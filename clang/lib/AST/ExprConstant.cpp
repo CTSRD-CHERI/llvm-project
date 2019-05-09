@@ -2108,7 +2108,7 @@ static bool HandleOverflow(EvalInfo &Info, const Expr *E,
 static bool HandleFloatToIntCast(EvalInfo &Info, const Expr *E,
                                  QualType SrcType, const APFloat &Value,
                                  QualType DestType, APSInt &Result) {
-  unsigned DestWidth = Info.Ctx.getIntWidth(DestType);
+  unsigned DestWidth = Info.Ctx.getIntRange(DestType);
   // Determine whether we are converting to unsigned or signed.
   bool DestSigned = DestType->isSignedIntegerOrEnumerationType();
 
@@ -7412,7 +7412,7 @@ public:
   bool Success(const llvm::APInt &I, const Expr *E, APValue &Result) {
     assert(E->getType()->isIntegralOrEnumerationType() &&
            "Invalid evaluation result.");
-    assert(I.getBitWidth() == Info.Ctx.getIntWidth(E->getType()) &&
+    assert(I.getBitWidth() == Info.Ctx.getIntRange(E->getType()) &&
            "Invalid evaluation result.");
     Result = APValue(APSInt(I));
     Result.getInt().setIsUnsigned(
@@ -7553,7 +7553,7 @@ class FixedPointExprEvaluator
 
   bool Success(const APFixedPoint &V, const Expr *E) {
     assert(E->getType()->isFixedPointType() && "Invalid evaluation result.");
-    assert(V.getWidth() == Info.Ctx.getIntWidth(E->getType()) &&
+    assert(V.getWidth() == Info.Ctx.getIntRange(E->getType()) &&
            "Invalid evaluation result.");
     Result = APValue(V);
     return true;
@@ -7641,7 +7641,7 @@ bool IntExprEvaluator::CheckReferencedDecl(const Expr* E, const Decl* D) {
     bool SameSign = (ECD->getInitVal().isSigned()
                      == E->getType()->isSignedIntegerOrEnumerationType());
     bool SameWidth = (ECD->getInitVal().getBitWidth()
-                      == Info.Ctx.getIntWidth(E->getType()));
+                      == Info.Ctx.getIntRange(E->getType()));
     if (SameSign && SameWidth)
       return Success(ECD->getInitVal(), E);
     else {
@@ -9135,7 +9135,7 @@ bool DataRecursiveIntBinOpEvaluator::
   // Set up the width and signedness manually, in case it can't be deduced
   // from the operation we're performing.
   // FIXME: Don't do this in the cases where we can deduce it.
-  APSInt Value(Info.Ctx.getIntWidth(E->getType()),
+  APSInt Value(Info.Ctx.getIntRange(E->getType()),
                E->getType()->isUnsignedIntegerOrEnumerationType());
   if (!handleIntIntBinOp(Info, E, LHSVal.getInt(), E->getOpcode(),
                          RHSVal.getInt(), Value))
@@ -9672,7 +9672,7 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
     APSInt ElemSize(llvm::APInt(65, (int64_t)ElementSize.getQuantity(), true),
                     false);
     APSInt TrueResult = (LHS - RHS) / ElemSize;
-    APSInt Result = TrueResult.trunc(Info.Ctx.getIntWidth(E->getType()));
+    APSInt Result = TrueResult.trunc(Info.Ctx.getIntRange(E->getType()));
 
     if (Result.extend(65) != TrueResult &&
         !HandleOverflow(Info, E, TrueResult, E->getType()))
@@ -9942,7 +9942,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
       return false;
     bool Overflowed;
     llvm::APSInt Result = Src.convertToInt(
-        Info.Ctx.getIntWidth(DestType),
+        Info.Ctx.getIntRange(DestType),
         DestType->isSignedIntegerOrEnumerationType(), &Overflowed);
     if (Overflowed && !HandleOverflow(Info, E, Result, DestType))
       return false;
@@ -11765,7 +11765,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     if (isa<ExplicitCastExpr>(E)) {
       if (const FloatingLiteral *FL
             = dyn_cast<FloatingLiteral>(SubExpr->IgnoreParenImpCasts())) {
-        unsigned DestWidth = Ctx.getIntWidth(E->getType());
+        unsigned DestWidth = Ctx.getIntRange(E->getType());
         bool DestSigned = E->getType()->isSignedIntegerOrEnumerationType();
         APSInt IgnoredVal(DestWidth, !DestSigned);
         bool Ignored;

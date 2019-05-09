@@ -782,7 +782,7 @@ IntegerLiteral::IntegerLiteral(const ASTContext &C, const llvm::APInt &V,
          false, false),
     Loc(l) {
   assert(type->isIntegerType() && "Illegal type in IntegerLiteral");
-  assert(V.getBitWidth() == C.getIntWidth(type) &&
+  assert(V.getBitWidth() == C.getIntRange(type) &&
          "Integer type is not the correct size for constant.");
   setValue(C, V);
 }

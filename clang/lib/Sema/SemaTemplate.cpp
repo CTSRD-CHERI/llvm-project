@@ -6931,7 +6931,7 @@ Sema::BuildExpressionFromIntegralTemplateArgument(const TemplateArgument &Arg,
   } else {
     auto IntValue = Arg.getAsIntegral();
     if (T->isIntCapType())
-      IntValue = IntValue.extOrTrunc(Context.getIntWidth(T));
+      IntValue = IntValue.extOrTrunc(Context.getIntRange(T));
     E = IntegerLiteral::Create(Context, IntValue, T, Loc);
   }
 
