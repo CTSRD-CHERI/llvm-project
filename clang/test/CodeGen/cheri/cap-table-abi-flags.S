@@ -1,12 +1,12 @@
 # RUN: %cheri_purecap_clang -cheri-cap-table-abi=plt -c %s -o - -### 2>&1 | FileCheck %s -check-prefix CMDLINE
 
 # Preprocess first then run as (make sure both contain the cap-table-abi flag
-# CMDLINE: "-cc1" "-triple" "cheri-unknown-freebsd-purecap" "-E"
+# CMDLINE: "-cc1" "-triple" "mips64c{{128|256}}-unknown-freebsd-purecap" "-E"
 # CMDLINE-SAME: "-mrelocation-model" "pic"
 # CMDLINE-SAME: "-target-abi" "purecap"
 # CMDLINE-SAME: "-mllvm" "-cheri-cap-table-abi=plt" "-mllvm" "-mxcaptable=false"
 
-# CMDLINE-NEXT: "-cc1as" "-triple" "cheri-unknown-freebsd-purecap"
+# CMDLINE-NEXT: "-cc1as" "-triple" "mips64c{{128|256}}-unknown-freebsd-purecap"
 # CMDLINE-SAME: "-mrelocation-model" "pic"
 # CMDLINE-SAME: "-target-abi" "purecap"
 # CMDLINE-SAME: "-mllvm" "-cheri-cap-table-abi=plt" "-mllvm" "-mxcaptable=false"

@@ -1,5 +1,5 @@
-; RUN: not --crash %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - 2>&1 | FileCheck %s
-; CHECK: false &&  "This is wrong and needs a different fix!"
+; RUN: not %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - 2>&1 | FileCheck %s
+; CHECK: LLVM ERROR: Cannot emit a global .chericap referring to a temporary since this will result in the wrong value at runtime!
 
 ; RUNTODO: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -filetype=obj | llvm-objdump -d -t -r -
 ; RUNTODO: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -filetype=obj | llvm-readobj -r -
