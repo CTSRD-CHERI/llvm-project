@@ -1,6 +1,6 @@
 // REQUIRES: mips-registered-target
 
-// RUNNOT: %cheri_purecap_cc1 -std=c11 %s -emit-llvm -o - -O2 -verify
+// RUN: %cheri_purecap_cc1 -std=c11 %s -emit-llvm -o - -O2 -verify
 // RUN: %cheri_purecap_cc1 -std=c11 %s -emit-llvm -o - -O2 -verify | FileCheck %s -implicit-check-not llvm.memcpy
 // Check that we can generate assembly without crashing
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -std=c11 %s -S -o /dev/null -verify
@@ -73,9 +73,16 @@ int __atomic_stuff(int** p, int* expected, int* newval) {
   __atomic_compare_exchange_n(p, &expected, newval, 1, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
   // CHECK: cmpxchg weak i32 addrspace(200)* addrspace(200)* %p, i32 addrspace(200)* %9, i32 addrspace(200)* %newval seq_cst seq_cst
 
+  // Check the __sync_ builtin
+  int* prev = __sync_val_compare_and_swap(p, expected, newval);
+  // CHECK: cmpxchg i32 addrspace(200)* addrspace(200)* %p, i32 addrspace(200)* %11, i32 addrspace(200)* %newval seq_cst seq_cst
+  int* swapped = __sync_swap(p, newval);
+  // CHECK: %13 = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %p, i32 addrspace(200)* %newval seq_cst
+
   // TODO: fetch_add/add_fetch
   return 0;
 }
+
 
 // CHECK-LABEL: @uint128(
 int uint128(void) {

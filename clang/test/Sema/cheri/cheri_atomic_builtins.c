@@ -4,6 +4,10 @@
 // check that we reject usage of the __sync atomic builtins with capabilites
 // as this would result in wrong code generation
 
+// Check that we can emit assembly without crashing
+// RUN: %cheri_cc1 "-target-abi" "n64" -S -o /dev/null %s -verify
+// RUN: %cheri_purecap_cc1 -S -o /dev/null %s -verify
+
 
 #define do_atomic_ops(ptr, result, newval) do { \
   result = __sync_fetch_and_add(ptr, 0); \
@@ -39,7 +43,7 @@ int capability_ptr() {
   void* __capability foo_cap;
   void* __capability result = 0;
   void* __capability newval = (__cheri_tocap void* __capability * __capability)&foo_cap;
-  do_atomic_ops(&foo_cap, result, newval); // expected-error 16 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
+  do_atomic_ops(&foo_cap, result, newval); // expected-error 13 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
   // check that calling the size-suffixed functions fails too
   do_suffixed_atomic_ops(&foo_cap, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
 }
@@ -48,7 +52,7 @@ int intcap() {
   __intcap_t foo_intcap = 0;
   __intcap_t result = 0;
   __intcap_t newval = (__intcap_t)&foo_intcap;
-  do_atomic_ops(&foo_intcap, result, newval); // expected-error 16 {{the __sync_* atomic builtins only work with integers and not capability type '__intcap_t'.}}
+  do_atomic_ops(&foo_intcap, result, newval); // expected-error 13 {{the __sync_* atomic builtins only work with integers and not capability type '__intcap_t'.}}
   // check that calling the size-suffixed functions fails too
   do_suffixed_atomic_ops(&foo_intcap, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type '__intcap_t'.}}
 }
@@ -61,7 +65,7 @@ int uintptr() {
   // should be acceptable in hybrid ABI but cause errors in pure capability ABI
   do_atomic_ops(&foo_uintptr, result, newval);
 #ifdef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 16 {{the __sync_* atomic builtins only work with integers and not capability type '__uintcap_t'.}}
+  // expected-error@-2 13 {{the __sync_* atomic builtins only work with integers and not capability type '__uintcap_t'.}}
   do_suffixed_atomic_ops(&foo_uintptr, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type '__uintcap_t'.}}
 #else
   // expected-warning@-5 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}

@@ -5027,9 +5027,17 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   bool IsCapabilityAtomicOp = false;
   if (pointerType->getPointeeType()->isCHERICapabilityType(Context)) {
     IsCapabilityAtomicOp = true;
-    Diag(DRE->getBeginLoc(), diag::err_sync_atomic_builtin_with_capability)
-      << pointerType->getPointeeType() << FirstArg->getSourceRange();
-    return ExprError();
+    switch (FDecl->getBuiltinID()) {
+    case Builtin::BI__sync_bool_compare_and_swap:
+    case Builtin::BI__sync_val_compare_and_swap:
+    case Builtin::BI__sync_swap:
+      break;
+    default:
+      // All other builtins generate broken code for now
+      Diag(DRE->getBeginLoc(), diag::err_sync_atomic_builtin_with_capability)
+        << pointerType->getPointeeType() << FirstArg->getSourceRange();
+      return ExprError();
+    }
   }
 
   QualType ValType = pointerType->getPointeeType();
