@@ -460,8 +460,8 @@ public:
   Value *VisitIntegerLiteral(const IntegerLiteral *E) {
     if (E->getType()->isIntCapType()) {
       // FIXME: diagnose > 64 bit constants
-      auto Value = E->getValue().trunc(
-          CGF.getTarget().getPointerRangeForCHERICapability());
+      auto Value = E->getValue();
+      assert(Value.getBitWidth() == CGF.getTarget().getPointerRangeForCHERICapability());
       // assert(E->getValue().getBitWidth() <= 64);
       return CGF.setCapabilityIntegerValue(
           llvm::ConstantPointerNull::get(CGF.Int8CheriCapTy),
