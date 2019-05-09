@@ -48,11 +48,11 @@ const char *ExtractInt(const char *str, const char *delims, int *result) {
   return ret;
 }
 
-const char *ExtractUptr(const char *str, const char *delims, uptr *result) {
+const char *ExtractUSize(const char *str, const char *delims, usize *result) {
   char *buff;
   const char *ret = ExtractToken(str, delims, &buff);
   if (buff != 0) {
-    *result = (uptr)internal_atoll(buff);
+    *result = (usize)internal_atoll(buff);
   }
   InternalFree(buff);
   return ret;
@@ -71,10 +71,10 @@ const char *ExtractTokenUpToDelimiter(const char *str, const char *delimiter,
   return prefix_end;
 }
 
-SymbolizedStack *Symbolizer::SymbolizePC(uptr addr) {
+SymbolizedStack *Symbolizer::SymbolizePC(vaddr addr) {
   BlockingMutexLock l(&mu_);
   const char *module_name;
-  uptr module_offset;
+  vaddr module_offset;
   ModuleArch arch;
   SymbolizedStack *res = SymbolizedStack::New(addr);
   if (!FindModuleNameAndOffsetForAddress(addr, &module_name, &module_offset,
@@ -91,10 +91,10 @@ SymbolizedStack *Symbolizer::SymbolizePC(uptr addr) {
   return res;
 }
 
-bool Symbolizer::SymbolizeData(uptr addr, DataInfo *info) {
+bool Symbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
   BlockingMutexLock l(&mu_);
   const char *module_name;
-  uptr module_offset;
+  vaddr module_offset;
   ModuleArch arch;
   if (!FindModuleNameAndOffsetForAddress(addr, &module_name, &module_offset,
                                          &arch))
@@ -112,8 +112,8 @@ bool Symbolizer::SymbolizeData(uptr addr, DataInfo *info) {
   return true;
 }
 
-bool Symbolizer::GetModuleNameAndOffsetForPC(uptr pc, const char **module_name,
-                                             uptr *module_address) {
+bool Symbolizer::GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
+                                             vaddr *module_address) {
   BlockingMutexLock l(&mu_);
   const char *internal_module_name = nullptr;
   ModuleArch arch;
@@ -144,9 +144,9 @@ const char *Symbolizer::Demangle(const char *name) {
   return PlatformDemangle(name);
 }
 
-bool Symbolizer::FindModuleNameAndOffsetForAddress(uptr address,
+bool Symbolizer::FindModuleNameAndOffsetForAddress(vaddr address,
                                                    const char **module_name,
-                                                   uptr *module_offset,
+                                                   vaddr *module_offset,
                                                    ModuleArch *module_arch) {
   const LoadedModule *module = FindModuleForAddress(address);
   if (module == nullptr)
@@ -165,8 +165,8 @@ void Symbolizer::RefreshModules() {
 }
 
 static const LoadedModule *SearchForModule(const ListOfModules &modules,
-                                           uptr address) {
-  for (uptr i = 0; i < modules.size(); i++) {
+                                           vaddr address) {
+  for (usize i = 0; i < modules.size(); i++) {
     if (modules[i].containsAddress(address)) {
       return &modules[i];
     }
@@ -174,7 +174,7 @@ static const LoadedModule *SearchForModule(const ListOfModules &modules,
   return nullptr;
 }
 
-const LoadedModule *Symbolizer::FindModuleForAddress(uptr address) {
+const LoadedModule *Symbolizer::FindModuleForAddress(vaddr address) {
   bool modules_were_reloaded = false;
   if (!modules_fresh_) {
     RefreshModules();
@@ -339,11 +339,11 @@ void ParseSymbolizePCOutput(const char *str, SymbolizedStack *res) {
 // Used by LLVMSymbolizer and InternalSymbolizer.
 void ParseSymbolizeDataOutput(const char *str, DataInfo *info) {
   str = ExtractToken(str, "\n", &info->name);
-  str = ExtractUptr(str, " ", &info->start);
-  str = ExtractUptr(str, "\n", &info->size);
+  str = ExtractUSize(str, " ", &info->start);
+  str = ExtractUSize(str, "\n", &info->size);
 }
 
-bool LLVMSymbolizer::SymbolizePC(uptr addr, SymbolizedStack *stack) {
+bool LLVMSymbolizer::SymbolizePC(vaddr addr, SymbolizedStack *stack) {
   AddressInfo *info = &stack->info;
   const char *buf = FormatAndSendCommand(
       /*is_data*/ false, info->module, info->module_offset, info->module_arch);
@@ -354,7 +354,7 @@ bool LLVMSymbolizer::SymbolizePC(uptr addr, SymbolizedStack *stack) {
   return false;
 }
 
-bool LLVMSymbolizer::SymbolizeData(uptr addr, DataInfo *info) {
+bool LLVMSymbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
   const char *buf = FormatAndSendCommand(
       /*is_data*/ true, info->module, info->module_offset, info->module_arch);
   if (buf) {

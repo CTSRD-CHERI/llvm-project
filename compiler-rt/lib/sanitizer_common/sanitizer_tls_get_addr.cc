@@ -38,7 +38,7 @@ static __thread DTLS dtls;
 
 // Make sure we properly destroy the DTLS objects:
 // this counter should never get too large.
-static atomic_uintptr_t number_of_live_dtls;
+static atomic_size_t number_of_live_dtls;
 
 static const uptr kDestroyedThread = -1;
 
@@ -49,7 +49,7 @@ static inline void DTLS_Deallocate(DTLS::DTV *dtv, usize size) {
   atomic_fetch_sub(&number_of_live_dtls, 1, memory_order_relaxed);
 }
 
-static inline void DTLS_Resize(uptr new_size) {
+static inline void DTLS_Resize(usize new_size) {
   if (dtls.dtv_size >= new_size) return;
   new_size = RoundUpToPowerOfTwo(new_size);
   new_size = Max(new_size, 4096UL / sizeof(DTLS::DTV));

@@ -24,7 +24,7 @@ namespace __sanitizer {
 // to the next characted after the found delimiter.
 const char *ExtractToken(const char *str, const char *delims, char **result);
 const char *ExtractInt(const char *str, const char *delims, int *result);
-const char *ExtractUptr(const char *str, const char *delims, uptr *result);
+const char *ExtractUSize(const char *str, const char *delims, usize *result);
 const char *ExtractTokenUpToDelimiter(const char *str, const char *delimiter,
                                       char **result);
 
@@ -48,13 +48,13 @@ class SymbolizerTool {
   // The |stack| parameter is inout. It is pre-filled with the address,
   // module base and module offset values and is to be used to construct
   // other stack frames.
-  virtual bool SymbolizePC(uptr addr, SymbolizedStack *stack) {
+  virtual bool SymbolizePC(vaddr addr, SymbolizedStack *stack) {
     UNIMPLEMENTED();
   }
 
   // The |info| parameter is inout. It is pre-filled with the module base
   // and module offset values.
-  virtual bool SymbolizeData(uptr addr, DataInfo *info) {
+  virtual bool SymbolizeData(vaddr addr, DataInfo *info) {
     UNIMPLEMENTED();
   }
 
@@ -119,9 +119,9 @@ class LLVMSymbolizer : public SymbolizerTool {
  public:
   explicit LLVMSymbolizer(const char *path, LowLevelAllocator *allocator);
 
-  bool SymbolizePC(uptr addr, SymbolizedStack *stack) override;
+  bool SymbolizePC(vaddr addr, SymbolizedStack *stack) override;
 
-  bool SymbolizeData(uptr addr, DataInfo *info) override;
+  bool SymbolizeData(vaddr addr, DataInfo *info) override;
 
  private:
   const char *FormatAndSendCommand(bool is_data, const char *module_name,

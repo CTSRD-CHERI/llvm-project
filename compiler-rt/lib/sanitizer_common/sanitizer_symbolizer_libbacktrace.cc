@@ -181,12 +181,12 @@ LibbacktraceSymbolizer *LibbacktraceSymbolizer::get(LowLevelAllocator *alloc) {
   return 0;
 }
 
-bool LibbacktraceSymbolizer::SymbolizePC(uptr addr, SymbolizedStack *stack) {
+bool LibbacktraceSymbolizer::SymbolizePC(vaddr addr, SymbolizedStack *stack) {
   (void)state_;
   return false;
 }
 
-bool LibbacktraceSymbolizer::SymbolizeData(uptr addr, DataInfo *info) {
+bool LibbacktraceSymbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
   return false;
 }
 

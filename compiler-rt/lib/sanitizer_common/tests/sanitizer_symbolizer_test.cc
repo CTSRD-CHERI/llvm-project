@@ -40,7 +40,7 @@ TEST(Symbolizer, ExtractInt) {
 
 TEST(Symbolizer, ExtractUptr) {
   uptr token;
-  const char *rest = ExtractUptr("123,456;789", ";,", &token);
+  const char *rest = ExtractUSize("123,456;789", ";,", &token);
   EXPECT_EQ(123U, token);
   EXPECT_STREQ("456;789", rest);
 }

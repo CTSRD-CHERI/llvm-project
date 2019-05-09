@@ -65,6 +65,13 @@ using atomic_size_t = atomic_uint32_t;
 #error "Unsupported word size"
 #endif
 
+
+#ifdef __CHERI_PURE_CAPABILITY__
+using atomic_vaddr_t = atomic_size_t;
+#else
+using atomic_vaddr_t = atomic_uintptr_t;
+#endif
+
 }  // namespace __sanitizer
 
 #if defined(__clang__) || defined(__GNUC__)

@@ -32,9 +32,9 @@ class LibbacktraceSymbolizer : public SymbolizerTool {
  public:
   static LibbacktraceSymbolizer *get(LowLevelAllocator *alloc);
 
-  bool SymbolizePC(uptr addr, SymbolizedStack *stack) override;
+  bool SymbolizePC(vaddr addr, SymbolizedStack *stack) override;
 
-  bool SymbolizeData(uptr addr, DataInfo *info) override;
+  bool SymbolizeData(vaddr addr, DataInfo *info) override;
 
   // May return NULL if demangling failed.
   const char *Demangle(const char *name) override;

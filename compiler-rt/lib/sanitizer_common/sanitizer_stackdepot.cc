@@ -126,7 +126,7 @@ StackDepotReverseMap::StackDepotReverseMap() {
   for (int idx = 0; idx < StackDepot::kTabSize; idx++) {
     atomic_uintptr_t *p = &theDepot.tab[idx];
     uptr v = atomic_load(p, memory_order_consume);
-    StackDepotNode *s = (StackDepotNode*)(v & ~1);
+    StackDepotNode *s = (StackDepotNode*)ClearLowPtrBits<1>(v);
     for (; s; s = s->link) {
       IdDescPair pair = {s->id, s};
       map_.push_back(pair);

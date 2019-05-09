@@ -85,7 +85,7 @@ void BufferedStackTrace::Unwind(u32 max_depth, uptr pc, uptr bp, void *context,
 }
 
 static int GetModuleAndOffsetForPc(uptr pc, char *module_name,
-                                   uptr module_name_len, uptr *pc_offset) {
+                                   usize module_name_len, vaddr *pc_offset) {
   const char *found_module_name = nullptr;
   bool ok = Symbolizer::GetOrInit()->GetModuleNameAndOffsetForPC(
       pc, &found_module_name, pc_offset);
@@ -105,7 +105,7 @@ using namespace __sanitizer;
 extern "C" {
 SANITIZER_INTERFACE_ATTRIBUTE
 void __sanitizer_symbolize_pc(uptr pc, const char *fmt, char *out_buf,
-                              uptr out_buf_size) {
+                              usize out_buf_size) {
   if (!out_buf_size) return;
   pc = StackTrace::GetPreviousInstructionPc(pc);
   SymbolizedStack *frame = Symbolizer::GetOrInit()->SymbolizePC(pc);
@@ -151,7 +151,7 @@ void __sanitizer_symbolize_global(uptr data_addr, const char *fmt,
 
 SANITIZER_INTERFACE_ATTRIBUTE
 int __sanitizer_get_module_and_offset_for_pc( // NOLINT
-    uptr pc, char *module_name, uptr module_name_len, uptr *pc_offset) {
+    uptr pc, char *module_name, uptr module_name_len, vaddr *pc_offset) {
   return __sanitizer::GetModuleAndOffsetForPc(pc, module_name, module_name_len,
                                               pc_offset);
 }

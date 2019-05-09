@@ -26,15 +26,15 @@ namespace __sanitizer {
 struct AddressInfo {
   // Owns all the string members. Storage for them is
   // (de)allocated using sanitizer internal allocator.
-  uptr address;
+  vaddr address;
 
   char *module;
-  uptr module_offset;
+  usize module_offset;
   ModuleArch module_arch;
 
-  static const uptr kUnknown = ~(uptr)0;
+  static const vaddr kUnknown = ~(vaddr)0;
   char *function;
-  uptr function_offset;
+  usize function_offset;
 
   char *file;
   int line;
@@ -43,14 +43,14 @@ struct AddressInfo {
   AddressInfo();
   // Deletes all strings and resets all fields.
   void Clear();
-  void FillModuleInfo(const char *mod_name, uptr mod_offset, ModuleArch arch);
+  void FillModuleInfo(const char *mod_name, usize mod_offset, ModuleArch arch);
 };
 
 // Linked list of symbolized frames (each frame is described by AddressInfo).
 struct SymbolizedStack {
   SymbolizedStack *next;
   AddressInfo info;
-  static SymbolizedStack *New(uptr addr);
+  static SymbolizedStack *New(vaddr addr);
   // Deletes current, and all subsequent frames in the linked list.
   // The object cannot be accessed after the call to this function.
   void ClearAll();
@@ -64,14 +64,14 @@ struct DataInfo {
   // Owns all the string members. Storage for them is
   // (de)allocated using sanitizer internal allocator.
   char *module;
-  uptr module_offset;
+  usize module_offset;
   ModuleArch module_arch;
 
   char *file;
-  uptr line;
+  usize line;
   char *name;
-  uptr start;
-  uptr size;
+  vaddr start;
+  usize size;
 
   DataInfo();
   void Clear();
@@ -87,16 +87,16 @@ class Symbolizer final {
   static void LateInitialize();
   // Returns a list of symbolized frames for a given address (containing
   // all inlined functions, if necessary).
-  SymbolizedStack *SymbolizePC(uptr address);
-  bool SymbolizeData(uptr address, DataInfo *info);
+  SymbolizedStack *SymbolizePC(vaddr address);
+  bool SymbolizeData(vaddr address, DataInfo *info);
 
   // The module names Symbolizer returns are stable and unique for every given
   // module.  It is safe to store and compare them as pointers.
-  bool GetModuleNameAndOffsetForPC(uptr pc, const char **module_name,
-                                   uptr *module_address);
-  const char *GetModuleNameForPc(uptr pc) {
+  bool GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
+                                   vaddr *module_address);
+  const char *GetModuleNameForPc(vaddr pc) {
     const char *module_name = nullptr;
-    uptr unused;
+    vaddr unused;
     if (GetModuleNameAndOffsetForPC(pc, &module_name, &unused))
       return module_name;
     return nullptr;
@@ -118,7 +118,7 @@ class Symbolizer final {
                 EndSymbolizationHook end_hook);
 
   void RefreshModules();
-  const LoadedModule *FindModuleForAddress(uptr address);
+  const LoadedModule *FindModuleForAddress(vaddr address);
 
   void InvalidateModuleList();
 
@@ -137,7 +137,7 @@ class Symbolizer final {
     const char *GetOwnedCopy(const char *str);
 
    private:
-    static const uptr kInitialCapacity = 1000;
+    static const usize kInitialCapacity = 1000;
     InternalMmapVector<const char*> storage_;
     const char *last_match_;
 
@@ -147,8 +147,8 @@ class Symbolizer final {
   /// Platform-specific function for creating a Symbolizer object.
   static Symbolizer *PlatformInit();
 
-  bool FindModuleNameAndOffsetForAddress(uptr address, const char **module_name,
-                                         uptr *module_offset,
+  bool FindModuleNameAndOffsetForAddress(vaddr address, const char **module_name,
+                                         vaddr *module_offset,
                                          ModuleArch *module_arch);
   ListOfModules modules_;
   ListOfModules fallback_modules_;

@@ -346,10 +346,7 @@ unsigned char _BitScanReverse64(unsigned long *index, unsigned __int64 mask);  /
 }
 #endif
 
-#ifdef __CHERI_PURE_CAPABILITY__
-uptr MostSignificantSetBitIndex(uptr x) = delete;
-#endif
-INLINE uword MostSignificantSetBitIndex(uword x) {
+INLINE usize MostSignificantSetBitIndex(usize x) {
   CHECK_NE(x, 0U);
   unsigned long up;  // NOLINT
 #if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
@@ -365,11 +362,14 @@ INLINE uword MostSignificantSetBitIndex(uword x) {
 #endif
   return up;
 }
-
 #ifdef __CHERI_PURE_CAPABILITY__
-uword LeastSignificantSetBitIndex(uptr x) = delete;
+usize MostSignificantSetBitIndex(uptr x) = delete;
+INLINE usize MostSignificantSetBitIndex(u64 x) {
+  return MostSignificantSetBitIndex((usize)x);
+}
 #endif
-INLINE uword LeastSignificantSetBitIndex(uword x) {
+
+INLINE usize LeastSignificantSetBitIndex(usize x) {
   CHECK_NE(x, 0U);
   unsigned long up;  // NOLINT
 #if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
@@ -385,33 +385,45 @@ INLINE uword LeastSignificantSetBitIndex(uword x) {
 #endif
   return up;
 }
-
 #ifdef __CHERI_PURE_CAPABILITY__
-bool IsPowerOfTwo(uptr x) = delete;
+usize LeastSignificantSetBitIndex(uptr x) = delete;
+INLINE usize LeastSignificantSetBitIndex(u64 x) {
+  return LeastSignificantSetBitIndex((usize)x);
+}
 #endif
-INLINE bool IsPowerOfTwo(uword x) {
+
+INLINE bool IsPowerOfTwo(u64 x) {
   return (x & (x - 1)) == 0;
 }
-
 #ifdef __CHERI_PURE_CAPABILITY__
-uptr RoundUpToPowerOfTwo(usize size) = delete;
+bool IsPowerOfTwo(uptr x) = delete;
+INLINE bool IsPowerOfTwo(usize x) {
+  return IsPowerOfTwo((u64)x);
+}
 #endif
-INLINE uword RoundUpToPowerOfTwo(uword size) {
+
+INLINE u64 RoundUpToPowerOfTwo(u64 size) {
   CHECK(size);
   if (IsPowerOfTwo(size)) return size;
 
-  uword up = MostSignificantSetBitIndex(size);
+  usize up = MostSignificantSetBitIndex(size);
   CHECK_LT(size, (1ULL << (up + 1)));
   CHECK_GT(size, (1ULL << up));
   return 1ULL << (up + 1);
 }
+#ifdef __CHERI_PURE_CAPABILITY__
+uptr RoundUpToPowerOfTwo(uptr size) = delete;
+INLINE usize RoundUpToPowerOfTwo(usize x) {
+  return (usize)RoundUpToPowerOfTwo((u64)x);
+}
+#endif
 
-INLINE uptr RoundUpTo(usize size, usize boundary) {
+INLINE uptr RoundUpTo(uptr p, usize boundary) {
   RAW_CHECK(IsPowerOfTwo(boundary));
 #if __has_builtin(__builtin_align_up)
-  return __builtin_align_up(size, boundary);
+  return __builtin_align_up(p, boundary);
 #else
-  return (size + boundary - 1) & ~(boundary - 1);
+  return (p + boundary - 1) & ~(boundary - 1);
 #endif
 }
 
@@ -435,13 +447,16 @@ INLINE bool IsAligned(void* ptr, usize alignment) {
   return IsAligned((uptr)ptr, alignment);
 }
 
-#ifdef __CHERI_PURE_CAPABILITY__
-uptr Log2(uptr x) = delete;
-#endif
-INLINE uword Log2(uword x) {
+INLINE u64 Log2(u64 x) {
   CHECK(IsPowerOfTwo(x));
   return LeastSignificantSetBitIndex(x);
 }
+#ifdef __CHERI_PURE_CAPABILITY__
+uptr Log2(uptr x) = delete;
+INLINE usize Log2(usize x) {
+  return (usize)Log2((u64)x);
+}
+#endif
 
 // Don't use std::min, std::max or std::swap, to minimize dependency
 // on libstdc++.

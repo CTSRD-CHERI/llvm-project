@@ -208,7 +208,7 @@ static bool FindThreadContextByOsIdCallback(ThreadContextBase *tctx,
 
 ThreadContextBase *ThreadRegistry::FindThreadContextByOsIDLocked(tid_t os_id) {
   return FindThreadContextLocked(FindThreadContextByOsIdCallback,
-                                 (void *)os_id);
+                                 (void *)(uptr)os_id);
 }
 
 void ThreadRegistry::SetThreadName(u32 tid, const char *name) {

@@ -180,7 +180,7 @@ uptr internal_mmap(void *addr, usize length, int prot, int flags, int fd,
 #endif // !SANITIZER_S390 && !SANITIZER_OPENBSD
 
 #if !SANITIZER_OPENBSD
-uptr internal_munmap(void *addr, usize length) {
+usize internal_munmap(void *addr, usize length) {
   return internal_syscall(SYSCALL(munmap), (uptr)addr, length);
 }
 
@@ -189,11 +189,11 @@ int internal_mprotect(void *addr, usize length, int prot) {
 }
 #endif
 
-uptr internal_close(fd_t fd) {
+usize internal_close(fd_t fd) {
   return internal_syscall(SYSCALL(close), fd);
 }
 
-uptr internal_open(const char *filename, int flags) {
+usize internal_open(const char *filename, int flags) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(openat), AT_FDCWD, (uptr)filename, flags);
 #else
@@ -201,7 +201,7 @@ uptr internal_open(const char *filename, int flags) {
 #endif
 }
 
-uptr internal_open(const char *filename, int flags, u32 mode) {
+usize internal_open(const char *filename, int flags, u32 mode) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(openat), AT_FDCWD, (uptr)filename, flags,
                           mode);
@@ -210,21 +210,21 @@ uptr internal_open(const char *filename, int flags, u32 mode) {
 #endif
 }
 
-uptr internal_read(fd_t fd, void *buf, usize count) {
+usize internal_read(fd_t fd, void *buf, usize count) {
   sptr res;
   HANDLE_EINTR(res,
                (sptr)internal_syscall(SYSCALL(read), fd, (uptr)buf, count));
   return res;
 }
 
-uptr internal_write(fd_t fd, const void *buf, usize count) {
+usize internal_write(fd_t fd, const void *buf, usize count) {
   sptr res;
   HANDLE_EINTR(res,
                (sptr)internal_syscall(SYSCALL(write), fd, (uptr)buf, count));
   return res;
 }
 
-uptr internal_ftruncate(fd_t fd, usize size) {
+usize internal_ftruncate(fd_t fd, usize size) {
   sptr res;
   HANDLE_EINTR(res, (sptr)internal_syscall(SYSCALL(ftruncate), fd,
                (OFF_T)size));
@@ -298,7 +298,7 @@ static void kernel_stat_to_stat(struct kernel_stat *in, struct stat *out) {
 }
 #endif
 
-uptr internal_stat(const char *path, void *buf) {
+usize internal_stat(const char *path, void *buf) {
 #if SANITIZER_FREEBSD || SANITIZER_OPENBSD
   return internal_syscall(SYSCALL(fstatat), AT_FDCWD, (uptr)path, (uptr)buf, 0);
 #elif SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
@@ -322,7 +322,7 @@ uptr internal_stat(const char *path, void *buf) {
 #endif
 }
 
-uptr internal_lstat(const char *path, void *buf) {
+usize internal_lstat(const char *path, void *buf) {
 #if SANITIZER_FREEBSD || SANITIZER_OPENBSD
   return internal_syscall(SYSCALL(fstatat), AT_FDCWD, (uptr)path, (uptr)buf,
                           AT_SYMLINK_NOFOLLOW);
@@ -347,7 +347,7 @@ uptr internal_lstat(const char *path, void *buf) {
 #endif
 }
 
-uptr internal_fstat(fd_t fd, void *buf) {
+usize internal_fstat(fd_t fd, void *buf) {
 #if SANITIZER_FREEBSD || SANITIZER_OPENBSD || \
     SANITIZER_LINUX_USES_64BIT_SYSCALLS
 #if SANITIZER_MIPS64 && SANITIZER_LINUX_USES_64BIT_SYSCALLS
@@ -367,18 +367,18 @@ uptr internal_fstat(fd_t fd, void *buf) {
 #endif
 }
 
-uptr internal_filesize(fd_t fd) {
+usize internal_filesize(fd_t fd) {
   struct stat st;
   if (internal_fstat(fd, &st))
     return -1;
   return (uptr)st.st_size;
 }
 
-uptr internal_dup(int oldfd) {
+usize internal_dup(int oldfd) {
   return internal_syscall(SYSCALL(dup), oldfd);
 }
 
-uptr internal_dup2(int oldfd, int newfd) {
+usize internal_dup2(int oldfd, int newfd) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(dup3), oldfd, newfd, 0);
 #else
@@ -386,7 +386,7 @@ uptr internal_dup2(int oldfd, int newfd) {
 #endif
 }
 
-uptr internal_readlink(const char *path, char *buf, uptr bufsize) {
+usize internal_readlink(const char *path, char *buf, uptr bufsize) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(readlinkat), AT_FDCWD, (uptr)path, (uptr)buf,
                           bufsize);
@@ -398,7 +398,7 @@ uptr internal_readlink(const char *path, char *buf, uptr bufsize) {
 #endif
 }
 
-uptr internal_unlink(const char *path) {
+usize internal_unlink(const char *path) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS || SANITIZER_OPENBSD
   return internal_syscall(SYSCALL(unlinkat), AT_FDCWD, (uptr)path, 0);
 #else
@@ -406,7 +406,7 @@ uptr internal_unlink(const char *path) {
 #endif
 }
 
-uptr internal_rename(const char *oldpath, const char *newpath) {
+usize internal_rename(const char *oldpath, const char *newpath) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS || SANITIZER_OPENBSD
   return internal_syscall(SYSCALL(renameat), AT_FDCWD, (uptr)oldpath, AT_FDCWD,
                           (uptr)newpath);
@@ -415,7 +415,7 @@ uptr internal_rename(const char *oldpath, const char *newpath) {
 #endif
 }
 
-uptr internal_sched_yield() {
+usize internal_sched_yield() {
   return internal_syscall(SYSCALL(sched_yield));
 }
 
@@ -437,7 +437,7 @@ unsigned int internal_sleep(unsigned int seconds) {
   return 0;
 }
 
-uptr internal_execve(const char *filename, char *const argv[],
+usize internal_execve(const char *filename, char *const argv[],
                      char *const envp[]) {
   return internal_syscall(SYSCALL(execve), (uptr)filename, (uptr)argv,
                           (uptr)envp);
@@ -501,7 +501,7 @@ u64 NanoTime() {
   return (u64)tv.tv_sec * 1000*1000*1000 + tv.tv_usec * 1000;
 }
 
-uptr internal_clock_gettime(__sanitizer_clockid_t clk_id, void *tp) {
+usize internal_clock_gettime(__sanitizer_clockid_t clk_id, void *tp) {
   return internal_syscall(SYSCALL(clock_gettime), clk_id, tp);
 }
 #endif  // !SANITIZER_SOLARIS && !SANITIZER_NETBSD
@@ -588,7 +588,7 @@ static void GetArgsAndEnv(char ***argv, char ***envp) {
   // kern.ps_strings sysctl, which returns a pointer to a structure containing
   // this information. See also <sys/exec.h>.
   ps_strings *pss;
-  uptr sz = sizeof(pss);
+  usize sz = sizeof(pss);
   if (internal_sysctlbyname("kern.ps_strings", &pss, &sz, NULL, 0) == -1) {
     Printf("sysctl kern.ps_strings failed\n");
     Die();
@@ -714,25 +714,25 @@ struct linux_dirent {
 
 #if !SANITIZER_SOLARIS && !SANITIZER_NETBSD
 // Syscall wrappers.
-uptr internal_ptrace(int request, int pid, void *addr, void *data) {
+usize internal_ptrace(int request, int pid, void *addr, void *data) {
   return internal_syscall(SYSCALL(ptrace), request, pid, (uptr)addr,
                           (uptr)data);
 }
 
-uptr internal_waitpid(int pid, int *status, int options) {
+usize internal_waitpid(int pid, int *status, int options) {
   return internal_syscall(SYSCALL(wait4), pid, (uptr)status, options,
                           0 /* rusage */);
 }
 
-uptr internal_getpid() {
+pid_t internal_getpid() {
   return internal_syscall(SYSCALL(getpid));
 }
 
-uptr internal_getppid() {
+pid_t internal_getppid() {
   return internal_syscall(SYSCALL(getppid));
 }
 
-uptr internal_getdents(fd_t fd, struct linux_dirent *dirp, unsigned int count) {
+usize internal_getdents(fd_t fd, struct linux_dirent *dirp, unsigned int count) {
 #if SANITIZER_FREEBSD
   return internal_syscall(SYSCALL(getdirentries), fd, (uptr)dirp, count, NULL);
 #elif SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
@@ -742,17 +742,17 @@ uptr internal_getdents(fd_t fd, struct linux_dirent *dirp, unsigned int count) {
 #endif
 }
 
-uptr internal_lseek(fd_t fd, OFF_T offset, int whence) {
+usize internal_lseek(fd_t fd, OFF_T offset, int whence) {
   return internal_syscall(SYSCALL(lseek), fd, offset, whence);
 }
 
 #if SANITIZER_LINUX
-uptr internal_prctl(int option, uptr arg2, uptr arg3, uptr arg4, uptr arg5) {
+usize internal_prctl(int option, uptr arg2, uptr arg3, uptr arg4, uptr arg5) {
   return internal_syscall(SYSCALL(prctl), option, arg2, arg3, arg4, arg5);
 }
 #endif
 
-uptr internal_sigaltstack(const void *ss, void *oss) {
+usize internal_sigaltstack(const void *ss, void *oss) {
   return internal_syscall(SYSCALL(sigaltstack), (uptr)ss, (uptr)oss);
 }
 
@@ -766,7 +766,7 @@ int internal_fork() {
 
 #if SANITIZER_FREEBSD || SANITIZER_OPENBSD
 int internal_sysctl(const int *name, unsigned int namelen, void *oldp,
-                    uptr *oldlenp, const void *newp, uptr newlen) {
+                    usize *oldlenp, const void *newp, usize newlen) {
 #if SANITIZER_OPENBSD
   return sysctl(name, namelen, oldp, (size_t *)oldlenp, (void *)newp,
                 (size_t)newlen);
@@ -777,8 +777,8 @@ int internal_sysctl(const int *name, unsigned int namelen, void *oldp,
 }
 
 #if SANITIZER_FREEBSD
-int internal_sysctlbyname(const char *sname, void *oldp, uptr *oldlenp,
-                          const void *newp, uptr newlen) {
+int internal_sysctlbyname(const char *sname, void *oldp, usize *oldlenp,
+                          const void *newp, usize newlen) {
   return sysctlbyname(sname, oldp, (size_t *)oldlenp, newp, (size_t)newlen);
 }
 #endif
@@ -860,8 +860,8 @@ void internal_sigdelset(__sanitizer_sigset_t *set, int signum) {
   CHECK_GE(signum, 0);
   CHECK_LT(signum, sizeof(*set) * 8);
   __sanitizer_kernel_sigset_t *k_set = (__sanitizer_kernel_sigset_t *)set;
-  const uptr idx = signum / (sizeof(k_set->sig[0]) * 8);
-  const uptr bit = signum % (sizeof(k_set->sig[0]) * 8);
+  const usize idx = signum / (sizeof(k_set->sig[0]) * 8);
+  const usize bit = signum % (sizeof(k_set->sig[0]) * 8);
   k_set->sig[idx] &= ~(1 << bit);
 }
 
@@ -870,8 +870,8 @@ bool internal_sigismember(__sanitizer_sigset_t *set, int signum) {
   CHECK_GE(signum, 0);
   CHECK_LT(signum, sizeof(*set) * 8);
   __sanitizer_kernel_sigset_t *k_set = (__sanitizer_kernel_sigset_t *)set;
-  const uptr idx = signum / (sizeof(k_set->sig[0]) * 8);
-  const uptr bit = signum % (sizeof(k_set->sig[0]) * 8);
+  const usize idx = signum / (sizeof(k_set->sig[0]) * 8);
+  const usize bit = signum % (sizeof(k_set->sig[0]) * 8);
   return k_set->sig[idx] & (1 << bit);
 }
 #elif SANITIZER_FREEBSD
@@ -911,7 +911,7 @@ ThreadLister::Result ThreadLister::ListThreads(
     // Resize to max capacity if it was downsized by IsAlive.
     buffer_.resize(buffer_.capacity());
     CHECK_GE(buffer_.size(), 4096);
-    uptr read = internal_getdents(
+    usize read = internal_getdents(
         descriptor_, (struct linux_dirent *)buffer_.data(), buffer_.size());
     if (!read)
       return result;
@@ -978,9 +978,9 @@ ThreadLister::~ThreadLister() {
 
 #if SANITIZER_WORDSIZE == 32
 // Take care of unusable kernel area in top gigabyte.
-static uptr GetKernelAreaSize() {
+static usize GetKernelAreaSize() {
 #if SANITIZER_LINUX && !SANITIZER_X32
-  const uptr gbyte = 1UL << 30;
+  const usize gbyte = 1UL << 30;
 
   // Firstly check if there are writable segments
   // mapped to top gigabyte (e.g. stack).
@@ -1013,7 +1013,7 @@ static uptr GetKernelAreaSize() {
 }
 #endif  // SANITIZER_WORDSIZE == 32
 
-uptr GetMaxVirtualAddress() {
+vaddr GetMaxVirtualAddress() {
 #if (SANITIZER_NETBSD || SANITIZER_OPENBSD) && defined(__x86_64__)
   return 0x7f7ffffff000ULL;  // (0x00007f8000000000 - PAGE_SIZE)
 #elif SANITIZER_WORDSIZE == 64
@@ -1031,7 +1031,7 @@ uptr GetMaxVirtualAddress() {
 # elif defined(__s390x__)
   return (1ULL << 53) - 1;  // 0x001fffffffffffffUL;
 #elif defined(__sparc__)
-  return ~(uptr)0;
+  return ~(vaddr)0;
 # else
   return (1ULL << 47) - 1;  // 0x00007fffffffffffUL;
 # endif
@@ -1044,18 +1044,18 @@ uptr GetMaxVirtualAddress() {
 #endif  // SANITIZER_WORDSIZE
 }
 
-uptr GetMaxUserVirtualAddress() {
-  uptr addr = GetMaxVirtualAddress();
+vaddr GetMaxUserVirtualAddress() {
+  vaddr addr = GetMaxVirtualAddress();
 #if SANITIZER_WORDSIZE == 32 && !defined(__s390__)
   if (!common_flags()->full_address_space)
     addr -= GetKernelAreaSize();
-  CHECK_LT(reinterpret_cast<uptr>(&addr), addr);
+  CHECK_LT(reinterpret_cast<vaddr>(&addr), addr);
 #endif
   return addr;
 }
 
 #if !SANITIZER_ANDROID
-uptr GetPageSize() {
+usize GetPageSize() {
 #if SANITIZER_LINUX && (defined(__x86_64__) || defined(__i386__))
   return EXEC_PAGESIZE;
 #elif SANITIZER_USE_GETAUXVAL
@@ -1063,11 +1063,11 @@ uptr GetPageSize() {
 #elif SANITIZER_FREEBSD || SANITIZER_NETBSD
 // Use sysctl as sysconf can trigger interceptors internally.
   int pz = 0;
-  uptr pzl = sizeof(pz);
+  usize pzl = sizeof(pz);
   int mib[2] = {CTL_HW, HW_PAGESIZE};
   int rv = internal_sysctl(mib, 2, &pz, &pzl, nullptr, 0);
   CHECK_EQ(rv, 0);
-  return (uptr)pz;
+  return (usize)pz;
 #else
   return sysconf(_SC_PAGESIZE);  // EXEC_PAGESIZE may not be trustworthy.
 #endif
@@ -1075,7 +1075,7 @@ uptr GetPageSize() {
 #endif // !SANITIZER_ANDROID
 
 #if !SANITIZER_OPENBSD
-uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
+usize ReadBinaryName(/*out*/char *buf, usize buf_len) {
 #if SANITIZER_SOLARIS
   const char *default_module_name = getexecname();
   CHECK_NE(default_module_name, NULL);
@@ -1088,14 +1088,14 @@ uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
   const int Mib[4] = {CTL_KERN, KERN_PROC_ARGS, -1, KERN_PROC_PATHNAME};
 #endif
   const char *default_module_name = "kern.proc.pathname";
-  uptr Size = buf_len;
+  usize Size = buf_len;
   bool IsErr =
       (internal_sysctl(Mib, ARRAY_SIZE(Mib), buf, &Size, NULL, 0) != 0);
   int readlink_error = IsErr ? errno : 0;
-  uptr module_name_len = Size;
+  usize module_name_len = Size;
 #else
   const char *default_module_name = "/proc/self/exe";
-  uptr module_name_len = internal_readlink(
+  usize module_name_len = internal_readlink(
       default_module_name, buf, buf_len);
   int readlink_error;
   bool IsErr = internal_iserror(module_name_len, &readlink_error);
@@ -1116,8 +1116,8 @@ uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
 usize ReadLongProcessName(/*out*/ char *buf, usize buf_len) {
 #if SANITIZER_LINUX
   char *tmpbuf;
-  uptr tmpsize;
-  uptr tmplen;
+  usize tmpsize;
+  usize tmplen;
   if (ReadFileToBuffer("/proc/self/cmdline", &tmpbuf, &tmpsize, &tmplen,
                        1024 * 1024)) {
     internal_strncpy(buf, tmpbuf, buf_len);
@@ -1135,14 +1135,14 @@ bool LibraryNameIs(const char *full_name, const char *base_name) {
   while (*name != '\0') name++;
   while (name > full_name && *name != '/') name--;
   if (*name == '/') name++;
-  uptr base_name_length = internal_strlen(base_name);
+  usize base_name_length = internal_strlen(base_name);
   if (internal_strncmp(name, base_name, base_name_length)) return false;
   return (name[base_name_length] == '-' || name[base_name_length] == '.');
 }
 
 #if !SANITIZER_ANDROID
 // Call cb for each region mapped by map.
-void ForEachMappedRegion(link_map *map, void (*cb)(const void *, uptr)) {
+void ForEachMappedRegion(link_map *map, void (*cb)(const void *, usize)) {
   CHECK_NE(map, nullptr);
 #if !SANITIZER_FREEBSD && !SANITIZER_OPENBSD
   typedef ElfW(Phdr) Elf_Phdr;
@@ -1156,26 +1156,26 @@ void ForEachMappedRegion(link_map *map, void (*cb)(const void *, uptr)) {
   // Find the segment with the minimum base so we can "relocate" the p_vaddr
   // fields.  Typically ET_DYN objects (DSOs) have base of zero and ET_EXEC
   // objects have a non-zero base.
-  uptr preferred_base = (uptr)-1;
+  vaddr preferred_base = (vaddr)-1;
   for (char *iter = phdrs; iter != phdrs_end; iter += ehdr->e_phentsize) {
     Elf_Phdr *phdr = (Elf_Phdr *)iter;
-    if (phdr->p_type == PT_LOAD && preferred_base > (uptr)phdr->p_vaddr)
-      preferred_base = (uptr)phdr->p_vaddr;
+    if (phdr->p_type == PT_LOAD && preferred_base > (vaddr)phdr->p_vaddr)
+      preferred_base = (vaddr)phdr->p_vaddr;
   }
 
   // Compute the delta from the real base to get a relocation delta.
-  sptr delta = (uptr)base - preferred_base;
+  ptrdiff delta = (vaddr)base - preferred_base;
   // Now we can figure out what the loader really mapped.
   for (char *iter = phdrs; iter != phdrs_end; iter += ehdr->e_phentsize) {
     Elf_Phdr *phdr = (Elf_Phdr *)iter;
     if (phdr->p_type == PT_LOAD) {
-      uptr seg_start = phdr->p_vaddr + delta;
-      uptr seg_end = seg_start + phdr->p_memsz;
+      vaddr seg_start = phdr->p_vaddr + delta;
+      vaddr seg_end = seg_start + phdr->p_memsz;
       // None of these values are aligned.  We consider the ragged edges of the
       // load command as defined, since they are mapped from the file.
       seg_start = RoundDownTo(seg_start, GetPageSizeCached());
       seg_end = RoundUpTo(seg_end, GetPageSizeCached());
-      cb((void *)seg_start, seg_end - seg_start);
+      cb((void *)(uptr)seg_start, seg_end - seg_start);
     }
   }
 }
@@ -1188,12 +1188,12 @@ void ForEachMappedRegion(link_map *map, void (*cb)(const void *, uptr)) {
 // the parent (because we don't know how to allocate a new thread
 // descriptor to keep glibc happy). So the stock version of clone(), when
 // used with CLONE_VM, would end up corrupting the parent's thread descriptor.
-uptr internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
+usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
                     int *parent_tidptr, void *newtls, int *child_tidptr) {
   long long res;
   if (!fn || !child_stack)
     return -EINVAL;
-  CHECK_EQ(0, (uptr)child_stack % 16);
+  CHECK(IsAligned((uptr)child_stack, 16));
   child_stack = (char *)child_stack - 2 * sizeof(unsigned long long);
   ((unsigned long long *)child_stack)[0] = (uptr)fn;
   ((unsigned long long *)child_stack)[1] = (uptr)arg;
@@ -1771,7 +1771,7 @@ SignalContext::WriteFlag SignalContext::GetWriteFlag() const {
   uint32_t op_code;
 
 # if SANITIZER_FREEBSD
-  exception_source = (uint32_t *)ucontext->uc_mcontext.mc_pc;
+  exception_source = (uint32_t *)(uptr)ucontext->uc_mcontext.mc_pc;
 # else
   exception_source = (uint32_t *)ucontext->uc_mcontext.pc;
 # endif

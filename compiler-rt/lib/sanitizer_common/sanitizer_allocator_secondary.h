@@ -112,7 +112,7 @@ class LargeMmapAllocator {
     h->size = size;
     h->map_beg = map_beg;
     h->map_size = map_size;
-    uptr size_log = MostSignificantSetBitIndex(map_size);
+    usize size_log = MostSignificantSetBitIndex(map_size);
     CHECK_LT(size_log, ARRAY_SIZE(stats.by_size_log));
     {
       SpinMutexLock l(&mutex_);

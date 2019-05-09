@@ -24,7 +24,7 @@ enum { kKindBits = 3 };
 
 struct StatInfo {
   uptr addr;
-  uptr data;
+  usize data;
 };
 
 struct StatModule {
@@ -33,8 +33,8 @@ struct StatModule {
   StatInfo infos[1];
 };
 
-inline uptr CountFromData(uptr data) {
-  return data & ((1ull << (sizeof(uptr) * 8 - kKindBits)) - 1);
+inline usize CountFromData(usize data) {
+  return data & ((1ull << (sizeof(usize) * 8 - kKindBits)) - 1);
 }
 
 }

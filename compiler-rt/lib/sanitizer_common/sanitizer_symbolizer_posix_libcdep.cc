@@ -318,7 +318,7 @@ class Addr2LinePool : public SymbolizerTool {
     addr2line_pool_.reserve(16);
   }
 
-  bool SymbolizePC(uptr addr, SymbolizedStack *stack) override {
+  bool SymbolizePC(vaddr addr, SymbolizedStack *stack) override {
     if (const char *buf =
             SendCommand(stack->info.module, stack->info.module_offset)) {
       ParseSymbolizePCOutput(buf, stack);
@@ -327,7 +327,7 @@ class Addr2LinePool : public SymbolizerTool {
     return false;
   }
 
-  bool SymbolizeData(uptr addr, DataInfo *info) override {
+  bool SymbolizeData(vaddr addr, DataInfo *info) override {
     return false;
   }
 

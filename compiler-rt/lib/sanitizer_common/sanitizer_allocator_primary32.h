@@ -104,7 +104,7 @@ class SizeClassAllocator32 {
 
   static const usize kBatchSize = sizeof(TransferBatch);
   COMPILER_CHECK((kBatchSize & (kBatchSize - 1)) == 0);
-  COMPILER_CHECK(kBatchSize == SizeClassMap::kMaxNumCachedHint * sizeof(usize));
+  COMPILER_CHECK(kBatchSize == SizeClassMap::kMaxNumCachedHint * sizeof(uptr));
 
   static usize ClassIdToSize(usize class_id) {
     return (class_id == SizeClassMap::kBatchClassID) ?
@@ -183,7 +183,7 @@ class SizeClassAllocator32 {
   }
 
   bool PointerIsMine(const void *p) {
-    uptr mem = reinterpret_cast<uptr>(p);
+    vaddr mem = reinterpret_cast<vaddr>(p);
     if (SANITIZER_SIGN_EXTENDED_ADDRESSES)
       mem &= (kSpaceSize - 1);
     if (mem < kSpaceBeg || mem >= kSpaceBeg + kSpaceSize)
@@ -277,7 +277,7 @@ class SizeClassAllocator32 {
   };
   COMPILER_CHECK(sizeof(SizeClassInfo) % kCacheLineSize == 0);
 
-  usize ComputeRegionId(uptr mem) {
+  usize ComputeRegionId(vaddr mem) {
     if (SANITIZER_SIGN_EXTENDED_ADDRESSES)
       mem &= (kSpaceSize - 1);
     const usize res = (usize)mem >> kRegionSizeLog;

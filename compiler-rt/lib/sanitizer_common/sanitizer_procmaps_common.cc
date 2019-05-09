@@ -145,13 +145,13 @@ void MemoryMappingLayout::DumpListOfModules(
   }
 }
 
-void GetMemoryProfile(fill_profile_f cb, usize *stats, uptr stats_size) {
+void GetMemoryProfile(fill_profile_f cb, usize *stats, usize stats_size) {
   char *smaps = nullptr;
-  uptr smaps_cap = 0;
-  uptr smaps_len = 0;
+  usize smaps_cap = 0;
+  usize smaps_len = 0;
   if (!ReadFileToBuffer("/proc/self/smaps", &smaps, &smaps_cap, &smaps_len))
     return;
-  uptr start = 0;
+  usize start = 0;
   bool file = false;
   const char *pos = smaps;
   while (pos < smaps + smaps_len) {

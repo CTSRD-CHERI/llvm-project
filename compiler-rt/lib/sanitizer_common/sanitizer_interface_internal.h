@@ -47,7 +47,7 @@ extern "C" {
 
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_cov_dump();
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_dump_coverage(
-      const __sanitizer::uptr *pcs, const __sanitizer::uptr len);
+      const __sanitizer::vaddr *pcs, const __sanitizer::usize len);
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_dump_trace_pc_guard_coverage();
 
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_cov(__sanitizer::u32 *guard);
@@ -72,7 +72,7 @@ extern "C" {
   SANITIZER_INTERFACE_ATTRIBUTE
   int __sanitizer_get_module_and_offset_for_pc(
       __sanitizer::uptr pc, char *module_path,
-      __sanitizer::uptr module_path_len, __sanitizer::uptr *pc_offset);
+      __sanitizer::uptr module_path_len, __sanitizer::vaddr *pc_offset);
 
   SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
   void __sanitizer_cov_trace_cmp();

@@ -16,7 +16,7 @@
 
 namespace __ubsan {
 
-typedef uptr HashValue;
+typedef uword HashValue;
 
 /// \brief Information about the dynamic type of an object (extracted from its
 /// vptr).

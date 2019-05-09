@@ -52,8 +52,8 @@ class MemoryMappedSegment {
   uptr end;
   OFF_T offset;
   char *filename;  // owned by caller
-  uword filename_size;
-  uword protection;
+  usize filename_size;
+  usize protection;
   ModuleArch arch;
   u8 uuid[kModuleUUIDSize];
 

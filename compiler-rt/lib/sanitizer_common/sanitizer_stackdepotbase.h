@@ -18,7 +18,32 @@
 #include "sanitizer_atomic.h"
 #include "sanitizer_persistent_allocator.h"
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#include <cheri.h>
+#endif
+
 namespace __sanitizer {
+
+template<usize mask>
+usize GetLowPtrBits(uptr ptr) {
+#ifdef __CHERI_PURE_CAPABILITY__
+  return cheri_get_low_ptr_bits(ptr, mask);
+#else
+  return ptr & mask;
+#endif
+}
+uptr SetLowPtrBits(uptr ptr, usize bits) {
+  return ptr | bits;
+}
+
+template<usize mask>
+uptr ClearLowPtrBits(uptr ptr) {
+#ifdef __CHERI_PURE_CAPABILITY__
+  return cheri_clear_low_ptr_bits(ptr, mask);
+#else
+  return ptr & ~mask;
+#endif
+}
 
 template <class Node, int kReservedBits, int kTabSizeLog>
 class StackDepotBase {
@@ -75,7 +100,7 @@ Node *StackDepotBase<Node, kReservedBits, kTabSizeLog>::lock(
   // Uses the pointer lsb as mutex.
   for (int i = 0;; i++) {
     uptr cmp = atomic_load(p, memory_order_relaxed);
-    if ((cmp & 1) == 0 &&
+    if (GetLowPtrBits<1>(cmp) == 0 &&
         atomic_compare_exchange_weak(p, &cmp, cmp | 1, memory_order_acquire))
       return (Node *)cmp;
     if (i < 10)
@@ -101,7 +126,7 @@ StackDepotBase<Node, kReservedBits, kTabSizeLog>::Put(args_type args,
   uptr h = Node::hash(args);
   atomic_uintptr_t *p = &tab[h % kTabSize];
   uptr v = atomic_load(p, memory_order_consume);
-  Node *s = (Node *)(v & ~1);
+  Node *s = (Node *)ClearLowPtrBits<1>(v);
   // First, try to find the existing stack.
   Node *node = find(s, args, h);
   if (node) return node->get_handle();
@@ -114,14 +139,14 @@ StackDepotBase<Node, kReservedBits, kTabSizeLog>::Put(args_type args,
       return node->get_handle();
     }
   }
-  uptr part = (h % kTabSize) / kPartSize;
+  usize part = (h % kTabSize) / kPartSize;
   u32 id = atomic_fetch_add(&seq[part], 1, memory_order_relaxed) + 1;
   stats.n_uniq_ids++;
   CHECK_LT(id, kMaxId);
   id |= part << kPartShift;
   CHECK_NE(id, 0);
   CHECK_EQ(id & (((u32)-1) >> kReservedBits), id);
-  uptr memsz = Node::storage_size(args);
+  usize memsz = Node::storage_size(args);
   s = (Node *)PersistentAlloc(memsz);
   stats.allocated += memsz;
   s->id = id;
@@ -146,7 +171,7 @@ StackDepotBase<Node, kReservedBits, kTabSizeLog>::Get(u32 id) {
     CHECK_LT(idx, kTabSize);
     atomic_uintptr_t *p = &tab[idx];
     uptr v = atomic_load(p, memory_order_consume);
-    Node *s = (Node *)(v & ~1);
+    Node *s = (Node *)ClearLowPtrBits<1>(v);
     for (; s; s = s->link) {
       if (s->id == id) {
         return s->load();
@@ -168,7 +193,7 @@ void StackDepotBase<Node, kReservedBits, kTabSizeLog>::UnlockAll() {
   for (int i = 0; i < kTabSize; ++i) {
     atomic_uintptr_t *p = &tab[i];
     uptr s = atomic_load(p, memory_order_relaxed);
-    unlock(p, (Node *)(s & ~1UL));
+    unlock(p, (Node *)ClearLowPtrBits<1>(s));
   }
 }
 

@@ -396,10 +396,14 @@ static void **ThreadSelfSegbase() {
   const uptr kTlsTcbOffset = 0x7000;
   const uptr kTlsTcbSize = sizeof(void *) * 2;
   uptr thread_pointer;
+#ifdef __CHERI_PURE_CAPABILITY__
+  asm volatile("creadhwr\t%0, $chwr_userlocal" : "=C"(thread_pointer));
+#else
   asm volatile(".set push;\
                 .set mips64r2;\
                 rdhwr %0,$29;\
                 .set pop" : "=r" (thread_pointer));
+#endif
   segbase = (void **)(thread_pointer - kTlsTcbOffset - kTlsTcbSize);
 # else
 #  error "unsupported CPU arch"
@@ -448,7 +452,7 @@ int GetSizeFromHdr(struct dl_phdr_info *info, size_t size, void *data) {
 #endif  // SANITIZER_NETBSD || (SANITIZER_FREEBSD && defined(__mips__))
 
 #if !SANITIZER_GO
-static void GetTls(uptr *addr, uptr *size) {
+static void GetTls(uptr *addr, usize *size) {
 #if SANITIZER_LINUX && !SANITIZER_ANDROID
 # if defined(__x86_64__) || defined(__i386__) || defined(__s390__)
   *addr = ThreadSelf();
@@ -524,10 +528,11 @@ static void GetTls(uptr *addr, uptr *size) {
 #endif
 
 #if !SANITIZER_GO
-uptr GetTlsSize() {
+usize GetTlsSize() {
 #if SANITIZER_FREEBSD || SANITIZER_ANDROID || SANITIZER_NETBSD ||              \
     SANITIZER_OPENBSD || SANITIZER_SOLARIS
-  uptr addr, size;
+  uptr addr;
+  usize size;
   GetTls(&addr, &size);
   return size;
 #elif defined(__mips__) || defined(__powerpc64__)

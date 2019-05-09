@@ -190,7 +190,7 @@ void RenderFrame(InternalScopedString *buffer, const char *format, int frame_no,
         RenderModuleLocation(buffer, StripModuleName(info.module),
                              info.module_offset, info.module_arch, "");
       else
-        buffer->append("(%p)", (void *)info.address);
+        buffer->append("(%p)", (void *)(uptr)info.address);
       break;
     default:
       Report("Unsupported specifier in stack frame format: %c (0x%zx)!\n", *p,
