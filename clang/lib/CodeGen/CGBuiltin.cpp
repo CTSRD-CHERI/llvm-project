@@ -108,15 +108,18 @@ static Value *MakeBinaryAtomicValue(
   assert(CGF.getContext().hasSameUnqualifiedType(T, E->getArg(1)->getType()));
 
   llvm::Value *DestPtr = CGF.EmitScalarExpr(E->getArg(0));
-  unsigned AddrSpace = DestPtr->getType()->getPointerAddressSpace();
 
   llvm::Value *Args[2];
   Args[0] = DestPtr;
   Args[1] = CGF.EmitScalarExpr(E->getArg(1));
-  llvm::Type *ValueType = Args[1]->getType();
+  QualType ArgTy = E->getArg(1)->getType();
+  if (ArgTy->isBooleanType())
+    Args[1] = CGF.EmitToMemory(Args[1], E->getArg(1)->getType());
 
   llvm::Value *Result = CGF.Builder.CreateAtomicRMW(
       Kind, Args[0], Args[1], Ordering);
+  if (ArgTy->isBooleanType())
+    Result = CGF.EmitFromMemory(Result, ArgTy);
   return Result;
 }
 
@@ -203,13 +206,17 @@ static RValue EmitBinaryAtomicPost(CodeGenFunction &CGF,
 /// invoke the function EmitAtomicCmpXchgForMSIntrin.
 static Value *MakeAtomicCmpXchgValue(CodeGenFunction &CGF, const CallExpr *E,
                                      bool ReturnBool) {
-  // QualType T = ReturnBool ? E->getArg(1)->getType() : E->getType();
+  QualType T = ReturnBool ? E->getArg(1)->getType() : E->getType();
   llvm::Value *DestPtr = CGF.EmitScalarExpr(E->getArg(0));
 
   Value *Args[3];
   Args[0] = DestPtr;
   Args[1] = CGF.EmitScalarExpr(E->getArg(1));
   Args[2] = CGF.EmitScalarExpr(E->getArg(2));
+  if (E->getArg(1)->getType()->isBooleanType())
+     Args[1] = CGF.EmitToMemory(Args[1], E->getArg(1)->getType());
+  if (E->getArg(2)->getType()->isBooleanType())
+     Args[2] = CGF.EmitToMemory(Args[2], E->getArg(2)->getType());
 
   Value *Pair = CGF.Builder.CreateAtomicCmpXchg(
       Args[0], Args[1], Args[2], llvm::AtomicOrdering::SequentiallyConsistent,
@@ -220,7 +227,7 @@ static Value *MakeAtomicCmpXchgValue(CodeGenFunction &CGF, const CallExpr *E,
                                   CGF.ConvertType(E->getType()));
   else
     // Extract old value and emit it using the same type as compare value.
-    return CGF.Builder.CreateExtractValue(Pair, 0);
+    return CGF.EmitFromMemory(CGF.Builder.CreateExtractValue(Pair, 0), T);
 }
 
 /// This function should be invoked to emit atomic cmpxchg for Microsoft's
