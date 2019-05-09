@@ -7,7 +7,7 @@
 // CHECK-CHERI: "--eh-frame-hdr" "-dynamic-linker" "{{.*}}ld-elf{{.*}}" "-o" "a.out" "{{.*}}crt1.o" "{{.*}}crti.o" "{{.*}}crtbegin.o" "-L[[SYSROOT]]/usr/lib" "{{.*}}.o" "--start-group" "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed" "-lc" "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed" "--end-group" "{{.*}}crtend.o" "{{.*}}crtn.o"
 //
 // RUN: %plain_clang_cheri_triple_allowed -no-canonical-prefixes \
-// RUN:   -target cheri-pc-freebsd11 -mabi=purecap %s        \
+// RUN:   -target cheri-pc-freebsd11 -mabi=purecap %s -cheri=128  \
 // RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcheri_tree -### 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-CHERI-SANDBOX %s
 // CHECK-CHERI-SANDBOX: "-cc1" "-triple" "mips64c128-pc-freebsd11-purecap"
