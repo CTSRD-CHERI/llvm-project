@@ -27,8 +27,8 @@
 #endif
 
 namespace __sanitizer {
-unsigned long internal_open(const char *filename, int flags);
-unsigned long internal_open(const char *filename, int flags, unsigned mode);
+fd_t internal_open(const char *filename, int flags);
+fd_t internal_open(const char *filename, int flags, unsigned mode);
 unsigned long internal_close(int fd);
 unsigned long internal_stat(const char *path, void *buf);
 unsigned long internal_lstat(const char *path, void *buf);
@@ -117,7 +117,7 @@ extern "C" {
   }                                                   \
   return (T)res;
 
-int open(const char *filename, int flags, ...) {
+fd_t open(const char *filename, int flags, ...) {
   unsigned long res;
   if (flags | O_CREAT) {
     va_list va;

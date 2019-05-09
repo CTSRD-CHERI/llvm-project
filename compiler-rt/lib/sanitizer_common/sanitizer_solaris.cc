@@ -80,11 +80,11 @@ DECLARE__REAL_AND_INTERNAL(uptr, close, fd_t fd) {
 
 extern "C" int _REAL64(open)(const char *, int, ...);
 
-uptr internal_open(const char *filename, int flags) {
+fd_t internal_open(const char *filename, int flags) {
   return _REAL64(open)(filename, flags);
 }
 
-uptr internal_open(const char *filename, int flags, u32 mode) {
+fd_t internal_open(const char *filename, int flags, u32 mode) {
   return _REAL64(open)(filename, flags, mode);
 }
 

@@ -85,7 +85,7 @@ class ThreadLister {
   bool IsAlive(int tid);
 
   pid_t pid_;
-  int descriptor_ = -1;
+  fd_t descriptor_ = -1;
   InternalMmapVector<char> buffer_;
 };
 

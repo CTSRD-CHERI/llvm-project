@@ -708,7 +708,7 @@ u32 GetNumberOfCPUs() {
   // NDKs.
   // This code doesn't work on AArch64 because internal_getdents makes use of
   // the 64bit getdents syscall, but cpu_set_t seems to always exist on AArch64.
-  uptr fd = internal_open("/sys/devices/system/cpu", O_RDONLY | O_DIRECTORY);
+  fd_t fd = internal_open("/sys/devices/system/cpu", O_RDONLY | O_DIRECTORY);
   if (internal_iserror(fd))
     return 0;
   InternalMmapVector<u8> buffer(4096);

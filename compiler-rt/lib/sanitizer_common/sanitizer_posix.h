@@ -30,8 +30,8 @@ namespace __sanitizer {
 
 // I/O
 // Don't use directly, use __sanitizer::OpenFile() instead.
-usize internal_open(const char *filename, int flags);
-usize internal_open(const char *filename, int flags, u32 mode);
+fd_t internal_open(const char *filename, int flags);
+fd_t internal_open(const char *filename, int flags, u32 mode);
 usize internal_close(fd_t fd);
 
 usize internal_read(fd_t fd, void *buf, usize count);

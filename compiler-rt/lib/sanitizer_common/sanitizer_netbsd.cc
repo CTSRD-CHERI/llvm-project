@@ -115,12 +115,12 @@ uptr internal_close(fd_t fd) {
   return _sys_close(fd);
 }
 
-uptr internal_open(const char *filename, int flags) {
+fd_t internal_open(const char *filename, int flags) {
   CHECK(&_sys_open);
   return _sys_open(filename, flags);
 }
 
-uptr internal_open(const char *filename, int flags, u32 mode) {
+fd_t internal_open(const char *filename, int flags, u32 mode) {
   CHECK(&_sys_open);
   return _sys_open(filename, flags, mode);
 }
@@ -178,7 +178,7 @@ uptr internal_dup2(int oldfd, int newfd) {
   return _REAL(dup2, oldfd, newfd);
 }
 
-uptr internal_readlink(const char *path, char *buf, uptr bufsize) {
+usize internal_readlink(const char *path, char *buf, usize bufsize) {
   CHECK(&_sys_readlink);
   return (uptr)_sys_readlink(path, buf, bufsize);
 }

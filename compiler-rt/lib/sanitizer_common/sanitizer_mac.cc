@@ -138,11 +138,11 @@ usize internal_close(fd_t fd) {
   return close(fd);
 }
 
-usize internal_open(const char *filename, int flags) {
+fd_t internal_open(const char *filename, int flags) {
   return open(filename, flags);
 }
 
-usize internal_open(const char *filename, int flags, u32 mode) {
+fd_t internal_open(const char *filename, int flags, u32 mode) {
   return open(filename, flags, mode);
 }
 
