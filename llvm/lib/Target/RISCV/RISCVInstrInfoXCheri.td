@@ -13,6 +13,8 @@ include "RISCVInstrFormatsXCheri.td"
 //===----------------------------------------------------------------------===//
 
 // Target-dependent type requirements.
+def SDT_RISCVCapCall        : SDTypeProfile<0, -1, [SDTCisVT<0, CLenVT>]>;
+
 def SDT_RISCVCheriBoolUnary : SDTypeProfile<1, 1, [
   SDTCisInt<0>, SDTCisVT<1, CLenVT>
 ]>;
@@ -22,6 +24,12 @@ def SDT_RISCVCheriBoolBinary : SDTypeProfile<1, 2, [
 ]>;
 
 // Target-dependent nodes.
+def riscv_cap_call        : SDNode<"RISCVISD::CAP_CALL", SDT_RISCVCapCall,
+                                   [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
+                                    SDNPVariadic]>;
+def riscv_cap_tail        : SDNode<"RISCVISD::CAP_TAIL", SDT_RISCVCapCall,
+                                   [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
+                                    SDNPVariadic]>;
 def riscv_cap_tag_get     : SDNode<"RISCVISD::CAP_TAG_GET",
                                    SDT_RISCVCheriBoolUnary>;
 def riscv_cap_sealed_get  : SDNode<"RISCVISD::CAP_SEALED_GET",
@@ -109,6 +117,23 @@ def : InstAlias<"cret", (CJALR C0, C1), 2>;
 def : InstAlias<"creturn", (CCall C0, C0, 0)>;
 def : InstAlias<"ccall $cs, $cb", (CCall GPCR:$cs, GPCR:$cb, 0)>;
 }
+
+let Predicates = [HasCheri, IsPureCapABI],
+    isCall = 1, Defs = [C1] in
+def PseudoCapCALLIndirect : Pseudo<(outs), (ins GPCR:$rs1),
+                                   [(riscv_cap_call GPCR:$rs1)]>,
+                            PseudoInstExpansion<(CJALR C1, GPCR:$rs1)>;
+
+let Predicates = [HasCheri, IsPureCapABI],
+    isBarrier = 1, isReturn = 1, isTerminator = 1 in
+def PseudoCapRET : Pseudo<(outs), (ins), [(riscv_ret_flag)]>,
+                   PseudoInstExpansion<(CJALR C0, C1)>;
+
+let Predicates = [HasCheri, IsPureCapABI],
+    isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [C2] in
+def PseudoCapTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
+                                   [(riscv_cap_tail GPCRTC:$rs1)]>,
+                            PseudoInstExpansion<(CJALR C0, GPCR:$rs1)>;
 
 //===----------------------------------------------------------------------===//
 // Assertion Instructions
@@ -406,6 +431,13 @@ def : InstAlias<"cfsd $rs2, (${rs1})", (CFSD FPR64:$rs2, GPCR:$rs1, 0), 0>;
 //===----------------------------------------------------------------------===//
 // Pseudo-instructions and codegen patterns
 //===----------------------------------------------------------------------===//
+
+let Predicates = [HasCheri, IsCapMode] in {
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1 in
+def PseudoCLGC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
+                        "clgc", "$dst, $src">;
+}
 
 class PatGpcr<SDPatternOperator OpNode, RVInstCheriRR Inst>
     : Pat<(OpNode GPCR:$rs1), (Inst GPCR:$rs1)>;

@@ -74,6 +74,11 @@ def IsCapMode  : Predicate<"Subtarget->isCapMode()">,
 def NotCapMode : Predicate<"!Subtarget->isCapMode()">,
                            AssemblerPredicate<"!FeatureCapMode">;
 
+def IsPureCapABI
+    : Predicate<"RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">;
+def NotPureCapABI
+    : Predicate<"!RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">;
+
 def FeatureRelax
     : SubtargetFeature<"relax", "EnableLinkerRelax", "true",
                        "Enable Linker relaxation.">;

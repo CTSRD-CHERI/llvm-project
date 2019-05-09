@@ -190,6 +190,13 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BlockAddress, XLenVT, Custom);
   setOperationAction(ISD::ConstantPool, XLenVT, Custom);
 
+  if (Subtarget.hasCheri()) {
+    MVT CLenVT = Subtarget.typeForCapabilities();
+    setOperationAction(ISD::GlobalAddress, CLenVT, Custom);
+    setOperationAction(ISD::BlockAddress, CLenVT, Custom);
+    setOperationAction(ISD::ConstantPool, CLenVT, Custom);
+  }
+
   // Some CHERI intrinsics return i1, which isn't legal, so we have to custom
   // lower them in the DAG combine phase before the first type legalization
   // pass.
@@ -398,6 +405,11 @@ static SDValue getTargetNode(GlobalAddressSDNode *N, SDLoc DL, EVT Ty,
   return DAG.getTargetGlobalAddress(N->getGlobal(), DL, Ty, 0, Flags);
 }
 
+static SDValue getTargetNode(ExternalSymbolSDNode *N, SDLoc DL, EVT Ty,
+                             SelectionDAG &DAG, unsigned Flags) {
+  return DAG.getTargetExternalSymbol(N->getSymbol(), Ty, Flags);
+}
+
 static SDValue getTargetNode(BlockAddressSDNode *N, SDLoc DL, EVT Ty,
                              SelectionDAG &DAG, unsigned Flags) {
   return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, N->getOffset(),
@@ -411,10 +423,16 @@ static SDValue getTargetNode(ConstantPoolSDNode *N, SDLoc DL, EVT Ty,
 }
 
 template <class NodeTy>
-SDValue RISCVTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG) const {
+SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG) const {
   SDLoc DL(N);
-  // TODO: Purecap globals
-  EVT Ty = getPointerTy(DAG.getDataLayout(), 0);
+
+  if (Ty.isFatPointer()) {
+    // Generate a sequence to load a capability from the captable. This
+    // generates the pattern (PseudoCLGC sym), which expands to
+    // (clc (auipcc %captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
+    SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
+    return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC, DL, Ty, Addr), 0);
+  }
 
   switch (getTargetMachine().getCodeModel()) {
   default:
@@ -443,41 +461,41 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   EVT Ty = Op.getValueType();
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   int64_t Offset = N->getOffset();
-  MVT XLenVT = Subtarget.getXLenVT();
 
   if (isPositionIndependent())
     report_fatal_error("Unable to lowerGlobalAddress");
 
-  SDValue Addr = getAddr(N, DAG);
+  SDValue Addr = getAddr(N, Ty, DAG);
 
   // In order to maximise the opportunity for common subexpression elimination,
-  // emit a separate ADD node for the global address offset instead of folding
-  // it in the global address node. Later peephole optimisations may choose to
-  // fold it back in when profitable.
+  // emit a separate ADD/PTRADD node for the global address offset instead of
+  // folding it in the global address node. Later peephole optimisations may
+  // choose to fold it back in when profitable.
   if (Offset != 0)
-    return DAG.getNode(ISD::ADD, DL, Ty, Addr,
-                       DAG.getConstant(Offset, DL, XLenVT));
+    return DAG.getPointerAdd(DL, Addr, Offset);
   return Addr;
 }
 
 SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
                                                SelectionDAG &DAG) const {
   BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
+  EVT Ty = Op.getValueType();
 
   if (isPositionIndependent())
     report_fatal_error("Unable to lowerBlockAddress");
 
-  return getAddr(N, DAG);
+  return getAddr(N, Ty, DAG);
 }
 
 SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
                                                SelectionDAG &DAG) const {
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
+  EVT Ty = Op.getValueType();
 
   if (isPositionIndependent())
     report_fatal_error("Unable to lowerConstantPool");
 
-  return getAddr(N, DAG);
+  return getAddr(N, Ty, DAG);
 }
 
 SDValue RISCVTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
@@ -551,8 +569,7 @@ SDValue RISCVTargetLowering::lowerFRAMEADDR(SDValue Op,
   unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
   while (Depth--) {
     int Offset = -(XLenInBytes * 2);
-    SDValue Ptr = DAG.getNode(ISD::ADD, DL, VT, FrameAddr,
-                              DAG.getIntPtrConstant(Offset, DL));
+    SDValue Ptr = DAG.getPointerAdd(DL, FrameAddr, Offset);
     FrameAddr =
         DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr, MachinePointerInfo());
   }
@@ -577,9 +594,8 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op,
   if (Depth) {
     int Off = -XLenInBytes;
     SDValue FrameAddr = lowerFRAMEADDR(Op, DAG);
-    SDValue Offset = DAG.getConstant(Off, DL, VT);
     return DAG.getLoad(VT, DL, DAG.getEntryNode(),
-                       DAG.getNode(ISD::ADD, DL, VT, FrameAddr, Offset),
+                       DAG.getPointerAdd(DL, FrameAddr, Off),
                        MachinePointerInfo());
   }
 
@@ -1557,8 +1573,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
       while (i + 1 != e && Ins[i + 1].OrigArgIndex == ArgIndex) {
         CCValAssign &PartVA = ArgLocs[i + 1];
         unsigned PartOffset = Ins[i + 1].PartOffset;
-        SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, ArgValue,
-                                      DAG.getIntPtrConstant(PartOffset, DL));
+        SDValue Address = DAG.getPointerAdd(DL, ArgValue, PartOffset);
         InVals.push_back(DAG.getLoad(PartVA.getValVT(), DL, Chain, Address,
                                      MachinePointerInfo()));
         ++i;
@@ -1742,7 +1757,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
   // TODO-CHERI: Stack address space (and uses)
-  EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(),
+                           DAG.getDataLayout().getAllocaAddrSpace());
   MVT XLenVT = Subtarget.getXLenVT();
 
   MachineFunction &MF = DAG.getMachineFunction();
@@ -1816,7 +1832,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         // Second half of f64 is passed on the stack.
         // Work out the address of the stack slot.
         if (!StackPtr.getNode())
-          StackPtr = DAG.getCopyFromReg(Chain, DL, RISCV::X2, PtrVT);
+          StackPtr =
+              DAG.getCopyFromReg(Chain, DL,
+                                 getStackPointerRegisterToSaveRestore(),
+                                 PtrVT);
         // Emit the store.
         MemOpChains.push_back(
             DAG.getStore(Chain, DL, Hi, StackPtr, MachinePointerInfo()));
@@ -1847,8 +1866,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       while (i + 1 != e && Outs[i + 1].OrigArgIndex == ArgIndex) {
         SDValue PartValue = OutVals[i + 1];
         unsigned PartOffset = Outs[i + 1].PartOffset;
-        SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, SpillSlot,
-                                      DAG.getIntPtrConstant(PartOffset, DL));
+        SDValue Address = DAG.getPointerAdd(DL, SpillSlot, PartOffset);
         MemOpChains.push_back(
             DAG.getStore(Chain, DL, PartValue, Address,
                          MachinePointerInfo::getFixedStack(MF, FI)));
@@ -1873,10 +1891,12 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
       // Work out the address of the stack slot.
       if (!StackPtr.getNode())
-        StackPtr = DAG.getCopyFromReg(Chain, DL, RISCV::X2, PtrVT);
+        StackPtr =
+            DAG.getCopyFromReg(Chain, DL,
+                               getStackPointerRegisterToSaveRestore(),
+                               PtrVT);
       SDValue Address =
-          DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
-                      DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
+          DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
 
       // Emit the store.
       MemOpChains.push_back(
@@ -1899,12 +1919,20 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // If the callee is a GlobalAddress/ExternalSymbol node, turn it into a
   // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
   // split it and then direct call can be matched by PseudoCALL.
+  // TODO: Support purecap PLT
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    Callee = DAG.getTargetGlobalAddress(S->getGlobal(), DL, PtrVT, 0,
-                                        RISCVII::MO_CALL);
+    if (Callee.getValueType().isFatPointer())
+      Callee = getAddr(S, Callee.getValueType(), DAG);
+    else
+      Callee = DAG.getTargetGlobalAddress(S->getGlobal(), DL,
+                                          Callee.getValueType(), 0,
+                                          RISCVII::MO_CALL);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee =
-        DAG.getTargetExternalFunctionSymbol(S->getSymbol(), RISCVII::MO_CALL);
+    if (Callee.getValueType().isFatPointer())
+      Callee = getAddr(S, Callee.getValueType(), DAG);
+    else
+      Callee =
+          DAG.getTargetExternalFunctionSymbol(S->getSymbol(), RISCVII::MO_CALL);
   }
 
   // The first call operand is the chain and the second is the target address.
@@ -1934,16 +1962,23 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   if (IsTailCall) {
     MF.getFrameInfo().setHasTailCall();
-    return DAG.getNode(RISCVISD::TAIL, DL, NodeTys, Ops);
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+      return DAG.getNode(RISCVISD::CAP_TAIL, DL, NodeTys, Ops);
+    else
+      return DAG.getNode(RISCVISD::TAIL, DL, NodeTys, Ops);
   }
 
-  Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
+  if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+    Chain = DAG.getNode(RISCVISD::CAP_CALL, DL, NodeTys, Ops);
+  else
+    Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
+
   Glue = Chain.getValue(1);
 
   // Mark the end of the call, which is glued to the call itself.
   Chain = DAG.getCALLSEQ_END(Chain,
-                             DAG.getConstant(NumBytes, DL, PtrVT, true),
-                             DAG.getConstant(0, DL, PtrVT, true),
+                             DAG.getIntPtrConstant(NumBytes, DL, true),
+                             DAG.getIntPtrConstant(0, DL, true),
                              Glue, DL);
   Glue = Chain.getValue(1);
 
@@ -2115,6 +2150,10 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "RISCVISD::FMV_W_X_RV64";
   case RISCVISD::FMV_X_ANYEXTW_RV64:
     return "RISCVISD::FMV_X_ANYEXTW_RV64";
+  case RISCVISD::CAP_CALL:
+    return "RISCVISD::CAP_CALL";
+  case RISCVISD::CAP_TAIL:
+    return "RISCVISD::CAP_TAIL";
   case RISCVISD::CAP_TAG_GET:
     return "RISCVISD::CAP_TAG_GET";
   case RISCVISD::CAP_SEALED_GET:

@@ -893,19 +893,23 @@ def PseudoCALL : Pseudo<(outs), (ins call_symbol:$func), []> {
   let AsmString = "call\t$func";
 }
 
+let Predicates = [NotCapMode, NotPureCapABI] in {
 def : Pat<(riscv_call tglobaladdr:$func), (PseudoCALL tglobaladdr:$func)>;
 def : Pat<(riscv_call texternalsym:$func), (PseudoCALL texternalsym:$func)>;
+} // Predicates = [NotCapMode, NotPureCapABI]
 
 def : Pat<(riscv_uret_flag), (URET X0, X0)>;
 def : Pat<(riscv_sret_flag), (SRET X0, X0)>;
 def : Pat<(riscv_mret_flag), (MRET X0, X0)>;
 
-let isCall = 1, Defs = [X1] in
+let Predicates = [NotPureCapABI],
+    isCall = 1, Defs = [X1] in
 def PseudoCALLIndirect : Pseudo<(outs), (ins GPR:$rs1),
                                 [(riscv_call GPR:$rs1)]>,
                          PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
 
-let isBarrier = 1, isReturn = 1, isTerminator = 1 in
+let Predicates = [NotPureCapABI],
+    isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), [(riscv_ret_flag)]>,
                 PseudoInstExpansion<(JALR X0, X1, 0)>;
 
@@ -919,15 +923,18 @@ def PseudoTAIL : Pseudo<(outs), (ins call_symbol:$dst), []> {
   let AsmString = "tail\t$dst";
 }
 
-let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in
+let Predicates = [NotPureCapABI],
+    isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in
 def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1),
                                 [(riscv_tail GPRTC:$rs1)]>,
                          PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
 
+let Predicates = [NotCapMode, NotPureCapABI] in {
 def : Pat<(riscv_tail (iPTR tglobaladdr:$dst)),
           (PseudoTAIL texternalsym:$dst)>;
 def : Pat<(riscv_tail (iPTR texternalsym:$dst)),
           (PseudoTAIL texternalsym:$dst)>;
+} // Predicates = [NotCapMode, NotPureCapABI]
 
 let Predicates = [NotCapMode] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,

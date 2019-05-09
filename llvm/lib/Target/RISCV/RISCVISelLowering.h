@@ -49,6 +49,8 @@ enum NodeType : unsigned {
   // unnecessary GPR->FPR->GPR moves.
   FMV_W_X_RV64,
   FMV_X_ANYEXTW_RV64,
+  CAP_CALL,
+  CAP_TAIL,
   /// Legalised int_cheri_cap_tag_get
   CAP_TAG_GET,
   /// Legalised int_cheri_cap_sealed_get
@@ -149,7 +151,7 @@ private:
   }
 
   template <class NodeTy>
-  SDValue getAddr(NodeTy *N, SelectionDAG &DAG) const;
+  SDValue getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG) const;
 
   SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;

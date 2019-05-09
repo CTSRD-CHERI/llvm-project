@@ -76,6 +76,10 @@ enum Fixups {
   // relaxation.
   fixup_riscv_align,
 
+  // fixup_riscv_captab_pcrel_hi20 - 20-bit fixup corresponding to
+  // captab_pcrel_hi(foo) for instructions like auipcc
+  fixup_riscv_captab_pcrel_hi20,
+
   // fixup_riscv_invalid - used as a sentinel and a marker, must be last fixup
   fixup_riscv_invalid,
   NumTargetFixupKinds = fixup_riscv_invalid - FirstTargetFixupKind

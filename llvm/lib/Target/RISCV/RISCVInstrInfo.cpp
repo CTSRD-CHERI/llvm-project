@@ -48,6 +48,17 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
   case RISCV::FLD:
   case RISCV::LC_64:
   case RISCV::LC_128:
+  case RISCV::CLB:
+  case RISCV::CLBU:
+  case RISCV::CLH:
+  case RISCV::CLHU:
+  case RISCV::CLW:
+  case RISCV::CFLW:
+  case RISCV::CLWU:
+  case RISCV::CLD:
+  case RISCV::CFLD:
+  case RISCV::CLC_64:
+  case RISCV::CLC_128:
     break;
   }
 
@@ -73,6 +84,14 @@ unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
   case RISCV::FSD:
   case RISCV::SC_64:
   case RISCV::SC_128:
+  case RISCV::CSB:
+  case RISCV::CSH:
+  case RISCV::CSW:
+  case RISCV::CFSW:
+  case RISCV::CSD:
+  case RISCV::CFSD:
+  case RISCV::CSC_64:
+  case RISCV::CSC_128:
     break;
   }
 
@@ -125,18 +144,33 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
   unsigned Opcode;
 
-  if (RISCV::GPRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
-             RISCV::SW : RISCV::SD;
-  else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
-             RISCV::SC_64 : RISCV::SC_128;
-  else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FSW;
-  else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FSD;
-  else
-    llvm_unreachable("Can't store this register to stack slot");
+  if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::CSW : RISCV::CSD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::CSC_64 : RISCV::CSC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFSW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFSD;
+    else
+      llvm_unreachable("Can't store this register to stack slot");
+  } else {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::SW : RISCV::SD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::SC_64 : RISCV::SC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FSW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FSD;
+    else
+      llvm_unreachable("Can't store this register to stack slot");
+  }
 
   BuildMI(MBB, I, DL, get(Opcode))
       .addReg(SrcReg, getKillRegState(IsKill))
@@ -155,18 +189,33 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 
   unsigned Opcode;
 
-  if (RISCV::GPRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
-             RISCV::LW : RISCV::LD;
-  else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
-             RISCV::LC_64 : RISCV::LC_128;
-  else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FLW;
-  else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FLD;
-  else
-    llvm_unreachable("Can't load this register from stack slot");
+  if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::CLW : RISCV::CLD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::CLC_64 : RISCV::CLC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFLW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFLD;
+    else
+      llvm_unreachable("Can't load this register from stack slot");
+  } else {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::LW : RISCV::LD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::LC_64 : RISCV::LC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FLW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FLD;
+    else
+      llvm_unreachable("Can't load this register from stack slot");
+  }
 
   BuildMI(MBB, I, DL, get(Opcode), DstReg).addFrameIndex(FI).addImm(0);
 }
@@ -454,6 +503,7 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCALL:
   case RISCV::PseudoTAIL:
   case RISCV::PseudoLLA:
+  case RISCV::PseudoCLGC:
     return 8;
   case TargetOpcode::INLINEASM:
   case TargetOpcode::INLINEASM_BR: {

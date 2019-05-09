@@ -315,6 +315,9 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
       FixupKind = RISCV::fixup_riscv_call_plt;
       RelaxCandidate = true;
       break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI:
+      FixupKind = RISCV::fixup_riscv_captab_pcrel_hi20;
+      break;
     }
   } else if (Kind == MCExpr::SymbolRef &&
              cast<MCSymbolRefExpr>(Expr)->getKind() == MCSymbolRefExpr::VK_None) {
