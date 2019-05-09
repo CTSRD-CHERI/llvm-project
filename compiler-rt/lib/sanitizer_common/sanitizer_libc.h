@@ -26,34 +26,34 @@ namespace __sanitizer {
 
 // String functions
 s64 internal_atoll(const char *nptr);
-void *internal_memchr(const void *s, int c, uptr n);
-void *internal_memrchr(const void *s, int c, uptr n);
-int internal_memcmp(const void* s1, const void* s2, uptr n);
-void *internal_memcpy(void *dest, const void *src, uptr n);
-void *internal_memmove(void *dest, const void *src, uptr n);
+void *internal_memchr(const void *s, int c, usize n);
+void *internal_memrchr(const void *s, int c, usize n);
+int internal_memcmp(const void* s1, const void* s2, usize n);
+void *internal_memcpy(void *dest, const void *src, usize n);
+void *internal_memmove(void *dest, const void *src, usize n);
 // Should not be used in performance-critical places.
-void *internal_memset(void *s, int c, uptr n);
+void *internal_memset(void *s, int c, usize n);
 char* internal_strchr(const char *s, int c);
 char *internal_strchrnul(const char *s, int c);
 int internal_strcmp(const char *s1, const char *s2);
-uptr internal_strcspn(const char *s, const char *reject);
+usize internal_strcspn(const char *s, const char *reject);
 char *internal_strdup(const char *s);
-uptr internal_strlen(const char *s);
-uptr internal_strlcat(char *dst, const char *src, uptr maxlen);
-char *internal_strncat(char *dst, const char *src, uptr n);
-int internal_strncmp(const char *s1, const char *s2, uptr n);
-uptr internal_strlcpy(char *dst, const char *src, uptr maxlen);
-char *internal_strncpy(char *dst, const char *src, uptr n);
-uptr internal_strnlen(const char *s, uptr maxlen);
+usize internal_strlen(const char *s);
+usize internal_strlcat(char *dst, const char *src, usize maxlen);
+char *internal_strncat(char *dst, const char *src, usize n);
+int internal_strncmp(const char *s1, const char *s2, usize n);
+usize internal_strlcpy(char *dst, const char *src, usize maxlen);
+char *internal_strncpy(char *dst, const char *src, usize n);
+usize internal_strnlen(const char *s, usize maxlen);
 char *internal_strrchr(const char *s, int c);
 char *internal_strstr(const char *haystack, const char *needle);
 // Works only for base=10 and doesn't set errno.
 s64 internal_simple_strtoll(const char *nptr, const char **endptr, int base);
-int internal_snprintf(char *buffer, uptr length, const char *format, ...);
+int internal_snprintf(char *buffer, usize length, const char *format, ...);
 
 // Return true if all bytes in [mem, mem+size) are zero.
 // Optimized for the case when the result is true.
-bool mem_is_zero(const char *mem, uptr size);
+bool mem_is_zero(const char *mem, usize size);
 
 // I/O
 // Define these as macros so we can use them in linker initialized global
@@ -63,17 +63,17 @@ bool mem_is_zero(const char *mem, uptr size);
 #define kStdoutFd ((fd_t)1)
 #define kStderrFd ((fd_t)2)
 
-uptr internal_ftruncate(fd_t fd, uptr size);
+usize internal_ftruncate(fd_t fd, usize size);
 
 // OS
 void NORETURN internal__exit(int exitcode);
 unsigned int internal_sleep(unsigned int seconds);
 
-uptr internal_getpid();
-uptr internal_getppid();
+pid_t internal_getpid();
+pid_t internal_getppid();
 
 // Threading
-uptr internal_sched_yield();
+usize internal_sched_yield();
 
 // Error handling
 bool internal_iserror(uptr retval, int *rverrno = nullptr);

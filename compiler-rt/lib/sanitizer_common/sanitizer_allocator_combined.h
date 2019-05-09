@@ -44,7 +44,7 @@ class CombinedAllocator {
     secondary_.Init();
   }
 
-  void *Allocate(AllocatorCache *cache, uptr size, uptr alignment) {
+  void *Allocate(AllocatorCache *cache, usize size, usize alignment) {
     // Returning 0 on malloc(0) may break a lot of code.
     if (size == 0)
       size = 1;
@@ -54,7 +54,7 @@ class CombinedAllocator {
              SanitizerToolName, size, alignment);
       return nullptr;
     }
-    uptr original_size = size;
+    usize original_size = size;
     // If alignment requirements are to be fulfilled by the frontend allocator
     // rather than by the primary or secondary, passing an alignment lower than
     // or equal to 8 will prevent any further rounding up, as well as the later
@@ -73,7 +73,7 @@ class CombinedAllocator {
     else
       res = secondary_.Allocate(&stats_, original_size, alignment);
     if (alignment > 8)
-      CHECK_EQ(reinterpret_cast<uptr>(res) & (alignment - 1), 0);
+      CHECK(IsAligned(res, alignment));
     return res;
   }
 
@@ -97,8 +97,8 @@ class CombinedAllocator {
       secondary_.Deallocate(&stats_, p);
   }
 
-  void *Reallocate(AllocatorCache *cache, void *p, uptr new_size,
-                   uptr alignment) {
+  void *Reallocate(AllocatorCache *cache, void *p, usize new_size,
+                   usize alignment) {
     if (!p)
       return Allocate(cache, new_size, alignment);
     if (!new_size) {
@@ -106,8 +106,8 @@ class CombinedAllocator {
       return nullptr;
     }
     CHECK(PointerIsMine(p));
-    uptr old_size = GetActuallyAllocatedSize(p);
-    uptr memcpy_size = Min(new_size, old_size);
+    usize old_size = GetActuallyAllocatedSize(p);
+    usize memcpy_size = Min(new_size, old_size);
     void *new_p = Allocate(cache, new_size, alignment);
     if (new_p)
       internal_memcpy(new_p, p, memcpy_size);
@@ -145,13 +145,13 @@ class CombinedAllocator {
     return secondary_.GetBlockBeginFastLocked(p);
   }
 
-  uptr GetActuallyAllocatedSize(void *p) {
+  usize GetActuallyAllocatedSize(void *p) {
     if (primary_.PointerIsMine(p))
       return primary_.GetActuallyAllocatedSize(p);
     return secondary_.GetActuallyAllocatedSize(p);
   }
 
-  uptr TotalMemoryUsed() {
+  usize TotalMemoryUsed() {
     return primary_.TotalMemoryUsed() + secondary_.TotalMemoryUsed();
   }
 

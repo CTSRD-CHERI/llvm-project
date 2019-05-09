@@ -43,14 +43,14 @@ void NORETURN reportInvalidChunkState(AllocatorAction Action, void *Ptr);
 void NORETURN reportMisalignedPointer(AllocatorAction Action, void *Ptr);
 void NORETURN reportDeallocTypeMismatch(AllocatorAction Action, void *Ptr,
                                         u8 TypeA, u8 TypeB);
-void NORETURN reportDeleteSizeMismatch(void *Ptr, uptr Size, uptr ExpectedSize);
+void NORETURN reportDeleteSizeMismatch(void *Ptr, usize Size, uptr ExpectedSize);
 
 // C wrappers errors.
 void NORETURN reportAlignmentNotPowerOfTwo(uptr Alignment);
 void NORETURN reportInvalidPosixMemalignAlignment(uptr Alignment);
-void NORETURN reportCallocOverflow(uptr Count, uptr Size);
-void NORETURN reportPvallocOverflow(uptr Size);
-void NORETURN reportInvalidAlignedAllocAlignment(uptr Size, uptr Alignment);
+void NORETURN reportCallocOverflow(uptr Count, usize Size);
+void NORETURN reportPvallocOverflow(usize Size);
+void NORETURN reportInvalidAlignedAllocAlignment(usize Size, usize alignment);
 
 } // namespace scudo
 

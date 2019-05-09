@@ -78,8 +78,8 @@ u32 ThreadCreate(u32 parent_tid, uptr user_id, bool detached) {
 
 void ThreadStart(u32 tid, tid_t os_id, ThreadType thread_type) {
   OnStartedArgs args;
-  uptr stack_size = 0;
-  uptr tls_size = 0;
+  usize stack_size = 0;
+  usize tls_size = 0;
   GetThreadStackAndTls(tid == 0, &args.stack_begin, &stack_size,
                        &args.tls_begin, &tls_size);
   args.stack_end = args.stack_begin + stack_size;

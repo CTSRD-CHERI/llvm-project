@@ -26,24 +26,24 @@ void AllocatorProcFinish(Processor *proc);
 void AllocatorPrintStats();
 
 // For user allocations.
-void *user_alloc_internal(ThreadState *thr, uptr pc, uptr sz,
-                          uptr align = kDefaultAlignment, bool signal = true);
+void *user_alloc_internal(ThreadState *thr, uptr pc, usize sz,
+                          usize align = kDefaultAlignment, bool signal = true);
 // Does not accept NULL.
 void user_free(ThreadState *thr, uptr pc, void *p, bool signal = true);
 // Interceptor implementations.
-void *user_alloc(ThreadState *thr, uptr pc, uptr sz);
-void *user_calloc(ThreadState *thr, uptr pc, uptr sz, uptr n);
-void *user_realloc(ThreadState *thr, uptr pc, void *p, uptr sz);
-void *user_memalign(ThreadState *thr, uptr pc, uptr align, uptr sz);
-int user_posix_memalign(ThreadState *thr, uptr pc, void **memptr, uptr align,
-                        uptr sz);
-void *user_aligned_alloc(ThreadState *thr, uptr pc, uptr align, uptr sz);
-void *user_valloc(ThreadState *thr, uptr pc, uptr sz);
-void *user_pvalloc(ThreadState *thr, uptr pc, uptr sz);
-uptr user_alloc_usable_size(const void *p);
+void *user_alloc(ThreadState *thr, uptr pc, usize sz);
+void *user_calloc(ThreadState *thr, uptr pc, usize sz, usize n);
+void *user_realloc(ThreadState *thr, uptr pc, void *p, usize sz);
+void *user_memalign(ThreadState *thr, uptr pc, usize align, usize sz);
+int user_posix_memalign(ThreadState *thr, uptr pc, void **memptr, usize align,
+                        usize sz);
+void *user_aligned_alloc(ThreadState *thr, uptr pc, usize align, usize sz);
+void *user_valloc(ThreadState *thr, uptr pc, usize sz);
+void *user_pvalloc(ThreadState *thr, uptr pc, usize sz);
+usize user_alloc_usable_size(const void *p);
 
 // Invoking malloc/free hooks that may be installed by the user.
-void invoke_malloc_hook(void *ptr, uptr size);
+void invoke_malloc_hook(void *ptr, usize size);
 void invoke_free_hook(void *ptr);
 
 enum MBlockType {
@@ -75,7 +75,7 @@ enum MBlockType {
 };
 
 // For internal data structures.
-void *internal_alloc(MBlockType typ, uptr sz);
+void *internal_alloc(MBlockType typ, usize sz);
 void internal_free(void *p);
 
 template<typename T>

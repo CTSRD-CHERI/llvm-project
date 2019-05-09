@@ -24,9 +24,9 @@
 
 // These typedefs should be used only in the interceptor definitions to replace
 // the standard system types (e.g. SSIZE_T instead of ssize_t)
-typedef __sanitizer::uptr    SIZE_T;
-typedef __sanitizer::sptr    SSIZE_T;
-typedef __sanitizer::sptr    PTRDIFF_T;
+typedef __sanitizer::usize   SIZE_T;
+typedef __sanitizer::ssize   SSIZE_T;
+typedef __sanitizer::ptrdiff PTRDIFF_T;
 typedef __sanitizer::s64     INTMAX_T;
 typedef __sanitizer::u64     UINTMAX_T;
 typedef __sanitizer::OFF_T   OFF_T;

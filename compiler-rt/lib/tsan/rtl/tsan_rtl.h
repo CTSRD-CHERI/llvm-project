@@ -61,25 +61,25 @@ static const uptr kAllocatorNumRegions =
 using ByteMap = TwoLevelByteMap<(kAllocatorNumRegions >> 12), 1 << 12,
                                 LocalAddressSpaceView, MapUnmapCallback>;
 struct AP32 {
-  static const uptr kSpaceBeg = 0;
+  static const vaddr kSpaceBeg = 0;
   static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
-  static const uptr kMetadataSize = 0;
+  static const usize kMetadataSize = 0;
   typedef __sanitizer::CompactSizeClassMap SizeClassMap;
-  static const uptr kRegionSizeLog = kAllocatorRegionSizeLog;
+  static const usize kRegionSizeLog = kAllocatorRegionSizeLog;
   using AddressSpaceView = LocalAddressSpaceView;
   using ByteMap = __tsan::ByteMap;
   typedef __tsan::MapUnmapCallback MapUnmapCallback;
-  static const uptr kFlags = 0;
+  static const usize kFlags = 0;
 };
 typedef SizeClassAllocator32<AP32> PrimaryAllocator;
 #else
 struct AP64 {  // Allocator64 parameters. Deliberately using a short name.
-  static const uptr kSpaceBeg = Mapping::kHeapMemBeg;
-  static const uptr kSpaceSize = Mapping::kHeapMemEnd - Mapping::kHeapMemBeg;
-  static const uptr kMetadataSize = 0;
+  static const vaddr kSpaceBeg = Mapping::kHeapMemBeg;
+  static const usize kSpaceSize = Mapping::kHeapMemEnd - Mapping::kHeapMemBeg;
+  static const usize kMetadataSize = 0;
   typedef DefaultSizeClassMap SizeClassMap;
   typedef __tsan::MapUnmapCallback MapUnmapCallback;
-  static const uptr kFlags = 0;
+  static const usize kFlags = 0;
   using AddressSpaceView = LocalAddressSpaceView;
 };
 typedef SizeClassAllocator64<AP64> PrimaryAllocator;
@@ -600,7 +600,7 @@ class ScopedReportBase {
   void AddUniqueTid(int unique_tid);
   void AddMutex(const SyncVar *s);
   u64 AddMutex(u64 id);
-  void AddLocation(uptr addr, uptr size);
+  void AddLocation(uptr addr, usize size);
   void AddSleep(u32 stack_id);
   void SetCount(int count);
 
@@ -684,9 +684,9 @@ void ALWAYS_INLINE StatSet(ThreadState *thr, StatType typ, u64 n) {
 #endif
 }
 
-void MapShadow(uptr addr, uptr size);
-void MapThreadTrace(uptr addr, uptr size, const char *name);
-void DontNeedShadowFor(uptr addr, uptr size);
+void MapShadow(uptr addr, usize size);
+void MapThreadTrace(uptr addr, usize size, const char *name);
+void DontNeedShadowFor(uptr addr, usize size);
 void InitializeShadowMemory();
 void InitializeInterceptors();
 void InitializeLibIgnore();
@@ -699,7 +699,7 @@ void ForkChildAfter(ThreadState *thr, uptr pc);
 void ReportRace(ThreadState *thr);
 bool OutputReport(ThreadState *thr, const ScopedReport &srep);
 bool IsFiredSuppression(Context *ctx, ReportType type, StackTrace trace);
-bool IsExpectedReport(uptr addr, uptr size);
+bool IsExpectedReport(uptr addr, usize size);
 void PrintMatchedBenignRaces();
 
 #if defined(TSAN_DEBUG_OUTPUT) && TSAN_DEBUG_OUTPUT >= 1
@@ -723,7 +723,7 @@ void Initialize(ThreadState *thr);
 void MaybeSpawnBackgroundThread();
 int Finalize(ThreadState *thr);
 
-void OnUserAlloc(ThreadState *thr, uptr pc, uptr p, uptr sz, bool write);
+void OnUserAlloc(ThreadState *thr, uptr pc, uptr p, usize sz, bool write);
 void OnUserFree(ThreadState *thr, uptr pc, uptr p, bool write);
 
 void MemoryAccess(ThreadState *thr, uptr pc, uptr addr,
@@ -763,9 +763,9 @@ void ALWAYS_INLINE MemoryWriteAtomic(ThreadState *thr, uptr pc,
   MemoryAccess(thr, pc, addr, kAccessSizeLog, true, true);
 }
 
-void MemoryResetRange(ThreadState *thr, uptr pc, uptr addr, uptr size);
-void MemoryRangeFreed(ThreadState *thr, uptr pc, uptr addr, uptr size);
-void MemoryRangeImitateWrite(ThreadState *thr, uptr pc, uptr addr, uptr size);
+void MemoryResetRange(ThreadState *thr, uptr pc, uptr addr, usize size);
+void MemoryRangeFreed(ThreadState *thr, uptr pc, uptr addr, usize size);
+void MemoryRangeImitateWrite(ThreadState *thr, uptr pc, uptr addr, usize size);
 
 void ThreadIgnoreBegin(ThreadState *thr, uptr pc, bool save_stack = true);
 void ThreadIgnoreEnd(ThreadState *thr, uptr pc);

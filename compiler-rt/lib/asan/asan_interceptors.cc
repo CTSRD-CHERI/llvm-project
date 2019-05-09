@@ -52,7 +52,7 @@ namespace __asan {
 #define ASAN_READ_STRING(ctx, s, n)                             \
   ASAN_READ_STRING_OF_LEN((ctx), (s), REAL(strlen)(s), (n))
 
-static inline uptr MaybeRealStrnlen(const char *s, uptr maxlen) {
+static inline usize MaybeRealStrnlen(const char *s, usize maxlen) {
 #if SANITIZER_INTERCEPT_STRNLEN
   if (REAL(strnlen)) {
     return REAL(strnlen)(s, maxlen);
@@ -81,7 +81,7 @@ int OnExit() {
 // ---------------------- Wrappers ---------------- {{{1
 using namespace __asan;  // NOLINT
 
-DECLARE_REAL_AND_INTERCEPTOR(void *, malloc, uptr)
+DECLARE_REAL_AND_INTERCEPTOR(void *, malloc, usize)
 DECLARE_REAL_AND_INTERCEPTOR(void, free, void *)
 
 #define ASAN_INTERCEPTOR_ENTER(ctx, func)                                      \
@@ -249,13 +249,13 @@ DEFINE_REAL_PTHREAD_FUNCTIONS
 #endif  // ASAN_INTERCEPT_PTHREAD_CREATE
 
 #if ASAN_INTERCEPT_SWAPCONTEXT
-static void ClearShadowMemoryForContextStack(uptr stack, uptr ssize) {
+static void ClearShadowMemoryForContextStack(uptr stack, usize ssize) {
   // Align to page size.
-  uptr PageSize = GetPageSizeCached();
-  uptr bottom = stack & ~(PageSize - 1);
+  usize PageSize = GetPageSizeCached();
+  uptr bottom = RoundDownTo(stack, PageSize);
   ssize += stack - bottom;
   ssize = RoundUpTo(ssize, PageSize);
-  static const uptr kMaxSaneContextStackSize = 1 << 22;  // 4 Mb
+  static const usize kMaxSaneContextStackSize = 1 << 22;  // 4 Mb
   if (AddrIsInMem(bottom) && ssize && ssize <= kMaxSaneContextStackSize) {
     PoisonShadow(bottom, ssize, 0);
   }
@@ -271,7 +271,8 @@ INTERCEPTOR(int, swapcontext, struct ucontext_t *oucp,
   }
   // Clear shadow memory for new context (it may share stack
   // with current context).
-  uptr stack, ssize;
+  uptr stack;
+  usize ssize;
   ReadContextStack(ucp, &stack, &ssize);
   ClearShadowMemoryForContextStack(stack, ssize);
 #if __has_attribute(__indirect_return__) && \
@@ -378,9 +379,9 @@ INTERCEPTOR(char*, strcat, char *to, const char *from) {  // NOLINT
   ASAN_INTERCEPTOR_ENTER(ctx, strcat);  // NOLINT
   ENSURE_ASAN_INITED();
   if (flags()->replace_str) {
-    uptr from_length = REAL(strlen)(from);
+    usize from_length = REAL(strlen)(from);
     ASAN_READ_RANGE(ctx, from, from_length + 1);
-    uptr to_length = REAL(strlen)(to);
+    usize to_length = REAL(strlen)(to);
     ASAN_READ_STRING_OF_LEN(ctx, to, to_length, to_length);
     ASAN_WRITE_RANGE(ctx, to + to_length, from_length + 1);
     // If the copying actually happens, the |from| string should not overlap
@@ -394,15 +395,15 @@ INTERCEPTOR(char*, strcat, char *to, const char *from) {  // NOLINT
   return REAL(strcat)(to, from);  // NOLINT
 }
 
-INTERCEPTOR(char*, strncat, char *to, const char *from, uptr size) {
+INTERCEPTOR(char*, strncat, char *to, const char *from, usize size) {
   void *ctx;
   ASAN_INTERCEPTOR_ENTER(ctx, strncat);
   ENSURE_ASAN_INITED();
   if (flags()->replace_str) {
-    uptr from_length = MaybeRealStrnlen(from, size);
-    uptr copy_length = Min(size, from_length + 1);
+    usize from_length = MaybeRealStrnlen(from, size);
+    usize copy_length = Min(size, from_length + 1);
     ASAN_READ_RANGE(ctx, from, copy_length);
-    uptr to_length = REAL(strlen)(to);
+    usize to_length = REAL(strlen)(to);
     ASAN_READ_STRING_OF_LEN(ctx, to, to_length, to_length);
     ASAN_WRITE_RANGE(ctx, to + to_length, from_length + 1);
     if (from_length > 0) {
@@ -426,7 +427,7 @@ INTERCEPTOR(char*, strcpy, char *to, const char *from) {  // NOLINT
   }
   ENSURE_ASAN_INITED();
   if (flags()->replace_str) {
-    uptr from_size = REAL(strlen)(from) + 1;
+    usize from_size = REAL(strlen)(from) + 1;
     CHECK_RANGES_OVERLAP("strcpy", to, from_size, from, from_size);
     ASAN_READ_RANGE(ctx, from, from_size);
     ASAN_WRITE_RANGE(ctx, to, from_size);
@@ -439,7 +440,7 @@ INTERCEPTOR(char*, strdup, const char *s) {
   ASAN_INTERCEPTOR_ENTER(ctx, strdup);
   if (UNLIKELY(!asan_inited)) return internal_strdup(s);
   ENSURE_ASAN_INITED();
-  uptr length = REAL(strlen)(s);
+  usize length = REAL(strlen)(s);
   if (flags()->replace_str) {
     ASAN_READ_RANGE(ctx, s, length + 1);
   }
@@ -455,7 +456,7 @@ INTERCEPTOR(char*, __strdup, const char *s) {
   ASAN_INTERCEPTOR_ENTER(ctx, strdup);
   if (UNLIKELY(!asan_inited)) return internal_strdup(s);
   ENSURE_ASAN_INITED();
-  uptr length = REAL(strlen)(s);
+  usize length = REAL(strlen)(s);
   if (flags()->replace_str) {
     ASAN_READ_RANGE(ctx, s, length + 1);
   }
@@ -466,12 +467,12 @@ INTERCEPTOR(char*, __strdup, const char *s) {
 }
 #endif // ASAN_INTERCEPT___STRDUP
 
-INTERCEPTOR(char*, strncpy, char *to, const char *from, uptr size) {
+INTERCEPTOR(char*, strncpy, char *to, const char *from, usize size) {
   void *ctx;
   ASAN_INTERCEPTOR_ENTER(ctx, strncpy);
   ENSURE_ASAN_INITED();
   if (flags()->replace_str) {
-    uptr from_size = Min(size, MaybeRealStrnlen(from, size) + 1);
+    usize from_size = Min(size, MaybeRealStrnlen(from, size) + 1);
     CHECK_RANGES_OVERLAP("strncpy", to, from_size, from, from_size);
     ASAN_READ_RANGE(ctx, from, from_size);
     ASAN_WRITE_RANGE(ctx, to, size);

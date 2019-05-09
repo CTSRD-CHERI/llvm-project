@@ -29,7 +29,7 @@ Symbolizer *Symbolizer::GetOrInit() {
 #if !SANITIZER_SYMBOLIZER_MARKUP
 
 const char *ExtractToken(const char *str, const char *delims, char **result) {
-  uptr prefix_len = internal_strcspn(str, delims);
+  usize prefix_len = internal_strcspn(str, delims);
   *result = (char*)InternalAlloc(prefix_len + 1);
   internal_memcpy(*result, str, prefix_len);
   (*result)[prefix_len] = '\0';
@@ -61,7 +61,7 @@ const char *ExtractUptr(const char *str, const char *delims, uptr *result) {
 const char *ExtractTokenUpToDelimiter(const char *str, const char *delimiter,
                                       char **result) {
   const char *found_delimiter = internal_strstr(str, delimiter);
-  uptr prefix_len =
+  usize prefix_len =
       found_delimiter ? found_delimiter - str : internal_strlen(str);
   *result = (char *)InternalAlloc(prefix_len + 1);
   internal_memcpy(*result, str, prefix_len);
@@ -215,7 +215,7 @@ class LLVMSymbolizerProcess : public SymbolizerProcess {
   explicit LLVMSymbolizerProcess(const char *path) : SymbolizerProcess(path) {}
 
  private:
-  bool ReachedEndOfOutput(const char *buffer, uptr length) const override {
+  bool ReachedEndOfOutput(const char *buffer, usize length) const override {
     // Empty line marks the end of llvm-symbolizer output.
     return length >= 2 && buffer[length - 1] == '\n' &&
            buffer[length - 2] == '\n';
@@ -269,7 +269,7 @@ static const char *ParseFileLineInfo(AddressInfo *info, const char *str) {
   str = ExtractToken(str, "\n", &file_line_info);
   CHECK(file_line_info);
 
-  if (uptr size = internal_strlen(file_line_info)) {
+  if (usize size = internal_strlen(file_line_info)) {
     char *back = file_line_info + size - 1;
     for (int i = 0; i < 2; ++i) {
       while (back > file_line_info && IsDigit(*back)) --back;
@@ -367,7 +367,7 @@ bool LLVMSymbolizer::SymbolizeData(uptr addr, DataInfo *info) {
 
 const char *LLVMSymbolizer::FormatAndSendCommand(bool is_data,
                                                  const char *module_name,
-                                                 uptr module_offset,
+                                                 usize module_offset,
                                                  ModuleArch arch) {
   CHECK(module_name);
   const char *is_data_str = is_data ? "DATA " : "";
@@ -449,12 +449,12 @@ bool SymbolizerProcess::Restart() {
   return StartSymbolizerSubprocess();
 }
 
-bool SymbolizerProcess::ReadFromSymbolizer(char *buffer, uptr max_length) {
+bool SymbolizerProcess::ReadFromSymbolizer(char *buffer, usize max_length) {
   if (max_length == 0)
     return true;
-  uptr read_len = 0;
+  usize read_len = 0;
   while (true) {
-    uptr just_read = 0;
+    usize just_read = 0;
     bool success = ReadFromFile(input_fd_, buffer + read_len,
                                 max_length - read_len - 1, &just_read);
     // We can't read 0 bytes, as we don't expect external symbolizer to close
@@ -476,10 +476,10 @@ bool SymbolizerProcess::ReadFromSymbolizer(char *buffer, uptr max_length) {
   return true;
 }
 
-bool SymbolizerProcess::WriteToSymbolizer(const char *buffer, uptr length) {
+bool SymbolizerProcess::WriteToSymbolizer(const char *buffer, usize length) {
   if (length == 0)
     return true;
-  uptr write_len = 0;
+  usize write_len = 0;
   bool success = WriteToFile(output_fd_, buffer, length, &write_len);
   if (!success || write_len != length) {
     Report("WARNING: Can't write to symbolizer at fd %d\n", output_fd_);

@@ -75,7 +75,7 @@ class SymbolizerProcess {
   const char *SendCommand(const char *command);
 
  protected:
-  virtual bool ReachedEndOfOutput(const char *buffer, uptr length) const {
+  virtual bool ReachedEndOfOutput(const char *buffer, usize length) const {
     UNIMPLEMENTED();
   }
 
@@ -88,24 +88,24 @@ class SymbolizerProcess {
     UNIMPLEMENTED();
   }
 
-  virtual bool ReadFromSymbolizer(char *buffer, uptr max_length);
+  virtual bool ReadFromSymbolizer(char *buffer, usize max_length);
 
  private:
   bool Restart();
   const char *SendCommandImpl(const char *command);
-  bool WriteToSymbolizer(const char *buffer, uptr length);
+  bool WriteToSymbolizer(const char *buffer, usize length);
   bool StartSymbolizerSubprocess();
 
   const char *path_;
   fd_t input_fd_;
   fd_t output_fd_;
 
-  static const uptr kBufferSize = 16 * 1024;
+  static const usize kBufferSize = 16 * 1024;
   char buffer_[kBufferSize];
 
-  static const uptr kMaxTimesRestarted = 5;
+  static const usize kMaxTimesRestarted = 5;
   static const int kSymbolizerStartupTimeMillis = 10;
-  uptr times_restarted_;
+  usize times_restarted_;
   bool failed_to_start_;
   bool reported_invalid_path_;
   bool use_forkpty_;
@@ -125,10 +125,10 @@ class LLVMSymbolizer : public SymbolizerTool {
 
  private:
   const char *FormatAndSendCommand(bool is_data, const char *module_name,
-                                   uptr module_offset, ModuleArch arch);
+                                   usize module_offset, ModuleArch arch);
 
   LLVMSymbolizerProcess *symbolizer_process_;
-  static const uptr kBufferSize = 16 * 1024;
+  static const usize kBufferSize = 16 * 1024;
   char buffer_[kBufferSize];
 };
 

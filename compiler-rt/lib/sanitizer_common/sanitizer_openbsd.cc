@@ -46,9 +46,9 @@ uptr internal_mmap(void *addr, size_t length, int prot, int flags, int fd,
   return (uptr)mmap(addr, length, prot, flags, fd, offset);
 }
 
-uptr internal_munmap(void *addr, uptr length) { return munmap(addr, length); }
+uptr internal_munmap(void *addr, usize length) { return munmap(addr, length); }
 
-int internal_mprotect(void *addr, uptr length, int prot) {
+int internal_mprotect(void *addr, usize length, int prot) {
   return mprotect(addr, length, prot);
 }
 

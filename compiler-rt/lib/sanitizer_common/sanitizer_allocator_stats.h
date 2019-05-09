@@ -20,7 +20,7 @@ enum AllocatorStat {
   AllocatorStatCount
 };
 
-typedef uptr AllocatorStatCounters[AllocatorStatCount];
+typedef usize AllocatorStatCounters[AllocatorStatCount];
 
 // Per-thread stats, live in per-thread cache.
 class AllocatorStats {
@@ -30,21 +30,21 @@ class AllocatorStats {
   }
   void InitLinkerInitialized() {}
 
-  void Add(AllocatorStat i, uptr v) {
+  void Add(AllocatorStat i, usize v) {
     v += atomic_load(&stats_[i], memory_order_relaxed);
     atomic_store(&stats_[i], v, memory_order_relaxed);
   }
 
-  void Sub(AllocatorStat i, uptr v) {
+  void Sub(AllocatorStat i, usize v) {
     v = atomic_load(&stats_[i], memory_order_relaxed) - v;
     atomic_store(&stats_[i], v, memory_order_relaxed);
   }
 
-  void Set(AllocatorStat i, uptr v) {
+  void Set(AllocatorStat i, usize v) {
     atomic_store(&stats_[i], v, memory_order_relaxed);
   }
 
-  uptr Get(AllocatorStat i) const {
+  usize Get(AllocatorStat i) const {
     return atomic_load(&stats_[i], memory_order_relaxed);
   }
 
@@ -52,7 +52,7 @@ class AllocatorStats {
   friend class AllocatorGlobalStats;
   AllocatorStats *next_;
   AllocatorStats *prev_;
-  atomic_uintptr_t stats_[AllocatorStatCount];
+  atomic_size_t stats_[AllocatorStatCount];
 };
 
 // Global stats, used for aggregation and querying.
@@ -84,7 +84,7 @@ class AllocatorGlobalStats : public AllocatorStats {
   }
 
   void Get(AllocatorStatCounters s) const {
-    internal_memset(s, 0, AllocatorStatCount * sizeof(uptr));
+    internal_memset(s, 0, AllocatorStatCount * sizeof(*s));
     SpinMutexLock l(&mu_);
     const AllocatorStats *stats = this;
     for (;;) {

@@ -23,7 +23,7 @@ struct Suppression {
   const char *type;
   char *templ;
   atomic_uint32_t hit_count;
-  uptr weight;
+  usize weight;
 };
 
 class SuppressionContext {
@@ -36,9 +36,9 @@ class SuppressionContext {
   void Parse(const char *str);
 
   bool Match(const char *str, const char *type, Suppression **s);
-  uptr SuppressionCount() const;
+  usize SuppressionCount() const;
   bool HasSuppressionType(const char *type) const;
-  const Suppression *SuppressionAt(uptr i) const;
+  const Suppression *SuppressionAt(usize i) const;
   void GetMatched(InternalMmapVector<Suppression *> *matched);
 
  private:

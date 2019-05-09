@@ -19,7 +19,7 @@
 
 namespace __hwasan {
 
-uptr TagMemoryAligned(uptr p, uptr size, tag_t tag) {
+uptr TagMemoryAligned(uptr p, usize size, tag_t tag) {
   CHECK(IsAligned(p, kShadowAlignment));
   CHECK(IsAligned(size, kShadowAlignment));
   uptr shadow_start = MemToShadow(p);
@@ -43,7 +43,7 @@ uptr TagMemoryAligned(uptr p, uptr size, tag_t tag) {
   return AddTagToPointer(p, tag);
 }
 
-uptr TagMemory(uptr p, uptr size, tag_t tag) {
+uptr TagMemory(uptr p, usize size, tag_t tag) {
   uptr start = RoundDownTo(p, kShadowAlignment);
   uptr end = RoundUpTo(p + size, kShadowAlignment);
   return TagMemoryAligned(start, end - start, tag);

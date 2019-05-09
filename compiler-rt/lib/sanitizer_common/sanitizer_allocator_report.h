@@ -19,12 +19,12 @@
 
 namespace __sanitizer {
 
-void NORETURN ReportCallocOverflow(uptr count, uptr size,
+void NORETURN ReportCallocOverflow(uptr count, usize size,
                                    const StackTrace *stack);
-void NORETURN ReportPvallocOverflow(uptr size, const StackTrace *stack);
+void NORETURN ReportPvallocOverflow(usize size, const StackTrace *stack);
 void NORETURN ReportInvalidAllocationAlignment(uptr alignment,
                                                const StackTrace *stack);
-void NORETURN ReportInvalidAlignedAllocAlignment(uptr size, uptr alignment,
+void NORETURN ReportInvalidAlignedAllocAlignment(usize size, usize alignment,
                                                  const StackTrace *stack);
 void NORETURN ReportInvalidPosixMemalignAlignment(uptr alignment,
                                                   const StackTrace *stack);

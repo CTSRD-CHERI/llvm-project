@@ -21,7 +21,7 @@ public:
   explicit ScopedString(uptr MaxLength) : String(MaxLength), Length(0) {
     String[0] = '\0';
   }
-  uptr length() { return Length; }
+  usize length() { return Length; }
   const char *data() { return String.data(); }
   void clear() {
     String[0] = '\0';

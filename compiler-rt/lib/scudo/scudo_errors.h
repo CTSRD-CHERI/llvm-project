@@ -17,13 +17,13 @@
 
 namespace __scudo {
 
-void NORETURN reportCallocOverflow(uptr Count, uptr Size);
-void NORETURN reportPvallocOverflow(uptr Size);
+void NORETURN reportCallocOverflow(uptr Count, usize Size);
+void NORETURN reportPvallocOverflow(usize Size);
 void NORETURN reportAllocationAlignmentTooBig(uptr Alignment,
                                               uptr MaxAlignment);
 void NORETURN reportAllocationAlignmentNotPowerOfTwo(uptr Alignment);
 void NORETURN reportInvalidPosixMemalignAlignment(uptr Alignment);
-void NORETURN reportInvalidAlignedAllocAlignment(uptr Size, uptr Alignment);
+void NORETURN reportInvalidAlignedAllocAlignment(usize Size, usize alignment);
 void NORETURN reportAllocationSizeTooBig(uptr UserSize, uptr TotalSize,
                                          uptr MaxSize);
 void NORETURN reportRssLimitExceeded();

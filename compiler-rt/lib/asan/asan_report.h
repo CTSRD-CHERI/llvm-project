@@ -60,11 +60,11 @@ void ReportAllocTypeMismatch(uptr addr, BufferedStackTrace *free_stack,
 void ReportMallocUsableSizeNotOwned(uptr addr, BufferedStackTrace *stack);
 void ReportSanitizerGetAllocatedSizeNotOwned(uptr addr,
                                              BufferedStackTrace *stack);
-void ReportCallocOverflow(uptr count, uptr size, BufferedStackTrace *stack);
-void ReportPvallocOverflow(uptr size, BufferedStackTrace *stack);
+void ReportCallocOverflow(uptr count, usize size, BufferedStackTrace *stack);
+void ReportPvallocOverflow(usize size, BufferedStackTrace *stack);
 void ReportInvalidAllocationAlignment(uptr alignment,
                                       BufferedStackTrace *stack);
-void ReportInvalidAlignedAllocAlignment(uptr size, uptr alignment,
+void ReportInvalidAlignedAllocAlignment(usize size, usize alignment,
                                         BufferedStackTrace *stack);
 void ReportInvalidPosixMemalignAlignment(uptr alignment,
                                          BufferedStackTrace *stack);
@@ -73,10 +73,10 @@ void ReportAllocationSizeTooBig(uptr user_size, uptr total_size, uptr max_size,
 void ReportRssLimitExceeded(BufferedStackTrace *stack);
 void ReportOutOfMemory(uptr requested_size, BufferedStackTrace *stack);
 void ReportStringFunctionMemoryRangesOverlap(const char *function,
-                                             const char *offset1, uptr length1,
-                                             const char *offset2, uptr length2,
+                                             const char *offset1, usize length1,
+                                             const char *offset2, usize length2,
                                              BufferedStackTrace *stack);
-void ReportStringFunctionSizeOverflow(uptr offset, uptr size,
+void ReportStringFunctionSizeOverflow(uptr offset, usize size,
                                       BufferedStackTrace *stack);
 void ReportBadParamsToAnnotateContiguousContainer(uptr beg, uptr end,
                                                   uptr old_mid, uptr new_mid,

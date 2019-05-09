@@ -242,7 +242,7 @@ class LsanMetadata {
   bool allocated() const;
   ChunkTag tag() const;
   void set_tag(ChunkTag value);
-  uptr requested_size() const;
+  usize requested_size() const;
   u32 stack_trace_id() const;
  private:
   void *metadata_;

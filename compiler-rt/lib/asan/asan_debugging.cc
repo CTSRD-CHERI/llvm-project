@@ -128,12 +128,12 @@ const char *__asan_locate_address(uptr addr, char *name, uptr name_size,
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-uptr __asan_get_alloc_stack(uptr addr, uptr *trace, uptr size, u32 *thread_id) {
+uptr __asan_get_alloc_stack(uptr addr, uptr *trace, usize size, u32 *thread_id) {
   return AsanGetStack(addr, trace, size, thread_id, /* alloc_stack */ true);
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-uptr __asan_get_free_stack(uptr addr, uptr *trace, uptr size, u32 *thread_id) {
+uptr __asan_get_free_stack(uptr addr, uptr *trace, usize size, u32 *thread_id) {
   return AsanGetStack(addr, trace, size, thread_id, /* alloc_stack */ false);
 }
 

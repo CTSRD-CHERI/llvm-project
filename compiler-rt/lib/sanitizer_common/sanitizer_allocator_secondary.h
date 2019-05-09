@@ -82,9 +82,9 @@ class LargeMmapAllocator {
     InitLinkerInitialized();
   }
 
-  void *Allocate(AllocatorStats *stat, uptr size, uptr alignment) {
+  void *Allocate(AllocatorStats *stat, usize size, usize alignment) {
     CHECK(IsPowerOfTwo(alignment));
-    uptr map_size = RoundUpMapSize(size);
+    usize map_size = RoundUpMapSize(size);
     if (alignment > page_size_)
       map_size += alignment;
     // Overflow.
@@ -102,8 +102,8 @@ class LargeMmapAllocator {
     MapUnmapCallback().OnMap(map_beg, map_size);
     uptr map_end = map_beg + map_size;
     uptr res = map_beg + page_size_;
-    if (res & (alignment - 1))  // Align.
-      res += alignment - (res & (alignment - 1));
+    if (!IsAligned(res, alignment))  // Align.
+      res = RoundUpTo(res, alignment);
     CHECK(IsAligned(res, alignment));
     CHECK(IsAligned(res, page_size_));
     CHECK_GE(res + size, map_beg);
@@ -310,7 +310,7 @@ class LargeMmapAllocator {
     return reinterpret_cast<void*>(reinterpret_cast<uptr>(h) + page_size_);
   }
 
-  uptr RoundUpMapSize(uptr size) {
+  uptr RoundUpMapSize(usize size) {
     return RoundUpTo(size, page_size_) + page_size_;
   }
 

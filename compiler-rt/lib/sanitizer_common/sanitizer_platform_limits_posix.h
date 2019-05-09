@@ -157,9 +157,9 @@ namespace __sanitizer {
     int *name;
     int nlen;
     void *oldval;
-    uptr *oldlenp;
+    usize *oldlenp;
     void *newval;
-    uptr newlen;
+    usize newlen;
     unsigned long ___unused[4];
   };
 
@@ -250,7 +250,7 @@ namespace __sanitizer {
     u32 __pad3;
   #endif
     long shm_ctime;
-    uptr shm_segsz;
+    usize shm_segsz;
     int shm_cpid;
     int shm_lpid;
     unsigned long shm_nattch;
@@ -258,30 +258,30 @@ namespace __sanitizer {
     unsigned long __glibc_reserved2;
   #else
   #ifndef __powerpc__
-    uptr shm_segsz;
+    usize shm_segsz;
   #elif !defined(__powerpc64__)
-    uptr __unused0;
+    usize __unused0;
   #endif
   #if defined(__x86_64__) && !defined(_LP64)
     u64 shm_atime;
     u64 shm_dtime;
     u64 shm_ctime;
   #else
-    uptr shm_atime;
+    usize shm_atime;
   #if !defined(_LP64) && !defined(__mips__)
-    uptr __unused1;
+    usize __unused1;
   #endif
-    uptr shm_dtime;
+    usize shm_dtime;
   #if !defined(_LP64) && !defined(__mips__)
-    uptr __unused2;
+    usize __unused2;
   #endif
-    uptr shm_ctime;
+    usize shm_ctime;
   #if !defined(_LP64) && !defined(__mips__)
-    uptr __unused3;
+    usize __unused3;
   #endif
   #endif
   #ifdef __powerpc__
-    uptr shm_segsz;
+    usize shm_segsz;
   #endif
     int shm_cpid;
     int shm_lpid;
@@ -290,9 +290,9 @@ namespace __sanitizer {
     u64 __unused4;
     u64 __unused5;
   #else
-    uptr shm_nattch;
-    uptr __unused4;
-    uptr __unused5;
+    usize shm_nattch;
+    usize __unused4;
+    usize __unused5;
   #endif
 #endif
   };
@@ -307,7 +307,7 @@ namespace __sanitizer {
 
   struct __sanitizer_iovec {
     void *iov_base;
-    uptr iov_len;
+    usize iov_len;
   };
 
 #if !SANITIZER_ANDROID
@@ -454,13 +454,13 @@ namespace __sanitizer {
     void *msg_name;
     unsigned msg_namelen;
     struct __sanitizer_iovec *msg_iov;
-    uptr msg_iovlen;
+    usize msg_iovlen;
     void *msg_control;
-    uptr msg_controllen;
+    usize msg_controllen;
     int msg_flags;
   };
   struct __sanitizer_cmsghdr {
-    uptr cmsg_len;
+    usize cmsg_len;
     int cmsg_level;
     int cmsg_type;
   };
@@ -489,8 +489,8 @@ namespace __sanitizer {
   };
 #else
   struct __sanitizer_dirent {
-    uptr d_ino;
-    uptr d_off;
+    usize d_ino;
+    usize d_off;
     unsigned short d_reclen;
     // more fields that we don't care about
   };
@@ -563,7 +563,7 @@ namespace __sanitizer {
 #elif SANITIZER_LINUX
   struct __sanitizer_sigset_t {
     // The size is determined by looking at sizeof of real sigset_t on linux.
-    uptr val[128 / sizeof(uptr)];
+    usize val[128 / sizeof(usize)];
   };
 #endif
 
@@ -603,7 +603,7 @@ namespace __sanitizer {
       __sanitizer_sighandler_ptr handler;
     };
     __sanitizer_sigset_t sa_mask;
-    uptr sa_flags;
+    usize sa_flags;
     void (*sa_restorer)();
   };
 #else // !SANITIZER_ANDROID
@@ -656,7 +656,7 @@ namespace __sanitizer {
 
 #if defined(__mips__)
   struct __sanitizer_kernel_sigset_t {
-    uptr sig[2];
+    usize sig[2];
   };
 #else
   struct __sanitizer_kernel_sigset_t {
@@ -698,7 +698,7 @@ namespace __sanitizer {
 
   extern int af_inet;
   extern int af_inet6;
-  uptr __sanitizer_in_addr_sz(int af);
+  usize __sanitizer_in_addr_sz(int af);
 
 #if SANITIZER_LINUX
   struct __sanitizer_dl_phdr_info {
@@ -773,9 +773,9 @@ namespace __sanitizer {
   extern unsigned path_max;
 
   struct __sanitizer_wordexp_t {
-    uptr we_wordc;
+    usize we_wordc;
     char **we_wordv;
-    uptr we_offs;
+    usize we_offs;
   };
 
 #if SANITIZER_LINUX && !SANITIZER_ANDROID
@@ -873,9 +873,9 @@ struct __sanitizer_obstack {
   uptr more_fields[7];
 };
 
-typedef uptr (*__sanitizer_cookie_io_read)(void *cookie, char *buf, uptr size);
-typedef uptr (*__sanitizer_cookie_io_write)(void *cookie, const char *buf,
-                                            uptr size);
+typedef usize (*__sanitizer_cookie_io_read)(void *cookie, char *buf, usize size);
+typedef usize (*__sanitizer_cookie_io_write)(void *cookie, const char *buf,
+                                            usize size);
 typedef int (*__sanitizer_cookie_io_seek)(void *cookie, u64 *offset,
                                           int whence);
 typedef int (*__sanitizer_cookie_io_close)(void *cookie);

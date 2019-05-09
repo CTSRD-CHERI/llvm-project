@@ -90,7 +90,7 @@ AsanThread *CreateMainThread();
 // loaded image containing `needle' and then enumerates all global metadata
 // structures declared in that image, applying `op' (e.g.,
 // __asan_(un)register_globals) to them.
-typedef void (*globals_op_fptr)(__asan_global *, uptr);
+typedef void (*globals_op_fptr)(__asan_global *, usize);
 void AsanApplyToGlobals(globals_op_fptr op, const void *needle);
 
 void AsanOnDeadlySignal(int, void *siginfo, void *context);

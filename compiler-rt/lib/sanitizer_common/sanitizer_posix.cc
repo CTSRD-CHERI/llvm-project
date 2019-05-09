@@ -37,11 +37,11 @@
 namespace __sanitizer {
 
 // ------------- sanitizer_common.h
-uptr GetMmapGranularity() {
+usize GetMmapGranularity() {
   return GetPageSize();
 }
 
-void *MmapOrDie(uptr size, const char *mem_type, bool raw_report) {
+void *MmapOrDie(usize size, const char *mem_type, bool raw_report) {
   size = RoundUpTo(size, GetPageSizeCached());
   uptr res = MmapNamed(nullptr, size, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANON, mem_type);
@@ -52,7 +52,7 @@ void *MmapOrDie(uptr size, const char *mem_type, bool raw_report) {
   return (void *)res;
 }
 
-void UnmapOrDie(void *addr, uptr size) {
+void UnmapOrDie(void *addr, usize size) {
   if (!addr || !size) return;
   uptr res = internal_munmap(addr, size);
   if (UNLIKELY(internal_iserror(res))) {
@@ -63,7 +63,7 @@ void UnmapOrDie(void *addr, uptr size) {
   DecreaseTotalMmap(size);
 }
 
-void *MmapOrDieOnFatalError(uptr size, const char *mem_type) {
+void *MmapOrDieOnFatalError(usize size, const char *mem_type) {
   size = RoundUpTo(size, GetPageSizeCached());
   uptr res = MmapNamed(nullptr, size, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANON, mem_type);
@@ -80,18 +80,18 @@ void *MmapOrDieOnFatalError(uptr size, const char *mem_type) {
 // We want to map a chunk of address space aligned to 'alignment'.
 // We do it by mapping a bit more and then unmapping redundant pieces.
 // We probably can do it with fewer syscalls in some OS-dependent way.
-void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
+void *MmapAlignedOrDieOnFatalError(usize size, usize alignment,
                                    const char *mem_type) {
   CHECK(IsPowerOfTwo(size));
   CHECK(IsPowerOfTwo(alignment));
-  uptr map_size = size + alignment;
+  usize map_size = size + alignment;
   uptr map_res = (uptr)MmapOrDieOnFatalError(map_size, mem_type);
   if (UNLIKELY(!map_res))
     return nullptr;
   uptr map_end = map_res + map_size;
   uptr res = map_res;
   if (!IsAligned(res, alignment)) {
-    res = (map_res + alignment - 1) & ~(alignment - 1);
+    res = RoundUpTo(map_res, alignment);
     UnmapOrDie((void*)map_res, res - map_res);
   }
   uptr end = res + size;
@@ -100,7 +100,7 @@ void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
   return (void*)res;
 }
 
-void *MmapNoReserveOrDie(uptr size, const char *mem_type) {
+void *MmapNoReserveOrDie(usize size, const char *mem_type) {
   size = RoundUpTo(size, GetPageSizeCached());
   uptr p = MmapNamed(nullptr, size, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANON | MAP_NORESERVE, mem_type);
@@ -111,7 +111,7 @@ void *MmapNoReserveOrDie(uptr size, const char *mem_type) {
   return (void *)p;
 }
 
-static void *MmapFixedImpl(uptr fixed_addr, uptr size, bool tolerate_enomem,
+static void *MmapFixedImpl(uptr fixed_addr, usize size, bool tolerate_enomem,
                            const char *name) {
   size = RoundUpTo(size, GetPageSizeCached());
   fixed_addr = RoundDownTo(fixed_addr, GetPageSizeCached());
@@ -130,19 +130,19 @@ static void *MmapFixedImpl(uptr fixed_addr, uptr size, bool tolerate_enomem,
   return (void *)p;
 }
 
-void *MmapFixedOrDie(uptr fixed_addr, uptr size, const char *name) {
+void *MmapFixedOrDie(uptr fixed_addr, usize size, const char *name) {
   return MmapFixedImpl(fixed_addr, size, false /*tolerate_enomem*/, name);
 }
 
-void *MmapFixedOrDieOnFatalError(uptr fixed_addr, uptr size, const char *name) {
+void *MmapFixedOrDieOnFatalError(uptr fixed_addr, usize size, const char *name) {
   return MmapFixedImpl(fixed_addr, size, true /*tolerate_enomem*/, name);
 }
 
-bool MprotectNoAccess(uptr addr, uptr size) {
+bool MprotectNoAccess(uptr addr, usize size) {
   return 0 == internal_mprotect((void*)addr, size, PROT_NONE);
 }
 
-bool MprotectReadOnly(uptr addr, uptr size) {
+bool MprotectReadOnly(uptr addr, usize size) {
   return 0 == internal_mprotect((void *)addr, size, PROT_READ);
 }
 
@@ -169,9 +169,9 @@ void CloseFile(fd_t fd) {
   internal_close(fd);
 }
 
-bool ReadFromFile(fd_t fd, void *buff, uptr buff_size, uptr *bytes_read,
+bool ReadFromFile(fd_t fd, void *buff, usize buff_size, usize *bytes_read,
                   error_t *error_p) {
-  uptr res = internal_read(fd, buff, buff_size);
+  usize res = internal_read(fd, buff, buff_size);
   if (internal_iserror(res, error_p))
     return false;
   if (bytes_read)
@@ -179,9 +179,9 @@ bool ReadFromFile(fd_t fd, void *buff, uptr buff_size, uptr *bytes_read,
   return true;
 }
 
-bool WriteToFile(fd_t fd, const void *buff, uptr buff_size, uptr *bytes_written,
+bool WriteToFile(fd_t fd, const void *buff, usize buff_size, usize *bytes_written,
                  error_t *error_p) {
-  uptr res = internal_write(fd, buff, buff_size);
+  usize res = internal_write(fd, buff, buff_size);
   if (internal_iserror(res, error_p))
     return false;
   if (bytes_written)
@@ -189,19 +189,19 @@ bool WriteToFile(fd_t fd, const void *buff, uptr buff_size, uptr *bytes_written,
   return true;
 }
 
-void *MapFileToMemory(const char *file_name, uptr *buff_size) {
+void *MapFileToMemory(const char *file_name, usize *buff_size) {
   fd_t fd = OpenFile(file_name, RdOnly);
   CHECK(fd != kInvalidFd);
-  uptr fsize = internal_filesize(fd);
-  CHECK_NE(fsize, (uptr)-1);
+  usize fsize = internal_filesize(fd);
+  CHECK_NE(fsize, (usize)-1);
   CHECK_GT(fsize, 0);
   *buff_size = RoundUpTo(fsize, GetPageSizeCached());
   uptr map = internal_mmap(nullptr, *buff_size, PROT_READ, MAP_PRIVATE, fd, 0);
   return internal_iserror(map) ? nullptr : (void *)map;
 }
 
-void *MapWritableFileToMemory(void *addr, uptr size, fd_t fd, OFF_T offset) {
-  uptr flags = MAP_SHARED;
+void *MapWritableFileToMemory(void *addr, usize size, fd_t fd, OFF_T offset) {
+  usize flags = MAP_SHARED;
   if (addr) flags |= MAP_FIXED;
   uptr p = internal_mmap(addr, size, PROT_READ | PROT_WRITE, flags, fd, offset);
   int mmap_errno = 0;
@@ -265,7 +265,7 @@ bool IsAbsolutePath(const char *path) {
   return path != nullptr && IsPathSeparator(path[0]);
 }
 
-void ReportFile::Write(const char *buffer, uptr length) {
+void ReportFile::Write(const char *buffer, usize length) {
   SpinMutexLock l(mu);
   ReopenIfNecessary();
   internal_write(fd, buffer, length);
@@ -338,7 +338,7 @@ bool ShouldMockFailureToOpen(const char *path) {
 }
 
 #if SANITIZER_LINUX && !SANITIZER_ANDROID && !SANITIZER_GO
-int GetNamedMappingFd(const char *name, uptr size, int *flags) {
+int GetNamedMappingFd(const char *name, usize size, int *flags) {
   if (!common_flags()->decorate_proc_maps || !name)
     return -1;
   char shmname[200];
@@ -356,7 +356,7 @@ int GetNamedMappingFd(const char *name, uptr size, int *flags) {
   return fd;
 }
 #else
-int GetNamedMappingFd(const char *name, uptr size, int *flags) {
+int GetNamedMappingFd(const char *name, usize size, int *flags) {
   return -1;
 }
 #endif
@@ -364,18 +364,18 @@ int GetNamedMappingFd(const char *name, uptr size, int *flags) {
 #if SANITIZER_ANDROID
 #define PR_SET_VMA 0x53564d41
 #define PR_SET_VMA_ANON_NAME 0
-void DecorateMapping(uptr addr, uptr size, const char *name) {
+void DecorateMapping(uptr addr, usize size, const char *name) {
   if (!common_flags()->decorate_proc_maps || !name)
     return;
   CHECK(internal_prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, addr, size,
                        (uptr)name) == 0);
 }
 #else
-void DecorateMapping(uptr addr, uptr size, const char *name) {
+void DecorateMapping(uptr addr, usize size, const char *name) {
 }
 #endif
 
-uptr MmapNamed(void *addr, uptr length, int prot, int flags, const char *name) {
+uptr MmapNamed(void *addr, usize length, int prot, int flags, const char *name) {
   int fd = GetNamedMappingFd(name, length, &flags);
   uptr res = internal_mmap(addr, length, prot, flags, fd, 0);
   if (!internal_iserror(res))

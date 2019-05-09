@@ -23,7 +23,7 @@
 namespace __sanitizer {
 
 struct ReportFile {
-  void Write(const char *buffer, uptr length);
+  void Write(const char *buffer, usize length);
   bool SupportsColors();
   void SetReportPath(const char *path);
 
@@ -41,7 +41,7 @@ struct ReportFile {
   char full_path[kMaxPathLength];
   // PID of the process that opened fd. If a fork() occurs,
   // the PID of child will be different from fd_pid.
-  uptr fd_pid;
+  pid_t fd_pid;
 
  private:
   void ReopenIfNecessary();
@@ -60,10 +60,10 @@ fd_t OpenFile(const char *filename, FileAccessMode mode,
 void CloseFile(fd_t);
 
 // Return true on success, false on error.
-bool ReadFromFile(fd_t fd, void *buff, uptr buff_size,
-                  uptr *bytes_read = nullptr, error_t *error_p = nullptr);
-bool WriteToFile(fd_t fd, const void *buff, uptr buff_size,
-                 uptr *bytes_written = nullptr, error_t *error_p = nullptr);
+bool ReadFromFile(fd_t fd, void *buff, usize buff_size,
+                  usize *bytes_read = nullptr, error_t *error_p = nullptr);
+bool WriteToFile(fd_t fd, const void *buff, usize buff_size,
+                 usize *bytes_written = nullptr, error_t *error_p = nullptr);
 
 // Scoped file handle closer.
 struct FileCloser {
@@ -98,8 +98,8 @@ int WaitForProcess(pid_t pid);
 // Maps given file to virtual memory, and returns pointer to it
 // (or NULL if mapping fails). Stores the size of mmaped region
 // in '*buff_size'.
-void *MapFileToMemory(const char *file_name, uptr *buff_size);
-void *MapWritableFileToMemory(void *addr, uptr size, fd_t fd, OFF_T offset);
+void *MapFileToMemory(const char *file_name, usize *buff_size);
+void *MapWritableFileToMemory(void *addr, usize size, fd_t fd, OFF_T offset);
 
 }  // namespace __sanitizer
 

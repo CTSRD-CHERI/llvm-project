@@ -60,7 +60,7 @@ const uptr MaxAlignment = 1 << MaxAlignmentLog;
 
 // constexpr version of __sanitizer::RoundUp without the extraneous CHECK.
 // This way we can use it in constexpr variables and functions declarations.
-constexpr uptr RoundUpTo(uptr Size, uptr Boundary) {
+constexpr uptr RoundUpTo(usize Size, uptr Boundary) {
   return (Size + Boundary - 1) & ~(Boundary - 1);
 }
 
@@ -73,12 +73,12 @@ namespace Chunk {
 #if SANITIZER_CAN_USE_ALLOCATOR64
 const uptr AllocatorSpace = ~0ULL;
 struct AP64 {
-  static const uptr kSpaceBeg = AllocatorSpace;
-  static const uptr kSpaceSize = AllocatorSize;
-  static const uptr kMetadataSize = 0;
+  static const vaddr kSpaceBeg = AllocatorSpace;
+  static const usize kSpaceSize = AllocatorSize;
+  static const usize kMetadataSize = 0;
   typedef __scudo::SizeClassMap SizeClassMap;
   typedef NoOpMapUnmapCallback MapUnmapCallback;
-  static const uptr kFlags =
+  static const usize kFlags =
       SizeClassAllocator64FlagMasks::kRandomShuffleChunks;
   using AddressSpaceView = LocalAddressSpaceView;
 };
@@ -91,15 +91,15 @@ typedef FlatByteMap<NumRegions> ByteMap;
 typedef TwoLevelByteMap<(NumRegions >> 12), 1 << 12> ByteMap;
 # endif  // SANITIZER_WORDSIZE
 struct AP32 {
-  static const uptr kSpaceBeg = 0;
+  static const vaddr kSpaceBeg = 0;
   static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
-  static const uptr kMetadataSize = 0;
+  static const usize kMetadataSize = 0;
   typedef __scudo::SizeClassMap SizeClassMap;
-  static const uptr kRegionSizeLog = RegionSizeLog;
+  static const usize kRegionSizeLog = RegionSizeLog;
   using AddressSpaceView = LocalAddressSpaceView;
   using ByteMap = __scudo::ByteMap;
   typedef NoOpMapUnmapCallback MapUnmapCallback;
-  static const uptr kFlags =
+  static const usize kFlags =
       SizeClassAllocator32FlagMasks::kRandomShuffleChunks |
       SizeClassAllocator32FlagMasks::kUseSeparateSizeClassForBatch;
 };
@@ -115,14 +115,14 @@ typedef CombinedAllocator<PrimaryT, AllocatorCacheT, SecondaryT> BackendT;
 
 void initScudo();
 
-void *scudoAllocate(uptr Size, uptr Alignment, AllocType Type);
-void scudoDeallocate(void *Ptr, uptr Size, uptr Alignment, AllocType Type);
-void *scudoRealloc(void *Ptr, uptr Size);
-void *scudoCalloc(uptr NMemB, uptr Size);
-void *scudoValloc(uptr Size);
-void *scudoPvalloc(uptr Size);
-int scudoPosixMemalign(void **MemPtr, uptr Alignment, uptr Size);
-void *scudoAlignedAlloc(uptr Alignment, uptr Size);
+void *scudoAllocate(usize Size, usize alignment, AllocType Type);
+void scudoDeallocate(void *Ptr, usize Size, usize alignment, AllocType Type);
+void *scudoRealloc(void *Ptr, usize Size);
+void *scudoCalloc(uptr NMemB, usize Size);
+void *scudoValloc(usize Size);
+void *scudoPvalloc(usize Size);
+int scudoPosixMemalign(void **MemPtr, usize alignment, usize Size);
+void *scudoAlignedAlloc(uptr Alignment, usize Size);
 uptr scudoMallocUsableSize(void *Ptr);
 
 }  // namespace __scudo

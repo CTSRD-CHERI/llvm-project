@@ -234,11 +234,11 @@ static void StopBackgroundThread() {
 #endif
 #endif
 
-void DontNeedShadowFor(uptr addr, uptr size) {
+void DontNeedShadowFor(uptr addr, usize size) {
   ReleaseMemoryPagesToOS(MemToShadow(addr), MemToShadow(addr + size));
 }
 
-void MapShadow(uptr addr, uptr size) {
+void MapShadow(uptr addr, usize size) {
   // Global data is not 64K aligned, but there are no adjacent mappings,
   // so we can get away with unaligned mapping.
   // CHECK_EQ(addr, addr & ~((64 << 10) - 1));  // windows wants 64K alignment
@@ -277,7 +277,7 @@ void MapShadow(uptr addr, uptr size) {
       addr, addr+size, meta_begin, meta_end);
 }
 
-void MapThreadTrace(uptr addr, uptr size, const char *name) {
+void MapThreadTrace(uptr addr, usize size, const char *name) {
   DPrintf("#0: Mapping trace at %p-%p(0x%zx)\n", addr, addr + size, size);
   CHECK_GE(addr, TraceMemBeg());
   CHECK_LE(addr + size, TraceMemEnd());
@@ -886,7 +886,7 @@ void MemoryAccessImpl(ThreadState *thr, uptr addr,
       shadow_mem, cur);
 }
 
-static void MemoryRangeSet(ThreadState *thr, uptr pc, uptr addr, uptr size,
+static void MemoryRangeSet(ThreadState *thr, uptr pc, uptr addr, usize size,
                            u64 val) {
   (void)thr;
   (void)pc;
@@ -947,11 +947,11 @@ static void MemoryRangeSet(ThreadState *thr, uptr pc, uptr addr, uptr size,
   }
 }
 
-void MemoryResetRange(ThreadState *thr, uptr pc, uptr addr, uptr size) {
+void MemoryResetRange(ThreadState *thr, uptr pc, uptr addr, usize size) {
   MemoryRangeSet(thr, pc, addr, size, 0);
 }
 
-void MemoryRangeFreed(ThreadState *thr, uptr pc, uptr addr, uptr size) {
+void MemoryRangeFreed(ThreadState *thr, uptr pc, uptr addr, usize size) {
   // Processing more than 1k (4k of shadow) is expensive,
   // can cause excessive memory consumption (user does not necessary touch
   // the whole range) and most likely unnecessary.
@@ -973,7 +973,7 @@ void MemoryRangeFreed(ThreadState *thr, uptr pc, uptr addr, uptr size) {
   MemoryRangeSet(thr, pc, addr, size, s.raw());
 }
 
-void MemoryRangeImitateWrite(ThreadState *thr, uptr pc, uptr addr, uptr size) {
+void MemoryRangeImitateWrite(ThreadState *thr, uptr pc, uptr addr, usize size) {
   if (kCollectHistory) {
     thr->fast_state.IncrementEpoch();
     TraceAddEvent(thr, thr->fast_state, EventTypeMop, pc);

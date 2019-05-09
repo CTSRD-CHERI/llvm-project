@@ -267,9 +267,9 @@ class Addr2LineProcess : public SymbolizerProcess {
     argv[i++] = nullptr;
   }
 
-  bool ReachedEndOfOutput(const char *buffer, uptr length) const override;
+  bool ReachedEndOfOutput(const char *buffer, usize length) const override;
 
-  bool ReadFromSymbolizer(char *buffer, uptr max_length) override {
+  bool ReadFromSymbolizer(char *buffer, usize max_length) override {
     if (!SymbolizerProcess::ReadFromSymbolizer(buffer, max_length))
       return false;
     // The returned buffer is empty when output is valid, but exceeds
@@ -297,7 +297,7 @@ class Addr2LineProcess : public SymbolizerProcess {
 const char Addr2LineProcess::output_terminator_[] = "??\n??:0\n";
 
 bool Addr2LineProcess::ReachedEndOfOutput(const char *buffer,
-                                          uptr length) const {
+                                          usize length) const {
   const size_t kTerminatorLen = sizeof(output_terminator_) - 1;
   // Skip, if we read just kTerminatorLen bytes, because Addr2Line output
   // should consist at least of two pairs of lines:

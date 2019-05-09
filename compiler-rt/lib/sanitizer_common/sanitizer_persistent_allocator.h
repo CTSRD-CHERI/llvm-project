@@ -22,16 +22,16 @@ namespace __sanitizer {
 
 class PersistentAllocator {
  public:
-  void *alloc(uptr size);
+  void *alloc(usize size);
 
  private:
-  void *tryAlloc(uptr size);
+  void *tryAlloc(usize size);
   StaticSpinMutex mtx;  // Protects alloc of new blocks for region allocator.
   atomic_uintptr_t region_pos;  // Region allocator for Node's.
   atomic_uintptr_t region_end;
 };
 
-inline void *PersistentAllocator::tryAlloc(uptr size) {
+inline void *PersistentAllocator::tryAlloc(usize size) {
   // Optimisic lock-free allocation, essentially try to bump the region ptr.
   for (;;) {
     uptr cmp = atomic_load(&region_pos, memory_order_acquire);
@@ -43,7 +43,7 @@ inline void *PersistentAllocator::tryAlloc(uptr size) {
   }
 }
 
-inline void *PersistentAllocator::alloc(uptr size) {
+inline void *PersistentAllocator::alloc(usize size) {
   // First, try to allocate optimisitically.
   void *s = tryAlloc(size);
   if (s) return s;
@@ -62,7 +62,7 @@ inline void *PersistentAllocator::alloc(uptr size) {
 }
 
 extern PersistentAllocator thePersistentAllocator;
-inline void *PersistentAlloc(uptr sz) {
+inline void *PersistentAlloc(usize sz) {
   return thePersistentAllocator.alloc(sz);
 }
 

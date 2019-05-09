@@ -55,8 +55,8 @@ using __sanitizer::atomic_uintptr_t;
 
 DECLARE_REAL(SIZE_T, strlen, const char *s)
 DECLARE_REAL(SIZE_T, strnlen, const char *s, SIZE_T maxlen)
-DECLARE_REAL(void *, memcpy, void *dest, const void *src, uptr n)
-DECLARE_REAL(void *, memset, void *dest, int c, uptr n)
+DECLARE_REAL(void *, memcpy, void *dest, const void *src, usize n)
+DECLARE_REAL(void *, memset, void *dest, int c, usize n)
 
 // True if this is a nested interceptor.
 static THREADLOCAL int in_interceptor_scope;
@@ -82,7 +82,7 @@ static bool IsInDlsymAllocPool(const void *ptr) {
   return off < sizeof(alloc_memory_for_dlsym);
 }
 
-static void *AllocateFromLocalPool(uptr size_in_bytes) {
+static void *AllocateFromLocalPool(usize size_in_bytes) {
   uptr size_in_words = RoundUpTo(size_in_bytes, kWordSize) / kWordSize;
   void *mem = (void *)&alloc_memory_for_dlsym[allocated_for_dlsym];
   allocated_for_dlsym += size_in_words;
@@ -468,7 +468,7 @@ INTERCEPTORS_STRTO_BASE(unsigned long long, wcstoull, wchar_t)  // NOLINT
 
 
 // FIXME: support *wprintf in common format interceptors.
-INTERCEPTOR(int, vswprintf, void *str, uptr size, void *format, va_list ap) {
+INTERCEPTOR(int, vswprintf, void *str, usize size, void *format, va_list ap) {
   ENSURE_MSAN_INITED();
   int res = REAL(vswprintf)(str, size, format, ap);
   if (res >= 0) {
@@ -477,7 +477,7 @@ INTERCEPTOR(int, vswprintf, void *str, uptr size, void *format, va_list ap) {
   return res;
 }
 
-INTERCEPTOR(int, swprintf, void *str, uptr size, void *format, ...) {
+INTERCEPTOR(int, swprintf, void *str, usize size, void *format, ...) {
   ENSURE_MSAN_INITED();
   va_list ap;
   va_start(ap, format);
@@ -915,7 +915,7 @@ INTERCEPTOR(void *, malloc, SIZE_T size) {
   return msan_malloc(size, &stack);
 }
 
-void __msan_allocated_memory(const void *data, uptr size) {
+void __msan_allocated_memory(const void *data, usize size) {
   GET_MALLOC_STACK_TRACE;
   if (flags()->poison_in_malloc) {
     stack.tag = STACK_TRACE_TAG_POISON;
@@ -923,12 +923,12 @@ void __msan_allocated_memory(const void *data, uptr size) {
   }
 }
 
-void __msan_copy_shadow(void *dest, const void *src, uptr n) {
+void __msan_copy_shadow(void *dest, const void *src, usize n) {
   GET_STORE_STACK_TRACE;
   MoveShadowAndOrigin(dest, src, n, &stack);
 }
 
-void __sanitizer_dtor_callback(const void *data, uptr size) {
+void __sanitizer_dtor_callback(const void *data, usize size) {
   GET_MALLOC_STACK_TRACE;
   if (flags()->poison_in_dtor) {
     stack.tag = STACK_TRACE_TAG_POISON;
@@ -1523,22 +1523,22 @@ INTERCEPTOR(wchar_t *, wcsncpy, wchar_t *dest, const wchar_t *src,
 
 // These interface functions reside here so that they can use
 // REAL(memset), etc.
-void __msan_unpoison(const void *a, uptr size) {
+void __msan_unpoison(const void *a, usize size) {
   if (!MEM_IS_APP(a)) return;
   SetShadow(a, size, 0);
 }
 
-void __msan_poison(const void *a, uptr size) {
+void __msan_poison(const void *a, usize size) {
   if (!MEM_IS_APP(a)) return;
   SetShadow(a, size, __msan::flags()->poison_heap_with_zeroes ? 0 : -1);
 }
 
-void __msan_poison_stack(void *a, uptr size) {
+void __msan_poison_stack(void *a, usize size) {
   if (!MEM_IS_APP(a)) return;
   SetShadow(a, size, __msan::flags()->poison_stack_with_zeroes ? 0 : -1);
 }
 
-void __msan_clear_and_unpoison(void *a, uptr size) {
+void __msan_clear_and_unpoison(void *a, usize size) {
   REAL(memset)(a, 0, size);
   SetShadow(a, size, 0);
 }

@@ -332,7 +332,7 @@ SANITIZER_INTERFACE_ATTRIBUTE int __dfsw_clock_gettime(clockid_t clk_id,
   return ret;
 }
 
-static void unpoison(const void *ptr, uptr size) {
+static void unpoison(const void *ptr, usize size) {
   dfsan_set_label(0, const_cast<void *>(ptr), size);
 }
 

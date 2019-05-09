@@ -145,7 +145,7 @@ void MemoryMappingLayout::DumpListOfModules(
   }
 }
 
-void GetMemoryProfile(fill_profile_f cb, uptr *stats, uptr stats_size) {
+void GetMemoryProfile(fill_profile_f cb, usize *stats, uptr stats_size) {
   char *smaps = nullptr;
   uptr smaps_cap = 0;
   uptr smaps_len = 0;
@@ -161,7 +161,7 @@ void GetMemoryProfile(fill_profile_f cb, uptr *stats, uptr stats_size) {
       file = *pos == '/';
     } else if (internal_strncmp(pos, "Rss:", 4) == 0) {
       while (!IsDecimal(*pos)) pos++;
-      uptr rss = ParseDecimal(&pos) * 1024;
+      usize rss = ParseDecimal(&pos) * 1024;
       cb(start, rss, file, stats, stats_size);
     }
     while (*pos++ != '\n') {}

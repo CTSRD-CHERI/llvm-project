@@ -23,17 +23,17 @@ namespace __sanitizer {
 const char *SanitizerToolName = "SanitizerTool";
 
 atomic_uint32_t current_verbosity;
-uptr PageSizeCached;
+usize PageSizeCached;
 u32 NumberOfCPUsCached;
 
 // PID of the tracer task in StopTheWorld. It shares the address space with the
 // main process, but has a different PID and thus requires special handling.
-uptr stoptheworld_tracer_pid = 0;
+pid_t stoptheworld_tracer_pid = 0;
 // Cached pid of parent process - if the parent process dies, we want to keep
 // writing to the same log file.
-uptr stoptheworld_tracer_ppid = 0;
+pid_t stoptheworld_tracer_ppid = 0;
 
-void NORETURN ReportMmapFailureAndDie(uptr size, const char *mem_type,
+void NORETURN ReportMmapFailureAndDie(usize size, const char *mem_type,
                                       const char *mmap_type, error_t err,
                                       bool raw_report) {
   static int recursion_count;
@@ -175,18 +175,18 @@ bool LoadedModule::containsAddress(uptr address) const {
   return false;
 }
 
-static atomic_uintptr_t g_total_mmaped;
+static atomic_size_t g_total_mmaped;
 
-void IncreaseTotalMmap(uptr size) {
+void IncreaseTotalMmap(usize size) {
   if (!common_flags()->mmap_limit_mb) return;
-  uptr total_mmaped =
+  usize total_mmaped =
       atomic_fetch_add(&g_total_mmaped, size, memory_order_relaxed) + size;
   // Since for now mmap_limit_mb is not a user-facing flag, just kill
   // a program. Use RAW_CHECK to avoid extra mmaps in reporting.
   RAW_CHECK((total_mmaped >> 20) < common_flags()->mmap_limit_mb);
 }
 
-void DecreaseTotalMmap(uptr size) {
+void DecreaseTotalMmap(usize size) {
   if (!common_flags()->mmap_limit_mb) return;
   atomic_fetch_sub(&g_total_mmaped, size, memory_order_relaxed);
 }
@@ -240,10 +240,10 @@ const char *GetProcessName() {
   return process_name_cache_str;
 }
 
-static uptr ReadProcessName(/*out*/ char *buf, uptr buf_len) {
+static usize ReadProcessName(/*out*/ char *buf, usize buf_len) {
   ReadLongProcessName(buf, buf_len);
   char *s = const_cast<char *>(StripModuleName(buf));
-  uptr len = internal_strlen(s);
+  usize len = internal_strlen(s);
   if (s != buf) {
     internal_memmove(buf, s, len);
     buf[len] = '\0';
@@ -263,9 +263,9 @@ void CacheBinaryName() {
   ReadProcessName(process_name_cache_str, sizeof(process_name_cache_str));
 }
 
-uptr ReadBinaryNameCached(/*out*/char *buf, uptr buf_len) {
+usize ReadBinaryNameCached(/*out*/char *buf, usize buf_len) {
   CacheBinaryName();
-  uptr name_len = internal_strlen(binary_name_cache_str);
+  usize name_len = internal_strlen(binary_name_cache_str);
   name_len = (name_len < buf_len - 1) ? name_len : buf_len - 1;
   if (buf_len == 0)
     return 0;
@@ -278,7 +278,7 @@ void PrintCmdline() {
   char **argv = GetArgv();
   if (!argv) return;
   Printf("\nCommand: ");
-  for (uptr i = 0; argv[i]; ++i)
+  for (usize i = 0; argv[i]; ++i)
     Printf("%s ", argv[i]);
   Printf("\n\n");
 }
@@ -286,13 +286,13 @@ void PrintCmdline() {
 // Malloc hooks.
 static const int kMaxMallocFreeHooks = 5;
 struct MallocFreeHook {
-  void (*malloc_hook)(const void *, uptr);
+  void (*malloc_hook)(const void *, usize);
   void (*free_hook)(const void *);
 };
 
 static MallocFreeHook MFHooks[kMaxMallocFreeHooks];
 
-void RunMallocHooks(const void *ptr, uptr size) {
+void RunMallocHooks(const void *ptr, usize size) {
   for (int i = 0; i < kMaxMallocFreeHooks; i++) {
     auto hook = MFHooks[i].malloc_hook;
     if (!hook) return;
@@ -308,7 +308,7 @@ void RunFreeHooks(const void *ptr) {
   }
 }
 
-static int InstallMallocFreeHooks(void (*malloc_hook)(const void *, uptr),
+static int InstallMallocFreeHooks(void (*malloc_hook)(const void *, usize),
                                   void (*free_hook)(const void *)) {
   if (!malloc_hook || !free_hook) return 0;
   for (int i = 0; i < kMaxMallocFreeHooks; i++) {
@@ -339,7 +339,7 @@ int __sanitizer_acquire_crash_state() {
 
 SANITIZER_INTERFACE_ATTRIBUTE
 int __sanitizer_install_malloc_and_free_hooks(void (*malloc_hook)(const void *,
-                                                                  uptr),
+                                                                  usize),
                                               void (*free_hook)(const void *)) {
   return InstallMallocFreeHooks(malloc_hook, free_hook);
 }

@@ -252,7 +252,7 @@ TEST(AddressSanitizer, LoadStoreCallbacks) {
     char *ptr = (char*) __asan::asan_malloc(len, &stack);
     uptr p = reinterpret_cast<uptr>(ptr);
     for (uptr is_write = 0; is_write <= 1; is_write++) {
-      for (uptr size_log = 0; size_log <= 4; size_log++) {
+      for (usize size_log = 0; size_log <= 4; size_log++) {
         uptr size = 1 << size_log;
         CB call = cb[is_write][size_log];
         // Iterate only size-aligned offsets.

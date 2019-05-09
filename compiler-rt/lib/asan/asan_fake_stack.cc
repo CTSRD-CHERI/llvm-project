@@ -26,7 +26,7 @@ static const u64 kAllocaRedzoneSize = 32UL;
 static const u64 kAllocaRedzoneMask = 31UL;
 
 // For small size classes inline PoisonShadow for better performance.
-ALWAYS_INLINE void SetShadow(uptr ptr, uptr size, uptr class_id, u64 magic) {
+ALWAYS_INLINE void SetShadow(uptr ptr, usize size, uptr class_id, u64 magic) {
   u64 *shadow = reinterpret_cast<u64*>(MemToShadow(ptr));
   if (SHADOW_SCALE == 3 && class_id <= 6) {
     // This code expects SHADOW_SCALE=3.
@@ -198,7 +198,7 @@ static FakeStack *GetFakeStackFast() {
   return GetFakeStack();
 }
 
-ALWAYS_INLINE uptr OnMalloc(uptr class_id, uptr size) {
+ALWAYS_INLINE uptr OnMalloc(uptr class_id, usize size) {
   FakeStack *fs = GetFakeStackFast();
   if (!fs) return 0;
   uptr local_stack;
@@ -210,7 +210,7 @@ ALWAYS_INLINE uptr OnMalloc(uptr class_id, uptr size) {
   return ptr;
 }
 
-ALWAYS_INLINE void OnFree(uptr ptr, uptr class_id, uptr size) {
+ALWAYS_INLINE void OnFree(uptr ptr, uptr class_id, usize size) {
   FakeStack::Deallocate(ptr, class_id);
   SetShadow(ptr, size, class_id, kMagic8);
 }
@@ -221,11 +221,11 @@ ALWAYS_INLINE void OnFree(uptr ptr, uptr class_id, uptr size) {
 using namespace __asan;
 #define DEFINE_STACK_MALLOC_FREE_WITH_CLASS_ID(class_id)                       \
   extern "C" SANITIZER_INTERFACE_ATTRIBUTE uptr                                \
-      __asan_stack_malloc_##class_id(uptr size) {                              \
+      __asan_stack_malloc_##class_id(usize size) {                              \
     return OnMalloc(class_id, size);                                           \
   }                                                                            \
   extern "C" SANITIZER_INTERFACE_ATTRIBUTE void __asan_stack_free_##class_id(  \
-      uptr ptr, uptr size) {                                                   \
+      uptr ptr, usize size) {                                                   \
     OnFree(ptr, class_id, size);                                               \
   }
 
@@ -261,7 +261,7 @@ void *__asan_addr_is_in_fake_stack(void *fake_stack, void *addr, void **beg,
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-void __asan_alloca_poison(uptr addr, uptr size) {
+void __asan_alloca_poison(uptr addr, usize size) {
   uptr LeftRedzoneAddr = addr - kAllocaRedzoneSize;
   uptr PartialRzAddr = addr + size;
   uptr RightRzAddr = (PartialRzAddr + kAllocaRedzoneMask) & ~kAllocaRedzoneMask;

@@ -31,7 +31,7 @@ INLINE constexpr uptr roundDownTo(uptr X, uptr Boundary) {
   return X & ~(Boundary - 1);
 }
 
-INLINE constexpr bool isAligned(uptr X, uptr Alignment) {
+INLINE constexpr bool isAligned(uptr X, usize alignment) {
   return (X & (Alignment - 1)) == 0;
 }
 
@@ -52,7 +52,7 @@ INLINE uptr getMostSignificantSetBitIndex(uptr X) {
   return SCUDO_WORDSIZE - 1U - static_cast<uptr>(__builtin_clzl(X));
 }
 
-INLINE uptr roundUpToPowerOfTwo(uptr Size) {
+INLINE uptr roundUpToPowerOfTwo(usize Size) {
   DCHECK(Size);
   if (isPowerOfTwo(Size))
     return Size;
@@ -147,16 +147,16 @@ bool getRandom(void *Buffer, uptr Length, bool Blocking = false);
 // by the function implementation. The Extra parameter allows to pass opaque
 // platform specific data to the function.
 // Returns nullptr on error or dies if MAP_ALLOWNOMEM is not specified.
-void *map(void *Addr, uptr Size, const char *Name, uptr Flags = 0,
+void *map(void *Addr, usize Size, const char *Name, uptr Flags = 0,
           u64 *Extra = nullptr);
 
 // Indicates that we are getting rid of the whole mapping, which might have
 // further consequences on Extra, depending on the platform.
 #define UNMAP_ALL (1U << 0)
 
-void unmap(void *Addr, uptr Size, uptr Flags = 0, u64 *Extra = nullptr);
+void unmap(void *Addr, usize Size, uptr Flags = 0, u64 *Extra = nullptr);
 
-void releasePagesToOS(uptr BaseAddress, uptr Offset, uptr Size,
+void releasePagesToOS(uptr BaseAddress, uptr Offset, usize Size,
                       u64 *Extra = nullptr);
 
 // Internal map & unmap fatal error. This must not call map().

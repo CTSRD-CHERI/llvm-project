@@ -27,19 +27,19 @@ const char *SecondaryAllocatorName = "LargeMmapAllocator";
 // ThreadSanitizer for Go uses libc malloc/free.
 #if SANITIZER_GO || defined(SANITIZER_USE_MALLOC)
 # if SANITIZER_LINUX && !SANITIZER_ANDROID
-extern "C" void *__libc_malloc(uptr size);
+extern "C" void *__libc_malloc(usize size);
 #  if !SANITIZER_GO
-extern "C" void *__libc_memalign(uptr alignment, uptr size);
+extern "C" void *__libc_memalign(usize alignment, usize size);
 #  endif
-extern "C" void *__libc_realloc(void *ptr, uptr size);
+extern "C" void *__libc_realloc(void *ptr, usize size);
 extern "C" void __libc_free(void *ptr);
 # else
 #  include <stdlib.h>
 #  define __libc_malloc malloc
 #  if !SANITIZER_GO
-static void *__libc_memalign(uptr alignment, uptr size) {
+static void *__libc_memalign(usize alignment, usize size) {
   void *p;
-  uptr error = posix_memalign(&p, alignment, size);
+  usize error = posix_memalign(&p, alignment, size);
   if (error) return nullptr;
   return p;
 }
@@ -48,8 +48,8 @@ static void *__libc_memalign(uptr alignment, uptr size) {
 #  define __libc_free free
 # endif
 
-static void *RawInternalAlloc(uptr size, InternalAllocatorCache *cache,
-                              uptr alignment) {
+static void *RawInternalAlloc(usize size, InternalAllocatorCache *cache,
+                              usize alignment) {
   (void)cache;
 #if !SANITIZER_GO
   if (alignment == 0)
@@ -67,7 +67,7 @@ static void *RawInternalAlloc(uptr size, InternalAllocatorCache *cache,
 #endif
 }
 
-static void *RawInternalRealloc(void *ptr, uptr size,
+static void *RawInternalRealloc(void *ptr, usize size,
                                 InternalAllocatorCache *cache) {
   (void)cache;
   return __libc_realloc(ptr, size);
@@ -105,8 +105,8 @@ InternalAllocator *internal_allocator() {
   return internal_allocator_instance;
 }
 
-static void *RawInternalAlloc(uptr size, InternalAllocatorCache *cache,
-                              uptr alignment) {
+static void *RawInternalAlloc(usize size, InternalAllocatorCache *cache,
+                              usize alignment) {
   if (alignment == 0) alignment = 8;
   if (cache == 0) {
     SpinMutexLock l(&internal_allocator_cache_mu);
@@ -116,9 +116,9 @@ static void *RawInternalAlloc(uptr size, InternalAllocatorCache *cache,
   return internal_allocator()->Allocate(cache, size, alignment);
 }
 
-static void *RawInternalRealloc(void *ptr, uptr size,
+static void *RawInternalRealloc(void *ptr, usize size,
                                 InternalAllocatorCache *cache) {
-  uptr alignment = 8;
+  usize alignment = 8;
   if (cache == 0) {
     SpinMutexLock l(&internal_allocator_cache_mu);
     return internal_allocator()->Reallocate(&internal_allocator_cache, ptr,
@@ -139,14 +139,14 @@ static void RawInternalFree(void *ptr, InternalAllocatorCache *cache) {
 
 const u64 kBlockMagic = 0x6A6CB03ABCEBC041ull;
 
-static void NORETURN ReportInternalAllocatorOutOfMemory(uptr requested_size) {
+static void NORETURN ReportInternalAllocatorOutOfMemory(usize requested_size) {
   SetAllocatorOutOfMemory();
   Report("FATAL: %s: internal allocator is out of memory trying to allocate "
          "0x%zx bytes\n", SanitizerToolName, requested_size);
   Die();
 }
 
-void *InternalAlloc(uptr size, InternalAllocatorCache *cache, uptr alignment) {
+void *InternalAlloc(usize size, InternalAllocatorCache *cache, usize alignment) {
   if (size + sizeof(u64) < size)
     return nullptr;
   void *p = RawInternalAlloc(size + sizeof(u64), cache, alignment);
@@ -156,7 +156,7 @@ void *InternalAlloc(uptr size, InternalAllocatorCache *cache, uptr alignment) {
   return (char*)p + sizeof(u64);
 }
 
-void *InternalRealloc(void *addr, uptr size, InternalAllocatorCache *cache) {
+void *InternalRealloc(void *addr, usize size, InternalAllocatorCache *cache) {
   if (!addr)
     return InternalAlloc(size, cache);
   if (size + sizeof(u64) < size)
@@ -170,7 +170,7 @@ void *InternalRealloc(void *addr, uptr size, InternalAllocatorCache *cache) {
   return (char*)p + sizeof(u64);
 }
 
-void *InternalCalloc(uptr count, uptr size, InternalAllocatorCache *cache) {
+void *InternalCalloc(usize count, usize size, InternalAllocatorCache *cache) {
   if (UNLIKELY(CheckForCallocOverflow(count, size))) {
     Report("FATAL: %s: calloc parameters overflow: count * size (%zd * %zd) "
            "cannot be represented in type size_t\n", SanitizerToolName, count,
@@ -193,15 +193,15 @@ void InternalFree(void *addr, InternalAllocatorCache *cache) {
 }
 
 // LowLevelAllocator
-constexpr uptr kLowLevelAllocatorDefaultAlignment = 8;
-static uptr low_level_alloc_min_alignment = kLowLevelAllocatorDefaultAlignment;
+constexpr usize kLowLevelAllocatorDefaultAlignment = 8;
+static usize low_level_alloc_min_alignment = kLowLevelAllocatorDefaultAlignment;
 static LowLevelAllocateCallback low_level_alloc_callback;
 
-void *LowLevelAllocator::Allocate(uptr size) {
+void *LowLevelAllocator::Allocate(usize size) {
   // Align allocation size.
   size = RoundUpTo(size, low_level_alloc_min_alignment);
   if (allocated_end_ - allocated_current_ < (sptr)size) {
-    uptr size_to_allocate = Max(size, GetPageSizeCached());
+    usize size_to_allocate = Max(size, GetPageSizeCached());
     allocated_current_ =
         (char*)MmapOrDie(size_to_allocate, __func__);
     allocated_end_ = allocated_current_ + size_to_allocate;
@@ -216,7 +216,7 @@ void *LowLevelAllocator::Allocate(uptr size) {
   return res;
 }
 
-void SetLowLevelAllocateMinAlignment(uptr alignment) {
+void SetLowLevelAllocateMinAlignment(usize alignment) {
   CHECK(IsPowerOfTwo(alignment));
   low_level_alloc_min_alignment = Max(alignment, low_level_alloc_min_alignment);
 }

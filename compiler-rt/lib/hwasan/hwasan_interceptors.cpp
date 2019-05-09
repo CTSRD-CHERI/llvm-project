@@ -71,7 +71,7 @@ static bool IsInDlsymAllocPool(const void *ptr) {
   return off < sizeof(alloc_memory_for_dlsym);
 }
 
-static void *AllocateFromLocalPool(uptr size_in_bytes) {
+static void *AllocateFromLocalPool(usize size_in_bytes) {
   uptr size_in_words = RoundUpTo(size_in_bytes, kWordSize) / kWordSize;
   void *mem = (void *)&alloc_memory_for_dlsym[allocated_for_dlsym];
   allocated_for_dlsym += size_in_words;
@@ -87,24 +87,24 @@ static void *AllocateFromLocalPool(uptr size_in_bytes) {
 } while (0)
 
 
-int __sanitizer_posix_memalign(void **memptr, uptr alignment, uptr size) {
+int __sanitizer_posix_memalign(void **memptr, usize alignment, usize size) {
   GET_MALLOC_STACK_TRACE;
   CHECK_NE(memptr, 0);
   int res = hwasan_posix_memalign(memptr, alignment, size, &stack);
   return res;
 }
 
-void * __sanitizer_memalign(uptr alignment, uptr size) {
+void * __sanitizer_memalign(uptr alignment, usize size) {
   GET_MALLOC_STACK_TRACE;
   return hwasan_memalign(alignment, size, &stack);
 }
 
-void * __sanitizer_aligned_alloc(uptr alignment, uptr size) {
+void * __sanitizer_aligned_alloc(uptr alignment, usize size) {
   GET_MALLOC_STACK_TRACE;
   return hwasan_aligned_alloc(alignment, size, &stack);
 }
 
-void * __sanitizer___libc_memalign(uptr alignment, uptr size) {
+void * __sanitizer___libc_memalign(uptr alignment, usize size) {
   GET_MALLOC_STACK_TRACE;
   void *ptr = hwasan_memalign(alignment, size, &stack);
   if (ptr)
@@ -112,12 +112,12 @@ void * __sanitizer___libc_memalign(uptr alignment, uptr size) {
   return ptr;
 }
 
-void * __sanitizer_valloc(uptr size) {
+void * __sanitizer_valloc(usize size) {
   GET_MALLOC_STACK_TRACE;
   return hwasan_valloc(size, &stack);
 }
 
-void * __sanitizer_pvalloc(uptr size) {
+void * __sanitizer_pvalloc(usize size) {
   GET_MALLOC_STACK_TRACE;
   return hwasan_pvalloc(size, &stack);
 }
@@ -152,7 +152,7 @@ void __sanitizer_malloc_stats(void) {
   // FIXME: implement, but don't call REAL(malloc_stats)!
 }
 
-void * __sanitizer_calloc(uptr nmemb, uptr size) {
+void * __sanitizer_calloc(uptr nmemb, usize size) {
   GET_MALLOC_STACK_TRACE;
   if (UNLIKELY(!hwasan_inited))
     // Hack: dlsym calls calloc before REAL(calloc) is retrieved from dlsym.
@@ -160,7 +160,7 @@ void * __sanitizer_calloc(uptr nmemb, uptr size) {
   return hwasan_calloc(nmemb, size, &stack);
 }
 
-void * __sanitizer_realloc(void *ptr, uptr size) {
+void * __sanitizer_realloc(void *ptr, usize size) {
   GET_MALLOC_STACK_TRACE;
   if (UNLIKELY(IsInDlsymAllocPool(ptr))) {
     uptr offset = (uptr)ptr - (uptr)alloc_memory_for_dlsym;
@@ -178,7 +178,7 @@ void * __sanitizer_realloc(void *ptr, uptr size) {
   return hwasan_realloc(ptr, size, &stack);
 }
 
-void * __sanitizer_malloc(uptr size) {
+void * __sanitizer_malloc(usize size) {
   GET_MALLOC_STACK_TRACE;
   if (UNLIKELY(!hwasan_init_is_running))
     ENSURE_HWASAN_INITED();

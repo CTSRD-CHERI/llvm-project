@@ -33,11 +33,11 @@ SuppressionContext::SuppressionContext(const char *suppression_types[],
 #if !SANITIZER_FUCHSIA
 static bool GetPathAssumingFileIsRelativeToExec(const char *file_path,
                                                 /*out*/char *new_file_path,
-                                                uptr new_file_path_size) {
+                                                usize new_file_path_size) {
   InternalScopedString exec(kMaxPathLength);
   if (ReadBinaryNameCached(exec.data(), exec.size())) {
     const char *file_name_pos = StripModuleName(exec.data());
-    uptr path_to_exec_len = file_name_pos - exec.data();
+    usize path_to_exec_len = file_name_pos - exec.data();
     internal_strncat(new_file_path, exec.data(),
                      Min(path_to_exec_len, new_file_path_size - 1));
     internal_strncat(new_file_path, file_path,
@@ -49,7 +49,7 @@ static bool GetPathAssumingFileIsRelativeToExec(const char *file_path,
 
 static const char *FindFile(const char *file_path,
                             /*out*/char *new_file_path,
-                            uptr new_file_path_size) {
+                            usize new_file_path_size) {
   // If we cannot find the file, check if its location is relative to
   // the location of the executable.
   if (!FileExists(file_path) && !IsAbsolutePath(file_path) &&
@@ -60,7 +60,7 @@ static const char *FindFile(const char *file_path,
   return file_path;
 }
 #else
-static const char *FindFile(const char *file_path, char *, uptr) {
+static const char *FindFile(const char *file_path, char *, usize) {
   return file_path;
 }
 #endif
@@ -76,8 +76,8 @@ void SuppressionContext::ParseFromFile(const char *filename) {
   VPrintf(1, "%s: reading suppressions file at %s\n",
           SanitizerToolName, filename);
   char *file_contents;
-  uptr buffer_size;
-  uptr contents_size;
+  usize buffer_size;
+  usize contents_size;
   if (!ReadFileToBuffer(filename, &file_contents, &buffer_size,
                         &contents_size)) {
     Printf("%s: failed to read suppressions file '%s'\n", SanitizerToolName,
@@ -93,7 +93,7 @@ bool SuppressionContext::Match(const char *str, const char *type,
   can_parse_ = false;
   if (!HasSuppressionType(type))
     return false;
-  for (uptr i = 0; i < suppressions_.size(); i++) {
+  for (usize i = 0; i < suppressions_.size(); i++) {
     Suppression &cur = suppressions_[i];
     if (0 == internal_strcmp(cur.type, type) && TemplateMatch(cur.templ, str)) {
       *s = &cur;
@@ -154,7 +154,7 @@ void SuppressionContext::Parse(const char *str) {
   }
 }
 
-uptr SuppressionContext::SuppressionCount() const {
+usize SuppressionContext::SuppressionCount() const {
   return suppressions_.size();
 }
 
@@ -166,14 +166,14 @@ bool SuppressionContext::HasSuppressionType(const char *type) const {
   return false;
 }
 
-const Suppression *SuppressionContext::SuppressionAt(uptr i) const {
+const Suppression *SuppressionContext::SuppressionAt(usize i) const {
   CHECK_LT(i, suppressions_.size());
   return &suppressions_[i];
 }
 
 void SuppressionContext::GetMatched(
     InternalMmapVector<Suppression *> *matched) {
-  for (uptr i = 0; i < suppressions_.size(); i++)
+  for (usize i = 0; i < suppressions_.size(); i++)
     if (atomic_load_relaxed(&suppressions_[i].hit_count))
       matched->push_back(&suppressions_[i]);
 }

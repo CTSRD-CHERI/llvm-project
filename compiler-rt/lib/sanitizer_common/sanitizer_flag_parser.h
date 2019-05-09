@@ -125,7 +125,7 @@ class FlagParser {
   void parse_flags();
   void parse_flag();
   bool run_handler(const char *name, const char *value);
-  char *ll_strndup(const char *s, uptr n);
+  char *ll_strndup(const char *s, usize n);
 };
 
 template <typename T>

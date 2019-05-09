@@ -116,81 +116,81 @@
 // c25 => s: 98304 diff: +32768 50% l 16 cached: 1 98304; id 25
 // c26 => s: 131072 diff: +32768 33% l 17 cached: 1 131072; id 26
 
-template <uptr kNumBits, uptr kMinSizeLog, uptr kMidSizeLog, uptr kMaxSizeLog,
-          uptr kMaxNumCachedHintT, uptr kMaxBytesCachedLog>
+template <usize kNumBits, usize kMinSizeLog, usize kMidSizeLog, usize kMaxSizeLog,
+          usize kMaxNumCachedHintT, usize kMaxBytesCachedLog>
 class SizeClassMap {
-  static const uptr kMinSize = 1 << kMinSizeLog;
-  static const uptr kMidSize = 1 << kMidSizeLog;
-  static const uptr kMidClass = kMidSize / kMinSize;
-  static const uptr S = kNumBits - 1;
-  static const uptr M = (1 << S) - 1;
+  static const usize kMinSize = 1 << kMinSizeLog;
+  static const usize kMidSize = 1 << kMidSizeLog;
+  static const usize kMidClass = kMidSize / kMinSize;
+  static const usize S = kNumBits - 1;
+  static const usize M = (1 << S) - 1;
 
  public:
   // kMaxNumCachedHintT is a power of two. It serves as a hint
   // for the size of TransferBatch, the actual size could be a bit smaller.
-  static const uptr kMaxNumCachedHint = kMaxNumCachedHintT;
+  static const usize kMaxNumCachedHint = kMaxNumCachedHintT;
   COMPILER_CHECK((kMaxNumCachedHint & (kMaxNumCachedHint - 1)) == 0);
 
-  static const uptr kMaxSize = 1UL << kMaxSizeLog;
-  static const uptr kNumClasses =
+  static const usize kMaxSize = 1UL << kMaxSizeLog;
+  static const usize kNumClasses =
       kMidClass + ((kMaxSizeLog - kMidSizeLog) << S) + 1 + 1;
-  static const uptr kLargestClassID = kNumClasses - 2;
-  static const uptr kBatchClassID = kNumClasses - 1;
+  static const usize kLargestClassID = kNumClasses - 2;
+  static const usize kBatchClassID = kNumClasses - 1;
   COMPILER_CHECK(kNumClasses >= 16 && kNumClasses <= 256);
-  static const uptr kNumClassesRounded =
+  static const usize kNumClassesRounded =
       kNumClasses <= 32  ? 32 :
       kNumClasses <= 64  ? 64 :
       kNumClasses <= 128 ? 128 : 256;
 
-  static uptr Size(uptr class_id) {
+  static usize Size(usize class_id) {
     // Estimate the result for kBatchClassID because this class does not know
     // the exact size of TransferBatch. It's OK since we are using the actual
     // sizeof(TransferBatch) where it matters.
     if (UNLIKELY(class_id == kBatchClassID))
-      return kMaxNumCachedHint * sizeof(uptr);
+      return kMaxNumCachedHint * sizeof(usize);
     if (class_id <= kMidClass)
       return kMinSize * class_id;
     class_id -= kMidClass;
-    uptr t = kMidSize << (class_id >> S);
+    usize t = kMidSize << (class_id >> S);
     return t + (t >> S) * (class_id & M);
   }
 
-  static uptr ClassID(uptr size) {
+  static usize ClassID(usize size) {
     if (UNLIKELY(size > kMaxSize))
       return 0;
     if (size <= kMidSize)
       return (size + kMinSize - 1) >> kMinSizeLog;
-    const uptr l = MostSignificantSetBitIndex(size);
-    const uptr hbits = (size >> (l - S)) & M;
-    const uptr lbits = size & ((1U << (l - S)) - 1);
-    const uptr l1 = l - kMidSizeLog;
+    const usize l = MostSignificantSetBitIndex(size);
+    const usize hbits = (size >> (l - S)) & M;
+    const usize lbits = size & ((1U << (l - S)) - 1);
+    const usize l1 = l - kMidSizeLog;
     return kMidClass + (l1 << S) + hbits + (lbits > 0);
   }
 
-  static uptr MaxCachedHint(uptr size) {
+  static usize MaxCachedHint(usize size) {
     DCHECK_LE(size, kMaxSize);
     if (UNLIKELY(size == 0))
       return 0;
-    uptr n;
+    usize n;
     // Force a 32-bit division if the template parameters allow for it.
     if (kMaxBytesCachedLog > 31 || kMaxSizeLog > 31)
       n = (1UL << kMaxBytesCachedLog) / size;
     else
       n = (1U << kMaxBytesCachedLog) / static_cast<u32>(size);
-    return Max<uptr>(1U, Min(kMaxNumCachedHint, n));
+    return Max<usize>(1U, Min(kMaxNumCachedHint, n));
   }
 
   static void Print() {
-    uptr prev_s = 0;
-    uptr total_cached = 0;
-    for (uptr i = 0; i < kNumClasses; i++) {
-      uptr s = Size(i);
+    usize prev_s = 0;
+    usize total_cached = 0;
+    for (usize i = 0; i < kNumClasses; i++) {
+      usize s = Size(i);
       if (s >= kMidSize / 2 && (s & (s - 1)) == 0)
         Printf("\n");
-      uptr d = s - prev_s;
-      uptr p = prev_s ? (d * 100 / prev_s) : 0;
-      uptr l = s ? MostSignificantSetBitIndex(s) : 0;
-      uptr cached = MaxCachedHint(s) * s;
+      usize d = s - prev_s;
+      usize p = prev_s ? (d * 100 / prev_s) : 0;
+      usize l = s ? MostSignificantSetBitIndex(s) : 0;
+      usize cached = MaxCachedHint(s) * s;
       if (i == kBatchClassID)
         d = p = l = 0;
       Printf("c%02zd => s: %zd diff: +%zd %02zd%% l %zd "
@@ -203,9 +203,9 @@ class SizeClassMap {
   }
 
   static void Validate() {
-    for (uptr c = 1; c < kNumClasses; c++) {
+    for (usize c = 1; c < kNumClasses; c++) {
       // Printf("Validate: c%zd\n", c);
-      uptr s = Size(c);
+      usize s = Size(c);
       CHECK_NE(s, 0U);
       if (c == kBatchClassID)
         continue;
@@ -217,8 +217,8 @@ class SizeClassMap {
     }
     CHECK_EQ(ClassID(kMaxSize + 1), 0);
 
-    for (uptr s = 1; s <= kMaxSize; s++) {
-      uptr c = ClassID(s);
+    for (usize s = 1; s <= kMaxSize; s++) {
+      usize c = ClassID(s);
       // Printf("s%zd => c%zd\n", s, c);
       CHECK_LT(c, kNumClasses);
       CHECK_GE(Size(c), s);

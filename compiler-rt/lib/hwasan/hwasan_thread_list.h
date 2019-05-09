@@ -107,7 +107,7 @@ struct ThreadStats {
 
 class HwasanThreadList {
  public:
-  HwasanThreadList(uptr storage, uptr size)
+  HwasanThreadList(uptr storage, usize size)
       : free_space_(storage), free_space_end_(storage + size) {
     // [storage, storage + size) is used as a vector of
     // thread_alloc_size_-sized, ring_buffer_size_*2-aligned elements.
@@ -209,7 +209,7 @@ class HwasanThreadList {
   SpinMutex stats_mutex_;
 };
 
-void InitThreadList(uptr storage, uptr size);
+void InitThreadList(uptr storage, usize size);
 HwasanThreadList &hwasanThreadList();
 
 } // namespace

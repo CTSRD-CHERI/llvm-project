@@ -22,7 +22,7 @@ template<class T>
 class RingBuffer {
  public:
   COMPILER_CHECK(sizeof(T) % sizeof(void *) == 0);
-  static RingBuffer *New(uptr Size) {
+  static RingBuffer *New(usize Size) {
     void *Ptr = MmapOrDie(SizeInBytes(Size), "RingBuffer");
     RingBuffer *RB = reinterpret_cast<RingBuffer*>(Ptr);
     uptr End = reinterpret_cast<uptr>(Ptr) + SizeInBytes(Size);
@@ -38,7 +38,7 @@ class RingBuffer {
                                  2 * sizeof(T *));
   }
 
-  static uptr SizeInBytes(uptr Size) {
+  static uptr SizeInBytes(usize Size) {
     return Size * sizeof(T) + 2 * sizeof(T*);
   }
 
@@ -90,7 +90,7 @@ class CompactRingBuffer {
 
   uptr GetStorageSize() const { return (long_ >> kSizeShift) << kPageSizeBits; }
 
-  void Init(void *storage, uptr size) {
+  void Init(void *storage, usize size) {
     CHECK_EQ(sizeof(CompactRingBuffer<T>), sizeof(void *));
     CHECK(IsPowerOfTwo(size));
     CHECK_GE(size, 1 << kPageSizeBits);
@@ -106,7 +106,7 @@ class CompactRingBuffer {
   }
 
  public:
-  CompactRingBuffer(void *storage, uptr size) {
+  CompactRingBuffer(void *storage, usize size) {
     Init(storage, size);
   }
 

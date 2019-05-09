@@ -89,7 +89,7 @@ uint64_t getTSCFrequency() XRAY_NEVER_INSTRUMENT {
 #elif SANITIZER_FREEBSD || SANITIZER_NETBSD || SANITIZER_OPENBSD || SANITIZER_MAC
 uint64_t getTSCFrequency() XRAY_NEVER_INSTRUMENT {
     long long TSCFrequency = -1;
-    size_t tscfreqsz = sizeof(TSCFrequency);
+    usize tscfreqsz = sizeof(TSCFrequency);
 #if SANITIZER_OPENBSD
     int Mib[2] = { CTL_MACHDEP, CPU_TSCFREQ };
     if (internal_sysctl(Mib, 2, &TSCFrequency, &tscfreqsz, NULL, 0) != -1) {

@@ -58,7 +58,7 @@ MetaMap::MetaMap()
   atomic_store(&uid_gen_, 0, memory_order_relaxed);
 }
 
-void MetaMap::AllocBlock(ThreadState *thr, uptr pc, uptr p, uptr sz) {
+void MetaMap::AllocBlock(ThreadState *thr, uptr pc, uptr p, usize sz) {
   u32 idx = block_alloc_.Alloc(&thr->proc()->block_cache);
   MBlock *b = block_alloc_.Map(idx);
   b->siz = sz;
@@ -79,7 +79,7 @@ uptr MetaMap::FreeBlock(Processor *proc, uptr p) {
   return sz;
 }
 
-bool MetaMap::FreeRange(Processor *proc, uptr p, uptr sz) {
+bool MetaMap::FreeRange(Processor *proc, uptr p, usize sz) {
   bool has_something = false;
   u32 *meta = MemToMeta(p);
   u32 *end = MemToMeta(p + sz);
@@ -118,7 +118,7 @@ bool MetaMap::FreeRange(Processor *proc, uptr p, uptr sz) {
 // which can be huge. The function probes pages one-by-one until it finds a page
 // without meta objects, at this point it stops freeing meta objects. Because
 // thread stacks grow top-down, we do the same starting from end as well.
-void MetaMap::ResetRange(Processor *proc, uptr p, uptr sz) {
+void MetaMap::ResetRange(Processor *proc, uptr p, usize sz) {
   if (SANITIZER_GO) {
     // UnmapOrDie/MmapFixedNoReserve does not work on Windows,
     // so we do the optimization only for C/C++.
@@ -255,7 +255,7 @@ SyncVar* MetaMap::GetAndLock(ThreadState *thr, uptr pc,
   }
 }
 
-void MetaMap::MoveMemory(uptr src, uptr dst, uptr sz) {
+void MetaMap::MoveMemory(uptr src, uptr dst, usize sz) {
   // src and dst can overlap,
   // there are no concurrent accesses to the regions (e.g. stop-the-world).
   CHECK_NE(src, dst);

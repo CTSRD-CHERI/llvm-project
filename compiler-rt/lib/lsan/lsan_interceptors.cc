@@ -49,7 +49,7 @@ namespace std {
 }
 
 #if !SANITIZER_MAC
-INTERCEPTOR(void*, malloc, uptr size) {
+INTERCEPTOR(void*, malloc, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_malloc(size, stack);
@@ -60,7 +60,7 @@ INTERCEPTOR(void, free, void *p) {
   lsan_free(p);
 }
 
-INTERCEPTOR(void*, calloc, uptr nmemb, uptr size) {
+INTERCEPTOR(void*, calloc, uptr nmemb, usize size) {
   if (lsan_init_is_running) {
     // Hack: dlsym calls calloc before REAL(calloc) is retrieved from dlsym.
     const uptr kCallocPoolSize = 1024;
@@ -77,19 +77,19 @@ INTERCEPTOR(void*, calloc, uptr nmemb, uptr size) {
   return lsan_calloc(nmemb, size, stack);
 }
 
-INTERCEPTOR(void*, realloc, void *q, uptr size) {
+INTERCEPTOR(void*, realloc, void *q, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_realloc(q, size, stack);
 }
 
-INTERCEPTOR(int, posix_memalign, void **memptr, uptr alignment, uptr size) {
+INTERCEPTOR(int, posix_memalign, void **memptr, usize alignment, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_posix_memalign(memptr, alignment, size, stack);
 }
 
-INTERCEPTOR(void*, valloc, uptr size) {
+INTERCEPTOR(void*, valloc, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_valloc(size, stack);
@@ -97,14 +97,14 @@ INTERCEPTOR(void*, valloc, uptr size) {
 #endif
 
 #if SANITIZER_INTERCEPT_MEMALIGN
-INTERCEPTOR(void*, memalign, uptr alignment, uptr size) {
+INTERCEPTOR(void*, memalign, usize alignment, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_memalign(alignment, size, stack);
 }
 #define LSAN_MAYBE_INTERCEPT_MEMALIGN INTERCEPT_FUNCTION(memalign)
 
-INTERCEPTOR(void *, __libc_memalign, uptr alignment, uptr size) {
+INTERCEPTOR(void *, __libc_memalign, usize alignment, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   void *res = lsan_memalign(alignment, size, stack);
@@ -118,7 +118,7 @@ INTERCEPTOR(void *, __libc_memalign, uptr alignment, uptr size) {
 #endif // SANITIZER_INTERCEPT_MEMALIGN
 
 #if SANITIZER_INTERCEPT_ALIGNED_ALLOC
-INTERCEPTOR(void*, aligned_alloc, uptr alignment, uptr size) {
+INTERCEPTOR(void*, aligned_alloc, usize alignment, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_aligned_alloc(alignment, size, stack);
@@ -161,7 +161,7 @@ INTERCEPTOR(int, mallopt, int cmd, int value) {
 #endif // SANITIZER_INTERCEPT_MALLOPT_AND_MALLINFO
 
 #if SANITIZER_INTERCEPT_PVALLOC
-INTERCEPTOR(void*, pvalloc, uptr size) {
+INTERCEPTOR(void*, pvalloc, usize size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_pvalloc(size, stack);

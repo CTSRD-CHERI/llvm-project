@@ -22,7 +22,7 @@
 
 namespace __sanitizer {
 
-void CatastrophicErrorWrite(const char *buffer, uptr length) {
+void CatastrophicErrorWrite(const char *buffer, usize length) {
   WriteToFile(kStderrFd, buffer, length);
 }
 
@@ -37,7 +37,7 @@ void ReportFile::ReopenIfNecessary() {
   mu->CheckLocked();
   if (fd == kStdoutFd || fd == kStderrFd) return;
 
-  uptr pid = internal_getpid();
+  pid_t pid = internal_getpid();
   // If in tracer, use the parent's file.
   if (pid == stoptheworld_tracer_pid)
     pid = stoptheworld_tracer_ppid;
@@ -71,7 +71,7 @@ void ReportFile::ReopenIfNecessary() {
 void ReportFile::SetReportPath(const char *path) {
   if (!path)
     return;
-  uptr len = internal_strlen(path);
+  usize len = internal_strlen(path);
   if (len > sizeof(path_prefix) - 100) {
     Report("ERROR: Path is too long: %c%c%c%c%c%c%c%c...\n",
            path[0], path[1], path[2], path[3],
@@ -92,18 +92,18 @@ void ReportFile::SetReportPath(const char *path) {
   }
 }
 
-bool ReadFileToBuffer(const char *file_name, char **buff, uptr *buff_size,
-                      uptr *read_len, uptr max_len, error_t *errno_p) {
+bool ReadFileToBuffer(const char *file_name, char **buff, usize *buff_size,
+                      usize *read_len, usize max_len, error_t *errno_p) {
   *buff = nullptr;
   *buff_size = 0;
   *read_len = 0;
   if (!max_len)
     return true;
-  uptr PageSize = GetPageSizeCached();
-  uptr kMinFileLen = Min(PageSize, max_len);
+  usize PageSize = GetPageSizeCached();
+  usize kMinFileLen = Min(PageSize, max_len);
 
   // The files we usually open are not seekable, so try different buffer sizes.
-  for (uptr size = kMinFileLen;; size = Min(size * 2, max_len)) {
+  for (usize size = kMinFileLen;; size = Min(size * 2, max_len)) {
     UnmapOrDie(*buff, *buff_size);
     *buff = (char*)MmapOrDie(size, __func__);
     *buff_size = size;
@@ -116,7 +116,7 @@ bool ReadFileToBuffer(const char *file_name, char **buff, uptr *buff_size,
     // Read up to one page at a time.
     bool reached_eof = false;
     while (*read_len < size) {
-      uptr just_read;
+      usize just_read;
       if (!ReadFromFile(fd, *buff + *read_len, size - *read_len, &just_read,
                         errno_p)) {
         UnmapOrDie(*buff, *buff_size);
@@ -137,22 +137,22 @@ bool ReadFileToBuffer(const char *file_name, char **buff, uptr *buff_size,
 }
 
 bool ReadFileToVector(const char *file_name,
-                      InternalMmapVectorNoCtor<char> *buff, uptr max_len,
+                      InternalMmapVectorNoCtor<char> *buff, usize max_len,
                       error_t *errno_p) {
   buff->clear();
   if (!max_len)
     return true;
-  uptr PageSize = GetPageSizeCached();
+  usize PageSize = GetPageSizeCached();
   fd_t fd = OpenFile(file_name, RdOnly, errno_p);
   if (fd == kInvalidFd)
     return false;
-  uptr read_len = 0;
+  usize read_len = 0;
   while (read_len < max_len) {
     if (read_len >= buff->size())
       buff->resize(Min(Max(PageSize, read_len * 2), max_len));
     CHECK_LT(read_len, buff->size());
     CHECK_LE(buff->size(), max_len);
-    uptr just_read;
+    usize just_read;
     if (!ReadFromFile(fd, buff->data() + read_len, buff->size() - read_len,
                       &just_read, errno_p)) {
       CloseFile(fd);
@@ -177,12 +177,12 @@ char *FindPathToBinary(const char *name) {
   const char *path = GetEnv("PATH");
   if (!path)
     return nullptr;
-  uptr name_len = internal_strlen(name);
+  usize name_len = internal_strlen(name);
   InternalMmapVector<char> buffer(kMaxPathLength);
   const char *beg = path;
   while (true) {
     const char *end = internal_strchrnul(beg, kPathSeparator);
-    uptr prefix_len = end - beg;
+    usize prefix_len = end - beg;
     if (prefix_len + name_len + 2 <= kMaxPathLength) {
       internal_memcpy(buffer.data(), beg, prefix_len);
       buffer[prefix_len] = '/';

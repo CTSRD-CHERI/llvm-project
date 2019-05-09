@@ -165,7 +165,7 @@ namespace __sanitizer {
 // --------------- sanitizer_libc.h
 #if !SANITIZER_SOLARIS && !SANITIZER_NETBSD
 #if !SANITIZER_S390 && !SANITIZER_OPENBSD
-uptr internal_mmap(void *addr, uptr length, int prot, int flags, int fd,
+uptr internal_mmap(void *addr, usize length, int prot, int flags, int fd,
                    OFF_T offset) {
 #if SANITIZER_FREEBSD || SANITIZER_LINUX_USES_64BIT_SYSCALLS
   return internal_syscall(SYSCALL(mmap), (uptr)addr, length, prot, flags, fd,
@@ -180,11 +180,11 @@ uptr internal_mmap(void *addr, uptr length, int prot, int flags, int fd,
 #endif // !SANITIZER_S390 && !SANITIZER_OPENBSD
 
 #if !SANITIZER_OPENBSD
-uptr internal_munmap(void *addr, uptr length) {
+uptr internal_munmap(void *addr, usize length) {
   return internal_syscall(SYSCALL(munmap), (uptr)addr, length);
 }
 
-int internal_mprotect(void *addr, uptr length, int prot) {
+int internal_mprotect(void *addr, usize length, int prot) {
   return internal_syscall(SYSCALL(mprotect), (uptr)addr, length, prot);
 }
 #endif
@@ -210,21 +210,21 @@ uptr internal_open(const char *filename, int flags, u32 mode) {
 #endif
 }
 
-uptr internal_read(fd_t fd, void *buf, uptr count) {
+uptr internal_read(fd_t fd, void *buf, usize count) {
   sptr res;
   HANDLE_EINTR(res,
                (sptr)internal_syscall(SYSCALL(read), fd, (uptr)buf, count));
   return res;
 }
 
-uptr internal_write(fd_t fd, const void *buf, uptr count) {
+uptr internal_write(fd_t fd, const void *buf, usize count) {
   sptr res;
   HANDLE_EINTR(res,
                (sptr)internal_syscall(SYSCALL(write), fd, (uptr)buf, count));
   return res;
 }
 
-uptr internal_ftruncate(fd_t fd, uptr size) {
+uptr internal_ftruncate(fd_t fd, usize size) {
   sptr res;
   HANDLE_EINTR(res, (sptr)internal_syscall(SYSCALL(ftruncate), fd,
                (OFF_T)size));
@@ -833,7 +833,7 @@ int internal_sigaction_norestorer(int signum, const void *act, void *oldact) {
 }
 #endif  // SANITIZER_LINUX
 
-uptr internal_sigprocmask(int how, __sanitizer_sigset_t *set,
+usize internal_sigprocmask(int how, __sanitizer_sigset_t *set,
                           __sanitizer_sigset_t *oldset) {
 #if SANITIZER_FREEBSD || SANITIZER_OPENBSD
   return internal_syscall(SYSCALL(sigprocmask), how, set, oldset);
@@ -1113,7 +1113,7 @@ uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
 }
 #endif // !SANITIZER_OPENBSD
 
-uptr ReadLongProcessName(/*out*/ char *buf, uptr buf_len) {
+usize ReadLongProcessName(/*out*/ char *buf, usize buf_len) {
 #if SANITIZER_LINUX
   char *tmpbuf;
   uptr tmpsize;
@@ -2064,14 +2064,14 @@ void CheckNoDeepBind(const char *filename, int flag) {
 #endif
 }
 
-uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding,
+uptr FindAvailableMemoryRange(usize size, usize alignment, uptr left_padding,
                               uptr *largest_gap_found,
                               uptr *max_occupied_addr) {
   UNREACHABLE("FindAvailableMemoryRange is not available");
   return 0;
 }
 
-bool GetRandom(void *buffer, uptr length, bool blocking) {
+bool GetRandom(void *buffer, usize length, bool blocking) {
   if (!buffer || !length || length > 256)
     return false;
 #if SANITIZER_USE_GETENTROPY

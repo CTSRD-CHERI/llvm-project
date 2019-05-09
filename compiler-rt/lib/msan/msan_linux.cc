@@ -35,14 +35,14 @@
 
 namespace __msan {
 
-void ReportMapRange(const char *descr, uptr beg, uptr size) {
+void ReportMapRange(const char *descr, uptr beg, usize size) {
   if (size > 0) {
     uptr end = beg + size - 1;
     VPrintf(1, "%s : %p - %p\n", descr, beg, end);
   }
 }
 
-static bool CheckMemoryRangeAvailability(uptr beg, uptr size) {
+static bool CheckMemoryRangeAvailability(uptr beg, usize size) {
   if (size > 0) {
     uptr end = beg + size - 1;
     if (!MemoryRangeIsAvailable(beg, end)) {
@@ -53,7 +53,7 @@ static bool CheckMemoryRangeAvailability(uptr beg, uptr size) {
   return true;
 }
 
-static bool ProtectMemoryRange(uptr beg, uptr size, const char *name) {
+static bool ProtectMemoryRange(uptr beg, usize size, const char *name) {
   if (size > 0) {
     void *addr = MmapFixedNoAccess(beg, size, name);
     if (beg == 0 && addr) {

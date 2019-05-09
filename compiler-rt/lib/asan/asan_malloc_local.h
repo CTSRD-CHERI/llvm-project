@@ -24,7 +24,7 @@ static INLINE bool EarlyMalloc() {
                              __asan::asan_init_is_running);
 }
 
-void* MemalignFromLocalPool(uptr alignment, uptr size);
+void* MemalignFromLocalPool(uptr alignment, usize size);
 
 #if SANITIZER_RTEMS
 

@@ -42,7 +42,7 @@ static atomic_uintptr_t number_of_live_dtls;
 
 static const uptr kDestroyedThread = -1;
 
-static inline void DTLS_Deallocate(DTLS::DTV *dtv, uptr size) {
+static inline void DTLS_Deallocate(DTLS::DTV *dtv, usize size) {
   if (!size) return;
   VReport(2, "__tls_get_addr: DTLS_Deallocate %p %zd\n", dtv, size);
   UnmapOrDie(dtv, size * sizeof(DTLS::DTV));
@@ -126,7 +126,7 @@ DTLS::DTV *DTLS_on_tls_get_addr(void *arg_void, void *res,
   return dtls.dtv + dso_id;
 }
 
-void DTLS_on_libc_memalign(void *ptr, uptr size) {
+void DTLS_on_libc_memalign(void *ptr, usize size) {
   if (!common_flags()->intercept_tls_get_addr) return;
   VReport(2, "DTLS_on_libc_memalign: %p %p\n", ptr, size);
   dtls.last_memalign_ptr = reinterpret_cast<uptr>(ptr);
@@ -140,7 +140,7 @@ bool DTLSInDestruction(DTLS *dtls) {
 }
 
 #else
-void DTLS_on_libc_memalign(void *ptr, uptr size) {}
+void DTLS_on_libc_memalign(void *ptr, usize size) {}
 DTLS::DTV *DTLS_on_tls_get_addr(void *arg, void *res,
   unsigned long, unsigned long) { return 0; }
 DTLS *DTLS_Get() { return 0; }

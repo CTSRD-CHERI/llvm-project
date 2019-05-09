@@ -239,7 +239,7 @@ const char *__tsan_locate_address(uptr addr, char *name, uptr name_size,
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-int __tsan_get_alloc_stack(uptr addr, uptr *trace, uptr size, int *thread_id,
+int __tsan_get_alloc_stack(uptr addr, uptr *trace, usize size, int *thread_id,
                            tid_t *os_id) {
   MBlock *b = 0;
   Allocator *a = allocator();
@@ -256,7 +256,7 @@ int __tsan_get_alloc_stack(uptr addr, uptr *trace, uptr size, int *thread_id,
   *os_id = tctx->os_id;
 
   StackTrace stack = StackDepotGet(b->stk);
-  size = Min(size, (uptr)stack.size);
+  size = Min(size, (usize)stack.size);
   for (uptr i = 0; i < size; i++) trace[i] = stack.trace[stack.size - i - 1];
   return size;
 }

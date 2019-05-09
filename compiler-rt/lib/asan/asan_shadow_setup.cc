@@ -41,7 +41,7 @@ void ReserveShadowMemoryRange(uptr beg, uptr end, const char *name) {
   if (common_flags()->use_madv_dontdump) DontDumpShadowMemory(beg, size);
 }
 
-static void ProtectGap(uptr addr, uptr size) {
+static void ProtectGap(uptr addr, usize size) {
   if (!flags()->protect_shadow_gap) {
     // The shadow gap is unprotected, so there is a chance that someone
     // is actually using this memory. Which means it needs a shadow...

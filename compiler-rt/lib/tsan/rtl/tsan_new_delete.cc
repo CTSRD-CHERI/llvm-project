@@ -24,7 +24,7 @@ struct nothrow_t {};
 enum class align_val_t: __sanitizer::uptr {};
 }  // namespace std
 
-DECLARE_REAL(void *, malloc, uptr size)
+DECLARE_REAL(void *, malloc, usize size)
 DECLARE_REAL(void, free, void *ptr)
 
 // TODO(alekseys): throw std::bad_alloc instead of dying on OOM.

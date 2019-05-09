@@ -336,7 +336,7 @@ void Report(const char *format, ...) {
 // (not including trailing '\0'). Thus, the string is truncated
 // iff return value is not less than "length".
 FORMAT(3, 4)
-int internal_snprintf(char *buffer, uptr length, const char *format, ...) {
+int internal_snprintf(char *buffer, usize length, const char *format, ...) {
   va_list args;
   va_start(args, format);
   int needed_length = VSNPrintf(buffer, length, format, args);

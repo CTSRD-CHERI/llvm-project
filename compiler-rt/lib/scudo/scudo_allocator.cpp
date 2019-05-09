@@ -190,7 +190,7 @@ struct QuarantineCallback {
   // Internal quarantine allocation and deallocation functions. We first check
   // that the batches are indeed serviced by the Primary.
   // TODO(kostyak): figure out the best way to protect the batches.
-  void *Allocate(uptr Size) {
+  void *Allocate(usize Size) {
     const uptr BatchClassId = SizeClassMap::ClassID(sizeof(QuarantineBatch));
     return getBackend().allocatePrimary(Cache_, BatchClassId);
   }
@@ -288,7 +288,7 @@ struct Allocator {
   NOINLINE bool isRssLimitExceeded();
 
   // Allocates a chunk.
-  void *allocate(uptr Size, uptr Alignment, AllocType Type,
+  void *allocate(usize Size, usize alignment, AllocType Type,
                  bool ForceZeroContents = false) {
     initThreadMaybe();
     if (UNLIKELY(Alignment > MaxAlignment)) {
@@ -512,7 +512,7 @@ struct Allocator {
     return Chunk::getUsableSize(Ptr, &Header);
   }
 
-  void *calloc(uptr NMemB, uptr Size) {
+  void *calloc(uptr NMemB, usize Size) {
     initThreadMaybe();
     if (UNLIKELY(CheckForCallocOverflow(NMemB, Size))) {
       if (AllocatorMayReturnNull())
@@ -529,7 +529,7 @@ struct Allocator {
 
   uptr getStats(AllocatorStat StatType) {
     initThreadMaybe();
-    uptr stats[AllocatorStatCount];
+    usize stats[AllocatorStatCount];
     Backend.getStats(stats);
     return stats[StatType];
   }
@@ -637,7 +637,7 @@ void ScudoTSD::commitBack() {
   Instance.commitBack(this);
 }
 
-void *scudoAllocate(uptr Size, uptr Alignment, AllocType Type) {
+void *scudoAllocate(usize Size, usize alignment, AllocType Type) {
   if (Alignment && UNLIKELY(!IsPowerOfTwo(Alignment))) {
     errno = EINVAL;
     if (Instance.canReturnNull())
@@ -647,11 +647,11 @@ void *scudoAllocate(uptr Size, uptr Alignment, AllocType Type) {
   return SetErrnoOnNull(Instance.allocate(Size, Alignment, Type));
 }
 
-void scudoDeallocate(void *Ptr, uptr Size, uptr Alignment, AllocType Type) {
+void scudoDeallocate(void *Ptr, usize Size, usize alignment, AllocType Type) {
   Instance.deallocate(Ptr, Size, Alignment, Type);
 }
 
-void *scudoRealloc(void *Ptr, uptr Size) {
+void *scudoRealloc(void *Ptr, usize Size) {
   if (!Ptr)
     return SetErrnoOnNull(Instance.allocate(Size, MinAlignment, FromMalloc));
   if (Size == 0) {
@@ -661,16 +661,16 @@ void *scudoRealloc(void *Ptr, uptr Size) {
   return SetErrnoOnNull(Instance.reallocate(Ptr, Size));
 }
 
-void *scudoCalloc(uptr NMemB, uptr Size) {
+void *scudoCalloc(uptr NMemB, usize Size) {
   return SetErrnoOnNull(Instance.calloc(NMemB, Size));
 }
 
-void *scudoValloc(uptr Size) {
+void *scudoValloc(usize Size) {
   return SetErrnoOnNull(
       Instance.allocate(Size, GetPageSizeCached(), FromMemalign));
 }
 
-void *scudoPvalloc(uptr Size) {
+void *scudoPvalloc(usize Size) {
   const uptr PageSize = GetPageSizeCached();
   if (UNLIKELY(CheckForPvallocOverflow(Size, PageSize))) {
     errno = ENOMEM;
@@ -683,7 +683,7 @@ void *scudoPvalloc(uptr Size) {
   return SetErrnoOnNull(Instance.allocate(Size, PageSize, FromMemalign));
 }
 
-int scudoPosixMemalign(void **MemPtr, uptr Alignment, uptr Size) {
+int scudoPosixMemalign(void **MemPtr, usize alignment, usize Size) {
   if (UNLIKELY(!CheckPosixMemalignAlignment(Alignment))) {
     if (!Instance.canReturnNull())
       reportInvalidPosixMemalignAlignment(Alignment);
@@ -696,7 +696,7 @@ int scudoPosixMemalign(void **MemPtr, uptr Alignment, uptr Size) {
   return 0;
 }
 
-void *scudoAlignedAlloc(uptr Alignment, uptr Size) {
+void *scudoAlignedAlloc(uptr Alignment, usize Size) {
   if (UNLIKELY(!CheckAlignedAllocAlignmentAndSize(Alignment, Size))) {
     errno = EINVAL;
     if (Instance.canReturnNull())
@@ -732,7 +732,7 @@ uptr __sanitizer_get_unmapped_bytes() {
   return 1;
 }
 
-uptr __sanitizer_get_estimated_allocated_size(uptr Size) {
+uptr __sanitizer_get_estimated_allocated_size(usize Size) {
   return Size;
 }
 
@@ -746,7 +746,7 @@ uptr __sanitizer_get_allocated_size(const void *Ptr) {
 
 #if !SANITIZER_SUPPORTS_WEAK_HOOKS
 SANITIZER_INTERFACE_WEAK_DEF(void, __sanitizer_malloc_hook,
-                             void *Ptr, uptr Size) {
+                             void *Ptr, usize Size) {
   (void)Ptr;
   (void)Size;
 }

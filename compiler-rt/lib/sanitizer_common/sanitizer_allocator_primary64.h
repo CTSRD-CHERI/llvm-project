@@ -46,9 +46,9 @@ template <class Params>
 class SizeClassAllocator64 {
  public:
   using AddressSpaceView = typename Params::AddressSpaceView;
-  static const uptr kSpaceBeg = Params::kSpaceBeg;
-  static const uptr kSpaceSize = Params::kSpaceSize;
-  static const uptr kMetadataSize = Params::kMetadataSize;
+  static const vaddr kSpaceBeg = Params::kSpaceBeg;
+  static const usize kSpaceSize = Params::kSpaceSize;
+  static const usize kMetadataSize = Params::kMetadataSize;
   typedef typename Params::SizeClassMap SizeClassMap;
   typedef typename Params::MapUnmapCallback MapUnmapCallback;
 
@@ -102,7 +102,7 @@ class SizeClassAllocator64 {
     }
   }
 
-  static bool CanAllocate(uptr size, uptr alignment) {
+  static bool CanAllocate(usize size, usize alignment) {
     return size <= SizeClassMap::kMaxSize &&
       alignment <= SizeClassMap::kMaxSize;
   }
@@ -163,17 +163,17 @@ class SizeClassAllocator64 {
 
   uptr GetRegionBegin(const void *p) {
     if (kUsingConstantSpaceBeg)
-      return reinterpret_cast<uptr>(p) & ~(kRegionSize - 1);
+      return RoundDownTo(reinterpret_cast<uptr>(p), kRegionSize);
     uptr space_beg = SpaceBeg();
-    return ((reinterpret_cast<uptr>(p)  - space_beg) & ~(kRegionSize - 1)) +
+    return RoundDownTo(reinterpret_cast<uptr>(p) - space_beg, kRegionSize) +
         space_beg;
   }
 
-  uptr GetRegionBeginBySizeClass(uptr class_id) const {
+  uptr GetRegionBeginBySizeClass(usize class_id) const {
     return SpaceBeg() + kRegionSize * class_id;
   }
 
-  uptr GetSizeClass(const void *p) {
+  usize GetSizeClass(const void *p) {
     if (kUsingConstantSpaceBeg && (kSpaceBeg % kSpaceSize) == 0)
       return ((reinterpret_cast<uptr>(p)) / kRegionSize) % kNumClassesRounded;
     return ((reinterpret_cast<uptr>(p) - SpaceBeg()) / kRegionSize) %
@@ -200,7 +200,7 @@ class SizeClassAllocator64 {
     return ClassIdToSize(GetSizeClass(p));
   }
 
-  uptr ClassID(uptr size) { return SizeClassMap::ClassID(size); }
+  uptr ClassID(usize size) { return SizeClassMap::ClassID(size); }
 
   void *GetMetaData(const void *p) {
     uptr class_id = GetSizeClass(p);
@@ -223,8 +223,8 @@ class SizeClassAllocator64 {
     UnmapWithCallbackOrDie(SpaceBeg(), kSpaceSize + AdditionalSize());
   }
 
-  static void FillMemoryProfile(uptr start, uptr rss, bool file, uptr *stats,
-                           uptr stats_size) {
+  static void FillMemoryProfile(uptr start, usize rss, bool file, usize *stats,
+                           usize stats_size) {
     for (uptr class_id = 0; class_id < stats_size; class_id++)
       if (stats[class_id] == start)
         stats[class_id] = rss;
@@ -248,7 +248,7 @@ class SizeClassAllocator64 {
   }
 
   void PrintStats() {
-    uptr rss_stats[kNumClasses];
+    usize rss_stats[kNumClasses];
     for (uptr class_id = 0; class_id < kNumClasses; class_id++)
       rss_stats[class_id] = SpaceBeg() + kRegionSize * class_id;
     GetMemoryProfile(FillMemoryProfile, rss_stats, kNumClasses);
@@ -316,8 +316,8 @@ class SizeClassAllocator64 {
   }
 
   typedef SizeClassMap SizeClassMapT;
-  static const uptr kNumClasses = SizeClassMap::kNumClasses;
-  static const uptr kNumClassesRounded = SizeClassMap::kNumClassesRounded;
+  static const usize kNumClasses = SizeClassMap::kNumClasses;
+  static const usize kNumClassesRounded = SizeClassMap::kNumClassesRounded;
 
   // A packed array of counters. Each counter occupies 2^n bits, enough to store
   // counter's max_value. Ctor will try to allocate the required buffer via
@@ -336,13 +336,13 @@ class SizeClassAllocator64 {
       constexpr u64 kMaxCounterBits = sizeof(*buffer) * 8ULL;
       // Rounding counter storage size up to the power of two allows for using
       // bit shifts calculating particular counter's index and offset.
-      uptr counter_size_bits =
+      u64 counter_size_bits =
           RoundUpToPowerOfTwo(MostSignificantSetBitIndex(max_value) + 1);
       CHECK_LE(counter_size_bits, kMaxCounterBits);
       counter_size_bits_log = Log2(counter_size_bits);
       counter_mask = ~0ULL >> (kMaxCounterBits - counter_size_bits);
 
-      uptr packing_ratio = kMaxCounterBits >> counter_size_bits_log;
+      usize packing_ratio = kMaxCounterBits >> counter_size_bits_log;
       CHECK_GT(packing_ratio, 0);
       packing_ratio_log = Log2(packing_ratio);
       bit_offset_mask = packing_ratio - 1;
@@ -368,23 +368,23 @@ class SizeClassAllocator64 {
       return n;
     }
 
-    uptr Get(uptr i) const {
+    u64 Get(usize i) const {
       DCHECK_LT(i, n);
-      uptr index = i >> packing_ratio_log;
-      uptr bit_offset = (i & bit_offset_mask) << counter_size_bits_log;
+      usize index = i >> packing_ratio_log;
+      usize bit_offset = (i & bit_offset_mask) << counter_size_bits_log;
       return (buffer[index] >> bit_offset) & counter_mask;
     }
 
-    void Inc(uptr i) const {
+    void Inc(usize i) const {
       DCHECK_LT(Get(i), counter_mask);
-      uptr index = i >> packing_ratio_log;
-      uptr bit_offset = (i & bit_offset_mask) << counter_size_bits_log;
+      usize index = i >> packing_ratio_log;
+      usize bit_offset = (i & bit_offset_mask) << counter_size_bits_log;
       buffer[index] += 1ULL << bit_offset;
     }
 
-    void IncRange(uptr from, uptr to) const {
+    void IncRange(usize from, usize to) const {
       DCHECK_LE(from, to);
-      for (uptr i = from; i <= to; i++)
+      for (usize i = from; i <= to; i++)
         Inc(i);
     }
 
@@ -447,10 +447,10 @@ class SizeClassAllocator64 {
   // current bucket.
   template<class MemoryMapperT>
   static void ReleaseFreeMemoryToOS(CompactPtrT *free_array,
-                                    uptr free_array_count, uptr chunk_size,
-                                    uptr allocated_pages_count,
+                                    usize free_array_count, usize chunk_size,
+                                    usize allocated_pages_count,
                                     MemoryMapperT *memory_mapper) {
-    const uptr page_size = GetPageSizeCached();
+    const usize page_size = GetPageSizeCached();
 
     // Figure out the number of chunks per page and whether we can take a fast
     // path (the number of chunks per page is the same for all pages).
@@ -491,9 +491,9 @@ class SizeClassAllocator64 {
     if (!counters.IsAllocated())
       return;
 
-    const uptr chunk_size_scaled = chunk_size >> kCompactPtrScale;
-    const uptr page_size_scaled = page_size >> kCompactPtrScale;
-    const uptr page_size_scaled_log = Log2(page_size_scaled);
+    const usize chunk_size_scaled = chunk_size >> kCompactPtrScale;
+    const usize page_size_scaled = page_size >> kCompactPtrScale;
+    const usize page_size_scaled_log = Log2(page_size_scaled);
 
     // Iterate over free chunks and count how many free chunks affect each
     // allocated page.
@@ -555,12 +555,12 @@ class SizeClassAllocator64 {
 
   ReservedAddressRange address_range;
 
-  static const uptr kRegionSize = kSpaceSize / kNumClassesRounded;
+  static const usize kRegionSize = kSpaceSize / kNumClassesRounded;
   // FreeArray is the array of free-d chunks (stored as 4-byte offsets).
   // In the worst case it may reguire kRegionSize/SizeClassMap::kMinSize
   // elements, but in reality this will not happen. For simplicity we
   // dedicate 1/8 of the region's virtual space to FreeArray.
-  static const uptr kFreeArraySize = kRegionSize / 8;
+  static const usize kFreeArraySize = kRegionSize / 8;
 
   static const bool kUsingConstantSpaceBeg = kSpaceBeg != ~(uptr)0;
   uptr NonConstSpaceBeg;
@@ -618,7 +618,7 @@ class SizeClassAllocator64 {
     return region_beg + kRegionSize - kFreeArraySize;
   }
 
-  uptr GetChunkIdx(uptr chunk, uptr size) const {
+  uptr GetChunkIdx(uptr chunk, usize size) const {
     if (!kUsingConstantSpaceBeg)
       chunk -= SpaceBeg();
 
@@ -634,7 +634,7 @@ class SizeClassAllocator64 {
     return reinterpret_cast<CompactPtrT *>(GetMetadataEnd(region_beg));
   }
 
-  bool MapWithCallback(uptr beg, uptr size, const char *name) {
+  bool MapWithCallback(uptr beg, usize size, const char *name) {
     uptr mapped = address_range.Map(beg, size, name);
     if (UNLIKELY(!mapped))
       return false;
@@ -643,12 +643,12 @@ class SizeClassAllocator64 {
     return true;
   }
 
-  void MapWithCallbackOrDie(uptr beg, uptr size, const char *name) {
+  void MapWithCallbackOrDie(uptr beg, usize size, const char *name) {
     CHECK_EQ(beg, address_range.MapOrDie(beg, size, name));
     MapUnmapCallback().OnMap(beg, size);
   }
 
-  void UnmapWithCallbackOrDie(uptr beg, uptr size) {
+  void UnmapWithCallbackOrDie(uptr beg, usize size) {
     MapUnmapCallback().OnUnmap(beg, size);
     address_range.Unmap(beg, size);
   }

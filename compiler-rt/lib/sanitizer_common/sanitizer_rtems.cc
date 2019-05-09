@@ -85,8 +85,8 @@ void GetThreadStackTopAndBottom(bool at_initialization,
   *stack_top = *stack_bottom + size;
 }
 
-void GetThreadStackAndTls(bool main, uptr *stk_addr, uptr *stk_size,
-                          uptr *tls_addr, uptr *tls_size) {
+void GetThreadStackAndTls(bool main, uptr *stk_addr, usize *stk_size,
+                          uptr *tls_addr, usize *tls_size) {
   uptr stack_top, stack_bottom;
   GetThreadStackTopAndBottom(main, &stack_top, &stack_bottom);
   *stk_addr = stack_bottom;
@@ -144,7 +144,7 @@ uptr GetMaxVirtualAddress() {
   return (1ULL << 32) - 1;  // 0xffffffff
 }
 
-void *MmapOrDie(uptr size, const char *mem_type, bool raw_report) {
+void *MmapOrDie(usize size, const char *mem_type, bool raw_report) {
   void* ptr = 0;
   int res = __mmap_alloc_aligned(&ptr, GetPageSize(), size);
   if (UNLIKELY(res))
@@ -154,7 +154,7 @@ void *MmapOrDie(uptr size, const char *mem_type, bool raw_report) {
   return ptr;
 }
 
-void *MmapOrDieOnFatalError(uptr size, const char *mem_type) {
+void *MmapOrDieOnFatalError(usize size, const char *mem_type) {
   void* ptr = 0;
   int res = __mmap_alloc_aligned(&ptr, GetPageSize(), size);
   if (UNLIKELY(res)) {
@@ -167,7 +167,7 @@ void *MmapOrDieOnFatalError(uptr size, const char *mem_type) {
   return ptr;
 }
 
-void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
+void *MmapAlignedOrDieOnFatalError(usize size, usize alignment,
                                    const char *mem_type) {
   CHECK(IsPowerOfTwo(size));
   CHECK(IsPowerOfTwo(alignment));
@@ -180,11 +180,11 @@ void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
   return ptr;
 }
 
-void *MmapNoReserveOrDie(uptr size, const char *mem_type) {
+void *MmapNoReserveOrDie(usize size, const char *mem_type) {
   return MmapOrDie(size, mem_type, false);
 }
 
-void UnmapOrDie(void *addr, uptr size) {
+void UnmapOrDie(void *addr, usize size) {
   if (!addr || !size) return;
   __mmap_free(addr);
   DecreaseTotalMmap(size);
@@ -231,7 +231,7 @@ void ReleaseMemoryPagesToOS(uptr beg, uptr end) {}
 void DumpProcessMap() {}
 
 // There is no page protection so everything is "accessible."
-bool IsAccessibleMemoryRange(uptr beg, uptr size) {
+bool IsAccessibleMemoryRange(uptr beg, usize size) {
   return true;
 }
 
@@ -242,12 +242,12 @@ const char *GetEnv(const char *name) {
   return getenv(name);
 }
 
-uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
+usize ReadBinaryName(/*out*/char *buf, usize buf_len) {
   internal_strncpy(buf, "StubBinaryName", buf_len);
   return internal_strlen(buf);
 }
 
-uptr ReadLongProcessName(/*out*/ char *buf, uptr buf_len) {
+usize ReadLongProcessName(/*out*/ char *buf, usize buf_len) {
   internal_strncpy(buf, "StubProcessName", buf_len);
   return internal_strlen(buf);
 }
@@ -260,7 +260,7 @@ bool IsAbsolutePath(const char *path) {
   return path != nullptr && IsPathSeparator(path[0]);
 }
 
-void ReportFile::Write(const char *buffer, uptr length) {
+void ReportFile::Write(const char *buffer, usize length) {
   SpinMutexLock l(mu);
   static const char *kWriteError =
       "ReportFile::Write() can't output requested buffer!\n";

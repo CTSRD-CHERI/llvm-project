@@ -144,7 +144,7 @@ void NORETURN reportDeallocTypeMismatch(AllocatorAction Action, void *Ptr,
 
 // The size specified to the delete operator does not match the one that was
 // passed to new when allocating the chunk.
-void NORETURN reportDeleteSizeMismatch(void *Ptr, uptr Size,
+void NORETURN reportDeleteSizeMismatch(void *Ptr, usize Size,
                                        uptr ExpectedSize) {
   ScopedErrorReport Report;
   Report.append(
@@ -159,7 +159,7 @@ void NORETURN reportAlignmentNotPowerOfTwo(uptr Alignment) {
       Alignment);
 }
 
-void NORETURN reportCallocOverflow(uptr Count, uptr Size) {
+void NORETURN reportCallocOverflow(uptr Count, usize Size) {
   ScopedErrorReport Report;
   Report.append("calloc parameters overflow: count * size (%zu * %zu) cannot "
                 "be represented with type size_t\n",
@@ -174,14 +174,14 @@ void NORETURN reportInvalidPosixMemalignAlignment(uptr Alignment) {
       Alignment, sizeof(void *));
 }
 
-void NORETURN reportPvallocOverflow(uptr Size) {
+void NORETURN reportPvallocOverflow(usize Size) {
   ScopedErrorReport Report;
   Report.append("pvalloc parameters overflow: size %zu rounded up to system "
                 "page size %zu cannot be represented in type size_t\n",
                 Size, getPageSizeCached());
 }
 
-void NORETURN reportInvalidAlignedAllocAlignment(uptr Alignment, uptr Size) {
+void NORETURN reportInvalidAlignedAllocAlignment(uptr Alignment, usize Size) {
   ScopedErrorReport Report;
   Report.append("invalid alignment requested in aligned_alloc: %zu, alignment "
                 "must be a power of two and the requested size %zu must be a "

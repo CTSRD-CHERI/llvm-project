@@ -206,7 +206,7 @@ dfsan_label __dfsan_union(dfsan_label l1, dfsan_label l2) {
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-dfsan_label __dfsan_union_load(const dfsan_label *ls, uptr n) {
+dfsan_label __dfsan_union_load(const dfsan_label *ls, usize n) {
   dfsan_label label = ls[0];
   for (uptr i = 1; i != n; ++i) {
     dfsan_label next_label = ls[i];
@@ -261,7 +261,7 @@ dfsan_label dfsan_create_label(const char *desc, void *userdata) {
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-void __dfsan_set_label(dfsan_label label, void *addr, uptr size) {
+void __dfsan_set_label(dfsan_label label, void *addr, usize size) {
   for (dfsan_label *labelp = shadow_for(addr); size != 0; --size, ++labelp) {
     // Don't write the label if it is already the value we need it to be.
     // In a program where most addresses are not labeled, it is common that
@@ -279,12 +279,12 @@ void __dfsan_set_label(dfsan_label label, void *addr, uptr size) {
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-void dfsan_set_label(dfsan_label label, void *addr, uptr size) {
+void dfsan_set_label(dfsan_label label, void *addr, usize size) {
   __dfsan_set_label(label, addr, size);
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-void dfsan_add_label(dfsan_label label, void *addr, uptr size) {
+void dfsan_add_label(dfsan_label label, void *addr, usize size) {
   for (dfsan_label *labelp = shadow_for(addr); size != 0; --size, ++labelp)
     if (*labelp != label)
       *labelp = __dfsan_union(*labelp, label);
@@ -301,7 +301,7 @@ __dfsw_dfsan_get_label(long data, dfsan_label data_label,
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE dfsan_label
-dfsan_read_label(const void *addr, uptr size) {
+dfsan_read_label(const void *addr, usize size) {
   if (size == 0)
     return 0;
   return __dfsan_union_load(shadow_for(addr), size);

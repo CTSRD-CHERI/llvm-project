@@ -94,18 +94,18 @@ static void *GetRealLibcAddress(const char *symbol) {
   CHECK(real_##func);
 
 // --------------- sanitizer_libc.h
-uptr internal_mmap(void *addr, uptr length, int prot, int flags, int fd,
+uptr internal_mmap(void *addr, usize length, int prot, int flags, int fd,
                    OFF_T offset) {
   CHECK(&__mmap);
   return (uptr)__mmap(addr, length, prot, flags, fd, 0, offset);
 }
 
-uptr internal_munmap(void *addr, uptr length) {
+uptr internal_munmap(void *addr, usize length) {
   DEFINE__REAL(int, munmap, void *a, uptr b);
   return _REAL(munmap, addr, length);
 }
 
-int internal_mprotect(void *addr, uptr length, int prot) {
+int internal_mprotect(void *addr, usize length, int prot) {
   DEFINE__REAL(int, mprotect, void *a, uptr b, int c);
   return _REAL(mprotect, addr, length, prot);
 }
@@ -125,21 +125,21 @@ uptr internal_open(const char *filename, int flags, u32 mode) {
   return _sys_open(filename, flags, mode);
 }
 
-uptr internal_read(fd_t fd, void *buf, uptr count) {
+uptr internal_read(fd_t fd, void *buf, usize count) {
   sptr res;
   CHECK(&_sys_read);
   HANDLE_EINTR(res, (sptr)_sys_read(fd, buf, (size_t)count));
   return res;
 }
 
-uptr internal_write(fd_t fd, const void *buf, uptr count) {
+uptr internal_write(fd_t fd, const void *buf, usize count) {
   sptr res;
   CHECK(&_sys_write);
   HANDLE_EINTR(res, (sptr)_sys_write(fd, buf, count));
   return res;
 }
 
-uptr internal_ftruncate(fd_t fd, uptr size) {
+uptr internal_ftruncate(fd_t fd, usize size) {
   sptr res;
   CHECK(&__ftruncate);
   HANDLE_EINTR(res, __ftruncate(fd, 0, (s64)size));
@@ -306,7 +306,7 @@ int internal_sysctlbyname(const char *sname, void *oldp, uptr *oldlenp,
                (size_t)newlen);
 }
 
-uptr internal_sigprocmask(int how, __sanitizer_sigset_t *set,
+usize internal_sigprocmask(int how, __sanitizer_sigset_t *set,
                           __sanitizer_sigset_t *oldset) {
   CHECK(&_sys___sigprocmask14);
   return _sys___sigprocmask14(how, set, oldset);

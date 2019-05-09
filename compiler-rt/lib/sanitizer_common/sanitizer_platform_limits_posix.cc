@@ -277,7 +277,7 @@ namespace __sanitizer {
   int af_inet = (int)AF_INET;
   int af_inet6 = (int)AF_INET6;
 
-  uptr __sanitizer_in_addr_sz(int af) {
+  usize __sanitizer_in_addr_sz(int af) {
     if (af == AF_INET)
       return sizeof(struct in_addr);
     else if (af == AF_INET6)

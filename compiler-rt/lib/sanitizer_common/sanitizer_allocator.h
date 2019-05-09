@@ -45,8 +45,8 @@ void PrintHintAllocatorCannotReturnNull();
 
 // Allocators call these callbacks on mmap/munmap.
 struct NoOpMapUnmapCallback {
-  void OnMap(uptr p, uptr size) const { }
-  void OnUnmap(uptr p, uptr size) const { }
+  void OnMap(uptr p, usize size) const { }
+  void OnUnmap(uptr p, usize size) const { }
 };
 
 // Callback type for iterating over chunks.

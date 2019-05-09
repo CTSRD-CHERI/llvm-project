@@ -16,20 +16,20 @@
 #include "msan_origin.h"
 #include "sanitizer_common/sanitizer_common.h"
 
-DECLARE_REAL(void *, memset, void *dest, int c, uptr n)
-DECLARE_REAL(void *, memcpy, void *dest, const void *src, uptr n)
-DECLARE_REAL(void *, memmove, void *dest, const void *src, uptr n)
+DECLARE_REAL(void *, memset, void *dest, int c, usize n)
+DECLARE_REAL(void *, memcpy, void *dest, const void *src, usize n)
+DECLARE_REAL(void *, memmove, void *dest, const void *src, usize n)
 
 namespace __msan {
 
-u32 GetOriginIfPoisoned(uptr addr, uptr size) {
+u32 GetOriginIfPoisoned(uptr addr, usize size) {
   unsigned char *s = (unsigned char *)MEM_TO_SHADOW(addr);
   for (uptr i = 0; i < size; ++i)
     if (s[i]) return *(u32 *)SHADOW_TO_ORIGIN(((uptr)s + i) & ~3UL);
   return 0;
 }
 
-void SetOriginIfPoisoned(uptr addr, uptr src_shadow, uptr size,
+void SetOriginIfPoisoned(uptr addr, uptr src_shadow, usize size,
                          u32 src_origin) {
   uptr dst_s = MEM_TO_SHADOW(addr);
   uptr src_s = src_shadow;
@@ -39,7 +39,7 @@ void SetOriginIfPoisoned(uptr addr, uptr src_shadow, uptr size,
     if (*(u8 *)src_s) *(u32 *)SHADOW_TO_ORIGIN(dst_s & ~3UL) = src_origin;
 }
 
-void CopyOrigin(const void *dst, const void *src, uptr size,
+void CopyOrigin(const void *dst, const void *src, usize size,
                 StackTrace *stack) {
   if (!MEM_IS_APP(dst) || !MEM_IS_APP(src)) return;
 
@@ -94,7 +94,7 @@ void CopyOrigin(const void *dst, const void *src, uptr size,
   }
 }
 
-void MoveShadowAndOrigin(const void *dst, const void *src, uptr size,
+void MoveShadowAndOrigin(const void *dst, const void *src, usize size,
                          StackTrace *stack) {
   if (!MEM_IS_APP(dst)) return;
   if (!MEM_IS_APP(src)) return;
@@ -104,7 +104,7 @@ void MoveShadowAndOrigin(const void *dst, const void *src, uptr size,
   if (__msan_get_track_origins()) CopyOrigin(dst, src, size, stack);
 }
 
-void CopyShadowAndOrigin(const void *dst, const void *src, uptr size,
+void CopyShadowAndOrigin(const void *dst, const void *src, usize size,
                          StackTrace *stack) {
   if (!MEM_IS_APP(dst)) return;
   if (!MEM_IS_APP(src)) return;
@@ -113,12 +113,12 @@ void CopyShadowAndOrigin(const void *dst, const void *src, uptr size,
   if (__msan_get_track_origins()) CopyOrigin(dst, src, size, stack);
 }
 
-void CopyMemory(void *dst, const void *src, uptr size, StackTrace *stack) {
+void CopyMemory(void *dst, const void *src, usize size, StackTrace *stack) {
   REAL(memcpy)(dst, src, size);
   CopyShadowAndOrigin(dst, src, size, stack);
 }
 
-void SetShadow(const void *ptr, uptr size, u8 value) {
+void SetShadow(const void *ptr, usize size, u8 value) {
   uptr PageSize = GetPageSizeCached();
   uptr shadow_beg = MEM_TO_SHADOW(ptr);
   uptr shadow_end = shadow_beg + size;
@@ -144,7 +144,7 @@ void SetShadow(const void *ptr, uptr size, u8 value) {
   }
 }
 
-void SetOrigin(const void *dst, uptr size, u32 origin) {
+void SetOrigin(const void *dst, usize size, u32 origin) {
   // Origin mapping is 4 bytes per 4 bytes of application memory.
   // Here we extend the range such that its left and right bounds are both
   // 4 byte aligned.
@@ -162,7 +162,7 @@ void SetOrigin(const void *dst, uptr size, u32 origin) {
   if (end & 7ULL) *(u32 *)(end - 4) = origin;
 }
 
-void PoisonMemory(const void *dst, uptr size, StackTrace *stack) {
+void PoisonMemory(const void *dst, usize size, StackTrace *stack) {
   SetShadow(dst, size, (u8)-1);
 
   if (__msan_get_track_origins()) {

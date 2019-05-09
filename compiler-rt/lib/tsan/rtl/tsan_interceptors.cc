@@ -87,7 +87,7 @@ extern "C" int pthread_key_create(unsigned *key, void (*destructor)(void* v));
 extern "C" int pthread_setspecific(unsigned key, const void *v);
 DECLARE_REAL(int, pthread_mutexattr_gettype, void *, void *)
 DECLARE_REAL(int, fflush, __sanitizer_FILE *fp)
-DECLARE_REAL_AND_INTERCEPTOR(void *, malloc, uptr size)
+DECLARE_REAL_AND_INTERCEPTOR(void *, malloc, usize size)
 DECLARE_REAL_AND_INTERCEPTOR(void, free, void *ptr)
 extern "C" void *pthread_self();
 extern "C" void _exit(int status);
@@ -664,7 +664,7 @@ TSAN_INTERCEPTOR(void, _longjmp, uptr *env, int val) {
 #endif
 
 #if !SANITIZER_MAC
-TSAN_INTERCEPTOR(void*, malloc, uptr size) {
+TSAN_INTERCEPTOR(void*, malloc, usize size) {
   if (in_symbolizer())
     return InternalAlloc(size);
   void *p = 0;
@@ -676,12 +676,12 @@ TSAN_INTERCEPTOR(void*, malloc, uptr size) {
   return p;
 }
 
-TSAN_INTERCEPTOR(void*, __libc_memalign, uptr align, uptr sz) {
+TSAN_INTERCEPTOR(void*, __libc_memalign, usize align, usize sz) {
   SCOPED_TSAN_INTERCEPTOR(__libc_memalign, align, sz);
   return user_memalign(thr, pc, align, sz);
 }
 
-TSAN_INTERCEPTOR(void*, calloc, uptr size, uptr n) {
+TSAN_INTERCEPTOR(void*, calloc, usize size, usize n) {
   if (in_symbolizer())
     return InternalCalloc(size, n);
   void *p = 0;
@@ -693,7 +693,7 @@ TSAN_INTERCEPTOR(void*, calloc, uptr size, uptr n) {
   return p;
 }
 
-TSAN_INTERCEPTOR(void*, realloc, void *p, uptr size) {
+TSAN_INTERCEPTOR(void*, realloc, void *p, usize size) {
   if (in_symbolizer())
     return InternalRealloc(p, size);
   if (p)
@@ -734,15 +734,15 @@ TSAN_INTERCEPTOR(uptr, malloc_usable_size, void *p) {
 
 TSAN_INTERCEPTOR(char*, strcpy, char *dst, const char *src) {  // NOLINT
   SCOPED_TSAN_INTERCEPTOR(strcpy, dst, src);  // NOLINT
-  uptr srclen = internal_strlen(src);
+  usize srclen = internal_strlen(src);
   MemoryAccessRange(thr, pc, (uptr)dst, srclen + 1, true);
   MemoryAccessRange(thr, pc, (uptr)src, srclen + 1, false);
   return REAL(strcpy)(dst, src);  // NOLINT
 }
 
-TSAN_INTERCEPTOR(char*, strncpy, char *dst, char *src, uptr n) {
+TSAN_INTERCEPTOR(char*, strncpy, char *dst, char *src, usize n) {
   SCOPED_TSAN_INTERCEPTOR(strncpy, dst, src, n);
-  uptr srclen = internal_strnlen(src, n);
+  usize srclen = internal_strnlen(src, n);
   MemoryAccessRange(thr, pc, (uptr)dst, n, true);
   MemoryAccessRange(thr, pc, (uptr)src, min(srclen + 1, n), false);
   return REAL(strncpy)(dst, src, n);
@@ -790,14 +790,14 @@ TSAN_INTERCEPTOR(int, munmap, void *addr, long_t sz) {
     // If sz == 0, munmap will return EINVAL and don't unmap any memory.
     DontNeedShadowFor((uptr)addr, sz);
     ScopedGlobalProcessor sgp;
-    ctx->metamap.ResetRange(thr->proc(), (uptr)addr, (uptr)sz);
+    ctx->metamap.ResetRange(thr->proc(), (uptr)addr, (usize)sz);
   }
   int res = REAL(munmap)(addr, sz);
   return res;
 }
 
 #if SANITIZER_LINUX
-TSAN_INTERCEPTOR(void*, memalign, uptr align, uptr sz) {
+TSAN_INTERCEPTOR(void*, memalign, usize align, usize sz) {
   SCOPED_INTERCEPTOR_RAW(memalign, align, sz);
   return user_memalign(thr, pc, align, sz);
 }
@@ -807,14 +807,14 @@ TSAN_INTERCEPTOR(void*, memalign, uptr align, uptr sz) {
 #endif
 
 #if !SANITIZER_MAC
-TSAN_INTERCEPTOR(void*, aligned_alloc, uptr align, uptr sz) {
+TSAN_INTERCEPTOR(void*, aligned_alloc, usize align, usize sz) {
   if (in_symbolizer())
     return InternalAlloc(sz, nullptr, align);
   SCOPED_INTERCEPTOR_RAW(aligned_alloc, align, sz);
   return user_aligned_alloc(thr, pc, align, sz);
 }
 
-TSAN_INTERCEPTOR(void*, valloc, uptr sz) {
+TSAN_INTERCEPTOR(void*, valloc, usize sz) {
   if (in_symbolizer())
     return InternalAlloc(sz, nullptr, GetPageSizeCached());
   SCOPED_INTERCEPTOR_RAW(valloc, sz);
@@ -823,7 +823,7 @@ TSAN_INTERCEPTOR(void*, valloc, uptr sz) {
 #endif
 
 #if SANITIZER_LINUX
-TSAN_INTERCEPTOR(void*, pvalloc, uptr sz) {
+TSAN_INTERCEPTOR(void*, pvalloc, usize sz) {
   if (in_symbolizer()) {
     uptr PageSize = GetPageSizeCached();
     sz = sz ? RoundUpTo(sz, PageSize) : PageSize;
@@ -838,7 +838,7 @@ TSAN_INTERCEPTOR(void*, pvalloc, uptr sz) {
 #endif
 
 #if !SANITIZER_MAC
-TSAN_INTERCEPTOR(int, posix_memalign, void **memptr, uptr align, uptr sz) {
+TSAN_INTERCEPTOR(int, posix_memalign, void **memptr, usize align, usize sz) {
   if (in_symbolizer()) {
     void *p = InternalAlloc(sz, nullptr, align);
     if (!p)

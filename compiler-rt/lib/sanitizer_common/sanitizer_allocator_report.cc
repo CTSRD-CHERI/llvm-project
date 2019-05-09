@@ -40,7 +40,7 @@ class ScopedAllocatorErrorReport {
   const SanitizerCommonDecorator d;
 };
 
-void NORETURN ReportCallocOverflow(uptr count, uptr size,
+void NORETURN ReportCallocOverflow(uptr count, usize size,
                                    const StackTrace *stack) {
   {
     ScopedAllocatorErrorReport report("calloc-overflow", stack);
@@ -51,7 +51,7 @@ void NORETURN ReportCallocOverflow(uptr count, uptr size,
   Die();
 }
 
-void NORETURN ReportPvallocOverflow(uptr size, const StackTrace *stack) {
+void NORETURN ReportPvallocOverflow(usize size, const StackTrace *stack) {
   {
     ScopedAllocatorErrorReport report("pvalloc-overflow", stack);
     Report("ERROR: %s: pvalloc parameters overflow: size 0x%zx rounded up to "
@@ -71,7 +71,7 @@ void NORETURN ReportInvalidAllocationAlignment(uptr alignment,
   Die();
 }
 
-void NORETURN ReportInvalidAlignedAllocAlignment(uptr size, uptr alignment,
+void NORETURN ReportInvalidAlignedAllocAlignment(usize size, usize alignment,
                                                  const StackTrace *stack) {
   {
     ScopedAllocatorErrorReport report("invalid-aligned-alloc-alignment", stack);

@@ -66,7 +66,7 @@ struct ExpectRace {
   atomic_uintptr_t hitcount;
   atomic_uintptr_t addcount;
   uptr addr;
-  uptr size;
+  usize size;
   char *file;
   int line;
   char desc[kMaxDescLen];
@@ -86,7 +86,7 @@ static DynamicAnnContext *dyn_ann_ctx;
 static char dyn_ann_ctx_placeholder[sizeof(DynamicAnnContext)] ALIGNED(64);
 
 static void AddExpectRace(ExpectRace *list,
-    char *f, int l, uptr addr, uptr size, char *desc) {
+    char *f, int l, uptr addr, usize size, char *desc) {
   ExpectRace *race = list->next;
   for (; race != list; race = race->next) {
     if (race->addr == addr && race->size == size) {
@@ -115,7 +115,7 @@ static void AddExpectRace(ExpectRace *list,
   list->next = race;
 }
 
-static ExpectRace *FindRace(ExpectRace *list, uptr addr, uptr size) {
+static ExpectRace *FindRace(ExpectRace *list, uptr addr, usize size) {
   for (ExpectRace *race = list->next; race != list; race = race->next) {
     uptr maxbegin = max(race->addr, addr);
     uptr minend = min(race->addr + race->size, addr + size);
@@ -125,7 +125,7 @@ static ExpectRace *FindRace(ExpectRace *list, uptr addr, uptr size) {
   return 0;
 }
 
-static bool CheckContains(ExpectRace *list, uptr addr, uptr size) {
+static bool CheckContains(ExpectRace *list, uptr addr, usize size) {
   ExpectRace *race = FindRace(list, addr, size);
   if (race == 0)
     return false;
@@ -146,7 +146,7 @@ void InitializeDynamicAnnotations() {
   InitList(&dyn_ann_ctx->benign);
 }
 
-bool IsExpectedReport(uptr addr, uptr size) {
+bool IsExpectedReport(uptr addr, usize size) {
   ReadLock lock(&dyn_ann_ctx->mtx);
   if (CheckContains(&dyn_ann_ctx->expect, addr, size))
     return true;
@@ -356,7 +356,7 @@ void INTERFACE_ATTRIBUTE AnnotateExpectRace(
 }
 
 static void BenignRaceImpl(
-    char *f, int l, uptr mem, uptr size, char *desc) {
+    char *f, int l, uptr mem, usize size, char *desc) {
   Lock lock(&dyn_ann_ctx->mtx);
   AddExpectRace(&dyn_ann_ctx->benign,
                 f, l, mem, size, desc);
@@ -365,7 +365,7 @@ static void BenignRaceImpl(
 
 // FIXME: Turn it off later. WTF is benign race?1?? Go talk to Hans Boehm.
 void INTERFACE_ATTRIBUTE AnnotateBenignRaceSized(
-    char *f, int l, uptr mem, uptr size, char *desc) {
+    char *f, int l, uptr mem, usize size, char *desc) {
   SCOPED_ANNOTATION(AnnotateBenignRaceSized);
   BenignRaceImpl(f, l, mem, size, desc);
 }
@@ -407,12 +407,12 @@ void INTERFACE_ATTRIBUTE AnnotateIgnoreSyncEnd(char *f, int l) {
 }
 
 void INTERFACE_ATTRIBUTE AnnotatePublishMemoryRange(
-    char *f, int l, uptr addr, uptr size) {
+    char *f, int l, uptr addr, usize size) {
   SCOPED_ANNOTATION(AnnotatePublishMemoryRange);
 }
 
 void INTERFACE_ATTRIBUTE AnnotateUnpublishMemoryRange(
-    char *f, int l, uptr addr, uptr size) {
+    char *f, int l, uptr addr, usize size) {
   SCOPED_ANNOTATION(AnnotateUnpublishMemoryRange);
 }
 
@@ -434,7 +434,7 @@ void INTERFACE_ATTRIBUTE WTFAnnotateHappensAfter(char *f, int l, uptr addr) {
 }
 
 void INTERFACE_ATTRIBUTE WTFAnnotateBenignRaceSized(
-    char *f, int l, uptr mem, uptr sz, char *desc) {
+    char *f, int l, uptr mem, usize sz, char *desc) {
   SCOPED_ANNOTATION(AnnotateBenignRaceSized);
   BenignRaceImpl(f, l, mem, sz, desc);
 }
@@ -455,9 +455,9 @@ const char INTERFACE_ATTRIBUTE* ThreadSanitizerQuery(const char *query) {
 }
 
 void INTERFACE_ATTRIBUTE
-AnnotateMemoryIsInitialized(char *f, int l, uptr mem, uptr sz) {}
+AnnotateMemoryIsInitialized(char *f, int l, uptr mem, usize sz) {}
 void INTERFACE_ATTRIBUTE
-AnnotateMemoryIsUninitialized(char *f, int l, uptr mem, uptr sz) {}
+AnnotateMemoryIsUninitialized(char *f, int l, uptr mem, usize sz) {}
 
 // Note: the parameter is called flagz, because flags is already taken
 // by the global function that returns flags.

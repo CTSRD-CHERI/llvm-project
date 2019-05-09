@@ -23,11 +23,11 @@ void InitializeInterceptors() {
 void InitializeDynamicAnnotations() {
 }
 
-bool IsExpectedReport(uptr addr, uptr size) {
+bool IsExpectedReport(uptr addr, usize size) {
   return false;
 }
 
-void *internal_alloc(MBlockType typ, uptr sz) {
+void *internal_alloc(MBlockType typ, usize sz) {
   return InternalAlloc(sz);
 }
 
@@ -154,7 +154,7 @@ void __tsan_fini() {
   exit(res);
 }
 
-void __tsan_map_shadow(uptr addr, uptr size) {
+void __tsan_map_shadow(uptr addr, usize size) {
   MapShadow(addr, size);
 }
 
@@ -182,11 +182,11 @@ void __tsan_write_pc(ThreadState *thr, void *addr, uptr callpc, uptr pc) {
     FuncExit(thr);
 }
 
-void __tsan_read_range(ThreadState *thr, void *addr, uptr size, uptr pc) {
+void __tsan_read_range(ThreadState *thr, void *addr, usize size, uptr pc) {
   MemoryAccessRange(thr, (uptr)pc, (uptr)addr, size, false);
 }
 
-void __tsan_write_range(ThreadState *thr, void *addr, uptr size, uptr pc) {
+void __tsan_write_range(ThreadState *thr, void *addr, usize size, uptr pc) {
   MemoryAccessRange(thr, (uptr)pc, (uptr)addr, size, true);
 }
 
@@ -198,14 +198,14 @@ void __tsan_func_exit(ThreadState *thr) {
   FuncExit(thr);
 }
 
-void __tsan_malloc(ThreadState *thr, uptr pc, uptr p, uptr sz) {
+void __tsan_malloc(ThreadState *thr, uptr pc, uptr p, usize sz) {
   CHECK(inited);
   if (thr && pc)
     ctx->metamap.AllocBlock(thr, pc, p, sz);
   MemoryResetRange(0, 0, (uptr)p, sz);
 }
 
-void __tsan_free(uptr p, uptr sz) {
+void __tsan_free(uptr p, usize sz) {
   ctx->metamap.FreeRange(get_cur_proc(), p, sz);
 }
 

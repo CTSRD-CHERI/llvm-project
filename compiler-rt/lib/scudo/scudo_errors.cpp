@@ -16,12 +16,12 @@
 
 namespace __scudo {
 
-void NORETURN reportCallocOverflow(uptr Count, uptr Size) {
+void NORETURN reportCallocOverflow(uptr Count, usize Size) {
   dieWithMessage("calloc parameters overflow: count * size (%zd * %zd) cannot "
       "be represented with type size_t\n", Count, Size);
 }
 
-void NORETURN reportPvallocOverflow(uptr Size) {
+void NORETURN reportPvallocOverflow(usize Size) {
   dieWithMessage("pvalloc parameters overflow: size 0x%zx rounded up to system "
       "page size 0x%zx cannot be represented in type size_t\n", Size,
       GetPageSizeCached());
@@ -44,7 +44,7 @@ void NORETURN reportInvalidPosixMemalignAlignment(uptr Alignment) {
       Alignment, sizeof(void *));  // NOLINT
 }
 
-void NORETURN reportInvalidAlignedAllocAlignment(uptr Size, uptr Alignment) {
+void NORETURN reportInvalidAlignedAllocAlignment(usize Size, usize alignment) {
 #if SANITIZER_POSIX
   dieWithMessage("invalid alignment requested in aligned_alloc: %zd, alignment "
       "must be a power of two and the requested size 0x%zx must be a multiple "

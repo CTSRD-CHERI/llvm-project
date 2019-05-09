@@ -180,7 +180,7 @@ class OriginSet {
   int next_id_;
 };
 
-void DescribeMemoryRange(const void *x, uptr size) {
+void DescribeMemoryRange(const void *x, usize size) {
   // Real limits.
   uptr start = MEM_TO_SHADOW(x);
   uptr end = start + size;
@@ -258,7 +258,7 @@ void DescribeMemoryRange(const void *x, uptr size) {
   }
 }
 
-void ReportUMRInsideAddressRange(const char *what, const void *start, uptr size,
+void ReportUMRInsideAddressRange(const char *what, const void *start, usize size,
                                  uptr offset) {
   Decorator d;
   Printf("%s", d.Warning());

@@ -30,9 +30,9 @@ void AsanStats::Clear() {
 }
 
 static void PrintMallocStatsArray(const char *prefix,
-                                  uptr (&array)[kNumberOfSizeClasses]) {
+                                  usize (&array)[kNumberOfSizeClasses]) {
   Printf("%s", prefix);
-  for (uptr i = 0; i < kNumberOfSizeClasses; i++) {
+  for (usize i = 0; i < kNumberOfSizeClasses; i++) {
     if (!array[i]) continue;
     Printf("%zu:%zu; ", i, array[i]);
   }
@@ -55,10 +55,10 @@ void AsanStats::Print() {
 }
 
 void AsanStats::MergeFrom(const AsanStats *stats) {
-  uptr *dst_ptr = reinterpret_cast<uptr*>(this);
-  const uptr *src_ptr = reinterpret_cast<const uptr*>(stats);
-  uptr num_fields = sizeof(*this) / sizeof(uptr);
-  for (uptr i = 0; i < num_fields; i++)
+  usize *dst_ptr = reinterpret_cast<usize*>(this);
+  const usize *src_ptr = reinterpret_cast<const usize*>(stats);
+  usize num_fields = sizeof(*this) / sizeof(usize);
+  for (usize i = 0; i < num_fields; i++)
     dst_ptr[i] += src_ptr[i];
 }
 
@@ -69,7 +69,7 @@ static AsanStats dead_threads_stats(LINKER_INITIALIZED);
 static BlockingMutex dead_threads_stats_lock(LINKER_INITIALIZED);
 // Required for malloc_zone_statistics() on OS X. This can't be stored in
 // per-thread AsanStats.
-static uptr max_malloced_memory;
+static usize max_malloced_memory;
 
 static void MergeThreadStats(ThreadContextBase *tctx_base, void *arg) {
   AsanStats *accumulated_stats = reinterpret_cast<AsanStats*>(arg);
@@ -135,36 +135,36 @@ static void PrintAccumulatedStats() {
 // ---------------------- Interface ---------------- {{{1
 using namespace __asan;  // NOLINT
 
-uptr __sanitizer_get_current_allocated_bytes() {
+usize __sanitizer_get_current_allocated_bytes() {
   AsanStats stats;
   GetAccumulatedStats(&stats);
-  uptr malloced = stats.malloced;
-  uptr freed = stats.freed;
+  usize malloced = stats.malloced;
+  usize freed = stats.freed;
   // Return sane value if malloced < freed due to racy
   // way we update accumulated stats.
   return (malloced > freed) ? malloced - freed : 1;
 }
 
-uptr __sanitizer_get_heap_size() {
+usize __sanitizer_get_heap_size() {
   AsanStats stats;
   GetAccumulatedStats(&stats);
   return stats.mmaped - stats.munmaped;
 }
 
-uptr __sanitizer_get_free_bytes() {
+usize __sanitizer_get_free_bytes() {
   AsanStats stats;
   GetAccumulatedStats(&stats);
-  uptr total_free = stats.mmaped
+  usize total_free = stats.mmaped
                   - stats.munmaped
                   + stats.really_freed;
-  uptr total_used = stats.malloced
+  usize total_used = stats.malloced
                   + stats.malloced_redzones;
   // Return sane value if total_free < total_used due to racy
   // way we update accumulated stats.
   return (total_free > total_used) ? total_free - total_used : 1;
 }
 
-uptr __sanitizer_get_unmapped_bytes() {
+usize __sanitizer_get_unmapped_bytes() {
   return 0;
 }
 

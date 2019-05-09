@@ -360,7 +360,7 @@ void __asan_unregister_elf_globals(uptr *flag, void *start, void *stop) {
 }
 
 // Register an array of globals.
-void __asan_register_globals(__asan_global *globals, uptr n) {
+void __asan_register_globals(__asan_global *globals, usize n) {
   if (!flags()->report_globals) return;
   GET_STACK_TRACE_MALLOC;
   u32 stack_id = StackDepotPut(stack);
@@ -401,7 +401,7 @@ void __asan_register_globals(__asan_global *globals, uptr n) {
 
 // Unregister an array of globals.
 // We must do this when a shared objects gets dlclosed.
-void __asan_unregister_globals(__asan_global *globals, uptr n) {
+void __asan_unregister_globals(__asan_global *globals, usize n) {
   if (!flags()->report_globals) return;
   BlockingMutexLock lock(&mu_for_globals);
   for (uptr i = 0; i < n; i++) {

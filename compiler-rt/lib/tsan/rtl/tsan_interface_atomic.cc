@@ -502,7 +502,7 @@ class ScopedAtomic {
   ThreadState *thr_;
 };
 
-static void AtomicStatInc(ThreadState *thr, uptr size, morder mo, StatType t) {
+static void AtomicStatInc(ThreadState *thr, usize size, morder mo, StatType t) {
   StatInc(thr, StatAtomic);
   StatInc(thr, t);
   StatInc(thr, size == 1 ? StatAtomic1

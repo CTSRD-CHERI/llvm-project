@@ -479,7 +479,7 @@ void __msan_set_expect_umr(int expect_umr) {
   msan_expect_umr = expect_umr;
 }
 
-void __msan_print_shadow(const void *x, uptr size) {
+void __msan_print_shadow(const void *x, usize size) {
   if (!MEM_IS_APP(x)) {
     Printf("Not a valid application address: %p\n", x);
     return;
@@ -488,7 +488,7 @@ void __msan_print_shadow(const void *x, uptr size) {
   DescribeMemoryRange(x, size);
 }
 
-void __msan_dump_shadow(const void *x, uptr size) {
+void __msan_dump_shadow(const void *x, usize size) {
   if (!MEM_IS_APP(x)) {
     Printf("Not a valid application address: %p\n", x);
     return;
@@ -500,7 +500,7 @@ void __msan_dump_shadow(const void *x, uptr size) {
   Printf("\n");
 }
 
-sptr __msan_test_shadow(const void *x, uptr size) {
+sptr __msan_test_shadow(const void *x, usize size) {
   if (!MEM_IS_APP(x)) return -1;
   unsigned char *s = (unsigned char *)MEM_TO_SHADOW((uptr)x);
   for (uptr i = 0; i < size; ++i)
@@ -509,7 +509,7 @@ sptr __msan_test_shadow(const void *x, uptr size) {
   return -1;
 }
 
-void __msan_check_mem_is_initialized(const void *x, uptr size) {
+void __msan_check_mem_is_initialized(const void *x, usize size) {
   if (!__msan::flags()->report_umrs) return;
   sptr offset = __msan_test_shadow(x, size);
   if (offset < 0)
@@ -539,27 +539,27 @@ void __msan_clear_on_return() {
   __msan_param_tls[0] = 0;
 }
 
-void __msan_partial_poison(const void* data, void* shadow, uptr size) {
+void __msan_partial_poison(const void* data, void* shadow, usize size) {
   internal_memcpy((void*)MEM_TO_SHADOW((uptr)data), shadow, size);
 }
 
-void __msan_load_unpoisoned(const void *src, uptr size, void *dst) {
+void __msan_load_unpoisoned(const void *src, usize size, void *dst) {
   internal_memcpy(dst, src, size);
   __msan_unpoison(dst, size);
 }
 
-void __msan_set_origin(const void *a, uptr size, u32 origin) {
+void __msan_set_origin(const void *a, usize size, u32 origin) {
   if (__msan_get_track_origins()) SetOrigin(a, size, origin);
 }
 
 // 'descr' is created at compile time and contains '----' in the beginning.
 // When we see descr for the first time we replace '----' with a uniq id
 // and set the origin to (id | (31-th bit)).
-void __msan_set_alloca_origin(void *a, uptr size, char *descr) {
+void __msan_set_alloca_origin(void *a, usize size, char *descr) {
   __msan_set_alloca_origin4(a, size, descr, 0);
 }
 
-void __msan_set_alloca_origin4(void *a, uptr size, char *descr, uptr pc) {
+void __msan_set_alloca_origin4(void *a, usize size, char *descr, uptr pc) {
   static const u32 dash = '-';
   static const u32 first_timer =
       dash + (dash << 8) + (dash << 16) + (dash << 24);

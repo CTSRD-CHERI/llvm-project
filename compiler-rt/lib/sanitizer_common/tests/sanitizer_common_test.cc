@@ -24,7 +24,7 @@
 
 namespace __sanitizer {
 
-static bool IsSorted(const uptr *array, uptr n) {
+static bool IsSorted(const uptr *array, usize n) {
   for (uptr i = 1; i < n; i++) {
     if (array[i] < array[i - 1]) return false;
   }
@@ -74,7 +74,7 @@ TEST(SanitizerCommon, SortTest) {
 
 TEST(SanitizerCommon, MmapAlignedOrDieOnFatalError) {
   uptr PageSize = GetPageSizeCached();
-  for (uptr size = 1; size <= 32; size *= 2) {
+  for (usize size = 1; size <= 32; size *= 2) {
     for (uptr alignment = 1; alignment <= 32; alignment *= 2) {
       for (int iter = 0; iter < 100; iter++) {
         uptr res = (uptr)MmapAlignedOrDieOnFatalError(
@@ -362,7 +362,7 @@ TEST(SanitizerCommon, GetRandom) {
     EXPECT_FALSE(GetRandom(buffer_1, 0, blocking));
     EXPECT_FALSE(GetRandom(buffer_1, 512, blocking));
     EXPECT_EQ(ARRAY_SIZE(buffer_1), ARRAY_SIZE(buffer_2));
-    for (uptr size = 4; size <= ARRAY_SIZE(buffer_1); size += 4) {
+    for (usize size = 4; size <= ARRAY_SIZE(buffer_1); size += 4) {
       for (uptr i = 0; i < 100; i++) {
         EXPECT_TRUE(GetRandom(buffer_1, size, blocking));
         EXPECT_TRUE(GetRandom(buffer_2, size, blocking));

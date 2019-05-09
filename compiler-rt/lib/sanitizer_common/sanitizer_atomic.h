@@ -57,6 +57,14 @@ struct atomic_uintptr_t {
   volatile Type val_dont_use;
 };
 
+#if SANITIZER_WORDSIZE == 64
+using atomic_size_t = atomic_uint64_t;
+#elif SANITIZER_WORDSIZE == 32
+using atomic_size_t = atomic_uint32_t;
+#else
+#error "Unsupported word size"
+#endif
+
 }  // namespace __sanitizer
 
 #if defined(__clang__) || defined(__GNUC__)

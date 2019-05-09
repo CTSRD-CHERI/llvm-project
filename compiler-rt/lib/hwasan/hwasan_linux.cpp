@@ -59,7 +59,7 @@ static void ReserveShadowMemoryRange(uptr beg, uptr end, const char *name) {
   }
 }
 
-static void ProtectGap(uptr addr, uptr size) {
+static void ProtectGap(uptr addr, usize size) {
   if (!size)
     return;
   void *res = MmapFixedNoAccess(addr, size, "shadow gap");

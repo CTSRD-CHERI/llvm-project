@@ -19,7 +19,7 @@ namespace __sanitizer {
 
 struct QuarantineCallback {
   void Recycle(void *m) {}
-  void *Allocate(uptr size) {
+  void *Allocate(usize size) {
     return malloc(size);
   }
   void Deallocate(void *p) {

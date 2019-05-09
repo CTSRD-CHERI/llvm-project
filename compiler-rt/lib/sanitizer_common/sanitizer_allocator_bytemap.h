@@ -41,7 +41,7 @@ class FlatByteMap {
 // to kSize2-byte arrays. The secondary arrays are mmaped on demand.
 // Each value is initially zero and can be set to something else only once.
 // Setting and getting values from multiple threads is safe w/o extra locking.
-template <u64 kSize1, u64 kSize2,
+template <usize kSize1, usize kSize2,
           typename AddressSpaceViewTy = LocalAddressSpaceView,
           class MapUnmapCallback = NoOpMapUnmapCallback>
 class TwoLevelByteMap {

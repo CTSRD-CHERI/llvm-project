@@ -285,14 +285,14 @@ void MsanAllocatorInit();
 void MsanAllocatorThreadFinish();
 void MsanDeallocate(StackTrace *stack, void *ptr);
 
-void *msan_malloc(uptr size, StackTrace *stack);
-void *msan_calloc(uptr nmemb, uptr size, StackTrace *stack);
-void *msan_realloc(void *ptr, uptr size, StackTrace *stack);
-void *msan_valloc(uptr size, StackTrace *stack);
-void *msan_pvalloc(uptr size, StackTrace *stack);
-void *msan_aligned_alloc(uptr alignment, uptr size, StackTrace *stack);
-void *msan_memalign(uptr alignment, uptr size, StackTrace *stack);
-int msan_posix_memalign(void **memptr, uptr alignment, uptr size,
+void *msan_malloc(usize size, StackTrace *stack);
+void *msan_calloc(uptr nmemb, usize size, StackTrace *stack);
+void *msan_realloc(void *ptr, usize size, StackTrace *stack);
+void *msan_valloc(usize size, StackTrace *stack);
+void *msan_pvalloc(usize size, StackTrace *stack);
+void *msan_aligned_alloc(uptr alignment, usize size, StackTrace *stack);
+void *msan_memalign(uptr alignment, usize size, StackTrace *stack);
+int msan_posix_memalign(void **memptr, usize alignment, usize size,
                         StackTrace *stack);
 
 void InstallTrapHandler();

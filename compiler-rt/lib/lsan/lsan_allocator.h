@@ -21,12 +21,12 @@
 
 namespace __lsan {
 
-void *Allocate(const StackTrace &stack, uptr size, uptr alignment,
+void *Allocate(const StackTrace &stack, usize size, usize alignment,
                bool cleared);
 void Deallocate(void *p);
-void *Reallocate(const StackTrace &stack, void *p, uptr new_size,
-                 uptr alignment);
-uptr GetMallocUsableSize(const void *p);
+void *Reallocate(const StackTrace &stack, void *p, usize new_size,
+                 usize alignment);
+usize GetMallocUsableSize(const void *p);
 
 template<typename Callable>
 void ForEachChunk(const Callable &callback);
@@ -51,43 +51,43 @@ struct ChunkMetadata {
 
 #if defined(__mips64) || defined(__aarch64__) || defined(__i386__) || \
     defined(__arm__)
-static const uptr kRegionSizeLog = 20;
-static const uptr kNumRegions = SANITIZER_MMAP_RANGE_SIZE >> kRegionSizeLog;
+static const usize kRegionSizeLog = 20;
+static const usize kNumRegions = SANITIZER_MMAP_RANGE_SIZE >> kRegionSizeLog;
 template <typename AddressSpaceView>
 using ByteMapASVT =
     TwoLevelByteMap<(kNumRegions >> 12), 1 << 12, AddressSpaceView>;
 
 template <typename AddressSpaceViewTy>
 struct AP32 {
-  static const uptr kSpaceBeg = 0;
+  static const vaddr kSpaceBeg = 0;
   static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
-  static const uptr kMetadataSize = sizeof(ChunkMetadata);
+  static const usize kMetadataSize = sizeof(ChunkMetadata);
   typedef __sanitizer::CompactSizeClassMap SizeClassMap;
-  static const uptr kRegionSizeLog = __lsan::kRegionSizeLog;
+  static const usize kRegionSizeLog = __lsan::kRegionSizeLog;
   using AddressSpaceView = AddressSpaceViewTy;
   using ByteMap = __lsan::ByteMapASVT<AddressSpaceView>;
   typedef NoOpMapUnmapCallback MapUnmapCallback;
-  static const uptr kFlags = 0;
+  static const usize kFlags = 0;
 };
 template <typename AddressSpaceView>
 using PrimaryAllocatorASVT = SizeClassAllocator32<AP32<AddressSpaceView>>;
 using PrimaryAllocator = PrimaryAllocatorASVT<LocalAddressSpaceView>;
 #elif defined(__x86_64__) || defined(__powerpc64__)
 # if defined(__powerpc64__)
-const uptr kAllocatorSpace = 0xa0000000000ULL;
-const uptr kAllocatorSize  = 0x20000000000ULL;  // 2T.
+const vaddr kAllocatorSpace = 0xa0000000000ULL;
+const usize kAllocatorSize  = 0x20000000000ULL;  // 2T.
 # else
-const uptr kAllocatorSpace = 0x600000000000ULL;
-const uptr kAllocatorSize  = 0x40000000000ULL;  // 4T.
+const vaddr kAllocatorSpace = 0x600000000000ULL;
+const usize kAllocatorSize  = 0x40000000000ULL;  // 4T.
 # endif
 template <typename AddressSpaceViewTy>
 struct AP64 {  // Allocator64 parameters. Deliberately using a short name.
-  static const uptr kSpaceBeg = kAllocatorSpace;
-  static const uptr kSpaceSize = kAllocatorSize;
-  static const uptr kMetadataSize = sizeof(ChunkMetadata);
+  static const vaddr kSpaceBeg = kAllocatorSpace;
+  static const usize kSpaceSize = kAllocatorSize;
+  static const usize kMetadataSize = sizeof(ChunkMetadata);
   typedef DefaultSizeClassMap SizeClassMap;
   typedef NoOpMapUnmapCallback MapUnmapCallback;
-  static const uptr kFlags = 0;
+  static const usize kFlags = 0;
   using AddressSpaceView = AddressSpaceViewTy;
 };
 
@@ -116,17 +116,17 @@ using Allocator = AllocatorASVT<LocalAddressSpaceView>;
 
 AllocatorCache *GetAllocatorCache();
 
-int lsan_posix_memalign(void **memptr, uptr alignment, uptr size,
+int lsan_posix_memalign(void **memptr, usize alignment, usize size,
                         const StackTrace &stack);
-void *lsan_aligned_alloc(uptr alignment, uptr size, const StackTrace &stack);
-void *lsan_memalign(uptr alignment, uptr size, const StackTrace &stack);
-void *lsan_malloc(uptr size, const StackTrace &stack);
+void *lsan_aligned_alloc(usize alignment, usize size, const StackTrace &stack);
+void *lsan_memalign(usize alignment, usize size, const StackTrace &stack);
+void *lsan_malloc(usize size, const StackTrace &stack);
 void lsan_free(void *p);
-void *lsan_realloc(void *p, uptr size, const StackTrace &stack);
-void *lsan_calloc(uptr nmemb, uptr size, const StackTrace &stack);
-void *lsan_valloc(uptr size, const StackTrace &stack);
-void *lsan_pvalloc(uptr size, const StackTrace &stack);
-uptr lsan_mz_size(const void *p);
+void *lsan_realloc(void *p, usize size, const StackTrace &stack);
+void *lsan_calloc(usize nmemb, usize size, const StackTrace &stack);
+void *lsan_valloc(usize size, const StackTrace &stack);
+void *lsan_pvalloc(usize size, const StackTrace &stack);
+usize lsan_mz_size(const void *p);
 
 }  // namespace __lsan
 

@@ -46,7 +46,7 @@ inline uptr MemToShadow(uptr untagged_addr) {
 inline uptr ShadowToMem(uptr shadow_addr) {
   return (shadow_addr - __hwasan_shadow_memory_dynamic_address) << kShadowScale;
 }
-inline uptr MemToShadowSize(uptr size) {
+inline uptr MemToShadowSize(usize size) {
   return size >> kShadowScale;
 }
 

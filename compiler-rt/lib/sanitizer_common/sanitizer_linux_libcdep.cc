@@ -125,7 +125,7 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
     *stack_bottom = segment.end - stacksize;
     return;
   }
-  uptr stacksize = 0;
+  usize stacksize = 0;
   void *stackaddr = nullptr;
 #if SANITIZER_SOLARIS
   stack_t ss;
@@ -166,7 +166,7 @@ __attribute__((unused)) static bool GetLibcVersion(int *major, int *minor,
                                                    int *patch) {
 #ifdef _CS_GNU_LIBC_VERSION
   char buf[64];
-  uptr len = confstr(_CS_GNU_LIBC_VERSION, buf, sizeof(buf));
+  usize len = confstr(_CS_GNU_LIBC_VERSION, buf, sizeof(buf));
   if (len >= sizeof(buf))
     return false;
   buf[len] = 0;
@@ -185,7 +185,7 @@ __attribute__((unused)) static bool GetLibcVersion(int *major, int *minor,
 
 #if !SANITIZER_FREEBSD && !SANITIZER_ANDROID && !SANITIZER_GO &&               \
     !SANITIZER_NETBSD && !SANITIZER_OPENBSD && !SANITIZER_SOLARIS
-static uptr g_tls_size;
+static usize g_tls_size;
 
 #ifdef __i386__
 # ifndef __GLIBC_PREREQ
@@ -268,10 +268,10 @@ void InitTlsSize() { }
      defined(__arm__)) &&                                                      \
     SANITIZER_LINUX && !SANITIZER_ANDROID
 // sizeof(struct pthread) from glibc.
-static atomic_uintptr_t thread_descriptor_size;
+static atomic_size_t thread_descriptor_size;
 
-uptr ThreadDescriptorSize() {
-  uptr val = atomic_load_relaxed(&thread_descriptor_size);
+usize ThreadDescriptorSize() {
+  usize val = atomic_load_relaxed(&thread_descriptor_size);
   if (val)
     return val;
 #if defined(__x86_64__) || defined(__i386__) || defined(__arm__)
@@ -319,23 +319,23 @@ uptr ThreadDescriptorSize() {
 }
 
 // The offset at which pointer to self is located in the thread descriptor.
-const uptr kThreadSelfOffset = FIRST_32_SECOND_64(8, 16);
+const usize kThreadSelfOffset = FIRST_32_SECOND_64(8, 16);
 
-uptr ThreadSelfOffset() {
+usize ThreadSelfOffset() {
   return kThreadSelfOffset;
 }
 
 #if defined(__mips__) || defined(__powerpc64__)
 // TlsPreTcbSize includes size of struct pthread_descr and size of tcb
 // head structure. It lies before the static tls blocks.
-static uptr TlsPreTcbSize() {
+static usize TlsPreTcbSize() {
 # if defined(__mips__)
-  const uptr kTcbHead = 16; // sizeof (tcbhead_t)
+  const usize kTcbHead = 16; // sizeof (tcbhead_t)
 # elif defined(__powerpc64__)
-  const uptr kTcbHead = 88; // sizeof (tcbhead_t)
+  const usize kTcbHead = 88; // sizeof (tcbhead_t)
 # endif
-  const uptr kTlsAlign = 16;
-  const uptr kTlsPreTcbSize =
+  const usize kTlsAlign = 16;
+  const usize kTlsPreTcbSize =
       RoundUpTo(ThreadDescriptorSize() + kTcbHead, kTlsAlign);
   return kTlsPreTcbSize;
 }
@@ -538,8 +538,8 @@ uptr GetTlsSize() {
 }
 #endif
 
-void GetThreadStackAndTls(bool main, uptr *stk_addr, uptr *stk_size,
-                          uptr *tls_addr, uptr *tls_size) {
+void GetThreadStackAndTls(bool main, uptr *stk_addr, usize *stk_size,
+                          uptr *tls_addr, usize *tls_size) {
 #if SANITIZER_GO
   // Stub implementation for Go.
   *stk_addr = *stk_size = *tls_addr = *tls_size = 0;
@@ -650,14 +650,14 @@ void ListOfModules::fallbackInit() {
 // getrusage does not give us the current RSS, only the max RSS.
 // Still, this is better than nothing if /proc/self/statm is not available
 // for some reason, e.g. due to a sandbox.
-static uptr GetRSSFromGetrusage() {
+static usize GetRSSFromGetrusage() {
   struct rusage usage;
   if (getrusage(RUSAGE_SELF, &usage))  // Failed, probably due to a sandbox.
     return 0;
   return usage.ru_maxrss << 10;  // ru_maxrss is in Kb.
 }
 
-uptr GetRSS() {
+usize GetRSS() {
   if (!common_flags()->can_use_proc_maps_statm)
     return GetRSSFromGetrusage();
   fd_t fd = OpenFile("/proc/self/statm", RdOnly);
@@ -692,7 +692,7 @@ u32 GetNumberOfCPUs() {
 #if SANITIZER_FREEBSD || SANITIZER_NETBSD || SANITIZER_OPENBSD
   u32 ncpu;
   int req[2];
-  uptr len = sizeof(ncpu);
+  usize len = sizeof(ncpu);
   req[0] = CTL_HW;
   req[1] = HW_NCPU;
   CHECK_EQ(internal_sysctl(req, 2, &ncpu, &len, NULL, 0), 0);
@@ -707,8 +707,8 @@ u32 GetNumberOfCPUs() {
   if (internal_iserror(fd))
     return 0;
   InternalMmapVector<u8> buffer(4096);
-  uptr bytes_read = buffer.size();
-  uptr n_cpus = 0;
+  usize bytes_read = buffer.size();
+  usize n_cpus = 0;
   u8 *d_type;
   struct linux_dirent *entry = (struct linux_dirent *)&buffer[bytes_read];
   while (true) {
@@ -858,7 +858,7 @@ void ReExec() {
       KERN_PROC_PATHNAME,
   };
   char path[400];
-  uptr len;
+  usize len;
 
   len = sizeof(path);
   if (internal_sysctl(name, ARRAY_SIZE(name), path, &len, NULL, 0) != -1)

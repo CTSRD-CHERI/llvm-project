@@ -66,11 +66,11 @@ DECLARE__REAL_AND_INTERNAL64(uptr, mmap, void *addr, uptr /*size_t*/ length,
   return (uptr)_REAL64(mmap)(addr, length, prot, flags, fd, offset);
 }
 
-DECLARE__REAL_AND_INTERNAL(uptr, munmap, void *addr, uptr length) {
+DECLARE__REAL_AND_INTERNAL(uptr, munmap, void *addr, usize length) {
   return _REAL(munmap)(addr, length);
 }
 
-DECLARE__REAL_AND_INTERNAL(int, mprotect, void *addr, uptr length, int prot) {
+DECLARE__REAL_AND_INTERNAL(int, mprotect, void *addr, usize length, int prot) {
   return _REAL(mprotect)(addr, length, prot);
 }
 
@@ -93,16 +93,16 @@ uptr OpenFile(const char *filename, bool write) {
       internal_open(filename, write ? O_WRONLY | O_CREAT : O_RDONLY, 0660));
 }
 
-DECLARE__REAL_AND_INTERNAL(uptr, read, fd_t fd, void *buf, uptr count) {
+DECLARE__REAL_AND_INTERNAL(uptr, read, fd_t fd, void *buf, usize count) {
   return _REAL(read)(fd, buf, count);
 }
 
-DECLARE__REAL_AND_INTERNAL(uptr, write, fd_t fd, const void *buf, uptr count) {
+DECLARE__REAL_AND_INTERNAL(uptr, write, fd_t fd, const void *buf, usize count) {
   return _REAL(write)(fd, buf, count);
 }
 
 // FIXME: There's only _ftruncate64 beginning with Solaris 11.
-DECLARE__REAL_AND_INTERNAL(uptr, ftruncate, fd_t fd, uptr size) {
+DECLARE__REAL_AND_INTERNAL(uptr, ftruncate, fd_t fd, usize size) {
   return ftruncate(fd, size);
 }
 

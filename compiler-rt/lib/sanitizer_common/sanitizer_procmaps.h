@@ -28,16 +28,16 @@ namespace __sanitizer {
 
 
 // Memory protection masks.
-static const uptr kProtectionRead = 1;
-static const uptr kProtectionWrite = 2;
-static const uptr kProtectionExecute = 4;
-static const uptr kProtectionShared = 8;
+static const usize kProtectionRead = 1;
+static const usize kProtectionWrite = 2;
+static const usize kProtectionExecute = 4;
+static const usize kProtectionShared = 8;
 
 struct MemoryMappedSegmentData;
 
 class MemoryMappedSegment {
  public:
-  MemoryMappedSegment(char *buff = nullptr, uptr size = 0)
+  MemoryMappedSegment(char *buff = nullptr, usize size = 0)
       : filename(buff), filename_size(size), data_(nullptr) {}
   ~MemoryMappedSegment() {}
 
@@ -50,10 +50,10 @@ class MemoryMappedSegment {
 
   uptr start;
   uptr end;
-  uptr offset;
+  OFF_T offset;
   char *filename;  // owned by caller
-  uptr filename_size;
-  uptr protection;
+  uword filename_size;
+  uword protection;
   ModuleArch arch;
   u8 uuid[kModuleUUIDSize];
 
