@@ -57,11 +57,13 @@ public:
 
 private:
   void doPeepholeLoadStoreADDI();
+  void doPeepholeLoadStoreCIncOffsetImm();
 };
 }
 
 void RISCVDAGToDAGISel::PostprocessISelDAG() {
   doPeepholeLoadStoreADDI();
+  doPeepholeLoadStoreCIncOffsetImm();
 }
 
 static SDNode *selectImm(SelectionDAG *CurDAG, const SDLoc &DL, int64_t Imm,
@@ -285,6 +287,94 @@ void RISCVDAGToDAGISel::doPeepholeLoadStoreADDI() {
                                  ImmOperand, N->getOperand(3));
 
     // The add-immediate may now be dead, in which case remove it.
+    if (Base.getNode()->use_empty())
+      CurDAG->RemoveDeadNode(Base.getNode());
+  }
+}
+
+// Merge an CIncOffsetImm into the offset of a load/store instruction where possible.
+// (load (CIncOffsetImm base, off), 0) -> (load base, off)
+// (store val, (CIncOffsetImm base, off)) -> (store val, base, off)
+void RISCVDAGToDAGISel::doPeepholeLoadStoreCIncOffsetImm() {
+  SelectionDAG::allnodes_iterator Position(CurDAG->getRoot().getNode());
+  ++Position;
+
+  while (Position != CurDAG->allnodes_begin()) {
+    SDNode *N = &*--Position;
+    // Skip dead nodes and any non-machine opcodes.
+    if (N->use_empty() || !N->isMachineOpcode())
+      continue;
+
+    int OffsetOpIdx;
+    int BaseOpIdx;
+
+    // Only attempt this optimisation for I-type loads and S-type stores.
+    switch (N->getMachineOpcode()) {
+    default:
+      continue;
+    case RISCV::CLB:
+    case RISCV::CLH:
+    case RISCV::CLW:
+    case RISCV::CLBU:
+    case RISCV::CLHU:
+    case RISCV::CLWU:
+    case RISCV::CLD:
+    case RISCV::CFLW:
+    case RISCV::CFLD:
+      BaseOpIdx = 0;
+      OffsetOpIdx = 1;
+      break;
+    case RISCV::CSB:
+    case RISCV::CSH:
+    case RISCV::CSW:
+    case RISCV::CSD:
+    case RISCV::CFSW:
+    case RISCV::CFSD:
+      BaseOpIdx = 1;
+      OffsetOpIdx = 2;
+      break;
+    }
+
+    // Currently, the load/store offset must be 0 to be considered for this
+    // peephole optimisation.
+    if (!isa<ConstantSDNode>(N->getOperand(OffsetOpIdx)) ||
+        N->getConstantOperandVal(OffsetOpIdx) != 0)
+      continue;
+
+    SDValue Base = N->getOperand(BaseOpIdx);
+
+    // If the base is an CIncOffsetImm, we can merge it in to the load/store.
+    if (!Base.isMachineOpcode() || Base.getMachineOpcode() != RISCV::CIncOffsetImm)
+      continue;
+
+    SDValue ImmOperand = Base.getOperand(1);
+
+    if (auto Const = dyn_cast<ConstantSDNode>(ImmOperand)) {
+      ImmOperand = CurDAG->getTargetConstant(
+          Const->getSExtValue(), SDLoc(ImmOperand), ImmOperand.getValueType());
+    } else if (auto GA = dyn_cast<GlobalAddressSDNode>(ImmOperand)) {
+      ImmOperand = CurDAG->getTargetGlobalAddress(
+          GA->getGlobal(), SDLoc(ImmOperand), ImmOperand.getValueType(),
+          GA->getOffset(), GA->getTargetFlags());
+    } else {
+      continue;
+    }
+
+    LLVM_DEBUG(dbgs() << "Folding CIncOffsetImm into mem-op:\nBase:    ");
+    LLVM_DEBUG(Base->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\nN: ");
+    LLVM_DEBUG(N->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\n");
+
+    // Modify the offset operand of the load/store.
+    if (BaseOpIdx == 0) // Load
+      CurDAG->UpdateNodeOperands(N, Base.getOperand(0), ImmOperand,
+                                 N->getOperand(2));
+    else // Store
+      CurDAG->UpdateNodeOperands(N, N->getOperand(0), Base.getOperand(0),
+                                 ImmOperand, N->getOperand(3));
+
+    // The CIncOffsetImm may now be dead, in which case remove it.
     if (Base.getNode()->use_empty())
       CurDAG->RemoveDeadNode(Base.getNode());
   }
