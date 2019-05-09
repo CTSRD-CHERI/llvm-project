@@ -73,8 +73,8 @@ int atomic(void) {
   // CHECK: atomicrmw nand i8* %valc, i8 6 seq_cst  
  
   __sync_val_compare_and_swap((void **)0, (void *)0, (void *)0);
-  // CHECK: [[PAIR:%[a-z0-9_.]+]] = cmpxchg i32* null, i32 0, i32 0 seq_cst
-  // CHECK: extractvalue { i32, i1 } [[PAIR]], 0
+  // CHECK: [[PAIR:%[a-z0-9_.]+]] = cmpxchg i8** null, i8* null, i8* null seq_cst seq_cst
+  // CHECK: extractvalue { i8*, i1 } [[PAIR]], 0
 
   if ( __sync_val_compare_and_swap(&valb, 0, 1)) {
     // CHECK: [[PAIR:%[a-z0-9_.]+]] = cmpxchg i8* %valb, i8 0, i8 1 seq_cst
@@ -84,8 +84,9 @@ int atomic(void) {
   }
   
   __sync_bool_compare_and_swap((void **)0, (void *)0, (void *)0);
-  // CHECK: cmpxchg i32* null, i32 0, i32 0 seq_cst
-  
+  // CHECK: [[PAIR:%[a-z0-9_.]+]] = cmpxchg i8** null, i8* null, i8* null seq_cst seq_cst
+  // CHECK-NEXT: extractvalue { i8*, i1 } [[PAIR]], 1
+
   __sync_lock_release(&val);
   // CHECK: store atomic i32 0, {{.*}} release, align 4
 
