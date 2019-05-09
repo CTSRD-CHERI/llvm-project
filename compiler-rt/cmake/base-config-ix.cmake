@@ -99,6 +99,17 @@ if(APPLE)
        OUTPUT_VARIABLE OSX_SYSROOT
        ERROR_QUIET
        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (NOT OSX_SYSROOT)
+      execute_process(COMMAND xcrun -v -sdk macosx --show-sdk-path
+         OUTPUT_VARIABLE OSX_SYSROOT
+         ERROR_QUIET
+         OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
+    if (NOT OSX_SYSROOT)
+      message(FATAL_ERROR "Could not find macOS sysroot. Cannot run tests")
+    else()
+      message(STATUS "Found macOS sysroot: ${OSX_SYSROOT}")
+    endif()
     set(OSX_SYSROOT_FLAG "-isysroot${OSX_SYSROOT}")
   endif()
 
