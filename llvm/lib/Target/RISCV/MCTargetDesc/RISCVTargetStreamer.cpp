@@ -45,3 +45,11 @@ void RISCVTargetAsmStreamer::emitDirectiveOptionRelax() {
 void RISCVTargetAsmStreamer::emitDirectiveOptionNoRelax() {
   OS << "\t.option\tnorelax\n";
 }
+
+void RISCVTargetAsmStreamer::emitDirectiveOptionCapMode() {
+  OS << "\t.option\tcapmode\n";
+}
+
+void RISCVTargetAsmStreamer::emitDirectiveOptionNoCapMode() {
+  OS << "\t.option\tnocapmode\n";
+}
