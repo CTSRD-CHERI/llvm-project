@@ -196,7 +196,7 @@ size_t ForEachNonZeroByte(const uint8_t *Begin, const uint8_t *End,
       Handle8bitCounter(FirstFeature, P - Begin, V);
 
   // Iterate by Step bytes at a time.
-  for (; P < End; P += Step)
+  for (; P + Step < End; P += Step)
     if (LargeType Bundle = *reinterpret_cast<const LargeType *>(P))
       for (size_t I = 0; I < Step; I++, Bundle >>= 8)
         if (uint8_t V = Bundle & 0xff)
