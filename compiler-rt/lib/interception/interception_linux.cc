@@ -40,6 +40,7 @@ bool GetRealFunctionAddress(const char *func_name, uptr *func_addr,
   if (StrCmp(func_name, "sigaction"))
     func_name = "__sigaction14";
 #endif
+  static_assert(sizeof(*func_addr) == sizeof(void(*)()), "");
   *func_addr = (uptr)dlsym(RTLD_NEXT, func_name);
   if (!*func_addr) {
     // If the lookup using RTLD_NEXT failed, the sanitizer runtime library is

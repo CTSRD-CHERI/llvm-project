@@ -32,6 +32,7 @@ static T GetFnPtr(const char *FnName, bool WarnIfMissing) {
       Printf("\n");
     }
   }
+  static_assert(sizeof(T) == sizeof(Fn), "Bad cast of dlsym() pointer");
   return reinterpret_cast<T>(Fn);
 }
 
