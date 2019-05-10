@@ -96,6 +96,8 @@ COMMON_FLAG(HandleSignalMode, handle_sigtrap, kHandleSignalNo,
             COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGTRAP))
 COMMON_FLAG(HandleSignalMode, handle_sigfpe, kHandleSignalYes,
             COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGFPE))
+COMMON_FLAG(HandleSignalMode, handle_sigprot, kHandleSignalNo,
+            COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGPROT))
 #undef COMMON_FLAG_HANDLE_SIGNAL_HELP
 COMMON_FLAG(bool, allow_user_segv_handler, true,
             "Deprecated. True has no effect, use handle_sigbus=1. If false, "

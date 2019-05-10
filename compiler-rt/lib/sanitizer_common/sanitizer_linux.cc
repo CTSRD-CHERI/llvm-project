@@ -1684,6 +1684,10 @@ static HandleSignalMode GetHandleSignalModeImpl(int signum) {
       return common_flags()->handle_segv;
     case SIGBUS:
       return common_flags()->handle_sigbus;
+#ifdef SIGPROT
+    case SIGPROT:
+      return common_flags()->handle_sigprot;
+#endif
   }
   return kHandleSignalNo;
 }
