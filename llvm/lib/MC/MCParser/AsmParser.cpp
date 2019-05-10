@@ -514,6 +514,7 @@ private:
     DK_PRINT,
     DK_ADDRSIG,
     DK_ADDRSIG_SYM,
+    DK_CHERICAP,
     DK_END
   };
 
@@ -666,6 +667,9 @@ private:
   // Directives to support address-significance tables.
   bool parseDirectiveAddrsig();
   bool parseDirectiveAddrsigSym();
+
+  // ".chericap"
+  bool parseDirectiveCheriCap(SMLoc DirectiveLoc);
 
   void initializeDirectiveKindMap();
 };
@@ -2177,6 +2181,8 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
       return parseDirectiveAddrsig();
     case DK_ADDRSIG_SYM:
       return parseDirectiveAddrsigSym();
+    case DK_CHERICAP:
+      return parseDirectiveCheriCap(IDLoc);
     }
 
     return Error(IDLoc, "unknown directive");
@@ -5378,6 +5384,7 @@ void AsmParser::initializeDirectiveKindMap() {
   DirectiveKindMap[".print"] = DK_PRINT;
   DirectiveKindMap[".addrsig"] = DK_ADDRSIG;
   DirectiveKindMap[".addrsig_sym"] = DK_ADDRSIG_SYM;
+  DirectiveKindMap[".chericap"] = DK_CHERICAP;
 }
 
 MCAsmMacro *AsmParser::parseMacroLikeBody(SMLoc DirectiveLoc) {
@@ -5630,6 +5637,59 @@ bool AsmParser::parseDirectiveAddrsigSym() {
     return true;
   MCSymbol *Sym = getContext().getOrCreateSymbol(Name);
   getStreamer().EmitAddrsigSym(Sym);
+  return false;
+}
+
+/// parseDirectiveCheriCap
+///  ::= .chericap sym[+off]
+bool AsmParser::parseDirectiveCheriCap(SMLoc DirectiveLoc) {
+  const MCExpr *SymExpr;
+  SMLoc ExprLoc = getLexer().getLoc();
+
+  if (!getTargetParser().isCheri())
+    return Error(DirectiveLoc, "'.chericap' requires CHERI");
+
+  if (parseExpression(SymExpr))
+    return true;
+
+  int64_t Offset = 0;
+  unsigned CapSize = getTargetParser().getCheriCapabilitySize();
+  // Allow .chericap 0x123456 to create an untagged uintcap_t
+  if (SymExpr->evaluateAsAbsolute(Offset)) {
+    getStreamer().EmitCheriIntcap(Offset, CapSize, ExprLoc);
+  } else {
+    const MCSymbolRefExpr *SRE = nullptr;
+    if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(SymExpr)) {
+      const MCConstantExpr *CE = nullptr;
+      bool Neg = false;
+      switch (BE->getOpcode()) {
+        case MCBinaryExpr::Sub:
+          Neg = true;
+          LLVM_FALLTHROUGH;
+        case MCBinaryExpr::Add:
+          CE = dyn_cast<MCConstantExpr>(BE->getRHS());
+          break;
+        default:
+          break;
+      }
+
+      SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
+      if (!SRE || !CE)
+        return Error(ExprLoc, "must be sym[+const]");
+      Offset = CE->getValue();
+      if (Neg)
+        Offset = -Offset;
+    } else {
+      SRE = dyn_cast<MCSymbolRefExpr>(SymExpr);
+      if (!SRE)
+        return Error(ExprLoc, "must be sym[+const]");
+      Offset = 0;
+    }
+    const MCSymbol &Symbol = SRE->getSymbol();
+    getStreamer().EmitCheriCapability(&Symbol, Offset, CapSize, ExprLoc);
+  }
+  if (parseToken(AsmToken::EndOfStatement, "expected end of statement"))
+    return true;
   return false;
 }
 

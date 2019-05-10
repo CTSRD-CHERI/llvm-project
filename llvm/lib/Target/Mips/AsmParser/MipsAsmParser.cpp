@@ -381,7 +381,6 @@ class MipsAsmParser : public MCTargetAsmParser {
   bool parseDirectiveTpRelDWord();
   bool parseDirectiveModule();
   bool parseDirectiveModuleFP();
-  bool parseDirectiveCHERICap(SMLoc Loc);
   bool parseFpABIValue(MipsABIFlagsSection::FpABIKind &FpABI,
                        StringRef Directive);
 
@@ -676,11 +675,11 @@ public:
     return getSTI().getFeatureBits()[Mips::FeatureMT];
   }
 
-  bool isCheri() const {
+  bool isCheri() const override {
     return getSTI().getFeatureBits()[Mips::FeatureMipsCheri];
   }
 
-  unsigned getCHERICapabilitySize() const {
+  unsigned getCheriCapabilitySize() const override {
     if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri256])
       return 32;
     if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri128])
@@ -8559,69 +8558,6 @@ bool MipsAsmParser::parseFpABIValue(MipsABIFlagsSection::FpABIKind &FpABI,
   return false;
 }
 
-/// parseDirectiveCHERICap
-///  ::= .chericap sym[+off]
-bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
-  MCAsmParser &Parser = getParser();
-  const MCExpr *SymExpr;
-
-  // TODO: it would be nice if we could get this from MCSubtarget. However, it
-  // is only in MipsSubtarget which we can't access here :(
-  if (!isCheri()) {
-    reportParseError(Loc, "'.chericap' requires CHERI");
-    errs() << getSTI().getCPU() << " fs=" << getSTI().getTargetTriple().str() << "\n";
-    return false;
-  }
-
-  if (getParser().parseExpression(SymExpr))
-    return true;
-  int64_t Offset = 0;
-  unsigned CapSize = getCHERICapabilitySize();
-  // Allow .chericap 0x123456 to create an untagged uintcap_t
-  if (SymExpr->evaluateAsAbsolute(Offset)) {
-    getParser().getStreamer().EmitCheriIntcap(Offset, CapSize, Loc);
-  } else {
-    const MCSymbolRefExpr *SRE = nullptr;
-    if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(SymExpr)) {
-      const MCConstantExpr *CE = nullptr;
-      bool Neg = false;
-      switch (BE->getOpcode()) {
-        case MCBinaryExpr::Sub:
-          Neg = true;
-          LLVM_FALLTHROUGH;
-        case MCBinaryExpr::Add:
-          CE = dyn_cast<MCConstantExpr>(BE->getRHS());
-          break;
-        default:
-          break;
-      }
-
-      SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
-      if (!SRE || !CE) {
-        reportParseError(Loc, "must be sym[+const]");
-        return false;
-      }
-      Offset = CE->getValue();
-      if (Neg)
-        Offset = -Offset;
-    } else {
-      SRE = dyn_cast<MCSymbolRefExpr>(SymExpr);
-      if (!SRE) {
-        reportParseError(Loc, "must be sym[+const]");
-        return false;
-      }
-      Offset = 0;
-    }
-    const MCSymbol &Symbol = SRE->getSymbol();
-    getParser().getStreamer().EmitCheriCapability(&Symbol, Offset, CapSize, Loc);
-  }
-  if (getLexer().isNot(AsmToken::EndOfStatement))
-    return Error(getLexer().getLoc(),
-                 "unexpected token, expected end of statement");
-  Parser.Lex(); // Eat EndOfStatement token.
-  return false;
-}
-
 bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
   // This returns false if this function recognizes the directive
   // regardless of whether it is successfully handles or reports an
@@ -8935,11 +8871,6 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
   }
   if (IDVal == ".sdata") {
     parseSSectionDirective(IDVal, ELF::SHT_PROGBITS);
-    return false;
-  }
-
-  if (IDVal == ".chericap") {
-    parseDirectiveCHERICap(DirectiveID.getLoc());
     return false;
   }
 

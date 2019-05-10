@@ -494,6 +494,15 @@ public:
 
   // For any checks or cleanups at the end of parsing.
   virtual void onEndOfFile() {}
+
+  virtual bool isCheri() const {
+    return false;
+  }
+
+  virtual unsigned getCheriCapabilitySize() const {
+    llvm_unreachable("Should not have been called without checking isCheri()!");
+  }
+
 };
 
 } // end namespace llvm
