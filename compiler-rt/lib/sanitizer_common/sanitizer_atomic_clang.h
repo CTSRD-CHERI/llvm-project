@@ -46,7 +46,7 @@ template<typename T>
 INLINE typename T::Type atomic_fetch_add(volatile T *a,
     typename T::Type v, memory_order mo) {
   (void)mo;
-  DCHECK(!((uptr)a % sizeof(*a)));
+  DCHECK(((vaddr)a % sizeof(*a)));
   return __sync_fetch_and_add(&a->val_dont_use, v);
 }
 
@@ -54,14 +54,14 @@ template<typename T>
 INLINE typename T::Type atomic_fetch_sub(volatile T *a,
     typename T::Type v, memory_order mo) {
   (void)mo;
-  DCHECK(!((uptr)a % sizeof(*a)));
+  DCHECK(!((vaddr)a % sizeof(*a)));
   return __sync_fetch_and_add(&a->val_dont_use, -v);
 }
 
 template<typename T>
 INLINE typename T::Type atomic_exchange(volatile T *a,
     typename T::Type v, memory_order mo) {
-  DCHECK(!((uptr)a % sizeof(*a)));
+  DCHECK(!((vaddr)a % sizeof(*a)));
   if (mo & (memory_order_release | memory_order_acq_rel | memory_order_seq_cst))
     __sync_synchronize();
   v = __sync_lock_test_and_set(&a->val_dont_use, v);

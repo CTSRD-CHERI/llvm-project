@@ -113,7 +113,7 @@ Node *StackDepotBase<Node, kReservedBits, kTabSizeLog>::lock(
 template <class Node, int kReservedBits, int kTabSizeLog>
 void StackDepotBase<Node, kReservedBits, kTabSizeLog>::unlock(
     atomic_uintptr_t *p, Node *s) {
-  DCHECK_EQ((uptr)s & 1, 0);
+  DCHECK_EQ(GetLowPtrBits<1>((uptr)s), 0);
   atomic_store(p, (uptr)s, memory_order_release);
 }
 

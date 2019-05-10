@@ -42,7 +42,7 @@ INLINE atomic_uint64_t::Type atomic_fetch_add(volatile atomic_uint64_t *ptr,
                                               memory_order mo) {
   DCHECK(mo &
          (memory_order_relaxed | memory_order_releasae | memory_order_seq_cst));
-  DCHECK(!((uptr)ptr % sizeof(*ptr)));
+  DCHECK(!((vaddr)ptr % sizeof(*ptr)));
 
   atomic_uint64_t::Type ret;
 
@@ -68,7 +68,7 @@ INLINE bool atomic_compare_exchange_strong(volatile atomic_uint64_t *ptr,
                                            memory_order mo) {
   DCHECK(mo &
          (memory_order_relaxed | memory_order_releasae | memory_order_seq_cst));
-  DCHECK(!((uptr)ptr % sizeof(*ptr)));
+  DCHECK(!((vaddr)ptr % sizeof(*ptr)));
 
   typedef atomic_uint64_t::Type Type;
   Type cmpv = *cmp;
@@ -91,7 +91,7 @@ INLINE atomic_uint64_t::Type atomic_load(const volatile atomic_uint64_t *ptr,
                                          memory_order mo) {
   DCHECK(mo &
          (memory_order_relaxed | memory_order_releasae | memory_order_seq_cst));
-  DCHECK(!((uptr)ptr % sizeof(*ptr)));
+  DCHECK(!((vaddr)ptr % sizeof(*ptr)));
 
   atomic_uint64_t::Type zero = 0;
   volatile atomic_uint64_t *Newptr =
@@ -104,7 +104,7 @@ INLINE void atomic_store(volatile atomic_uint64_t *ptr, atomic_uint64_t::Type v,
                          memory_order mo) {
   DCHECK(mo &
          (memory_order_relaxed | memory_order_releasae | memory_order_seq_cst));
-  DCHECK(!((uptr)ptr % sizeof(*ptr)));
+  DCHECK(!((vaddr)ptr % sizeof(*ptr)));
 
   __spin_lock(&lock.lock);
   ptr->val_dont_use = v;

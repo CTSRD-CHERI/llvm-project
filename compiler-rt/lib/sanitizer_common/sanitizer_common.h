@@ -443,7 +443,7 @@ INLINE bool IsAligned(uptr a, usize alignment) {
 #endif
 }
 
-INLINE bool IsAligned(void* ptr, usize alignment) {
+INLINE bool IsAligned(const void *ptr, usize alignment) {
   return IsAligned((uptr)ptr, alignment);
 }
 
