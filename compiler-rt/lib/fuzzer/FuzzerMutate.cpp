@@ -197,6 +197,13 @@ DictionaryEntry MutationDispatcher::MakeDictionaryEntryFromCMP(
   bool HandleFirst = Rand.RandBool();
   const void *ExistingBytes, *DesiredBytes;
   Word W;
+#ifdef __CHERI_PURE_CAPABILITY__
+  // Clear the bytes that will not be intialized to avoid copying garbage from
+  // the stack and asserting in memcpy() (from the implicit copy constructor).
+  // Note: we clear the whole buffer here since it can be inlined by the
+  // compiler while, just clearing the remaining bytes would not be constant.
+  memset(&W, 0, sizeof(W));
+#endif
   const uint8_t *End = Data + Size;
   for (int Arg = 0; Arg < 2; Arg++) {
     ExistingBytes = HandleFirst ? Arg1 : Arg2;
