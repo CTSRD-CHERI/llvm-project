@@ -281,7 +281,7 @@ InputSection *InputSectionBase::getLinkOrderDep() const {
 
 // Find a function symbol that encloses a given location.
 template <class ELFT, unsigned SymbolType>
-Defined *InputSectionBase::getEnclosingSymbol(uint64_t Offset) {
+Defined *InputSectionBase::getEnclosingSymbol(uint64_t Offset) const {
   for (Symbol *B : File->getSymbols())
     if (Defined *D = dyn_cast<Defined>(B))
       if (D->Section == this && D->Type == SymbolType && D->Value <= Offset &&
@@ -291,18 +291,18 @@ Defined *InputSectionBase::getEnclosingSymbol(uint64_t Offset) {
 }
 
 template <class ELFT>
-Defined *InputSectionBase::getEnclosingFunction(uint64_t Offset) {
+Defined *InputSectionBase::getEnclosingFunction(uint64_t Offset) const {
   return getEnclosingSymbol<ELFT, STT_FUNC>(Offset);
 }
 
 template <class ELFT>
-Defined *InputSectionBase::getEnclosingObject(uint64_t Offset) {
+Defined *InputSectionBase::getEnclosingObject(uint64_t Offset) const {
   return getEnclosingSymbol<ELFT, STT_OBJECT>(Offset);
 }
 
 // Returns a source location string. Used to construct an error message.
 template <class ELFT>
-std::string InputSectionBase::getLocation(uint64_t Offset) {
+std::string InputSectionBase::getLocation(uint64_t Offset) const {
   std::string SecAndOffset = (Name + "+0x" + utohexstr(Offset)).str();
 
   // We don't have file for synthetic sections.
@@ -336,7 +336,7 @@ std::string InputSectionBase::getLocation(uint64_t Offset) {
 //   foo.c:42 (/home/alice/possibly/very/long/path/foo.c:42)
 //
 //  Returns an empty string if there's no way to get line info.
-std::string InputSectionBase::getSrcMsg(const Symbol &Sym, uint64_t Offset) {
+std::string InputSectionBase::getSrcMsg(const Symbol &Sym, uint64_t Offset) const {
   // Synthetic sections don't have input files.
   if (!File)
     return "";
@@ -352,7 +352,7 @@ std::string InputSectionBase::getSrcMsg(const Symbol &Sym, uint64_t Offset) {
 // or
 //
 //   path/to/foo.o:(function bar) in archive path/to/bar.a
-std::string InputSectionBase::getObjMsg(uint64_t Off) {
+std::string InputSectionBase::getObjMsg(uint64_t Off) const {
   // Synthetic sections don't have input files.
   if (!File)
     return ("<internal>:(" + Name + "+0x" + utohexstr(Off) + ")").str();
@@ -1374,15 +1374,15 @@ template InputSection::InputSection(ObjFile<ELF64LE> &, const ELF64LE::Shdr &,
 template InputSection::InputSection(ObjFile<ELF64BE> &, const ELF64BE::Shdr &,
                                     StringRef);
 
-template std::string InputSectionBase::getLocation<ELF32LE>(uint64_t);
-template std::string InputSectionBase::getLocation<ELF32BE>(uint64_t);
-template std::string InputSectionBase::getLocation<ELF64LE>(uint64_t);
-template std::string InputSectionBase::getLocation<ELF64BE>(uint64_t);
+template std::string InputSectionBase::getLocation<ELF32LE>(uint64_t) const;
+template std::string InputSectionBase::getLocation<ELF32BE>(uint64_t) const;
+template std::string InputSectionBase::getLocation<ELF64LE>(uint64_t) const;
+template std::string InputSectionBase::getLocation<ELF64BE>(uint64_t) const;
 
-template Defined *InputSectionBase::getEnclosingFunction<ELF32LE>(uint64_t Offset);
-template Defined *InputSectionBase::getEnclosingFunction<ELF32BE>(uint64_t Offset);
-template Defined *InputSectionBase::getEnclosingFunction<ELF64LE>(uint64_t Offset);
-template Defined *InputSectionBase::getEnclosingFunction<ELF64BE>(uint64_t Offset);
+template Defined *InputSectionBase::getEnclosingFunction<ELF32LE>(uint64_t Offset) const;
+template Defined *InputSectionBase::getEnclosingFunction<ELF32BE>(uint64_t Offset) const;
+template Defined *InputSectionBase::getEnclosingFunction<ELF64LE>(uint64_t Offset) const;
+template Defined *InputSectionBase::getEnclosingFunction<ELF64BE>(uint64_t Offset) const;
 
 template void InputSection::writeTo<ELF32LE>(uint8_t *);
 template void InputSection::writeTo<ELF32BE>(uint8_t *);

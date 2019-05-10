@@ -825,6 +825,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->AuxiliaryList = args::getStrings(Args, OPT_auxiliary);
   Config->Bsymbolic = Args.hasArg(OPT_Bsymbolic);
   Config->BsymbolicFunctions = Args.hasArg(OPT_Bsymbolic_functions);
+  Config->BuildingFreeBSDRtld = Args.hasArg(OPT_building_freebsd_rtld);
   Config->CapTableScope = getCapTableScope(Args);
   Config->CheckSections =
       Args.hasFlag(OPT_check_sections, OPT_no_check_sections, true);

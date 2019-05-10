@@ -172,16 +172,16 @@ public:
   // Get the function symbol that encloses this offset from within the
   // section.
   template <class ELFT>
-  Defined *getEnclosingFunction(uint64_t Offset);
+  Defined *getEnclosingFunction(uint64_t Offset) const;
   template <class ELFT>
-  Defined *getEnclosingObject(uint64_t Offset);
+  Defined *getEnclosingObject(uint64_t Offset) const;
   template <class ELFT, unsigned SymbolType>
-  Defined *getEnclosingSymbol(uint64_t Offset);
+  Defined *getEnclosingSymbol(uint64_t Offset) const;
 
   // Returns a source location string. Used to construct an error message.
-  template <class ELFT> std::string getLocation(uint64_t Offset);
-  std::string getSrcMsg(const Symbol &Sym, uint64_t Offset);
-  std::string getObjMsg(uint64_t Offset);
+  template <class ELFT> std::string getLocation(uint64_t Offset) const;
+  std::string getSrcMsg(const Symbol &Sym, uint64_t Offset) const;
+  std::string getObjMsg(uint64_t Offset) const;
 
   // Each section knows how to relocate itself. These functions apply
   // relocations, assuming that Buf points to this section's copy in

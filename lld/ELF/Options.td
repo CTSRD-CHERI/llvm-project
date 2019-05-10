@@ -516,6 +516,8 @@ def plugin_opt_slash: J<"plugin-opt=/">;
 
 
 // CHERI options:
+def building_freebsd_rtld: F<"building-freebsd-rtld">,
+    HelpText<"Disallow any relocations that are not supported by _rtld_relocate_nonplt_self">;
 // -no-process-cap-relocs flag to fall back to using external capsizefix tool
 defm process_cap_relocs: B<"process-cap-relocs",
     "Enable special processing of __cap_relocs sections",

@@ -226,6 +226,7 @@ private:
     llvm::Optional<uint32_t> Index;
     bool NeedsSmallImm = false;
     bool UsedAsFunctionPointer = true;
+    llvm::Optional<SymbolAndOffset> FirstUse;
   };
   struct CaptableMap {
     uint64_t FirstIndex = std::numeric_limits<uint64_t>::max();
@@ -359,6 +360,12 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
                                    : Config->LocalCapRelocsMode;
   // local cap relocs don't need a Elf relocation with a full symbol lookup:
   if (CapRelocMode == CapRelocsMode::ElfReloc) {
+    if (Config->EMachine == llvm::ELF::EM_MIPS && Config->BuildingFreeBSDRtld) {
+        error("relocation " + toString(Type) + " against " +
+              verboseToString(&Sym) + " cannot be using when building FreeBSD RTLD" +
+              ReferencedBy());
+        return;
+    }
     if (!Config->Pic && SharedFiles.empty()) {
       error(
           "attempting to emit a R_CAPABILITY relocation against " +

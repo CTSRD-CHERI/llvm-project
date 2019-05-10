@@ -1577,6 +1577,13 @@ void RelocationBaseSection::addReloc(const DynamicReloc &Reloc) {
     if (Reloc.Type != R_MIPS_CHERI_CAPABILITY)
       const_cast<InputSectionBase*>(IS)->FreeBSDMipsRelocationsHack.push_back(Reloc);
   }
+  if (Config->EMachine == EM_MIPS && Config->BuildingFreeBSDRtld) {
+    unsigned BaseRelocType = Reloc.Type & 0xff;
+    if (BaseRelocType != R_MIPS_REL32 && BaseRelocType != R_MIPS_NONE)
+      error("relocation " + toString(Reloc.Type) + " against " +
+            toString(*Reloc.Sym) + " cannot be using when building FreeBSD RTLD" +
+            getLocationMessage(*Reloc.InputSec, *Reloc.Sym, Reloc.OffsetInSec));
+  }
 }
 
 void RelocationBaseSection::finalizeContents() {

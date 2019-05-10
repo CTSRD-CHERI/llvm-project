@@ -136,6 +136,9 @@ struct Configuration {
   bool AsNeeded = false;
   bool Bsymbolic;
   bool BsymbolicFunctions;
+  // make dynamic relocations that are not supported by
+  // FreeBSD _rtld_relocate_nonplt_self an error.
+  bool BuildingFreeBSDRtld;
   bool CallGraphProfileSort;
   bool CheckSections;
   bool CompressDebugSections;

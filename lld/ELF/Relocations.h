@@ -189,6 +189,10 @@ template <class ELFT>
 static inline int64_t getAddend(const typename ELFT::Rela &Rel) {
   return Rel.r_addend;
 }
+
+std::string getLocationMessage(const InputSectionBase &S, const Symbol &Sym,
+                               uint64_t Off);
+
 } // namespace elf
 } // namespace lld
 

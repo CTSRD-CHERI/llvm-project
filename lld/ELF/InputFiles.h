@@ -109,7 +109,7 @@ public:
   // Cache for toString(). Only toString() should use this member.
   mutable std::string ToStringCache;
 
-  std::string getSrcMsg(const Symbol &Sym, InputSectionBase &Sec,
+  std::string getSrcMsg(const Symbol &Sym, const InputSectionBase &Sec,
                         uint64_t Offset);
 
   // True if this is an argument for --just-symbols. Usually false.
@@ -214,7 +214,7 @@ public:
     return getSymbol(SymIndex);
   }
 
-  llvm::Optional<llvm::DILineInfo> getDILineInfo(InputSectionBase *, uint64_t);
+  llvm::Optional<llvm::DILineInfo> getDILineInfo(const InputSectionBase *, uint64_t);
   llvm::Optional<std::pair<std::string, unsigned>> getVariableLoc(StringRef Name);
 
   // MIPS GP0 value defined by this file. This value represents the gp value

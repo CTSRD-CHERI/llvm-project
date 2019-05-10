@@ -616,6 +616,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
   CapTableIndex Idx;
   Idx.NeedsSmallImm = SmallImm;
   Idx.UsedAsFunctionPointer = true;
+  Idx.FirstUse = SymbolAndOffset::fromSectionWithOffset(IS, Offset);
   // If the symbol is only ever referenced by the CAP*CALL* relocations we can
   // emit a R_MIPS_CHERI_CAPABILITY_CALL instead of a R_MIPS_CHERI_CAPABILITY
   // relocation. This indicates to the runtime linker that the capability is not
@@ -830,7 +831,12 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
     addCapabilityRelocation<ELFT>(
         *TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
         R_CHERI_CAPABILITY, 0,
-        [&]() { return "\n>>> referenced by " + RefName; }, DynRelSec);
+        [&]() {
+          return ("\n>>> referenced by " + RefName + "\n>>> first used in " +
+                  it.second.FirstUse->verboseToString())
+              .str();
+        },
+        DynRelSec);
   }
   assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
   return AssignedSmallIndexes + AssignedLargeIndexes;

@@ -81,7 +81,7 @@ static Optional<std::string> getLinkerScriptLocation(const Symbol &Sym) {
 // >>> defined in /home/alice/src/foo.o
 // >>> referenced by bar.c:12 (/home/alice/src/bar.c:12)
 // >>>               /home/alice/src/bar.o:(.text+0x1)
-static std::string getLocation(InputSectionBase &S, const Symbol &Sym,
+static std::string getLocation(const InputSectionBase &S, const Symbol &Sym,
                                uint64_t Off) {
   std::string Msg = "\n>>> defined in ";
   if (Sym.File)
@@ -94,6 +94,11 @@ static std::string getLocation(InputSectionBase &S, const Symbol &Sym,
   if (!Src.empty())
     Msg += Src + "\n>>>               ";
   return Msg + S.getObjMsg(Off);
+}
+
+std::string lld::elf::getLocationMessage(const InputSectionBase &S, const Symbol &Sym,
+                               uint64_t Off) {
+  return getLocation(S, Sym, Off);
 }
 
 namespace {

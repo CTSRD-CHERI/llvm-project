@@ -89,7 +89,7 @@ static std::string createFileLineMsg(StringRef Path, unsigned Line) {
 
 template <class ELFT>
 static std::string getSrcMsgAux(ObjFile<ELFT> &File, const Symbol &Sym,
-                                InputSectionBase &Sec, uint64_t Offset) {
+                                const InputSectionBase &Sec, uint64_t Offset) {
   // In DWARF, functions and variables are stored to different places.
   // First, lookup a function for a given offset.
   if (Optional<DILineInfo> Info = File.getDILineInfo(&Sec, Offset))
@@ -104,7 +104,7 @@ static std::string getSrcMsgAux(ObjFile<ELFT> &File, const Symbol &Sym,
   return File.SourceFile;
 }
 
-std::string InputFile::getSrcMsg(const Symbol &Sym, InputSectionBase &Sec,
+std::string InputFile::getSrcMsg(const Symbol &Sym, const InputSectionBase &Sec,
                                  uint64_t Offset) {
   if (kind() != ObjKind)
     return "";
@@ -201,7 +201,7 @@ ObjFile<ELFT>::getVariableLoc(StringRef Name) {
 // Returns source line information for a given offset
 // using DWARF debug info.
 template <class ELFT>
-Optional<DILineInfo> ObjFile<ELFT>::getDILineInfo(InputSectionBase *S,
+Optional<DILineInfo> ObjFile<ELFT>::getDILineInfo(const InputSectionBase *S,
                                                   uint64_t Offset) {
   llvm::call_once(InitDwarfLine, [this]() { initializeDwarf(); });
 
