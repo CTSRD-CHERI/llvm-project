@@ -118,6 +118,7 @@ FUZZER_FLAG_INT(handle_xfsz, 1, "If 1, try to intercept SIGXFSZ.")
 FUZZER_FLAG_INT(handle_usr1, 1, "If 1, try to intercept SIGUSR1.")
 FUZZER_FLAG_INT(handle_usr2, 1, "If 1, try to intercept SIGUSR2.")
 FUZZER_FLAG_INT(handle_trap, 1, "If 1, try to intercept SIGTRAP.")
+FUZZER_FLAG_INT(handle_prot, 1, "If 1, try to intercept SIGPROT.")
 FUZZER_FLAG_INT(lazy_counters, 0, "If 1, a performance optimization is"
     "enabled for the 8bit inline counters. "
     "Requires that libFuzzer successfully installs its SEGV handler")

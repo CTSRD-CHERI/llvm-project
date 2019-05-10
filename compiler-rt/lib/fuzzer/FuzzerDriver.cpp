@@ -691,6 +691,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   Options.HandleUsr1 = Flags.handle_usr1;
   Options.HandleUsr2 = Flags.handle_usr2;
   Options.HandleTrap = Flags.handle_trap;
+  Options.HandleProt = Flags.handle_prot;
   SetSignalHandler(Options);
 
   std::atexit(Fuzzer::StaticExitCallback);
