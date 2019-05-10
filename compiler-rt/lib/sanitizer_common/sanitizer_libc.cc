@@ -46,6 +46,18 @@ int internal_memcmp(const void* s1, const void* s2, usize n) {
   return 0;
 }
 
+#ifdef __CHERI_PURE_CAPABILITY__
+extern "C" void *memcpy(void *dest, const void *src, unsigned long n);
+extern "C" void *memmove(void *dest, const void *src, unsigned long n);
+// For purecap we need to maintain tags in memcpy()/memmove() -> for now
+// just use the libc versions (since we only use libfuzzer and that can link libc)
+void *internal_memcpy(void *dest, const void *src, usize n) {
+  return memcpy(dest, src, n);
+}
+void *internal_memmove(void *dest, const void *src, usize n) {
+  return memmove(dest, src, n);
+}
+#else
 void *internal_memcpy(void *dest, const void *src, usize n) {
   char *d = (char*)dest;
   const char *s = (const char *)src;
@@ -70,6 +82,7 @@ void *internal_memmove(void *dest, const void *src, usize n) {
   }
   return dest;
 }
+#endif
 
 void *internal_memset(void* s, int c, usize n) {
   // Optimize for the most performance-critical case:
