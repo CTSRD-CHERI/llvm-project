@@ -38,6 +38,7 @@ void __msan_warning_noreturn();
 
 using __sanitizer::uptr;
 using __sanitizer::sptr;
+using __sanitizer::usize;
 using __sanitizer::uu64;
 using __sanitizer::uu32;
 using __sanitizer::uu16;
