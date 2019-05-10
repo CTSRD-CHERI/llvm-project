@@ -2168,11 +2168,16 @@ std::pair<unsigned, const TargetRegisterClass *>
 RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                                   StringRef Constraint,
                                                   MVT VT) const {
+  MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities()
+                                    : MVT();
+
   // First, see if this is a constraint that directly corresponds to a
   // RISCV register class.
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'r':
+      if (VT == CLenVT)
+        return std::make_pair(0U, &RISCV::GPCRRegClass);
       return std::make_pair(0U, &RISCV::GPRRegClass);
     default:
       break;
