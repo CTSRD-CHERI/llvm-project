@@ -171,7 +171,7 @@ int VSNPrintf(char *buff, int buff_length,
     switch (*cur) {
       case 'd': {
         dval = have_ll ? va_arg(args, s64)
-             : have_z ? va_arg(args, sptr)
+             : have_z ? va_arg(args, ssize)
              : va_arg(args, int);
         result += AppendSignedDecimal(&buff, buff_end, dval, width,
                                       pad_with_zero);
@@ -181,7 +181,7 @@ int VSNPrintf(char *buff, int buff_length,
       case 'x':
       case 'X': {
         uval = have_ll ? va_arg(args, u64)
-             : have_z ? va_arg(args, uptr)
+             : have_z ? va_arg(args, usize)
              : va_arg(args, unsigned);
         bool uppercase = (*cur == 'X');
         result += AppendUnsigned(&buff, buff_end, uval, (*cur == 'u') ? 10 : 16,
