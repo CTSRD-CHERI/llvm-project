@@ -77,6 +77,7 @@ public:
 protected:
   Tool *buildAssembler() const override;
   Tool *buildLinker() const override;
+  bool IsCheriPurecap = false;
 };
 
 } // end namespace toolchains

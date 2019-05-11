@@ -399,13 +399,17 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
                  const ArgList &Args)
     : Generic_ELF(D, Triple, Args) {
 
+  IsCheriPurecap =
+      Triple.getEnvironment() == llvm::Triple::CheriPurecap ||
+      (Triple.isMIPS() && tools::mips::hasMipsAbiArg(Args, "purecap"));
+
   // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
   // back to '/usr/lib' if it doesn't exist.
   if ((Triple.getArch() == llvm::Triple::x86 || Triple.isMIPS32() ||
        Triple.getArch() == llvm::Triple::ppc) &&
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
-  else if (Triple.isMIPS() && tools::mips::hasMipsAbiArg(Args, "purecap") &&
+  else if (IsCheriPurecap &&
            D.getVFS().exists(getDriver().SysRoot + "/usr/libcheri/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
@@ -413,8 +417,9 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
 }
 
 ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
-  if (getTriple().getOSMajorVersion() >= 10 ||
-      getTriple().getArch() == llvm::Triple::cheri)
+  // Always use libc++ for CHERI purecap
+  // TODO: always use libc++ for MIPS64?
+  if (getTriple().getOSMajorVersion() >= 10 || IsCheriPurecap)
     return ToolChain::CST_Libcxx;
   return ToolChain::CST_Libstdcxx;
 }
