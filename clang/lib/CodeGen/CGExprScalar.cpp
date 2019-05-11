@@ -3930,8 +3930,10 @@ Value *ScalarExprEmitter::EmitFixedPointBinOp(const BinOpInfo &op) {
 }
 
 Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
-  auto RHSExpr = cast<BinaryOperator>(op.E)->getRHS();
-  if (RHSExpr->getType()->isIntCapType()) {
+  auto RHSExpr = isa<BinaryOperator>(op.E)
+                     ? cast<BinaryOperator>(op.E)->getRHS()
+                     : nullptr;
+  if (RHSExpr && RHSExpr->getType()->isIntCapType()) {
     const bool IsAddrMode = CGF.CGM.getLangOpts().cheriUIntCapUsesAddr();
     // Subtraction of __intcap_t is ambiguous: could be pointer
     // increment/decrement or pointer difference

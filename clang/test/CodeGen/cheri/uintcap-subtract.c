@@ -1,6 +1,5 @@
-// RUN: %cheri_purecap_clang -cheri-uintcap=offset %s -S -emit-llvm -o /dev/null
-// RUN: %cheri_purecap_cc1 -verify=offset,expected -cheri-uintcap=offset %s -emit-llvm -o - -O2
-// RUN: %cheri_purecap_cc1 -verify=address,expected -cheri-uintcap=addr %s -emit-llvm -o - -O2
+// RUN: %cheri_purecap_cc1 -verify=offset,expected -cheri-uintcap=offset %s -emit-llvm -o /dev/null -O0
+// RUN: %cheri_purecap_cc1 -verify=address,expected -cheri-uintcap=addr %s -emit-llvm -o /dev/null -O0
 
 // Subtracting two __intcap_t values yields surprising results in offset mode.
 // In address mode the result is correct (but might be a tagged value since we
@@ -74,4 +73,9 @@ void test_pointers(char* ptr, __intcap_t intcap, ptrdiff_t ptrdiff) {
   ptr -= intcap;
   // offset-warning@-1{{subtracting '__intcap_t' from 'char * __capability' may yield an incorrect result if the '__intcap_t' value is derived from a pointer since it will only consider the capability offset}}}
   ptr -= ptrdiff;
+}
+
+
+__intcap_t test_unary() {
+  return -1;
 }
