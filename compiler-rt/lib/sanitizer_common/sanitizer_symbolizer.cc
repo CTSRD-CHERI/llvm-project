@@ -43,6 +43,7 @@ SymbolizedStack::SymbolizedStack() : next(nullptr), info() {}
 
 SymbolizedStack *SymbolizedStack::New(vaddr addr) {
   void *mem = InternalAlloc(sizeof(SymbolizedStack));
+  DCHECK(IsAligned(mem, sizeof(void*)));
   SymbolizedStack *res = new(mem) SymbolizedStack();
   res->info.address = addr;
   return res;

@@ -24,7 +24,7 @@ namespace __sanitizer {
 const char *PrimaryAllocatorName = "SizeClassAllocator";
 const char *SecondaryAllocatorName = "LargeMmapAllocator";
 
-#ifdef __CHERI_PURE_CAPABILITY__
+#if defined(__CHERI_PURE_CAPABILITY__)
 // Use the system malloc() to get bounded allocations
 #define SANITIZER_USE_MALLOC
 #endif
@@ -112,7 +112,7 @@ InternalAllocator *internal_allocator() {
 
 static void *RawInternalAlloc(usize size, InternalAllocatorCache *cache,
                               usize alignment) {
-  if (alignment == 0) alignment = 8;
+  if (alignment == 0) alignment = Max((usize)8, sizeof(void*));
   if (cache == 0) {
     SpinMutexLock l(&internal_allocator_cache_mu);
     return internal_allocator()->Allocate(&internal_allocator_cache, size,
@@ -123,7 +123,7 @@ static void *RawInternalAlloc(usize size, InternalAllocatorCache *cache,
 
 static void *RawInternalRealloc(void *ptr, usize size,
                                 InternalAllocatorCache *cache) {
-  usize alignment = 8;
+  usize alignment =  Max((usize)8, sizeof(void*));
   if (cache == 0) {
     SpinMutexLock l(&internal_allocator_cache_mu);
     return internal_allocator()->Reallocate(&internal_allocator_cache, ptr,
@@ -144,6 +144,19 @@ static void RawInternalFree(void *ptr, InternalAllocatorCache *cache) {
 
 const u64 kBlockMagic = 0x6A6CB03ABCEBC041ull;
 
+// TODO: should just use two u32 members to save some space
+struct InternalAllocMetaData {
+  u64 magic;
+  u64 offset_to_real_allocation;
+};
+
+static usize InteralAllocRequiredSize(usize requested_size, usize requested_align) {
+  // If alignment is zero, assume that we want the result to be at least sizeof(void*) aligned
+  if (requested_align == 0)
+    requested_align = Max((usize)8, sizeof(void*));
+  return requested_size + RoundUpTo(sizeof(InternalAllocMetaData), requested_align);
+}
+
 static void NORETURN ReportInternalAllocatorOutOfMemory(usize requested_size) {
   SetAllocatorOutOfMemory();
   Report("FATAL: %s: internal allocator is out of memory trying to allocate "
@@ -152,27 +165,43 @@ static void NORETURN ReportInternalAllocatorOutOfMemory(usize requested_size) {
 }
 
 void *InternalAlloc(usize size, InternalAllocatorCache *cache, usize alignment) {
-  if (size + sizeof(u64) < size)
+  usize real_size = InteralAllocRequiredSize(size, alignment);
+  usize difference = real_size - size;
+  if (real_size < size) // integer overflow
     return nullptr;
-  void *p = RawInternalAlloc(size + sizeof(u64), cache, alignment);
+  void *p = RawInternalAlloc(real_size, cache, alignment);
   if (UNLIKELY(!p))
-    ReportInternalAllocatorOutOfMemory(size + sizeof(u64));
-  ((u64*)p)[0] = kBlockMagic;
-  return (char*)p + sizeof(u64);
+    ReportInternalAllocatorOutOfMemory(real_size);
+  char* result = (char*)p + difference;
+  InternalAllocMetaData* metadata = ((InternalAllocMetaData*)result - 1);
+  DCHECK_GE((vaddr)metadata, (vaddr)p);
+  metadata->magic = kBlockMagic;
+  metadata->offset_to_real_allocation = difference;
+  DCHECK(IsAligned(result, alignment));
+  Report("%s: result=%p (real=%p), offset=%zd, req_align=%zd\n", __func__, result, p, difference, alignment);
+  return result;
 }
 
 void *InternalRealloc(void *addr, usize size, InternalAllocatorCache *cache) {
   if (!addr)
     return InternalAlloc(size, cache);
-  if (size + sizeof(u64) < size)
+  usize real_size = InteralAllocRequiredSize(size, 0);
+  if (real_size < size) // integer overflow
     return nullptr;
-  addr = (char*)addr - sizeof(u64);
-  size = size + sizeof(u64);
-  CHECK_EQ(kBlockMagic, ((u64*)addr)[0]);
-  void *p = RawInternalRealloc(addr, size, cache);
+  // Load the original metadata
+  InternalAllocMetaData* metadata = (InternalAllocMetaData*)addr - 1;
+  CHECK_EQ(kBlockMagic, metadata->magic);
+  // Must load this value now since it might be clobbered by realloc()
+  const usize offset_to_alloc = metadata->offset_to_real_allocation;
+  void *p = RawInternalRealloc((char*)addr - offset_to_alloc, real_size, cache);
   if (UNLIKELY(!p))
     ReportInternalAllocatorOutOfMemory(size);
-  return (char*)p + sizeof(u64);
+  // Check that the metadata is still valid after realloc():
+  char* result = (char*)p + offset_to_alloc;
+  metadata = (InternalAllocMetaData*)result - 1;
+  CHECK_EQ(kBlockMagic, metadata->magic);
+  Report("%s: result=%p (real=%p), offset=%zd\n", __func__, result, p, offset_to_alloc);
+  return result;
 }
 
 void *InternalCalloc(usize count, usize size, InternalAllocatorCache *cache) {
@@ -191,14 +220,15 @@ void *InternalCalloc(usize count, usize size, InternalAllocatorCache *cache) {
 void InternalFree(void *addr, InternalAllocatorCache *cache) {
   if (!addr)
     return;
-  addr = (char*)addr - sizeof(u64);
-  CHECK_EQ(kBlockMagic, ((u64*)addr)[0]);
-  ((u64*)addr)[0] = 0;
-  RawInternalFree(addr, cache);
+  InternalAllocMetaData* metadata = (InternalAllocMetaData*)addr - 1;
+  CHECK_EQ(kBlockMagic, metadata->magic);
+  char* real_addr = (char*)addr - metadata->offset_to_real_allocation;
+  Report("%s: addr=%p (real=%p), offset=%zd\n", __func__, addr, real_addr, metadata->offset_to_real_allocation);
+  RawInternalFree(real_addr, cache);
 }
 
 // LowLevelAllocator
-constexpr usize kLowLevelAllocatorDefaultAlignment = 8;
+constexpr usize kLowLevelAllocatorDefaultAlignment = sizeof(void*) > 8 ? sizeof(void*) : 8;
 static usize low_level_alloc_min_alignment = kLowLevelAllocatorDefaultAlignment;
 static LowLevelAllocateCallback low_level_alloc_callback;
 
