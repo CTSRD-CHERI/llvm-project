@@ -3942,23 +3942,25 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
     // if the LHS is an non-capability integer that was promoted to __intcap_t
     // since it will always yield an untagged capability with the correct value
     // TODO: should avoid the getaddr/setaddr calls in codegen for this case
+    QualType LhsRealType = LHSExpr->IgnoreImplicit()->getType();
     bool ShouldWarn =
-        op.Ty->isIntCapType() &&
-        (!IsAddrMode || LHSExpr->IgnoreImplicit()->getType()->isIntCapType());
+        op.Ty->isIntCapType() && (!IsAddrMode || LhsRealType->isIntCapType());
     QualType RhsRealType = RHSExpr->IgnoreImplicit()->getType();
     if (ShouldWarn && RhsRealType->isIntCapType()) {
-      CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
+      CGF.CGM.getDiags().Report(op.E->getExprLoc(),
                                 diag::warn_uintcap_add_subtract)
-          << op.Ty << /* subtraction */ 1 << IsAddrMode;
+          << /* subtraction */ 1 << RhsRealType << LhsRealType << IsAddrMode
+          << op.E->getSourceRange();
       CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
                                 diag::note_uintcap_subtract);
     }
     // In offset interpretation subtracting an __intcap_t from a pointer may
     // also yield the wrong result since only the offset is subtracted.
     if (!IsAddrMode && op.Ty->isPointerType() && RhsRealType->isIntCapType()) {
-      CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
+      CGF.CGM.getDiags().Report(op.E->getExprLoc(),
                                 diag::warn_ptr_uintcap_subtract_offset_mode)
-          << /* subtraction */ 1 << RhsRealType << op.Ty;
+          << /* subtraction */ 1 << RhsRealType << op.Ty
+          << op.E->getSourceRange();
     }
     // TODO: warn about inefficient code generation?
   }

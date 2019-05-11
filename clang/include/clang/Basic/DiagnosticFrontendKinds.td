@@ -264,10 +264,10 @@ def note_cheri_memintrin_misaligned_fixit : Note<
 
 // TODO: move these into a sensible warning group
 def warn_uintcap_add_subtract : Warning<
-  "%0 %select{addition|subtraction}1 may yield incorrect results if the values "
-  "are derived from pointers since it %select{will only consider the capability "
-  "offset|may result in an unintended tagged value}2; see "
-  "https://github.com/CTSRD-CHERI/llvm-project/wiki/intcap_t-arithmetic">,
+  "%select{adding|subtracting}0 %1 %select{to|from}0 %2 may yield incorrect results "
+  "if the %select{right|left}3-hand side is derived from a pointer since it "
+  "%select{will only consider the capability offset|may result in an unintended tagged value}3; "
+  "see https://github.com/CTSRD-CHERI/llvm-project/wiki/intcap_t-arithmetic">,
   InGroup<CHERICaps>, DefaultWarnNoWerror;
 def warn_ptr_uintcap_subtract_offset_mode : Warning<
   "%select{adding|subtracting}0 %1 %select{to|from}0 %2 may yield an incorrect "
