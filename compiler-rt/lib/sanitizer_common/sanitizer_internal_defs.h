@@ -217,6 +217,13 @@ typedef s32 ptrdiff;
 typedef unsigned long usize;
 typedef signed long ssize;
 
+#ifdef __CHERI_PURE_CAPABILITY__
+static_assert(sizeof(ptrdiff) == sizeof(__PTRDIFF_TYPE__), "");
+static_assert(sizeof(usize) == sizeof(__SIZE_TYPE__), "");
+static_assert(sizeof(uptr) == sizeof(__UINTPTR_TYPE__), "");
+static_assert(sizeof(sptr) == sizeof(__INTPTR_TYPE__), "");
+#endif
+
 // ----------- ATTENTION -------------
 // This header should NOT include any other headers to avoid portability issues.
 
