@@ -24,6 +24,11 @@ namespace __sanitizer {
 const char *PrimaryAllocatorName = "SizeClassAllocator";
 const char *SecondaryAllocatorName = "LargeMmapAllocator";
 
+#ifdef __CHERI_PURE_CAPABILITY__
+// Use the system malloc() to get bounded allocations
+#define SANITIZER_USE_MALLOC
+#endif
+
 // ThreadSanitizer for Go uses libc malloc/free.
 #if SANITIZER_GO || defined(SANITIZER_USE_MALLOC)
 # if SANITIZER_LINUX && !SANITIZER_ANDROID
