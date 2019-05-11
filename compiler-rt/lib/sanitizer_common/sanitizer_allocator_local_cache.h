@@ -204,10 +204,10 @@ struct SizeClassAllocator32LocalCache {
       Allocator::kUseSeparateSizeClassForBatch;
 
   struct PerClass {
-    uptr count;
-    uptr max_count;
-    uptr class_size;
-    uptr batch_class_id;
+    usize count;
+    usize max_count;
+    usize class_size;
+    usize batch_class_id;
     void *batch[2 * TransferBatch::kMaxNumCached];
   };
   PerClass per_class_[kNumClasses];
@@ -254,7 +254,7 @@ struct SizeClassAllocator32LocalCache {
   NOINLINE void Drain(PerClass *c, SizeClassAllocator *allocator,
                       uptr class_id) {
     const uptr count = Min(c->max_count / 2, c->count);
-    const uptr first_idx_to_drain = c->count - count;
+    const usize first_idx_to_drain = c->count - count;
     TransferBatch *b = CreateBatch(
         class_id, allocator, (TransferBatch *)c->batch[first_idx_to_drain]);
     // Failure to allocate a batch while releasing memory is non recoverable.

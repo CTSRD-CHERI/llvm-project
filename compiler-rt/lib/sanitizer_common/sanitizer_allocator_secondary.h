@@ -188,7 +188,7 @@ class LargeMmapAllocator {
     for (uptr i = 0; i < n_chunks_; i++) {
       uptr ch = reinterpret_cast<uptr>(chunks[i]);
       if (p < ch) continue;  // p is at left to this chunk, skip it.
-      if (p - ch < p - nearest_chunk)
+      if ((char*)p - (char*)ch < (char*)p - (char*)nearest_chunk)
         nearest_chunk = ch;
     }
     if (!nearest_chunk)
@@ -292,9 +292,9 @@ class LargeMmapAllocator {
  private:
   struct Header {
     uptr map_beg;
-    uptr map_size;
-    uptr size;
-    uptr chunk_idx;
+    usize map_size;
+    usize size;
+    usize chunk_idx;
   };
 
   Header *GetHeader(uptr p) {
@@ -314,13 +314,13 @@ class LargeMmapAllocator {
     return RoundUpTo(size, page_size_) + page_size_;
   }
 
-  uptr page_size_;
+  usize page_size_;
   Header **chunks_;
   PtrArrayT ptr_array_;
-  uptr n_chunks_;
+  usize n_chunks_;
   bool chunks_sorted_;
   struct Stats {
-    uptr n_allocs, n_frees, currently_allocated, max_allocated, by_size_log[64];
+    usize n_allocs, n_frees, currently_allocated, max_allocated, by_size_log[64];
   } stats;
   StaticSpinMutex mutex_;
 };
