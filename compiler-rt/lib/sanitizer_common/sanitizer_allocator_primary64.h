@@ -195,7 +195,7 @@ class SizeClassAllocator64 {
     return nullptr;
   }
 
-  uptr GetActuallyAllocatedSize(void *p) {
+  usize GetActuallyAllocatedSize(void *p) {
     CHECK(PointerIsMine(p));
     return ClassIdToSize(GetSizeClass(p));
   }
@@ -293,7 +293,7 @@ class SizeClassAllocator64 {
   void ForEachChunk(ForEachChunkCallback callback, void *arg) {
     for (uptr class_id = 1; class_id < kNumClasses; class_id++) {
       RegionInfo *region = GetRegionInfo(class_id);
-      uptr chunk_size = ClassIdToSize(class_id);
+      usize chunk_size = ClassIdToSize(class_id);
       uptr region_beg = SpaceBeg() + class_id * kRegionSize;
       uptr region_allocated_user_size =
           AddressSpaceView::Load(region)->allocated_user;
@@ -306,11 +306,11 @@ class SizeClassAllocator64 {
     }
   }
 
-  static uptr ClassIdToSize(uptr class_id) {
+  static usize ClassIdToSize(uptr class_id) {
     return SizeClassMap::Size(class_id);
   }
 
-  static uptr AdditionalSize() {
+  static usize AdditionalSize() {
     return RoundUpTo(sizeof(RegionInfo) * kNumClassesRounded,
                      GetPageSizeCached());
   }
