@@ -114,8 +114,9 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
 
     // Get stacksize from rlimit, but clip it so that it does not overlap
     // with other mappings.
-    uptr stacksize = rl.rlim_cur;
-    if (stacksize > segment.end - prev_end) stacksize = segment.end - prev_end;
+    usize stacksize = rl.rlim_cur;
+    if (stacksize > (char *)segment.end - (char *)prev_end)
+      stacksize = (char *)segment.end - (char *)prev_end;
     // When running with unlimited stack size, we still want to set some limit.
     // The unlimited stack size is caused by 'ulimit -s unlimited'.
     // Also, for some reason, GNU make spawns subprocesses with unlimited stack.
@@ -404,7 +405,7 @@ static void **ThreadSelfSegbase() {
                 rdhwr %0,$29;\
                 .set pop" : "=r" (thread_pointer));
 #endif
-  segbase = (void **)(thread_pointer - kTlsTcbOffset - kTlsTcbSize);
+  segbase = (void **)((char *)thread_pointer - kTlsTcbOffset - kTlsTcbSize);
 # else
 #  error "unsupported CPU arch"
 # endif
@@ -554,7 +555,7 @@ void GetThreadStackAndTls(bool main, uptr *stk_addr, usize *stk_size,
   uptr stack_top, stack_bottom;
   GetThreadStackTopAndBottom(main, &stack_top, &stack_bottom);
   *stk_addr = stack_bottom;
-  *stk_size = stack_top - stack_bottom;
+  *stk_size = (char *)stack_top - (char *)stack_bottom;
 
   if (!main) {
     // If stack and tls intersect, make them non-intersecting.

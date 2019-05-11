@@ -426,12 +426,30 @@ INLINE uptr RoundUpTo(uptr p, usize boundary) {
   return (p + boundary - 1) & ~(boundary - 1);
 #endif
 }
+template <typename T>
+INLINE T *RoundUpTo(T *p, usize boundary) {
+  RAW_CHECK(IsPowerOfTwo(boundary));
+#if __has_builtin(__builtin_align_up)
+  return __builtin_align_up(p, boundary);
+#else
+  return (T *)RoundUpTo((uptr)p, boundary);
+#endif
+}
 
 INLINE uptr RoundDownTo(uptr x, usize boundary) {
 #if __has_builtin(__builtin_align_down)
   return __builtin_align_down(x, boundary);
 #else
   return x & ~(boundary - 1);
+#endif
+}
+template <typename T>
+INLINE T *RoundDownTo(T *p, usize boundary) {
+  RAW_CHECK(IsPowerOfTwo(boundary));
+#if __has_builtin(__builtin_align_down)
+  return __builtin_align_down(p, boundary);
+#else
+  return (T *)RoundDownTo((uptr)p, boundary);
 #endif
 }
 

@@ -58,14 +58,13 @@ uptr GetThreadSelf() {
 
 void ReleaseMemoryPagesToOS(uptr beg, uptr end) {
   usize page_size = GetPageSizeCached();
-  uptr beg_aligned = RoundUpTo(beg, page_size);
-  uptr end_aligned = RoundDownTo(end, page_size);
+  char *beg_aligned = (char *)RoundUpTo(beg, page_size);
+  char *end_aligned = (char *)RoundDownTo(end, page_size);
   if (beg_aligned < end_aligned)
     // In the default Solaris compilation environment, madvise() is declared
     // to take a caddr_t arg; casting it to void * results in an invalid
     // conversion error, so use char * instead.
-    madvise((char *)beg_aligned, end_aligned - beg_aligned,
-            SANITIZER_MADVISE_DONTNEED);
+    madvise(beg_aligned, end_aligned - beg_aligned, SANITIZER_MADVISE_DONTNEED);
 }
 
 bool NoHugePagesInRegion(uptr addr, usize size) {

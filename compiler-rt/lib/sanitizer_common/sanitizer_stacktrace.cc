@@ -120,10 +120,10 @@ void BufferedStackTrace::PopStackFrames(uptr count) {
   }
 }
 
-static uptr Distance(uptr a, uptr b) { return a < b ? b - a : a - b; }
+static vaddr Distance(vaddr a, vaddr b) { return a < b ? b - a : a - b; }
 
-uptr BufferedStackTrace::LocatePcInTrace(uptr pc) {
-  uptr best = 0;
+vaddr BufferedStackTrace::LocatePcInTrace(vaddr pc) {
+  vaddr best = 0;
   for (uptr i = 1; i < size; ++i) {
     if (Distance(trace[i], pc) < Distance(trace[best], pc)) best = i;
   }

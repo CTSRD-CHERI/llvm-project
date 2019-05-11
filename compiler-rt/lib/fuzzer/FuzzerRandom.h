@@ -28,7 +28,7 @@ class Random : public std::minstd_rand {
   size_t operator()(size_t n) { return n ? Rand() % n : 0; }
   intptr_t operator()(intptr_t From, intptr_t To) {
     assert(From < To);
-    intptr_t RangeSize = To - From + 1;
+    size_t RangeSize = (char *)To - (char *)From + 1;
     return operator()(RangeSize) + From;
   }
 };

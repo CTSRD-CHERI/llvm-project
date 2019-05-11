@@ -120,7 +120,7 @@ static void handleAlignmentAssumptionImpl(AlignmentAssumptionData *Data,
 
   ScopedReport R(Opts, Loc, ET);
 
-  vaddr RealPointerAddr = Pointer - Offset;
+  vaddr RealPointerAddr = (char *)Pointer - (char *)Offset;
   usize LSB = LeastSignificantSetBitIndex(RealPointerAddr);
   usize ActualAlignment = usize(1) << LSB;
 

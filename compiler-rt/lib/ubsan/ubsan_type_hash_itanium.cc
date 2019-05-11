@@ -115,7 +115,7 @@ static __ubsan::HashValue *getTypeCacheHashTableBucket(__ubsan::HashValue V) {
 /// offset \p Offset.
 static bool isDerivedFromAtOffset(const abi::__class_type_info *Derived,
                                   const abi::__class_type_info *Base,
-                                  sptr Offset) {
+                                  ptrdiff Offset) {
   if (Derived->__type_name == Base->__type_name ||
       (SANITIZER_NON_UNIQUE_TYPEINFO &&
        Derived->__type_name[0] != '*' &&
@@ -136,8 +136,8 @@ static bool isDerivedFromAtOffset(const abi::__class_type_info *Derived,
   for (unsigned int base = 0; base != VTI->base_count; ++base) {
     // FIXME: Curtail the recursion if this base can't possibly contain the
     //        given offset.
-    sptr OffsetHere = VTI->base_info[base].__offset_flags >>
-                      abi::__base_class_type_info::__offset_shift;
+    ptrdiff OffsetHere = VTI->base_info[base].__offset_flags >>
+                         abi::__base_class_type_info::__offset_shift;
     if (VTI->base_info[base].__offset_flags &
           abi::__base_class_type_info::__virtual_mask)
       // For now, just punt on virtual bases and say 'yes'.
@@ -170,8 +170,8 @@ static const abi::__class_type_info *findBaseAtOffset(
     return nullptr;
 
   for (unsigned int base = 0; base != VTI->base_count; ++base) {
-    sptr OffsetHere = VTI->base_info[base].__offset_flags >>
-                      abi::__base_class_type_info::__offset_shift;
+    ptrdiff OffsetHere = VTI->base_info[base].__offset_flags >>
+                         abi::__base_class_type_info::__offset_shift;
     if (VTI->base_info[base].__offset_flags &
           abi::__base_class_type_info::__virtual_mask)
       // FIXME: Can't handle virtual bases yet.

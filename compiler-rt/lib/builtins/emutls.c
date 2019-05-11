@@ -346,12 +346,12 @@ static __inline void emutls_check_array_set_size(emutls_address_array *array,
 /* Returns the new 'data' array size, number of elements,
  * which must be no smaller than the given index.
  */
-static __inline uintptr_t emutls_new_data_array_size(uintptr_t index) {
-   /* Need to allocate emutls_address_array with extra slots
-    * to store the header.
-    * Round up the emutls_address_array size to multiple of 16.
-    */
-    uintptr_t header_words = sizeof(emutls_address_array) / sizeof(void *);
+static __inline size_t emutls_new_data_array_size(size_t index) {
+  /* Need to allocate emutls_address_array with extra slots
+   * to store the header.
+   * Round up the emutls_address_array size to multiple of 16.
+   */
+  size_t header_words = sizeof(emutls_address_array) / sizeof(void *);
 #if __has_builtin(__builtin_align_down)
     return __builtin_align_up(index + header_words, 16) - header_words;
 #else
@@ -381,13 +381,13 @@ emutls_get_address_array(uintptr_t index) {
         }
         emutls_check_array_set_size(array, new_size);
     } else if (index > array->size) {
-        uintptr_t orig_size = array->size;
-        uintptr_t new_size = emutls_new_data_array_size(index);
-        array = (emutls_address_array*) realloc(array, emutls_asize(new_size));
-        if (array)
-            memset(array->data + orig_size, 0,
-                   (new_size - orig_size) * sizeof(void*));
-        emutls_check_array_set_size(array, new_size);
+      size_t orig_size = array->size;
+      size_t new_size = emutls_new_data_array_size(index);
+      array = (emutls_address_array *)realloc(array, emutls_asize(new_size));
+      if (array)
+        memset(array->data + orig_size, 0,
+               (new_size - orig_size) * sizeof(void *));
+      emutls_check_array_set_size(array, new_size);
     }
     return array;
 }

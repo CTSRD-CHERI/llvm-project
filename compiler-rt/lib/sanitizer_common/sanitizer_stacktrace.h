@@ -135,7 +135,7 @@ struct BufferedStackTrace : public StackTrace {
   void UnwindSlow(uptr pc, void *context, u32 max_depth);
 
   void PopStackFrames(uptr count);
-  uptr LocatePcInTrace(uptr pc);
+  vaddr LocatePcInTrace(vaddr pc);
 
   BufferedStackTrace(const BufferedStackTrace &) = delete;
   void operator=(const BufferedStackTrace &) = delete;

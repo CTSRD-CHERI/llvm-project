@@ -22,13 +22,13 @@ namespace __sanitizer {
 // is a pointer to a struct with two words in it:
 struct TlsGetAddrParam {
   uptr dso_id;
-  uptr offset;
+  usize offset;
 };
 
 // Glibc starting from 2.19 allocates tls using __signal_safe_memalign,
 // which has such header.
 struct Glibc_2_19_tls_header {
-  uptr size;
+  usize size;
   uptr start;
 };
 
@@ -81,9 +81,9 @@ void DTLS_Destroy() {
 // This is glibc's TLS_DTV_OFFSET:
 // "Dynamic thread vector pointers point 0x8000 past the start of each
 //  TLS block."
-static const uptr kDtvOffset = 0x8000;
+static const usize kDtvOffset = 0x8000;
 #else
-static const uptr kDtvOffset = 0;
+static const usize kDtvOffset = 0;
 #endif
 
 DTLS::DTV *DTLS_on_tls_get_addr(void *arg_void, void *res,

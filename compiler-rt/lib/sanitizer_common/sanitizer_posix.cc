@@ -92,11 +92,12 @@ void *MmapAlignedOrDieOnFatalError(usize size, usize alignment,
   uptr res = map_res;
   if (!IsAligned(res, alignment)) {
     res = RoundUpTo(map_res, alignment);
-    UnmapOrDie((void*)map_res, res - map_res);
+    // FIXME: this should not do a csetaddr
+    UnmapOrDie((void *)map_res, (char *)res - (char *)map_res);
   }
   uptr end = res + size;
   if (end != map_end)
-    UnmapOrDie((void*)end, map_end - end);
+    UnmapOrDie((void *)end, (char *)map_end - (char *)end);
   return (void*)res;
 }
 

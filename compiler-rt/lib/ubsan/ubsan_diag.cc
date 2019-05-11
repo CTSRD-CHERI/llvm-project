@@ -243,11 +243,11 @@ static Range *upperBound(MemoryLocation Loc, Range *Ranges,
   return Best;
 }
 
-static inline uptr subtractNoOverflow(uptr LHS, uptr RHS) {
+static inline uptr subtractNoOverflow(uptr LHS, ptrdiff RHS) {
   return (LHS < RHS) ? 0 : LHS - RHS;
 }
 
-static inline uptr addNoOverflow(uptr LHS, uptr RHS) {
+static inline uptr addNoOverflow(uptr LHS, ptrdiff RHS) {
   const uptr Limit = (uptr)-1;
   return (LHS > Limit - RHS) ? Limit : LHS + RHS;
 }
@@ -268,11 +268,11 @@ static void PrintMemorySnippet(const Decorator &Decor, MemoryLocation Loc,
 
   // If we have too many interesting bytes, prefer to show bytes after Loc.
   const unsigned BytesToShow = 32;
-  if (Max - Min > BytesToShow)
+  if ((char*)Max - (char*)Min > BytesToShow)
     Min = __sanitizer::Min(Max - BytesToShow, OrigMin);
   Max = addNoOverflow(Min, BytesToShow);
 
-  if (!IsAccessibleMemoryRange(Min, Max - Min)) {
+  if (!IsAccessibleMemoryRange(Min, (char*)Max - (char*)Min)) {
     Printf("<memory cannot be printed>\n");
     return;
   }
