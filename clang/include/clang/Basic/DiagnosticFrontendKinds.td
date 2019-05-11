@@ -262,6 +262,22 @@ def note_cheri_memintrin_misaligned_fixit : Note<
   " be used to maintain tag bits). For more information see"
   " https://github.com/CTSRD-CHERI/llvm-project/wiki/Unaligned-capability-copies">;
 
+// TODO: move these into a sensible warning group
+def warn_uintcap_add_subtract : Warning<
+  "%0 %select{addition|subtraction}1 may yield incorrect results if the values "
+  "are derived from pointers since it %select{will only consider the capability "
+  "offset|may result in an unintended tagged value}2; see "
+  "https://github.com/CTSRD-CHERI/llvm-project/wiki/intcap_t-arithmetic">,
+  InGroup<CHERICaps>, DefaultWarnNoWerror;
+def warn_ptr_uintcap_subtract_offset_mode : Warning<
+  "%select{adding|subtracting}0 %1 %select{to|from}0 %2 may yield an incorrect "
+  "result if the %1 value is derived from a pointer since it will only consider "
+  "the capability offset; see https://github.com/CTSRD-CHERI/llvm-project/wiki/intcap_t-arithmetic">,
+  InGroup<CHERICaps>, DefaultWarnNoWerror;
+def note_uintcap_subtract: Note<"in order to perform pointer arithmetic, "
+  "cast the right-hand operand to an integer type; if you intended to compute "
+  "the difference between the addresses cast both operands to char*">;
+
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;
 def err_invalid_vfs_overlay : Error<

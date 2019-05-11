@@ -23,6 +23,7 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/CodeGenOptions.h"
+#include "clang/Basic/DiagnosticFrontend.h"
 #include "clang/Basic/FixedPoint.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Sema/SemaDiagnostic.h"
@@ -3929,6 +3930,37 @@ Value *ScalarExprEmitter::EmitFixedPointBinOp(const BinOpInfo &op) {
 }
 
 Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
+  auto RHSExpr = cast<BinaryOperator>(op.E)->getRHS();
+  if (RHSExpr->getType()->isIntCapType()) {
+    const bool IsAddrMode = CGF.CGM.getLangOpts().cheriUIntCapUsesAddr();
+    // Subtraction of __intcap_t is ambiguous: could be pointer
+    // increment/decrement or pointer difference
+    auto LHSExpr = cast<BinaryOperator>(op.E)->getLHS();
+    // However, we can avoid emitting this warning in address interpretation
+    // if the LHS is an non-capability integer that was promoted to __intcap_t
+    // since it will always yield an untagged capability with the correct value
+    // TODO: should avoid the getaddr/setaddr calls in codegen for this case
+    bool ShouldWarn =
+        op.Ty->isIntCapType() &&
+        (!IsAddrMode || LHSExpr->IgnoreImplicit()->getType()->isIntCapType());
+    QualType RhsRealType = RHSExpr->IgnoreImplicit()->getType();
+    if (ShouldWarn && RhsRealType->isIntCapType()) {
+      CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
+                                diag::warn_uintcap_add_subtract)
+          << op.Ty << /* subtraction */ 1 << IsAddrMode;
+      CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
+                                diag::note_uintcap_subtract);
+    }
+    // In offset interpretation subtracting an __intcap_t from a pointer may
+    // also yield the wrong result since only the offset is subtracted.
+    if (!IsAddrMode && op.Ty->isPointerType() && RhsRealType->isIntCapType()) {
+      CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
+                                diag::warn_ptr_uintcap_subtract_offset_mode)
+          << /* subtraction */ 1 << RhsRealType << op.Ty;
+    }
+    // TODO: warn about inefficient code generation?
+  }
+
   // The LHS is always a pointer if either side is.
   if (!op.LHS->getType()->isPointerTy()) {
     if (op.Ty->isSignedIntegerOrEnumerationType()) {
