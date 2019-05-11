@@ -867,6 +867,7 @@ public:
     if (!(E->getType()->isCHERICapabilityType(CGF.getContext()) &&
           !E->getType()->isPointerType()))
       return EmitAdd(BOP);
+    // FIXME: should not need this!
     Value *Base = BOP.LHS;
     BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
     BOP.RHS = GetBinOpVal(BOP, BOP.RHS);
@@ -3237,7 +3238,30 @@ BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
   TestAndClearIgnoreResultAssign();
   BinOpInfo Result;
   Result.LHS = Visit(E->getLHS());
+#ifdef NOTYET
+  auto RHSExpr = E->getRHS();
+  bool PromoteRHSToPtrDiff = false;
+  if (RHSExpr->getType()->isIntCapType()) {
+    // For arithmetic on __intcap_t we ignore implicit promotions to intcap_t
+    // on the RHS since we have to convert it back to an i64 anyway:
+    if (auto CE = dyn_cast<ImplicitCastExpr>(RHSExpr->IgnoreParens())) {
+      if (CE->getCastKind() == CK_IntegralCast &&
+          !CE->getSubExpr()->getType()->isIntCapType()) {
+        RHSExpr = CE->getSubExpr();
+        PromoteRHSToPtrDiff = true;
+      }
+    }
+  }
+  Result.RHS = Visit(RHSExpr);
+  if (PromoteRHSToPtrDiff) {
+    // Ensure that the RHS is still promoted to the correct type:
+    Result.RHS = CGF.Builder.CreateIntCast(Result.RHS, CGF.PtrDiffTy,
+                                           E->getType()->isSignedIntegerType(),
+                                           "promote");
+  }
+#else
   Result.RHS = Visit(E->getRHS());
+#endif
   Result.Ty  = E->getType();
   Result.Opcode = E->getOpcode();
   Result.FPFeatures = E->getFPFeatures();
@@ -3660,7 +3684,7 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
 
   const PointerType *pointerType
     = pointerOperand->getType()->getAs<PointerType>();
-  if (!pointerType) {
+  if (!pointerType && !pointerOperand->getType()->isIntCapType()) {
     QualType objectType = pointerOperand->getType()
                                         ->castAs<ObjCObjectPointerType>()
                                         ->getPointeeType();
