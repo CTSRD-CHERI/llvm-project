@@ -29,6 +29,8 @@ const char *SecondaryAllocatorName = "LargeMmapAllocator";
 #define SANITIZER_USE_MALLOC
 #endif
 
+static constexpr usize InternalDefaultAlign = Max((usize)8, sizeof(void*));
+
 // ThreadSanitizer for Go uses libc malloc/free.
 #if SANITIZER_GO || defined(SANITIZER_USE_MALLOC)
 # if SANITIZER_LINUX && !SANITIZER_ANDROID
@@ -112,7 +114,7 @@ InternalAllocator *internal_allocator() {
 
 static void *RawInternalAlloc(usize size, InternalAllocatorCache *cache,
                               usize alignment) {
-  if (alignment == 0) alignment = Max((usize)8, sizeof(void*));
+  if (alignment == 0) alignment = InternalDefaultAlign;
   if (cache == 0) {
     SpinMutexLock l(&internal_allocator_cache_mu);
     return internal_allocator()->Allocate(&internal_allocator_cache, size,
@@ -123,7 +125,7 @@ static void *RawInternalAlloc(usize size, InternalAllocatorCache *cache,
 
 static void *RawInternalRealloc(void *ptr, usize size,
                                 InternalAllocatorCache *cache) {
-  usize alignment =  Max((usize)8, sizeof(void*));
+  usize alignment = InternalDefaultAlign;
   if (cache == 0) {
     SpinMutexLock l(&internal_allocator_cache_mu);
     return internal_allocator()->Reallocate(&internal_allocator_cache, ptr,
@@ -153,7 +155,7 @@ struct InternalAllocMetaData {
 static usize InteralAllocRequiredSize(usize requested_size, usize requested_align) {
   // If alignment is zero, assume that we want the result to be at least sizeof(void*) aligned
   if (requested_align == 0)
-    requested_align = Max((usize)8, sizeof(void*));
+    requested_align = InternalDefaultAlign;
   return requested_size + RoundUpTo(sizeof(InternalAllocMetaData), requested_align);
 }
 
@@ -177,8 +179,8 @@ void *InternalAlloc(usize size, InternalAllocatorCache *cache, usize alignment) 
   DCHECK_GE((vaddr)metadata, (vaddr)p);
   metadata->magic = kBlockMagic;
   metadata->offset_to_real_allocation = difference;
-  DCHECK(IsAligned(result, alignment));
-  Report("%s: result=%p (real=%p), offset=%zd, req_align=%zd\n", __func__, result, p, difference, alignment);
+  // Report("%s: result=%p (real=%p), offset=%zd, req_align=%zd\n", __func__, result, p, difference, alignment);
+  DCHECK(IsAligned(result, Max(alignment, InternalDefaultAlign)));
   return result;
 }
 
@@ -200,7 +202,7 @@ void *InternalRealloc(void *addr, usize size, InternalAllocatorCache *cache) {
   char* result = (char*)p + offset_to_alloc;
   metadata = (InternalAllocMetaData*)result - 1;
   CHECK_EQ(kBlockMagic, metadata->magic);
-  Report("%s: result=%p (real=%p), offset=%zd\n", __func__, result, p, offset_to_alloc);
+  // Report("%s: result=%p (real=%p), offset=%zd\n", __func__, result, p, offset_to_alloc);
   return result;
 }
 
@@ -223,12 +225,12 @@ void InternalFree(void *addr, InternalAllocatorCache *cache) {
   InternalAllocMetaData* metadata = (InternalAllocMetaData*)addr - 1;
   CHECK_EQ(kBlockMagic, metadata->magic);
   char* real_addr = (char*)addr - metadata->offset_to_real_allocation;
-  Report("%s: addr=%p (real=%p), offset=%zd\n", __func__, addr, real_addr, metadata->offset_to_real_allocation);
+  // Report("%s: addr=%p (real=%p), offset=%zd\n", __func__, addr, real_addr, metadata->offset_to_real_allocation);
   RawInternalFree(real_addr, cache);
 }
 
 // LowLevelAllocator
-constexpr usize kLowLevelAllocatorDefaultAlignment = sizeof(void*) > 8 ? sizeof(void*) : 8;
+constexpr usize kLowLevelAllocatorDefaultAlignment = InternalDefaultAlign;
 static usize low_level_alloc_min_alignment = kLowLevelAllocatorDefaultAlignment;
 static LowLevelAllocateCallback low_level_alloc_callback;
 
