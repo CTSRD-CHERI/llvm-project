@@ -3006,7 +3006,15 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //       and the types are compatible.
 
   // Use getRealReferenceType() because getType() only returns T for T&
-  const QualType SrcTy = SubExpr->getRealReferenceType(Context);
+  const QualType SrcTy = SubExpr->getRealReferenceType(Context, false);
+  // Dependent types not yet handled, would probably need a new AST node to
+  // differentiate from normal C-style casts
+  if (SrcTy->isDependentType()) {
+    Diag(KeywordLoc, diag::err_cheri_to_from_cap_not_supported_in_templates)
+        << IsToCap << SrcTy;
+    return ExprError();
+  }
+
   // We don't included __uintcap_t here since it should be be allowed to use
   // a __cheri_{to,from}cap on __uintcap_t
   const bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, false);
@@ -3129,13 +3137,16 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
   CastKind Kind =
       IsOffsetCast ? CK_CHERICapabilityToOffset : CK_CHERICapabilityToAddress;
 
-  if (SubExpr->getType()->isDependentType()) {
-    return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
-                                  nullptr, TSInfo, LParenLoc, RParenLoc);
-  }
   // Check the source type
   // Use getRealReferenceType() because getType() only returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType(Context, false);
+  // Dependent types not yet handled, would probably need a new AST node to
+  // differentiate from normal C-style casts
+  if (SrcTy->isDependentType()) {
+    Diag(KeywordLoc, diag::err_cheri_addr_offset_not_supported_in_templates)
+        << IsOffsetCast << SrcTy;
+    return ExprError();
+  }
   // __cheri_offset and __cheri_addr is valid for __uintcap_t as well
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, true);
   if (!SrcIsCap) {
