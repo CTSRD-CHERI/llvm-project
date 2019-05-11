@@ -38,9 +38,9 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
   // This should not be a problem in most cases since the value will generally be a compile-time constant so the
   // LLVM optimizer can eliminate the select.
   if ((mtx & (__uintcap_t)1) == (__uintcap_t)1) { // locked flag is set
-    // expected-warning@-1{{using bitwise and on capability types may give surprising results}}
+    // expected-warning@-1{{using bitwise and on a capability type may give surprising results}}
     mtx &= ~1;                                    // clear locked flag flag
-    // expected-warning@-1{{using bitwise and on capability types may give surprising results}}
+    // expected-warning@-1{{using bitwise and on a capability type may give surprising results}}
     do_unlock();
   }
   return mtx;
@@ -178,9 +178,9 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 //
 __uintcap_t can_fold_the_bitand_provenance_check(__uintcap_t mtx) {
   if ((mtx & (__uintcap_t)1) == (__uintcap_t)1) {
-    // expected-warning@-1{{using bitwise and on capability types may give surprising results}}
+    // expected-warning@-1{{using bitwise and on a capability type may give surprising results}}
     mtx &= ~1;
-    // expected-warning@-1{{using bitwise and on capability types may give surprising results}}
+    // expected-warning@-1{{using bitwise and on a capability type may give surprising results}}
     do_unlock();
   }
   return mtx;

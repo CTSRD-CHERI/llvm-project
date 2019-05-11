@@ -6058,7 +6058,7 @@ def err_typecheck_convert_ptr_to_cap_unrelated_type: Error<"cannot implicitly "
   "unrelated capability type %1">;
 
 def warn_uintcap_bitwise_and : Warning<
-  "using bitwise and on capability types may give surprising results; "
+  "using bitwise and on a capability type may give surprising results; "
   "if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); "
   "if you are operating on integer values only consider using size_t/vaddr_t; "
   "if you are attempting to store data in the low pointer bits use the "

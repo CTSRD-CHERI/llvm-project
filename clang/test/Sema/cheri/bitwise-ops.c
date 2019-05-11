@@ -91,13 +91,13 @@ void check_and(void *ptr, uintptr_t cap, int i) {
   // i is promoted to __intcap_t here so the warning triggers:
   uintptr_t int_and_cap = i & cap;   // expected-warning{{binary expression on capability and non-capability types: 'int' and 'uintptr_t' (aka '__uintcap_t')}}
   // Verify the full message once:
-  uintptr_t cap_and_int = cap & i;   // bitand-warning{{using bitwise and on capability types may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/vaddr_t; if you are attempting to store data in the low pointer bits use the cheri_{get,set,clear}_low_ptr_bits() macros.}}
-  uintptr_t cap_and_cap = cap & cap; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  uintptr_t cap_and_int = cap & i;   // bitand-warning{{using bitwise and on a capability type may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/vaddr_t; if you are attempting to store data in the low pointer bits use the cheri_{get,set,clear}_low_ptr_bits() macros.}}
+  uintptr_t cap_and_cap = cap & cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   i &= i;
   // FIXME: shouldn't this really be an invalid operand error?
   i &= cap;   // expected-warning{{binary expression on capability and non-capability types}}
-  cap &= i;   // bitand-warning{{using bitwise and on capability types may give surprising results;}}
-  cap &= cap; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  cap &= i;   // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
+  cap &= cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 }
 
 // Bitwise or operations just operate on the offset field and this behaviour should always be fine -> no warnings
@@ -122,32 +122,32 @@ typedef _Bool bool;
 
 void set_low_pointer_bits(void *ptr, uintptr_t cap) {
   bool aligned = ptr & 7;     // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
-  bool aligned_bad = cap & 7; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  bool aligned_bad = cap & 7; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
   // store flag in low pointer bits
   uintptr_t with_flags = cap | 3; // bitwise or works as expected
-  if ((with_flags & 3) == 3) {    // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  if ((with_flags & 3) == 3) {    // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
     // clear the flags again:
-    with_flags &= ~3; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+    with_flags &= ~3; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   }
 
   ptr &= 3; // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
-  cap &= 3; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  cap &= 3; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
   ptr &= ~3; // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
-  cap &= ~3; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  cap &= ~3; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
   ptr &= cap; // expected-error{{invalid operands to binary expression ('void * __capability' and 'uintptr_t' (aka '__uintcap_t'))}}
-  cap &= cap; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  cap &= cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
   ptr &= ~cap; // expected-error{{invalid operands to binary expression ('void * __capability' and 'uintptr_t' (aka '__uintcap_t'))}}
-  cap &= ~cap; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  cap &= ~cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 }
 
 // verify that we warn for the QMutexLocker issue:
 void do_unlock(void);
 void this_broke_qmutex(uintptr_t mtx) {
-  if ((mtx & (uintptr_t)1) == (uintptr_t)1) { // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  if ((mtx & (uintptr_t)1) == (uintptr_t)1) { // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
     do_unlock();
   }
 }
@@ -163,11 +163,11 @@ void check_without_macros(void *mtx) {
   u |= 1;
   // Bug: will always be false
   // TODO: we should also warn about always false here
-  if ((u & 1) == 1) { // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  if ((u & 1) == 1) { // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
     do_unlock();
   }
   // clear the bit again, warning should trigger
-  u &= ~1; // bitand-warning{{using bitwise and on capability types may give surprising results;}}
+  u &= ~1; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 }
 
 void check_with_macros(void *mtx) {
@@ -206,4 +206,22 @@ void check_bad_macro_values(void *mtx) {
   if (cheri_clear_low_ptr_bits(u, 3) == 1) {
     do_unlock();
   }
+}
+
+
+int check_without_runtime_behaviour(__uintcap_t cap1, __uintcap_t cap2) {
+  int x1 =
+    (cap1 ^ cap2) +  // offset-warning{{using xor on a capability type}}
+    (cap1 & cap2) +  // bitand-warning{{using bitwise and on a capability type}}
+    (cap1 >> cap2) + // offset-warning{{using shifts on a capability type}}
+    (cap1 << cap2) + // offset-warning{{using shifts on a capability type}}
+    (cap1 | cap2);
+
+  // No warnings here since the code is not emitted for sizeof()
+  return x1 +
+    sizeof(cap1 ^ cap2) +
+    sizeof(cap1 & cap2) +
+    sizeof(cap1 >> cap2) +
+    sizeof(cap1 << cap2) +
+    sizeof(cap1 | cap2);
 }

@@ -9178,9 +9178,11 @@ QualType Sema::CheckRemainderOperands(
   if (getLangOpts().cheriUIntCapUsesOffset() &&
       (LHS.get()->getType()->isCHERICapabilityType(Context) ||
        RHS.get()->getType()->isCHERICapabilityType(Context)))
-    Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
-      << 2 /*=modulo*/ << 1 /* used for alignment checks */
-      << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    DiagRuntimeBehavior(
+        Loc, RHS.get(),
+        PDiag(diag::warn_uintcap_bad_bitwise_op)
+            << 2 /*=modulo*/ << 1 /* used for alignment checks */
+            << LHS.get()->getSourceRange() << RHS.get()->getSourceRange());
 
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
@@ -9913,9 +9915,11 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
       (LHSType->isIntCapType() || RHSType->isIntCapType()) &&
       (Opc == BO_Shl || Opc == BO_ShlAssign || Opc == BO_Shr ||
        Opc == BO_ShrAssign))
-    Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
-        << 1 /*=shift*/ << 0 /* usecase is hashing */
-        << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    DiagRuntimeBehavior(Loc, RHS.get(),
+                        PDiag(diag::warn_uintcap_bad_bitwise_op)
+                            << 1 /*=shift*/ << 0 /* usecase is hashing */
+                            << LHS.get()->getSourceRange()
+                            << RHS.get()->getSourceRange());
 
   // "The type of the result is that of the promoted left operand."
   return LHSType;
@@ -11107,24 +11111,30 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
       // and always false condition (see CTSRD-CHERI/clang#189) unless we
       // have CheriDataDependentProvenance enabled. It also gives surprising
       // behaviour if we are compiling in uintcap=offset mode so warn if either
-      // of conditions are not met:
+      // of these conditions are met:
       if (UsingUIntCapOffset || !getLangOpts().CheriDataDependentProvenance)
-        Diag(Loc, diag::warn_uintcap_bitwise_and)
-            << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+        DiagRuntimeBehavior(Loc, RHS.get(),
+                            PDiag(diag::warn_uintcap_bitwise_and)
+                                << LHS.get()->getSourceRange()
+                                << RHS.get()->getSourceRange());
     } else if (UsingUIntCapOffset && isLHSCap &&
                (Opc == BO_Xor || Opc == BO_XorAssign)) {
       // XOR is highly dubious when in offset mode (except when using on plain
       // integer values, but then the user should be using size_t/vaddr_t and
       // not uintcap_t. Don't warn in address mode since that works just fine
       // (only slightly less efficiently)
-      Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
-          << 0 /*=xor*/ << 0 /* usecase is hashing */
-          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+      DiagRuntimeBehavior(Loc, RHS.get(),
+                          PDiag(diag::warn_uintcap_bad_bitwise_op)
+                              << 0 /*=xor*/ << 0 /* usecase is hashing */
+                              << LHS.get()->getSourceRange()
+                              << RHS.get()->getSourceRange());
     } else if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap)) {
       // FIXME: this warning is not always useful
-      Diag(Loc, diag::warn_mixed_capability_binop)
-          << OriginalLHSType << RHS.get()->getType()
-          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+      DiagRuntimeBehavior(Loc, RHS.get(),
+                          PDiag(diag::warn_mixed_capability_binop)
+                              << OriginalLHSType << RHS.get()->getType()
+                              << LHS.get()->getSourceRange()
+                              << RHS.get()->getSourceRange());
     }
     return compType;
   }

@@ -29,3 +29,7 @@ void check_modulo(void *ptr, uintptr_t cap, int i) {
   cap %= i;   // expected-warning {{using remainder on a capability type only operates on the offset}}
   cap %= cap; // expected-warning {{using remainder on a capability type only operates on the offset}}
 }
+
+int check_runtime_behaviour_only(uintptr_t cap, int i) {
+  return sizeof(cap % i);
+}
