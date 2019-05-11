@@ -244,12 +244,12 @@ static Range *upperBound(MemoryLocation Loc, Range *Ranges,
 }
 
 static inline uptr subtractNoOverflow(uptr LHS, ptrdiff RHS) {
-  return (LHS < RHS) ? 0 : LHS - RHS;
+  return ((ptrdiff)(char*)LHS < RHS) ? 0 : LHS - RHS;
 }
 
 static inline uptr addNoOverflow(uptr LHS, ptrdiff RHS) {
-  const uptr Limit = (uptr)-1;
-  return (LHS > Limit - RHS) ? Limit : LHS + RHS;
+  const ptrdiff Limit = (uptr)-1;
+  return ((ptrdiff)(char*)LHS > Limit - RHS) ? (uptr)Limit : LHS + RHS;
 }
 
 /// Render a snippet of the address space near a location.
