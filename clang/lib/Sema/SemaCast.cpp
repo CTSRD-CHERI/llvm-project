@@ -3128,16 +3128,21 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
 
   CastKind Kind =
       IsOffsetCast ? CK_CHERICapabilityToOffset : CK_CHERICapabilityToAddress;
+
+  if (SubExpr->getType()->isDependentType()) {
+    return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
+                                  nullptr, TSInfo, LParenLoc, RParenLoc);
+  }
   // Check the source type
   // Use getRealReferenceType() because getType() only returns T for T&
-  QualType SrcTy = SubExpr->getRealReferenceType(Context);
+  QualType SrcTy = SubExpr->getRealReferenceType(Context, false);
   // __cheri_offset and __cheri_addr is valid for __uintcap_t as well
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, true);
   if (!SrcIsCap) {
     // Note: __cheri_addr can be used on plain pointers since otherwise it would
     // be very difficult to write code that compiles both in hybrid and in
     // purecap mode. However, the offset cast only makes sense for capabilities!
-    if (IsOffsetCast || (!SrcTy->isPointerType() && !SrcTy->isReferenceType())) {
+    if (IsOffsetCast || (!SrcTy->isPointerType() && !SrcTy->isIntCapType())) {
       // XXXKG: What about functions?
       Diag(SubExpr->getBeginLoc(),
            diag::err_cheri_offset_addr_invalid_source_type)

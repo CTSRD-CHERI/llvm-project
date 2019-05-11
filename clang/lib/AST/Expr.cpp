@@ -1745,15 +1745,17 @@ bool CastExpr::CastConsistency() const {
   case CK_CHERICapabilityToOffset:
   case CK_CHERICapabilityToAddress: {
     QualType SubType = getSubExpr()->getType();
-    bool IsCapabilityTy = getSubExpr()->hasUnderlyingCapability();
-    if (const PointerType *PTy =
-            getSubExpr()->getType()->getAs<PointerType>()) {
-      IsCapabilityTy |= PTy->isCHERICapability();
+    if (!SubType->isDependentType()) {
+      bool IsCapabilityTy = getSubExpr()->hasUnderlyingCapability();
+      if (const PointerType *PTy =
+              getSubExpr()->getType()->getAs<PointerType>()) {
+        IsCapabilityTy |= PTy->isCHERICapability();
+      }
+      assert(IsCapabilityTy || SubType->isIntCapType() ||
+             SubType->isNullPtrType());
+      assert(getType()->isIntegerType());
+      assert(!getType()->isEnumeralType());
     }
-    assert(IsCapabilityTy || SubType->isIntCapType() ||
-           SubType->isNullPtrType());
-    assert(getType()->isIntegerType());
-    assert(!getType()->isEnumeralType());
     goto CheckNoBasePath;
   }
 
