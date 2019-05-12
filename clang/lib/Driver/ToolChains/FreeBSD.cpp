@@ -421,6 +421,19 @@ ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
   // TODO: always use libc++ for MIPS64?
   if (getTriple().getOSMajorVersion() >= 10 || IsCheriPurecap)
     return ToolChain::CST_Libcxx;
+  // Always use libc++ for CHERI triples and CHERI subarch:
+  if (getTriple().getArch() == llvm::Triple::cheri)
+    return ToolChain::CST_Libcxx;
+  if (getTriple().isMIPS()) {
+    switch (getTriple().getSubArch()) {
+    case llvm::Triple::MipsSubArch_cheri64:
+    case llvm::Triple::MipsSubArch_cheri128:
+    case llvm::Triple::MipsSubArch_cheri256:
+      return ToolChain::CST_Libcxx;
+    default:
+      break;
+    }
+  }
   return ToolChain::CST_Libstdcxx;
 }
 
