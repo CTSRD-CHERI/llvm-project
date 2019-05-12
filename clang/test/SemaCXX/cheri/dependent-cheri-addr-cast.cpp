@@ -35,7 +35,7 @@ void test2_instantiate() {
 
 // TODO: would be nice to get a sane warning on instantiation
 template <typename T1, typename T2> T1 test3(T2 arg) {
-  return (__cheri_fromcap T1)arg; // expected-error{{__cheri_from_cap with dependent type 'T2' is not yet supported}}
+  return (__cheri_fromcap T1)arg; // expected-error{{__cheri_fromcap with dependent type 'T2' is not yet supported}}
 }
 
 void test3_instantiate() {
