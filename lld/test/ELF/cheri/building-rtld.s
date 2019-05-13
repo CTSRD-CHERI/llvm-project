@@ -18,12 +18,12 @@ test:
 # CHECK:      ld.lld: error: relocation R_MIPS_CHERI_CAPABILITY against <undefined> foo2 cannot be using when building FreeBSD RTLD
 # CHECK-NEXT: >>> referenced by foo2@CAPTABLE
 # CHECK-NEXT: >>> first used in function test
-# CHECK-NEXT: >>> defined in  (/Users/alex/cheri/llvm-project/cmake-build-debug/tools/lld/test/ELF/cheri/Output/building-rtld.s.tmp.o:(test))
+# CHECK-NEXT: >>> defined in  ({{.+}}building-rtld.s.tmp.o:(test))
 # CHECK-EMPTY:
 # CHECK-NEXT: ld.lld: error: relocation R_MIPS_TLS_DTPMOD64 against foo cannot be using when building FreeBSD RTLD
-# CHECK-NEXT: >>> defined in /Users/alex/cheri/llvm-project/cmake-build-debug/tools/lld/test/ELF/cheri/Output/building-rtld.s.tmp.o
+# CHECK-NEXT: >>> defined in {{.+}}building-rtld.s.tmp.o
 # CHECK-NEXT: >>> referenced by <internal>:(.captable+0x10)
 # CHECK-EMPTY:
 # CHECK-NEXT: ld.lld: error: relocation R_MIPS_TLS_DTPREL64 against foo cannot be using when building FreeBSD RTLD
-# CHECK-NEXT: >>> defined in /Users/alex/cheri/llvm-project/cmake-build-debug/tools/lld/test/ELF/cheri/Output/building-rtld.s.tmp.o
+# CHECK-NEXT: >>> defined in {{.+}}building-rtld.s.tmp.o
 # CHECK-NEXT: >>> referenced by <internal>:(.captable+0x18)
