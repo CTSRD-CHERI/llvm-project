@@ -1592,6 +1592,7 @@ const MCSymbol &FrameEmitterImpl::EmitCIE(const MCDwarfFrameInfo &Frame) {
 
   if (CIEVersion >= 4) {
     // Address Size
+    // FIXME: should this be 16/32 for CHERI?
     Streamer.EmitIntValue(context.getAsmInfo()->getCodePointerSize(), 1);
 
     // Segment Descriptor Size
