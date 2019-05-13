@@ -12,8 +12,8 @@
 
 #include "RISCVMCTargetDesc.h"
 #include "InstPrinter/RISCVInstPrinter.h"
-#include "RISCVELFStreamer.h"
 #include "RISCVMCAsmInfo.h"
+#include "RISCVTargetELFStreamer.h"
 #include "RISCVTargetStreamer.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCAsmInfo.h"

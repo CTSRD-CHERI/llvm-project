@@ -6,5 +6,5 @@ add_llvm_library(LLVMRISCVDesc
   RISCVMCExpr.cpp
   RISCVMCTargetDesc.cpp
   RISCVTargetStreamer.cpp
-  RISCVELFStreamer.cpp
+  RISCVTargetELFStreamer.cpp
 )

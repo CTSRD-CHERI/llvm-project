@@ -1,4 +1,4 @@
-//===-- RISCVELFStreamer.h - RISCV ELF Target Streamer ---------*- C++ -*--===//
+//===-- RISCVTargetELFStreamer.h - RISCV ELF Target Streamer ---*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVELFSTREAMER_H
-#define LLVM_LIB_TARGET_RISCV_RISCVELFSTREAMER_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVTARGETELFSTREAMER_H
+#define LLVM_LIB_TARGET_RISCV_RISCVTARGETELFSTREAMER_H
 
 #include "RISCVTargetStreamer.h"
 #include "llvm/MC/MCELFStreamer.h"

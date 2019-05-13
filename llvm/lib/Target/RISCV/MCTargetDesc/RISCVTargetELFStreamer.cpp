@@ -1,4 +1,4 @@
-//===-- RISCVELFStreamer.cpp - RISCV ELF Target Streamer Methods ----------===//
+//===-- RISCVTargetELFStreamer.cpp - RISCV ELF Target Streamer Methods ----===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,7 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVELFStreamer.h"
+#include "RISCVTargetELFStreamer.h"
 #include "MCTargetDesc/RISCVAsmBackend.h"
 #include "RISCVMCTargetDesc.h"
 #include "Utils/RISCVBaseInfo.h"
