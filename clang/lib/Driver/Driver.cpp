@@ -530,6 +530,16 @@ static llvm::Triple computeTargetTriple(const Driver &D,
   A = Args.getLastArg(options::OPT_mabi_EQ);
   if (A && Target.isMIPS()) {
     StringRef ABIName = A->getValue();
+    if (Target.isMIPS64() && Target.getEnvironment() == llvm::Triple::CheriPurecap) {
+      if (ABIName.empty()) {
+        ABIName = "purecap";
+      } else if (ABIName != "purecap") {
+        D.Diag(diag::warn_drv_abi_overriding_triple)
+          << Target.str() << Target.getEnvironmentName() << ABIName;
+        Target.setEnvironment(llvm::Triple::GNUABI64);
+      }
+    }
+
     if (ABIName == "32") {
       Target = Target.get32BitArchVariant();
       if (Target.getEnvironment() == llvm::Triple::GNUABI64 ||
@@ -538,15 +548,23 @@ static llvm::Triple computeTargetTriple(const Driver &D,
     } else if (ABIName == "n32") {
       Target = Target.get64BitArchVariant();
       if (Target.getEnvironment() == llvm::Triple::GNU ||
-          Target.getEnvironment() == llvm::Triple::GNUABI64)
+          Target.getEnvironment() == llvm::Triple::GNUABI64 ||
+          Target.getEnvironment() == llvm::Triple::CheriPurecap)
         Target.setEnvironment(llvm::Triple::GNUABIN32);
     } else if (ABIName == "64") {
       Target = Target.get64BitArchVariant();
       if (Target.getEnvironment() == llvm::Triple::GNU ||
-          Target.getEnvironment() == llvm::Triple::GNUABIN32)
+          Target.getEnvironment() == llvm::Triple::GNUABIN32 ||
+          Target.getEnvironment() == llvm::Triple::CheriPurecap)
         Target.setEnvironment(llvm::Triple::GNUABI64);
     } else if (ABIName == "purecap") {
+      if (Target.getEnvironment() != llvm::Triple::CheriPurecap && Target.getEnvironment() != llvm::Triple::UnknownEnvironment) {
+      D.Diag(diag::warn_drv_abi_overriding_triple)
+        << Target.str() << Target.getEnvironmentName() << ABIName;
+      }
       Target.setEnvironment(llvm::Triple::CheriPurecap);
+      if (Target.isMIPS32())
+        D.Diag(diag::err_drv_unsupported_opt_for_target) << "-mabi=purecap" << Target.str();
       if (Target.getSubArch() == llvm::Triple::NoSubArch) {
         const char *ArchName = nullptr;
         if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {

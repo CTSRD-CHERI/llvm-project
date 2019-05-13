@@ -3294,6 +3294,23 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     Opts.ABI = "purecap";
     Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
   }
+  if (T.isMIPS()) {
+    if (Opts.ABI != "purecap" && T.getEnvironment() == llvm::Triple::CheriPurecap) {
+      // Can't use -mabi=64 with -purecap triple
+      // Can't use -mabi=64 with -purecap triple
+      if (Opts.ABI.empty())
+        Opts.ABI = "purecap";
+      else
+        Diags.Report(diag::err_drv_abi_incompatible_with_triple) << Opts.ABI << T.str();
+    } else if (Opts.ABI == "purecap") {
+      if (T.getEnvironment() == llvm::Triple::UnknownEnvironment) {
+        T.setEnvironment(llvm::Triple::CheriPurecap);
+      } else if (T.getEnvironment() != llvm::Triple::CheriPurecap) {
+        // e.g. explicit gnuabin32 triple with -mabi=purecap
+        Diags.Report(diag::err_drv_abi_incompatible_with_triple) << Opts.ABI << T.str();
+      }
+    }
+  }
 
   if (const Arg *A = Args.getLastArg(OPT_cheri_size)) {
     // NOTE: Opts.Features is cleared after this so we need to add it to FeaturesAsWritten!

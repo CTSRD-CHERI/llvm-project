@@ -402,6 +402,11 @@ def warn_cheri_purecap_nopic_broken : Warning<
 def warn_cheri_purecap_init_array_required : Warning<
   "The CHERI RTLD does not support .ctors. Passing -fno-use-init-array will "
   "probably create broken binaries.">, InGroup<MIPSCHERIBugs>;
+def err_drv_abi_incompatible_with_triple : Error<
+  "ABI '%0' is incompatible with target triple '%1'">;
+def warn_drv_abi_overriding_triple : Warning<
+  "overriding triple '%0' environment '%1' since an explicit -mabi=%2 flag was passed">,
+  InGroup<OptionIgnored>;
 
 def warn_drv_fine_grained_bitfield_accesses_ignored : Warning<
   "option '-ffine-grained-bitfield-accesses' cannot be enabled together with a sanitizer; flag ignored">,

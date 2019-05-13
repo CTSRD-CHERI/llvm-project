@@ -256,6 +256,7 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
       }
     }
   }
+
   Opts.LLVMArgs = Args.getAllArgValues(OPT_mllvm);
   Opts.OutputPath = Args.getLastArgValue(OPT_o);
   Opts.SplitDwarfFile = Args.getLastArgValue(OPT_split_dwarf_file);
@@ -299,6 +300,26 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
                             .Case("bitcode", 1)
                             .Case("marker", 1)
                             .Default(0);
+  }
+
+  // Fixup the triple for CHERI ABI flags:
+  llvm::Triple TT(Opts.Triple);
+  if (TT.isMIPS()) {
+    if (Opts.TargetABI != "purecap" && TT.getEnvironment() == llvm::Triple::CheriPurecap) {
+      // Can't use -mabi=64 with -purecap triple
+      if (Opts.TargetABI.empty())
+        Opts.TargetABI = "purecap";
+      else
+        Diags.Report(diag::err_drv_abi_incompatible_with_triple) << Opts.TargetABI << TT.str();
+    } else if (Opts.TargetABI == "purecap") {
+      if (TT.getEnvironment() == llvm::Triple::UnknownEnvironment) {
+        TT.setEnvironment(llvm::Triple::CheriPurecap);
+        Opts.Triple = llvm::Triple::normalize(TT.str());
+      } else if (TT.getEnvironment() != llvm::Triple::CheriPurecap) {
+        // e.g. explicit gnuabin32 triple with -mabi=purecap
+        Diags.Report(diag::err_drv_abi_incompatible_with_triple) << Opts.TargetABI << TT.str();
+      }
+    }
   }
 
   return Success;
