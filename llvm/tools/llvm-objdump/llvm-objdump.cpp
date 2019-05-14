@@ -1441,7 +1441,14 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
     }
   }
 }
-void llvm::printCapRelocations(const ObjectFile *Obj) {
+
+template <class ELFT> static void
+printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
+  StringRef AddrFmt = Obj->getBytesInAddress() > 4 ? "0x%016" PRIx64 :
+                                                     "0x%08" PRIx64;
+  StringRef PermsFmt = Obj->getBytesInAddress() > 4 ? "0x%08" PRIx64 :
+                                                      "0x%04" PRIx64;
+
   std::unordered_map<uint64_t, std::string> SymbolNames;
   for (const SymbolRef &Sym : Obj->symbols()) {
     Expected<uint64_t> Start = Sym.getAddress();
@@ -1464,32 +1471,60 @@ void llvm::printCapRelocations(const ObjectFile *Obj) {
     }
   }
   outs() << "CAPABILITY RELOCATION RECORDS:\n";
-  const size_t entry_size = 40;
+  const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
+  using TargetUint = typename ELFT::uint;
   for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
     const char *entry = Data.data() + (entry_size * i);
-    uint64_t Target = support::endian::read<uint64_t, support::big, 1>(entry);
-    uint64_t Base = support::endian::read<uint64_t, support::big, 1>(entry + 8);
+    uint64_t Target =
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry);
+    uint64_t Base =
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry + sizeof(TargetUint));
     uint64_t Offset =
-        support::endian::read<uint64_t, support::big, 1>(entry + 16);
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry + 2*sizeof(TargetUint));
     uint64_t Length =
-        support::endian::read<uint64_t, support::big, 1>(entry + 24);
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry + 3*sizeof(TargetUint));
     uint64_t Perms =
-        support::endian::read<uint64_t, support::big, 1>(entry + 32);
-    bool isFunction = Perms & (UINT64_C(1) << 63);
-    bool isConstant = Perms & (UINT64_C(1) << 62);
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry + 4*sizeof(TargetUint));
+    bool isFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
+    bool isConstant = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
     //Perms &= 0xffffffff;
     StringRef Symbol = "<Unnamed symbol>";
     if (SymbolNames.find(Base) != SymbolNames.end())
       Symbol = SymbolNames[Base];
-    outs() << format("0x%016" PRIx64, Target) << "\tBase: " << Symbol << " ("
-           << format("0x%016" PRIx64, Base)
-           << ")\tOffset: " << format("0x%016" PRIx64, Offset)
-           << "\tLength: " << format("0x%016" PRIx64, Length)
-           << "\tPermissions: " << format("0x%08" PRIx64, Perms)
+    outs() << format(AddrFmt.data(), Target) << "\tBase: " << Symbol << " ("
+           << format(AddrFmt.data(), Base)
+           << ")\tOffset: " << format(AddrFmt.data(), Offset)
+           << "\tLength: " << format(AddrFmt.data(), Length)
+           << "\tPermissions: " << format(PermsFmt.data(), Perms)
            << (isFunction ? " (Function)\n"
                           : (isConstant ? " (Constant)\n" : "\n"));
   }
   outs() << "\n";
+}
+
+void llvm::printCapRelocations(const ObjectFile *Obj) {
+  if (!Obj->isELF()) {
+    WithColor::error(errs(), ToolName)
+        << "This operation is only currently supported "
+           "for ELF object files.\n";
+    return;
+  }
+
+  if (auto *Elf32LEObj = dyn_cast<ELF32LEObjectFile>(Obj))
+    printELFCapRelocations(Elf32LEObj);
+  else if (auto *Elf64LEObj = dyn_cast<ELF64LEObjectFile>(Obj))
+    printELFCapRelocations(Elf64LEObj);
+  else if (auto *Elf32BEObj = dyn_cast<ELF32BEObjectFile>(Obj))
+    printELFCapRelocations(Elf32BEObj);
+  else if (auto *Elf64BEObj = cast<ELF64BEObjectFile>(Obj))
+    printELFCapRelocations(Elf64BEObj);
+  else
+    llvm_unreachable("Unsupported binary format");
 }
 
 static void disassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
