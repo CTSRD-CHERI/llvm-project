@@ -2372,7 +2372,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   ArrayRef<uint8_t> Data = unwrapOrError(Obj->getSectionContents(Shdr));
   const uint64_t CapRelocsFileOffset = Shdr->sh_offset;
   const uint64_t CapRelocsEnd = Shdr->sh_offset + Shdr->sh_size;
-  const size_t entry_size = 40;
+  const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
   if (Data.size() % entry_size != 0) {
     W.startLine() << "The __cap_relocs section has a wrong size: "
                   << Data.size() << "\n";
@@ -2423,19 +2423,29 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   //        << " dynamic relocations pointing to __cap_relocs section\n";
 
   typename ELFT::SymRange DynSyms = dynamic_symbols();
+  using TargetUint = typename ELFT::uint;
+  using TargetInt =
+      typename std::conditional<ELFT::Is64Bits, int64_t, int32_t>::type;
   for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
     const uint64_t CurrentOffset = entry_size * i;
     const uint8_t *entry = Data.data() + CurrentOffset;
-    uint64_t Target = support::endian::read<uint64_t, support::big, 1>(entry);
-    uint64_t Base = support::endian::read<uint64_t, support::big, 1>(entry + 8);
+    uint64_t Target =
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry);
+    uint64_t Base =
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry + sizeof(TargetUint));
     int64_t Offset =
-        support::endian::read<int64_t, support::big, 1>(entry + 16);
+        support::endian::read<TargetInt,  ELFT::TargetEndianness, 1>(
+                entry + 2*sizeof(TargetUint));
     uint64_t Length =
-        support::endian::read<uint64_t, support::big, 1>(entry + 24);
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry + 3*sizeof(TargetUint));
     uint64_t Perms =
-        support::endian::read<uint64_t, support::big, 1>(entry + 32);
-    bool isFunction = Perms & (UINT64_C(1) << 63);
-    bool isReadOnly = Perms & (UINT64_C(1) << 62);
+        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
+                entry + 4*sizeof(TargetUint));
+    bool isFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
+    bool isReadOnly = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
     const char *PermStr =
         isFunction ? "Function" : (isReadOnly ? "Constant" : "Object");
     // Perms &= 0xffffffff;
