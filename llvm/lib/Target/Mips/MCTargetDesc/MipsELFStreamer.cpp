@@ -127,7 +127,7 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
   MCFixup cheriFixup =
       MCFixup::create(0, CapExpr, MCFixupKind(Mips::fixup_CHERI_CAPABILITY));
   DF->getFixups().push_back(cheriFixup);
-  DF->getContents().resize(DF->getContents().size() + CapSize, 0xca);
+  DF->getContents().resize(DF->getContents().size() + CapSize, '\xca');
   insert(DF);
 }
 
