@@ -610,7 +610,10 @@ static Relocation *getRISCVPCRelHi20(const Symbol *sym, uint64_t addend) {
 
   for (auto it = range.first; it != range.second; ++it)
     if (it->type == R_RISCV_PCREL_HI20 || it->type == R_RISCV_GOT_HI20 ||
-        it->type == R_RISCV_TLS_GD_HI20 || it->type == R_RISCV_TLS_GOT_HI20)
+        it->type == R_RISCV_TLS_GD_HI20 || it->type == R_RISCV_TLS_GOT_HI20 ||
+        it->type == R_RISCV_CHERI_CAPTAB_PCREL_HI20 ||
+        it->type == R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20 ||
+        it->type == R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20)
       return &*it;
 
   error("R_RISCV_PCREL_LO12 relocation points to " + isec->getObjMsg(d->value) +
@@ -848,6 +851,24 @@ static uint64_t getRelocTargetVA(const InputFile *file, RelType type, int64_t a,
   case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
     assert(a == 0 && "capability table index relocs should not have addends");
     return config->capabilitySize * in.cheriCapTable->getIndex(sym, isec, offset);
+  case R_CHERI_CAPABILITY_TABLE_ENTRY_PC: {
+    assert(a == 0 && "capability table entry relocs should not have addends");
+    uint64_t capTableOffset =
+        config->capabilitySize * in.cheriCapTable->getIndex(sym, isec, offset);
+    return ElfSym::cheriCapabilityTable->getVA() + capTableOffset - p;
+  }
+  case R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC: {
+    assert(a == 0 && "capability table index relocs should not have addends");
+    uint64_t capTableOffset =
+        in.cheriCapTable->getDynTlsOffset(sym);
+    return ElfSym::cheriCapabilityTable->getVA() + capTableOffset - p;
+  }
+  case R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC: {
+    assert(a == 0 && "capability table index relocs should not have addends");
+    uint64_t capTableOffset =
+        in.cheriCapTable->getTlsOffset(sym);
+    return ElfSym::cheriCapabilityTable->getVA() + capTableOffset - p;
+  }
   case R_CHERI_CAPABILITY_TABLE_REL:
     if (!ElfSym::cheriCapabilityTable) {
       error("cannot compute difference between non-existent "

@@ -218,6 +218,19 @@ handleTlsRelocation(RelType type, Symbol &sym, InputSectionBase &c,
                   config->emachine != EM_HEXAGON &&
                   config->emachine != EM_RISCV;
 
+  // No targets currently support TLS relaxation, so we can avoid duplicating
+  // much of the logic below for the captable.
+  if (expr == R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC) {
+    in.cheriCapTable->addDynTlsEntry(sym);
+    c.relocations.push_back({expr, type, offset, addend, &sym});
+    return 1;
+  }
+  if (expr == R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC) {
+    in.cheriCapTable->addTlsEntry(sym);
+    c.relocations.push_back({expr, type, offset, addend, &sym});
+    return 1;
+  }
+
   // If we are producing an executable and the symbol is non-preemptable, it
   // must be defined and the code sequence can be relaxed to use Local-Exec.
   //
@@ -413,6 +426,7 @@ static bool isStaticLinkTimeConstant(RelExpr e, RelType type, const Symbol &sym,
             R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE,
+            R_CHERI_CAPABILITY_TABLE_ENTRY_PC,
             R_CHERI_CAPABILITY_TABLE_REL,
             R_MIPS_GOT_LOCAL_PAGE, R_MIPS_GOTREL, R_MIPS_GOT_OFF,
             R_MIPS_GOT_OFF32, R_MIPS_GOT_GP_PC, R_MIPS_TLSGD,
@@ -1422,7 +1436,8 @@ static void scanReloc(InputSectionBase &sec, OffsetGetter &getOffset, RelTy *&i,
   if (oneof<R_CHERI_CAPABILITY_TABLE_INDEX,
             R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
-            R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE>(expr)) {
+            R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE,
+            R_CHERI_CAPABILITY_TABLE_ENTRY_PC>(expr)) {
     assert(config->processCapRelocs);
     in.cheriCapTable->addEntry(sym, expr, &sec, offset);
     // Write out the index into the instruction
