@@ -2652,7 +2652,6 @@ static void handleIndirectSymViaGOTPCRel(AsmPrinter &AP, const MCExpr **ME,
 static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
                                        AsmPrinter &AP) {
   const uint64_t CapWidth = DL.getPointerTypeSize(CV->getType());
-  assert(CapWidth == 32 || CapWidth == 16);
   // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
   // and offset 5.
   const MCExpr *Expr = AP.lowerConstant(CV);
