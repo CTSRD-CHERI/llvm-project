@@ -17,8 +17,24 @@ using namespace llvm::ELF;
 #undef DEBUG_CAP_TABLE
 
 namespace lld {
-
 namespace elf {
+
+// See CheriBSD crt_init_globals()
+template <class ELFT> struct InMemoryCapRelocEntry {
+  using NativeUint = typename ELFT::uint;
+  using CapRelocUint = llvm::support::detail::packed_endian_specific_integral<
+      NativeUint, ELFT::TargetEndianness, llvm::support::aligned>;
+  InMemoryCapRelocEntry(NativeUint Loc, NativeUint Obj, NativeUint Off,
+                        NativeUint S, NativeUint Perms)
+      : capability_location(Loc), object(Obj), offset(Off), size(S),
+        permissions(Perms) {}
+  CapRelocUint capability_location;
+  CapRelocUint object;
+  CapRelocUint offset;
+  CapRelocUint size;
+  CapRelocUint permissions;
+};
+
 template <class ELFT>
 CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
     : SyntheticSection(SHF_ALLOC | (Config->Pic ? SHF_WRITE : 0), /* XXX: actually RELRO */
@@ -131,7 +147,6 @@ std::string CheriCapRelocLocation::toString() const {
 
 template <class ELFT>
 void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
-  constexpr endianness E = ELFT::TargetEndianness;
   // TODO: sort by offset (or is that always true?
   const auto Rels = S->relas<ELFT>();
   for (auto I = Rels.begin(), End = Rels.end(); I != End; ++I) {
@@ -144,7 +159,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
             Twine(Entsize) + " but got " + Twine(LocationRel.r_offset));
       return;
     }
-    if (TargetRel.r_offset != LocationRel.r_offset + 8) {
+    if (TargetRel.r_offset != LocationRel.r_offset + FieldSize) {
       error("corrupted __cap_relocs: expected target relocation (" +
             Twine(TargetRel.r_offset) +
             " to directly follow location relocation (" +
@@ -180,7 +195,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     //    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
     //           << Twine((int)LocationSym.Type) << " against "
     //           << toString(TargetSym) << "\n";
-    auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E> *>(
+    auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<ELFT> *>(
         S->data().begin() + CapRelocsOffset);
     int64_t TargetCapabilityOffset = (int64_t)RawInput->offset;
     assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
@@ -329,18 +344,18 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // will be zero unless we are targetting a string constant as these
     // don't have a symbol and will be like .rodata.str+0x1234
     int64_t Addend = Target.Offset;
-    // Capability target is the second field -> offset + 8
-    assert((CurrentEntryOffset + 8) < getSize());
-    In.RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + 8,
+    // Capability target is the second field
+    assert((CurrentEntryOffset + FieldSize) < getSize());
+    In.RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + FieldSize,
                             RelativeToLoadAddress, Target.Sym, Addend});
     ContainsDynamicRelocations = true;
     if (!RelativeToLoadAddress) {
       // We also add a size relocation for the size field here
       assert(Config->EMachine == EM_MIPS);
       RelType Size64Rel = R_MIPS_CHERI_SIZE | (R_MIPS_64 << 8);
-      // Capability size is the fourth field -> offset + 24
-      assert((CurrentEntryOffset + 24) < getSize());
-      In.RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 24,
+      // Capability size is the fourth field
+      assert((CurrentEntryOffset + 3*FieldSize) < getSize());
+      In.RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 3*FieldSize,
                              Target.Sym);
     }
   }
@@ -429,14 +444,16 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
   return TargetSize;
 }
 
-enum CaptablePermissions : uint64_t {
-  Function = UINT64_C(1) << 63,
-  ReadOnly = UINT64_C(1) << 62,
+template <class ELFT>
+struct CaptablePermissions {
+  static const uint64_t Function =
+      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 1);
+  static const uint64_t ReadOnly =
+      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 2);
 };
 
 template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
-  constexpr endianness E = ELFT::TargetEndianness;
-  static_assert(RelocSize == sizeof(InMemoryCapRelocEntry<E>),
+  static_assert(RelocSize == sizeof(InMemoryCapRelocEntry<ELFT>),
                 "cap relocs size mismatch");
   uint64_t Offset = 0;
   for (const auto &I : RelocsMap) {
@@ -480,13 +497,13 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t Permissions = 0;
     // Fow now Function implies ReadOnly so don't add the flag
     if (Reloc.Target.Sym->isFunc()) {
-      Permissions |= CaptablePermissions::Function;
+      Permissions |= CaptablePermissions<ELFT>::Function;
     } else if (auto OS = Reloc.Target.Sym->getOutputSection()) {
       assert(!Reloc.Target.Sym->isTls());
       assert((OS->Flags & SHF_TLS) == 0);
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
       if (((OS->Flags & SHF_WRITE) == 0) || isRelroSection(OS)) {
-        Permissions |= CaptablePermissions::ReadOnly;
+        Permissions |= CaptablePermissions<ELFT>::ReadOnly;
       } else if (OS->Flags & SHF_EXECINSTR) {
         warn("Non-function __cap_reloc against symbol in section with "
              "SHF_EXECINSTR (" + toString(OS->Name) + ") for symbol " +
@@ -498,8 +515,8 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);
 
-    InMemoryCapRelocEntry<E> Entry{LocationVA, TargetVA, TargetOffset,
-                                   TargetSize, Permissions};
+    InMemoryCapRelocEntry<ELFT> Entry(LocationVA, TargetVA, TargetOffset,
+                                      TargetSize, Permissions);
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
     //     if (errorHandler().Verbose) {
     //       errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
@@ -520,10 +537,10 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   // will mean the dynamic relocation offset refers to a different location
   // FIXME: do the sorting in finalizeSection instead
   if (Config->SortCapRelocs && !ContainsDynamicRelocations)
-    std::stable_sort(reinterpret_cast<InMemoryCapRelocEntry<E> *>(Buf),
-                     reinterpret_cast<InMemoryCapRelocEntry<E> *>(Buf + Offset),
-                     [](const InMemoryCapRelocEntry<E> &a,
-                        const InMemoryCapRelocEntry<E> &b) {
+    std::stable_sort(reinterpret_cast<InMemoryCapRelocEntry<ELFT> *>(Buf),
+                     reinterpret_cast<InMemoryCapRelocEntry<ELFT> *>(Buf + Offset),
+                     [](const InMemoryCapRelocEntry<ELFT> &a,
+                        const InMemoryCapRelocEntry<ELFT> &b) {
                        return a.capability_location < b.capability_location;
                      });
   assert(Offset == getSize() && "Not all data written?");

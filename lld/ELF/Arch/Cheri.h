@@ -11,21 +11,6 @@
 namespace lld {
 namespace elf {
 
-// See CheriBSD crt_init_globals()
-template <llvm::support::endianness E> struct InMemoryCapRelocEntry {
-  using CapRelocUint64 = llvm::support::detail::packed_endian_specific_integral<
-      uint64_t, E, llvm::support::aligned>;
-  InMemoryCapRelocEntry(uint64_t Loc, uint64_t Obj, uint64_t Off, uint64_t S,
-                        uint64_t Perms)
-      : capability_location(Loc), object(Obj), offset(Off), size(S),
-        permissions(Perms) {}
-  CapRelocUint64 capability_location;
-  CapRelocUint64 object;
-  CapRelocUint64 offset;
-  CapRelocUint64 size;
-  CapRelocUint64 permissions;
-};
-
 struct SymbolAndOffset {
   SymbolAndOffset(Symbol *S, int64_t O) : Sym(S), Offset(O) {}
   SymbolAndOffset(const SymbolAndOffset &) = default;
@@ -74,7 +59,8 @@ struct CheriCapReloc {
 template <class ELFT> class CheriCapRelocsSection : public SyntheticSection {
 public:
   CheriCapRelocsSection();
-  static constexpr size_t RelocSize = 40;
+  static constexpr size_t FieldSize = ELFT::Is64Bits ? 8 : 4;
+  static constexpr size_t RelocSize = FieldSize * 5;
   // Add a __cap_relocs section from in input object file
   void addSection(InputSectionBase *S);
   bool isNeeded() const override { return !RelocsMap.empty() || !LegacyInputs.empty(); }
