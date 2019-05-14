@@ -173,15 +173,28 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     }
     uint64_t CapRelocsOffset = LocationRel.r_offset;
     assert(CapRelocsOffset + Entsize <= S->getSize());
-    if (LocationRel.getType(Config->IsMips64EL) != R_MIPS_64) {
-      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
-            toString(LocationRel.getType(Config->IsMips64EL)));
-      continue;
-    }
-    if (TargetRel.getType(Config->IsMips64EL) != R_MIPS_64) {
-      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
-            toString(TargetRel.getType(Config->IsMips64EL)));
-      continue;
+    if (Config->EMachine == EM_MIPS) {
+      if (LocationRel.getType(Config->IsMips64EL) != R_MIPS_64) {
+        error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
+              toString(LocationRel.getType(Config->IsMips64EL)));
+        continue;
+      }
+      if (TargetRel.getType(Config->IsMips64EL) != R_MIPS_64) {
+        error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
+              toString(TargetRel.getType(Config->IsMips64EL)));
+        continue;
+      }
+    } else {
+      if (LocationRel.getType(Config->IsMips64EL) != *Target->AbsPointerRel) {
+        error("Exptected an absolute pointer relocation in __cap_relocs "
+              "but got " + toString(LocationRel.getType(Config->IsMips64EL)));
+        continue;
+      }
+      if (TargetRel.getType(Config->IsMips64EL) != *Target->AbsPointerRel) {
+        error("Exptected an absolute pointer relocation in __cap_relocs "
+              "but got " + toString(TargetRel.getType(Config->IsMips64EL)));
+        continue;
+      }
     }
     Symbol *LocationSym =
         &S->getFile<ELFT>()->getRelocTargetSym(LocationRel);
@@ -351,11 +364,10 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     ContainsDynamicRelocations = true;
     if (!RelativeToLoadAddress) {
       // We also add a size relocation for the size field here
-      assert(Config->EMachine == EM_MIPS);
-      RelType Size64Rel = R_MIPS_CHERI_SIZE | (R_MIPS_64 << 8);
+      RelType SizeRel = *elf::Target->SizeRel;
       // Capability size is the fourth field
       assert((CurrentEntryOffset + 3*FieldSize) < getSize());
-      In.RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 3*FieldSize,
+      In.RelaDyn->addReloc(SizeRel, this, CurrentEntryOffset + 3*FieldSize,
                              Target.Sym);
     }
   }
@@ -571,7 +583,6 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
   // If TLS entry has a corresponding dynamic relocations, leave it
   // initialized by zero. Write down adjusted TLS symbol's values otherwise.
   // To calculate the adjustments use offsets for thread-local storage.
-  // TODO: Don't hard-code MIPS offsets here.
   for (auto &it : DynTlsEntries.Map) {
     if (it.first == nullptr && !Config->Pic)
       Write(it.second.Index.getValue(), nullptr, 1);
@@ -627,23 +638,29 @@ CheriCapTableSection::getCaptableMapForFileAndOffset(InputSectionBase *IS,
   return GlobalEntries;
 }
 
-void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
+void CheriCapTableSection::addEntry(Symbol &Sym, RelExpr Expr,
                                     InputSectionBase *IS, uint64_t Offset) {
   // FIXME: can this be called from multiple threads?
   CapTableIndex Idx;
-  Idx.NeedsSmallImm = SmallImm;
+  Idx.NeedsSmallImm = false;
   Idx.UsedAsFunctionPointer = true;
   Idx.FirstUse = SymbolAndOffset::fromSectionWithOffset(IS, Offset);
-  // If the symbol is only ever referenced by the CAP*CALL* relocations we can
-  // emit a R_MIPS_CHERI_CAPABILITY_CALL instead of a R_MIPS_CHERI_CAPABILITY
-  // relocation. This indicates to the runtime linker that the capability is not
-  // used as a function pointer and therefore does not need a unique address
-  // (plt stub) across all DSOs.
-  switch (Type) {
-  case R_MIPS_CHERI_CAPCALL20:
-  case R_MIPS_CHERI_CAPCALL_CLC11:
-  case R_MIPS_CHERI_CAPCALL_HI16:
-  case R_MIPS_CHERI_CAPCALL_LO16:
+  switch (Expr) {
+  case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
+  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
+    Idx.NeedsSmallImm = true;
+    break;
+  default:
+    break;
+  }
+  // If the symbol is only ever referenced by the captable call relocations we
+  // can emit a capability call relocation instead of a normal capability
+  // relocation. This indicates to the runtime linker that the capability is
+  // not used as a function pointer and therefore does not need a unique
+  // address (plt stub) across all DSOs.
+  switch (Expr) {
+  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL:
+  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
     if (!Sym.isFunc() && !Sym.isUndefWeak()) {
       CheriCapRelocLocation Loc{IS, Offset, false};
       std::string Msg = "call relocation against non-function symbol " + verboseToString(&Sym, 0) +
@@ -671,7 +688,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
   if (!it.second) {
     // If it is references by a small immediate relocation we need to update
     // the small immediate flag
-    if (SmallImm)
+    if (Idx.NeedsSmallImm)
       it.first->second.NeedsSmallImm = true;
     if (Idx.UsedAsFunctionPointer)
       it.first->second.UsedAsFunctionPointer = true;
@@ -760,19 +777,21 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
     }
   }
 
-  unsigned MaxSmallEntries = (1 << 19) / Config->CapabilitySize;
-  if (SmallEntryCount > MaxSmallEntries) {
-    // Use warn here since the calculation may be wrong if the 11 bit clc is
-    // used. We will error when writing the relocation values later anyway
-    // so this will help find the error
-    warn("added " + Twine(SmallEntryCount) + " entries to .captable but "
-        "current maximum is " + Twine(MaxSmallEntries) + "; try recompiling "
-        "non-performance critical source files with -mxcaptable");
-  }
-  if (errorHandler().Verbose) {
-    message("Total " + Twine(Entries.size()) + " .captable entries: " +
-        Twine(SmallEntryCount) + " use a small immediate and " +
-        Twine(Entries.size() - SmallEntryCount) + " use -mxcaptable. ");
+  if (Config->EMachine == EM_MIPS) {
+    unsigned MaxSmallEntries = (1 << 19) / Config->CapabilitySize;
+    if (SmallEntryCount > MaxSmallEntries) {
+      // Use warn here since the calculation may be wrong if the 11 bit clc is
+      // used. We will error when writing the relocation values later anyway
+      // so this will help find the error
+      warn("added " + Twine(SmallEntryCount) + " entries to .captable but "
+          "current maximum is " + Twine(MaxSmallEntries) + "; try recompiling "
+          "non-performance critical source files with -mxcaptable");
+    }
+    if (errorHandler().Verbose) {
+      message("Total " + Twine(Entries.size()) + " .captable entries: " +
+          Twine(SmallEntryCount) + " use a small immediate and " +
+          Twine(Entries.size() - SmallEntryCount) + " use -mxcaptable. ");
+    }
   }
 
   // Only add the @CAPTABLE symbols when running the LLD unit tests
@@ -834,15 +853,15 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
     // If the symbol is used as a function pointer the runtime linker has to
     // ensure that all pointers to that function compare equal. This is done
     // by ensuring that they all point to the same PLT stub.
-    // If it is not used as a function pointer we can use
-    // R_MIPS_CHERI_CAPABILITY_CALL instead which allows the runtime linker to
-    // create non-unique plt stubs.
+    // If it is not used as a function pointer we can use a capability call
+    // relocation instead which allows the runtime linker to create non-unique
+    // plt stubs.
     RelType ElfCapabilityReloc = it.second.UsedAsFunctionPointer
-                                     ? R_MIPS_CHERI_CAPABILITY
-                                     : R_MIPS_CHERI_CAPABILITY_CALL;
-    // All R_MIPS_CHERI_CAPABILITY_CALL relocations should end up in
-    // the pltrel section rather than the normal relocation section to make
-    // processing of PLT relocations in RTLD more efficient.
+                                     ? *Target->CheriCapRel
+                                     : *Target->CheriCapCallRel;
+    // All capability call relocations should end up in the pltrel section
+    // rather than the normal relocation section to make processing of PLT
+    // relocations in RTLD more efficient.
     RelocationBaseSection *DynRelSec =
         it.second.UsedAsFunctionPointer ? In.RelaDyn : In.RelaPlt;
     addCapabilityRelocation<ELFT>(
@@ -861,10 +880,6 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
 
 template <class ELFT>
 void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
-  // FIXME: we should not be hardcoding architecture specific relocation numbers
-  // here
-  assert(Config->EMachine == EM_MIPS);
-
   // First assign the global indices (which will usually be the only ones)
   uint64_t AssignedEntries = assignIndices<ELFT>(0, GlobalEntries, "");
   if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScopePolicy::All)) {

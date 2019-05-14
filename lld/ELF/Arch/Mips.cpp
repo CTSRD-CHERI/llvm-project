@@ -54,6 +54,8 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
   CopyRel = R_MIPS_COPY;
   NoneRel = R_MIPS_NONE;
   PltRel = R_MIPS_JUMP_SLOT;
+  CheriCapRel = R_MIPS_CHERI_CAPABILITY;
+  CheriCapCallRel = R_MIPS_CHERI_CAPABILITY_CALL;
   NeedsThunks = true;
 
   // Set `sigrie 1` as a trap instruction.
@@ -65,12 +67,14 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
     TlsModuleIndexRel = R_MIPS_TLS_DTPMOD64;
     TlsOffsetRel = R_MIPS_TLS_DTPREL64;
     AbsPointerRel = (R_MIPS_64 << 8) | R_MIPS_CHERI_ABSPTR;
+    SizeRel = (R_MIPS_64 << 8) | R_MIPS_CHERI_SIZE;
   } else {
     RelativeRel = R_MIPS_REL32;
     TlsGotRel = R_MIPS_TLS_TPREL32;
     TlsModuleIndexRel = R_MIPS_TLS_DTPMOD32;
     TlsOffsetRel = R_MIPS_TLS_DTPREL32;
     AbsPointerRel = R_MIPS_CHERI_ABSPTR;
+    SizeRel = R_MIPS_CHERI_SIZE;
   }
   // Make the CheriABI start address more similar to the BFD output
   if (Config->OSABI == ELFOSABI_FREEBSD && Config->isCheriABI()) {
@@ -188,14 +192,16 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
     return R_CHERI_CAPABILITY;
   case R_MIPS_CHERI_CAPTAB_LO16:
   case R_MIPS_CHERI_CAPTAB_HI16:
+    return R_CHERI_CAPABILITY_TABLE_INDEX;
   case R_MIPS_CHERI_CAPCALL_LO16:
   case R_MIPS_CHERI_CAPCALL_HI16:
-    return R_CHERI_CAPABILITY_TABLE_INDEX;
-  case R_MIPS_CHERI_CAPCALL_CLC11:
-  case R_MIPS_CHERI_CAPCALL20:
+    return R_CHERI_CAPABILITY_TABLE_INDEX_CALL;
   case R_MIPS_CHERI_CAPTAB_CLC11:
   case R_MIPS_CHERI_CAPTAB20:
     return R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
+  case R_MIPS_CHERI_CAPCALL_CLC11:
+  case R_MIPS_CHERI_CAPCALL20:
+    return R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE;
   case R_MIPS_CHERI_CAPTAB_TLS_GD_LO16:
   case R_MIPS_CHERI_CAPTAB_TLS_GD_HI16:
     return R_MIPS_CHERI_CAPTAB_TLSGD;

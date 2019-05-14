@@ -175,8 +175,8 @@ public:
   CheriCapTableSection();
   // InputFile and Offset is needed in order to implement per-file/per-function
   // tables
-  void addEntry(Symbol &Sym, bool NeedsSmallImm, RelType Type,
-                InputSectionBase *IS, uint64_t Offset);
+  void addEntry(Symbol &Sym, RelExpr Expr, InputSectionBase *IS,
+                uint64_t Offset);
   void addDynTlsEntry(Symbol &Sym);
   void addTlsIndex();
   void addTlsEntry(Symbol &Sym);

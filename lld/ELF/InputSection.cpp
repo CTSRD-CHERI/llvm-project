@@ -792,6 +792,8 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
     llvm_unreachable("R_CHERI_CAPABILITY should not be handled here!");
   case R_CHERI_CAPABILITY_TABLE_INDEX:
   case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
+  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL:
+  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
     assert(A == 0 && "capability table index relocs should not have addends");
     return Config->CapabilitySize * In.CheriCapTable->getIndex(Sym, IS, Offset);
   case R_CHERI_CAPABILITY_TABLE_REL:

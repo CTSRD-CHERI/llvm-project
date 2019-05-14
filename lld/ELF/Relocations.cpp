@@ -430,6 +430,8 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
   // These expressions always compute a constant
   if (oneof<R_CHERI_CAPABILITY_TABLE_INDEX,
             R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
+            R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
+            R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_REL,
             R_GOTPLT, R_GOT_OFF, R_HEXAGON_GOT, R_TLSLD_GOT_OFF,
             R_MIPS_GOT_LOCAL_PAGE, R_MIPS_GOTREL, R_MIPS_GOT_OFF,
@@ -1166,11 +1168,11 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
   }
 
   if (oneof<R_CHERI_CAPABILITY_TABLE_INDEX,
-            R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(Expr)) {
+            R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
+            R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
+            R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE>(Expr)) {
     assert(Config->ProcessCapRelocs);
-    bool SmallImmediate =
-        Expr == R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
-    In.CheriCapTable->addEntry(Sym, SmallImmediate, Type, &Sec, Offset);
+    In.CheriCapTable->addEntry(Sym, Expr, &Sec, Offset);
     // Write out the index into the instruction
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;

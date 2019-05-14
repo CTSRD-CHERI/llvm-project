@@ -100,6 +100,9 @@ public:
   RelType TlsModuleIndexRel;
   RelType TlsOffsetRel;
   llvm::Optional<RelType> AbsPointerRel; // TODO: remove the optional
+  llvm::Optional<RelType> SizeRel;
+  llvm::Optional<RelType> CheriCapRel;
+  llvm::Optional<RelType> CheriCapCallRel;
   unsigned GotEntrySize = 0;
   unsigned GotPltEntrySize = 0;
   unsigned PltEntrySize;
