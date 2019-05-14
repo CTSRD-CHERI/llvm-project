@@ -118,7 +118,7 @@ public:
 private:
   static bool parseInstructions(A &addressSpace, pint_t instructions,
                                 pint_t instructionsEnd, const CIE_Info &cieInfo,
-                                ptrdiff_t pcoffset,
+                                size_t pcoffset,
                                 PrologInfoStackEntry *&rememberStack, int arch,
                                 PrologInfo *results);
 };
@@ -445,26 +445,26 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
   // parse CIE then FDE instructions
   return parseInstructions(addressSpace, cieInfo.cieInstructions,
                            cieInfo.cieStart + cieInfo.cieLength, cieInfo,
-                           (ptrdiff_t)(-1), rememberStack, arch, results) &&
+                           (size_t)(-1), rememberStack, arch, results) &&
          parseInstructions(addressSpace, fdeInfo.fdeInstructions,
                            fdeInfo.fdeStart + fdeInfo.fdeLength, cieInfo,
-                           (ptrdiff_t)((char *)upToPC - (char *)fdeInfo.pcStart), rememberStack,
-                           arch, results);
+                           (size_t)((char*)upToPC - (char*)fdeInfo.pcStart),
+                           rememberStack, arch, results);
 }
 
 /// "run" the DWARF instructions
 template <typename A>
 bool CFI_Parser<A>::parseInstructions(A &addressSpace, pint_t instructions,
                                       pint_t instructionsEnd,
-                                      const CIE_Info &cieInfo, ptrdiff_t pcoffset,
+                                      const CIE_Info &cieInfo, size_t pcoffset,
                                       PrologInfoStackEntry *&rememberStack,
                                       int arch, PrologInfo *results) {
   pint_t p = instructions;
-  ptrdiff_t codeOffset = 0;
+  size_t codeOffset = 0;
   PrologInfo initialState = *results;
 
-  _LIBUNWIND_TRACE_DWARF("parseInstructions(instructions=0x%0" PRIx64 ")\n",
-                         static_cast<uint64_t>(instructionsEnd));
+  _LIBUNWIND_TRACE_DWARF("parseInstructions(instructions=%#p-%p, pcoffset=0x%zx)\n",
+                         (void*)instructions, (void*)instructionsEnd, pcoffset);
 
   // see DWARF Spec, section 6.4.2 for details on unwind opcodes
   while ((p < instructionsEnd) && (codeOffset < pcoffset)) {
@@ -650,8 +650,8 @@ bool CFI_Parser<A>::parseInstructions(A &addressSpace, pint_t instructions,
       results->savedRegisters[reg].location = kRegisterAtExpression;
       results->savedRegisters[reg].value = (int64_t)p;
       length = addressSpace.getULEB128(p, instructionsEnd);
-      assert(length < static_cast<pint_t>(~0) && "pointer overflow");
-      p += static_cast<pint_t>(length);
+      assert(length < static_cast<uint64_t>(~0) && "pointer overflow");
+      p += static_cast<uint64_t>(length);
       _LIBUNWIND_TRACE_DWARF("DW_CFA_expression(reg=%" PRIu64 ", "
                              "expression=%p, length=%" PRIu64 ")\n",
                              reg, (void*)results->savedRegisters[reg].value, length);
