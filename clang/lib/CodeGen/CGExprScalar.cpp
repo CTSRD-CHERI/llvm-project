@@ -1447,11 +1447,10 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
 
     if (DstType->isCHERICapabilityType(CGF.getContext())) {
       Value *Null = llvm::ConstantPointerNull::get(DstPT);
-      // Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstPT);
       if (SrcType->isBooleanType() && !Opts.TreatBooleanAsSigned)
-        Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
+        Src = Builder.CreateZExtOrTrunc(Src, CGF.IntPtrTy);
       else
-        Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);
+        Src = Builder.CreateSExtOrTrunc(Src, CGF.IntPtrTy);
       return CGF.setCapabilityIntegerValue(Null, Src);
     }
     // First, convert to the correct width so that we control the kind of
