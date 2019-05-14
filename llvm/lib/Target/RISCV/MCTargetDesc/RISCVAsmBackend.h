@@ -118,6 +118,7 @@ public:
       { "fixup_riscv_relax",         0,      0,  0 },
       { "fixup_riscv_align",         0,      0,  0 },
       { "fixup_riscv_captab_pcrel_hi20", 12, 20, MCFixupKindInfo::FKF_IsPCRel },
+      { "fixup_riscv_capability",    0,      0,  0 },
     };
     static_assert((array_lengthof(Infos)) == RISCV::NumTargetFixupKinds,
                   "Not all fixup kinds added to Infos array");

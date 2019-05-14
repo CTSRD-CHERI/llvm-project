@@ -72,6 +72,16 @@ class RISCVAsmParser : public MCTargetAsmParser {
 
   bool ParseDirective(AsmToken DirectiveID) override;
 
+  bool isCheri() const override {
+    return getSTI().getFeatureBits()[RISCV::FeatureCheri];
+  }
+
+  unsigned getCheriCapabilitySize() const override {
+    assert(isCheri() &&
+           "Should not have been called without checking isCheri()!");
+    return isRV64() ? 16 : 8;
+  }
+
   // Helper to actually emit an instruction to the MCStreamer. Also, when
   // possible, compression of the instruction is performed.
   void emitToStreamer(MCStreamer &S, const MCInst &Inst);

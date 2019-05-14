@@ -182,6 +182,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     llvm_unreachable("Unknown fixup kind!");
   case RISCV::fixup_riscv_got_hi20:
   case RISCV::fixup_riscv_captab_pcrel_hi20:
+  case RISCV::fixup_riscv_capability:
     llvm_unreachable("Relocation should be unconditionally forced\n");
   case FK_Data_1:
   case FK_Data_2:
