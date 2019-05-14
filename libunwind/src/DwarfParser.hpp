@@ -107,7 +107,7 @@ public:
   static bool findFDE(A &addressSpace, pint_t pc, pint_t ehSectionStart,
                       uint32_t sectionLength, pint_t fdeHint, FDE_Info *fdeInfo,
                       CIE_Info *cieInfo);
-  static const char *decodeFDE(A &addressSpace, pint_t fdeStart,
+  static const char *decodeFDE(A &addressSpace, pint_t pc, pint_t fdeStart,
                                FDE_Info *fdeInfo, CIE_Info *cieInfo);
   static bool parseFDEInstructions(A &addressSpace, const FDE_Info &fdeInfo,
                                    const CIE_Info &cieInfo, pint_t upToPC,
@@ -125,7 +125,7 @@ private:
 
 /// Parse a FDE into a CIE_Info and an FDE_Info
 template <typename A>
-const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pint_t fdeStart,
+const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pint_t pc, pint_t fdeStart,
                                      FDE_Info *fdeInfo, CIE_Info *cieInfo) {
   pint_t p = fdeStart;
   pint_t cfiLength = (pint_t)addressSpace.get32(p);
@@ -141,16 +141,28 @@ const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pint_t fdeStart,
   if (ciePointer == 0)
     return "FDE is really a CIE"; // this is a CIE not an FDE
   pint_t nextCFI = p + cfiLength;
-  pint_t cieStart = p - ciePointer;
+  pint_t cieStart = assert_pointer_in_bounds(p - ciePointer);
   const char *err = parseCIE(addressSpace, cieStart, cieInfo);
   if (err != NULL)
     return err;
   p += 4;
   // Parse pc begin and range.
-  pint_t pcStart =
+  pint_t _pcStart =
       addressSpace.getEncodedP(p, nextCFI, cieInfo->pointerEncoding);
-  pint_t pcRange =
-      addressSpace.getEncodedP(p, nextCFI, cieInfo->pointerEncoding & 0x0F);
+#ifdef __CHERI_PURE_CAPABILITY__
+  assert(!__builtin_cheri_tag_get((void*)_pcStart));
+  addr_t pcStart = __builtin_cheri_address_get((void*)_pcStart);
+#else
+  addr_t pcStart = (addr_t)_pcStart;
+#endif
+  pint_t _pcRange = addressSpace.getEncodedP(
+      p, nextCFI, cieInfo->pointerEncoding & 0x0F);
+#ifdef __CHERI_PURE_CAPABILITY__
+  assert(!__builtin_cheri_tag_get((void*)_pcRange));
+  addr_t pcRange = __builtin_cheri_address_get((void*)_pcRange);
+#else
+  addr_t pcRange = (addr_t)_pcRange;
+#endif
   // Parse rest of info.
   fdeInfo->lsda = 0;
   // Check for augmentation length.
@@ -170,11 +182,26 @@ const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pint_t fdeStart,
     }
     p = endOfAug;
   }
-  fdeInfo->fdeStart = fdeStart;
+  fdeInfo->fdeStart = assert_pointer_in_bounds(fdeStart);
   fdeInfo->fdeLength = (size_t)((char*)nextCFI - (char*)fdeStart);
+#ifdef __CHERI_PURE_CAPABILITY__
+  // Set bounds on the individual items
+  // Note: Cannot set bounds on fdeStart since that is used to get pointers to other data structures
+  // However, it should be fine to set bounds on fdeInstructions
+  pint_t boundedFde = (pint_t)__builtin_cheri_bounds_set(
+      (char *)fdeInfo->fdeStart, fdeInfo->fdeLength);
+  fdeInfo->fdeInstructions = boundedFde + (size_t)((char *)p - (char *)boundedFde);
+#else
   fdeInfo->fdeInstructions = p;
+#endif
+
+#ifdef __CHERI_PURE_CAPABILITY__
+  fdeInfo->pcStart = assert_pointer_in_bounds((pint_t)__builtin_cheri_address_set((void*)pc, pcStart));
+  fdeInfo->pcEnd = assert_pointer_in_bounds(fdeInfo->pcStart + pcRange);
+#else
   fdeInfo->pcStart = pcStart;
   fdeInfo->pcEnd = pcStart + pcRange;
+#endif
   return NULL; // success
 }
 
@@ -261,10 +288,16 @@ bool CFI_Parser<A>::findFDE(A &addressSpace, pint_t pc, pint_t ehSectionStart,
               }
               p = endOfAug;
             }
-            fdeInfo->fdeStart = currentCFI;
+            fdeInfo->fdeStart = assert_pointer_in_bounds(currentCFI);
             fdeInfo->fdeLength = (size_t)((char*)nextCFI - (char*)currentCFI);
             fdeInfo->fdeInstructions = p;
 #ifdef __CHERI_PURE_CAPABILITY__
+            // Set bounds on the individual items
+            // Note: Cannot set bounds on fdeStart since that is used to get pointers to other data structures
+            // However, it should be fine to set bounds on fdeInstructions
+            pint_t boundedFde = (pint_t)__builtin_cheri_bounds_set(
+                (char *)fdeInfo->fdeStart, fdeInfo->fdeLength);
+            fdeInfo->fdeInstructions = boundedFde + (size_t)((char *)p - (char *)boundedFde);
             fdeInfo->pcStart = assert_pointer_in_bounds(pc - (pcAddr - pcStart));
             fdeInfo->pcEnd = assert_pointer_in_bounds(fdeInfo->pcStart + pcRange);
 #else
@@ -303,7 +336,7 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
 #if defined(_LIBUNWIND_TARGET_AARCH64)
   cieInfo->addressesSignedWithBKey = false;
 #endif
-  cieInfo->cieStart = cie;
+  cieInfo->cieStart = assert_pointer_in_bounds(cie);
   pint_t p = cie;
   uint64_t cieLength = addressSpace.get32(p);
   p += 4;
@@ -341,6 +374,10 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
 #ifdef __CHERI_PURE_CAPABILITY__
   // FIXME: This is entirely wrong, but for some reason we get the wrong value
   // from the compiler-generated DWARF
+  if (cieInfo->returnAddressRegister != UNW_MIPS_C17) {
+    fprintf(stderr, "WARNING: return register was not $c17: %d in cie=%p\n",
+            cieInfo->returnAddressRegister, (void *)cie);
+  }
   cieInfo->returnAddressRegister = (uint8_t)UNW_MIPS_C17;
 #endif
   // parse augmentation data based on augmentation string
@@ -383,7 +420,14 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
     }
   }
   cieInfo->cieLength = (size_t)((char*)cieContentEnd - (char*)cieInfo->cieStart);
+#ifdef __CHERI_PURE_CAPABILITY__
+  cieInfo->cieStart = (pint_t)__builtin_cheri_bounds_set(
+      (char *)cieInfo->cieStart, cieInfo->cieLength);
+  cieInfo->cieInstructions = assert_pointer_in_bounds(
+      cieInfo->cieStart + (size_t)((char *)p - (char *)cieInfo->cieStart));
+#else
   cieInfo->cieInstructions = p;
+#endif
   return result;
 }
 
