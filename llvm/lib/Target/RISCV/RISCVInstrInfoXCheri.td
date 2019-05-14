@@ -499,6 +499,14 @@ def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
 def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, $rs2)>;
 def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
 
+def : Pat<(int_cheri_ddc_get), (CSpecialRW C0, SCR_DDC.Encoding)>;
+
+let Predicates = [HasCheri, IsCapMode] in
+def : Pat<(int_cheri_pcc_get), (AUIPCC 0)>;
+
+let Predicates = [HasCheri, NotCapMode] in
+def : Pat<(int_cheri_pcc_get), (CSpecialRW C0, SCR_PCC.Encoding)>;
+
 /// Pointer-Comparison Instructions
 
 // Currently no dedicated instructions, so we:
