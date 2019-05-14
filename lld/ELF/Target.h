@@ -26,6 +26,7 @@ class Symbol;
 class TargetInfo {
 public:
   virtual uint32_t calcEFlags() const { return 0; }
+  virtual int getCapabilitySize() const { return 0; }
   virtual RelType getDynRel(RelType Type) const { return Type; }
   virtual void writeGotPltHeader(uint8_t *Buf) const {}
   virtual void writeGotHeader(uint8_t *Buf) const {}

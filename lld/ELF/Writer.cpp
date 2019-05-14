@@ -356,20 +356,21 @@ template <class ELFT> static void createSyntheticSections() {
       make<BssSection>(HasDataRelRo ? ".data.rel.ro.bss" : ".bss.rel.ro", 0, 1);
   Add(In.BssRelRo);
 
+  if (Config->ProcessCapRelocs) {
+    InX<ELFT>::CapRelocs = make<CheriCapRelocsSection<ELFT>>();
+  }
+
+  if (Config->CapabilitySize > 0) {
+    In.CheriCapTable = make<CheriCapTableSection>();
+    Add(In.CheriCapTable);
+    if (Config->CapTableScope != CapTableScopePolicy::All) {
+      In.CheriCapTableMapping = make<CheriCapTableMappingSection>();
+      Add(In.CheriCapTableMapping);
+    }
+  }
+
   // Add MIPS-specific sections.
   if (Config->EMachine == EM_MIPS) {
-    if (Config->ProcessCapRelocs) {
-      InX<ELFT>::CapRelocs = make<CheriCapRelocsSection<ELFT>>();
-    }
-    // We only need the capability table section if EF_MIPS_MACH_CHERI[128|256] is set
-    if (Config->CapabilitySize > 0) {
-      In.CheriCapTable = make<CheriCapTableSection>();
-      Add(In.CheriCapTable);
-      if (Config->CapTableScope != CapTableScopePolicy::All) {
-        In.CheriCapTableMapping = make<CheriCapTableMappingSection>();
-        Add(In.CheriCapTableMapping);
-      }
-    }
     if (!Config->Shared && Config->HasDynSymTab) {
       In.MipsRldMap = make<MipsRldMapSection>();
       Add(In.MipsRldMap);

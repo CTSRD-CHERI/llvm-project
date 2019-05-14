@@ -320,14 +320,14 @@ struct Configuration {
   // Size of a CHERI capability
   int CapabilitySize = 0;
 
-  inline bool isCheriABI() const { return MipsCheriAbi; }
+  inline bool isCheriABI() const { return CheriABI; }
   // We need to set the searchPaths before createFiles() is called since linker
   // scripts might contain INPUT() commands. Add a getter and setter for
-  // MipsCheriAbi to ensure this is always the case
+  // CheriABI to ensure this is always the case
   inline void setIsCheriABI(bool Set) {
     if (!Set)
       return;
-    MipsCheriAbi = true;
+    CheriABI = true;
     if (DynamicLinker.empty())
       DynamicLinker = "/libexec/ld-cheri-elf.so.1";
     // add the default search paths for CheriABI
@@ -337,7 +337,7 @@ struct Configuration {
   }
 
 private:
-  bool MipsCheriAbi = false;
+  bool CheriABI = false;
 };
 
 // The only instance of Configuration struct.

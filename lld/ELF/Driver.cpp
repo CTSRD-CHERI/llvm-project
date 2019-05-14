@@ -115,12 +115,18 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
 }
 
 // Parses a linker -m option.
-static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
+static std::tuple<ELFKind, uint16_t, uint8_t, bool> parseEmulation(
+    StringRef Emul) {
   uint8_t OSABI = 0;
+  bool IsCheriABI = false;
   StringRef S = Emul;
   if (S.endswith("_fbsd")) {
     S = S.drop_back(5);
     OSABI = ELFOSABI_FREEBSD;
+    if (S.endswith("_cheri")) {
+      S = S.drop_back(6);
+      IsCheriABI = true;
+    }
   }
 
   std::pair<ELFKind, uint16_t> Ret =
@@ -134,7 +140,6 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
           .Case("elf32lriscv", {ELF32LEKind, EM_RISCV})
           .Cases("elf32ppc", "elf32ppclinux", {ELF32BEKind, EM_PPC})
           .Case("elf64btsmip", {ELF64BEKind, EM_MIPS})
-          .Case("elf64btsmip_cheri", {ELF64BEKind, EM_MIPS})
           .Case("elf64ltsmip", {ELF64LEKind, EM_MIPS})
           .Case("elf64lriscv", {ELF64LEKind, EM_RISCV})
           .Case("elf64ppc", {ELF64BEKind, EM_PPC64})
@@ -146,7 +151,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
 
   if (Ret.first == ELFNoneKind)
     error("unknown emulation: " + Emul);
-  return std::make_tuple(Ret.first, Ret.second, OSABI);
+  return std::make_tuple(Ret.first, Ret.second, OSABI, IsCheriABI);
 }
 
 // Returns slices of MB by parsing MB as an archive file.
@@ -993,10 +998,11 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   // Parse ELF{32,64}{LE,BE} and CPU type.
   if (auto *Arg = Args.getLastArg(OPT_m)) {
     StringRef S = Arg->getValue();
-    std::tie(Config->EKind, Config->EMachine, Config->OSABI) =
+    bool IsCheriABI;
+    std::tie(Config->EKind, Config->EMachine, Config->OSABI, IsCheriABI) =
         parseEmulation(S);
 
-    Config->setIsCheriABI(S == "elf64btsmip_cheri_fbsd");
+    Config->setIsCheriABI(IsCheriABI);
     // TODO: add CHERI128 or CHERI256 flags (command line option?)
     Config->MipsN32Abi = (S == "elf32btsmipn32" || S == "elf32ltsmipn32");
     Config->Emulation = S;
@@ -1700,6 +1706,14 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Config->EFlags = Target->calcEFlags();
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
+  Config->CapabilitySize = Target->getCapabilitySize();
+
+  // CapabilitySize must be set if we are targeting the purecap ABI
+  if (Config->isCheriABI()) {
+    if (errorCount())
+      return;
+    assert(Config->CapabilitySize > 0);
+  }
 
   if (Config->EMachine == EM_ARM) {
     // FIXME: These warnings can be removed when lld only uses these features
@@ -1709,19 +1723,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
       warn("lld uses blx instruction, no object with architecture supporting "
            "feature detected");
   }
-
-  if (Config->EMachine == EM_MIPS) {
-    // Compute the size of a CHERI capability based on the MIPS ABI flags:
-    if ((Config->EFlags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128)
-      Config->CapabilitySize = 16;
-    if ((Config->EFlags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256)
-      Config->CapabilitySize = 32;
-    if (errorCount())
-      return;
-  }
-  // CapabilitySize must be set if we are targeting the purecap ABI
-  if (Config->isCheriABI())
-    assert(Config->CapabilitySize > 0);
 
   // This adds a .comment section containing a version string. We have to add it
   // before mergeSections because the .comment section is a mergeable section.

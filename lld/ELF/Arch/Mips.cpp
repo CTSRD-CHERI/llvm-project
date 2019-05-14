@@ -28,6 +28,7 @@ template <class ELFT> class MIPS final : public TargetInfo {
 public:
   MIPS();
   uint32_t calcEFlags() const override;
+  int getCapabilitySize() const override;
   RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
   int64_t getImplicitAddend(const uint8_t *Buf, RelType Type) const override;
@@ -86,6 +87,15 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
 
 template <class ELFT> uint32_t MIPS<ELFT>::calcEFlags() const {
   return calcMipsEFlags<ELFT>();
+}
+
+template <class ELFT> int MIPS<ELFT>::getCapabilitySize() const {
+  // Compute the size of a CHERI capability based on the MIPS ABI flags:
+  if ((Config->EFlags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128)
+    return 16;
+  if ((Config->EFlags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256)
+    return 32;
+  return 0;
 }
 
 template <class ELFT>
