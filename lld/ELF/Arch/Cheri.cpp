@@ -165,7 +165,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     }
     if (TargetRel.getType(Config->IsMips64EL) != R_MIPS_64) {
       error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
-            toString(LocationRel.getType(Config->IsMips64EL)));
+            toString(TargetRel.getType(Config->IsMips64EL)));
       continue;
     }
     Symbol *LocationSym =
