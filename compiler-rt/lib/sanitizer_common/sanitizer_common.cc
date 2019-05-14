@@ -127,13 +127,13 @@ void RemoveANSIEscapeSequencesFromString(char *str) {
   *z = '\0';
 }
 
-void LoadedModule::set(const char *module_name, uptr base_address) {
+void LoadedModule::set(const char *module_name, vaddr base_address) {
   clear();
   full_name_ = internal_strdup(module_name);
   base_address_ = base_address;
 }
 
-void LoadedModule::set(const char *module_name, uptr base_address,
+void LoadedModule::set(const char *module_name, vaddr base_address,
                        ModuleArch arch, u8 uuid[kModuleUUIDSize],
                        bool instrumented) {
   set(module_name, base_address);
@@ -157,7 +157,7 @@ void LoadedModule::clear() {
   }
 }
 
-void LoadedModule::addAddressRange(uptr beg, uptr end, bool executable,
+void LoadedModule::addAddressRange(vaddr beg, vaddr end, bool executable,
                                    bool writable, const char *name) {
   void *mem = InternalAlloc(sizeof(AddressRange));
   AddressRange *r =
@@ -167,7 +167,7 @@ void LoadedModule::addAddressRange(uptr beg, uptr end, bool executable,
     max_executable_address_ = end;
 }
 
-bool LoadedModule::containsAddress(uptr address) const {
+bool LoadedModule::containsAddress(vaddr address) const {
   for (const AddressRange &r : ranges()) {
     if (r.beg <= address && address < r.end)
       return true;

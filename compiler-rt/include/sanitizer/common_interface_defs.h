@@ -197,9 +197,9 @@ extern "C" {
 
   // Get full module name and calculate pc offset within it.
   // Returns 1 if pc belongs to some module, 0 if module was not found.
-  int __sanitizer_get_module_and_offset_for_pc(void *pc, char *module_path,
+  int __sanitizer_get_module_and_offset_for_pc(uintptr_t pc, char *module_path,
                                                size_t module_path_len,
-                                               void **pc_offset);
+                                               size_t *pc_offset);
 
 #ifdef __cplusplus
 }  // extern "C"

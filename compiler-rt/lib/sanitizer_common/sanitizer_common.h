@@ -775,30 +775,30 @@ class LoadedModule {
     internal_memset(uuid_, 0, kModuleUUIDSize);
     ranges_.clear();
   }
-  void set(const char *module_name, uptr base_address);
-  void set(const char *module_name, uptr base_address, ModuleArch arch,
+  void set(const char *module_name, vaddr base_address);
+  void set(const char *module_name, vaddr base_address, ModuleArch arch,
            u8 uuid[kModuleUUIDSize], bool instrumented);
   void clear();
-  void addAddressRange(uptr beg, uptr end, bool executable, bool writable,
+  void addAddressRange(vaddr beg, vaddr end, bool executable, bool writable,
                        const char *name = nullptr);
-  bool containsAddress(uptr address) const;
+  bool containsAddress(vaddr address) const;
 
   const char *full_name() const { return full_name_; }
-  uptr base_address() const { return base_address_; }
-  uptr max_executable_address() const { return max_executable_address_; }
+  vaddr base_address() const { return base_address_; }
+  vaddr max_executable_address() const { return max_executable_address_; }
   ModuleArch arch() const { return arch_; }
   const u8 *uuid() const { return uuid_; }
   bool instrumented() const { return instrumented_; }
 
   struct AddressRange {
     AddressRange *next;
-    uptr beg;
-    uptr end;
+    vaddr beg;
+    vaddr end;
     bool executable;
     bool writable;
     char name[kMaxSegName];
 
-    AddressRange(uptr beg, uptr end, bool executable, bool writable,
+    AddressRange(vaddr beg, vaddr end, bool executable, bool writable,
                  const char *name)
         : next(nullptr),
           beg(beg),
@@ -813,8 +813,8 @@ class LoadedModule {
 
  private:
   char *full_name_;  // Owned.
-  uptr base_address_;
-  uptr max_executable_address_;
+  vaddr base_address_;
+  vaddr max_executable_address_;
   ModuleArch arch_;
   u8 uuid_[kModuleUUIDSize];
   bool instrumented_;
@@ -856,7 +856,7 @@ class ListOfModules {
 };
 
 // Callback type for iterating over a set of memory ranges.
-typedef void (*RangeIteratorCallback)(uptr begin, uptr end, void *arg);
+typedef void (*RangeIteratorCallback)(vaddr begin, vaddr end, void *arg);
 
 enum AndroidApiLevel {
   ANDROID_NOT_ANDROID = 0,

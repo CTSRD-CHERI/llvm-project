@@ -23,7 +23,7 @@ namespace __sanitizer {
 enum { kKindBits = 3 };
 
 struct StatInfo {
-  uptr addr;
+  vaddr addr;
   usize data;
 };
 

@@ -164,7 +164,7 @@ void FakeStack::ForEachFakeFrame(RangeIteratorCallback callback, void *arg) {
       if (flags[i] == 0) continue;  // not allocated.
       FakeFrame *ff = reinterpret_cast<FakeFrame *>(
           GetFrame(stack_size_log(), class_id, i));
-      uptr begin = reinterpret_cast<uptr>(ff);
+      vaddr begin = reinterpret_cast<vaddr>(ff);
       callback(begin, begin + FakeStack::BytesInSizeClass(class_id), arg);
     }
   }

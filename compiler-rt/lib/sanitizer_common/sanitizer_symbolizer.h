@@ -93,7 +93,7 @@ class Symbolizer final {
   // The module names Symbolizer returns are stable and unique for every given
   // module.  It is safe to store and compare them as pointers.
   bool GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
-                                   vaddr *module_address);
+                                   usize *module_offset);
   const char *GetModuleNameForPc(vaddr pc) {
     const char *module_name = nullptr;
     vaddr unused;
@@ -148,7 +148,7 @@ class Symbolizer final {
   static Symbolizer *PlatformInit();
 
   bool FindModuleNameAndOffsetForAddress(vaddr address, const char **module_name,
-                                         vaddr *module_offset,
+                                         usize *module_offset,
                                          ModuleArch *module_arch);
   ListOfModules modules_;
   ListOfModules fallback_modules_;

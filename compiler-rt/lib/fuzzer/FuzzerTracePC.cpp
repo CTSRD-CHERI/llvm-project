@@ -251,9 +251,9 @@ const TracePC::PCTableEntry *TracePC::PCTableEntryByIdx(size_t Idx) {
 
 static std::string GetModuleName(VirtAddr PC) {
   char ModulePathRaw[4096] = "";  // What's PATH_MAX in portable C++?
-  void *OffsetRaw = nullptr;
+  size_t OffsetRaw = 0;
   if (!EF->__sanitizer_get_module_and_offset_for_pc(
-      reinterpret_cast<void *>(static_cast<uintptr_t>(PC)), ModulePathRaw,
+      static_cast<uintptr_t>(PC), ModulePathRaw,
       sizeof(ModulePathRaw), &OffsetRaw))
     return "";
   return ModulePathRaw;

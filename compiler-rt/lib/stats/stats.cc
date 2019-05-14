@@ -71,7 +71,7 @@ void WriteModuleReport(StatModule **smodp) {
       StatInfo *s = &smod->infos[i];
       if (!s->addr)
         continue;
-      WriteLE(stats_fd, (char*)s->addr - (char*)mod->base_address());
+      WriteLE(stats_fd, s->addr - mod->base_address());
       WriteLE(stats_fd, s->data);
     }
   }

@@ -74,7 +74,7 @@ const char *ExtractTokenUpToDelimiter(const char *str, const char *delimiter,
 SymbolizedStack *Symbolizer::SymbolizePC(vaddr addr) {
   BlockingMutexLock l(&mu_);
   const char *module_name;
-  vaddr module_offset;
+  usize module_offset;
   ModuleArch arch;
   SymbolizedStack *res = SymbolizedStack::New(addr);
   if (!FindModuleNameAndOffsetForAddress(addr, &module_name, &module_offset,
@@ -94,7 +94,7 @@ SymbolizedStack *Symbolizer::SymbolizePC(vaddr addr) {
 bool Symbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
   BlockingMutexLock l(&mu_);
   const char *module_name;
-  vaddr module_offset;
+  usize module_offset;
   ModuleArch arch;
   if (!FindModuleNameAndOffsetForAddress(addr, &module_name, &module_offset,
                                          &arch))
@@ -113,12 +113,12 @@ bool Symbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
 }
 
 bool Symbolizer::GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
-                                             vaddr *module_address) {
+                                             usize *module_offset) {
   BlockingMutexLock l(&mu_);
   const char *internal_module_name = nullptr;
   ModuleArch arch;
   if (!FindModuleNameAndOffsetForAddress(pc, &internal_module_name,
-                                         module_address, &arch))
+                                         module_offset, &arch))
     return false;
 
   if (module_name)
@@ -146,7 +146,7 @@ const char *Symbolizer::Demangle(const char *name) {
 
 bool Symbolizer::FindModuleNameAndOffsetForAddress(vaddr address,
                                                    const char **module_name,
-                                                   vaddr *module_offset,
+                                                   usize *module_offset,
                                                    ModuleArch *module_arch) {
   const LoadedModule *module = FindModuleForAddress(address);
   if (module == nullptr)

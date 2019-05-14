@@ -21,13 +21,13 @@ int foo() { return 1; }
 
 void Test(void *pc, const char *name) {
   char module_name[1024];
-  void *offset;
+  size_t offset;
   int ok = __sanitizer_get_module_and_offset_for_pc(
-      pc, module_name, sizeof(module_name), &offset);
+      (uintptr_t)pc, module_name, sizeof(module_name), &offset);
   if (!ok) {
     printf("NOT FOUND %s: %p\n", name, pc);
   } else {
-    printf("FOUND %s: %s %p\n", name, module_name, offset);
+    printf("FOUND %s: %s %zx\n", name, module_name, offset);
   }
 }
 
@@ -47,9 +47,9 @@ void TestDlsym() {
 void TestLoop() {
   void *pc = __builtin_return_address(0);
   char module_name[1024];
-  void *offset;
+  size_t offset;
   for (int i = 0; i < 1000000; ++i) {
-    __sanitizer_get_module_and_offset_for_pc(pc, module_name,
+    __sanitizer_get_module_and_offset_for_pc((uintptr_t)pc, module_name,
                                              sizeof(module_name), &offset);
   }
 }
