@@ -40,7 +40,7 @@ static const u32 kStackTraceMax = 256;
 #endif
 
 struct StackTrace {
-  const uptr *trace;
+  const vaddr *trace;
   u32 size;
   u32 tag;
 
@@ -50,8 +50,8 @@ struct StackTrace {
   static const int TAG_CUSTOM = 100; // Tool specific tags start here.
 
   StackTrace() : trace(nullptr), size(0), tag(0) {}
-  StackTrace(const uptr *trace, u32 size) : trace(trace), size(size), tag(0) {}
-  StackTrace(const uptr *trace, u32 size, u32 tag)
+  StackTrace(const vaddr *trace, u32 size) : trace(trace), size(size), tag(0) {}
+  StackTrace(const vaddr *trace, u32 size, u32 tag)
       : trace(trace), size(size), tag(tag) {}
 
   // Prints a symbolized stacktrace, followed by an empty line.
@@ -92,12 +92,12 @@ uptr StackTrace::GetPreviousInstructionPc(uptr pc) {
 
 // StackTrace that owns the buffer used to store the addresses.
 struct BufferedStackTrace : public StackTrace {
-  uptr trace_buffer[kStackTraceMax];
+  vaddr trace_buffer[kStackTraceMax];
   uptr top_frame_bp;  // Optional bp of a top frame.
 
   BufferedStackTrace() : StackTrace(trace_buffer, 0), top_frame_bp(0) {}
 
-  void Init(const uptr *pcs, uptr cnt, uptr extra_top_pc = 0);
+  void Init(const vaddr *pcs, usize cnt, bool extra_top_pc = false);
 
   // Get the stack trace with the given pc and bp.
   // The pc will be in the position 0 of the resulting stack trace.
@@ -134,8 +134,8 @@ struct BufferedStackTrace : public StackTrace {
   void UnwindSlow(uptr pc, u32 max_depth);
   void UnwindSlow(uptr pc, void *context, u32 max_depth);
 
-  void PopStackFrames(uptr count);
-  vaddr LocatePcInTrace(vaddr pc);
+  void PopStackFrames(usize count);
+  usize LocatePcInTrace(vaddr pc);
 
   BufferedStackTrace(const BufferedStackTrace &) = delete;
   void operator=(const BufferedStackTrace &) = delete;

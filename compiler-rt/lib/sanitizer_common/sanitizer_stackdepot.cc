@@ -24,7 +24,7 @@ struct StackDepotNode {
   atomic_uint32_t hash_and_use_count; // hash_bits : 12; use_count : 20;
   u32 size;
   u32 tag;
-  uptr stack[1];  // [size]
+  vaddr stack[1];  // [size]
 
   static const u32 kTabSizeLog = SANITIZER_ANDROID ? 16 : 20;
   // Lower kTabSizeLog bits are equal for all items in one bucket.
@@ -40,18 +40,17 @@ struct StackDepotNode {
         atomic_load(&hash_and_use_count, memory_order_relaxed) & kHashMask;
     if ((hash & kHashMask) != hash_bits || args.size != size || args.tag != tag)
       return false;
-    uptr i = 0;
-    for (; i < size; i++) {
+    for (usize i = 0; i < size; i++) {
       if (stack[i] != args.trace[i]) return false;
     }
     return true;
   }
-  static uptr storage_size(const args_type &args) {
-    return sizeof(StackDepotNode) + (args.size - 1) * sizeof(uptr);
+  static usize storage_size(const args_type &args) {
+    return sizeof(StackDepotNode) + (args.size - 1) * sizeof(args.trace[0]);
   }
   static u32 hash(const args_type &args) {
-    MurMur2HashBuilder H(args.size * sizeof(uptr));
-    for (uptr i = 0; i < args.size; i++) H.add(args.trace[i]);
+    MurMur2HashBuilder H(args.size * sizeof(args.trace[0]));
+    for (usize i = 0; i < args.size; i++) H.add(args.trace[i]);
     return H.get();
   }
   static bool is_valid(const args_type &args) {
@@ -61,7 +60,7 @@ struct StackDepotNode {
     atomic_store(&hash_and_use_count, hash & kHashMask, memory_order_relaxed);
     size = args.size;
     tag = args.tag;
-    internal_memcpy(stack, args.trace, size * sizeof(uptr));
+    internal_memcpy(stack, args.trace, size * sizeof(args.trace[0]));
   }
   args_type load() const {
     return args_type(&stack[0], size, tag);

@@ -22,7 +22,7 @@ VarSizeStackTrace::~VarSizeStackTrace() {
   ResizeBuffer(0);
 }
 
-void VarSizeStackTrace::ResizeBuffer(uptr new_size) {
+void VarSizeStackTrace::ResizeBuffer(usize new_size) {
   if (trace_buffer) {
     internal_free(trace_buffer);
   }
@@ -35,7 +35,7 @@ void VarSizeStackTrace::ResizeBuffer(uptr new_size) {
   size = new_size;
 }
 
-void VarSizeStackTrace::Init(const uptr *pcs, uptr cnt, uptr extra_top_pc) {
+void VarSizeStackTrace::Init(const vaddr *pcs, usize cnt, bool extra_top_pc) {
   ResizeBuffer(cnt + !!extra_top_pc);
   internal_memcpy(trace_buffer, pcs, cnt * sizeof(trace_buffer[0]));
   if (extra_top_pc)
