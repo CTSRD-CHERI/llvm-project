@@ -483,9 +483,9 @@ bool CFI_Parser<A>::parseInstructions(A &addressSpace, pint_t instructions,
       _LIBUNWIND_TRACE_DWARF("DW_CFA_nop\n");
       break;
     case DW_CFA_set_loc:
-      codeOffset = (ptrdiff_t)addressSpace.getEncodedP(p, instructionsEnd,
-                                                       cieInfo.pointerEncoding);
-      _LIBUNWIND_TRACE_DWARF("DW_CFA_set_loc\n");
+      codeOffset = addressSpace.template get<addr_t>(p);
+      _LIBUNWIND_TRACE_DWARF("DW_CFA_set_loc: new offset %" PRIu64 "\n",
+                             static_cast<uint64_t>(codeOffset));
       break;
     case DW_CFA_advance_loc1:
       codeOffset += (addressSpace.get8(p) * cieInfo.codeAlignFactor);
