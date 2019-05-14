@@ -192,6 +192,9 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   if (Subtarget.hasCheri()) {
     MVT CLenVT = Subtarget.typeForCapabilities();
+    setOperationAction(ISD::BR_CC, CLenVT, Expand);
+    setOperationAction(ISD::SELECT, CLenVT, Custom);
+    setOperationAction(ISD::SELECT_CC, CLenVT, Expand);
     setOperationAction(ISD::GlobalAddress, CLenVT, Custom);
     setOperationAction(ISD::BlockAddress, CLenVT, Custom);
     setOperationAction(ISD::ConstantPool, CLenVT, Custom);
@@ -907,6 +910,7 @@ static bool isSelectPseudo(MachineInstr &MI) {
   default:
     return false;
   case RISCV::Select_GPR_Using_CC_GPR:
+  case RISCV::Select_GPCR_Using_CC_GPR:
   case RISCV::Select_FPR32_Using_CC_GPR:
   case RISCV::Select_FPR64_Using_CC_GPR:
     return true;
@@ -1042,6 +1046,7 @@ RISCVTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   default:
     llvm_unreachable("Unexpected instr type to insert");
   case RISCV::Select_GPR_Using_CC_GPR:
+  case RISCV::Select_GPCR_Using_CC_GPR:
   case RISCV::Select_FPR32_Using_CC_GPR:
   case RISCV::Select_FPR64_Using_CC_GPR:
     return emitSelectPseudo(MI, BB);

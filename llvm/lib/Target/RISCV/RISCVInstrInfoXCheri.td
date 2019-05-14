@@ -499,7 +499,56 @@ def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
 def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, $rs2)>;
 def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
 
+/// Pointer-Comparison Instructions
+
+// Currently no dedicated instructions, so we:
+// * Rely on a merged register file
+// * Break untagged < tagged semantics
+// * Can't implement exact equality
+class CheriSetCCPat<PatFrag CondOp, dag GprDag>
+    : Pat<(CondOp GPCR:$cs1, GPCR:$cs2),
+          (OutPatFrag<(ops node:$rs1, node:$rs2), GprDag>
+            (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr),
+            (EXTRACT_SUBREG GPCR:$cs2, sub_cap_addr))>;
+
+def : CheriSetCCPat<setugt, (SLTU node:$rs2, node:$rs1)>;
+def : CheriSetCCPat<setuge, (XORI (SLTU node:$rs1, node:$rs2), 1)>;
+def : CheriSetCCPat<setule, (XORI (SLTU node:$rs2, node:$rs1), 1)>;
+def : CheriSetCCPat<setgt, (SLT node:$rs2, node:$rs1)>;
+def : CheriSetCCPat<setge, (XORI (SLT node:$rs1, node:$rs2), 1)>;
+def : CheriSetCCPat<setle, (XORI (SLT node:$rs2, node:$rs1), 1)>;
+
+def Select_GPCR_Using_CC_GPR : SelectCC_rrirr<GPCR, GPR>;
+
 /// Control-Flow Instructions
+
+// No dedicated instructions; see above
+
+class CheriBccPat<PatFrag CondOp, RVInstB Inst>
+    : Pat<(brcond (XLenVT (CondOp GPCR:$rs1, GPCR:$rs2)), bb:$imm12),
+          (Inst
+            (EXTRACT_SUBREG GPCR:$rs1, sub_cap_addr),
+            (EXTRACT_SUBREG GPCR:$rs2, sub_cap_addr),
+            simm13_lsb0:$imm12)>;
+
+def : CheriBccPat<seteq, BEQ>;
+def : CheriBccPat<setne, BNE>;
+def : CheriBccPat<setlt, BLT>;
+def : CheriBccPat<setge, BGE>;
+def : CheriBccPat<setult, BLTU>;
+def : CheriBccPat<setuge, BGEU>;
+
+class CheriBccSwapPat<PatFrag CondOp, RVInst InstBcc>
+    : Pat<(brcond (XLenVT (CondOp GPCR:$rs1, GPCR:$rs2)), bb:$imm12),
+          (InstBcc
+            (EXTRACT_SUBREG GPCR:$rs2, sub_cap_addr),
+            (EXTRACT_SUBREG GPCR:$rs1, sub_cap_addr),
+            simm13_lsb0:$imm12)>;
+
+def : CheriBccSwapPat<setgt, BLT>;
+def : CheriBccSwapPat<setle, BGE>;
+def : CheriBccSwapPat<setugt, BLTU>;
+def : CheriBccSwapPat<setule, BGEU>;
 
 /// Assertion Instructions
 
