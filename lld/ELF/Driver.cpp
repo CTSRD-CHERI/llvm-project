@@ -1257,6 +1257,8 @@ void LinkerDriver::inferMachineType() {
       Config->MipsN32Abi = isMipsN32Abi(F);
       Config->setIsCheriABI((F->EFlags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI);
     }
+    if (F->EMachine == EM_RISCV)
+      Config->setIsCheriABI(F->EFlags & EF_RISCV_CHERIABI);
     return;
   }
   error("target emulation unknown: -m or at least one .o file required");

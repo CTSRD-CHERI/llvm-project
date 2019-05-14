@@ -22,6 +22,7 @@ class RISCV final : public TargetInfo {
 public:
   RISCV();
   uint32_t calcEFlags() const override;
+  int getCapabilitySize() const override;
   RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
   void relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const override;
@@ -29,7 +30,20 @@ public:
 
 } // end anonymous namespace
 
-RISCV::RISCV() { NoneRel = R_RISCV_NONE; }
+RISCV::RISCV() {
+  NoneRel = R_RISCV_NONE;
+  RelativeRel = R_RISCV_RELATIVE;
+  SizeRel = R_RISCV_CHERI_SIZE;
+  CheriCapRel = R_RISCV_CHERI_CAPABILITY;
+  // TODO: PLT stubs with a separate relocation
+  CheriCapCallRel = R_RISCV_CHERI_CAPABILITY;
+
+  if (Config->Is64) {
+    AbsPointerRel = R_RISCV_64;
+  } else {
+    AbsPointerRel = R_RISCV_32;
+  }
+}
 
 static uint32_t getEFlags(InputFile *F) {
   if (Config->Is64)
@@ -54,9 +68,21 @@ uint32_t RISCV::calcEFlags() const {
     if ((EFlags & EF_RISCV_RVE) != (Target & EF_RISCV_RVE))
       error(toString(F) +
             ": cannot link object files with different EF_RISCV_RVE");
+
+    if ((EFlags & EF_RISCV_CHERIABI) != (Target & EF_RISCV_CHERIABI))
+      error(toString(F) +
+            ": cannot link object files with different EF_RISCV_CHERIABI");
+
+    if ((EFlags & EF_RISCV_CAP_MODE) != (Target & EF_RISCV_CAP_MODE))
+      error(toString(F) +
+            ": cannot link object files with different EF_RISCV_CAP_MODE");
   }
 
   return Target;
+}
+
+int RISCV::getCapabilitySize() const {
+  return Config->Is64 ? 16 : 8;
 }
 
 RelExpr RISCV::getRelExpr(const RelType Type, const Symbol &S,
@@ -76,6 +102,10 @@ RelExpr RISCV::getRelExpr(const RelType Type, const Symbol &S,
   case R_RISCV_RELAX:
   case R_RISCV_ALIGN:
     return R_HINT;
+  case R_RISCV_CHERI_CAPABILITY:
+    return R_CHERI_CAPABILITY;
+  case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
+    return R_CHERI_CAPABILITY_TABLE_ENTRY_PC;
   default:
     return R_ABS;
   }
@@ -182,6 +212,7 @@ void RISCV::relocateOne(uint8_t *Loc, const RelType Type,
     return;
   }
 
+  case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
   case R_RISCV_PCREL_HI20:
   case R_RISCV_HI20: {
     checkInt(Loc, Val, 32, Type);

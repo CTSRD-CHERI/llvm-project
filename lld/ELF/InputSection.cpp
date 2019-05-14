@@ -590,7 +590,7 @@ static Relocation *getRISCVPCRelHi20(const Symbol *Sym, uint64_t Addend) {
                        });
 
   for (auto It = Range.first; It != Range.second; ++It)
-    if (It->Expr == R_PC)
+    if (It->Expr == R_PC || It->Expr == R_CHERI_CAPABILITY_TABLE_ENTRY_PC)
       return &*It;
 
   error("R_RISCV_PCREL_LO12 relocation points to " + IS->getObjMsg(D->Value) +
@@ -796,6 +796,12 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
   case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
     assert(A == 0 && "capability table index relocs should not have addends");
     return Config->CapabilitySize * In.CheriCapTable->getIndex(Sym, IS, Offset);
+  case R_CHERI_CAPABILITY_TABLE_ENTRY_PC: {
+    assert(A == 0 && "capability table entry relocs should not have addends");
+    uint64_t CapTableOffset =
+        Config->CapabilitySize * In.CheriCapTable->getIndex(Sym, IS, Offset);
+    return ElfSym::CheriCapabilityTable->getVA() + CapTableOffset - P;
+  }
   case R_CHERI_CAPABILITY_TABLE_REL:
     if (!ElfSym::CheriCapabilityTable) {
       error("cannot compute difference between non-existent "
