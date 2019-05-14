@@ -3125,12 +3125,22 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
 
   const Elf_Ehdr *e = Obj->getHeader();
   unsigned CapSize;
-  if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256) {
-    CapSize = 32;
-  } else if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128) {
-    CapSize = 16;
-  } else {
-    W.startLine() << "Invalid ELF header (no EF_MIPS_MACH_CHERI128/256 flag)\n";
+  switch (e->e_machine) {
+  case EM_MIPS:
+    if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256) {
+      CapSize = 32;
+    } else if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128) {
+      CapSize = 16;
+    } else {
+      W.startLine() << "Invalid ELF header (no EF_MIPS_MACH_CHERI128/256 flag)\n";
+      return;
+    }
+    break;
+  case EM_RISCV:
+    CapSize = e->getFileClass() == ELF::ELFCLASS64 ? 16 : 8;
+    break;
+  default:
+    W.startLine() << "Unknown machine type\n";
     return;
   }
   const uint64_t CapTableStartVaddr = Shdr->sh_addr;

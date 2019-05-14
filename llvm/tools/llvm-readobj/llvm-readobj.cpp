@@ -527,14 +527,12 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer,
       Dumper->printELFLinkerOptions();
     if (opts::ArchSpecificInfo)
       Dumper->printArchSpecificInfo();
-    if (isMipsArch(Obj->getArch())) {
-      if (opts::CheriCapRelocs)
-        Dumper->printCheriCapRelocs();
-      if (opts::CheriCapTable)
-        Dumper->printCheriCapTable();
-      if (opts::CheriCapTableMapping)
-        Dumper->printCheriCapTableMapping();
-    }
+    if (opts::CheriCapRelocs)
+      Dumper->printCheriCapRelocs();
+    if (opts::CheriCapTable)
+      Dumper->printCheriCapTable();
+    if (opts::CheriCapTableMapping)
+      Dumper->printCheriCapTableMapping();
     if (opts::SectionGroups)
       Dumper->printGroupSections();
     if (opts::HashHistogram)
