@@ -36,25 +36,27 @@
 #define CHERI_INIT_GLOBALS_SUPPORTS_CONSTANT_FLAG 1
 
 struct capreloc {
-    __UINT64_TYPE__ capability_location;
-    __UINT64_TYPE__ object;
-    __UINT64_TYPE__ offset;
-    __UINT64_TYPE__ size;
-    __UINT64_TYPE__ permissions;
+    __SIZE_TYPE__ capability_location;
+    __SIZE_TYPE__ object;
+    __SIZE_TYPE__ offset;
+    __SIZE_TYPE__ size;
+    __SIZE_TYPE__ permissions;
 };
-static const __UINT64_TYPE__ function_reloc_flag = 1ULL << 63;
-static const __UINT64_TYPE__ function_pointer_permissions_mask =
+static const __SIZE_TYPE__ function_reloc_flag =
+   (__SIZE_TYPE__)1 << (__SIZE_WIDTH__ - 1);
+static const __SIZE_TYPE__ function_pointer_permissions_mask =
     ~(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE__);
-static const __UINT64_TYPE__ constant_reloc_flag = 1ULL << 62;
-static const __UINT64_TYPE__ constant_pointer_permissions_mask =
+static const __SIZE_TYPE__ constant_reloc_flag =
+   (__SIZE_TYPE__)1 << (__SIZE_WIDTH__ - 2);
+static const __SIZE_TYPE__ constant_pointer_permissions_mask =
     ~(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE__ |
       __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__);
-static const __UINT64_TYPE__ global_pointer_permissions_mask =
+static const __SIZE_TYPE__ global_pointer_permissions_mask =
     ~(__CHERI_CAP_PERMISSION_PERMIT_SEAL__|
       __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__);
 
@@ -73,14 +75,18 @@ __cap_table_end;
  * position-dependent executables.
  */
 #ifdef CHERI_INIT_GLOBALS_USE_OFFSET
+#define cgetaddr_or_offset "cgetoffset"
 #define csetaddr_or_offset "csetoffset"
 #define cheri_address_or_offset_set(_cap, _val)                                \
   __builtin_cheri_offset_set((_cap), (_val))
 #else
+#define cgetaddr_or_offset "cgetaddr"
 #define csetaddr_or_offset "csetaddr"
 #define cheri_address_or_offset_set(_cap, _val)                                \
   __builtin_cheri_address_set((_cap), (_val))
 #endif
+
+#if defined(__mips__)
 
 #define INIT_CGP_REGISTER_ASM                                                  \
   ".option pic0\n\t"                                                           \
@@ -120,11 +126,18 @@ __cap_table_end;
           "nop\n\t"                                                            \
           ".end __start");
 
+#elif defined(__riscv)
+/* No DEFINE_CHERI_START_FUNCTION needed; everything is currently PC-relative
+ * using AUIPCC. */
+#else
+#error Unknown architecture
+#endif
+
 static __attribute__((always_inline)) void
 cheri_init_globals_impl(const struct capreloc *start_relocs,
                         const struct capreloc *stop_relocs, void *data_cap,
                         const void *code_cap, const void *rodata_cap,
-                        _Bool tight_code_bounds, __UINT64_TYPE__ relocbase) {
+                        _Bool tight_code_bounds, __SIZE_TYPE__ relocbase) {
   data_cap =
       __builtin_cheri_perms_and(data_cap, global_pointer_permissions_mask);
   code_cap =
@@ -174,12 +187,26 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
   start_relocs = &__start___cap_relocs;
   stop_relocs = &__stop___cap_relocs;
 #else
-  __UINT64_TYPE__ start_addr, end_addr;
+  __SIZE_TYPE__ start_addr, end_addr;
+#if defined(__mips__)
   __asm__ (".option pic0\n\t"
        "dla %0, __start___cap_relocs\n\t"
        "dla %1, __stop___cap_relocs\n\t"
        :"=r"(start_addr), "=r"(end_addr));
-  long relocs_size = end_addr - start_addr;
+#elif defined(__riscv)
+  void * __capability tmp;
+  __asm__ (
+       "1: auipcc %2, %%pcrel_hi(__start___cap_relocs)\n\t"
+       "cincoffset %2, %2, %%pcrel_lo(1b)\n\t"
+       cgetaddr_or_offset " %0, %2\n\t"
+       "2: auipcc %2, %%pcrel_hi(__stop___cap_relocs)\n\t"
+       "cincoffset %2, %2, %%pcrel_lo(2b)\n\t"
+       cgetaddr_or_offset " %1, %2\n\t"
+       :"=r"(start_addr), "=r"(end_addr), "=&r"(tmp));
+#else
+#error Unknown architecture
+#endif
+  __SIZE_TYPE__ relocs_size = end_addr - start_addr;
   /*
    * Always get __cap_relocs relative to the initial $pcc. This should span
    * rodata and rw data, too so we can access __cap_relocs, no matter where it
