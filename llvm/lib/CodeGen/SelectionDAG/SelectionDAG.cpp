@@ -1188,7 +1188,7 @@ SDValue SelectionDAG::getBoolConstant(bool V, const SDLoc &DL, EVT VT,
 
 SDValue SelectionDAG::getNullCapability(const SDLoc &DL, EVT CapType) {
   assert(CapType.isFatPointer());
-  MVT IntVT = MVT::getIntegerVT(8 * getDataLayout().getPointerSize(0));
+  MVT IntVT = MVT::getIntegerVT(getDataLayout().getPointerSizeInBits(0));
   return getNode(ISD::INTTOPTR, DL, CapType, getConstant(0, DL, IntVT));
 }
 
@@ -1209,7 +1209,7 @@ SDValue SelectionDAG::getConstant(const APInt &Val, const SDLoc &DL, EVT VT,
 SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
                                   EVT VT, bool isT, bool isO) {
   if (VT.isFatPointer()) {
-    unsigned BitWidth = 8 * getDataLayout().getPointerSize(0);
+    unsigned BitWidth =  getDataLayout().getPointerSizeInBits(0);
     MVT IntVT = MVT::getIntegerVT(BitWidth);
     const ConstantInt *V = ConstantInt::get(*Context, Val.getValue().trunc(BitWidth));
     SDValue IntVal = getConstant(*V, DL, IntVT, isT);
@@ -6278,7 +6278,7 @@ SDValue SelectionDAG::getCSetBounds(SDValue Val, SDValue Length,
   // Using the bounded stack cap intrinisic allows reuse of the same register:
   if (isa<FrameIndexSDNode>(Val.getNode()))
     SetBounds = Intrinsic::cheri_bounded_stack_cap;
-  MVT SizeVT = MVT::getIntegerVT(8 * getDataLayout().getPointerSize(0));
+  MVT SizeVT = MVT::getIntegerVT(getDataLayout().getPointerSizeInBits(0));
   return getNode(ISD::INTRINSIC_WO_CHAIN, DL, Val.getValueType(),
                  getConstant(SetBounds, DL, SizeVT), Val, Length);
 }
