@@ -5635,10 +5635,11 @@ void CodeGenModule::AddVTableTypeMetadata(llvm::GlobalVariable *VTable,
 
 static llvm::GlobalVariable *
 GenerateAS0StringLiteral(CodeGenModule &CGM, StringRef Str) {
-  StringRef StrWithNull(Str.str().c_str(), Str.str().size() + 1);
+  llvm::SmallString<128> StrWithNull(Str);
+  StrWithNull.push_back('\0');
 
   llvm::Constant *C = llvm::ConstantDataArray::getString(CGM.getLLVMContext(),
-          StrWithNull, false);
+                                                         StrWithNull, false);
 
   auto *GV = new llvm::GlobalVariable( CGM.getModule(), C->getType(), true,
           llvm::GlobalValue::PrivateLinkage, C);

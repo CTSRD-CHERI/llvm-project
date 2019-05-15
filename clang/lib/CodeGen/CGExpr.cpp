@@ -5767,7 +5767,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     SmallVector<QualType, 16> NewParams;
     auto NumTy = getContext().UnsignedLongLongTy;
     auto *ClsAttr = TargetDecl->getAttr<CHERIMethodClassAttr>();
-    std::string FunctionBaseName = cast<NamedDecl>(TargetDecl)->getName().str();
+    StringRef FunctionBaseName = cast<NamedDecl>(TargetDecl)->getName();
     FunctionBaseName = FunctionBaseName.substr(0, FunctionBaseName.size() -
         Suffix.size());
     auto *MethodNumVar =
