@@ -124,7 +124,9 @@ CMAKE_ARGS+=("-DPYTHON_EXECUTABLE=$(which python3)")
          buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF" "-DBUILD_SHARED_LIBS=OFF" "-DLLVM_ENABLE_EXPENSIVE_CHECKS=OFF")'''
     } else {
         // Release build with assertions is a bit faster than a debug build and A LOT smaller
-        buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")'''
+        buildScript += '''
+CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")
+CMAKE_ARGS+=("-DLLVM_USE_SANITIZER=Address;Undefined")'''
     }
         buildScript += '''
 # Also don't set the default target or default sysroot when running tests as it breaks quite a few
