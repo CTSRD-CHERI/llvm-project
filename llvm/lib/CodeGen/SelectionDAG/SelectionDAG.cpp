@@ -1188,7 +1188,8 @@ SDValue SelectionDAG::getBoolConstant(bool V, const SDLoc &DL, EVT VT,
 
 SDValue SelectionDAG::getNullCapability(const SDLoc &DL, EVT CapType) {
   assert(CapType.isFatPointer());
-  return getNode(ISD::INTTOPTR, DL, CapType, getConstant(0, DL, MVT::i64));
+  MVT IntVT = MVT::getIntegerVT(8 * getDataLayout().getPointerSize(0));
+  return getNode(ISD::INTTOPTR, DL, CapType, getConstant(0, DL, IntVT));
 }
 
 SDValue SelectionDAG::getConstant(uint64_t Val, const SDLoc &DL, EVT VT,
@@ -1208,8 +1209,10 @@ SDValue SelectionDAG::getConstant(const APInt &Val, const SDLoc &DL, EVT VT,
 SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
                                   EVT VT, bool isT, bool isO) {
   if (VT.isFatPointer()) {
-    const ConstantInt *V = ConstantInt::get(*Context, Val.getValue().trunc(64));
-    SDValue IntVal = getConstant(*V, DL, MVT::i64, isT);
+    unsigned BitWidth = 8 * getDataLayout().getPointerSize(0);
+    MVT IntVT = MVT::getIntegerVT(BitWidth);
+    const ConstantInt *V = ConstantInt::get(*Context, Val.getValue().trunc(BitWidth));
+    SDValue IntVal = getConstant(*V, DL, IntVT, isT);
     assert(!isT && "Cannot create INTTOPTR targetconstant");
     // TODO: For MIPS we could copy from CNULL for value 0
     return getNode(ISD::INTTOPTR, SDLoc(), VT, IntVal);
@@ -6275,8 +6278,9 @@ SDValue SelectionDAG::getCSetBounds(SDValue Val, SDValue Length,
   // Using the bounded stack cap intrinisic allows reuse of the same register:
   if (isa<FrameIndexSDNode>(Val.getNode()))
     SetBounds = Intrinsic::cheri_bounded_stack_cap;
+  MVT SizeVT = MVT::getIntegerVT(8 * getDataLayout().getPointerSize(0));
   return getNode(ISD::INTRINSIC_WO_CHAIN, DL, Val.getValueType(),
-                 getConstant(SetBounds, DL, MVT::i64), Val, Length);
+                 getConstant(SetBounds, DL, SizeVT), Val, Length);
 }
 
 static void checkAddrSpaceIsValidForLibcall(const TargetLowering *TLI,
