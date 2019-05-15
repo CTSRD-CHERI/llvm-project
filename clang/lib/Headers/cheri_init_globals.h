@@ -74,10 +74,12 @@ __cap_table_end;
  * position-dependent executables.
  */
 #ifdef CHERI_INIT_GLOBALS_USE_OFFSET
+#define cgetaddr_or_offset "cgetoffset"
 #define csetaddr_or_offset "csetoffset"
 #define cheri_address_or_offset_set(_cap, _val)                                \
   __builtin_cheri_offset_set((_cap), (_val))
 #else
+#define cgetaddr_or_offset "cgetaddr"
 #define csetaddr_or_offset "csetaddr"
 #define cheri_address_or_offset_set(_cap, _val)                                \
   __builtin_cheri_address_set((_cap), (_val))
@@ -92,6 +94,8 @@ __cap_table_end;
 /* The initial PCC should have load+load_cap and span the current binary */
 #define GET_GCP_BASE_CAPABILITY "cgetpcc $cgp\n\t"
 #endif
+
+#if defined(__mips__)
 
 #if !defined(__CHERI_CAPABILITY_TABLE__) || __CHERI_CAPABILITY_TABLE__ == 3
 /* No need to setup $cgp for pc-relative or legacy ABI: */
@@ -136,6 +140,13 @@ __cap_table_end;
           "nop\n\t"                                                            \
           ".end __start");
 
+#elif defined(__riscv)
+/* No DEFINE_CHERI_START_FUNCTION needed; everything is currently PC-relative
+ * using AUIPCC. */
+#else
+#error Unknown architecture
+#endif
+
 static __attribute__((always_inline)) void
 cheri_init_globals_impl(const struct capreloc *start_relocs,
                         const struct capreloc *stop_relocs, void *data_cap,
@@ -175,7 +186,8 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
     src = __builtin_cheri_offset_increment(src, reloc->offset);
-#if __has_builtin(__builtin_cheri_seal_entry)
+    /* XXX: Permit on RISC-V once supported */
+#if __has_builtin(__builtin_cheri_seal_entry) && !defined(__riscv)
     if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
       /* Convert function pointers to sentries: */
       src = __builtin_cheri_seal_entry(src);
@@ -200,10 +212,24 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
   stop_relocs = &__stop___cap_relocs;
 #else
   __SIZE_TYPE__ start_addr, end_addr;
+#if defined(__mips__)
   __asm__ (".option pic0\n\t"
        "dla %0, __start___cap_relocs\n\t"
        "dla %1, __stop___cap_relocs\n\t"
        :"=r"(start_addr), "=r"(end_addr));
+#elif defined(__riscv)
+  void * __capability tmp;
+  __asm__ (
+       "1: auipcc %2, %%pcrel_hi(__start___cap_relocs)\n\t"
+       "cincoffset %2, %2, %%pcrel_lo(1b)\n\t"
+       cgetaddr_or_offset " %0, %2\n\t"
+       "2: auipcc %2, %%pcrel_hi(__stop___cap_relocs)\n\t"
+       "cincoffset %2, %2, %%pcrel_lo(2b)\n\t"
+       cgetaddr_or_offset " %1, %2\n\t"
+       :"=r"(start_addr), "=r"(end_addr), "=&C"(tmp));
+#else
+#error Unknown architecture
+#endif
   __SIZE_TYPE__ relocs_size = end_addr - start_addr;
   /*
    * Always get __cap_relocs relative to the initial $pcc. This should span
