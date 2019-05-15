@@ -1476,6 +1476,8 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       // if (Config->CapTableScope != CapTableScopePolicy::All)
       // Add the captable scope to the CHERI flags:
       CheriFlags |= ((unsigned)Config->CapTableScope) << 3;
+      if (Config->RelativeCapRelocsOnly)
+        CheriFlags |= DF_MIPS_CHERI_RELATIVE_CAPRELOCS;
       addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
     }
     if (In.CheriCapTable && In.CheriCapTable->isNeeded()) {
@@ -1576,6 +1578,11 @@ void RelocationBaseSection::addReloc(const DynamicReloc &Reloc) {
     // TODO: remove this hack
     if (Reloc.Type != R_MIPS_CHERI_CAPABILITY)
       const_cast<InputSectionBase*>(IS)->FreeBSDMipsRelocationsHack.push_back(Reloc);
+  }
+  if (Config->isCheriABI() && Config->RelativeCapRelocsOnly &&
+      Reloc.InputSec->Name == "__cap_relocs") {
+    warn("attempting to add a dynamic relocation against the __cap_relocs "
+         "section. If this is intended pass --no-relative-cap-relocs.");
   }
   if (Config->EMachine == EM_MIPS && Config->BuildingFreeBSDRtld) {
     unsigned BaseRelocType = Reloc.Type & 0xff;

@@ -31,7 +31,7 @@
 #endif
 
 /* Bump this on every incompatible change */
-#define CHERI_INIT_GLOBALS_VERSION 2
+#define CHERI_INIT_GLOBALS_VERSION 3
 #define CHERI_INIT_GLOBALS_NUM_ARGS 7
 #define CHERI_INIT_GLOBALS_SUPPORTS_CONSTANT_FLAG 1
 
@@ -124,7 +124,7 @@ static __attribute__((always_inline)) void
 cheri_init_globals_impl(const struct capreloc *start_relocs,
                         const struct capreloc *stop_relocs, void *data_cap,
                         const void *code_cap, const void *rodata_cap,
-                        _Bool tight_code_bounds, __UINT64_TYPE__ relocbase) {
+                        _Bool tight_code_bounds, __UINT64_TYPE__ base_addr) {
   data_cap =
       __builtin_cheri_perms_and(data_cap, global_pointer_permissions_mask);
   code_cap =
@@ -133,7 +133,7 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
       __builtin_cheri_perms_and(rodata_cap, constant_pointer_permissions_mask);
   for (const struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
     void **dest = cheri_address_or_offset_set(
-        data_cap, reloc->capability_location + relocbase);
+        data_cap, reloc->capability_location + base_addr);
     if (reloc->object == 0) {
       /* XXXAR: clang fills uninitialized capabilities with 0xcacaca..., so we
        * we need to explicitly write NULL here */
@@ -153,7 +153,8 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
     } else {
       base_cap = data_cap; /* read-write data */
     }
-    void *src = cheri_address_or_offset_set(base_cap, reloc->object);
+    void *src =
+        cheri_address_or_offset_set(base_cap, reloc->object + base_addr);
     if (can_set_bounds && (reloc->size != 0)) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }

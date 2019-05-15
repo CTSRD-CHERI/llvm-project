@@ -29,7 +29,7 @@ foo:
 # CHECK-NEXT: EntrySize: 40
 # CHECK-NEXT: }
 
-# CHECK-LABEL: DynamicSection [ (19 entries)
+# CHECK-LABEL: DynamicSection [ (16 entries)
 # CHECK:      0x000000007000C002 MIPS_CHERI_FLAGS
 # flag name is so long that there is no space:
 # CHECK-NEXT: 0x000000007000C000 MIPS_CHERI___CAPRELOCS0x10000

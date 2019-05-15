@@ -6,28 +6,28 @@
 
 
 
-// RUN: ld.lld -process-cap-relocs %t.o %t_external.o %t_bar.o -static -o %t-static.exe -verbose-cap-relocs
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o %t_external.o %t_bar.o -static -o %t-static.exe -verbose-cap-relocs
 // RUN: llvm-objdump -t -s -h %t-static.exe | FileCheck -check-prefixes DUMP-EXE,GLOBAL_SIZES %s
 
 // Look at shared libraries .global_sizes:
-// RUN: ld.lld -process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t.so -verbose-cap-relocs
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t.so -verbose-cap-relocs
 // RUN: llvm-objdump -t -s -h %t.so | FileCheck -check-prefixes DUMP-SHLIB,GLOBAL_SIZES %s
 
 // Check that -r output doesn't fill in .global_size but it does when that .o file is turned into an exe
-// RUN: ld.lld -process-cap-relocs -r %t.o %t_external.o %t_bar.o -o %t-relocatable.o -verbose-cap-relocs
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs -r %t.o %t_external.o %t_bar.o -o %t-relocatable.o -verbose-cap-relocs
 // RUN: llvm-objdump -t -s -h %t-relocatable.o | FileCheck -check-prefixes DUMP-RELOCATABLE %s
-// RUN: ld.lld -process-cap-relocs %t-relocatable.o -static -o %t-relocatable.exe -verbose-cap-relocs
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t-relocatable.o -static -o %t-relocatable.exe -verbose-cap-relocs
 // RUN: llvm-objdump -t -s -h %t-relocatable.exe | FileCheck -check-prefixes DUMP-EXE,GLOBAL_SIZES %s
 
 
 
 // check external capsizefix (results in different addresses so only test the .global_sizes section contents)
-// RUN: ld.lld -no-process-cap-relocs %t.o %t_external.o %t_bar.o -static -o %t-static-external-capsizefix.exe
+// RUN: ld.lld --no-relative-cap-relocs -no-process-cap-relocs %t.o %t_external.o %t_bar.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-objdump -s -t -h %t-static-external-capsizefix.exe | FileCheck -check-prefixes GLOBAL_SIZES %s
 
 
-// RUN: ld.lld -no-process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t-external-capsizefix.so
+// RUN: ld.lld --no-relative-cap-relocs -no-process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t-external-capsizefix.so
 // RUN: %capsizefix %t-external-capsizefix.so
 // RUN: llvm-objdump -s -t -h %t-external-capsizefix.so | FileCheck -check-prefixes GLOBAL_SIZES %s
 

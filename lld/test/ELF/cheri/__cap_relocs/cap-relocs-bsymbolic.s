@@ -41,7 +41,7 @@
 #                                                   ^---- Addend for the baz relocation
 
 # Now check for CHERI:
-# RUN: ld.lld -preemptible-caprelocs=legacy %t-cheri.o -shared -o %t-cheri.so
+# RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-cheri.o -shared -o %t-cheri.so
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
 # RUN: llvm-readobj -r --cap-relocs %t-cheri.so | FileCheck %s -check-prefix CHERI-PREEMPTIBLE
 # CHERI-PREEMPTIBLE-LABEL:  Relocations [
@@ -92,7 +92,7 @@
 
 
 # Now check for CHERI -Bsymbolic:
-# RUN: ld.lld -preemptible-caprelocs=legacy %t-cheri.o -shared -Bsymbolic -o %t-cheri-symbolic.so
+# RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-cheri.o -shared -Bsymbolic -o %t-cheri-symbolic.so
 # With -BSymbolic all 6 relocations should be against the load address:
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
 # RUN: llvm-readobj -r --cap-relocs %t-cheri-symbolic.so | FileCheck %s -check-prefix CHERI-BSYMBOLIC

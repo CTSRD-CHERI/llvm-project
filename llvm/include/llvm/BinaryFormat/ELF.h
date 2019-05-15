@@ -1323,6 +1323,7 @@ enum {
   // Tighter bounds on captable:
   DF_MIPS_CHERI_CAPTABLE_PER_FILE = 0x00000008,
   DF_MIPS_CHERI_CAPTABLE_PER_FUNC = 0x00000010,
+  DF_MIPS_CHERI_RELATIVE_CAPRELOCS = 0x00000020,
 };
 
 // ElfXX_VerDef structure version (GNU versioning)

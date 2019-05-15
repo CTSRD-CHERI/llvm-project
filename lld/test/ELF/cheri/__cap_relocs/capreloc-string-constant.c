@@ -3,7 +3,7 @@
 // RUN: %cheri256_purecap_cc1 %s -emit-obj -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
 
-// RUN: ld.lld -preemptible-caprelocs=legacy %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
+// RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
 // RUN: llvm-readobj --cap-relocs -s %t-static.exe | FileCheck -check-prefixes STATIC %s
 
 // same again for statically dynamically linked exe:
@@ -12,7 +12,7 @@
 // RUN: llvm-readobj -r -s --cap-relocs  %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC %s
 
 // Look at shared libraries:
-// RUN: ld.lld -preemptible-caprelocs=legacy %t.o -shared -o %t.so
+// RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -s --cap-relocs %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 
 

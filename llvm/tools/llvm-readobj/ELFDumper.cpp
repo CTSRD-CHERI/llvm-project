@@ -1684,6 +1684,7 @@ static const EnumEntry<unsigned> ElfDynamicDTMipsFlags[] = {
 static const EnumEntry<unsigned> ElfDynamicDTMipsCheriAbiFlags[] = {
     LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, CAPTABLE_PER_FILE),
     LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, CAPTABLE_PER_FUNC),
+    LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, RELATIVE_CAPRELOCS),
 };
 
 #undef LLVM_READOBJ_DT_FLAG_ENT

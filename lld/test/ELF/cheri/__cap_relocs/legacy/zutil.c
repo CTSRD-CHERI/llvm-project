@@ -2,7 +2,7 @@
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-RELOCS %s
-// RUN: ld.lld -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o
+// RUN: ld.lld --no-relative-cap-relocs -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o
 // RUN: llvm-objdump --cap-relocs -s -t %t.so | FileCheck %s
 
 #define z_const const

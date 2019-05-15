@@ -4,7 +4,7 @@
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
 
 // By default building a shared library should not warn about unresolved symbols (but still report them)
-// RUN: ld.lld -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o | FileCheck %s -check-prefix NOTE
+// RUN: ld.lld --no-relative-cap-relocs -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o | FileCheck %s -check-prefix NOTE
 // NOTE: warning: cap_reloc against undefined symbol: foo
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix SHLIB-RELOCS
 // First reloc the is __cap_reloc target which has a load address relocation
@@ -40,9 +40,9 @@
 // CHECK: 0000000000020000       g     O .data  000000{{1|2}}0 foo_ptr
 
 // But it should with --unresolved-symbols=report-all
-// RUN: not ld.lld -shared --unresolved-symbols=report-all -o %t.so %t.o 2>&1 | FileCheck %s -check-prefix ERR
+// RUN: not ld.lld --no-relative-cap-relocs -shared --unresolved-symbols=report-all -o %t.so %t.o 2>&1 | FileCheck %s -check-prefix ERR
 // And when building executables
-// RUN: not ld.lld -o %t.exe %t.o 2>&1 | FileCheck %s -check-prefix ERR
+// RUN: not ld.lld --no-relative-cap-relocs -o %t.exe %t.o 2>&1 | FileCheck %s -check-prefix ERR
 // ERR: error: cap_reloc against undefined symbol: foo
 
 // READOBJ-LABEL:Section ({{.+}}) .rela__cap_relocs {

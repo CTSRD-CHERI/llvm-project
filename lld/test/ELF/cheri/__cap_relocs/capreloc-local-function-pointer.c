@@ -3,7 +3,7 @@
 // RUN: %cheri_purecap_clang -cheri-cap-table-abi=legacy %s -c -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
-// RUN: ld.lld -preemptible-caprelocs=legacy %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
+// RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
 // RUN: llvm-readobj --cap-relocs -t -s -sd %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
@@ -12,11 +12,11 @@
 // RUN: llvm-readobj --cap-relocs -t -s -sd -r %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
 
 // Look at shared libraries:
-// RUN: ld.lld -preemptible-caprelocs=legacy %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
+// RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
 // RUN: llvm-readobj --cap-relocs -t -s -sd -r %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t-legacy.o
-// RUN: ld.lld -preemptible-caprelocs=legacy %t-legacy.o -no-process-cap-relocs -static -o %t-static-external-capsizefix.exe
+// RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-legacy.o -no-process-cap-relocs -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-readobj --cap-relocs -s -t -sd %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 

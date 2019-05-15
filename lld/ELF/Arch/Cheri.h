@@ -367,8 +367,6 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
     // the offset addend
     if (!DynRelSec)
       DynRelSec = In.RelaDyn;
-    DynRelSec->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
-                        *Target->AbsPointerRel);
     // in the case that -local-caprelocs=elf is passed we need to ensure that
     // the target symbol is included in the dynamic symbol table
     if (!In.DynSymTab) {
@@ -391,6 +389,8 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
         In.DynSymTab->addSymbol(&Sym);
       }
     }
+    DynRelSec->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
+                        *Target->AbsPointerRel);
     if (!Sym.includeInDynsym()) {
       error("added a R_CHERI_CAPABILITY relocation but symbol not included "
             "in dynamic symbol: " +
@@ -398,8 +398,13 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
       return;
     }
   } else if (CapRelocMode == CapRelocsMode::Legacy) {
-    InX<ELFT>::CapRelocs->addCapReloc({Sec, Offset, Config->Pic}, {&Sym, 0u},
-                                     Sym.IsPreemptible, Addend);
+    bool NeedsDynReloc = Config->Pic;
+    if (Config->RelativeCapRelocsOnly) {
+      assert(!Sym.IsPreemptible);
+      NeedsDynReloc = false;
+    }
+    InX<ELFT>::CapRelocs->addCapReloc({Sec, Offset, NeedsDynReloc}, {&Sym, 0u},
+                                      Sym.IsPreemptible, Addend);
   } else {
     assert(Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap);
     error("CBuildCap method not implemented yet!");

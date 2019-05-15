@@ -522,6 +522,9 @@ def building_freebsd_rtld: F<"building-freebsd-rtld">,
 defm process_cap_relocs: B<"process-cap-relocs",
     "Enable special processing of __cap_relocs sections",
     "Don't do any special processing for the __cap_relocs section">;
+defm relative_cap_relocs: B<"relative-cap-relocs",
+    "All __cap_relocs entries are relative to the load addresss (not compatible with -preemptible-caprelocs=legacy)",
+    "Add dynamic relocations to write the full addresses to all __cap_relocs entries">;
 defm sort_cap_relocs: B<"sort-cap-relocs",
     "Sort the __cap_relocs section by capability location",
     "Do not sort the __cap_relocs section by capability location">, Flags<[HelpHidden]>;

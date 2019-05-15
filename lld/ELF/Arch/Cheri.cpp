@@ -270,8 +270,19 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
                                               bool TargetNeedsDynReloc,
                                               int64_t CapabilityOffset,
                                               Symbol *SourceSymbol) {
-  Loc.NeedsDynReloc = Loc.NeedsDynReloc || Config->Pic || Config->Pie;
-  TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
+  if (Config->RelativeCapRelocsOnly) {
+    assert(!Loc.NeedsDynReloc);
+    if (TargetNeedsDynReloc) {
+      error("Cannot add __cap_reloc against target that needs a dynamic "
+            "relocation when --relative-cap-relocs is enabled: " +
+            Target.verboseToString());
+      return;
+    }
+  } else {
+    // Allow relocations in __cap_relocs section for legacy mode
+    Loc.NeedsDynReloc = Loc.NeedsDynReloc || Config->Pic || Config->Pie;
+    TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
+  }
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
   std::string SourceMsg =
@@ -311,11 +322,11 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
                                   Filename).str();
     auto LocationSym = Symtab->find(SymbolHackName);
     if (!LocationSym) {
-        Symtab->addDefined<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
-                                 STT_OBJECT, Loc.Offset, Config->CapabilitySize,
-                                 STB_GLOBAL, Loc.Section, Loc.Section->File);
-        LocationSym = Symtab->find(SymbolHackName);
-        assert(LocationSym);
+      Symtab->addDefined(Saver.save(SymbolHackName), STV_DEFAULT, STT_OBJECT,
+                         Loc.Offset, Config->CapabilitySize, STB_GLOBAL,
+                         Loc.Section, Loc.Section->File);
+      LocationSym = Symtab->find(SymbolHackName);
+      assert(LocationSym);
     }
 
     // Needed because local symbols cannot be used in dynamic relocations
@@ -338,7 +349,8 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   if (TargetNeedsDynReloc) {
 #ifdef DEBUG_CAP_RELOCS
     message("Adding dyn reloc at " + toString(this) + "+0x" +
-            utohexstr(OffsetInOutSec) + " against " + Target.verboseToString());
+            utohexstr(CurrentEntryOffset) + " against " +
+            Target.verboseToString());
     message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
 #endif
 

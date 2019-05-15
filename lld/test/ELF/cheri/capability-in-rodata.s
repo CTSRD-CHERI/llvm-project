@@ -58,5 +58,5 @@ bar:
 
 # SHLIB: CHERI __cap_relocs [
 # SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x10000 (__start+4) Length: 16 Perms: Function
-# SHLIB-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x500 (foo+123) Length: {{16|32}} Perms: Constant
+# SHLIB-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x{{.+}} (foo+123) Length: {{16|32}} Perms: Constant
 # SHLIB-NEXT: ]

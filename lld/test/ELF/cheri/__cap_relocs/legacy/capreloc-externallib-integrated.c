@@ -3,25 +3,25 @@
 // RUN: %cheri256_purecap_cc1 %legacy_caprelocs_flag_cc1 %S/../Inputs/external_lib_user.c -emit-obj -o %t.o
 // RUN: %cheri256_purecap_cc1 %legacy_caprelocs_flag_cc1 %S/../Inputs/external_lib.c -emit-obj -o %t-externs.o
 
-// RUN: ld.lld -process-cap-relocs %t.o %t-externs.o -static -o %t-static.exe -e entry
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o %t-externs.o -static -o %t-static.exe -e entry
 // RUN: llvm-objdump -h -r -t  --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %s
 
-// RUN: ld.lld -process-cap-relocs %t-externs.o -shared -o %t-externs.so
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t-externs.o -shared -o %t-externs.so
 // RUN: llvm-objdump --cap-relocs -t  %t-externs.so | FileCheck -check-prefixes DUMP-EXTERNALLIB %s
 
-// RUN: ld.lld -process-cap-relocs %t-externs.so %t.o -o %t-dynamic.exe -e entry
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs --no-relative-cap-relocs %t-externs.so %t.o -o %t-dynamic.exe -e entry
 // RUN: llvm-objdump -h -r -t  --cap-relocs %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %s
 // RUN: llvm-readobj -r %t-dynamic.exe | FileCheck -check-prefix DYNAMIC-EXE-RELOCS %s
 
 // See what it looks like as a shared library
-// RUN: ld.lld -process-cap-relocs %t-externs.so %t.o -shared -o %t.so
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs --no-relative-cap-relocs %t-externs.so %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -dyn-relocations -s %t.so | FileCheck -check-prefixes SHLIB %s
 // RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck -check-prefixes DUMP-SHLIB %s
 
 // check that we get an undefined symbol error:
-// RUN: not ld.lld -process-cap-relocs %t.o -Bdynamic -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
-// RUN: not ld.lld -process-cap-relocs %t.o -static -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
-// RUN: not ld.lld -process-cap-relocs %t.o -shared -no-undefined -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
+// RUN: not ld.lld --no-relative-cap-relocs -process-cap-relocs --no-relative-cap-relocs %t.o -Bdynamic -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
+// RUN: not ld.lld --no-relative-cap-relocs -process-cap-relocs --no-relative-cap-relocs %t.o -static -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
+// RUN: not ld.lld --no-relative-cap-relocs -process-cap-relocs --no-relative-cap-relocs %t.o -shared -no-undefined -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
 
 // STATIC: CAPABILITY RELOCATION RECORDS:
 // STATIC: 0x0000000120020000	Base: external_cap (0x0000000120021180)	Offset: 0x0000000000000000	Length: 0x00000000000000{{1|2}}0	Permissions: 0x00000000

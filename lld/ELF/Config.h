@@ -232,6 +232,7 @@ struct Configuration {
   // Method used for capability relocations for non-preemptible symbols
   CapRelocsMode LocalCapRelocsMode;
   CapTableScopePolicy CapTableScope;
+  bool RelativeCapRelocsOnly;
 
   ARMVFPArgKind ARMVFPArgs = ARMVFPArgKind::Default;
   BuildIdKind BuildId = BuildIdKind::None;

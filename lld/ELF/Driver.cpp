@@ -331,6 +331,11 @@ static void checkOptions() {
     error("local-cap-relocs=cbuildcap is not implemented yet");
   assert(Config->PreemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
 
+  if (Config->PreemptibleCapRelocsMode == CapRelocsMode::Legacy &&
+      Config->RelativeCapRelocsOnly)
+    error("--preemptible-caprelocs=legacy is not compatible with "
+          "--relative-cap-relocs");
+
   if (Config->ExecuteOnly) {
     if (Config->EMachine != EM_AARCH64)
       error("-execute-only is only supported on AArch64 targets");
@@ -1124,6 +1129,14 @@ static void setConfigs(opt::InputArgList &Args) {
   Config->WriteAddends = Args.hasFlag(OPT_apply_dynamic_relocs,
                                       OPT_no_apply_dynamic_relocs, false) ||
                          !Config->IsRela;
+
+  // Avoid dynamic relocations for __cap_relocs unless we are building legacy
+  // TODO: remove once benchmarking is done.
+  bool RelativeCapRelocsDefault =
+      !Config->Pic || Config->PreemptibleCapRelocsMode != CapRelocsMode::Legacy;
+  Config->RelativeCapRelocsOnly =
+      Args.hasFlag(OPT_relative_cap_relocs, OPT_no_relative_cap_relocs,
+                   RelativeCapRelocsDefault);
 
   Config->TocOptimize =
       Args.hasFlag(OPT_toc_optimize, OPT_no_toc_optimize, M == EM_PPC64);

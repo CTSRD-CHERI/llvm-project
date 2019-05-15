@@ -1,5 +1,5 @@
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
-# RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=legacy -local-caprelocs=legacy
+# RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=legacy --no-relative-cap-relocs -local-caprelocs=legacy
 # RUN: llvm-readobj -r %t | FileCheck %s -check-prefix LEGACY-BOTH-ELF-RELOCS
 # RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s -check-prefix LEGACY-BOTH-CAPRELOCS
 # RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=elf -local-caprelocs=legacy
@@ -73,10 +73,6 @@ local_var:
 # One relative reloc for the local __cap_reloc location and one R_MIPS_CHERI_CAPABILITY for the preemptible symbol
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS:      Relocations [
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS-NEXT:   Section (7) .rel.dyn {
-# ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS-NEXT:     0x20020 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-#                                                     ^----- location field in __cap_reloc[0]
-# ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS-NEXT:     0x20028 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-#                                                     ^----- base field in __cap_reloc[0]
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS-NEXT:     0x20000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE preemptible_var 0x0 (real addend unknown)
 #                                                       ^---- preemptible_var@CAPTABLE
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS-NEXT:   }

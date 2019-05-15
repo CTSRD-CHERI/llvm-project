@@ -3,21 +3,21 @@
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t.o
 // RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
-// RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
 // RUN: llvm-objdump --cap-relocs -t -s %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
-// RUN: ld.lld -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
 // RUN: llvm-objdump --cap-relocs -t -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 // RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 
 // Look at shared libraries:
-// RUN: ld.lld -process-cap-relocs %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
+// RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 // RUN: llvm-objdump --cap-relocs -t -s %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 
-// RUN: ld.lld -no-process-cap-relocs %t.o -static -o %t-static-external-capsizefix.exe
+// RUN: ld.lld --no-relative-cap-relocs -no-process-cap-relocs %t.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-objdump --cap-relocs -s -t %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 

@@ -19,8 +19,6 @@
 
 // PER-FILE: Relocations [
 // PER-FILE-NEXT:   Section ({{.+}}) .rel.dyn {
-// PER-FILE-NEXT:     0x20090 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// PER-FILE-NEXT:     0x20098 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // PER-FILE-NEXT:     0x20030 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
 // PER-FILE-NEXT:     0x20060 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
 // PER-FILE-NEXT:     0x20080 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
@@ -58,8 +56,6 @@
 // Less entries and relocations with a global captable:
 // GLOBAL: Relocations [
 // GLOBAL-NEXT:   Section (7) .rel.dyn {
-// GLOBAL-NEXT:     0x20050 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// GLOBAL-NEXT:     0x20058 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // GLOBAL-NEXT:     0x20030 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
 // GLOBAL-NEXT:   }
 // GLOBAL-NEXT:   Section (8) .rel.plt {
