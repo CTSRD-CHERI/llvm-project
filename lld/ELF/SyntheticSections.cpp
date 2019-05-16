@@ -1535,8 +1535,10 @@ int64_t DynamicReloc::computeAddend() const {
 
 uint32_t DynamicReloc::getSymIndex() const {
   if (Sym && !UseSymVA) {
-    if (Sym->DynsymIndex == 0) {
-      warn("DynsymIndex == 0 for relocation against " + verboseToString(Sym));
+    // It is fine to have a dynsymindex of 0 for the TLS module relocations
+    if (Sym->DynsymIndex == 0 && Type != Target->TlsModuleIndexRel) {
+      warn("DynsymIndex == 0 for " + toString(Type) + " relocation against " +
+           verboseToString(Sym) + "+" + Twine(Addend));
     }
     return Sym->DynsymIndex;
   }
