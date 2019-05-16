@@ -1534,8 +1534,12 @@ int64_t DynamicReloc::computeAddend() const {
 }
 
 uint32_t DynamicReloc::getSymIndex() const {
-  if (Sym && !UseSymVA)
+  if (Sym && !UseSymVA) {
+    if (Sym->DynsymIndex == 0) {
+      warn("DynsymIndex == 0 for relocation against " + verboseToString(Sym));
+    }
     return Sym->DynsymIndex;
+  }
   return 0;
 }
 
