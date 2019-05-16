@@ -539,8 +539,7 @@ def preemptible_caprelocs_elf: F<"preemptible-caprelocs=elf">,
 def local_caprelocs_legacy: F<"local-caprelocs=legacy">,
   HelpText<"Emit capability relocations for local symbols using the __cap_relocs mechanism">;
 def local_caprelocs_elf: F<"local-caprelocs=elf">,
-  HelpText<"Emit capability relocations for local symbols using R_CAPABILITY relocations in .rel(a).dyn. "
-  "This options is for debugging only since it means any capability needs to be added to the dynamic symbol table.">;
+  HelpText<"Use ELF relocations for local capabilities.">;
 def local_caprelocs_cbuildcap: F<"local-caprelocs=cbuildcap">,
   HelpText<"Emit capability relocations for local symbols by writing bits to be initialized using CBuildCap.">;
 

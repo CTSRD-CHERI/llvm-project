@@ -8,11 +8,6 @@
 
 # TODO: ld.lld -o %t %t -preemptible-caprelocs=elf -local-caprelocs=cbuildcap
 
-# Not sure it makes sense to maintain the -local-caprelocs=elf codepath
-# RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=elf -local-caprelocs=elf
-# RUN: llvm-readobj -r %t | FileCheck %s -check-prefix ELF-BOTH-ELF-RELOCS
-# RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s -check-prefix ELF-BOTH-CAPRELOCS
-
 .text
 .ent __start
 .global __start
@@ -77,24 +72,3 @@ local_var:
 #                                                       ^---- preemptible_var@CAPTABLE
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS-NEXT:   }
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS-NEXT: ]
-
-
-# Finally if we use ELF relocs for local symbols as well we have no __cap_relocs, only two elf relocs:
-# ELF-BOTH-CAPRELOCS: CAPABILITY RELOCATION RECORDS:{{$}}
-# ELF-BOTH-CAPRELOCS-SAME: {{[[:space:]]$}}
-# ELF-BOTH-CAPRELOCS-LABEL: Sections:
-# ELF-BOTH-CAPRELOCS-NOT: __cap_relocs
-# ELF-BOTH-CAPRELOCS: 9 .captable    00000020 0000000000020000 DATA
-# ELF-BOTH-CAPRELOCS-NOT: __cap_relocs
-# ELF-BOTH-CAPRELOCS-LABEL: SYMBOL TABLE:
-# ELF-BOTH-CAPRELOCS:       0000000000020000 l     O .captable              00000010 preemptible_var@CAPTABLE
-# ELF-BOTH-CAPRELOCS:       0000000000020010 l     O .captable              00000010 local_var@CAPTABLE
-
-# ELF-BOTH-ELF-RELOCS:      Relocations [
-# ELF-BOTH-ELF-RELOCS-NEXT:   Section (7) .rel.dyn {
-# ELF-BOTH-ELF-RELOCS-NEXT:     0x20010 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE local_var 0x0 (real addend unknown)
-#                                    ^---- local_var@CAPTABLE
-# ELF-BOTH-ELF-RELOCS-NEXT:     0x20000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE preemptible_var 0x0 (real addend unknown)
-#                                   ^---- preemptible_var@CAPTABLE
-# ELF-BOTH-ELF-RELOCS-NEXT:   }
-# ELF-BOTH-ELF-RELOCS-NEXT: ]

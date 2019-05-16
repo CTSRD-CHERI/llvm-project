@@ -8,15 +8,6 @@
 # RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs %t-old.so | FileCheck %s -check-prefix DUMP
 # RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs %t-new.so | FileCheck %s -check-prefix DUMP
 
-# Test that we can also emit R_CHERI_CAPABILITY relocations for local symbols (even though it is stupid)
-# RUN: ld.lld -preemptible-caprelocs=elf -local-caprelocs=elf -shared %t.o -o %t.so -verbose -verbose-cap-relocs
-# RUN: llvm-readobj -dyn-relocations -dyn-symbols %t.so | FileCheck %s -check-prefixes=R_CAPABILITY_FOR_ALL
-# RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs -t %t.so | FileCheck %s -check-prefix DUMP-R_CAPABILITY_FOR_ALL
-
-# RUN: ld.lld -pie -preemptible-caprelocs=elf -local-caprelocs=elf %t.o -o %t.exe
-# RUN: llvm-readobj -dyn-relocations -dyn-symbols %t.exe | FileCheck %s -check-prefixes=R_CAPABILITY_FOR_ALL
-# RUN: llvm-objdump --cap-relocs -s -t --section=.data --section=__cap_relocs %t.exe | FileCheck %s -check-prefix DUMP-R_CAPABILITY_FOR_ALL
-
 .text
 .global foo
 .ent foo
@@ -93,58 +84,3 @@ local_ref_with_addend:
 # DUMP-NEXT:  30060 cacacaca cacacaca cacacaca cacacaca
 #                        ^---- No addend for local_ref_with_addend since we are using __cap_relocs
 # DUMP-NEXT:  30070 14141414 14141414 14141414 14141414
-
-
-# R_CAPABILITY_FOR_ALL:      Dynamic Relocations {
-# R_CAPABILITY_FOR_ALL-NEXT:   0x20020 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE bar 0x0
-# R_CAPABILITY_FOR_ALL-NEXT:   0x20060 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE bar 0x0
-# R_CAPABILITY_FOR_ALL-NEXT:   0x20000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE foo 0x0
-# R_CAPABILITY_FOR_ALL-NEXT:   0x20040 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE foo 0x0
-# R_CAPABILITY_FOR_ALL-NEXT: }
-# R_CAPABILITY_FOR_ALL-NEXT: DynamicSymbols [
-# R_CAPABILITY_FOR_ALL-NEXT:   Symbol {
-# R_CAPABILITY_FOR_ALL-NEXT:     Name:  (0)
-# R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x0
-# R_CAPABILITY_FOR_ALL-NEXT:     Size: 0
-# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Local
-# R_CAPABILITY_FOR_ALL-NEXT:     Type: None (0x0)
-# R_CAPABILITY_FOR_ALL-NEXT:     Other: 0
-# R_CAPABILITY_FOR_ALL-NEXT:     Section: Undefined (0x0)
-# R_CAPABILITY_FOR_ALL-NEXT:   }
-# R_CAPABILITY_FOR_ALL-NEXT:   Symbol {
-# R_CAPABILITY_FOR_ALL-NEXT:     Name: bar (1)
-# R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x10040
-# R_CAPABILITY_FOR_ALL-NEXT:     Size: 8
-# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Local
-# R_CAPABILITY_FOR_ALL-NEXT:     Type: Function (0x2)
-# R_CAPABILITY_FOR_ALL-NEXT:     Other [
-# R_CAPABILITY_FOR_ALL-NEXT:       STV_INTERNAL
-# R_CAPABILITY_FOR_ALL-NEXT:     ]
-# R_CAPABILITY_FOR_ALL-NEXT:     Section: .text (0x8)
-# R_CAPABILITY_FOR_ALL-NEXT:  }
-# R_CAPABILITY_FOR_ALL-NEXT:   Symbol {
-# R_CAPABILITY_FOR_ALL-NEXT:     Name: foo (5)
-# R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x10000
-# R_CAPABILITY_FOR_ALL-NEXT:     Size: 4
-# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Global
-# R_CAPABILITY_FOR_ALL-NEXT:     Type: Function (0x2)
-# R_CAPABILITY_FOR_ALL-NEXT:     Other: 0
-# R_CAPABILITY_FOR_ALL-NEXT:     Section: .text (0x8)
-# R_CAPABILITY_FOR_ALL-NEXT:   }
-# R_CAPABILITY_FOR_ALL-NEXT: ]
-
-# DUMP-R_CAPABILITY_FOR_ALL: CAPABILITY RELOCATION RECORDS:
-# DUMP-R_CAPABILITY_FOR_ALL-EMPTY:
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT: Contents of section .data:
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20000 00000000 00000000 cacacaca cacacaca
-#                                             ^---- addend 0 for preemptible_ref
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20010 11111111 11111111 11111111 11111111
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20020 00000000 00000000 cacacaca cacacaca
-#                                             ^---- addend 0 for local_ref
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20030 13131313 13131313 13131313 13131313
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20040 00000000 00000002 cacacaca cacacaca
-#                                             ^---- addend 0x2 for preemptible_ref_with_addend
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20050 13131313 13131313 13131313 13131313
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20060 00000000 00000004 cacacaca cacacaca
-#                                             ^---- addend 0x4 for local_ref_with_addend
-# DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20070 14141414 14141414 14141414 14141414

@@ -279,9 +279,6 @@ uint8_t Symbol::computeBinding() const {
 bool Symbol::includeInDynsym() const {
   if (!Config->HasDynSymTab)
     return false;
-  // XXXAR: This is a hack to allow R_CHERI_CAPABILITY against local symbols
-  if (ForceExportDynamic)
-    return true;
   if (computeBinding() == STB_LOCAL)
     return false;
   // If a PIE binary was not linked against any shared libraries, then we can

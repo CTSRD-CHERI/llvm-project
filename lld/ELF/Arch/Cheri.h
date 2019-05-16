@@ -346,6 +346,8 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
                                    : Config->LocalCapRelocsMode;
   // local cap relocs don't need a Elf relocation with a full symbol lookup:
   if (CapRelocMode == CapRelocsMode::ElfReloc) {
+    assert(Sym.IsPreemptible && "ELF relocs should not be used for non-preemptible symbols");
+    assert(!Sym.isLocal() && "ELF relocs should not be used for local symbols");
     if (Config->EMachine == llvm::ELF::EM_MIPS && Config->BuildingFreeBSDRtld) {
         error("relocation " + toString(Type) + " against " +
               verboseToString(&Sym) + " cannot be using when building FreeBSD RTLD" +
@@ -372,22 +374,6 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
     if (!In.DynSymTab) {
       error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
       return;
-    }
-    // The following is a hack for allowing R_MIPS_CHERI_CAPABILITY relocation
-    // for local symbols (this should probably be removed in the future)
-    if (!Sym.includeInDynsym()) {
-      static std::vector<Symbol *> AddedToDynSymTab;
-      // Ensure that it is included in the dynamic symbol table
-      Sym.ExportDynamic = true;
-      Sym.ForceExportDynamic = true;
-      // Local symbols will not be part of Symtab so the code in Writer.cpp
-      // will not add them to DynSymTab. Do it manually here if it hasn't
-      // been added yet.
-      if (Sym.isLocal() && !llvm::is_contained(AddedToDynSymTab, &Sym)) {
-        Sym.Binding = llvm::ELF::STB_GLOBAL;
-        Sym.Visibility = llvm::ELF::STV_INTERNAL;
-        In.DynSymTab->addSymbol(&Sym);
-      }
     }
     DynRelSec->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
                         *Target->AbsPointerRel);

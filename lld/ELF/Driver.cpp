@@ -327,6 +327,9 @@ static void checkOptions() {
     if (Config->Pie)
       error("-r and -pie may not be used together");
   }
+  if (Config->LocalCapRelocsMode == CapRelocsMode::ElfReloc)
+    error("local-cap-relocs=elf is not implemented yet");
+  assert(Config->LocalCapRelocsMode != CapRelocsMode::ElfReloc);
   if (Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap)
     error("local-cap-relocs=cbuildcap is not implemented yet");
   assert(Config->PreemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
