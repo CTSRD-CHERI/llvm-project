@@ -1136,6 +1136,7 @@ static void setConfigs(opt::InputArgList &Args) {
   // TODO: remove once benchmarking is done.
   bool RelativeCapRelocsDefault =
       !Config->Pic || Config->PreemptibleCapRelocsMode != CapRelocsMode::Legacy;
+  RelativeCapRelocsDefault = false; // TODO: turn on by default
   Config->RelativeCapRelocsOnly =
       Args.hasFlag(OPT_relative_cap_relocs, OPT_no_relative_cap_relocs,
                    RelativeCapRelocsDefault);
