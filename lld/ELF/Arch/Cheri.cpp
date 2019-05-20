@@ -37,10 +37,9 @@ template <class ELFT> struct InMemoryCapRelocEntry {
 
 template <class ELFT>
 CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
-    : SyntheticSection(SHF_ALLOC |
-                           ((Config->Pic && !Config->RelativeCapRelocsOnly)
-                                ? SHF_WRITE /* XXX: actually RELRO */
-                                : 0),
+    : SyntheticSection((Config->Pic && !Config->RelativeCapRelocsOnly)
+                           ? SHF_ALLOC | SHF_WRITE /* XXX: actually RELRO */
+                           : SHF_ALLOC,
                        SHT_PROGBITS, 8, "__cap_relocs") {
   this->Entsize = RelocSize;
 }
