@@ -781,8 +781,8 @@ bool lld::elf::isRelroSection(const OutputSection *Sec) {
   // in the table need to be initialized at runtime to set the tag bits
   if (In.CheriCapTable && Sec == In.CheriCapTable->getParent()) {
     // Without -z now, the PLT stubs can update the captable entries so we
-    // can't mark it as relro.
-    return Config->ZNow;
+    // can't mark it as relro. It can also be relro for static binaries:
+    return Config->ZNow || !Config->Pic;
   }
 
   // .dynamic section contains data for the dynamic linker, and

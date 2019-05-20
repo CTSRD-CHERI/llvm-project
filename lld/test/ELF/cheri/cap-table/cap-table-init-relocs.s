@@ -1,8 +1,8 @@
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
-# RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=legacy --no-relative-cap-relocs -local-caprelocs=legacy
+# RUN: ld.lld -z now -shared -o %t %t.o -preemptible-caprelocs=legacy --no-relative-cap-relocs -local-caprelocs=legacy
 # RUN: llvm-readobj -r %t | FileCheck %s -check-prefix LEGACY-BOTH-ELF-RELOCS
 # RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s -check-prefix LEGACY-BOTH-CAPRELOCS
-# RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=elf -local-caprelocs=legacy
+# RUN: ld.lld -z now -shared -o %t %t.o -preemptible-caprelocs=elf -local-caprelocs=legacy
 # RUN: llvm-readobj -r %t | FileCheck %s -check-prefix ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS
 # RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s -check-prefix ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS
 
@@ -59,8 +59,8 @@ local_var:
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS-NEXT: 0x0000000000020010	Base: local_var (0x0000000000030008)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x00000000{{$}}
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS-SAME: {{[[:space:]]$}}
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS-LABEL: Sections:
-# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS: 9 .captable    00000020 0000000000020000 DATA
-# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS: 10 __cap_relocs  00000028 0000000000020020 DATA
+# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS: __cap_relocs  00000028 00000000000004b8 DATA
+# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS: .captable    00000020 0000000000020000 DATA
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS-LABEL: SYMBOL TABLE:
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS:       0000000000020000 l     O .captable              00000010 preemptible_var@CAPTABLE
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS:       0000000000020010 l     O .captable              00000010 local_var@CAPTABLE

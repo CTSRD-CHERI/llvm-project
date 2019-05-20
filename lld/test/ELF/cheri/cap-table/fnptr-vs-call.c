@@ -44,7 +44,7 @@
 // ONE-CALL-NEXT:  }
 // ONE-CALL-LABEL: DynamicSection [
 // ONE-CALL-NEXT: Tag                Type                 Name/Value
-// ONE-CALL-NEXT: 0x0000000000000017 JMPREL               0x468
+// ONE-CALL-NEXT: 0x0000000000000017 JMPREL               0x3F8
 // ONE-CALL-NEXT: 0x0000000000000002 PLTRELSZ             16 (bytes)
 // ONE-CALL-NEXT: 0x0000000070000032 MIPS_PLTGOT          0x0
 // ONE-CALL-NEXT: 0x0000000000000014 PLTREL               REL
@@ -59,7 +59,7 @@
 // TWO-CALLS-NEXT:  }
 // TWO-CALLS-LABEL: DynamicSection [
 // TWO-CALLS-NEXT: Tag                Type                 Name/Value
-// TWO-CALLS-NEXT: 0x0000000000000017 JMPREL               0x4B8
+// TWO-CALLS-NEXT: 0x0000000000000017 JMPREL               0x448
 // TWO-CALLS-NEXT: 0x0000000000000002 PLTRELSZ             32 (bytes)
 // TWO-CALLS-NEXT: 0x0000000070000032 MIPS_PLTGOT          0x0
 // TWO-CALLS-NEXT: 0x0000000000000014 PLTREL               REL
@@ -84,9 +84,9 @@
 // RUN: llvm-readobj -dynamic-table -r %t-all.so  | FileCheck -check-prefix ALL %s
 // ALL: Relocations [
 // ALL-NEXT: Section ({{.+}}) .rel.dyn {
-// ALL-NEXT:    0x20000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0 (real addend unknown)
+// ALL-NEXT:    0x20010 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0 (real addend unknown)
 // Since this is a data symbol we have to eagerly resolve it to a stub
-// ALL-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
+// ALL-NEXT:    0x20000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
 // ALL-NEXT:  }
 // FIXME: we should to avoid another PLT relocation here since we are already resolving the symbol!
 // However, it is a data symbol and not just a local value loaded from the captable so it will require a bit more logic.
@@ -95,10 +95,10 @@
 // ALL-NEXT:  }
 // ALL-LABEL: DynamicSection [
 // ALL-NEXT:  Tag                Type                 Name/Value
-// ALL-NEXT:  0x0000000000000011 REL                  0x540
+// ALL-NEXT:  0x0000000000000011 REL                  0x4D0
 // ALL-NEXT:  0x0000000000000012 RELSZ                32 (bytes)
 // ALL-NEXT:  0x0000000000000013 RELENT               16 (bytes)
-// ALL-NEXT:  0x0000000000000017 JMPREL               0x560
+// ALL-NEXT:  0x0000000000000017 JMPREL               0x4F0
 // ALL-NEXT:  0x0000000000000002 PLTRELSZ             16 (bytes)
 // ALL-NEXT:  0x0000000070000032 MIPS_PLTGOT          0x0
 // ALL-NEXT:  0x0000000000000014 PLTREL               REL

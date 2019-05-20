@@ -3,7 +3,7 @@
 // RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUNNOT: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
-// RUN: ld.lld -pie -o %t-pie.exe %t.o
+// RUN: ld.lld -z now -pie -o %t-pie.exe %t.o
 // RUN: llvm-objdump -r -cap-relocs -t %t.exe | FileCheck %s -check-prefixes EXE,STATIC-EXE
 // RUN: llvm-objdump -r -cap-relocs -t %t-pie.exe | FileCheck %s -check-prefixes EXE,DYNAMIC-EXE
 

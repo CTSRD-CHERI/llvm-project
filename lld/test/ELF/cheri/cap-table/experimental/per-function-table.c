@@ -2,12 +2,12 @@
 // REQUIRES: clang
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
-// RUN: ld.lld -shared -o %t.so %t.o -captable-scope=function -z captabledebug
+// RUN: ld.lld -z now -shared -o %t.so %t.o -captable-scope=function -z captabledebug
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t.so | FileCheck %s -check-prefixes CHECK,PER-FUNCTION
 // RUN: llvm-objdump --syms -d %t.so | FileCheck %s -check-prefixes SYMBOLS,DISAS
-// RUN: ld.lld -shared -o %t-file.so %t.o -captable-scope=file
+// RUN: ld.lld -z now -shared -o %t-file.so %t.o -captable-scope=file
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t-file.so | FileCheck %s -check-prefixes CHECK,PER-FILE
-// RUN: ld.lld -shared -o %t-all.so %t.o -captable-scope=all
+// RUN: ld.lld -z now -shared -o %t-all.so %t.o -captable-scope=all
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t-all.so | FileCheck %s -check-prefixes CHECK,GLOBAL
 
 // CHECK-DYNAMIC:   0x000000007000C002 MIPS_CHERI_FLAGS ABI_PLT CAPTABLE_PER_FUNC
@@ -37,11 +37,11 @@
 // CHECK-NEXT: ]
 // CHECK-LABEL: DynamicSection [
 // CHECK-NEXT:    Tag                Type                 Name/Value
-// PER-FUNCTION:  0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FUNC
-// PER-FUNCTION:  0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x6C8
+// PER-FUNCTION:  0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FUNC RELATIVE_CAPRELOCS {{$}}
+// PER-FUNCTION:  0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x6E8
 // PER-FUNCTION:  0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ0xA8
-// PER-FILE:      0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE
-// PER-FILE:      0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x688
+// PER-FILE:      0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE RELATIVE_CAPRELOCS {{$}}
+// PER-FILE:      0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x6A8
 // PER-FILE:      0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ0xA8
 // GLOBAL:        0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT RELATIVE_CAPRELOCS {{$}}
 // CHECK:      ]
@@ -177,36 +177,36 @@ __attribute__((noinline)) static void *function3(void) {
 // Also check that the raw bytes are correct in addition to the llvm-readobj output
 // RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
 // MAPPING: Idx Name          Size      VMA          Type
-// MAPPING:   9 .captable_mapping 000000a8 00000000000006c8 DATA
+// MAPPING:   9 .captable_mapping 000000a8 00000000000006e8 DATA
 // MAPPING-EMPTY:
 // MAPPING: Contents of section .captable_mapping:
-// MAPPING-NEXT:  06c8 00000000 [[FUNCTION1_ADDR:00010000]]
+// MAPPING-NEXT:  06e8 00000000 [[FUNCTION1_ADDR:00010000]]
 // MAPPING-SAME:       00000000 00010020
-// MAPPING-NEXT:  06d8 00000000 00000010
+// MAPPING-NEXT:  06f8 00000000 00000010
 // Start addr  00010000, size 0x20, captable index 0, size 1
 // MAPPING-SAME:       00000000 [[FUNCTION2_ADDR:00010020]]
-// MAPPING-NEXT:  06e8 00000000 00010040
+// MAPPING-NEXT:  0708 00000000 00010040
 // MAPPING-SAME:       00000010 00000010
 // Start addr  00010020, size 0x20, captable index 1, size 1
-// MAPPING-NEXT:  06f8 00000000 [[FUNCTION4_ADDR:00010040]]
+// MAPPING-NEXT:  0718 00000000 [[FUNCTION4_ADDR:00010040]]
 // MAPPING-SAME:       00000000 0001008c
-// MAPPING-NEXT:  0708 00000020 00000020
+// MAPPING-NEXT:  0728 00000020 00000020
 // Start addr  00010040, size 0x48, captable index 2, size 2
 // MAPPING-SAME:       00000000 [[FUNCTION5_ADDR:00010090]]
-// MAPPING-NEXT:  0718 00000000 0001009c
+// MAPPING-NEXT:  0738 00000000 0001009c
 // MAPPING-SAME:       00000040 00000010
 // Start addr  00010088, size 0xc, captable index 4, size 1
-// MAPPING-NEXT:  0728 00000000 [[SAME_GLOBALS_ADDR:000100a0]]
+// MAPPING-NEXT:  0748 00000000 [[SAME_GLOBALS_ADDR:000100a0]]
 // MAPPING-SAME:       00000000 000100c0
-// MAPPING-NEXT:  0738 00000050 00000010
+// MAPPING-NEXT:  0758 00000050 00000010
 // Start addr  00010098, size 0x20, captable index 5, size 1
 // MAPPING-SAME:       00000000 [[X_ADDR:000100c0]]
-// MAPPING-NEXT:  0748 00000000 000100e0
+// MAPPING-NEXT:  0768 00000000 000100e0
 // MAPPING-SAME:       00000060 00000010
 // Start addr  000100b8, size 0x20, captable index 6, size 1
-// MAPPING-NEXT:  0758 00000000 [[FUNCTION3_ADDR:000100e0]]
+// MAPPING-NEXT:  0778 00000000 [[FUNCTION3_ADDR:000100e0]]
 // MAPPING-SAME:       00000000 0001012c
-// MAPPING-NEXT:  0768 00000070 00000020
+// MAPPING-NEXT:  0788 00000070 00000020
 // Start addr  000100d8, size 0x48, captable index 7, size 2
 // MAPPING-NEXT: SYMBOL TABLE:
 // MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 0000004c function3
