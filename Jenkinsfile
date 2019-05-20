@@ -60,6 +60,8 @@ if [ "$label" = "freebsd" ]; then
   export LC_ALL=en_US.UTF-8
 fi
 rm -fv "\${WORKSPACE}/llvm-test-output.xml"
+# Verbose filecheck failure output:
+export FILECHECK_DUMP_INPUT_ON_FAILURE=1
 ninja check-${targetSuffix} \${JFLAG} || echo "Some check-${targetSuffix} tests failed!"
 mv -fv "\${WORKSPACE}/llvm-test-output.xml" "\${WORKSPACE}/llvm-test-output-${targetSuffix}.xml"
 echo "Done running check-${targetSuffix} tests"
