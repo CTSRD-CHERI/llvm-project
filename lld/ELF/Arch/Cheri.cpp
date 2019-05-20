@@ -572,7 +572,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
 
 
 CheriCapTableSection::CheriCapTableSection()
-  : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO */
+  : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO for BIND_NOW*/
                      SHT_PROGBITS, Config->CapabilitySize, ".captable") {
   assert(Config->CapabilitySize > 0);
   this->Entsize = Config->CapabilitySize;
