@@ -211,7 +211,7 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    * location of the capreloc.
    */
   cheri_init_globals_impl(start_relocs, stop_relocs, data_cap, code_cap,
-                          rodata_cap, /*relocbase=*/0, can_set_code_bounds);
+                          rodata_cap, can_set_code_bounds, /*relocbase=*/0);
 }
 
 static __attribute__((always_inline, unused)) void
