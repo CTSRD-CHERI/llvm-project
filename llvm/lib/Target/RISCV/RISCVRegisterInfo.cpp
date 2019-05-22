@@ -89,6 +89,8 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   if (TFI->hasFP(MF))
     markSuperRegs(Reserved, RISCV::C8); // cfp
 
+  markSuperRegs(Reserved, RISCV::DDC);
+
   assert(checkAllSuperRegsMarked(Reserved));
   return Reserved;
 }
