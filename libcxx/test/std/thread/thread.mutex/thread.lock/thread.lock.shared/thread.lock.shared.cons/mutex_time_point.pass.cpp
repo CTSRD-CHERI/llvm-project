@@ -35,34 +35,36 @@ typedef Clock::duration duration;
 typedef std::chrono::milliseconds ms;
 typedef std::chrono::nanoseconds ns;
 
-ms WaitTime = ms(250);
-
 // Thread sanitizer causes more overhead and will sometimes cause this test
 // to fail. To prevent this we give Thread sanitizer more time to complete the
 // test.
 #if !defined(TEST_HAS_SANITIZERS) && !TEST_SLOW_HOST()
-ms Tolerance = ms(50);
+#define LONGDELAY() 1
 #else
-ms Tolerance = ms(50 * 5);
+#define LONGDELAY() 0
 #endif
+
+static ms Tolerance = ms(LONGDELAY() ? 150 : 50); // 150ms for slow hosts, 50ms otherwise
+static ms DelayLong = ms(LONGDELAY() ? 800 : 300);
+static ms DelayShort = ms(LONGDELAY() ? 500 : 250);
 
 void f1()
 {
     time_point t0 = Clock::now();
-    std::shared_lock<std::shared_timed_mutex> lk(m, Clock::now() + WaitTime + Tolerance);
+    std::shared_lock<std::shared_timed_mutex> lk(m, Clock::now() + DelayLong);
     assert(lk.owns_lock() == true);
     time_point t1 = Clock::now();
-    ns d = t1 - t0 - WaitTime;
+    ns d = t1 - t0 - DelayShort;
     assert(d < Tolerance);  // within 50ms
 }
 
 void f2()
 {
     time_point t0 = Clock::now();
-    std::shared_lock<std::shared_timed_mutex> lk(m, Clock::now() + WaitTime);
+    std::shared_lock<std::shared_timed_mutex> lk(m, Clock::now() + DelayShort);
     assert(lk.owns_lock() == false);
     time_point t1 = Clock::now();
-    ns d = t1 - t0 - WaitTime;
+    ns d = t1 - t0 - DelayShort;
     assert(d < Tolerance);  // within 50ms
 }
 
@@ -71,9 +73,9 @@ int main(int, char**)
     {
         m.lock();
         std::vector<std::thread> v;
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < TEST_SLOW_HOST() ? 2 : 5; ++i)
             v.push_back(std::thread(f1));
-        std::this_thread::sleep_for(WaitTime);
+        std::this_thread::sleep_for(DelayShort);
         m.unlock();
         for (auto& t : v)
             t.join();
@@ -81,9 +83,9 @@ int main(int, char**)
     {
         m.lock();
         std::vector<std::thread> v;
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < TEST_SLOW_HOST() ? 2 : 5; ++i)
             v.push_back(std::thread(f2));
-        std::this_thread::sleep_for(WaitTime + Tolerance);
+        std::this_thread::sleep_for(DelayLong);
         m.unlock();
         for (auto& t : v)
             t.join();

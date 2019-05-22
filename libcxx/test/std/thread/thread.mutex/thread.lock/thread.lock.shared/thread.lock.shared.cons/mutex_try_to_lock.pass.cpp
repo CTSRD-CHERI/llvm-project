@@ -32,6 +32,9 @@ typedef Clock::duration duration;
 typedef std::chrono::milliseconds ms;
 typedef std::chrono::nanoseconds ns;
 
+ms WaitTime = ms(TEST_SLOW_HOST() ? 750 : 250);
+ms Tolerance = ms(TEST_SLOW_HOST() ? 400 : 200);
+
 void f()
 {
     time_point t0 = Clock::now();
@@ -54,7 +57,7 @@ void f()
             break;
     }
     time_point t1 = Clock::now();
-    ns d = t1 - t0 - ms(250);
+    ns d = t1 - t0 - ms(WaitTime);
     assert(d < ms(200));  // within 200ms
 }
 
@@ -64,7 +67,7 @@ int main(int, char**)
     std::vector<std::thread> v;
     for (int i = 0; i < 5; ++i)
         v.push_back(std::thread(f));
-    std::this_thread::sleep_for(ms(250));
+    std::this_thread::sleep_for(WaitTime);
     m.unlock();
     for (auto& t : v)
         t.join();
