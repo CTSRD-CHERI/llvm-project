@@ -82,21 +82,35 @@ __cap_table_end;
   __builtin_cheri_address_set((_cap), (_val))
 #endif
 
+#define __STRINGIFY2(x) #x
+#define __STRINGIFY(x) __STRINGIFY2(x)
+#define CGP_PERMISSIONS __STRINGIFY((__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__ | __CHERI_CAP_PERMISSION_PERMIT_LOAD__))
+
+/* By default derive $cgp from $pcc on startup */
+#ifndef GET_GCP_BASE_CAPABILITY
+/* The initial PCC should have load+load_cap and span the current binary */
+#define GET_GCP_BASE_CAPABILITY "cgetpcc $cgp\n\t"
+#endif
+
+#if !defined(__CHERI_CAPABILITY_TABLE__) || __CHERI_CAPABILITY_TABLE__ == 3
+/* No need to setup $cgp for pc-relative or legacy ABI: */
+#define INIT_CGP_REGISTER_ASM
+#else
 #define INIT_CGP_REGISTER_ASM                                                  \
   ".option pic0\n\t"                                                           \
+  /* If we already have a tagged $cgp skip the setup (e.g. called by RTLD) */  \
+  "cbts $cgp, .Lskip_cgp_setup\n\t"                                            \
+  GET_GCP_BASE_CAPABILITY                                                      \
   "dla $2, __cap_table_start\n\t"                                              \
-  "beqz $2, .Lskip_cgp_setup\n\t"                                              \
-  "nop\n\t"                                                                    \
-  "cgetdefault $c14\n\t"                                                       \
-  /* If we are running without a DDC we should have a valid $cgp already */    \
-  "cbtu $c14, .Lskip_cgp_setup\n\t"                                            \
   "dla $3, __cap_table_end\n\t"                                                \
-  csetaddr_or_offset " $cgp, $c14, $2\n\t"                                     \
   "dsubu $1, $3, $2\n\t"                                                       \
-  /* Avoid leaking original DDC in $c14 */                                     \
-  "cgetnull $c14\n\t"                                                          \
+  csetaddr_or_offset " $cgp, $cgp, $2\n\t"                                     \
   "csetbounds $cgp, $cgp, $1\n\t"                                              \
+  /* Clear all permissions except LOAD+LOAD_CAP */                             \
+  "dli $1, " CGP_PERMISSIONS "\n\t"                                            \
+  "candperm $cgp, $cgp, $1\n\t"                                                \
   ".Lskip_cgp_setup: \n\t"
+#endif
 
 /*
  * Defines a __start function that sets up $cgp and then branches to
