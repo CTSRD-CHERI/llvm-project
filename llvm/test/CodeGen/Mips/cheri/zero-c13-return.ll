@@ -81,10 +81,11 @@ define i8 addrspace(200)* @no_onstack_args_call_variadic(i8 addrspace(200)* %in_
 ; CHECK-NEXT:    clcbi $c12, %capcall20(variadic_fn)($c18)
 ; CHECK-NEXT:    csetbounds $c1, $c11, 8
 ; CHECK-NEXT:    ori $1, $zero, 65495
-; CHECK-NEXT:    candperm $c13, $c1, $1
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c26, $c18
+; CHECK-NEXT:    candperm $c13, $c1, $1
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c18)
+; Restore $cgp
+; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    clc $c17, $zero, [[$CAP_SIZE]]($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjr $c17

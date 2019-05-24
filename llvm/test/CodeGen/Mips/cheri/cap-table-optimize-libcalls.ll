@@ -11,8 +11,8 @@ entry:
   %call = call i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* getelementptr inbounds ([33 x i8], [33 x i8] addrspace(200)* @.str, i32 0, i32 0))
   ret void
 
-  ; CHECK:      clcbi $c3, %captab20(.L.str)($c26)
-  ; CHECK-NEXT: clcbi $c12, %capcall20(printf)($c26)
+  ; CHECK:      clcbi $c3, %captab20(.L.str)($c18)
+  ; CHECK-NEXT: clcbi $c12, %capcall20(printf)($c18)
   ; CHECK-NEXT: cjalr	$c12, $c17
   ; CHECK-NEXT: nop
 }

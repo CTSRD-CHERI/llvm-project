@@ -19,12 +19,15 @@ define i32 @a() {
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn1)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c26, $c18
+; CHECK-NEXT:    nop
 ; CHECK-NEXT:    move $16, $2
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn2)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
+; Restore $cgp before the next call since it might not actually be external (moved to delay slot)
 ; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    addu $2, $16, $2
+; restore $cgp after return from potential external call
+; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cld $16, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
