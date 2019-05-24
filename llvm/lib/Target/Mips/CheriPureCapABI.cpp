@@ -136,7 +136,7 @@ private:
     const Instruction *I = cast<Instruction>(U.getUser());
     // Value *V = U->get();
     if (Depth > 10) {
-      DBG_INDENTED("reached max depth, assuming bounds needed.");
+      DBG_INDENTED("reached max depth, assuming bounds needed.\n");
       return true;
     }
 
@@ -541,7 +541,7 @@ public:
             // For PHI nodes we can't insert just before the PHI, instead we
             // must insert it just before
             auto BB = PHI->getIncomingBlock(*U);
-            LLVM_DEBUG(dbgs() << "PHI use coming from"; BB->dump());
+            // LLVM_DEBUG(dbgs() << "PHI use coming from"; BB->dump());
             B.SetInsertPoint(BB->getTerminator());
           } else {
             // insert a new intrinsic call before every use. This can avoid

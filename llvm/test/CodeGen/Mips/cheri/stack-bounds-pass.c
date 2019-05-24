@@ -1,6 +1,5 @@
 // REQUIRES: asserts
 // RUN: %cheri_purecap_clang -mcpu=cheri128 -cheri=128 -xc -O0 -fsanitize-address-use-after-scope -g0 %s -o %t.ll -c -S -emit-llvm -Xclang -disable-O0-optnone -Wno-array-bounds -Wno-return-stack-address
-// RUN: %cheri_purecap_clang -mcpu=cheri128 -cheri=128 -xc -O2 -fsanitize-address-use-after-scope -g0 %s -o - -c -S -mllvm -stop-before=cheriaddrmodefolder -Xclang -disable-O0-optnone -Wno-array-bounds -Wno-return-stack-address
 // RUN: %cheri128_purecap_opt -cheri-purecap-alloca %t.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-threshold=10 \
 // RUN:    -cheri-stack-bounds=if-needed -debug-only="cheri-purecap-alloca" 2>&1 | FileCheck -check-prefix DBG %s
 
@@ -8,7 +7,7 @@
 // RUN: %cheri128_purecap_opt -cheri-purecap-alloca %t-lifetime.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-threshold=10 \
 // RUN:     -cheri-stack-bounds=if-needed -debug-only="cheri-purecap-alloca" 2>&1 | FileCheck -check-prefix DBG-OPT %s
 
-// chec that we ignore lifetime.start and lifetime.end intrinisics at -O1 and higher
+// check that we ignore lifetime.start and lifetime.end intrinisics at -O1 and higher
 // DBG-OPT: cheri-purecap-alloca:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull %0) #6
 // DBG-OPT: cheri-purecap-alloca:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull %0) #6
 // DBG-OPT: cheri-purecap-alloca: pass_arg: 2 of 7 users need bounds for   %x = alloca i32, align 4, addrspace(200)

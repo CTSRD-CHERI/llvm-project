@@ -1,6 +1,5 @@
 ; Check that llvm.memcpy() and llvm.memmove() intrinisics with nobuiltin
 ; attribute are always lowered to libcalls
-; RUN: %cheri128_purecap_cc1 %s -O2 -o - -S
 ; RUN: %cheri128_purecap_cc1 %s -O2 -o - -S | FileCheck %s
 
 ; Function Attrs: argmemonly nounwind
