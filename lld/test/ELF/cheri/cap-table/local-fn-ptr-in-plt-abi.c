@@ -37,10 +37,10 @@
 // VERBOSE-MSG-EMPTY:
 
 // CHECK-LABEL: Dynamic Relocations {
-// R_MIPS_CHERI_CAPABILITY against the global function pointer:
-// CHECK-SHLIB:   0x{{12002|2}}0020 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_return2 0x0
 // We need a R_MIPS_CHERI_CAPABILITY relocation against return1 to ensure that the dynamic linker creates a unique trampoline
 // CHECK-NEXT:    0x{{12002|2}}0000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_return1 0x0
+// R_MIPS_CHERI_CAPABILITY against the global function pointer:
+// CHECK-SHLIB:   0x{{12002|2}}0020 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_return2 0x0
 // In executables with --export-dynamic we add a new hidden symbol:
 // CHECK-NODYN:     0x{{12002|2}}0020 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_global_return2 0x0
 // We need a R_MIPS_CHERI_CAPABILITY_CALL relocation against use_callback to call a function in another DSO
@@ -53,24 +53,6 @@
 // CHECK-NEXT:     Size: 0
 // CHECK-NEXT:     Binding: Local (0x0)
 // CHECK-NEXT:     Type: None (0x0)
-// CHECK-NEXT:     Other: 0
-// CHECK-NEXT:     Section: Undefined (0x0)
-// CHECK-NEXT:   }
-// CHECK-SHLIB-NEXT:   Symbol {
-// CHECK-SHLIB-NEXT:     Name: global_return2 ({{.+}})
-// CHECK-SHLIB-NEXT:     Value: 0x{{12001|1}}0000
-// CHECK-SHLIB-NEXT:     Size: 12
-// CHECK-SHLIB-NEXT:     Binding: Global (0x1)
-// CHECK-SHLIB-NEXT:     Type: Function (0x2)
-// CHECK-SHLIB-NEXT:     Other: 0
-// CHECK-SHLIB-NEXT:     Section: .text (0x{{.+}})
-// CHECK-SHLIB-NEXT:   }
-// CHECK-NEXT:   Symbol {
-// CHECK-NEXT:     Name: use_callback ({{.+}})
-// CHECK-NEXT:     Value: 0x0
-// CHECK-NEXT:     Size: 0
-// CHECK-NEXT:     Binding: Global (0x1)
-// CHECK-NEXT:     Type: Function (0x2)
 // CHECK-NEXT:     Other: 0
 // CHECK-NEXT:     Section: Undefined (0x0)
 // CHECK-NEXT:   }
@@ -98,6 +80,24 @@
 // CHECK-NODYN-NEXT:     ]
 // CHECK-NODYN-NEXT:     Section: .text (0x{{.+}})
 // CHECK-NODYN-NEXT:   }
+// CHECK-SHLIB-NEXT:   Symbol {
+// CHECK-SHLIB-NEXT:     Name: global_return2 ({{.+}})
+// CHECK-SHLIB-NEXT:     Value: 0x{{12001|1}}0000
+// CHECK-SHLIB-NEXT:     Size: 12
+// CHECK-SHLIB-NEXT:     Binding: Global (0x1)
+// CHECK-SHLIB-NEXT:     Type: Function (0x2)
+// CHECK-SHLIB-NEXT:     Other: 0
+// CHECK-SHLIB-NEXT:     Section: .text (0x{{.+}})
+// CHECK-SHLIB-NEXT:   }
+// CHECK-NEXT:   Symbol {
+// CHECK-NEXT:     Name: use_callback ({{.+}})
+// CHECK-NEXT:     Value: 0x0
+// CHECK-NEXT:     Size: 0
+// CHECK-NEXT:     Binding: Global (0x1)
+// CHECK-NEXT:     Type: Function (0x2)
+// CHECK-NEXT:     Other: 0
+// CHECK-NEXT:     Section: Undefined (0x0)
+// CHECK-NEXT:   }
 // CHECK-NEXT: ]
 // __cap_relocs should be empty! we need a dynamic relocaiton for return1 since we are using it as a function pointer
 // CHECK-NEXT: There is no __cap_relocs section in the file.

@@ -1981,6 +1981,12 @@ void SymbolTableBaseSection::finalizeContents() {
   // Because the first symbol entry is a null entry, 1 is the first.
   getParent()->Info = 1;
 
+  // XXXAR: in the CheriABI case it is possible that we have local symbols
+  // in .dynsym (for function pointers in the PLT ABI)
+  if (Config->isCheriABI()) {
+    sortSymTabSymbols();
+  }
+
   if (In.GnuHashTab) {
     // NB: It also sorts Symbols to meet the GNU hash table requirements.
     In.GnuHashTab->addSymbols(Symbols);
