@@ -59,7 +59,7 @@ bool isMipsN32Abi(const InputFile *F);
 bool isMicroMips();
 bool isMipsR6();
 
-bool needsInterpSection();
+bool hasDynamicLinker();
 } // namespace elf
 } // namespace lld
 

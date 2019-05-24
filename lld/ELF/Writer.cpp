@@ -137,9 +137,13 @@ StringRef elf::getOutputSectionName(const InputSectionBase *S) {
   return S->Name;
 }
 
-bool lld::elf::needsInterpSection() {
+static bool needsInterpSection() {
   return !SharedFiles.empty() && !Config->DynamicLinker.empty() &&
          Script->needsInterpSection();
+}
+
+bool lld::elf::hasDynamicLinker() {
+  return Config->Shared || needsInterpSection();
 }
 
 template <class ELFT> void elf::writeResult() { Writer<ELFT>().run(); }

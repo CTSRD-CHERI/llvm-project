@@ -176,8 +176,9 @@ protected:
       : File(File), NameData(Name.Data), NameSize(Name.Size), Binding(Binding),
         Type(Type), StOther(StOther), SymbolKind(K), NeedsPltAddr(false),
         IsInIplt(false), GotInIgot(false), IsPreemptible(false),
-        Used(!Config->GcSections), IsSectionStartSymbol(false),
-        NeedsTocRestore(false), ScriptDefined(false) {}
+        Used(!Config->GcSections), UsedByDynReloc(false),
+        IsSectionStartSymbol(false), NeedsTocRestore(false),
+        ScriptDefined(false) {}
 
 public:
   // True the symbol should point to its PLT entry.
@@ -197,6 +198,10 @@ public:
 
   // True if an undefined or shared symbol is used from a live section.
   unsigned Used : 1;
+
+  // True if a symbol is referenced by a dynamic relocation and therefore needs
+  // to be included in the dynamic symbol table.
+  unsigned UsedByDynReloc : 1;
 
   // True if the linker should set the size of this symbol to be the size of the
   // section it references. For compatibility reason this is only used when

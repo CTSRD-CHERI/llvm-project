@@ -2,9 +2,11 @@
 
 #include "../SymbolTable.h"
 #include "../Symbols.h"
-#include "../Target.h"
 #include "../SyntheticSections.h"
+#include "../Target.h"
+#include "../Writer.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Memory.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/Support/Endian.h"
 
@@ -211,7 +213,7 @@ private:
     // int64_t Index = -1;
     llvm::Optional<uint32_t> Index;
     bool NeedsSmallImm = false;
-    bool UsedAsFunctionPointer = true;
+    bool UsedInCallExpr = false;
     llvm::Optional<SymbolAndOffset> FirstUse;
   };
   struct CaptableMap {
@@ -333,34 +335,63 @@ inline void readOnlyCapRelocsError(Symbol &Sym, const Twine &SourceMsg) {
 
 template <typename ELFT, typename ReferencedByFunc>
 inline void
-addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
+addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
                         uint64_t Offset, RelExpr Expr, int64_t Addend,
-                        ReferencedByFunc &&ReferencedBy,
+                        bool IsCallExpr, ReferencedByFunc &&ReferencedBy,
                         RelocationBaseSection *DynRelSec = nullptr) {
   // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
   assert(Config->ProcessCapRelocs);
-  CapRelocsMode CapRelocMode = Sym.IsPreemptible
+  CapRelocsMode CapRelocMode = Sym->IsPreemptible
                                    ? Config->PreemptibleCapRelocsMode
                                    : Config->LocalCapRelocsMode;
+  bool NeedTrampoline = false;
+  // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
+  // pointers to ensure that the runtime linker adds the required trampolines
+  // that sets $cgp:
+  if (!IsCallExpr && Config->EMachine == llvm::ELF::EM_MIPS && Sym->isFunc()) {
+    if (!lld::elf::hasDynamicLinker()) {
+      // In static binaries we do not need PLT stubs for function pointers since
+      // all functions share the same $cgp
+      // TODO: this is no longer true if we were to support dlopen() in static
+      // binaries
+      if (Config->VerboseCapRelocs)
+        message("Do not need function pointer trampoline for " +
+                toString(*Sym) + " in static binary");
+      NeedTrampoline = false;
+    } else if (auto ABI = InX<ELFT>::MipsAbiFlags->getCheriAbiVariant()) {
+      if (*ABI == llvm::ELF::DF_MIPS_CHERI_ABI_PLT ||
+          *ABI == llvm::ELF::DF_MIPS_CHERI_ABI_FNDESC)
+        NeedTrampoline = true;
+    }
+  }
+  if (NeedTrampoline) {
+    CapRelocMode = CapRelocsMode::ElfReloc;
+    if (Config->VerboseCapRelocs)
+      message("Using preemptible relocation for function pointer against " +
+              verboseToString(Sym));
+  }
+
   // local cap relocs don't need a Elf relocation with a full symbol lookup:
   if (CapRelocMode == CapRelocsMode::ElfReloc) {
-    assert(Sym.IsPreemptible && "ELF relocs should not be used for non-preemptible symbols");
-    assert(!Sym.isLocal() && "ELF relocs should not be used for local symbols");
+    assert((Sym->IsPreemptible || NeedTrampoline) &&
+           "ELF relocs should not be used for non-preemptible symbols");
+    assert((!Sym->isLocal() || NeedTrampoline) &&
+           "ELF relocs should not be used for local symbols");
     if (Config->EMachine == llvm::ELF::EM_MIPS && Config->BuildingFreeBSDRtld) {
-        error("relocation " + toString(Type) + " against " +
-              verboseToString(&Sym) + " cannot be using when building FreeBSD RTLD" +
-              ReferencedBy());
-        return;
+      error("relocation " + toString(Type) + " against " +
+            verboseToString(Sym) +
+            " cannot be using when building FreeBSD RTLD" + ReferencedBy());
+      return;
     }
-    if (!Config->Pic && SharedFiles.empty()) {
-      error(
-          "attempting to emit a R_CAPABILITY relocation against " +
-          (Sym.getName().empty() ? "local symbol" : "symbol " + toString(Sym)) +
-          " in binary without a dynamic linker; try removing -Wl,-" +
-          (Sym.IsPreemptible ? "preemptible" : "local") + "-caprelocs=elf" +
-          ReferencedBy());
+    if (!lld::elf::hasDynamicLinker()) {
+      error("attempting to emit a R_CAPABILITY relocation against " +
+            (Sym->getName().empty() ? "local symbol"
+                                    : "symbol " + toString(*Sym)) +
+            " in binary without a dynamic linker; try removing -Wl,-" +
+            (Sym->IsPreemptible ? "preemptible" : "local") + "-caprelocs=elf" +
+            ReferencedBy());
       return;
     }
     assert(Config->HasDynSymTab && "Should have been checked in Driver.cpp");
@@ -375,22 +406,53 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
       error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
       return;
     }
-    DynRelSec->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
-                        *Target->AbsPointerRel);
-    if (!Sym.includeInDynsym()) {
-      error("added a R_CHERI_CAPABILITY relocation but symbol not included "
-            "in dynamic symbol: " +
-            verboseToString(&Sym));
-      return;
+    if (!Sym->includeInDynsym()) {
+      assert(Sym->isLocal());
+      if (!NeedTrampoline) {
+        error("added a R_CHERI_CAPABILITY relocation but symbol not included "
+              "in dynamic symbol: " +
+              verboseToString(Sym));
+        return;
+      }
+      // Hack: Add a new global symbol with a unique name so that we can use
+      // a dynamic relocation against it.
+      // TODO: should it be possible to add STB_LOCAL symbols to .dynsymtab?
+      // create a unique name:
+
+      std::string UniqueName = ("__cheri_fnptr_" + Sym->getName()).str();
+      for (int i = 2; Symtab->find(UniqueName); i++) {
+        UniqueName = ("__cheri_fnptr" + Twine(i) + "_" + Sym->getName()).str();
+      }
+      auto LocalDef = cast<Defined>(Sym);
+      auto NewSym = Symtab->addDefined(
+          Saver.save(UniqueName), llvm::ELF::STV_HIDDEN, LocalDef->Type,
+          LocalDef->Value, LocalDef->Size, llvm::ELF::STB_GLOBAL,
+          LocalDef->Section, LocalDef->File);
+      assert(NewSym->isFunc() && "This should only be used for functions");
+      // TODO: would be nice to just set this on Sym, but we can't have
+      // STB_LOCAL symbols in .dynsym
+      NewSym->UsedByDynReloc = true;
+      NewSym->IsPreemptible = false;
+      if (Config->VerboseCapRelocs)
+        message("Adding new symbol " + toString(*NewSym) +
+                " to allow relocation against local symbol " +
+                verboseToString(Sym));
+      Sym = NewSym; // Make the relocation point to the newly added symbol
+      assert(NewSym->includeInDynsym());
+      assert(NewSym->Binding == llvm::ELF::STB_GLOBAL);
+      assert(NewSym->Visibility == llvm::ELF::STV_HIDDEN);
     }
+    DynRelSec->addReloc(
+        Type, Sec, Offset, Sym, Addend, Expr,
+        /* Relocation type for the addend = */ *Target->AbsPointerRel);
   } else if (CapRelocMode == CapRelocsMode::Legacy) {
     bool NeedsDynReloc = Config->Pic;
     if (Config->RelativeCapRelocsOnly) {
-      assert(!Sym.IsPreemptible);
+      assert(!Sym->IsPreemptible);
       NeedsDynReloc = false;
     }
-    InX<ELFT>::CapRelocs->addCapReloc({Sec, Offset, NeedsDynReloc}, {&Sym, 0u},
-                                      Sym.IsPreemptible, Addend);
+    InX<ELFT>::CapRelocs->addCapReloc({Sec, Offset, NeedsDynReloc}, {Sym, 0u},
+                                      Sym->IsPreemptible, Addend);
   } else {
     assert(Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap);
     error("CBuildCap method not implemented yet!");

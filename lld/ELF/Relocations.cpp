@@ -927,7 +927,8 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
       readOnlyCapRelocsError(Sym, getRelocTargetLocation());
       return;
     }
-    addCapabilityRelocation<ELFT>(Sym, Type, &Sec, Offset, Expr, Addend,
+    addCapabilityRelocation<ELFT>(&Sym, Type, &Sec, Offset, Expr, Addend,
+                                  /* IsCallExpr=*/false,
                                   getRelocTargetLocation);
     // TODO: check if it is a call and needs a plt stub
     return;

@@ -279,6 +279,8 @@ uint8_t Symbol::computeBinding() const {
 bool Symbol::includeInDynsym() const {
   if (!Config->HasDynSymTab)
     return false;
+  if (UsedByDynReloc)
+    return true;
   if (computeBinding() == STB_LOCAL)
     return false;
   // If a PIE binary was not linked against any shared libraries, then we can

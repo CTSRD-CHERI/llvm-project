@@ -239,7 +239,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     case Symbol::DefinedKind:
       break;
     case Symbol::SharedKind:
-      if (!Config->Shared && !needsInterpSection()) {
+      if (!hasDynamicLinker()) {
         error("cannot create a capability relocation against a shared symbol"
               " when linking statically");
         continue;
@@ -657,7 +657,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, RelExpr Expr,
   // FIXME: can this be called from multiple threads?
   CapTableIndex Idx;
   Idx.NeedsSmallImm = false;
-  Idx.UsedAsFunctionPointer = true;
+  Idx.UsedInCallExpr = false;
   Idx.FirstUse = SymbolAndOffset::fromSectionWithOffset(IS, Offset);
   switch (Expr) {
   case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
@@ -686,7 +686,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, RelExpr Expr,
         warn(Msg);
       }
     }
-    Idx.UsedAsFunctionPointer = false;
+    Idx.UsedInCallExpr = true;
     break;
   default:
     break;
@@ -704,8 +704,11 @@ void CheriCapTableSection::addEntry(Symbol &Sym, RelExpr Expr,
     // the small immediate flag
     if (Idx.NeedsSmallImm)
       it.first->second.NeedsSmallImm = true;
-    if (Idx.UsedAsFunctionPointer)
-      it.first->second.UsedAsFunctionPointer = true;
+    // If one of the uses is not a call expression, we need to emit a unique
+    // function pointer and reuse that for the call expression, too.
+    // TODO: should we emit two relocations instead?
+    if (!Idx.UsedInCallExpr)
+      it.first->second.UsedInCallExpr = false;
   }
 #if defined(DEBUG_CAP_TABLE)
   std::string DbgContext;
@@ -870,17 +873,17 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
     // If it is not used as a function pointer we can use a capability call
     // relocation instead which allows the runtime linker to create non-unique
     // plt stubs.
-    RelType ElfCapabilityReloc = it.second.UsedAsFunctionPointer
-                                     ? *Target->CheriCapRel
-                                     : *Target->CheriCapCallRel;
+    RelType ElfCapabilityReloc = it.second.UsedInCallExpr
+                                     ? *Target->CheriCapCallRel
+                                     : *Target->CheriCapRel;
     // All capability call relocations should end up in the pltrel section
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection *DynRelSec =
-        it.second.UsedAsFunctionPointer ? In.RelaDyn : In.RelaPlt;
+        it.second.UsedInCallExpr ? In.RelaPlt : In.RelaDyn;
     addCapabilityRelocation<ELFT>(
-        *TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
-        R_CHERI_CAPABILITY, 0,
+        TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
+        R_CHERI_CAPABILITY, 0, it.second.UsedInCallExpr,
         [&]() {
           return ("\n>>> referenced by " + RefName + "\n>>> first used in " +
                   it.second.FirstUse->verboseToString())
