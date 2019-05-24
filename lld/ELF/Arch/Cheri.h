@@ -368,8 +368,9 @@ addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
   }
   if (NeedTrampoline) {
     CapRelocMode = CapRelocsMode::ElfReloc;
+    assert(CapRelocMode == Config->PreemptibleCapRelocsMode);
     if (Config->VerboseCapRelocs)
-      message("Using preemptible relocation for function pointer against " +
+      message("Using trampoline for function pointer against " +
               verboseToString(Sym));
   }
 
@@ -407,7 +408,6 @@ addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
       return;
     }
     if (!Sym->includeInDynsym()) {
-      assert(Sym->isLocal());
       if (!NeedTrampoline) {
         error("added a R_CHERI_CAPABILITY relocation but symbol not included "
               "in dynamic symbol: " +
@@ -435,8 +435,7 @@ addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
       NewSym->IsPreemptible = false;
       if (Config->VerboseCapRelocs)
         message("Adding new symbol " + toString(*NewSym) +
-                " to allow relocation against local symbol " +
-                verboseToString(Sym));
+                " to allow relocation against " + verboseToString(Sym));
       Sym = NewSym; // Make the relocation point to the newly added symbol
       assert(NewSym->includeInDynsym());
       assert(NewSym->Binding == llvm::ELF::STB_GLOBAL);
