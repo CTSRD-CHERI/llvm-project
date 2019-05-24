@@ -9,26 +9,26 @@ DEFINE_CHERI_START_FUNCTION(_start)
 int _start(void) {
   // crt_init_globals();
 
-  // CHECK:      lui	$2, %highest(__cap_table_start)
+  // CHECK:      cbts	$c26, .Lskip_cgp_setup
+  // CHECK-NEXT: nop
+  // CHECK-NEXT: cgetpcc	$c26
+  // CHECK-NEXT: lui	$2, %highest(__cap_table_start)
   // CHECK-NEXT: lui	$1, %hi(__cap_table_start)
   // CHECK-NEXT: daddiu	$2, $2, %higher(__cap_table_start)
   // CHECK-NEXT: daddiu	$1, $1, %lo(__cap_table_start)
   // CHECK-NEXT: dsll32	$2, $2, 0
   // CHECK-NEXT: daddu	$2, $2, $1
-  // CHECK-NEXT: beqz	$2, .Lskip_cgp_setup
-  // CHECK-NEXT: nop
-  // CHECK-NEXT: creadhwr $c14, $chwr_ddc
-  // CHECK-NEXT: cbtu $c14, .Lskip_cgp_setup
   // CHECK-NEXT: lui	$3, %highest(__cap_table_end)
   // CHECK-NEXT: lui	$1, %hi(__cap_table_end)
   // CHECK-NEXT: daddiu	$3, $3, %higher(__cap_table_end)
   // CHECK-NEXT: daddiu	$1, $1, %lo(__cap_table_end)
   // CHECK-NEXT: dsll32	$3, $3, 0
   // CHECK-NEXT: daddu	$3, $3, $1
-  // CHECK-NEXT: csetaddr $c26, $c14, $2
   // CHECK-NEXT: dsubu	$1, $3, $2
-  // CHECK-NEXT: cgetnull $c14
+  // CHECK-NEXT: csetaddr $c26, $c26, $2
   // CHECK-NEXT: csetbounds	$c26, $c26, $1
+  // CHECK-NEXT: addiu	$1, $zero, 20
+  // CHECK-NEXT: candperm	$c26, $c26, $1
   // CHECK-NEXT: .Lskip_cgp_setup:
   // CHECK-NEXT: .set    noat
   // CHECK-NEXT: .protected      _start

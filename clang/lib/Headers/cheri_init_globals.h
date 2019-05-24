@@ -100,6 +100,7 @@ __cap_table_end;
   ".option pic0\n\t"                                                           \
   /* If we already have a tagged $cgp skip the setup (e.g. called by RTLD) */  \
   "cbts $cgp, .Lskip_cgp_setup\n\t"                                            \
+  "nop\n\t"                                                                    \
   GET_GCP_BASE_CAPABILITY                                                      \
   "dla $2, __cap_table_start\n\t"                                              \
   "dla $3, __cap_table_end\n\t"                                                \
