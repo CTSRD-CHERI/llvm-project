@@ -86,7 +86,7 @@ extern int global_int;
 void *function1(void) { return extern_void_ptr(); }
 // DISAS: function1:
 // DISAS: $captable_load_extern_void_ptr:
-// DISAS-NEXT: clcbi	$c12, 0($c26)
+// DISAS-NEXT: clcbi	$c12, 0($c18)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
@@ -95,7 +95,7 @@ __attribute__((visibility("protected"))) void *function2(void) {
 }
 // DISAS: function2:
 // DISAS: $captable_load_extern_char_ptr:
-// DISAS-NEXT: clcbi	$c12, 0($c26)
+// DISAS-NEXT: clcbi	$c12, 0($c18)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
@@ -122,7 +122,7 @@ int function5(void) { return global_int; }
 void *same_globals_as_function1(void) { return (char *)extern_void_ptr(); }
 // DISAS: same_globals_as_function1:
 // DISAS: $captable_load_extern_void_ptr:
-// DISAS-NEXT: clcbi	$c12, 0($c26)
+// DISAS-NEXT: clcbi	$c12, 0($c18)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
@@ -164,13 +164,13 @@ __attribute__((noinline)) static void *function3(void) {
 // Check that the mapping between functions + captable subsets is sensible:
 
 // READOBJ-MAPPING: CHERI .captable per-file/per-function mapping information [
-// READOBJ-MAPPING:   Function start: 0x10000 (function1) Function end: 0x10020 .captable offset: 0x0 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x10020 (function2) Function end: 0x10040 .captable offset: 0x10 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x10040 (function4) Function end: 0x1008C .captable offset: 0x20 Length:0x20
-// READOBJ-MAPPING:   Function start: 0x10090 (function5) Function end: 0x1009C .captable offset: 0x40 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x100A0 (same_globals_as_function1) Function end: 0x100C0 .captable offset: 0x50 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x100C0 (x) Function end: 0x100E0 .captable offset: 0x60 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x100E0 (function3) Function end: 0x1012C .captable offset: 0x70 Length:0x20
+// READOBJ-MAPPING:   Function start: 0x10000 (function1) Function end: 0x10030 .captable offset: 0x0 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10030 (function2) Function end: 0x10060 .captable offset: 0x10 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10060 (function4) Function end: 0x100B0 .captable offset: 0x20 Length:0x20
+// READOBJ-MAPPING:   Function start: 0x100B0 (function5) Function end: 0x100BC .captable offset: 0x40 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x100C0 (same_globals_as_function1) Function end: 0x100F0 .captable offset: 0x50 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x100F0 (x) Function end: 0x10110 .captable offset: 0x60 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10110 (function3) Function end: 0x10160 .captable offset: 0x70 Length:0x20
 // READOBJ-MAPPING: ]
 
 
@@ -181,39 +181,39 @@ __attribute__((noinline)) static void *function3(void) {
 // MAPPING-EMPTY:
 // MAPPING: Contents of section .captable_mapping:
 // MAPPING-NEXT:  06e8 00000000 [[FUNCTION1_ADDR:00010000]]
-// MAPPING-SAME:       00000000 00010020
+// MAPPING-SAME:       00000000 00010030
 // MAPPING-NEXT:  06f8 00000000 00000010
 // Start addr  00010000, size 0x20, captable index 0, size 1
-// MAPPING-SAME:       00000000 [[FUNCTION2_ADDR:00010020]]
-// MAPPING-NEXT:  0708 00000000 00010040
+// MAPPING-SAME:       00000000 [[FUNCTION2_ADDR:00010030]]
+// MAPPING-NEXT:  0708 00000000 00010060
 // MAPPING-SAME:       00000010 00000010
 // Start addr  00010020, size 0x20, captable index 1, size 1
-// MAPPING-NEXT:  0718 00000000 [[FUNCTION4_ADDR:00010040]]
-// MAPPING-SAME:       00000000 0001008c
+// MAPPING-NEXT:  0718 00000000 [[FUNCTION4_ADDR:00010060]]
+// MAPPING-SAME:       00000000 000100b0
 // MAPPING-NEXT:  0728 00000020 00000020
 // Start addr  00010040, size 0x48, captable index 2, size 2
-// MAPPING-SAME:       00000000 [[FUNCTION5_ADDR:00010090]]
-// MAPPING-NEXT:  0738 00000000 0001009c
+// MAPPING-SAME:       00000000 [[FUNCTION5_ADDR:000100b0]]
+// MAPPING-NEXT:  0738 00000000 000100bc
 // MAPPING-SAME:       00000040 00000010
 // Start addr  00010088, size 0xc, captable index 4, size 1
-// MAPPING-NEXT:  0748 00000000 [[SAME_GLOBALS_ADDR:000100a0]]
-// MAPPING-SAME:       00000000 000100c0
+// MAPPING-NEXT:  0748 00000000 [[SAME_GLOBALS_ADDR:000100c0]]
+// MAPPING-SAME:       00000000 000100f0
 // MAPPING-NEXT:  0758 00000050 00000010
 // Start addr  00010098, size 0x20, captable index 5, size 1
-// MAPPING-SAME:       00000000 [[X_ADDR:000100c0]]
-// MAPPING-NEXT:  0768 00000000 000100e0
+// MAPPING-SAME:       00000000 [[X_ADDR:000100f0]]
+// MAPPING-NEXT:  0768 00000000 00010110
 // MAPPING-SAME:       00000060 00000010
 // Start addr  000100b8, size 0x20, captable index 6, size 1
-// MAPPING-NEXT:  0778 00000000 [[FUNCTION3_ADDR:000100e0]]
-// MAPPING-SAME:       00000000 0001012c
+// MAPPING-NEXT:  0778 00000000 [[FUNCTION3_ADDR:00010110]]
+// MAPPING-SAME:       00000000 00010160
 // MAPPING-NEXT:  0788 00000070 00000020
 // Start addr  000100d8, size 0x48, captable index 7, size 2
 // MAPPING-NEXT: SYMBOL TABLE:
-// MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 0000004c function3
-// MAPPING: 00000000[[FUNCTION1_ADDR]] g     F .text		 00000020 function1
-// MAPPING: 00000000[[FUNCTION2_ADDR]] g     F .text		 00000020 function2
-// MAPPING: 00000000[[FUNCTION4_ADDR]] g     F .text		 0000004c function4
+// MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 00000050 function3
+// MAPPING: 00000000[[FUNCTION1_ADDR]] g     F .text		 00000030 function1
+// MAPPING: 00000000[[FUNCTION2_ADDR]] g     F .text		 00000030 function2
+// MAPPING: 00000000[[FUNCTION4_ADDR]] g     F .text		 00000050 function4
 // MAPPING: 00000000[[FUNCTION5_ADDR]] g     F .text		 0000000c function5
 // MAPPING: 0000000000000000         *UND*		 00000000 global_int
-// MAPPING: 00000000[[SAME_GLOBALS_ADDR]] g     F .text		 00000020 same_globals_as_function1
+// MAPPING: 00000000[[SAME_GLOBALS_ADDR]] g     F .text		 00000030 same_globals_as_function1
 // MAPPING: 00000000[[X_ADDR]] g     F .text		 00000020 x

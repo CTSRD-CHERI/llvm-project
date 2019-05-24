@@ -57,7 +57,7 @@
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix PURECAP-OBJ %s
 // PURECAP-OBJ: Relocations [
 // PURECAP-OBJ-NEXT: Section ({{.+}}) .rela.text {
-// PURECAP-OBJ-NEXT:    0x8 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0
+// PURECAP-OBJ-NEXT:    0x10 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0
 // PURECAP-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t.so %t.o
 // RUN: llvm-readobj -dynamic-table -file-headers -r -sections %t.so | FileCheck -check-prefix PURECAP-SHLIB %s

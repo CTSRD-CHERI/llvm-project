@@ -17,12 +17,12 @@
 // RUN: llvm-readobj -r %t-call1.o | FileCheck -check-prefix OBJ-CALL1 %s
 // OBJ-CALL1: Relocations [
 // OBJ-CALL1-NEXT: Section ({{.+}}) .rela.text {
-// OBJ-CALL1-NEXT:    0x8 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern1 0x0
+// OBJ-CALL1-NEXT:    0x10 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern1 0x0
 // OBJ-CALL1-NEXT:  }
 // RUN: llvm-readobj -r %t-call2.o| FileCheck -check-prefix OBJ-CALL2 %s
 // OBJ-CALL2: Relocations [
 // OBJ-CALL2-NEXT: Section ({{.+}}) .rela.text {
-// OBJ-CALL2-NEXT:    0x8 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern2 0x0
+// OBJ-CALL2-NEXT:    0x10 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern2 0x0
 // OBJ-CALL2-NEXT:  }
 
 // Check the resulting output relocations for a single fnptr/call
