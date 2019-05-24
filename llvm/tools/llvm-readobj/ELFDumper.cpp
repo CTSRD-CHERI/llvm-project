@@ -2518,8 +2518,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
     W.startLine() << "Invalid ELF header (no EF_MIPS_MACH_CHERI128/256 flag)\n";
     return;
   }
-  const uint64_t CapTableFileOffset = Shdr->sh_offset;
-  const uint64_t CapTableEnd = Shdr->sh_offset + Shdr->sh_size;
+  const uint64_t CapTableStartVaddr = Shdr->sh_addr;
+  const uint64_t CapTableEndVaddr = Shdr->sh_addr + Shdr->sh_size;
 
   // Use the .symtab section if available otherwise use .dynsym:
   typename ELFT::SymRange Syms;
@@ -2537,7 +2537,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
   std::unordered_map<uint64_t, std::string> SymbolNames;
   for (const auto &Sym : Syms) {
     uint64_t Start = Sym.st_value;
-    if (Start < CapTableFileOffset || Start > CapTableEnd)
+    if (Start < CapTableStartVaddr || Start > CapTableEndVaddr)
       continue;
     std::string Name = getFullSymbolName(&Sym, StrTable, UsingDynsym);
     if (Name == "_CHERI_CAPABILITY_TABLE_")
@@ -2557,12 +2557,14 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
       return;
     if (RelRegion.EntSize == sizeof(Elf_Rela)) {
       for (const Elf_Rela &Rela : RelRegion.getAsArrayRef<Elf_Rela>()) {
-        if (Rela.r_offset >= CapTableFileOffset && Rela.r_offset < CapTableEnd)
+        if (Rela.r_offset >= CapTableStartVaddr &&
+            Rela.r_offset < CapTableEndVaddr)
           CapTableDynRels.insert(std::make_pair((uint64_t)Rela.r_offset, Rela));
       }
     } else {
       for (const Elf_Rel &Rel : RelRegion.getAsArrayRef<Elf_Rel>()) {
-        if (Rel.r_offset >= CapTableFileOffset && Rel.r_offset < CapTableEnd) {
+        if (Rel.r_offset >= CapTableStartVaddr &&
+            Rel.r_offset < CapTableEndVaddr) {
           Elf_Rela Rela;
           Rela.r_offset = Rel.r_offset;
           Rela.r_info = Rel.r_info;
@@ -2577,12 +2579,12 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
   FindRelocs(getDynRelaRegion());
 
   typename ELFT::SymRange DynSyms = dynamic_symbols();
-  for (uint64_t Offset = CapTableFileOffset; Offset < CapTableEnd;
+  for (uint64_t Offset = CapTableStartVaddr; Offset < CapTableEndVaddr;
        Offset += CapSize) {
     // Find name:
     const auto &Name = SymbolNames.find(Offset);
     formatted_raw_ostream OS(W.startLine());
-    OS << W.hex(Offset - CapTableFileOffset);
+    OS << W.hex(Offset - CapTableStartVaddr);
     OS.PadToColumn(9u);
     if (Name == SymbolNames.end())
       OS << "<unknown symbol>"
