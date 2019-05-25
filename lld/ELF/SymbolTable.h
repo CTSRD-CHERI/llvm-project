@@ -34,7 +34,8 @@ class SectionBase;
 // is one add* function per symbol type.
 class SymbolTable {
 public:
-  template <class ELFT> void addFile(InputFile *File);
+  template <class ELFT> void addFile(InputFile *File, Symbol *ReferencedFromSym,
+                      const InputFile *ReferencedFromFile);
   template <class ELFT> void addCombinedLTOObject();
   void wrap(Symbol *Sym, Symbol *Real, Symbol *Wrap);
 
@@ -69,7 +70,7 @@ public:
   std::pair<Symbol *, bool> insert(StringRef Name, uint8_t Visibility,
                                    bool CanOmitFromDynSym, InputFile *File);
 
-  template <class ELFT> void fetchLazy(Symbol *Sym);
+  template <class ELFT> void fetchLazy(Symbol *Sym, const InputFile *ReferencedFrom);
 
   void scanVersionScript();
 

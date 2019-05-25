@@ -62,7 +62,8 @@ static bool isCompatible(InputFile *F) {
 }
 
 // Add symbols in File to the symbol table.
-template <class ELFT> void SymbolTable::addFile(InputFile *File) {
+template <class ELFT> void SymbolTable::addFile(InputFile *File, Symbol* ReferencedFromSym,
+                                 const InputFile* ReferencedFromFile) {
   if (!isCompatible(File))
     return;
 
@@ -86,8 +87,20 @@ template <class ELFT> void SymbolTable::addFile(InputFile *File) {
     return;
   }
 
-  if (Config->Trace)
+  for (auto Bad : Config->WarnIfFileLinked) {
+    if (File->getName().endswith(Bad)) {
+      std::string RefSymName = ReferencedFromSym
+                                   ? verboseToString(ReferencedFromSym)
+                                   : "<unknown symbol>";
+      warn("Attempting to link blacklisted file " + toString(File) +
+           "\n>>> Referenced from file " + toString(ReferencedFromFile) +
+           "\n>>> Referencing from symbol" + RefSymName);
+    }
+  }
+
+  if (Config->Trace) {
     message(toString(File));
+  }
 
   // .so file
   if (auto *F = dyn_cast<SharedFile<ELFT>>(File)) {
@@ -322,7 +335,7 @@ Symbol *SymbolTable::addUndefined(StringRef Name, uint8_t Binding,
     // group assignment rule simulates the traditional linker's semantics.
     bool Backref =
         Config->WarnBackrefs && File && S->File->GroupId < File->GroupId;
-    fetchLazy<ELFT>(S);
+    fetchLazy<ELFT>(S, File);
 
     // We don't report backward references to weak symbols as they can be
     // overridden later.
@@ -560,7 +573,7 @@ void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &File,
   }
 
   if (InputFile *F = File.fetch(Sym))
-    addFile<ELFT>(F);
+    addFile<ELFT>(F, S, &File);
 }
 
 template <class ELFT>
@@ -584,19 +597,19 @@ void SymbolTable::addLazyObject(StringRef Name, LazyObjFile &File) {
   }
 
   if (InputFile *F = File.fetch())
-    addFile<ELFT>(F);
+    addFile<ELFT>(F, S, /* FIXME: should be non-null*/nullptr);
 }
 
-template <class ELFT> void SymbolTable::fetchLazy(Symbol *Sym) {
+template <class ELFT> void SymbolTable::fetchLazy(Symbol *Sym, const InputFile *ReferencedFrom) {
   if (auto *S = dyn_cast<LazyArchive>(Sym)) {
     if (InputFile *File = S->fetch())
-      addFile<ELFT>(File);
+      addFile<ELFT>(File, Sym, ReferencedFrom);
     return;
   }
 
   auto *S = cast<LazyObject>(Sym);
   if (InputFile *File = cast<LazyObjFile>(S->File)->fetch())
-    addFile<ELFT>(File);
+    addFile<ELFT>(File, Sym, ReferencedFrom);
 }
 
 // Initialize DemangledSyms with a map from demangled symbols to symbol
@@ -760,10 +773,10 @@ void SymbolTable::scanVersionScript() {
     Sym->parseSymbolVersion();
 }
 
-template void SymbolTable::addFile<ELF32LE>(InputFile *);
-template void SymbolTable::addFile<ELF32BE>(InputFile *);
-template void SymbolTable::addFile<ELF64LE>(InputFile *);
-template void SymbolTable::addFile<ELF64BE>(InputFile *);
+template void SymbolTable::addFile<ELF32LE>(InputFile *, Symbol *, const InputFile *);
+template void SymbolTable::addFile<ELF32BE>(InputFile *, Symbol *, const InputFile *);
+template void SymbolTable::addFile<ELF64LE>(InputFile *, Symbol *, const InputFile *);
+template void SymbolTable::addFile<ELF64BE>(InputFile *, Symbol *, const InputFile *);
 
 template Symbol *SymbolTable::addUndefined<ELF32LE>(StringRef, uint8_t, uint8_t,
                                                     uint8_t, bool, InputFile *);
@@ -797,10 +810,10 @@ template void SymbolTable::addLazyObject<ELF32BE>(StringRef, LazyObjFile &);
 template void SymbolTable::addLazyObject<ELF64LE>(StringRef, LazyObjFile &);
 template void SymbolTable::addLazyObject<ELF64BE>(StringRef, LazyObjFile &);
 
-template void SymbolTable::fetchLazy<ELF32LE>(Symbol *);
-template void SymbolTable::fetchLazy<ELF32BE>(Symbol *);
-template void SymbolTable::fetchLazy<ELF64LE>(Symbol *);
-template void SymbolTable::fetchLazy<ELF64BE>(Symbol *);
+template void SymbolTable::fetchLazy<ELF32LE>(Symbol *, const InputFile *);
+template void SymbolTable::fetchLazy<ELF32BE>(Symbol *, const InputFile *);
+template void SymbolTable::fetchLazy<ELF64LE>(Symbol *, const InputFile *);
+template void SymbolTable::fetchLazy<ELF64BE>(Symbol *, const InputFile *);
 
 template void SymbolTable::addShared<ELF32LE>(StringRef, SharedFile<ELF32LE> &,
                                               const typename ELF32LE::Sym &,

@@ -118,6 +118,7 @@ struct Configuration {
   std::vector<llvm::StringRef> FilterList;
   std::vector<llvm::StringRef> SearchPaths;
   std::vector<llvm::StringRef> SymbolOrderingFile;
+  std::vector<llvm::StringRef> WarnIfFileLinked;
   std::vector<llvm::StringRef> Undefined;
   std::vector<SymbolVersion> DynamicList;
   std::vector<SymbolVersion> VersionScriptGlobals;

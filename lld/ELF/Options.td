@@ -389,6 +389,8 @@ defm warn_symbol_ordering: B<"warn-symbol-ordering",
 def warn_unresolved_symbols: F<"warn-unresolved-symbols">,
   HelpText<"Report unresolved symbols as warnings">;
 
+defm warn_file_linked: Eq<"warn-if-file-linked", "Warn when the given file is linked">;
+
 defm whole_archive: B<"whole-archive",
     "Force load of all members in a static library",
     "Do not force load of all members in a static library (default)">;

@@ -1047,6 +1047,9 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
     if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
       Config->SymbolOrderingFile = getSymbolOrderingFile(*Buffer);
 
+  for (auto *Arg : Args.filtered(OPT_warn_file_linked))
+    Config->WarnIfFileLinked.push_back(Arg->getValue());
+
   // If --retain-symbol-file is used, we'll keep only the symbols listed in
   // the file and discard all others.
   if (auto *Arg = Args.getLastArg(OPT_retain_symbols_file)) {
@@ -1360,7 +1363,7 @@ template <class ELFT> static void handleUndefined(StringRef Name) {
   Sym->IsUsedInRegularObj = true;
 
   if (Sym->isLazy())
-    Symtab->fetchLazy<ELFT>(Sym);
+    Symtab->fetchLazy<ELFT>(Sym, nullptr);
 }
 
 template <class ELFT> static void handleLibcall(StringRef Name) {
@@ -1375,7 +1378,7 @@ template <class ELFT> static void handleLibcall(StringRef Name) {
     MB = cast<LazyArchive>(Sym)->getMemberBuffer();
 
   if (isBitcode(MB))
-    Symtab->fetchLazy<ELFT>(Sym);
+    Symtab->fetchLazy<ELFT>(Sym, nullptr);
 }
 
 // If all references to a DSO happen to be weak, the DSO is not added
@@ -1588,7 +1591,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // Add all files to the symbol table. This will add almost all
   // symbols that we need to the symbol table.
   for (InputFile *F : Files)
-    Symtab->addFile<ELFT>(F);
+    Symtab->addFile<ELFT>(F, nullptr, nullptr);
 
   // Now that we have every file, we can decide if we will need a
   // dynamic symbol table.
