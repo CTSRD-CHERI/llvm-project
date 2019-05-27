@@ -87,8 +87,11 @@ template <class ELFT> void SymbolTable::addFile(InputFile *File, Symbol* Referen
     return;
   }
 
-  for (auto Bad : Config->WarnIfFileLinked) {
-    if (File->getName().endswith(Bad)) {
+  // If this file is being linked into the output check if we are linking
+  // against a blacklisted file:
+  if (!Config->WarnIfFileLinked.empty()) {
+    StringMatcher M(Config->WarnIfFileLinked);
+    if (M.match(File->getName())) {
       std::string RefSymName = ReferencedFromSym
                                    ? verboseToString(ReferencedFromSym)
                                    : "<unknown symbol>";
