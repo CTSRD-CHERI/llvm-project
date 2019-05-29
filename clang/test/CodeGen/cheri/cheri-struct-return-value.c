@@ -1,7 +1,7 @@
 // REQUIRES: mips-registered-target
 
 // RUN: %cheri_purecap_cc1 -std=c11 -O2 -emit-llvm -o - %s | %cheri_FileCheck %s -enable-var-scope
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -D\$CAP_SIZE=32 -check-prefixes=ASM,%cheri_type-ASM %s
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -check-prefixes=ASM,%cheri_type-ASM %s
 int global;
 
 unsigned long sizeof_cap(void) {
@@ -175,18 +175,58 @@ typedef struct {
 } IntAndLong;
 
 IntAndLong int_and_long() {
-  // FIXME: this seems very wrong, we are returning registers so it should not assume this is an in-memory big-endian representation
+  // Note: this looks wrong, but we actually have to use the in-memory big-endian representation for the registers!
+  // See: https://github.com/CTSRD-CHERI/llvm-project/issues/310#issuecomment-497094466
+  // Structs, unions, or other composite types are treated as a sequence of doublewords,
+  // and are passed in integer or floating point registers as though they were simple
+  // scalar parameters to the extent that they fit, with any excess on the stack packed
+  // according to the normal memory layout of the object.
+  // More specifically:
+  //   – Regardless of the struct field structure, it is treated as a
+  //     sequence of 64-bit chunks. If a chunk consists solely of a double
+  //     float field (but not a double, which is part of a union), it is
+  //     passed in a floating point register. Any other chunk is passed in
+  //     an integer register
+  //
   // CHECK-LABEL: define inreg { i64, i64 } @int_and_long() local_unnamed_addr
-  // TODO-CHECK-NOT: ret { i64, i64 } { i64 8589934592, i64 3 }
-  // TODO-CHECK:     ret { i32, i64 } { i32 2, i64 3 }
+  // CHECK: ret { i64, i64 } { i64 8589934592, i64 3 }
   // ASM-LABEL: int_and_long
-  // TODO-ASM-NOT: daddiu  $1, $zero, 1
-  // TODO-ASM-NOT: dsll    $2, $1, 33
-  // TODO-ASM: daddiu  $2, $zero, 3
-  // ASM:            cjr     $c17
-  // ASM-NEXT:       daddiu  $3, $zero, 3
+  // ASM:      daddiu	$1, $zero, 1
+  // ASM-NEXT: dsll	$2, $1, 33
+  // ASM-NEXT: cjr	$c17
+  // ASM-NEXT: daddiu	$3, $zero, 3
   IntAndLong t = { 2, 3 };
   return t;
+}
+
+extern IntAndLong extern_int_and_long();
+
+int read_int_and_long_1() {
+  // This function needs to shift the l1 value by 32 to get the int value
+  // (since the registers hold the in-memory representation)
+  return extern_int_and_long().l1;
+  // ASM-LABEL: read_int_and_long_1:
+  // ASM: clcbi	$c12, %capcall20(extern_int_and_long)($c1)
+  // ASM-NEXT: cjalr	$c12, $c17
+  // ASM-NEXT: nop
+  // This shift undoes the left-shift from int_and_long():
+  // ASM-NEXT: dsra	$2, $2, 32
+  // ASM-NEXT: clc	$c17, $zero, 0($c11)
+  // ASM-NEXT: cjr	$c17
+  // ASM-NEXT: cincoffset	$c11, $c11, 16
+}
+
+long read_int_and_long_2() {
+  // ASM-LABEL: read_int_and_long_2:
+  // ASM: clcbi	$c12, %capcall20(extern_int_and_long)($c1)
+  // ASM-NEXT: cjalr	$c12, $c17
+  // ASM-NEXT: nop
+  // Read the second 64-bit value from $v1 and move it to $v0
+  // ASM-NEXT: move $2, $3
+  // ASM-NEXT: clc	$c17, $zero, 0($c11)
+  // ASM-NEXT: cjr	$c17
+  // ASM-NEXT: cincoffset	$c11, $c11, 16
+  return extern_int_and_long().l2;
 }
 
 IntAndLong int_and_long2(IntAndLong arg) {
