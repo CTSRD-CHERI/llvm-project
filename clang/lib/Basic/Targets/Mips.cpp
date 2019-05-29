@@ -201,8 +201,6 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
                             Twine((int)CapTlsABI));
       }
     }
-    if (llvm::MCTargetOptions::cheriUsesCapabilityTable())
-      Builder.defineMacro("__CHERI_CAPABILITY_TABLE__", Twine(1));
 
     // Macros for use with the set and get permissions builtins.
     Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
