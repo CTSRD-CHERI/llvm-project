@@ -4,7 +4,7 @@
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[B:%.*]] = alloca i32, align 4, addrspace(200)
 // CHECK-NEXT:    [[B1:%.*]] = bitcast i32 addrspace(200)* [[B]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.var.annotation.p200i8(i8 addrspace(200)* [[B1]], i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @.str, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([67 x i8], [67 x i8] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+4]])
+// CHECK-NEXT:    call void @llvm.var.annotation.p200i8(i8 addrspace(200)* [[B1]], i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @.str, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY:\[[0-9]+ x i8\]]], [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+4]])
 // CHECK-NEXT:    ret void
 //
 void var_annotation(void) {
@@ -21,7 +21,7 @@ void var_annotation(void) {
 // CHECK-NEXT:    store i32 0, i32 addrspace(200)* [[U]], align 4
 // CHECK-NEXT:    [[V:%.*]] = getelementptr inbounds [[STRUCT_ANON]], [[STRUCT_ANON]] addrspace(200)* [[VAR]], i32 0, i32 1
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[V]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.2, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([67 x i8], [67 x i8] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+8]])
+// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.2, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+8]])
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 // CHECK-NEXT:    store i32 0, i32 addrspace(200)* [[TMP2]], align 4
 // CHECK-NEXT:    ret i32 0
@@ -45,7 +45,7 @@ int ptr_annotation(void) {
 // CHECK-NEXT:    [[Y:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    store i64 [[X:%.*]], i64 addrspace(200)* [[X_ADDR]], align 8
 // CHECK-NEXT:    [[TMP0:%.*]] = load i64, i64 addrspace(200)* [[X_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.annotation.i64.p200i8(i64 [[TMP0]], i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.3, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([67 x i8], [67 x i8] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+9]])
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.annotation.i64.p200i8(i64 [[TMP0]], i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.3, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+9]])
 // CHECK-NEXT:    store i64 [[TMP1]], i64 addrspace(200)* [[Y]], align 8
 // CHECK-NEXT:    [[TMP2:%.*]] = load i64, i64 addrspace(200)* [[X_ADDR]], align 8
 // CHECK-NEXT:    [[TMP3:%.*]] = load i64, i64 addrspace(200)* [[Y]], align 8
