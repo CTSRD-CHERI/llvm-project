@@ -1154,29 +1154,19 @@ void addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
       // Hack: Add a new global symbol with a unique name so that we can use
       // a dynamic relocation against it.
       // TODO: should it be possible to add STB_LOCAL symbols to .dynsymtab?
-      // create a unique name:
+
+
 
       std::string UniqueName = ("__cheri_fnptr_" + Sym->getName()).str();
       for (int i = 2; Symtab->find(UniqueName); i++) {
         UniqueName = ("__cheri_fnptr" + Twine(i) + "_" + Sym->getName()).str();
       }
-      auto LocalDef = cast<Defined>(Sym);
-      auto NewSym = Symtab->addDefined(
-          Saver.save(UniqueName), llvm::ELF::STV_HIDDEN, LocalDef->Type,
-          LocalDef->Value, LocalDef->Size, llvm::ELF::STB_GLOBAL,
-          LocalDef->Section, LocalDef->File);
+      Defined* NewSym = Symtab->ensureSymbolWillBeInDynsym(Sym);
       assert(NewSym->isFunc() && "This should only be used for functions");
-      // TODO: would be nice to just set this on Sym, but we can't have
-      // STB_LOCAL symbols in .dynsym
-      NewSym->UsedByDynReloc = true;
-      NewSym->IsPreemptible = false;
-      if (Config->VerboseCapRelocs)
-        message("Adding new symbol " + toString(*NewSym) +
-                " to allow relocation against " + verboseToString(Sym));
-      Sym = NewSym; // Make the relocation point to the newly added symbol
       assert(NewSym->includeInDynsym());
       assert(NewSym->Binding == llvm::ELF::STB_GLOBAL);
       assert(NewSym->Visibility == llvm::ELF::STV_HIDDEN);
+      Sym = NewSym; // Make the relocation point to the newly added symbol
     }
     DynRelSec->addReloc(
         Type, Sec, Offset, Sym, Addend, Expr,

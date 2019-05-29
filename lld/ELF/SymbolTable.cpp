@@ -500,6 +500,45 @@ Defined *SymbolTable::addDefined(StringRef Name, uint8_t StOther, uint8_t Type,
   return cast<Defined>(S);
 }
 
+Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* Original) {
+  assert(!Original->includeInDynsym() && "Already included in dynsym?");
+  assert(Original->isFunc() && "This should only be used for functions");
+  // Hack: Add a new global symbol with a unique name so that we can use
+  // a dynamic relocation against it.
+  // TODO: should it be possible to add STB_LOCAL symbols to .dynsymtab?
+  // create a unique name:
+
+  auto it = LocalSymbolsForDynsym.find(Original);
+  if (it != LocalSymbolsForDynsym.end()) {
+    if (Config->VerboseCapRelocs)
+      message("Reusing existing 'fake' symbol " + toString(*it->second) +
+              " to allow relocation against " + verboseToString(Original));
+    return it->second;
+  }
+
+  std::string UniqueName = ("__cheri_fnptr_" + Original->getName()).str();
+  for (int i = 2; Symtab->find(UniqueName); i++) {
+    UniqueName = ("__cheri_fnptr" + Twine(i) + "_" + Original->getName()).str();
+  }
+  auto LocalDef = cast<Defined>(Original);
+  Defined* NewSym = Symtab->addDefined(
+      Saver.save(UniqueName), llvm::ELF::STV_HIDDEN, LocalDef->Type,
+      LocalDef->Value, LocalDef->Size, llvm::ELF::STB_GLOBAL,
+      LocalDef->Section, LocalDef->File);
+
+  assert(NewSym->isFunc() && "This should only be used for functions");
+  // TODO: would be nice to just set this on Sym, but we can't have
+  // STB_LOCAL symbols in .dynsym
+  NewSym->UsedByDynReloc = true;
+  NewSym->IsPreemptible = false;
+  if (Config->VerboseCapRelocs)
+    message("Adding new symbol " + toString(*NewSym) +
+            " to allow relocation against " + verboseToString(Original));
+  LocalSymbolsForDynsym[Original] = NewSym;
+  return NewSym;
+}
+
+
 template <typename ELFT>
 void SymbolTable::addShared(StringRef Name, SharedFile<ELFT> &File,
                             const typename ELFT::Sym &Sym, uint32_t Alignment,

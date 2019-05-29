@@ -83,6 +83,9 @@ public:
   // Set of .so files to not link the same shared object file more than once.
   llvm::DenseMap<StringRef, InputFile *> SoNames;
 
+  // This is a workaround for CHERI to add local symbols to .dynsym for relocations
+  Defined *ensureSymbolWillBeInDynsym(Symbol* Original);
+
 private:
   std::pair<Symbol *, bool> insertName(StringRef Name);
 
@@ -104,6 +107,8 @@ private:
   // once symbol resolution is finished.
   llvm::DenseMap<llvm::CachedHashStringRef, int> SymMap;
   std::vector<Symbol *> SymVector;
+  llvm::DenseMap<Symbol *, Defined *> LocalSymbolsForDynsym;
+
 
   // Comdat groups define "link once" sections. If two comdat groups have the
   // same name, only one of them is linked, and the other is ignored. This set
