@@ -1070,5 +1070,143 @@ void CheriCapTableMappingSection::writeTo(uint8_t *Buf) {
   memcpy(Buf, Entries.data(), Entries.size() * sizeof(CaptableMappingEntry));
 }
 
+template <typename ELFT>
+void addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
+                             uint64_t Offset, RelExpr Expr, int64_t Addend,
+                             bool IsCallExpr,
+                             llvm::function_ref<std::string()> ReferencedBy,
+                             RelocationBaseSection *DynRelSec) {
+  // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
+  // For local symbols we can also emit the untagged capability bits and
+  // instruct csu/rtld to run CBuildCap
+  assert(Config->ProcessCapRelocs);
+  CapRelocsMode CapRelocMode = Sym->IsPreemptible
+                                   ? Config->PreemptibleCapRelocsMode
+                                   : Config->LocalCapRelocsMode;
+  bool NeedTrampoline = false;
+  // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
+  // pointers to ensure that the runtime linker adds the required trampolines
+  // that sets $cgp:
+  if (!IsCallExpr && Config->EMachine == llvm::ELF::EM_MIPS && Sym->isFunc()) {
+    if (!lld::elf::hasDynamicLinker()) {
+      // In static binaries we do not need PLT stubs for function pointers since
+      // all functions share the same $cgp
+      // TODO: this is no longer true if we were to support dlopen() in static
+      // binaries
+      if (Config->VerboseCapRelocs)
+        message("Do not need function pointer trampoline for " +
+                toString(*Sym) + " in static binary");
+      NeedTrampoline = false;
+    } else if (auto ABI = InX<ELFT>::MipsAbiFlags->getCheriAbiVariant()) {
+      if (*ABI == llvm::ELF::DF_MIPS_CHERI_ABI_PLT ||
+          *ABI == llvm::ELF::DF_MIPS_CHERI_ABI_FNDESC)
+        NeedTrampoline = true;
+    }
+  }
+  if (NeedTrampoline) {
+    CapRelocMode = CapRelocsMode::ElfReloc;
+    assert(CapRelocMode == Config->PreemptibleCapRelocsMode);
+    if (Config->VerboseCapRelocs)
+      message("Using trampoline for function pointer against " +
+              verboseToString(Sym));
+  }
+
+  // local cap relocs don't need a Elf relocation with a full symbol lookup:
+  if (CapRelocMode == CapRelocsMode::ElfReloc) {
+    assert((Sym->IsPreemptible || NeedTrampoline) &&
+           "ELF relocs should not be used for non-preemptible symbols");
+    assert((!Sym->isLocal() || NeedTrampoline) &&
+           "ELF relocs should not be used for local symbols");
+    if (Config->EMachine == llvm::ELF::EM_MIPS && Config->BuildingFreeBSDRtld) {
+      error("relocation " + toString(Type) + " against " +
+            verboseToString(Sym) +
+            " cannot be using when building FreeBSD RTLD" + ReferencedBy());
+      return;
+    }
+    if (!lld::elf::hasDynamicLinker()) {
+      error("attempting to emit a R_CAPABILITY relocation against " +
+            (Sym->getName().empty() ? "local symbol"
+                                    : "symbol " + toString(*Sym)) +
+            " in binary without a dynamic linker; try removing -Wl,-" +
+            (Sym->IsPreemptible ? "preemptible" : "local") + "-caprelocs=elf" +
+            ReferencedBy());
+      return;
+    }
+    assert(Config->HasDynSymTab && "Should have been checked in Driver.cpp");
+    // We don't use a R_MIPS_CHERI_CAPABILITY relocation for the input but
+    // instead need to use an absolute pointer size relocation to write
+    // the offset addend
+    if (!DynRelSec)
+      DynRelSec = In.RelaDyn;
+    // in the case that -local-caprelocs=elf is passed we need to ensure that
+    // the target symbol is included in the dynamic symbol table
+    if (!In.DynSymTab) {
+      error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
+      return;
+    }
+    if (!Sym->includeInDynsym()) {
+      if (!NeedTrampoline) {
+        error("added a R_CHERI_CAPABILITY relocation but symbol not included "
+              "in dynamic symbol: " +
+              verboseToString(Sym));
+        return;
+      }
+      // Hack: Add a new global symbol with a unique name so that we can use
+      // a dynamic relocation against it.
+      // TODO: should it be possible to add STB_LOCAL symbols to .dynsymtab?
+      // create a unique name:
+
+      std::string UniqueName = ("__cheri_fnptr_" + Sym->getName()).str();
+      for (int i = 2; Symtab->find(UniqueName); i++) {
+        UniqueName = ("__cheri_fnptr" + Twine(i) + "_" + Sym->getName()).str();
+      }
+      auto LocalDef = cast<Defined>(Sym);
+      auto NewSym = Symtab->addDefined(
+          Saver.save(UniqueName), llvm::ELF::STV_HIDDEN, LocalDef->Type,
+          LocalDef->Value, LocalDef->Size, llvm::ELF::STB_GLOBAL,
+          LocalDef->Section, LocalDef->File);
+      assert(NewSym->isFunc() && "This should only be used for functions");
+      // TODO: would be nice to just set this on Sym, but we can't have
+      // STB_LOCAL symbols in .dynsym
+      NewSym->UsedByDynReloc = true;
+      NewSym->IsPreemptible = false;
+      if (Config->VerboseCapRelocs)
+        message("Adding new symbol " + toString(*NewSym) +
+                " to allow relocation against " + verboseToString(Sym));
+      Sym = NewSym; // Make the relocation point to the newly added symbol
+      assert(NewSym->includeInDynsym());
+      assert(NewSym->Binding == llvm::ELF::STB_GLOBAL);
+      assert(NewSym->Visibility == llvm::ELF::STV_HIDDEN);
+    }
+    DynRelSec->addReloc(
+        Type, Sec, Offset, Sym, Addend, Expr,
+        /* Relocation type for the addend = */ *Target->AbsPointerRel);
+  } else if (CapRelocMode == CapRelocsMode::Legacy) {
+    bool NeedsDynReloc = Config->Pic;
+    if (Config->RelativeCapRelocsOnly) {
+      assert(!Sym->IsPreemptible);
+      NeedsDynReloc = false;
+    }
+    InX<ELFT>::CapRelocs->addCapReloc({Sec, Offset, NeedsDynReloc}, {Sym, 0u},
+                                      Sym->IsPreemptible, Addend);
+  } else {
+    assert(Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap);
+    error("CBuildCap method not implemented yet!");
+  }
+}
+
 } // namespace elf
 } // namespace lld
+
+template void lld::elf::addCapabilityRelocation<ELF32LE>(
+    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::function_ref<std::string()>, RelocationBaseSection *);
+template void lld::elf::addCapabilityRelocation<ELF32BE>(
+    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::function_ref<std::string()>, RelocationBaseSection *);
+template void lld::elf::addCapabilityRelocation<ELF64LE>(
+    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::function_ref<std::string()>, RelocationBaseSection *);
+template void lld::elf::addCapabilityRelocation<ELF64BE>(
+    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::function_ref<std::string()>, RelocationBaseSection *);
