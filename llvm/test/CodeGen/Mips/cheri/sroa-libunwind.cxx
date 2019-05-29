@@ -1,6 +1,6 @@
 // RUNs: %cheri_purecap_cc1 -munwind-tables -fuse-init-array -mllvm -cheri-cap-table-abi=pcrel -dwarf-column-info -debug-info-kind=line-tables-only -dwarf-version=5 -debugger-tuning=gdb -nobuiltininc -cheri-uintcap=offset -O2 -std=c++11 -mstack-alignment=16 -S %s -emit-llvm -o %s.opt.ll
 // RUNs: %cheri128_purecap_cc1 -munwind-tables -fuse-init-array -mllvm -cheri-cap-table-abi=pcrel -dwarf-column-info -debug-info-kind=standalone -dwarf-version=2 -debugger-tuning=gdb -nobuiltininc -cheri-uintcap=offset -O2 -std=c++11 -mstack-alignment=16 -o - -S %s
-// RUN: %cheri128_purecap_cc1 -cheri-uintcap=offset -O2 -std=c++11 -o - -emit-llvm %s | %cheri_FileCheck %s
+// RUN: %cheri128_purecap_cc1 -cheri-uintcap=offset -O2 -std=c++11 -o - -emit-llvm %s | %FileCheck %s
 // Check that this no longer crashes:
 // RUN: %cheri128_purecap_cc1 -cheri-uintcap=offset -O2 -std=c++11 -o /dev/null -S %s -verify
 // REQUIRES: clang
@@ -29,7 +29,7 @@ extern "C" __uintcap_t minimal_test_case2(__int128 y) {
    // CHECK-NEXT: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 %0)
    // CHECK-NEXT: [[SROA_CAST:%.+]] = bitcast i8 addrspace(200)* %1 to i8 addrspace(200)* addrspace(200)*
    // Alignment is 16/32 due to the explicit cast to __uintcap_t*
-   // CHECK-NEXT: %r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[SROA_CAST]], align [[$CAP_SIZE]]
+   // CHECK-NEXT: %r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[SROA_CAST]], align 16
    // CHECK-NEXT: ret i8 addrspace(200)* %r.0.copyload
 }
 
@@ -40,7 +40,7 @@ extern "C" __uintcap_t minimal_test_case3(__int128 y) {
   // CHECK:      %y.addr.sroa.0 = alloca i8 addrspace(200)*, align 16, addrspace(200)
   // CHECK-NEXT: %tmpcast = bitcast i8 addrspace(200)* addrspace(200)* %y.addr.sroa.0 to i128 addrspace(200)*
   // CHECK-NEXT: store i128 %y, i128 addrspace(200)* %tmpcast, align 16,
-  // CHECK-NEXT: %y.addr.sroa.0.0.y.addr.sroa.0.0.y.addr.0.r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %y.addr.sroa.0, align [[$CAP_SIZE]]
+  // CHECK-NEXT: %y.addr.sroa.0.0.y.addr.sroa.0.0.y.addr.0.r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %y.addr.sroa.0, align 16
   // CHECK-NEXT: ret i8 addrspace(200)* %y.addr.sroa.0.0.y.addr.sroa.0.0.y.addr.0.r.0.copyload
   return r;
 }
