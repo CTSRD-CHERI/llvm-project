@@ -2315,8 +2315,10 @@ void CodeGenFunction::EmitVarAnnotations(const VarDecl *D, llvm::Value *V) {
   assert(D->hasAttr<AnnotateAttr>() && "no annotate attribute");
   // FIXME We create a new bitcast for every annotation because that's what
   // llvm-gcc was doing.
+  auto AnnotateIntrin =
+      CGM.getIntrinsic(llvm::Intrinsic::var_annotation, Int8PtrTy);
   for (const auto *I : D->specific_attrs<AnnotateAttr>())
-    EmitAnnotationCall(CGM.getIntrinsic(llvm::Intrinsic::var_annotation),
+    EmitAnnotationCall(AnnotateIntrin,
                        Builder.CreateBitCast(V, CGM.Int8PtrTy, V->getName()),
                        I->getAnnotation(), D->getLocation());
 }
@@ -2327,7 +2329,7 @@ Address CodeGenFunction::EmitFieldAnnotations(const FieldDecl *D,
   llvm::Value *V = Addr.getPointer();
   llvm::Type *VTy = V->getType();
   llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::ptr_annotation,
-                                    CGM.Int8PtrTy);
+                                       {CGM.Int8PtrTy, CGM.Int8PtrTy});
 
   for (const auto *I : D->specific_attrs<AnnotateAttr>()) {
     // FIXME Always emit the cast inst so we can differentiate between

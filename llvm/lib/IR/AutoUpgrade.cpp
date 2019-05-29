@@ -586,6 +586,11 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
         return true;
       }
     }
+    if (Name == "annotation") {
+      Type *Tys[] = {F->getReturnType(), F->getFunctionType()->params()[1] };
+      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::annotation, Tys);
+      return true;
+    }
     break;
   }
 
@@ -783,6 +788,14 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       }
     }
     break;
+  case 'p':
+   if (Name == "ptr.annotation") {
+      Type *Tys[] = {F->getReturnType(), F->getFunctionType()->params()[1] };
+      NewFn = Intrinsic::getDeclaration(F->getParent(),
+                                        Intrinsic::ptr_annotation, Tys);
+      return true;
+    }
+    break;
   case 'r':
     if (Name == "returnaddress") {
       NewFn = Intrinsic::getDeclaration(
@@ -823,6 +836,11 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
     if (Name == "va_copy") {
       NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::vacopy,
                                         { ArgTy, ArgTy });
+      return true;
+    }
+    if (Name == "var.annotation") {
+      NewFn = Intrinsic::getDeclaration(F->getParent(),
+                                        Intrinsic::var_annotation, ArgTy);
       return true;
     }
     break;
