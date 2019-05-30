@@ -97,7 +97,7 @@
 // CHECK-NEXT: Offset:
 // CHECK-NEXT: Size: [[RELSIZE:.*]]
 // CHECK-NEXT: Link:
-// CHECK-NEXT: Info:
+// CHECK-NEXT: Info: 0
 // CHECK-NEXT: AddressAlignment:
 // CHECK-NEXT: EntrySize: [[RELENT:.*]]
 

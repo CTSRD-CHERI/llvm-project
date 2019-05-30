@@ -1613,15 +1613,20 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->Link = 0;
 
-  if (Config->isCheriABI() && In.CheriCapTable) {
+  if (Config->isCheriABI() && In.CheriCapTable && In.CheriCapTable->isNeeded()) {
+    assert(In.CheriCapTable->getParent()->SectionIndex != UINT32_MAX);
     // For MIPS CheriABI we use the captable as the sh_info value
-    getParent()->Info = In.CheriCapTable->getParent()->SectionIndex;
+    if (In.RelaPlt == this)
+      getParent()->Info = In.CheriCapTable->getParent()->SectionIndex;
+    if (In.RelaIplt == this)
+      getParent()->Info = In.CheriCapTable->getParent()->SectionIndex;
   } else {
     if (In.RelaPlt == this)
       getParent()->Info = In.GotPlt->getParent()->SectionIndex;
     if (In.RelaIplt == this)
       getParent()->Info = In.IgotPlt->getParent()->SectionIndex;
   }
+  assert(getParent()->Info != UINT32_MAX);
 }
 
 RelrBaseSection::RelrBaseSection()
