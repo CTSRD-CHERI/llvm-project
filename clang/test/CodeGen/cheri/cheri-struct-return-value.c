@@ -213,7 +213,7 @@ int read_int_and_long_1() {
   // ASM-NEXT: dsra	$2, $2, 32
   // ASM-NEXT: clc	$c17, $zero, 0($c11)
   // ASM-NEXT: cjr	$c17
-  // ASM-NEXT: cincoffset	$c11, $c11, 16
+  // ASM-NEXT: cincoffset	$c11, $c11, [[$CAP_SIZE]]
 }
 
 long read_int_and_long_2() {
@@ -225,7 +225,7 @@ long read_int_and_long_2() {
   // ASM-NEXT: move $2, $3
   // ASM-NEXT: clc	$c17, $zero, 0($c11)
   // ASM-NEXT: cjr	$c17
-  // ASM-NEXT: cincoffset	$c11, $c11, 16
+  // ASM-NEXT: cincoffset	$c11, $c11, [[$CAP_SIZE]]
   return extern_int_and_long().l2;
 }
 
