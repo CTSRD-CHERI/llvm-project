@@ -2616,6 +2616,11 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 
         SDValue Argument = getCapToCapTable(GA, DL, DAG, HiFlag, LoFlag, 0,
                                             MipsISD::TlsHi);
+        // Set bounds to sizeof(tls_index)
+        if (cheri::ShouldCollectCSetBoundsStats)
+          addGlobalsCSetBoundsStats(GV, DAG, "set bounds on tls_index",
+                                    DL.getDebugLoc());
+        Argument = setBounds(DAG, Argument, 16, /*CSetBoundsStatsLogged=*/true);
         Type *CapTy = Type::getInt8PtrTy(*DAG.getContext(),
                                          GVTy->getPointerAddressSpace());
 
