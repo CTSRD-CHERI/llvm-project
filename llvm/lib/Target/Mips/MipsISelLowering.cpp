@@ -2698,23 +2698,39 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
     SDValue Argument = DAG.getNode(MipsISD::Wrapper, DL, PtrVT,
                                    getGlobalReg(DAG, PtrVT, /*IsForTls=*/true), TGA);
     unsigned PtrSize = PtrVT.getSizeInBits();
-    IntegerType *PtrTy = Type::getIntNTy(*DAG.getContext(), PtrSize);
+    Type *TlsGetAddrArgAndRetTy = Type::getIntNTy(*DAG.getContext(), PtrSize);
 
     SDValue TlsGetAddr = DAG.getExternalFunctionSymbol("__tls_get_addr");
+
+    if (ABI.IsCheriPureCap()) {
+      Argument = cFromDDC(DAG, DL, Argument);
+      // Set bounds to sizeof(tls_index)
+      if (cheri::ShouldCollectCSetBoundsStats)
+        addGlobalsCSetBoundsStats(GV, DAG, "set bounds on tls_index",
+                                    DL.getDebugLoc());
+      Argument = setBounds(DAG, Argument, 16, /*CSetBoundsStatsLogged=*/true);
+      // In the pure-capability ABI __tls_get_addr takes and returns capabilities
+      TlsGetAddrArgAndRetTy = Type::getInt8PtrTy(*DAG.getContext(), 200);
+    }
 
     ArgListTy Args;
     ArgListEntry Entry;
     Entry.Node = Argument;
-    Entry.Ty = PtrTy;
+    Entry.Ty = TlsGetAddrArgAndRetTy;
     Args.push_back(Entry);
 
     TargetLowering::CallLoweringInfo CLI(DAG);
     CLI.setDebugLoc(DL)
         .setChain(DAG.getEntryNode())
-        .setLibCallee(CallingConv::C, PtrTy, TlsGetAddr, std::move(Args));
+        .setLibCallee(CallingConv::C, TlsGetAddrArgAndRetTy, TlsGetAddr, std::move(Args));
     std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
 
     SDValue Ret = CallResult.first;
+    // Convert back to an integer value for the legacy ABI:
+    if (ABI.IsCheriPureCap()) {
+      auto GetAddr = DAG.getConstant(Intrinsic::cheri_cap_address_get, DL, PtrVT);
+      Ret = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::i64, GetAddr, Ret);
+    }
 
     if (model != TLSModel::LocalDynamic)
       return Ret;
