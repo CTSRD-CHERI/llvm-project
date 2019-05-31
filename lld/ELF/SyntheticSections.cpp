@@ -1467,7 +1467,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       addInt(DT_MIPS_GOTSYM, In.DynSymTab->getNumSymbols());
     addInSec(DT_PLTGOT, In.MipsGot);
     if (In.MipsRldMap) {
-      if (!Config->Pie)
+      if (!Config->Pie && !Config->Shared)
         addInSec(DT_MIPS_RLD_MAP, In.MipsRldMap);
       // Store the offset to the .rld_map section
       // relative to the address of the tag.
