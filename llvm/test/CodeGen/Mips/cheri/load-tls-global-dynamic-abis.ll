@@ -117,7 +117,7 @@ entry:
 ; CAP-TABLE-NEXT:   %2:gpr64 = DADDiu killed %1:gpr64, target-flags(mips-captable-tlsgd-lo16) @external_gd
 ; CAP-TABLE-NEXT:   %3:cherigpr = CIncOffset [[CAPTABLE]], killed %2:gpr64
 ; CAP-TABLE-NEXT:   %4:cherigpr = CSetBoundsImm killed %3:cherigpr, 16
-; CAP-TABLE-NEXT:   %5:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load 16 from call-entry &__tls_get_addr)
+; CAP-TABLE-NEXT:   %5:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load [[$CAP_SIZE]] from call-entry &__tls_get_addr)
 ; CAP-TABLE-NEXT:   $c3 = COPY %4:cherigpr
 ; CAP-TABLE-NEXT:   CapJumpLinkPseudo killed %5:cherigpr, <regmask $fp $gp $ra $c17 $c18 $c19 $c20 $c21 $c22 $c23 $c24 $c25 $d12 $d13 $d14 $d15 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 $fp_64 $f_hi24 $f_hi25 $f_hi26 $f_hi27 $f_hi28 $f_hi29 $f_hi30 $f_hi31 and 26 more...>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit-def $c11, implicit-def $c3
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
@@ -130,7 +130,7 @@ entry:
 ; CAP-TABLE-NEXT:   %9:gpr64 = DADDiu killed %8:gpr64, target-flags(mips-captable-tlsldm-lo16) @internal_gd
 ; CAP-TABLE-NEXT:   %10:cherigpr = CIncOffset [[CAPTABLE]], killed %9:gpr64
 ; CAP-TABLE-NEXT:   %11:cherigpr = CSetBoundsImm killed %10:cherigpr, 16
-; CAP-TABLE-NEXT:   %12:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load 16 from call-entry &__tls_get_addr)
+; CAP-TABLE-NEXT:   %12:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load [[$CAP_SIZE]] from call-entry &__tls_get_addr)
 ; CAP-TABLE-NEXT:   $c3 = COPY %11:cherigpr
 ; CAP-TABLE-NEXT:   CapJumpLinkPseudo killed %12:cherigpr, <regmask $fp $gp $ra $c17 $c18 $c19 $c20 $c21 $c22 $c23 $c24 $c25 $d12 $d13 $d14 $d15 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 $fp_64 $f_hi24 $f_hi25 $f_hi26 $f_hi27 $f_hi28 $f_hi29 $f_hi30 $f_hi31 and 26 more...>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit-def $c11, implicit-def $c3
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11

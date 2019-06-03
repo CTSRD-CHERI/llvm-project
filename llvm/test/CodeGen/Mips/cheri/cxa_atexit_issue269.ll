@@ -16,7 +16,8 @@ define void @store() nounwind {
 ; CHECK-NEXT:    cmove $c1, $c26
 ; CHECK-NEXT:    lui $1, %captab_tlsgd_hi(__tls_guard)
 ; CHECK-NEXT:    daddiu $1, $1, %captab_tlsgd_lo(__tls_guard)
-; CHECK-NEXT:    cincoffset $c3, $c1, $1
+; CHECK-NEXT:    cincoffset $c2, $c1, $1
+; CHECK-NEXT:    csetbounds $c3, $c2, 16
 ; CHECK-NEXT:    clcbi $c12, %capcall20(__tls_get_addr)($c1)
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -42,7 +43,8 @@ define i1 @load() nounwind {
 ; CHECK-NEXT:    cmove $c1, $c26
 ; CHECK-NEXT:    lui $1, %captab_tlsgd_hi(__tls_guard)
 ; CHECK-NEXT:    daddiu $1, $1, %captab_tlsgd_lo(__tls_guard)
-; CHECK-NEXT:    cincoffset $c3, $c1, $1
+; CHECK-NEXT:    cincoffset $c2, $c1, $1
+; CHECK-NEXT:    csetbounds $c3, $c2, 16
 ; CHECK-NEXT:    clcbi $c12, %capcall20(__tls_get_addr)($c1)
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
