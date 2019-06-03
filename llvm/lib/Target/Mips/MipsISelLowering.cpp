@@ -2310,16 +2310,20 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   if (ABI.UsesCapabilityTable()) {
     // XXXAR: HACK for the capability table (we turn this into an iFATPTR later
     // so we can just return the value
-    if (GlobalAddressSDNode *GN = dyn_cast<GlobalAddressSDNode>(Src)) {
+    if (isa<GlobalAddressSDNode>(Src)) {
       return Op;
     }
   }
   if (Src.getValueType() == MVT::i64) {
     assert(Op.getValueType() == CapType);
-    LLVM_DEBUG(dbgs() << "Lowering addrspacecast to CFromDDC: "; Op.dump(&DAG));
+    bool IsFunction = false;
+    if (GlobalAddressSDNode *GN = dyn_cast<GlobalAddressSDNode>(Src)) {
+      IsFunction = isa<Function>(GN->getGlobal()->getBaseObject());
+    }
+    LLVM_DEBUG(dbgs() << "Lowering addrspacecast: "; Op.dump(&DAG));
     // INTTOPTR will lower to a cincoffset on null in the purecap ABI, so we
     // need to use cfromddc here to keep the legacy ABI working:
-    auto Ptr = cFromDDC(DAG, DL, Src);
+    SDValue Ptr = IsFunction ? setPccOffset(DAG, DL, Src) : cFromDDC(DAG, DL, Src);
     if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
       const GlobalValue *GV = N->getGlobal();
       auto *Ty = GV->getValueType();
@@ -2332,6 +2336,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
         Ptr = setBounds(DAG, Ptr, SizeBytes, /*CSetBoundsStatsLogged=*/true);
       }
     }
+    LLVM_DEBUG(dbgs() << "Lowering addrspacecast result: "; Ptr.dump(&DAG));
     return Ptr;
   }
   assert(Src.getValueType() == CapType);
@@ -2494,7 +2499,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
           MachinePointerInfo::getGOT(DAG.getMachineFunction()), GV->isThreadLocal());
     else if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
       Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
-    else 
+    else
       Global = getAddrGlobal(
           N, SDLoc(N), Ty, DAG,
           (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT,
