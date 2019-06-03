@@ -879,9 +879,15 @@ static bool canEmitInitWithFewStoresAfterBZero(llvm::Constant *Init,
       isa<llvm::UndefValue>(Init))
     return true;
   if (isa<llvm::ConstantInt>(Init) || isa<llvm::ConstantFP>(Init) ||
-      isa<llvm::ConstantVector>(Init) || isa<llvm::BlockAddress>(Init) ||
-      isa<llvm::ConstantExpr>(Init))
+      isa<llvm::ConstantVector>(Init) || isa<llvm::BlockAddress>(Init))
     return Init->isNullValue() || NumStores--;
+  if (auto C = dyn_cast<llvm::ConstantExpr>(Init)) {
+    // To match the pcrel ABI, don't emit bzero for legacy ABI where all
+    // functions are addrspacecast
+    if (C->isCast() && C->getOpcode() == llvm::Instruction::AddrSpaceCast && isa<llvm::Function>(C->getOperand(0)))
+      return false;
+    return Init->isNullValue() || NumStores--;
+  }
 
   // See if we can emit each element.
   if (isa<llvm::ConstantArray>(Init) || isa<llvm::ConstantStruct>(Init)) {
