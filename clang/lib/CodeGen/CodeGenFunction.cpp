@@ -2319,7 +2319,7 @@ void CodeGenFunction::EmitVarAnnotations(const VarDecl *D, llvm::Value *V) {
       CGM.getIntrinsic(llvm::Intrinsic::var_annotation, Int8PtrTy);
   for (const auto *I : D->specific_attrs<AnnotateAttr>())
     EmitAnnotationCall(AnnotateIntrin,
-                       Builder.CreateBitCast(V, CGM.Int8PtrTy, V->getName()),
+                       Builder.CreatePointerBitCastOrAddrSpaceCast(V, CGM.Int8PtrTy, V->getName()),
                        I->getAnnotation(), D->getLocation());
 }
 
@@ -2336,9 +2336,9 @@ Address CodeGenFunction::EmitFieldAnnotations(const FieldDecl *D,
     // annotation on the first field of a struct and annotation on the struct
     // itself.
     if (VTy != CGM.Int8PtrTy)
-      V = Builder.CreateBitCast(V, CGM.Int8PtrTy);
+      V = Builder.CreatePointerBitCastOrAddrSpaceCast(V, CGM.Int8PtrTy);
     V = EmitAnnotationCall(F, V, I->getAnnotation(), D->getLocation());
-    V = Builder.CreateBitCast(V, VTy);
+    V = Builder.CreatePointerBitCastOrAddrSpaceCast(V, VTy);
   }
 
   return Address(V, Addr.getAlignment());
