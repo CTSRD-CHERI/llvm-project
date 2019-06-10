@@ -229,12 +229,17 @@ old_cset_c4 28
     # DUMP-NEXT: 48 06 3c 7f crepresentablealignmentmask $6, $7
     # CHECK-NEXT: crepresentablealignmentmask	$5, $6 # encoding: [0x48,0x05,0x34,0x7f]
     # DUMP-NEXT: 48 05 34 7f crepresentablealignmentmask $5, $6
-    CRoundArchitecturalPrecision $6, $7
+    CRoundRepresentableLength $6, $7
+    # old name: CRoundArchitecturalPrecision $6, $7
+    crrl $5, $6
+    # old alias still supported
     crap $5, $6
-    # CHECK-NEXT: croundarchitecturalprecision	$6, $7 # encoding: [0x48,0x06,0x3c,0x3f]
-    # DUMP-NEXT: 48 06 3c 3f croundarchitecturalprecision $6, $7
-    # CHECK-NEXT: croundarchitecturalprecision	$5, $6 # encoding: [0x48,0x05,0x34,0x3f]
-    # DUMP-NEXT: 48 05 34 3f croundarchitecturalprecision $5, $6
+    # CHECK-NEXT: croundrepresentablelength	$6, $7 # encoding: [0x48,0x06,0x3c,0x3f]
+    # DUMP-NEXT: 48 06 3c 3f croundrepresentablelength $6, $7
+    # CHECK-NEXT: croundrepresentablelength	$5, $6 # encoding: [0x48,0x05,0x34,0x3f]
+    # DUMP-NEXT: 48 05 34 3f croundrepresentablelength $5, $6
+    # CHECK-NEXT: croundrepresentablelength	$5, $6 # encoding: [0x48,0x05,0x34,0x3f]
+    # DUMP-NEXT: 48 05 34 3f croundrepresentablelength $5, $6
 
     teq $zero, $zero
     # Check that we didn't forget to add a check line for some instruction:

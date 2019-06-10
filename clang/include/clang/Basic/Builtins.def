@@ -1494,7 +1494,7 @@ BUILTIN(__builtin_cheri_address_get, "zvC*m", "nc")
 BUILTIN(__builtin_cheri_address_set, "v*mvC*mz", "nc")
 
 BUILTIN(__builtin_cheri_cap_load_tags, "zvC*m", "n")
-BUILTIN(__builtin_cheri_round_architectural_precision, "zz", "nc")
+BUILTIN(__builtin_cheri_round_representable_length, "zz", "nc")
 BUILTIN(__builtin_cheri_representable_alignment_mask, "zz", "nc")
 
 BUILTIN(__builtin_cheri_stack_get, "v*m", "nc")

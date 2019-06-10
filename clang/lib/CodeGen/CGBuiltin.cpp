@@ -3661,13 +3661,13 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   // Round to capability precision:
   // TODO: should we handle targets that don't have any precision constraints
   // here or in the backend?
-  case Builtin::BI__builtin_cheri_round_architectural_precision:
+  case Builtin::BI__builtin_cheri_round_representable_length:
     return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_round_architectural_precision, {SizeTy, SizeTy}),
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_round_representable_length, {SizeTy}),
         {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_representable_alignment_mask:
     return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_representable_alignment_mask, {SizeTy, SizeTy}),
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_representable_alignment_mask, {SizeTy}),
         {EmitScalarExpr(E->getArg(0))}));
 
   case Builtin::BI__builtin_cheri_callback_create: {

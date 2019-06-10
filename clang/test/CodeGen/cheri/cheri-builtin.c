@@ -111,10 +111,10 @@ void buildcap(void * __capability auth, __intcap_t bits) {
 
 
 int crap_cram(int len) {
-  return __builtin_cheri_round_architectural_precision(len) & __builtin_cheri_representable_alignment_mask(len);
+  return __builtin_cheri_round_representable_length(len) & __builtin_cheri_representable_alignment_mask(len);
   // CHECK-LABEL: @crap_cram(
-  // CHECK: call i64 @llvm.cheri.round.architectural.precision.i64.i64(
-  // CHECK: call i64 @llvm.cheri.representable.alignment.mask.i64.i64(
-  // ASM: croundarchitecturalprecision	${{[0-9]+}}, ${{[0-9]+}}
+  // CHECK: call i64 @llvm.cheri.round.representable.length.i64(
+  // CHECK: call i64 @llvm.cheri.representable.alignment.mask.i64(
+  // ASM: croundrepresentablelength	${{[0-9]+}}, ${{[0-9]+}}
   // ASM: crepresentablealignmentmask	${{[0-9]+}}, ${{[0-9]+}}
 }

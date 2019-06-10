@@ -156,12 +156,12 @@ def int_cheri_cap_load_tags:
   Intrinsic<[llvm_anyint_ty], [llvm_fatptr_ty], [IntrReadMem]>;
 
 /// Round length to compressed capability precision:
-def int_cheri_round_architectural_precision :
-   GCCBuiltin<"__builtin_cheri_round_architectural_precision">,
-   Intrinsic<[llvm_anyint_ty], [llvm_anyint_ty], [IntrNoMem]>;
+def int_cheri_round_representable_length :
+   GCCBuiltin<"__builtin_cheri_round_representable_length">,
+   Intrinsic<[llvm_anyint_ty], [LLVMMatchType<0>], [IntrNoMem]>;
 def int_cheri_representable_alignment_mask :
    GCCBuiltin<"__builtin_cheri_representable_alignment_mask">,
-   Intrinsic<[llvm_anyint_ty], [llvm_anyint_ty], [IntrNoMem]>;
+   Intrinsic<[llvm_anyint_ty], [LLVMMatchType<0>], [IntrNoMem]>;
 
 
 /// This intrinsics makes it easier to avoid spilling registers to create

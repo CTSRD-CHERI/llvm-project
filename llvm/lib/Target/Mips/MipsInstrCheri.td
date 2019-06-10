@@ -353,22 +353,23 @@ def CSetOffset : CheriFmtCSet<0xf, "offset">;
 def CSetBounds : CheriFmtCSet<0x8, "bounds">;
 def CSetBoundsExact : CheriFmtCSet<0x9, "boundsexact", "bounds", "set", "set_exact">;
 def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
-def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2), 
+def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
                               "ccleartag\t$r1, $r2",
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
 def CSetAddr : CheriFmtCSet<0x22, "addr", "address">;
 
-// CRoundArchitecturalPrecision
+// CRoundRepresentableLength (a.k.a. CRoundArchitecturalPrecision)
 def CRAP : CheriFmt2Op<0x10, (outs GPR64Opnd:$r1), (ins GPR64Opnd:$r2),
-                       "croundarchitecturalprecision\t$r1, $r2",
-                       [(set GPR64Opnd:$r1, (int_cheri_round_architectural_precision GPR64Opnd:$r2))]>;
+                       "croundrepresentablelength\t$r1, $r2",
+                       [(set GPR64Opnd:$r1, (int_cheri_round_representable_length GPR64Opnd:$r2))]>;
 // CRepresentableAlignmentMask
 def CRAM : CheriFmt2Op<0x11, (outs GPR64Opnd:$r1), (ins GPR64Opnd:$r2),
                        "crepresentablealignmentmask\t$r1, $r2",
                        [(set GPR64Opnd:$r1, (int_cheri_representable_alignment_mask GPR64Opnd:$r2))]>;
 }
-// CRAM/CRAP aliases
+// CRAM/CRRL (a.k.a. CRAP) aliases
 def : InstAlias<"crap $dst, $len", (CRAP GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
+def : InstAlias<"crrl $dst, $len", (CRAP GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
 def : InstAlias<"cram $dst, $len", (CRAM GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
 
 // Convert CIncOffsets of the difference to csetaddr
@@ -401,10 +402,10 @@ def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 [(set CheriOpnd:$r1, (int_cheri_cap_offset_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
 
 // Sealing and unsealing
-def CSeal   : CheriFmt3Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3), 
+def CSeal   : CheriFmt3Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
                                "cseal\t$r1, $r2, $r3",
                                [(set CheriOpnd:$r1, (int_cheri_cap_seal CheriOpnd:$r2, CheriOpnd:$r3))]>;
-def CUnSeal : CheriFmt3Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3), 
+def CUnSeal : CheriFmt3Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
                                "cunseal\t$r1, $r2, $r3",
                                [(set CheriOpnd:$r1, (int_cheri_cap_unseal CheriOpnd:$r2, CheriOpnd:$r3))]>;
 
@@ -576,7 +577,7 @@ multiclass StoreViaCapScaled<bits<2> t, bit e, string instr_asm, RegisterOperand
 }
 multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
   StoreViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
- 
+
 multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
   def : Pat<(storeType RC:$rd, CheriOpnd0IsDDC:$cb),
             (Op RC:$rd, ZERO_64, (i64 0), CheriOpnd0IsDDC:$cb)>;
