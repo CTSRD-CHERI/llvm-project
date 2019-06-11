@@ -115,8 +115,8 @@ if [ "$label" == "linux" ] ; then
     export CMAKE_CXX_COMPILER=clang++-6.0
     export CMAKE_C_COMPILER=clang-6.0
 else
-    export CMAKE_CXX_COMPILER=clang++40
-    export CMAKE_C_COMPILER=clang40
+    export CMAKE_CXX_COMPILER=clang++80
+    export CMAKE_C_COMPILER=clang80
 fi
 CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}" "-DLLVM_ENABLE_LLD=ON")
 # Run lit with python3 to avoid multiprocessing errors
