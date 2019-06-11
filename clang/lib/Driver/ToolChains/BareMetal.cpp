@@ -201,6 +201,8 @@ void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
     assert(Target == BaremetalTarget::MIPS);
     if (getTriple().getArch() == llvm::Triple::cheri && !IsCheriPurecap) {
       LibName += "mips64";
+    } else if (getTriple().isMIPS() && IsCheriPurecap) {
+      LibName += "cheri"; // TODO: would be nice to have CHERI size here
     } else {
       LibName += getTriple().getArchName();
     }
