@@ -1305,7 +1305,8 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
     NeedCodeGen = true;
     CodeGenPasses.add(
         createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
-    if (!CodeGenOpts.SplitDwarfFile.empty()) {
+    if (!CodeGenOpts.SplitDwarfFile.empty() &&
+        CodeGenOpts.getSplitDwarfMode() == CodeGenOptions::SplitFileFission) {
       DwoOS = openOutputFile(CodeGenOpts.SplitDwarfFile);
       if (!DwoOS)
         return;
