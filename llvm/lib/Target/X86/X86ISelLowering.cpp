@@ -28727,10 +28727,18 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
   unsigned ArgMode = MI.getOperand(7).getImm();
   unsigned Align = MI.getOperand(8).getImm();
 
+  MachineFunction *MF = MBB->getParent();
+
   // Memory Reference
   assert(MI.hasOneMemOperand() && "Expected VAARG_64 to have one memoperand");
-  SmallVector<MachineMemOperand *, 1> MMOs(MI.memoperands_begin(),
-                                           MI.memoperands_end());
+
+  MachineMemOperand *OldMMO = MI.memoperands().front();
+
+  // Clone the MMO into two separate MMOs for loading and storing
+  MachineMemOperand *LoadOnlyMMO = MF->getMachineMemOperand(
+      OldMMO, OldMMO->getFlags() & ~MachineMemOperand::MOStore);
+  MachineMemOperand *StoreOnlyMMO = MF->getMachineMemOperand(
+      OldMMO, OldMMO->getFlags() & ~MachineMemOperand::MOLoad);
 
   // Machine Information
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
@@ -28795,7 +28803,6 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
     OverflowDestReg = MRI.createVirtualRegister(AddrRegClass);
 
     const BasicBlock *LLVM_BB = MBB->getBasicBlock();
-    MachineFunction *MF = MBB->getParent();
     overflowMBB = MF->CreateMachineBasicBlock(LLVM_BB);
     offsetMBB = MF->CreateMachineBasicBlock(LLVM_BB);
     endMBB = MF->CreateMachineBasicBlock(LLVM_BB);
@@ -28828,7 +28835,7 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
         .add(Index)
         .addDisp(Disp, UseFPOffset ? 4 : 0)
         .add(Segment)
-        .setMemRefs(MMOs);
+        .setMemRefs(LoadOnlyMMO);
 
     // Check if there is enough room left to pull this argument.
     BuildMI(thisMBB, DL, TII->get(X86::CMP32ri))
@@ -28853,7 +28860,7 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
         .add(Index)
         .addDisp(Disp, 16)
         .add(Segment)
-        .setMemRefs(MMOs);
+        .setMemRefs(LoadOnlyMMO);
 
     // Zero-extend the offset
     unsigned OffsetReg64 = MRI.createVirtualRegister(AddrRegClass);
@@ -28881,7 +28888,7 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
         .addDisp(Disp, UseFPOffset ? 4 : 0)
         .add(Segment)
         .addReg(NextOffsetReg)
-        .setMemRefs(MMOs);
+        .setMemRefs(StoreOnlyMMO);
 
     // Jump to endMBB
     BuildMI(offsetMBB, DL, TII->get(X86::JMP_1))
@@ -28900,7 +28907,7 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
       .add(Index)
       .addDisp(Disp, 8)
       .add(Segment)
-      .setMemRefs(MMOs);
+      .setMemRefs(LoadOnlyMMO);
 
   // If we need to align it, do so. Otherwise, just copy the address
   // to OverflowDestReg.
@@ -28937,7 +28944,7 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
       .addDisp(Disp, 8)
       .add(Segment)
       .addReg(NextAddrReg)
-      .setMemRefs(MMOs);
+      .setMemRefs(StoreOnlyMMO);
 
   // If we branched, emit the PHI to the front of endMBB.
   if (offsetMBB) {
