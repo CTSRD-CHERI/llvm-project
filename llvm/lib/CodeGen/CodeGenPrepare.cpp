@@ -6139,6 +6139,7 @@ bool CodeGenPrepare::optimizeShuffleVectorInst(ShuffleVectorInst *SVI) {
       InsertedShuffle =
           new ShuffleVectorInst(SVI->getOperand(0), SVI->getOperand(1),
                                 SVI->getOperand(2), "", &*InsertPt);
+      InsertedShuffle->setDebugLoc(SVI->getDebugLoc());
     }
 
     UI->replaceUsesOfWith(SVI, InsertedShuffle);
