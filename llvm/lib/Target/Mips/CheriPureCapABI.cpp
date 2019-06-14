@@ -27,6 +27,8 @@
 
 #include "llvm/IR/Verifier.h"
 
+#include "cheri-compressed-cap/cheri_compressed_cap.h"
+
 #define DEBUG_TYPE "cheri-purecap-alloca"
 
 
@@ -434,8 +436,7 @@ public:
           AllocaSize *= CI->getValue().getLimitedValue();
         else
           AllocaSize *= 1048576;
-        ForcedAlignment = AllocaSize / (1 << 13);
-        ForcedAlignment = PowerOf2Ceil(ForcedAlignment);
+        ForcedAlignment = cc128_get_required_alignment(AllocaSize);
         // MIPS doesn't support stack alignments greater than 2^16
         ForcedAlignment = std::min(ForcedAlignment, 0x4000U);
       }
