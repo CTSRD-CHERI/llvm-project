@@ -365,7 +365,7 @@ private:
   unsigned Friend_specified : 1;
 
   // constexpr-specifier
-  ConstexprSpecKind ConstexprSpecifier : 2;
+  unsigned ConstexprSpecifier : 2;
 
   union {
     UnionParsedType TypeRep;
@@ -735,7 +735,10 @@ public:
   bool isModulePrivateSpecified() const { return ModulePrivateLoc.isValid(); }
   SourceLocation getModulePrivateSpecLoc() const { return ModulePrivateLoc; }
 
-  ConstexprSpecKind getConstexprSpecifier() const { return ConstexprSpecifier; }
+  ConstexprSpecKind getConstexprSpecifier() const {
+    return ConstexprSpecKind(ConstexprSpecifier);
+  }
+
   SourceLocation getConstexprSpecLoc() const { return ConstexprLoc; }
   bool hasConstexprSpecifier() const {
     return ConstexprSpecifier != CSK_unspecified;
