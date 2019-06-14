@@ -1106,8 +1106,14 @@ static inline uint64_t cc128_get_alignment_mask(uint64_t req_length) {
   // base should have been rounded down using this mask:
   assert((req_base & mask) == tmpcap.cr_base);
   return mask;
-
 }
+
+static inline uint64_t cc128_get_required_alignment(uint64_t req_length) {
+    // To get the required alignment from the CRAM mask we can just invert
+    // the bits and add one to get a power-of-two
+    return ~cc128_get_alignment_mask(req_length) + 1;
+}
+
 
 #endif /* CC128_DEFINE_FUNCTIONS != 0 */
 
