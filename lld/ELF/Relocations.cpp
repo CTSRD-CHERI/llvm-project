@@ -973,10 +973,21 @@ template <class ELFT, class RelTy>
 static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
                             uint64_t Offset, Symbol &Sym, const RelTy &Rel,
                             int64_t Addend) {
-  if (isStaticLinkTimeConstant(Expr, Type, Sym, Sec, Offset)) {
+  // If the relocation is known to be a link-time constant, we know no dynamic
+  // relocation will be created, pass the control to relocateAlloc() or
+  // relocateNonAlloc() to resolve it.
+  //
+  // The behavior of an undefined weak reference is implementation defined. If
+  // the relocation is to a weak undef, and we are producing an executable, let
+  // relocate{,Non}Alloc() resolve it.
+  //
+  // R_CHERI_CAPABILITY is always handled below.
+  if (isStaticLinkTimeConstant(Expr, Type, Sym, Sec, Offset) ||
+      (!Config->Shared && Sym.isUndefWeak() && Expr != R_CHERI_CAPABILITY)) {
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;
   }
+
   bool CanWrite = (Sec.Flags & SHF_WRITE) || !Config->ZText;
   // HACK: clang emits a read-only __cap_relocs, but for PIC code we need to
   //       emit dynamic relocations for its contents (REL32/64/NONE).
@@ -1049,15 +1060,6 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
         In.MipsGot->addEntry(*Sec.File, Sym, Addend, Expr);
       return;
     }
-  }
-
-  // If the relocation is to a weak undef, and we are producing
-  // executable, give up on it and produce a non preemptible 0.
-  if (!Config->Shared && Sym.isUndefWeak()) {
-    if (Expr == R_CHERI_CAPABILITY)
-      error("Not implemented yet");
-    Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
-    return;
   }
 
   if (!CanWrite && (Config->Pic && !isRelExpr(Expr))) {
