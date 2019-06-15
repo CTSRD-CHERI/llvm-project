@@ -393,13 +393,13 @@ static constexpr bool check_same() {
     static_assert(a == b, "");
     return true;
 }
-#define STATIC_ASSERT_SAME(a, b) static_assert(check_same<a, b>(), "")
+#define CC128_STATIC_ASSERT_SAME(a, b) static_assert(check_same<a, b>(), "")
 #else
-#define STATIC_ASSERT_SAME(a, b) _Static_assert(a == b, "")
+#define CC128_STATIC_ASSERT_SAME(a, b) _Static_assert(a == b, "")
 #endif
-STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, CC128_NULL_PESBT);
-STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_BOT_WIDTH);
-STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
+CC128_STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, CC128_NULL_PESBT);
+CC128_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_BOT_WIDTH);
+CC128_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
 /* Avoid pulling in code that uses cr_pesbt_xored_for_mem when building QEMU256 */
 #ifndef CC128_DEFINE_FUNCTIONS
@@ -470,7 +470,7 @@ static inline uint64_t cc128_truncate64(uint64_t value, size_t n) {
 // truncates `value`, keeping only the _most_ significant `n` bits.
 #define TRUNCATE_LSB_FUNC(type_width) \
 static inline uint64_t cc128_truncateLSB##type_width(uint64_t value, size_t n) { \
-    _Static_assert(type_width <= 64, ""); \
+    CC128_STATIC_ASSERT(type_width <= 64, ""); \
     return value >> (type_width - n);\
 }
 
@@ -682,7 +682,6 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 23, "This code assumes 14-bit bot");
     CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "This code assumes 14-bit bot");
 #else
-    uint32_t BWidth = CC128_BOT_WIDTH;
     CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 14, "This code assumes 14-bit bot");
     CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "This code assumes 14-bit bot");
 #endif
