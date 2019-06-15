@@ -7,6 +7,7 @@
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "test_util.h"
 
+#if 0
 struct setbounds_regressions {
     uint64_t base1;
     uint64_t base2;
@@ -21,6 +22,7 @@ struct setbounds_regressions {
     {0x000000000006cdf7, 0x0000000000214459, 0x0000000000086940, 0x1fffff5b88378ec7},
     {0x0010D700C6318A88, 0x383264C38950ADB7, 0x00000D5EBA967A84, 0x0000000002FFFFCE},
 };
+#endif
 
 static inline void check_csetbounds_invariants(const cap_register_t& initial_cap, const cap_register_t& with_bounds,
                                                bool was_exact, uint64_t requested_base, unsigned __int128 requested_top) {
@@ -38,6 +40,7 @@ static inline void check_csetbounds_invariants(const cap_register_t& initial_cap
     }
     REQUIRE(with_bounds.base() >= initial_cap.base()); // monotonicity broken
     REQUIRE(with_bounds.top() <= initial_cap.top());   // monotonicity broken
+    REQUIRE(cc128_is_representable_cap_exact(&with_bounds)); // result of csetbounds must be representable
 }
 
 static cap_register_t do_csetbounds(const cap_register_t& initial_cap, unsigned __int128 requested_top, bool* was_exact) {

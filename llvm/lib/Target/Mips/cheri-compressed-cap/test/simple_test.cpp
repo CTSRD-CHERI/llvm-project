@@ -248,7 +248,7 @@ TEST_CASE("New format max length regression", "[new]") {
 }
 #endif
 
-static void check_representable(uint64_t base, unsigned __int128 length, bool should_work, const std::string& ctx) {
+static void check_representable(uint64_t base, unsigned __int128 length, uint64_t offset, bool should_work, const std::string& ctx) {
     // INFO("Checking representability for " << ctx);
     // INFO("Base = " << base);
     // INFO("Length = " << length);
@@ -257,6 +257,7 @@ static void check_representable(uint64_t base, unsigned __int128 length, bool sh
     cap_register_t cap;
     memset(&cap, 0, sizeof(cap));
     cap.cr_base = base;
+    cap.cr_offset = offset;
     cap._cr_length = length;
     cap.cr_tag = true;
     cap.cr_otype = CC128_OTYPE_UNSEALED;
@@ -264,15 +265,16 @@ static void check_representable(uint64_t base, unsigned __int128 length, bool sh
     cap_register_t decompressed;
     memset(&decompressed, 0, sizeof(decompressed));
 
-    bool unsealed_representable = cc128_is_representable(false, base, length, 0, 0);
     decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
+    CAPTURE(cap);
+    CAPTURE(decompressed);
     bool unsealed_roundtrip = cap.cr_base == decompressed.cr_base && cap._cr_length == decompressed._cr_length && cap.cr_offset == decompressed.cr_offset;
+    bool unsealed_representable = cc128_is_representable(false, base, length, 0, cap.cr_offset);
     CHECK(unsealed_representable == should_work);
     CHECK(unsealed_roundtrip == unsealed_representable);
     // TODO: CHECK(fast_representable == unsealed_representable);
 
-    bool sealed_representable = cc128_is_representable(true, base, length, 0, 0);
-    cap.cr_offset = 42;
+    bool sealed_representable = cc128_is_representable(true, base, length, 0, cap.cr_offset);
     decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
     bool sealed_roundtrip = cap.cr_base == decompressed.cr_base && cap._cr_length == decompressed._cr_length && cap.cr_offset == decompressed.cr_offset;
     CHECK(sealed_representable == should_work);
@@ -283,10 +285,20 @@ static void check_representable(uint64_t base, unsigned __int128 length, bool sh
 
 TEST_CASE("Check max size cap represetable", "[representable]") {
     // 0000000d b:0000000000000000 l:ffffffffffffffff |o:0000000000000000 t:ffffff
-    check_representable(0, CAP_MAX_ADDRESS_PLUS_ONE, true, "1 << 64 length");
-    check_representable(0, 0, true, "zero length");
-    check_representable(0, UINT64_MAX, false, "UINT64_MAX length");
+    check_representable(0, CAP_MAX_ADDRESS_PLUS_ONE, 0, true, "1 << 64 length");
+    check_representable(0, 0, 0, true, "zero length");
+    check_representable(0, UINT64_MAX, 0, false, "UINT64_MAX length");
 
-    check_representable(0xffffffffff000000, 0x00000000000ffffff, false, "lenght with too many bits");
+    check_representable(0xffffffffff000000, 0x00000000000ffffff, 0, false, "length with too many bits");
+
+
+    // regression test from QEMU broken cincoffset
+    CHECK(cc128_is_representable(false, 0x00000000000b7fcc, 0x00000000000000e1, 0, 52));
+    check_representable(0x00000000000b7fcc, 0x00000000000000e1, 52, true, "regression");
+    // $c17: v:1 s:0 p:0007817d b:00000000401cf020 l:0000000000001800 o:0 t:-1 + 0x1800
+    check_representable(0x00000000401cf020, 0x0000000000001800, 0x1800, true, "regression");
+    CHECK(cc128_is_representable(false, 0x00000000401cf020, 0x0000000000001800, 0, 0x1800));
+    // $c18: v:1 s:0 p:0007817d b:00000000401ffff8 l:0000000000000008 o:0 t:-1 + 0x8
+    check_representable(0x00000000401ffff8, 0x0000000000000008, 0x8, true, "regression");
+    CHECK(cc128_is_representable(false, 0x00000000401ffff8, 0x0000000000000008, 0, 0x8));
 }
-
