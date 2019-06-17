@@ -1043,7 +1043,7 @@ public:
     llvm_unreachable("invalid ResultKind");
   }
   ResultStorageKind getResultStorageKind() const {
-    return static_cast<const ResultStorageKind>(ConstantExprBits.ResultKind);
+    return static_cast<ResultStorageKind>(ConstantExprBits.ResultKind);
   }
   APValue getAPValueResult() const;
 
