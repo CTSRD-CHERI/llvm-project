@@ -1250,6 +1250,11 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     NeedLocTracking = true;
   }
 
+  if (Arg *A = Args.getLastArg(OPT_opt_record_format)) {
+    Opts.OptRecordFormat = A->getValue();
+    NeedLocTracking = true;
+  }
+
   if (Arg *A = Args.getLastArg(OPT_Rpass_EQ)) {
     Opts.OptimizationRemarkPattern =
         GenerateOptimizationRemarkRegex(Diags, Args, A);
