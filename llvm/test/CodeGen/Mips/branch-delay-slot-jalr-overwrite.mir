@@ -59,7 +59,7 @@ frameInfo:
 fixedStack:
 stack:
   - { id: 0, name: '', type: spill-slot, offset: -8, size: 8, alignment: 8,
-      stack-id: 0, callee-saved-register: '$ra_64', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '$ra_64', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
 constants:
 body:             |

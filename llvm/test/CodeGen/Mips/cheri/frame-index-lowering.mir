@@ -74,28 +74,28 @@ frameInfo:
 fixedStack:      []
 stack:
   - { id: 0, name: over_16_bit_imm, type: spill-slot, offset: 0, size: 8, alignment: 8,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
   - { id: 1, name: over_16_bit_imm_pad, type: spill-slot, offset: 0, size: 60000, alignment: 16,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
   - { id: 2, name: huge_imm, type: spill-slot, offset: 0, size: 8, alignment: 8,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
   - { id: 3, name: huge_pad, type: spill-slot, offset: 0, size: 20000, alignment: 16,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
   - { id: 4, name: medium_imm, type: default, offset: 0, size: 1, alignment: 4,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
   - { id: 5, name: medium_pad, type: default, offset: 0, size: 368, alignment: 16,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
   - { id: 6, name: tiny_imm, type: spill-slot, offset: 0, size: 4, alignment: 4,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
   - { id: 7, name: tiny_pad, type: spill-slot, offset: 0, size: 4, alignment: 4,
-      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
 constants:       []
 body:             |
