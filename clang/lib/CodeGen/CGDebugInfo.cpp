@@ -1420,6 +1420,9 @@ void CGDebugInfo::CollectRecordFields(
             isa<VarTemplateSpecializationDecl>(V))
           continue;
 
+        if (isa<VarTemplatePartialSpecializationDecl>(V))
+          continue;
+
         // Reuse the existing static member declaration if one exists
         auto MI = StaticDataMemberCache.find(V->getCanonicalDecl());
         if (MI != StaticDataMemberCache.end()) {
