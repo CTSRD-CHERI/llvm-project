@@ -1692,6 +1692,11 @@ static Value *getNaturalGEPWithOffset(IRBuilderTy &IRB, const DataLayout &DL,
 /// surrounding code.
 static Value *getAdjustedPtr(IRBuilderTy &IRB, const DataLayout &DL, Value *Ptr,
                              APInt Offset, Type *PointerTy, Twine NamePrefix) {
+  // Make sure that we're not inadvertently inserting a bitcast between address
+  // spaces.
+  unsigned AS = Ptr->getType()->getPointerAddressSpace();
+  if (PointerTy->getPointerAddressSpace() != AS)
+    PointerTy = PointerTy->getPointerElementType()->getPointerTo(AS);
   // Even though we don't look through PHI nodes, we could be called on an
   // instruction in an unreachable block, which may be on a cycle.
   SmallPtrSet<Value *, 4> Visited;
@@ -1711,12 +1716,6 @@ static Value *getAdjustedPtr(IRBuilderTy &IRB, const DataLayout &DL, Value *Ptr,
 
   PointerType *TargetPtrTy = cast<PointerType>(PointerTy);
   Type *TargetTy = TargetPtrTy->getElementType();
-
-  // As `addrspacecast` is , `Ptr` (the storage pointer) may have different
-  // address space from the expected `PointerTy` (the pointer to be used).
-  // Adjust the pointer type based the original storage pointer.
-  auto AS = cast<PointerType>(Ptr->getType())->getAddressSpace();
-  PointerTy = PointerTy->getPointerTo(AS);
 
   do {
     // First fold any existing GEPs into the offset.
