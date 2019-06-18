@@ -12,6 +12,7 @@
 
 #include "InputFiles.h"
 #include "SymbolTable.h"
+#include "SyntheticSections.h"
 #include "Writer.h"
 
 #include "lld/Common/ErrorHandler.h"
@@ -452,6 +453,54 @@ uint8_t elf::getMipsIsaExt(uint64_t OldExt, StringRef OldFile, uint64_t NewExt,
   }
   // non-cheri isa_ext -> just return the maximum
   return std::max(OldExt, NewExt);
+}
+
+static Mips::AFL_EXT cheriFlagsToAFL_EXT(uint64_t CheriFlags) {
+  assert(CheriFlags < DF_MIPS_CHERI_ABI_MASK);
+  switch (CheriFlags) {
+  case DF_MIPS_CHERI_ABI_LEGACY:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_LEGACY;
+  case DF_MIPS_CHERI_ABI_PCREL:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_PCREL;
+  case DF_MIPS_CHERI_ABI_PLT:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_PLT;
+  case DF_MIPS_CHERI_ABI_FNDESC:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_FNDESC;
+  default:
+    llvm_unreachable("Invalid ABI");
+  }
+  return Mips::AFL_EXT::AFL_EXT_NONE;
+}
+
+void elf::checkMipsShlibCompatible(InputFile *F, uint64_t InputCheriFlags,
+                                   uint64_t TargetCheriFlags) {
+  const uint32_t TargetABI = Config->EFlags & (EF_MIPS_ABI | EF_MIPS_ABI2);
+  assert(F->EMachine == Config->EMachine);
+  uint32_t ABI = F->EFlags & (EF_MIPS_ABI | EF_MIPS_ABI2);
+  // Mips can't link against cheriabi and the other way around
+  if ((Config->isCheriABI() && ABI != EF_MIPS_ABI_CHERIABI) ||
+      (!Config->isCheriABI() && ABI == EF_MIPS_ABI_CHERIABI)) {
+    // assert(errorCount() && "Should have already caused an errors");
+    // llvm_unreachable("Should have been checked earlier!");
+    if (!errorCount())
+      error(toString(F) + ": ABI '" + getAbiName(ABI) +
+            "' is incompatible with target ABI: " + getAbiName(TargetABI));
+  }
+  uint64_t InputCheriAbi = InputCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+  uint64_t TargetCheriAbi = TargetCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+  if (InputCheriAbi != TargetCheriAbi) {
+    std::string Msg = "target pure-capability ABI " +
+                      getMipsIsaExtName(cheriFlagsToAFL_EXT(TargetCheriAbi)) +
+                      " is incompatible with linked shared library\n>>> " +
+                      toString(F) + " uses " +
+                      getMipsIsaExtName(cheriFlagsToAFL_EXT(InputCheriAbi));
+    // mixing legacy/non-legacy is an error, anything a warning
+    if (InputCheriAbi == DF_MIPS_CHERI_ABI_LEGACY ||
+        TargetCheriAbi == DF_MIPS_CHERI_ABI_LEGACY)
+      error(Msg);
+    else
+      warn(Msg);
+  }
 }
 
 template <class ELFT> static bool isN32Abi(const InputFile *F) {
