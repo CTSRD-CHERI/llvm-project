@@ -497,7 +497,7 @@ public:
   bool isHardwareLoopProfitable(Loop *L, ScalarEvolution &SE,
                                 AssumptionCache &AC,
                                 TargetLibraryInfo *LibInfo,
-                                TTI::HardwareLoopInfo &HWLoopInfo) {
+                                HardwareLoopInfo &HWLoopInfo) {
     return BaseT::isHardwareLoopProfitable(L, SE, AC, LibInfo, HWLoopInfo);
   }
 
