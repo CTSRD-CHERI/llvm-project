@@ -162,12 +162,9 @@ llvm::MDNode *Temporal::GetNodeForSafety(AllocaInst *Inst, bool safe) {
   return auto_node;
 }
 
-
-extern analysis_type get_temporal_analysis_type();
-extern int get_temporal_expand_limit();
-
 Pass *llvm::createCHERISafeStacksPass() {
-  return new Temporal(false, get_temporal_analysis_type(), get_temporal_expand_limit());
+  if(get_temporal_analysis_type() == NONE) return nullptr;
+  return new Temporal(false, llvm::get_temporal_analysis_type(), llvm::get_temporal_expand_limit());
 }
 
 

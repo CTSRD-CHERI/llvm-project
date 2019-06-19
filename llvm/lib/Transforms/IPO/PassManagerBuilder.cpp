@@ -748,6 +748,10 @@ void PassManagerBuilder::populateModulePassManager(
   // Rename anon globals to be able to handle them in the summary
   if (PrepareForLTO)
     MPM.add(createNameAnonGlobalPass());
+
+  // This should be last
+  auto stackpass = createCHERISafeStacksPass();
+    if(stackpass) MPM.add(stackpass);
 }
 
 void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
@@ -986,7 +990,8 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
     addLateLTOOptimizationPasses(PM);
 
   // This should be last
-  PM.add(createCHERISafeStacksPass());
+  auto stackpass = createCHERISafeStacksPass();
+  if(stackpass) PM.add(stackpass);
 
   if (VerifyOutput)
     PM.add(createVerifierPass());

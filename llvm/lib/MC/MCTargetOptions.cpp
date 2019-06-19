@@ -35,11 +35,11 @@ static cl::opt<int> TemporalExpandLimit("TemporalExpandLimit",
     cl::init(1));
 
 
-analysis_type get_temporal_analysis_type() {
+analysis_type llvm::get_temporal_analysis_type() {
   return TemporalType.getValue();
 }
 
-int get_temporal_expand_limit() {
+int llvm::get_temporal_expand_limit() {
   return TemporalExpandLimit.getValue();
 }
 

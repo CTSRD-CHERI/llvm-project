@@ -72,6 +72,13 @@ CallSort EscapeAnalyser::getSort(const Instruction &I, const Use* Use) {
     safeIntrinsic = false;
   }
 
+  // I want memcpy to be considered memcpy even in freestanding. Use the name.
+  auto CF = CS.getCalledFunction();
+  if(CF && CF->hasName()) {
+    StringRef name = CF->getName();
+    if(name.equals("memcpy") || name.equals("memmove")) return MEMCPY;
+  }
+
   bool retCap = isUnsafeTrackable(&I);
 
   if(retCap && (Use == nullptr || (CS.isArgOperand(Use) && !CS.doesNotCapture(CS.getArgumentNo(Use))))) {

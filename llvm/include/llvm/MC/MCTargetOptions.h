@@ -24,6 +24,9 @@ enum analysis_type {
   ANALYSIS_ALL_SAFE = 5,
 };
 
+extern analysis_type get_temporal_analysis_type();
+extern int get_temporal_expand_limit();
+
 enum class ExceptionHandling {
   None,     /// No exception support
   DwarfCFI, /// DWARF-like instruction based exceptions
