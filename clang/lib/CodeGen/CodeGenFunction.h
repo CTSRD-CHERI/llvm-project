@@ -2326,7 +2326,7 @@ public:
   }
 
   /// Determine whether a return value slot may overlap some other object.
-  AggValueSlot::Overlap_t overlapForReturnValue() {
+  AggValueSlot::Overlap_t getOverlapForReturnValue() {
     // FIXME: Assuming no overlap here breaks guaranteed copy elision for base
     // class subobjects. These cases may need to be revisited depending on the
     // resolution of the relevant core issue.
@@ -2334,13 +2334,13 @@ public:
   }
 
   /// Determine whether a field initialization may overlap some other object.
-  AggValueSlot::Overlap_t overlapForFieldInit(const FieldDecl *FD);
+  AggValueSlot::Overlap_t getOverlapForFieldInit(const FieldDecl *FD);
 
   /// Determine whether a base class initialization may overlap some other
   /// object.
-  AggValueSlot::Overlap_t overlapForBaseInit(const CXXRecordDecl *RD,
-                                             const CXXRecordDecl *BaseRD,
-                                             bool IsVirtual);
+  AggValueSlot::Overlap_t getOverlapForBaseInit(const CXXRecordDecl *RD,
+                                                const CXXRecordDecl *BaseRD,
+                                                bool IsVirtual);
 
   /// Emit an aggregate assignment.
   void EmitAggregateAssign(LValue Dest, LValue Src, QualType EltTy) {
