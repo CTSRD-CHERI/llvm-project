@@ -7023,9 +7023,27 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
       visitTargetIntrinsic(I, Intrinsic);
       return;
     }
+
+    Value *CapV = I.getArgOperand(0);
+    SDValue Cap = getValue(CapV);
+    Value *AddrV = I.getArgOperand(1);
+    SDValue Addr = getValue(AddrV);
+
+    if (isa<Constant>(CapV) && cast<Constant>(CapV)->isNullValue()) {
+      if (ConstantInt *AddrC = dyn_cast<ConstantInt>(AddrV)) {
+        if (AddrC->getValue() == 0) {
+          // SetAddr(null, 0) -> null
+          Res = Cap;
+        } else {
+          // SetAddr(null, $addr) -> CIncOffset(null, $addr)
+          Res = DAG.getPointerAdd(sdl, Cap, Addr);
+        }
+        setValue(&I, Res);
+        return;
+      }
+    }
+
     // SetAddr($cap, $addr) -> CIncOffset($cap, $addr - GetAddr($cap))
-    SDValue Cap = getValue(I.getArgOperand(0));
-    SDValue Addr = getValue(I.getArgOperand(1));
     EVT PtrVT = TLI.getPointerTy(DAG.getDataLayout(), 0);
     SDValue CapAddr = DAG.getNode(
         ISD::INTRINSIC_WO_CHAIN, sdl, PtrVT,
