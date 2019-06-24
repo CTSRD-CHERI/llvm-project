@@ -32,13 +32,13 @@ public:
   void setSRetReturnReg(unsigned Reg) { SRetReturnReg = Reg; }
 
   bool globalBaseRegSet() const;
-  unsigned getGlobalBaseReg(bool IsForTls);
-  unsigned getGlobalBaseRegUnchecked() const;
+  Register getGlobalBaseReg(bool IsForTls);
+  Register getGlobalBaseRegUnchecked() const;
 
   bool capGlobalBaseRegSet() const;
-  unsigned getCapGlobalBaseReg();
-  unsigned getCapGlobalBaseRegForGlobalISel();
-  unsigned getGlobalBaseRegForGlobalISel();
+  Register getCapGlobalBaseReg();
+  Register getCapGlobalBaseRegForGlobalISel();
+  Register getGlobalBaseRegForGlobalISel();
 
   // Insert instructions to initialize the global base register in the
   // first MBB of the function.

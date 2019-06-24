@@ -44,12 +44,12 @@ static const TargetRegisterClass &getGlobalBaseRegClass(MachineFunction &MF) {
   return Mips::GPR32RegClass;
 }
 
-unsigned MipsFunctionInfo::getGlobalBaseRegUnchecked() const {
+Register MipsFunctionInfo::getGlobalBaseRegUnchecked() const {
   assert(GlobalBaseReg);
   return GlobalBaseReg;
 }
 
-unsigned MipsFunctionInfo::getGlobalBaseReg(bool IsForTls) {
+Register MipsFunctionInfo::getGlobalBaseReg(bool IsForTls) {
   if (IsForTls)
     UsesTlsViaGlobalReg = true;
   else
@@ -67,7 +67,7 @@ bool MipsFunctionInfo::capGlobalBaseRegSet() const {
   return CapGlobalBaseReg;
 }
 
-unsigned MipsFunctionInfo::getCapGlobalBaseReg() {
+Register MipsFunctionInfo::getCapGlobalBaseReg() {
   // Return if it has already been initialized.
   if (CapGlobalBaseReg)
     return CapGlobalBaseReg;
@@ -76,7 +76,7 @@ unsigned MipsFunctionInfo::getCapGlobalBaseReg() {
   return CapGlobalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
 }
 
-unsigned MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel() {
+Register MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel() {
   assert(static_cast<const MipsSubtarget&>(MF.getSubtarget()).useCheriCapTable());
   if (!CapGlobalBaseReg) {
     getCapGlobalBaseReg();
@@ -85,7 +85,7 @@ unsigned MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel() {
   return CapGlobalBaseReg;
 }
 
-unsigned MipsFunctionInfo::getGlobalBaseRegForGlobalISel() {
+Register MipsFunctionInfo::getGlobalBaseRegForGlobalISel() {
   if (static_cast<const MipsSubtarget&>(MF.getSubtarget()).useCheriCapTable()) {
     if (!CapGlobalBaseReg) {
       getCapGlobalBaseReg();
