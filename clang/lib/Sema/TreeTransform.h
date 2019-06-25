@@ -3950,10 +3950,6 @@ template<typename Derived>
 bool TreeTransform<Derived>::TransformTemplateArgument(
                                          const TemplateArgumentLoc &Input,
                                          TemplateArgumentLoc &Output, bool Uneval) {
-  EnterExpressionEvaluationContext EEEC(
-      SemaRef, Sema::ExpressionEvaluationContext::ConstantEvaluated,
-      /*LambdaContextDecl=*/nullptr, /*ExprContext=*/
-      Sema::ExpressionEvaluationContextRecord::EK_TemplateArgument);
   const TemplateArgument &Arg = Input.getArgument();
   switch (Arg.getKind()) {
   case TemplateArgument::Null:
@@ -4002,9 +3998,11 @@ bool TreeTransform<Derived>::TransformTemplateArgument(
   case TemplateArgument::Expression: {
     // Template argument expressions are constant expressions.
     EnterExpressionEvaluationContext Unevaluated(
-        getSema(), Uneval
-                       ? Sema::ExpressionEvaluationContext::Unevaluated
-                       : Sema::ExpressionEvaluationContext::ConstantEvaluated);
+        getSema(),
+        Uneval ? Sema::ExpressionEvaluationContext::Unevaluated
+               : Sema::ExpressionEvaluationContext::ConstantEvaluated,
+        /*LambdaContextDecl=*/nullptr, /*ExprContext=*/
+        Sema::ExpressionEvaluationContextRecord::EK_TemplateArgument);
 
     Expr *InputExpr = Input.getSourceExpression();
     if (!InputExpr) InputExpr = Input.getArgument().getAsExpr();
