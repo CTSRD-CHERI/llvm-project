@@ -156,6 +156,11 @@ static ArchTreeEdge ArchTree[] = {
     // MIPS IV extensions.
     {EF_MIPS_ARCH_4 | EF_MIPS_MACH_5400, EF_MIPS_ARCH_4},
     {EF_MIPS_ARCH_4 | EF_MIPS_MACH_9000, EF_MIPS_ARCH_4},
+    // CHERI is a superset of BERI
+    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_4 | EF_MIPS_MACH_BERI},
+    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI256, EF_MIPS_ARCH_4 | EF_MIPS_MACH_BERI},
+    // BERI is a superset of MIPS4
+    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_BERI, EF_MIPS_ARCH_4},
     {EF_MIPS_ARCH_5, EF_MIPS_ARCH_4},
     // VR4100 extensions.
     {EF_MIPS_ARCH_3 | EF_MIPS_MACH_4111, EF_MIPS_ARCH_3 | EF_MIPS_MACH_4100},
@@ -191,12 +196,12 @@ static bool isArchMatched(uint32_t New, uint32_t Res) {
   uint32_t NewMach = (New & EF_MIPS_MACH);
   uint32_t ResMach = (Res & EF_MIPS_MACH);
   if (ResMach == EF_MIPS_MACH_CHERI128) {
-    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI128)
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI128 && NewMach != EF_MIPS_MACH_BERI)
       return false;
     return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
   }
   if (ResMach == EF_MIPS_MACH_CHERI256) {
-    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI256)
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI256 && NewMach != EF_MIPS_MACH_BERI)
       return false;
     return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
   }

@@ -3,6 +3,7 @@
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t-cheri128-main.o
 # RUN: %cheri256_llvm-mc -filetype=obj -target-abi n64 %s -o %t-cheri256-hybrid-main.o
 # RUN: %cheri128_llvm-mc -filetype=obj -target-abi n64 %s -o %t-cheri128-hybrid-main.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -filetype=obj -target-abi n64 -mcpu=beri %s -o %t-beri-main.o
 # RUN: %cheri256_purecap_llvm-mc -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri256-lib.o
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
 # RUN: %cheri256_llvm-mc -filetype=obj -target-abi n64 %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
@@ -36,6 +37,8 @@
 # RUN:         %S/../Inputs/mips-dynamic.s -o %t-mips64.o
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd \
 # RUN:         %S/../Inputs/mips-dynamic.s -mcpu=mips4 -o %t-mips4.o
+# RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd \
+# RUN:         %S/../Inputs/mips-dynamic.s -mcpu=beri -o %t-beri.o
 # RUN: not ld.lld %t-cheri256-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI256-vs-MIPS %s
 # RUN: not ld.lld %t-cheri128-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI128-vs-MIPS %s
 # RUN: not ld.lld %t-cheri256-main.o %t-cheri128-lib.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI256-vs-CHERI128 %s
@@ -48,6 +51,22 @@
 # RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
 # RUN: ld.lld %t-cheri128-hybrid-main.o %t-mips4.o -o %t.exe
 # RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
+# Same for -mcpu=beri
+# RUN: ld.lld %t-cheri128-hybrid-main.o %t-beri.o -o %t.exe
+# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
+# RUN: ld.lld %t-cheri256-hybrid-main.o %t-beri.o -o %t.exe
+# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
+
+
+# Should be able to link beri with MIPS4
+# RUN: ld.lld %t-beri-main.o %t-mips4.o -o %t.exe
+# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=BERI-FLAGS %s
+# But not against mips64
+# RUN: not ld.lld %t-beri-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -DCHERI_TYPE=cheri128 -check-prefix BERI-vs-MIPS64 %s
+# BERI-vs-MIPS64: incompatible target ISA:
+# BERI-vs-MIPS64-NEXT: {{.+}}-beri-main.o: mips4 (beri)
+# BERI-vs-MIPS64-NEXT: {{.+}}-mips64.o: mips64
+
 
 # but not if the plain MIPS arch is a superset of the cheri arch
 # RUN: not ld.lld %t-cheri128-hybrid-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -DCHERI_TYPE=cheri128 -check-prefix CHERI-MIPS4-vs-MIPS64 %s
@@ -65,6 +84,12 @@
 __start:
   nop
 
+# BERI-FLAGS:      Machine: EM_MIPS (0x8)
+# BERI-FLAGS:      Flags [
+# BERI-FLAGS-NEXT:    EF_MIPS_ARCH_4 (0x30000000)
+# BERI-FLAGS-NEXT:    EF_MIPS_CPIC (0x4)
+# BERI-FLAGS-NEXT:    EF_MIPS_MACH_BERI (0xBE0000)
+# BERI-FLAGS-NEXT:  ]
 # CHERI256-FLAGS:      Machine: EM_MIPS (0x8)
 # CHERI256-FLAGS:      Flags [
 # CHERI256-FLAGS-NEXT:    EF_MIPS_ABI_CHERIABI (0xC000)
@@ -94,7 +119,7 @@ __start:
 # CHERI128-HYBRID-FLAGS-NEXT:  ]
 
 # CHERI256-vs-MIPS: {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o: ABI 'n64' is incompatible with target ABI 'purecap'
-# CHERI128-vs-MIPS: s{{.*}}/cheri-elf-flags-err.s.tmp-mips64.o: ABI 'n64' is incompatible with target ABI 'purecap'
+# CHERI128-vs-MIPS: {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o: ABI 'n64' is incompatible with target ABI 'purecap'
 # CHERI256-vs-CHERI128: incompatible target ISA:
 # CHERI256-vs-CHERI128-NEXT: {{.+}}-cheri256-main.o: mips4 (cheri256)
 # CHERI256-vs-CHERI128-NEXT: {{.+}}-cheri128-lib.o: mips4 (cheri128)
