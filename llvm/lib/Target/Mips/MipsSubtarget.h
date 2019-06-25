@@ -147,6 +147,9 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   /// IsCheri - Supports the CHERI capability extensions
   bool IsCheri;
 
+  /// IsCheri - Supports the BERI MIPS4 extensions
+  bool IsBeri;
+
   bool UseCheriExactEquals;
 
   // InMips16 -- can process Mips16 instructions
@@ -229,7 +232,7 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
 public:
   bool isPositionIndependent() const;
   /// This overrides the PostRAScheduler bit in the SchedModel for each CPU.
-  bool enableMachineScheduler() const override { return isCheri(); }
+  bool enableMachineScheduler() const override { return isCheri() || isBeri(); }
   // TODO: unless we set enableMachineSchedDefaultSched() to false
   //  this causes lots of unncessary stack spills really likely
   //  See stack-spill-unncessary.c test
@@ -344,6 +347,7 @@ public:
     return UseIndirectJumpsHazard && hasMips32r2();
   }
   bool useSmallSection() const { return UseSmallSection; }
+  bool isBeri() const { return IsBeri; }
   bool isCheri() const { return IsCheri; }
   bool isCheri64() const { return IsCheri64; }
   bool isCheri128() const { return IsCheri128; }
@@ -360,7 +364,7 @@ public:
   /// looks at one basic block at a time).  Unfortunately, it defaults to using
   /// ptrtoint / inttoptr pairs, which means that SelectionDAG doesn't generate
   /// pointer addition nodes and instead just ends up producing CToPtr /
-  /// CFromPtr instruction pairs.  There is a command-line flag for preferring 
+  /// CFromPtr instruction pairs.  There is a command-line flag for preferring
   /// to sink GEPs instead, but no way for the subtarget to set this flag.
   /// Claiming that you use AA also enables the GEP-sinking mode, so we claim
   /// this for CHERI.

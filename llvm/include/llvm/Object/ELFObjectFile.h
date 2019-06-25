@@ -1134,9 +1134,9 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
       return IsLittleEndian ? Triple::mipsel : Triple::mips;
     case ELF::ELFCLASS64: {
       unsigned Arch = EF.getHeader()->e_flags & ELF::EF_MIPS_MACH;
-      if (Arch == ELF::EF_MIPS_MACH_CHERI256 || Arch == ELF::EF_MIPS_MACH_CHERI128) {
+      if (Arch == ELF::EF_MIPS_MACH_CHERI256 || Arch == ELF::EF_MIPS_MACH_CHERI128 || Arch == ELF::EF_MIPS_MACH_BERI) {
         if (IsLittleEndian)
-          report_fatal_error("CHERI must be big endian!");
+          report_fatal_error("BERI/CHERI must be big endian!");
         return Triple::cheri;
       }
       return IsLittleEndian ? Triple::mips64el : Triple::mips64;

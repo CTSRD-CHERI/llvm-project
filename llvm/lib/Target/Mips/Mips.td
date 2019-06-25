@@ -168,9 +168,12 @@ def FeatureMips64r6    : SubtargetFeature<"mips64r6", "MipsArchVersion",
                                 "Mips64r6 ISA Support [experimental]",
                                 [FeatureMips32r6, FeatureMips64r5,
                                  FeatureNaN2008, FeatureAbs2008]>;
+def FeatureMipsBeri   : SubtargetFeature<"beri", "IsBeri", "true",
+                                "Supports the BERI instructions",
+                                [FeatureMips4]>;
 def FeatureMipsCheri   : SubtargetFeature<"chericap", "IsCheri", "true",
                                 "Supports the CHERI capability coprocessor",
-                                [FeatureMips4]>;
+                                [FeatureMipsBeri]>;
 def FeatureMipsCheri64 : SubtargetFeature<"cheri64", "IsCheri64", "true",
                                 "Capabilities are 64 bits",
                                 [FeatureMipsCheri]>;
@@ -243,11 +246,11 @@ class Proc<string Name, list<SubtargetFeature> Features>
  : ProcessorModel<Name, MipsGenericModel, Features>;
 
 def : ProcessorModel<"beri", BeriModel,
-                     [FeatureMips4]>;
+                     [FeatureMipsBeri]>;
 def : ProcessorModel<"cheri256", BeriModel,
-                     [FeatureMipsCheri256, FeatureMipsCheri, FeatureMips4]>;
+                     [FeatureMipsCheri256, FeatureMipsCheri, FeatureMipsBeri]>;
 def : ProcessorModel<"cheri128", BeriModel,
-                     [FeatureMipsCheri128, FeatureMipsCheri, FeatureMips4]>;
+                     [FeatureMipsCheri128, FeatureMipsCheri, FeatureMipsBeri]>;
 def : Proc<"mips1", [FeatureMips1]>;
 def : Proc<"mips2", [FeatureMips2]>;
 def : Proc<"mips32", [FeatureMips32]>;

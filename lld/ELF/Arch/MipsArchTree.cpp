@@ -251,6 +251,8 @@ static StringRef getMachName(uint32_t Flags) {
     return "sb1";
   case EF_MIPS_MACH_XLR:
     return "xlr";
+  case EF_MIPS_MACH_BERI:
+    return "beri";
   case EF_MIPS_MACH_CHERI128:
     return "cheri128";
   case EF_MIPS_MACH_CHERI256:

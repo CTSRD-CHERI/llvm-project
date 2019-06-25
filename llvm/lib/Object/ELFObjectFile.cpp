@@ -133,6 +133,9 @@ SubtargetFeatures ELFObjectFileBase::getMIPSFeatures() const {
   case ELF::EF_MIPS_MACH_OCTEON:
     Features.AddFeature("cnmips");
     break;
+  case ELF::EF_MIPS_MACH_BERI:
+    Features.AddFeature("beri");
+    break;
   case ELF::EF_MIPS_MACH_CHERI128:
     Features.AddFeature("chericap");
     Features.AddFeature("cheri128");
