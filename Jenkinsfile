@@ -13,6 +13,7 @@ properties([disableConcurrentBuilds(),
 // global vars needed to update github status
 llvmRepo = null
 TEST_RELEASE_BUILD = false
+TEST_WITH_SANITIZERS = false
 
 def updateGithubStatus(String message) {
     setGitHubStatus(llvmRepo, [message: message])
@@ -128,9 +129,13 @@ CMAKE_ARGS+=("-DPYTHON_EXECUTABLE=$(which python3)")
         // Release build with assertions is a bit faster than a debug build and A LOT smaller
         buildScript += '''
 CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")
-CMAKE_ARGS+=("-DLLVM_USE_SANITIZER=Address;Undefined")'''
+'''
     }
+    if (TEST_WITH_SANITIZERS) {
         buildScript += '''
+CMAKE_ARGS+=("-DLLVM_USE_SANITIZER=Address;Undefined")
+'''
+    }
 # Also don't set the default target or default sysroot when running tests as it breaks quite a few
 # max 1 hour total and max 2 minutes per test
 CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output ${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout 240")
@@ -154,6 +159,9 @@ rm -fv ${WORKSPACE}/llvm-test-*.xml
     runTests('all-cheri256-only')
 
     if (TEST_RELEASE_BUILD)
+      return;
+
+    if (TEST_WITH_SANITIZERS)
       return;
 
     stage("Archive artifacts") {
@@ -238,8 +246,9 @@ if (env.JOB_NAME.toLowerCase().contains("linux")) {
 if (env.JOB_NAME.toLowerCase().contains("nodebug")) {
     TEST_RELEASE_BUILD = true
 }
-
-
+if (env.JOB_NAME.toLowerCase().contains("sanitizer")) {
+    TEST_WITH_SANITIZERS = true
+}
 
 node(nodeLabel) {
     try {
