@@ -27,6 +27,8 @@
 
 #include "llvm/IR/Verifier.h"
 
+#include "cheri-compressed-cap/cheri_compressed_cap.h"
+
 #define DEBUG_TYPE "cheri-purecap-alloca"
 
 
@@ -376,6 +378,28 @@ public:
     bool Modified = false;
     for (Function &F : Mod)
       Modified |= runOnFunction(F);
+
+    auto &DL = Mod.getDataLayout();
+    if (IsCheri128) {
+      for (auto &G : Mod.globals()) {
+        // Adjust the alignment for CHERI128 global variable definitions to
+        // ensure that we can precisely represent bounds.
+        // We can increase alignment for exact definitions and common
+        // definitions:
+        if (G.canIncreaseAlignment() || G.hasCommonLinkage()) {
+          auto Size = DL.getTypeAllocSize(G.getValueType());
+          uint64_t Alignment = G.getAlignment();
+          uint64_t ReqAlignment = cc128_get_required_alignment(Size);
+          if (ReqAlignment > Alignment) {
+            ReqAlignment = std::min(ReqAlignment, UINT64_C(1) << 31);
+            LLVM_DEBUG(dbgs() << "\nIncreased alignment for global from "
+                              << Alignment << " to " << ReqAlignment << ": ";
+                       G.dump(););
+            G.setAlignment(ReqAlignment);
+          }
+        }
+      }
+    }
     return Modified;
   }
 
@@ -434,8 +458,7 @@ public:
           AllocaSize *= CI->getValue().getLimitedValue();
         else
           AllocaSize *= 1048576;
-        ForcedAlignment = AllocaSize / (1 << 13);
-        ForcedAlignment = PowerOf2Ceil(ForcedAlignment);
+        ForcedAlignment = cc128_get_required_alignment(AllocaSize);
         // MIPS doesn't support stack alignments greater than 2^16
         ForcedAlignment = std::min(ForcedAlignment, 0x4000U);
       }

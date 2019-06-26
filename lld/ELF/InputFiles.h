@@ -353,6 +353,7 @@ public:
   SharedFile(MemoryBufferRef M, StringRef DefaultSoName)
       : ELFFileBase(SharedKind, M), SoName(DefaultSoName),
         IsNeeded(!Config->AsNeeded) {}
+  uint64_t CheriFlags = 0;
 
   // This is actually a vector of Elf_Verdef pointers.
   std::vector<const void *> Verdefs;

@@ -20,11 +20,13 @@ define dso_local void @baz() nounwind #1 !dbg !4 {
 ; CHERI128-NEXT:    and $sp, $sp, $1
 ; CHECK-NEXT:    daddiu $1, $sp, 0
 ; CHECK-NEXT:    clc $c1, $1, 0($ddc)
+; CHERI128-NEXT:    daddiu $2, $sp, 144
+; CHERI256-NEXT:    daddiu $1, $sp, 160
 ; CHERI128-NEXT:    ori $1, $1, 16
 ; CHERI128-NEXT:    clc $c2, $1, 0($ddc)
-; CHECK-NEXT:    daddiu $1, $sp, {{144|160}}
-; CHECK-NEXT:    csc $c1, $1, 0($ddc)
-; CHERI128-NEXT:    daddiu $1, $1, 16
+; CHERI128-NEXT:    csc $c1, $2, 0($ddc)
+; CHERI256-NEXT:    csc $c1, $1, 0($ddc)
+; CHERI128-NEXT:    daddiu $1, $2, 16
 ; CHERI128-NEXT:    csc $c2, $1, 0($ddc)
 ; CHERI128-NEXT:    move $sp, $fp
 ; CHERI128-NEXT:    ld $fp, 248($sp) # 8-byte Folded Reload

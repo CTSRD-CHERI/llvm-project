@@ -8,21 +8,21 @@
 
 // CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
 
-// CSV-NEXT: 7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:17","CHERI sandbox ABI setup","set bounds on local variable buf"
-// CSV-NEXT: 7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:23","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
+// CSV-NEXT: 11,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:17","CHERI sandbox ABI setup","set bounds on local variable buf"
+// CSV-NEXT: 11,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:23","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
 
 extern int do_stuff(char* buf, int n);
 
 int test(int n) {
   char buf[n];
   return do_stuff(buf, n);
-  // CSV-NEXT:   7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:[[@LINE-2]]","ExpandDYNAMIC_STACKALLOC",""
+  // CSV-NEXT:   11,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:[[@LINE-2]]","ExpandDYNAMIC_STACKALLOC",""
 }
 
 int test2(int n) {
   char* buf = __builtin_alloca(n);
   return do_stuff(buf, n);
-  // CSV-NEXT: 7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:[[@LINE-2]]","ExpandDYNAMIC_STACKALLOC",""
+  // CSV-NEXT: 11,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:[[@LINE-2]]","ExpandDYNAMIC_STACKALLOC",""
 }
 
 // CSV-EMPTY:

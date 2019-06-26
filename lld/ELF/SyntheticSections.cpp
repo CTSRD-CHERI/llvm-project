@@ -1474,17 +1474,25 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       // relative to the address of the tag.
       addInSecRelative(DT_MIPS_RLD_MAP_REL, In.MipsRldMap);
     }
+    uint64_t TargetCheriFlags = 0;
     if (Config->isCheriABI()) {
-      uint32_t CheriFlags = 0;
       if (InX<ELFT>::MipsAbiFlags)
         if (auto ABI = InX<ELFT>::MipsAbiFlags->getCheriAbiVariant())
-          CheriFlags |= *ABI;
+          TargetCheriFlags |= *ABI;
       // if (Config->CapTableScope != CapTableScopePolicy::All)
       // Add the captable scope to the CHERI flags:
-      CheriFlags |= ((unsigned)Config->CapTableScope) << 3;
+      TargetCheriFlags |= ((unsigned)Config->CapTableScope) << 3;
       if (Config->RelativeCapRelocsOnly)
-        CheriFlags |= DF_MIPS_CHERI_RELATIVE_CAPRELOCS;
-      addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
+        TargetCheriFlags |= DF_MIPS_CHERI_RELATIVE_CAPRELOCS;
+      addInt(DT_MIPS_CHERI_FLAGS, TargetCheriFlags);
+    }
+    // CHeck that we didn't link incompatible libraries:
+    for (InputFile *File : SharedFiles) {
+      auto *F = cast<SharedFile>(File);
+      // Add an e_flags check here for CHERI-MIPS to avoid linking between
+      // incompatible libraries:
+      if (F->IsNeeded)
+        checkMipsShlibCompatible(F, F->CheriFlags, TargetCheriFlags);
     }
     if (In.CheriCapTable && In.CheriCapTable->isNeeded()) {
       addInSec(DT_MIPS_CHERI_CAPTABLE, In.CheriCapTable);

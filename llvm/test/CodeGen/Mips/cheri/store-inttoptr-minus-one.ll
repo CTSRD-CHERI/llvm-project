@@ -57,8 +57,8 @@ define void @f() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(f)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(f)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    clcbi $c1, %captab20(b)($c1)
 ; CHECK-NEXT:    lui $1, 1
+; CHECK-NEXT:    clcbi $c1, %captab20(b)($c1)
 ; CHECK-NEXT:    ori $1, $1, 57920
 ; CHECK-NEXT:    cincoffset $c2, $cnull, $1
 ; CHECK-NEXT:    cjr $c17

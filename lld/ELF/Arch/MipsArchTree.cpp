@@ -12,6 +12,7 @@
 
 #include "InputFiles.h"
 #include "SymbolTable.h"
+#include "SyntheticSections.h"
 #include "Writer.h"
 
 #include "lld/Common/ErrorHandler.h"
@@ -155,6 +156,11 @@ static ArchTreeEdge ArchTree[] = {
     // MIPS IV extensions.
     {EF_MIPS_ARCH_4 | EF_MIPS_MACH_5400, EF_MIPS_ARCH_4},
     {EF_MIPS_ARCH_4 | EF_MIPS_MACH_9000, EF_MIPS_ARCH_4},
+    // CHERI is a superset of BERI
+    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_4 | EF_MIPS_MACH_BERI},
+    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI256, EF_MIPS_ARCH_4 | EF_MIPS_MACH_BERI},
+    // BERI is a superset of MIPS4
+    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_BERI, EF_MIPS_ARCH_4},
     {EF_MIPS_ARCH_5, EF_MIPS_ARCH_4},
     // VR4100 extensions.
     {EF_MIPS_ARCH_3 | EF_MIPS_MACH_4111, EF_MIPS_ARCH_3 | EF_MIPS_MACH_4100},
@@ -190,12 +196,12 @@ static bool isArchMatched(uint32_t New, uint32_t Res) {
   uint32_t NewMach = (New & EF_MIPS_MACH);
   uint32_t ResMach = (Res & EF_MIPS_MACH);
   if (ResMach == EF_MIPS_MACH_CHERI128) {
-    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI128)
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI128 && NewMach != EF_MIPS_MACH_BERI)
       return false;
     return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
   }
   if (ResMach == EF_MIPS_MACH_CHERI256) {
-    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI256)
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI256 && NewMach != EF_MIPS_MACH_BERI)
       return false;
     return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
   }
@@ -250,6 +256,8 @@ static StringRef getMachName(uint32_t Flags) {
     return "sb1";
   case EF_MIPS_MACH_XLR:
     return "xlr";
+  case EF_MIPS_MACH_BERI:
+    return "beri";
   case EF_MIPS_MACH_CHERI128:
     return "cheri128";
   case EF_MIPS_MACH_CHERI256:
@@ -296,6 +304,12 @@ static std::string getFullArchName(uint32_t Flags) {
   return (Arch + " (" + Mach + ")").str();
 }
 
+static inline bool isBeriOrCheri(uint32_t Flags) {
+  uint32_t Mach = Flags & EF_MIPS_MACH;
+  return Mach == EF_MIPS_MACH_BERI || Mach == EF_MIPS_MACH_CHERI128 ||
+         Mach == EF_MIPS_MACH_CHERI256;
+}
+
 // There are (arguably too) many MIPS ISAs out there. Their relationships
 // can be represented as a forest. If all input files have ISAs which
 // reachable by repeated proceeding from the single child to the parent,
@@ -310,6 +324,17 @@ static uint32_t getArchFlags(ArrayRef<FileFlags> Files) {
 
   for (const FileFlags &F : Files.slice(1)) {
     uint32_t New = F.Flags & (EF_MIPS_ARCH | EF_MIPS_MACH);
+
+    // Warn about linking BERI/CHERI and non BERI/CHERI
+    // This is required because the default -mcpu=mips4 instruction scheduling
+    // results in lots of pipeline bubbles that prevent MIPS performance from
+    // being comparable to CHERI performance.
+    if (isBeriOrCheri(Ret) != isBeriOrCheri(New)) {
+      warn("linking files compiled for BERI/CHERI and non-BERI/CHERI can "
+           "result in surprising performance:\n>>> " +
+           toString(Files[0].File) + ": " + getFullArchName(Ret) + "\n>>> " +
+           toString(F.File) + ": " + getFullArchName(New));
+    }
 
     // Check ISA compatibility.
     if (isArchMatched(New, Ret))
@@ -452,6 +477,55 @@ uint8_t elf::getMipsIsaExt(uint64_t OldExt, StringRef OldFile, uint64_t NewExt,
   }
   // non-cheri isa_ext -> just return the maximum
   return std::max(OldExt, NewExt);
+}
+
+static Mips::AFL_EXT cheriFlagsToAFL_EXT(uint64_t CheriFlags) {
+  assert(CheriFlags < DF_MIPS_CHERI_ABI_MASK);
+  switch (CheriFlags) {
+  case DF_MIPS_CHERI_ABI_LEGACY:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_LEGACY;
+  case DF_MIPS_CHERI_ABI_PCREL:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_PCREL;
+  case DF_MIPS_CHERI_ABI_PLT:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_PLT;
+  case DF_MIPS_CHERI_ABI_FNDESC:
+    return Mips::AFL_EXT::AFL_EXT_CHERI_ABI_FNDESC;
+  default:
+    llvm_unreachable("Invalid ABI");
+  }
+  return Mips::AFL_EXT::AFL_EXT_NONE;
+}
+
+void elf::checkMipsShlibCompatible(InputFile *F, uint64_t InputCheriFlags,
+                                   uint64_t TargetCheriFlags) {
+  const uint32_t TargetABI = Config->EFlags & (EF_MIPS_ABI | EF_MIPS_ABI2);
+  assert(F->EMachine == Config->EMachine);
+  uint32_t ABI = F->EFlags & (EF_MIPS_ABI | EF_MIPS_ABI2);
+  // Mips can't link against cheriabi and the other way around
+  if ((Config->isCheriABI() && ABI != EF_MIPS_ABI_CHERIABI) ||
+      (!Config->isCheriABI() && ABI == EF_MIPS_ABI_CHERIABI)) {
+    // assert(errorCount() && "Should have already caused an errors");
+    // llvm_unreachable("Should have been checked earlier!");
+    if (!errorCount())
+      error(toString(F) + ": ABI '" + getAbiName(ABI) +
+            "' is incompatible with target ABI: " + getAbiName(TargetABI));
+  } else {
+    uint64_t InputCheriAbi = InputCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+    uint64_t TargetCheriAbi = TargetCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+    if (InputCheriAbi != TargetCheriAbi) {
+      std::string Msg = "target pure-capability ABI " +
+                        getMipsIsaExtName(cheriFlagsToAFL_EXT(TargetCheriAbi)) +
+                        " is incompatible with linked shared library\n>>> " +
+                        toString(F) + " uses " +
+                        getMipsIsaExtName(cheriFlagsToAFL_EXT(InputCheriAbi));
+      // mixing legacy/non-legacy is an error, anything a warning
+      if (InputCheriAbi == DF_MIPS_CHERI_ABI_LEGACY ||
+          TargetCheriAbi == DF_MIPS_CHERI_ABI_LEGACY)
+        error(Msg);
+      else
+        warn(Msg);
+    }
+  }
 }
 
 template <class ELFT> static bool isN32Abi(const InputFile *F) {

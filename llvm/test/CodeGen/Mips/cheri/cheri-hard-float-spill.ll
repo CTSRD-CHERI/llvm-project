@@ -186,8 +186,8 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; CAPTABLE-NEXT:    nop
 ; CAPTABLE-NEXT:  # %bb.1: # %for.cond.30.preheader
 ; CAPTABLE-NEXT:    dmtc1 $2, $f24
-; CAPTABLE-NEXT:    cld $1, $zero, 0($c1)
 ; CAPTABLE-NEXT:    neg.d $f26, $f24
+; CAPTABLE-NEXT:    cld $1, $zero, 0($c1)
 ; CAPTABLE-NEXT:    div.d $f27, $f24, $f0
 ; CAPTABLE-NEXT:    neg.d $f28, $f0
 ; CAPTABLE-NEXT:    dmtc1 $1, $f25

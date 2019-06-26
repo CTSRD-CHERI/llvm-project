@@ -4,9 +4,9 @@
 ; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
 ;
 [subrepo]
-	remote = https://github.com/CTSRD-CHERI/libcxx
-	branch = monorepo-mirror
-	commit = de9bb680f66e80085c6de6bc837cb9fe3788a8a2
+	remote = https://github.com/CTSRD-CHERI/cheri-compressed-cap.git
+	branch = master
+	commit = 5e024fe9b57d0605fb2609dbc42d0c3a32dc22a6
+	parent = 162f13a8a36439f335d0182804a086468065b0df
 	method = rebase
 	cmdver = 0.4.0
-	parent = 093693169f805bab1e7506bb2abb17e84e2aa51b

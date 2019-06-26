@@ -13,21 +13,21 @@ define i32 @cmpxchg_null_ptr(i32 addrspace(200)* nocapture %exp, i32 addrspace(2
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(cmpxchg_null_ptr)))
 ; CHECK-NEXT:    sync
 ; CHECK-NEXT:    cgetnull $c2
 ; CHECK-NEXT:  .LBB0_1: # %entry
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    cllc $c1, $c2
-; CHECK-NEXT:    ceq $1, $c1, $c3
-; CHECK-NEXT:    beqz $1, .LBB0_3
+; CHECK-NEXT:    ceq $2, $c1, $c3
+; CHECK-NEXT:    beqz $2, .LBB0_3
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.2: # %entry
 ; CHECK-NEXT:    # in Loop: Header=BB0_1 Depth=1
-; CHECK-NEXT:    cscc $1, $c4, $c2
-; CHECK-NEXT:    beqz $1, .LBB0_1
+; CHECK-NEXT:    cscc $2, $c4, $c2
+; CHECK-NEXT:    beqz $2, .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_3: # %entry
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(cmpxchg_null_ptr)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(cmpxchg_null_ptr)))
 ; CHECK-NEXT:    cincoffset $c2, $c12, $1
 ; CHECK-NEXT:    ceq $4, $c1, $c3

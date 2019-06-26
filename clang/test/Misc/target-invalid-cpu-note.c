@@ -86,7 +86,7 @@
 
 // RUN: not %clang_cc1 -triple mips--- -target-cpu not-a-cpu -fsyntax-only %s 2>&1 | FileCheck %s --check-prefix MIPS
 // MIPS: error: unknown target CPU 'not-a-cpu'
-// MIPS: note: valid target CPU values are: cheri128, cheri256, cheri64, mips1, mips2, mips3, mips4, mips5,
+// MIPS: note: valid target CPU values are: cheri128, cheri256, cheri64, beri, mips1, mips2, mips3, mips4, mips5,
 // MIPS-SAME: mips32, mips32r2, mips32r3, mips32r5, mips32r6, mips64, mips64r2,
 // MIPS-SAME: mips64r3, mips64r5, mips64r6, octeon, p5600
 

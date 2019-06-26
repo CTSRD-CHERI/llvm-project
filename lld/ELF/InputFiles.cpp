@@ -1279,6 +1279,8 @@ template <class ELFT> void SharedFile::parse() {
       if (Val >= this->StringTable.size())
         fatal(toString(this) + ": invalid DT_SONAME entry");
       SoName = this->StringTable.data() + Val;
+    } else if (Dyn.d_tag == DT_MIPS_CHERI_FLAGS) {
+      CheriFlags = Dyn.getVal();
     }
   }
 

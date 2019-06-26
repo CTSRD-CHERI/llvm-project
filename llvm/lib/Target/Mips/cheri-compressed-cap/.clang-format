@@ -1,0 +1,8 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+TabWidth: 8
+UseTab: Never
+# Force pointers to the type
+DerivePointerAlignment: false
+PointerAlignment: Left

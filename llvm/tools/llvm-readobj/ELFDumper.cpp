@@ -1252,6 +1252,7 @@ static const EnumEntry<unsigned> ElfHeaderMipsFlags[] = {
   ENUM_ENT(EF_MIPS_MACH_LS2E, "loongson-2e"),
   ENUM_ENT(EF_MIPS_MACH_LS2F, "loongson-2f"),
   ENUM_ENT(EF_MIPS_MACH_LS3A, "loongson-3a"),
+  ENUM_ENT(EF_MIPS_MACH_BERI, "beri"),
   ENUM_ENT(EF_MIPS_MACH_CHERI128, "cheri128"),
   ENUM_ENT(EF_MIPS_MACH_CHERI256, "cheri256"),
   ENUM_ENT(EF_MIPS_MICROMIPS, "micromips"),

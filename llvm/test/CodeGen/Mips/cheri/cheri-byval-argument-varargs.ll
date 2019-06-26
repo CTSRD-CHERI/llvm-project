@@ -30,8 +30,8 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:    csc $c18, $zero, 0($c11)
-; CHECK-NEXT:    clcbi $c12, %capcall20(fn2)($c19)
 ; CHECK-NEXT:    csetbounds $c1, $c11, [[#CAP_SIZE]]
+; CHECK-NEXT:    clcbi $c12, %capcall20(fn2)($c19)
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    candperm $c13, $c1, $1

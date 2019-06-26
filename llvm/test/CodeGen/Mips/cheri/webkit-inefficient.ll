@@ -724,9 +724,9 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.14: # %if.end19
 ; CHECK-NEXT:    clc $c2, $zero, 96($c18)
+; CHECK-NEXT:    clc $c19, $zero, 48($c1)
 ; CHECK-NEXT:    csc $c2, $zero, 0($c24)
 ; CHECK-NEXT:    cld $2, $zero, 8($c24)
-; CHECK-NEXT:    clc $c19, $zero, 48($c1)
 ; CHECK-NEXT:    daddiu $1, $zero, -1
 ; CHECK-NEXT:    dsll $3, $1, 48
 ; CHECK-NEXT:    sltu $1, $2, $3

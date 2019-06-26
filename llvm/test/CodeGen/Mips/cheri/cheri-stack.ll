@@ -49,7 +49,7 @@ entry:
 ; Check that we spill and reload relative to the correct frame capability and
 ; that we're loading from the same place that we spill
 ; CHECK-LABEL: has_spill
-; 
+;
 ; CHECK: cincoffset	$c11, $c11, -[[FRAMESIZE:([0-9]+)]]
 ; CHECK: csc	$c17, $zero, [[C17OFFSET:([0-9]+|sp)]]($c11)
 ; CHECK: clcbi $c12, %capcall20(use_arg)
@@ -78,7 +78,7 @@ entry:
 ; CHECK-NEXT: cgetoffset	$[[OFFSET:([0-9]+|sp)]], $c[[TEMPCAP]]
 ; CHECK-NEXT: dsubu	$[[OFFSET]], $[[OFFSET]], ${{([0-9]+|sp)}}
 ; No need to realign the stack for CHERI256
-; CHERI128-NEXT: daddiu $[[SP_ALIGN_MASK:[0-9]+]], $zero, -512
+; CHERI128-NEXT: daddiu $[[SP_ALIGN_MASK:[0-9]+]], $zero, -8192
 ; CHERI128-NEXT: and	$[[OFFSET1:([0-9]+|sp)]], $[[OFFSET]], $[[SP_ALIGN_MASK]]
 ; CHERI128-NEXT: csetoffset $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET1]]
 ; CHERI256-NEXT: csetoffset $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET]]
