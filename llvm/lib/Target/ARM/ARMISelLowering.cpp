@@ -14092,10 +14092,10 @@ RCPair ARMTargetLowering::getRegForInlineAsmConstraint(
         return RCPair(0U, &ARM::QPR_VFP2RegClass);
       break;
     }
+    break;
 
   case 2:
-    switch (Constraint[0]) {
-    case 'T':
+    if (Constraint[0] == 'T') {
       switch (Constraint[1]) {
       default:
         break;
@@ -14104,9 +14104,8 @@ RCPair ARMTargetLowering::getRegForInlineAsmConstraint(
       case 'o':
         return RCPair(0U, &ARM::tGPROddRegClass);
       }
-    default:
-      break;
     }
+    break;
 
   default:
     break;
