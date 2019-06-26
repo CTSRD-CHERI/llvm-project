@@ -18225,6 +18225,7 @@ SDValue DAGCombiner::visitEXTRACT_SUBVECTOR(SDNode *N) {
         return DAG.getBitcast(NVT, NewExtract);
       }
     }
+    // TODO - handle (DestNumElts % SrcNumElts) == 0
   }
 
   // Combine:
