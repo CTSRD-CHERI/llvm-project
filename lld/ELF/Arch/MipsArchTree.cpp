@@ -304,6 +304,12 @@ static std::string getFullArchName(uint32_t Flags) {
   return (Arch + " (" + Mach + ")").str();
 }
 
+static inline bool isBeriOrCheri(uint32_t Flags) {
+  uint32_t Mach = Flags & EF_MIPS_MACH;
+  return Mach == EF_MIPS_MACH_BERI || Mach == EF_MIPS_MACH_CHERI128 ||
+         Mach == EF_MIPS_MACH_CHERI256;
+}
+
 // There are (arguably too) many MIPS ISAs out there. Their relationships
 // can be represented as a forest. If all input files have ISAs which
 // reachable by repeated proceeding from the single child to the parent,
@@ -318,6 +324,17 @@ static uint32_t getArchFlags(ArrayRef<FileFlags> Files) {
 
   for (const FileFlags &F : Files.slice(1)) {
     uint32_t New = F.Flags & (EF_MIPS_ARCH | EF_MIPS_MACH);
+
+    // Warn about linking BERI/CHERI and non BERI/CHERI
+    // This is required because the default -mcpu=mips4 instruction scheduling
+    // results in lots of pipeline bubbles that prevent MIPS performance from
+    // being comparable to CHERI performance.
+    if (isBeriOrCheri(Ret) != isBeriOrCheri(New)) {
+      warn("linking files compiled for BERI/CHERI and non-BERI/CHERI can "
+           "result in surprising performance:\n>>> " +
+           toString(Files[0].File) + ": " + getFullArchName(Ret) + "\n>>> " +
+           toString(F.File) + ": " + getFullArchName(New));
+    }
 
     // Check ISA compatibility.
     if (isArchMatched(New, Ret))
@@ -492,21 +509,22 @@ void elf::checkMipsShlibCompatible(InputFile *F, uint64_t InputCheriFlags,
     if (!errorCount())
       error(toString(F) + ": ABI '" + getAbiName(ABI) +
             "' is incompatible with target ABI: " + getAbiName(TargetABI));
-  }
-  uint64_t InputCheriAbi = InputCheriFlags & DF_MIPS_CHERI_ABI_MASK;
-  uint64_t TargetCheriAbi = TargetCheriFlags & DF_MIPS_CHERI_ABI_MASK;
-  if (InputCheriAbi != TargetCheriAbi) {
-    std::string Msg = "target pure-capability ABI " +
-                      getMipsIsaExtName(cheriFlagsToAFL_EXT(TargetCheriAbi)) +
-                      " is incompatible with linked shared library\n>>> " +
-                      toString(F) + " uses " +
-                      getMipsIsaExtName(cheriFlagsToAFL_EXT(InputCheriAbi));
-    // mixing legacy/non-legacy is an error, anything a warning
-    if (InputCheriAbi == DF_MIPS_CHERI_ABI_LEGACY ||
-        TargetCheriAbi == DF_MIPS_CHERI_ABI_LEGACY)
-      error(Msg);
-    else
-      warn(Msg);
+  } else {
+    uint64_t InputCheriAbi = InputCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+    uint64_t TargetCheriAbi = TargetCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+    if (InputCheriAbi != TargetCheriAbi) {
+      std::string Msg = "target pure-capability ABI " +
+                        getMipsIsaExtName(cheriFlagsToAFL_EXT(TargetCheriAbi)) +
+                        " is incompatible with linked shared library\n>>> " +
+                        toString(F) + " uses " +
+                        getMipsIsaExtName(cheriFlagsToAFL_EXT(InputCheriAbi));
+      // mixing legacy/non-legacy is an error, anything a warning
+      if (InputCheriAbi == DF_MIPS_CHERI_ABI_LEGACY ||
+          TargetCheriAbi == DF_MIPS_CHERI_ABI_LEGACY)
+        error(Msg);
+      else
+        warn(Msg);
+    }
   }
 }
 

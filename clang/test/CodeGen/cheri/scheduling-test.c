@@ -6,6 +6,24 @@
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -S %s -o - -O2 -fPIC -mllvm -disable-mips-delay-filler  | FileCheck %s -check-prefixes CHECK,MIPS4
 // Check that adding the -cheri flag enables BERI scheduling:
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -cheri=128 -S %s -o - -O2 -fPIC -mllvm -disable-mips-delay-filler  | FileCheck %s -check-prefixes CHECK,BERI
+
+// RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-MIPS4
+// RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -cheri=128 -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-CHERI128
+// RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=beri -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-BERI
+// RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -Xclang -target-feature -Xclang +beri -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-BERI
+// FLAGS:                Flags [
+// FLAGS-CHERI128-SAME:   (0x30C10007)
+// FLAGS-BERI-SAME:       (0x30BE0007)
+// FLAGS-MIPS4-SAME:      (0x30000007)
+// FLAGS-NEXT:             EF_MIPS_ARCH_4 (0x30000000)
+// FLAGS-NEXT:             EF_MIPS_CPIC (0x4)
+// FLAGS-BERI-NEXT:        EF_MIPS_MACH_BERI (0xBE0000)
+// FLAGS-CHERI128-NEXT:    EF_MIPS_MACH_CHERI128 (0xC10000)
+// FLAGS-NEXT:             EF_MIPS_NOREORDER (0x1)
+// FLAGS-NEXT:             EF_MIPS_PIC (0x2)
+// FLAGS-NEXT:           ]
+
+
 // TODO: This should be an IR level test but that's annoying to get working for purecap and non-purecap
 
 long test2(const void* a1, const void* a2) {

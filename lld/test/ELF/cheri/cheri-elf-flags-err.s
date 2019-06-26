@@ -76,6 +76,17 @@
 # CHERI-MIPS4-vs-MIPS64-NEXT: {{.+}}-mips64.o: mips64
 
 
+# Emit a warning when linking BERI/CHERI with plain MIPS4 since it could result in unpredictable performance on BERI
+# because -mcpu=mips4 doesn't schedule loads sensibly
+# RUN: not ld.lld --fatal-warnings %t-beri-main.o %t-mips4.o -o /dev/null 2>&1 | FileCheck %s -check-prefix BERI-NON-BERI -DARCH=beri
+# RUN: not ld.lld --fatal-warnings %t-cheri128-hybrid-main.o %t-mips4.o -o /dev/null 2>&1 | FileCheck %s -check-prefix BERI-NON-BERI -DARCH=cheri128
+# RUN: not ld.lld --fatal-warnings %t-cheri256-hybrid-main.o %t-mips4.o -o /dev/null 2>&1 | FileCheck %s -check-prefix BERI-NON-BERI -DARCH=cheri256
+
+// BERI-NON-BERI: ld.lld: error: linking files compiled for BERI/CHERI and non-BERI/CHERI can result in surprising performance:
+// BERI-NON-BERI-NEXT: >>> {{.+}}cheri-elf-flags-err.s.tmp-{{.+}}-main.o: mips4 ([[ARCH]])
+// BERI-NON-BERI-NEXT: >>> {{.+}}cheri-elf-flags-err.s.tmp-mips4.o: mips4
+// BERI-NON-BERI-EMPTY:
+
 # REQUIRES: mips
 
   .option pic0
