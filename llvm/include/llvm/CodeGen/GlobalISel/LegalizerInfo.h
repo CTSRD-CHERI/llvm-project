@@ -92,6 +92,7 @@ enum LegalizeAction : std::uint8_t {
   UseLegacyRules,
 };
 } // end namespace LegalizeActions
+raw_ostream &operator<<(raw_ostream &OS, LegalizeActions::LegalizeAction Action);
 
 using LegalizeActions::LegalizeAction;
 
@@ -494,6 +495,12 @@ public:
                                      Types2);
   }
 
+  LegalizeRuleSet &alwaysLegal() {
+    using namespace LegalizeMutations;
+    markAllTypeIdxsAsCovered();
+    return actionIf(LegalizeAction::Legal, always);
+  }
+
   /// The instruction is lowered.
   LegalizeRuleSet &lower() {
     using namespace LegalizeMutations;
@@ -643,6 +650,13 @@ public:
   LegalizeRuleSet &customFor(std::initializer_list<LLT> Types) {
     return actionFor(LegalizeAction::Custom, Types);
   }
+
+  /// The instruction is custom when type indexes 0 and 1 is any type pair in the
+  /// given list.
+  LegalizeRuleSet &customFor(std::initializer_list<std::pair<LLT, LLT>> Types) {
+    return actionFor(LegalizeAction::Custom, Types);
+  }
+
   LegalizeRuleSet &customForCartesianProduct(std::initializer_list<LLT> Types) {
     return actionForCartesianProduct(LegalizeAction::Custom, Types);
   }
@@ -689,12 +703,23 @@ public:
                     LegalizeMutations::scalarize(TypeIdx));
   }
 
-  /// Ensure the scalar is at least as wide as Ty.
+  /// Ensure the scalar or element is at least as wide as Ty.
   LegalizeRuleSet &minScalarOrElt(unsigned TypeIdx, const LLT &Ty) {
     using namespace LegalityPredicates;
     using namespace LegalizeMutations;
     return actionIf(LegalizeAction::WidenScalar,
                     scalarOrEltNarrowerThan(TypeIdx, Ty.getScalarSizeInBits()),
+                    changeElementTo(typeIdx(TypeIdx), Ty));
+  }
+
+  /// Ensure the scalar or element is at least as wide as Ty.
+  LegalizeRuleSet &minScalarOrEltIf(LegalityPredicate Predicate,
+                                    unsigned TypeIdx, const LLT &Ty) {
+    using namespace LegalityPredicates;
+    using namespace LegalizeMutations;
+    return actionIf(LegalizeAction::WidenScalar,
+                    all(Predicate, scalarOrEltNarrowerThan(
+                                       TypeIdx, Ty.getScalarSizeInBits())),
                     changeElementTo(typeIdx(TypeIdx), Ty));
   }
 
@@ -765,6 +790,22 @@ public:
           LLT T = Query.Types[LargeTypeIdx];
           return std::make_pair(TypeIdx,
                                 T.isVector() ? T.getElementType() : T);
+        });
+  }
+
+  /// Conditionally widen the scalar or elt to match the size of another.
+  LegalizeRuleSet &minScalarEltSameAsIf(LegalityPredicate Predicate,
+                                   unsigned TypeIdx, unsigned LargeTypeIdx) {
+    typeIdx(TypeIdx);
+    return widenScalarIf(
+        [=](const LegalityQuery &Query) {
+          return Query.Types[LargeTypeIdx].getScalarSizeInBits() >
+                     Query.Types[TypeIdx].getScalarSizeInBits() &&
+                 Predicate(Query);
+        },
+        [=](const LegalityQuery &Query) {
+          LLT T = Query.Types[LargeTypeIdx];
+          return std::make_pair(TypeIdx, T);
         });
   }
 

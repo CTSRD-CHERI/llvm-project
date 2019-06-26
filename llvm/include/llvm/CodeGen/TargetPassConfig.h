@@ -24,6 +24,7 @@ class LLVMTargetMachine;
 struct MachineSchedContext;
 class PassConfigImpl;
 class ScheduleDAGInstrs;
+class CSEConfigBase;
 
 // The old pass manager infrastructure is hidden in a legacy namespace now.
 namespace legacy {
@@ -319,6 +320,9 @@ public:
   /// By default, it's enabled for non O0 levels.
   virtual bool isGISelCSEEnabled() const;
 
+  /// Returns the CSEConfig object to use for the current optimization level.
+  virtual std::unique_ptr<CSEConfigBase> getCSEConfig() const;
+
 protected:
   // Helper to verify the analysis is really immutable.
   void setOpt(bool &Opt, bool Val);
@@ -381,6 +385,10 @@ protected:
   virtual bool addPreRewrite() {
     return false;
   }
+
+  /// Add passes to be run immediately after virtual registers are rewritten
+  /// to physical registers.
+  virtual void addPostRewrite() { }
 
   /// This method may be implemented by targets that want to run passes after
   /// register allocation pass pipeline but before prolog-epilog insertion.

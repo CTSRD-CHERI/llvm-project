@@ -81,6 +81,11 @@ bool llvm::VerifyMemorySSA = true;
 #else
 bool llvm::VerifyMemorySSA = false;
 #endif
+/// Enables memory ssa as a dependency for loop passes in legacy pass manager.
+cl::opt<bool> llvm::EnableMSSALoopDependency(
+    "enable-mssa-loop-dependency", cl::Hidden, cl::init(false),
+    cl::desc("Enable MemorySSA dependency for loop pass manager"));
+
 static cl::opt<bool, true>
     VerifyMemorySSAX("verify-memoryssa", cl::location(VerifyMemorySSA),
                      cl::Hidden, cl::desc("Enable verification of MemorySSA."));
@@ -544,10 +549,15 @@ template <class AliasAnalysisType> class ClobberWalker {
                      const MemoryAccess *SkipStopAt = nullptr) const {
     assert(!isa<MemoryUse>(Desc.Last) && "Uses don't exist in my world");
     assert(UpwardWalkLimit && "Need a valid walk limit");
-    // This will not do any alias() calls. It returns in the first iteration in
-    // the loop below.
-    if (*UpwardWalkLimit == 0)
-      (*UpwardWalkLimit)++;
+    bool LimitAlreadyReached = false;
+    // (*UpwardWalkLimit) may be 0 here, due to the loop in tryOptimizePhi. Set
+    // it to 1. This will not do any alias() calls. It either returns in the
+    // first iteration in the loop below, or is set back to 0 if all def chains
+    // are free of MemoryDefs.
+    if (!*UpwardWalkLimit) {
+      *UpwardWalkLimit = 1;
+      LimitAlreadyReached = true;
+    }
 
     for (MemoryAccess *Current : def_chain(Desc.Last)) {
       Desc.Last = Current;
@@ -567,6 +577,9 @@ template <class AliasAnalysisType> class ClobberWalker {
           return {MD, true, CA.AR};
       }
     }
+
+    if (LimitAlreadyReached)
+      *UpwardWalkLimit = 0;
 
     assert(isa<MemoryPhi>(Desc.Last) &&
            "Ended at a non-clobber that's not a phi?");
@@ -1112,6 +1125,8 @@ MemoryAccess *MemorySSA::renameBlock(BasicBlock *BB, MemoryAccess *IncomingVal,
 void MemorySSA::renamePass(DomTreeNode *Root, MemoryAccess *IncomingVal,
                            SmallPtrSetImpl<BasicBlock *> &Visited,
                            bool SkipVisited, bool RenameAllUses) {
+  assert(Root && "Trying to rename accesses in an unreachable block");
+
   SmallVector<RenamePassData, 32> WorkStack;
   // Skip everything if we already renamed this block and we are skipping.
   // Note: You can't sink this into the if, because we need it to occur
@@ -2198,6 +2213,15 @@ MemorySSAAnalysis::Result MemorySSAAnalysis::run(Function &F,
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
   auto &AA = AM.getResult<AAManager>(F);
   return MemorySSAAnalysis::Result(llvm::make_unique<MemorySSA>(F, &AA, &DT));
+}
+
+bool MemorySSAAnalysis::Result::invalidate(
+    Function &F, const PreservedAnalyses &PA,
+    FunctionAnalysisManager::Invalidator &Inv) {
+  auto PAC = PA.getChecker<MemorySSAAnalysis>();
+  return !(PAC.preserved() || PAC.preservedSet<AllAnalysesOn<Function>>()) ||
+         Inv.invalidate<AAManager>(F, PA) ||
+         Inv.invalidate<DominatorTreeAnalysis>(F, PA);
 }
 
 PreservedAnalyses MemorySSAPrinterPass::run(Function &F,

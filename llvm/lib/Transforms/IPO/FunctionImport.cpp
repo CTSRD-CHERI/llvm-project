@@ -976,12 +976,15 @@ void llvm::thinLTOResolvePrevailingInModule(
         // changed to enable this for aliases.
         llvm_unreachable("Expected GV to be converted");
     } else {
-      // If the original symbols has global unnamed addr and linkonce_odr linkage,
-      // it should be an auto hide symbol. Add hidden visibility to the symbol to
-      // preserve the property.
-      if (GV.hasLinkOnceODRLinkage() && GV.hasGlobalUnnamedAddr() &&
-          NewLinkage == GlobalValue::WeakODRLinkage)
+      // If all copies of the original symbol had global unnamed addr and
+      // linkonce_odr linkage, it should be an auto hide symbol. In that case
+      // the thin link would have marked it as CanAutoHide. Add hidden visibility
+      // to the symbol to preserve the property.
+      if (NewLinkage == GlobalValue::WeakODRLinkage &&
+          GS->second->canAutoHide()) {
+        assert(GV.hasLinkOnceODRLinkage() && GV.hasGlobalUnnamedAddr());
         GV.setVisibility(GlobalValue::HiddenVisibility);
+      }
 
       LLVM_DEBUG(dbgs() << "ODR fixing up linkage for `" << GV.getName()
                         << "` from " << GV.getLinkage() << " to " << NewLinkage
@@ -1050,9 +1053,10 @@ static Function *replaceAliasWithAliasee(Module *SrcModule, GlobalAlias *GA) {
 
   ValueToValueMapTy VMap;
   Function *NewFn = CloneFunction(Fn, VMap);
-  // Clone should use the original alias's linkage and name, and we ensure
-  // all uses of alias instead use the new clone (casted if necessary).
+  // Clone should use the original alias's linkage, visibility and name, and we
+  // ensure all uses of alias instead use the new clone (casted if necessary).
   NewFn->setLinkage(GA->getLinkage());
+  NewFn->setVisibility(GA->getVisibility());
   GA->replaceAllUsesWith(ConstantExpr::getBitCast(NewFn, GA->getType()));
   NewFn->takeName(GA);
   return NewFn;

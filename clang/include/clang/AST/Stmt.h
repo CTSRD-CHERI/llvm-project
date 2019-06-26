@@ -46,6 +46,7 @@ class Attr;
 class CapturedDecl;
 class Decl;
 class Expr;
+class AddrLabelExpr;
 class LabelDecl;
 class ODRHash;
 class PrinterHelper;
@@ -350,6 +351,7 @@ protected:
     unsigned HasFoundDecl : 1;
     unsigned HadMultipleCandidates : 1;
     unsigned RefersToEnclosingVariableOrCapture : 1;
+    unsigned NonOdrUseReason : 2;
 
     /// The location of the declaration name itself.
     SourceLocation Loc;
@@ -452,6 +454,7 @@ protected:
   enum { NumCallExprBits = 32 };
 
   class MemberExprBitfields {
+    friend class ASTStmtReader;
     friend class MemberExpr;
 
     unsigned : NumExprBits;
@@ -475,6 +478,11 @@ protected:
     /// True if this member expression refers to a method that
     /// was resolved from an overloaded set having size greater than 1.
     unsigned HadMultipleCandidates : 1;
+
+    /// Value of type NonOdrUseReason indicating why this MemberExpr does
+    /// not constitute an odr-use of the named declaration. Meaningful only
+    /// when naming a static member.
+    unsigned NonOdrUseReason : 2;
 
     /// This is the location of the -> or . in the expression.
     SourceLocation OperatorLoc;
@@ -549,6 +557,17 @@ protected:
     // strictly limited by the forms of expressions we permit.
     unsigned NumSubExprs : 8;
     unsigned ResultIndex : 32 - 8 - NumExprBits;
+  };
+
+  class SourceLocExprBitfields {
+    friend class ASTStmtReader;
+    friend class SourceLocExpr;
+
+    unsigned : NumExprBits;
+
+    /// The kind of source location builtin represented by the SourceLocExpr.
+    /// Ex. __builtin_LINE, __builtin_FUNCTION, ect.
+    unsigned Kind : 2;
   };
 
   //===--- C++ Expression bitfields classes ---===//
@@ -936,6 +955,7 @@ protected:
     ParenListExprBitfields ParenListExprBits;
     GenericSelectionExprBitfields GenericSelectionExprBits;
     PseudoObjectExprBitfields PseudoObjectExprBits;
+    SourceLocExprBitfields SourceLocExprBits;
 
     // C++ Expressions
     CXXOperatorCallExprBitfields CXXOperatorCallExprBits;
@@ -1009,7 +1029,7 @@ protected:
     CastIterator(StmtPtr *I) : Base(I) {}
 
     typename Base::value_type operator*() const {
-      return cast<T>(*this->I);
+      return cast_or_null<T>(*this->I);
     }
   };
 
@@ -1029,6 +1049,12 @@ protected:
   explicit Stmt(StmtClass SC, EmptyShell) : Stmt(SC) {}
 
 public:
+  Stmt() = delete;
+  Stmt(const Stmt &) = delete;
+  Stmt(Stmt &&) = delete;
+  Stmt &operator=(const Stmt &) = delete;
+  Stmt &operator=(Stmt &&) = delete;
+
   Stmt(StmtClass SC) {
     static_assert(sizeof(*this) <= 8,
                   "changing bitfields changed sizeof(Stmt)");
@@ -1082,6 +1108,10 @@ public:
                    const PrintingPolicy &Policy, unsigned Indentation = 0,
                    StringRef NewlineSymbol = "\n",
                    const ASTContext *Context = nullptr) const;
+
+  /// Pretty-prints in JSON format.
+  void printJson(raw_ostream &Out, PrinterHelper *Helper,
+                 const PrintingPolicy &Policy, bool AddQuotes) const;
 
   /// viewAST - Visualize an AST rooted at this Stmt* using GraphViz.  Only
   ///   works on systems with GraphViz (Mac OS X) or dot+gv installed.
@@ -1189,6 +1219,11 @@ public:
                        child_iterator(DG.end(), DG.end()));
   }
 
+  const_child_range children() const {
+    auto Children = const_cast<DeclStmt *>(this)->children();
+    return const_child_range(Children);
+  }
+
   using decl_iterator = DeclGroupRef::iterator;
   using const_decl_iterator = DeclGroupRef::const_iterator;
   using decl_range = llvm::iterator_range<decl_iterator>;
@@ -1245,6 +1280,10 @@ public:
 
   child_range children() {
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -1550,6 +1589,12 @@ public:
                        getTrailingObjects<Stmt *>() +
                            numTrailingObjects(OverloadToken<Stmt *>()));
   }
+
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
+  }
 };
 
 class DefaultStmt : public SwitchCase {
@@ -1581,6 +1626,10 @@ public:
 
   // Iterators
   child_range children() { return child_range(&SubStmt, &SubStmt + 1); }
+
+  const_child_range children() const {
+    return const_child_range(&SubStmt, &SubStmt + 1);
+  }
 };
 
 SourceLocation SwitchCase::getEndLoc() const {
@@ -1655,6 +1704,10 @@ public:
 
   child_range children() { return child_range(&SubStmt, &SubStmt + 1); }
 
+  const_child_range children() const {
+    return const_child_range(&SubStmt, &SubStmt + 1);
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == LabelStmtClass;
   }
@@ -1711,6 +1764,10 @@ public:
   SourceLocation getEndLoc() const LLVM_READONLY { return SubStmt->getEndLoc();}
 
   child_range children() { return child_range(&SubStmt, &SubStmt + 1); }
+
+  const_child_range children() const {
+    return const_child_range(&SubStmt, &SubStmt + 1);
+  }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == AttributedStmtClass;
@@ -1911,6 +1968,12 @@ public:
                            numTrailingObjects(OverloadToken<Stmt *>()));
   }
 
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == IfStmtClass;
   }
@@ -2088,6 +2151,12 @@ public:
                            numTrailingObjects(OverloadToken<Stmt *>()));
   }
 
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == SwitchStmtClass;
   }
@@ -2213,6 +2282,12 @@ public:
                        getTrailingObjects<Stmt *>() +
                            numTrailingObjects(OverloadToken<Stmt *>()));
   }
+
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
+  }
 };
 
 /// DoStmt - This represents a 'do/while' stmt.
@@ -2262,6 +2337,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(&SubExprs[0], &SubExprs[0] + END_EXPR);
+  }
+
+  const_child_range children() const {
+    return const_child_range(&SubExprs[0], &SubExprs[0] + END_EXPR);
   }
 };
 
@@ -2332,6 +2411,10 @@ public:
   child_range children() {
     return child_range(&SubExprs[0], &SubExprs[0]+END_EXPR);
   }
+
+  const_child_range children() const {
+    return const_child_range(&SubExprs[0], &SubExprs[0] + END_EXPR);
+  }
 };
 
 /// GotoStmt - This represents a direct goto.
@@ -2366,6 +2449,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -2412,6 +2499,10 @@ public:
 
   // Iterators
   child_range children() { return child_range(&Target, &Target + 1); }
+
+  const_child_range children() const {
+    return const_child_range(&Target, &Target + 1);
+  }
 };
 
 /// ContinueStmt - This represents a continue.
@@ -2438,6 +2529,10 @@ public:
   child_range children() {
     return child_range(child_iterator(), child_iterator());
   }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
+  }
 };
 
 /// BreakStmt - This represents a break.
@@ -2463,6 +2558,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -2547,6 +2646,12 @@ public:
     if (RetExpr)
       return child_range(&RetExpr, &RetExpr + 1);
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    if (RetExpr)
+      return const_child_range(&RetExpr, &RetExpr + 1);
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -2703,6 +2808,10 @@ public:
   child_range children() {
     return child_range(&Exprs[0], &Exprs[0] + NumOutputs + NumInputs);
   }
+
+  const_child_range children() const {
+    return const_child_range(&Exprs[0], &Exprs[0] + NumOutputs + NumInputs);
+  }
 };
 
 /// This represents a GCC inline-assembly statement extension.
@@ -2716,13 +2825,15 @@ class GCCAsmStmt : public AsmStmt {
   StringLiteral **Constraints = nullptr;
   StringLiteral **Clobbers = nullptr;
   IdentifierInfo **Names = nullptr;
+  unsigned NumLabels = 0;
 
 public:
   GCCAsmStmt(const ASTContext &C, SourceLocation asmloc, bool issimple,
              bool isvolatile, unsigned numoutputs, unsigned numinputs,
              IdentifierInfo **names, StringLiteral **constraints, Expr **exprs,
              StringLiteral *asmstr, unsigned numclobbers,
-             StringLiteral **clobbers, SourceLocation rparenloc);
+             StringLiteral **clobbers, unsigned numlabels,
+             SourceLocation rparenloc);
 
   /// Build an empty inline-assembly statement.
   explicit GCCAsmStmt(EmptyShell Empty) : AsmStmt(GCCAsmStmtClass, Empty) {}
@@ -2847,6 +2958,51 @@ public:
     return const_cast<GCCAsmStmt*>(this)->getInputExpr(i);
   }
 
+  //===--- Labels ---===//
+
+  bool isAsmGoto() const {
+    return NumLabels > 0;
+  }
+
+  unsigned getNumLabels() const {
+    return NumLabels;
+  }
+
+  IdentifierInfo *getLabelIdentifier(unsigned i) const {
+    return Names[i + NumInputs];
+  }
+
+  AddrLabelExpr *getLabelExpr(unsigned i) const;
+  StringRef getLabelName(unsigned i) const;
+  using labels_iterator = CastIterator<AddrLabelExpr>;
+  using const_labels_iterator = ConstCastIterator<AddrLabelExpr>;
+  using labels_range = llvm::iterator_range<labels_iterator>;
+  using labels_const_range = llvm::iterator_range<const_labels_iterator>;
+
+  labels_iterator begin_labels() {
+    return &Exprs[0] + NumInputs;
+  }
+
+  labels_iterator end_labels() {
+    return &Exprs[0] + NumInputs + NumLabels;
+  }
+
+  labels_range labels() {
+    return labels_range(begin_labels(), end_labels());
+  }
+
+  const_labels_iterator begin_labels() const {
+    return &Exprs[0] + NumInputs;
+  }
+
+  const_labels_iterator end_labels() const {
+    return &Exprs[0] + NumInputs + NumLabels;
+  }
+
+  labels_const_range labels() const {
+    return labels_const_range(begin_labels(), end_labels());
+  }
+
 private:
   void setOutputsAndInputsAndClobbers(const ASTContext &C,
                                       IdentifierInfo **Names,
@@ -2854,6 +3010,7 @@ private:
                                       Stmt **Exprs,
                                       unsigned NumOutputs,
                                       unsigned NumInputs,
+                                      unsigned NumLabels,
                                       StringLiteral **Clobbers,
                                       unsigned NumClobbers);
 
@@ -2979,6 +3136,10 @@ public:
   child_range children() {
     return child_range(&Exprs[0], &Exprs[NumInputs + NumOutputs]);
   }
+
+  const_child_range children() const {
+    return const_child_range(&Exprs[0], &Exprs[NumInputs + NumOutputs]);
+  }
 };
 
 class SEHExceptStmt : public Stmt {
@@ -3016,6 +3177,10 @@ public:
     return child_range(Children, Children+2);
   }
 
+  const_child_range children() const {
+    return const_child_range(Children, Children + 2);
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == SEHExceptStmtClass;
   }
@@ -3045,6 +3210,10 @@ public:
 
   child_range children() {
     return child_range(&Block,&Block+1);
+  }
+
+  const_child_range children() const {
+    return const_child_range(&Block, &Block + 1);
   }
 
   static bool classof(const Stmt *T) {
@@ -3095,6 +3264,10 @@ public:
     return child_range(Children, Children+2);
   }
 
+  const_child_range children() const {
+    return const_child_range(Children, Children + 2);
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == SEHTryStmtClass;
   }
@@ -3124,6 +3297,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -3345,6 +3522,8 @@ public:
   }
 
   child_range children();
+
+  const_child_range children() const;
 };
 
 } // namespace clang

@@ -1015,6 +1015,7 @@ public:
 
   SUGARED_TYPE_CLASS(Typedef)
   SUGARED_TYPE_CLASS(ObjCTypeParam)
+  SUGARED_TYPE_CLASS(MacroQualified)
 
   QualType VisitAdjustedType(const AdjustedType *T) {
     QualType originalType = recurse(T->getOriginalType());
@@ -1777,8 +1778,16 @@ namespace {
       return Visit(T->getModifiedType());
     }
 
+    Type *VisitMacroQualifiedType(const MacroQualifiedType *T) {
+      return Visit(T->getUnderlyingType());
+    }
+
     Type *VisitAdjustedType(const AdjustedType *T) {
       return Visit(T->getOriginalType());
+    }
+
+    Type *VisitPackExpansionType(const PackExpansionType *T) {
+      return Visit(T->getPattern());
     }
   };
 
@@ -3122,6 +3131,7 @@ CanThrowResult FunctionProtoType::canThrow() const {
   case EST_DynamicNone:
   case EST_BasicNoexcept:
   case EST_NoexceptTrue:
+  case EST_NoThrow:
     return CT_Cannot;
 
   case EST_None:
@@ -3212,6 +3222,20 @@ void FunctionProtoType::Profile(llvm::FoldingSetNodeID &ID,
 
 QualType TypedefType::desugar() const {
   return getDecl()->getUnderlyingType();
+}
+
+QualType MacroQualifiedType::desugar() const { return getUnderlyingType(); }
+
+QualType MacroQualifiedType::getModifiedType() const {
+  // Step over MacroQualifiedTypes from the same macro to find the type
+  // ultimately qualified by the macro qualifier.
+  QualType Inner = cast<AttributedType>(getUnderlyingType())->getModifiedType();
+  while (auto *InnerMQT = dyn_cast<MacroQualifiedType>(Inner)) {
+    if (InnerMQT->getMacroIdentifier() != getMacroIdentifier())
+      break;
+    Inner = InnerMQT->getModifiedType();
+  }
+  return Inner;
 }
 
 TypeOfExprType::TypeOfExprType(Expr *E, QualType can)
@@ -3969,7 +3993,11 @@ AttributedType::getImmediateNullability() const {
 }
 
 Optional<NullabilityKind> AttributedType::stripOuterNullability(QualType &T) {
-  if (auto attributed = dyn_cast<AttributedType>(T.getTypePtr())) {
+  QualType AttrTy = T;
+  if (auto MacroTy = dyn_cast<MacroQualifiedType>(T))
+    AttrTy = MacroTy->getUnderlyingType();
+
+  if (auto attributed = dyn_cast<AttributedType>(AttrTy)) {
     if (auto nullability = attributed->getImmediateNullability()) {
       T = attributed->getModifiedType();
       return nullability;

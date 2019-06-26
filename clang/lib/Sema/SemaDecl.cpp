@@ -918,6 +918,16 @@ Corrected:
       }
     }
 
+    if (getLangOpts().CPlusPlus2a && !SS.isSet() && NextToken.is(tok::less)) {
+      // In C++20 onwards, this could be an ADL-only call to a function
+      // template, and we're required to assume that this is a template name.
+      //
+      // FIXME: Find a way to still do typo correction in this case.
+      TemplateName Template =
+          Context.getAssumedTemplateName(NameInfo.getName());
+      return NameClassification::UndeclaredTemplate(Template);
+    }
+
     // In C, we first see whether there is a tag type by the same name, in
     // which case it's likely that the user just forgot to write "enum",
     // "struct", or "union".
@@ -1046,52 +1056,62 @@ Corrected:
 
   if (getLangOpts().CPlusPlus && NextToken.is(tok::less) &&
       (IsFilteredTemplateName ||
-       hasAnyAcceptableTemplateNames(Result, /*AllowFunctionTemplates=*/true,
-                                     /*AllowDependent=*/false))) {
+       hasAnyAcceptableTemplateNames(
+           Result, /*AllowFunctionTemplates=*/true,
+           /*AllowDependent=*/false,
+           /*AllowNonTemplateFunctions*/ !SS.isSet() &&
+               getLangOpts().CPlusPlus2a))) {
     // C++ [temp.names]p3:
     //   After name lookup (3.4) finds that a name is a template-name or that
     //   an operator-function-id or a literal- operator-id refers to a set of
     //   overloaded functions any member of which is a function template if
     //   this is followed by a <, the < is always taken as the delimiter of a
     //   template-argument-list and never as the less-than operator.
+    // C++2a [temp.names]p2:
+    //   A name is also considered to refer to a template if it is an
+    //   unqualified-id followed by a < and name lookup finds either one
+    //   or more functions or finds nothing.
     if (!IsFilteredTemplateName)
       FilterAcceptableTemplateNames(Result);
 
-    if (!Result.empty()) {
-      bool IsFunctionTemplate;
-      bool IsVarTemplate;
-      TemplateName Template;
-      if (Result.end() - Result.begin() > 1) {
-        IsFunctionTemplate = true;
-        Template = Context.getOverloadedTemplateName(Result.begin(),
-                                                     Result.end());
-      } else {
-        auto *TD = cast<TemplateDecl>(getAsTemplateNameDecl(
-            *Result.begin(), /*AllowFunctionTemplates=*/true,
-            /*AllowDependent=*/false));
-        IsFunctionTemplate = isa<FunctionTemplateDecl>(TD);
-        IsVarTemplate = isa<VarTemplateDecl>(TD);
+    bool IsFunctionTemplate;
+    bool IsVarTemplate;
+    TemplateName Template;
+    if (Result.end() - Result.begin() > 1) {
+      IsFunctionTemplate = true;
+      Template = Context.getOverloadedTemplateName(Result.begin(),
+                                                   Result.end());
+    } else if (!Result.empty()) {
+      auto *TD = cast<TemplateDecl>(getAsTemplateNameDecl(
+          *Result.begin(), /*AllowFunctionTemplates=*/true,
+          /*AllowDependent=*/false));
+      IsFunctionTemplate = isa<FunctionTemplateDecl>(TD);
+      IsVarTemplate = isa<VarTemplateDecl>(TD);
 
-        if (SS.isSet() && !SS.isInvalid())
-          Template =
-              Context.getQualifiedTemplateName(SS.getScopeRep(),
-                                               /*TemplateKeyword=*/false, TD);
-        else
-          Template = TemplateName(TD);
-      }
-
-      if (IsFunctionTemplate) {
-        // Function templates always go through overload resolution, at which
-        // point we'll perform the various checks (e.g., accessibility) we need
-        // to based on which function we selected.
-        Result.suppressDiagnostics();
-
-        return NameClassification::FunctionTemplate(Template);
-      }
-
-      return IsVarTemplate ? NameClassification::VarTemplate(Template)
-                           : NameClassification::TypeTemplate(Template);
+      if (SS.isSet() && !SS.isInvalid())
+        Template =
+            Context.getQualifiedTemplateName(SS.getScopeRep(),
+                                             /*TemplateKeyword=*/false, TD);
+      else
+        Template = TemplateName(TD);
+    } else {
+      // All results were non-template functions. This is a function template
+      // name.
+      IsFunctionTemplate = true;
+      Template = Context.getAssumedTemplateName(NameInfo.getName());
     }
+
+    if (IsFunctionTemplate) {
+      // Function templates always go through overload resolution, at which
+      // point we'll perform the various checks (e.g., accessibility) we need
+      // to based on which function we selected.
+      Result.suppressDiagnostics();
+
+      return NameClassification::FunctionTemplate(Template);
+    }
+
+    return IsVarTemplate ? NameClassification::VarTemplate(Template)
+                         : NameClassification::TypeTemplate(Template);
   }
 
   NamedDecl *FirstDecl = (*Result.begin())->getUnderlyingDecl();
@@ -1405,11 +1425,6 @@ void Sema::PushOnScopeChains(NamedDecl *D, Scope *S, bool AddToContext) {
   }
 }
 
-void Sema::pushExternalDeclIntoScope(NamedDecl *D, DeclarationName Name) {
-  if (IdResolver.tryAddTopLevelDecl(D, Name) && TUScope)
-    TUScope->AddDecl(D);
-}
-
 bool Sema::isDeclInScope(NamedDecl *D, DeclContext *Ctx, Scope *S,
                          bool AllowInlineNamespace) {
   return IdResolver.isDeclInScope(D, Ctx, S, AllowInlineNamespace);
@@ -1467,12 +1482,17 @@ bool Sema::CheckRedeclarationModuleOwnership(NamedDecl *New, NamedDecl *Old) {
 
   Module *NewM = New->getOwningModule();
   Module *OldM = Old->getOwningModule();
+
+  if (NewM && NewM->Kind == Module::PrivateModuleFragment)
+    NewM = NewM->Parent;
+  if (OldM && OldM->Kind == Module::PrivateModuleFragment)
+    OldM = OldM->Parent;
+
   if (NewM == OldM)
     return false;
 
-  // FIXME: Check proclaimed-ownership-declarations here too.
-  bool NewIsModuleInterface = NewM && NewM->Kind == Module::ModuleInterfaceUnit;
-  bool OldIsModuleInterface = OldM && OldM->Kind == Module::ModuleInterfaceUnit;
+  bool NewIsModuleInterface = NewM && NewM->isModulePurview();
+  bool OldIsModuleInterface = OldM && OldM->isModulePurview();
   if (NewIsModuleInterface || OldIsModuleInterface) {
     // C++ Modules TS [basic.def.odr] 6.2/6.7 [sic]:
     //   if a declaration of D [...] appears in the purview of a module, all
@@ -4820,6 +4840,18 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
     Invalid = true;
   }
 
+  // C++ [dcl.dcl]p3:
+  //   [If there are no declarators], and except for the declaration of an
+  //   unnamed bit-field, the decl-specifier-seq shall introduce one or more
+  //   names into the program
+  // C++ [class.mem]p2:
+  //   each such member-declaration shall either declare at least one member
+  //   name of the class or declare at least one unnamed bit-field
+  //
+  // For C this is an error even for a named struct, and is diagnosed elsewhere.
+  if (getLangOpts().CPlusPlus && Record->field_empty())
+    Diag(DS.getBeginLoc(), diag::ext_no_declarators) << DS.getSourceRange();
+
   // Mock up a declarator.
   Declarator Dc(DS, DeclaratorContext::MemberContext);
   TypeSourceInfo *TInfo = GetTypeForDeclarator(Dc, S);
@@ -5696,7 +5728,7 @@ void Sema::DiagnoseFunctionSpecifiers(const DeclSpec &DS) {
     Diag(DS.getVirtualSpecLoc(),
          diag::err_virtual_non_function);
 
-  if (DS.isExplicitSpecified())
+  if (DS.hasExplicitSpecifier())
     Diag(DS.getExplicitSpecLoc(),
          diag::err_explicit_non_function);
 
@@ -7985,7 +8017,7 @@ static FunctionDecl* CreateNewFunctionDecl(Sema &SemaRef, Declarator &D,
     return NewFD;
   }
 
-  bool isExplicit = D.getDeclSpec().isExplicitSpecified();
+  ExplicitSpecifier ExplicitSpecifier = D.getDeclSpec().getExplicitSpecifier();
   bool isConstexpr = D.getDeclSpec().isConstexprSpecified();
 
   // Check that the return type is not an abstract class type.
@@ -8005,7 +8037,7 @@ static FunctionDecl* CreateNewFunctionDecl(Sema &SemaRef, Declarator &D,
     R = SemaRef.CheckConstructorDeclarator(D, R, SC);
     return CXXConstructorDecl::Create(
         SemaRef.Context, cast<CXXRecordDecl>(DC), D.getBeginLoc(), NameInfo, R,
-        TInfo, isExplicit, isInline,
+        TInfo, ExplicitSpecifier, isInline,
         /*isImplicitlyDeclared=*/false, isConstexpr);
 
   } else if (Name.getNameKind() == DeclarationName::CXXDestructorName) {
@@ -8050,13 +8082,13 @@ static FunctionDecl* CreateNewFunctionDecl(Sema &SemaRef, Declarator &D,
     IsVirtualOkay = true;
     return CXXConversionDecl::Create(
         SemaRef.Context, cast<CXXRecordDecl>(DC), D.getBeginLoc(), NameInfo, R,
-        TInfo, isInline, isExplicit, isConstexpr, SourceLocation());
+        TInfo, isInline, ExplicitSpecifier, isConstexpr, SourceLocation());
 
   } else if (Name.getNameKind() == DeclarationName::CXXDeductionGuideName) {
     SemaRef.CheckDeductionGuideDeclarator(D, R, SC);
 
     return CXXDeductionGuideDecl::Create(SemaRef.Context, DC, D.getBeginLoc(),
-                                         isExplicit, NameInfo, R, TInfo,
+                                         ExplicitSpecifier, NameInfo, R, TInfo,
                                          D.getEndLoc());
   } else if (DC->isRecord()) {
     // If the name of the function is the same as the name of the record,
@@ -8417,7 +8449,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   if (getLangOpts().CPlusPlus) {
     bool isInline = D.getDeclSpec().isInlineSpecified();
     bool isVirtual = D.getDeclSpec().isVirtualSpecified();
-    bool isExplicit = D.getDeclSpec().isExplicitSpecified();
+    bool hasExplicit = D.getDeclSpec().hasExplicitSpecifier();
     bool isConstexpr = D.getDeclSpec().isConstexprSpecified();
     isFriend = D.getDeclSpec().isFriendSpecified();
     if (isFriend && !isInline && D.isFunctionDefinition()) {
@@ -8600,20 +8632,20 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     //  The explicit specifier shall be used only in the declaration of a
     //  constructor or conversion function within its class definition;
     //  see 12.3.1 and 12.3.2.
-    if (isExplicit && !NewFD->isInvalidDecl() &&
+    if (hasExplicit && !NewFD->isInvalidDecl() &&
         !isa<CXXDeductionGuideDecl>(NewFD)) {
       if (!CurContext->isRecord()) {
         // 'explicit' was specified outside of the class.
         Diag(D.getDeclSpec().getExplicitSpecLoc(),
              diag::err_explicit_out_of_class)
-          << FixItHint::CreateRemoval(D.getDeclSpec().getExplicitSpecLoc());
+            << FixItHint::CreateRemoval(D.getDeclSpec().getExplicitSpecRange());
       } else if (!isa<CXXConstructorDecl>(NewFD) &&
                  !isa<CXXConversionDecl>(NewFD)) {
         // 'explicit' was specified on a function that wasn't a constructor
         // or conversion function.
         Diag(D.getDeclSpec().getExplicitSpecLoc(),
              diag::err_explicit_non_ctor_or_conv_function)
-          << FixItHint::CreateRemoval(D.getDeclSpec().getExplicitSpecLoc());
+            << FixItHint::CreateRemoval(D.getDeclSpec().getExplicitSpecRange());
       }
     }
 
@@ -8689,9 +8721,12 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       // member function definition.
 
       // MSVC permits the use of a 'static' storage specifier on an out-of-line
-      // member function template declaration, warn about this.
+      // member function template declaration and class member template
+      // declaration (MSVC versions before 2015), warn about this.
       Diag(D.getDeclSpec().getStorageClassSpecLoc(),
-           NewFD->getDescribedFunctionTemplate() && getLangOpts().MSVCCompat
+           ((!getLangOpts().isCompatibleWithMSVC(LangOptions::MSVC2015) &&
+             cast<CXXRecordDecl>(DC)->getDescribedClassTemplate()) ||
+           (getLangOpts().MSVCCompat && NewFD->getDescribedFunctionTemplate()))
            ? diag::ext_static_out_of_line : diag::err_static_out_of_line)
         << FixItHint::CreateRemoval(D.getDeclSpec().getStorageClassSpecLoc());
     }
@@ -9179,8 +9214,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
         // nothing will diagnose that error later.
         if (isFriend &&
             (D.getCXXScopeSpec().getScopeRep()->isDependent() ||
-             (!Previous.empty() && (TemplateParamLists.size() ||
-                                    CurContext->isDependentContext())))) {
+             (!Previous.empty() && CurContext->isDependentContext()))) {
           // ignore these
         } else {
           // The user tried to provide an out-of-line definition for a
@@ -9308,18 +9342,9 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   MarkUnusedFileScopedDecl(NewFD);
 
-  if (getLangOpts().CPlusPlus) {
-    if (FunctionTemplate) {
-      if (NewFD->isInvalidDecl())
-        FunctionTemplate->setInvalidDecl();
-      return FunctionTemplate;
-    }
 
-    if (isMemberSpecialization && !NewFD->isInvalidDecl())
-      CompleteMemberSpecialization(NewFD, Previous);
-  }
 
-  if (NewFD->hasAttr<OpenCLKernelAttr>()) {
+  if (getLangOpts().OpenCL && NewFD->hasAttr<OpenCLKernelAttr>()) {
     // OpenCL v1.2 s6.8 static is invalid for kernel functions.
     if ((getLangOpts().OpenCLVersion >= 120)
         && (SC == SC_Static)) {
@@ -9339,13 +9364,36 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     llvm::SmallPtrSet<const Type *, 16> ValidTypes;
     for (auto Param : NewFD->parameters())
       checkIsValidOpenCLKernelParameter(*this, D, Param, ValidTypes);
+
+    if (getLangOpts().OpenCLCPlusPlus) {
+      if (DC->isRecord()) {
+        Diag(D.getIdentifierLoc(), diag::err_method_kernel);
+        D.setInvalidType();
+      }
+      if (FunctionTemplate) {
+        Diag(D.getIdentifierLoc(), diag::err_template_kernel);
+        D.setInvalidType();
+      }
+    }
   }
+
+  if (getLangOpts().CPlusPlus) {
+    if (FunctionTemplate) {
+      if (NewFD->isInvalidDecl())
+        FunctionTemplate->setInvalidDecl();
+      return FunctionTemplate;
+    }
+
+    if (isMemberSpecialization && !NewFD->isInvalidDecl())
+      CompleteMemberSpecialization(NewFD, Previous);
+  }
+
   for (const ParmVarDecl *Param : NewFD->parameters()) {
     QualType PT = Param->getType();
 
     // OpenCL 2.0 pipe restrictions forbids pipe packet types to be non-value
     // types.
-    if (getLangOpts().OpenCLVersion >= 200) {
+    if (getLangOpts().OpenCLVersion >= 200 || getLangOpts().OpenCLCPlusPlus) {
       if(const PipeType *PipeTy = PT->getAs<PipeType>()) {
         QualType ElemTy = PipeTy->getElementType();
           if (ElemTy->isReferenceType() || ElemTy->isPointerType()) {
@@ -9722,9 +9770,7 @@ static bool CheckMultiVersionAdditionalRules(Sema &S, const FunctionDecl *OldFD,
 /// Returns true if there was an error, false otherwise.
 static bool CheckMultiVersionFirstFunction(Sema &S, FunctionDecl *FD,
                                            MultiVersionKind MVType,
-                                           const TargetAttr *TA,
-                                           const CPUDispatchAttr *CPUDisp,
-                                           const CPUSpecificAttr *CPUSpec) {
+                                           const TargetAttr *TA) {
   assert(MVType != MultiVersionKind::None &&
          "Function lacks multiversion attribute");
 
@@ -10031,8 +10077,7 @@ static bool CheckMultiVersionFunction(Sema &S, FunctionDecl *NewFD,
     // multiversioning, this isn't an error condition.
     if (MVType == MultiVersionKind::None)
       return false;
-    return CheckMultiVersionFirstFunction(S, NewFD, MVType, NewTA, NewCPUDisp,
-                                          NewCPUSpec);
+    return CheckMultiVersionFirstFunction(S, NewFD, MVType, NewTA);
   }
 
   FunctionDecl *OldFD = OldDecl->getAsFunction();
@@ -10955,7 +11000,7 @@ QualType Sema::deduceVarTypeFromInitializer(VarDecl *VDecl,
                                             DeclarationName Name, QualType Type,
                                             TypeSourceInfo *TSI,
                                             SourceRange Range, bool DirectInit,
-                                            Expr *&Init) {
+                                            Expr *Init) {
   bool IsInitCapture = !VDecl;
   assert((!VDecl || !VDecl->isInitCapture()) &&
          "init captures are expected to be deduced prior to initialization");
@@ -11071,8 +11116,7 @@ QualType Sema::deduceVarTypeFromInitializer(VarDecl *VDecl,
           << (DeduceInit->getType().isNull() ? TSI->getType()
                                              : DeduceInit->getType())
           << DeduceInit->getSourceRange();
-  } else
-    Init = DeduceInit;
+  }
 
   // Warn if we deduced 'id'. 'auto' usually implies type-safety, but using
   // 'id' instead of a specific object type prevents most of our usual
@@ -11089,7 +11133,7 @@ QualType Sema::deduceVarTypeFromInitializer(VarDecl *VDecl,
 }
 
 bool Sema::DeduceVariableDeclarationType(VarDecl *VDecl, bool DirectInit,
-                                         Expr *&Init) {
+                                         Expr *Init) {
   QualType DeducedType = deduceVarTypeFromInitializer(
       VDecl, VDecl->getDeclName(), VDecl->getType(), VDecl->getTypeSourceInfo(),
       VDecl->getSourceRange(), DirectInit, Init);
@@ -11608,9 +11652,8 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl) {
       return;
     }
 
-    Expr *TmpInit = nullptr;
     if (Type->isUndeducedType() &&
-        DeduceVariableDeclarationType(Var, false, TmpInit))
+        DeduceVariableDeclarationType(Var, false, nullptr))
       return;
 
     // C++11 [class.static.data]p3: A static data member can be declared with
@@ -11887,7 +11930,6 @@ Sema::ActOnCXXForRangeIdentifier(Scope *S, SourceLocation IdentLoc,
   D.SetIdentifier(Ident, IdentLoc);
   D.takeAttributes(Attrs, AttrEnd);
 
-  ParsedAttributes EmptyAttrs(Attrs.getPool().getFactory());
   D.AddTypeInfo(DeclaratorChunk::getReference(0, IdentLoc, /*lvalue*/ false),
                 IdentLoc);
   Decl *Var = ActOnDeclarator(S, D);
@@ -12057,7 +12099,7 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
         for (unsigned I = 0, N = Notes.size(); I != N; ++I)
           Diag(Notes[I].first, Notes[I].second);
       }
-    } else if (var->isUsableInConstantExpressions(Context)) {
+    } else if (var->mightBeUsableInConstantExpressions(Context)) {
       // Check whether the initializer of a const variable of integral or
       // enumeration type is an ICE now, since we can't tell whether it was
       // initialized by a constant expression if we check later.
@@ -13002,14 +13044,14 @@ static void RebuildLambdaScopeInfo(CXXMethodDecl *CallOperator,
           /*RefersToEnclosingVariableOrCapture*/true, C.getLocation(),
           /*EllipsisLoc*/C.isPackExpansion()
                          ? C.getEllipsisLoc() : SourceLocation(),
-          CaptureType, /*Expr*/ nullptr);
+          CaptureType, /*Invalid*/false);
 
     } else if (C.capturesThis()) {
-      LSI->addThisCapture(/*Nested*/ false, C.getLocation(),
-                              /*Expr*/ nullptr,
-                              C.getCaptureKind() == LCK_StarThis);
+      LSI->addThisCapture(/*Nested*/ false, C.getLocation(), I->getType(),
+                          C.getCaptureKind() == LCK_StarThis);
     } else {
-      LSI->addVLATypeCapture(C.getLocation(), I->getType());
+      LSI->addVLATypeCapture(C.getLocation(), I->getCapturedVLAType(),
+                             I->getType());
     }
     ++I;
   }
@@ -13260,6 +13302,35 @@ private:
   bool IsLambda = false;
 };
 
+static void diagnoseImplicitlyRetainedSelf(Sema &S) {
+  llvm::DenseMap<const BlockDecl *, bool> EscapeInfo;
+
+  auto IsOrNestedInEscapingBlock = [&](const BlockDecl *BD) {
+    if (EscapeInfo.count(BD))
+      return EscapeInfo[BD];
+
+    bool R = false;
+    const BlockDecl *CurBD = BD;
+
+    do {
+      R = !CurBD->doesNotEscape();
+      if (R)
+        break;
+      CurBD = CurBD->getParent()->getInnermostBlockDecl();
+    } while (CurBD);
+
+    return EscapeInfo[BD] = R;
+  };
+
+  // If the location where 'self' is implicitly retained is inside a escaping
+  // block, emit a diagnostic.
+  for (const std::pair<SourceLocation, const BlockDecl *> &P :
+       S.ImplicitlyRetainedSelfLocs)
+    if (IsOrNestedInEscapingBlock(P.second))
+      S.Diag(P.first, diag::warn_implicitly_retains_self)
+          << FixItHint::CreateInsertion(P.first, "self->");
+}
+
 Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
                                     bool IsInstantiation) {
   FunctionDecl *FD = dcl ? dcl->getAsFunction() : nullptr;
@@ -13324,7 +13395,7 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
 
     // MSVC permits the use of pure specifier (=0) on function definition,
     // defined at class scope, warn about this non-standard construct.
-    if (getLangOpts().MicrosoftExt && FD->isPure() && FD->isCanonicalDecl())
+    if (getLangOpts().MicrosoftExt && FD->isPure() && !FD->isOutOfLine())
       Diag(FD->getLocation(), diag::ext_pure_function_definition);
 
     if (!FD->isInvalidDecl()) {
@@ -13424,8 +13495,6 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
     assert(MD == getCurMethodDecl() && "Method parsing confused");
     MD->setBody(Body);
     if (!MD->isInvalidDecl()) {
-      if (!MD->hasSkippedBody())
-        DiagnoseUnusedParameters(MD->parameters());
       DiagnoseSizeOfParametersAndReturnValue(MD->parameters(),
                                              MD->getReturnType(), MD);
 
@@ -13471,6 +13540,8 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
              diag::warn_objc_secondary_init_missing_init_call);
       getCurFunction()->ObjCWarnForNoInitDelegation = false;
     }
+
+    diagnoseImplicitlyRetainedSelf(*this);
   } else {
     // Parsing the function declaration failed in some way. Pop the fake scope
     // we pushed on.
@@ -17197,350 +17268,6 @@ Decl *Sema::ActOnFileScopeAsmDecl(Expr *expr,
   return New;
 }
 
-static void checkModuleImportContext(Sema &S, Module *M,
-                                     SourceLocation ImportLoc, DeclContext *DC,
-                                     bool FromInclude = false) {
-  SourceLocation ExternCLoc;
-
-  if (auto *LSD = dyn_cast<LinkageSpecDecl>(DC)) {
-    switch (LSD->getLanguage()) {
-    case LinkageSpecDecl::lang_c:
-      if (ExternCLoc.isInvalid())
-        ExternCLoc = LSD->getBeginLoc();
-      break;
-    case LinkageSpecDecl::lang_cxx:
-      break;
-    }
-    DC = LSD->getParent();
-  }
-
-  while (isa<LinkageSpecDecl>(DC) || isa<ExportDecl>(DC))
-    DC = DC->getParent();
-
-  if (!isa<TranslationUnitDecl>(DC)) {
-    S.Diag(ImportLoc, (FromInclude && S.isModuleVisible(M))
-                          ? diag::ext_module_import_not_at_top_level_noop
-                          : diag::err_module_import_not_at_top_level_fatal)
-        << M->getFullModuleName() << DC;
-    S.Diag(cast<Decl>(DC)->getBeginLoc(),
-           diag::note_module_import_not_at_top_level)
-        << DC;
-  } else if (!M->IsExternC && ExternCLoc.isValid()) {
-    S.Diag(ImportLoc, diag::ext_module_import_in_extern_c)
-      << M->getFullModuleName();
-    S.Diag(ExternCLoc, diag::note_extern_c_begins_here);
-  }
-}
-
-Sema::DeclGroupPtrTy Sema::ActOnModuleDecl(SourceLocation StartLoc,
-                                           SourceLocation ModuleLoc,
-                                           ModuleDeclKind MDK,
-                                           ModuleIdPath Path) {
-  assert(getLangOpts().ModulesTS &&
-         "should only have module decl in modules TS");
-
-  // A module implementation unit requires that we are not compiling a module
-  // of any kind. A module interface unit requires that we are not compiling a
-  // module map.
-  switch (getLangOpts().getCompilingModule()) {
-  case LangOptions::CMK_None:
-    // It's OK to compile a module interface as a normal translation unit.
-    break;
-
-  case LangOptions::CMK_ModuleInterface:
-    if (MDK != ModuleDeclKind::Implementation)
-      break;
-
-    // We were asked to compile a module interface unit but this is a module
-    // implementation unit. That indicates the 'export' is missing.
-    Diag(ModuleLoc, diag::err_module_interface_implementation_mismatch)
-      << FixItHint::CreateInsertion(ModuleLoc, "export ");
-    MDK = ModuleDeclKind::Interface;
-    break;
-
-  case LangOptions::CMK_ModuleMap:
-    Diag(ModuleLoc, diag::err_module_decl_in_module_map_module);
-    return nullptr;
-
-  case LangOptions::CMK_HeaderModule:
-    Diag(ModuleLoc, diag::err_module_decl_in_header_module);
-    return nullptr;
-  }
-
-  assert(ModuleScopes.size() == 1 && "expected to be at global module scope");
-
-  // FIXME: Most of this work should be done by the preprocessor rather than
-  // here, in order to support macro import.
-
-  // Only one module-declaration is permitted per source file.
-  if (ModuleScopes.back().Module->Kind == Module::ModuleInterfaceUnit) {
-    Diag(ModuleLoc, diag::err_module_redeclaration);
-    Diag(VisibleModules.getImportLoc(ModuleScopes.back().Module),
-         diag::note_prev_module_declaration);
-    return nullptr;
-  }
-
-  // Flatten the dots in a module name. Unlike Clang's hierarchical module map
-  // modules, the dots here are just another character that can appear in a
-  // module name.
-  std::string ModuleName;
-  for (auto &Piece : Path) {
-    if (!ModuleName.empty())
-      ModuleName += ".";
-    ModuleName += Piece.first->getName();
-  }
-
-  // If a module name was explicitly specified on the command line, it must be
-  // correct.
-  if (!getLangOpts().CurrentModule.empty() &&
-      getLangOpts().CurrentModule != ModuleName) {
-    Diag(Path.front().second, diag::err_current_module_name_mismatch)
-        << SourceRange(Path.front().second, Path.back().second)
-        << getLangOpts().CurrentModule;
-    return nullptr;
-  }
-  const_cast<LangOptions&>(getLangOpts()).CurrentModule = ModuleName;
-
-  auto &Map = PP.getHeaderSearchInfo().getModuleMap();
-  Module *Mod;
-
-  switch (MDK) {
-  case ModuleDeclKind::Interface: {
-    // We can't have parsed or imported a definition of this module or parsed a
-    // module map defining it already.
-    if (auto *M = Map.findModule(ModuleName)) {
-      Diag(Path[0].second, diag::err_module_redefinition) << ModuleName;
-      if (M->DefinitionLoc.isValid())
-        Diag(M->DefinitionLoc, diag::note_prev_module_definition);
-      else if (const auto *FE = M->getASTFile())
-        Diag(M->DefinitionLoc, diag::note_prev_module_definition_from_ast_file)
-            << FE->getName();
-      Mod = M;
-      break;
-    }
-
-    // Create a Module for the module that we're defining.
-    Mod = Map.createModuleForInterfaceUnit(ModuleLoc, ModuleName,
-                                           ModuleScopes.front().Module);
-    assert(Mod && "module creation should not fail");
-    break;
-  }
-
-  case ModuleDeclKind::Partition:
-    // FIXME: Check we are in a submodule of the named module.
-    return nullptr;
-
-  case ModuleDeclKind::Implementation:
-    std::pair<IdentifierInfo *, SourceLocation> ModuleNameLoc(
-        PP.getIdentifierInfo(ModuleName), Path[0].second);
-    Mod = getModuleLoader().loadModule(ModuleLoc, {ModuleNameLoc},
-                                       Module::AllVisible,
-                                       /*IsIncludeDirective=*/false);
-    if (!Mod) {
-      Diag(ModuleLoc, diag::err_module_not_defined) << ModuleName;
-      // Create an empty module interface unit for error recovery.
-      Mod = Map.createModuleForInterfaceUnit(ModuleLoc, ModuleName,
-                                             ModuleScopes.front().Module);
-    }
-    break;
-  }
-
-  // Switch from the global module to the named module.
-  ModuleScopes.back().Module = Mod;
-  ModuleScopes.back().ModuleInterface = MDK != ModuleDeclKind::Implementation;
-  VisibleModules.setVisible(Mod, ModuleLoc);
-
-  // From now on, we have an owning module for all declarations we see.
-  // However, those declarations are module-private unless explicitly
-  // exported.
-  auto *TU = Context.getTranslationUnitDecl();
-  TU->setModuleOwnershipKind(Decl::ModuleOwnershipKind::ModulePrivate);
-  TU->setLocalOwningModule(Mod);
-
-  // FIXME: Create a ModuleDecl.
-  return nullptr;
-}
-
-DeclResult Sema::ActOnModuleImport(SourceLocation StartLoc,
-                                   SourceLocation ImportLoc,
-                                   ModuleIdPath Path) {
-  // Flatten the module path for a Modules TS module name.
-  std::pair<IdentifierInfo *, SourceLocation> ModuleNameLoc;
-  if (getLangOpts().ModulesTS) {
-    std::string ModuleName;
-    for (auto &Piece : Path) {
-      if (!ModuleName.empty())
-        ModuleName += ".";
-      ModuleName += Piece.first->getName();
-    }
-    ModuleNameLoc = {PP.getIdentifierInfo(ModuleName), Path[0].second};
-    Path = ModuleIdPath(ModuleNameLoc);
-  }
-
-  Module *Mod =
-      getModuleLoader().loadModule(ImportLoc, Path, Module::AllVisible,
-                                   /*IsIncludeDirective=*/false);
-  if (!Mod)
-    return true;
-
-  VisibleModules.setVisible(Mod, ImportLoc);
-
-  checkModuleImportContext(*this, Mod, ImportLoc, CurContext);
-
-  // FIXME: we should support importing a submodule within a different submodule
-  // of the same top-level module. Until we do, make it an error rather than
-  // silently ignoring the import.
-  // Import-from-implementation is valid in the Modules TS. FIXME: Should we
-  // warn on a redundant import of the current module?
-  if (Mod->getTopLevelModuleName() == getLangOpts().CurrentModule &&
-      (getLangOpts().isCompilingModule() || !getLangOpts().ModulesTS))
-    Diag(ImportLoc, getLangOpts().isCompilingModule()
-                        ? diag::err_module_self_import
-                        : diag::err_module_import_in_implementation)
-        << Mod->getFullModuleName() << getLangOpts().CurrentModule;
-
-  SmallVector<SourceLocation, 2> IdentifierLocs;
-  Module *ModCheck = Mod;
-  for (unsigned I = 0, N = Path.size(); I != N; ++I) {
-    // If we've run out of module parents, just drop the remaining identifiers.
-    // We need the length to be consistent.
-    if (!ModCheck)
-      break;
-    ModCheck = ModCheck->Parent;
-
-    IdentifierLocs.push_back(Path[I].second);
-  }
-
-  ImportDecl *Import = ImportDecl::Create(Context, CurContext, StartLoc,
-                                          Mod, IdentifierLocs);
-  if (!ModuleScopes.empty())
-    Context.addModuleInitializer(ModuleScopes.back().Module, Import);
-  CurContext->addDecl(Import);
-
-  // Re-export the module if needed.
-  if (Import->isExported() &&
-      !ModuleScopes.empty() && ModuleScopes.back().ModuleInterface)
-    getCurrentModule()->Exports.emplace_back(Mod, false);
-
-  return Import;
-}
-
-void Sema::ActOnModuleInclude(SourceLocation DirectiveLoc, Module *Mod) {
-  checkModuleImportContext(*this, Mod, DirectiveLoc, CurContext, true);
-  BuildModuleInclude(DirectiveLoc, Mod);
-}
-
-void Sema::BuildModuleInclude(SourceLocation DirectiveLoc, Module *Mod) {
-  // Determine whether we're in the #include buffer for a module. The #includes
-  // in that buffer do not qualify as module imports; they're just an
-  // implementation detail of us building the module.
-  //
-  // FIXME: Should we even get ActOnModuleInclude calls for those?
-  bool IsInModuleIncludes =
-      TUKind == TU_Module &&
-      getSourceManager().isWrittenInMainFile(DirectiveLoc);
-
-  bool ShouldAddImport = !IsInModuleIncludes;
-
-  // If this module import was due to an inclusion directive, create an
-  // implicit import declaration to capture it in the AST.
-  if (ShouldAddImport) {
-    TranslationUnitDecl *TU = getASTContext().getTranslationUnitDecl();
-    ImportDecl *ImportD = ImportDecl::CreateImplicit(getASTContext(), TU,
-                                                     DirectiveLoc, Mod,
-                                                     DirectiveLoc);
-    if (!ModuleScopes.empty())
-      Context.addModuleInitializer(ModuleScopes.back().Module, ImportD);
-    TU->addDecl(ImportD);
-    Consumer.HandleImplicitImportDecl(ImportD);
-  }
-
-  getModuleLoader().makeModuleVisible(Mod, Module::AllVisible, DirectiveLoc);
-  VisibleModules.setVisible(Mod, DirectiveLoc);
-}
-
-void Sema::ActOnModuleBegin(SourceLocation DirectiveLoc, Module *Mod) {
-  checkModuleImportContext(*this, Mod, DirectiveLoc, CurContext, true);
-
-  ModuleScopes.push_back({});
-  ModuleScopes.back().Module = Mod;
-  if (getLangOpts().ModulesLocalVisibility)
-    ModuleScopes.back().OuterVisibleModules = std::move(VisibleModules);
-
-  VisibleModules.setVisible(Mod, DirectiveLoc);
-
-  // The enclosing context is now part of this module.
-  // FIXME: Consider creating a child DeclContext to hold the entities
-  // lexically within the module.
-  if (getLangOpts().trackLocalOwningModule()) {
-    for (auto *DC = CurContext; DC; DC = DC->getLexicalParent()) {
-      cast<Decl>(DC)->setModuleOwnershipKind(
-          getLangOpts().ModulesLocalVisibility
-              ? Decl::ModuleOwnershipKind::VisibleWhenImported
-              : Decl::ModuleOwnershipKind::Visible);
-      cast<Decl>(DC)->setLocalOwningModule(Mod);
-    }
-  }
-}
-
-void Sema::ActOnModuleEnd(SourceLocation EomLoc, Module *Mod) {
-  if (getLangOpts().ModulesLocalVisibility) {
-    VisibleModules = std::move(ModuleScopes.back().OuterVisibleModules);
-    // Leaving a module hides namespace names, so our visible namespace cache
-    // is now out of date.
-    VisibleNamespaceCache.clear();
-  }
-
-  assert(!ModuleScopes.empty() && ModuleScopes.back().Module == Mod &&
-         "left the wrong module scope");
-  ModuleScopes.pop_back();
-
-  // We got to the end of processing a local module. Create an
-  // ImportDecl as we would for an imported module.
-  FileID File = getSourceManager().getFileID(EomLoc);
-  SourceLocation DirectiveLoc;
-  if (EomLoc == getSourceManager().getLocForEndOfFile(File)) {
-    // We reached the end of a #included module header. Use the #include loc.
-    assert(File != getSourceManager().getMainFileID() &&
-           "end of submodule in main source file");
-    DirectiveLoc = getSourceManager().getIncludeLoc(File);
-  } else {
-    // We reached an EOM pragma. Use the pragma location.
-    DirectiveLoc = EomLoc;
-  }
-  BuildModuleInclude(DirectiveLoc, Mod);
-
-  // Any further declarations are in whatever module we returned to.
-  if (getLangOpts().trackLocalOwningModule()) {
-    // The parser guarantees that this is the same context that we entered
-    // the module within.
-    for (auto *DC = CurContext; DC; DC = DC->getLexicalParent()) {
-      cast<Decl>(DC)->setLocalOwningModule(getCurrentModule());
-      if (!getCurrentModule())
-        cast<Decl>(DC)->setModuleOwnershipKind(
-            Decl::ModuleOwnershipKind::Unowned);
-    }
-  }
-}
-
-void Sema::createImplicitModuleImportForErrorRecovery(SourceLocation Loc,
-                                                      Module *Mod) {
-  // Bail if we're not allowed to implicitly import a module here.
-  if (isSFINAEContext() || !getLangOpts().ModulesErrorRecovery ||
-      VisibleModules.isVisible(Mod))
-    return;
-
-  // Create the implicit import declaration.
-  TranslationUnitDecl *TU = getASTContext().getTranslationUnitDecl();
-  ImportDecl *ImportD = ImportDecl::CreateImplicit(getASTContext(), TU,
-                                                   Loc, Mod, Loc);
-  TU->addDecl(ImportD);
-  Consumer.HandleImplicitImportDecl(ImportD);
-
-  // Make the module visible.
-  getModuleLoader().makeModuleVisible(Mod, Module::AllVisible, Loc);
-  VisibleModules.setVisible(Mod, Loc);
-}
 void Sema::ActOnPragmaOpaque(IdentifierInfo* TypeName,
                              IdentifierInfo* KeyName,
                              SourceLocation PragmaLoc,
@@ -17564,45 +17291,6 @@ void Sema::ActOnPragmaOpaque(IdentifierInfo* TypeName,
   }
 
   TypeDecl->setOpaqueKey(KeyDecl);
-}
-
-/// We have parsed the start of an export declaration, including the '{'
-/// (if present).
-Decl *Sema::ActOnStartExportDecl(Scope *S, SourceLocation ExportLoc,
-                                 SourceLocation LBraceLoc) {
-  ExportDecl *D = ExportDecl::Create(Context, CurContext, ExportLoc);
-
-  // C++ Modules TS draft:
-  //   An export-declaration shall appear in the purview of a module other than
-  //   the global module.
-  if (ModuleScopes.empty() || !ModuleScopes.back().ModuleInterface)
-    Diag(ExportLoc, diag::err_export_not_in_module_interface);
-
-  //   An export-declaration [...] shall not contain more than one
-  //   export keyword.
-  //
-  // The intent here is that an export-declaration cannot appear within another
-  // export-declaration.
-  if (D->isExported())
-    Diag(ExportLoc, diag::err_export_within_export);
-
-  CurContext->addDecl(D);
-  PushDeclContext(S, D);
-  D->setModuleOwnershipKind(Decl::ModuleOwnershipKind::VisibleWhenImported);
-  return D;
-}
-
-/// Complete the definition of an export declaration.
-Decl *Sema::ActOnFinishExportDecl(Scope *S, Decl *D, SourceLocation RBraceLoc) {
-  auto *ED = cast<ExportDecl>(D);
-  if (RBraceLoc.isValid())
-    ED->setRBraceLoc(RBraceLoc);
-
-  // FIXME: Diagnose export of internal-linkage declaration (including
-  // anonymous namespace).
-
-  PopDeclContext();
-  return D;
 }
 
 void Sema::ActOnPragmaRedefineExtname(IdentifierInfo* Name,

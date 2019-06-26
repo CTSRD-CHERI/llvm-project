@@ -16,6 +16,7 @@
 #include "CGObjCRuntime.h"
 #include "CodeGenFunction.h"
 #include "CodeGenModule.h"
+#include "ConstantEmitter.h"
 #include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
@@ -675,12 +676,20 @@ public:
   Value *VisitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *E) {
     return EmitLoadOfLValue(E);
   }
+  Value *VisitSourceLocExpr(SourceLocExpr *SLE) {
+    auto &Ctx = CGF.getContext();
+    APValue Evaluated =
+        SLE->EvaluateInContext(Ctx, CGF.CurSourceLocExprScope.getDefaultExpr());
+    return ConstantEmitter(CGF.CGM, &CGF)
+        .emitAbstract(SLE->getLocation(), Evaluated, SLE->getType());
+  }
 
   Value *VisitCXXDefaultArgExpr(CXXDefaultArgExpr *DAE) {
+    CodeGenFunction::CXXDefaultArgExprScope Scope(CGF, DAE);
     return Visit(DAE->getExpr());
   }
   Value *VisitCXXDefaultInitExpr(CXXDefaultInitExpr *DIE) {
-    CodeGenFunction::CXXDefaultInitExprScope Scope(CGF);
+    CodeGenFunction::CXXDefaultInitExprScope Scope(CGF, DIE);
     return Visit(DIE->getExpr());
   }
   Value *VisitCXXThisExpr(CXXThisExpr *TE) {
@@ -2303,6 +2312,12 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (E->getType()->isPointerType() && DestTy->isPointerType())
       return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 
+    // Update heapallocsite metadata when there is an explicit cast.
+    if (llvm::CallInst *CI = dyn_cast<llvm::CallInst>(Src))
+      if (CI->getMetadata("heapallocsite") && isa<ExplicitCastExpr>(CE))
+          CGF.getDebugInfo()->
+              addHeapAllocSiteMetadata(CI, CE->getType(), CE->getExprLoc());
+
     return Builder.CreateBitCast(Src, DstTy);
   }
   case CK_AddressSpaceConversion:
@@ -3400,7 +3415,7 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
 Value *ScalarExprEmitter::EmitCompoundAssign(const CompoundAssignOperator *E,
                       Value *(ScalarExprEmitter::*Func)(const BinOpInfo &)) {
   bool Ignore = TestAndClearIgnoreResultAssign();
-  Value *RHS;
+  Value *RHS = nullptr;
   LValue LHS = EmitCompoundAssignLValue(E, Func, RHS);
 
   // If the result is clearly ignored, return now.

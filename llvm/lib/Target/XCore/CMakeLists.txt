@@ -31,6 +31,5 @@ add_llvm_target(XCoreCodeGen
 add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)
 
 add_subdirectory(Disassembler)
-add_subdirectory(InstPrinter)
 add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

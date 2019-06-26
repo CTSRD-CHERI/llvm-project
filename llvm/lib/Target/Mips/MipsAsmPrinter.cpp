@@ -12,9 +12,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "MipsAsmPrinter.h"
-#include "InstPrinter/MipsInstPrinter.h"
 #include "MCTargetDesc/MipsABIInfo.h"
 #include "MCTargetDesc/MipsBaseInfo.h"
+#include "MCTargetDesc/MipsInstPrinter.h"
 #include "MCTargetDesc/MipsMCNaCl.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
 #include "Mips.h"
@@ -23,6 +23,7 @@
 #include "MipsSubtarget.h"
 #include "MipsTargetMachine.h"
 #include "MipsTargetStreamer.h"
+#include "TargetInfo/MipsTargetInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
@@ -522,8 +523,7 @@ bool MipsAsmPrinter::isBlockOnlyReachableByFallthrough(const MachineBasicBlock*
 
 // Print out an operand for an inline asm expression.
 bool MipsAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
-                                     unsigned AsmVariant, const char *ExtraCode,
-                                     raw_ostream &O) {
+                                     const char *ExtraCode, raw_ostream &O) {
   // Does this asm operand have a single letter operand modifier?
   if (ExtraCode && ExtraCode[0]) {
     if (ExtraCode[1] != 0) return true; // Unknown modifier.
@@ -532,7 +532,7 @@ bool MipsAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
     switch (ExtraCode[0]) {
     default:
       // See if this is a generic print operand
-      return AsmPrinter::PrintAsmOperand(MI,OpNum,AsmVariant,ExtraCode,O);
+      return AsmPrinter::PrintAsmOperand(MI, OpNum, ExtraCode, O);
     case 'X': // hex const int
       if ((MO.getType()) != MachineOperand::MO_Immediate)
         return true;
@@ -628,7 +628,7 @@ bool MipsAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
 }
 
 bool MipsAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
-                                           unsigned OpNum, unsigned AsmVariant,
+                                           unsigned OpNum,
                                            const char *ExtraCode,
                                            raw_ostream &O) {
   assert(OpNum + 1 < MI->getNumOperands() && "Insufficient operands");
@@ -714,7 +714,7 @@ void MipsAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
       return;
 
     case MachineOperand::MO_GlobalAddress:
-      getSymbol(MO.getGlobal())->print(O, MAI);
+      PrintSymbolOperand(MO, O);
       break;
 
     case MachineOperand::MO_BlockAddress: {

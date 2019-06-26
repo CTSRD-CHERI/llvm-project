@@ -16,6 +16,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instruction.h"
@@ -32,6 +33,7 @@ class DataLayout;
 class DominatorTree;
 class GEPOperator;
 class IntrinsicInst;
+class WithOverflowInst;
 struct KnownBits;
 class Loop;
 class LoopInfo;
@@ -350,7 +352,8 @@ class Value;
   /// Since A[i] and A[i-1] are independent pointers, getUnderlyingObjects
   /// should not assume that Curr and Prev share the same underlying object thus
   /// it shouldn't look through the phi above.
-  void GetUnderlyingObjects(Value *V, SmallVectorImpl<Value *> &Objects,
+  void GetUnderlyingObjects(const Value *V,
+                            SmallVectorImpl<const Value *> &Objects,
                             const DataLayout &DL, LoopInfo *LI = nullptr,
                             unsigned MaxLookup = 6);
 
@@ -410,7 +413,16 @@ class Value;
   bool isValidAssumeForContext(const Instruction *I, const Instruction *CxtI,
                                const DominatorTree *DT = nullptr);
 
-  enum class OverflowResult { AlwaysOverflows, MayOverflow, NeverOverflows };
+  enum class OverflowResult {
+    /// Always overflows in the direction of signed/unsigned min value.
+    AlwaysOverflowsLow,
+    /// Always overflows in the direction of signed/unsigned max value.
+    AlwaysOverflowsHigh,
+    /// May or may not overflow.
+    MayOverflow,
+    /// Never overflows.
+    NeverOverflows,
+  };
 
   OverflowResult computeOverflowForUnsignedMul(const Value *LHS,
                                                const Value *RHS,
@@ -454,10 +466,10 @@ class Value;
                                              const Instruction *CxtI,
                                              const DominatorTree *DT);
 
-  /// Returns true if the arithmetic part of the \p II 's result is
+  /// Returns true if the arithmetic part of the \p WO 's result is
   /// used only along the paths control dependent on the computation
-  /// not overflowing, \p II being an <op>.with.overflow intrinsic.
-  bool isOverflowIntrinsicNoWrap(const IntrinsicInst *II,
+  /// not overflowing, \p WO being an <op>.with.overflow intrinsic.
+  bool isOverflowIntrinsicNoWrap(const WithOverflowInst *WO,
                                  const DominatorTree &DT);
 
 
@@ -509,6 +521,12 @@ class Value;
   /// undefined behavior if I is executed and that operand has a full-poison
   /// value (all bits poison).
   const Value *getGuaranteedNonFullPoisonOp(const Instruction *I);
+
+  /// Return true if the given instruction must trigger undefined behavior.
+  /// when I is executed with any operands which appear in KnownPoison holding
+  /// a full-poison value at the point of execution.
+  bool mustTriggerUB(const Instruction *I,
+                     const SmallSet<const Value *, 16>& KnownPoison);
 
   /// Return true if this function can prove that if PoisonI is executed
   /// and yields a full-poison value (all bits poison), then that will

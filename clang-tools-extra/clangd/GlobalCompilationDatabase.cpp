@@ -63,10 +63,11 @@ GlobalCompilationDatabase::getFallbackCommand(PathRef File) const {
   if (llvm::sys::path::extension(File) == ".h")
     Argv.push_back("-xobjective-c++-header");
   Argv.push_back(File);
-  return tooling::CompileCommand(llvm::sys::path::parent_path(File),
-                                 llvm::sys::path::filename(File),
-                                 std::move(Argv),
-                                 /*Output=*/"");
+  tooling::CompileCommand Cmd(llvm::sys::path::parent_path(File),
+                              llvm::sys::path::filename(File), std::move(Argv),
+                              /*Output=*/"");
+  Cmd.Heuristic = "clangd fallback";
+  return Cmd;
 }
 
 DirectoryBasedGlobalCompilationDatabase::
@@ -172,6 +173,7 @@ tooling::CompileCommand OverlayCDB::getFallbackCommand(PathRef File) const {
   std::lock_guard<std::mutex> Lock(Mutex);
   Cmd.CommandLine.insert(Cmd.CommandLine.end(), FallbackFlags.begin(),
                          FallbackFlags.end());
+  adjustArguments(Cmd, ResourceDir);
   return Cmd;
 }
 

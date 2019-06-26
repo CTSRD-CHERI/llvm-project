@@ -101,7 +101,8 @@ static ContributionCollection
 collectContributionData(DWARFContext::unit_iterator_range Units) {
   ContributionCollection Contributions;
   for (const auto &U : Units)
-    Contributions.push_back(U->getStringOffsetsTableContribution());
+    if (const auto &C = U->getStringOffsetsTableContribution())
+      Contributions.push_back(C);
   // Sort the contributions so that any invalid ones are placed at
   // the start of the contributions vector. This way they are reported
   // first.
@@ -157,9 +158,9 @@ static void dumpDWARFv5StringOffsetsSection(
 
     // Detect overlapping contributions.
     if (Offset > ContributionHeader) {
-      OS << "error: overlapping contributions to string offsets table in "
-            "section ."
-         << SectionName << ".\n";
+      WithColor::error()
+          << "overlapping contributions to string offsets table in section ."
+          << SectionName << ".\n";
       return;
     }
     // Report a gap in the table.
@@ -1421,8 +1422,14 @@ public:
       // Try to obtain an already relocated version of this section.
       // Else use the unrelocated section from the object file. We'll have to
       // apply relocations ourselves later.
-      if (!L || !L->getLoadedSectionContents(*RelocatedSection, Data))
-        Section.getContents(Data);
+      if (!L || !L->getLoadedSectionContents(*RelocatedSection, Data)) {
+        Expected<StringRef> E = Section.getContents();
+        if (E)
+          Data = *E;
+        else
+          // maybeDecompress below will error.
+          consumeError(E.takeError());
+      }
 
       if (auto Err = maybeDecompress(Section, Name, Data)) {
         ErrorPolicy EP = HandleError(createError(

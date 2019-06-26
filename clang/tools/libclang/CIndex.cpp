@@ -171,7 +171,6 @@ CXSourceRange cxloc::translateSourceRange(const SourceManager &SM,
 static SourceRange getRawCursorExtent(CXCursor C);
 static SourceRange getFullCursorExtent(CXCursor C, SourceManager &SrcMgr);
 
-
 RangeComparisonResult CursorVisitor::CompareRegionOfInterest(SourceRange R) {
   return RangeCompare(AU->getSourceManager(), R, RegionOfInterest);
 }
@@ -1431,6 +1430,10 @@ bool CursorVisitor::VisitTemplateName(TemplateName Name, SourceLocation Loc) {
 
     return false;
 
+  case TemplateName::AssumedTemplate:
+    // FIXME: Visit DeclarationName?
+    return false;
+
   case TemplateName::DependentTemplate:
     // FIXME: Visit nested-name-specifier.
     return false;
@@ -1612,6 +1615,10 @@ bool CursorVisitor::VisitObjCObjectPointerTypeLoc(ObjCObjectPointerTypeLoc TL) {
 }
 
 bool CursorVisitor::VisitParenTypeLoc(ParenTypeLoc TL) {
+  return Visit(TL.getInnerLoc());
+}
+
+bool CursorVisitor::VisitMacroQualifiedTypeLoc(MacroQualifiedTypeLoc TL) {
   return Visit(TL.getInnerLoc());
 }
 
@@ -2480,7 +2487,7 @@ void EnqueueVisitor::VisitCXXNewExpr(const CXXNewExpr *E) {
   // Enqueue the initializer , if any.
   AddStmt(E->getInitializer());
   // Enqueue the array size, if any.
-  AddStmt(E->getArraySize());
+  AddStmt(E->getArraySize().getValueOr(nullptr));
   // Enqueue the allocated type.
   AddTypeLoc(E->getAllocatedTypeSourceInfo());
   // Enqueue the placement arguments.
@@ -3127,18 +3134,22 @@ bool CursorVisitor::RunVisitorWorkList(VisitorWorkList &WL) {
       }
         
       case VisitorJob::LambdaExprPartsKind: {
-        // Visit captures.
+        // Visit non-init captures.
         const LambdaExpr *E = cast<LambdaExprParts>(&LI)->get();
         for (LambdaExpr::capture_iterator C = E->explicit_capture_begin(),
                                        CEnd = E->explicit_capture_end();
              C != CEnd; ++C) {
-          // FIXME: Lambda init-captures.
           if (!C->capturesVariable())
             continue;
 
           if (Visit(MakeCursorVariableRef(C->getCapturedVar(),
                                           C->getLocation(),
                                           TU)))
+            return true;
+        }
+        // Visit init captures
+        for (auto InitExpr : E->capture_inits()) {
+          if (Visit(InitExpr))
             return true;
         }
         
@@ -3345,7 +3356,7 @@ enum CXErrorCode clang_createTranslationUnit2(CXIndex CIdx,
       ASTUnit::LoadEverything, Diags,
       FileSystemOpts, /*UseDebugInfo=*/false,
       CXXIdx->getOnlyLocalDecls(), None,
-      /*CaptureDiagnostics=*/true,
+      CaptureDiagsKind::All,
       /*AllowPCHWithCompilerErrors=*/true,
       /*UserFilesAreVolatile=*/true);
   *out_TU = MakeCXTranslationUnit(CXXIdx, std::move(AU));
@@ -3417,6 +3428,10 @@ clang_parseTranslationUnit_Impl(CXIndex CIdx, const char *source_filename,
 
   if (options & CXTranslationUnit_KeepGoing)
     Diags->setFatalsAsError(true);
+
+  CaptureDiagsKind CaptureDiagnostics = CaptureDiagsKind::All;
+  if (options & CXTranslationUnit_IgnoreNonErrorsFromIncludedFiles)
+    CaptureDiagnostics = CaptureDiagsKind::AllWithoutNonErrorsFromIncludes;
 
   // Recover resources if we crash before exiting this function.
   llvm::CrashRecoveryContextCleanupRegistrar<DiagnosticsEngine,
@@ -3495,7 +3510,7 @@ clang_parseTranslationUnit_Impl(CXIndex CIdx, const char *source_filename,
       Args->data(), Args->data() + Args->size(),
       CXXIdx->getPCHContainerOperations(), Diags,
       CXXIdx->getClangResourcesPath(), CXXIdx->getOnlyLocalDecls(),
-      /*CaptureDiagnostics=*/true, *RemappedFiles.get(),
+      CaptureDiagnostics, *RemappedFiles.get(),
       /*RemappedFilesKeepOriginalName=*/true, PrecompilePreambleAfterNParses,
       TUKind, CacheCodeCompletionResults, IncludeBriefCommentsInCodeCompletion,
       /*AllowPCHWithCompilerErrors=*/true, SkipFunctionBodies, SingleFileParse,
@@ -7246,15 +7261,14 @@ void AnnotateTokensWorker::HandlePostPonedChildCursors(
 
 void AnnotateTokensWorker::HandlePostPonedChildCursor(
     CXCursor Cursor, unsigned StartTokenIndex) {
-  const auto flags = CXNameRange_WantQualifier | CXNameRange_WantQualifier;
   unsigned I = StartTokenIndex;
 
   // The bracket tokens of a Call or Subscript operator are mapped to
   // CallExpr/CXXOperatorCallExpr because we skipped visiting the corresponding
   // DeclRefExpr. Remap these tokens to the DeclRefExpr cursors.
   for (unsigned RefNameRangeNr = 0; I < NumTokens; RefNameRangeNr++) {
-    const CXSourceRange CXRefNameRange =
-        clang_getCursorReferenceNameRange(Cursor, flags, RefNameRangeNr);
+    const CXSourceRange CXRefNameRange = clang_getCursorReferenceNameRange(
+        Cursor, CXNameRange_WantQualifier, RefNameRangeNr);
     if (clang_Range_isNull(CXRefNameRange))
       break; // All ranges handled.
 
@@ -8723,8 +8737,8 @@ void clang::setThreadBackgroundPriority() {
   if (getenv("LIBCLANG_BGPRIO_DISABLE"))
     return;
 
-#ifdef USE_DARWIN_THREADS
-  setpriority(PRIO_DARWIN_THREAD, 0, PRIO_DARWIN_BG);
+#if LLVM_ENABLE_THREADS
+  llvm::set_thread_priority(llvm::ThreadPriority::Background);
 #endif
 }
 

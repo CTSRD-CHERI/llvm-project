@@ -41,6 +41,10 @@ struct Range {
 
   Range(lldb::addr_t start, llvm::ArrayRef<uint8_t> range_ref)
       : start(start), range_ref(range_ref) {}
+
+  friend bool operator==(const Range &lhs, const Range &rhs) {
+    return lhs.start == rhs.start && lhs.range_ref == rhs.range_ref;
+  }
 };
 
 class MinidumpParser {
@@ -52,19 +56,15 @@ public:
 
   llvm::ArrayRef<uint8_t> GetStream(StreamType stream_type);
 
-  llvm::Optional<std::string> GetMinidumpString(uint32_t rva);
+  UUID GetModuleUUID(const minidump::Module *module);
 
-  UUID GetModuleUUID(const MinidumpModule* module);
-
-  llvm::ArrayRef<MinidumpThread> GetThreads();
+  llvm::ArrayRef<minidump::Thread> GetThreads();
 
   llvm::ArrayRef<uint8_t> GetThreadContext(const LocationDescriptor &location);
 
-  llvm::ArrayRef<uint8_t> GetThreadContext(const MinidumpThread &td);
+  llvm::ArrayRef<uint8_t> GetThreadContext(const minidump::Thread &td);
 
-  llvm::ArrayRef<uint8_t> GetThreadContextWow64(const MinidumpThread &td);
-
-  const SystemInfo *GetSystemInfo();
+  llvm::ArrayRef<uint8_t> GetThreadContextWow64(const minidump::Thread &td);
 
   ArchSpec GetArchitecture();
 
@@ -74,13 +74,13 @@ public:
 
   llvm::Optional<lldb::pid_t> GetPid();
 
-  llvm::ArrayRef<MinidumpModule> GetModuleList();
+  llvm::ArrayRef<minidump::Module> GetModuleList();
 
   // There are cases in which there is more than one record in the ModuleList
   // for the same module name.(e.g. when the binary has non contiguous segments)
   // So this function returns a filtered module list - if it finds records that
   // have the same name, it keeps the copy with the lowest load address.
-  std::vector<const MinidumpModule *> GetFilteredModuleList();
+  std::vector<const minidump::Module *> GetFilteredModuleList();
 
   const MinidumpExceptionStream *GetExceptionStream();
 

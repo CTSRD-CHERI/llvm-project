@@ -12,8 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "MipsISelLowering.h"
-#include "InstPrinter/MipsInstPrinter.h"
 #include "MCTargetDesc/MipsBaseInfo.h"
+#include "MCTargetDesc/MipsInstPrinter.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
 #include "MipsCCState.h"
 #include "MipsInstrInfo.h"
@@ -182,7 +182,7 @@ SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
   assert(Ty.isFatPointer());
   assert(ABI.UsesCapabilityTable());
   MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
-  return DAG.getRegister(FI->getCapGlobalBaseReg(), Ty);
+  return DAG.getRegister(FI->getCapGlobalBaseRegForGlobalISel(), Ty);
 }
 
 SDValue MipsTargetLowering::getTargetNode(GlobalAddressSDNode *N, EVT Ty,
@@ -1408,8 +1408,8 @@ bool MipsTargetLowering::canLowerPointerTypeCmpXchg(
   return TargetLowering::canLowerPointerTypeCmpXchg(DL, AI);
 }
 
-bool MipsTargetLowering::shouldFoldShiftPairToMask(const SDNode *N,
-                                                   CombineLevel Level) const {
+bool MipsTargetLowering::shouldFoldConstantShiftPairToMask(
+    const SDNode *N, CombineLevel Level) const {
   if (N->getOperand(0).getValueType().isVector())
     return false;
   return true;
@@ -1421,8 +1421,9 @@ MipsTargetLowering::LowerOperationWrapper(SDNode *N,
                                           SelectionDAG &DAG) const {
   SDValue Res = LowerOperation(SDValue(N, 0), DAG);
 
-  for (unsigned I = 0, E = Res->getNumValues(); I != E; ++I)
-    Results.push_back(Res.getValue(I));
+  if (Res)
+    for (unsigned I = 0, E = Res->getNumValues(); I != E; ++I)
+      Results.push_back(Res.getValue(I));
 }
 
 void
@@ -5322,11 +5323,10 @@ MipsTargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const {
   return false;
 }
 
-EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
-                                            unsigned SrcAlign,
-                                            bool IsMemset, bool ZeroMemset,
-                                            bool MemcpyStrSrc,
-                                            MachineFunction &MF) const {
+EVT MipsTargetLowering::getOptimalMemOpType(
+    uint64_t Size, unsigned DstAlign, unsigned SrcAlign, bool IsMemset,
+    bool ZeroMemset, bool MemcpyStrSrc,
+    const AttributeList &FuncAttributes) const {
   // If the source alignment is 32 then we are copying something that may
   // contain capabilities.  If the destination alignment is 32, then we are
   // copying to something that may contain capabilities.  If both of these is

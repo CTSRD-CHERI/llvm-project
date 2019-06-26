@@ -1174,7 +1174,8 @@ bool JumpThreadingPass::ProcessBlock(BasicBlock *BB) {
   }
 
   if (SwitchInst *SI = dyn_cast<SwitchInst>(BB->getTerminator()))
-    TryToUnfoldSelect(SI, BB);
+    if (TryToUnfoldSelect(SI, BB))
+      return true;
 
   // Check for some cases that are worth simplifying.  Right now we want to look
   // for loads that are used by a switch or by the condition for the branch.  If
@@ -1606,7 +1607,6 @@ bool JumpThreadingPass::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
   Constant *OnlyVal = nullptr;
   Constant *MultipleVal = (Constant *)(intptr_t)~0ULL;
 
-  unsigned PredWithKnownDest = 0;
   for (const auto &PredValue : PredValues) {
     BasicBlock *Pred = PredValue.second;
     if (!SeenPreds.insert(Pred).second)
@@ -1643,9 +1643,6 @@ bool JumpThreadingPass::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
         OnlyVal = MultipleVal;
     }
 
-    // We know where this predecessor is going.
-    ++PredWithKnownDest;
-
     // If the predecessor ends with an indirect goto, we can't change its
     // destination. Same for CallBr.
     if (isa<IndirectBrInst>(Pred->getTerminator()) ||
@@ -1663,7 +1660,7 @@ bool JumpThreadingPass::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
   // not thread. By doing so, we do not need to duplicate the current block and
   // also miss potential opportunities in case we dont/cant duplicate.
   if (OnlyDest && OnlyDest != MultipleDestSentinel) {
-    if (PredWithKnownDest == (size_t)pred_size(BB)) {
+    if (BB->hasNPredecessors(PredToDestList.size())) {
       bool SeenFirstBranchToOnlyDest = false;
       std::vector <DominatorTree::UpdateType> Updates;
       Updates.reserve(BB->getTerminator()->getNumSuccessors() - 1);

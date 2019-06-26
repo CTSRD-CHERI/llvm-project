@@ -116,13 +116,14 @@ add_llvm_target(AMDGPUCodeGen
   SIShrinkInstructions.cpp
   SIWholeQuadMode.cpp
   GCNILPSched.cpp
+  GCNRegBankReassign.cpp
+  GCNNSAReassign.cpp
   GCNDPPCombine.cpp
   SIModeRegister.cpp
   )
 
 add_subdirectory(AsmParser)
 add_subdirectory(Disassembler)
-add_subdirectory(InstPrinter)
 add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)
 add_subdirectory(Utils)

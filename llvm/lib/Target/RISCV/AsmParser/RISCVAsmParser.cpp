@@ -10,6 +10,7 @@
 #include "MCTargetDesc/RISCVMCExpr.h"
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "MCTargetDesc/RISCVTargetStreamer.h"
+#include "TargetInfo/RISCVTargetInfo.h"
 #include "Utils/RISCVBaseInfo.h"
 #include "Utils/RISCVMatInt.h"
 #include "llvm/ADT/STLExtras.h"
@@ -92,15 +93,30 @@ class RISCVAsmParser : public MCTargetAsmParser {
   // Helper to emit pseudo instruction "la" used in GOT/PC-rel addressing.
   void emitLoadAddress(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
 
+  // Helper to emit pseudo instruction "la.tls.ie" used in initial-exec TLS
+  // addressing.
+  void emitLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+
+  // Helper to emit pseudo instruction "la.tls.gd" used in global-dynamic TLS
+  // addressing.
+  void emitLoadTLSGDAddress(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+
   // Helper to emit pseudo load/store instruction with a symbol.
   void emitLoadStoreSymbol(MCInst &Inst, unsigned Opcode, SMLoc IDLoc,
                            MCStreamer &Out, bool HasTmpReg);
+
+  // Checks that a PseudoAddTPRel is using x4/tp in its second input operand.
+  // Enforcing this using a restricted register class for the second input
+  // operand of PseudoAddTPRel results in a poor diagnostic due to the fact
+  // 'add' is an overloaded mnemonic.
+  bool checkPseudoAddTPRel(MCInst &Inst, OperandVector &Operands);
 
   /// Helper for processing MC instructions that have been successfully matched
   /// by MatchAndEmitInstruction. Modifications to the emitted instructions,
   /// like the expansion of pseudo instructions (e.g., "li"), can be performed
   /// in this method.
-  bool processInstruction(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+  bool processInstruction(MCInst &Inst, SMLoc IDLoc, OperandVector &Operands,
+                          MCStreamer &Out);
 
 // Auto-generated instruction matching functions
 #define GET_ASSEMBLER_HEADER
@@ -545,11 +561,15 @@ public:
     if (!IsConstantImm) {
       IsValid = RISCVAsmParser::classifySymbolRef(getImm(), VK, Imm);
       return IsValid && (VK == RISCVMCExpr::VK_RISCV_PCREL_HI ||
-                         VK == RISCVMCExpr::VK_RISCV_GOT_HI);
+                         VK == RISCVMCExpr::VK_RISCV_GOT_HI ||
+                         VK == RISCVMCExpr::VK_RISCV_TLS_GOT_HI ||
+                         VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI);
     } else {
       return isUInt<20>(Imm) && (VK == RISCVMCExpr::VK_RISCV_None ||
                                  VK == RISCVMCExpr::VK_RISCV_PCREL_HI ||
-                                 VK == RISCVMCExpr::VK_RISCV_GOT_HI);
+                                 VK == RISCVMCExpr::VK_RISCV_GOT_HI ||
+                                 VK == RISCVMCExpr::VK_RISCV_TLS_GOT_HI ||
+                                 VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI);
     }
   }
 
@@ -794,7 +814,7 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   default:
     break;
   case Match_Success:
-    return processInstruction(Inst, IDLoc, Out);
+    return processInstruction(Inst, IDLoc, Operands, Out);
   case Match_MissingFeature:
     return Error(IDLoc, "instruction use requires an option to be enabled");
   case Match_MnemonicFail:
@@ -903,8 +923,9 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidUImm20AUIPC:
     return generateImmOutOfRangeError(
         Operands, ErrorInfo, 0, (1 << 20) - 1,
-        "operand must be a symbol with a %pcrel_hi/%got_pcrel_hi modifier "
-        "or an integer in the range");
+        "operand must be a symbol with a "
+        "%pcrel_hi/%got_pcrel_hi/%tls_ie_pcrel_hi/%tls_gd_pcrel_hi modifier or "
+        "an integer in the range");
   case Match_InvalidSImm21Lsb0JAL:
     return generateImmOutOfRangeError(
         Operands, ErrorInfo, -(1 << 20), (1 << 20) - 2,
@@ -1577,6 +1598,35 @@ void RISCVAsmParser::emitLoadAddress(MCInst &Inst, SMLoc IDLoc,
   emitAuipcInstPair(DestReg, DestReg, Symbol, VKHi, SecondOpcode, IDLoc, Out);
 }
 
+void RISCVAsmParser::emitLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc,
+                                          MCStreamer &Out) {
+  // The load TLS IE address pseudo-instruction "la.tls.ie" is used in
+  // initial-exec TLS model addressing of global symbols:
+  //   la.tls.ie rdest, symbol
+  // expands to
+  //   TmpLabel: AUIPC rdest, %tls_ie_pcrel_hi(symbol)
+  //             Lx rdest, %pcrel_lo(TmpLabel)(rdest)
+  MCOperand DestReg = Inst.getOperand(0);
+  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  unsigned SecondOpcode = isRV64() ? RISCV::LD : RISCV::LW;
+  emitAuipcInstPair(DestReg, DestReg, Symbol, RISCVMCExpr::VK_RISCV_TLS_GOT_HI,
+                    SecondOpcode, IDLoc, Out);
+}
+
+void RISCVAsmParser::emitLoadTLSGDAddress(MCInst &Inst, SMLoc IDLoc,
+                                          MCStreamer &Out) {
+  // The load TLS GD address pseudo-instruction "la.tls.gd" is used in
+  // global-dynamic TLS model addressing of global symbols:
+  //   la.tls.gd rdest, symbol
+  // expands to
+  //   TmpLabel: AUIPC rdest, %tls_gd_pcrel_hi(symbol)
+  //             ADDI rdest, rdest, %pcrel_lo(TmpLabel)
+  MCOperand DestReg = Inst.getOperand(0);
+  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  emitAuipcInstPair(DestReg, DestReg, Symbol, RISCVMCExpr::VK_RISCV_TLS_GD_HI,
+                    RISCV::ADDI, IDLoc, Out);
+}
+
 void RISCVAsmParser::emitLoadStoreSymbol(MCInst &Inst, unsigned Opcode,
                                          SMLoc IDLoc, MCStreamer &Out,
                                          bool HasTmpReg) {
@@ -1596,7 +1646,21 @@ void RISCVAsmParser::emitLoadStoreSymbol(MCInst &Inst, unsigned Opcode,
                     Opcode, IDLoc, Out);
 }
 
+bool RISCVAsmParser::checkPseudoAddTPRel(MCInst &Inst,
+                                         OperandVector &Operands) {
+  assert(Inst.getOpcode() == RISCV::PseudoAddTPRel && "Invalid instruction");
+  assert(Inst.getOperand(2).isReg() && "Unexpected second operand kind");
+  if (Inst.getOperand(2).getReg() != RISCV::X4) {
+    SMLoc ErrorLoc = ((RISCVOperand &)*Operands[3]).getStartLoc();
+    return Error(ErrorLoc, "the second input operand must be tp/x4 when using "
+                           "%tprel_add modifier");
+  }
+
+  return false;
+}
+
 bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
+                                        OperandVector &Operands,
                                         MCStreamer &Out) {
   Inst.setLoc(IDLoc);
 
@@ -1629,6 +1693,12 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     return false;
   case RISCV::PseudoLA:
     emitLoadAddress(Inst, IDLoc, Out);
+    return false;
+  case RISCV::PseudoLA_TLS_IE:
+    emitLoadTLSIEAddress(Inst, IDLoc, Out);
+    return false;
+  case RISCV::PseudoLA_TLS_GD:
+    emitLoadTLSGDAddress(Inst, IDLoc, Out);
     return false;
   case RISCV::PseudoLB:
     emitLoadStoreSymbol(Inst, RISCV::LB, IDLoc, Out, /*HasTmpReg=*/false);
@@ -1675,6 +1745,9 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
   case RISCV::PseudoFSD:
     emitLoadStoreSymbol(Inst, RISCV::FSD, IDLoc, Out, /*HasTmpReg=*/true);
     return false;
+  case RISCV::PseudoAddTPRel:
+    if (checkPseudoAddTPRel(Inst, Operands))
+      return true;
   }
 
   emitToStreamer(Out, Inst);

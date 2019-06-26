@@ -529,3 +529,11 @@ D: PowerPC Backend Developer
 N: Zheng Chen
 E: czhengsz@cn.ibm.com
 D: PowerPC Backend Developer
+
+N: Qiu Chaofan
+E: qiucf@cn.ibm.com
+D: PowerPC Backend Developer
+
+N: Djordje Todorovic
+E: djordje.todorovic@rt-rk.com
+D: Debug Information

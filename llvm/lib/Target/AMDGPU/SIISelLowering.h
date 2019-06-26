@@ -89,7 +89,7 @@ private:
   SDValue LowerTrig(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerATOMIC_CMP_SWAP(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
-
+  SDValue LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue adjustLoadValueType(unsigned Opcode, MemSDNode *M,
                               SelectionDAG &DAG, ArrayRef<SDValue> Ops,
                               bool IsIntrinsic = false) const;
@@ -233,20 +233,21 @@ public:
   bool canMergeStoresTo(unsigned AS, EVT MemVT,
                         const SelectionDAG &DAG) const override;
 
-  bool allowsMisalignedMemoryAccesses(EVT VT, unsigned AS,
-                                      unsigned Align,
-                                      bool *IsFast) const override;
+  bool allowsMisalignedMemoryAccesses(
+      EVT VT, unsigned AS, unsigned Align,
+      MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
+      bool *IsFast = nullptr) const override;
 
   EVT getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
                           unsigned SrcAlign, bool IsMemset,
                           bool ZeroMemset,
                           bool MemcpyStrSrc,
-                          MachineFunction &MF) const override;
+                          const AttributeList &FuncAttributes) const override;
 
   bool isMemOpUniform(const SDNode *N) const;
   bool isMemOpHasNoClobberedMemOperand(const SDNode *N) const;
   bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
-  bool isCheapAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
+  bool isFreeAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
 
   TargetLoweringBase::LegalizeTypeAction
   getPreferredVectorAction(MVT VT) const override;
@@ -367,6 +368,8 @@ public:
                                     bool SNaN = false,
                                     unsigned Depth = 0) const override;
   AtomicExpansionKind shouldExpandAtomicRMWInIR(AtomicRMWInst *) const override;
+
+  unsigned getPrefLoopAlignment(MachineLoop *ML) const override;
 };
 
 } // End namespace llvm

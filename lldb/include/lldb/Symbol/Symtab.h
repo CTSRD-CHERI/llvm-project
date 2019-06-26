@@ -23,17 +23,13 @@ public:
   typedef std::vector<uint32_t> IndexCollection;
   typedef UniqueCStringMap<uint32_t> NameToIndexMap;
 
-  typedef enum Debug {
+  enum Debug {
     eDebugNo,  // Not a debug symbol
     eDebugYes, // A debug symbol
     eDebugAny
-  } Debug;
+  };
 
-  typedef enum Visibility {
-    eVisibilityAny,
-    eVisibilityExtern,
-    eVisibilityPrivate
-  } Visibility;
+  enum Visibility { eVisibilityAny, eVisibilityExtern, eVisibilityPrivate };
 
   Symtab(ObjectFile *objfile);
   ~Symtab();
@@ -54,13 +50,11 @@ public:
   Symbol *FindSymbolWithType(lldb::SymbolType symbol_type,
                              Debug symbol_debug_type,
                              Visibility symbol_visibility, uint32_t &start_idx);
-  //----------------------------------------------------------------------
   /// Get the parent symbol for the given symbol.
   ///
   /// Many symbols in symbol tables are scoped by other symbols that
   /// contain one or more symbol. This function will look for such a
   /// containing symbol and return it if there is one.
-  //----------------------------------------------------------------------
   const Symbol *GetParent(Symbol *symbol) const;
   uint32_t AppendSymbolIndexesWithType(lldb::SymbolType symbol_type,
                                        std::vector<uint32_t> &indexes,

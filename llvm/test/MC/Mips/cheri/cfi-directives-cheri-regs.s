@@ -29,8 +29,8 @@ b:
 
 .end b
 
-# HYBRID:   DW_CFA_def_cfa: reg29 +0
-# PURECAP:   DW_CFA_def_cfa: reg83 +0
+# HYBRID:   DW_CFA_def_cfa_register: reg29
+# PURECAP:   DW_CFA_def_cfa_register: reg83
 
 # CHECK:      00000014 00000028 00000018 FDE cie=00000018 pc=00000000...00000014
 # CHECK-NEXT:   DW_CFA_advance_loc: 4

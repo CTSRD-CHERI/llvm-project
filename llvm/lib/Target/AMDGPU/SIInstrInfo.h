@@ -127,7 +127,8 @@ private:
   const TargetRegisterClass *
   getDestEquivalentVGPRClass(const MachineInstr &Inst) const;
 
-  bool checkInstOffsetsDoNotOverlap(MachineInstr &MIa, MachineInstr &MIb) const;
+  bool checkInstOffsetsDoNotOverlap(const MachineInstr &MIa,
+                                    const MachineInstr &MIb) const;
 
   unsigned findUsedSGPR(const MachineInstr &MI, int OpIndices[3]) const;
 
@@ -156,7 +157,10 @@ public:
     MO_REL32 = 4,
     MO_REL32_LO = 4,
     // MO_REL32_HI -> symbol@rel32@hi -> R_AMDGPU_REL32_HI.
-    MO_REL32_HI = 5
+    MO_REL32_HI = 5,
+
+    MO_LONG_BRANCH_FORWARD = 6,
+    MO_LONG_BRANCH_BACKWARD = 7
   };
 
   explicit SIInstrInfo(const GCNSubtarget &ST);
@@ -172,11 +176,13 @@ public:
                                int64_t &Offset1,
                                int64_t &Offset2) const override;
 
-  bool getMemOperandWithOffset(MachineInstr &LdSt, MachineOperand *&BaseOp,
+  bool getMemOperandWithOffset(const MachineInstr &LdSt,
+                               const MachineOperand *&BaseOp,
                                int64_t &Offset,
                                const TargetRegisterInfo *TRI) const final;
 
-  bool shouldClusterMemOps(MachineOperand &BaseOp1, MachineOperand &BaseOp2,
+  bool shouldClusterMemOps(const MachineOperand &BaseOp1,
+                           const MachineOperand &BaseOp2,
                            unsigned NumLoads) const override;
 
   bool shouldScheduleLoadsNear(SDNode *Load0, SDNode *Load1, int64_t Offset0,
@@ -293,7 +299,8 @@ public:
              unsigned Kind) const override;
 
   bool
-  areMemAccessesTriviallyDisjoint(MachineInstr &MIa, MachineInstr &MIb,
+  areMemAccessesTriviallyDisjoint(const MachineInstr &MIa,
+                                  const MachineInstr &MIb,
                                   AliasAnalysis *AA = nullptr) const override;
 
   bool isFoldableCopy(const MachineInstr &MI) const;
@@ -373,6 +380,14 @@ public:
 
   bool isSOPP(uint16_t Opcode) const {
     return get(Opcode).TSFlags & SIInstrFlags::SOPP;
+  }
+
+  static bool isPacked(const MachineInstr &MI) {
+    return MI.getDesc().TSFlags & SIInstrFlags::IsPacked;
+  }
+
+  bool isPacked(uint16_t Opcode) const {
+    return get(Opcode).TSFlags & SIInstrFlags::IsPacked;
   }
 
   static bool isVOP1(const MachineInstr &MI) {
@@ -1010,16 +1025,13 @@ namespace AMDGPU {
   LLVM_READONLY
   int getGlobalSaddrOp(uint16_t Opcode);
 
+  LLVM_READONLY
+  int getVCMPXNoSDstOp(uint16_t Opcode);
+
   const uint64_t RSRC_DATA_FORMAT = 0xf00000000000LL;
   const uint64_t RSRC_ELEMENT_SIZE_SHIFT = (32 + 19);
   const uint64_t RSRC_INDEX_STRIDE_SHIFT = (32 + 21);
   const uint64_t RSRC_TID_ENABLE = UINT64_C(1) << (32 + 23);
-
-  // For MachineOperands.
-  enum TargetFlags {
-    TF_LONG_BRANCH_FORWARD = 1 << 0,
-    TF_LONG_BRANCH_BACKWARD = 1 << 1
-  };
 
 } // end namespace AMDGPU
 

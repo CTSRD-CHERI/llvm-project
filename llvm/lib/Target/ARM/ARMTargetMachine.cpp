@@ -16,6 +16,7 @@
 #include "ARMTargetObjectFile.h"
 #include "ARMTargetTransformInfo.h"
 #include "MCTargetDesc/ARMMCTargetDesc.h"
+#include "TargetInfo/ARMTargetInfo.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -361,6 +362,8 @@ public:
   void addPreRegAlloc() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
+
+  std::unique_ptr<CSEConfigBase> getCSEConfig() const override;
 };
 
 class ARMExecutionDomainFix : public ExecutionDomainFix {
@@ -383,6 +386,10 @@ INITIALIZE_PASS_END(ARMExecutionDomainFix, "arm-execution-domain-fix",
 
 TargetPassConfig *ARMBaseTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ARMPassConfig(*this, PM);
+}
+
+std::unique_ptr<CSEConfigBase> ARMPassConfig::getCSEConfig() const {
+  return getStandardCSEConfigForOpt(TM->getOptLevel());
 }
 
 void ARMPassConfig::addIRPasses() {

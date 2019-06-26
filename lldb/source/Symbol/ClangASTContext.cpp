@@ -52,6 +52,7 @@
 #include "clang/Basic/TargetOptions.h"
 #include "clang/Frontend/FrontendOptions.h"
 #include "clang/Frontend/LangStandard.h"
+#include "clang/Sema/Sema.h"
 
 #ifdef LLDB_DEFINED_NDEBUG_FOR_CLANG
 #undef NDEBUG
@@ -663,9 +664,7 @@ ClangASTContext::ClangASTContext(const char *target_triple)
     SetTargetTriple(target_triple);
 }
 
-//----------------------------------------------------------------------
 // Destructor
-//----------------------------------------------------------------------
 ClangASTContext::~ClangASTContext() { Finalize(); }
 
 ConstString ClangASTContext::GetPluginNameStatic() {
@@ -792,6 +791,12 @@ void ClangASTContext::Clear() {
   m_selector_table_up.reset();
   m_builtins_up.reset();
   m_pointer_byte_size = 0;
+}
+
+void ClangASTContext::setSema(Sema *s) {
+  // Ensure that the new sema actually belongs to our ASTContext.
+  assert(s == nullptr || &s->getASTContext() == m_ast_up.get());
+  m_sema = s;
 }
 
 const char *ClangASTContext::GetTargetTriple() {
@@ -946,7 +951,7 @@ public:
   }
 
   void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
-                        const clang::Diagnostic &info) {
+                        const clang::Diagnostic &info) override {
     if (m_log) {
       llvm::SmallVector<char, 32> diag_str(10);
       info.FormatDiagnostic(diag_str);
@@ -1410,7 +1415,14 @@ clang::Decl *ClangASTContext::CopyDecl(ASTContext *dst_ast, ASTContext *src_ast,
   FileManager file_manager(file_system_options);
   ASTImporter importer(*dst_ast, file_manager, *src_ast, file_manager, false);
 
-  return importer.Import(source_decl);
+  if (llvm::Expected<clang::Decl *> ret_or_error =
+          importer.Import(source_decl)) {
+    return *ret_or_error;
+  } else {
+    Log *log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EXPRESSIONS);
+    LLDB_LOG_ERROR(log, ret_or_error.takeError(), "Couldn't import decl: {0}");
+    return nullptr;
+  }
 }
 
 bool ClangASTContext::AreTypesSame(CompilerType type1, CompilerType type2,
@@ -2435,21 +2447,17 @@ void ClangASTContext::DumpDeclHiearchy(clang::Decl *decl) {
 bool ClangASTContext::DeclsAreEquivalent(clang::Decl *lhs_decl,
                                          clang::Decl *rhs_decl) {
   if (lhs_decl && rhs_decl) {
-    //----------------------------------------------------------------------
     // Make sure the decl kinds match first
-    //----------------------------------------------------------------------
     const clang::Decl::Kind lhs_decl_kind = lhs_decl->getKind();
     const clang::Decl::Kind rhs_decl_kind = rhs_decl->getKind();
 
     if (lhs_decl_kind == rhs_decl_kind) {
-      //------------------------------------------------------------------
       // Now check that the decl contexts kinds are all equivalent before we
       // have to check any names of the decl contexts...
-      //------------------------------------------------------------------
       clang::DeclContext *lhs_decl_ctx = lhs_decl->getDeclContext();
       clang::DeclContext *rhs_decl_ctx = rhs_decl->getDeclContext();
       if (lhs_decl_ctx && rhs_decl_ctx) {
-        while (1) {
+        while (true) {
           if (lhs_decl_ctx && rhs_decl_ctx) {
             const clang::Decl::Kind lhs_decl_ctx_kind =
                 lhs_decl_ctx->getDeclKind();
@@ -2467,9 +2475,7 @@ bool ClangASTContext::DeclsAreEquivalent(clang::Decl *lhs_decl,
             return false;
         }
 
-        //--------------------------------------------------------------
         // Now make sure the name of the decls match
-        //--------------------------------------------------------------
         clang::NamedDecl *lhs_named_decl =
             llvm::dyn_cast<clang::NamedDecl>(lhs_decl);
         clang::NamedDecl *rhs_named_decl =
@@ -2485,13 +2491,11 @@ bool ClangASTContext::DeclsAreEquivalent(clang::Decl *lhs_decl,
         } else
           return false;
 
-        //--------------------------------------------------------------
         // We know that the decl context kinds all match, so now we need to
         // make sure the names match as well
-        //--------------------------------------------------------------
         lhs_decl_ctx = lhs_decl->getDeclContext();
         rhs_decl_ctx = rhs_decl->getDeclContext();
-        while (1) {
+        while (true) {
           switch (lhs_decl_ctx->getDeclKind()) {
           case clang::Decl::TranslationUnit:
             // We don't care about the translation unit names
@@ -2830,9 +2834,7 @@ ConvertAccessTypeToObjCIvarAccessControl(AccessType access) {
   return clang::ObjCIvarDecl::None;
 }
 
-//----------------------------------------------------------------------
 // Tests
-//----------------------------------------------------------------------
 
 bool ClangASTContext::IsAggregateType(lldb::opaque_compiler_type_t type) {
   clang::QualType qual_type(GetCanonicalQualType(type));
@@ -3909,6 +3911,14 @@ bool ClangASTContext::IsVoidType(lldb::opaque_compiler_type_t type) {
   return GetCanonicalQualType(type)->isVoidType();
 }
 
+bool ClangASTContext::CanPassInRegisters(const CompilerType &type) {
+  if (auto *record_decl =
+      ClangASTContext::GetAsRecordDecl(type)) {
+    return record_decl->canPassInRegisters();
+  }
+  return false;
+}
+
 bool ClangASTContext::SupportsLanguage(lldb::LanguageType language) {
   return ClangASTContextSupportsLanguage(language);
 }
@@ -3994,9 +4004,7 @@ bool ClangASTContext::GetObjCClassName(const CompilerType &type,
   return false;
 }
 
-//----------------------------------------------------------------------
 // Type Completion
-//----------------------------------------------------------------------
 
 bool ClangASTContext::GetCompleteType(lldb::opaque_compiler_type_t type) {
   if (!type)
@@ -4264,9 +4272,11 @@ ClangASTContext::GetMinimumLanguage(lldb::opaque_compiler_type_t type) {
   if (qual_type->isAnyPointerType()) {
     if (qual_type->isObjCObjectPointerType())
       return lldb::eLanguageTypeObjC;
+    if (qual_type->getPointeeCXXRecordDecl())
+      return lldb::eLanguageTypeC_plus_plus;
 
     clang::QualType pointee_type(qual_type->getPointeeType());
-    if (pointee_type->getPointeeCXXRecordDecl() != nullptr)
+    if (pointee_type->getPointeeCXXRecordDecl())
       return lldb::eLanguageTypeC_plus_plus;
     if (pointee_type->isObjCObjectOrInterfaceType())
       return lldb::eLanguageTypeObjC;
@@ -4474,6 +4484,8 @@ ClangASTContext::GetTypeClass(lldb::opaque_compiler_type_t type) {
 
   case clang::Type::DependentAddressSpace:
     break;
+  case clang::Type::MacroQualified:
+    break;
   }
   // We don't know hot to display this type...
   return lldb::eTypeClassOther;
@@ -4485,9 +4497,7 @@ unsigned ClangASTContext::GetTypeQualifiers(lldb::opaque_compiler_type_t type) {
   return 0;
 }
 
-//----------------------------------------------------------------------
 // Creating related types
-//----------------------------------------------------------------------
 
 CompilerType
 ClangASTContext::GetArrayElementType(lldb::opaque_compiler_type_t type,
@@ -4999,16 +5009,12 @@ ClangASTContext::GetTypedefedType(lldb::opaque_compiler_type_t type) {
   return CompilerType();
 }
 
-//----------------------------------------------------------------------
 // Create related types using the current type's AST
-//----------------------------------------------------------------------
 
 CompilerType ClangASTContext::GetBasicTypeFromAST(lldb::BasicType basic_type) {
   return ClangASTContext::GetBasicType(getASTContext(), basic_type);
 }
-//----------------------------------------------------------------------
 // Exploring the type
-//----------------------------------------------------------------------
 
 Optional<uint64_t>
 ClangASTContext::GetBitSize(lldb::opaque_compiler_type_t type,
@@ -5029,7 +5035,7 @@ ClangASTContext::GetBitSize(lldb::opaque_compiler_type_t type,
       ExecutionContext exe_ctx(exe_scope);
       Process *process = exe_ctx.GetProcessPtr();
       if (process) {
-        ObjCLanguageRuntime *objc_runtime = process->GetObjCLanguageRuntime();
+        ObjCLanguageRuntime *objc_runtime = ObjCLanguageRuntime::Get(*process);
         if (objc_runtime) {
           uint64_t bit_size = 0;
           if (objc_runtime->GetTypeBitSize(
@@ -5348,6 +5354,8 @@ lldb::Encoding ClangASTContext::GetEncoding(lldb::opaque_compiler_type_t type,
 
   case clang::Type::DependentAddressSpace:
     break;
+  case clang::Type::MacroQualified:
+    break;
   }
   count = 0;
   return lldb::eEncodingInvalid;
@@ -5514,6 +5522,8 @@ lldb::Format ClangASTContext::GetFormat(lldb::opaque_compiler_type_t type) {
     break;
 
   case clang::Type::DependentAddressSpace:
+    break;
+  case clang::Type::MacroQualified:
     break;
   }
   // We don't know hot to display this type...
@@ -6832,7 +6842,7 @@ CompilerType ClangASTContext::GetChildCompilerTypeAtIndex(
                   process = exe_ctx->GetProcessPtr();
                 if (process) {
                   ObjCLanguageRuntime *objc_runtime =
-                      process->GetObjCLanguageRuntime();
+                      ObjCLanguageRuntime::Get(*process);
                   if (objc_runtime != nullptr) {
                     CompilerType parent_ast_type(getASTContext(),
                                                  parent_qual_type);
@@ -6892,7 +6902,7 @@ CompilerType ClangASTContext::GetChildCompilerTypeAtIndex(
       } else {
         child_is_deref_of_parent = true;
         const char *parent_name =
-            valobj ? valobj->GetName().GetCString() : NULL;
+            valobj ? valobj->GetName().GetCString() : nullptr;
         if (parent_name) {
           child_name.assign(1, '*');
           child_name += parent_name;
@@ -6973,7 +6983,7 @@ CompilerType ClangASTContext::GetChildCompilerTypeAtIndex(
       child_is_deref_of_parent = true;
 
       const char *parent_name =
-          valobj ? valobj->GetName().GetCString() : NULL;
+          valobj ? valobj->GetName().GetCString() : nullptr;
       if (parent_name) {
         child_name.assign(1, '*');
         child_name += parent_name;
@@ -7010,7 +7020,7 @@ CompilerType ClangASTContext::GetChildCompilerTypeAtIndex(
             language_flags);
       } else {
         const char *parent_name =
-            valobj ? valobj->GetName().GetCString() : NULL;
+            valobj ? valobj->GetName().GetCString() : nullptr;
         if (parent_name) {
           child_name.assign(1, '&');
           child_name += parent_name;
@@ -7840,7 +7850,7 @@ clang::EnumDecl *ClangASTContext::GetAsEnumDecl(const CompilerType &type) {
       llvm::dyn_cast<clang::EnumType>(ClangUtil::GetCanonicalQualType(type));
   if (enutype)
     return enutype->getDecl();
-  return NULL;
+  return nullptr;
 }
 
 clang::RecordDecl *ClangASTContext::GetAsRecordDecl(const CompilerType &type) {
@@ -8178,6 +8188,10 @@ clang::CXXMethodDecl *ClangASTContext::AddMethodToCXXRecordType(
   if (is_artificial)
     return nullptr; // skip everything artificial
 
+  const clang::ExplicitSpecifier explicit_spec(
+      nullptr /*expr*/, is_explicit
+                            ? clang::ExplicitSpecKind::ResolvedTrue
+                            : clang::ExplicitSpecKind::ResolvedFalse);
   if (name[0] == '~') {
     cxx_dtor_decl = clang::CXXDestructorDecl::Create(
         *getASTContext(), cxx_record_decl, clang::SourceLocation(),
@@ -8196,7 +8210,7 @@ clang::CXXMethodDecl *ClangASTContext::AddMethodToCXXRecordType(
             clang::SourceLocation()),
         method_qual_type,
         nullptr, // TypeSourceInfo *
-        is_explicit, is_inline, is_artificial, false /*is_constexpr*/);
+        explicit_spec, is_inline, is_artificial, false /*is_constexpr*/);
     cxx_method_decl = cxx_ctor_decl;
   } else {
     clang::StorageClass SC = is_static ? clang::SC_Static : clang::SC_None;
@@ -8231,7 +8245,7 @@ clang::CXXMethodDecl *ClangASTContext::AddMethodToCXXRecordType(
                 clang::SourceLocation()),
             method_qual_type,
             nullptr, // TypeSourceInfo *
-            is_inline, is_explicit, false /*is_constexpr*/,
+            is_inline, explicit_spec, false /*is_constexpr*/,
             clang::SourceLocation());
       }
     }
@@ -8255,7 +8269,7 @@ clang::CXXMethodDecl *ClangASTContext::AddMethodToCXXRecordType(
   if (is_attr_used)
     cxx_method_decl->addAttr(clang::UsedAttr::CreateImplicit(*getASTContext()));
 
-  if (mangled_name != NULL) {
+  if (mangled_name != nullptr) {
     cxx_method_decl->addAttr(
         clang::AsmLabelAttr::CreateImplicit(*getASTContext(), mangled_name));
   }
@@ -9081,9 +9095,7 @@ ClangASTContext::ConvertStringToFloatValue(lldb::opaque_compiler_type_t type,
   return 0;
 }
 
-//----------------------------------------------------------------------
 // Dumping types
-//----------------------------------------------------------------------
 #define DEPTH_INCREMENT 2
 
 #ifndef NDEBUG
@@ -9625,7 +9637,7 @@ bool ClangASTContext::DumpTypeValue(
       break;
     }
   }
-  return 0;
+  return false;
 }
 
 void ClangASTContext::DumpSummary(lldb::opaque_compiler_type_t type,
@@ -9864,7 +9876,7 @@ clang::ClassTemplateDecl *ClangASTContext::ParseClassTemplateDecl(
                                    template_basename.c_str(), tag_decl_kind,
                                    template_param_infos);
   }
-  return NULL;
+  return nullptr;
 }
 
 void ClangASTContext::CompleteTagDecl(void *baton, clang::TagDecl *decl) {
@@ -9921,9 +9933,7 @@ bool ClangASTContext::LayoutRecordType(
                                     field_offsets, base_offsets, vbase_offsets);
 }
 
-//----------------------------------------------------------------------
 // CompilerDecl override functions
-//----------------------------------------------------------------------
 
 ConstString ClangASTContext::DeclGetName(void *opaque_decl) {
   if (opaque_decl) {
@@ -10011,9 +10021,7 @@ CompilerType ClangASTContext::DeclGetFunctionArgumentType(void *opaque_decl,
   return CompilerType();
 }
 
-//----------------------------------------------------------------------
 // CompilerDeclContext functions
-//----------------------------------------------------------------------
 
 std::vector<CompilerDecl> ClangASTContext::DeclContextFindDeclByName(
     void *opaque_decl_ctx, ConstString name, const bool ignore_using_decls) {

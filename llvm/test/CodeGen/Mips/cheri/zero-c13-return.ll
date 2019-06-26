@@ -72,9 +72,9 @@ define i8 addrspace(200)* @no_onstack_args_call_variadic(i8 addrspace(200)* %in_
 ; We should not need to clear $c13 after calling the variadic function since it will clear it prior to return
 ; CHECK-LABEL: no_onstack_args_call_variadic:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[@EXPR 3 * $CAP_SIZE]]
-; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[$CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE * 3]]
+; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    daddiu $1, $zero, 42
 ; CHECK-NEXT:    csd $1, $zero, 0($c11)
@@ -86,10 +86,10 @@ define i8 addrspace(200)* @no_onstack_args_call_variadic(i8 addrspace(200)* %in_
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c18)
 ; Restore $cgp
 ; CHECK-NEXT:    cmove $c26, $c18
-; CHECK-NEXT:    clc $c17, $zero, [[$CAP_SIZE]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[@EXPR 3 * $CAP_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE * 3]]
 entry:
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic_fn(i8 addrspace(200)* %in_arg1, i64 42)
   ret i8 addrspace(200)* @global

@@ -52,7 +52,7 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
   assert(S->Name == "__cap_relocs");
   assert(S->AreRelocsRela && "__cap_relocs should be RELA");
   // make sure the section is no longer processed
-  S->Live = false;
+  S->markDead();
 
   if ((S->getSize() % Entsize) != 0) {
     error("__cap_relocs section size is not a multiple of " + Twine(Entsize) +
@@ -344,7 +344,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // full Elf_Rel/Elf_Rela
     // The addend is zero here since it will be written in writeTo()
     assert(!Config->IsRela);
-    In.RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
+    Main->RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
                             true, nullptr, 0});
     ContainsDynamicRelocations = true;
   }
@@ -373,7 +373,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     int64_t Addend = Target.Offset;
     // Capability target is the second field
     assert((CurrentEntryOffset + FieldSize) < getSize());
-    In.RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + FieldSize,
+    Main->RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + FieldSize,
                             RelativeToLoadAddress, Target.Sym, Addend});
     ContainsDynamicRelocations = true;
     if (!RelativeToLoadAddress) {
@@ -381,7 +381,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
       RelType SizeRel = *elf::Target->SizeRel;
       // Capability size is the fourth field
       assert((CurrentEntryOffset + 3*FieldSize) < getSize());
-      In.RelaDyn->addReloc(SizeRel, this, CurrentEntryOffset + 3*FieldSize,
+      Main->RelaDyn->addReloc(SizeRel, this, CurrentEntryOffset + 3*FieldSize,
                              Target.Sym);
     }
   }
@@ -880,7 +880,7 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection *DynRelSec =
-        it.second.UsedInCallExpr ? In.RelaPlt : In.RelaDyn;
+        it.second.UsedInCallExpr ? In.RelaPlt : Main->RelaDyn;
     addCapabilityRelocation<ELFT>(
         TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
         R_CHERI_CAPABILITY, 0, it.second.UsedInCallExpr,
@@ -936,7 +936,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     if (S == nullptr) {
       if (!Config->Pic)
         continue;
-      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
     } else {
       // When building a shared library we still need a dynamic relocation
       // for the module index. Therefore only checking for
@@ -944,13 +944,13 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       // thread-locals that have been marked as local through a linker script)
       if (!S->IsPreemptible && !Config->Pic)
         continue;
-      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
       // However, we can skip writing the TLS offset reloc for non-preemptible
       // symbols since it is known even in shared libraries
       if (!S->IsPreemptible)
         continue;
       Offset += Config->Wordsize;
-      In.RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
     }
   }
 
@@ -961,7 +961,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     Symbol *S = it.first;
     uint64_t Offset = CTI.Index.getValue() * Config->Wordsize;
     if (S->IsPreemptible)
-      In.RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
   }
 
   ValuesAssigned = true;
@@ -1137,10 +1137,10 @@ void addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
     // instead need to use an absolute pointer size relocation to write
     // the offset addend
     if (!DynRelSec)
-      DynRelSec = In.RelaDyn;
+      DynRelSec = Main->RelaDyn;
     // in the case that -local-caprelocs=elf is passed we need to ensure that
     // the target symbol is included in the dynamic symbol table
-    if (!In.DynSymTab) {
+    if (!Main->DynSymTab) {
       error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
       return;
     }

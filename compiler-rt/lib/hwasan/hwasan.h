@@ -81,6 +81,7 @@ void HwasanAllocatorThreadFinish();
 void *hwasan_malloc(usize size, StackTrace *stack);
 void *hwasan_calloc(uptr nmemb, usize size, StackTrace *stack);
 void *hwasan_realloc(void *ptr, usize size, StackTrace *stack);
+void *hwasan_reallocarray(void *ptr, usize nmemb, usize size, StackTrace *stack);
 void *hwasan_valloc(usize size, StackTrace *stack);
 void *hwasan_pvalloc(usize size, StackTrace *stack);
 void *hwasan_aligned_alloc(uptr alignment, usize size, StackTrace *stack);

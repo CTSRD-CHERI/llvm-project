@@ -23,13 +23,13 @@ declare i32 @external_fn()
 
 ; SYMTAB-LABEL: SYMBOL TABLE:
 ; SYMTAB-NEXT: 0000000000000000 l    df *ABS*		 00000000 csetbounds-stats-function.ll
-; SYMTAB-NEXT: 0000000000000000 l     F .text		 00000014 maybe_inline
+; SYMTAB-NEXT: 0000000000000000 l     F .text		 00000010 maybe_inline
 ; SYMTAB-NEXT: 0000000000000000 l    d  .text		 00000000 .text
 ; SYMTAB-NEXT: 0000000000000000         *UND*		 00000000 external_fn
-; SYMTAB-NEXT: 0000000000000018 g     F .text		 00000060 test_func
+; SYMTAB-NEXT: 0000000000000010 g     F .text		 00000060 test_func
 ; SYMTAB-EMPTY:
 
 ; CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
-; CSV-NEXT: 2,20,c,"UNKNOWN","ELF symbol table","Function maybe_inline"
+; CSV-NEXT: 2,16,c,"UNKNOWN","ELF symbol table","Function maybe_inline"
 ; CSV-NEXT: 2,96,c,"UNKNOWN","ELF symbol table","Function test_func"
 ; CSV-EMPTY:

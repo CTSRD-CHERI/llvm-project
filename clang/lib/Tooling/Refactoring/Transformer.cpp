@@ -28,14 +28,11 @@ using namespace clang;
 using namespace tooling;
 
 using ast_matchers::MatchFinder;
+using ast_matchers::internal::DynTypedMatcher;
 using ast_type_traits::ASTNodeKind;
 using ast_type_traits::DynTypedNode;
 using llvm::Error;
-using llvm::Expected;
-using llvm::Optional;
 using llvm::StringError;
-using llvm::StringRef;
-using llvm::Twine;
 
 using MatchResult = MatchFinder::MatchResult;
 
@@ -70,134 +67,179 @@ static bool isOriginMacroBody(const clang::SourceManager &SM,
   return false;
 }
 
-static llvm::Error invalidArgumentError(Twine Message) {
-  return llvm::make_error<StringError>(llvm::errc::invalid_argument, Message);
-}
-
-static llvm::Error typeError(StringRef Id, const ASTNodeKind &Kind,
-                             Twine Message) {
-  return invalidArgumentError(
-      Message + " (node id=" + Id + " kind=" + Kind.asStringRef() + ")");
-}
-
-static llvm::Error missingPropertyError(StringRef Id, Twine Description,
-                                        StringRef Property) {
-  return invalidArgumentError(Description + " requires property '" + Property +
-                              "' (node id=" + Id + ")");
-}
-
-static Expected<CharSourceRange>
-getTargetRange(StringRef Target, const DynTypedNode &Node, ASTNodeKind Kind,
-               NodePart TargetPart, ASTContext &Context) {
-  switch (TargetPart) {
-  case NodePart::Node: {
-    // For non-expression statements, associate any trailing semicolon with the
-    // statement text.  However, if the target was intended as an expression (as
-    // indicated by its kind) then we do not associate any trailing semicolon
-    // with it.  We only associate the exact expression text.
-    if (Node.get<Stmt>() != nullptr) {
-      auto ExprKind = ASTNodeKind::getFromNodeKind<clang::Expr>();
-      if (!ExprKind.isBaseOf(Kind))
-        return getExtendedRange(Node, tok::TokenKind::semi, Context);
-    }
-    return CharSourceRange::getTokenRange(Node.getSourceRange());
+Expected<SmallVector<tooling::detail::Transformation, 1>>
+tooling::detail::translateEdits(const MatchResult &Result,
+                                llvm::ArrayRef<ASTEdit> Edits) {
+  SmallVector<tooling::detail::Transformation, 1> Transformations;
+  for (const auto &Edit : Edits) {
+    Expected<CharSourceRange> Range = Edit.TargetRange(Result);
+    if (!Range)
+      return Range.takeError();
+    if (Range->isInvalid() ||
+        isOriginMacroBody(*Result.SourceManager, Range->getBegin()))
+      return SmallVector<Transformation, 0>();
+    auto Replacement = Edit.Replacement(Result);
+    if (!Replacement)
+      return Replacement.takeError();
+    tooling::detail::Transformation T;
+    T.Range = *Range;
+    T.Replacement = std::move(*Replacement);
+    Transformations.push_back(std::move(T));
   }
-  case NodePart::Member:
-    if (auto *M = Node.get<clang::MemberExpr>())
-      return CharSourceRange::getTokenRange(
-          M->getMemberNameInfo().getSourceRange());
-    return typeError(Target, Node.getNodeKind(),
-                     "NodePart::Member applied to non-MemberExpr");
-  case NodePart::Name:
-    if (const auto *D = Node.get<clang::NamedDecl>()) {
-      if (!D->getDeclName().isIdentifier())
-        return missingPropertyError(Target, "NodePart::Name", "identifier");
-      SourceLocation L = D->getLocation();
-      auto R = CharSourceRange::getTokenRange(L, L);
-      // Verify that the range covers exactly the name.
-      // FIXME: extend this code to support cases like `operator +` or
-      // `foo<int>` for which this range will be too short.  Doing so will
-      // require subcasing `NamedDecl`, because it doesn't provide virtual
-      // access to the \c DeclarationNameInfo.
-      if (getText(R, Context) != D->getName())
-        return CharSourceRange();
-      return R;
+  return Transformations;
+}
+
+ASTEdit tooling::change(RangeSelector S, TextGenerator Replacement) {
+  ASTEdit E;
+  E.TargetRange = std::move(S);
+  E.Replacement = std::move(Replacement);
+  return E;
+}
+
+RewriteRule tooling::makeRule(DynTypedMatcher M, SmallVector<ASTEdit, 1> Edits,
+                              TextGenerator Explanation) {
+  return RewriteRule{{RewriteRule::Case{std::move(M), std::move(Edits),
+                                        std::move(Explanation)}}};
+}
+
+// Determines whether A is a base type of B in the class hierarchy, including
+// the implicit relationship of Type and QualType.
+static bool isBaseOf(ASTNodeKind A, ASTNodeKind B) {
+  static auto TypeKind = ASTNodeKind::getFromNodeKind<Type>();
+  static auto QualKind = ASTNodeKind::getFromNodeKind<QualType>();
+  /// Mimic the implicit conversions of Matcher<>.
+  /// - From Matcher<Type> to Matcher<QualType>
+  /// - From Matcher<Base> to Matcher<Derived>
+  return (A.isSame(TypeKind) && B.isSame(QualKind)) || A.isBaseOf(B);
+}
+
+// Try to find a common kind to which all of the rule's matchers can be
+// converted.
+static ASTNodeKind
+findCommonKind(const SmallVectorImpl<RewriteRule::Case> &Cases) {
+  assert(!Cases.empty() && "Rule must have at least one case.");
+  ASTNodeKind JoinKind = Cases[0].Matcher.getSupportedKind();
+  // Find a (least) Kind K, for which M.canConvertTo(K) holds, for all matchers
+  // M in Rules.
+  for (const auto &Case : Cases) {
+    auto K = Case.Matcher.getSupportedKind();
+    if (isBaseOf(JoinKind, K)) {
+      JoinKind = K;
+      continue;
     }
-    if (const auto *E = Node.get<clang::DeclRefExpr>()) {
-      if (!E->getNameInfo().getName().isIdentifier())
-        return missingPropertyError(Target, "NodePart::Name", "identifier");
-      SourceLocation L = E->getLocation();
-      return CharSourceRange::getTokenRange(L, L);
-    }
-    if (const auto *I = Node.get<clang::CXXCtorInitializer>()) {
-      if (!I->isMemberInitializer() && I->isWritten())
-        return missingPropertyError(Target, "NodePart::Name",
-                                    "explicit member initializer");
-      SourceLocation L = I->getMemberLocation();
-      return CharSourceRange::getTokenRange(L, L);
-    }
-    return typeError(
-        Target, Node.getNodeKind(),
-        "NodePart::Name applied to neither DeclRefExpr, NamedDecl nor "
-        "CXXCtorInitializer");
+    if (K.isSame(JoinKind) || isBaseOf(K, JoinKind))
+      // JoinKind is already the lowest.
+      continue;
+    // K and JoinKind are unrelated -- there is no least common kind.
+    return ASTNodeKind();
   }
-  llvm_unreachable("Unexpected case in NodePart type.");
+  return JoinKind;
 }
 
-Expected<Transformation>
-tooling::applyRewriteRule(const RewriteRule &Rule,
-                          const ast_matchers::MatchFinder::MatchResult &Match) {
-  if (Match.Context->getDiagnostics().hasErrorOccurred())
-    return Transformation();
-
-  auto &NodesMap = Match.Nodes.getMap();
-  auto It = NodesMap.find(Rule.Target);
-  assert (It != NodesMap.end() && "Rule.Target must be bound in the match.");
-
-  Expected<CharSourceRange> TargetOrErr =
-      getTargetRange(Rule.Target, It->second, Rule.TargetKind, Rule.TargetPart,
-                     *Match.Context);
-  if (auto Err = TargetOrErr.takeError())
-    return std::move(Err);
-  auto &Target = *TargetOrErr;
-  if (Target.isInvalid() ||
-      isOriginMacroBody(*Match.SourceManager, Target.getBegin()))
-    return Transformation();
-
-  return Transformation{Target, Rule.Replacement(Match)};
+// Binds each rule's matcher to a unique (and deterministic) tag based on
+// `TagBase`.
+static std::vector<DynTypedMatcher>
+taggedMatchers(StringRef TagBase,
+               const SmallVectorImpl<RewriteRule::Case> &Cases) {
+  std::vector<DynTypedMatcher> Matchers;
+  Matchers.reserve(Cases.size());
+  size_t count = 0;
+  for (const auto &Case : Cases) {
+    std::string Tag = (TagBase + Twine(count)).str();
+    ++count;
+    auto M = Case.Matcher.tryBind(Tag);
+    assert(M && "RewriteRule matchers should be bindable.");
+    Matchers.push_back(*std::move(M));
+  }
+  return Matchers;
 }
 
-constexpr llvm::StringLiteral RewriteRule::RootId;
-
-RewriteRuleBuilder RewriteRuleBuilder::replaceWith(TextGenerator T) {
-  Rule.Replacement = std::move(T);
-  return *this;
+// Simply gathers the contents of the various rules into a single rule. The
+// actual work to combine these into an ordered choice is deferred to matcher
+// registration.
+RewriteRule tooling::applyFirst(ArrayRef<RewriteRule> Rules) {
+  RewriteRule R;
+  for (auto &Rule : Rules)
+    R.Cases.append(Rule.Cases.begin(), Rule.Cases.end());
+  return R;
 }
 
-RewriteRuleBuilder RewriteRuleBuilder::because(TextGenerator T) {
-  Rule.Explanation = std::move(T);
-  return *this;
+static DynTypedMatcher joinCaseMatchers(const RewriteRule &Rule) {
+  assert(!Rule.Cases.empty() && "Rule must have at least one case.");
+  if (Rule.Cases.size() == 1)
+    return Rule.Cases[0].Matcher;
+
+  auto CommonKind = findCommonKind(Rule.Cases);
+  assert(!CommonKind.isNone() && "Cases must have compatible matchers.");
+  return DynTypedMatcher::constructVariadic(
+      DynTypedMatcher::VO_AnyOf, CommonKind, taggedMatchers("Tag", Rule.Cases));
 }
+
+DynTypedMatcher tooling::detail::buildMatcher(const RewriteRule &Rule) {
+  DynTypedMatcher M = joinCaseMatchers(Rule);
+  M.setAllowBind(true);
+  // `tryBind` is guaranteed to succeed, because `AllowBind` was set to true.
+  return *M.tryBind(RewriteRule::RootID);
+}
+
+// Finds the case that was "selected" -- that is, whose matcher triggered the
+// `MatchResult`.
+const RewriteRule::Case &
+tooling::detail::findSelectedCase(const MatchResult &Result,
+                                  const RewriteRule &Rule) {
+  if (Rule.Cases.size() == 1)
+    return Rule.Cases[0];
+
+  auto &NodesMap = Result.Nodes.getMap();
+  for (size_t i = 0, N = Rule.Cases.size(); i < N; ++i) {
+    std::string Tag = ("Tag" + Twine(i)).str();
+    if (NodesMap.find(Tag) != NodesMap.end())
+      return Rule.Cases[i];
+  }
+  llvm_unreachable("No tag found for this rule.");
+}
+
+constexpr llvm::StringLiteral RewriteRule::RootID;
 
 void Transformer::registerMatchers(MatchFinder *MatchFinder) {
-  MatchFinder->addDynamicMatcher(Rule.Matcher, this);
+  MatchFinder->addDynamicMatcher(tooling::detail::buildMatcher(Rule), this);
 }
 
 void Transformer::run(const MatchResult &Result) {
-  auto ChangeOrErr = applyRewriteRule(Rule, Result);
-  if (auto Err = ChangeOrErr.takeError()) {
-    llvm::errs() << "Rewrite failed: " << llvm::toString(std::move(Err))
-                 << "\n";
+  if (Result.Context->getDiagnostics().hasErrorOccurred())
+    return;
+
+  // Verify the existence and validity of the AST node that roots this rule.
+  auto &NodesMap = Result.Nodes.getMap();
+  auto Root = NodesMap.find(RewriteRule::RootID);
+  assert(Root != NodesMap.end() && "Transformation failed: missing root node.");
+  SourceLocation RootLoc = Result.SourceManager->getExpansionLoc(
+      Root->second.getSourceRange().getBegin());
+  assert(RootLoc.isValid() && "Invalid location for Root node of match.");
+
+  auto Transformations = tooling::detail::translateEdits(
+      Result, tooling::detail::findSelectedCase(Result, Rule).Edits);
+  if (!Transformations) {
+    Consumer(Transformations.takeError());
     return;
   }
-  auto &Change = *ChangeOrErr;
-  auto &Range = Change.Range;
-  if (Range.isInvalid()) {
+
+  if (Transformations->empty()) {
     // No rewrite applied (but no error encountered either).
+    RootLoc.print(llvm::errs() << "note: skipping match at loc ",
+                  *Result.SourceManager);
+    llvm::errs() << "\n";
     return;
   }
-  AtomicChange AC(*Result.SourceManager, Range.getBegin());
-  if (auto Err = AC.replace(*Result.SourceManager, Range, Change.Replacement))
-    AC.setError(llvm::toString(std::move(Err)));
-  Consumer(AC);
+
+  // Record the results in the AtomicChange.
+  AtomicChange AC(*Result.SourceManager, RootLoc);
+  for (const auto &T : *Transformations) {
+    if (auto Err = AC.replace(*Result.SourceManager, T.Range, T.Replacement)) {
+      Consumer(std::move(Err));
+      return;
+    }
+  }
+
+  Consumer(std::move(AC));
 }

@@ -459,7 +459,7 @@ bool ConstStructBuilder::Build(const APValue &Val, const RecordDecl *RD,
       CharUnits BaseOffset = Layout.getBaseClassOffset(BD);
       Bases.push_back(BaseInfo(BD, BaseOffset, BaseNo));
     }
-    std::stable_sort(Bases.begin(), Bases.end());
+    llvm::stable_sort(Bases);
 
     for (unsigned I = 0, N = Bases.size(); I != N; ++I) {
       BaseInfo &Base = Bases[I];
@@ -476,7 +476,7 @@ bool ConstStructBuilder::Build(const APValue &Val, const RecordDecl *RD,
   for (RecordDecl::field_iterator Field = RD->field_begin(),
        FieldEnd = RD->field_end(); Field != FieldEnd; ++Field, ++FieldNo) {
     // If this is a union, skip all the fields that aren't being initialized.
-    if (RD->isUnion() && Val.getUnionField() != *Field)
+    if (RD->isUnion() && !declaresSameEntity(Val.getUnionField(), *Field))
       continue;
 
     // Don't emit anonymous bitfields, they just affect layout.
@@ -888,10 +888,6 @@ public:
       return nullptr;
     }
     llvm_unreachable("Invalid CastKind");
-  }
-
-  llvm::Constant *VisitCXXDefaultArgExpr(CXXDefaultArgExpr *DAE, QualType T) {
-    return Visit(DAE->getExpr(), T);
   }
 
   llvm::Constant *VisitCXXDefaultInitExpr(CXXDefaultInitExpr *DIE, QualType T) {
@@ -1717,8 +1713,6 @@ llvm::Constant *ConstantLValueEmitter::tryEmit() {
 /// bitcast to pointer type.
 llvm::Constant *
 ConstantLValueEmitter::tryEmitAbsolute(llvm::Type *destTy) {
-  auto offset = getOffset();
-
   // If we're producing a pointer, this is easy.
   auto destPtrTy = cast<llvm::PointerType>(destTy);
   if (Value.isNullPointer()) {
@@ -1730,7 +1724,7 @@ ConstantLValueEmitter::tryEmitAbsolute(llvm::Type *destTy) {
   // to a pointer.
   // FIXME: signedness depends on the original integer type.
   auto intptrTy = CGM.getDataLayout().getIntPtrType(destPtrTy);
-  llvm::Constant *C = offset;
+  llvm::Constant *C;
   C = llvm::ConstantExpr::getIntegerCast(getOffset(), intptrTy,
                                          /*isSigned*/ false);
 
@@ -1764,6 +1758,17 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
     }
 
     return nullptr;
+  }
+
+  // Handle typeid(T).
+  if (TypeInfoLValue TI = base.dyn_cast<TypeInfoLValue>()) {
+    llvm::Type *StdTypeInfoPtrTy =
+        CGM.getTypes().ConvertType(base.getTypeInfoType())->getPointerTo();
+    llvm::Constant *TypeInfo =
+        CGM.GetAddrOfRTTIDescriptor(QualType(TI.getType(), 0));
+    if (TypeInfo->getType() != StdTypeInfoPtrTy)
+      TypeInfo = llvm::ConstantExpr::getBitCast(TypeInfo, StdTypeInfoPtrTy);
+    return TypeInfo;
   }
 
   // Otherwise, it must be an expression.
@@ -1880,8 +1885,10 @@ ConstantLValueEmitter::VisitMaterializeTemporaryExpr(
 llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
                                                 QualType DestType) {
   switch (Value.getKind()) {
-  case APValue::Uninitialized:
-    llvm_unreachable("Constant expressions should be initialized.");
+  case APValue::None:
+  case APValue::Indeterminate:
+    // Out-of-lifetime and indeterminate values can be modeled as 'undef'.
+    return llvm::UndefValue::get(CGM.getTypes().ConvertType(DestType));
   case APValue::LValue:
     return ConstantLValueEmitter(*this, Value, DestType).tryEmit();
   case APValue::Int: {

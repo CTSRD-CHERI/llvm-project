@@ -19,6 +19,7 @@
 #include "clang/Index/IndexSymbol.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/Support/Regex.h"
 #include <functional>
 
 namespace clang {
@@ -109,6 +110,7 @@ public:
 
   SymbolSlab takeSymbols() { return std::move(Symbols).build(); }
   RefSlab takeRefs() { return std::move(Refs).build(); }
+  RelationSlab takeRelations() { return std::move(Relations).build(); }
 
   void finish() override;
 
@@ -116,13 +118,28 @@ private:
   const Symbol *addDeclaration(const NamedDecl &, SymbolID,
                                bool IsMainFileSymbol);
   void addDefinition(const NamedDecl &, const Symbol &DeclSymbol);
+  void processRelations(const NamedDecl &ND, const SymbolID &ID,
+                        ArrayRef<index::SymbolRelation> Relations);
+
+  llvm::Optional<std::string> getIncludeHeader(llvm::StringRef QName, FileID);
+  bool isSelfContainedHeader(FileID);
+  // Heuristically headers that only want to be included via an umbrella.
+  static bool isDontIncludeMeHeader(llvm::StringRef);
 
   // All Symbols collected from the AST.
   SymbolSlab::Builder Symbols;
+  // File IDs for Symbol.IncludeHeaders.
+  // The final spelling is calculated in finish().
+  llvm::DenseMap<SymbolID, FileID> IncludeFiles;
+  void setIncludeLocation(const Symbol &S, SourceLocation);
+  // Indexed macros, to be erased if they turned out to be include guards.
+  llvm::DenseSet<const IdentifierInfo *> IndexedMacros;
   // All refs collected from the AST.
   // Only symbols declared in preamble (from #include) and referenced from the
   // main file will be included.
   RefSlab::Builder Refs;
+  // All relations collected from the AST.
+  RelationSlab::Builder Relations;
   ASTContext *ASTCtx;
   std::shared_ptr<Preprocessor> PP;
   std::shared_ptr<GlobalCodeCompletionAllocator> CompletionAllocator;
@@ -141,6 +158,7 @@ private:
   llvm::DenseMap<const Decl *, const Decl *> CanonicalDecls;
   // Cache whether to index a file or not.
   llvm::DenseMap<FileID, bool> FilesToIndexCache;
+  llvm::DenseMap<FileID, bool> HeaderIsSelfContainedCache;
 };
 
 } // namespace clangd

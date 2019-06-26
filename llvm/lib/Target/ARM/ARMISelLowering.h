@@ -321,13 +321,14 @@ class VectorType;
     /// is "fast" by reference in the second argument.
     bool allowsMisalignedMemoryAccesses(EVT VT, unsigned AddrSpace,
                                         unsigned Align,
+                                        MachineMemOperand::Flags Flags,
                                         bool *Fast) const override;
 
     EVT getOptimalMemOpType(uint64_t Size,
                             unsigned DstAlign, unsigned SrcAlign,
                             bool IsMemset, bool ZeroMemset,
                             bool MemcpyStrSrc,
-                            MachineFunction &MF) const override;
+                            const AttributeList &FuncAttributes) const override;
 
     bool isTruncateFree(Type *SrcTy, Type *DstTy) const override;
     bool isTruncateFree(EVT SrcVT, EVT DstVT) const override;
@@ -456,7 +457,8 @@ class VectorType;
 
     /// getRegClassFor - Return the register class that should be used for the
     /// specified value type.
-    const TargetRegisterClass *getRegClassFor(MVT VT) const override;
+    const TargetRegisterClass *
+    getRegClassFor(MVT VT, bool isDivergent = false) const override;
 
     /// Returns true if a cast between SrcAS and DestAS is a noop.
     bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override {
@@ -598,8 +600,8 @@ class VectorType;
     bool isDesirableToCommuteWithShift(const SDNode *N,
                                        CombineLevel Level) const override;
 
-    bool shouldFoldShiftPairToMask(const SDNode *N,
-                                   CombineLevel Level) const override;
+    bool shouldFoldConstantShiftPairToMask(const SDNode *N,
+                                           CombineLevel Level) const override;
   protected:
     std::pair<const TargetRegisterClass *, uint8_t>
     findRepresentativeClass(const TargetRegisterInfo *TRI,
@@ -762,15 +764,13 @@ class VectorType;
     /// IsEligibleForTailCallOptimization - Check whether the call is eligible
     /// for tail call optimization. Targets which want to do tail call
     /// optimization should implement this function.
-    bool IsEligibleForTailCallOptimization(SDValue Callee,
-                                           CallingConv::ID CalleeCC,
-                                           bool isVarArg,
-                                           bool isCalleeStructRet,
-                                           bool isCallerStructRet,
-                                    const SmallVectorImpl<ISD::OutputArg> &Outs,
-                                    const SmallVectorImpl<SDValue> &OutVals,
-                                    const SmallVectorImpl<ISD::InputArg> &Ins,
-                                           SelectionDAG& DAG) const;
+    bool IsEligibleForTailCallOptimization(
+        SDValue Callee, CallingConv::ID CalleeCC, bool isVarArg,
+        bool isCalleeStructRet, bool isCallerStructRet,
+        const SmallVectorImpl<ISD::OutputArg> &Outs,
+        const SmallVectorImpl<SDValue> &OutVals,
+        const SmallVectorImpl<ISD::InputArg> &Ins, SelectionDAG &DAG,
+        const bool isIndirect) const;
 
     bool CanLowerReturn(CallingConv::ID CallConv,
                         MachineFunction &MF, bool isVarArg,

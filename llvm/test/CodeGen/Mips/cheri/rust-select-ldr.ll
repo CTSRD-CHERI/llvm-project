@@ -11,52 +11,48 @@ declare dso_local { i64, i128 } @"_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..
 define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace(200) nounwind {
 ; MIPS-LABEL: _ZN4main4main17hfe98083a4c87500fE:
 ; MIPS:       # %bb.0: # %start
-; MIPS-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:80|160]]
-; MIPS-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
-; MIPS-NEXT:    daddiu $4, $sp, 24
-; MIPS-NEXT:    daddiu $5, $sp, 48
+; MIPS-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; MIPS-NEXT:    sd $ra, 56($sp) # 8-byte Folded Spill
+; MIPS-NEXT:    daddiu $4, $sp, 8
+; MIPS-NEXT:    daddiu $5, $sp, 32
 ; MIPS-NEXT:    jal _ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E
 ; MIPS-NEXT:    nop
-; MIPS-NEXT:    ld $6, 40($sp)
-; MIPS-NEXT:    ld $5, 32($sp)
-; MIPS-NEXT:    ld $4, 24($sp)
+; MIPS-NEXT:    ld $6, 24($sp)
+; MIPS-NEXT:    ld $5, 16($sp)
+; MIPS-NEXT:    ld $4, 8($sp)
 ; MIPS-NEXT:    jal _ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E
 ; MIPS-NEXT:    nop
-; MIPS-NEXT:    sd $2, 16($sp) # 8-byte Folded Spill
-; MIPS-NEXT:    sd $3, 8($sp) # 8-byte Folded Spill
-; MIPS-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
-; MIPS-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
+; MIPS-NEXT:    ld $ra, 56($sp) # 8-byte Folded Reload
+; MIPS-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
 ; MIPS-NEXT:    jr $ra
 ; MIPS-NEXT:    nop
 ;
 ; PURECAP-LABEL: _ZN4main4main17hfe98083a4c87500fE:
 ; PURECAP:       # %bb.0: # %start
-; PURECAP-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:96|192]]
-; PURECAP-NEXT:    csc $c17, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
+; PURECAP-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; PURECAP-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
 ; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
 ; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
 ; PURECAP-NEXT:    cincoffset $c26, $c12, $1
 ; PURECAP-NEXT:    cmove $c1, $c26
-; PURECAP-NEXT:    cincoffset $c4, $c11, 64
+; PURECAP-NEXT:    cincoffset $c4, $c11, 48
 ; PURECAP-NEXT:    csetbounds $c4, $c4, 16
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E)($c1)
-; PURECAP-NEXT:    cincoffset $c3, $c11, 40
+; PURECAP-NEXT:    cincoffset $c3, $c11, 24
 ; PURECAP-NEXT:    cgetnull $c13
-; PURECAP-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; PURECAP-NEXT:    csc $c1, $zero, 0($c11)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:    cld $6, $zero, 56($c11)
-; PURECAP-NEXT:    cld $5, $zero, 48($c11)
-; PURECAP-NEXT:    cld $4, $zero, 40($c11)
-; PURECAP-NEXT:    clc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; PURECAP-NEXT:    cld $6, $zero, 40($c11)
+; PURECAP-NEXT:    cld $5, $zero, 32($c11)
+; PURECAP-NEXT:    cld $4, $zero, 24($c11)
+; PURECAP-NEXT:    clc $c1, $zero, 0($c11)
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E)($c1)
 ; PURECAP-NEXT:    cgetnull $c13
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:    csd $2, $zero, [[@EXPR STACKFRAME_SIZE - 88]]($c11)
-; PURECAP-NEXT:    csd $3, $zero, [[@EXPR STACKFRAME_SIZE - 96]]($c11)
-; PURECAP-NEXT:    clc $c17, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
-; PURECAP-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; PURECAP-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
+; PURECAP-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 

@@ -237,13 +237,13 @@ llvm::Function *CodeGenFunction::createAtExitStub(const VarDecl &VD,
   }
 
   const CGFunctionInfo &FI = CGM.getTypes().arrangeNullaryFunction();
-  llvm::Function *fn = CGM.CreateGlobalInitOrDestructFunction(ty, FnName.str(),
-                                                              FI,
-                                                              VD.getLocation());
+  llvm::Function *fn = CGM.CreateGlobalInitOrDestructFunction(
+      ty, FnName.str(), FI, VD.getLocation());
 
   CodeGenFunction CGF(CGM);
 
-  CGF.StartFunction(&VD, CGM.getContext().VoidTy, fn, FI, FunctionArgList());
+  CGF.StartFunction(GlobalDecl(&VD, DynamicInitKind::AtExit),
+                    CGM.getContext().VoidTy, fn, FI, FunctionArgList());
 
   llvm::CallInst *call = CGF.Builder.CreateCall(dtor, addr);
 
@@ -478,7 +478,8 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
   } else if (auto *IPA = D->getAttr<InitPriorityAttr>()) {
     OrderGlobalInits Key(IPA->getPriority(), PrioritizedCXXGlobalInits.size());
     PrioritizedCXXGlobalInits.push_back(std::make_pair(Key, Fn));
-  } else if (isTemplateInstantiation(D->getTemplateSpecializationKind())) {
+  } else if (isTemplateInstantiation(D->getTemplateSpecializationKind()) ||
+             getContext().GetGVALinkageForVariable(D) == GVA_DiscardableODR) {
     // C++ [basic.start.init]p2:
     //   Definitions of explicitly specialized class template static data
     //   members have ordered initialization. Other class template static data
@@ -492,10 +493,9 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     // minor startup time optimization.  In the MS C++ ABI, there are no guard
     // variables, so this COMDAT key is required for correctness.
     AddGlobalCtor(Fn, 65535, COMDATKey);
-    if (getTarget().getCXXABI().isMicrosoft()) {
+    if (getTarget().getCXXABI().isMicrosoft() && COMDATKey) {
       // In The MS C++, MS add template static data member in the linker
       // drective.
-      assert(COMDATKey);
       addUsedGlobal(COMDATKey);
     }
   } else if (D->hasAttr<SelectAnyAttr>()) {
@@ -591,6 +591,19 @@ CodeGenModule::EmitCXXGlobalInitFunc() {
   CodeGenFunction(*this).GenerateCXXGlobalInitFunc(Fn, CXXGlobalInits);
   AddGlobalCtor(Fn);
 
+  // In OpenCL global init functions must be converted to kernels in order to
+  // be able to launch them from the host.
+  // FIXME: Some more work might be needed to handle destructors correctly.
+  // Current initialization function makes use of function pointers callbacks.
+  // We can't support function pointers especially between host and device.
+  // However it seems global destruction has little meaning without any
+  // dynamic resource allocation on the device and program scope variables are
+  // destroyed by the runtime when program is released.
+  if (getLangOpts().OpenCL) {
+    GenOpenCLArgMetadata(Fn);
+    Fn->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
+  }
+
   CXXGlobalInits.clear();
 }
 
@@ -620,15 +633,21 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
 
   CurEHLocation = D->getBeginLoc();
 
-  StartFunction(GlobalDecl(D), getContext().VoidTy, Fn,
-                getTypes().arrangeNullaryFunction(),
+  StartFunction(GlobalDecl(D, DynamicInitKind::Initializer),
+                getContext().VoidTy, Fn, getTypes().arrangeNullaryFunction(),
                 FunctionArgList(), D->getLocation(),
                 D->getInit()->getExprLoc());
 
   // Use guarded initialization if the global variable is weak. This
   // occurs for, e.g., instantiated static data members and
   // definitions explicitly marked weak.
-  if (Addr->hasWeakLinkage() || Addr->hasLinkOnceLinkage()) {
+  //
+  // Also use guarded initialization for a variable with dynamic TLS and
+  // unordered initialization. (If the initialization is ordered, the ABI
+  // layer will guard the whole-TU initialization for us.)
+  if (Addr->hasWeakLinkage() || Addr->hasLinkOnceLinkage() ||
+      (D->getTLSKind() == VarDecl::TLS_Dynamic &&
+       isTemplateInstantiation(D->getTemplateSpecializationKind()))) {
     EmitCXXGuardedInit(*D, Addr, PerformInit);
   } else {
     EmitCXXGlobalVarDeclInit(*D, Addr, PerformInit);

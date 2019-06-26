@@ -310,10 +310,10 @@
 // AARCH64:#define __FLT16_HAS_QUIET_NAN__ 1
 // AARCH64:#define __FLT16_MANT_DIG__ 11
 // AARCH64:#define __FLT16_MAX_10_EXP__ 4
-// AARCH64:#define __FLT16_MAX_EXP__ 15
+// AARCH64:#define __FLT16_MAX_EXP__ 16
 // AARCH64:#define __FLT16_MAX__ 6.5504e+4F16
-// AARCH64:#define __FLT16_MIN_10_EXP__ (-13)
-// AARCH64:#define __FLT16_MIN_EXP__ (-14)
+// AARCH64:#define __FLT16_MIN_10_EXP__ (-4)
+// AARCH64:#define __FLT16_MIN_EXP__ (-13)
 // AARCH64:#define __FLT16_MIN__ 6.103515625e-5F16
 // AARCH64:#define __FLT_DENORM_MIN__ 1.40129846e-45F
 // AARCH64:#define __FLT_DIG__ 6
@@ -7665,6 +7665,129 @@
 // PPC-AIX:#define __powerpc__ 1
 // PPC-AIX:#define __ppc__ 1
 //
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix7.2.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX72 %s
+//
+// PPC-AIX72:#define _AIX32 1
+// PPC-AIX72:#define _AIX41 1
+// PPC-AIX72:#define _AIX43 1
+// PPC-AIX72:#define _AIX50 1
+// PPC-AIX72:#define _AIX51 1
+// PPC-AIX72:#define _AIX52 1
+// PPC-AIX72:#define _AIX53 1
+// PPC-AIX72:#define _AIX61 1
+// PPC-AIX72:#define _AIX71 1
+// PPC-AIX72:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix7.1.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX71 %s
+//
+// PPC-AIX71:#define _AIX32 1
+// PPC-AIX71:#define _AIX41 1
+// PPC-AIX71:#define _AIX43 1
+// PPC-AIX71:#define _AIX50 1
+// PPC-AIX71:#define _AIX51 1
+// PPC-AIX71:#define _AIX52 1
+// PPC-AIX71:#define _AIX53 1
+// PPC-AIX71:#define _AIX61 1
+// PPC-AIX71:#define _AIX71 1
+// PPC-AIX71-NOT:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix6.1.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX61 %s
+//
+// PPC-AIX61:#define _AIX32 1
+// PPC-AIX61:#define _AIX41 1
+// PPC-AIX61:#define _AIX43 1
+// PPC-AIX61:#define _AIX50 1
+// PPC-AIX61:#define _AIX51 1
+// PPC-AIX61:#define _AIX52 1
+// PPC-AIX61:#define _AIX53 1
+// PPC-AIX61:#define _AIX61 1
+// PPC-AIX61-NOT:#define _AIX71 1
+// PPC-AIX61-NOT:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix5.3.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX53 %s
+// PPC-AIX53:#define _AIX32 1
+// PPC-AIX53:#define _AIX41 1
+// PPC-AIX53:#define _AIX43 1
+// PPC-AIX53:#define _AIX50 1
+// PPC-AIX53:#define _AIX51 1
+// PPC-AIX53:#define _AIX52 1
+// PPC-AIX53:#define _AIX53 1
+// PPC-AIX53-NOT:#define _AIX61 1
+// PPC-AIX53-NOT:#define _AIX71 1
+// PPC-AIX53-NOT:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix5.2.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX52 %s
+// PPC-AIX52:#define _AIX32 1
+// PPC-AIX52:#define _AIX41 1
+// PPC-AIX52:#define _AIX43 1
+// PPC-AIX52:#define _AIX50 1
+// PPC-AIX52:#define _AIX51 1
+// PPC-AIX52:#define _AIX52 1
+// PPC-AIX52-NOT:#define _AIX53 1
+// PPC-AIX52-NOT:#define _AIX61 1
+// PPC-AIX52-NOT:#define _AIX71 1
+// PPC-AIX52-NOT:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix5.1.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX51 %s
+// PPC-AIX51:#define _AIX32 1
+// PPC-AIX51:#define _AIX41 1
+// PPC-AIX51:#define _AIX43 1
+// PPC-AIX51:#define _AIX50 1
+// PPC-AIX51:#define _AIX51 1
+// PPC-AIX51-NOT:#define _AIX52 1
+// PPC-AIX51-NOT:#define _AIX53 1
+// PPC-AIX51-NOT:#define _AIX61 1
+// PPC-AIX51-NOT:#define _AIX71 1
+// PPC-AIX51-NOT:#define _AIX72 1
+//
+//RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix5.0.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX50 %s
+// PPC-AIX50:#define _AIX32 1
+// PPC-AIX50:#define _AIX41 1
+// PPC-AIX50:#define _AIX43 1
+// PPC-AIX50:#define _AIX50 1
+// PPC-AIX50-NOT:#define _AIX51 1
+// PPC-AIX50-NOT:#define _AIX52 1
+// PPC-AIX50-NOT:#define _AIX53 1
+// PPC-AIX50-NOT:#define _AIX61 1
+// PPC-AIX50-NOT:#define _AIX71 1
+// PPC-AIX50-NOT:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix4.3.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX43 %s
+// PPC-AIX43:#define _AIX32 1
+// PPC-AIX43:#define _AIX41 1
+// PPC-AIX43:#define _AIX43 1
+// PPC-AIX43-NOT:#define _AIX50 1
+// PPC-AIX43-NOT:#define _AIX51 1
+// PPC-AIX43-NOT:#define _AIX52 1
+// PPC-AIX43-NOT:#define _AIX53 1
+// PPC-AIX43-NOT:#define _AIX61 1
+// PPC-AIX43-NOT:#define _AIX71 1
+// PPC-AIX43-NOT:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix4.1.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX41 %s
+// PPC-AIX41:#define _AIX32 1
+// PPC-AIX41:#define _AIX41 1
+// PPC-AIX41-NOT:#define _AIX43 1
+// PPC-AIX41-NOT:#define _AIX50 1
+// PPC-AIX41-NOT:#define _AIX51 1
+// PPC-AIX41-NOT:#define _AIX52 1
+// PPC-AIX41-NOT:#define _AIX53 1
+// PPC-AIX41-NOT:#define _AIX61 1
+// PPC-AIX41-NOT:#define _AIX71 1
+// PPC-AIX41-NOT:#define _AIX72 1
+//
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc-ibm-aix3.2.0.0 < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX32 %s
+// PPC-AIX32:#define _AIX32 1
+// PPC-AIX32-NOT:#define _AIX41 1
+// PPC-AIX32-NOT:#define _AIX43 1
+// PPC-AIX32-NOT:#define _AIX50 1
+// PPC-AIX32-NOT:#define _AIX51 1
+// PPC-AIX32-NOT:#define _AIX52 1
+// PPC-AIX32-NOT:#define _AIX53 1
+// PPC-AIX32-NOT:#define _AIX61 1
+// PPC-AIX32-NOT:#define _AIX71 1
+// PPC-AIX32-NOT:#define _AIX72 1
+//
 // RUN: %clang_cc1 -x c++ -E -dM -ffreestanding -triple=powerpc-ibm-aix7.1.0.0 -fno-signed-char < /dev/null | FileCheck -match-full-lines -check-prefix PPC-AIX-CXX %s
 //
 // PPC-AIX-CXX:#define _WCHAR_T 1
@@ -10001,10 +10124,10 @@
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=wasm64-unknown-unknown \
 // RUN:   < /dev/null \
 // RUN:   | FileCheck -match-full-lines -check-prefixes=WEBASSEMBLY,WEBASSEMBLY64 %s
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=wasm32-unknown-wasi \
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=wasm32-wasi \
 // RUN:   < /dev/null \
 // RUN:   | FileCheck -match-full-lines -check-prefixes=WEBASSEMBLY,WEBASSEMBLY32,WEBASSEMBLY-WASI %s
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=wasm64-unknown-wasi \
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=wasm64-wasi \
 // RUN:   < /dev/null \
 // RUN:   | FileCheck -match-full-lines -check-prefixes=WEBASSEMBLY,WEBASSEMBLY64,WEBASSEMBLY-WASI %s
 //

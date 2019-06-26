@@ -12,20 +12,22 @@ add_lldb_library(lldbSymbol
   ClangExternalASTSourceCallbacks.cpp
   ClangExternalASTSourceCommon.cpp
   ClangUtil.cpp
+  CompactUnwindInfo.cpp
+  CompileUnit.cpp
   CompilerDecl.cpp
   CompilerDeclContext.cpp
   CompilerType.cpp
-  CompileUnit.cpp
-  CompactUnwindInfo.cpp
+  CxxModuleHandler.cpp
+  DWARFCallFrameInfo.cpp
   DebugMacros.cpp
   Declaration.cpp
-  DWARFCallFrameInfo.cpp
-  Function.cpp
   FuncUnwinders.cpp
+  Function.cpp
   LineEntry.cpp
   LineTable.cpp
   LocateSymbolFile.cpp
   ObjectFile.cpp
+  PostfixExpression.cpp
   Symbol.cpp
   SymbolContext.cpp
   SymbolFile.cpp
@@ -55,7 +57,6 @@ add_lldb_library(lldbSymbol
     lldbPluginExpressionParserClang
     lldbPluginSymbolFileDWARF
     lldbPluginSymbolFilePDB
-    lldbPluginCPlusPlusLanguage
     lldbPluginObjCLanguage
 
   LINK_COMPONENTS

@@ -841,8 +841,8 @@ public:
 
   /// Create a new FileID that represents the specified memory buffer.
   ///
-  /// This does no caching of the buffer and takes ownership of the
-  /// MemoryBuffer, so only pass a MemoryBuffer to this once.
+  /// This does not take ownership of the MemoryBuffer. The memory buffer must
+  /// outlive the SourceManager.
   FileID createFileID(UnownedTag, const llvm::MemoryBuffer *Buffer,
                       SrcMgr::CharacteristicKind FileCharacter = SrcMgr::C_User,
                       int LoadedID = 0, unsigned LoadedOffset = 0,
@@ -1466,8 +1466,13 @@ public:
 
     // This happens when the macro is the result of a paste, in that case
     // its spelling is the scratch memory, so we take the parent context.
-    if (isWrittenInScratchSpace(getSpellingLoc(loc)))
-      return isInSystemHeader(getSpellingLoc(getImmediateMacroCallerLoc(loc)));
+    // There can be several level of token pasting.
+    if (isWrittenInScratchSpace(getSpellingLoc(loc))) {
+      do {
+        loc = getImmediateMacroCallerLoc(loc);
+      } while (isWrittenInScratchSpace(getSpellingLoc(loc)));
+      return isInSystemMacro(loc);
+    }
 
     return isInSystemHeader(getSpellingLoc(loc));
   }

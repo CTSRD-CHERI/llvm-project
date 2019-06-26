@@ -133,14 +133,6 @@ private:
 
   void processFunctionAfterISel(MachineFunction &MF) override;
 
-  // Insert instructions to initialize the global base register in the
-  // first MBB of the function.
-  void initGlobalBaseReg(MachineFunction &MF);
-
-  // Insert instructions to initialize the capability global base register in
-  // the first MBB of the function.
-  void initCapGlobalBaseReg(MachineFunction &MF);
-
   bool SelectInlineAsmMemoryOperand(const SDValue &Op,
                                     unsigned ConstraintID,
                                     std::vector<SDValue> &OutOps) override;

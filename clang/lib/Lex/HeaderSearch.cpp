@@ -869,7 +869,10 @@ const FileEntry *HeaderSearch::LookupFile(
         *IsMapped = true;
     }
     if (IsFrameworkFound)
-      *IsFrameworkFound |= IsFrameworkFoundInDir;
+      // Because we keep a filename remapped for subsequent search directory
+      // lookups, ignore IsFrameworkFoundInDir after the first remapping and not
+      // just for remapping in a current search directory.
+      *IsFrameworkFound |= (IsFrameworkFoundInDir && !CacheLookup.MappedName);
     if (!FE) continue;
 
     CurDir = &SearchDirs[i];
@@ -1685,11 +1688,10 @@ std::string HeaderSearch::suggestPathToFileForDiagnostics(
 
     StringRef Dir = SearchDirs[I].getDir()->getName();
     llvm::SmallString<32> DirPath(Dir.begin(), Dir.end());
-    if (!WorkingDir.empty() && !path::is_absolute(Dir)) {
+    if (!WorkingDir.empty() && !path::is_absolute(Dir))
       fs::make_absolute(WorkingDir, DirPath);
-      path::remove_dots(DirPath, /*remove_dot_dot=*/true);
-      Dir = DirPath;
-    }
+    path::remove_dots(DirPath, /*remove_dot_dot=*/true);
+    Dir = DirPath;
     for (auto NI = path::begin(File), NE = path::end(File),
               DI = path::begin(Dir), DE = path::end(Dir);
          /*termination condition in loop*/; ++NI, ++DI) {
@@ -1713,6 +1715,11 @@ std::string HeaderSearch::suggestPathToFileForDiagnostics(
         break;
       }
 
+      // Consider all path separators equal.
+      if (NI->size() == 1 && DI->size() == 1 &&
+          path::is_separator(NI->front()) && path::is_separator(DI->front()))
+        continue;
+
       if (*NI != *DI)
         break;
     }
@@ -1720,5 +1727,5 @@ std::string HeaderSearch::suggestPathToFileForDiagnostics(
 
   if (IsSystem)
     *IsSystem = BestPrefixLength ? BestSearchDir >= SystemDirIdx : false;
-  return File.drop_front(BestPrefixLength);
+  return path::convert_to_slash(File.drop_front(BestPrefixLength));
 }

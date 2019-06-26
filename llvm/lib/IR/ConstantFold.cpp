@@ -268,19 +268,20 @@ static Constant *ExtractConstantBytes(Constant *C, unsigned ByteStart,
     ConstantInt *Amt = dyn_cast<ConstantInt>(CE->getOperand(1));
     if (!Amt)
       return nullptr;
-    unsigned ShAmt = Amt->getZExtValue();
+    APInt ShAmt = Amt->getValue();
     // Cannot analyze non-byte shifts.
     if ((ShAmt & 7) != 0)
       return nullptr;
-    ShAmt >>= 3;
+    ShAmt.lshrInPlace(3);
 
     // If the extract is known to be all zeros, return zero.
-    if (ByteStart >= CSize-ShAmt)
-      return Constant::getNullValue(IntegerType::get(CE->getContext(),
-                                                     ByteSize*8));
+    if (ShAmt.uge(CSize - ByteStart))
+      return Constant::getNullValue(
+          IntegerType::get(CE->getContext(), ByteSize * 8));
     // If the extract is known to be fully in the input, extract it.
-    if (ByteStart+ByteSize+ShAmt <= CSize)
-      return ExtractConstantBytes(CE->getOperand(0), ByteStart+ShAmt, ByteSize);
+    if (ShAmt.ule(CSize - (ByteStart + ByteSize)))
+      return ExtractConstantBytes(CE->getOperand(0),
+                                  ByteStart + ShAmt.getZExtValue(), ByteSize);
 
     // TODO: Handle the 'partially zero' case.
     return nullptr;
@@ -290,19 +291,20 @@ static Constant *ExtractConstantBytes(Constant *C, unsigned ByteStart,
     ConstantInt *Amt = dyn_cast<ConstantInt>(CE->getOperand(1));
     if (!Amt)
       return nullptr;
-    unsigned ShAmt = Amt->getZExtValue();
+    APInt ShAmt = Amt->getValue();
     // Cannot analyze non-byte shifts.
     if ((ShAmt & 7) != 0)
       return nullptr;
-    ShAmt >>= 3;
+    ShAmt.lshrInPlace(3);
 
     // If the extract is known to be all zeros, return zero.
-    if (ByteStart+ByteSize <= ShAmt)
-      return Constant::getNullValue(IntegerType::get(CE->getContext(),
-                                                     ByteSize*8));
+    if (ShAmt.uge(ByteStart + ByteSize))
+      return Constant::getNullValue(
+          IntegerType::get(CE->getContext(), ByteSize * 8));
     // If the extract is known to be fully in the input, extract it.
-    if (ByteStart >= ShAmt)
-      return ExtractConstantBytes(CE->getOperand(0), ByteStart-ShAmt, ByteSize);
+    if (ShAmt.ule(ByteStart))
+      return ExtractConstantBytes(CE->getOperand(0),
+                                  ByteStart - ShAmt.getZExtValue(), ByteSize);
 
     // TODO: Handle the 'partially zero' case.
     return nullptr;
@@ -914,6 +916,52 @@ Constant *llvm::ConstantFoldInsertValueInstruction(Constant *Agg,
   if (ArrayType *AT = dyn_cast<ArrayType>(Agg->getType()))
     return ConstantArray::get(AT, Result);
   return ConstantVector::get(Result);
+}
+
+Constant *llvm::ConstantFoldUnaryInstruction(unsigned Opcode, Constant *C) {
+  assert(Instruction::isUnaryOp(Opcode) && "Non-unary instruction detected");
+
+  // Handle scalar UndefValue. Vectors are always evaluated per element.
+  bool HasScalarUndef = !C->getType()->isVectorTy() && isa<UndefValue>(C);
+
+  if (HasScalarUndef) {
+    switch (static_cast<Instruction::UnaryOps>(Opcode)) {
+    case Instruction::FNeg:
+      return C; // -undef -> undef
+    case Instruction::UnaryOpsEnd:
+      llvm_unreachable("Invalid UnaryOp");
+    }
+  }
+
+  // Constant should not be UndefValue, unless these are vector constants.
+  assert(!HasScalarUndef && "Unexpected UndefValue");
+  // We only have FP UnaryOps right now.
+  assert(!isa<ConstantInt>(C) && "Unexpected Integer UnaryOp");
+
+  if (ConstantFP *CFP = dyn_cast<ConstantFP>(C)) {
+    const APFloat &CV = CFP->getValueAPF();
+    switch (Opcode) {
+    default:
+      break;
+    case Instruction::FNeg:
+      return ConstantFP::get(C->getContext(), neg(CV));
+    }
+  } else if (VectorType *VTy = dyn_cast<VectorType>(C->getType())) {
+    // Fold each element and create a vector constant from those constants.
+    SmallVector<Constant*, 16> Result;
+    Type *Ty = IntegerType::get(VTy->getContext(), 32);
+    for (unsigned i = 0, e = VTy->getNumElements(); i != e; ++i) {
+      Constant *ExtractIdx = ConstantInt::get(Ty, i);
+      Constant *Elt = ConstantExpr::getExtractElement(C, ExtractIdx);
+
+      Result.push_back(ConstantExpr::get(Opcode, Elt));
+    }
+
+    return ConstantVector::get(Result);
+  }
+
+  // We don't know how to fold this.
+  return nullptr;
 }
 
 Constant *llvm::ConstantFoldBinaryInstruction(unsigned Opcode, Constant *C1,
@@ -1572,7 +1620,7 @@ static ICmpInst::Predicate evaluateICmpRelation(Constant *V1, Constant *V2,
     case Instruction::ZExt:
     case Instruction::SExt:
       // We can't evaluate floating point casts or truncations.
-      if (CE1Op0->getType()->isFloatingPointTy())
+      if (CE1Op0->getType()->isFPOrFPVectorTy())
         break;
 
       // If the cast is not actually changing bits, and the second operand is a

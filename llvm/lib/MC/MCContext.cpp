@@ -32,6 +32,7 @@
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCSymbolMachO.h"
 #include "llvm/MC/MCSymbolWasm.h"
+#include "llvm/MC/MCSymbolXCOFF.h"
 #include "llvm/MC/SectionKind.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -162,8 +163,7 @@ MCSymbol *MCContext::createSymbolImpl(const StringMapEntry<bool> *Name,
     case MCObjectFileInfo::IsWasm:
       return new (Name, *this) MCSymbolWasm(Name, IsTemporary);
     case MCObjectFileInfo::IsXCOFF:
-      // TODO: Need to implement class MCSymbolXCOFF.
-      break;
+      return new (Name, *this) MCSymbolXCOFF(Name, IsTemporary);
     }
   }
   return new (Name, *this) MCSymbol(MCSymbol::SymbolKindUnset, Name,
@@ -582,10 +582,21 @@ void MCContext::setGenDwarfRootFile(StringRef InputFileName, StringRef Buffer) {
   }
   // Canonicalize the root filename. It cannot be empty, and should not
   // repeat the compilation dir.
-  StringRef FileName =
-      !getMainFileName().empty() ? StringRef(getMainFileName()) : InputFileName;
-  if (FileName.empty() || FileName == "-")
-    FileName = "<stdin>";
+  // The MCContext ctor initializes MainFileName to the name associated with
+  // the SrcMgr's main file ID, which might be the same as InputFileName (and
+  // possibly include directory components).
+  // Or, MainFileName might have been overridden by a -main-file-name option,
+  // which is supposed to be just a base filename with no directory component.
+  // So, if the InputFileName and MainFileName are not equal, assume
+  // MainFileName is a substitute basename and replace the last component.
+  SmallString<1024> FileNameBuf = InputFileName;
+  if (FileNameBuf.empty() || FileNameBuf == "-")
+    FileNameBuf = "<stdin>";
+  if (!getMainFileName().empty() && FileNameBuf != getMainFileName()) {
+    llvm::sys::path::remove_filename(FileNameBuf);
+    llvm::sys::path::append(FileNameBuf, getMainFileName());
+  }
+  StringRef FileName = FileNameBuf;
   if (FileName.consume_front(getCompilationDir()))
     if (llvm::sys::path::is_separator(FileName.front()))
       FileName = FileName.drop_front();
@@ -605,7 +616,8 @@ Expected<unsigned> MCContext::getDwarfFile(StringRef Directory,
                                            Optional<StringRef> Source,
                                            unsigned CUID) {
   MCDwarfLineTable &Table = MCDwarfLineTablesCUMap[CUID];
-  return Table.tryGetFile(Directory, FileName, Checksum, Source, FileNumber);
+  return Table.tryGetFile(Directory, FileName, Checksum, Source, DwarfVersion,
+                          FileNumber);
 }
 
 /// isValidDwarfFileNumber - takes a dwarf file number and returns true if it
@@ -613,7 +625,7 @@ Expected<unsigned> MCContext::getDwarfFile(StringRef Directory,
 bool MCContext::isValidDwarfFileNumber(unsigned FileNumber, unsigned CUID) {
   const MCDwarfLineTable &LineTable = getMCDwarfLineTable(CUID);
   if (FileNumber == 0)
-    return getDwarfVersion() >= 5 && LineTable.hasRootFile();
+    return getDwarfVersion() >= 5;
   if (FileNumber >= LineTable.getMCDwarfFiles().size())
     return false;
 

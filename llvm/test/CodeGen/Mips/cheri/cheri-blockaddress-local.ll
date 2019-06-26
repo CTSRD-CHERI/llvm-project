@@ -28,8 +28,8 @@ indirectgoto:                                     ; preds = %entry
 
 ; CHECK-LABEL: addrof_label_in_local:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[$CAP_SIZE]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[$CAP_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE]]
+; CHECK-NEXT:    .cfi_def_cfa_offset [[#CAP_SIZE]]
 ; Generate a pc-relative blockaddress:
 ; CHECK-NEXT:    cgetpcc $c1
 ; CHECK-NEXT:    lui $1, %pcrel_hi(.Ltmp0+4)
@@ -41,10 +41,10 @@ indirectgoto:                                     ; preds = %entry
 ; CHECK-NEXT:  .LBB0_1: # %label2
 ; CHECK-NEXT:    addiu $2, $zero, 2
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[$CAP_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE]]
 
 ; DUMP-LABEL: addrof_label_in_local:
-; DUMP-NEXT:        0:	4a 6b 5f {{f|e}}0 	cincoffset	$c11, $c11, -[[$CAP_SIZE]]
+; DUMP-NEXT:        0:	4a 6b 5f {{f|e}}0 	cincoffset	$c11, $c11, -[[#CAP_SIZE]]
 ; DUMP-NEXT:        4:	48 01 07 ff 	cgetpcc	$c1
 ; DUMP-NEXT:        8:	3c 01 00 00 	lui	$1, 0
 ; DUMP-NEXT:        c:	64 21 00 18 	daddiu	$1, $1, [[PCREL_LOWER:24]]
@@ -52,6 +52,6 @@ indirectgoto:                                     ; preds = %entry
 ; DUMP-NEXT:       14:	48 01 1f ff 	cjr	$c1
 ; DUMP-NEXT:       18:	f8 2b 00 00 	csc	$c1, $zero, 0($c11)
 ; Check that the jump target address is correct
-; DUMP-NEXT:       [[@EXPR tolower(hex(0x4 + PCREL_LOWER))]]:	24 02 00 02 	addiu	$2, $zero, 2
+; DUMP-NEXT:       1c:	24 02 00 02 	addiu	$2, $zero, 2
 ; DUMP-NEXT:       20:	48 11 1f ff 	cjr	$c17
-; DUMP-NEXT:       24:	4a 6b 58 {{1|2}}0 	cincoffset	$c11, $c11, [[$CAP_SIZE]]
+; DUMP-NEXT:       24:	4a 6b 58 {{1|2}}0 	cincoffset	$c11, $c11, [[#CAP_SIZE]]

@@ -15,11 +15,11 @@
 #include <map>
 #include <string>
 
-#include "Plugins/ExpressionParser/Clang/ClangPersistentVariables.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Expression/DiagnosticManager.h"
+#include "lldb/Expression/ExpressionVariable.h"
 #include "lldb/Expression/IRExecutionUnit.h"
 #include "lldb/Expression/IRInterpreter.h"
 #include "lldb/Expression/Materializer.h"
@@ -174,7 +174,7 @@ lldb::ExpressionResults UserExpression::Evaluate(
 
   Process *process = exe_ctx.GetProcessPtr();
 
-  if (process == NULL || process->GetState() != lldb::eStateStopped) {
+  if (process == nullptr || process->GetState() != lldb::eStateStopped) {
     if (execution_policy == eExecutionPolicyAlways) {
       if (log)
         log->Printf("== [UserExpression::Evaluate] Expression may not run, but "
@@ -186,7 +186,7 @@ lldb::ExpressionResults UserExpression::Evaluate(
     }
   }
 
-  if (process == NULL || !process->CanJIT())
+  if (process == nullptr || !process->CanJIT())
     execution_policy = eExecutionPolicyNever;
 
   // We need to set the expression execution thread here, turns out parse can
@@ -375,7 +375,7 @@ lldb::ExpressionResults UserExpression::Evaluate(
     return lldb::eExpressionInterrupted;
   }
 
-  if (result_valobj_sp.get() == NULL) {
+  if (result_valobj_sp.get() == nullptr) {
     result_valobj_sp = ValueObjectConstResult::Create(
         exe_ctx.GetBestExecutionContextScope(), error);
   }

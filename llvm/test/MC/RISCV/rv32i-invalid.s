@@ -40,7 +40,7 @@ bgeu t0, t1, -13 # CHECK: :[[@LINE]]:14: error: immediate must be a multiple of 
 ## uimm20
 lui a0, -1 # CHECK: :[[@LINE]]:9: error: operand must be a symbol with %hi/%tprel_hi modifier or an integer in the range [0, 1048575]
 lui s0, 1048576 # CHECK: :[[@LINE]]:9: error: operand must be a symbol with %hi/%tprel_hi modifier or an integer in the range [0, 1048575]
-auipc zero, -0xf # CHECK: :[[@LINE]]:13: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi modifier or an integer in the range [0, 1048575]
+auipc zero, -0xf # CHECK: :[[@LINE]]:13: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi/%tls_ie_pcrel_hi/%tls_gd_pcrel_hi modifier or an integer in the range [0, 1048575]
 
 ## simm21_lsb0
 jal gp, -1048578 # CHECK: :[[@LINE]]:9: error: immediate must be a multiple of 2 bytes in the range [-1048576, 1048574]
@@ -105,7 +105,7 @@ bgeu t0, t1, %pcrel_lo(d) # CHECK: :[[@LINE]]:14: error: immediate must be a mul
 
 ## uimm20
 lui a0, %lo(1) # CHECK: :[[@LINE]]:9: error: operand must be a symbol with %hi/%tprel_hi modifier or an integer in the range [0, 1048575]
-auipc a1, %lo(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi modifier or an integer in the range [0, 1048575]
+auipc a1, %lo(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi/%tls_ie_pcrel_hi/%tls_gd_pcrel_hi modifier or an integer in the range [0, 1048575]
 
 ## simm21_lsb0
 jal gp, %lo(1) # CHECK: :[[@LINE]]:9: error: immediate must be a multiple of 2 bytes in the range [-1048576, 1048574]
@@ -125,14 +125,15 @@ lui a0, %lo(foo) # CHECK: :[[@LINE]]:9: error: operand must be a symbol with %hi
 lui a0, %pcrel_lo(foo) # CHECK: :[[@LINE]]:9: error: operand must be a symbol with %hi/%tprel_hi modifier or an integer in the range [0, 1048575]
 lui a0, %pcrel_hi(foo) # CHECK: :[[@LINE]]:9: error: operand must be a symbol with %hi/%tprel_hi modifier or an integer in the range [0, 1048575]
 
-auipc a0, foo # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi modifier or an integer in the range [0, 1048575]
-auipc a0, %lo(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi modifier or an integer in the range [0, 1048575]
-auipc a0, %hi(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi modifier or an integer in the range [0, 1048575]
-auipc a0, %pcrel_lo(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi modifier or an integer in the range [0, 1048575]
+auipc a0, foo # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi/%tls_ie_pcrel_hi/%tls_gd_pcrel_hi modifier or an integer in the range [0, 1048575]
+auipc a0, %lo(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi/%tls_ie_pcrel_hi/%tls_gd_pcrel_hi modifier or an integer in the range [0, 1048575]
+auipc a0, %hi(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi/%tls_ie_pcrel_hi/%tls_gd_pcrel_hi modifier or an integer in the range [0, 1048575]
+auipc a0, %pcrel_lo(foo) # CHECK: :[[@LINE]]:11: error: operand must be a symbol with a %pcrel_hi/%got_pcrel_hi/%tls_ie_pcrel_hi/%tls_gd_pcrel_hi modifier or an integer in the range [0, 1048575]
 
 # TP-relative symbol names require a %tprel_add modifier.
 add a0, a0, tp, zero # CHECK: :[[@LINE]]:17: error: expected '%' for operand modifier
 add a0, a0, tp, %hi(foo) # CHECK: :[[@LINE]]:17: error: operand must be a symbol with %tprel_add modifier
+add a0, tp, a0, %tprel_add(foo) # CHECK: :[[@LINE]]:13: error: the second input operand must be tp/x4 when using %tprel_add modifier
 
 # Unrecognized operand modifier
 addi t0, sp, %modifer(255) # CHECK: :[[@LINE]]:15: error: unrecognized operand modifier

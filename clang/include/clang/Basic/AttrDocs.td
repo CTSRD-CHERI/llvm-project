@@ -1085,6 +1085,25 @@ them.
     }];
 }
 
+def ObjCClassStubDocs : Documentation {
+    let Category = DocCatType;
+    let Content = [{
+This attribute specifies that the Objective-C class to which it applies is
+instantiated at runtime.
+
+Unlike ``__attribute__((objc_runtime_visible))``, a class having this attribute
+still has a "class stub" that is visible to the linker. This allows categories
+to be defined. Static message sends with the class as a receiver use a special
+access pattern to ensure the class is lazily instantiated from the class stub.
+
+Classes annotated with this attribute cannot be subclassed and cannot have
+implementations defined for them. This attribute is intended for use in
+Swift-generated headers for classes defined in Swift.
+
+Adding or removing this attribute to a class is an ABI-breaking change.
+    }];
+}
+
 def ObjCBoxableDocs : Documentation {
     let Category = DocCatDecl;
     let Content = [{
@@ -3711,14 +3730,14 @@ ensure that this class cannot be subclassed.
 def ObjCNonLazyClassDocs : Documentation {
   let Category = DocCatDecl;
   let Content = [{
-This attribute can be added to an Objective-C ``@interface`` declaration to
-add the class to the list of non-lazily initialized classes. A non-lazy class
-will be initialized eagerly when the Objective-C runtime is loaded.  This is
-required for certain system classes which have instances allocated in
-non-standard ways, such as the classes for blocks and constant strings.  Adding
-this attribute is essentially equivalent to providing a trivial `+load` method 
-but avoids the (fairly small) load-time overheads associated with defining and
-calling such a method.
+This attribute can be added to an Objective-C ``@interface`` or
+``@implementation`` declaration to add the class to the list of non-lazily
+initialized classes. A non-lazy class will be initialized eagerly when the
+Objective-C runtime is loaded. This is required for certain system classes which
+have instances allocated in non-standard ways, such as the classes for blocks
+and constant strings. Adding this attribute is essentially equivalent to
+providing a trivial `+load` method but avoids the (fairly small) load-time
+overheads associated with defining and calling such a method.
   }];
 }
 
@@ -3880,6 +3899,39 @@ The ``no_destroy`` attribute specifies that a variable with static or thread
 storage duration shouldn't have its exit-time destructor run. Annotating every
 static and thread duration variable with this attribute is equivalent to
 invoking clang with -fno-c++-static-destructors.
+
+If a variable is declared with this attribute, clang doesn't access check or
+generate the type's destructor. If you have a type that you only want to be
+annotated with ``no_destroy``, you can therefore declare the destructor private:
+
+.. code-block:: c++
+
+  struct only_no_destroy {
+    only_no_destroy();
+  private:
+    ~only_no_destroy();
+  };
+
+  [[clang::no_destroy]] only_no_destroy global; // fine!
+
+Note that destructors are still required for subobjects of aggregates annotated
+with this attribute. This is because previously constructed subobjects need to
+be destroyed if an exception gets thrown before the initialization of the
+complete object is complete. For instance:
+
+.. code-block::c++
+
+  void f() {
+    try {
+      [[clang::no_destroy]]
+      static only_no_destroy array[10]; // error, only_no_destroy has a private destructor.
+    } catch (...) {
+      // Handle the error
+    }
+  }
+
+Here, if the construction of `array[9]` fails with an exception, `array[0..8]`
+will be destroyed, so the element's destructor needs to be accessible.
   }];
 }
 

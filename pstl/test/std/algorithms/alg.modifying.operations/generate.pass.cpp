@@ -9,15 +9,9 @@
 
 #include "support/pstl_test_config.h"
 
-#ifdef PSTL_STANDALONE_TESTS
 #include <atomic>
-
-#include "pstl/execution"
-#include "pstl/algorithm"
-#else
 #include <execution>
 #include <algorithm>
-#endif // PSTL_STANDALONE_TESTS
 
 #include "support/utils.h"
 
@@ -52,7 +46,8 @@ struct test_generate
         {
             Generator_count<T> g;
             generate(exec, first, last, g);
-            EXPECT_TRUE(std::count(first, last, g.default_value()) == n, "generate wrong result for generate");
+            Size count = std::count(first, last, g.default_value());
+            EXPECT_TRUE(count == n, "generate wrong result for generate");
             std::fill(first, last, T(0));
         }
 
@@ -60,7 +55,8 @@ struct test_generate
             Generator_count<T> g;
             const auto m = n / 2;
             auto last = generate_n(exec, first, m, g);
-            EXPECT_TRUE(std::count(first, last, g.default_value()) == m && last == std::next(first, m),
+            Size count = std::count(first, last, g.default_value());
+            EXPECT_TRUE(count == m && last == std::next(first, m),
                         "generate_n wrong result for generate_n");
             std::fill(first, last, T(0));
         }

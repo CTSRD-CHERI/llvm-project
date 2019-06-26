@@ -33,15 +33,18 @@
 #ifndef HEADER
 #define HEADER
 
-typedef void **omp_allocator_handle_t;
-extern const omp_allocator_handle_t omp_default_mem_alloc;
-extern const omp_allocator_handle_t omp_large_cap_mem_alloc;
-extern const omp_allocator_handle_t omp_const_mem_alloc;
-extern const omp_allocator_handle_t omp_high_bw_mem_alloc;
-extern const omp_allocator_handle_t omp_low_lat_mem_alloc;
-extern const omp_allocator_handle_t omp_cgroup_mem_alloc;
-extern const omp_allocator_handle_t omp_pteam_mem_alloc;
-extern const omp_allocator_handle_t omp_thread_mem_alloc;
+enum omp_allocator_handle_t {
+  omp_null_allocator = 0,
+  omp_default_mem_alloc = 1,
+  omp_large_cap_mem_alloc = 2,
+  omp_const_mem_alloc = 3,
+  omp_high_bw_mem_alloc = 4,
+  omp_low_lat_mem_alloc = 5,
+  omp_cgroup_mem_alloc = 6,
+  omp_pteam_mem_alloc = 7,
+  omp_thread_mem_alloc = 8,
+  KMP_ALLOCATOR_MAX_HANDLE = __UINTPTR_MAX__
+};
 
 struct St {
   int a, b;
@@ -177,10 +180,10 @@ int main() {
     // LAMBDA: [[B_PRIV:%.+]] = alloca i{{[0-9]+}},
     // LAMBDA: [[C_PRIV:%.+]] = alloca i{{[0-9]+}},
     // LAMBDA-64: [[A_CONV:%.+]] = bitcast i64* [[A_PRIV]] to i32*
-    // LAMBDA-64: store i32* [[A_CONV]], i32** [[REFA:%.+]],
-    // LAMBDA-32: store i32* [[A_PRIV]], i32** [[REFA:%.+]],
     // LAMBDA-64: [[B_CONV:%.+]] = bitcast i64* [[B_PRIV]] to i32*
     // LAMBDA-64: [[C_CONV:%.+]] = bitcast i64* [[C_PRIV]] to i32*
+    // LAMBDA-64: store i32* [[A_CONV]], i32** [[REFA:%.+]],
+    // LAMBDA-32: store i32* [[A_PRIV]], i32** [[REFA:%.+]],
     // LAMBDA-64: store i32* [[C_CONV]], i32** [[REFC:%.+]],
     // LAMBDA-32: store i32* [[C_PRIV]], i32** [[REFC:%.+]],
     // LAMBDA-NEXT: [[A_PRIV:%.+]] = load i{{[0-9]+}}*, i{{[0-9]+}}** [[REFA]],
@@ -300,10 +303,10 @@ int main() {
 // BLOCKS: [[B_PRIV:%.+]] = alloca i{{[0-9]+}},
 // BLOCKS: [[C_PRIV:%.+]] = alloca i{{[0-9]+}},
 // BLOCKS-64: [[A_CONV:%.+]] = bitcast i64* [[A_PRIV]] to i32*
-// BLOCKS-64: store i32* [[A_CONV]], i32** [[REFA:%.+]],
-// BLOCKS-32: store i32* [[A_PRIV]], i32** [[REFA:%.+]],
 // BLOCKS-64: [[B_CONV:%.+]] = bitcast i64* [[B_PRIV]] to i32*
 // BLOCKS-64: [[C_CONV:%.+]] = bitcast i64* [[C_PRIV]] to i32*
+// BLOCKS-64: store i32* [[A_CONV]], i32** [[REFA:%.+]],
+// BLOCKS-32: store i32* [[A_PRIV]], i32** [[REFA:%.+]],
 // BLOCKS-64: store i32* [[C_CONV]], i32** [[REFC:%.+]],
 // BLOCKS-32: store i32* [[C_PRIV]], i32** [[REFC:%.+]],
 // BLOCKS-NEXT: [[A_PRIV:%.+]] = load i{{[0-9]+}}*, i{{[0-9]+}}** [[REFA]],
@@ -332,8 +335,9 @@ int main() {
     s_arr[0] = var;
     sivar = 2;
   }
-#pragma omp parallel allocate(omp_default_mem_alloc: t_var) firstprivate(t_var)
-  {}
+  const int a = 0;
+#pragma omp parallel allocate(omp_default_mem_alloc: t_var) firstprivate(t_var, a)
+  { t_var = a; }
   return tmain<int>();
 #endif
 }
@@ -343,6 +347,7 @@ int main() {
 // CHECK: [[T_VAR:%.+]] = alloca i32,
 // CHECK: [[T_VARCAST:%.+]] = alloca [[iz:i64|i32]],
 // CHECK: [[SIVARCAST:%.+]] = alloca [[iz]],
+// CHECK: [[A:%.+]] = alloca i32,
 // CHECK: [[T_VARCAST1:%.+]] = alloca [[iz:i64|i32]],
 // CHECK: call {{.*}} [[S_FLOAT_TY_DEF_CONSTR:@.+]]([[S_FLOAT_TY]]* [[TEST]])
 // CHECK: [[T_VARVAL:%.+]] = load i32, i32* [[T_VAR]],
@@ -412,13 +417,13 @@ int main() {
 // CHECK-64: [[BC:%.+]] = bitcast [[iz]]* [[T_VAR_ADDR]] to i32*
 // CHECK:    [[GTID_PTR:%.+]] = load i32*, i32** [[GTID_ADDR]],
 // CHECK:    [[GTID:%.+]] = load i32, i32* [[GTID_PTR]],
-// CHECK:    [[ALLOCATOR:%.+]] = load i8**, i8*** @omp_default_mem_alloc,
-// CHECK:    [[T_VAR_VOID_PTR:%.+]] = call i8* @__kmpc_alloc(i32 [[GTID]], [[iz]] 4, i8** [[ALLOCATOR]])
+// CHECK:    [[T_VAR_VOID_PTR:%.+]] = call i8* @__kmpc_alloc(i32 [[GTID]], [[iz]] 4, i8* inttoptr ([[iz]] 1 to i8*))
 // CHECK:    [[T_VAR_PRIV:%.+]] = bitcast i8* [[T_VAR_VOID_PTR]] to i32*
 // CHECK-32: [[T_VAR_VAL:%.+]] = load i32, i32* [[T_VAR_ADDR]],
 // CHECK-64: [[T_VAR_VAL:%.+]] = load i32, i32* [[BC]],
 // CHECK:    store i32 [[T_VAR_VAL]], i32* [[T_VAR_PRIV]],
-// CHECK:    call void @__kmpc_free(i32 [[GTID]], i8* [[T_VAR_VOID_PTR]], i8** [[ALLOCATOR]])
+// CHECK:    store i32 0, i32* [[T_VAR_PRIV]],
+// CHECK:    call void @__kmpc_free(i32 [[GTID]], i8* [[T_VAR_VOID_PTR]], i8* inttoptr ([[iz]] 1 to i8*))
 // CHECK:    ret void
 
 
@@ -450,10 +455,10 @@ int main() {
 // CHECK: store i{{[0-9]+}} {{.+}}, i{{[0-9]+}}* [[B_PRIV]]
 // CHECK: store i{{[0-9]+}} {{.+}}, i{{[0-9]+}}* [[C_PRIV]]
 // CHECK-64: [[A_CONV:%.+]] = bitcast i64* [[A_PRIV:%.+]] to i32*
-// CHECK-64: store i32* [[A_CONV]], i32** [[REFA:%.+]],
-// CHECK-32: store i32* [[A_PRIV]], i32** [[REFA:%.+]],
 // CHECK-64: [[B_CONV:%.+]] = bitcast i64* [[B_PRIV:%.+]] to i32*
 // CHECK-64: [[C_CONV:%.+]] = bitcast i64* [[C_PRIV:%.+]] to i32*
+// CHECK-64: store i32* [[A_CONV]], i32** [[REFA:%.+]],
+// CHECK-32: store i32* [[A_PRIV]], i32** [[REFA:%.+]],
 // CHECK-64: store i32* [[C_CONV]], i32** [[REFC:%.+]],
 // CHECK-32: store i32* [[C_PRIV]], i32** [[REFC:%.+]],
 // CHECK: bitcast [4 x i{{[0-9]+}}]* [[E_PRIV]] to i8*
@@ -515,15 +520,19 @@ int main() {
 
 #endif
 #else
-typedef void **omp_allocator_handle_t;
-extern const omp_allocator_handle_t omp_default_mem_alloc;
-extern const omp_allocator_handle_t omp_large_cap_mem_alloc;
-extern const omp_allocator_handle_t omp_const_mem_alloc;
-extern const omp_allocator_handle_t omp_high_bw_mem_alloc;
-extern const omp_allocator_handle_t omp_low_lat_mem_alloc;
-extern const omp_allocator_handle_t omp_cgroup_mem_alloc;
-extern const omp_allocator_handle_t omp_pteam_mem_alloc;
-extern const omp_allocator_handle_t omp_thread_mem_alloc;
+
+enum omp_allocator_handle_t {
+  omp_null_allocator = 0,
+  omp_default_mem_alloc = 1,
+  omp_large_cap_mem_alloc = 2,
+  omp_const_mem_alloc = 3,
+  omp_high_bw_mem_alloc = 4,
+  omp_low_lat_mem_alloc = 5,
+  omp_cgroup_mem_alloc = 6,
+  omp_pteam_mem_alloc = 7,
+  omp_thread_mem_alloc = 8,
+  KMP_ALLOCATOR_MAX_HANDLE = __UINTPTR_MAX__
+};
 
 struct St {
   int a, b;
@@ -570,13 +579,12 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // ARRAY: [[SZ1:%.+]] = add nuw i64 [[SIZE]], 127
 // ARRAY: [[SZ2:%.+]] = udiv i64 [[SZ1]], 128
 // ARRAY: [[SIZE:%.+]] = mul nuw i64 [[SZ2]], 128
-// ARRAY: [[ALLOCATOR:%.+]] = load i8**, i8*** @omp_thread_mem_alloc,
-// ARRAY: [[VLA2_VOID_PTR:%.+]] = call i8* @__kmpc_alloc(i32 [[GTID:%.+]], i64 [[SIZE]], i8** [[ALLOCATOR]])
+// ARRAY: [[VLA2_VOID_PTR:%.+]] = call i8* @__kmpc_alloc(i32 [[GTID:%.+]], i64 [[SIZE]], i8* inttoptr (i64 8 to i8*))
 // ARRAY: [[VLA2_PTR:%.+]] = bitcast i8* [[VLA2_VOID_PTR]] to double*
 // ARRAY: [[SIZE:%.+]] = mul nuw i64 %{{.+}}, 8
 // ARRAY: [[BC:%.+]] = bitcast double* [[VLA2_PTR]] to i8*
 // ARRAY: call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 128 [[BC]], i8* align 128 %{{.+}}, i64 [[SIZE]], i1 false)
-// ARRAY: call void @__kmpc_free(i32 [[GTID]], i8* [[VLA2_VOID_PTR]], i8** [[ALLOCATOR]])
+// ARRAY: call void @__kmpc_free(i32 [[GTID]], i8* [[VLA2_VOID_PTR]], i8* inttoptr (i64 8 to i8*))
 // ARRAY-NEXT: ret void
 #endif
 

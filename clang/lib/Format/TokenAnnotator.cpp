@@ -1119,13 +1119,16 @@ public:
       return LT_ImportStatement;
     }
 
-    // In .proto files, top-level options are very similar to import statements
-    // and should not be line-wrapped.
+    // In .proto files, top-level options and package statements are very
+    // similar to import statements and should not be line-wrapped.
     if (Style.Language == FormatStyle::LK_Proto && Line.Level == 0 &&
-        CurrentToken->is(Keywords.kw_option)) {
+        CurrentToken->isOneOf(Keywords.kw_option, Keywords.kw_package)) {
       next();
-      if (CurrentToken && CurrentToken->is(tok::identifier))
+      if (CurrentToken && CurrentToken->is(tok::identifier)) {
+        while (CurrentToken)
+          next();
         return LT_ImportStatement;
+      }
     }
 
     bool KeywordVirtualFound = false;
@@ -1193,9 +1196,10 @@ private:
     // recovered from an error (e.g. failure to find the matching >).
     if (!CurrentToken->isOneOf(
             TT_LambdaLSquare, TT_LambdaLBrace, TT_ForEachMacro,
-            TT_FunctionLBrace, TT_ImplicitStringLiteral, TT_InlineASMBrace,
-            TT_JsFatArrow, TT_LambdaArrow, TT_OverloadedOperator,
-            TT_RegexLiteral, TT_TemplateString, TT_ObjCStringLiteral))
+            TT_TypenameMacro, TT_FunctionLBrace, TT_ImplicitStringLiteral,
+            TT_InlineASMBrace, TT_JsFatArrow, TT_LambdaArrow, TT_NamespaceMacro,
+            TT_OverloadedOperator, TT_RegexLiteral, TT_TemplateString,
+            TT_ObjCStringLiteral))
       CurrentToken->Type = TT_Unknown;
     CurrentToken->Role.reset();
     CurrentToken->MatchingParen = nullptr;
@@ -1413,6 +1417,7 @@ private:
           if (AfterParen->Tok.isNot(tok::caret)) {
             if (FormatToken *BeforeParen = Current.MatchingParen->Previous)
               if (BeforeParen->is(tok::identifier) &&
+                  !BeforeParen->is(TT_TypenameMacro) &&
                   BeforeParen->TokenText == BeforeParen->TokenText.upper() &&
                   (!BeforeParen->Previous ||
                    BeforeParen->Previous->ClosesTemplateDeclaration))
@@ -1664,7 +1669,8 @@ private:
       FormatToken *TokenBeforeMatchingParen =
           PrevToken->MatchingParen->getPreviousNonComment();
       if (TokenBeforeMatchingParen &&
-          TokenBeforeMatchingParen->isOneOf(tok::kw_typeof, tok::kw_decltype))
+          TokenBeforeMatchingParen->isOneOf(tok::kw_typeof, tok::kw_decltype,
+                                            TT_TypenameMacro))
         return TT_PointerOrReference;
     }
 
@@ -2524,7 +2530,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
       FormatToken *TokenBeforeMatchingParen =
           Left.MatchingParen->getPreviousNonComment();
       if (!TokenBeforeMatchingParen ||
-          !TokenBeforeMatchingParen->isOneOf(tok::kw_typeof, tok::kw_decltype))
+          !TokenBeforeMatchingParen->isOneOf(tok::kw_typeof, tok::kw_decltype,
+                                             TT_TypenameMacro))
         return true;
     }
     return (Left.Tok.isLiteral() ||
@@ -2832,7 +2839,8 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
     return true;
   }
   if (Left.is(TT_UnaryOperator))
-    return Right.is(TT_BinaryOperator);
+    return (Style.SpaceAfterLogicalNot && Left.is(tok::exclaim)) ||
+           Right.is(TT_BinaryOperator);
 
   // If the next token is a binary operator or a selector name, we have
   // incorrectly classified the parenthesis as a cast. FIXME: Detect correctly.

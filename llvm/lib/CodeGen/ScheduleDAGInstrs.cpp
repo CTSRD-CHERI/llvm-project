@@ -712,6 +712,7 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
   AAForDep = UseAA ? AA : nullptr;
 
   BarrierChain = nullptr;
+  SUnit *FPBarrierChain = nullptr;
 
   this->TrackLaneMasks = TrackLaneMasks;
   MISUnitMap.clear();
@@ -871,7 +872,19 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
       addBarrierChain(NonAliasStores);
       addBarrierChain(NonAliasLoads);
 
+      // Add dependency against previous FP barrier and reset FP barrier.
+      if (FPBarrierChain)
+        FPBarrierChain->addPredBarrier(BarrierChain);
+      FPBarrierChain = BarrierChain;
+
       continue;
+    }
+
+    // Instructions that may raise FP exceptions depend on each other.
+    if (MI.mayRaiseFPException()) {
+      if (FPBarrierChain)
+        FPBarrierChain->addPredBarrier(SU);
+      FPBarrierChain = SU;
     }
 
     // If it's not a store or a variant load, we're done.
@@ -969,7 +982,7 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
   CurrentVRegDefs.clear();
   CurrentVRegUses.clear();
 
-  Topo.InitDAGTopologicalSorting();
+  Topo.MarkDirty();
 }
 
 raw_ostream &llvm::operator<<(raw_ostream &OS, const PseudoSourceValue* PSV) {
@@ -1158,7 +1171,7 @@ bool ScheduleDAGInstrs::addEdge(SUnit *SuccSU, const SDep &PredDep) {
     // If Pred is reachable from Succ, then the edge creates a cycle.
     if (Topo.IsReachable(PredDep.getSUnit(), SuccSU))
       return false;
-    Topo.AddPred(SuccSU, PredDep.getSUnit());
+    Topo.AddPredQueued(SuccSU, PredDep.getSUnit());
   }
   SuccSU->addPred(PredDep, /*Required=*/!PredDep.isArtificial());
   // Return true regardless of whether a new edge needed to be inserted.

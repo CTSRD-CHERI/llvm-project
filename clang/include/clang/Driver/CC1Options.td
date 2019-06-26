@@ -109,7 +109,7 @@ def analyzer_checker : Separate<["-"], "analyzer-checker">,
   ValuesCode<[{
     const char *Values =
     #define GET_CHECKERS
-    #define CHECKER(FULLNAME, CLASS, HT, DOC_URI)  FULLNAME ","
+    #define CHECKER(FULLNAME, CLASS, HT, DOC_URI, IS_HIDDEN)  FULLNAME ","
     #include "clang/StaticAnalyzer/Checkers/Checkers.inc"
     #undef GET_CHECKERS
     #define GET_PACKAGES
@@ -132,6 +132,15 @@ def analyzer_disable_all_checks : Flag<["-"], "analyzer-disable-all-checks">,
 def analyzer_checker_help : Flag<["-"], "analyzer-checker-help">,
   HelpText<"Display the list of analyzer checkers that are available">;
 
+def analyzer_checker_help_alpha : Flag<["-"], "analyzer-checker-help-alpha">,
+  HelpText<"Display the list of in development analyzer checkers. These "
+           "are NOT considered safe, they are unstable and will emit incorrect "
+           "reports. Enable ONLY FOR DEVELOPMENT purposes">;
+
+def analyzer_checker_help_developer : Flag<["-"], "analyzer-checker-help-developer">,
+  HelpText<"Display the list of developer-only checkers such as modeling "
+           "and debug checkers">;
+
 def analyzer_config_help : Flag<["-"], "analyzer-config-help">,
   HelpText<"Display the list of -analyzer-config options">;
 
@@ -141,11 +150,26 @@ def analyzer_list_enabled_checkers : Flag<["-"], "analyzer-list-enabled-checkers
 def analyzer_config : Separate<["-"], "analyzer-config">,
   HelpText<"Choose analyzer options to enable">;
 
+def analyzer_checker_option_help : Flag<["-"], "analyzer-checker-option-help">,
+  HelpText<"Display the list of checker and package options">;
+
+def analyzer_checker_option_help_alpha : Flag<["-"], "analyzer-checker-option-help-alpha">,
+  HelpText<"Display the list of in development checker and package options. "
+           "These are NOT considered safe, they are unstable and will emit "
+           "incorrect reports. Enable ONLY FOR DEVELOPMENT purposes">;
+
+def analyzer_checker_option_help_developer : Flag<["-"], "analyzer-checker-option-help-developer">,
+  HelpText<"Display the list of checker and package options meant for "
+           "development purposes only">;
+
 def analyzer_config_compatibility_mode : Separate<["-"], "analyzer-config-compatibility-mode">,
   HelpText<"Don't emit errors on invalid analyzer-config inputs">;
 
 def analyzer_config_compatibility_mode_EQ : Joined<["-"], "analyzer-config-compatibility-mode=">,
   Alias<analyzer_config_compatibility_mode>;
+
+def analyzer_werror : Flag<["-"], "analyzer-werror">,
+  HelpText<"Emit analyzer results as errors rather than warnings">;
 
 //===----------------------------------------------------------------------===//
 // Migrator Options
@@ -176,7 +200,7 @@ def record_command_line : Separate<["-"], "record-command-line">,
   HelpText<"The string to embed in the .LLVM.command.line section.">;
 def compress_debug_sections : Flag<["-", "--"], "compress-debug-sections">,
     HelpText<"DWARF debug sections compression">;
-def compress_debug_sections_EQ : Joined<["-"], "compress-debug-sections=">,
+def compress_debug_sections_EQ : Joined<["-", "--"], "compress-debug-sections=">,
     HelpText<"DWARF debug sections compression type">;
 def mno_exec_stack : Flag<["-"], "mnoexecstack">,
   HelpText<"Mark the file as not needing an executable stack">;
@@ -555,8 +579,14 @@ def ast_list : Flag<["-"], "ast-list">,
   HelpText<"Build ASTs and print the list of declaration node qualified names">;
 def ast_dump : Flag<["-"], "ast-dump">,
   HelpText<"Build ASTs and then debug dump them">;
+def ast_dump_EQ : Joined<["-"], "ast-dump=">,
+  HelpText<"Build ASTs and then debug dump them in the specified format. "
+           "Supported formats include: default, json">;
 def ast_dump_all : Flag<["-"], "ast-dump-all">,
   HelpText<"Build ASTs and then debug dump them, forcing deserialization">;
+def ast_dump_all_EQ : Joined<["-"], "ast-dump-all=">,
+  HelpText<"Build ASTs and then debug dump them in the specified format, "
+           "forcing deserialization. Supported formats include: default, json">;
 def templight_dump : Flag<["-"], "templight-dump">,
   HelpText<"Dump templight information to stdout">;
 def ast_dump_lookups : Flag<["-"], "ast-dump-lookups">,
@@ -587,6 +617,9 @@ def migrate : Flag<["-"], "migrate">,
   HelpText<"Migrate source code">;
 def compiler_options_dump : Flag<["-"], "compiler-options-dump">,
   HelpText<"Dump the compiler configuration options">;
+def print_dependency_directives_minimized_source : Flag<["-"],
+  "print-dependency-directives-minimized-source">,
+  HelpText<"Print the output of the dependency directives source minimizer">;
 }
 
 def emit_llvm_uselists : Flag<["-"], "emit-llvm-uselists">,
@@ -756,7 +789,9 @@ def fallow_half_arguments_and_returns : Flag<["-"], "fallow-half-arguments-and-r
 def fdefault_calling_conv_EQ : Joined<["-"], "fdefault-calling-conv=">,
   HelpText<"Set default calling convention">, Values<"cdecl,fastcall,stdcall,vectorcall,regcall">;
 def finclude_default_header : Flag<["-"], "finclude-default-header">,
-  HelpText<"Include the default header file for OpenCL">;
+  HelpText<"Include default header file for OpenCL">;
+def fdeclare_opencl_builtins : Flag<["-"], "fdeclare-opencl-builtins">,
+  HelpText<"Add OpenCL builtin function declarations (experimental)">;
 def fpreserve_vec3_type : Flag<["-"], "fpreserve-vec3-type">,
   HelpText<"Preserve 3-component vector type">;
 def fwchar_type_EQ : Joined<["-"], "fwchar-type=">,

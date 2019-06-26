@@ -12,11 +12,21 @@ include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
 include(CheckSymbolExists)
 
-if(CMAKE_LINKER MATCHES "lld-link\.exe" OR (WIN32 AND LLVM_USE_LINKER STREQUAL "lld") OR LLVM_ENABLE_LLD)
+if(CMAKE_LINKER MATCHES "lld-link" OR (WIN32 AND LLVM_USE_LINKER STREQUAL "lld") OR LLVM_ENABLE_LLD)
   set(LINKER_IS_LLD_LINK TRUE)
 else()
   set(LINKER_IS_LLD_LINK FALSE)
 endif()
+
+set(LLVM_CXX_STD_default "c++11")
+# Preserve behaviour of legacy cache variables
+if (LLVM_ENABLE_CXX1Y)
+  set(LLVM_CXX_STD_default "c++1y")
+elseif (LLVM_ENABLE_CXX1Z)
+  set(LLVM_CXX_STD_default "c++1z")
+endif()
+set(LLVM_CXX_STD ${LLVM_CXX_STD_default}
+    CACHE STRING "C++ standard to use for compilation.")
 
 set(LLVM_ENABLE_LTO OFF CACHE STRING "Build LLVM with LTO. May be specified as Thin or Full to use a particular kind of LTO")
 string(TOUPPER "${LLVM_ENABLE_LTO}" uppercase_LLVM_ENABLE_LTO)
@@ -210,10 +220,10 @@ function(add_flag_or_print_warning flag name)
 endfunction()
 
 if( LLVM_ENABLE_LLD )
-	if ( LLVM_USE_LINKER )
-		message(FATAL_ERROR "LLVM_ENABLE_LLD and LLVM_USE_LINKER can't be set at the same time")
-	endif()
-	set(LLVM_USE_LINKER "lld")
+  if ( LLVM_USE_LINKER )
+    message(FATAL_ERROR "LLVM_ENABLE_LLD and LLVM_USE_LINKER can't be set at the same time")
+  endif()
+  set(LLVM_USE_LINKER "lld")
 endif()
 
 if( LLVM_USE_LINKER )
@@ -221,7 +231,7 @@ if( LLVM_USE_LINKER )
   set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -fuse-ld=${LLVM_USE_LINKER}")
   check_cxx_source_compiles("int main() { return 0; }" CXX_SUPPORTS_CUSTOM_LINKER)
   if ( NOT CXX_SUPPORTS_CUSTOM_LINKER )
-	  message(FATAL_ERROR "Host compiler does not support '-fuse-ld=${LLVM_USE_LINKER}'")
+    message(FATAL_ERROR "Host compiler does not support '-fuse-ld=${LLVM_USE_LINKER}'")
   endif()
   set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
   append("-fuse-ld=${LLVM_USE_LINKER}"
@@ -237,6 +247,11 @@ if( LLVM_ENABLE_PIC )
     # On Windows all code is PIC. MinGW warns if -fPIC is used.
   else()
     add_flag_or_print_warning("-fPIC" FPIC)
+  endif()
+  # GCC for MIPS can miscompile LLVM due to PR37701.
+  if(CMAKE_COMPILER_IS_GNUCXX AND LLVM_NATIVE_ARCH STREQUAL "Mips" AND
+         NOT Uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+    add_flag_or_print_warning("-fno-shrink-wrap" FNO_SHRINK_WRAP)
   endif()
 endif()
 
@@ -437,25 +452,18 @@ elseif( LLVM_COMPILER_IS_GCC_COMPATIBLE )
   append_if(LLVM_ENABLE_WERROR "-Wno-error" CMAKE_REQUIRED_FLAGS)
   add_flag_if_supported("-Werror=date-time" WERROR_DATE_TIME)
   add_flag_if_supported("-Werror=unguarded-availability-new" WERROR_UNGUARDED_AVAILABILITY_NEW)
-  if (LLVM_ENABLE_CXX1Y)
-    check_cxx_compiler_flag("-std=c++1y" CXX_SUPPORTS_CXX1Y)
-    append_if(CXX_SUPPORTS_CXX1Y "-std=c++1y" CMAKE_CXX_FLAGS)
-  elseif(LLVM_ENABLE_CXX1Z)
-    check_cxx_compiler_flag("-std=c++1z" CXX_SUPPORTS_CXX1Z)
-    append_if(CXX_SUPPORTS_CXX1Z "-std=c++1z" CMAKE_CXX_FLAGS)
-  else()
-    check_cxx_compiler_flag("-std=c++11" CXX_SUPPORTS_CXX11)
-    if (CXX_SUPPORTS_CXX11)
-      if (CYGWIN OR MINGW)
-        # MinGW and Cygwin are a bit stricter and lack things like
-        # 'strdup', 'stricmp', etc in c++11 mode.
-        append("-std=gnu++11" CMAKE_CXX_FLAGS)
-      else()
-        append("-std=c++11" CMAKE_CXX_FLAGS)
-      endif()
+  check_cxx_compiler_flag("-std=${LLVM_CXX_STD}" CXX_SUPPORTS_CXX_STD)
+  if (CXX_SUPPORTS_CXX_STD)
+   if (CYGWIN OR MINGW)
+      # MinGW and Cygwin are a bit stricter and lack things like
+      # 'strdup', 'stricmp', etc in c++11 mode.
+      string(REPLACE "c++" "gnu++" gnu_LLVM_CXX_STD "${LLVM_CXX_STD}")
+      append("-std=${gnu_LLVM_CXX_STD}" CMAKE_CXX_FLAGS)
     else()
-      message(FATAL_ERROR "LLVM requires C++11 support but the '-std=c++11' flag isn't supported.")
+      append("-std=${LLVM_CXX_STD}" CMAKE_CXX_FLAGS)
     endif()
+  else()
+    message(FATAL_ERROR "The host compiler does not support '-std=${LLVM_CXX_STD}'.")
   endif()
   if (LLVM_ENABLE_MODULES)
     set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
@@ -504,7 +512,6 @@ if (MSVC)
       -wd4291 # Suppress ''declaration' : no matching operator delete found; memory will not be freed if initialization throws an exception'
       -wd4345 # Suppress 'behavior change: an object of POD type constructed with an initializer of the form () will be default-initialized'
       -wd4351 # Suppress 'new behavior: elements of array 'array' will be default initialized'
-      -wd4355 # Suppress ''this' : used in base member initializer list'
       -wd4456 # Suppress 'declaration of 'var' hides local variable'
       -wd4457 # Suppress 'declaration of 'var' hides function parameter'
       -wd4458 # Suppress 'declaration of 'var' hides class member'
@@ -512,7 +519,6 @@ if (MSVC)
       -wd4503 # Suppress ''identifier' : decorated name length exceeded, name was truncated'
       -wd4624 # Suppress ''derived class' : destructor could not be generated because a base class destructor is inaccessible'
       -wd4722 # Suppress 'function' : destructor never returns, potential memory leak
-      -wd4800 # Suppress ''type' : forcing value to bool 'true' or 'false' (performance warning)'
       -wd4100 # Suppress 'unreferenced formal parameter'
       -wd4127 # Suppress 'conditional expression is constant'
       -wd4512 # Suppress 'assignment operator could not be generated'
@@ -679,14 +685,8 @@ macro(append_common_sanitizer_flags)
   elseif (CLANG_CL)
     # Keep frame pointers around.
     append("/Oy-" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
-    if (LINKER_IS_LLD_LINK)
-      # Use DWARF debug info with LLD.
-      append("-gdwarf" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
-    else()
-      # Enable codeview otherwise.
-      append("/Z7" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
-    endif()
     # Always ask the linker to produce symbols with asan.
+    append("/Z7" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
     append("-debug" CMAKE_EXE_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
   endif()
 endmacro()
@@ -697,6 +697,9 @@ if(LLVM_USE_SANITIZER)
     if (LLVM_USE_SANITIZER STREQUAL "Address")
       append_common_sanitizer_flags()
       append("-fsanitize=address" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+    elseif (LLVM_USE_SANITIZER STREQUAL "HWAddress")
+      append_common_sanitizer_flags()
+      append("-fsanitize=hwaddress" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
     elseif (LLVM_USE_SANITIZER MATCHES "Memory(WithOrigins)?")
       append_common_sanitizer_flags()
       append("-fsanitize=memory" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
@@ -918,18 +921,6 @@ if(LLVM_LINK_LLVM_DYLIB AND LLVM_EXPORT_SYMBOLS_FOR_PLUGINS)
   message(FATAL_ERROR "LLVM_LINK_LLVM_DYLIB not compatible with LLVM_EXPORT_SYMBOLS_FOR_PLUGINS")
 endif()
 
-# Plugin support
-# FIXME: Make this configurable.
-if(WIN32 OR CYGWIN)
-  if(BUILD_SHARED_LIBS OR LLVM_BUILD_LLVM_DYLIB)
-    set(LLVM_ENABLE_PLUGINS ON)
-  else()
-    set(LLVM_ENABLE_PLUGINS OFF)
-  endif()
-else()
-  set(LLVM_ENABLE_PLUGINS ON)
-endif()
-
 # By default we should enable LLVM_ENABLE_IDE only for multi-configuration
 # generators. This option disables optional build system features that make IDEs
 # less usable.
@@ -986,4 +977,20 @@ if(macos_signposts_available)
                           " \"${LLVM_ENABLE_SUPPORT_XCODE_SIGNPOSTS}\"!")
     endif()
   endif()
+endif()
+
+option(LLVM_USE_RELATIVE_PATHS_IN_DEBUG_INFO "Use relative paths in debug info" OFF)
+set(LLVM_SOURCE_PREFIX "" CACHE STRING "Use prefix for sources in debug info")
+
+if(LLVM_USE_RELATIVE_PATHS_IN_DEBUG_INFO)
+  check_c_compiler_flag("-fdebug-prefix-map=foo=bar" SUPPORTS_FDEBUG_PREFIX_MAP)
+  if(LLVM_ENABLE_PROJECTS_USED)
+    get_filename_component(source_root "${LLVM_MAIN_SRC_DIR}/.." ABSOLUTE)
+  else()
+    set(source_root "${LLVM_MAIN_SRC_DIR}")
+  endif()
+  file(RELATIVE_PATH relative_root "${source_root}" "${CMAKE_BINARY_DIR}")
+  append_if(SUPPORTS_FDEBUG_PREFIX_MAP "-fdebug-prefix-map=${CMAKE_BINARY_DIR}=${relative_root}" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+  append_if(SUPPORTS_FDEBUG_PREFIX_MAP "-fdebug-prefix-map=${source_root}/=${LLVM_SOURCE_PREFIX}" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+  add_flag_if_supported("-no-canonical-prefixes" NO_CANONICAL_PREFIXES)
 endif()

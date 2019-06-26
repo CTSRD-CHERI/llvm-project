@@ -150,6 +150,8 @@ def ext_warn_duplicate_declspec : ExtWarn<"%sub{duplicate_declspec}0">,
 def warn_duplicate_declspec : Warning<"%sub{duplicate_declspec}0">,
   InGroup<DuplicateDeclSpecifier>;
 
+def err_duplicate_declspec : Error<"%sub{duplicate_declspec}0">;
+
 def err_friend_decl_spec : Error<"'%0' is invalid in friend declarations">;
 
 def err_invalid_member_in_interface : Error<
@@ -250,6 +252,8 @@ def err_target_unsupported_unaligned : Error<
   "the %0 sub-architecture does not support unaligned accesses">;
 def err_target_unsupported_execute_only : Error<
   "execute only is not supported for the %0 sub-architecture">;
+def err_target_unsupported_mcmse : Error<
+  "-mcmse is not supported for %0">;
 def err_opt_not_valid_with_opt : Error<
   "option '%0' cannot be specified with '%1'">;
 def err_opt_not_valid_without_opt : Error<
@@ -292,7 +296,7 @@ def err_omp_more_one_clause : Error<
 
 // Static Analyzer Core
 def err_unknown_analyzer_checker : Error<
-    "no analyzer checkers are associated with '%0'">;
+    "no analyzer checkers or packages are associated with '%0'">;
 def note_suggest_disabling_all_checkers : Note<
     "use -analyzer-disable-all-checks to disable all static analyzer checkers">;
 }

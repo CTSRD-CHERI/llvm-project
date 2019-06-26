@@ -24,16 +24,13 @@
 class DWARFUnit;
 class SymbolFileDWARF;
 
-//----------------------------------------------------------------------
 // DWARFDebugLine
-//----------------------------------------------------------------------
 class DWARFDebugLine {
 public:
-  //------------------------------------------------------------------
   // FileNameEntry
-  //------------------------------------------------------------------
   struct FileNameEntry {
-    FileNameEntry() : name(nullptr), dir_idx(0), mod_time(0), length(0) {}
+    FileNameEntry()
+        : name(nullptr), dir_idx(0), mod_time(0), length(0), checksum() {}
 
     const char *name;
     dw_sleb128_t dir_idx;
@@ -42,9 +39,7 @@ public:
     llvm::MD5::MD5Result checksum;
   };
 
-  //------------------------------------------------------------------
   // Prologue
-  //------------------------------------------------------------------
   struct Prologue {
 
     Prologue()
@@ -145,9 +140,7 @@ public:
                   // instruction set architecture for the current instruction.
   };
 
-  //------------------------------------------------------------------
   // LineTable
-  //------------------------------------------------------------------
   struct LineTable {
     typedef std::shared_ptr<LineTable> shared_ptr;
 
@@ -165,9 +158,7 @@ public:
     Row::collection rows;
   };
 
-  //------------------------------------------------------------------
   // State
-  //------------------------------------------------------------------
   struct State : public Row {
     typedef void (*Callback)(dw_offset_t offset, const State &state,
                              void *userData);

@@ -91,5 +91,28 @@ TEST_F(HeaderSearchTest, Dots) {
             "z");
 }
 
+#ifdef _WIN32
+TEST_F(HeaderSearchTest, BackSlash) {
+  addSearchDir("C:\\x\\y\\");
+  EXPECT_EQ(Search.suggestPathToFileForDiagnostics("C:\\x\\y\\z\\t",
+                                                   /*WorkingDir=*/""),
+            "z/t");
+}
+
+TEST_F(HeaderSearchTest, BackSlashWithDotDot) {
+  addSearchDir("..\\y");
+  EXPECT_EQ(Search.suggestPathToFileForDiagnostics("C:\\x\\y\\z\\t",
+                                                   /*WorkingDir=*/"C:/x/y/"),
+            "z/t");
+}
+#endif
+
+TEST_F(HeaderSearchTest, DotDotsWithAbsPath) {
+  addSearchDir("/x/../y/");
+  EXPECT_EQ(Search.suggestPathToFileForDiagnostics("/y/z",
+                                                   /*WorkingDir=*/""),
+            "z");
+}
+
 } // namespace
 } // namespace clang

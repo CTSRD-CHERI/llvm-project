@@ -102,8 +102,10 @@ public:
                                         // no unsigned wrap.
     NoSWrap      = 1 << 12,             // Instruction supports binary operator
                                         // no signed wrap.
-    IsExact      = 1 << 13              // Instruction supports division is
+    IsExact      = 1 << 13,             // Instruction supports division is
                                         // known to be exact.
+    FPExcept     = 1 << 14,             // Instruction may raise floating-point
+                                        // exceptions.
   };
 
 private:
@@ -830,6 +832,17 @@ public:
     return mayLoad(Type) || mayStore(Type);
   }
 
+  /// Return true if this instruction could possibly raise a floating-point
+  /// exception.  This is the case if the instruction is a floating-point
+  /// instruction that can in principle raise an exception, as indicated
+  /// by the MCID::MayRaiseFPException property, *and* at the same time,
+  /// the instruction is used in a context where we expect floating-point
+  /// exceptions might be enabled, as indicated by the FPExcept MI flag.
+  bool mayRaiseFPException() const {
+    return hasProperty(MCID::MayRaiseFPException) &&
+           getFlag(MachineInstr::MIFlag::FPExcept);
+  }
+
   //===--------------------------------------------------------------------===//
   // Flags that indicate whether an instruction can be modified by a method.
   //===--------------------------------------------------------------------===//
@@ -1005,6 +1018,12 @@ public:
       && getOperand(1).isImm();
   }
 
+  /// Return true if the instruction is a debug value which describes a part of
+  /// a variable as unavailable.
+  bool isUndefDebugValue() const {
+    return isDebugValue() && getOperand(0).isReg() && !getOperand(0).getReg();
+  }
+
   bool isPHI() const {
     return getOpcode() == TargetOpcode::PHI ||
            getOpcode() == TargetOpcode::G_PHI;
@@ -1016,6 +1035,8 @@ public:
            getOpcode() == TargetOpcode::INLINEASM_BR;
   }
 
+  /// FIXME: Seems like a layering violation that the AsmDialect, which is X86
+  /// specific, be attached to a generic MachineInstr.
   bool isMSInlineAsm() const {
     return isInlineAsm() && getInlineAsmDialect() == InlineAsm::AD_Intel;
   }
@@ -1376,7 +1397,7 @@ public:
   /// @param AA Optional alias analysis, used to compare memory operands.
   /// @param Other MachineInstr to check aliasing against.
   /// @param UseTBAA Whether to pass TBAA information to alias analysis.
-  bool mayAlias(AliasAnalysis *AA, MachineInstr &Other, bool UseTBAA);
+  bool mayAlias(AliasAnalysis *AA, const MachineInstr &Other, bool UseTBAA) const;
 
   /// Return true if this instruction may have an ordered
   /// or volatile memory reference, or if the information describing the memory
@@ -1545,6 +1566,10 @@ public:
   ///
   /// FIXME: This is not fully implemented yet.
   void setPostInstrSymbol(MachineFunction &MF, MCSymbol *Symbol);
+
+  /// Clone another MachineInstr's pre- and post- instruction symbols and
+  /// replace ours with it.
+  void cloneInstrSymbols(MachineFunction &MF, const MachineInstr &MI);
 
   /// Return the MIFlags which represent both MachineInstrs. This
   /// should be used when merging two MachineInstrs into one. This routine does

@@ -1014,7 +1014,7 @@ Currently, only the following parameter attributes are defined:
     opposed to memory, though some targets use it to distinguish between
     two different kinds of registers). Use of this attribute is
     target-specific.
-``byval``
+``byval`` or ``byval(<ty>)``
     This indicates that the pointer parameter should really be passed by
     value to the function. The attribute implies that a hidden copy of
     the pointee is made between the caller and the callee, so the callee
@@ -1025,6 +1025,9 @@ Currently, only the following parameter attributes are defined:
     callee (for example, ``readonly`` functions should not write to
     ``byval`` parameters). This is not a valid attribute for return
     values.
+
+    The byval attribute also supports an optional type argument, which must be
+    the same as the pointee type of the argument.
 
     The byval attribute also supports specifying an alignment with the
     align attribute. It indicates the alignment of the stack slot to
@@ -6081,10 +6084,10 @@ enum is the smallest type which can represent all of its values::
 Automatic Linker Flags Named Metadata
 =====================================
 
-Some targets support embedding flags to the linker inside individual object
+Some targets support embedding of flags to the linker inside individual object
 files. Typically this is used in conjunction with language extensions which
-allow source files to explicitly declare the libraries they depend on, and have
-these automatically be transmitted to the linker via object files.
+allow source files to contain linker command line options, and have these
+automatically be transmitted to the linker via object files.
 
 These flags are encoded in the IR using named metadata with the name
 ``!llvm.linker.options``. Each operand is expected to be a metadata node
@@ -6095,8 +6098,8 @@ For example, the following metadata section specifies two separate sets of
 linker options, presumably to link against ``libz`` and the ``Cocoa``
 framework::
 
-    !0 = !{ !"-lz" },
-    !1 = !{ !"-framework", !"Cocoa" } } }
+    !0 = !{ !"-lz" }
+    !1 = !{ !"-framework", !"Cocoa" }
     !llvm.linker.options = !{ !0, !1 }
 
 The metadata encoding as lists of lists of options, as opposed to a collapsed
@@ -6108,6 +6111,28 @@ assembly writer or object file emitter.
 Each individual option is required to be either a valid option for the target's
 linker, or an option that is reserved by the target specific assembly writer or
 object file emitter. No other aspect of these options is defined by the IR.
+
+Dependent Libs Named Metadata
+=============================
+
+Some targets support embedding of strings into object files to indicate
+a set of libraries to add to the link. Typically this is used in conjunction
+with language extensions which allow source files to explicitly declare the
+libraries they depend on, and have these automatically be transmitted to the
+linker via object files.
+
+The list is encoded in the IR using named metadata with the name
+``!llvm.dependent-libraries``. Each operand is expected to be a metadata node
+which should contain a single string operand.
+
+For example, the following metadata section contains two library specfiers::
+
+    !0 = !{!"a library specifier"}
+    !1 = !{!"another library specifier"}
+    !llvm.dependent-libraries = !{ !0, !1 }
+
+Each library specifier will be handled independently by the consuming linker.
+The effect of the library specifiers are defined by the consuming linker.
 
 .. _summary:
 
@@ -6482,12 +6507,12 @@ The '``llvm.global_ctors``' Global Variable
     @llvm.global_ctors = appending global [1 x %0] [%0 { i32 65535, void ()* @ctor, i8* @data }]
 
 The ``@llvm.global_ctors`` array contains a list of constructor
-functions, priorities, and an optional associated global or function.
+functions, priorities, and an associated global or function.
 The functions referenced by this array will be called in ascending order
 of priority (i.e. lowest first) when the module is loaded. The order of
 functions with the same priority is not defined.
 
-If the third field is present, non-null, and points to a global variable
+If the third field is non-null, and points to a global variable
 or function, the initializer function will only run if the associated
 data from the current module is not discarded.
 
@@ -6502,12 +6527,12 @@ The '``llvm.global_dtors``' Global Variable
     @llvm.global_dtors = appending global [1 x %0] [%0 { i32 65535, void ()* @dtor, i8* @data }]
 
 The ``@llvm.global_dtors`` array contains a list of destructor
-functions, priorities, and an optional associated global or function.
+functions, priorities, and an associated global or function.
 The functions referenced by this array will be called in descending
 order of priority (i.e. highest first) when the module is unloaded. The
 order of functions with the same priority is not defined.
 
-If the third field is present, non-null, and points to a global variable
+If the third field is non-null, and points to a global variable
 or function, the destructor function will only run if the associated
 data from the current module is not discarded.
 
@@ -9909,7 +9934,7 @@ Syntax:
 
 ::
 
-      <result> = select selty <cond>, <ty> <val1>, <ty> <val2>             ; yields ty
+      <result> = select [fast-math flags] selty <cond>, <ty> <val1>, <ty> <val2>             ; yields ty
 
       selty is either i1 or {<N x i1>}
 
@@ -9925,6 +9950,11 @@ Arguments:
 The '``select``' instruction requires an 'i1' value or a vector of 'i1'
 values indicating the condition, and two values of the same :ref:`first
 class <t_firstclass>` type.
+
+#. The optional ``fast-math flags`` marker indicates that the select has one or more
+   :ref:`fast-math flags <fastmath>`. These are optimization hints to enable
+   otherwise unsafe floating-point optimizations. Fast-math flags are only valid
+   for selects that return a floating-point scalar or vector type.
 
 Semantics:
 """"""""""
@@ -9979,12 +10009,16 @@ This instruction requires several arguments:
       recursive cycle in the call graph.
    #. Arguments with the :ref:`inalloca <attr_inalloca>` attribute are
       forwarded in place.
+   #. If the musttail call appears in a function with the ``"thunk"`` attribute
+      and the caller and callee both have varargs, than any unprototyped
+      arguments in register or memory are forwarded to the callee. Similarly,
+      the return value of the callee is returned the the caller's caller, even
+      if a void return type is in use.
 
    Both markers imply that the callee does not access allocas from the caller.
    The ``tail`` marker additionally implies that the callee does not access
-   varargs from the caller, while ``musttail`` implies that varargs from the
-   caller are passed to the callee. Calls marked ``musttail`` must obey the
-   following additional  rules:
+   varargs from the caller. Calls marked ``musttail`` must obey the following
+   additional  rules:
 
    - The call must immediately precede a :ref:`ret <i_ret>` instruction,
      or a pointer bitcast followed by a ret instruction.
@@ -12344,6 +12378,154 @@ Semantics:
 This function returns the same values as the libm ``round``
 functions would, and handles error conditions in the same way.
 
+'``llvm.lround.*``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+This is an overloaded intrinsic. You can use ``llvm.lround`` on any
+floating-point type. Not all targets support all types however.
+
+::
+
+      declare i32 @llvm.lround.i32.f32(float %Val)
+      declare i32 @llvm.lround.i32.f64(double %Val)
+      declare i32 @llvm.lround.i32.f80(float %Val)
+      declare i32 @llvm.lround.i32.f128(double %Val)
+      declare i32 @llvm.lround.i32.ppcf128(double %Val)
+
+      declare i64 @llvm.lround.i64.f32(float %Val)
+      declare i64 @llvm.lround.i64.f64(double %Val)
+      declare i64 @llvm.lround.i64.f80(float %Val)
+      declare i64 @llvm.lround.i64.f128(double %Val)
+      declare i64 @llvm.lround.i64.ppcf128(double %Val)
+
+Overview:
+"""""""""
+
+The '``llvm.lround.*``' intrinsics returns the operand rounded to the
+nearest integer.
+
+Arguments:
+""""""""""
+
+The argument is a floating-point number and return is an integer type.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``lround``
+functions would, but without setting errno.
+
+'``llvm.llround.*``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+This is an overloaded intrinsic. You can use ``llvm.llround`` on any
+floating-point type. Not all targets support all types however.
+
+::
+
+      declare i64 @llvm.lround.i64.f32(float %Val)
+      declare i64 @llvm.lround.i64.f64(double %Val)
+      declare i64 @llvm.lround.i64.f80(float %Val)
+      declare i64 @llvm.lround.i64.f128(double %Val)
+      declare i64 @llvm.lround.i64.ppcf128(double %Val)
+
+Overview:
+"""""""""
+
+The '``llvm.llround.*``' intrinsics returns the operand rounded to the
+nearest integer.
+
+Arguments:
+""""""""""
+
+The argument is a floating-point number and return is an integer type.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``llround``
+functions would, but without setting errno.
+
+'``llvm.lrint.*``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+This is an overloaded intrinsic. You can use ``llvm.lrint`` on any
+floating-point type. Not all targets support all types however.
+
+::
+
+      declare i32 @llvm.lrint.i32.f32(float %Val)
+      declare i32 @llvm.lrint.i32.f64(double %Val)
+      declare i32 @llvm.lrint.i32.f80(float %Val)
+      declare i32 @llvm.lrint.i32.f128(double %Val)
+      declare i32 @llvm.lrint.i32.ppcf128(double %Val)
+
+      declare i64 @llvm.lrint.i64.f32(float %Val)
+      declare i64 @llvm.lrint.i64.f64(double %Val)
+      declare i64 @llvm.lrint.i64.f80(float %Val)
+      declare i64 @llvm.lrint.i64.f128(double %Val)
+      declare i64 @llvm.lrint.i64.ppcf128(double %Val)
+
+Overview:
+"""""""""
+
+The '``llvm.lrint.*``' intrinsics returns the operand rounded to the
+nearest integer.
+
+Arguments:
+""""""""""
+
+The argument is a floating-point number and return is an integer type.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``lrint``
+functions would, but without setting errno.
+
+'``llvm.llrint.*``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+This is an overloaded intrinsic. You can use ``llvm.llrint`` on any
+floating-point type. Not all targets support all types however.
+
+::
+
+      declare i64 @llvm.llrint.i64.f32(float %Val)
+      declare i64 @llvm.llrint.i64.f64(double %Val)
+      declare i64 @llvm.llrint.i64.f80(float %Val)
+      declare i64 @llvm.llrint.i64.f128(double %Val)
+      declare i64 @llvm.llrint.i64.ppcf128(double %Val)
+
+Overview:
+"""""""""
+
+The '``llvm.llrint.*``' intrinsics returns the operand rounded to the
+nearest integer.
+
+Arguments:
+""""""""""
+
+The argument is a floating-point number and return is an integer type.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``llrint``
+functions would, but without setting errno.
+
 Bit Manipulation Intrinsics
 ---------------------------
 
@@ -13182,6 +13364,32 @@ are useful for representing fractional values to a specific precision. The
 following intrinsics perform fixed point arithmetic operations on 2 operands
 of the same scale, specified as the third argument.
 
+The `llvm.*mul.fix` family of intrinsic functions represents a multiplication
+of fixed point numbers through scaled integers. Therefore, fixed point
+multplication can be represented as
+
+::
+        %result = call i4 @llvm.smul.fix.i4(i4 %a, i4 %b, i32 %scale)
+
+        ; Expands to
+        %a2 = sext i4 %a to i8
+        %b2 = sext i4 %b to i8
+        %mul = mul nsw nuw i8 %a, %b
+        %scale2 = trunc i32 %scale to i8
+        %r = ashr i8 %mul, i8 %scale2  ; this is for a target rounding down towards negative infinity
+        %result = trunc i8 %r to i4
+
+For each of these functions, if the result cannot be represented exactly with
+the provided scale, the result is rounded. Rounding is unspecified since
+preferred rounding may vary for different targets. Rounding is specified
+through a target hook. Different pipelines should legalize or optimize this
+using the rounding specified by this hook if it is provided. Operations like
+constant folding, instruction combining, KnownBits, and ValueTracking should
+also use this hook, if provided, and not assume the direction of rounding. A
+rounded result must always be within one unit of precision from the true
+result. That is, the error between the returned result and the true result must
+be less than 1/2^(scale).
+
 
 '``llvm.smul.fix.*``' Intrinsics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -13300,6 +13508,76 @@ Examples
 
       ; The result in the following could be rounded down to 3.5 or up to 4
       %res = call i4 @llvm.umul.fix.i4(i4 15, i4 1, i32 1)  ; %res = 7 (or 8) (7.5 x 0.5 = 3.75)
+
+
+'``llvm.smul.fix.sat.*``' Intrinsics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax
+"""""""
+
+This is an overloaded intrinsic. You can use ``llvm.smul.fix.sat``
+on any integer bit width or vectors of integers.
+
+::
+
+      declare i16 @llvm.smul.fix.sat.i16(i16 %a, i16 %b, i32 %scale)
+      declare i32 @llvm.smul.fix.sat.i32(i32 %a, i32 %b, i32 %scale)
+      declare i64 @llvm.smul.fix.sat.i64(i64 %a, i64 %b, i32 %scale)
+      declare <4 x i32> @llvm.smul.fix.sat.v4i32(<4 x i32> %a, <4 x i32> %b, i32 %scale)
+
+Overview
+"""""""""
+
+The '``llvm.smul.fix.sat``' family of intrinsic functions perform signed
+fixed point saturation multiplication on 2 arguments of the same scale.
+
+Arguments
+""""""""""
+
+The arguments (%a and %b) and the result may be of integer types of any bit
+width, but they must have the same bit width. ``%a`` and ``%b`` are the two
+values that will undergo signed fixed point multiplication. The argument
+``%scale`` represents the scale of both operands, and must be a constant
+integer.
+
+Semantics:
+""""""""""
+
+This operation performs fixed point multiplication on the 2 arguments of a
+specified scale. The result will also be returned in the same scale specified
+in the third argument.
+
+If the result value cannot be precisely represented in the given scale, the
+value is rounded up or down to the closest representable value. The rounding
+direction is unspecified.
+
+The maximum value this operation can clamp to is the largest signed value
+representable by the bit width of the first 2 arguments. The minimum value is the
+smallest signed value representable by this bit width.
+
+
+Examples
+"""""""""
+
+.. code-block:: llvm
+
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 3, i4 2, i32 0)  ; %res = 6 (2 x 3 = 6)
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 3, i4 2, i32 1)  ; %res = 3 (1.5 x 1 = 1.5)
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 3, i4 -2, i32 1)  ; %res = -3 (1.5 x -1 = -1.5)
+
+      ; The result in the following could be rounded up to -2 or down to -2.5
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 3, i4 -3, i32 1)  ; %res = -5 (or -4) (1.5 x -1.5 = -2.25)
+
+      ; Saturation
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 7, i4 2, i32 0)  ; %res = 7
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 7, i4 2, i32 2)  ; %res = 7
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 -8, i4 2, i32 2)  ; %res = -8
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 -8, i4 -2, i32 2)  ; %res = 7
+
+      ; Scale can affect the saturation result
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 2, i4 4, i32 0)  ; %res = 7 (2 x 4 -> clamped to 7)
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 2, i4 4, i32 1)  ; %res = 4 (1 x 2 = 2)
 
 
 Specialised Arithmetic Intrinsics
@@ -13441,8 +13719,8 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.add.i32.v4i32(<4 x i32> %a)
-      declare i64 @llvm.experimental.vector.reduce.add.i64.v2i64(<2 x i64> %a)
+      declare i32 @llvm.experimental.vector.reduce.add.v4i32(<4 x i32> %a)
+      declare i64 @llvm.experimental.vector.reduce.add.v2i64(<2 x i64> %a)
 
 Overview:
 """""""""
@@ -13455,45 +13733,43 @@ Arguments:
 """"""""""
 The argument to this intrinsic must be a vector of integer values.
 
-'``llvm.experimental.vector.reduce.fadd.*``' Intrinsic
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+'``llvm.experimental.vector.reduce.v2.fadd.*``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Syntax:
 """""""
 
 ::
 
-      declare float @llvm.experimental.vector.reduce.fadd.f32.v4f32(float %acc, <4 x float> %a)
-      declare double @llvm.experimental.vector.reduce.fadd.f64.v2f64(double %acc, <2 x double> %a)
+      declare float @llvm.experimental.vector.reduce.v2.fadd.f32.v4f32(float %start_value, <4 x float> %a)
+      declare double @llvm.experimental.vector.reduce.v2.fadd.f64.v2f64(double %start_value, <2 x double> %a)
 
 Overview:
 """""""""
 
-The '``llvm.experimental.vector.reduce.fadd.*``' intrinsics do a floating-point
+The '``llvm.experimental.vector.reduce.v2.fadd.*``' intrinsics do a floating-point
 ``ADD`` reduction of a vector, returning the result as a scalar. The return type
 matches the element-type of the vector input.
 
-If the intrinsic call has fast-math flags, then the reduction will not preserve
-the associativity of an equivalent scalarized counterpart. If it does not have
-fast-math flags, then the reduction will be *ordered*, implying that the
-operation respects the associativity of a scalarized reduction.
+If the intrinsic call has the 'reassoc' or 'fast' flags set, then the
+reduction will not preserve the associativity of an equivalent scalarized
+counterpart. Otherwise the reduction will be *ordered*, thus implying that
+the operation respects the associativity of a scalarized reduction.
 
 
 Arguments:
 """"""""""
-The first argument to this intrinsic is a scalar accumulator value, which is
-only used when there are no fast-math flags attached. This argument may be undef
-when fast-math flags are used.
-
+The first argument to this intrinsic is a scalar start value for the reduction.
+The type of the start value matches the element-type of the vector input.
 The second argument must be a vector of floating-point values.
 
 Examples:
 """""""""
 
-.. code-block:: llvm
+::
 
-      %fast = call fast float @llvm.experimental.vector.reduce.fadd.f32.v4f32(float undef, <4 x float> %input) ; fast reduction
-      %ord = call float @llvm.experimental.vector.reduce.fadd.f32.v4f32(float %acc, <4 x float> %input) ; ordered reduction
+      %unord = call reassoc float @llvm.experimental.vector.reduce.v2.fadd.f32.v4f32(float 0.0, <4 x float> %input) ; unordered reduction
+      %ord = call float @llvm.experimental.vector.reduce.v2.fadd.f32.v4f32(float %start_value, <4 x float> %input) ; ordered reduction
 
 
 '``llvm.experimental.vector.reduce.mul.*``' Intrinsic
@@ -13504,8 +13780,8 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.mul.i32.v4i32(<4 x i32> %a)
-      declare i64 @llvm.experimental.vector.reduce.mul.i64.v2i64(<2 x i64> %a)
+      declare i32 @llvm.experimental.vector.reduce.mul.v4i32(<4 x i32> %a)
+      declare i64 @llvm.experimental.vector.reduce.mul.v2i64(<2 x i64> %a)
 
 Overview:
 """""""""
@@ -13518,45 +13794,43 @@ Arguments:
 """"""""""
 The argument to this intrinsic must be a vector of integer values.
 
-'``llvm.experimental.vector.reduce.fmul.*``' Intrinsic
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+'``llvm.experimental.vector.reduce.v2.fmul.*``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Syntax:
 """""""
 
 ::
 
-      declare float @llvm.experimental.vector.reduce.fmul.f32.v4f32(float %acc, <4 x float> %a)
-      declare double @llvm.experimental.vector.reduce.fmul.f64.v2f64(double %acc, <2 x double> %a)
+      declare float @llvm.experimental.vector.reduce.v2.fmul.f32.v4f32(float %start_value, <4 x float> %a)
+      declare double @llvm.experimental.vector.reduce.v2.fmul.f64.v2f64(double %start_value, <2 x double> %a)
 
 Overview:
 """""""""
 
-The '``llvm.experimental.vector.reduce.fmul.*``' intrinsics do a floating-point
+The '``llvm.experimental.vector.reduce.v2.fmul.*``' intrinsics do a floating-point
 ``MUL`` reduction of a vector, returning the result as a scalar. The return type
 matches the element-type of the vector input.
 
-If the intrinsic call has fast-math flags, then the reduction will not preserve
-the associativity of an equivalent scalarized counterpart. If it does not have
-fast-math flags, then the reduction will be *ordered*, implying that the
-operation respects the associativity of a scalarized reduction.
+If the intrinsic call has the 'reassoc' or 'fast' flags set, then the
+reduction will not preserve the associativity of an equivalent scalarized
+counterpart. Otherwise the reduction will be *ordered*, thus implying that
+the operation respects the associativity of a scalarized reduction.
 
 
 Arguments:
 """"""""""
-The first argument to this intrinsic is a scalar accumulator value, which is
-only used when there are no fast-math flags attached. This argument may be undef
-when fast-math flags are used.
-
+The first argument to this intrinsic is a scalar start value for the reduction.
+The type of the start value matches the element-type of the vector input.
 The second argument must be a vector of floating-point values.
 
 Examples:
 """""""""
 
-.. code-block:: llvm
+::
 
-      %fast = call fast float @llvm.experimental.vector.reduce.fmul.f32.v4f32(float undef, <4 x float> %input) ; fast reduction
-      %ord = call float @llvm.experimental.vector.reduce.fmul.f32.v4f32(float %acc, <4 x float> %input) ; ordered reduction
+      %unord = call reassoc float @llvm.experimental.vector.reduce.v2.fmul.f32.v4f32(float 1.0, <4 x float> %input) ; unordered reduction
+      %ord = call float @llvm.experimental.vector.reduce.v2.fmul.f32.v4f32(float %start_value, <4 x float> %input) ; ordered reduction
 
 '``llvm.experimental.vector.reduce.and.*``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -13566,7 +13840,7 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.and.i32.v4i32(<4 x i32> %a)
+      declare i32 @llvm.experimental.vector.reduce.and.v4i32(<4 x i32> %a)
 
 Overview:
 """""""""
@@ -13587,7 +13861,7 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.or.i32.v4i32(<4 x i32> %a)
+      declare i32 @llvm.experimental.vector.reduce.or.v4i32(<4 x i32> %a)
 
 Overview:
 """""""""
@@ -13608,7 +13882,7 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.xor.i32.v4i32(<4 x i32> %a)
+      declare i32 @llvm.experimental.vector.reduce.xor.v4i32(<4 x i32> %a)
 
 Overview:
 """""""""
@@ -13629,7 +13903,7 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.smax.i32.v4i32(<4 x i32> %a)
+      declare i32 @llvm.experimental.vector.reduce.smax.v4i32(<4 x i32> %a)
 
 Overview:
 """""""""
@@ -13650,7 +13924,7 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.smin.i32.v4i32(<4 x i32> %a)
+      declare i32 @llvm.experimental.vector.reduce.smin.v4i32(<4 x i32> %a)
 
 Overview:
 """""""""
@@ -13671,7 +13945,7 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.umax.i32.v4i32(<4 x i32> %a)
+      declare i32 @llvm.experimental.vector.reduce.umax.v4i32(<4 x i32> %a)
 
 Overview:
 """""""""
@@ -13692,7 +13966,7 @@ Syntax:
 
 ::
 
-      declare i32 @llvm.experimental.vector.reduce.umin.i32.v4i32(<4 x i32> %a)
+      declare i32 @llvm.experimental.vector.reduce.umin.v4i32(<4 x i32> %a)
 
 Overview:
 """""""""
@@ -13713,8 +13987,8 @@ Syntax:
 
 ::
 
-      declare float @llvm.experimental.vector.reduce.fmax.f32.v4f32(<4 x float> %a)
-      declare double @llvm.experimental.vector.reduce.fmax.f64.v2f64(<2 x double> %a)
+      declare float @llvm.experimental.vector.reduce.fmax.v4f32(<4 x float> %a)
+      declare double @llvm.experimental.vector.reduce.fmax.v2f64(<2 x double> %a)
 
 Overview:
 """""""""
@@ -13738,8 +14012,8 @@ Syntax:
 
 ::
 
-      declare float @llvm.experimental.vector.reduce.fmin.f32.v4f32(<4 x float> %a)
-      declare double @llvm.experimental.vector.reduce.fmin.f64.v2f64(<2 x double> %a)
+      declare float @llvm.experimental.vector.reduce.fmin.v4f32(<4 x float> %a)
+      declare double @llvm.experimental.vector.reduce.fmin.v2f64(<2 x double> %a)
 
 Overview:
 """""""""
@@ -14822,6 +15096,77 @@ Semantics:
 The result produced is the product of the first two operands added to the third
 operand computed with infinite precision, and then rounded to the target
 precision.
+
+'``llvm.experimental.constrained.fptrunc``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <ty2>
+      @llvm.experimental.constrained.fptrunc(<type> <value>,
+                                          metadata <rounding mode>,
+                                          metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.fptrunc``' intrinsic truncates ``value``
+to type ``ty2``.
+
+Arguments:
+""""""""""
+
+The first argument to the '``llvm.experimental.constrained.fptrunc``'
+intrinsic must be :ref:`floating point <t_floating>` or :ref:`vector
+<t_vector>` of floating point values. This argument must be larger in size
+than the result.
+
+The second and third arguments specify the rounding mode and exception 
+behavior as described above.
+
+Semantics:
+""""""""""
+
+The result produced is a floating point value truncated to be smaller in size
+than the operand.
+
+'``llvm.experimental.constrained.fpext``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <ty2>
+      @llvm.experimental.constrained.fpext(<type> <value>,
+                                          metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.fpext``' intrinsic extends a 
+floating-point ``value`` to a larger floating-point value.
+
+Arguments:
+""""""""""
+
+The first argument to the '``llvm.experimental.constrained.fpext``'
+intrinsic must be :ref:`floating point <t_floating>` or :ref:`vector
+<t_vector>` of floating point values. This argument must be smaller in size
+than the result.
+
+The second argument specifies the exception behavior as described above.
+
+Semantics:
+""""""""""
+
+The result produced is a floating point value extended to be larger in size
+than the operand. All restrictions that apply to the fpext instruction also
+apply to this intrinsic.
 
 Constrained libm-equivalent Intrinsics
 --------------------------------------

@@ -239,25 +239,25 @@ int internal_sysctlbyname(const char *sname, void *oldp, usize *oldlenp,
                       (size_t)newlen);
 }
 
-int internal_forkpty(int *amaster) {
-  int master, slave;
-  if (openpty(&master, &slave, nullptr, nullptr, nullptr) == -1) return -1;
+int internal_forkpty(int *aparent) {
+  int parent, worker;
+  if (openpty(&parent, &worker, nullptr, nullptr, nullptr) == -1) return -1;
   int pid = internal_fork();
   if (pid == -1) {
-    close(master);
-    close(slave);
+    close(parent);
+    close(worker);
     return -1;
   }
   if (pid == 0) {
-    close(master);
-    if (login_tty(slave) != 0) {
+    close(parent);
+    if (login_tty(worker) != 0) {
       // We already forked, there's not much we can do.  Let's quit.
       Report("login_tty failed (errno %d)\n", errno);
       internal__exit(1);
     }
   } else {
-    *amaster = master;
-    close(slave);
+    *aparent = parent;
+    close(worker);
   }
   return pid;
 }
@@ -558,8 +558,8 @@ MacosVersion GetMacosVersionInternal() {
       if (minor >= 5)
         return MACOS_VERSION_HIGH_SIERRA_DOT_RELEASE_4;
       return MACOS_VERSION_HIGH_SIERRA;
-    case 18:
-      return MACOS_VERSION_MOJAVE;
+    case 18: return MACOS_VERSION_MOJAVE;
+    case 19: return MACOS_VERSION_CATALINA;
     default:
       if (major < 9) return MACOS_VERSION_UNKNOWN;
       return MACOS_VERSION_UNKNOWN_NEWER;

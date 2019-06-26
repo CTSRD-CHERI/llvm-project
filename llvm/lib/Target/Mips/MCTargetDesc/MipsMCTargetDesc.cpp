@@ -11,13 +11,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "MipsMCTargetDesc.h"
-#include "InstPrinter/MipsInstPrinter.h"
 #include "MipsAsmBackend.h"
 #include "MipsBaseInfo.h"
 #include "MipsELFStreamer.h"
+#include "MipsInstPrinter.h"
 #include "MipsMCAsmInfo.h"
 #include "MipsMCNaCl.h"
 #include "MipsTargetStreamer.h"
+#include "TargetInfo/MipsTargetInfo.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCELFStreamer.h"
@@ -93,7 +94,7 @@ static MCAsmInfo *createMipsMCAsmInfo(const MCRegisterInfo &MRI,
   // just the triple.
   unsigned SP = MRI.getDwarfRegNum(
       TT.getEnvironment() == Triple::CheriPurecap ? Mips::C11 : Mips::SP, true);
-  MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, SP, 0);
+  MCCFIInstruction Inst = MCCFIInstruction::createDefCfaRegister(nullptr, SP);
   MAI->addInitialFrameState(Inst);
 
   return MAI;

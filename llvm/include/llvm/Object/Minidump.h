@@ -43,6 +43,13 @@ public:
   /// file does not contain a stream of this type.
   Optional<ArrayRef<uint8_t>> getRawStream(minidump::StreamType Type) const;
 
+  /// Returns the raw contents of an object given by the LocationDescriptor. An
+  /// error is returned if the descriptor points outside of the minidump file.
+  Expected<ArrayRef<uint8_t>>
+  getRawData(minidump::LocationDescriptor Desc) const {
+    return getDataSlice(getData(), Desc.RVA, Desc.DataSize);
+  }
+
   /// Returns the minidump string at the given offset. An error is returned if
   /// we fail to parse the string, or the string is invalid UTF16.
   Expected<std::string> getString(size_t Offset) const;
@@ -55,14 +62,42 @@ public:
     return getStream<minidump::SystemInfo>(minidump::StreamType::SystemInfo);
   }
 
+  /// Returns the module list embedded in the ModuleList stream. An error is
+  /// returned if the file does not contain this stream, or if the stream is
+  /// not large enough to contain the number of modules declared in the stream
+  /// header. The consistency of the Module entries themselves is not checked in
+  /// any way.
+  Expected<ArrayRef<minidump::Module>> getModuleList() const {
+    return getListStream<minidump::Module>(minidump::StreamType::ModuleList);
+  }
+
+  /// Returns the thread list embedded in the ThreadList stream. An error is
+  /// returned if the file does not contain this stream, or if the stream is
+  /// not large enough to contain the number of threads declared in the stream
+  /// header. The consistency of the Thread entries themselves is not checked in
+  /// any way.
+  Expected<ArrayRef<minidump::Thread>> getThreadList() const {
+    return getListStream<minidump::Thread>(minidump::StreamType::ThreadList);
+  }
+
+  /// Returns the list of memory ranges embedded in the MemoryList stream. An
+  /// error is returned if the file does not contain this stream, or if the
+  /// stream is not large enough to contain the number of memory descriptors
+  /// declared in the stream header. The consistency of the MemoryDescriptor
+  /// entries themselves is not checked in any way.
+  Expected<ArrayRef<minidump::MemoryDescriptor>> getMemoryList() const {
+    return getListStream<minidump::MemoryDescriptor>(
+        minidump::StreamType::MemoryList);
+  }
+
 private:
-  static Error createError(StringRef Str,
-                           object_error Err = object_error::parse_failed) {
-    return make_error<GenericBinaryError>(Str, Err);
+  static Error createError(StringRef Str) {
+    return make_error<GenericBinaryError>(Str, object_error::parse_failed);
   }
 
   static Error createEOFError() {
-    return createError("Unexpected EOF", object_error::unexpected_eof);
+    return make_error<GenericBinaryError>("Unexpected EOF",
+                                          object_error::unexpected_eof);
   }
 
   /// Return a slice of the given data array, with bounds checking.
@@ -91,6 +126,11 @@ private:
   template <typename T>
   Expected<const T &> getStream(minidump::StreamType Stream) const;
 
+  /// Return the contents of a stream which contains a list of fixed-size items,
+  /// prefixed by the list size.
+  template <typename T>
+  Expected<ArrayRef<T>> getListStream(minidump::StreamType Stream) const;
+
   const minidump::Header &Header;
   ArrayRef<minidump::Directory> Streams;
   DenseMap<minidump::StreamType, std::size_t> StreamMap;
@@ -101,9 +141,9 @@ Expected<const T &> MinidumpFile::getStream(minidump::StreamType Stream) const {
   if (auto OptionalStream = getRawStream(Stream)) {
     if (OptionalStream->size() >= sizeof(T))
       return *reinterpret_cast<const T *>(OptionalStream->data());
-    return createError("Malformed stream", object_error::unexpected_eof);
+    return createEOFError();
   }
-  return createError("No such stream", object_error::invalid_section_index);
+  return createError("No such stream");
 }
 
 template <typename T>

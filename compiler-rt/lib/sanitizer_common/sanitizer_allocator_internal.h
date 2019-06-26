@@ -22,41 +22,29 @@ namespace __sanitizer {
 // purposes.
 typedef CompactSizeClassMap InternalSizeClassMap;
 
-static const usize kInternalAllocatorRegionSizeLog = 20;
-static const usize kInternalAllocatorNumRegions =
-    SANITIZER_MMAP_RANGE_SIZE >> kInternalAllocatorRegionSizeLog;
-#if SANITIZER_WORDSIZE == 32
-typedef FlatByteMap<kInternalAllocatorNumRegions> ByteMap;
-#else
-typedef TwoLevelByteMap<(kInternalAllocatorNumRegions >> 12), 1 << 12> ByteMap;
-#endif
 struct AP32 {
   static const vaddr kSpaceBeg = 0;
   static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
   static const usize kMetadataSize = 0;
   typedef InternalSizeClassMap SizeClassMap;
-  static const usize kRegionSizeLog = kInternalAllocatorRegionSizeLog;
+  static const usize kRegionSizeLog = 20;
   using AddressSpaceView = LocalAddressSpaceView;
-  using ByteMap = __sanitizer::ByteMap;
   typedef NoOpMapUnmapCallback MapUnmapCallback;
   static const usize kFlags = 0;
 };
 typedef SizeClassAllocator32<AP32> PrimaryInternalAllocator;
 
-typedef SizeClassAllocatorLocalCache<PrimaryInternalAllocator>
-    InternalAllocatorCache;
-
-typedef LargeMmapAllocator<NoOpMapUnmapCallback,
-                           LargeMmapAllocatorPtrArrayStatic>
-    SecondaryInternalAllocator;
-
-typedef CombinedAllocator<PrimaryInternalAllocator, InternalAllocatorCache,
-                          SecondaryInternalAllocator> InternalAllocator;
+typedef CombinedAllocator<PrimaryInternalAllocator,
+                          LargeMmapAllocatorPtrArrayStatic>
+    InternalAllocator;
+typedef InternalAllocator::AllocatorCache InternalAllocatorCache;
 
 void *InternalAlloc(usize size, InternalAllocatorCache *cache = nullptr,
                     usize alignment = 0);
 void *InternalRealloc(void *p, usize size,
                       InternalAllocatorCache *cache = nullptr);
+void *InternalReallocArray(void *p, usize count, usize size,
+                           InternalAllocatorCache *cache = nullptr);
 void *InternalCalloc(usize count, usize size,
                      InternalAllocatorCache *cache = nullptr);
 void InternalFree(void *p, InternalAllocatorCache *cache = nullptr);

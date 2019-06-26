@@ -12,6 +12,7 @@
 
 #include "X86TargetMachine.h"
 #include "MCTargetDesc/X86MCTargetDesc.h"
+#include "TargetInfo/X86TargetInfo.h"
 #include "X86.h"
 #include "X86CallLowering.h"
 #include "X86LegalizerInfo.h"
@@ -37,6 +38,7 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
@@ -69,6 +71,7 @@ extern "C" void LLVMInitializeX86Target() {
   initializeFixupBWInstPassPass(PR);
   initializeEvexToVexInstPassPass(PR);
   initializeFixupLEAPassPass(PR);
+  initializeFPSPass(PR);
   initializeX86CallFrameOptimizationPass(PR);
   initializeX86CmovConverterPassPass(PR);
   initializeX86ExpandPseudoPass(PR);
@@ -193,7 +196,7 @@ static CodeModel::Model getEffectiveX86CodeModel(Optional<CodeModel::Model> CM,
                                                  bool JIT, bool Is64Bit) {
   if (CM) {
     if (*CM == CodeModel::Tiny)
-      report_fatal_error("Target does not support the tiny CodeModel");
+      report_fatal_error("Target does not support the tiny CodeModel", false);
     return *CM;
   }
   if (JIT)
@@ -377,6 +380,8 @@ public:
   void addPreEmitPass() override;
   void addPreEmitPass2() override;
   void addPreSched2() override;
+
+  std::unique_ptr<CSEConfigBase> getCSEConfig() const override;
 };
 
 class X86ExecutionDomainFix : public ExecutionDomainFix {
@@ -517,6 +522,13 @@ void X86PassConfig::addPreEmitPass2() {
   // correct CFA calculation rule where needed by inserting appropriate CFI
   // instructions.
   const Triple &TT = TM->getTargetTriple();
-  if (!TT.isOSDarwin() && !TT.isOSWindows())
+  const MCAsmInfo *MAI = TM->getMCAsmInfo();
+  if (!TT.isOSDarwin() &&
+      (!TT.isOSWindows() ||
+       MAI->getExceptionHandlingType() == ExceptionHandling::DwarfCFI))
     addPass(createCFIInstrInserter());
+}
+
+std::unique_ptr<CSEConfigBase> X86PassConfig::getCSEConfig() const {
+  return getStandardCSEConfigForOpt(TM->getOptLevel());
 }

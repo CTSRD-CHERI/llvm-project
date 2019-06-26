@@ -54,7 +54,7 @@ entry:
   ; CHECK-NEXT: clc $c1, $zero, 0([[CPYADDR]])
   ; TODO: there is no need to set the bounds on the va_copy() destination
   ; since it is just a single capability store.
-  ; CHECK-NEXT: csetbounds [[BOUNDED_STACK:\$c[0-9]+]], [[STACK:\$c(11|24)]], [[$CAP_SIZE]]
+  ; CHECK-NEXT: csetbounds [[BOUNDED_STACK:\$c[0-9]+]], [[STACK:\$c(11|24)]], [[#CAP_SIZE]]
   ; CHECK-NEXT: csc $c1, $zero, 0([[BOUNDED_STACK]])
   ; Load the va_list into the return capability: note: 0($c11) == $c2
   ; CHECK-NEXT: clc $c3, $zero, 0([[STACK]])
@@ -74,7 +74,7 @@ entry:
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
   ; TODO: this could be a simple cmove!
-  ; CHECK: csetbounds [[BOUNDED_STACK:\$c[0-9]+]], [[STACK:\$c(11|24)]], [[$CAP_SIZE]]
+  ; CHECK: csetbounds [[BOUNDED_STACK:\$c[0-9]+]], [[STACK:\$c(11|24)]], [[#CAP_SIZE]]
   ; CHECK-NEXT: csc $c13, $zero, 0([[BOUNDED_STACK]])
   ; CHECK-NEXT: clc $c3, $zero, 0([[STACK]])
   ; CHECK: clcbi   $c12, %capcall20(g)($c1)
@@ -106,7 +106,7 @@ declare i8 addrspace(200)* @llvm.mips.cap.offset.set(i8 addrspace(200)*, i64) #3
 define void @k(i32 addrspace(200)* %x, i32 addrspace(200)* %y) #0 {
 ; When calling a variadic function, we should set $c13 to the size of the arguments
 entry:
-; CHECK: csetbounds	$c2, $c11, [[$CAP_SIZE]]
+; CHECK: csetbounds	$c2, $c11, [[#CAP_SIZE]]
 ; CHECK: ori	$[[TMP:[0-9]+]], $zero, 65495
 ; CHECK: candperm	$c13, $c2, $[[TMP]]
   %x.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)

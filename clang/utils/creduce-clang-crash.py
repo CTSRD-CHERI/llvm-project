@@ -93,9 +93,14 @@ class Reduce(object):
   def read_clang_args(self, crash_script, filename):
     print("\nReading arguments from crash script...")
     with open(crash_script) as f:
-      # Assume clang call is on the last line of the script
-      line = f.readlines()[-1]
-      cmd = shlex.split(line)
+      # Assume clang call is the first non comment line.
+      cmd = []
+      for line in f:
+        if not line.lstrip().startswith('#'):
+          cmd = shlex.split(line)
+          break
+    if not cmd:
+      sys.exit("Could not find command in the crash script.");
 
     # Remove clang and filename from the command
     # Assume the last occurrence of the filename is the clang input file
@@ -122,7 +127,7 @@ class Reduce(object):
     # Look for specific error messages
     regexes = [r"Assertion `(.+)' failed", # Linux assert()
                r"Assertion failed: (.+),", # FreeBSD/Mac assert()
-               r"fatal error: backend error: (.+)",
+               r"fatal error: error in backend: (.+)",
                r"LLVM ERROR: (.+)",
                r"UNREACHABLE executed (at .+)?!",
                r"LLVM IR generation of ceclaration '(.+)'",
@@ -182,7 +187,7 @@ class Reduce(object):
         (pipes.quote(not_cmd), crash_flag, quote_cmd(self.get_crash_cmd()))
 
     for msg in self.expected_output:
-      output += 'grep %s t.log || exit 1\n' % pipes.quote(msg)
+      output += 'grep -F %s t.log || exit 1\n' % pipes.quote(msg)
 
     write_to_script(output, self.testfile)
     self.check_interestingness()
@@ -286,6 +291,10 @@ class Reduce(object):
                                     opts_startswith=["-gcodeview",
                                                      "-debug-info-kind=",
                                                      "-debugger-tuning="])
+
+    new_args = self.try_remove_args(new_args,
+                                    msg="Removed --show-includes",
+                                    opts_startswith=["--show-includes"])
     # Not suppressing warnings (-w) sometimes prevents the crash from occurring
     # after preprocessing
     new_args = self.try_remove_args(new_args,

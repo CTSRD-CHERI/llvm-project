@@ -2004,6 +2004,19 @@ static void writeDINamespace(raw_ostream &Out, const DINamespace *N,
   Out << ")";
 }
 
+static void writeDICommonBlock(raw_ostream &Out, const DICommonBlock *N,
+                               TypePrinting *TypePrinter, SlotTracker *Machine,
+                               const Module *Context) {
+  Out << "!DICommonBlock(";
+  MDFieldPrinter Printer(Out, TypePrinter, Machine, Context);
+  Printer.printMetadata("scope", N->getRawScope(), false);
+  Printer.printMetadata("declaration", N->getRawDecl(), false);
+  Printer.printString("name", N->getName());
+  Printer.printMetadata("file", N->getRawFile());
+  Printer.printInt("line", N->getLineNo());
+  Out << ")";
+}
+
 static void writeDIMacro(raw_ostream &Out, const DIMacro *N,
                          TypePrinting *TypePrinter, SlotTracker *Machine,
                          const Module *Context) {
@@ -3031,6 +3044,7 @@ void AssemblyWriter::printSummary(const GlobalValueSummary &Summary) {
   Out << ", notEligibleToImport: " << GVFlags.NotEligibleToImport;
   Out << ", live: " << GVFlags.Live;
   Out << ", dsoLocal: " << GVFlags.DSOLocal;
+  Out << ", canAutoHide: " << GVFlags.CanAutoHide;
   Out << ")";
 
   if (Summary.getSummaryKind() == GlobalValueSummary::AliasKind)
@@ -3236,6 +3250,12 @@ void AssemblyWriter::printGlobal(const GlobalVariable *GV) {
     printEscapedString(GV->getSection(), Out);
     Out << '"';
   }
+  if (GV->hasPartition()) {
+    Out << ", partition \"";
+    printEscapedString(GV->getPartition(), Out);
+    Out << '"';
+  }
+
   maybePrintComdat(Out, *GV);
   if (GV->getAlignment())
     Out << ", align " << GV->getAlignment();
@@ -3285,6 +3305,12 @@ void AssemblyWriter::printIndirectSymbol(const GlobalIndirectSymbol *GIS) {
     Out << " <<NULL ALIASEE>>";
   } else {
     writeOperand(IS, !isa<ConstantExpr>(IS));
+  }
+
+  if (GIS->hasPartition()) {
+    Out << ", partition \"";
+    printEscapedString(GIS->getPartition(), Out);
+    Out << '"';
   }
 
   printInfoComment(*GIS);
@@ -3425,6 +3451,11 @@ void AssemblyWriter::printFunction(const Function *F) {
   if (F->hasSection()) {
     Out << " section \"";
     printEscapedString(F->getSection(), Out);
+    Out << '"';
+  }
+  if (F->hasPartition()) {
+    Out << " partition \"";
+    printEscapedString(F->getPartition(), Out);
     Out << '"';
   }
   maybePrintComdat(Out, *F);

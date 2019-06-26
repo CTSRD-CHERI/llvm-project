@@ -570,6 +570,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(align);
   KEYWORD(addrspace);
   KEYWORD(section);
+  KEYWORD(partition);
   KEYWORD(alias);
   KEYWORD(ifunc);
   KEYWORD(module);
@@ -736,6 +737,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(notEligibleToImport);
   KEYWORD(live);
   KEYWORD(dsoLocal);
+  KEYWORD(canAutoHide);
   KEYWORD(function);
   KEYWORD(insts);
   KEYWORD(funcFlags);

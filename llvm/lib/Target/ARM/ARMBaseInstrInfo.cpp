@@ -133,7 +133,7 @@ ARMBaseInstrInfo::CreateTargetHazardRecognizer(const TargetSubtargetInfo *STI,
 ScheduleHazardRecognizer *ARMBaseInstrInfo::
 CreateTargetPostRAHazardRecognizer(const InstrItineraryData *II,
                                    const ScheduleDAG *DAG) const {
-  if (Subtarget.isThumb2() || Subtarget.hasVFP2())
+  if (Subtarget.isThumb2() || Subtarget.hasVFP2Base())
     return (ScheduleHazardRecognizer *)new ARMHazardRecognizer(II, DAG);
   return TargetInstrInfo::CreateTargetPostRAHazardRecognizer(II, DAG);
 }
@@ -706,15 +706,7 @@ unsigned ARMBaseInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   if (MCID.getSize())
     return MCID.getSize();
 
-  // If this machine instr is an inline asm, measure it.
-  if (MI.getOpcode() == ARM::INLINEASM) {
-    unsigned Size = getInlineAsmLength(MI.getOperand(0).getSymbolName(), *MAI);
-    if (!MF->getInfo<ARMFunctionInfo>()->isThumbFunction())
-      Size = alignTo(Size, 4);
-    return Size;
-  }
-  unsigned Opc = MI.getOpcode();
-  switch (Opc) {
+  switch (MI.getOpcode()) {
   default:
     // pseudo-instruction sizes are zero.
     return 0;
@@ -751,6 +743,14 @@ unsigned ARMBaseInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     return 12;
   case ARM::SPACE:
     return MI.getOperand(1).getImm();
+  case ARM::INLINEASM:
+  case ARM::INLINEASM_BR: {
+    // If this machine instr is an inline asm, measure it.
+    unsigned Size = getInlineAsmLength(MI.getOperand(0).getSymbolName(), *MAI);
+    if (!MF->getInfo<ARMFunctionInfo>()->isThumbFunction())
+      Size = alignTo(Size, 4);
+    return Size;
+  }
   }
 }
 
@@ -830,7 +830,7 @@ void ARMBaseInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     Opc = ARM::VMOVRS;
   else if (SPRDest && GPRSrc)
     Opc = ARM::VMOVSR;
-  else if (ARM::DPRRegClass.contains(DestReg, SrcReg) && !Subtarget.isFPOnlySP())
+  else if (ARM::DPRRegClass.contains(DestReg, SrcReg) && Subtarget.hasFP64())
     Opc = ARM::VMOVD;
   else if (ARM::QPRRegClass.contains(DestReg, SrcReg))
     Opc = ARM::VORRq;
@@ -890,7 +890,8 @@ void ARMBaseInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BeginIdx = ARM::dsub_0;
     SubRegs = 4;
     Spacing = 2;
-  } else if (ARM::DPRRegClass.contains(DestReg, SrcReg) && Subtarget.isFPOnlySP()) {
+  } else if (ARM::DPRRegClass.contains(DestReg, SrcReg) &&
+             !Subtarget.hasFP64()) {
     Opc = ARM::VMOVS;
     BeginIdx = ARM::ssub_0;
     SubRegs = 2;
@@ -1481,7 +1482,7 @@ bool ARMBaseInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   // copyPhysReg() calls.  Look for VMOVS instructions that can legally be
   // widened to VMOVD.  We prefer the VMOVD when possible because it may be
   // changed into a VORR that can go down the NEON pipeline.
-  if (!MI.isCopy() || Subtarget.dontWidenVMOVS() || Subtarget.isFPOnlySP())
+  if (!MI.isCopy() || Subtarget.dontWidenVMOVS() || !Subtarget.hasFP64())
     return false;
 
   // Look for a copy between even S-registers.  That is where we keep floats
@@ -1904,19 +1905,10 @@ isProfitableToIfCvt(MachineBasicBlock &MBB,
     if (!Pred->empty()) {
       MachineInstr *LastMI = &*Pred->rbegin();
       if (LastMI->getOpcode() == ARM::t2Bcc) {
-        MachineBasicBlock::iterator CmpMI = LastMI;
-        if (CmpMI != Pred->begin()) {
-          --CmpMI;
-          if (CmpMI->getOpcode() == ARM::tCMPi8 ||
-              CmpMI->getOpcode() == ARM::t2CMPri) {
-            unsigned Reg = CmpMI->getOperand(0).getReg();
-            unsigned PredReg = 0;
-            ARMCC::CondCodes P = getInstrPredicate(*CmpMI, PredReg);
-            if (P == ARMCC::AL && CmpMI->getOperand(1).getImm() == 0 &&
-                isARMLowRegister(Reg))
-              return false;
-          }
-        }
+        const TargetRegisterInfo *TRI = &getRegisterInfo();
+        MachineInstr *CmpMI = findCMPToFoldIntoCBZ(LastMI, TRI);
+        if (CmpMI)
+          return false;
       }
     }
   }
@@ -1932,6 +1924,15 @@ isProfitableToIfCvt(MachineBasicBlock &TBB,
                     BranchProbability Probability) const {
   if (!TCycles)
     return false;
+
+  // In thumb code we often end up trading one branch for a IT block, and
+  // if we are cloning the instruction can increase code size. Prevent
+  // blocks with multiple predecesors from being ifcvted to prevent this
+  // cloning.
+  if (Subtarget.isThumb2() && TBB.getParent()->getFunction().hasMinSize()) {
+    if (TBB.pred_size() != 1 || FBB.pred_size() != 1)
+      return false;
+  }
 
   // Attempt to estimate the relative costs of predication versus branching.
   // Here we scale up each component of UnpredCost to avoid precision issue when
@@ -2392,7 +2393,7 @@ bool llvm::rewriteARMFrameIndex(MachineInstr &MI, unsigned FrameRegIdx,
   bool isSub = false;
 
   // Memory operands in inline assembly always use AddrMode2.
-  if (Opcode == ARM::INLINEASM)
+  if (Opcode == ARM::INLINEASM || Opcode == ARM::INLINEASM_BR)
     AddrMode = ARMII::AddrMode2;
 
   if (Opcode == ARM::ADDri) {
@@ -2475,6 +2476,12 @@ bool llvm::rewriteARMFrameIndex(MachineInstr &MI, unsigned FrameRegIdx,
         InstrOffs *= -1;
       NumBits = 8;
       Scale = 2;
+      break;
+    case ARMII::AddrModeT2_i7s4:
+      ImmIdx = FrameRegIdx+1;
+      InstrOffs = MI.getOperand(ImmIdx).getImm();
+      NumBits = 7;
+      Scale = 4;
       break;
     default:
       llvm_unreachable("Unsupported addressing mode!");
@@ -5201,4 +5208,45 @@ ARMBaseInstrInfo::getSerializableBitmaskMachineOperandTargetFlags() const {
       {MO_SECREL, "arm-secrel"},
       {MO_NONLAZY, "arm-nonlazy"}};
   return makeArrayRef(TargetFlags);
+}
+
+bool llvm::registerDefinedBetween(unsigned Reg,
+                                  MachineBasicBlock::iterator From,
+                                  MachineBasicBlock::iterator To,
+                                  const TargetRegisterInfo *TRI) {
+  for (auto I = From; I != To; ++I)
+    if (I->modifiesRegister(Reg, TRI))
+      return true;
+  return false;
+}
+
+MachineInstr *llvm::findCMPToFoldIntoCBZ(MachineInstr *Br,
+                                         const TargetRegisterInfo *TRI) {
+  // Search backwards to the instruction that defines CSPR. This may or not
+  // be a CMP, we check that after this loop. If we find another instruction
+  // that reads cpsr, we return nullptr.
+  MachineBasicBlock::iterator CmpMI = Br;
+  while (CmpMI != Br->getParent()->begin()) {
+    --CmpMI;
+    if (CmpMI->modifiesRegister(ARM::CPSR, TRI))
+      break;
+    if (CmpMI->readsRegister(ARM::CPSR, TRI))
+      break;
+  }
+
+  // Check that this inst is a CMP r[0-7], #0 and that the register
+  // is not redefined between the cmp and the br.
+  if (CmpMI->getOpcode() != ARM::tCMPi8 && CmpMI->getOpcode() != ARM::t2CMPri)
+    return nullptr;
+  unsigned Reg = CmpMI->getOperand(0).getReg();
+  unsigned PredReg = 0;
+  ARMCC::CondCodes Pred = getInstrPredicate(*CmpMI, PredReg);
+  if (Pred != ARMCC::AL || CmpMI->getOperand(1).getImm() != 0)
+    return nullptr;
+  if (!isARMLowRegister(Reg))
+    return nullptr;
+  if (registerDefinedBetween(Reg, CmpMI->getNextNode(), Br, TRI))
+    return nullptr;
+
+  return &*CmpMI;
 }

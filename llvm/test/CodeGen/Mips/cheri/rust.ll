@@ -7,8 +7,8 @@ declare { i32 addrspace(200)*, i32 addrspace(200)* } @"_ZN13libcore_cheri5slice2
 define void @a() nounwind {
 ; CHECK-LABEL: a:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|128]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(a)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(a)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
@@ -18,9 +18,9 @@ define void @a() nounwind {
 ; CHECK-NEXT:    daddiu $4, $zero, 0
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    daddiu $5, $zero, 6
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
   call { i32 addrspace(200)*, i32 addrspace(200)* } @"_ZN13libcore_cheri5slice29_$LT$impl$u20$$u5b$T$u5d$$GT$4iter17h36a7eda044ca512cE"(i32 addrspace(200)* null, i128 6)
   ret void
 }

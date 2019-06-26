@@ -6482,9 +6482,21 @@ static void handleNoSanitizeSpecificAttr(Sema &S, Decl *D,
   if (isGlobalVar(D) && SanitizerName != "address")
     S.Diag(D->getLocation(), diag::err_attribute_wrong_decl_type)
         << AL << ExpectedFunction;
-  D->addAttr(::new (S.Context)
-                 NoSanitizeAttr(AL.getRange(), S.Context, &SanitizerName, 1,
-                                AL.getAttributeSpellingListIndex()));
+
+  // FIXME: Rather than create a NoSanitizeSpecificAttr, this creates a
+  // NoSanitizeAttr object; but we need to calculate the correct spelling list
+  // index rather than incorrectly assume the index for NoSanitizeSpecificAttr
+  // has the same spellings as the index for NoSanitizeAttr. We don't have a
+  // general way to "translate" between the two, so this hack attempts to work
+  // around the issue with hard-coded indicies. This is critical for calling
+  // getSpelling() or prettyPrint() on the resulting semantic attribute object
+  // without failing assertions.
+  unsigned TranslatedSpellingIndex = 0;
+  if (AL.isC2xAttribute() || AL.isCXX11Attribute())
+    TranslatedSpellingIndex = 1;
+
+  D->addAttr(::new (S.Context) NoSanitizeAttr(
+      AL.getRange(), S.Context, &SanitizerName, 1, TranslatedSpellingIndex));
 }
 
 static void handleInternalLinkageAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
@@ -6994,7 +7006,8 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleNoCfCheckAttr(S, D, AL);
     break;
   case ParsedAttr::AT_NoThrow:
-    handleSimpleAttribute<NoThrowAttr>(S, D, AL);
+    if (!AL.isUsedAsTypeAttr())
+      handleSimpleAttribute<NoThrowAttr>(S, D, AL);
     break;
   case ParsedAttr::AT_CUDAShared:
     handleSharedAttr(S, D, AL);
@@ -7133,6 +7146,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case ParsedAttr::AT_ObjCSubclassingRestricted:
     handleSimpleAttribute<ObjCSubclassingRestrictedAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_ObjCClassStub:
+    handleSimpleAttribute<ObjCClassStubAttr>(S, D, AL);
     break;
   case ParsedAttr::AT_ObjCExplicitProtocolImpl:
     handleObjCSuppresProtocolAttr(S, D, AL);

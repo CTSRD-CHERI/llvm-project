@@ -104,13 +104,28 @@ function(llvm_ExternalProject_Add name source_dir)
     endforeach()
   endforeach()
 
+  foreach(arg ${ARG_CMAKE_ARGS})
+    if(arg MATCHES "^-DCMAKE_SYSTEM_NAME=")
+      string(REGEX REPLACE "^-DCMAKE_SYSTEM_NAME=(.*)$" "\\1" _cmake_system_name "${arg}")
+    endif()
+  endforeach()
+
   if(ARG_USE_TOOLCHAIN AND NOT CMAKE_CROSSCOMPILING)
     if(CLANG_IN_TOOLCHAIN)
-      set(compiler_args -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang
-                        -DCMAKE_CXX_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang++)
+      if(_cmake_system_name STREQUAL Windows)
+        set(compiler_args -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang-cl
+                          -DCMAKE_CXX_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang-cl)
+      else()
+        set(compiler_args -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang
+                          -DCMAKE_CXX_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang++)
+      endif()
     endif()
     if(lld IN_LIST TOOLCHAIN_TOOLS)
-      list(APPEND compiler_args -DCMAKE_LINKER=${LLVM_RUNTIME_OUTPUT_INTDIR}/ld.lld)
+      if(_cmake_system_name STREQUAL Windows)
+        list(APPEND compiler_args -DCMAKE_LINKER=${LLVM_RUNTIME_OUTPUT_INTDIR}/lld-link)
+      else()
+        list(APPEND compiler_args -DCMAKE_LINKER=${LLVM_RUNTIME_OUTPUT_INTDIR}/ld.lld)
+      endif()
     endif()
     if(llvm-ar IN_LIST TOOLCHAIN_TOOLS)
       list(APPEND compiler_args -DCMAKE_AR=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-ar)
@@ -216,6 +231,8 @@ function(llvm_ExternalProject_Add name source_dir)
                -DLLVM_ENABLE_WERROR=${LLVM_ENABLE_WERROR}
                -DLLVM_HOST_TRIPLE=${LLVM_HOST_TRIPLE}
                -DLLVM_HAVE_LINK_VERSION_SCRIPT=${LLVM_HAVE_LINK_VERSION_SCRIPT}
+               -DLLVM_USE_RELATIVE_PATHS_IN_DEBUG_INFO=${LLVM_USE_RELATIVE_PATHS_IN_DEBUG_INFO}
+               -DLLVM_SOURCE_PREFIX=${LLVM_SOURCE_PREFIX}
                -DPACKAGE_VERSION=${PACKAGE_VERSION}
                -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}

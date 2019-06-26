@@ -9,13 +9,8 @@
 
 #include "support/pstl_test_config.h"
 
-#ifdef PSTL_STANDALONE_TESTS
-#include "pstl/execution"
-#include "pstl/algorithm"
-#else
 #include <execution>
 #include <algorithm>
-#endif // PSTL_STANDALONE_TESTS
 
 #include "support/utils.h"
 
@@ -25,10 +20,10 @@ using namespace TestUtils;
 
 struct UserType
 {
+    size_t key;
     float32_t f;
     float64_t d;
     int32_t i;
-    size_t key;
 
     bool
     operator()(UserType a, UserType b)
@@ -159,7 +154,7 @@ main()
     test<int32_t>(8 * sizeof(int32_t));
     test<uint16_t>(8 * sizeof(uint16_t));
     test<float64_t>(53);
-#if !__PSTL_ICC_16_17_TEST_REDUCTION_BOOL_TYPE_RELEASE_64_BROKEN
+#if !_PSTL_ICC_16_17_TEST_REDUCTION_BOOL_TYPE_RELEASE_64_BROKEN
     test<bool>(1);
 #endif
     test<UserType>(256);

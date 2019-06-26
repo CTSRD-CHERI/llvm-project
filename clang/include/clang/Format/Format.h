@@ -642,19 +642,28 @@ struct FormatStyle {
     BS_Stroustrup,
     /// Always break before braces.
     /// \code
-    ///   try {
+    ///   try
+    ///   {
     ///     foo();
     ///   }
-    ///   catch () {
+    ///   catch ()
+    ///   {
     ///   }
     ///   void foo() { bar(); }
-    ///   class foo {
+    ///   class foo
+    ///   {
     ///   };
-    ///   if (foo()) {
+    ///   if (foo())
+    ///   {
     ///   }
-    ///   else {
+    ///   else
+    ///   {
     ///   }
-    ///   enum X : int { A, B };
+    ///   enum X : int
+    ///   {
+    ///     A,
+    ///     B
+    ///   };
     /// \endcode
     BS_Allman,
     /// Always break before braces and add an extra level of indentation to
@@ -715,6 +724,22 @@ struct FormatStyle {
   ///       AfterClass: true
   /// \endcode
   struct BraceWrappingFlags {
+    /// Wrap case labels.
+    /// \code
+    ///   false:                                true:
+    ///   switch (foo) {                vs.     switch (foo) {
+    ///     case 1: {                             case 1:
+    ///       bar();                              {
+    ///       break;                                bar();
+    ///     }                                       break;
+    ///     default: {                            }
+    ///       plop();                             default:
+    ///     }                                     {
+    ///   }                                         plop();
+    ///                                           }
+    ///                                         }
+    /// \endcode
+    bool AfterCaseLabel;
     /// Wrap class definitions.
     /// \code
     ///   true:
@@ -1123,7 +1148,7 @@ struct FormatStyle {
   ///    true:                                  false:
   ///    namespace a {                  vs.     namespace a {
   ///    foo();                                 foo();
-  ///    } // namespace a;                      }
+  ///    } // namespace a                       }
   /// \endcode
   bool FixNamespaceComments;
 
@@ -1144,6 +1169,22 @@ struct FormatStyle {
   /// For example: BOOST_FOREACH.
   std::vector<std::string> ForEachMacros;
 
+  /// \brief A vector of macros that should be interpreted as type declarations
+  /// instead of as function calls.
+  ///
+  /// These are expected to be macros of the form:
+  /// \code
+  ///   STACK_OF(...)
+  /// \endcode
+  ///
+  /// In the .clang-format configuration file, this can be configured like:
+  /// \code{.yaml}
+  ///   TypenameMacros: ['STACK_OF', 'LIST']
+  /// \endcode
+  ///
+  /// For example: OpenSSL STACK_OF, BSD LIST_ENTRY.
+  std::vector<std::string> TypenameMacros;
+
   /// A vector of macros that should be interpreted as complete
   /// statements.
   ///
@@ -1153,6 +1194,18 @@ struct FormatStyle {
   ///
   /// For example: Q_UNUSED
   std::vector<std::string> StatementMacros;
+
+  /// A vector of macros which are used to open namespace blocks.
+  ///
+  /// These are expected to be macros of the form:
+  /// \code
+  ///   NAMESPACE(<namespace-name>, ...) {
+  ///     <namespace-content>
+  ///   }
+  /// \endcode
+  ///
+  /// For example: TESTSUITE
+  std::vector<std::string> NamespaceMacros;
 
   tooling::IncludeStyle IncludeStyle;
 
@@ -1628,6 +1681,13 @@ struct FormatStyle {
   /// \endcode
   bool SpaceAfterCStyleCast;
 
+  /// If ``true``, a space is inserted after the logical not operator (``!``).
+  /// \code
+  ///    true:                                  false:
+  ///    ! someExpression();            vs.     !someExpression();
+  /// \endcode
+  bool SpaceAfterLogicalNot;
+
   /// If \c true, a space will be inserted after the 'template' keyword.
   /// \code
   ///    true:                                  false:
@@ -1894,6 +1954,7 @@ struct FormatStyle {
            MacroBlockEnd == R.MacroBlockEnd &&
            MaxEmptyLinesToKeep == R.MaxEmptyLinesToKeep &&
            NamespaceIndentation == R.NamespaceIndentation &&
+           NamespaceMacros == R.NamespaceMacros &&
            ObjCBinPackProtocolList == R.ObjCBinPackProtocolList &&
            ObjCBlockIndentWidth == R.ObjCBlockIndentWidth &&
            ObjCSpaceAfterProperty == R.ObjCSpaceAfterProperty &&
@@ -1911,6 +1972,7 @@ struct FormatStyle {
            PointerAlignment == R.PointerAlignment &&
            RawStringFormats == R.RawStringFormats &&
            SpaceAfterCStyleCast == R.SpaceAfterCStyleCast &&
+           SpaceAfterLogicalNot == R.SpaceAfterLogicalNot &&
            SpaceAfterTemplateKeyword == R.SpaceAfterTemplateKeyword &&
            SpaceBeforeAssignmentOperators == R.SpaceBeforeAssignmentOperators &&
            SpaceBeforeCpp11BracedList == R.SpaceBeforeCpp11BracedList &&
@@ -1928,7 +1990,8 @@ struct FormatStyle {
            SpacesInParentheses == R.SpacesInParentheses &&
            SpacesInSquareBrackets == R.SpacesInSquareBrackets &&
            Standard == R.Standard && TabWidth == R.TabWidth &&
-           StatementMacros == R.StatementMacros && UseTab == R.UseTab;
+           StatementMacros == R.StatementMacros && UseTab == R.UseTab &&
+           TypenameMacros == R.TypenameMacros;
   }
 
   llvm::Optional<FormatStyle> GetLanguageStyle(LanguageKind Language) const;

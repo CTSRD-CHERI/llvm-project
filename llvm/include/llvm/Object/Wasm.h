@@ -171,13 +171,12 @@ public:
 
   // Overrides from SectionRef.
   void moveSectionNext(DataRefImpl &Sec) const override;
-  std::error_code getSectionName(DataRefImpl Sec,
-                                 StringRef &Res) const override;
+  Expected<StringRef> getSectionName(DataRefImpl Sec) const override;
   uint64_t getSectionAddress(DataRefImpl Sec) const override;
   uint64_t getSectionIndex(DataRefImpl Sec) const override;
   uint64_t getSectionSize(DataRefImpl Sec) const override;
-  std::error_code getSectionContents(DataRefImpl Sec,
-                                     StringRef &Res) const override;
+  Expected<ArrayRef<uint8_t>>
+  getSectionContents(DataRefImpl Sec) const override;
   uint64_t getSectionAlignment(DataRefImpl Sec) const override;
   bool isSectionCompressed(DataRefImpl Sec) const override;
   bool isSectionText(DataRefImpl Sec) const override;
@@ -247,6 +246,7 @@ private:
   Error parseElemSection(ReadContext &Ctx);
   Error parseCodeSection(ReadContext &Ctx);
   Error parseDataSection(ReadContext &Ctx);
+  Error parseDataCountSection(ReadContext &Ctx);
 
   // Custom section types
   Error parseDylinkSection(ReadContext &Ctx);
@@ -273,6 +273,7 @@ private:
   std::vector<wasm::WasmExport> Exports;
   std::vector<wasm::WasmElemSegment> ElemSegments;
   std::vector<WasmSegment> DataSegments;
+  llvm::Optional<size_t> DataCount;
   std::vector<wasm::WasmFunction> Functions;
   std::vector<WasmSymbol> Symbols;
   std::vector<wasm::WasmFunctionName> DebugNames;

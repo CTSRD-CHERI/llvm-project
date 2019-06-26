@@ -82,6 +82,7 @@
 LANGOPT(C99               , 1, 0, "C99")
 LANGOPT(C11               , 1, 0, "C11")
 LANGOPT(C17               , 1, 0, "C17")
+LANGOPT(C2x               , 1, 0, "C2x")
 LANGOPT(MSVCCompat        , 1, 0, "Microsoft Visual C++ full compatibility mode")
 LANGOPT(MicrosoftExt      , 1, 0, "Microsoft C++ extensions")
 LANGOPT(AsmBlocks         , 1, 0, "Microsoft inline asm blocks")
@@ -148,8 +149,9 @@ LANGOPT(Blocks            , 1, 0, "blocks extension to C")
 BENIGN_LANGOPT(EmitAllDecls      , 1, 0, "emitting all declarations")
 LANGOPT(MathErrno         , 1, 1, "errno in math functions")
 BENIGN_LANGOPT(HeinousExtensions , 1, 0, "extensions that we really don't like and may be ripped out at any time")
-LANGOPT(Modules           , 1, 0, "modules extension to C")
-COMPATIBLE_LANGOPT(ModulesTS  , 1, 0, "C++ Modules TS")
+LANGOPT(Modules           , 1, 0, "modules semantics")
+COMPATIBLE_LANGOPT(ModulesTS  , 1, 0, "C++ Modules TS syntax")
+COMPATIBLE_LANGOPT(CPlusPlusModules, 1, 0, "C++ modules syntax")
 BENIGN_ENUM_LANGOPT(CompilingModule, CompilingModuleKind, 2, CMK_None,
                     "compiling a module interface")
 BENIGN_LANGOPT(CompilingPCH, 1, 0, "building a pch")
@@ -254,6 +256,7 @@ LANGOPT(CFProtectionBranch , 1, 0, "Control-Flow Branch Protection enabled")
 LANGOPT(FakeAddressSpaceMap , 1, 0, "OpenCL fake address space map")
 ENUM_LANGOPT(AddressSpaceMapMangling , AddrSpaceMapMangling, 2, ASMM_Target, "OpenCL address space map mangling mode")
 LANGOPT(IncludeDefaultHeader, 1, 0, "Include default header file for OpenCL")
+LANGOPT(DeclareOpenCLBuiltins, 1, 0, "Declare OpenCL builtin functions")
 BENIGN_LANGOPT(DelayedTemplateParsing , 1, 0, "delayed template parsing")
 LANGOPT(BlocksRuntimeOptional , 1, 0, "optional blocks runtime")
 LANGOPT(
@@ -306,6 +309,8 @@ LANGOPT(RetainCommentsFromSystemHeaders, 1, 0, "retain documentation comments fr
 LANGOPT(SanitizeAddressFieldPadding, 2, 0, "controls how aggressive is ASan "
                                            "field padding (0: none, 1:least "
                                            "aggressive, 2: more aggressive)")
+
+LANGOPT(Cmse, 1, 0, "ARM Security extensions support")
 
 LANGOPT(XRayInstrument, 1, 0, "controls whether to do XRay instrumentation")
 LANGOPT(XRayAlwaysEmitCustomEvents, 1, 0,

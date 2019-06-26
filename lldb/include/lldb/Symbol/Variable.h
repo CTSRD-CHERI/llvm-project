@@ -26,9 +26,7 @@ class Variable : public UserID, public std::enable_shared_from_this<Variable> {
 public:
   typedef RangeVector<lldb::addr_t, lldb::addr_t> RangeList;
 
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   Variable(lldb::user_id_t uid, const char *name,
            const char
                *mangled, // The mangled or fully qualified name of the variable.
@@ -130,8 +128,8 @@ protected:
       m_static_member : 1; // Non-zero if variable is static member of a class
                            // or struct.
 private:
-  Variable(const Variable &rhs);
-  Variable &operator=(const Variable &rhs);
+  Variable(const Variable &rhs) = delete;
+  Variable &operator=(const Variable &rhs) = delete;
 };
 
 } // namespace lldb_private

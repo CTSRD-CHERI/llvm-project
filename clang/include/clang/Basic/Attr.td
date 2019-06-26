@@ -284,20 +284,28 @@ class SubjectList<list<AttrSubject> subjects, SubjectDiag diag = WarnDiag,
   string CustomDiag = customDiag;
 }
 
-class LangOpt<string name, bit negated = 0> {
+class LangOpt<string name, code customCode = [{}]> {
   string Name = name;
-  bit Negated = negated;
+
+  // A custom predicate, written as an expression evaluated in a context with
+  // "LangOpts" bound.
+  code CustomCode = customCode;
 }
 def MicrosoftExt : LangOpt<"MicrosoftExt">;
 def Borland : LangOpt<"Borland">;
 def CUDA : LangOpt<"CUDA">;
-def COnly : LangOpt<"CPlusPlus", 1>;
+def COnly : LangOpt<"COnly", "!LangOpts.CPlusPlus">;
 def CPlusPlus : LangOpt<"CPlusPlus">;
 def OpenCL : LangOpt<"OpenCL">;
 def RenderScript : LangOpt<"RenderScript">;
 def ObjC : LangOpt<"ObjC">;
 def BlocksSupported : LangOpt<"Blocks">;
 def ObjCAutoRefCount : LangOpt<"ObjCAutoRefCount">;
+def ObjCNonFragileRuntime : LangOpt<"ObjCNonFragileRuntime",
+                                    "LangOpts.ObjCRuntime.allowsClassStubs()">;
+
+// Language option for CMSE extensions
+def Cmse : LangOpt<"Cmse">;
 
 // Defines targets for target-specific attributes. Empty lists are unchecked.
 class TargetSpec {
@@ -417,6 +425,10 @@ def SubjectMatcherForObjCProtocol : AttrSubjectMatcherRule<"objc_protocol",
 }
 def SubjectMatcherForObjCCategory : AttrSubjectMatcherRule<"objc_category",
                                                            [ObjCCategory]> {
+  let LangOpts = [ObjC];
+}
+def SubjectMatcherForObjCImplementation :
+    AttrSubjectMatcherRule<"objc_implementation", [ObjCImpl]> {
   let LangOpts = [ObjC];
 }
 def SubjectMatcherForObjCMethod : AttrSubjectMatcherRule<"objc_method",
@@ -1422,7 +1434,7 @@ def NoCommon : InheritableAttr {
 
 def NoDebug : InheritableAttr {
   let Spellings = [GCC<"nodebug">];
-  let Subjects = SubjectList<[FunctionLike, ObjCMethod, NonParmVar]>;
+  let Subjects = SubjectList<[TypedefName, FunctionLike, ObjCMethod, NonParmVar]>;
   let Documentation = [NoDebugDocs];
 }
 
@@ -1645,7 +1657,7 @@ def NoStackProtector : InheritableAttr {
 
 def NoThrow : InheritableAttr {
   let Spellings = [GCC<"nothrow">, Declspec<"nothrow">];
-  let Subjects = SubjectList<[Function]>;
+  let Subjects = SubjectList<[FunctionLike]>;
   let Documentation = [NoThrowDocs];
 }
 
@@ -1763,7 +1775,7 @@ def ObjCRootClass : InheritableAttr {
 
 def ObjCNonLazyClass : Attr {
   let Spellings = [Clang<"objc_nonlazy_class">];
-  let Subjects = SubjectList<[ObjCInterface], ErrorDiag>;
+  let Subjects = SubjectList<[ObjCInterface, ObjCImpl], ErrorDiag>;
   let LangOpts = [ObjC];
   let Documentation = [ObjCNonLazyClassDocs];
 }
@@ -1797,6 +1809,13 @@ def ObjCRuntimeVisible : Attr {
   let Spellings = [Clang<"objc_runtime_visible">];
   let Subjects = SubjectList<[ObjCInterface], ErrorDiag>;
   let Documentation = [ObjCRuntimeVisibleDocs];
+}
+
+def ObjCClassStub : Attr {
+  let Spellings = [Clang<"objc_class_stub">];
+  let Subjects = SubjectList<[ObjCInterface], ErrorDiag>;
+  let Documentation = [ObjCClassStubDocs];
+  let LangOpts = [ObjCNonFragileRuntime];
 }
 
 def ObjCBoxable : Attr {

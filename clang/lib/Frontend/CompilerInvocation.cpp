@@ -285,6 +285,16 @@ static bool ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   }
 
   Opts.ShowCheckerHelp = Args.hasArg(OPT_analyzer_checker_help);
+  Opts.ShowCheckerHelpAlpha = Args.hasArg(OPT_analyzer_checker_help_alpha);
+  Opts.ShowCheckerHelpDeveloper =
+      Args.hasArg(OPT_analyzer_checker_help_developer);
+
+  Opts.ShowCheckerOptionList = Args.hasArg(OPT_analyzer_checker_option_help);
+  Opts.ShowCheckerOptionAlphaList =
+      Args.hasArg(OPT_analyzer_checker_option_help_alpha);
+  Opts.ShowCheckerOptionDeveloperList =
+      Args.hasArg(OPT_analyzer_checker_option_help_developer);
+
   Opts.ShowConfigOptionsList = Args.hasArg(OPT_analyzer_config_help);
   Opts.ShowEnabledCheckerList = Args.hasArg(OPT_analyzer_list_enabled_checkers);
   Opts.ShouldEmitErrorsOnInvalidConfigValue =
@@ -299,6 +309,7 @@ static bool ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
     Args.hasArg(OPT_analyzer_viz_egraph_graphviz);
   Opts.DumpExplodedGraphTo = Args.getLastArgValue(OPT_analyzer_dump_egraph);
   Opts.NoRetryExhausted = Args.hasArg(OPT_analyzer_disable_retry_exhausted);
+  Opts.AnalyzerWerror = Args.hasArg(OPT_analyzer_werror);
   Opts.AnalyzeAll = Args.hasArg(OPT_analyzer_opt_analyze_headers);
   Opts.AnalyzerDisplayProgress = Args.hasArg(OPT_analyzer_display_progress);
   Opts.AnalyzeNestedBlocks =
@@ -422,7 +433,7 @@ static void initOption(AnalyzerOptions::ConfigTable &Config,
 
   OptionField = DefaultVal;
   bool HasFailed = getStringOption(Config, Name, std::to_string(DefaultVal))
-                     .getAsInteger(10, OptionField);
+                     .getAsInteger(0, OptionField);
   if (Diags && HasFailed)
     Diags->Report(diag::err_analyzer_config_invalid_input)
       << Name << "an unsigned";
@@ -672,6 +683,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     StringRef Name = A->getValue();
     if (Name == "Accelerate")
       Opts.setVecLib(CodeGenOptions::Accelerate);
+    else if (Name == "MASSV")
+      Opts.setVecLib(CodeGenOptions::MASSV);
     else if (Name == "SVML")
       Opts.setVecLib(CodeGenOptions::SVML);
     else if (Name == "none")
@@ -1346,6 +1359,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.PassPlugins = Args.getAllArgValues(OPT_fpass_plugin_EQ);
 
+  Opts.SymbolPartition = Args.getLastArgValue(OPT_fsymbol_partition_EQ);
+
   return Success;
 }
 
@@ -1623,6 +1638,22 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       llvm_unreachable("Invalid option in group!");
     case OPT_ast_list:
       Opts.ProgramAction = frontend::ASTDeclList; break;
+    case OPT_ast_dump_all_EQ:
+    case OPT_ast_dump_EQ: {
+      unsigned Val = llvm::StringSwitch<unsigned>(A->getValue())
+                         .CaseLower("default", ADOF_Default)
+                         .CaseLower("json", ADOF_JSON)
+                         .Default(std::numeric_limits<unsigned>::max());
+
+      if (Val != std::numeric_limits<unsigned>::max())
+        Opts.ASTDumpFormat = static_cast<ASTDumpOutputFormat>(Val);
+      else {
+        Diags.Report(diag::err_drv_invalid_value)
+            << A->getAsString(Args) << A->getValue();
+        Opts.ASTDumpFormat = ADOF_Default;
+      }
+      LLVM_FALLTHROUGH;
+    }
     case OPT_ast_dump:
     case OPT_ast_dump_all:
     case OPT_ast_dump_lookups:
@@ -1690,6 +1721,10 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Opts.ProgramAction = frontend::MigrateSource; break;
     case OPT_Eonly:
       Opts.ProgramAction = frontend::RunPreprocessorOnly; break;
+    case OPT_print_dependency_directives_minimized_source:
+      Opts.ProgramAction =
+          frontend::PrintDependencyDirectivesSourceMinimizerOutput;
+      break;
     }
   }
 
@@ -1745,8 +1780,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   Opts.FixOnlyWarnings = Args.hasArg(OPT_fix_only_warnings);
   Opts.FixAndRecompile = Args.hasArg(OPT_fixit_recompile);
   Opts.FixToTemporaries = Args.hasArg(OPT_fixit_to_temp);
-  Opts.ASTDumpDecls = Args.hasArg(OPT_ast_dump);
-  Opts.ASTDumpAll = Args.hasArg(OPT_ast_dump_all);
+  Opts.ASTDumpDecls = Args.hasArg(OPT_ast_dump, OPT_ast_dump_EQ);
+  Opts.ASTDumpAll = Args.hasArg(OPT_ast_dump_all, OPT_ast_dump_all_EQ);
   Opts.ASTDumpFilter = Args.getLastArgValue(OPT_ast_dump_filter);
   Opts.ASTDumpLookups = Args.hasArg(OPT_ast_dump_lookups);
   Opts.UseGlobalModuleIndex = !Args.hasArg(OPT_fno_modules_global_index);
@@ -2138,6 +2173,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   Opts.C99 = Std.isC99();
   Opts.C11 = Std.isC11();
   Opts.C17 = Std.isC17();
+  Opts.C2x = Std.isC2x();
   Opts.CPlusPlus = Std.isCPlusPlus();
   Opts.CPlusPlus11 = Std.isCPlusPlus11();
   Opts.CPlusPlus14 = Std.isCPlusPlus14();
@@ -2172,7 +2208,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
     Opts.NativeHalfArgsAndReturns = 1;
     Opts.OpenCLCPlusPlus = Opts.CPlusPlus;
     // Include default header file for OpenCL.
-    if (Opts.IncludeDefaultHeader) {
+    if (Opts.IncludeDefaultHeader && !Opts.DeclareOpenCLBuiltins) {
       PPOpts.Includes.push_back("opencl-c.h");
     }
   }
@@ -2204,6 +2240,9 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   Opts.AlignedAllocation = Opts.CPlusPlus17;
 
   Opts.DollarIdents = !Opts.AsmPreprocessor;
+
+  // Enable [[]] attributes in C++11 and C2x by default.
+  Opts.DoubleSquareBracketAttributes = Opts.CPlusPlus11 || Opts.C2x;
 }
 
 /// Attempt to parse a visibility value out of the given argument.
@@ -2375,6 +2414,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   }
 
   Opts.IncludeDefaultHeader = Args.hasArg(OPT_finclude_default_header);
+  Opts.DeclareOpenCLBuiltins = Args.hasArg(OPT_fdeclare_opencl_builtins);
 
   llvm::Triple T(TargetOpts.Triple);
   CompilerInvocation::setLangDefaults(Opts, IK, T, PPOpts, LangStd);
@@ -2654,18 +2694,23 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.BlocksRuntimeOptional = Args.hasArg(OPT_fblocks_runtime_optional);
   Opts.Coroutines = Opts.CPlusPlus2a || Args.hasArg(OPT_fcoroutines_ts);
 
-  // Enable [[]] attributes in C++11 by default.
   Opts.DoubleSquareBracketAttributes =
       Args.hasFlag(OPT_fdouble_square_bracket_attributes,
-                   OPT_fno_double_square_bracket_attributes, Opts.CPlusPlus11);
+                   OPT_fno_double_square_bracket_attributes,
+                   Opts.DoubleSquareBracketAttributes);
 
+  Opts.CPlusPlusModules = Opts.CPlusPlus2a;
   Opts.ModulesTS = Args.hasArg(OPT_fmodules_ts);
-  Opts.Modules = Args.hasArg(OPT_fmodules) || Opts.ModulesTS;
+  Opts.Modules =
+      Args.hasArg(OPT_fmodules) || Opts.ModulesTS || Opts.CPlusPlusModules;
   Opts.ModulesStrictDeclUse = Args.hasArg(OPT_fmodules_strict_decluse);
   Opts.ModulesDeclUse =
       Args.hasArg(OPT_fmodules_decluse) || Opts.ModulesStrictDeclUse;
+  // FIXME: We only need this in C++ modules / Modules TS if we might textually
+  // enter a different module (eg, when building a header unit).
   Opts.ModulesLocalVisibility =
-      Args.hasArg(OPT_fmodules_local_submodule_visibility) || Opts.ModulesTS;
+      Args.hasArg(OPT_fmodules_local_submodule_visibility) || Opts.ModulesTS ||
+      Opts.CPlusPlusModules;
   Opts.ModulesCodegen = Args.hasArg(OPT_fmodules_codegen);
   Opts.ModulesDebugInfo = Args.hasArg(OPT_fmodules_debuginfo);
   Opts.ModulesSearchAll = Opts.Modules &&
@@ -2768,6 +2813,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.HalfArgsAndReturns = Args.hasArg(OPT_fallow_half_arguments_and_returns)
                             | Opts.NativeHalfArgsAndReturns;
   Opts.GNUAsm = !Args.hasArg(OPT_fno_gnu_inline_asm);
+  Opts.Cmse = Args.hasArg(OPT_mcmse); // Armv8-M Security Extensions
 
   // __declspec is enabled by default for the PS4 by the driver, and also
   // enabled for Microsoft Extensions or Borland Extensions, here.
@@ -3144,6 +3190,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
   case frontend::PrintPreprocessedInput:
   case frontend::RewriteMacros:
   case frontend::RunPreprocessorOnly:
+  case frontend::PrintDependencyDirectivesSourceMinimizerOutput:
     return true;
   }
   llvm_unreachable("invalid frontend action");
@@ -3446,10 +3493,8 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
                               Res.getFrontendOpts().ProgramAction);
 
   // Turn on -Wspir-compat for SPIR target.
-  auto Arch = T.getArch();
-  if (Arch == llvm::Triple::spir || Arch == llvm::Triple::spir64) {
+  if (T.isSPIR())
     Res.getDiagnosticOpts().Warnings.push_back("spir-compat");
-  }
 
   // If sanitizer is enabled, disable OPT_ffine_grained_bitfield_accesses.
   if (Res.getCodeGenOpts().FineGrainedBitfieldAccesses &&

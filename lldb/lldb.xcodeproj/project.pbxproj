@@ -129,7 +129,7 @@
 		2689007D13353E2200698AC0 /* Args.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26BC7E6C10F1B85900F91463 /* Args.cpp */; };
 		23CB153C1D66DA9300EDDDE1 /* ArgsTest.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2321F93E1BDD33CE00BA9A93 /* ArgsTest.cpp */; };
 		6D99A3631BBC2F3200979793 /* ArmUnwindInfo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6D99A3621BBC2F3200979793 /* ArmUnwindInfo.cpp */; };
-		26FFC19914FC072100087D58 /* AuxVector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26FFC19314FC072100087D58 /* AuxVector.cpp */; };
+		AF7BD81B22B04E20008E78D1 /* AuxVector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF7BD81A22B04E20008E78D1 /* AuxVector.cpp */; };
 		AFC2DCE91E6E2F2C00283714 /* Baton.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFC2DCE81E6E2F2C00283714 /* Baton.cpp */; };
 		268900D013353E6F00698AC0 /* Block.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26BC7F1310F1B8EC00F91463 /* Block.cpp */; };
 		49DEF1251CD7C6DF006A7C7D /* BlockPointer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 49DEF11F1CD7BD90006A7C7D /* BlockPointer.cpp */; };
@@ -243,6 +243,7 @@
 		9A3D43D61F3151C400EB767C /* ConstStringTest.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9A3D43C81F3150D200EB767C /* ConstStringTest.cpp */; };
 		2668022F115FD19D008E1FE4 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 26F5C39010F3FA26009D5894 /* CoreFoundation.framework */; };
 		949EEDA01BA74B6D008C63CF /* CoreMedia.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 949EED9E1BA74B64008C63CF /* CoreMedia.cpp */; };
+		DDB5829C2278C8D700491B41 /* CxxModuleHandler.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DDB5829B2278C8D600491B41 /* CxxModuleHandler.cpp */; };
 		945261BF1B9A11FC00BF138D /* CxxStringTypes.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 945261B31B9A11E800BF138D /* CxxStringTypes.cpp */; };
 		6D95DC001B9DC057000E318A /* DIERef.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6D95DBFD1B9DC057000E318A /* DIERef.cpp */; };
 		269DDD4A1B8FD1C300D0DBD8 /* DWARFASTParserClang.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 269DDD481B8FD1C300D0DBD8 /* DWARFASTParserClang.cpp */; };
@@ -268,6 +269,7 @@
 		268900C613353E5F00698AC0 /* DWARFFormValue.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 260C89D310F57C5600BB2B04 /* DWARFFormValue.cpp */; };
 		4CD44CFB20B37C440003557C /* DWARFIndex.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4CD44CF820B37C440003557C /* DWARFIndex.cpp */; };
 		4C38996421B9AECD002BAEF4 /* DWARFLocationExpression.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4C38996221B9AECC002BAEF4 /* DWARFLocationExpression.cpp */; };
+		4C645D0822961B3C00D3C034 /* DWARFTypeUnit.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4C645D022295D3B500D3C034 /* DWARFTypeUnit.cpp */; };
 		AFE228832060699D0042D0C8 /* DWARFUnit.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7F2AAA5920601BE000A422D8 /* DWARFUnit.cpp */; };
 		26FFC19B14FC072100087D58 /* DYLDRendezvous.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26FFC19514FC072100087D58 /* DYLDRendezvous.cpp */; };
 		49CA96FC1E6AACC900C03FEE /* DataBufferHeap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 49CA96E61E6AAC6600C03FEE /* DataBufferHeap.cpp */; };
@@ -642,6 +644,7 @@
 		26B7564E14F89356008D9CB3 /* PlatformiOSSimulator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26B7564C14F89356008D9CB3 /* PlatformiOSSimulator.cpp */; };
 		AFF81FB320D1CC910010F95E /* PlatformiOSSimulatorCoreSimulatorSupport.mm in Sources */ = {isa = PBXBuildFile; fileRef = AFF81FB220D1CC910010F95E /* PlatformiOSSimulatorCoreSimulatorSupport.mm */; };
 		2689004713353E0400698AC0 /* PluginManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26BC7E8A10F1B85900F91463 /* PluginManager.cpp */; };
+		AFC4ADB12270F4C700042167 /* PostfixExpression.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFC4ADB02270F4C600042167 /* PostfixExpression.cpp */; };
 		4C639ECE21FA684900A7B957 /* PredicateTest.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4C639EC021FA684700A7B957 /* PredicateTest.cpp */; };
 		268900F013353E6F00698AC0 /* Process.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26BC7F3610F1B90C00F91463 /* Process.cpp */; };
 		26BC17AB18C7F4CB00D2196D /* ProcessElfCore.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26BC17A218C7F4CB00D2196D /* ProcessElfCore.cpp */; };
@@ -897,6 +900,7 @@
 		26D7E45D13D5E30A007FD12B /* SocketAddress.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26D7E45C13D5E30A007FD12B /* SocketAddress.cpp */; };
 		23CB15451D66DA9300EDDDE1 /* SocketAddressTest.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2321F9391BDD332400BA9A93 /* SocketAddressTest.cpp */; };
 		23CB153B1D66DA9300EDDDE1 /* SocketTest.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2321F93A1BDD332400BA9A93 /* SocketTest.cpp */; };
+		26FCE61C229F00F000D125BD /* SocketTestUtilities.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26FCE61B229F00F000D125BD /* SocketTestUtilities.cpp */; };
 		26603879211CA90F00329572 /* SourceBreakpoint.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26603870211CA90D00329572 /* SourceBreakpoint.cpp */; };
 		2689004C13353E0400698AC0 /* SourceManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26BC7E8F10F1B85900F91463 /* SourceManager.cpp */; };
 		268900F313353E6F00698AC0 /* StackFrame.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 26BC7F3810F1B90C00F91463 /* StackFrame.cpp */; };
@@ -1489,8 +1493,7 @@
 		6D99A3621BBC2F3200979793 /* ArmUnwindInfo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ArmUnwindInfo.cpp; path = source/Symbol/ArmUnwindInfo.cpp; sourceTree = "<group>"; };
 		6D99A3611BBC2F1600979793 /* ArmUnwindInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ArmUnwindInfo.h; path = include/lldb/Symbol/ArmUnwindInfo.h; sourceTree = "<group>"; };
 		3FDFE54719A2946B009756A7 /* AutoHandle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AutoHandle.h; path = include/lldb/Host/windows/AutoHandle.h; sourceTree = "<group>"; };
-		26FFC19314FC072100087D58 /* AuxVector.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AuxVector.cpp; sourceTree = "<group>"; };
-		26FFC19414FC072100087D58 /* AuxVector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AuxVector.h; sourceTree = "<group>"; };
+		AF7BD81A22B04E20008E78D1 /* AuxVector.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = AuxVector.cpp; path = Utility/AuxVector.cpp; sourceTree = "<group>"; };
 		AFC2DCE81E6E2F2C00283714 /* Baton.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Baton.cpp; path = source/Utility/Baton.cpp; sourceTree = "<group>"; };
 		AFC2DCEE1E6E2FA300283714 /* Baton.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Baton.h; path = include/lldb/Utility/Baton.h; sourceTree = "<group>"; };
 		26BC7F1310F1B8EC00F91463 /* Block.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Block.cpp; path = source/Symbol/Block.cpp; sourceTree = "<group>"; };
@@ -1739,6 +1742,8 @@
 		949EED9F1BA74B64008C63CF /* CoreMedia.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = CoreMedia.h; path = Language/ObjC/CoreMedia.h; sourceTree = "<group>"; };
 		AF3F54AE1B3BA59C00186E73 /* CrashReason.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CrashReason.cpp; sourceTree = "<group>"; };
 		AF3F54AF1B3BA59C00186E73 /* CrashReason.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CrashReason.h; sourceTree = "<group>"; };
+		DDB5829B2278C8D600491B41 /* CxxModuleHandler.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CxxModuleHandler.cpp; path = source/Symbol/CxxModuleHandler.cpp; sourceTree = "<group>"; };
+		DDB5829D2278C8E900491B41 /* CxxModuleHandler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = CxxModuleHandler.h; path = include/lldb/Symbol/CxxModuleHandler.h; sourceTree = "<group>"; };
 		945261B31B9A11E800BF138D /* CxxStringTypes.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = CxxStringTypes.cpp; path = Language/CPlusPlus/CxxStringTypes.cpp; sourceTree = "<group>"; };
 		945261B41B9A11E800BF138D /* CxxStringTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = CxxStringTypes.h; path = Language/CPlusPlus/CxxStringTypes.h; sourceTree = "<group>"; };
 		6D95DBFD1B9DC057000E318A /* DIERef.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DIERef.cpp; sourceTree = "<group>"; };
@@ -1790,6 +1795,8 @@
 		4CD44CFE20B37C570003557C /* DWARFIndex.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DWARFIndex.h; sourceTree = "<group>"; };
 		4C38996221B9AECC002BAEF4 /* DWARFLocationExpression.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = DWARFLocationExpression.cpp; path = source/Plugins/SymbolFile/NativePDB/DWARFLocationExpression.cpp; sourceTree = SOURCE_ROOT; };
 		4C38996321B9AECC002BAEF4 /* DWARFLocationExpression.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DWARFLocationExpression.h; path = source/Plugins/SymbolFile/NativePDB/DWARFLocationExpression.h; sourceTree = SOURCE_ROOT; };
+		4C645D022295D3B500D3C034 /* DWARFTypeUnit.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DWARFTypeUnit.cpp; sourceTree = "<group>"; };
+		4C645D032295D3B600D3C034 /* DWARFTypeUnit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DWARFTypeUnit.h; sourceTree = "<group>"; };
 		7F2AAA5920601BE000A422D8 /* DWARFUnit.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DWARFUnit.cpp; sourceTree = "<group>"; };
 		7F2AAA5820601BDF00A422D8 /* DWARFUnit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DWARFUnit.h; sourceTree = "<group>"; };
 		26FFC19514FC072100087D58 /* DYLDRendezvous.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DYLDRendezvous.cpp; sourceTree = "<group>"; };
@@ -2518,6 +2525,7 @@
 		26BC7D7010F1B77400F91463 /* PluginInterface.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PluginInterface.h; path = include/lldb/Core/PluginInterface.h; sourceTree = "<group>"; };
 		26BC7E8A10F1B85900F91463 /* PluginManager.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = PluginManager.cpp; path = source/Core/PluginManager.cpp; sourceTree = "<group>"; };
 		26BC7D7110F1B77400F91463 /* PluginManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PluginManager.h; path = include/lldb/Core/PluginManager.h; sourceTree = "<group>"; };
+		AFC4ADB02270F4C600042167 /* PostfixExpression.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = PostfixExpression.cpp; path = source/Symbol/PostfixExpression.cpp; sourceTree = "<group>"; };
 		4C639EC021FA684700A7B957 /* PredicateTest.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = PredicateTest.cpp; sourceTree = "<group>"; };
 		26BC7F3610F1B90C00F91463 /* Process.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Process.cpp; path = source/Target/Process.cpp; sourceTree = "<group>"; };
 		26BC7DF310F1B81A00F91463 /* Process.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Process.h; path = include/lldb/Target/Process.h; sourceTree = "<group>"; };
@@ -2956,6 +2964,7 @@
 		26D7E45B13D5E2F9007FD12B /* SocketAddress.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = SocketAddress.h; path = include/lldb/Host/SocketAddress.h; sourceTree = "<group>"; };
 		2321F9391BDD332400BA9A93 /* SocketAddressTest.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SocketAddressTest.cpp; sourceTree = "<group>"; };
 		2321F93A1BDD332400BA9A93 /* SocketTest.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SocketTest.cpp; sourceTree = "<group>"; };
+		26FCE61B229F00F000D125BD /* SocketTestUtilities.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SocketTestUtilities.cpp; sourceTree = "<group>"; };
 		26603870211CA90D00329572 /* SourceBreakpoint.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = SourceBreakpoint.cpp; path = "tools/lldb-vscode/SourceBreakpoint.cpp"; sourceTree = "<group>"; };
 		2660386D211CA90C00329572 /* SourceBreakpoint.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SourceBreakpoint.h; path = "tools/lldb-vscode/SourceBreakpoint.h"; sourceTree = "<group>"; };
 		26BC7E8F10F1B85900F91463 /* SourceManager.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = SourceManager.cpp; path = source/Core/SourceManager.cpp; sourceTree = "<group>"; };
@@ -3368,7 +3377,6 @@
 		AF90106315AB7C5700FF120D /* lldb.1 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.man; name = lldb.1; path = docs/lldb.1; sourceTree = "<group>"; };
 		26BC7E7410F1B85900F91463 /* lldb.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = lldb.cpp; path = source/lldb.cpp; sourceTree = "<group>"; };
 		2669605E1199F4230075C61A /* lldb.swig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = lldb.swig; sourceTree = "<group>"; };
-		94E367CC140C4EC4001C7A5A /* modify-python-lldb.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = "modify-python-lldb.py"; sourceTree = "<group>"; };
 		26792616211CA3E100EE1D10 /* package.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; name = package.json; path = "tools/lldb-vscode/package.json"; sourceTree = "<group>"; };
 		9A48A3A7124AAA5A00922451 /* python-extensions.swig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "python-extensions.swig"; sourceTree = "<group>"; };
 		944DC3481774C99000D7D884 /* python-swigsafecast.swig */ = {isa = PBXFileReference; lastKnownFileType = text; path = "python-swigsafecast.swig"; sourceTree = "<group>"; };
@@ -3605,6 +3613,7 @@
 				2321F9381BDD332400BA9A93 /* CMakeLists.txt */,
 				2321F9391BDD332400BA9A93 /* SocketAddressTest.cpp */,
 				2321F93A1BDD332400BA9A93 /* SocketTest.cpp */,
+				26FCE61B229F00F000D125BD /* SocketTestUtilities.cpp */,
 				2321F9451BDD346100BA9A93 /* TaskPoolTest.cpp */,
 			);
 			path = Host;
@@ -4156,6 +4165,8 @@
 				260C89D410F57C5600BB2B04 /* DWARFFormValue.h */,
 				4CD44CF820B37C440003557C /* DWARFIndex.cpp */,
 				4CD44CFE20B37C570003557C /* DWARFIndex.h */,
+				4C645D022295D3B500D3C034 /* DWARFTypeUnit.cpp */,
+				4C645D032295D3B600D3C034 /* DWARFTypeUnit.h */,
 				7F2AAA5920601BE000A422D8 /* DWARFUnit.cpp */,
 				7F2AAA5820601BDF00A422D8 /* DWARFUnit.h */,
 				26A0DA4D140F721D006DA411 /* HashedNameToDIE.h */,
@@ -4592,7 +4603,6 @@
 				266960601199F4230075C61A /* build-swig-Python.sh */,
 				266960611199F4230075C61A /* edit-swig-python-wrapper-file.py */,
 				94FE476613FC1DA8001F8475 /* finish-swig-Python-LLDB.sh */,
-				94E367CC140C4EC4001C7A5A /* modify-python-lldb.py */,
 				9A48A3A7124AAA5A00922451 /* python-extensions.swig */,
 				944DC3481774C99000D7D884 /* python-swigsafecast.swig */,
 				94E367CE140C4EEA001C7A5A /* python-typemaps.swig */,
@@ -4998,6 +5008,7 @@
 		26B4666E11A2080F00CF6220 /* Utility */ = {
 			isa = PBXGroup;
 			children = (
+				AF7BD81A22B04E20008E78D1 /* AuxVector.cpp */,
 				9A0FDE951E8EF5010086B2F5 /* RegisterContext_mips.h */,
 				9A0FDE961E8EF5010086B2F5 /* RegisterContext_s390x.h */,
 				9A0FDE971E8EF5010086B2F5 /* RegisterContextLinux_mips.cpp */,
@@ -5306,8 +5317,10 @@
 				26BC7F1510F1B8EC00F91463 /* CompileUnit.cpp */,
 				23E77CDB1C20F2F2007192AD /* DebugMacros.cpp */,
 				26BC7C5810F1B6E900F91463 /* Declaration.h */,
+				DDB5829B2278C8D600491B41 /* CxxModuleHandler.cpp */,
 				26BC7F1610F1B8EC00F91463 /* Declaration.cpp */,
 				49B01A2D15F67B1700666829 /* DeclVendor.h */,
+				DDB5829D2278C8E900491B41 /* CxxModuleHandler.h */,
 				26BC7C5910F1B6E900F91463 /* DWARFCallFrameInfo.h */,
 				26BC7F1710F1B8EC00F91463 /* DWARFCallFrameInfo.cpp */,
 				26BC7C5A10F1B6E900F91463 /* Function.h */,
@@ -5323,6 +5336,7 @@
 				26BC7C5D10F1B6E900F91463 /* ObjectContainer.h */,
 				26BC7C5E10F1B6E900F91463 /* ObjectFile.h */,
 				26BC7F4C10F1BC1A00F91463 /* ObjectFile.cpp */,
+				AFC4ADB02270F4C600042167 /* PostfixExpression.cpp */,
 				26BC7C5F10F1B6E900F91463 /* Symbol.h */,
 				26BC7F1B10F1B8EC00F91463 /* Symbol.cpp */,
 				26BC7C6010F1B6E900F91463 /* SymbolContext.h */,
@@ -6055,8 +6069,6 @@
 		26FFC19214FC072100087D58 /* POSIX-DYLD */ = {
 			isa = PBXGroup;
 			children = (
-				26FFC19314FC072100087D58 /* AuxVector.cpp */,
-				26FFC19414FC072100087D58 /* AuxVector.h */,
 				26FFC19514FC072100087D58 /* DYLDRendezvous.cpp */,
 				26FFC19614FC072100087D58 /* DYLDRendezvous.h */,
 				26FFC19714FC072100087D58 /* DynamicLoaderPOSIXDYLD.cpp */,
@@ -7469,7 +7481,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = "/bin/sh -x";
-			shellScript = "# Run the just-built gtest executable\n\n# Uncomment this to see the steps in action\n# set -x\n\n# We need to hide the lldb.py that goes into BUILT_PRODUCTS\n# because it will conflict with finding the lldb module later,\n# which causes the python exception tests to fail.\nif [ -f \"${BUILT_PRODUCTS_DIR}/lldb.py\" ]; then\n    mv -f \"${BUILT_PRODUCTS_DIR}/lldb.py\" \"${BUILT_PRODUCTS_DIR}/park.lldb.py\"\nfi\n\n# Tell lldb-gtest where to find the lldb package\nexport PYTHONPATH=${BUILT_PRODUCTS_DIR}/LLDB.framework/Resources/Python\n\n# Set the terminal to VT100 so that the editline internals don't\n# fail.\nexport TERM=vt100\n\n# We must redirect stdin to /dev/null: without this, xcodebuild\n# will wait forever for input when we run the TestExceptionStateChecking\n# test.\n${BUILT_PRODUCTS_DIR}/lldb-gtest --gtest_output=xml:${BUILD_DIR}/gtest-results.xml < /dev/null\nRETCODE=$?\n\nif [ -f \"${BUILT_PRODUCTS_DIR}/park.lldb.py\" ]; then\nmv -f \"${BUILT_PRODUCTS_DIR}/park.lldb.py\" \"${BUILT_PRODUCTS_DIR}/lldb.py\"\nfi\n\nexit ${RETCODE}";
+			shellScript = "# Run the just-built gtest executable\n\n# Uncomment this to see the steps in action\n# set -x\n\n# We need to hide the lldb.py that goes into BUILT_PRODUCTS\n# because it will conflict with finding the lldb module later,\n# which causes the python exception tests to fail.\nif [ -f \"${BUILT_PRODUCTS_DIR}/lldb.py\" ]; then\n    mv -f \"${BUILT_PRODUCTS_DIR}/lldb.py\" \"${BUILT_PRODUCTS_DIR}/park.lldb.py\"\nfi\n\n# Tell lldb-gtest where to find the lldb package\nexport PYTHONPATH=${BUILT_PRODUCTS_DIR}/LLDB.framework/Resources/Python\n\n# Set the terminal to VT100 so that the editline internals don't\n# fail.\nexport TERM=vt100\n\n# We must redirect stdin to /dev/null: without this, xcodebuild\n# will wait forever for input when we run the TestExceptionStateChecking\n# test.\n${BUILT_PRODUCTS_DIR}/lldb-gtest --gtest_output=xml:${BUILD_DIR}/gtest-results.xml < /dev/null\nRETCODE=$?\n\nif [ -f \"${BUILT_PRODUCTS_DIR}/park.lldb.py\" ]; then\nmv -f \"${BUILT_PRODUCTS_DIR}/park.lldb.py\" \"${BUILT_PRODUCTS_DIR}/lldb.py\"\nfi\n\nexit ${RETCODE}\n";
 		};
 		23E2E5461D904B8A006F38BB /* Copy Inputs content to run dir */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -7689,7 +7701,7 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				$BUILT_PRODUCTS_DIR/Options.inc,
+				$BUILT_PRODUCTS_DIR/include/Options.inc,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -7825,6 +7837,7 @@
 				23CB15411D66DA9300EDDDE1 /* StringExtractorTest.cpp in Sources */,
 				9A2057031F3A605200F6C293 /* VASprintfTest.cpp in Sources */,
 				4C639ED121FA684900A7B957 /* OptionsWithRawTest.cpp in Sources */,
+				26FCE61C229F00F000D125BD /* SocketTestUtilities.cpp in Sources */,
 				4C639ED321FA684900A7B957 /* EventTest.cpp in Sources */,
 				9A18903C1F47D5E600394BCA /* TestUtilities.cpp in Sources */,
 				4C639ECD21FA684900A7B957 /* StreamTest.cpp in Sources */,
@@ -7978,6 +7991,7 @@
 				AF0578C4217FA80700CF9D80 /* UdtRecordCompleter.cpp in Sources */,
 				2689FFFF13353DB600698AC0 /* BreakpointResolver.cpp in Sources */,
 				25420ECD1A6490B8009ADBCB /* OptionValueChar.cpp in Sources */,
+				DDB5829C2278C8D700491B41 /* CxxModuleHandler.cpp in Sources */,
 				2689000113353DB600698AC0 /* BreakpointResolverAddress.cpp in Sources */,
 				255EFF741AFABA720069F277 /* LockFileBase.cpp in Sources */,
 				945261C21B9A11FC00BF138D /* LibCxxList.cpp in Sources */,
@@ -8027,6 +8041,7 @@
 				2689002113353DDE00698AC0 /* CommandObjectQuit.cpp in Sources */,
 				2689002213353DDE00698AC0 /* CommandObjectRegister.cpp in Sources */,
 				26BC17AF18C7F4CB00D2196D /* RegisterContextPOSIXCore_x86_64.cpp in Sources */,
+				4C645D0822961B3C00D3C034 /* DWARFTypeUnit.cpp in Sources */,
 				2619C4842107A9A2009CDE81 /* RegisterContextMinidump_ARM64.cpp in Sources */,
 				2689002313353DDE00698AC0 /* CommandObjectScript.cpp in Sources */,
 				2689002413353DDE00698AC0 /* CommandObjectSettings.cpp in Sources */,
@@ -8067,6 +8082,7 @@
 				AF1729D7182C907200E0AB97 /* HistoryUnwind.cpp in Sources */,
 				4C0B95802238342C0026C840 /* ASTUtils.cpp in Sources */,
 				AF77E0A11A033D360096C0EA /* RegisterContextFreeBSD_powerpc.cpp in Sources */,
+				AFC4ADB12270F4C700042167 /* PostfixExpression.cpp in Sources */,
 				26764CA01E48F528008D3573 /* RegularExpression.cpp in Sources */,
 				2689003B13353E0400698AC0 /* EmulateInstruction.cpp in Sources */,
 				AFC2DCE91E6E2F2C00283714 /* Baton.cpp in Sources */,
@@ -8296,6 +8312,7 @@
 				268900D913353E6F00698AC0 /* FuncUnwinders.cpp in Sources */,
 				268900DA13353E6F00698AC0 /* LineEntry.cpp in Sources */,
 				268900DB13353E6F00698AC0 /* LineTable.cpp in Sources */,
+				AF7BD81B22B04E20008E78D1 /* AuxVector.cpp in Sources */,
 				268900DC13353E6F00698AC0 /* ObjectFile.cpp in Sources */,
 				268900DD13353E6F00698AC0 /* Symbol.cpp in Sources */,
 				AF26703A1852D01E00B6CC36 /* Queue.cpp in Sources */,
@@ -8534,7 +8551,6 @@
 				26A527C314E24F5F00F3A14A /* ThreadMachCore.cpp in Sources */,
 				B299580B14F2FA1400050A04 /* DisassemblerLLVMC.cpp in Sources */,
 				26B7564E14F89356008D9CB3 /* PlatformiOSSimulator.cpp in Sources */,
-				26FFC19914FC072100087D58 /* AuxVector.cpp in Sources */,
 				26FFC19B14FC072100087D58 /* DYLDRendezvous.cpp in Sources */,
 				AF0F6E501739A76D009180FE /* RegisterContextKDP_arm64.cpp in Sources */,
 				26FFC19D14FC072100087D58 /* DynamicLoaderPOSIXDYLD.cpp in Sources */,

@@ -74,6 +74,10 @@ defm apply_dynamic_relocs: B<"apply-dynamic-relocs",
     "Apply link-time values for dynamic relocations",
     "Do not apply link-time values for dynamic relocations (default)">;
 
+defm dependent_libraries: B<"dependent-libraries",
+    "Process dependent library specifiers from input files (default)",
+    "Ignore dependent library specifiers from input files">;
+
 defm as_needed: B<"as-needed",
     "Only set DT_NEEDED for shared libraries if used",
     "Always set DT_NEEDED for shared libraries (default)">;
@@ -173,6 +177,13 @@ defm fini: Eq<"fini", "Specify a finalizer function">, MetaVarName<"<symbol>">;
 def fix_cortex_a53_843419: F<"fix-cortex-a53-843419">,
   HelpText<"Apply fixes for AArch64 Cortex-A53 erratum 843419">;
 
+// This option is intentionally hidden from the user as the implementation
+// is not complete.
+def require_cet: F<"require-cet">;
+
+def force_bti: F<"force-bti">,
+  HelpText<"Force enable AArch64 BTI in PLT, warn if Input ELF file does not have GNU_PROPERTY_AARCH64_FEATURE_1_BTI property">;
+
 defm format: Eq<"format", "Change the input format of the inputs following this option">,
   MetaVarName<"[default,elf,binary]">;
 
@@ -224,6 +235,9 @@ defm merge_exidx_entries: B<"merge-exidx-entries",
     "Enable merging .ARM.exidx entries (default)",
     "Disable merging .ARM.exidx entries">;
 
+def nmagic: F<"nmagic">, MetaVarName<"<magic>">,
+  HelpText<"Do not page align sections, link against static libraries.">;
+
 def nostdlib: F<"nostdlib">,
   HelpText<"Only search directories specified on the command line">;
 
@@ -236,8 +250,11 @@ def no_dynamic_linker: F<"no-dynamic-linker">,
 def noinhibit_exec: F<"noinhibit-exec">,
   HelpText<"Retain the executable output file whenever it is still usable">;
 
+def no_nmagic: F<"no-nmagic">, MetaVarName<"<magic>">,
+  HelpText<"Page align sections (default)">;
+
 def no_omagic: F<"no-omagic">, MetaVarName<"<magic>">,
-  HelpText<"Do not set the text data sections to be writable">;
+  HelpText<"Do not set the text data sections to be writable, page align sections (default)">;
 
 def no_rosegment: F<"no-rosegment">,
   HelpText<"Do not put read-only non-executable sections in their own segment">;
@@ -252,7 +269,7 @@ def oformat: Separate<["--"], "oformat">, MetaVarName<"<format>">,
   HelpText<"Specify the binary format for the output object file">;
 
 def omagic: Flag<["--"], "omagic">, MetaVarName<"<magic>">,
-  HelpText<"Set the text and data sections to be readable and writable">;
+  HelpText<"Set the text and data sections to be readable and writable, do not page align sections, link against static libraries">;
 
 defm orphan_handling:
   Eq<"orphan-handling", "Control how orphan sections are handled when linker script used">;
@@ -260,6 +277,9 @@ defm orphan_handling:
 defm pack_dyn_relocs:
   Eq<"pack-dyn-relocs", "Pack dynamic relocations in the given format">,
   MetaVarName<"[none,android,relr,android+relr]">;
+
+def pac_plt: F<"pac-plt">,
+  HelpText<"AArch64 only, use pointer authentication in PLT">;
 
 defm use_android_relr_tags: B<"use-android-relr-tags",
     "Use SHT_ANDROID_RELR / DT_ANDROID_RELR* tags instead of SHT_RELR / DT_RELR*",
@@ -422,6 +442,7 @@ def: Separate<["-"], "b">, Alias<format>, HelpText<"Alias for --format">;
 def: JoinedOrSeparate<["-"], "l">, Alias<library>, HelpText<"Alias for --library">;
 def: JoinedOrSeparate<["-"], "L">, Alias<library_path>, HelpText<"Alias for --library-path">;
 def: F<"no-pic-executable">, Alias<no_pie>, HelpText<"Alias for --no-pie">;
+def: Flag<["-"], "n">, Alias<nmagic>, HelpText<"Alias for --nmagic">;
 def: Flag<["-"], "N">, Alias<omagic>, HelpText<"Alias for --omagic">;
 def: Joined<["--"], "output=">, Alias<o>, HelpText<"Alias for -o">;
 def: Separate<["--"], "output">, Alias<o>, HelpText<"Alias for -o">;
@@ -566,6 +587,7 @@ def: F<"no-warn-mismatch">;
 def: Flag<["-"], "p">;
 def: Separate<["--", "-"], "rpath-link">;
 def: J<"rpath-link=">;
+def: F<"secure-plt">;
 def: F<"sort-common">;
 def: F<"stats">;
 def: F<"warn-execstack">;

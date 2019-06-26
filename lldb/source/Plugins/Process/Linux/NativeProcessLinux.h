@@ -12,6 +12,7 @@
 #include <csignal>
 #include <unordered_set>
 
+#include "Plugins/Process/Utility/AuxVector.h"
 #include "lldb/Host/Debug.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/linux/Support.h"
@@ -49,9 +50,7 @@ public:
            MainLoop &mainloop) const override;
   };
 
-  // ---------------------------------------------------------------------
   // NativeProcessProtocol Interface
-  // ---------------------------------------------------------------------
   Status Resume(const ResumeActionList &resume_actions) override;
 
   Status Halt() override;
@@ -104,6 +103,8 @@ public:
     return getProcFile(GetID(), "auxv");
   }
 
+  llvm::Optional<uint64_t> GetAuxValue(enum AuxVector::EntryType type);
+
   lldb::user_id_t StartTrace(const TraceOptions &config,
                              Status &error) override;
 
@@ -120,9 +121,7 @@ public:
 
   Status GetTraceConfig(lldb::user_id_t traceid, TraceOptions &config) override;
 
-  // ---------------------------------------------------------------------
   // Interface used by NativeRegisterContext-derived classes.
-  // ---------------------------------------------------------------------
   static Status PtraceWrapper(int req, lldb::pid_t pid, void *addr = nullptr,
                               void *data = nullptr, size_t data_size = 0,
                               long *result = nullptr);
@@ -136,6 +135,7 @@ protected:
 private:
   MainLoop::SignalHandleUP m_sigchld_handle;
   ArchSpec m_arch;
+  std::unique_ptr<AuxVector> m_aux_vector;
 
   LazyBool m_supports_mem_region = eLazyBoolCalculate;
   std::vector<std::pair<MemoryRegionInfo, FileSpec>> m_mem_region_cache;
@@ -146,9 +146,7 @@ private:
   // the relevan breakpoint
   std::map<lldb::tid_t, lldb::addr_t> m_threads_stepping_with_breakpoint;
 
-  // ---------------------------------------------------------------------
   // Private Instance Methods
-  // ---------------------------------------------------------------------
   NativeProcessLinux(::pid_t pid, int terminal_fd, NativeDelegate &delegate,
                      const ArchSpec &arch, MainLoop &mainloop,
                      llvm::ArrayRef<::pid_t> tids);

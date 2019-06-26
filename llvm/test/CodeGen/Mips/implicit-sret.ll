@@ -41,7 +41,6 @@ start:
 define internal { i32, i128, i64 } @implicit_sret_impl() unnamed_addr nounwind {
 ; CHECK-LABEL: implicit_sret_impl:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:16]]
 ; CHECK-NEXT:    move $1, $4
 ; CHECK-NEXT:    daddiu $2, $zero, 20
 ; CHECK-NEXT:    sd $2, 16($4)
@@ -51,9 +50,6 @@ define internal { i32, i128, i64 } @implicit_sret_impl() unnamed_addr nounwind {
 ; CHECK-NEXT:    sd $3, 24($4)
 ; CHECK-NEXT:    addiu $5, $zero, 10
 ; CHECK-NEXT:    sw $5, 0($4)
-; CHECK-NEXT:    sd $1, 8($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd $2, 0($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
   ret { i32, i128, i64 } { i32 10, i128 20, i64 30 }
@@ -97,7 +93,6 @@ start:
 define internal { i32, i32, i32, i32, i32, i32 } @implicit_sret_impl2() unnamed_addr nounwind {
 ; CHECK-LABEL: implicit_sret_impl2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:16]]
 ; CHECK-NEXT:    move $1, $4
 ; CHECK-NEXT:    addiu $2, $zero, 6
 ; CHECK-NEXT:    sw $2, 20($4)
@@ -111,8 +106,6 @@ define internal { i32, i32, i32, i32, i32, i32 } @implicit_sret_impl2() unnamed_
 ; CHECK-NEXT:    sw $2, 4($4)
 ; CHECK-NEXT:    addiu $2, $zero, 1
 ; CHECK-NEXT:    sw $2, 0($4)
-; CHECK-NEXT:    sd $1, 8($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
   ret { i32, i32, i32, i32, i32, i32 } { i32 1, i32 2, i32 3, i32 4, i32 5, i32 6 }

@@ -589,6 +589,7 @@ TEST_F(FileSystemTest, TempFileKeepDiscard) {
   auto TempFileOrError = fs::TempFile::create(TestDirectory + "/test-%%%%");
   ASSERT_TRUE((bool)TempFileOrError);
   fs::TempFile File = std::move(*TempFileOrError);
+  ASSERT_EQ(-1, TempFileOrError->FD);
   ASSERT_FALSE((bool)File.keep(TestDirectory + "/keep"));
   ASSERT_FALSE((bool)File.discard());
   ASSERT_TRUE(fs::exists(TestDirectory + "/keep"));
@@ -600,6 +601,7 @@ TEST_F(FileSystemTest, TempFileDiscardDiscard) {
   auto TempFileOrError = fs::TempFile::create(TestDirectory + "/test-%%%%");
   ASSERT_TRUE((bool)TempFileOrError);
   fs::TempFile File = std::move(*TempFileOrError);
+  ASSERT_EQ(-1, TempFileOrError->FD);
   ASSERT_FALSE((bool)File.discard());
   ASSERT_FALSE((bool)File.discard());
   ASSERT_FALSE(fs::exists(TestDirectory + "/keep"));
@@ -711,10 +713,18 @@ TEST_F(FileSystemTest, TempFileCollisions) {
     }
   };
 
-  // We should be able to create exactly 16 temporary files.
-  for (int i = 0; i < 16; ++i)
-    EXPECT_TRUE(TryCreateTempFile());
-  EXPECT_FALSE(TryCreateTempFile());
+  // Our single-character template allows for 16 unique names. Check that
+  // calling TryCreateTempFile repeatedly results in 16 successes.
+  // Because the test depends on random numbers, it could theoretically fail.
+  // However, the probability of this happening is tiny: with 32 calls, each
+  // of which will retry up to 128 times, to not get a given digit we would
+  // have to fail at least 15 + 17 * 128 = 2191 attempts. The probability of
+  // 2191 attempts not producing a given hexadecimal digit is
+  // (1 - 1/16) ** 2191 or 3.88e-62.
+  int Successes = 0;
+  for (int i = 0; i < 32; ++i)
+    if (TryCreateTempFile()) ++Successes;
+  EXPECT_EQ(Successes, 16);
 
   for (fs::TempFile &T : TempFiles)
     cantFail(T.discard());
@@ -1520,6 +1530,7 @@ TEST_F(FileSystemTest, is_local) {
   bool TempFileIsLocal;
   ASSERT_NO_ERROR(fs::is_local(FD, TempFileIsLocal));
   EXPECT_EQ(TempFileIsLocal, fs::is_local(FD));
+  ::close(FD);
 
   // Expect that the file and its parent directory are equally local or equally
   // remote.

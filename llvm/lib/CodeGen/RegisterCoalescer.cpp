@@ -358,9 +358,10 @@ INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
 INITIALIZE_PASS_END(RegisterCoalescer, "simple-register-coalescing",
                     "Simple Register Coalescing", false, false)
 
-static bool isMoveInstr(const TargetRegisterInfo &tri, const MachineInstr *MI,
-                        unsigned &Src, unsigned &Dst,
-                        unsigned &SrcSub, unsigned &DstSub) {
+LLVM_NODISCARD static bool isMoveInstr(const TargetRegisterInfo &tri,
+                                       const MachineInstr *MI, unsigned &Src,
+                                       unsigned &Dst, unsigned &SrcSub,
+                                       unsigned &DstSub) {
   if (MI->isCopy()) {
     Dst = MI->getOperand(0).getReg();
     DstSub = MI->getOperand(0).getSubReg();
@@ -693,8 +694,7 @@ bool RegisterCoalescer::hasOtherReachingDefs(LiveInterval &IntA,
 
   for (LiveRange::Segment &ASeg : IntA.segments) {
     if (ASeg.valno != AValNo) continue;
-    LiveInterval::iterator BI =
-      std::upper_bound(IntB.begin(), IntB.end(), ASeg.start);
+    LiveInterval::iterator BI = llvm::upper_bound(IntB, ASeg.start);
     if (BI != IntB.begin())
       --BI;
     for (; BI != IntB.end() && ASeg.end >= BI->start; ++BI) {
@@ -970,7 +970,7 @@ RegisterCoalescer::removeCopyByCommutingDef(const CoalescerPair &CP,
 
 /// For copy B = A in BB2, if A is defined by A = B in BB0 which is a
 /// predecessor of BB2, and if B is not redefined on the way from A = B
-/// in BB2 to B = A in BB2, B = A in BB2 is partially redundant if the
+/// in BB0 to B = A in BB2, B = A in BB2 is partially redundant if the
 /// execution goes through the path from BB0 to BB2. We may move B = A
 /// to the predecessor without such reversed copy.
 /// So we will transform the program from:
@@ -1517,7 +1517,8 @@ MachineInstr *RegisterCoalescer::eliminateUndefCopy(MachineInstr *CopyMI) {
   // CoalescerPair may have a new register class with adjusted subreg indices
   // at this point.
   unsigned SrcReg, DstReg, SrcSubIdx, DstSubIdx;
-  isMoveInstr(*TRI, CopyMI, SrcReg, DstReg, SrcSubIdx, DstSubIdx);
+  if(!isMoveInstr(*TRI, CopyMI, SrcReg, DstReg, SrcSubIdx, DstSubIdx))
+    return nullptr;
 
   SlotIndex Idx = LIS->getInstructionIndex(*CopyMI);
   const LiveInterval &SrcLI = LIS->getInterval(SrcReg);
@@ -2017,19 +2018,19 @@ bool RegisterCoalescer::joinReservedPhysReg(CoalescerPair &CP) {
   if (CP.isFlipped()) {
     // Physreg is copied into vreg
     //   %y = COPY %physreg_x
-    //   ...  //< no other def of %x here
+    //   ...  //< no other def of %physreg_x here
     //   use %y
     // =>
     //   ...
-    //   use %x
+    //   use %physreg_x
     CopyMI = MRI->getVRegDef(SrcReg);
   } else {
     // VReg is copied into physreg:
     //   %y = def
-    //   ... //< no other def or use of %y here
-    //   %y = COPY %physreg_x
+    //   ... //< no other def or use of %physreg_x here
+    //   %physreg_x = COPY %y
     // =>
-    //   %y = def
+    //   %physreg_x = def
     //   ...
     if (!MRI->hasOneNonDBGUse(SrcReg)) {
       LLVM_DEBUG(dbgs() << "\t\tMultiple vreg uses!\n");
@@ -3033,7 +3034,9 @@ void JoinVals::pruneSubRegValues(LiveInterval &LI, LaneBitmask &ShrinkMask) {
       // If a subrange starts at the copy then an undefined value has been
       // copied and we must remove that subrange value as well.
       VNInfo *ValueOut = Q.valueOutOrDead();
-      if (ValueOut != nullptr && Q.valueIn() == nullptr) {
+      if (ValueOut != nullptr && (Q.valueIn() == nullptr ||
+                                  (V.Identical && V.Resolution == CR_Erase &&
+                                   ValueOut->def == Def))) {
         LLVM_DEBUG(dbgs() << "\t\tPrune sublane " << PrintLaneMask(S.LaneMask)
                           << " at " << Def << "\n");
         SmallVector<SlotIndex,8> EndPoints;
@@ -3042,7 +3045,7 @@ void JoinVals::pruneSubRegValues(LiveInterval &LI, LaneBitmask &ShrinkMask) {
         // Mark value number as unused.
         ValueOut->markUnused();
 
-        if (V.Identical && S.Query(OtherDef).valueOut()) {
+        if (V.Identical && S.Query(OtherDef).valueOutOrDead()) {
           // If V is identical to V.OtherVNI (and S was live at OtherDef),
           // then we can't simply prune V from S. V needs to be replaced
           // with V.OtherVNI.
@@ -3513,7 +3516,8 @@ bool RegisterCoalescer::applyTerminalRule(const MachineInstr &Copy) const {
   if (!UseTerminalRule)
     return false;
   unsigned DstReg, DstSubReg, SrcReg, SrcSubReg;
-  isMoveInstr(*TRI, &Copy, SrcReg, DstReg, SrcSubReg, DstSubReg);
+  if (!isMoveInstr(*TRI, &Copy, SrcReg, DstReg, SrcSubReg, DstSubReg))
+    return false;
   // Check if the destination of this copy has any other affinity.
   if (TargetRegisterInfo::isPhysicalRegister(DstReg) ||
       // If SrcReg is a physical register, the copy won't be coalesced.
@@ -3537,8 +3541,9 @@ bool RegisterCoalescer::applyTerminalRule(const MachineInstr &Copy) const {
     if (&MI == &Copy || !MI.isCopyLike() || MI.getParent() != OrigBB)
       continue;
     unsigned OtherReg, OtherSubReg, OtherSrcReg, OtherSrcSubReg;
-    isMoveInstr(*TRI, &Copy, OtherSrcReg, OtherReg, OtherSrcSubReg,
-                OtherSubReg);
+    if (!isMoveInstr(*TRI, &Copy, OtherSrcReg, OtherReg, OtherSrcSubReg,
+                OtherSubReg))
+      return false;
     if (OtherReg == SrcReg)
       OtherReg = OtherSrcReg;
     // Check if OtherReg is a non-terminal.

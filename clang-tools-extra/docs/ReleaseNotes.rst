@@ -101,12 +101,53 @@ Improvements to clang-tidy
   Finds and fixes ``absl::Time`` subtraction expressions to do subtraction
   in the Time domain instead of the numeric domain.
 
+- New :doc:`android-cloexec-pipe
+  <clang-tidy/checks/android-cloexec-pipe>` check.
+
+  This check detects usage of ``pipe()``.
+
+- New :doc:`android-cloexec-pipe2
+  <clang-tidy/checks/android-cloexec-pipe2>` check.
+
+  This checks ensures that ``pipe2()`` is called with the O_CLOEXEC flag.
+
+- New :doc:`bugprone-unhandled-self-assignment
+  <clang-tidy/checks/bugprone-unhandled-self-assignment>` check.
+
+  Finds user-defined copy assignment operators which do not protect the code
+  against self-assignment either by checking self-assignment explicitly or
+  using the copy-and-swap or the copy-and-move method.
+
+- New :doc:`bugprone-branch-clone
+  <clang-tidy/checks/bugprone-branch-clone>` check.
+
+  Checks for repeated branches in ``if/else if/else`` chains, consecutive
+  repeated branches in ``switch`` statements and indentical true and false
+  branches in conditional operators.
+
 - New :doc:`google-readability-avoid-underscore-in-googletest-name
   <clang-tidy/checks/google-readability-avoid-underscore-in-googletest-name>`
   check.
 
   Checks whether there are underscores in googletest test and test case names in
   test macros, which is prohibited by the Googletest FAQ.
+
+- New :doc:`google-objc-avoid-nsobject-new
+  <clang-tidy/checks/google-objc-avoid-nsobject-new>` check.
+
+  Checks for calls to ``+new`` or overrides of it, which are prohibited by the
+  Google Objective-C style guide.
+
+- New :doc:`objc-super-self <clang-tidy/checks/objc-super-self>` check.
+
+  Finds invocations of ``-self`` on super instances in initializers of
+  subclasses of ``NSObject`` and recommends calling a superclass initializer
+  instead.
+
+- New alias :doc:`cert-oop54-cpp
+  <clang-tidy/checks/cert-oop54-cpp>` to
+  :doc:`bugprone-unhandled-self-assignment
+  <clang-tidy/checks/bugprone-unhandled-self-assignment>` was added.
 
 - New alias :doc:`cppcoreguidelines-explicit-virtual-functions
   <clang-tidy/checks/cppcoreguidelines-explicit-virtual-functions>` to
@@ -119,6 +160,12 @@ Improvements to clang-tidy
   `CommentUserDefiniedLiterals`, `CommentStringLiterals`,
   `CommentCharacterLiterals` & `CommentNullPtrs` options.
 
+- The :doc:`bugprone-too-small-loop-variable
+  <clang-tidy/checks/bugprone-too-small-loop-variable>` now supports
+  `MagnitudeBitsUpperLimit` option. The default value was set to 16,
+  which greatly reduces warnings related to loops which are unlikely to
+  cause an actual functional bug.
+
 - The :doc:`google-runtime-int <clang-tidy/checks/google-runtime-int>`
   check has been disabled in Objective-C++.
 
@@ -129,6 +176,33 @@ Improvements to clang-tidy
 - The :doc:`modernize-use-override
   <clang-tidy/checks/modernize-use-override>` now supports `OverrideSpelling`
   and `FinalSpelling` options.
+
+- New :doc:`llvm-prefer-isa-or-dyn-cast-in-conditionals
+  <clang-tidy/checks/llvm-prefer-isa-or-dyn-cast-in-conditionals>` check.
+
+  Looks at conditionals and finds and replaces cases of ``cast<>``,
+  which will assert rather than return a null pointer, and
+  ``dyn_cast<>`` where the return value is not captured. Additionally,
+  finds and replaces cases that match the pattern ``var &&
+  isa<X>(var)``, where ``var`` is evaluated twice.
+
+- New :doc:`modernize-use-trailing-return-type
+  <clang-tidy/checks/modernize-use-trailing-return-type>` check.
+
+  Rewrites function signatures to use a trailing return type.
+
+- The :doc:`misc-throw-by-value-catch-by-reference
+  <clang-tidy/checks/misc-throw-by-value-catch-by-reference.rst>` now supports
+  `WarnOnLargeObject` and `MaxSize` options to warn on any large trivial
+  object caught by value.
+
+- Added `UseAssignment` option to :doc:`cppcoreguidelines-pro-type-member-init`
+
+  If set to true, the check will provide fix-its with literal initializers
+  (``int i = 0;``) instead of curly braces (``int i{};``).
+
+Improvements to include-fixer
+-----------------------------
 
 - New :doc:`openmp-exception-escape
   <clang-tidy/checks/openmp-exception-escape>` check.

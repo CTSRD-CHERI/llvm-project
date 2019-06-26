@@ -30,7 +30,7 @@ typedef float float32_t;
 
 template <class T, std::size_t N>
 constexpr size_t
-const_size(const T (&array)[N]) noexcept
+const_size(const T (&)[N]) noexcept
 {
     return N;
 }
@@ -119,7 +119,7 @@ expect_equal(Iterator1 expected_first, Iterator2 actual_first, Size n, const cha
              const char* message)
 {
     size_t error_count = 0;
-    for (size_t k = 0; k < n && error_count < 10; ++k, ++expected_first, ++actual_first)
+    for (Size k = 0; k < n && error_count < 10; ++k, ++expected_first, ++actual_first)
     {
         if (!(*expected_first == *actual_first))
         {
@@ -572,7 +572,7 @@ struct Matrix2x2
     T a[2][2];
     Matrix2x2() : a{{1, 0}, {0, 1}} {}
     Matrix2x2(T x, T y) : a{{0, x}, {x, y}} {}
-#if !__PSTL_ICL_19_VC14_VC141_TEST_SCAN_RELEASE_BROKEN
+#if !_PSTL_ICL_19_VC14_VC141_TEST_SCAN_RELEASE_BROKEN
     Matrix2x2(const Matrix2x2& m) : a{{m.a[0][0], m.a[0][1]}, {m.a[1][0], m.a[1][1]}} {}
     Matrix2x2&
     operator=(const Matrix2x2& m)
@@ -605,13 +605,6 @@ multiply_matrix(const Matrix2x2<T>& left, const Matrix2x2<T>& right)
     }
     return result;
 }
-
-// Check that Intel(R) Threading Building Blocks header files are not used when parallel policies are off
-#if !__PSTL_USE_PAR_POLICIES
-#if defined(TBB_INTERFACE_VERSION)
-#error The parallel backend is used while it should not (__PSTL_USE_PAR_POLICIES==0)
-#endif
-#endif
 
 //============================================================================
 // Adapters for creating different types of iterators.
@@ -658,7 +651,7 @@ struct ReverseAdapter
     iterator_type
     operator()(Iterator it)
     {
-#if __PSTL_CPP14_MAKE_REVERSE_ITERATOR_PRESENT
+#if _PSTL_CPP14_MAKE_REVERSE_ITERATOR_PRESENT
         return std::make_reverse_iterator(it);
 #else
         return iterator_type(it);
@@ -759,7 +752,7 @@ struct invoke_if_<std::false_type, std::false_type>
 {
     template <typename Op, typename... Rest>
     void
-    operator()(bool is_allow, Op op, Rest&&... rest)
+    operator()(bool, Op op, Rest&&... rest)
     {
         op(std::forward<Rest>(rest)...);
     }
@@ -794,14 +787,14 @@ struct non_const_wrapper_tagged : non_const_wrapper
 
     template <typename Policy, typename Iterator>
     typename std::enable_if<IsPositiveCondition != is_same_iterator_category<Iterator, IteratorTag>::value, void>::type
-    operator()(Policy&& exec, Iterator iter)
+    operator()(Policy&&, Iterator)
     {
     }
 
     template <typename Policy, typename InputIterator, typename OutputIterator>
     typename std::enable_if<IsPositiveCondition != is_same_iterator_category<OutputIterator, IteratorTag>::value,
                             void>::type
-    operator()(Policy&& exec, InputIterator input_iter, OutputIterator out_iter)
+    operator()(Policy&&, InputIterator, OutputIterator)
     {
     }
 };
@@ -1006,7 +999,7 @@ struct iterator_invoker<std::forward_iterator_tag, /*isReverse=*/std::true_type>
 {
     template <typename... Rest>
     void
-    operator()(Rest&&... rest)
+    operator()(Rest&&...)
     {
     }
 };
@@ -1051,10 +1044,8 @@ invoke_on_all_policies(Op op, T&&... rest)
     // Try static execution policies
     invoke_on_all_iterator_types()(seq, op, std::forward<T>(rest)...);
     invoke_on_all_iterator_types()(unseq, op, std::forward<T>(rest)...);
-#if __PSTL_USE_PAR_POLICIES
     invoke_on_all_iterator_types()(par, op, std::forward<T>(rest)...);
     invoke_on_all_iterator_types()(par_unseq, op, std::forward<T>(rest)...);
-#endif
 }
 
 template <typename F>
@@ -1200,7 +1191,7 @@ transform_reduce_serial(InputIterator first, InputIterator last, T init, BinaryO
 static const char*
 done()
 {
-#if __PSTL_TEST_SUCCESSFUL_KEYWORD
+#if _PSTL_TEST_SUCCESSFUL_KEYWORD
     return "done";
 #else
     return "passed";
@@ -1235,9 +1226,9 @@ test_algo_basic_double(F&& f)
 
 template <typename Policy, typename F>
 static void
-invoke_if(Policy&& p, F f)
+invoke_if(Policy&&, F f)
 {
-#if __PSTL_ICC_16_VC14_TEST_SIMD_LAMBDA_DEBUG_32_BROKEN || __PSTL_ICC_17_VC141_TEST_SIMD_LAMBDA_DEBUG_32_BROKEN
+#if _PSTL_ICC_16_VC14_TEST_SIMD_LAMBDA_DEBUG_32_BROKEN || _PSTL_ICC_17_VC141_TEST_SIMD_LAMBDA_DEBUG_32_BROKEN
     __pstl::__internal::invoke_if_not(__pstl::__internal::allow_unsequenced<Policy>(), f);
 #else
     f();

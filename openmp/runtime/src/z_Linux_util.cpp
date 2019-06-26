@@ -1352,11 +1352,22 @@ void __kmp_suspend_initialize(void) {
   KMP_CHECK_SYSFAIL("pthread_condattr_init", status);
 }
 
-static void __kmp_suspend_initialize_thread(kmp_info_t *th) {
+void __kmp_suspend_initialize_thread(kmp_info_t *th) {
   ANNOTATE_HAPPENS_AFTER(&th->th.th_suspend_init_count);
-  if (th->th.th_suspend_init_count <= __kmp_fork_count) {
-    /* this means we haven't initialized the suspension pthread objects for this
-       thread in this instance of the process */
+  int old_value = KMP_ATOMIC_LD_RLX(&th->th.th_suspend_init_count);
+  int new_value = __kmp_fork_count + 1;
+  // Return if already initialized
+  if (old_value == new_value)
+    return;
+  // Wait, then return if being initialized
+  if (old_value == -1 ||
+      !__kmp_atomic_compare_store(&th->th.th_suspend_init_count, old_value,
+                                  -1)) {
+    while (KMP_ATOMIC_LD_ACQ(&th->th.th_suspend_init_count) != new_value) {
+      KMP_CPU_PAUSE();
+    }
+  } else {
+    // Claim to be the initializer and do initializations
     int status;
     status = pthread_cond_init(&th->th.th_suspend_cv.c_cond,
                                &__kmp_suspend_cond_attr);
@@ -1364,13 +1375,13 @@ static void __kmp_suspend_initialize_thread(kmp_info_t *th) {
     status = pthread_mutex_init(&th->th.th_suspend_mx.m_mutex,
                                 &__kmp_suspend_mutex_attr);
     KMP_CHECK_SYSFAIL("pthread_mutex_init", status);
-    *(volatile int *)&th->th.th_suspend_init_count = __kmp_fork_count + 1;
+    KMP_ATOMIC_ST_REL(&th->th.th_suspend_init_count, new_value);
     ANNOTATE_HAPPENS_BEFORE(&th->th.th_suspend_init_count);
   }
 }
 
 void __kmp_suspend_uninitialize_thread(kmp_info_t *th) {
-  if (th->th.th_suspend_init_count > __kmp_fork_count) {
+  if (KMP_ATOMIC_LD_ACQ(&th->th.th_suspend_init_count) > __kmp_fork_count) {
     /* this means we have initialize the suspension pthread objects for this
        thread in this instance of the process */
     int status;
@@ -1384,7 +1395,8 @@ void __kmp_suspend_uninitialize_thread(kmp_info_t *th) {
       KMP_SYSFAIL("pthread_mutex_destroy", status);
     }
     --th->th.th_suspend_init_count;
-    KMP_DEBUG_ASSERT(th->th.th_suspend_init_count == __kmp_fork_count);
+    KMP_DEBUG_ASSERT(KMP_ATOMIC_LD_RLX(&th->th.th_suspend_init_count) ==
+                     __kmp_fork_count);
   }
 }
 
@@ -1820,6 +1832,17 @@ void __kmp_runtime_initialize(void) {
 #endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
 
   __kmp_xproc = __kmp_get_xproc();
+
+#if ! KMP_32_BIT_ARCH
+  struct rlimit rlim;
+  // read stack size of calling thread, save it as default for worker threads;
+  // this should be done before reading environment variables
+  status = getrlimit(RLIMIT_STACK, &rlim);
+  if (status == 0) { // success?
+    __kmp_stksize = rlim.rlim_cur;
+    __kmp_check_stksize(&__kmp_stksize); // check value and adjust if needed
+  }
+#endif /* KMP_32_BIT_ARCH */
 
   if (sysconf(_SC_THREADS)) {
 

@@ -91,6 +91,10 @@ using namespace llvm::PatternMatch;
 
 STATISTIC(NumRemoved, "Number of unreachable basic blocks removed");
 
+// Max recursion depth for collectBitParts used when detecting bswap and
+// bitreverse idioms
+static const unsigned BitPartRecursionMaxDepth = 64;
+
 //===----------------------------------------------------------------------===//
 //  Local constant propagation.
 //
@@ -1286,6 +1290,19 @@ static bool valueCoversEntireFragment(Type *ValTy, DbgVariableIntrinsic *DII) {
   return false;
 }
 
+/// Produce a DebugLoc to use for each dbg.declare/inst pair that are promoted
+/// to a dbg.value. Because no machine insts can come from debug intrinsics,
+/// only the scope and inlinedAt is significant. Zero line numbers are used in
+/// case this DebugLoc leaks into any adjacent instructions.
+static DebugLoc getDebugValueLoc(DbgVariableIntrinsic *DII, Instruction *Src) {
+  // Original dbg.declare must have a location.
+  DebugLoc DeclareLoc = DII->getDebugLoc();
+  MDNode *Scope = DeclareLoc.getScope();
+  DILocation *InlinedAt = DeclareLoc.getInlinedAt();
+  // Produce an unknown location with the correct scope / inlinedAt fields.
+  return DebugLoc::get(0, 0, Scope, InlinedAt);
+}
+
 /// Inserts a llvm.dbg.value intrinsic before a store to an alloca'd value
 /// that has an associated llvm.dbg.declare or llvm.dbg.addr intrinsic.
 void llvm::ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
@@ -1295,6 +1312,8 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
   assert(DIVar && "Missing variable");
   auto *DIExpr = DII->getExpression();
   Value *DV = SI->getValueOperand();
+
+  DebugLoc NewLoc = getDebugValueLoc(DII, SI);
 
   if (!valueCoversEntireFragment(DV->getType(), DII)) {
     // FIXME: If storing to a part of the variable described by the dbg.declare,
@@ -1306,14 +1325,12 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
     // know nothing about the variable's content.
     DV = UndefValue::get(DV->getType());
     if (!LdStHasDebugValue(DIVar, DIExpr, SI))
-      Builder.insertDbgValueIntrinsic(DV, DIVar, DIExpr, DII->getDebugLoc(),
-                                      SI);
+      Builder.insertDbgValueIntrinsic(DV, DIVar, DIExpr, NewLoc, SI);
     return;
   }
 
   if (!LdStHasDebugValue(DIVar, DIExpr, SI))
-    Builder.insertDbgValueIntrinsic(DV, DIVar, DIExpr, DII->getDebugLoc(),
-                                    SI);
+    Builder.insertDbgValueIntrinsic(DV, DIVar, DIExpr, NewLoc, SI);
 }
 
 /// Inserts a llvm.dbg.value intrinsic before a load of an alloca'd value
@@ -1336,12 +1353,14 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
     return;
   }
 
+  DebugLoc NewLoc = getDebugValueLoc(DII, nullptr);
+
   // We are now tracking the loaded value instead of the address. In the
   // future if multi-location support is added to the IR, it might be
   // preferable to keep tracking both the loaded value and the original
   // address in case the alloca can not be elided.
   Instruction *DbgValue = Builder.insertDbgValueIntrinsic(
-      LI, DIVar, DIExpr, DII->getDebugLoc(), (Instruction *)nullptr);
+      LI, DIVar, DIExpr, NewLoc, (Instruction *)nullptr);
   DbgValue->insertAfter(LI);
 }
 
@@ -1368,12 +1387,13 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
   BasicBlock *BB = APN->getParent();
   auto InsertionPt = BB->getFirstInsertionPt();
 
+  DebugLoc NewLoc = getDebugValueLoc(DII, nullptr);
+
   // The block may be a catchswitch block, which does not have a valid
   // insertion point.
   // FIXME: Insert dbg.value markers in the successors when appropriate.
   if (InsertionPt != BB->end())
-    Builder.insertDbgValueIntrinsic(APN, DIVar, DIExpr, DII->getDebugLoc(),
-                                    &*InsertionPt);
+    Builder.insertDbgValueIntrinsic(APN, DIVar, DIExpr, NewLoc, &*InsertionPt);
 }
 
 /// Determine whether this alloca is either a VLA or an array.
@@ -1428,10 +1448,11 @@ bool llvm::LowerDbgDeclare(Function &F) {
         // This is a call by-value or some other instruction that takes a
         // pointer to the variable. Insert a *value* intrinsic that describes
         // the variable by dereferencing the alloca.
+        DebugLoc NewLoc = getDebugValueLoc(DDI, nullptr);
         auto *DerefExpr =
             DIExpression::append(DDI->getExpression(), dwarf::DW_OP_deref);
-        DIB.insertDbgValueIntrinsic(AI, DDI->getVariable(), DerefExpr,
-                                    DDI->getDebugLoc(), CI);
+        DIB.insertDbgValueIntrinsic(AI, DDI->getVariable(), DerefExpr, NewLoc,
+                                    CI);
       }
     }
     DDI->eraseFromParent();
@@ -1533,14 +1554,14 @@ void llvm::findDbgUsers(SmallVectorImpl<DbgVariableIntrinsic *> &DbgUsers,
 
 bool llvm::replaceDbgDeclare(Value *Address, Value *NewAddress,
                              Instruction *InsertBefore, DIBuilder &Builder,
-                             bool DerefBefore, int Offset, bool DerefAfter) {
+                             uint8_t DIExprFlags, int Offset) {
   auto DbgAddrs = FindDbgAddrUses(Address);
   for (DbgVariableIntrinsic *DII : DbgAddrs) {
     DebugLoc Loc = DII->getDebugLoc();
     auto *DIVar = DII->getVariable();
     auto *DIExpr = DII->getExpression();
     assert(DIVar && "Missing variable");
-    DIExpr = DIExpression::prepend(DIExpr, DerefBefore, Offset, DerefAfter);
+    DIExpr = DIExpression::prepend(DIExpr, DIExprFlags, Offset);
     // Insert llvm.dbg.declare immediately before InsertBefore, and remove old
     // llvm.dbg.declare.
     Builder.insertDeclare(NewAddress, DIVar, DIExpr, Loc, InsertBefore);
@@ -1552,10 +1573,10 @@ bool llvm::replaceDbgDeclare(Value *Address, Value *NewAddress,
 }
 
 bool llvm::replaceDbgDeclareForAlloca(AllocaInst *AI, Value *NewAllocaAddress,
-                                      DIBuilder &Builder, bool DerefBefore,
-                                      int Offset, bool DerefAfter) {
+                                      DIBuilder &Builder, uint8_t DIExprFlags,
+                                      int Offset) {
   return replaceDbgDeclare(AI, NewAllocaAddress, AI->getNextNode(), Builder,
-                           DerefBefore, Offset, DerefAfter);
+                           DIExprFlags, Offset);
 }
 
 static void replaceOneDbgValueForAlloca(DbgValueInst *DVI, Value *NewAddress,
@@ -1668,11 +1689,10 @@ DIExpression *llvm::salvageDebugInfoImpl(Instruction &I,
   };
 
   if (auto *CI = dyn_cast<CastInst>(&I)) {
-    if (!CI->isNoopCast(DL))
-      return nullptr;
-
-    // No-op casts are irrelevant for debug info.
-    return SrcDIExpr;
+    // No-op casts and zexts are irrelevant for debug info.
+    if (CI->isNoopCast(DL) || isa<ZExtInst>(&I))
+      return SrcDIExpr;
+    return nullptr;
   } else if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
     unsigned BitWidth =
         M.getDataLayout().getIndexSizeInBits(GEP->getPointerAddressSpace());
@@ -1897,9 +1917,13 @@ unsigned llvm::removeAllNonTerminatorAndEHPadInstructions(BasicBlock *BB) {
 }
 
 unsigned llvm::changeToUnreachable(Instruction *I, bool UseLLVMTrap,
-                                   bool PreserveLCSSA, DomTreeUpdater *DTU) {
+                                   bool PreserveLCSSA, DomTreeUpdater *DTU,
+                                   MemorySSAUpdater *MSSAU) {
   BasicBlock *BB = I->getParent();
   std::vector <DominatorTree::UpdateType> Updates;
+
+  if (MSSAU)
+    MSSAU->changeToUnreachable(I);
 
   // Loop over all of the successors, removing BB's entry from any PHI
   // nodes.
@@ -2618,7 +2642,7 @@ struct BitPart {
 /// does not invalidate internal references (std::map instead of DenseMap).
 static const Optional<BitPart> &
 collectBitParts(Value *V, bool MatchBSwaps, bool MatchBitReversals,
-                std::map<Value *, Optional<BitPart>> &BPS) {
+                std::map<Value *, Optional<BitPart>> &BPS, int Depth) {
   auto I = BPS.find(V);
   if (I != BPS.end())
     return I->second;
@@ -2626,13 +2650,19 @@ collectBitParts(Value *V, bool MatchBSwaps, bool MatchBitReversals,
   auto &Result = BPS[V] = None;
   auto BitWidth = cast<IntegerType>(V->getType())->getBitWidth();
 
+  // Prevent stack overflow by limiting the recursion depth
+  if (Depth == BitPartRecursionMaxDepth) {
+    LLVM_DEBUG(dbgs() << "collectBitParts max recursion depth reached.\n");
+    return Result;
+  }
+
   if (Instruction *I = dyn_cast<Instruction>(V)) {
     // If this is an or instruction, it may be an inner node of the bswap.
     if (I->getOpcode() == Instruction::Or) {
       auto &A = collectBitParts(I->getOperand(0), MatchBSwaps,
-                                MatchBitReversals, BPS);
+                                MatchBitReversals, BPS, Depth + 1);
       auto &B = collectBitParts(I->getOperand(1), MatchBSwaps,
-                                MatchBitReversals, BPS);
+                                MatchBitReversals, BPS, Depth + 1);
       if (!A || !B)
         return Result;
 
@@ -2665,7 +2695,7 @@ collectBitParts(Value *V, bool MatchBSwaps, bool MatchBitReversals,
         return Result;
 
       auto &Res = collectBitParts(I->getOperand(0), MatchBSwaps,
-                                  MatchBitReversals, BPS);
+                                  MatchBitReversals, BPS, Depth + 1);
       if (!Res)
         return Result;
       Result = Res;
@@ -2697,7 +2727,7 @@ collectBitParts(Value *V, bool MatchBSwaps, bool MatchBitReversals,
         return Result;
 
       auto &Res = collectBitParts(I->getOperand(0), MatchBSwaps,
-                                  MatchBitReversals, BPS);
+                                  MatchBitReversals, BPS, Depth + 1);
       if (!Res)
         return Result;
       Result = Res;
@@ -2712,7 +2742,7 @@ collectBitParts(Value *V, bool MatchBSwaps, bool MatchBitReversals,
     // If this is a zext instruction zero extend the result.
     if (I->getOpcode() == Instruction::ZExt) {
       auto &Res = collectBitParts(I->getOperand(0), MatchBSwaps,
-                                  MatchBitReversals, BPS);
+                                  MatchBitReversals, BPS, Depth + 1);
       if (!Res)
         return Result;
 
@@ -2774,7 +2804,7 @@ bool llvm::recognizeBSwapOrBitReverseIdiom(
 
   // Try to find all the pieces corresponding to the bswap.
   std::map<Value *, Optional<BitPart>> BPS;
-  auto Res = collectBitParts(I, MatchBSwaps, MatchBitReversals, BPS);
+  auto Res = collectBitParts(I, MatchBSwaps, MatchBitReversals, BPS, 0);
   if (!Res)
     return false;
   auto &BitProvenance = Res->Provenance;
@@ -2887,4 +2917,42 @@ bool llvm::canReplaceOperandWithVariable(const Instruction *I, unsigned OpIdx) {
         return false;
     return true;
   }
+}
+
+using AllocaForValueMapTy = DenseMap<Value *, AllocaInst *>;
+AllocaInst *llvm::findAllocaForValue(Value *V,
+                                     AllocaForValueMapTy &AllocaForValue) {
+  if (AllocaInst *AI = dyn_cast<AllocaInst>(V))
+    return AI;
+  // See if we've already calculated (or started to calculate) alloca for a
+  // given value.
+  AllocaForValueMapTy::iterator I = AllocaForValue.find(V);
+  if (I != AllocaForValue.end())
+    return I->second;
+  // Store 0 while we're calculating alloca for value V to avoid
+  // infinite recursion if the value references itself.
+  AllocaForValue[V] = nullptr;
+  AllocaInst *Res = nullptr;
+  if (CastInst *CI = dyn_cast<CastInst>(V))
+    Res = findAllocaForValue(CI->getOperand(0), AllocaForValue);
+  else if (PHINode *PN = dyn_cast<PHINode>(V)) {
+    for (Value *IncValue : PN->incoming_values()) {
+      // Allow self-referencing phi-nodes.
+      if (IncValue == PN)
+        continue;
+      AllocaInst *IncValueAI = findAllocaForValue(IncValue, AllocaForValue);
+      // AI for incoming values should exist and should all be equal.
+      if (IncValueAI == nullptr || (Res != nullptr && IncValueAI != Res))
+        return nullptr;
+      Res = IncValueAI;
+    }
+  } else if (GetElementPtrInst *EP = dyn_cast<GetElementPtrInst>(V)) {
+    Res = findAllocaForValue(EP->getPointerOperand(), AllocaForValue);
+  } else {
+    LLVM_DEBUG(dbgs() << "Alloca search cancelled on unknown instruction: "
+                      << *V << "\n");
+  }
+  if (Res)
+    AllocaForValue[V] = Res;
+  return Res;
 }

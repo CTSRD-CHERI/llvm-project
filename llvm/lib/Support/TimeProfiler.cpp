@@ -1,75 +1,62 @@
 //===-- TimeProfiler.cpp - Hierarchical Time Profiler ---------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
-/// \file Hierarchical time profiler implementation.
+// This file implements hierarchical time profiler.
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/TimeProfiler.h"
-#include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/JSON.h"
 #include <cassert>
 #include <chrono>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 using namespace std::chrono;
 
 namespace llvm {
 
+static cl::opt<unsigned> TimeTraceGranularity(
+    "time-trace-granularity",
+    cl::desc(
+        "Minimum time granularity (in microseconds) traced by time profiler"),
+    cl::init(500));
+
 TimeTraceProfiler *TimeTraceProfilerInstance = nullptr;
 
-static std::string escapeString(StringRef Src) {
-  std::string OS;
-  for (const unsigned char &C : Src) {
-    switch (C) {
-    case '"':
-    case '/':
-    case '\\':
-    case '\b':
-    case '\f':
-    case '\n':
-    case '\r':
-    case '\t':
-      OS += '\\';
-      OS += C;
-      break;
-    default:
-      if (isPrint(C)) {
-        OS += C;
-      }
-    }
-  }
-  return OS;
-}
-
 typedef duration<steady_clock::rep, steady_clock::period> DurationType;
-typedef std::pair<std::string, DurationType> NameAndDuration;
+typedef std::pair<size_t, DurationType> CountAndDurationType;
+typedef std::pair<std::string, CountAndDurationType>
+    NameAndCountAndDurationType;
 
 struct Entry {
   time_point<steady_clock> Start;
   DurationType Duration;
   std::string Name;
   std::string Detail;
+
+  Entry(time_point<steady_clock> &&S, DurationType &&D, std::string &&N,
+        std::string &&Dt)
+      : Start(std::move(S)), Duration(std::move(D)), Name(std::move(N)),
+        Detail(std::move(Dt)){};
 };
 
 struct TimeTraceProfiler {
   TimeTraceProfiler() {
-    Stack.reserve(8);
-    Entries.reserve(128);
     StartTime = steady_clock::now();
   }
 
   void begin(std::string Name, llvm::function_ref<std::string()> Detail) {
-    Entry E = {steady_clock::now(), {}, Name, Detail()};
-    Stack.push_back(std::move(E));
+    Stack.emplace_back(steady_clock::now(), DurationType{}, std::move(Name),
+                       Detail());
   }
 
   void end() {
@@ -77,8 +64,8 @@ struct TimeTraceProfiler {
     auto &E = Stack.back();
     E.Duration = steady_clock::now() - E.Start;
 
-    // Only include sections longer than 500us.
-    if (duration_cast<microseconds>(E.Duration).count() > 500)
+    // Only include sections longer than TimeTraceGranularity msec.
+    if (duration_cast<microseconds>(E.Duration).count() > TimeTraceGranularity)
       Entries.emplace_back(E);
 
     // Track total time taken by each "name", but only the topmost levels of
@@ -89,62 +76,90 @@ struct TimeTraceProfiler {
     if (std::find_if(++Stack.rbegin(), Stack.rend(), [&](const Entry &Val) {
           return Val.Name == E.Name;
         }) == Stack.rend()) {
-      TotalPerName[E.Name] += E.Duration;
-      CountPerName[E.Name]++;
+      auto &CountAndTotal = CountAndTotalPerName[E.Name];
+      CountAndTotal.first++;
+      CountAndTotal.second += E.Duration;
     }
 
     Stack.pop_back();
   }
 
-  void Write(std::unique_ptr<raw_pwrite_stream> &OS) {
+  void Write(raw_pwrite_stream &OS) {
     assert(Stack.empty() &&
            "All profiler sections should be ended when calling Write");
-
-    *OS << "{ \"traceEvents\": [\n";
+    json::OStream J(OS);
+    J.objectBegin();
+    J.attributeBegin("traceEvents");
+    J.arrayBegin();
 
     // Emit all events for the main flame graph.
     for (const auto &E : Entries) {
       auto StartUs = duration_cast<microseconds>(E.Start - StartTime).count();
       auto DurUs = duration_cast<microseconds>(E.Duration).count();
-      *OS << "{ \"pid\":1, \"tid\":0, \"ph\":\"X\", \"ts\":" << StartUs
-          << ", \"dur\":" << DurUs << ", \"name\":\"" << escapeString(E.Name)
-          << "\", \"args\":{ \"detail\":\"" << escapeString(E.Detail)
-          << "\"} },\n";
+
+      J.object([&]{
+        J.attribute("pid", 1);
+        J.attribute("tid", 0);
+        J.attribute("ph", "X");
+        J.attribute("ts", StartUs);
+        J.attribute("dur", DurUs);
+        J.attribute("name", E.Name);
+        J.attributeObject("args", [&] { J.attribute("detail", E.Detail); });
+      });
     }
 
     // Emit totals by section name as additional "thread" events, sorted from
     // longest one.
     int Tid = 1;
-    std::vector<NameAndDuration> SortedTotals;
-    SortedTotals.reserve(TotalPerName.size());
-    for (const auto &E : TotalPerName) {
-      SortedTotals.push_back(E);
-    }
-    std::sort(SortedTotals.begin(), SortedTotals.end(),
-              [](const NameAndDuration &A, const NameAndDuration &B) {
-                return A.second > B.second;
-              });
+    std::vector<NameAndCountAndDurationType> SortedTotals;
+    SortedTotals.reserve(CountAndTotalPerName.size());
+    for (const auto &E : CountAndTotalPerName)
+      SortedTotals.emplace_back(E.getKey(), E.getValue());
+
+    llvm::sort(SortedTotals.begin(), SortedTotals.end(),
+               [](const NameAndCountAndDurationType &A,
+                  const NameAndCountAndDurationType &B) {
+                 return A.second.second > B.second.second;
+               });
     for (const auto &E : SortedTotals) {
-      auto DurUs = duration_cast<microseconds>(E.second).count();
-      *OS << "{ \"pid\":1, \"tid\":" << Tid << ", \"ph\":\"X\", \"ts\":" << 0
-          << ", \"dur\":" << DurUs << ", \"name\":\"Total "
-          << escapeString(E.first)
-          << "\", \"args\":{ \"count\":" << CountPerName[E.first]
-          << ", \"avg ms\":" << (DurUs / CountPerName[E.first] / 1000)
-          << "} },\n";
+      auto DurUs = duration_cast<microseconds>(E.second.second).count();
+      auto Count = CountAndTotalPerName[E.first].first;
+
+      J.object([&]{
+        J.attribute("pid", 1);
+        J.attribute("tid", Tid);
+        J.attribute("ph", "X");
+        J.attribute("ts", 0);
+        J.attribute("dur", DurUs);
+        J.attribute("name", "Total " + E.first);
+        J.attributeObject("args", [&] {
+          J.attribute("count", int64_t(Count));
+          J.attribute("avg ms", int64_t(DurUs / Count / 1000));
+        });
+      });
+
       ++Tid;
     }
 
     // Emit metadata event with process name.
-    *OS << "{ \"cat\":\"\", \"pid\":1, \"tid\":0, \"ts\":0, \"ph\":\"M\", "
-           "\"name\":\"process_name\", \"args\":{ \"name\":\"clang\" } }\n";
-    *OS << "] }\n";
+    J.object([&] {
+      J.attribute("cat", "");
+      J.attribute("pid", 1);
+      J.attribute("tid", 0);
+      J.attribute("ts", 0);
+      J.attribute("ph", "M");
+      J.attribute("name", "process_name");
+      J.attributeObject("args", [&] { J.attribute("name", "clang"); });
+    });
+
+    J.arrayEnd();
+    J.attributeEnd();
+    J.objectEnd();
   }
 
-  std::vector<Entry> Stack;
-  std::vector<Entry> Entries;
-  std::unordered_map<std::string, DurationType> TotalPerName;
-  std::unordered_map<std::string, size_t> CountPerName;
+  SmallVector<Entry, 16> Stack;
+  SmallVector<Entry, 128> Entries;
+  StringMap<CountAndDurationType> CountAndTotalPerName;
   time_point<steady_clock> StartTime;
 };
 
@@ -159,7 +174,7 @@ void timeTraceProfilerCleanup() {
   TimeTraceProfilerInstance = nullptr;
 }
 
-void timeTraceProfilerWrite(std::unique_ptr<raw_pwrite_stream> &OS) {
+void timeTraceProfilerWrite(raw_pwrite_stream &OS) {
   assert(TimeTraceProfilerInstance != nullptr &&
          "Profiler object can't be null");
   TimeTraceProfilerInstance->Write(OS);

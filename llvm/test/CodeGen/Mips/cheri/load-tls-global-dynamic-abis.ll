@@ -113,35 +113,35 @@ entry:
 ; PCREL-NEXT: [[CAPTABLE:%0:cherigpr]] = CIncOffset $c12, [[CGPOFF_LO]]:gpr64
 
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
-; CAP-TABLE-NEXT:   %1:gpr64 = LUi64 target-flags(mips-captable-tlsgd-hi16) @external_gd
-; CAP-TABLE-NEXT:   %2:gpr64 = DADDiu killed %1:gpr64, target-flags(mips-captable-tlsgd-lo16) @external_gd
-; CAP-TABLE-NEXT:   %3:cherigpr = CIncOffset [[CAPTABLE]], killed %2:gpr64
-; CAP-TABLE-NEXT:   %4:cherigpr = CSetBoundsImm killed %3:cherigpr, 16
-; CAP-TABLE-NEXT:   %5:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load [[$CAP_SIZE]] from call-entry &__tls_get_addr)
-; CAP-TABLE-NEXT:   $c3 = COPY %4:cherigpr
-; CAP-TABLE-NEXT:   CapJumpLinkPseudo killed %5:cherigpr, <regmask $fp $gp $ra $c17 $c18 $c19 $c20 $c21 $c22 $c23 $c24 $c25 $d12 $d13 $d14 $d15 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 $fp_64 $f_hi24 $f_hi25 $f_hi26 $f_hi27 $f_hi28 $f_hi29 $f_hi30 $f_hi31 and 26 more...>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit-def $c11, implicit-def $c3
+; CAP-TABLE-NEXT:   %[[TLSGD_HI16:[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-tlsgd-hi16) @external_gd
+; CAP-TABLE-NEXT:   %[[TLSGD_LO16:[0-9]+]]:gpr64 = DADDiu killed %[[TLSGD_HI16]]:gpr64, target-flags(mips-captable-tlsgd-lo16) @external_gd
+; CAP-TABLE-NEXT:   %[[CAPTABLE_OFFSET:[0-9]+]]:cherigpr = CIncOffset [[CAPTABLE]], killed %[[TLSGD_LO16]]:gpr64
+; CAP-TABLE-NEXT:   %[[CAPTABLE_BOUNDED:[0-9]+]]:cherigpr = CSetBoundsImm killed %[[CAPTABLE_OFFSET]]:cherigpr, 16
+; CAP-TABLE-NEXT:   %[[CAPTABLE_CALL:[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load [[#CAP_SIZE]] from call-entry &__tls_get_addr)
+; CAP-TABLE-NEXT:   $c3 = COPY %[[CAPTABLE_BOUNDED]]:cherigpr
+; CAP-TABLE-NEXT:   CapJumpLinkPseudo killed %[[CAPTABLE_CALL]]:cherigpr, <regmask $fp $gp $ra $c17 $c18 $c19 $c20 $c21 $c22 $c23 $c24 $c25 $d12 $d13 $d14 $d15 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 $fp_64 $f_hi24 $f_hi25 $f_hi26 $f_hi27 $f_hi28 $f_hi29 $f_hi30 $f_hi31 and 26 more...>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit-def $c11, implicit-def $c3
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
 ; PLT-NEXT:         $c26 = COPY [[CAPTABLE]]
 ; FNDESC-NEXT:      $c26 = COPY [[CAPTABLE]]
-; CAP-TABLE-NEXT:   %6:cherigpr = COPY $c3
-; CAP-TABLE-NEXT:   %7:gpr64 = CAPLOAD64 $zero_64, 0, %6:cherigpr :: (dereferenceable load 8 from @external_gd, addrspace 200)
+; CAP-TABLE-NEXT:   %[[C3_COPY:[0-9]+]]:cherigpr = COPY $c3
+; CAP-TABLE-NEXT:   %[[LOAD:[0-9]+]]:gpr64 = CAPLOAD64 $zero_64, 0, %[[C3_COPY]]:cherigpr :: (dereferenceable load 8 from @external_gd, addrspace 200)
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
-; CAP-TABLE-NEXT:   %8:gpr64 = LUi64 target-flags(mips-captable-tlsldm-hi16) @internal_gd
-; CAP-TABLE-NEXT:   %9:gpr64 = DADDiu killed %8:gpr64, target-flags(mips-captable-tlsldm-lo16) @internal_gd
-; CAP-TABLE-NEXT:   %10:cherigpr = CIncOffset [[CAPTABLE]], killed %9:gpr64
-; CAP-TABLE-NEXT:   %11:cherigpr = CSetBoundsImm killed %10:cherigpr, 16
-; CAP-TABLE-NEXT:   %12:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load [[$CAP_SIZE]] from call-entry &__tls_get_addr)
-; CAP-TABLE-NEXT:   $c3 = COPY %11:cherigpr
-; CAP-TABLE-NEXT:   CapJumpLinkPseudo killed %12:cherigpr, <regmask $fp $gp $ra $c17 $c18 $c19 $c20 $c21 $c22 $c23 $c24 $c25 $d12 $d13 $d14 $d15 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 $fp_64 $f_hi24 $f_hi25 $f_hi26 $f_hi27 $f_hi28 $f_hi29 $f_hi30 $f_hi31 and 26 more...>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit-def $c11, implicit-def $c3
+; CAP-TABLE-NEXT:   %[[TLSLDM_HI16:[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-tlsldm-hi16) @internal_gd
+; CAP-TABLE-NEXT:   %[[TLSLDM_LO16:[0-9]+]]:gpr64 = DADDiu killed %[[TLSLDM_HI16]]:gpr64, target-flags(mips-captable-tlsldm-lo16) @internal_gd
+; CAP-TABLE-NEXT:   %[[CAPTABLE_OFFSET2:[0-9]+]]:cherigpr = CIncOffset [[CAPTABLE]], killed %[[TLSLDM_LO16]]:gpr64
+; CAP-TABLE-NEXT:   %[[CAPTABLE_BOUNDED2:[0-9]+]]:cherigpr = CSetBoundsImm killed %[[CAPTABLE_OFFSET2]]:cherigpr, 16
+; CAP-TABLE-NEXT:   %[[CAPTABLE_CALL2:[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) &__tls_get_addr, [[CAPTABLE]] :: (load [[#CAP_SIZE]] from call-entry &__tls_get_addr)
+; CAP-TABLE-NEXT:   $c3 = COPY %[[CAPTABLE_BOUNDED2]]:cherigpr
+; CAP-TABLE-NEXT:   CapJumpLinkPseudo killed %[[CAPTABLE_CALL2]]:cherigpr, <regmask $fp $gp $ra $c17 $c18 $c19 $c20 $c21 $c22 $c23 $c24 $c25 $d12 $d13 $d14 $d15 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 $fp_64 $f_hi24 $f_hi25 $f_hi26 $f_hi27 $f_hi28 $f_hi29 $f_hi30 $f_hi31 and 26 more...>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit-def $c11, implicit-def $c3
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
 ; PLT-NEXT:         $c26 = COPY [[CAPTABLE]]
 ; FNDESC-NEXT:      $c26 = COPY [[CAPTABLE]]
-; CAP-TABLE-NEXT:   %13:cherigpr = COPY $c3
-; CAP-TABLE-NEXT:   %14:gpr64 = LUi64 target-flags(mips-dtprel-hi) @internal_gd
-; CAP-TABLE-NEXT:   %15:gpr64 = DADDiu killed %14:gpr64, target-flags(mips-dtprel-lo) @internal_gd
-; CAP-TABLE-NEXT:   %16:cherigpr = CIncOffset %13:cherigpr, killed %15:gpr64
-; CAP-TABLE-NEXT:   %17:gpr64 = CAPLOAD64 $zero_64, 0, killed %16:cherigpr :: (dereferenceable load 8 from @internal_gd, addrspace 200)
-; CAP-TABLE-NEXT:   [[RESULT:%.+]] = DADDu killed %7:gpr64, killed %17:gpr64
+; CAP-TABLE-NEXT:   %[[C3_COPY:[0-9]+]]:cherigpr = COPY $c3
+; CAP-TABLE-NEXT:   %[[DTPREL_HI:[0-9]+]]:gpr64 = LUi64 target-flags(mips-dtprel-hi) @internal_gd
+; CAP-TABLE-NEXT:   %[[DTPREL:[0-9]+]]:gpr64 = DADDiu killed %[[DTPREL_HI]]:gpr64, target-flags(mips-dtprel-lo) @internal_gd
+; CAP-TABLE-NEXT:   %[[OFFSET:[0-9]+]]:cherigpr = CIncOffset %[[C3_COPY]]:cherigpr, killed %[[DTPREL]]:gpr64
+; CAP-TABLE-NEXT:   %[[LOAD2:[0-9]+]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %[[OFFSET]]:cherigpr :: (dereferenceable load 8 from @internal_gd, addrspace 200)
+; CAP-TABLE-NEXT:   [[RESULT:%.+]] = DADDu killed %[[LOAD]]:gpr64, killed %[[LOAD2]]:gpr64
 
 ; COMMON-NEXT:   $v0_64 = COPY [[RESULT]]
 ; COMMON-NEXT:   {{CapRetPseudo|RetRA}} implicit $v0_64

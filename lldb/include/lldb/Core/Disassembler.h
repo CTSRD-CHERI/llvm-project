@@ -38,41 +38,21 @@
 #include <stdint.h>
 #include <stdio.h>
 
-namespace lldb_private {
-class AddressRange;
-}
-namespace lldb_private {
-class DataExtractor;
-}
-namespace lldb_private {
-class Debugger;
-}
-namespace lldb_private {
-class Disassembler;
-}
-namespace lldb_private {
-class Module;
-}
-namespace lldb_private {
-class Stream;
-}
-namespace lldb_private {
-class SymbolContext;
-}
-namespace lldb_private {
-class SymbolContextList;
-}
-namespace lldb_private {
-class Target;
-}
-namespace lldb_private {
-struct RegisterInfo;
-}
 namespace llvm {
 template <typename T> class SmallVectorImpl;
 }
 
 namespace lldb_private {
+class AddressRange;
+class DataExtractor;
+class Debugger;
+class Disassembler;
+class Module;
+class Stream;
+class SymbolContext;
+class SymbolContextList;
+class Target;
+struct RegisterInfo;
 
 class Instruction {
 public:
@@ -109,7 +89,6 @@ public:
     m_address = addr;
   }
 
-  //------------------------------------------------------------------
   /// Dump the text representation of this Instruction to a Stream
   ///
   /// Print the (optional) address, (optional) bytes, opcode,
@@ -159,7 +138,6 @@ public:
   ///     Debugger::FormatDisassemblerAddress() string)
   ///     so this method can properly align the instruction opcodes.
   ///     May be 0 to indicate no indentation/alignment of the opcodes.
-  //------------------------------------------------------------------
   virtual void Dump(Stream *s, uint32_t max_opcode_byte_size, bool show_address,
                     bool show_bytes, const ExecutionContext *exe_ctx,
                     const SymbolContext *sym_ctx,
@@ -292,8 +270,32 @@ public:
 
   lldb::InstructionSP GetInstructionAtIndex(size_t idx) const;
 
+  //------------------------------------------------------------------
+  /// Get the index of the next branch instruction.
+  ///
+  /// Given a list of instructions, find the next branch instruction
+  /// in the list by returning an index.
+  ///
+  /// @param[in] start
+  ///     The instruction index of the first instruction to check.
+  ///
+  /// @param[in] target
+  ///     A LLDB target object that is used to resolve addresses.
+  ///    
+  /// @param[in] ignore_calls
+  ///     It true, then fine the first branch instruction that isn't
+  ///     a function call (a branch that calls and returns to the next
+  ///     instruction). If false, find the instruction index of any 
+  ///     branch in the list.
+  ///    
+  /// @return
+  ///     The instruction index of the first branch that is at or past
+  ///     \a start. Returns UINT32_MAX if no matching branches are 
+  ///     found.
+  //------------------------------------------------------------------
   uint32_t GetIndexOfNextBranchInstruction(uint32_t start,
-                                           Target &target) const;
+                                           Target &target,
+                                           bool ignore_calls) const;
 
   uint32_t GetIndexOfInstructionAtLoadAddress(lldb::addr_t load_addr,
                                               Target &target);
@@ -423,9 +425,7 @@ public:
               uint32_t num_instructions, bool mixed_source_and_assembly,
               uint32_t num_mixed_context_lines, uint32_t options, Stream &strm);
 
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   Disassembler(const ArchSpec &arch, const char *flavor);
   ~Disassembler() override;
 
@@ -535,18 +535,14 @@ protected:
     return ElideMixedSourceAndDisassemblyLine(exe_ctx, sc, sl);
   };
 
-  //------------------------------------------------------------------
   // Classes that inherit from Disassembler can see and modify these
-  //------------------------------------------------------------------
   ArchSpec m_arch;
   InstructionList m_instruction_list;
   lldb::addr_t m_base_addr;
   std::string m_flavor;
 
 private:
-  //------------------------------------------------------------------
   // For Disassembler only
-  //------------------------------------------------------------------
   DISALLOW_COPY_AND_ASSIGN(Disassembler);
 };
 

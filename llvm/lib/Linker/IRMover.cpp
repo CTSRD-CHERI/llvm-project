@@ -489,6 +489,10 @@ class IRLinker {
   void linkAliasBody(GlobalAlias &Dst, GlobalAlias &Src);
   Error linkGlobalValueBody(GlobalValue &Dst, GlobalValue &Src);
 
+  /// Replace all types in the source AttributeList with the
+  /// corresponding destination type.
+  AttributeList mapAttributeTypes(LLVMContext &C, AttributeList Attrs);
+
   /// Functions that take care of cloning a specific global value type
   /// into the destination module.
   GlobalVariable *copyGlobalVariableProto(const GlobalVariable *SGVar);
@@ -628,6 +632,21 @@ GlobalVariable *IRLinker::copyGlobalVariableProto(const GlobalVariable *SGVar) {
   return NewDGV;
 }
 
+AttributeList IRLinker::mapAttributeTypes(LLVMContext &C, AttributeList Attrs) {
+  for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
+    if (Attrs.hasAttribute(i, Attribute::ByVal)) {
+      Type *Ty = Attrs.getAttribute(i, Attribute::ByVal).getValueAsType();
+      if (!Ty)
+        continue;
+
+      Attrs = Attrs.removeAttribute(C, i, Attribute::ByVal);
+      Attrs = Attrs.addAttribute(
+          C, i, Attribute::getWithByValType(C, TypeMap.get(Ty)));
+    }
+  }
+  return Attrs;
+}
+
 /// Link the function in the source module into the destination module if
 /// needed, setting up mapping information.
 Function *IRLinker::copyFunctionProto(const Function *SF) {
@@ -637,6 +656,7 @@ Function *IRLinker::copyFunctionProto(const Function *SF) {
       Function::Create(TypeMap.get(SF->getFunctionType()),
                        GlobalValue::ExternalLinkage, SF->getName(), &DstM);
   F->copyAttributesFrom(SF);
+  F->setAttributes(mapAttributeTypes(F->getContext(), F->getAttributes()));
   return F;
 }
 
@@ -1223,7 +1243,9 @@ Error IRLinker::linkModuleFlagsMetadata() {
       if (SrcBehaviorValue == Module::Override &&
           SrcOp->getOperand(2) != DstOp->getOperand(2))
         return stringErr("linking module flags '" + ID->getString() +
-                         "': IDs have conflicting override values");
+                         "': IDs have conflicting override values in '" +
+                         SrcM->getModuleIdentifier() + "' and '" +
+                         DstM.getModuleIdentifier() + "'");
       continue;
     } else if (SrcBehaviorValue == Module::Override) {
       // Update the destination flag to that of the source.
@@ -1234,7 +1256,9 @@ Error IRLinker::linkModuleFlagsMetadata() {
     // Diagnose inconsistent merge behavior types.
     if (SrcBehaviorValue != DstBehaviorValue)
       return stringErr("linking module flags '" + ID->getString() +
-                       "': IDs have conflicting behaviors");
+                       "': IDs have conflicting behaviors in '" +
+                       SrcM->getModuleIdentifier() + "' and '" +
+                       DstM.getModuleIdentifier() + "'");
 
     auto replaceDstValue = [&](MDNode *New) {
       Metadata *FlagOps[] = {DstOp->getOperand(0), ID, New};
@@ -1252,7 +1276,9 @@ Error IRLinker::linkModuleFlagsMetadata() {
       // Emit an error if the values differ.
       if (SrcOp->getOperand(2) != DstOp->getOperand(2))
         return stringErr("linking module flags '" + ID->getString() +
-                         "': IDs have conflicting values");
+                         "': IDs have conflicting values in '" +
+                         SrcM->getModuleIdentifier() + "' and '" +
+                         DstM.getModuleIdentifier() + "'");
       continue;
     }
     case Module::Warning: {

@@ -16,6 +16,7 @@
 #include "lld/Common/Args.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
+#include "lld/Common/Reproduce.h"
 #include "lld/Common/Strings.h"
 #include "lld/Common/Threads.h"
 #include "lld/Common/Version.h"
@@ -26,6 +27,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/TarWriter.h"
 #include "llvm/Support/TargetSelect.h"
 
 #define DEBUG_TYPE "lld"
@@ -226,7 +228,7 @@ void LinkerDriver::addFile(StringRef Path) {
     // Handle -whole-archive.
     if (InWholeArchive) {
       for (MemoryBufferRef &M : getArchiveMembers(MBRef))
-        Files.push_back(createObjectFile(M));
+        Files.push_back(createObjectFile(M, Path));
       return;
     }
 
@@ -292,17 +294,15 @@ static StringRef getEntry(opt::InputArgList &Args) {
   return Arg->getValue();
 }
 
-// Some Config members do not directly correspond to any particular
-// command line options, but computed based on other Config values.
-// This function initialize such members. See Config.h for the details
-// of these values.
-static void setConfigs(opt::InputArgList &Args) {
+// Initializes Config members by the command line options.
+static void readConfigs(opt::InputArgList &Args) {
   Config->AllowUndefined = Args.hasArg(OPT_allow_undefined);
   Config->CheckFeatures =
       Args.hasFlag(OPT_check_features, OPT_no_check_features, true);
   Config->CompressRelocations = Args.hasArg(OPT_compress_relocations);
   Config->Demangle = Args.hasFlag(OPT_demangle, OPT_no_demangle, true);
   Config->DisableVerify = Args.hasArg(OPT_disable_verify);
+  Config->EmitRelocs = Args.hasArg(OPT_emit_relocs);
   Config->Entry = getEntry(Args);
   Config->ExportAll = Args.hasArg(OPT_export_all);
   Config->ExportDynamic = Args.hasFlag(OPT_export_dynamic,
@@ -353,6 +353,26 @@ static void setConfigs(opt::InputArgList &Args) {
         llvm::Optional<std::vector<std::string>>(std::vector<std::string>());
     for (StringRef S : Arg->getValues())
       Config->Features->push_back(S);
+  }
+}
+
+// Some Config members do not directly correspond to any particular
+// command line options, but computed based on other Config values.
+// This function initialize such members. See Config.h for the details
+// of these values.
+static void setConfigs() {
+  Config->Pic = Config->Pie || Config->Shared;
+
+  if (Config->Pic) {
+    if (Config->ExportTable)
+      error("-shared/-pie is incompatible with --export-table");
+    Config->ImportTable = true;
+  }
+
+  if (Config->Shared) {
+    Config->ImportMemory = true;
+    Config->ExportDynamic = true;
+    Config->AllowUndefined = true;
   }
 }
 
@@ -461,13 +481,8 @@ static void createSyntheticSymbols() {
     // See: https://github.com/WebAssembly/mutable-global
     WasmSym::StackPointer = Symtab->addSyntheticGlobal(
         "__stack_pointer", WASM_SYMBOL_VISIBILITY_HIDDEN, StackPointer);
-    WasmSym::HeapBase = Symtab->addSyntheticDataSymbol("__heap_base", 0);
-    WasmSym::DataEnd = Symtab->addSyntheticDataSymbol("__data_end", 0);
-
-    // These two synthetic symbols exist purely for the embedder so we always
-    // want to export them.
-    WasmSym::HeapBase->ForceExport = true;
-    WasmSym::DataEnd->ForceExport = true;
+    WasmSym::DataEnd = Symtab->addOptionalDataSymbol("__data_end");
+    WasmSym::HeapBase = Symtab->addOptionalDataSymbol("__heap_base");
   }
 
   if (Config->Pic) {
@@ -485,6 +500,112 @@ static void createSyntheticSymbols() {
 
   WasmSym::DsoHandle = Symtab->addSyntheticDataSymbol(
       "__dso_handle", WASM_SYMBOL_VISIBILITY_HIDDEN);
+}
+
+// Reconstructs command line arguments so that so that you can re-run
+// the same command with the same inputs. This is for --reproduce.
+static std::string createResponseFile(const opt::InputArgList &Args) {
+  SmallString<0> Data;
+  raw_svector_ostream OS(Data);
+
+  // Copy the command line to the output while rewriting paths.
+  for (auto *Arg : Args) {
+    switch (Arg->getOption().getUnaliasedOption().getID()) {
+    case OPT_reproduce:
+      break;
+    case OPT_INPUT:
+      OS << quote(relativeToRoot(Arg->getValue())) << "\n";
+      break;
+    case OPT_o:
+      // If -o path contains directories, "lld @response.txt" will likely
+      // fail because the archive we are creating doesn't contain empty
+      // directories for the output path (-o doesn't create directories).
+      // Strip directories to prevent the issue.
+      OS << "-o " << quote(sys::path::filename(Arg->getValue())) << "\n";
+      break;
+    default:
+      OS << toString(*Arg) << "\n";
+    }
+  }
+  return Data.str();
+}
+
+// The --wrap option is a feature to rename symbols so that you can write
+// wrappers for existing functions. If you pass `-wrap=foo`, all
+// occurrences of symbol `foo` are resolved to `wrap_foo` (so, you are
+// expected to write `wrap_foo` function as a wrapper). The original
+// symbol becomes accessible as `real_foo`, so you can call that from your
+// wrapper.
+//
+// This data structure is instantiated for each -wrap option.
+struct WrappedSymbol {
+  Symbol *Sym;
+  Symbol *Real;
+  Symbol *Wrap;
+};
+
+static Symbol *addUndefined(StringRef Name) {
+  return Symtab->addUndefinedFunction(Name, "", "", 0, nullptr, nullptr, false);
+}
+
+// Handles -wrap option.
+//
+// This function instantiates wrapper symbols. At this point, they seem
+// like they are not being used at all, so we explicitly set some flags so
+// that LTO won't eliminate them.
+static std::vector<WrappedSymbol> addWrappedSymbols(opt::InputArgList &Args) {
+  std::vector<WrappedSymbol> V;
+  DenseSet<StringRef> Seen;
+
+  for (auto *Arg : Args.filtered(OPT_wrap)) {
+    StringRef Name = Arg->getValue();
+    if (!Seen.insert(Name).second)
+      continue;
+
+    Symbol *Sym = Symtab->find(Name);
+    if (!Sym)
+      continue;
+
+    Symbol *Real = addUndefined(Saver.save("__real_" + Name));
+    Symbol *Wrap = addUndefined(Saver.save("__wrap_" + Name));
+    V.push_back({Sym, Real, Wrap});
+
+    // We want to tell LTO not to inline symbols to be overwritten
+    // because LTO doesn't know the final symbol contents after renaming.
+    Real->CanInline = false;
+    Sym->CanInline = false;
+
+    // Tell LTO not to eliminate these symbols.
+    Sym->IsUsedInRegularObj = true;
+    Wrap->IsUsedInRegularObj = true;
+    Real->IsUsedInRegularObj = false;
+  }
+  return V;
+}
+
+// Do renaming for -wrap by updating pointers to symbols.
+//
+// When this function is executed, only InputFiles and symbol table
+// contain pointers to symbol objects. We visit them to replace pointers,
+// so that wrapped symbols are swapped as instructed by the command line.
+static void wrapSymbols(ArrayRef<WrappedSymbol> Wrapped) {
+  DenseMap<Symbol *, Symbol *> Map;
+  for (const WrappedSymbol &W : Wrapped) {
+    Map[W.Sym] = W.Wrap;
+    Map[W.Real] = W.Sym;
+  }
+
+  // Update pointers in input files.
+  parallelForEach(Symtab->ObjectFiles, [&](InputFile *File) {
+    MutableArrayRef<Symbol *> Syms = File->getMutableSymbols();
+    for (size_t I = 0, E = Syms.size(); I != E; ++I)
+      if (Symbol *S = Map.lookup(Syms[I]))
+        Syms[I] = S;
+  });
+
+  // Update pointers in the symbol table.
+  for (const WrappedSymbol &W : Wrapped)
+    Symtab->wrap(W.Sym, W.Real, W.Wrap);
 }
 
 void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
@@ -505,6 +626,20 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     return;
   }
 
+  // Handle --reproduce
+  if (auto *Arg = Args.getLastArg(OPT_reproduce)) {
+    StringRef Path = Arg->getValue();
+    Expected<std::unique_ptr<TarWriter>> ErrOrWriter =
+        TarWriter::create(Path, path::stem(Path));
+    if (ErrOrWriter) {
+      Tar = std::move(*ErrOrWriter);
+      Tar->append("response.txt", createResponseFile(Args));
+      Tar->append("version.txt", getLLDVersion() + "\n");
+    } else {
+      error("--reproduce: " + toString(ErrOrWriter.takeError()));
+    }
+  }
+
   // Parse and evaluate -mllvm options.
   std::vector<const char *> V;
   V.push_back("wasm-ld (LLVM option parsing)");
@@ -514,7 +649,8 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   errorHandler().ErrorLimit = args::getInteger(Args, OPT_error_limit, 20);
 
-  setConfigs(Args);
+  readConfigs(Args);
+  setConfigs();
   checkOptions(Args);
 
   if (auto *Arg = Args.getLastArg(OPT_allow_undefined_file))
@@ -525,26 +661,15 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     return;
   }
 
-  Config->Pic = Config->Pie || Config->Shared;
-
-  if (Config->Pic) {
-    if (Config->ExportTable)
-      error("-shared/-pie is incompatible with --export-table");
-    Config->ImportTable = true;
-  }
-
   // Handle --trace-symbol.
   for (auto *Arg : Args.filtered(OPT_trace_symbol))
     Symtab->trace(Arg->getValue());
 
+  for (auto *Arg : Args.filtered(OPT_export))
+    Config->ExportedSymbols.insert(Arg->getValue());
+
   if (!Config->Relocatable)
     createSyntheticSymbols();
-
-  if (Config->Shared) {
-    Config->ImportMemory = true;
-    Config->ExportDynamic = true;
-    Config->AllowUndefined = true;
-  }
 
   createFiles(Args);
   if (errorCount())
@@ -561,6 +686,11 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   for (auto *Arg : Args.filtered(OPT_undefined))
     handleUndefined(Arg->getValue());
 
+  // Handle the `--export <sym>` options
+  // This works like --undefined but also exports the symbol if its found
+  for (auto *Arg : Args.filtered(OPT_export))
+    handleUndefined(Arg->getValue());
+
   Symbol *EntrySym = nullptr;
   if (!Config->Relocatable && !Config->Entry.empty()) {
     EntrySym = handleUndefined(Config->Entry);
@@ -574,10 +704,8 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (errorCount())
     return;
 
-  // Handle the `--export <sym>` options
-  // This works like --undefined but also exports the symbol if its found
-  for (auto *Arg : Args.filtered(OPT_export))
-    handleUndefined(Arg->getValue());
+  // Create wrapped symbols for -wrap option.
+  std::vector<WrappedSymbol> Wrapped = addWrappedSymbols(Args);
 
   // Do link-time optimization if given files are LLVM bitcode files.
   // This compiles bitcode files into real object files.
@@ -590,6 +718,10 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   Symtab->handleSymbolVariants();
   if (errorCount())
     return;
+
+  // Apply symbol renames for -wrap.
+  if (!Wrapped.empty())
+    wrapSymbols(Wrapped);
 
   for (auto *Arg : Args.filtered(OPT_export)) {
     Symbol *Sym = Symtab->find(Arg->getValue());
@@ -604,10 +736,6 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     // Add synthetic dummies for weak undefined functions.  Must happen
     // after LTO otherwise functions may not yet have signatures.
     Symtab->handleWeakUndefines();
-
-    // Make sure we have resolved all symbols.
-    if (!Config->AllowUndefined)
-      Symtab->reportRemainingUndefines();
   }
 
   if (EntrySym)

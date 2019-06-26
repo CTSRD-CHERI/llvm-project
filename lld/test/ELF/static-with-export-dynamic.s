@@ -4,8 +4,8 @@
 // BFD does not add a dynamic section when --export-dynamic is passed together
 // with -Bstatic so check that we do the same
 // RUN: ld.lld -Bstatic --export-dynamic %t.o -o %t-static
-// RUN: llvm-readobj -dyn-symbols -t -s %t | FileCheck %s
-// RUN: llvm-readobj -dyn-symbols -t -s %t-static | FileCheck %s -check-prefix STATIC
+// RUN: llvm-readobj --dyn-syms -t -s %t | FileCheck %s
+// RUN: llvm-readobj --dyn-syms -t -s %t-static | FileCheck %s -check-prefix STATIC
 
 
 // Ensure that the generated binary is still a static binary and doesn't have

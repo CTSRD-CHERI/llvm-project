@@ -24,6 +24,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/ModuleSlotTracker.h"
+#include "llvm/MC/MCDwarf.h"
 #include "llvm/Target/TargetIntrinsicInfo.h"
 #include "llvm/Target/TargetMachine.h"
 
@@ -177,6 +178,19 @@ void MachineOperand::ChangeToES(const char *SymName,
   OpKind = MO_ExternalSymbol;
   Contents.OffsetedInfo.Val.SymbolName = SymName;
   setOffset(0); // Offset is always 0.
+  setTargetFlags(TargetFlags);
+}
+
+void MachineOperand::ChangeToGA(const GlobalValue *GV, int64_t Offset,
+                                unsigned char TargetFlags) {
+  assert((!isReg() || !isTied()) &&
+         "Cannot change a tied operand into a global address");
+
+  removeRegFromUses();
+
+  OpKind = MO_GlobalAddress;
+  Contents.OffsetedInfo.Val.GV = GV;
+  setOffset(Offset);
   setTargetFlags(TargetFlags);
 }
 
@@ -347,7 +361,7 @@ hash_code llvm::hash_value(const MachineOperand &MO) {
     return hash_combine(MO.getType(), MO.getTargetFlags(), MO.getIndex());
   case MachineOperand::MO_ExternalSymbol:
     return hash_combine(MO.getType(), MO.getTargetFlags(), MO.getOffset(),
-                        MO.getSymbolName());
+                        StringRef(MO.getSymbolName()));
   case MachineOperand::MO_GlobalAddress:
     return hash_combine(MO.getType(), MO.getTargetFlags(), MO.getGlobal(),
                         MO.getOffset());

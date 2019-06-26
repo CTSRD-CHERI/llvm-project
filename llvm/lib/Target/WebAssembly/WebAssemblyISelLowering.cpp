@@ -45,9 +45,6 @@ WebAssemblyTargetLowering::WebAssemblyTargetLowering(
   setBooleanContents(ZeroOrOneBooleanContent);
   // Except in SIMD vectors
   setBooleanVectorContents(ZeroOrNegativeOneBooleanContent);
-  // WebAssembly does not produce floating-point exceptions on normal floating
-  // point operations.
-  setHasFloatingPointExceptions(false);
   // We don't know the microarchitecture here, so just reduce register pressure.
   setSchedulingPreference(Sched::RegPressure);
   // Tell ISel that we have a stack pointer.
@@ -185,7 +182,8 @@ WebAssemblyTargetLowering::WebAssemblyTargetLowering(
 
     // Expand float operations supported for scalars but not SIMD
     for (auto Op : {ISD::FCEIL, ISD::FFLOOR, ISD::FTRUNC, ISD::FNEARBYINT,
-                    ISD::FCOPYSIGN}) {
+                    ISD::FCOPYSIGN, ISD::FLOG, ISD::FLOG2, ISD::FLOG10,
+                    ISD::FEXP, ISD::FEXP2, ISD::FRINT}) {
       setOperationAction(Op, MVT::v4f32, Expand);
       if (Subtarget->hasUnimplementedSIMD128())
         setOperationAction(Op, MVT::v2f64, Expand);
@@ -270,6 +268,21 @@ WebAssemblyTargetLowering::WebAssemblyTargetLowering(
     MaxStoresPerMemset = 1;
     MaxStoresPerMemsetOptSize = 1;
   }
+
+  // Override the __gnu_f2h_ieee/__gnu_h2f_ieee names so that the f32 name is
+  // consistent with the f64 and f128 names.
+  setLibcallName(RTLIB::FPEXT_F16_F32, "__extendhfsf2");
+  setLibcallName(RTLIB::FPROUND_F32_F16, "__truncsfhf2");
+
+  // Define the emscripten name for return address helper.
+  // TODO: when implementing other WASM backends, make this generic or only do
+  // this on emscripten depending on what they end up doing.
+  setLibcallName(RTLIB::RETURN_ADDRESS, "emscripten_return_address");
+
+  // Always convert switches to br_tables unless there is only one case, which
+  // is equivalent to a simple branch. This reduces code size for wasm, and we
+  // defer possible jump table optimizations to the VM.
+  setMinimumJumpTableEntries(2);
 }
 
 TargetLowering::AtomicExpansionKind
@@ -517,7 +530,8 @@ bool WebAssemblyTargetLowering::isLegalAddressingMode(const DataLayout &DL,
 }
 
 bool WebAssemblyTargetLowering::allowsMisalignedMemoryAccesses(
-    EVT /*VT*/, unsigned /*AddrSpace*/, unsigned /*Align*/, bool *Fast) const {
+    EVT /*VT*/, unsigned /*AddrSpace*/, unsigned /*Align*/,
+    MachineMemOperand::Flags /*Flags*/, bool *Fast) const {
   // WebAssembly supports unaligned accesses, though it should be declared
   // with the p2align attribute on loads and stores which do so, and there
   // may be a performance impact. We tell LLVM they're "fast" because
@@ -886,6 +900,21 @@ SDValue WebAssemblyTargetLowering::LowerFormalArguments(
   return Chain;
 }
 
+void WebAssemblyTargetLowering::ReplaceNodeResults(
+    SDNode *N, SmallVectorImpl<SDValue> &Results, SelectionDAG &DAG) const {
+  switch (N->getOpcode()) {
+  case ISD::SIGN_EXTEND_INREG:
+    // Do not add any results, signifying that N should not be custom lowered
+    // after all. This happens because simd128 turns on custom lowering for
+    // SIGN_EXTEND_INREG, but for non-vector sign extends the result might be an
+    // illegal type.
+    break;
+  default:
+    llvm_unreachable(
+        "ReplaceNodeResults not implemented for this op for WebAssembly!");
+  }
+}
+
 //===----------------------------------------------------------------------===//
 //  Custom lowering hooks.
 //===----------------------------------------------------------------------===//
@@ -913,9 +942,8 @@ SDValue WebAssemblyTargetLowering::LowerOperation(SDValue Op,
   case ISD::BRIND:
     fail(DL, DAG, "WebAssembly hasn't implemented computed gotos");
     return SDValue();
-  case ISD::RETURNADDR: // Probably nothing meaningful can be returned here.
-    fail(DL, DAG, "WebAssembly hasn't implemented __builtin_return_address");
-    return SDValue();
+  case ISD::RETURNADDR:
+    return LowerRETURNADDR(Op, DAG);
   case ISD::FRAMEADDR:
     return LowerFRAMEADDR(Op, DAG);
   case ISD::CopyToReg:
@@ -970,6 +998,26 @@ SDValue WebAssemblyTargetLowering::LowerFrameIndex(SDValue Op,
                                                    SelectionDAG &DAG) const {
   int FI = cast<FrameIndexSDNode>(Op)->getIndex();
   return DAG.getTargetFrameIndex(FI, Op.getValueType());
+}
+
+SDValue WebAssemblyTargetLowering::LowerRETURNADDR(SDValue Op,
+                                                   SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+
+  if (!Subtarget->getTargetTriple().isOSEmscripten()) {
+    fail(DL, DAG,
+         "Non-Emscripten WebAssembly hasn't implemented "
+         "__builtin_return_address");
+    return SDValue();
+  }
+
+  if (verifyReturnAddressArgumentIsConstant(Op, DAG))
+    return SDValue();
+
+  unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  return makeLibCall(DAG, RTLIB::RETURN_ADDRESS, Op.getValueType(),
+                     {DAG.getConstant(Depth, DL, MVT::i32)}, false, DL)
+      .first;
 }
 
 SDValue WebAssemblyTargetLowering::LowerFRAMEADDR(SDValue Op,
@@ -1151,6 +1199,7 @@ SDValue WebAssemblyTargetLowering::LowerIntrinsic(SDValue Op,
 SDValue
 WebAssemblyTargetLowering::LowerSIGN_EXTEND_INREG(SDValue Op,
                                                   SelectionDAG &DAG) const {
+  SDLoc DL(Op);
   // If sign extension operations are disabled, allow sext_inreg only if operand
   // is a vector extract. SIMD does not depend on sign extension operations, but
   // allowing sext_inreg in this context lets us have simple patterns to select
@@ -1158,8 +1207,31 @@ WebAssemblyTargetLowering::LowerSIGN_EXTEND_INREG(SDValue Op,
   // simpler in this file, but would necessitate large and brittle patterns to
   // undo the expansion and select extract_lane_s instructions.
   assert(!Subtarget->hasSignExt() && Subtarget->hasSIMD128());
-  if (Op.getOperand(0).getOpcode() == ISD::EXTRACT_VECTOR_ELT)
-    return Op;
+  if (Op.getOperand(0).getOpcode() == ISD::EXTRACT_VECTOR_ELT) {
+    const SDValue &Extract = Op.getOperand(0);
+    MVT VecT = Extract.getOperand(0).getSimpleValueType();
+    MVT ExtractedLaneT = static_cast<VTSDNode *>(Op.getOperand(1).getNode())
+                             ->getVT()
+                             .getSimpleVT();
+    MVT ExtractedVecT =
+        MVT::getVectorVT(ExtractedLaneT, 128 / ExtractedLaneT.getSizeInBits());
+    if (ExtractedVecT == VecT)
+      return Op;
+    // Bitcast vector to appropriate type to ensure ISel pattern coverage
+    const SDValue &Index = Extract.getOperand(1);
+    unsigned IndexVal =
+        static_cast<ConstantSDNode *>(Index.getNode())->getZExtValue();
+    unsigned Scale =
+        ExtractedVecT.getVectorNumElements() / VecT.getVectorNumElements();
+    assert(Scale > 1);
+    SDValue NewIndex =
+        DAG.getConstant(IndexVal * Scale, DL, Index.getValueType());
+    SDValue NewExtract = DAG.getNode(
+        ISD::EXTRACT_VECTOR_ELT, DL, Extract.getValueType(),
+        DAG.getBitcast(ExtractedVecT, Extract.getOperand(0)), NewIndex);
+    return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, Op.getValueType(),
+                       NewExtract, Op.getOperand(1));
+  }
   // Otherwise expand
   return SDValue();
 }

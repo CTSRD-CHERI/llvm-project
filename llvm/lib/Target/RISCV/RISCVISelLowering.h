@@ -72,6 +72,8 @@ public:
   bool isZExtFree(SDValue Val, EVT VT2) const override;
   bool isSExtCheaperThanZExt(EVT SrcVT, EVT DstVT) const override;
 
+  bool hasBitPreservingFPLogic(EVT VT) const override;
+
   // Provide custom lowering hooks for some operations.
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
@@ -90,6 +92,10 @@ public:
   std::pair<unsigned, const TargetRegisterClass *>
   getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                StringRef Constraint, MVT VT) const override;
+
+  void LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
+                                    std::vector<SDValue> &Ops,
+                                    SelectionDAG &DAG) const override;
 
   MachineBasicBlock *
   EmitInstrWithCustomInserter(MachineInstr &MI,
@@ -112,6 +118,12 @@ public:
 
   ISD::NodeType getExtendForAtomicOps() const override {
     return ISD::SIGN_EXTEND;
+  }
+
+  bool shouldExpandShift(SelectionDAG &DAG, SDNode *N) const override {
+    if (DAG.getMachineFunction().getFunction().hasMinSize())
+      return false;
+    return true;
   }
 
 private:
@@ -143,7 +155,7 @@ private:
   }
 
   template <class NodeTy>
-  SDValue getAddr(NodeTy *N, SelectionDAG &DAG) const;
+  SDValue getAddr(NodeTy *N, SelectionDAG &DAG, bool IsLocal = true) const;
 
   SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
@@ -152,6 +164,8 @@ private:
   SDValue lowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerShiftLeftParts(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerShiftRightParts(SDValue Op, SelectionDAG &DAG, bool IsSRA) const;
 
   bool isEligibleForTailCallOptimization(
       CCState &CCInfo, CallLoweringInfo &CLI, MachineFunction &MF,

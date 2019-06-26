@@ -41,8 +41,8 @@ bool InstructionSelector::constrainOperandRegToRegClass(
   MachineFunction &MF = *MBB.getParent();
   MachineRegisterInfo &MRI = MF.getRegInfo();
 
-  return
-      constrainRegToClass(MRI, TII, RBI, I, I.getOperand(OpIdx).getReg(), RC);
+  return constrainOperandRegClass(MF, TRI, MRI, TII, RBI, I, RC,
+                                  I.getOperand(OpIdx), OpIdx);
 }
 
 bool InstructionSelector::isOperandImmEqual(
@@ -78,6 +78,6 @@ bool InstructionSelector::isObviouslySafeToFold(MachineInstr &MI,
       std::next(MI.getIterator()) == IntoMI.getIterator())
     return true;
 
-  return !MI.mayLoadOrStore() && !MI.hasUnmodeledSideEffects() &&
-         empty(MI.implicit_operands());
+  return !MI.mayLoadOrStore() && !MI.mayRaiseFPException() &&
+         !MI.hasUnmodeledSideEffects() && empty(MI.implicit_operands());
 }

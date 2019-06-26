@@ -513,6 +513,19 @@ void MachineInstr::setPostInstrSymbol(MachineFunction &MF, MCSymbol *Symbol) {
       MF.createMIExtraInfo(memoperands(), getPreInstrSymbol(), Symbol));
 }
 
+void MachineInstr::cloneInstrSymbols(MachineFunction &MF,
+                                     const MachineInstr &MI) {
+  if (this == &MI)
+    // Nothing to do for a self-clone!
+    return;
+
+  assert(&MF == MI.getMF() &&
+         "Invalid machine functions when cloning instruction symbols!");
+
+  setPreInstrSymbol(MF, MI.getPreInstrSymbol());
+  setPostInstrSymbol(MF, MI.getPostInstrSymbol());
+}
+
 uint16_t MachineInstr::mergeFlagsWith(const MachineInstr &Other) const {
   // For now, the just return the union of the flags. If the flags get more
   // complicated over time, we might need more logic here.
@@ -1165,7 +1178,7 @@ bool MachineInstr::isSafeToMove(AliasAnalysis *AA, bool &SawStore) const {
   }
 
   if (isPosition() || isDebugInstr() || isTerminator() ||
-      hasUnmodeledSideEffects())
+      mayRaiseFPException() || hasUnmodeledSideEffects())
     return false;
 
   // See if this instruction does a load.  If so, we have to guarantee that the
@@ -1181,8 +1194,8 @@ bool MachineInstr::isSafeToMove(AliasAnalysis *AA, bool &SawStore) const {
   return true;
 }
 
-bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
-                            bool UseTBAA) {
+bool MachineInstr::mayAlias(AliasAnalysis *AA, const MachineInstr &Other,
+                            bool UseTBAA) const {
   const MachineFunction *MF = getMF();
   const TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
   const MachineFrameInfo &MFI = MF->getFrameInfo();
@@ -1459,7 +1472,7 @@ void MachineInstr::print(raw_ostream &OS, bool IsStandalone, bool SkipOpers,
   ModuleSlotTracker MST(M);
   if (F)
     MST.incorporateFunction(*F);
-  print(OS, MST, IsStandalone, SkipOpers, SkipDebugLoc, TII);
+  print(OS, MST, IsStandalone, SkipOpers, SkipDebugLoc, AddNewLine, TII);
 }
 
 void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
@@ -1531,6 +1544,8 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
     OS << "nsw ";
   if (getFlag(MachineInstr::IsExact))
     OS << "exact ";
+  if (getFlag(MachineInstr::FPExcept))
+    OS << "fpexcept ";
 
   // Print the opcode name.
   if (TII)
@@ -2062,7 +2077,7 @@ static const DIExpression *computeExprForSpill(const MachineInstr &MI) {
   const DIExpression *Expr = MI.getDebugExpression();
   if (MI.isIndirectDebugValue()) {
     assert(MI.getOperand(1).getImm() == 0 && "DBG_VALUE with nonzero offset");
-    Expr = DIExpression::prepend(Expr, DIExpression::WithDeref);
+    Expr = DIExpression::prepend(Expr, DIExpression::DerefBefore);
   }
   return Expr;
 }

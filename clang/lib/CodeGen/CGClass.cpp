@@ -1010,7 +1010,7 @@ namespace {
       if (FOffset < FirstFieldOffset) {
         FirstField = F;
         FirstFieldOffset = FOffset;
-      } else if (FOffset > LastFieldOffset) {
+      } else if (FOffset >= LastFieldOffset) {
         LastField = F;
         LastFieldOffset = FOffset;
       }

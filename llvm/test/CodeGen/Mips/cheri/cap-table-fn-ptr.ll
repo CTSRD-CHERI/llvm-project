@@ -11,7 +11,7 @@ entry:
   tail call void %0() #1
   ret void
   ; TODO: it would be nice if we could have function pointers inlined into the GOT
-  ; CHECK:      csc	$c18, $zero, [[$CAP_SIZE]]($c11)
+  ; CHECK:      csc	$c18, $zero, [[#CAP_SIZE]]($c11)
   ; CHECK-NEXT: csc	$c17, $zero, 0($c11)
   ; CHECK-NEXT: cmove	$c18, $c26
   ; BIG-NEXT:   lui	$1, %captab_hi(fn)
@@ -23,10 +23,10 @@ entry:
   ; CHECK-NEXT: nop
   ; CHECK-NEXT: cmove	$c26, $c18
   ; CHECK-NEXT: clc	$c17, $zero, 0($c11)
-  ; CHECK-NEXT: clc	$c18, $zero, [[$CAP_SIZE]]($c11)
+  ; CHECK-NEXT: clc	$c18, $zero, [[#CAP_SIZE]]($c11)
   ; CHECK-NEXT: cjr	$c17
 
   ; CHECK:        .type	fn,@object              # @fn
   ; FIXME: why is alignment always 32?
-  ; CHECK-NEXT:   .comm	fn,[[$CAP_SIZE]],32
+  ; CHECK-NEXT:   .comm	fn,[[#CAP_SIZE]],32
 }

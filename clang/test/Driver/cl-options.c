@@ -62,12 +62,16 @@
 // RUN: %clang_cl /Z7 -### -- %s 2>&1 | FileCheck -check-prefix=gdefcolumn %s
 // gdefcolumn-NOT: -dwarf-column-info
 
-// RUN: %clang_cl -### /FA -fprofile-instr-generate -- %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-GENERATE %s
-// RUN: %clang_cl -### /FA -fprofile-instr-generate=/tmp/somefile.profraw -- %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-GENERATE-FILE %s
+// RUN: %clang_cl -### /FA -fprofile-instr-generate -- %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-INSTR-GENERATE %s
+// RUN: %clang_cl -### /FA -fprofile-instr-generate=/tmp/somefile.profraw -- %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-INSTR-GENERATE-FILE %s
+// CHECK-PROFILE-INSTR-GENERATE: "-fprofile-instrument=clang" "--dependent-lib={{[^"]*}}clang_rt.profile-{{[^"]*}}.lib"
+// CHECK-PROFILE-INSTR-GENERATE-FILE: "-fprofile-instrument-path=/tmp/somefile.profraw"
+
+// RUN: %clang_cl -### /FA -fprofile-generate -- %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-GENERATE %s
+// CHECK-PROFILE-GENERATE: "-fprofile-instrument=llvm" "--dependent-lib={{[^"]*}}clang_rt.profile-{{[^"]*}}.lib"
+
 // RUN: %clang_cl -### /FA -fprofile-instr-generate -fprofile-instr-use -- %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
 // RUN: %clang_cl -### /FA -fprofile-instr-generate -fprofile-instr-use=file -- %s 2>&1 | FileCheck -check-prefix=CHECK-NO-MIX-GEN-USE %s
-// CHECK-PROFILE-GENERATE: "-fprofile-instrument=clang"
-// CHECK-PROFILE-GENERATE-FILE: "-fprofile-instrument-path=/tmp/somefile.profraw"
 // CHECK-NO-MIX-GEN-USE: '{{[a-z=-]*}}' not allowed with '{{[a-z=-]*}}'
 
 // RUN: %clang_cl -### /FA -fprofile-instr-use -- %s 2>&1 | FileCheck -check-prefix=CHECK-PROFILE-USE %s
@@ -322,6 +326,13 @@
 // RUN: %clang_cl -c /Zc:twoPhase -### -- %s 2>&1 | FileCheck -check-prefix=DELAYEDOFF %s
 // DELAYEDOFF-NOT: "-fdelayed-template-parsing"
 
+// RUN: %clang_cl -c -### /std:c++latest -- %s 2>&1 | FileCheck -check-prefix CHECK-LATEST-CHAR8_T %s
+// CHECK-LATEST-CHAR8_T-NOT: "-fchar8_t"
+// RUN: %clang_cl -c -### /Zc:char8_t -- %s 2>&1 | FileCheck -check-prefix CHECK-CHAR8_T %s
+// CHECK-CHAR8_T: "-fchar8_t"
+// RUN: %clang_cl -c -### /Zc:char8_t- -- %s 2>&1 | FileCheck -check-prefix CHECK-CHAR8_T_ %s
+// CHECK-CHAR8_T_: "-fno-char8_t"
+
 // For some warning ids, we can map from MSVC warning to Clang warning.
 // RUN: %clang_cl -wd4005 -wd4100 -wd4910 -wd4996 -### -- %s 2>&1 | FileCheck -check-prefix=Wno %s
 // Wno: "-cc1"
@@ -400,7 +411,7 @@
 // RUN:     /d2FH4 \
 // RUN:     /docname \
 // RUN:     /EHsc \
-// RUN:     /F \
+// RUN:     /F 42 \
 // RUN:     /FA \
 // RUN:     /FAc \
 // RUN:     /Fafilename \
@@ -442,6 +453,7 @@
 // RUN:     /o foo.obj \
 // RUN:     /ofoo.obj \
 // RUN:     /openmp \
+// RUN:     /openmp:experimental \
 // RUN:     /Qfast_transcendentals \
 // RUN:     /QIfist \
 // RUN:     /Qimprecise_fwaits \
@@ -637,6 +649,7 @@
 // RUN:     -fno-profile-instr-use \
 // RUN:     -fcs-profile-generate \
 // RUN:     -fcs-profile-generate=dir \
+// RUN:     -ftime-trace \
 // RUN:     --version \
 // RUN:     -Werror /Zs -- %s 2>&1
 

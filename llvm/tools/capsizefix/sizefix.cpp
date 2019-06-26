@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
     StringRef Name;
     if (!Sec.getName(Name)) {
       if (Name == "__cap_relocs") {
-        Sec.getContents(Data);
+        Data = *Sec.getContents();
         continue;
       } else if (Name == ".global_sizes") {
         SizesSection = Sec;
@@ -137,7 +137,7 @@ int main(int argc, char *argv[]) {
     fwrite(&BigPerms, sizeof(BigPerms), 1, F);
   }
   if (SizesSection != SectionRef()) {
-    SizesSection.getContents(Data);
+    Data = *SizesSection.getContents();
     uint64_t SectionOffset = Data.data() - MB.getBufferStart();
     for (SymbolRef &sym : SizeSymbols) {
       Expected<uint64_t> Start = sym.getAddress();

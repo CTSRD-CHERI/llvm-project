@@ -51,7 +51,7 @@ llvm::Triple::ArchType stringTo<llvm::Triple::ArchType>(llvm::StringRef Str) {
   using llvm::Triple;
   return llvm::StringSwitch<Triple::ArchType>(Str)
       .Case("arm", Triple::arm)
-      .Case("arm64", Triple::aarch64)
+      .Cases("arm64", "arm64e", Triple::aarch64)
       .Case("mips", Triple::mips)
       .Case("ppc", Triple::ppc)
       .Case("ppc64", Triple::ppc64)
@@ -76,26 +76,11 @@ template <typename T> static constexpr size_t hex_digits() {
   return 2 * sizeof(T);
 }
 
-/// Consume the right number of digits from the input StringRef and convert it
-/// to the endian-specific integer N. Return true on success.
-template <typename T> static bool consume_hex_integer(llvm::StringRef &str, T &N) {
-  llvm::StringRef chunk = str.take_front(hex_digits<T>());
-  uintmax_t t;
-  if (!to_integer(chunk, t, 16))
-    return false;
-  N = t;
-  str = str.drop_front(hex_digits<T>());
-  return true;
-}
-
 static UUID parseModuleId(llvm::Triple::OSType os, llvm::StringRef str) {
   struct data_t {
-    struct uuid_t {
-      llvm::support::ulittle32_t part1;
-      llvm::support::ulittle16_t part2[2];
-      uint8_t part3[8];
-    } uuid;
-    llvm::support::ulittle32_t age;
+    using uuid_t = uint8_t[16];
+    uuid_t uuid;
+    llvm::support::ubig32_t age;
   } data;
   static_assert(sizeof(data) == 20, "");
   // The textual module id encoding should be between 33 and 40 bytes long,
@@ -105,19 +90,17 @@ static UUID parseModuleId(llvm::Triple::OSType os, llvm::StringRef str) {
   if (str.size() <= hex_digits<data_t::uuid_t>() ||
       str.size() > hex_digits<data_t>())
     return UUID();
-  if (!consume_hex_integer(str, data.uuid.part1))
+  if (!all_of(str, llvm::isHexDigit))
     return UUID();
-  for (auto &t : data.uuid.part2) {
-    if (!consume_hex_integer(str, t))
-      return UUID();
-  }
-  for (auto &t : data.uuid.part3) {
-    if (!consume_hex_integer(str, t))
-      return UUID();
-  }
+
+  llvm::StringRef uuid_str = str.take_front(hex_digits<data_t::uuid_t>());
+  llvm::StringRef age_str = str.drop_front(hex_digits<data_t::uuid_t>());
+
+  llvm::copy(fromHex(uuid_str), data.uuid);
   uint32_t age;
-  if (!to_integer(str, age, 16))
-    return UUID();
+  bool success = to_integer(age_str, age, 16);
+  assert(success);
+  (void)success;
   data.age = age;
 
   // On non-windows, the age field should always be zero, so we don't include to
@@ -143,8 +126,7 @@ llvm::Optional<Record::Kind> Record::classify(llvm::StringRef Line) {
     Tok = consume<Token>(Line);
     switch (Tok) {
     case Token::CFI:
-      Tok = consume<Token>(Line);
-      return Tok == Token::Init ? Record::StackCFIInit : Record::StackCFI;
+      return Record::StackCFI;
     default:
       return llvm::None;
     }
@@ -359,6 +341,55 @@ llvm::raw_ostream &breakpad::operator<<(llvm::raw_ostream &OS,
                              R.Name);
 }
 
+llvm::Optional<StackCFIRecord> StackCFIRecord::parse(llvm::StringRef Line) {
+  // STACK CFI INIT address size reg1: expr1 reg2: expr2 ...
+  // or
+  // STACK CFI address reg1: expr1 reg2: expr2 ...
+  // No token in exprN ends with a colon.
+
+  if (consume<Token>(Line) != Token::Stack)
+    return llvm::None;
+  if (consume<Token>(Line) != Token::CFI)
+    return llvm::None;
+
+  llvm::StringRef Str;
+  std::tie(Str, Line) = getToken(Line);
+
+  bool IsInitRecord = stringTo<Token>(Str) == Token::Init;
+  if (IsInitRecord)
+    std::tie(Str, Line) = getToken(Line);
+
+  lldb::addr_t Address;
+  if (!to_integer(Str, Address, 16))
+    return llvm::None;
+
+  llvm::Optional<lldb::addr_t> Size;
+  if (IsInitRecord) {
+    Size.emplace();
+    std::tie(Str, Line) = getToken(Line);
+    if (!to_integer(Str, *Size, 16))
+      return llvm::None;
+  }
+
+  return StackCFIRecord(Address, Size, Line.trim());
+}
+
+bool breakpad::operator==(const StackCFIRecord &L, const StackCFIRecord &R) {
+  return L.Address == R.Address && L.Size == R.Size &&
+         L.UnwindRules == R.UnwindRules;
+}
+
+llvm::raw_ostream &breakpad::operator<<(llvm::raw_ostream &OS,
+                                        const StackCFIRecord &R) {
+  OS << "STACK CFI ";
+  if (R.Size)
+    OS << "INIT ";
+  OS << llvm::formatv("{0:x-} ", R.Address);
+  if (R.Size)
+    OS << llvm::formatv("{0:x-} ", *R.Size);
+  return OS << " " << R.UnwindRules;
+}
+
 llvm::StringRef breakpad::toString(Record::Kind K) {
   switch (K) {
   case Record::Module:
@@ -373,8 +404,6 @@ llvm::StringRef breakpad::toString(Record::Kind K) {
     return "LINE";
   case Record::Public:
     return "PUBLIC";
-  case Record::StackCFIInit:
-    return "STACK CFI INIT";
   case Record::StackCFI:
     return "STACK CFI";
   }

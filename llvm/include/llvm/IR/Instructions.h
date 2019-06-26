@@ -1134,71 +1134,6 @@ GetElementPtrInst::GetElementPtrInst(Type *PointeeType, Value *Ptr,
 DEFINE_TRANSPARENT_OPERAND_ACCESSORS(GetElementPtrInst, Value)
 
 //===----------------------------------------------------------------------===//
-//                                UnaryOperator Class
-//===----------------------------------------------------------------------===//
-
-/// a unary instruction 
-class UnaryOperator : public UnaryInstruction {
-  void AssertOK();
-
-protected:
-  UnaryOperator(UnaryOps iType, Value *S, Type *Ty,
-                const Twine &Name, Instruction *InsertBefore);
-  UnaryOperator(UnaryOps iType, Value *S, Type *Ty,
-                const Twine &Name, BasicBlock *InsertAtEnd);
-
-  // Note: Instruction needs to be a friend here to call cloneImpl.
-  friend class Instruction;
-
-  UnaryOperator *cloneImpl() const;
-
-public:
-
-  /// Construct a unary instruction, given the opcode and an operand.
-  /// Optionally (if InstBefore is specified) insert the instruction
-  /// into a BasicBlock right before the specified instruction.  The specified
-  /// Instruction is allowed to be a dereferenced end iterator.
-  ///
-  static UnaryOperator *Create(UnaryOps Op, Value *S,
-                               const Twine &Name = Twine(),
-                               Instruction *InsertBefore = nullptr);
-
-  /// Construct a unary instruction, given the opcode and an operand.
-  /// Also automatically insert this instruction to the end of the
-  /// BasicBlock specified.
-  ///
-  static UnaryOperator *Create(UnaryOps Op, Value *S,
-                               const Twine &Name,
-                               BasicBlock *InsertAtEnd);
-
-  /// These methods just forward to Create, and are useful when you
-  /// statically know what type of instruction you're going to create.  These
-  /// helpers just save some typing.
-#define HANDLE_UNARY_INST(N, OPC, CLASS) \
-  static UnaryInstruction *Create##OPC(Value *V, \
-                                       const Twine &Name = "") {\
-    return Create(Instruction::OPC, V, Name);\
-  }
-#include "llvm/IR/Instruction.def"
-#define HANDLE_UNARY_INST(N, OPC, CLASS) \
-  static UnaryInstruction *Create##OPC(Value *V, \
-                                       const Twine &Name, BasicBlock *BB) {\
-    return Create(Instruction::OPC, V, Name, BB);\
-  }
-#include "llvm/IR/Instruction.def"
-#define HANDLE_UNARY_INST(N, OPC, CLASS) \
-  static UnaryInstruction *Create##OPC(Value *V, \
-                                       const Twine &Name, Instruction *I) {\
-    return Create(Instruction::OPC, V, Name, I);\
-  }
-#include "llvm/IR/Instruction.def"
-
-  UnaryOps getOpcode() const {
-    return static_cast<UnaryOps>(Instruction::getOpcode());
-  }
-};
-
-//===----------------------------------------------------------------------===//
 //                               ICmpInst Class
 //===----------------------------------------------------------------------===//
 
@@ -1729,6 +1664,9 @@ public:
   static bool classof(const Value *V) {
     return isa<Instruction>(V) && classof(cast<Instruction>(V));
   }
+
+  /// Updates profile metadata by scaling it by \p S / \p T.
+  void updateProfWeight(uint64_t S, uint64_t T);
 
 private:
   // Shadow Instruction::setInstructionSubclassData with a private forwarding
@@ -2735,6 +2673,14 @@ public:
     block_begin()[i] = BB;
   }
 
+  /// Replace every incoming basic block \p Old to basic block \p New.
+  void replaceIncomingBlockWith(BasicBlock *Old, BasicBlock *New) {
+    assert(New && Old && "PHI node got a null basic block!");
+    for (unsigned Op = 0, NumOps = getNumOperands(); Op != NumOps; ++Op)
+      if (getIncomingBlock(Op) == Old)
+        setIncomingBlock(Op, New);
+  }
+
   /// Add an incoming value to the end of the PHI list
   ///
   void addIncoming(Value *V, BasicBlock *BB) {
@@ -3487,6 +3433,60 @@ public:
   static bool classof(const Value *V) {
     return isa<Instruction>(V) && classof(cast<Instruction>(V));
   }
+};
+
+/// A wrapper class to simplify modification of SwitchInst cases along with
+/// their prof branch_weights metadata.
+class SwitchInstProfUpdateWrapper {
+  SwitchInst &SI;
+  Optional<SmallVector<uint32_t, 8> > Weights = None;
+
+  // Sticky invalid state is needed to safely ignore operations with prof data
+  // in cases where SwitchInstProfUpdateWrapper is created from SwitchInst
+  // with inconsistent prof data. TODO: once we fix all prof data
+  // inconsistencies we can turn invalid state to assertions.
+  enum {
+    Invalid,
+    Initialized,
+    Changed
+  } State = Invalid;
+
+protected:
+  static MDNode *getProfBranchWeightsMD(const SwitchInst &SI);
+
+  MDNode *buildProfBranchWeightsMD();
+
+  void init();
+
+public:
+  using CaseWeightOpt = Optional<uint32_t>;
+  SwitchInst *operator->() { return &SI; }
+  SwitchInst &operator*() { return SI; }
+  operator SwitchInst *() { return &SI; }
+
+  SwitchInstProfUpdateWrapper(SwitchInst &SI) : SI(SI) { init(); }
+
+  ~SwitchInstProfUpdateWrapper() {
+    if (State == Changed)
+      SI.setMetadata(LLVMContext::MD_prof, buildProfBranchWeightsMD());
+  }
+
+  /// Delegate the call to the underlying SwitchInst::removeCase() and remove
+  /// correspondent branch weight.
+  SwitchInst::CaseIt removeCase(SwitchInst::CaseIt I);
+
+  /// Delegate the call to the underlying SwitchInst::addCase() and set the
+  /// specified branch weight for the added case.
+  void addCase(ConstantInt *OnVal, BasicBlock *Dest, CaseWeightOpt W);
+
+  /// Delegate the call to the underlying SwitchInst::eraseFromParent() and mark
+  /// this object to not touch the underlying SwitchInst in destructor.
+  SymbolTableList<Instruction>::iterator eraseFromParent();
+
+  void setSuccessorWeight(unsigned idx, CaseWeightOpt W);
+  CaseWeightOpt getSuccessorWeight(unsigned idx);
+
+  static CaseWeightOpt getSuccessorWeight(const SwitchInst &SI, unsigned idx);
 };
 
 template <>

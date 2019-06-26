@@ -46,9 +46,9 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; ASM-LABEL: test_phi:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
-; ASM-NEXT:    csc $c19, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
-; ASM-NEXT:    csc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; ASM-NEXT:    csc $c19, $zero, [[#CAP_SIZE * 3]]($c11)
+; ASM-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(test_phi)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test_phi)))
 ; ASM-NEXT:    sll $2, $4, 0
@@ -84,9 +84,9 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c19)
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cmove $c3, $c18
-; ASM-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; ASM-NEXT:    clc $c19, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
+; ASM-NEXT:    clc $c19, $zero, [[#CAP_SIZE * 3]]($c11)
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:
@@ -142,7 +142,7 @@ define void @test_only_created_in_predecessor_block(i1 %cond) addrspace(200) nou
 ; ASM-LABEL: test_only_created_in_predecessor_block:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; ASM-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(test_only_created_in_predecessor_block)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test_only_created_in_predecessor_block)))
 ; ASM-NEXT:    sll $2, $4, 0
@@ -164,7 +164,7 @@ define void @test_only_created_in_predecessor_block(i1 %cond) addrspace(200) nou
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c1)
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
-; ASM-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#CAP_SIZE]]($c11)
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:

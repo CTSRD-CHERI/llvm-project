@@ -83,7 +83,8 @@ RecognizableInstr::RecognizableInstr(DisassemblerTables &tables,
   AdSize             = byteFromRec(Rec, "AdSizeBits");
   HasREX_WPrefix     = Rec->getValueAsBit("hasREX_WPrefix");
   HasVEX_4V          = Rec->getValueAsBit("hasVEX_4V");
-  VEX_WPrefix        = byteFromRec(Rec,"VEX_WPrefix");
+  HasVEX_W           = Rec->getValueAsBit("HasVEX_W");
+  IgnoresVEX_W       = Rec->getValueAsBit("IgnoresVEX_W");
   IgnoresVEX_L       = Rec->getValueAsBit("ignoresVEX_L");
   HasEVEX_L2Prefix   = Rec->getValueAsBit("hasEVEX_L2");
   HasEVEX_K          = Rec->getValueAsBit("hasEVEX_K");
@@ -163,8 +164,7 @@ InstructionContext RecognizableInstr::insnContext() const {
       llvm_unreachable("Don't support VEX.L if EVEX_L2 is enabled");
     }
     // VEX_L & VEX_W
-    if (!EncodeRC && HasVEX_LPrefix && (VEX_WPrefix == X86Local::VEX_W1 ||
-                                        VEX_WPrefix == X86Local::VEX_W1X)) {
+    if (!EncodeRC && HasVEX_LPrefix && HasVEX_W) {
       if (OpPrefix == X86Local::PD)
         insnContext = EVEX_KB(IC_EVEX_L_W_OPSIZE);
       else if (OpPrefix == X86Local::XS)
@@ -191,9 +191,7 @@ InstructionContext RecognizableInstr::insnContext() const {
         errs() << "Instruction does not use a prefix: " << Name << "\n";
         llvm_unreachable("Invalid prefix");
       }
-    } else if (!EncodeRC && HasEVEX_L2Prefix &&
-               (VEX_WPrefix == X86Local::VEX_W1 ||
-                VEX_WPrefix == X86Local::VEX_W1X)) {
+    } else if (!EncodeRC && HasEVEX_L2Prefix && HasVEX_W) {
       // EVEX_L2 & VEX_W
       if (OpPrefix == X86Local::PD)
         insnContext = EVEX_KB(IC_EVEX_L2_W_OPSIZE);
@@ -222,8 +220,7 @@ InstructionContext RecognizableInstr::insnContext() const {
         llvm_unreachable("Invalid prefix");
       }
     }
-    else if (VEX_WPrefix == X86Local::VEX_W1 ||
-             VEX_WPrefix == X86Local::VEX_W1X) {
+    else if (HasVEX_W) {
       // VEX_W
       if (OpPrefix == X86Local::PD)
         insnContext = EVEX_KB(IC_EVEX_W_OPSIZE);
@@ -253,8 +250,7 @@ InstructionContext RecognizableInstr::insnContext() const {
     }
     /// eof EVEX
   } else if (Encoding == X86Local::VEX || Encoding == X86Local::XOP) {
-    if (HasVEX_LPrefix && (VEX_WPrefix == X86Local::VEX_W1 ||
-                           VEX_WPrefix == X86Local::VEX_W1X)) {
+    if (HasVEX_LPrefix && HasVEX_W) {
       if (OpPrefix == X86Local::PD)
         insnContext = IC_VEX_L_W_OPSIZE;
       else if (OpPrefix == X86Local::XS)
@@ -269,8 +265,7 @@ InstructionContext RecognizableInstr::insnContext() const {
       }
     } else if (OpPrefix == X86Local::PD && HasVEX_LPrefix)
       insnContext = IC_VEX_L_OPSIZE;
-    else if (OpPrefix == X86Local::PD && (VEX_WPrefix == X86Local::VEX_W1 ||
-                                          VEX_WPrefix == X86Local::VEX_W1X))
+    else if (OpPrefix == X86Local::PD && HasVEX_W)
       insnContext = IC_VEX_W_OPSIZE;
     else if (OpPrefix == X86Local::PD)
       insnContext = IC_VEX_OPSIZE;
@@ -278,14 +273,11 @@ InstructionContext RecognizableInstr::insnContext() const {
       insnContext = IC_VEX_L_XS;
     else if (HasVEX_LPrefix && OpPrefix == X86Local::XD)
       insnContext = IC_VEX_L_XD;
-    else if ((VEX_WPrefix == X86Local::VEX_W1 ||
-              VEX_WPrefix == X86Local::VEX_W1X) && OpPrefix == X86Local::XS)
+    else if (HasVEX_W && OpPrefix == X86Local::XS)
       insnContext = IC_VEX_W_XS;
-    else if ((VEX_WPrefix == X86Local::VEX_W1 ||
-              VEX_WPrefix == X86Local::VEX_W1X) && OpPrefix == X86Local::XD)
+    else if (HasVEX_W && OpPrefix == X86Local::XD)
       insnContext = IC_VEX_W_XD;
-    else if ((VEX_WPrefix == X86Local::VEX_W1 ||
-              VEX_WPrefix == X86Local::VEX_W1X) && OpPrefix == X86Local::PS)
+    else if (HasVEX_W && OpPrefix == X86Local::PS)
       insnContext = IC_VEX_W;
     else if (HasVEX_LPrefix && OpPrefix == X86Local::PS)
       insnContext = IC_VEX_L;
@@ -819,11 +811,11 @@ void RecognizableInstr::emitDecodePath(DisassemblerTables &tables) const {
       tables.setTableFields(*opcodeType, insnContext(), currentOpcode, *filter,
                             UID, Is32Bit, OpPrefix == 0,
                             IgnoresVEX_L || EncodeRC,
-                            VEX_WPrefix == X86Local::VEX_WIG, AddressSize);
+                            IgnoresVEX_W, AddressSize);
   } else {
     tables.setTableFields(*opcodeType, insnContext(), opcodeToSet, *filter, UID,
                           Is32Bit, OpPrefix == 0, IgnoresVEX_L || EncodeRC,
-                          VEX_WPrefix == X86Local::VEX_WIG, AddressSize);
+                          IgnoresVEX_W, AddressSize);
   }
 
 #undef MAP
@@ -940,6 +932,11 @@ OperandType RecognizableInstr::typeFromString(const std::string &s,
   TYPE("VK32WM",              TYPE_VK)
   TYPE("VK64",                TYPE_VK)
   TYPE("VK64WM",              TYPE_VK)
+  TYPE("VK1Pair",             TYPE_VK_PAIR)
+  TYPE("VK2Pair",             TYPE_VK_PAIR)
+  TYPE("VK4Pair",             TYPE_VK_PAIR)
+  TYPE("VK8Pair",             TYPE_VK_PAIR)
+  TYPE("VK16Pair",            TYPE_VK_PAIR)
   TYPE("vx64mem",             TYPE_MVSIBX)
   TYPE("vx128mem",            TYPE_MVSIBX)
   TYPE("vx256mem",            TYPE_MVSIBX)
@@ -1024,6 +1021,11 @@ RecognizableInstr::rmRegisterEncodingFromString(const std::string &s,
   ENCODING("VK16",            ENCODING_RM)
   ENCODING("VK32",            ENCODING_RM)
   ENCODING("VK64",            ENCODING_RM)
+  ENCODING("VK1PAIR",         ENCODING_RM)
+  ENCODING("VK2PAIR",         ENCODING_RM)
+  ENCODING("VK4PAIR",         ENCODING_RM)
+  ENCODING("VK8PAIR",         ENCODING_RM)
+  ENCODING("VK16PAIR",        ENCODING_RM)
   ENCODING("BNDR",            ENCODING_RM)
   errs() << "Unhandled R/M register encoding " << s << "\n";
   llvm_unreachable("Unhandled R/M register encoding");
@@ -1058,6 +1060,11 @@ RecognizableInstr::roRegisterEncodingFromString(const std::string &s,
   ENCODING("VK16",            ENCODING_REG)
   ENCODING("VK32",            ENCODING_REG)
   ENCODING("VK64",            ENCODING_REG)
+  ENCODING("VK1Pair",         ENCODING_REG)
+  ENCODING("VK2Pair",         ENCODING_REG)
+  ENCODING("VK4Pair",         ENCODING_REG)
+  ENCODING("VK8Pair",         ENCODING_REG)
+  ENCODING("VK16Pair",        ENCODING_REG)
   ENCODING("VK1WM",           ENCODING_REG)
   ENCODING("VK2WM",           ENCODING_REG)
   ENCODING("VK4WM",           ENCODING_REG)
@@ -1092,6 +1099,11 @@ RecognizableInstr::vvvvRegisterEncodingFromString(const std::string &s,
   ENCODING("VK16",            ENCODING_VVVV)
   ENCODING("VK32",            ENCODING_VVVV)
   ENCODING("VK64",            ENCODING_VVVV)
+  ENCODING("VK1PAIR",         ENCODING_VVVV)
+  ENCODING("VK2PAIR",         ENCODING_VVVV)
+  ENCODING("VK4PAIR",         ENCODING_VVVV)
+  ENCODING("VK8PAIR",         ENCODING_VVVV)
+  ENCODING("VK16PAIR",        ENCODING_VVVV)
   errs() << "Unhandled VEX.vvvv register encoding " << s << "\n";
   llvm_unreachable("Unhandled VEX.vvvv register encoding");
 }

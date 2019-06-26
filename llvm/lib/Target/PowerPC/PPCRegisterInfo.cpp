@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "PPCRegisterInfo.h"
-#include "PPC.h"
 #include "PPCFrameLowering.h"
 #include "PPCInstrBuilder.h"
 #include "PPCMachineFunctionInfo.h"
@@ -69,6 +68,12 @@ StackPtrConst("ppc-stack-ptr-caller-preserved",
                 cl::desc("Consider R1 caller preserved so stack saves of "
                          "caller preserved registers can be LICM candidates"),
                 cl::init(true), cl::Hidden);
+
+static cl::opt<unsigned>
+MaxCRBitSpillDist("ppc-max-crbit-spill-dist",
+                  cl::desc("Maximum search distance for definition of CR bit "
+                           "spill on ppc"),
+                  cl::Hidden, cl::init(100));
 
 static unsigned offsetMinAlignForOpcode(unsigned OpC);
 
@@ -222,6 +227,10 @@ PPCRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                                   : CSR_Darwin64_RegMask)
                         : (Subtarget.hasAltivec() ? CSR_Darwin32_Altivec_RegMask
                                                   : CSR_Darwin32_RegMask);
+  if (Subtarget.isAIXABI()) {
+    assert(!Subtarget.hasAltivec() && "Altivec is not implemented on AIX yet.");
+    return TM.isPPC64() ? CSR_AIX64_RegMask : CSR_AIX32_RegMask;
+  }
 
   if (CC == CallingConv::Cold) {
     return TM.isPPC64() ? (Subtarget.hasAltivec() ? CSR_SVR64_ColdCC_Altivec_RegMask
@@ -288,6 +297,11 @@ BitVector PPCRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
       markSuperRegs(Reserved, PPC::R2);  // System-reserved register
     markSuperRegs(Reserved, PPC::R13); // Small Data Area pointer register
   }
+
+  // Always reserve r2 on AIX for now.
+  // TODO: Make r2 allocatable on AIX/XCOFF for some leaf functions.
+  if (Subtarget.isAIXABI())
+    markSuperRegs(Reserved, PPC::R2);  // System-reserved register
 
   // On PPC64, r13 is the thread pointer. Never allocate this register.
   if (TM.isPPC64())
@@ -710,6 +724,7 @@ void PPCRegisterInfo::lowerCRBitSpilling(MachineBasicBlock::iterator II,
   MachineFunction &MF = *MBB.getParent();
   const PPCSubtarget &Subtarget = MF.getSubtarget<PPCSubtarget>();
   const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
+  const TargetRegisterInfo* TRI = Subtarget.getRegisterInfo();
   DebugLoc dl = MI.getDebugLoc();
 
   bool LP64 = TM.isPPC64();
@@ -719,27 +734,59 @@ void PPCRegisterInfo::lowerCRBitSpilling(MachineBasicBlock::iterator II,
   unsigned Reg = MF.getRegInfo().createVirtualRegister(LP64 ? G8RC : GPRC);
   unsigned SrcReg = MI.getOperand(0).getReg();
 
-  // We need to move the CR field that contains the CR bit we are spilling.
-  // The super register may not be explicitly defined (i.e. it can be defined
-  // by a CR-logical that only defines the subreg) so we state that the CR
-  // field is undef. Also, in order to preserve the kill flag on the CR bit,
-  // we add it as an implicit use.
-  BuildMI(MBB, II, dl, TII.get(LP64 ? PPC::MFOCRF8 : PPC::MFOCRF), Reg)
+  // Search up the BB to find the definition of the CR bit.
+  MachineBasicBlock::reverse_iterator Ins;
+  unsigned CRBitSpillDistance = 0;
+  for (Ins = MI; Ins != MBB.rend(); Ins++) {
+    // Definition found.
+    if (Ins->modifiesRegister(SrcReg, TRI))
+      break;
+    // Unable to find CR bit definition within maximum search distance.
+    if (CRBitSpillDistance == MaxCRBitSpillDist) {
+      Ins = MI;
+      break;
+    }
+    // Skip debug instructions when counting CR bit spill distance.
+    if (!Ins->isDebugInstr())
+      CRBitSpillDistance++;
+  }
+
+  // Unable to find the definition of the CR bit in the MBB.
+  if (Ins == MBB.rend())
+    Ins = MI;
+
+  // There is no need to extract the CR bit if its value is already known.
+  switch (Ins->getOpcode()) {
+  case PPC::CRUNSET:
+    BuildMI(MBB, II, dl, TII.get(LP64 ? PPC::LI8 : PPC::LI), Reg)
+      .addImm(0);
+    break;
+  case PPC::CRSET:
+    BuildMI(MBB, II, dl, TII.get(LP64 ? PPC::LIS8 : PPC::LIS), Reg)
+      .addImm(-32768);
+    break;
+  default:
+    // We need to move the CR field that contains the CR bit we are spilling.
+    // The super register may not be explicitly defined (i.e. it can be defined
+    // by a CR-logical that only defines the subreg) so we state that the CR
+    // field is undef. Also, in order to preserve the kill flag on the CR bit,
+    // we add it as an implicit use.
+    BuildMI(MBB, II, dl, TII.get(LP64 ? PPC::MFOCRF8 : PPC::MFOCRF), Reg)
       .addReg(getCRFromCRBit(SrcReg), RegState::Undef)
       .addReg(SrcReg,
               RegState::Implicit | getKillRegState(MI.getOperand(0).isKill()));
 
-  // If the saved register wasn't CR0LT, shift the bits left so that the bit to
-  // store is the first one. Mask all but that bit.
-  unsigned Reg1 = Reg;
-  Reg = MF.getRegInfo().createVirtualRegister(LP64 ? G8RC : GPRC);
+    // If the saved register wasn't CR0LT, shift the bits left so that the bit
+    // to store is the first one. Mask all but that bit.
+    unsigned Reg1 = Reg;
+    Reg = MF.getRegInfo().createVirtualRegister(LP64 ? G8RC : GPRC);
 
-  // rlwinm rA, rA, ShiftBits, 0, 0.
-  BuildMI(MBB, II, dl, TII.get(LP64 ? PPC::RLWINM8 : PPC::RLWINM), Reg)
-    .addReg(Reg1, RegState::Kill)
-    .addImm(getEncodingValue(SrcReg))
-    .addImm(0).addImm(0);
-
+    // rlwinm rA, rA, ShiftBits, 0, 0.
+    BuildMI(MBB, II, dl, TII.get(LP64 ? PPC::RLWINM8 : PPC::RLWINM), Reg)
+      .addReg(Reg1, RegState::Kill)
+      .addImm(getEncodingValue(SrcReg))
+      .addImm(0).addImm(0);
+  }
   addFrameReference(BuildMI(MBB, II, dl, TII.get(LP64 ? PPC::STW8 : PPC::STW))
                     .addReg(Reg, RegState::Kill),
                     FrameIndex);

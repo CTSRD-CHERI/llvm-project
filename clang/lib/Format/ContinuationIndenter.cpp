@@ -945,18 +945,24 @@ unsigned ContinuationIndenter::getNewLineColumn(const LineState &State) {
       return State.Stack[State.Stack.size() - 2].LastSpace;
     return State.FirstIndent;
   }
-  // Indent a closing parenthesis at the previous level if followed by a semi or
-  // opening brace. This allows indentations such as:
+  // Indent a closing parenthesis at the previous level if followed by a semi,
+  // const, or opening brace. This allows indentations such as:
   //     foo(
   //       a,
   //     );
+  //     int Foo::getter(
+  //         //
+  //     ) const {
+  //       return foo;
+  //     }
   //     function foo(
   //       a,
   //     ) {
   //       code(); //
   //     }
   if (Current.is(tok::r_paren) && State.Stack.size() > 1 &&
-      (!Current.Next || Current.Next->isOneOf(tok::semi, tok::l_brace)))
+      (!Current.Next ||
+       Current.Next->isOneOf(tok::semi, tok::kw_const, tok::l_brace)))
     return State.Stack[State.Stack.size() - 2].LastSpace;
   if (NextNonComment->is(TT_TemplateString) && NextNonComment->closesScope())
     return State.Stack[State.Stack.size() - 2].LastSpace;
@@ -1190,7 +1196,8 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
   State.Column += Current.ColumnWidth;
   State.NextToken = State.NextToken->Next;
 
-  unsigned Penalty = handleEndOfLine(Current, State, DryRun, AllowBreak);
+  unsigned Penalty =
+      handleEndOfLine(Current, State, DryRun, AllowBreak, Newline);
 
   if (Current.Role)
     Current.Role->formatFromToken(State, this, DryRun);
@@ -1484,7 +1491,7 @@ static unsigned getLastLineEndColumn(StringRef Text, unsigned StartColumn,
 
 unsigned ContinuationIndenter::reformatRawStringLiteral(
     const FormatToken &Current, LineState &State,
-    const FormatStyle &RawStringStyle, bool DryRun) {
+    const FormatStyle &RawStringStyle, bool DryRun, bool Newline) {
   unsigned StartColumn = State.Column - Current.ColumnWidth;
   StringRef OldDelimiter = *getRawStringDelimiter(Current.TokenText);
   StringRef NewDelimiter =
@@ -1524,8 +1531,10 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   // source.
   bool ContentStartsOnNewline = Current.TokenText[OldPrefixSize] == '\n';
   // If this token is the last parameter (checked by looking if it's followed by
-  // `)`, the base the indent off the line's nested block indent. Otherwise,
-  // base the indent off the arguments indent, so we can achieve:
+  // `)` and is not on a newline, the base the indent off the line's nested
+  // block indent. Otherwise, base the indent off the arguments indent, so we
+  // can achieve:
+  //
   // fffffffffff(1, 2, 3, R"pb(
   //     key1: 1  #
   //     key2: 2)pb");
@@ -1534,11 +1543,18 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   //             R"pb(
   //               key1: 1  #
   //               key2: 2
+  //             )pb");
+  //
+  // fffffffffff(1, 2, 3,
+  //             R"pb(
+  //               key1: 1  #
+  //               key2: 2
   //             )pb",
   //             5);
-  unsigned CurrentIndent = (Current.Next && Current.Next->is(tok::r_paren))
-                               ? State.Stack.back().NestedBlockIndent
-                               : State.Stack.back().Indent;
+  unsigned CurrentIndent =
+      (!Newline && Current.Next && Current.Next->is(tok::r_paren))
+          ? State.Stack.back().NestedBlockIndent
+          : State.Stack.back().Indent;
   unsigned NextStartColumn = ContentStartsOnNewline
                                  ? CurrentIndent + Style.IndentWidth
                                  : FirstStartColumn;
@@ -1640,13 +1656,14 @@ unsigned ContinuationIndenter::addMultilineToken(const FormatToken &Current,
 
 unsigned ContinuationIndenter::handleEndOfLine(const FormatToken &Current,
                                                LineState &State, bool DryRun,
-                                               bool AllowBreak) {
+                                               bool AllowBreak, bool Newline) {
   unsigned Penalty = 0;
   // Compute the raw string style to use in case this is a raw string literal
   // that can be reformatted.
   auto RawStringStyle = getRawStringStyle(Current, State);
   if (RawStringStyle && !Current.Finalized) {
-    Penalty = reformatRawStringLiteral(Current, State, *RawStringStyle, DryRun);
+    Penalty = reformatRawStringLiteral(Current, State, *RawStringStyle, DryRun,
+                                       Newline);
   } else if (Current.IsMultiline && Current.isNot(TT_BlockComment)) {
     // Don't break multi-line tokens other than block comments and raw string
     // literals. Instead, just update the state.
@@ -1793,7 +1810,7 @@ ContinuationIndenter::createBreakableToken(const FormatToken &Current,
     }
     return llvm::make_unique<BreakableBlockComment>(
         Current, StartColumn, Current.OriginalColumn, !Current.Previous,
-        State.Line->InPPDirective, Encoding, Style);
+        State.Line->InPPDirective, Encoding, Style, Whitespaces.useCRLF());
   } else if (Current.is(TT_LineComment) &&
              (Current.Previous == nullptr ||
               Current.Previous->isNot(TT_ImplicitStringLiteral))) {

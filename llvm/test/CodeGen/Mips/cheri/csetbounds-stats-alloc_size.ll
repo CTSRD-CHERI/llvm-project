@@ -36,5 +36,5 @@ attributes #3 = { allocsize(1,2) }
 ; CSV-LABEL: alignment_bits,size,kind,source_loc,compiler_pass,details
 ; CSV-NEXT: 0,100,h,"<somewhere in test_direct_call_1>","function with alloc_size","call to do_alloc"
 ; CSV-NEXT: 0,200,h,"<somewhere in test_direct_call_2>","function with alloc_size","call to do_alloc_callsite_annotated"
-; CSV-NEXT: 5,[[$CAP_SIZE]],g,"<somewhere in test_indirect_call>","MipsTargetLowering::lowerGlobalAddress","load of global alloc_fn_ptr (alloc size=[[$CAP_SIZE]])"
+; CSV-NEXT: 5,[[#CAP_SIZE]],g,"<somewhere in test_indirect_call>","MipsTargetLowering::lowerGlobalAddress","load of global alloc_fn_ptr (alloc size=[[#CAP_SIZE]])"
 ; CSV-NEXT: 0,32,h,"<somewhere in test_indirect_call>","function with alloc_size","call to function pointer"

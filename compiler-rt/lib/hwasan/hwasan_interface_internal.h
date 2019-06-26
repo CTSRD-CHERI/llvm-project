@@ -198,6 +198,9 @@ SANITIZER_INTERFACE_ATTRIBUTE
 void * __sanitizer_realloc(void *ptr, usize size);
 
 SANITIZER_INTERFACE_ATTRIBUTE
+void * __sanitizer_reallocarray(void *ptr, usize nmemb, usize size);
+
+SANITIZER_INTERFACE_ATTRIBUTE
 void * __sanitizer_malloc(usize size);
 
 SANITIZER_INTERFACE_ATTRIBUTE

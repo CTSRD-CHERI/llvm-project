@@ -16,7 +16,7 @@ define %class.QWebSettings addrspace(200)* @_ZN16QGraphicsWebView8settingsEv(%cl
 ; PLT-LABEL: _ZN16QGraphicsWebView8settingsEv:
 ; PLT:       # %bb.0: # %entry
 ; PLT-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; PLT-NEXT:    csc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; PLT-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; PLT-NEXT:    csc $c17, $zero, 0($c11)
 ; PLT-NEXT:    cmove $c18, $c26
 ; PLT-NEXT:    clcbi $c12, %capcall20(_ZN16QGraphicsWebView4pageEv)($c18)
@@ -27,14 +27,14 @@ define %class.QWebSettings addrspace(200)* @_ZN16QGraphicsWebView8settingsEv(%cl
 ; PLT-NEXT:    cmove $c26, $c18
 ; PLT-NEXT:    cmove $c26, $c18
 ; PLT-NEXT:    clc $c17, $zero, 0($c11)
-; PLT-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; PLT-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; PLT-NEXT:    cjr $c17
 ; PLT-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ;
 ; PCREL-LABEL: _ZN16QGraphicsWebView8settingsEv:
 ; PCREL:       # %bb.0: # %entry
 ; PCREL-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; PCREL-NEXT:    csc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; PCREL-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; PCREL-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN16QGraphicsWebView8settingsEv)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN16QGraphicsWebView8settingsEv)))
@@ -46,7 +46,7 @@ define %class.QWebSettings addrspace(200)* @_ZN16QGraphicsWebView8settingsEv(%cl
 ; PCREL-NEXT:    cjalr $c12, $c17
 ; PCREL-NEXT:    nop
 ; PCREL-NEXT:    clc $c17, $zero, 0($c11)
-; PCREL-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; PCREL-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; PCREL-NEXT:    cjr $c17
 ; PCREL-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:

@@ -339,6 +339,7 @@ namespace llvm {
     bool ParseFnAttributeValuePairs(AttrBuilder &B,
                                     std::vector<unsigned> &FwdRefAttrGrps,
                                     bool inAttrGrp, LocTy &BuiltinLoc);
+    bool ParseByValWithOptionalType(Type *&Result);
 
     // Module Summary Index Parsing.
     bool SkipModuleSummaryEntry();
@@ -573,9 +574,9 @@ namespace llvm {
     bool ParseCallBr(Instruction *&Inst, PerFunctionState &PFS);
 
     bool ParseUnaryOp(Instruction *&Inst, PerFunctionState &PFS, unsigned Opc,
-                      unsigned OperandType);
+                      bool IsFP);
     bool ParseArithmetic(Instruction *&Inst, PerFunctionState &PFS, unsigned Opc,
-                         unsigned OperandType);
+                         bool IsFP);
     bool ParseLogical(Instruction *&Inst, PerFunctionState &PFS, unsigned Opc);
     bool ParseCompare(Instruction *&Inst, PerFunctionState &PFS, unsigned Opc);
     bool ParseCast(Instruction *&Inst, PerFunctionState &PFS, unsigned Opc);

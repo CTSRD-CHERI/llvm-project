@@ -40,22 +40,22 @@ define void @foobar() addrspace(200) nounwind {
 ; CHECK-LABEL: foobar:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
-; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foobar)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foobar)))
 ; CHECK-NEXT:    cincoffset $c18, $c12, $1
 ; CHECK-NEXT:    addiu $1, $zero, 123
-; CHECK-NEXT:    csw $1, $zero, [[@EXPR $CAP_SIZE - 4]]($c11)
+; CHECK-NEXT:    csw $1, $zero, [[#CAP_SIZE - 4]]($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 4]]
+; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 4]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:
@@ -99,8 +99,8 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; CHECK-LABEL: foobar_without_store:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
-; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foobar_without_store)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foobar_without_store)))
 ; CHECK-NEXT:    cincoffset $c18, $c12, $1
@@ -108,15 +108,15 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 4]]
+; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 4]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
+; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:

@@ -23,6 +23,7 @@
 #include "CodeRegion.h"
 #include "CodeRegionGenerator.h"
 #include "PipelinePrinter.h"
+#include "Views/BottleneckAnalysis.h"
 #include "Views/DispatchStatistics.h"
 #include "Views/InstructionInfoView.h"
 #include "Views/RegisterFileStatistics.h"
@@ -67,8 +68,9 @@ static cl::opt<std::string> OutputFilename("o", cl::desc("Output filename"),
                                            cl::value_desc("filename"));
 
 static cl::opt<std::string>
-    ArchName("march", cl::desc("Target architecture. "
-                               "See -version for available targets"),
+    ArchName("march",
+             cl::desc("Target architecture. "
+                      "See -version for available targets"),
              cl::cat(ToolOptions));
 
 static cl::opt<std::string>
@@ -235,6 +237,7 @@ static void processViewOptions() {
 
   if (EnableAllViews.getNumOccurrences()) {
     processOptionImpl(PrintSummaryView, EnableAllViews);
+    processOptionImpl(EnableBottleneckAnalysis, EnableAllViews);
     processOptionImpl(PrintResourcePressureView, EnableAllViews);
     processOptionImpl(PrintTimelineView, EnableAllViews);
     processOptionImpl(PrintInstructionInfoView, EnableAllViews);
@@ -363,6 +366,11 @@ int main(int argc, char **argv) {
     return 1;
   }
   const mca::CodeRegions &Regions = *RegionsOrErr;
+
+  // Early exit if errors were found by the code region parsing logic.
+  if (!Regions.isValid())
+    return 1;
+
   if (Regions.empty()) {
     WithColor::error() << "no assembly instructions found.\n";
     return 1;
@@ -435,8 +443,8 @@ int main(int argc, char **argv) {
                   WithColor::error() << IE.Message << '\n';
                   IP->printInst(&IE.Inst, SS, "", *STI);
                   SS.flush();
-                  WithColor::note() << "instruction: " << InstructionStr
-                                    << '\n';
+                  WithColor::note()
+                      << "instruction: " << InstructionStr << '\n';
                 })) {
           // Default case.
           WithColor::error() << toString(std::move(NewE));
@@ -476,8 +484,11 @@ int main(int argc, char **argv) {
     mca::PipelinePrinter Printer(*P);
 
     if (PrintSummaryView)
-      Printer.addView(llvm::make_unique<mca::SummaryView>(
-          SM, Insts, DispatchWidth, EnableBottleneckAnalysis));
+      Printer.addView(
+          llvm::make_unique<mca::SummaryView>(SM, Insts, DispatchWidth));
+
+    if (EnableBottleneckAnalysis)
+      Printer.addView(llvm::make_unique<mca::BottleneckAnalysis>(*STI, *IP, Insts));
 
     if (PrintInstructionInfoView)
       Printer.addView(

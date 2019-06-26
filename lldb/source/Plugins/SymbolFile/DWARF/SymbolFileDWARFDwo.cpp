@@ -13,17 +13,19 @@
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Utility/LLDBAssert.h"
 
-#include "DWARFUnit.h"
+#include "DWARFCompileUnit.h"
 #include "DWARFDebugInfo.h"
+#include "DWARFUnit.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
 SymbolFileDWARFDwo::SymbolFileDWARFDwo(ObjectFileSP objfile,
-                                       DWARFUnit *dwarf_cu)
-    : SymbolFileDWARF(objfile.get()), m_obj_file_sp(objfile),
-      m_base_dwarf_cu(dwarf_cu) {
-  SetID(((lldb::user_id_t)dwarf_cu->GetOffset()) << 32);
+                                       DWARFCompileUnit &dwarf_cu)
+    : SymbolFileDWARF(objfile.get(), objfile->GetSectionList(
+                                         /*update_module_section_list*/ false)),
+      m_obj_file_sp(objfile), m_base_dwarf_cu(dwarf_cu) {
+  SetID(((lldb::user_id_t)dwarf_cu.GetID()) << 32);
 }
 
 void SymbolFileDWARFDwo::LoadSectionData(lldb::SectionType sect_type,
@@ -45,18 +47,17 @@ void SymbolFileDWARFDwo::LoadSectionData(lldb::SectionType sect_type,
 }
 
 lldb::CompUnitSP
-SymbolFileDWARFDwo::ParseCompileUnit(DWARFUnit *dwarf_cu,
-                                     uint32_t cu_idx) {
-  assert(GetCompileUnit() == dwarf_cu && "SymbolFileDWARFDwo::ParseCompileUnit "
-                                         "called with incompatible compile "
-                                         "unit");
-  return GetBaseSymbolFile()->ParseCompileUnit(m_base_dwarf_cu, UINT32_MAX);
+SymbolFileDWARFDwo::ParseCompileUnit(DWARFCompileUnit &dwarf_cu) {
+  assert(GetCompileUnit() == &dwarf_cu &&
+         "SymbolFileDWARFDwo::ParseCompileUnit called with incompatible "
+         "compile unit");
+  return GetBaseSymbolFile()->ParseCompileUnit(m_base_dwarf_cu);
 }
 
 DWARFUnit *SymbolFileDWARFDwo::GetCompileUnit() {
   // Only dwo files with 1 compile unit is supported
   if (GetNumCompileUnits() == 1)
-    return DebugInfo()->GetCompileUnitAtIndex(0);
+    return DebugInfo()->GetUnitAtIndex(0);
   else
     return nullptr;
 }
@@ -107,43 +108,8 @@ lldb::TypeSP SymbolFileDWARFDwo::FindCompleteObjCDefinitionTypeForDIE(
       die, type_name, must_be_implementation);
 }
 
-DWARFUnit *SymbolFileDWARFDwo::GetBaseCompileUnit() {
-  return m_base_dwarf_cu;
-}
-
-const DWARFDataExtractor &SymbolFileDWARFDwo::get_debug_abbrev_data() {
-  return GetCachedSectionData(eSectionTypeDWARFDebugAbbrevDwo,
-                              m_data_debug_abbrev);
-}
-
-const DWARFDataExtractor &SymbolFileDWARFDwo::get_debug_addr_data() {
-  // For single file split dwarf case (when we have .dwo sections in a .o),
-  // we do not want to use the .debug_addr section from .o file,
-  // but want to get one from the final executable.
-  // For regular split debug case, .dwo file does not contain the
-  // .debug_addr, so we would always fall back to such lookup anyways.
-  llvm::call_once(m_data_debug_addr.m_flag, [this] {
-    SymbolFileDWARF::LoadSectionData(eSectionTypeDWARFDebugAddr,
-                                     std::ref(m_data_debug_addr.m_data));
-  });
-  return m_data_debug_addr.m_data;
-}
-
-const DWARFDataExtractor &SymbolFileDWARFDwo::get_debug_info_data() {
-  return GetCachedSectionData(eSectionTypeDWARFDebugInfoDwo, m_data_debug_info);
-}
-
-const DWARFDataExtractor &SymbolFileDWARFDwo::get_debug_str_data() {
-  return GetCachedSectionData(eSectionTypeDWARFDebugStrDwo, m_data_debug_str);
-}
-
-const DWARFDataExtractor &SymbolFileDWARFDwo::get_debug_str_offsets_data() {
-  return GetCachedSectionData(eSectionTypeDWARFDebugStrOffsetsDwo,
-                              m_data_debug_str_offsets);
-}
-
 SymbolFileDWARF *SymbolFileDWARFDwo::GetBaseSymbolFile() {
-  return m_base_dwarf_cu->GetSymbolFileDWARF();
+  return m_base_dwarf_cu.GetSymbolFileDWARF();
 }
 
 DWARFExpression::LocationListFormat
@@ -158,6 +124,7 @@ SymbolFileDWARFDwo::GetTypeSystemForLanguage(LanguageType language) {
 
 DWARFDIE
 SymbolFileDWARFDwo::GetDIE(const DIERef &die_ref) {
-  lldbassert(m_base_dwarf_cu->GetOffset() == die_ref.cu_offset);
-  return DebugInfo()->GetDIEForDIEOffset(die_ref.die_offset);
+  lldbassert(die_ref.cu_offset == m_base_dwarf_cu.GetOffset() ||
+             die_ref.cu_offset == DW_INVALID_OFFSET);
+  return DebugInfo()->GetDIEForDIEOffset(die_ref.section, die_ref.die_offset);
 }

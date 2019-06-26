@@ -1,4 +1,4 @@
-; RUN: %cheri_opt < %s -instcombine -S | FileCheck %s
+; RUN: %cheri_opt %s -instcombine -S | FileCheck %s
 ; This sandbox-ABI test case was manually constructed from non-CHERI IR (by
 ; replacing i8* with i8 addrspace(200)* etc. and changing the datalayout and
 ; triple) because the test requires that the call to strchr is a direct call

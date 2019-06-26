@@ -455,6 +455,7 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("MacroBlockEnd", Style.MacroBlockEnd);
     IO.mapOptional("MaxEmptyLinesToKeep", Style.MaxEmptyLinesToKeep);
     IO.mapOptional("NamespaceIndentation", Style.NamespaceIndentation);
+    IO.mapOptional("NamespaceMacros", Style.NamespaceMacros);
     IO.mapOptional("ObjCBinPackProtocolList", Style.ObjCBinPackProtocolList);
     IO.mapOptional("ObjCBlockIndentWidth", Style.ObjCBlockIndentWidth);
     IO.mapOptional("ObjCSpaceAfterProperty", Style.ObjCSpaceAfterProperty);
@@ -478,6 +479,7 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("SortIncludes", Style.SortIncludes);
     IO.mapOptional("SortUsingDeclarations", Style.SortUsingDeclarations);
     IO.mapOptional("SpaceAfterCStyleCast", Style.SpaceAfterCStyleCast);
+    IO.mapOptional("SpaceAfterLogicalNot", Style.SpaceAfterLogicalNot);
     IO.mapOptional("SpaceAfterTemplateKeyword",
                    Style.SpaceAfterTemplateKeyword);
     IO.mapOptional("SpaceBeforeAssignmentOperators",
@@ -504,12 +506,14 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("Standard", Style.Standard);
     IO.mapOptional("StatementMacros", Style.StatementMacros);
     IO.mapOptional("TabWidth", Style.TabWidth);
+    IO.mapOptional("TypenameMacros", Style.TypenameMacros);
     IO.mapOptional("UseTab", Style.UseTab);
   }
 };
 
 template <> struct MappingTraits<FormatStyle::BraceWrappingFlags> {
   static void mapping(IO &IO, FormatStyle::BraceWrappingFlags &Wrapping) {
+    IO.mapOptional("AfterCaseLabel", Wrapping.AfterCaseLabel);
     IO.mapOptional("AfterClass", Wrapping.AfterClass);
     IO.mapOptional("AfterControlStatement", Wrapping.AfterControlStatement);
     IO.mapOptional("AfterEnum", Wrapping.AfterEnum);
@@ -602,7 +606,7 @@ static FormatStyle expandPresets(const FormatStyle &Style) {
   if (Style.BreakBeforeBraces == FormatStyle::BS_Custom)
     return Style;
   FormatStyle Expanded = Style;
-  Expanded.BraceWrapping = {false, false, false, false, false,
+  Expanded.BraceWrapping = {false, false, false, false, false, false,
                             false, false, false, false, false,
                             false, false, true,  true,  true};
   switch (Style.BreakBeforeBraces) {
@@ -627,6 +631,7 @@ static FormatStyle expandPresets(const FormatStyle &Style) {
     Expanded.BraceWrapping.BeforeElse = true;
     break;
   case FormatStyle::BS_Allman:
+    Expanded.BraceWrapping.AfterCaseLabel = true;
     Expanded.BraceWrapping.AfterClass = true;
     Expanded.BraceWrapping.AfterControlStatement = true;
     Expanded.BraceWrapping.AfterEnum = true;
@@ -640,7 +645,7 @@ static FormatStyle expandPresets(const FormatStyle &Style) {
     break;
   case FormatStyle::BS_GNU:
     Expanded.BraceWrapping = {true, true, true, true, true, true, true, true,
-                              true, true, true, true, true, true, true};
+                              true, true, true, true, true, true, true, true};
     break;
   case FormatStyle::BS_WebKit:
     Expanded.BraceWrapping.AfterFunction = true;
@@ -679,7 +684,7 @@ FormatStyle getLLVMStyle(FormatStyle::LanguageKind Language) {
   LLVMStyle.BreakBeforeBinaryOperators = FormatStyle::BOS_None;
   LLVMStyle.BreakBeforeTernaryOperators = true;
   LLVMStyle.BreakBeforeBraces = FormatStyle::BS_Attach;
-  LLVMStyle.BraceWrapping = {false, false, false, false, false,
+  LLVMStyle.BraceWrapping = {false, false, false, false, false, false,
                              false, false, false, false, false,
                              false, false, true,  true,  true};
   LLVMStyle.BreakAfterJavaFieldAnnotations = false;
@@ -730,6 +735,7 @@ FormatStyle getLLVMStyle(FormatStyle::LanguageKind Language) {
   LLVMStyle.SpacesInContainerLiterals = true;
   LLVMStyle.SpacesInCStyleCastParentheses = false;
   LLVMStyle.SpaceAfterCStyleCast = false;
+  LLVMStyle.SpaceAfterLogicalNot = false;
   LLVMStyle.SpaceAfterTemplateKeyword = true;
   LLVMStyle.SpaceBeforeCtorInitializerColon = true;
   LLVMStyle.SpaceBeforeInheritanceColon = true;
@@ -1776,11 +1782,10 @@ static void sortCppIncludes(const FormatStyle &Style,
   SmallVector<unsigned, 16> Indices;
   for (unsigned i = 0, e = Includes.size(); i != e; ++i)
     Indices.push_back(i);
-  std::stable_sort(
-      Indices.begin(), Indices.end(), [&](unsigned LHSI, unsigned RHSI) {
-        return std::tie(Includes[LHSI].Category, Includes[LHSI].Filename) <
-               std::tie(Includes[RHSI].Category, Includes[RHSI].Filename);
-      });
+  llvm::stable_sort(Indices, [&](unsigned LHSI, unsigned RHSI) {
+    return std::tie(Includes[LHSI].Category, Includes[LHSI].Filename) <
+           std::tie(Includes[RHSI].Category, Includes[RHSI].Filename);
+  });
   // The index of the include on which the cursor will be put after
   // sorting/deduplicating.
   unsigned CursorIndex;

@@ -176,8 +176,6 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
       ExpressionEvaluationContext::PotentiallyEvaluated, 0, CleanupInfo{},
       nullptr, ExpressionEvaluationContextRecord::EK_Other);
 
-  PreallocatedFunctionScope.reset(new FunctionScopeInfo(Diags));
-
   // Initialization of data sharing attributes stack for OpenMP
   InitDataSharingAttributesStack();
 
@@ -366,8 +364,7 @@ Sema::~Sema() {
 
   // Kill all the active scopes.
   for (sema::FunctionScopeInfo *FSI : FunctionScopes)
-    if (FSI != PreallocatedFunctionScope.get())
-      delete FSI;
+    delete FSI;
 
   // Tell the SemaConsumer to forget about us; we're going out of scope.
   if (SemaConsumer *SC = dyn_cast<SemaConsumer>(&Consumer))
@@ -697,7 +694,7 @@ static bool ShouldRemoveFromUnused(Sema *SemaRef, const DeclaratorDecl *D) {
     // warn even if the variable isn't odr-used.  (isReferenced doesn't
     // precisely reflect that, but it's a decent approximation.)
     if (VD->isReferenced() &&
-        VD->isUsableInConstantExpressions(SemaRef->Context))
+        VD->mightBeUsableInConstantExpressions(SemaRef->Context))
       return true;
 
     if (VarTemplateDecl *Template = VD->getDescribedVarTemplate())
@@ -956,25 +953,67 @@ void Sema::ActOnStartOfTranslationUnit() {
   if (getLangOpts().ModulesTS &&
       (getLangOpts().getCompilingModule() == LangOptions::CMK_ModuleInterface ||
        getLangOpts().getCompilingModule() == LangOptions::CMK_None)) {
+    // We start in an implied global module fragment.
     SourceLocation StartOfTU =
         SourceMgr.getLocForStartOfFile(SourceMgr.getMainFileID());
-
-    // We start in the global module; all those declarations are implicitly
-    // module-private (though they do not have module linkage).
-    auto &Map = PP.getHeaderSearchInfo().getModuleMap();
-    auto *GlobalModule = Map.createGlobalModuleForInterfaceUnit(StartOfTU);
-    assert(GlobalModule && "module creation should not fail");
-
-    // Enter the scope of the global module.
-    ModuleScopes.push_back({});
-    ModuleScopes.back().Module = GlobalModule;
-    VisibleModules.setVisible(GlobalModule, StartOfTU);
-
-    // All declarations created from now on are owned by the global module.
-    auto *TU = Context.getTranslationUnitDecl();
-    TU->setModuleOwnershipKind(Decl::ModuleOwnershipKind::Visible);
-    TU->setLocalOwningModule(GlobalModule);
+    ActOnGlobalModuleFragmentDecl(StartOfTU);
+    ModuleScopes.back().ImplicitGlobalModuleFragment = true;
   }
+}
+
+void Sema::ActOnEndOfTranslationUnitFragment(TUFragmentKind Kind) {
+  // No explicit actions are required at the end of the global module fragment.
+  if (Kind == TUFragmentKind::Global)
+    return;
+
+  // Transfer late parsed template instantiations over to the pending template
+  // instantiation list. During normal compilation, the late template parser
+  // will be installed and instantiating these templates will succeed.
+  //
+  // If we are building a TU prefix for serialization, it is also safe to
+  // transfer these over, even though they are not parsed. The end of the TU
+  // should be outside of any eager template instantiation scope, so when this
+  // AST is deserialized, these templates will not be parsed until the end of
+  // the combined TU.
+  PendingInstantiations.insert(PendingInstantiations.end(),
+                               LateParsedInstantiations.begin(),
+                               LateParsedInstantiations.end());
+  LateParsedInstantiations.clear();
+
+  // If DefinedUsedVTables ends up marking any virtual member functions it
+  // might lead to more pending template instantiations, which we then need
+  // to instantiate.
+  DefineUsedVTables();
+
+  // C++: Perform implicit template instantiations.
+  //
+  // FIXME: When we perform these implicit instantiations, we do not
+  // carefully keep track of the point of instantiation (C++ [temp.point]).
+  // This means that name lookup that occurs within the template
+  // instantiation will always happen at the end of the translation unit,
+  // so it will find some names that are not required to be found. This is
+  // valid, but we could do better by diagnosing if an instantiation uses a
+  // name that was not visible at its first point of instantiation.
+  if (ExternalSource) {
+    // Load pending instantiations from the external source.
+    SmallVector<PendingImplicitInstantiation, 4> Pending;
+    ExternalSource->ReadPendingInstantiations(Pending);
+    for (auto PII : Pending)
+      if (auto Func = dyn_cast<FunctionDecl>(PII.first))
+        Func->setInstantiationIsPending(true);
+    PendingInstantiations.insert(PendingInstantiations.begin(),
+                                 Pending.begin(), Pending.end());
+  }
+
+  {
+    llvm::TimeTraceScope TimeScope("PerformPendingInstantiations",
+                                   StringRef(""));
+    PerformPendingInstantiations();
+  }
+
+  assert(LateParsedInstantiations.empty() &&
+         "end of TU template instantiation should not create more "
+         "late-parsed templates");
 }
 
 /// ActOnEndOfTranslationUnit - This is called at the very end of the
@@ -989,64 +1028,31 @@ void Sema::ActOnEndOfTranslationUnit() {
   if (PP.isCodeCompletionEnabled())
     return;
 
-  // Transfer late parsed template instantiations over to the pending template
-  // instantiation list. During normal compliation, the late template parser
-  // will be installed and instantiating these templates will succeed.
-  //
-  // If we are building a TU prefix for serialization, it is also safe to
-  // transfer these over, even though they are not parsed. The end of the TU
-  // should be outside of any eager template instantiation scope, so when this
-  // AST is deserialized, these templates will not be parsed until the end of
-  // the combined TU.
-  PendingInstantiations.insert(PendingInstantiations.end(),
-                               LateParsedInstantiations.begin(),
-                               LateParsedInstantiations.end());
-  LateParsedInstantiations.clear();
-
   // Complete translation units and modules define vtables and perform implicit
   // instantiations. PCH files do not.
   if (TUKind != TU_Prefix) {
     DiagnoseUseOfUnimplementedSelectors();
 
-    // If DefinedUsedVTables ends up marking any virtual member functions it
-    // might lead to more pending template instantiations, which we then need
-    // to instantiate.
-    DefineUsedVTables();
-
-    // C++: Perform implicit template instantiations.
-    //
-    // FIXME: When we perform these implicit instantiations, we do not
-    // carefully keep track of the point of instantiation (C++ [temp.point]).
-    // This means that name lookup that occurs within the template
-    // instantiation will always happen at the end of the translation unit,
-    // so it will find some names that are not required to be found. This is
-    // valid, but we could do better by diagnosing if an instantiation uses a
-    // name that was not visible at its first point of instantiation.
-    if (ExternalSource) {
-      // Load pending instantiations from the external source.
-      SmallVector<PendingImplicitInstantiation, 4> Pending;
-      ExternalSource->ReadPendingInstantiations(Pending);
-      for (auto PII : Pending)
-        if (auto Func = dyn_cast<FunctionDecl>(PII.first))
-          Func->setInstantiationIsPending(true);
-      PendingInstantiations.insert(PendingInstantiations.begin(),
-                                   Pending.begin(), Pending.end());
-    }
-
-    {
-      llvm::TimeTraceScope TimeScope("PerformPendingInstantiations",
-                                     StringRef(""));
-      PerformPendingInstantiations();
-    }
-
-    assert(LateParsedInstantiations.empty() &&
-           "end of TU template instantiation should not create more "
-           "late-parsed templates");
+    ActOnEndOfTranslationUnitFragment(
+        !ModuleScopes.empty() && ModuleScopes.back().Module->Kind ==
+                                     Module::PrivateModuleFragment
+            ? TUFragmentKind::Private
+            : TUFragmentKind::Normal);
 
     if (LateTemplateParserCleanup)
       LateTemplateParserCleanup(OpaqueParser);
 
     CheckDelayedMemberExceptionSpecs();
+  } else {
+    // If we are building a TU prefix for serialization, it is safe to transfer
+    // these over, even though they are not parsed. The end of the TU should be
+    // outside of any eager template instantiation scope, so when this AST is
+    // deserialized, these templates will not be parsed until the end of the
+    // combined TU.
+    PendingInstantiations.insert(PendingInstantiations.end(),
+                                 LateParsedInstantiations.begin(),
+                                 LateParsedInstantiations.end());
+    LateParsedInstantiations.clear();
   }
 
   DiagnoseUnterminatedPragmaPack();
@@ -1056,7 +1062,6 @@ void Sema::ActOnEndOfTranslationUnit() {
   // incompatible declarations.
   assert(DelayedOverridingExceptionSpecChecks.empty());
   assert(DelayedEquivalentExceptionSpecChecks.empty());
-  assert(DelayedDefaultedMemberExceptionSpecs.empty());
 
   // All dllexport classes should have been processed already.
   assert(DelayedDllExportClasses.empty());
@@ -1104,13 +1109,24 @@ void Sema::ActOnEndOfTranslationUnit() {
     checkUndefinedButUsed(*this);
   }
 
+  // A global-module-fragment is only permitted within a module unit.
+  bool DiagnosedMissingModuleDeclaration = false;
+  if (!ModuleScopes.empty() &&
+      ModuleScopes.back().Module->Kind == Module::GlobalModuleFragment &&
+      !ModuleScopes.back().ImplicitGlobalModuleFragment) {
+    Diag(ModuleScopes.back().BeginLoc,
+         diag::err_module_declaration_missing_after_global_module_introducer);
+    DiagnosedMissingModuleDeclaration = true;
+  }
+
   if (TUKind == TU_Module) {
     // If we are building a module interface unit, we need to have seen the
     // module declaration by now.
     if (getLangOpts().getCompilingModule() ==
             LangOptions::CMK_ModuleInterface &&
         (ModuleScopes.empty() ||
-         ModuleScopes.back().Module->Kind != Module::ModuleInterfaceUnit)) {
+         !ModuleScopes.back().Module->isModulePurview()) &&
+        !DiagnosedMissingModuleDeclaration) {
       // FIXME: Make a better guess as to where to put the module declaration.
       Diag(getSourceManager().getLocForStartOfFile(
                getSourceManager().getMainFileID()),
@@ -1684,10 +1700,10 @@ Scope *Sema::getScopeForContext(DeclContext *Ctx) {
 
 /// Enter a new function scope
 void Sema::PushFunctionScope() {
-  if (FunctionScopes.empty()) {
-    // Use PreallocatedFunctionScope to avoid allocating memory when possible.
-    PreallocatedFunctionScope->Clear();
-    FunctionScopes.push_back(PreallocatedFunctionScope.get());
+  if (FunctionScopes.empty() && CachedFunctionScope) {
+    // Use CachedFunctionScope to avoid allocating memory when possible.
+    CachedFunctionScope->Clear();
+    FunctionScopes.push_back(CachedFunctionScope.release());
   } else {
     FunctionScopes.push_back(new FunctionScopeInfo(getDiagnostics()));
   }
@@ -1716,7 +1732,7 @@ void Sema::RecordParsingTemplateParameterDepth(unsigned Depth) {
 }
 
 // Check that the type of the VarDecl has an accessible copy constructor and
-// resolve its destructor's exception spefication.
+// resolve its destructor's exception specification.
 static void checkEscapingByref(VarDecl *VD, Sema &S) {
   QualType T = VD->getType();
   EnterExpressionEvaluationContext scope(
@@ -1733,7 +1749,7 @@ static void checkEscapingByref(VarDecl *VD, Sema &S) {
     S.Context.setBlockVarCopyInit(VD, Init, S.canThrow(Init));
   }
 
-  // The destructor's exception spefication is needed when IRGen generates
+  // The destructor's exception specification is needed when IRGen generates
   // block copy/destroy functions. Resolve it here.
   if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
     if (CXXDestructorDecl *DD = RD->getDestructor()) {
@@ -1768,30 +1784,42 @@ static void markEscapingByrefs(const FunctionScopeInfo &FSI, Sema &S) {
   }
 }
 
-void Sema::PopFunctionScopeInfo(const AnalysisBasedWarnings::Policy *WP,
-                                const Decl *D, const BlockExpr *blkExpr) {
+/// Pop a function (or block or lambda or captured region) scope from the stack.
+///
+/// \param WP The warning policy to use for CFG-based warnings, or null if such
+///        warnings should not be produced.
+/// \param D The declaration corresponding to this function scope, if producing
+///        CFG-based warnings.
+/// \param BlockType The type of the block expression, if D is a BlockDecl.
+Sema::PoppedFunctionScopePtr
+Sema::PopFunctionScopeInfo(const AnalysisBasedWarnings::Policy *WP,
+                           const Decl *D, QualType BlockType) {
   assert(!FunctionScopes.empty() && "mismatched push/pop!");
 
-  // This function shouldn't be called after popping the current function scope.
-  // markEscapingByrefs calls PerformMoveOrCopyInitialization, which can call
-  // PushFunctionScope, which can cause clearing out PreallocatedFunctionScope
-  // when FunctionScopes is empty.
   markEscapingByrefs(*FunctionScopes.back(), *this);
 
-  FunctionScopeInfo *Scope = FunctionScopes.pop_back_val();
+  PoppedFunctionScopePtr Scope(FunctionScopes.pop_back_val(),
+                               PoppedFunctionScopeDeleter(this));
 
   if (LangOpts.OpenMP)
-    popOpenMPFunctionRegion(Scope);
+    popOpenMPFunctionRegion(Scope.get());
 
   // Issue any analysis-based warnings.
   if (WP && D)
-    AnalysisWarnings.IssueWarnings(*WP, Scope, D, blkExpr);
+    AnalysisWarnings.IssueWarnings(*WP, Scope.get(), D, BlockType);
   else
     for (const auto &PUD : Scope->PossiblyUnreachableDiags)
       Diag(PUD.Loc, PUD.PD);
 
-  // Delete the scope unless its our preallocated scope.
-  if (Scope != PreallocatedFunctionScope.get())
+  return Scope;
+}
+
+void Sema::PoppedFunctionScopeDeleter::
+operator()(sema::FunctionScopeInfo *Scope) const {
+  // Stash the function scope for later reuse if it's for a normal function.
+  if (Scope->isPlainFunction() && !Self->CachedFunctionScope)
+    Self->CachedFunctionScope.reset(Scope);
+  else
     delete Scope;
 }
 
@@ -1880,7 +1908,7 @@ LambdaScopeInfo *Sema::getCurLambda(bool IgnoreNonLambdaCapturingScope) {
 // an associated template parameter list.
 LambdaScopeInfo *Sema::getCurGenericLambda() {
   if (LambdaScopeInfo *LSI =  getCurLambda()) {
-    return (LSI->AutoTemplateParams.size() ||
+    return (LSI->TemplateParams.size() ||
                     LSI->GLTemplateParameterList) ? LSI : nullptr;
   }
   return nullptr;
@@ -2148,7 +2176,7 @@ bool Sema::tryToRecoverWithCall(ExprResult &E, const PartialDiagnostic &PD,
 
     // FIXME: Try this before emitting the fixit, and suppress diagnostics
     // while doing so.
-    E = ActOnCallExpr(nullptr, E.get(), Range.getEnd(), None,
+    E = BuildCallExpr(nullptr, E.get(), Range.getEnd(), None,
                       Range.getEnd().getLocWithOffset(1));
     return true;
   }

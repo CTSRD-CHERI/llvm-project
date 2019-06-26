@@ -861,6 +861,8 @@ static Value *NegateValue(Value *V, Instruction *BI,
     if (TheNeg->getParent()->getParent() != BI->getParent()->getParent())
       continue;
 
+    bool FoundCatchSwitch = false;
+
     BasicBlock::iterator InsertPt;
     if (Instruction *InstInput = dyn_cast<Instruction>(V)) {
       if (InvokeInst *II = dyn_cast<InvokeInst>(InstInput)) {
@@ -868,10 +870,30 @@ static Value *NegateValue(Value *V, Instruction *BI,
       } else {
         InsertPt = ++InstInput->getIterator();
       }
-      while (isa<PHINode>(InsertPt)) ++InsertPt;
+
+      const BasicBlock *BB = InsertPt->getParent();
+
+      // Make sure we don't move anything before PHIs or exception
+      // handling pads.
+      while (InsertPt != BB->end() && (isa<PHINode>(InsertPt) ||
+                                       InsertPt->isEHPad())) {
+        if (isa<CatchSwitchInst>(InsertPt))
+          // A catchswitch cannot have anything in the block except
+          // itself and PHIs.  We'll bail out below.
+          FoundCatchSwitch = true;
+        ++InsertPt;
+      }
     } else {
       InsertPt = TheNeg->getParent()->getParent()->getEntryBlock().begin();
     }
+
+    // We found a catchswitch in the block where we want to move the
+    // neg.  We cannot move anything into that block.  Bail and just
+    // create the neg before BI, as if we hadn't found an existing
+    // neg.
+    if (FoundCatchSwitch)
+      break;
+
     TheNeg->moveBefore(&*InsertPt);
     if (TheNeg->getOpcode() == Instruction::Sub) {
       TheNeg->setHasNoUnsignedWrap(false);
@@ -1328,8 +1350,7 @@ Value *ReassociatePass::OptimizeXor(Instruction *I,
   //     So, if Rank(X) < Rank(Y) < Rank(Z), it means X is defined earlier
   //     than Y which is defined earlier than Z. Permute "x | 1", "Y & 2",
   //     "z" in the order of X-Y-Z is better than any other orders.
-  std::stable_sort(OpndPtrs.begin(), OpndPtrs.end(),
-                   [](XorOpnd *LHS, XorOpnd *RHS) {
+  llvm::stable_sort(OpndPtrs, [](XorOpnd *LHS, XorOpnd *RHS) {
     return LHS->getSymbolicRank() < RHS->getSymbolicRank();
   });
 
@@ -1686,8 +1707,7 @@ static bool collectMultiplyFactors(SmallVectorImpl<ValueEntry> &Ops,
   // below our mininum of '4'.
   assert(FactorPowerSum >= 4);
 
-  std::stable_sort(Factors.begin(), Factors.end(),
-                   [](const Factor &LHS, const Factor &RHS) {
+  llvm::stable_sort(Factors, [](const Factor &LHS, const Factor &RHS) {
     return LHS.Power > RHS.Power;
   });
   return true;
@@ -2141,7 +2161,7 @@ void ReassociatePass::ReassociateExpression(BinaryOperator *I) {
   // positions maintained (and so the compiler is deterministic).  Note that
   // this sorts so that the highest ranking values end up at the beginning of
   // the vector.
-  std::stable_sort(Ops.begin(), Ops.end());
+  llvm::stable_sort(Ops);
 
   // Now that we have the expression tree in a convenient
   // sorted form, optimize it globally if possible.

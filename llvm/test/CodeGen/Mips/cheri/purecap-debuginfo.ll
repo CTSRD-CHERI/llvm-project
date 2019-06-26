@@ -40,21 +40,21 @@
 // CHECK-EMPTY:
 // CHECK-NEXT: DW_TAG_formal_parameter
 // MIPS-NEXT:              DW_AT_location	(DW_OP_fbreg +16)
-// CHERI-NEXT:             DW_AT_location	(DW_OP_fbreg +{{80|192}})
+// CHERI-NEXT:             DW_AT_location	(DW_OP_fbreg +{{[0-9]+}})
 // CHECK-NEXT:                   DW_AT_name	("i")
 // CHECK-NEXT:                   DW_AT_decl_file	("/src/test/CodeGen/cheri/cheri-debug-info.c")
 // CHECK-NEXT:                   DW_AT_decl_line	(20)
 // CHECK-NEXT:                   DW_AT_type	([[INTPTR_TYPE_INFO_ADDR:0x000.+]] "int*")
 // CHECK-EMPTY:
 // CHECK-NEXT: DW_TAG_lexical_block
-// MIPS-NEXT:                   DW_AT_low_pc	(0x0000000000000028)
-// CHERI-NEXT:                  DW_AT_low_pc	(0x000000000000004c)
-// MIPS-NEXT:                   DW_AT_high_pc	(0x0000000000000034)
-// CHERI-NEXT:                  DW_AT_high_pc	(0x000000000000005c)
+// MIPS-NEXT:                   DW_AT_low_pc	(0x0000000000000020)
+// CHERI-NEXT:                  DW_AT_low_pc	(0x0000000000000044)
+// MIPS-NEXT:                   DW_AT_high_pc	(0x000000000000002c)
+// CHERI-NEXT:                  DW_AT_high_pc	(0x0000000000000054)
 // CHECK-EMPTY:
 // CHECK-NEXT: DW_TAG_variable
 // MIPS-NEXT:                      DW_AT_location	(DW_OP_fbreg +12)
-// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +{{76|188}})
+// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +{{[0-9]+}})
 // CHECK-NEXT:                     DW_AT_name	("j")
 // CHECK-NEXT:                     DW_AT_decl_file	("/src/test/CodeGen/cheri/cheri-debug-info.c")
 // CHECK-NEXT:                     DW_AT_decl_line	(22)
@@ -63,14 +63,14 @@
 // CHECK-NEXT:  NULL
 // CHECK-EMPTY:
 // CHECK-NEXT:  DW_TAG_lexical_block
-// MIPS-NEXT:                   DW_AT_low_pc	(0x0000000000000038)
-// CHERI-NEXT:                  DW_AT_low_pc	(0x0000000000000060)
-// MIPS-NEXT:                   DW_AT_high_pc	(0x0000000000000044)
-// CHERI-NEXT:                  DW_AT_high_pc	(0x0000000000000070)
+// MIPS-NEXT:                   DW_AT_low_pc	(0x0000000000000030)
+// CHERI-NEXT:                  DW_AT_low_pc	(0x0000000000000058)
+// MIPS-NEXT:                   DW_AT_high_pc	(0x000000000000003c)
+// CHERI-NEXT:                  DW_AT_high_pc	(0x0000000000000068)
 // CHECK-EMPTY:
 // CHECK-NEXT:  DW_TAG_variable
 // MIPS-NEXT:                      DW_AT_location	(DW_OP_fbreg +8)
-// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +{{72|184}})
+// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +{{[0-9]+}})
 // CHECK-NEXT:                     DW_AT_name	("j")
 // CHECK-NEXT:                     DW_AT_decl_file	("{{.+}}/CodeGen/cheri/cheri-debug-info.c")
 // CHECK-NEXT:                     DW_AT_decl_line	(25)

@@ -1,4 +1,4 @@
-//===-- ManulaDWARFIndex.h -------------------------------------*- C++ -*-===//
+//===-- ManualDWARFIndex.h --------------------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -59,7 +59,6 @@ private:
 
   static void
   IndexUnitImpl(DWARFUnit &unit, const lldb::LanguageType cu_language,
-                const DWARFFormValue::FixedFormSizes &fixed_form_sizes,
                 const dw_offset_t cu_offset, IndexSet &set);
 
   /// Non-null value means we haven't built the index yet.

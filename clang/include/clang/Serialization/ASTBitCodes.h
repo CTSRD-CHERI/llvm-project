@@ -1179,7 +1179,10 @@ namespace serialization {
       TYPE_DEPENDENT_ADDRESS_SPACE = 47,
 
       /// A dependentSizedVectorType record.
-      TYPE_DEPENDENT_SIZED_VECTOR = 48
+      TYPE_DEPENDENT_SIZED_VECTOR = 48,
+
+      /// A type defined in a macro.
+      TYPE_MACRO_QUALIFIED = 49
     };
 
     /// The type IDs for special types constructed by semantic
@@ -1449,9 +1452,6 @@ namespace serialization {
 
       /// A CXXConstructorDecl record.
       DECL_CXX_CONSTRUCTOR,
-
-      /// A CXXConstructorDecl record for an inherited constructor.
-      DECL_CXX_INHERITED_CONSTRUCTOR,
 
       /// A CXXDestructorDecl record.
       DECL_CXX_DESTRUCTOR,
@@ -1743,6 +1743,9 @@ namespace serialization {
 
       /// A GNUNullExpr record.
       EXPR_GNU_NULL,
+
+      /// A SourceLocExpr record.
+      EXPR_SOURCE_LOC,
 
       /// A ShuffleVectorExpr record.
       EXPR_SHUFFLE_VECTOR,

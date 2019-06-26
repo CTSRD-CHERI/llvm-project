@@ -8,12 +8,12 @@
 define i32 @a(i64 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *,
 ; LEGACY-LABEL: a:
 ; LEGACY:       # %bb.0:
-; LEGACY-NEXT:    cincoffset $c11, $c11, -[[@EXPR 2*$CAP_SIZE]]
-; LEGACY-NEXT:    .cfi_def_cfa_offset [[@EXPR 2*$CAP_SIZE]]
-; LEGACY-NEXT:    csd $gp, $zero, [[@EXPR 2*$CAP_SIZE -8]]($c11) # 8-byte Folded Spill
+; LEGACY-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE * 2]]
+; LEGACY-NEXT:    .cfi_def_cfa_offset [[#CAP_SIZE * 2]]
+; LEGACY-NEXT:    csd $gp, $zero, [[GP_SPILL:24|56]]($c11) # 8-byte Folded Spill
 ; LEGACY-NEXT:    csc $c17, $zero, 0($c11)
 ; LEGACY-NEXT:    .cfi_offset 28, -8
-; LEGACY-NEXT:    .cfi_offset 89, -[[@EXPR 2*$CAP_SIZE]]
+; LEGACY-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 2]]
 ; LEGACY-NEXT:    cgetoffset $25, $c12
 ; LEGACY-NEXT:    lui $1, %hi(%neg(%gp_rel(a)))
 ; LEGACY-NEXT:    daddu $1, $1, $25
@@ -24,15 +24,15 @@ define i32 @a(i64 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *,
 ; LEGACY-NEXT:    cgetnull $c13
 ; LEGACY-NEXT:    cgetnull $c13
 ; LEGACY-NEXT:    clc $c17, $zero, 0($c11)
-; LEGACY-NEXT:    cld $gp, $zero, [[@EXPR 2 * $CAP_SIZE - 8]]($c11) # 8-byte Folded Reload
+; LEGACY-NEXT:    cld $gp, $zero, [[GP_SPILL]]($c11) # 8-byte Folded Reload
 ; LEGACY-NEXT:    cjr $c17
-; LEGACY-NEXT:    cincoffset $c11, $c11, [[@EXPR 2* $CAP_SIZE]]
+; LEGACY-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE * 2]]
 ; PCREL-LABEL: a:
 ; PCREL:       # %bb.0:
-; PCREL-NEXT:    cincoffset $c11, $c11, -[[$CAP_SIZE]]
-; PCREL-NEXT:    .cfi_def_cfa_offset [[$CAP_SIZE]]
+; PCREL-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE]]
+; PCREL-NEXT:    .cfi_def_cfa_offset [[#CAP_SIZE]]
 ; PCREL-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    .cfi_offset 89, -[[$CAP_SIZE]]
+; PCREL-NEXT:    .cfi_offset 89, -[[#CAP_SIZE]]
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(a)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(a)))
 ; PCREL-NEXT:    cincoffset $c1, $c12, $1
@@ -42,7 +42,7 @@ define i32 @a(i64 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *,
 ; PCREL-NEXT:    cgetnull $c13
 ; PCREL-NEXT:    clc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    cjr $c17
-; PCREL-NEXT:    cincoffset $c11, $c11, [[$CAP_SIZE]] 
+; PCREL-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE]] 
               i64 addrspace(200) *, i64 addrspace(200) *, i64 addrspace(200) *,
               i32 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *) {
   %ret = call i32 @b()

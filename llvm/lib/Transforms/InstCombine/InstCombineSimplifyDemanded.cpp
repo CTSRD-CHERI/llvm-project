@@ -1019,13 +1019,12 @@ Value *InstCombiner::simplifyAMDGCNMemoryIntrinsicDemanded(IntrinsicInst *II,
   getIntrinsicInfoTableEntries(IID, Table);
   ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
 
+  // Validate function argument and return types, extracting overloaded types
+  // along the way.
   FunctionType *FTy = II->getCalledFunction()->getFunctionType();
   SmallVector<Type *, 6> OverloadTys;
-  Intrinsic::matchIntrinsicType(FTy->getReturnType(), TableRef, OverloadTys);
-  for (unsigned i = 0, e = FTy->getNumParams(); i != e; ++i)
-    Intrinsic::matchIntrinsicType(FTy->getParamType(i), TableRef, OverloadTys);
+  Intrinsic::matchIntrinsicSignature(FTy, TableRef, OverloadTys);
 
-  // Get the new return type overload of the intrinsic.
   Module *M = II->getParent()->getParent()->getParent();
   Type *EltTy = II->getType()->getVectorElementType();
   Type *NewTy = (NewNumElts == 1) ? EltTy : VectorType::get(EltTy, NewNumElts);
@@ -1169,6 +1168,18 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
   default: break;
 
   case Instruction::GetElementPtr: {
+    // The LangRef requires that struct geps have all constant indices.  As
+    // such, we can't convert any operand to partial undef.
+    auto mayIndexStructType = [](GetElementPtrInst &GEP) {
+      for (auto I = gep_type_begin(GEP), E = gep_type_end(GEP);
+           I != E; I++)
+        if (I.isStruct())
+          return true;;
+      return false;
+    };
+    if (mayIndexStructType(cast<GetElementPtrInst>(*I)))
+      break;
+    
     // Conservatively track the demanded elements back through any vector
     // operands we may have.  We know there must be at least one, or we
     // wouldn't have a vector result to get here. Note that we intentionally
@@ -1437,7 +1448,11 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     switch (II->getIntrinsicID()) {
     case Intrinsic::masked_gather: // fallthrough
     case Intrinsic::masked_load: {
-      APInt DemandedPtrs(DemandedElts), DemandedPassThrough(DemandedElts);
+      // Subtlety: If we load from a pointer, the pointer must be valid
+      // regardless of whether the element is demanded.  Doing otherwise risks
+      // segfaults which didn't exist in the original program.
+      APInt DemandedPtrs(APInt::getAllOnesValue(VWidth)),
+        DemandedPassThrough(DemandedElts);
       if (auto *CV = dyn_cast<ConstantVector>(II->getOperand(2)))
         for (unsigned i = 0; i < VWidth; i++) {
           Constant *CElt = CV->getAggregateElement(i);

@@ -32,19 +32,17 @@ declare void @free(i8 addrspace(200)* nocapture) #1
 define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x_off) nounwind {
 ; LEGACY-LABEL: eo_fermion_force:
 ; LEGACY:       # %bb.0: # %entry
-; LEGACY-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|96]]
-; LEGACY-NEXT:    dmfc1 $1, $f28
-; LEGACY-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
+; LEGACY-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; LEGACY-NEXT:    dmfc1 $1, $f27
-; LEGACY-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 16]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
 ; LEGACY-NEXT:    dmfc1 $1, $f26
-; LEGACY-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 24]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 16]]($c11)
 ; LEGACY-NEXT:    dmfc1 $1, $f25
-; LEGACY-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 32]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 24]]($c11)
 ; LEGACY-NEXT:    dmfc1 $1, $f24
-; LEGACY-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 40]]($c11)
-; LEGACY-NEXT:    csd $gp, $zero, [[@EXPR STACKFRAME_SIZE - 48]]($c11)
-; LEGACY-NEXT:    csd $16, $zero, [[@EXPR STACKFRAME_SIZE - 56]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 32]]($c11)
+; LEGACY-NEXT:    csd $gp, $zero, [[#STACKFRAME_SIZE - 40]]($c11)
+; LEGACY-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 48]]($c11)
 ; LEGACY-NEXT:    csc $c17, $zero, 0($c11)
 ; LEGACY-NEXT:    cgetoffset $25, $c12
 ; LEGACY-NEXT:    lui $1, %hi(%neg(%gp_rel(eo_fermion_force)))
@@ -54,7 +52,6 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; LEGACY-NEXT:    daddiu $gp, $2, %lo(%neg(%gp_rel(eo_fermion_force)))
 ; LEGACY-NEXT:    ld $1, %got_page(.LCPI0_0)($gp)
 ; LEGACY-NEXT:    ldc1 $f24, %got_ofst(.LCPI0_0)($1)
-; LEGACY-NEXT:    neg.d $f28, $f0
 ; LEGACY-NEXT:    neg.d $f25, $f24
 ; LEGACY-NEXT:    div.d $f26, $f24, $f0
 ; LEGACY-NEXT:    neg.d $f27, $f0
@@ -155,9 +152,8 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; LEGACY-NEXT:  .LBB0_20: # %if.then.48
 ; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
-; LEGACY-NEXT:    daddiu $4, $zero, 0
 ; LEGACY-NEXT:    cjalr $c12, $c17
-; LEGACY-NEXT:    mov.d $f13, $f28
+; LEGACY-NEXT:    daddiu $4, $zero, 0
 ; LEGACY-NEXT:  .LBB0_21: # %if.then.182
 ; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
@@ -167,21 +163,19 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 
 ; CAPTABLE-LABEL: eo_fermion_force:
 ; CAPTABLE:       # %bb.0: # %entry
-; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:96|128]]
-; CAPTABLE-NEXT:    dmfc1 $1, $f29
-; CAPTABLE-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
+; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CAPTABLE-NEXT:    dmfc1 $1, $f28
-; CAPTABLE-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 16]]($c11)
+; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
 ; CAPTABLE-NEXT:    dmfc1 $1, $f27
-; CAPTABLE-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 24]]($c11)
+; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 16]]($c11)
 ; CAPTABLE-NEXT:    dmfc1 $1, $f26
-; CAPTABLE-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 32]]($c11)
+; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 24]]($c11)
 ; CAPTABLE-NEXT:    dmfc1 $1, $f25
-; CAPTABLE-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 40]]($c11)
+; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 32]]($c11)
 ; CAPTABLE-NEXT:    dmfc1 $1, $f24
-; CAPTABLE-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 48]]($c11)
-; CAPTABLE-NEXT:    csd $16, $zero, [[@EXPR STACKFRAME_SIZE - 56]]($c11)
-; CAPTABLE-NEXT:    csc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 40]]($c11)
+; CAPTABLE-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 48]]($c11)
+; CAPTABLE-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11)
 ; CAPTABLE-NEXT:    lui $1, %hi(%neg(%captab_rel(eo_fermion_force)))
 ; CAPTABLE-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(eo_fermion_force)))
@@ -192,7 +186,6 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; CAPTABLE-NEXT:    nop
 ; CAPTABLE-NEXT:  # %bb.1: # %for.cond.30.preheader
 ; CAPTABLE-NEXT:    dmtc1 $2, $f24
-; CAPTABLE-NEXT:    neg.d $f29, $f0
 ; CAPTABLE-NEXT:    cld $1, $zero, 0($c1)
 ; CAPTABLE-NEXT:    neg.d $f26, $f24
 ; CAPTABLE-NEXT:    div.d $f27, $f24, $f0
@@ -286,9 +279,8 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; CAPTABLE-NEXT:    .insn
 ; CAPTABLE-NEXT:  .LBB0_20: # %if.then.48
 ; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
 ; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f13, $f29
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
 ; CAPTABLE-NEXT:  .LBB0_21: # %if.then.182
 ; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
 ; CAPTABLE-NEXT:    daddiu $4, $zero, 0

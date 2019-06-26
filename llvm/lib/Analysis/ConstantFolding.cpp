@@ -1002,7 +1002,9 @@ Constant *ConstantFoldInstOperandsImpl(const Value *InstOrCE, unsigned Opcode,
                                        const TargetLibraryInfo *TLI) {
   Type *DestTy = InstOrCE->getType();
 
-  // Handle easy binops first.
+  if (Instruction::isUnaryOp(Opcode))
+    return ConstantFoldUnaryOpOperand(Opcode, Ops[0], DL);
+
   if (Instruction::isBinaryOp(Opcode))
     return ConstantFoldBinaryOpOperands(Opcode, Ops[0], Ops[1], DL);
 
@@ -1263,6 +1265,13 @@ Constant *llvm::ConstantFoldCompareInstOperands(unsigned Predicate,
   }
 
   return ConstantExpr::getCompare(Predicate, Ops0, Ops1);
+}
+
+Constant *llvm::ConstantFoldUnaryOpOperand(unsigned Opcode, Constant *Op,
+                                           const DataLayout &DL) {
+  assert(Instruction::isUnaryOp(Opcode));
+
+  return ConstantExpr::get(Opcode, Op);
 }
 
 Constant *llvm::ConstantFoldBinaryOpOperands(unsigned Opcode, Constant *LHS,
@@ -1641,10 +1650,11 @@ static bool getConstIntOrUndef(Value *Op, const APInt *&C) {
   return false;
 }
 
-Constant *ConstantFoldScalarCall(StringRef Name, unsigned IntrinsicID, Type *Ty,
-                                 ArrayRef<Constant *> Operands,
-                                 const TargetLibraryInfo *TLI,
-                                 const CallBase *Call) {
+static Constant *ConstantFoldScalarCall(StringRef Name, unsigned IntrinsicID,
+                                        Type *Ty,
+                                        ArrayRef<Constant *> Operands,
+                                        const TargetLibraryInfo *TLI,
+                                        const CallBase *Call) {
   if (Operands.size() == 1) {
     if (IntrinsicID == Intrinsic::is_constant) {
       // We know we have a "Constant" argument. But we want to only
@@ -2213,11 +2223,12 @@ Constant *ConstantFoldScalarCall(StringRef Name, unsigned IntrinsicID, Type *Ty,
   return nullptr;
 }
 
-Constant *ConstantFoldVectorCall(StringRef Name, unsigned IntrinsicID,
-                                 VectorType *VTy, ArrayRef<Constant *> Operands,
-                                 const DataLayout &DL,
-                                 const TargetLibraryInfo *TLI,
-                                 const CallBase *Call) {
+static Constant *ConstantFoldVectorCall(StringRef Name, unsigned IntrinsicID,
+                                        VectorType *VTy,
+                                        ArrayRef<Constant *> Operands,
+                                        const DataLayout &DL,
+                                        const TargetLibraryInfo *TLI,
+                                        const CallBase *Call) {
   SmallVector<Constant *, 4> Result(VTy->getNumElements());
   SmallVector<Constant *, 4> Lane(Operands.size());
   Type *Ty = VTy->getElementType();

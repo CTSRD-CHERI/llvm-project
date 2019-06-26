@@ -71,10 +71,10 @@ static unsigned computeFramePointerSaveOffset(const PPCSubtarget &STI) {
 }
 
 static unsigned computeLinkageSize(const PPCSubtarget &STI) {
-  if (STI.isDarwinABI() || STI.isPPC64())
+  if ((STI.isDarwinABI() || STI.isAIXABI()) || STI.isPPC64())
     return (STI.isELFv2ABI() ? 4 : 6) * (STI.isPPC64() ? 8 : 4);
 
-  // SVR4 ABI:
+  // 32-bit SVR4 ABI:
   return 8;
 }
 
@@ -756,7 +756,7 @@ bool PPCFrameLowering::stackUpdateCanBeMoved(MachineFunction &MF) const {
   if (FI->hasFastCall() || FI->usesPICBase())
     return false;
 
-  // Finally we can move the stack update if we do not require regiser
+  // Finally we can move the stack update if we do not require register
   // scavenging. Register scavenging can introduce more spills and so
   // may make the frame size larger than we have computed.
   return !RegInfo->requiresFrameIndexScavenging(MF);

@@ -37,6 +37,15 @@ public:
 
   bool capGlobalBaseRegSet() const;
   unsigned getCapGlobalBaseReg();
+  unsigned getCapGlobalBaseRegForGlobalISel();
+  unsigned getGlobalBaseRegForGlobalISel();
+
+  // Insert instructions to initialize the global base register in the
+  // first MBB of the function.
+  void initGlobalBaseReg();
+  // Insert instructions to initialize the capability global base register in
+  // the first MBB of the function.
+  void initCapGlobalBaseReg();
 
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }

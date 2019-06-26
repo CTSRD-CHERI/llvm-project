@@ -97,6 +97,7 @@ struct Configuration {
   bool TailMerge;
   bool Relocatable = true;
   bool ForceMultiple = false;
+  bool ForceMultipleRes = false;
   bool ForceUnresolved = false;
   bool Debug = false;
   bool DebugDwarf = false;
@@ -179,6 +180,7 @@ struct Configuration {
   std::string MapFile;
 
   uint64_t ImageBase = -1;
+  uint64_t FileAlign = 512;
   uint64_t StackReserve = 1024 * 1024;
   uint64_t StackCommit = 4096;
   uint64_t HeapReserve = 1024 * 1024;
@@ -205,6 +207,8 @@ struct Configuration {
   bool IntegrityCheck = false;
   bool KillAt = false;
   bool Repro = false;
+  bool SwaprunCD = false;
+  bool SwaprunNet = false;
 };
 
 extern Configuration *Config;

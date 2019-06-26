@@ -16,6 +16,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compression.h"
 #include "llvm/Support/Errc.h"
+#include "llvm/Support/JamCRC.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/StringSaver.h"
 #include <memory>
@@ -260,6 +261,8 @@ static const StringMap<MachineInfo> ArchMap{
     {"i386:x86-64", {ELF::EM_X86_64, true, true}},
     {"mips", {ELF::EM_MIPS, false, false}},
     {"powerpc:common64", {ELF::EM_PPC64, true, true}},
+    {"riscv:rv32", {ELF::EM_RISCV, false, true}},
+    {"riscv:rv64", {ELF::EM_RISCV, true, true}},
     {"sparc", {ELF::EM_SPARC, false, true}},
     {"x86-64", {ELF::EM_X86_64, true, true}},
 };
@@ -275,22 +278,31 @@ static Expected<const MachineInfo &> getMachineInfo(StringRef Arch) {
 // FIXME: consolidate with the bfd parsing used by lld.
 static const StringMap<MachineInfo> OutputFormatMap{
     // Name, {EMachine, 64bit, LittleEndian}
+    // x86
     {"elf32-i386", {ELF::EM_386, false, true}},
-    {"elf32-iamcu", {ELF::EM_IAMCU, false, true}},
-    {"elf32-littlearm", {ELF::EM_ARM, false, true}},
     {"elf32-x86-64", {ELF::EM_X86_64, false, true}},
+    {"elf64-x86-64", {ELF::EM_X86_64, true, true}},
+    // Intel MCU
+    {"elf32-iamcu", {ELF::EM_IAMCU, false, true}},
+    // ARM
+    {"elf32-littlearm", {ELF::EM_ARM, false, true}},
+    // ARM AArch64
     {"elf64-aarch64", {ELF::EM_AARCH64, true, true}},
     {"elf64-littleaarch64", {ELF::EM_AARCH64, true, true}},
+    // RISC-V
+    {"elf32-littleriscv", {ELF::EM_RISCV, false, true}},
+    {"elf64-littleriscv", {ELF::EM_RISCV, true, true}},
+    // PowerPC
     {"elf32-powerpc", {ELF::EM_PPC, false, false}},
     {"elf32-powerpcle", {ELF::EM_PPC, false, true}},
     {"elf64-powerpc", {ELF::EM_PPC64, true, false}},
     {"elf64-powerpcle", {ELF::EM_PPC64, true, true}},
-    {"elf64-x86-64", {ELF::EM_X86_64, true, true}},
-    {"elf32-tradbigmips", {ELF::EM_MIPS, false, false}},
+    // MIPS
     {"elf32-bigmips", {ELF::EM_MIPS, false, false}},
     {"elf32-ntradbigmips", {ELF::EM_MIPS, false, false}},
-    {"elf32-tradlittlemips", {ELF::EM_MIPS, false, true}},
     {"elf32-ntradlittlemips", {ELF::EM_MIPS, false, true}},
+    {"elf32-tradbigmips", {ELF::EM_MIPS, false, false}},
+    {"elf32-tradlittlemips", {ELF::EM_MIPS, false, true}},
     {"elf64-tradbigmips", {ELF::EM_MIPS, true, false}},
     {"elf64-tradlittlemips", {ELF::EM_MIPS, true, true}},
 };
@@ -446,7 +458,8 @@ Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
       return MI.takeError();
     Config.BinaryArch = *MI;
   }
-  if (!Config.OutputFormat.empty() && Config.OutputFormat != "binary") {
+  if (!Config.OutputFormat.empty() && Config.OutputFormat != "binary" &&
+      Config.OutputFormat != "ihex") {
     Expected<MachineInfo> MI = getOutputFormatMachineInfo(Config.OutputFormat);
     if (!MI)
       return MI.takeError();
@@ -479,6 +492,22 @@ Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   }
 
   Config.AddGnuDebugLink = InputArgs.getLastArgValue(OBJCOPY_add_gnu_debuglink);
+  // The gnu_debuglink's target is expected to not change or else its CRC would
+  // become invalidated and get rejected. We can avoid recalculating the
+  // checksum for every target file inside an archive by precomputing the CRC
+  // here. This prevents a significant amount of I/O.
+  if (!Config.AddGnuDebugLink.empty()) {
+    auto DebugOrErr = MemoryBuffer::getFile(Config.AddGnuDebugLink);
+    if (!DebugOrErr)
+      return createFileError(Config.AddGnuDebugLink, DebugOrErr.getError());
+    auto Debug = std::move(*DebugOrErr);
+    JamCRC CRC;
+    CRC.update(
+        ArrayRef<char>(Debug->getBuffer().data(), Debug->getBuffer().size()));
+    // The CRC32 value needs to be complemented because the JamCRC doesn't
+    // finalize the CRC32 value.
+    Config.GnuDebugLinkCRC32 = ~CRC.getCRC();
+  }
   Config.BuildIdLinkDir = InputArgs.getLastArgValue(OBJCOPY_build_id_link_dir);
   if (InputArgs.hasArg(OBJCOPY_build_id_link_input))
     Config.BuildIdLinkInput =
@@ -488,6 +517,10 @@ Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
         InputArgs.getLastArgValue(OBJCOPY_build_id_link_output);
   Config.SplitDWO = InputArgs.getLastArgValue(OBJCOPY_split_dwo);
   Config.SymbolsPrefix = InputArgs.getLastArgValue(OBJCOPY_prefix_symbols);
+  Config.AllocSectionsPrefix =
+      InputArgs.getLastArgValue(OBJCOPY_prefix_alloc_sections);
+  if (auto Arg = InputArgs.getLastArg(OBJCOPY_extract_partition))
+    Config.ExtractPartition = Arg->getValue();
 
   for (auto Arg : InputArgs.filtered(OBJCOPY_redefine_symbol)) {
     if (!StringRef(Arg->getValue()).contains('='))
@@ -562,6 +595,8 @@ Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   Config.StripNonAlloc = InputArgs.hasArg(OBJCOPY_strip_non_alloc);
   Config.StripUnneeded = InputArgs.hasArg(OBJCOPY_strip_unneeded);
   Config.ExtractDWO = InputArgs.hasArg(OBJCOPY_extract_dwo);
+  Config.ExtractMainPartition =
+      InputArgs.hasArg(OBJCOPY_extract_main_partition);
   Config.LocalizeHidden = InputArgs.hasArg(OBJCOPY_localize_hidden);
   Config.Weaken = InputArgs.hasArg(OBJCOPY_weaken);
   if (InputArgs.hasArg(OBJCOPY_discard_all, OBJCOPY_discard_locals))
@@ -573,6 +608,8 @@ Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   Config.KeepFileSymbols = InputArgs.hasArg(OBJCOPY_keep_file_symbols);
   Config.DecompressDebugSections =
       InputArgs.hasArg(OBJCOPY_decompress_debug_sections);
+  if (Config.DiscardMode == DiscardType::All)
+    Config.StripDebug = true;
   for (auto Arg : InputArgs.filtered(OBJCOPY_localize_symbol))
     Config.SymbolsToLocalize.emplace_back(Arg->getValue(), UseRegex);
   for (auto Arg : InputArgs.filtered(OBJCOPY_localize_symbols))
@@ -622,6 +659,8 @@ Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
     Config.SymbolsToAdd.push_back(*NSI);
   }
 
+  Config.AllowBrokenLinks = InputArgs.hasArg(OBJCOPY_allow_broken_links);
+
   Config.DeterministicArchives = InputArgs.hasFlag(
       OBJCOPY_enable_deterministic_archives,
       OBJCOPY_disable_deterministic_archives, /*default=*/true);
@@ -661,6 +700,11 @@ Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
     return createStringError(
         errc::invalid_argument,
         "LLVM was not compiled with LLVM_ENABLE_ZLIB: cannot decompress");
+
+  if (Config.ExtractPartition && Config.ExtractMainPartition)
+    return createStringError(errc::invalid_argument,
+                             "cannot specify --extract-partition together with "
+                             "--extract-main-partition");
 
   DC.CopyConfigs.push_back(std::move(Config));
   return std::move(DC);
@@ -708,6 +752,7 @@ Expected<DriverConfig> parseStripOptions(ArrayRef<const char *> ArgsArr) {
 
   CopyConfig Config;
   bool UseRegexp = InputArgs.hasArg(STRIP_regex);
+  Config.AllowBrokenLinks = InputArgs.hasArg(STRIP_allow_broken_links);
   Config.StripDebug = InputArgs.hasArg(STRIP_strip_debug);
 
   if (InputArgs.hasArg(STRIP_discard_all, STRIP_discard_locals))
@@ -716,7 +761,8 @@ Expected<DriverConfig> parseStripOptions(ArrayRef<const char *> ArgsArr) {
             ? DiscardType::All
             : DiscardType::Locals;
   Config.StripUnneeded = InputArgs.hasArg(STRIP_strip_unneeded);
-  Config.StripAll = InputArgs.hasArg(STRIP_strip_all);
+  if (auto Arg = InputArgs.getLastArg(STRIP_strip_all, STRIP_no_strip_all))
+    Config.StripAll = Arg->getOption().getID() == STRIP_strip_all;
   Config.StripAllGNU = InputArgs.hasArg(STRIP_strip_all_gnu);
   Config.OnlyKeepDebug = InputArgs.hasArg(STRIP_only_keep_debug);
   Config.KeepFileSymbols = InputArgs.hasArg(STRIP_keep_file_symbols);
@@ -733,9 +779,13 @@ Expected<DriverConfig> parseStripOptions(ArrayRef<const char *> ArgsArr) {
   for (auto Arg : InputArgs.filtered(STRIP_keep_symbol))
     Config.SymbolsToKeep.emplace_back(Arg->getValue(), UseRegexp);
 
-  if (!Config.StripDebug && !Config.StripUnneeded &&
-      Config.DiscardMode == DiscardType::None && !Config.StripAllGNU && Config.SymbolsToRemove.empty())
+  if (!InputArgs.hasArg(STRIP_no_strip_all) && !Config.StripDebug &&
+      !Config.StripUnneeded && Config.DiscardMode == DiscardType::None &&
+      !Config.StripAllGNU && Config.SymbolsToRemove.empty())
     Config.StripAll = true;
+
+  if (Config.DiscardMode == DiscardType::All)
+    Config.StripDebug = true;
 
   Config.DeterministicArchives =
       InputArgs.hasFlag(STRIP_enable_deterministic_archives,

@@ -414,6 +414,7 @@ void ScalarBitSetTraits<ELFYAML::ELF_EF>::bitset(IO &IO,
     BCaseMask(EF_AMDGPU_MACH_AMDGCN_GFX904, EF_AMDGPU_MACH);
     BCaseMask(EF_AMDGPU_MACH_AMDGCN_GFX906, EF_AMDGPU_MACH);
     BCaseMask(EF_AMDGPU_MACH_AMDGCN_GFX909, EF_AMDGPU_MACH);
+    BCaseMask(EF_AMDGPU_MACH_AMDGCN_GFX1010, EF_AMDGPU_MACH);
     BCase(EF_AMDGPU_XNACK);
     BCase(EF_AMDGPU_SRAM_ECC);
     break;
@@ -457,6 +458,7 @@ void ScalarEnumerationTraits<ELFYAML::ELF_SHT>::enumeration(
   ECase(SHT_LLVM_LINKER_OPTIONS);
   ECase(SHT_LLVM_CALL_GRAPH_PROFILE);
   ECase(SHT_LLVM_ADDRSIG);
+  ECase(SHT_LLVM_DEPENDENT_LIBRARIES);
   ECase(SHT_GNU_ATTRIBUTES);
   ECase(SHT_GNU_HASH);
   ECase(SHT_GNU_verdef);
@@ -681,8 +683,10 @@ void ScalarEnumerationTraits<ELFYAML::ELF_DYNTAG>::enumeration(
   assert(Object && "The IO context is not initialized");
 
 // Disable architecture specific tags by default. We might enable them below.
+#define AARCH64_DYNAMIC_TAG(name, value)
 #define MIPS_DYNAMIC_TAG(name, value)
 #define HEXAGON_DYNAMIC_TAG(name, value)
+#define PPC_DYNAMIC_TAG(name, value)
 #define PPC64_DYNAMIC_TAG(name, value)
 // Ignore marker tags such as DT_HIOS (maps to DT_VERNEEDNUM), etc.
 #define DYNAMIC_TAG_MARKER(name, value)
@@ -690,6 +694,13 @@ void ScalarEnumerationTraits<ELFYAML::ELF_DYNTAG>::enumeration(
 #define STRINGIFY(X) (#X)
 #define DYNAMIC_TAG(X, Y) IO.enumCase(Value, STRINGIFY(DT_##X), ELF::DT_##X);
   switch (Object->Header.Machine) {
+  case ELF::EM_AARCH64:
+#undef AARCH64_DYNAMIC_TAG
+#define AARCH64_DYNAMIC_TAG(name, value) DYNAMIC_TAG(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef AARCH64_DYNAMIC_TAG
+#define AARCH64_DYNAMIC_TAG(name, value)
+    break;
   case ELF::EM_MIPS:
 #undef MIPS_DYNAMIC_TAG
 #define MIPS_DYNAMIC_TAG(name, value) DYNAMIC_TAG(name, value)
@@ -704,6 +715,13 @@ void ScalarEnumerationTraits<ELFYAML::ELF_DYNTAG>::enumeration(
 #undef HEXAGON_DYNAMIC_TAG
 #define HEXAGON_DYNAMIC_TAG(name, value)
     break;
+  case ELF::EM_PPC:
+#undef PPC_DYNAMIC_TAG
+#define PPC_DYNAMIC_TAG(name, value) DYNAMIC_TAG(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef PPC_DYNAMIC_TAG
+#define PPC_DYNAMIC_TAG(name, value)
+    break;
   case ELF::EM_PPC64:
 #undef PPC64_DYNAMIC_TAG
 #define PPC64_DYNAMIC_TAG(name, value) DYNAMIC_TAG(name, value)
@@ -715,9 +733,10 @@ void ScalarEnumerationTraits<ELFYAML::ELF_DYNTAG>::enumeration(
 #include "llvm/BinaryFormat/DynamicTags.def"
     break;
   }
-
+#undef AARCH64_DYNAMIC_TAG
 #undef MIPS_DYNAMIC_TAG
 #undef HEXAGON_DYNAMIC_TAG
+#undef PPC_DYNAMIC_TAG
 #undef PPC64_DYNAMIC_TAG
 #undef DYNAMIC_TAG_MARKER
 #undef STRINGIFY
@@ -861,6 +880,7 @@ struct NormalizedOther {
 
 void MappingTraits<ELFYAML::Symbol>::mapping(IO &IO, ELFYAML::Symbol &Symbol) {
   IO.mapOptional("Name", Symbol.Name, StringRef());
+  IO.mapOptional("NameIndex", Symbol.NameIndex);
   IO.mapOptional("Type", Symbol.Type, ELFYAML::ELF_STT(0));
   IO.mapOptional("Section", Symbol.Section, StringRef());
   IO.mapOptional("Index", Symbol.Index);
@@ -874,12 +894,12 @@ void MappingTraits<ELFYAML::Symbol>::mapping(IO &IO, ELFYAML::Symbol &Symbol) {
 
 StringRef MappingTraits<ELFYAML::Symbol>::validate(IO &IO,
                                                    ELFYAML::Symbol &Symbol) {
-  if (Symbol.Index && Symbol.Section.data()) {
+  if (Symbol.Index && Symbol.Section.data())
     return "Index and Section cannot both be specified for Symbol";
-  }
-  if (Symbol.Index && *Symbol.Index == ELFYAML::ELF_SHN(ELF::SHN_XINDEX)) {
+  if (Symbol.Index && *Symbol.Index == ELFYAML::ELF_SHN(ELF::SHN_XINDEX))
     return "Large indexes are not supported";
-  }
+  if (Symbol.NameIndex && !Symbol.Name.empty())
+    return "Name and NameIndex cannot both be specified for Symbol";
   return StringRef();
 }
 
@@ -902,7 +922,7 @@ static void sectionMapping(IO &IO, ELFYAML::DynamicSection &Section) {
 static void sectionMapping(IO &IO, ELFYAML::RawContentSection &Section) {
   commonSectionMapping(IO, Section);
   IO.mapOptional("Content", Section.Content);
-  IO.mapOptional("Size", Section.Size, Hex64(Section.Content.binary_size()));
+  IO.mapOptional("Size", Section.Size);
   IO.mapOptional("Info", Section.Info, Hex64(0));
 }
 
@@ -1030,9 +1050,12 @@ void MappingTraits<std::unique_ptr<ELFYAML::Section>>::mapping(
 StringRef MappingTraits<std::unique_ptr<ELFYAML::Section>>::validate(
     IO &io, std::unique_ptr<ELFYAML::Section> &Section) {
   const auto *RawSection = dyn_cast<ELFYAML::RawContentSection>(Section.get());
-  if (!RawSection || RawSection->Size >= RawSection->Content.binary_size())
-    return StringRef();
-  return "Section size must be greater or equal to the content size";
+  if (!RawSection)
+    return {};
+  if (RawSection->Size && RawSection->Content &&
+      (uint64_t)(*RawSection->Size) < RawSection->Content->binary_size())
+    return "Section size must be greater than or equal to the content size";
+  return {};
 }
 
 namespace {

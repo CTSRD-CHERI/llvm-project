@@ -72,34 +72,6 @@ private:
 
 } // anonymous namespace
 
-// Returns /machine's value.
-MachineTypes getMachineType(StringRef S) {
-  MachineTypes MT = StringSwitch<MachineTypes>(S.lower())
-                        .Cases("x64", "amd64", AMD64)
-                        .Cases("x86", "i386", I386)
-                        .Case("arm", ARMNT)
-                        .Case("arm64", ARM64)
-                        .Default(IMAGE_FILE_MACHINE_UNKNOWN);
-  if (MT != IMAGE_FILE_MACHINE_UNKNOWN)
-    return MT;
-  fatal("unknown /machine argument: " + S);
-}
-
-StringRef machineToStr(MachineTypes MT) {
-  switch (MT) {
-  case ARMNT:
-    return "arm";
-  case ARM64:
-    return "arm64";
-  case AMD64:
-    return "x64";
-  case I386:
-    return "x86";
-  default:
-    llvm_unreachable("unknown machine type");
-  }
-}
-
 // Parses a string in the form of "<integer>[,<integer>]".
 void parseNumbers(StringRef Arg, uint64_t *Addr, uint64_t *Size) {
   StringRef S1, S2;
@@ -313,6 +285,27 @@ void parseManifestUAC(StringRef Arg) {
     }
     fatal("invalid option " + Arg);
   }
+}
+
+// Parses a string in the form of "cd|net[,(cd|net)]*"
+// Results are directly written to Config.
+void parseSwaprun(StringRef Arg) {
+  do {
+    StringRef Swaprun, NewArg;
+    std::tie(Swaprun, NewArg) = Arg.split(',');
+    if (Swaprun.equals_lower("cd"))
+      Config->SwaprunCD = true;
+    else if (Swaprun.equals_lower("net"))
+      Config->SwaprunNet = true;
+    else if (Swaprun.empty())
+      error("/swaprun: missing argument");
+    else
+      error("/swaprun: invalid argument: " + Swaprun);
+    // To catch trailing commas, e.g. `/spawrun:cd,`
+    if (NewArg.empty() && Arg.endswith(","))
+      error("/swaprun: missing argument");
+    Arg = NewArg;
+  } while (!Arg.empty());
 }
 
 // An RAII temporary file class that automatically removes a temporary file.
@@ -634,18 +627,6 @@ void fixupExports() {
   }
 
   for (Export &E : Config->Exports) {
-    Symbol *Sym = E.Sym;
-    if (!E.ForwardTo.empty() || !Sym) {
-      E.SymbolName = E.Name;
-    } else {
-      if (auto *U = dyn_cast<Undefined>(Sym))
-        if (U->WeakAlias)
-          Sym = U->WeakAlias;
-      E.SymbolName = Sym->getName();
-    }
-  }
-
-  for (Export &E : Config->Exports) {
     if (!E.ForwardTo.empty()) {
       E.ExportName = undecorate(E.Name);
     } else {
@@ -716,6 +697,7 @@ void checkFailIfMismatch(StringRef Arg, InputFile *Source) {
 }
 
 // Convert Windows resource files (.res files) to a .obj file.
+// Does what cvtres.exe does, but in-process and cross-platform.
 MemoryBufferRef convertResToCOFF(ArrayRef<MemoryBufferRef> MBs) {
   object::WindowsResourceParser Parser;
 
@@ -724,12 +706,21 @@ MemoryBufferRef convertResToCOFF(ArrayRef<MemoryBufferRef> MBs) {
     object::WindowsResource *RF = dyn_cast<object::WindowsResource>(Bin.get());
     if (!RF)
       fatal("cannot compile non-resource file as resource");
-    if (auto EC = Parser.parse(RF))
-      fatal("failed to parse .res file: " + toString(std::move(EC)));
+
+    std::vector<std::string> Duplicates;
+    if (auto EC = Parser.parse(RF, Duplicates))
+      fatal(toString(std::move(EC)));
+
+    for (const auto &DupeDiag : Duplicates)
+      if (Config->ForceMultipleRes)
+        warn(DupeDiag);
+      else
+        error(DupeDiag);
   }
 
   Expected<std::unique_ptr<MemoryBuffer>> E =
-      llvm::object::writeWindowsResourceCOFF(Config->Machine, Parser);
+      llvm::object::writeWindowsResourceCOFF(Config->Machine, Parser,
+                                             Config->Timestamp);
   if (!E)
     fatal("failed to write .res to COFF: " + toString(E.takeError()));
 
@@ -804,7 +795,8 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> Argv) {
 
   // Expand response files (arguments in the form of @<filename>)
   // and then parse the argument again.
-  SmallVector<const char *, 256> ExpandedArgv(Argv.data(), Argv.data() + Argv.size());
+  SmallVector<const char *, 256> ExpandedArgv(Argv.data(),
+                                              Argv.data() + Argv.size());
   cl::ExpandResponseFiles(Saver, getQuotingStyle(Args), ExpandedArgv);
   Args = Table.ParseArgs(makeArrayRef(ExpandedArgv).drop_front(), MissingIndex,
                          MissingCount);
@@ -829,8 +821,14 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> Argv) {
 
   handleColorDiagnostics(Args);
 
-  for (auto *Arg : Args.filtered(OPT_UNKNOWN))
-    warn("ignoring unknown argument: " + Arg->getSpelling());
+  for (auto *Arg : Args.filtered(OPT_UNKNOWN)) {
+    std::string Nearest;
+    if (Table.findNearest(Arg->getAsString(Args), Nearest) > 1)
+      warn("ignoring unknown argument '" + Arg->getSpelling() + "'");
+    else
+      warn("ignoring unknown argument '" + Arg->getSpelling() +
+           "', did you mean '" + Nearest + "'");
+  }
 
   if (Args.hasArg(OPT_lib))
     warn("ignoring /lib since it's not the first argument");

@@ -43,6 +43,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalValue.h"
@@ -273,6 +274,12 @@ bool MachineFunction::shouldSplitStack() const {
   return getFunction().hasFnAttribute("split-stack");
 }
 
+LLVM_NODISCARD unsigned
+MachineFunction::addFrameInst(const MCCFIInstruction &Inst) {
+  FrameInstructions.push_back(Inst);
+  return FrameInstructions.size() - 1;
+}
+
 /// This discards all of the MachineBasicBlock numbers and recomputes them.
 /// This guarantees that the MBB numbers are sequential, dense, and match the
 /// ordering of the blocks within the function.  If a specific MachineBasicBlock
@@ -421,6 +428,15 @@ MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
                                MMO->getBaseAlignment(), AAInfo,
                                MMO->getRanges(), MMO->getSyncScopeID(),
                                MMO->getOrdering(), MMO->getFailureOrdering());
+}
+
+MachineMemOperand *
+MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
+                                      MachineMemOperand::Flags Flags) {
+  return new (Allocator) MachineMemOperand(
+      MMO->getPointerInfo(), Flags, MMO->getSize(), MMO->getBaseAlignment(),
+      MMO->getAAInfo(), MMO->getRanges(), MMO->getSyncScopeID(),
+      MMO->getOrdering(), MMO->getFailureOrdering());
 }
 
 MachineInstr::ExtraInfo *
@@ -798,6 +814,16 @@ try_next:;
   FilterEnds.push_back(FilterIds.size());
   FilterIds.push_back(0); // terminator
   return FilterID;
+}
+
+void MachineFunction::addCodeViewHeapAllocSite(MachineInstr *I, MDNode *MD) {
+  MCSymbol *BeginLabel = Ctx.createTempSymbol("heapallocsite", true);
+  MCSymbol *EndLabel = Ctx.createTempSymbol("heapallocsite", true);
+  I->setPreInstrSymbol(*this, BeginLabel);
+  I->setPostInstrSymbol(*this, EndLabel);
+
+  DIType *DI = dyn_cast<DIType>(MD);
+  CodeViewHeapAllocSites.push_back(std::make_tuple(BeginLabel, EndLabel, DI));
 }
 
 /// \}

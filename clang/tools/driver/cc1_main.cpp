@@ -269,8 +269,15 @@ int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
                                 /*Extension=*/"json",
                                 /*useTemporary=*/false);
 
-    llvm::timeTraceProfilerWrite(profilerOutput);
+    llvm::timeTraceProfilerWrite(*profilerOutput);
+    // FIXME(ibiryukov): make profilerOutput flush in destructor instead.
+    profilerOutput->flush();
     llvm::timeTraceProfilerCleanup();
+
+    llvm::errs() << "Time trace json-file dumped to " << Path.str() << "\n";
+    llvm::errs()
+        << "Use chrome://tracing or Speedscope App "
+           "(https://www.speedscope.app) for flamegraph visualization\n";
   }
 
   // Our error handler depends on the Diagnostics object, which we're

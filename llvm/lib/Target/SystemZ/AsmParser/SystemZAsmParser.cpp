@@ -6,8 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "InstPrinter/SystemZInstPrinter.h"
+#include "MCTargetDesc/SystemZInstPrinter.h"
 #include "MCTargetDesc/SystemZMCTargetDesc.h"
+#include "TargetInfo/SystemZTargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -650,7 +651,6 @@ static void printMCExpr(const MCExpr *E, raw_ostream &OS) {
 
 void SystemZOperand::print(raw_ostream &OS) const {
   switch (Kind) {
-    break;
   case KindToken:
     OS << "Token:" << getToken();
     break;

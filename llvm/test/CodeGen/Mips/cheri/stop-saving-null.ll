@@ -8,10 +8,10 @@ declare i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
 define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspace(200)* %arg2, i8 addrspace(200)* %arg3, i8 addrspace(200)* %arg4,
 ; CHECK-LABEL: call_one_arg_from_many_arg:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[$CAP_SIZE]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[$CAP_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE]]
+; CHECK-NEXT:    .cfi_def_cfa_offset [[#CAP_SIZE]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    .cfi_offset 89, -[[$CAP_SIZE]]
+; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE]]
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(call_one_arg_from_many_arg)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_one_arg_from_many_arg)))
 ; CHECK-NEXT:    cincoffset [[CGP:\$c1]], $c12, $1
@@ -22,7 +22,7 @@ define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspac
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[$CAP_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE]]
                                         i8 addrspace(200)* %arg5, i8 addrspace(200)* %arg6, i8 addrspace(200)* %arg7, i8 addrspace(200)* %arg8,
                                         i8 addrspace(200)* %arg9, i8 addrspace(200)* %arg10, i8 addrspace(200)* %arg11, i8 addrspace(200)* %arg12) {
 ; TODO: we should not be saving null to $c18 since that is a waste of time and space

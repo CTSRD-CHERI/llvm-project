@@ -10,12 +10,18 @@
 #include "ClangdUnit.h"
 #include "CodeComplete.h"
 #include "FindSymbols.h"
+#include "Format.h"
+#include "FormattedString.h"
 #include "Headers.h"
+#include "Protocol.h"
 #include "SourceCode.h"
+#include "TUScheduler.h"
 #include "Trace.h"
+#include "XRefs.h"
 #include "index/CanonicalIncludes.h"
 #include "index/FileIndex.h"
 #include "index/Merge.h"
+#include "refactor/Rename.h"
 #include "refactor/Tweak.h"
 #include "clang/Format/Format.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -23,8 +29,6 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Tooling/CompilationDatabase.h"
 #include "clang/Tooling/Core/Replacement.h"
-#include "clang/Tooling/Refactoring/RefactoringResultConsumer.h"
-#include "clang/Tooling/Refactoring/Rename/RenamingAction.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -41,28 +45,6 @@
 namespace clang {
 namespace clangd {
 namespace {
-
-class RefactoringResultCollector final
-    : public tooling::RefactoringResultConsumer {
-public:
-  void handleError(llvm::Error Err) override {
-    assert(!Result.hasValue());
-    // FIXME: figure out a way to return better message for DiagnosticError.
-    // clangd uses llvm::toString to convert the Err to string, however, for
-    // DiagnosticError, only "clang diagnostic" will be generated.
-    Result = std::move(Err);
-  }
-
-  // Using the handle(SymbolOccurrences) from parent class.
-  using tooling::RefactoringResultConsumer::handle;
-
-  void handle(tooling::AtomicChanges SourceReplacements) override {
-    assert(!Result.hasValue());
-    Result = std::move(SourceReplacements);
-  }
-
-  llvm::Optional<llvm::Expected<tooling::AtomicChanges>> Result;
-};
 
 // Update the FileIndex with new ASTs and plumb the diagnostics responses.
 struct UpdateIndexCallbacks : public ParsingCallbacks {
@@ -107,11 +89,11 @@ ClangdServer::ClangdServer(const GlobalCompilationDatabase &CDB,
                            const FileSystemProvider &FSProvider,
                            DiagnosticsConsumer &DiagConsumer,
                            const Options &Opts)
-    : CDB(CDB), FSProvider(FSProvider),
+    : FSProvider(FSProvider),
       DynamicIdx(Opts.BuildDynamicSymbolIndex
                      ? new FileIndex(Opts.HeavyweightDynamicSymbolIndex)
                      : nullptr),
-      ClangTidyOptProvider(Opts.ClangTidyOptProvider),
+      GetClangTidyOptions(Opts.GetClangTidyOptions),
       SuggestMissingIncludes(Opts.SuggestMissingIncludes),
       WorkspaceRoot(Opts.WorkspaceRoot),
       // Pass a callback into `WorkScheduler` to extract symbols from a newly
@@ -119,7 +101,7 @@ ClangdServer::ClangdServer(const GlobalCompilationDatabase &CDB,
       // is parsed.
       // FIXME(ioeric): this can be slow and we may be able to index on less
       // critical paths.
-      WorkScheduler(Opts.AsyncThreadsCount, Opts.StorePreamblesInMemory,
+      WorkScheduler(CDB, Opts.AsyncThreadsCount, Opts.StorePreamblesInMemory,
                     llvm::make_unique<UpdateIndexCallbacks>(DynamicIdx.get(),
                                                             DiagConsumer),
                     Opts.UpdateDebounce, Opts.RetentionPolicy) {
@@ -147,18 +129,18 @@ ClangdServer::ClangdServer(const GlobalCompilationDatabase &CDB,
 
 void ClangdServer::addDocument(PathRef File, llvm::StringRef Contents,
                                WantDiagnostics WantDiags) {
+  auto FS = FSProvider.getFileSystem();
+
   ParseOptions Opts;
   Opts.ClangTidyOpts = tidy::ClangTidyOptions::getDefaults();
-  if (ClangTidyOptProvider)
-    Opts.ClangTidyOpts = ClangTidyOptProvider->getOptions(File);
+  // FIXME: call tidy options builder on the worker thread, it can do IO.
+  if (GetClangTidyOptions)
+    Opts.ClangTidyOpts = GetClangTidyOptions(*FS, File);
   Opts.SuggestMissingIncludes = SuggestMissingIncludes;
-  // FIXME: some build systems like Bazel will take time to preparing
-  // environment to build the file, it would be nice if we could emit a
-  // "PreparingBuild" status to inform users, it is non-trivial given the
-  // current implementation.
+
+  // Compile command is set asynchronously during update, as it can be slow.
   ParseInputs Inputs;
-  Inputs.CompileCommand = getCompileCommand(File);
-  Inputs.FS = FSProvider.getFileSystem();
+  Inputs.FS = FS;
   Inputs.Contents = Contents;
   Inputs.Opts = std::move(Opts);
   Inputs.Index = Index;
@@ -185,14 +167,21 @@ void ClangdServer::codeComplete(PathRef File, Position Pos,
       return CB(llvm::make_error<CancelledError>());
 
     llvm::Optional<SpeculativeFuzzyFind> SpecFuzzyFind;
-    if (CodeCompleteOpts.Index && CodeCompleteOpts.SpeculativeIndexRequest) {
-      SpecFuzzyFind.emplace();
-      {
-        std::lock_guard<std::mutex> Lock(CachedCompletionFuzzyFindRequestMutex);
-        SpecFuzzyFind->CachedReq = CachedCompletionFuzzyFindRequestByFile[File];
+    if (!IP->Preamble) {
+      // No speculation in Fallback mode, as it's supposed to be much faster
+      // without compiling.
+      vlog("Build for file {0} is not ready. Enter fallback mode.", File);
+    } else {
+      if (CodeCompleteOpts.Index && CodeCompleteOpts.SpeculativeIndexRequest) {
+        SpecFuzzyFind.emplace();
+        {
+          std::lock_guard<std::mutex> Lock(
+              CachedCompletionFuzzyFindRequestMutex);
+          SpecFuzzyFind->CachedReq =
+              CachedCompletionFuzzyFindRequestByFile[File];
+        }
       }
     }
-
     // FIXME(ibiryukov): even if Preamble is non-null, we may want to check
     // both the old and the new version in case only one of them matches.
     CodeCompleteResult Result = clangd::codeComplete(
@@ -214,8 +203,12 @@ void ClangdServer::codeComplete(PathRef File, Position Pos,
   };
 
   // We use a potentially-stale preamble because latency is critical here.
-  WorkScheduler.runWithPreamble("CodeComplete", File, TUScheduler::Stale,
-                                Bind(Task, File.str(), std::move(CB)));
+  WorkScheduler.runWithPreamble(
+      "CodeComplete", File,
+      (Opts.RunParser == CodeCompleteOptions::AlwaysParse)
+          ? TUScheduler::Stale
+          : TUScheduler::StaleOrAbsent,
+      Bind(Task, File.str(), std::move(CB)));
 }
 
 void ClangdServer::signatureHelp(PathRef File, Position Pos,
@@ -258,20 +251,23 @@ ClangdServer::formatFile(llvm::StringRef Code, PathRef File) {
   return formatCode(Code, File, {tooling::Range(0, Code.size())});
 }
 
-llvm::Expected<tooling::Replacements>
-ClangdServer::formatOnType(llvm::StringRef Code, PathRef File, Position Pos) {
-  // Look for the previous opening brace from the character position and
-  // format starting from there.
+llvm::Expected<std::vector<TextEdit>>
+ClangdServer::formatOnType(llvm::StringRef Code, PathRef File, Position Pos,
+                           StringRef TriggerText) {
   llvm::Expected<size_t> CursorPos = positionToOffset(Code, Pos);
   if (!CursorPos)
     return CursorPos.takeError();
-  size_t PreviousLBracePos =
-      llvm::StringRef(Code).find_last_of('{', *CursorPos);
-  if (PreviousLBracePos == llvm::StringRef::npos)
-    PreviousLBracePos = *CursorPos;
-  size_t Len = *CursorPos - PreviousLBracePos;
+  auto FS = FSProvider.getFileSystem();
+  auto Style = format::getStyle(format::DefaultFormatStyle, File,
+                                format::DefaultFallbackStyle, Code, FS.get());
+  if (!Style)
+    return Style.takeError();
 
-  return formatCode(Code, File, {tooling::Range(PreviousLBracePos, Len)});
+  std::vector<TextEdit> Result;
+  for (const tooling::Replacement &R :
+       formatIncremental(Code, *CursorPos, TriggerText, *Style))
+    Result.push_back(replacementToEdit(Code, R));
+  return Result;
 }
 
 void ClangdServer::rename(PathRef File, Position Pos, llvm::StringRef NewName,
@@ -281,45 +277,13 @@ void ClangdServer::rename(PathRef File, Position Pos, llvm::StringRef NewName,
                       llvm::Expected<InputsAndAST> InpAST) {
     if (!InpAST)
       return CB(InpAST.takeError());
-    auto &AST = InpAST->AST;
-
-    RefactoringResultCollector ResultCollector;
-    const SourceManager &SourceMgr = AST.getASTContext().getSourceManager();
-    SourceLocation SourceLocationBeg =
-        clangd::getBeginningOfIdentifier(AST, Pos, SourceMgr.getMainFileID());
-    tooling::RefactoringRuleContext Context(
-        AST.getASTContext().getSourceManager());
-    Context.setASTContext(AST.getASTContext());
-    auto Rename = clang::tooling::RenameOccurrences::initiate(
-        Context, SourceRange(SourceLocationBeg), NewName);
-    if (!Rename)
-      return CB(Rename.takeError());
-
-    Rename->invoke(ResultCollector, Context);
-
-    assert(ResultCollector.Result.hasValue());
-    if (!ResultCollector.Result.getValue())
-      return CB(ResultCollector.Result->takeError());
-
-    std::vector<TextEdit> Replacements;
-    for (const tooling::AtomicChange &Change : ResultCollector.Result->get()) {
-      tooling::Replacements ChangeReps = Change.getReplacements();
-      for (const auto &Rep : ChangeReps) {
-        // FIXME: Right now we only support renaming the main file, so we
-        // drop replacements not for the main file. In the future, we might
-        // consider to support:
-        //   * rename in any included header
-        //   * rename only in the "main" header
-        //   * provide an error if there are symbols we won't rename (e.g.
-        //     std::vector)
-        //   * rename globally in project
-        //   * rename in open files
-        if (Rep.getFilePath() == File)
-          Replacements.push_back(
-              replacementToEdit(InpAST->Inputs.Contents, Rep));
-      }
-    }
-    return CB(std::move(Replacements));
+    auto Changes = renameWithinFile(InpAST->AST, File, Pos, NewName);
+    if (!Changes)
+      return CB(Changes.takeError());
+    std::vector<TextEdit> Edits;
+    for (const auto &Rep : *Changes)
+      Edits.push_back(replacementToEdit(InpAST->Inputs.Contents, Rep));
+    return CB(std::move(Edits));
   };
 
   WorkScheduler.runWithAST(
@@ -357,7 +321,7 @@ void ClangdServer::enumerateTweaks(PathRef File, Range Sel,
 }
 
 void ClangdServer::applyTweak(PathRef File, Range Sel, StringRef TweakID,
-                              Callback<tooling::Replacements> CB) {
+                              Callback<std::vector<TextEdit>> CB) {
   auto Action = [Sel](decltype(CB) CB, std::string File, std::string TweakID,
                       Expected<InputsAndAST> InpAST) {
     if (!InpAST)
@@ -368,15 +332,18 @@ void ClangdServer::applyTweak(PathRef File, Range Sel, StringRef TweakID,
     auto A = prepareTweak(TweakID, *Selection);
     if (!A)
       return CB(A.takeError());
-    auto RawReplacements = (*A)->apply(*Selection);
-    if (!RawReplacements)
-      return CB(RawReplacements.takeError());
+    auto Raw = (*A)->apply(*Selection);
+    if (!Raw)
+      return CB(Raw.takeError());
     // FIXME: this function has I/O operations (find .clang-format file), figure
     // out a way to cache the format style.
     auto Style = getFormatStyleForFile(File, InpAST->Inputs.Contents,
                                        InpAST->Inputs.FS.get());
-    return CB(
-        cleanupAndFormat(InpAST->Inputs.Contents, *RawReplacements, Style));
+    auto Formatted =
+        cleanupAndFormat(InpAST->Inputs.Contents, *Raw, Style);
+    if (!Formatted)
+      return CB(Formatted.takeError());
+    return CB(replacementsToEdits(InpAST->Inputs.Contents, *Formatted));
   };
   WorkScheduler.runWithAST(
       "ApplyTweak", File,
@@ -476,20 +443,16 @@ llvm::Expected<tooling::Replacements>
 ClangdServer::formatCode(llvm::StringRef Code, PathRef File,
                          llvm::ArrayRef<tooling::Range> Ranges) {
   // Call clang-format.
-  auto FS = FSProvider.getFileSystem();
-  auto Style = format::getStyle(format::DefaultFormatStyle, File,
-                                format::DefaultFallbackStyle, Code, FS.get());
-  if (!Style)
-    return Style.takeError();
-
+  format::FormatStyle Style =
+      getFormatStyleForFile(File, Code, FSProvider.getFileSystem().get());
   tooling::Replacements IncludeReplaces =
-      format::sortIncludes(*Style, Code, Ranges, File);
+      format::sortIncludes(Style, Code, Ranges, File);
   auto Changed = tooling::applyAllReplacements(Code, IncludeReplaces);
   if (!Changed)
     return Changed.takeError();
 
   return IncludeReplaces.merge(format::reformat(
-      Style.get(), *Changed,
+      Style, *Changed,
       tooling::calculateRangesAfterReplacements(IncludeReplaces, Ranges),
       File));
 }
@@ -507,15 +470,18 @@ void ClangdServer::findDocumentHighlights(
 }
 
 void ClangdServer::findHover(PathRef File, Position Pos,
-                             Callback<llvm::Optional<Hover>> CB) {
-  auto Action = [Pos](Callback<llvm::Optional<Hover>> CB,
+                             Callback<llvm::Optional<HoverInfo>> CB) {
+  auto Action = [Pos](decltype(CB) CB, Path File,
                       llvm::Expected<InputsAndAST> InpAST) {
     if (!InpAST)
       return CB(InpAST.takeError());
-    CB(clangd::getHover(InpAST->AST, Pos));
+    format::FormatStyle Style = getFormatStyleForFile(
+        File, InpAST->Inputs.Contents, InpAST->Inputs.FS.get());
+    CB(clangd::getHover(InpAST->AST, Pos, std::move(Style)));
   };
 
-  WorkScheduler.runWithAST("Hover", File, Bind(Action, std::move(CB)));
+  WorkScheduler.runWithAST("Hover", File,
+                           Bind(Action, std::move(CB), File.str()));
 }
 
 void ClangdServer::typeHierarchy(PathRef File, Position Pos, int Resolve,
@@ -529,14 +495,6 @@ void ClangdServer::typeHierarchy(PathRef File, Position Pos, int Resolve,
   };
 
   WorkScheduler.runWithAST("Type Hierarchy", File, Bind(Action, std::move(CB)));
-}
-
-tooling::CompileCommand ClangdServer::getCompileCommand(PathRef File) {
-  trace::Span Span("GetCompileCommand");
-  llvm::Optional<tooling::CompileCommand> C = CDB.getCompileCommand(File);
-  if (!C) // FIXME: Suppress diagnostics? Let the user know?
-    C = CDB.getFallbackCommand(File);
-  return std::move(*C);
 }
 
 void ClangdServer::onFileEvent(const DidChangeWatchedFilesParams &Params) {
