@@ -68,13 +68,13 @@
 
 # ERR-CHERIABI-LINKING-MIPS: ld.lld: error: {{.+}}mix-abis-shlib.s.tmp-lib-mips.so: ABI 'n64' is incompatible with target ABI: purecap
 # ERR-CHERIABI-LINKING-MIPS-EMPTY:
-# ERR-MIPS-LINKING-CHERIABI: ld.lld: error: {{.+}}mix-abis-shlib.s.tmp-lib-mips.so: ABI 'purecap' is incompatible with target ABI: n64
+# ERR-MIPS-LINKING-CHERIABI: ld.lld: error: {{.+}}mix-abis-shlib.s.tmp-lib-{{.+}}.so: ABI 'purecap' is incompatible with target ABI: n64
 # ERR-MIPS-LINKING-CHERIABI-EMPTY:
 
 # ERR-SHARED: ld.lld: error: target pure-capability ABI EXT_CHERI_ABI_[[IN_ABI]] is incompatible with linked shared library
 # ERR-SHARED-NEXT: >>> {{.+}}mix-abis-shlib.s.tmp-lib-{{.+}}.so uses EXT_CHERI_ABI_[[BAD_ABI]]
 # ERR-SHARED-EMPTY:
-# WARN-SHARED: ld.lld: error: target pure-capability ABI EXT_CHERI_ABI_[[IN_ABI]] is incompatible with linked shared library
+# WARN-SHARED: ld.lld: warning: target pure-capability ABI EXT_CHERI_ABI_[[IN_ABI]] is incompatible with linked shared library
 # WARN-SHARED-NEXT: >>> {{.+}}mix-abis-shlib.s.tmp-lib-{{.+}}.so uses EXT_CHERI_ABI_[[BAD_ABI]]
 # WARN-SHARED-EMPTY:
 
