@@ -25,8 +25,8 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(main)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(main)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    clcbi $c1, %captab20(x)($c1)
 ; CHECK-NEXT:    csw $zero, $zero, 44($c11)
+; CHECK-NEXT:    clcbi $c1, %captab20(x)($c1)
 ; CHECK-NEXT:    csw $4, $zero, 40($c11)
 ; CHECK-NEXT:    csc $c3, $zero, 0($c11)
 ; CHECK-NEXT:    cld $1, $zero, 8($c1)

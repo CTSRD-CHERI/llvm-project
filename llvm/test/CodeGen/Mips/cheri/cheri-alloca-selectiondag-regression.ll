@@ -10,18 +10,19 @@ declare i32 @a(i32 addrspace(200)*)
 define i32 @d(i64 %i) {
 ; C128-LABEL: d:
 ; C128:       # %bb.0: # %entry
-; C128-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:1024|2048]]
-; C128-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; C128-NEXT:    csc $c25, $zero, [[@EXPR 63 * $CAP_SIZE]]($c11)
-; C128-NEXT:    csc $c24, $zero, [[@EXPR 62 * $CAP_SIZE]]($c11)
-; C128-NEXT:    csc $c17, $zero, [[@EXPR 61 * $CAP_SIZE]]($c11)
+; C128-NEXT:    daddiu $1, $zero, -16384
+; C128-NEXT:    cincoffset $c11, $c11, $1
+; C128-NEXT:    .cfi_def_cfa_offset 16384
+; C128-NEXT:    csc $c25, $zero, [[@EXPR 1023 * $CAP_SIZE]]($c11)
+; C128-NEXT:    csc $c24, $zero, [[@EXPR 1022 * $CAP_SIZE]]($c11)
+; C128-NEXT:    csc $c17, $zero, [[@EXPR 1021 * $CAP_SIZE]]($c11)
 ; C128-NEXT:    .cfi_offset 97, -[[@EXPR 1 * $CAP_SIZE]]
 ; C128-NEXT:    .cfi_offset 96, -[[@EXPR 2 * $CAP_SIZE]]
 ; C128-NEXT:    .cfi_offset 89, -[[@EXPR 3 * $CAP_SIZE]]
 ; C128-NEXT:    cincoffset $c24, $c11, $zero
 ; C128-NEXT:    .cfi_def_cfa_register 96
 ; C128-NEXT:    cgetoffset $1, $c11
-; C128-NEXT:    daddiu $2, $zero, -512
+; C128-NEXT:    daddiu $2, $zero, -8192
 ; C128-NEXT:    and $1, $1, $2
 ; C128-NEXT:    csetoffset $c11, $c11, $1
 ; C128-NEXT:    cincoffset $c25, $c11, $zero
@@ -37,7 +38,7 @@ define i32 @d(i64 %i) {
 ; C128-NEXT:    cmove $c2, $c11
 ; C128-NEXT:    cgetoffset $4, $c2
 ; C128-NEXT:    dsubu $4, $4, $3
-; C128-NEXT:    daddiu $5, $zero, -512
+; C128-NEXT:    daddiu $5, $zero, -8192
 ; C128-NEXT:    and $4, $4, $5
 ; C128-NEXT:    csetoffset $c2, $c2, $4
 ; C128-NEXT:    csetbounds $c3, $c2, $3
@@ -45,14 +46,15 @@ define i32 @d(i64 %i) {
 ; C128-NEXT:    csetbounds $c3, $c3, $2
 ; C128-NEXT:    clcbi $c12, %capcall20(a)($c1)
 ; C128-NEXT:    cgetnull $c13
-; C128-NEXT:    csd $1, $zero, 504($c25) # 8-byte Folded Spill
+; C128-NEXT:    daddiu $2, $zero, 8184
+; C128-NEXT:    csd $1, $2, 0($c25) # 8-byte Folded Spill
 ; C128-NEXT:    cjalr $c12, $c17
 ; C128-NEXT:    nop
 ; C128-NEXT:    cincoffset $c11, $c24, $zero
-; C128-NEXT:    clc $c17, $zero, [[@EXPR 61 * $CAP_SIZE]]($c11)
-; C128-NEXT:    clc $c24, $zero, [[@EXPR 62 * $CAP_SIZE]]($c11)
-; C128-NEXT:    clc $c25, $zero, [[@EXPR 63 * $CAP_SIZE]]($c11)
-; C128-NEXT:    daddiu $1, $zero, 1024
+; C128-NEXT:    clc $c17, $zero, [[@EXPR 1021 * $CAP_SIZE]]($c11)
+; C128-NEXT:    clc $c24, $zero, [[@EXPR 1022 * $CAP_SIZE]]($c11)
+; C128-NEXT:    clc $c25, $zero, [[@EXPR 1023 * $CAP_SIZE]]($c11)
+; C128-NEXT:    daddiu $1, $zero, 16384
 ; C128-NEXT:    cincoffset $c11, $c11, $1
 ; C128-NEXT:    cjr $c17
 ; C128-NEXT:    nop

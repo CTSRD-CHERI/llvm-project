@@ -12,7 +12,7 @@
 define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval, i32 addrspace(200)* %optchkd) nounwind {
 ; MIPS-LABEL: select_hdr32:
 ; MIPS:       # %bb.0: # %entry
-; MIPS-NEXT:    daddiu $sp, $sp, -80
+; MIPS-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:80|160]]
 ; MIPS-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    sd $4, 16($sp)
 ; MIPS-NEXT:    sd $11, 72($sp)
@@ -35,14 +35,14 @@ define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval, i32 addrspace(2
 ; MIPS-NEXT:    addiu $2, $zero, 0
 ; MIPS-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; MIPS-NEXT:    jr $ra
-; MIPS-NEXT:    daddiu $sp, $sp, 80
+; MIPS-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ;
 ; CHERI-LABEL: select_hdr32:
 ; CHERI:       # %bb.0: # %entry
 ; CHERI-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHERI-NEXT:    csc $c17, $zero, 0($c11)
-; CHERI-NEXT:    clh $4, $zero, 0($c3)
 ; CHERI-NEXT:    lui $1, %hi(%neg(%captab_rel(select_hdr32)))
+; CHERI-NEXT:    clh $4, $zero, 0($c3)
 ; CHERI-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(select_hdr32)))
 ; CHERI-NEXT:    cincoffset $c1, $c12, $1
 ; CHERI-NEXT:    clcbi $c3, %captab20(maskp)($c1)
@@ -66,15 +66,15 @@ entry:
 define i32 @foo(i512 addrspace(200)* byval %x, %struct.tokenstr addrspace(200)* byval, i32 addrspace(200)* %optchkd) nounwind {
 ; MIPS-LABEL: foo:
 ; MIPS:       # %bb.0: # %entry
-; MIPS-NEXT:    daddiu $sp, $sp, -80
+; MIPS-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:80|160]]
 ; MIPS-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    sd $11, 72($sp)
 ; MIPS-NEXT:    sd $10, 64($sp)
 ; MIPS-NEXT:    sd $9, 56($sp)
 ; MIPS-NEXT:    sd $8, 48($sp)
 ; MIPS-NEXT:    sd $7, 40($sp)
-; MIPS-NEXT:    lh $1, 80($sp)
 ; MIPS-NEXT:    sd $6, 32($sp)
+; MIPS-NEXT:    lh $1, 80($sp)
 ; MIPS-NEXT:    sd $5, 24($sp)
 ; MIPS-NEXT:    sd $4, 16($sp)
 ; MIPS-NEXT:    lui $2, %highest(maskp)
@@ -90,14 +90,14 @@ define i32 @foo(i512 addrspace(200)* byval %x, %struct.tokenstr addrspace(200)* 
 ; MIPS-NEXT:    addiu $2, $zero, 0
 ; MIPS-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; MIPS-NEXT:    jr $ra
-; MIPS-NEXT:    daddiu $sp, $sp, 80
+; MIPS-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ;
 ; CHERI-LABEL: foo:
 ; CHERI:       # %bb.0: # %entry
 ; CHERI-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHERI-NEXT:    csc $c17, $zero, 0($c11)
-; CHERI-NEXT:    clh $4, $zero, 0($c4)
 ; CHERI-NEXT:    lui $1, %hi(%neg(%captab_rel(foo)))
+; CHERI-NEXT:    clh $4, $zero, 0($c4)
 ; CHERI-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foo)))
 ; CHERI-NEXT:    cincoffset $c1, $c12, $1
 ; CHERI-NEXT:    clcbi $c3, %captab20(maskp)($c1)
