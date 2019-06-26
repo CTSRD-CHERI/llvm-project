@@ -4,6 +4,8 @@
 // RUN: %cheri_purecap_cc1 -S %s -o - -O2 -mllvm -disable-mips-delay-filler | FileCheck %s -check-prefixes CHECK,PURECAP
 // With -mcpu=mips4 we get lots of pipeline bubbles:
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -S %s -o - -O2 -fPIC -mllvm -disable-mips-delay-filler  | FileCheck %s -check-prefixes CHECK,MIPS4
+// Check that adding the -cheri flag enables BERI scheduling:
+// RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -cheri=128 -S %s -o - -O2 -fPIC -mllvm -disable-mips-delay-filler  | FileCheck %s -check-prefixes CHECK,BERI
 // TODO: This should be an IR level test but that's annoying to get working for purecap and non-purecap
 
 long test2(const void* a1, const void* a2) {
