@@ -3158,7 +3158,7 @@ bool X86DAGToDAGISel::matchBitExtract(SDNode *Node) {
   };
 
   // a) x & ((1 << nbits) + (-1))
-  auto matchPatternA = [&checkOneUse, peekThroughOneUseTruncation,
+  auto matchPatternA = [checkOneUse, peekThroughOneUseTruncation,
                         &NBits](SDValue Mask) -> bool {
     // Match `add`. Must only have one use!
     if (Mask->getOpcode() != ISD::ADD || !checkOneUse(Mask))
@@ -3184,7 +3184,7 @@ bool X86DAGToDAGISel::matchBitExtract(SDNode *Node) {
   };
 
   // b) x & ~(-1 << nbits)
-  auto matchPatternB = [&checkOneUse, isAllOnes, &peekThroughOneUseTruncation,
+  auto matchPatternB = [checkOneUse, isAllOnes, peekThroughOneUseTruncation,
                         &NBits](SDValue Mask) -> bool {
     // Match `~()`. Must only have one use!
     if (Mask.getOpcode() != ISD::XOR || !checkOneUse(Mask))
@@ -3224,7 +3224,7 @@ bool X86DAGToDAGISel::matchBitExtract(SDNode *Node) {
   };
 
   // c) x &  (-1 >> (32 - y))
-  auto matchPatternC = [&checkOneUse, &peekThroughOneUseTruncation,
+  auto matchPatternC = [checkOneUse, peekThroughOneUseTruncation,
                         matchShiftAmt](SDValue Mask) -> bool {
     // The mask itself may be truncated.
     Mask = peekThroughOneUseTruncation(Mask);
@@ -3245,7 +3245,7 @@ bool X86DAGToDAGISel::matchBitExtract(SDNode *Node) {
   SDValue X;
 
   // d) x << (32 - y) >> (32 - y)
-  auto matchPatternD = [&checkOneUse, &checkTwoUse, matchShiftAmt,
+  auto matchPatternD = [checkOneUse, checkTwoUse, matchShiftAmt,
                         &X](SDNode *Node) -> bool {
     if (Node->getOpcode() != ISD::SRL)
       return false;
@@ -3265,9 +3265,8 @@ bool X86DAGToDAGISel::matchBitExtract(SDNode *Node) {
     return true;
   };
 
-  auto matchLowBitMask = [&matchPatternA, &matchPatternB,
-                          &matchPatternC](SDValue Mask) -> bool {
-    // FIXME: pattern c.
+  auto matchLowBitMask = [matchPatternA, matchPatternB,
+                          matchPatternC](SDValue Mask) -> bool {
     return matchPatternA(Mask) || matchPatternB(Mask) || matchPatternC(Mask);
   };
 
