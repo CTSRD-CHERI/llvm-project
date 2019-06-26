@@ -484,6 +484,7 @@ static void initTargetOptions(llvm::TargetOptions &Options,
   Options.DebuggerTuning = CodeGenOpts.getDebuggerTuning();
   Options.EmitStackSizeSection = CodeGenOpts.StackSizeSection;
   Options.EmitAddrsig = CodeGenOpts.Addrsig;
+  Options.EnableDebugEntryValues = CodeGenOpts.EnableDebugEntryValues;
 
   if (CodeGenOpts.getSplitDwarfMode() != CodeGenOptions::NoFission)
     Options.MCOptions.SplitDwarfFile = CodeGenOpts.SplitDwarfFile;
