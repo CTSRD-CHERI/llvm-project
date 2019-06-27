@@ -5962,7 +5962,18 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     Callee.setFunctionPointer(CalleePtr);
   }
 
-  auto ret = EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr, E->getExprLoc());
+  llvm::CallBase *CallOrInvoke = nullptr;
+  RValue Call = EmitCall(FnInfo, Callee, ReturnValue, Args, &CallOrInvoke,
+                         E->getExprLoc());
+
+  // Generate function declaration DISuprogram in order to be used
+  // in debug info about call sites.
+  if (CGDebugInfo *DI = getDebugInfo()) {
+    if (auto *CalleeDecl = dyn_cast_or_null<FunctionDecl>(TargetDecl))
+      DI->EmitFuncDeclForCallSite(CallOrInvoke, QualType(FnType, 0),
+                                  CalleeDecl);
+  }
+
   // If we're doing a CHERI ccall in C++ mode and have exceptions enabled, then
   // translate the CHERI errno value into an exception.
   if (CallCHERIInvoke && getLangOpts().CPlusPlus && getLangOpts().Exceptions &&
@@ -5995,7 +6006,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     Builder.CreateUnreachable();
     EmitBlock(Continue);
   }
-  return ret;
+
+  return Call;
 }
 
 LValue CodeGenFunction::
