@@ -1587,10 +1587,7 @@ bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
   }
 
   if (!F || !F->isIntrinsic() || ID == Intrinsic::not_intrinsic) {
-    bool IsSplitType = valueIsSplit(CI);
-    Register Res = IsSplitType ? MRI->createGenericVirtualRegister(
-                                     getLLTForType(*CI.getType(), *DL))
-                               : getOrCreateVReg(CI);
+    ArrayRef<Register> Res = getOrCreateVRegs(CI);
 
     SmallVector<Register, 8> Args;
     Register SwiftErrorVReg;
@@ -1612,9 +1609,6 @@ bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
     bool Success =
         CLI->lowerCall(MIRBuilder, &CI, Res, Args, SwiftErrorVReg,
                        [&]() { return getOrCreateVReg(*CI.getCalledValue()); });
-
-    if (IsSplitType)
-      unpackRegs(CI, Res, MIRBuilder);
 
     return Success;
   }
@@ -1689,11 +1683,11 @@ bool IRTranslator::translateInvoke(const User &U,
   MCSymbol *BeginSymbol = Context.createTempSymbol();
   MIRBuilder.buildInstr(TargetOpcode::EH_LABEL).addSym(BeginSymbol);
 
-  Register Res;
+  ArrayRef<Register> Res;
   if (!I.getType()->isVoidTy())
-    Res = MRI->createGenericVirtualRegister(getLLTForType(*I.getType(), *DL));
+    Res = getOrCreateVRegs(I);
   SmallVector<Register, 8> Args;
-  Register SwiftErrorVReg;
+  Register SwiftErrorVReg = 0;
   for (auto &Arg : I.arg_operands()) {
     if (CLI->supportSwiftError() && isSwiftError(Arg)) {
       LLT Ty = getLLTForType(*Arg->getType(), *DL);
@@ -1712,8 +1706,6 @@ bool IRTranslator::translateInvoke(const User &U,
   if (!CLI->lowerCall(MIRBuilder, &I, Res, Args, SwiftErrorVReg,
                       [&]() { return getOrCreateVReg(*I.getCalledValue()); }))
     return false;
-
-  unpackRegs(I, Res, MIRBuilder);
 
   MCSymbol *EndSymbol = Context.createTempSymbol();
   MIRBuilder.buildInstr(TargetOpcode::EH_LABEL).addSym(EndSymbol);
