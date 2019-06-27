@@ -372,7 +372,6 @@ public:
     return ContainedTys[0];
   }
 
-  inline bool getVectorIsScalable() const;
   inline unsigned getVectorNumElements() const;
   Type *getVectorElementType() const {
     assert(getTypeID() == VectorTyID);
