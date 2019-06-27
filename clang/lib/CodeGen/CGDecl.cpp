@@ -1174,14 +1174,10 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
     return;
   }
 
-  auto *Int8Ty = llvm::IntegerType::getInt8Ty(CGM.getLLVMContext());
-  auto *IntPtrTy = CGM.getDataLayout().getIntPtrType(
-      CGM.getLLVMContext(), CGM.getTargetCodeGenInfo().getDefaultAS());
-
   uint64_t ConstantSize = CGM.getDataLayout().getTypeAllocSize(Ty);
   if (!ConstantSize)
     return;
-  auto *SizeVal = llvm::ConstantInt::get(IntPtrTy, ConstantSize);
+  auto *SizeVal = llvm::ConstantInt::get(CGM.IntPtrTy, ConstantSize);
 
   // If the initializer is all or mostly the same, codegen with bzero / memset
   // then do a few stores afterward.
@@ -1192,7 +1188,7 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
     AddedThreshold = CGM.getTarget().getCHERICapabilityWidth() / 8;
 
   if (shouldUseBZeroPlusStoresToInitialize(constant, ConstantSize, AddedThreshold)) {
-    Builder.CreateMemSet(Loc, llvm::ConstantInt::get(Int8Ty, 0), SizeVal,
+    Builder.CreateMemSet(Loc, llvm::ConstantInt::get(CGM.Int8Ty, 0), SizeVal,
                          isVolatile);
 
     bool valueAlreadyCorrect =
@@ -1214,7 +1210,7 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
       assert(AP.getBitWidth() <= 8);
       Value = AP.getLimitedValue();
     }
-    Builder.CreateMemSet(Loc, llvm::ConstantInt::get(Int8Ty, Value), SizeVal,
+    Builder.CreateMemSet(Loc, llvm::ConstantInt::get(CGM.Int8Ty, Value), SizeVal,
                          isVolatile);
     return;
   }
@@ -1709,8 +1705,6 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
   auto DL = ApplyDebugLocation::CreateDefaultArtificial(*this, D.getLocation());
   QualType type = D.getType();
 
-  bool isVolatile = type.isVolatileQualified();
-
   // If this local has an initializer, emit it now.
   const Expr *Init = D.getInit();
 
@@ -1765,6 +1759,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     if (emission.IsEscapingByRef && !locIsByrefHeader)
       Loc = emitBlockByrefAddress(Loc, &D, /*follow=*/false);
 
+    bool isVolatile = type.isVolatileQualified();
     CharUnits Size = getContext().getTypeSizeInChars(type);
     if (!Size.isZero()) {
       switch (trivialAutoVarInit) {
@@ -1893,7 +1888,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
 
   emitStoresForConstant(
       CGM, D, (Loc.getType() == BP) ? Loc : Builder.CreateBitCast(Loc, BP),
-      isVolatile, Builder, constant, ContainsCapabilities);
+      type.isVolatileQualified(), Builder, constant, ContainsCapabilities);
 }
 
 /// Emit an expression as an initializer for an object (variable, field, etc.)
