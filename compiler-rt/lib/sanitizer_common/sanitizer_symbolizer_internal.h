@@ -15,6 +15,7 @@
 
 #include "sanitizer_symbolizer.h"
 #include "sanitizer_file.h"
+#include "sanitizer_vector.h"
 
 namespace __sanitizer {
 
@@ -56,6 +57,10 @@ class SymbolizerTool {
   // and module offset values.
   virtual bool SymbolizeData(vaddr addr, DataInfo *info) {
     UNIMPLEMENTED();
+  }
+
+  virtual bool SymbolizeFrame(vaddr addr, FrameInfo *info) {
+    return false;
   }
 
   virtual void Flush() {}
@@ -120,12 +125,13 @@ class LLVMSymbolizer : public SymbolizerTool {
   explicit LLVMSymbolizer(const char *path, LowLevelAllocator *allocator);
 
   bool SymbolizePC(vaddr addr, SymbolizedStack *stack) override;
-
   bool SymbolizeData(vaddr addr, DataInfo *info) override;
+  bool SymbolizeFrame(vaddr addr, FrameInfo *info) override;
 
  private:
-  const char *FormatAndSendCommand(bool is_data, const char *module_name,
-                                   usize module_offset, ModuleArch arch);
+  const char *FormatAndSendCommand(const char *command_prefix,
+                                   const char *module_name, usize module_offset,
+                                   ModuleArch arch);
 
   LLVMSymbolizerProcess *symbolizer_process_;
   static const usize kBufferSize = 16 * 1024;
