@@ -5868,7 +5868,6 @@ static SDValue getMemcpyLoadsAndStores(
   bool CopyFromConstant = isMemSrcFromConstant(Src, Slice);
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
-  bool ReachedLimit = false;
   const bool FoundLowering = TLI.findOptimalMemOpLowering(MemOps, Limit, Size,
                                     (DstAlignCanChange ? 0 : Align),
                                     (isZeroConstant ? 0 : SrcAlign),
@@ -5883,6 +5882,7 @@ static SDValue getMemcpyLoadsAndStores(
   // small memcpys
   auto CapTy = TLI.cheriCapabilityType();
   const uint64_t CapSize = CapTy.isValid() ? CapTy.getStoreSize() : 0;
+  bool ReachedLimit = (CapSize * Limit) < Size;
   if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
       (!FoundLowering || !MemOps[0].isFatPointer())) {
     LLVM_DEBUG(
@@ -6082,7 +6082,6 @@ static SDValue getMemmoveLoadsAndStores(
   if (Align > SrcAlign)
     SrcAlign = Align;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemmove(OptSize);
-  bool ReachedLimit = false;
   const bool FoundLowering = TLI.findOptimalMemOpLowering(MemOps, Limit, Size,
                                     (DstAlignCanChange ? 0 : Align), SrcAlign,
                                     false, false, false, false, MustPreserveCheriCapabilities,
@@ -6096,6 +6095,7 @@ static SDValue getMemmoveLoadsAndStores(
   // small memcpys
   auto CapTy = TLI.cheriCapabilityType();
   const uint64_t CapSize = CapTy.isValid() ? CapTy.getStoreSize() : 0;
+  bool ReachedLimit = (CapSize * Limit) < Size;
   if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
       (!FoundLowering || !MemOps[0].isFatPointer())) {
     LLVM_DEBUG(

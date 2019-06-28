@@ -22,4 +22,4 @@ int test(int arg1, int arg2) {
 // CHECK-NEXT:  Data alignment factor: -8
 // CHECK-NEXT:  Return address column: 89
 // CHECK-EMPTY:
-// CHECK-NEXT: DW_CFA_def_cfa: reg83 +0
+// CHECK-NEXT: DW_CFA_def_cfa_register: reg83

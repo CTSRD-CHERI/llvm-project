@@ -16,14 +16,14 @@
 // Passing mllvm -cheri-cap-table-abi to clang breaks all code since clang will then assume it needs to pass abi=legacy
 // RUN: not %cheri_purecap_clang -mllvm -cheri-cap-table-abi=pcrel -c %s -o /dev/null 2>&1 | FileCheck %s -check-prefix BAD_MLLVM
 
-// BAD_MLLVM: error: unsupported option '-mllvm -cheri-cap-table-abi=pcrel', did you mean '-cheri-cap-table-abi=pcrel'?
+// BAD_MLLVM: error: unsupported option '-mllvm -cheri-cap-table-abi=pcrel'; did you mean '-cheri-cap-table-abi=pcrel'?
 
 // RUN: not %cheri_purecap_clang -mllvm -mxcaptable -c %s -o /dev/null 2>&1 | FileCheck %s -check-prefix BAD_MXCAPTABLE-1
-// BAD_MXCAPTABLE-1: error: unsupported option '-mllvm -mxcaptable', did you mean '-mxcaptable'?
+// BAD_MXCAPTABLE-1: error: unsupported option '-mllvm -mxcaptable'; did you mean '-mxcaptable'?
 // RUN: not %cheri_purecap_clang -mllvm -mxcaptable=true -c %s -o /dev/null 2>&1 | FileCheck %s -check-prefix BAD_MXCAPTABLE-2
-// BAD_MXCAPTABLE-2: error: unsupported option '-mllvm -mxcaptable=true', did you mean '-mxcaptable'?
+// BAD_MXCAPTABLE-2: error: unsupported option '-mllvm -mxcaptable=true'; did you mean '-mxcaptable'?
 // RUN: not %cheri_purecap_clang -mllvm -mxcaptable=false -c %s -o /dev/null 2>&1 | FileCheck %s -check-prefix BAD_MXCAPTABLE-3
-// BAD_MXCAPTABLE-3: error: unsupported option '-mllvm -mxcaptable=false', did you mean '-no-mxcaptable'?
+// BAD_MXCAPTABLE-3: error: unsupported option '-mllvm -mxcaptable=false'; did you mean '-no-mxcaptable'?
 
 
 // TABLE: "-mllvm" "-cheri-cap-table-abi=pcrel"

@@ -318,5 +318,5 @@ void check_start(int n, ...) {
   va_start(the_list, n);
 // CHECK: [[THE_LIST:%[a-z0-9._]+]] = alloca %struct.__va_list
 // CHECK: [[VOIDP_THE_LIST:%[a-z0-9._]+]] = bitcast %struct.__va_list* [[THE_LIST]] to i8*
-// CHECK: call void @llvm.va_start(i8* [[VOIDP_THE_LIST]])
+// CHECK: call void @llvm.va_start.p0i8(i8* [[VOIDP_THE_LIST]])
 }

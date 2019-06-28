@@ -59,15 +59,15 @@ void test_fnptr(struct ContainsFnPtr *s) {
   do_stuff_with_fn_ptr(&foo); // expected-remark {{not setting bounds for pointer to 'void (void)' (address of function)}}
   // DBG-NEXT: subobj bounds check: address of function -> not setting bounds
   do_stuff_with_fn_ptr_ptr(&s->fn_ptr); // expected-remark-re {{setting sub-object bounds for field 'fn_ptr' (pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)')) to {{16|32}} bytes}}
-  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[$CAP_SIZE]]
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[#CAP_SIZE]]
   fn_ptr_ty fnptr_array[4];
   struct ContainsFnPtr onstack;
   do_stuff_with_fn_ptr_ptr(&onstack.fn_ptr); // expected-remark-re {{setting sub-object bounds for field 'fn_ptr' (pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)')) to {{16|32}} bytes}}
-  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[$CAP_SIZE]]
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[#CAP_SIZE]]
   do_stuff_with_fn_ptr_ptr(&fnptr_array[2]); // expected-remark-re {{setting sub-object bounds for pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)') to {{16|32}} bytes}}
   //  expected-remark-re@-1{{setting bounds for array subscript on 'fn_ptr_ty [4]' to {{64|128}} bytes}}
   // DBG-NEXT: subscript 'fn_ptr_ty [4]' subobj bounds check: subscript on constant size array -> setting bounds for 'fn_ptr_ty [4]' subscript to {{64|128}}
-  // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[$CAP_SIZE]]
+  // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[#CAP_SIZE]]
 }
 
 

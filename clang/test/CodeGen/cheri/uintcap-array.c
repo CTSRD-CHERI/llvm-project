@@ -11,12 +11,12 @@ __uintcap_t uintcapvalue = (__uintcap_t)&x;
 
 // CHECK: @x = common addrspace(200) global i32 0, align 4
 // CHECK: @longvalue = local_unnamed_addr addrspace(200) global i64 ptrtoint (i32 addrspace(200)* @x to i64), align 8
-// CHECK: @uintcapvalue = local_unnamed_addr addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @x to i8 addrspace(200)*), align [[$CAP_SIZE]]
+// CHECK: @uintcapvalue = local_unnamed_addr addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @x to i8 addrspace(200)*), align [[#CAP_SIZE]]
 
 __uintcap_t uintptr_constant_int = 1;
-// CHECK: @uintptr_constant_int = addrspace(200) global i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*), align [[$CAP_SIZE]]
+// CHECK: @uintptr_constant_int = addrspace(200) global i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 __uintcap_t uintptr_constant_ptr = (__uintcap_t)&uintptr_constant_int;
-// CHECK: @uintptr_constant_ptr = local_unnamed_addr addrspace(200) global i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*), align [[$CAP_SIZE]]
+// CHECK: @uintptr_constant_ptr = local_unnamed_addr addrspace(200) global i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*), align [[#CAP_SIZE]]
 
 // We were previously not emitting capability sized elements for this array:
 // All integer constant were emitted as i64 and only the pointer casted to uintcap ended up as addrspace(200) pointers
@@ -102,16 +102,16 @@ void func(void) {
 __uintcap_t uintptr_bss;
 __uintcap_t uintptr_array_bss[5];
 struct uintptr_struct uintptr_struct_bss;
-// CHECK: @uintptr_bss = common local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align [[$CAP_SIZE]]
-// CHECK: @uintptr_array_bss = common local_unnamed_addr addrspace(200) global [5 x i8 addrspace(200)*] zeroinitializer, align [[$CAP_SIZE]]
-// CHECK: @uintptr_struct_bss = common local_unnamed_addr addrspace(200) global %struct.uintptr_struct zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @uintptr_bss = common local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align [[#CAP_SIZE]]
+// CHECK: @uintptr_array_bss = common local_unnamed_addr addrspace(200) global [5 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
+// CHECK: @uintptr_struct_bss = common local_unnamed_addr addrspace(200) global %struct.uintptr_struct zeroinitializer, align [[#CAP_SIZE]]
 
 
 
 // CHECK-LABEL: define void @func()
 // test that the correct values are used
-// CHECK: alloca [2 x %struct.uintptr_struct], align [[$CAP_SIZE]], addrspace(200)
-// CHECK: alloca [2 x i8 addrspace(200)*], align [[$CAP_SIZE]], addrspace(200)
+// CHECK: alloca [2 x %struct.uintptr_struct], align [[#CAP_SIZE]], addrspace(200)
+// CHECK: alloca [2 x i8 addrspace(200)*], align [[#CAP_SIZE]], addrspace(200)
 
 
 
@@ -121,58 +121,58 @@ struct uintptr_struct uintptr_struct_bss;
 // ASM-NEXT:	.size	longvalue, 8
 // ASM-LABEL: uintcapvalue:
 // ASM-NEXT: 	.chericap	x
-// ASM-NEXT: 	.size	uintcapvalue, [[$CAP_SIZE]]
+// ASM-NEXT: 	.size	uintcapvalue, [[#CAP_SIZE]]
 // ASM-LABEL: uintptr_constant_int:
 // ASM-NEXT: 	.chericap	1
-// ASM-NEXT: 	.size	uintptr_constant_int, [[$CAP_SIZE]]
+// ASM-NEXT: 	.size	uintptr_constant_int, [[#CAP_SIZE]]
 // ASM-LABEL: uintptr_constant_ptr:
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.size	uintptr_constant_ptr, [[$CAP_SIZE]]
+// ASM-NEXT: 	.size	uintptr_constant_ptr, [[#CAP_SIZE]]
 
 // ASM-LABEL: uintptr_array:
 // ASM-NEXT: 	.chericap	3
 // ASM-NEXT: 	.chericap	5246977
 // ASM-NEXT: 	.chericap	uintptr_constant_int
 // ASM-NEXT: 	.chericap	0
-// ASM-NEXT: 	.size	uintptr_array, [[@EXPR 4 * $CAP_SIZE]]
+// ASM-NEXT: 	.size	uintptr_array, [[#CAP_SIZE * 4]]
 
 // ASM-LABEL: uintptr_array_2:
 // ASM-NEXT: 	.chericap	1
 // ASM-NEXT: 	.chericap	0
 // ASM-NEXT: 	.chericap	0
-// ASM-NEXT: 	.size	uintptr_array_2, [[@EXPR 3 * $CAP_SIZE]]
+// ASM-NEXT: 	.size	uintptr_array_2, [[#CAP_SIZE * 3]]
 
 // ASM-LABEL: ptr_array:
 // ASM-NEXT: 	.chericap	3
 // ASM-NEXT: 	.chericap	5246977
 // ASM-NEXT: 	.chericap	uintptr_constant_int
 // ASM-NEXT: 	.chericap	0
-// ASM-NEXT: 	.size	ptr_array, [[@EXPR 4 * $CAP_SIZE]]
+// ASM-NEXT: 	.size	ptr_array, [[#CAP_SIZE * 4]]
 
 // ASM-LABEL: one_uintptr_struct:
 // ASM-NEXT: 	.chericap	123
-// ASM-NEXT: 	.size	one_uintptr_struct, [[$CAP_SIZE]]
+// ASM-NEXT: 	.size	one_uintptr_struct, [[#CAP_SIZE]]
 
 // ASM-LABEL: uintptr_struct_array:
 // ASM-NEXT: 	.chericap	3
 // ASM-NEXT: 	.chericap	5246977
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.space	[[$CAP_SIZE]]
-// ASM-NEXT: 	.size	uintptr_struct_array, [[@EXPR 4 * $CAP_SIZE]]
+// ASM-NEXT: 	.space	[[#CAP_SIZE]]
+// ASM-NEXT: 	.size	uintptr_struct_array, [[#CAP_SIZE * 4]]
 
 // ASM-LABEL: .L__const.func.uintptr_struct_array:
 // ASM-NEXT: 	.chericap	5246977
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.size	.L__const.func.uintptr_struct_array, [[@EXPR 2 * $CAP_SIZE]]
+// ASM-NEXT: 	.size	.L__const.func.uintptr_struct_array, [[#CAP_SIZE * 2]]
 
 // ASM-LABEL: .L__const.func.uintptr_array:
 // ASM-NEXT: 	.chericap	3
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.size	.L__const.func.uintptr_array, [[@EXPR 2 * $CAP_SIZE]]
+// ASM-NEXT: 	.size	.L__const.func.uintptr_array, [[#CAP_SIZE * 2]]
 
 // ASM-LABEL: .type	uintptr_bss,@object
-// ASM-NEXT: .comm	uintptr_bss,[[$CAP_SIZE]],[[$CAP_SIZE]]
+// ASM-NEXT: .comm	uintptr_bss,[[#CAP_SIZE]],[[#CAP_SIZE]]
 // ASM-NEXT: .type	uintptr_array_bss,@object
-// ASM-NEXT: .comm	uintptr_array_bss,[[@EXPR 5 * $CAP_SIZE]],[[$CAP_SIZE]]
+// ASM-NEXT: .comm	uintptr_array_bss,[[#CAP_SIZE * 5]],[[#CAP_SIZE]]
 // ASM-NEXT: .type	uintptr_struct_bss,@object
-// ASM-NEXT: .comm	uintptr_struct_bss,[[$CAP_SIZE]],[[$CAP_SIZE]]
+// ASM-NEXT: .comm	uintptr_struct_bss,[[#CAP_SIZE]],[[#CAP_SIZE]]

@@ -38,8 +38,7 @@ static void appendToGlobalArray(const char *Array, Module &M, Function *F,
   // Get the current set of static global constructors and add the new ctor
   // to the list.
   SmallVector<Constant *, 16> CurrentCtors;
-  StructType *EltTy = StructType::get(
-      IRB.getInt32Ty(), PointerType::getUnqual(FnTy), IRB.getInt8PtrTy());
+  StructType *EltTy = StructType::get(IRB.getInt32Ty(), CtorPFTy, ArgTy);
   if (GlobalVariable *GVCtor = M.getNamedGlobal(Array)) {
     if (Constant *Init = GVCtor->getInitializer()) {
       unsigned n = Init->getNumOperands();
@@ -53,7 +52,7 @@ static void appendToGlobalArray(const char *Array, Module &M, Function *F,
   // Build a 3 field global_ctor entry.  We don't take a comdat key.
   Constant *CSVals[3];
   CSVals[0] = IRB.getInt32(Priority);
-  CSVals[1] = F;
+  CSVals[1] = ConstantExpr::getPointerBitCastOrAddrSpaceCast(F, CtorPFTy);
   CSVals[2] = Data ? ConstantExpr::getPointerCast(Data, ArgTy)
                    : Constant::getNullValue(ArgTy);
   Constant *RuntimeCtorInit =

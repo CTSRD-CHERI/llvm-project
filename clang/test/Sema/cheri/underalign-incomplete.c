@@ -28,4 +28,4 @@ struct {
 // CHECK: @b1 = common addrspace(200) global %struct.anon.0 zeroinitializer, align 8
 // CHECK: @b2 = common addrspace(200) global %struct.anon.1 zeroinitializer, align 2
 // CHECK: @c1 = common addrspace(200) global %struct.anon.2 zeroinitializer, align 2
-// CHECK: @c2 = common addrspace(200) global %struct.anon.3 zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @c2 = common addrspace(200) global %struct.anon.3 zeroinitializer, align [[#CAP_SIZE]]

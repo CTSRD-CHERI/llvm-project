@@ -2,16 +2,16 @@
 // CHECK:      *** Dumping AST Record Layout
 // CHECK-NEXT:         0 | class error_category
 // CHECK-NEXT:         0 |   (error_category vtable pointer)
-// CHECK-NEXT:           | [sizeof=[[$CAP_SIZE]],
-// CHECK-SAME:              dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
-// CHECK-NEXT:           |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
+// CHECK-NEXT:           | [sizeof=[[#CAP_SIZE]],
+// CHECK-SAME:              dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
+// CHECK-NEXT:           |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
 
 // CHECK:      *** Dumping AST Record Layout
 // CHECK-NEXT:          0 | class __do_message
 // CHECK-NEXT:          0 |   class error_category (primary base)
 // CHECK-NEXT:          0 |     (error_category vtable pointer)
-// CHECK-NEXT:            | [sizeof=[[$CAP_SIZE]], dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
-// CHECK-NEXT:            |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
+// CHECK-NEXT:            | [sizeof=[[#CAP_SIZE]], dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
+// CHECK-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
 
 
 // CHECK:      *** Dumping AST Record Layout
@@ -19,8 +19,8 @@
 // CHECK-NEXT:          0 |   class __do_message (primary base)
 // CHECK-NEXT:          0 |     class error_category (primary base)
 // CHECK-NEXT:          0 |       (error_category vtable pointer)
-// CHECK-NEXT:            | [sizeof=[[$CAP_SIZE]], dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
-// CHECK-NEXT:            |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
+// CHECK-NEXT:            | [sizeof=[[#CAP_SIZE]], dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
+// CHECK-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
 
 
 #define _LIBCPP_ALWAYS_INLINE     __attribute__ ((__always_inline__))

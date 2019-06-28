@@ -28,17 +28,17 @@ const __uintcap_t flags = thinFlag | reservedFlag;
 // CHECK: @foo3 = global i8* bitcast (i32* @i to i8*), align 8
 // CHECK: @foo4 = global i8* bitcast (i32* @i to i8*), align 8
 
-// CHECK: @thinFlag = constant i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*), align [[$CAP_SIZE]]
-// CHECK: @reservedFlag = constant i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*), align [[$CAP_SIZE]]
-// CHECK: @flags = constant i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*), align [[$CAP_SIZE]]
+// CHECK: @thinFlag = constant i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*), align [[#CAP_SIZE]]
+// CHECK: @reservedFlag = constant i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*), align [[#CAP_SIZE]]
+// CHECK: @flags = constant i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 
 // PURECAP: @i = common addrspace(200) global i32 0, align 4
-// PURECAP: @foo  = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
-// PURECAP: @foo1 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
-// PURECAP: @foo2 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
-// PURECAP: @foo3 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
+// PURECAP: @foo  = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
+// PURECAP: @foo1 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
+// PURECAP: @foo2 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
+// PURECAP: @foo3 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
 
-// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo, align [[$CAP_SIZE]]
-// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo1, align [[$CAP_SIZE]]
-// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo2, align [[$CAP_SIZE]]
-// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo3, align [[$CAP_SIZE]]
+// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo, align [[#CAP_SIZE]]
+// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo1, align [[#CAP_SIZE]]
+// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo2, align [[#CAP_SIZE]]
+// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo3, align [[#CAP_SIZE]]

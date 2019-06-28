@@ -7571,7 +7571,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
 
   if (BuiltinID == AArch64::BI__builtin_sponentry) {
-    llvm::Function *F = CGM.getIntrinsic(Intrinsic::sponentry);
+    llvm::Function *F = CGM.getIntrinsic(Intrinsic::sponentry,
+                                         {CGM.ProgramInt8PtrTy});
     return Builder.CreateCall(F);
   }
 

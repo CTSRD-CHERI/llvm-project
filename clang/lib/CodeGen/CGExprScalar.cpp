@@ -2308,15 +2308,16 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         Src = Builder.CreateStripInvariantGroup(Src);
       }
     }
-    // Handle CHERI pointers casts (e.g. __input+__output qualifiers, etc)
-    if (E->getType()->isPointerType() && DestTy->isPointerType())
-      return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 
     // Update heapallocsite metadata when there is an explicit cast.
     if (llvm::CallInst *CI = dyn_cast<llvm::CallInst>(Src))
       if (CI->getMetadata("heapallocsite") && isa<ExplicitCastExpr>(CE))
           CGF.getDebugInfo()->
               addHeapAllocSiteMetadata(CI, CE->getType(), CE->getExprLoc());
+
+    // Handle CHERI pointers casts (e.g. __input+__output qualifiers, etc)
+    if (E->getType()->isPointerType() && DestTy->isPointerType())
+      return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 
     return Builder.CreateBitCast(Src, DstTy);
   }

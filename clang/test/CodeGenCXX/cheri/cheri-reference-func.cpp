@@ -6,8 +6,6 @@ void invoke(Functor&& f);
 int& f(void);
 
 void g() {
-  // Skip the first call to llvm.cheri.pcc.get
-  // LEGACY: call {{.*}} @llvm.cheri.pcc.get()
   int&(&fn)(void) = f;
   // LEGACY: [[TMP1:%[0-9]]] = call {{.*}} @llvm.cheri.pcc.get()
   // LEGACY-NEXT: [[TMP2:%[0-9]]] = call {{.*}} @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP1]]

@@ -25,13 +25,13 @@ handler get_handler_sync() noexcept {
 
 handler set_handler_atomic(handler func) noexcept {
   // CHECK-LABEL: @_Z18set_handler_atomicU3capPFvvE(
-  // CHECK: %func.addr = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
-  // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
-  // CHECK: %atomic-temp = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
-  // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
-  // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
-  // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
-  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
+  // CHECK: %func.addr = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
+  // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
+  // CHECK: %atomic-temp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
+  // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align [[#CAP_SIZE]]
+  // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align [[#CAP_SIZE]]
+  // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align [[#CAP_SIZE]]
+  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %.atomictmp, align [[#CAP_SIZE]]
   // CHECK: atomicrmw xchg void () addrspace(200)* addrspace(200)* @_ZL9__handler, void () addrspace(200)* [[VAR_1]] seq_cst
   return __atomic_exchange_n(&__handler, func, __ATOMIC_SEQ_CST);
 
@@ -65,13 +65,13 @@ __attribute__((__require_constant_initialization__)) static _Atomic(handler) __a
 
 handler set_handler_c11_atomic(handler func) noexcept {
   // CHECK-LABEL: @_Z22set_handler_c11_atomicU3capPFvvE(
-  // CHECK: %func.addr = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
-  // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
-  // CHECK: %atomic-temp = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
-  // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
-  // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
-  // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
-  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
+  // CHECK: %func.addr = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
+  // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
+  // CHECK: %atomic-temp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
+  // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align [[#CAP_SIZE]]
+  // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align [[#CAP_SIZE]]
+  // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align [[#CAP_SIZE]]
+  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %.atomictmp, align [[#CAP_SIZE]]
   // CHECK: atomicrmw xchg void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler, void () addrspace(200)* [[VAR_1]] seq_cst
   return __c11_atomic_exchange(&__atomic_handler, func, __ATOMIC_SEQ_CST);
 

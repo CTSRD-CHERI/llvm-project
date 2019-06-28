@@ -25,7 +25,7 @@ struct DBT2 {
 } __attribute__((aligned(2)));  // this should not warn!
 
 struct DBT2 dbt2;
-// IR: @dbt2 = common addrspace(200) global %struct.DBT2 zeroinitializer, align [[$CAP_SIZE]]
+// IR: @dbt2 = common addrspace(200) global %struct.DBT2 zeroinitializer, align [[#CAP_SIZE]]
 
 // We should also be warning if it has the packed attribute:
 struct DBT3 {  // expected-warning-re{{alignment (4) of 'struct DBT3' is less than the required capability alignment ({{8|16|32}})}}
@@ -58,7 +58,7 @@ struct DBT6 {
 } __attribute__((packed, aligned(__BIGGEST_ALIGNMENT__)));
 _Static_assert(__BIGGEST_ALIGNMENT__ == sizeof(void* __capability), "__BIGGEST_ALIGNMENT__ wrong?");
 struct DBT6 dbt6;
-// IR: @dbt6 = common addrspace(200) global %struct.DBT6 zeroinitializer, align [[$CAP_SIZE]]
+// IR: @dbt6 = common addrspace(200) global %struct.DBT6 zeroinitializer, align [[#CAP_SIZE]]
 
 // packed implies alignment 1:
 struct DBT7 { // expected-warning-re{{alignment (1) of 'struct DBT7' is less than the required capability alignment ({{8|16|32}})}}

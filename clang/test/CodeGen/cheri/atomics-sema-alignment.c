@@ -76,10 +76,10 @@ void func2(int *__capability *p) {
 
   // hybrid code uses a libcall here and casts the i8 addrspace(200)** to i8* for the libcall
   // N64: [[PTR1:%.+]] = bitcast i32 addrspace(200)** %{{.+}} to i8*
-  // N64: call void @__atomic_load(i64 zeroext [[$CAP_SIZE]], i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_store(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
+  // N64: call void @__atomic_load(i64 zeroext [[#CAP_SIZE]], i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_store(i64 zeroext [[#CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_exchange(i64 zeroext [[#CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[#CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
 
   int *__capability res;
   int *__capability res2;
@@ -122,10 +122,10 @@ void func3(__uintcap_t *p) {
 
   // hybrid code uses a libcall here and casts the i8 addrspace(200)** to i8* for the libcall
   // N64: [[PTR1:%.+]] = bitcast i8 addrspace(200)** %{{.+}} to i8*
-  // N64: call void @__atomic_load(i64 zeroext [[$CAP_SIZE]], i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_store(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
+  // N64: call void @__atomic_load(i64 zeroext [[#CAP_SIZE]], i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_store(i64 zeroext [[#CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_exchange(i64 zeroext [[#CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[#CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
 
 
   __uintcap_t res;

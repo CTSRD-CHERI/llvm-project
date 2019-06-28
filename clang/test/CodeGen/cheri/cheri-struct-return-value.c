@@ -1,16 +1,16 @@
 // REQUIRES: mips-registered-target
 
-// RUN: %cheri_purecap_cc1 -std=c11 -O2 -emit-llvm -o - %s | %cheri_FileCheck %s -enable-var-scope
+// RUN: %cheri_purecap_cc1 -std=c11 -O2 -emit-llvm -o - %s | %cheri_FileCheck %s
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -check-prefixes=ASM,%cheri_type-ASM %s
 int global;
 
 unsigned long sizeof_cap(void) {
   return sizeof(void* __capability);
   // CHECK-LABEL: define i64 @sizeof_cap() local_unnamed_addr
-  // CHECK: ret i64 [[$CAP_SIZE]]
+  // CHECK: ret i64 [[#CAP_SIZE]]
   // ASM-LABEL: sizeof_cap
   // ASM: cjr     $c17
-  // ASM: daddiu   $2, $zero, [[$CAP_SIZE]]
+  // ASM: daddiu   $2, $zero, [[#CAP_SIZE]]
 }
 
 typedef struct {
@@ -62,15 +62,15 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret %agg.result, {{.*}}, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
   // CHECK: [[VAR1:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in.coerce0, i64 1)
   // CHECK: [[INTPTR_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 0
-  // CHECK: store i8 addrspace(200)* [[VAR1]], i8 addrspace(200)* addrspace(200)* [[INTPTR_MEMBER]], align [[$CAP_SIZE]]
+  // CHECK: store i8 addrspace(200)* [[VAR1]], i8 addrspace(200)* addrspace(200)* [[INTPTR_MEMBER]], align [[#CAP_SIZE]]
   // CHECK: [[CAP_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 1
-  // CHECK: store i8 addrspace(200)* %in.coerce1, i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[$CAP_SIZE]]
+  // CHECK: store i8 addrspace(200)* %in.coerce1, i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[#CAP_SIZE]]
   // CHECK: ret void
   // ASM-LABEL: two_caps_struct
   // ASM:       cincoffset      $c1, $c4, 1
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
   // ASM-NEXT:  cjr     $c17
-  // ASM-NEXT:  csc     $c5, $zero, [[$CAP_SIZE]]($c3)
+  // ASM-NEXT:  csc     $c5, $zero, [[#CAP_SIZE]]($c3)
 
 }
 
@@ -106,7 +106,7 @@ GreaterThanIntCapSizeUnion greater_than_intcap_size_union() {
   return g;
   // CHECK-LABEL: define void @greater_than_intcap_size_union(%union.GreaterThanIntCapSizeUnion addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // CHECK: [[CAP_MEMBER:%.+]] = getelementptr inbounds %union.GreaterThanIntCapSizeUnion, %union.GreaterThanIntCapSizeUnion addrspace(200)* %agg.result, i64 0, i32 0
-  // CHECK: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[$CAP_SIZE]]
+  // CHECK: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[#CAP_SIZE]]
   // CHECK: ret void
   // ASM-LABEL: greater_than_intcap_size_union
   // ASM:       clcbi $c1, %captab20(global)($c{{.+}})
@@ -213,7 +213,7 @@ int read_int_and_long_1() {
   // ASM-NEXT: dsra	$2, $2, 32
   // ASM-NEXT: clc	$c17, $zero, 0($c11)
   // ASM-NEXT: cjr	$c17
-  // ASM-NEXT: cincoffset	$c11, $c11, [[$CAP_SIZE]]
+  // ASM-NEXT: cincoffset	$c11, $c11, [[#CAP_SIZE]]
 }
 
 long read_int_and_long_2() {
@@ -225,7 +225,7 @@ long read_int_and_long_2() {
   // ASM-NEXT: move $2, $3
   // ASM-NEXT: clc	$c17, $zero, 0($c11)
   // ASM-NEXT: cjr	$c17
-  // ASM-NEXT: cincoffset	$c11, $c11, [[$CAP_SIZE]]
+  // ASM-NEXT: cincoffset	$c11, $c11, [[#CAP_SIZE]]
   return extern_int_and_long().l2;
 }
 

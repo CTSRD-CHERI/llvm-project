@@ -23,14 +23,14 @@ struct umutex {
 // CHECK-CHERI128: %struct.umutex = type { i32, i32, [2 x i32], i8 addrspace(200)*, i32, [2 x i32] }
 // CHECK-CHERI256: %struct.umutex = type { i32, i32, [2 x i32], i8 addrspace(200)*, i32, [2 x i32], [20 x i8]  }
 
-// CHECK-CHERI128: @_thr_umutex_init.default_mtx = internal addrspace(200) constant %struct.umutex zeroinitializer, align [[$CAP_SIZE]]
+// CHECK-CHERI128: @_thr_umutex_init.default_mtx = internal addrspace(200) constant %struct.umutex zeroinitializer, align [[#CAP_SIZE]]
 // Without end padding for cheri256?
-// CHECK-CHERI256: @_thr_umutex_init.default_mtx = internal addrspace(200) constant { i32, i32, [2 x i32], i8 addrspace(200)*, i32, [2 x i32] } zeroinitializer, align [[$CAP_SIZE]]
+// CHECK-CHERI256: @_thr_umutex_init.default_mtx = internal addrspace(200) constant { i32, i32, [2 x i32], i8 addrspace(200)*, i32, [2 x i32] } zeroinitializer, align [[#CAP_SIZE]]
 
 // CHECK-LABEL: @_thr_umutex_init(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_UMUTEX:%.*]] addrspace(200)* [[MTX:%.*]] to i8 addrspace(200)*
-// CHECK-NEXT:    tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align [[$CAP_SIZE]] [[TMP0]], i8 addrspace(200)* align [[$CAP_SIZE]] bitcast ({{.+}} addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 {{48|96}}, i1 true), !tbaa.struct !2
+// CHECK-NEXT:    tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align [[#CAP_SIZE]] [[TMP0]], i8 addrspace(200)* align [[#CAP_SIZE]] bitcast ({{.+}} addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 {{48|96}}, i1 true), !tbaa.struct !2
 // CHECK-NEXT:    ret void
 //
 void _thr_umutex_init(struct umutex *mtx)
