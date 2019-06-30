@@ -405,6 +405,7 @@ template <class ELFT> void ELFFileBase::init() {
 
   // Initialize trivial attributes.
   const ELFFile<ELFT> &Obj = getObj<ELFT>();
+  EFlags = Obj.getHeader()->e_flags; // TODO: remove this
   EMachine = Obj.getHeader()->e_machine;
   OSABI = Obj.getHeader()->e_ident[llvm::ELF::EI_OSABI];
   ABIVersion = Obj.getHeader()->e_ident[llvm::ELF::EI_ABIVERSION];
