@@ -15,7 +15,9 @@ namespace elf {
 
 struct SymbolAndOffset {
 public:
-  SymbolAndOffset(Symbol *S, int64_t O) : SymOrSec(S), Offset(O) {}
+  SymbolAndOffset(Symbol *S, int64_t O) : SymOrSec(S), Offset(O) {
+    assert(S && "Should not be null");
+  }
   SymbolAndOffset(const SymbolAndOffset &) = default;
   SymbolAndOffset &operator=(const SymbolAndOffset &) = default;
 
@@ -24,13 +26,12 @@ public:
   // is stripped. This function tries to find the local symbol to a better match
   SymbolAndOffset findRealSymbol() const;
 
-  static SymbolAndOffset fromSectionWithOffset(InputSectionBase *IS,
-                                               uint64_t Offset,
-                                               Symbol *Default = nullptr);
+  static SymbolAndOffset
+  fromSectionWithOffset(InputSectionBase *IS, int64_t Offset,
+                        const SymbolAndOffset *Default = nullptr);
 
   inline std::string verboseToString() const {
-    if (SymOrSec.isNull())
-      return "<unknown symbol>";
+    assert(!SymOrSec.isNull());
     if (SymOrSec.is<Symbol *>())
       return lld::verboseToString(SymOrSec.get<Symbol *>(), Offset);
     assert(SymOrSec.is<InputSectionBase *>());
@@ -42,7 +43,9 @@ public:
   llvm::PointerUnion<Symbol *, InputSectionBase *> SymOrSec = nullptr;
   int64_t Offset = 0;
 private:
-  SymbolAndOffset(InputSectionBase *IS, int64_t O) : SymOrSec(IS), Offset(O) {}
+  SymbolAndOffset(InputSectionBase *IS, int64_t O) : SymOrSec(IS), Offset(O) {
+    assert(IS && "Should not be null");
+  }
 };
 
 struct CheriCapRelocLocation {

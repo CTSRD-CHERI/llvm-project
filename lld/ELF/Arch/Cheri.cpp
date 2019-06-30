@@ -86,24 +86,28 @@ static inline void nonFatalWarning(const Twine &Str) {
     warn(Str);
 }
 
-SymbolAndOffset SymbolAndOffset::fromSectionWithOffset(InputSectionBase *IS,
-                                                       uint64_t Offset,
-                                                       Symbol *Default) {
+SymbolAndOffset
+SymbolAndOffset::fromSectionWithOffset(InputSectionBase *IS, int64_t Offset,
+                                       const SymbolAndOffset *Default) {
   Symbol *FallbackResult = nullptr;
   assert((int64_t)Offset >= 0);
-  uint64_t FallbackOffset = Offset;
+  int64_t FallbackOffset = Offset;
   // For internal symbols we don't have a matching InputFile, just return
   auto* File = IS->File;
-  if (!File)
-    return {Default, (int64_t)Offset};
+  if (!File) {
+    if (Default)
+      return *Default;
+    return {IS, Offset};
+  }
   for (Symbol *B : IS->File->getSymbols()) {
     if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
         continue;
-      if (D->Value <= Offset && Offset <= D->Value + D->Size) {
+      if ((int64_t)D->Value <= Offset &&
+          Offset <= (int64_t)D->Value + (int64_t)D->Size) {
         // XXXAR: should we accept any symbol that encloses or only exact
         // matches?
-        if (D->Value == Offset && (D->isFunc() || D->isObject()))
+        if ((int64_t)D->Value == Offset && (D->isFunc() || D->isObject()))
           return {D, 0}; // perfect match
         FallbackResult = D;
         FallbackOffset = Offset - D->Value;
@@ -120,26 +124,28 @@ SymbolAndOffset SymbolAndOffset::fromSectionWithOffset(InputSectionBase *IS,
     if (!IS->Name.startswith(".rodata.str"))
       nonFatalWarning("Could not find a real symbol for __cap_reloc against " + IS->Name +
            "+0x" + utohexstr(Offset) + " in " + toString(IS->File));
-    FallbackResult = Default;
-  }
-  // we should have found at least a section symbol
-  if (!FallbackResult) {
     // Could not find a symbol -> return section+offset
-    return {IS, (int64_t)FallbackOffset};
+    assert(Offset == FallbackOffset);
+    if (Default)
+      return *Default;
+    return {IS, Offset};
   }
-  return {FallbackResult, (int64_t)FallbackOffset};
+  return {FallbackResult, FallbackOffset};
 }
 
 SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
-  if (!SymOrSec.is<Symbol *>())
-    return *this;
+  // If we only have a section, see if we can resolve section+offset to a
+  // symbol (that may have been added later).
+  if (SymOrSec.is<InputSectionBase *>()) {
+    return SymbolAndOffset::fromSectionWithOffset(
+        SymOrSec.get<InputSectionBase *>(), Offset, this);
+  }
   auto S = SymOrSec.get<Symbol *>();
   if (!S->isSection())
     return *this;
-
   if (Defined *DefinedSym = dyn_cast<Defined>(S)) {
     if (auto *IS = dyn_cast<InputSectionBase>(DefinedSym->Section)) {
-      return SymbolAndOffset::fromSectionWithOffset(IS, Offset, S);
+      return SymbolAndOffset::fromSectionWithOffset(IS, Offset, this);
     }
   }
   return *this;
@@ -663,6 +669,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, RelExpr Expr,
   Idx.NeedsSmallImm = false;
   Idx.UsedInCallExpr = false;
   Idx.FirstUse = SymbolAndOffset::fromSectionWithOffset(IS, Offset);
+  assert(!Idx.FirstUse->SymOrSec.isNull());
   switch (Expr) {
   case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
   case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
