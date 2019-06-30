@@ -48,7 +48,6 @@ public:
   void scanVersionScript();
 
   Symbol *find(StringRef Name);
-  
 
   void handleDynamicList();
 
