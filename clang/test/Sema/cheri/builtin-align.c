@@ -182,3 +182,16 @@ _Bool global3 = __builtin_is_aligned(33, 8);
 int global4 = __builtin_p2align_down(33, 8);
 int global5 = __builtin_p2align_up(33, 8);
 _Bool global6 = __builtin_is_p2aligned(33, 8);
+
+// Check that we can use it on array types:
+// https://github.com/CTSRD-CHERI/llvm-project/issues/328
+extern void test_ptr(char *c);
+char *test_array(void) {
+  char buf[1024];
+  // Array to pointer decay should work:
+  test_ptr(__builtin_align_up(buf, 16));
+  // Check that the return type decayed (if not this will result in a warning)
+  _Bool decayed = ((__typeof__(__builtin_align_up(buf, 16)))0) == ((char*)0);
+  // but not function to function-pointer:
+  test_ptr(__builtin_align_up(test_array, 16)); // expected-error{{operand of type 'char *(void)' where arithmetic or pointer type is required}}
+}

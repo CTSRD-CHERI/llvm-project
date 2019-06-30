@@ -14199,14 +14199,19 @@ struct BuiltinAlignArgs {
 
   BuiltinAlignArgs(const CallExpr *E, CodeGenFunction &CGF, bool PowerOfTwo) {
     QualType AstType = E->getArg(0)->getType();
+    if (AstType->isArrayType()) {
+      AstType = CGF.getContext().getDecayedType(AstType);
+      Src = CGF.EmitArrayToPointerDecay(E->getArg(0)).getPointer();
+    } else {
+      Src = CGF.EmitScalarExpr(E->getArg(0));
+    }
     IsCheri = AstType->isCHERICapabilityType(CGF.CGM.getContext());
     llvm::IntegerType *IntType = IntegerType::get(
         CGF.getLLVMContext(), CGF.getContext().getIntRange(AstType));
-    Src = CGF.EmitScalarExpr(E->getArg(0));
+
     // We need to convert source to an integer in order to perform the masking
     // For CHERI we need to get the virtual address and perform add the
     // difference instead of masking since that only works on the offset.
-
     if (IsCheri) {
       Value *Callee = CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get, CGF.IntPtrTy);
       SrcAsI8Cap = CGF.Builder.CreateBitCast(Src, CGF.CGM.Int8CheriCapTy);

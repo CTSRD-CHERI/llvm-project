@@ -1,6 +1,7 @@
 // REQUIRES: mips-registered-target
 // Run with delay slot filling disabled since this makes the test fragile by moving instructions after scheduling
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=beri -S %s -o - -O2 -fPIC -mllvm -disable-mips-delay-filler | FileCheck %s -check-prefixes CHECK,BERI
+// RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -march=beri -S %s -o - -O2 -fPIC -mllvm -disable-mips-delay-filler | FileCheck %s -check-prefixes CHECK,BERI
 // RUN: %cheri_purecap_cc1 -S %s -o - -O2 -mllvm -disable-mips-delay-filler | FileCheck %s -check-prefixes CHECK,PURECAP
 // With -mcpu=mips4 we get lots of pipeline bubbles:
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -S %s -o - -O2 -fPIC -mllvm -disable-mips-delay-filler  | FileCheck %s -check-prefixes CHECK,MIPS4
@@ -10,6 +11,7 @@
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-MIPS4
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -cheri=128 -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-CHERI128
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=beri -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-BERI
+// RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -march=beri -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-BERI
 // RUN: %clang -target mips64-unknown-freebsd -mabi=n64 -mcpu=mips4 -Xclang -target-feature -Xclang +beri -c %s -o - | llvm-readobj -h - | FileCheck %s -check-prefixes FLAGS,FLAGS-BERI
 // FLAGS:                Flags [
 // FLAGS-CHERI128-SAME:   (0x30C10007)

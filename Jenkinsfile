@@ -136,6 +136,8 @@ CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")
 CMAKE_ARGS+=("-DLLVM_USE_SANITIZER=Address;Undefined")
 '''
     }
+
+buildScript += '''
 # Also don't set the default target or default sysroot when running tests as it breaks quite a few
 # max 1 hour total and max 2 minutes per test
 CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output ${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout 240")

@@ -235,8 +235,11 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
   }
 
   QualType SrcTy = Source->getType();
-
-  if (!SrcTy->isPointerType() && !IsValidIntegerType(SrcTy)) {
+  // Should also be able to use it with arrays (but not functions!)
+  bool IsArrayToPointerDecay =
+      SrcTy->canDecayToPointerType() && SrcTy->isArrayType();
+  if (!SrcTy->isPointerType() && !IsArrayToPointerDecay &&
+      !IsValidIntegerType(SrcTy)) {
     // TODO: this is not quite the right error message since we don't allow
     // floating point types, or member pointers
     S.Diag(AlignOp->getExprLoc(), diag::err_typecheck_expect_scalar_operand)
@@ -281,9 +284,11 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
 
   TheCall->setArg(0, Source);
   TheCall->setArg(1, AlignOp);
+  QualType RetTy = Source->getType();
+  if (IsArrayToPointerDecay)
+    RetTy = S.Context.getDecayedType(RetTy);
   // __builtin_is_aligned() returns bool instead of the same type as Arg1
-  TheCall->setType(IsBooleanAlignBuiltin ? S.Context.BoolTy
-                                         : Source->getType());
+  TheCall->setType(IsBooleanAlignBuiltin ? S.Context.BoolTy : RetTy);
   return false;
 }
 
