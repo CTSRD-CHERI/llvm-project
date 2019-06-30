@@ -14,8 +14,8 @@
 // RUN: ld.lld --verbose -pie %t/main.o -o %t/thr-first.exe %t/libthr.a %t/libc.a
 // RUN: ld.lld --verbose -pie %t/main.o -o %t/libc-first.exe %t/libc.a %t/libthr.a
 
-// RUN: llvm-objdump -t %t/thr-first.exe
-// RUN: llvm-objdump -t %t/libc-first.exe
+// RUN: llvm-objdump -t %t/thr-first.exe | FileCheck %s -check-prefix USES-LIBTHR-SYMBOLS
+// RUN: llvm-objdump -t %t/libc-first.exe | FileCheck %s -check-prefix USES-LIBC-SYMBOLS
 
 // PTHREAD symbols are a single instruction in the libthr version:
 
@@ -30,6 +30,9 @@
 // USES-LIBTHR-SYMBOLS-DAG: gw    F .text		 00000004 pthread_once
 
 // Static linking of libc and libthr must be done in the right order otherwise we get infinite loops
+// FIXME: can we warn about this?
+// USES-LIBC-SYMBOLS: SYMBOL TABLE:
+// USES-LIBC-SYMBOLS: gw    F .text		 00000058 pthread_exit
 
 
 #ifndef EXE
