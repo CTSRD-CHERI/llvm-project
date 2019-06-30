@@ -16,7 +16,7 @@
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t2.o -DOTHER_FILE %s
 // RUN: llvm-objdump --syms %t2.o | FileCheck %s -check-prefix OTHER_FILE-SYMS
-// OTHER_FILE-SYMS: 0000000000000000 g F .text 00000034 check_if_default
+// OTHER_FILE-SYMS: 0000000000000000 g F .text 00000028 .protected check_if_default
 
 // Check that we emit a R_CHERI_CAPABILITY relocation instead of __cap_relocs for shlib/pie/dynamically linked exe
 // Also check that we only emit exactly one fake symbol for each function pointer!

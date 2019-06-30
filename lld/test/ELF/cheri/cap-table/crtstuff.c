@@ -79,5 +79,5 @@ __attribute__((noreturn)) void exit(int code) {
 // WITH_CTORS-SYMS:    0000000120020020       .init_array    00000008 .hidden __init_array_start
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_end
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_start
-// CHECK-SYMS:         00000001200002d0         __cap_relocs		 00000398 __start___cap_relocs
-// CHECK-SYMS:         0000000120000668         __cap_relocs		 00000000 __stop___cap_relocs
+// CHECK-SYMS:         00000001200002d0         __cap_relocs		 00000398 .protected __start___cap_relocs
+// CHECK-SYMS:         0000000120000668         __cap_relocs		 00000000 .protected __stop___cap_relocs
