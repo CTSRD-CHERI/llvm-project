@@ -1914,7 +1914,7 @@ void ELFDumper<ELFT>::printDynamicEntry(raw_ostream &OS, uint64_t Type,
         OS << ' ';
         printFlags(Value, makeArrayRef(ElfDynamicDTMipsCheriAbiFlags), OS);
       }
-      break;
+      return;
     default:
       break;
     }
