@@ -1491,6 +1491,15 @@ printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
 
   std::unordered_map<uint64_t, std::string> SymbolNames;
   for (const SymbolRef &Sym : Obj->symbols()) {
+    if (auto Type = Sym.getType()) {
+      // Skip STT_FILE symbols
+      if (*Type == SymbolRef::ST_File)
+        continue;
+    }
+    auto Section = Sym.getSection();
+    if (!Section || *Section == Obj->section_end()) {
+      continue; // Skip undefined symbols
+    }
     Expected<uint64_t> Start = Sym.getAddress();
     if (!Start)
       continue;
