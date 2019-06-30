@@ -25,9 +25,9 @@ __attribute((section(".rodata"))) const int(*foo)(int) = &__start + 4;
 // CHECK-NEXT: >>> defined in capability-in-rodata2.c ({{.+}}capability-in-rodata2.c.tmp.o:(foo))
 
 // EXE: CHERI __cap_relocs [
-// EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x120010000 (__start+4) Length: 44 Perms: Function
+// EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x120010000 (__start+4) Length: {{.+}} Perms: Function
 // EXE-NEXT: ]
 
 // SHLIB: CHERI __cap_relocs [
-// SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x10000 (__start+4) Length: 44 Perms: Function
+// SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x10000 (__start+4) Length: {{.+}} Perms: Function
 // SHLIB-NEXT: ]

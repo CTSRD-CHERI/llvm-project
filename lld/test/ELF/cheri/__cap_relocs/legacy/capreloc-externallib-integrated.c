@@ -26,7 +26,7 @@
 // STATIC: CAPABILITY RELOCATION RECORDS:
 // STATIC: 0x0000000120020000	Base: external_cap (0x0000000120021180)	Offset: 0x0000000000000000	Length: 0x00000000000000{{1|2}}0	Permissions: 0x00000000
 // STATIC: 0x0000000120020020	Base: external_buffer (0x0000000120020080)	Offset: 0x0000000000000019	Length: 0x00000000000010e1	Permissions: 0x00000000
-// STATIC: 0x0000000120020040	Base: external_func (0x000000012001{{.+}})	Offset: 0x0000000000000000	Length: 0x000000000000002c	Permissions: 0x8000000000000000 (Function)
+// STATIC: 0x0000000120020040	Base: external_func (0x000000012001{{.+}})	Offset: 0x0000000000000000	Length: 0x00000000000000{{[0-9a-f]+}}	Permissions: 0x8000000000000000 (Function)
 
 // The dynamic case fills in the offset length and permission fields but doesn't have the base yet
 // DYNAMIC: CAPABILITY RELOCATION RECORDS:
@@ -47,7 +47,7 @@
 // DUMP-EXTERNALLIB: SYMBOL TABLE:
 // DUMP-EXTERNALLIB:  0000000000020020 g     O .bss		 000010e1 external_buffer
 // DUMP-EXTERNALLIB:  0000000000021120 g     O .bss		 00000020 external_cap
-// DUMP-EXTERNALLIB:  0000000000010000 g     F .text		 0000002c external_func
+// DUMP-EXTERNALLIB:  0000000000010000 g     F .text		 000000{{[0-9a-f]+}} external_func
 
 
 // SHLIB:      Section (8) .rel.dyn {

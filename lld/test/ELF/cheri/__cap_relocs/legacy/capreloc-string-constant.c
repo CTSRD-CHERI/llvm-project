@@ -58,11 +58,11 @@ struct option options_table[] = {
 // READOBJ-NEXT: ]
 
 // OBJ-CAPRELOCS: CAPABILITY RELOCATION RECORDS:
-// OBJ-CAPRELOCS: 0x0000000000000000      Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// OBJ-CAPRELOCS: 0x0000000000000000      Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000004      Length: 0x0000000000000000      Permissions: 0x00000000
-// OBJ-CAPRELOCS: 0x0000000000000000      Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// OBJ-CAPRELOCS: 0x0000000000000000      Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// OBJ-CAPRELOCS: 0x0000000000000000      Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000001      Length: 0x0000000000000000      Permissions: 0x00000000{{$}}
+// OBJ-CAPRELOCS: 0x0000000000000000      Base: .rodata.str1.1 (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// OBJ-CAPRELOCS: 0x0000000000000000      Base: .rodata.str1.1 (0x0000000000000000)     Offset: 0x0000000000000004      Length: 0x0000000000000000      Permissions: 0x00000000
+// OBJ-CAPRELOCS: 0x0000000000000000      Base: .rodata.str1.1 (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// OBJ-CAPRELOCS: 0x0000000000000000      Base: .rodata.str1.1 (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// OBJ-CAPRELOCS: 0x0000000000000000      Base: .rodata.str1.1 (0x0000000000000000)     Offset: 0x0000000000000001      Length: 0x0000000000000000      Permissions: 0x00000000{{$}}
 // OBJ-CAPRELOCS-EMPTY:
 
 
@@ -100,14 +100,14 @@ struct option options_table[] = {
 // STATIC-NEXT:   SHF_MERGE (0x10)
 // STATIC-NEXT:   SHF_STRINGS (0x20)
 // STATIC-NEXT: ]
-// STATIC-NEXT: Address: [[$RODATA:0x120000208]]
+// STATIC-NEXT: Address: 0x120000208
 
 // STATIC-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT: 0x1200100{{20|10}}  Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: [[$CONSTANT_FLAG]]
-// STATIC-NEXT: 0x1200100{{60|30}}  Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7  Perms: [[$CONSTANT_FLAG]]
-// STATIC-NEXT: 0x1200100{{a0|50}}  Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
-// STATIC-NEXT: 0x1200100{{e0|70}}  Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
-// STATIC-NEXT: 0x120010{{120|090}} Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x1200100{{20|10}}  Base: 0x120000208     (<unknown symbol>+0) Length: 23 Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x1200100{{60|30}}  Base: 0x120000218 (<unknown symbol>+4) Length: 7  Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x1200100{{a0|50}}  Base: 0x12000020e  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x1200100{{e0|70}}  Base: 0x12000020e  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x120010{{120|090}} Base: 0x12000020e  (<unknown symbol>+1) Length: 17 Perms: [[$CONSTANT_FLAG]]
 // STATIC-NEXT: ]
 
 // DYNAMIC: Section {

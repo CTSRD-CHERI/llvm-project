@@ -107,7 +107,7 @@ def main():
       if len(commands) > 1:
         filecheck_cmd = commands[1]
       if filecheck_cmd.startswith("%cheri_FileCheck"):
-        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D$CAP_SIZE=16'")
+        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
       if not llc_cmd.startswith('llc '):
         print('WARNING: Skipping non-llc RUN line: ' + l, file=sys.stderr)
         continue
