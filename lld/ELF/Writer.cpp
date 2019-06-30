@@ -1803,6 +1803,16 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     }
   }
 
+  StringRef CaptableSym = "_CHERI_CAPABILITY_TABLE_";
+  if (In.CheriCapTable) {
+    // When creating relocatable output we should not define the
+    // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate
+    // symbol errors when linking that into a final executable
+    if (!Config->Relocatable)
+      ElfSym::CheriCapabilityTable =
+          addOptionalRegular(CaptableSym, In.CheriCapTable, 0);
+  }
+
   // This responsible for splitting up .eh_frame section into
   // pieces. The relocation scan uses those pieces, so this has to be
   // earlier.
@@ -1813,16 +1823,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     if (!S->IsPreemptible)
       S->IsPreemptible = computeIsPreemptible(*S);
   });
-
-  StringRef CaptableSym = "_CHERI_CAPABILITY_TABLE_";
-  if (In.CheriCapTable) {
-    // When creating relocatable output we should not define the
-    // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate
-    // symbol errors when linking that into a final executable
-    if (!Config->Relocatable)
-      ElfSym::CheriCapabilityTable = addOptionalRegular(
-          CaptableSym, In.CheriCapTable, 0, STV_HIDDEN, STB_LOCAL);
-  }
 
   // Scan relocations. This must be done after every symbol is declared so that
   // we can correctly decide if a dynamic relocation is needed.
@@ -1843,6 +1843,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
           Symtab->addSymbol(Defined{nullptr, CaptableSym, STB_LOCAL,
             STV_HIDDEN, STT_NOTYPE, 0, 0, In.CheriCapTable}));
       ElfSym::CheriCapabilityTable->IsSectionStartSymbol = true;
+      assert(!ElfSym::CheriCapabilityTable->IsPreemptible);
     }
     In.CheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
   }
