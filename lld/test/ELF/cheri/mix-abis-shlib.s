@@ -1,3 +1,4 @@
+# RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=legacy -filetype=obj %s -o %t-legacy.o
 # RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=pcrel -filetype=obj %s -o %t-pcrel.o
 # RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=plt -filetype=obj %s -o %t-plt.o
 # RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=fn-desc -filetype=obj %s -o %t-fn-desc.o
