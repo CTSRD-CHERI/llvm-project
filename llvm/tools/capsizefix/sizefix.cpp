@@ -47,7 +47,10 @@ int main(int argc, char *argv[]) {
     StringRef Name;
     if (!Sec.getName(Name)) {
       if (Name == "__cap_relocs") {
-        Data = *Sec.getContents();
+        Expected<StringRef> Contents = Sec.getContents();
+        if (!Contents)
+          report_fatal_error(Contents.takeError(), false);
+        Data = *Contents;
         continue;
       } else if (Name == ".global_sizes") {
         SizesSection = Sec;
@@ -137,7 +140,10 @@ int main(int argc, char *argv[]) {
     fwrite(&BigPerms, sizeof(BigPerms), 1, F);
   }
   if (SizesSection != SectionRef()) {
-    Data = *SizesSection.getContents();
+    Expected<StringRef> Contents = SizesSection.getContents();
+    if (!Contents)
+      report_fatal_error(Contents.takeError(), false);
+    Data = *Contents;
     uint64_t SectionOffset = Data.data() - MB.getBufferStart();
     for (SymbolRef &sym : SizeSymbols) {
       Expected<uint64_t> Start = sym.getAddress();
