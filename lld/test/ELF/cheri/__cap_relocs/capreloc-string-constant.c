@@ -72,7 +72,7 @@ struct option options_table[] = {
 // STATIC-NEXT:   SHF_MERGE (0x10)
 // STATIC-NEXT:   SHF_STRINGS (0x20)
 // STATIC-NEXT: ]
-// STATIC-NEXT: Address: [[#RODATA:]]
+// STATIC-NEXT: Address: [[#RODATA:12345]]
 
 // STATIC-LABEL: CHERI __cap_relocs [
 // STATIC-NEXT:    0x120010020 Base: 0x[[#RODATA]]      (<unknown symbol>+0) Length: 6 Perms: Constant
