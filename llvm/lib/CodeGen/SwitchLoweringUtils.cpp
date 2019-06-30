@@ -274,7 +274,7 @@ void SwitchCG::SwitchLowering::findBitTestClusters(CaseClusterVector &Clusters,
     return;
 
   // If target does not have legal shift left, do not emit bit tests at all.
-  EVT PTy = TLI->getPointerTy(*DL, DL->getProgramAddressSpace());
+  EVT PTy = TLI->getPointerRangeTy(*DL, DL->getProgramAddressSpace());
   if (!TLI->isOperationLegal(ISD::SHL, PTy))
     return;
 
@@ -380,7 +380,7 @@ bool SwitchCG::SwitchLowering::buildBitTests(CaseClusterVector &Clusters,
   APInt LowBound;
   APInt CmpRange;
 
-  const int BitWidth = TLI->getPointerTy(*DL, DL->getProgramAddressSpace()).getSizeInBits();
+  const int BitWidth = TLI->getPointerRangeTy(*DL, DL->getProgramAddressSpace()).getSizeInBits();
   assert(TLI->rangeFitsInWord(Low, High, *DL) &&
          "Case range must fit in bit mask!");
 
