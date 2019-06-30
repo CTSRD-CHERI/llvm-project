@@ -1078,7 +1078,9 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
   // mode. Disallow them.
   if (Config->Shared ||
       (Config->Pie && Expr == R_ABS && Type != Target->SymbolicRel)) {
-    errorOrWarn(
+    // XXXAR: currently we need absolute R_MIPS_HIGHER, relocations in -pie binaries for libcheri!
+    if (Config->ZText)
+      errorOrWarn(
         "relocation " + toString(Type) + " cannot be used against " +
         (Sym.getName().empty() ? "local symbol" : "symbol " + toString(Sym)) +
         "; recompile with -fPIC" + getLocation(Sec, Sym, Offset));
