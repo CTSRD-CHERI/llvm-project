@@ -52,7 +52,7 @@ __error(void)
 void __start(void) {}
 
 // OBJ-CAPRELOCS: CAPABILITY RELOCATION RECORDS:
-// OBJ-CAPRELOCS: 0x0000000000000000      Base:  (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000{{$}}
+// OBJ-CAPRELOCS: 0x0000000000000000      Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000{{$}}
 // OBJ-CAPRELOCS-SAME:{{[[:space:]]$}}
 
 // LINKING-EXE-NOT: warning
