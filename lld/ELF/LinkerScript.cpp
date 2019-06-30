@@ -539,7 +539,7 @@ static OutputSection *findByName(ArrayRef<BaseCommand *> Vec,
 static OutputSection *createSection(InputSectionBase *IS,
                                     StringRef OutsecName) {
   OutputSection *Sec = Script->createOutputSection(OutsecName, "<internal>");
-  if (OutsecName == "__cap_relocs") {
+  if (OutsecName == "__cap_relocs" && !Config->RelativeCapRelocsOnly) {
     Sec->Flags |= SHF_WRITE;
   }
   Sec->addSection(cast<InputSection>(IS));
