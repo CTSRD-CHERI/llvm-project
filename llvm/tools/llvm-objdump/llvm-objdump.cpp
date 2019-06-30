@@ -1506,7 +1506,7 @@ printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
     if (Sec.getName(Name))
       continue;
     if (Name == "__cap_relocs") {
-      Data = *Sec.getContents();
+      Data = unwrapOrError(Sec.getContents(), Obj->getFileName());
       break;
     }
   }
