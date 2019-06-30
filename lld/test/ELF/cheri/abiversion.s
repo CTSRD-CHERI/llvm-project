@@ -1,7 +1,6 @@
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -pie %t.o -o %t.exe
-# RUN: llvm-readobj --help
-# RUN: llvm-readobj -h %t.exe
+# RUN: llvm-readobj -h %t.exe | FileCheck %s
 
 .text
 .global __start
@@ -11,7 +10,7 @@ nop
 .end __start
 
 
-# CHECK-NEXT: Format: ELF64-mips
+# CHECK:      Format: ELF64-mips
 # CHECK-NEXT: Arch: cheri
 # CHECK-NEXT: AddressSize: 64bit
 # CHECK-NEXT: LoadName:
@@ -35,4 +34,3 @@ nop
 # CHECK-NEXT:     EF_MIPS_MACH_CHERI128 (0xC10000)
 # CHECK-NEXT:     EF_MIPS_PIC (0x2)
 # CHECK-NEXT:   ]
-# CHECK-NEXT: }
