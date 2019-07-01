@@ -202,6 +202,8 @@ struct __type_info_implementations {
     }
   };
 
+// XXXAR: this implementation cannot work for pure-capability CHERI
+#ifndef __CHERI_PURE_CAPABILITY__
   struct __non_unique_arm_rtti_bit_impl {
     typedef uintptr_t __type_name_t;
 
@@ -251,6 +253,7 @@ struct __type_info_implementations {
       return !((__lhs & __rhs) & __non_unique_rtti_bit::value);
     }
   };
+#endif // __CHERI_PURE_CAPABILITY__
 
   typedef
 #if defined(__APPLE__) && defined(__LP64__) && !defined(__x86_64__)
