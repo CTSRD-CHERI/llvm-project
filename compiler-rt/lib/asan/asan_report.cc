@@ -263,6 +263,13 @@ void ReportCallocOverflow(uptr count, usize size, BufferedStackTrace *stack) {
   in_report.ReportError(error);
 }
 
+void ReportReallocArrayOverflow(usize count, usize size,
+                                BufferedStackTrace *stack) {
+  ScopedInErrorReport in_report(/*fatal*/ true);
+  ErrorReallocArrayOverflow error(GetCurrentTidOrInvalid(), stack, count, size);
+  in_report.ReportError(error);
+}
+
 void ReportPvallocOverflow(usize size, BufferedStackTrace *stack) {
   ScopedInErrorReport in_report(/*fatal*/ true);
   ErrorPvallocOverflow error(GetCurrentTidOrInvalid(), stack, size);
