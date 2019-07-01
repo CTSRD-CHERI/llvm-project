@@ -5592,9 +5592,7 @@ undeclare_reachable(_Tp* __p)
     return static_cast<_Tp*>(__undeclare_reachable(__p));
 }
 
-#ifndef __CHERI_PURE_CAPABILITY__
 _LIBCPP_FUNC_VIS void* align(size_t __align, size_t __sz, void*& __ptr, size_t& __space);
-#endif
 
 // --- Helper for container swap --
 template <typename _Alloc>
