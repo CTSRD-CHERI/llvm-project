@@ -32,7 +32,7 @@
 // Static linking of libc and libthr must be done in the right order otherwise we get infinite loops
 // FIXME: can we warn about this?
 // USES-LIBC-SYMBOLS: SYMBOL TABLE:
-// USES-LIBC-SYMBOLS: gw    F .text		 00000058 pthread_exit
+// USES-LIBC-SYMBOLS: gw    F .text		 000000{{58|5c}} pthread_exit
 
 
 #ifndef EXE
