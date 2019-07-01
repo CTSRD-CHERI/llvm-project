@@ -8,18 +8,18 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK-LABEL: global_nonvirt_ptr:
 ; CHECK-NEXT:  .chericap       _ZN1A7nonvirtEv
 ; CHECK-NEXT:  .8byte  0
-; CHECK-NEXT:  .space  [[@EXPR $CAP_SIZE - 8]]
-; CHECK-NEXT:  .size   global_nonvirt_ptr, [[@EXPR 2 * $CAP_SIZE]]
+; CHECK-NEXT:  .space  [[#CAP_SIZE - 8]]
+; CHECK-NEXT:  .size   global_nonvirt_ptr, [[#CAP_SIZE * 2]]
 
 ; CHECK-LABEL: global_virt_ptr:
 ; CHECK-NEXT:  .chericap 0
 ; CHECK-NEXT:  .8byte  1
-; CHECK-NEXT:  .space  [[@EXPR $CAP_SIZE - 8]]
-; CHECK-NEXT:  .size   global_virt_ptr, [[@EXPR 2 * $CAP_SIZE]]
+; CHECK-NEXT:  .space  [[#CAP_SIZE - 8]]
+; CHECK-NEXT:  .size   global_virt_ptr, [[#CAP_SIZE * 2]]
 
 ; CHECK-LABEL: global_fn_ptr:
 ; CHECK-NEXT:  .chericap       _Z9global_fnv
-; CHECK-NEXT:  .size   global_fn_ptr, [[$CAP_SIZE]]
+; CHECK-NEXT:  .size   global_fn_ptr, [[#CAP_SIZE]]
 
 ; CHECK:       .type   _ZTV1A,@object          # @_ZTV1A
 ; CHECK-NEXT:  .section .data.rel.ro,"aw",@progbits
@@ -30,7 +30,7 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK-NEXT:  .chericap 0
 ; CHECK-NEXT:  .chericap       _ZN1A4virtEv
 ; CHECK-NEXT:  .chericap       _ZN1A5virt2Ev
-; CHECK-NEXT:  .size   _ZTV1A, [[@EXPR 4 * $CAP_SIZE]]
+; CHECK-NEXT:  .size   _ZTV1A, [[#CAP_SIZE * 4]]
 
 ; LEGACY_ABI-LABEL: .size.global_nonvirt_ptr:
 ; LEGACY_ABI-LABEL: .size.global_fn_ptr:

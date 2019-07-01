@@ -167,9 +167,16 @@ def FeaturePKU   : SubtargetFeature<"pku", "HasPKU", "true",
 def FeatureVNNI    : SubtargetFeature<"avx512vnni", "HasVNNI", "true",
                           "Enable AVX-512 Vector Neural Network Instructions",
                                       [FeatureAVX512]>;
+def FeatureBF16    : SubtargetFeature<"avx512bf16", "HasBF16", "true",
+                           "Support bfloat16 floating point",
+                                      [FeatureBWI]>;
 def FeatureBITALG  : SubtargetFeature<"avx512bitalg", "HasBITALG", "true",
                        "Enable AVX-512 Bit Algorithms",
                         [FeatureBWI]>;
+def FeatureVP2INTERSECT  : SubtargetFeature<"avx512vp2intersect",
+                                            "HasVP2INTERSECT", "true",
+                                            "Enable AVX-512 vp2intersect",
+                                            [FeatureAVX512]>;
 def FeaturePCLMUL  : SubtargetFeature<"pclmul", "HasPCLMUL", "true",
                          "Enable packed carry-less multiplication instructions",
                                [FeatureSSE2]>;
@@ -260,6 +267,8 @@ def FeatureRDPID : SubtargetFeature<"rdpid", "HasRDPID", "true",
                                     "Support RDPID instructions">;
 def FeatureWAITPKG  : SubtargetFeature<"waitpkg", "HasWAITPKG", "true",
                                       "Wait and pause enhancements">;
+def FeatureENQCMD : SubtargetFeature<"enqcmd", "HasENQCMD", "true",
+                                     "Has ENQCMD instructions">;
 // On some processors, instructions that implicitly take two memory operands are
 // slow. In practice, this means that CALL, PUSH, and POP with memory operands
 // should be avoided in favor of a MOV + register CALL/PUSH/POP.
@@ -423,6 +432,16 @@ def FeatureFastHorizontalOps
         "fast-hops", "HasFastHorizontalOps", "true",
         "Prefer horizontal vector math instructions (haddp, phsub, etc.) over "
         "normal vector instructions with shuffles", [FeatureSSE3]>;
+
+def FeatureFastScalarShiftMasks
+    : SubtargetFeature<
+        "fast-scalar-shift-masks", "HasFastScalarShiftMasks", "true",
+        "Prefer a left/right scalar logical shift pair over a shift+and pair">;
+
+def FeatureFastVectorShiftMasks
+    : SubtargetFeature<
+        "fast-vector-shift-masks", "HasFastVectorShiftMasks", "true",
+        "Prefer a left/right vector logical shift pair over a shift+and pair">;
 
 // Merge branches using three-way conditional code.
 def FeatureMergeToThreeWayBranch : SubtargetFeature<"merge-to-threeway-branch",
@@ -596,6 +615,15 @@ def ProcessorFeatures {
     !listconcat(SKXInheritableFeatures, CLXAdditionalFeatures);
   list<SubtargetFeature> CLXFeatures =
     !listconcat(CLXInheritableFeatures, CLXSpecificFeatures);
+
+  // Cooperlake
+  list<SubtargetFeature> CPXAdditionalFeatures = [FeatureBF16];
+  list<SubtargetFeature> CPXSpecificFeatures = [FeatureHasFastGather,
+                                                FeaturePOPCNTFalseDeps];
+  list<SubtargetFeature> CPXInheritableFeatures =
+    !listconcat(CLXInheritableFeatures, CPXAdditionalFeatures);
+  list<SubtargetFeature> CPXFeatures =
+    !listconcat(CPXInheritableFeatures, CPXSpecificFeatures);
 
   // Cannonlake
   list<SubtargetFeature> CNLAdditionalFeatures = [FeatureAVX512,
@@ -775,7 +803,9 @@ def ProcessorFeatures {
                                                       FeaturePOPCNT,
                                                       FeatureSlowSHLD,
                                                       FeatureLAHFSAHF,
-                                                      FeatureFast15ByteNOP];
+                                                      FeatureFast15ByteNOP,
+                                                      FeatureFastScalarShiftMasks,
+                                                      FeatureFastVectorShiftMasks];
   list<SubtargetFeature> BtVer1Features = BtVer1InheritableFeatures;
 
   // Jaguar
@@ -816,6 +846,7 @@ def ProcessorFeatures {
                                                       FeatureSlowSHLD,
                                                       FeatureLAHFSAHF,
                                                       FeatureFast11ByteNOP,
+                                                      FeatureFastScalarShiftMasks,
                                                       FeatureBranchFusion];
   list<SubtargetFeature> BdVer1Features = BdVer1InheritableFeatures;
 
@@ -867,6 +898,7 @@ def ProcessorFeatures {
                                        FeatureFastBEXTR,
                                        FeatureFast15ByteNOP,
                                        FeatureBranchFusion,
+                                       FeatureFastScalarShiftMasks,
                                        FeatureMMX,
                                        FeatureMOVBE,
                                        FeatureMWAITX,
@@ -1053,6 +1085,8 @@ foreach P = ["skylake-avx512", "skx"] in {
 
 def : ProcessorModel<"cascadelake", SkylakeServerModel,
                      ProcessorFeatures.CLXFeatures>;
+def : ProcessorModel<"cooperlake", SkylakeServerModel,
+                     ProcessorFeatures.CPXFeatures>;
 def : ProcessorModel<"cannonlake", SkylakeServerModel,
                      ProcessorFeatures.CNLFeatures>;
 def : ProcessorModel<"icelake-client", SkylakeServerModel,
@@ -1083,20 +1117,22 @@ foreach P = ["athlon-4", "athlon-xp", "athlon-mp"] in {
 foreach P = ["k8", "opteron", "athlon64", "athlon-fx"] in {
   def : Proc<P, [FeatureX87, FeatureSlowUAMem16, FeatureCMPXCHG8B,
                  FeatureSSE2, Feature3DNowA, FeatureFXSR, FeatureNOPL,
-                 Feature64Bit, FeatureSlowSHLD, FeatureCMOV]>;
+                 Feature64Bit, FeatureSlowSHLD, FeatureCMOV,
+                 FeatureFastScalarShiftMasks]>;
 }
 
 foreach P = ["k8-sse3", "opteron-sse3", "athlon64-sse3"] in {
   def : Proc<P, [FeatureX87, FeatureSlowUAMem16, FeatureCMPXCHG8B, FeatureSSE3,
                  Feature3DNowA, FeatureFXSR, FeatureNOPL, FeatureCMPXCHG16B,
-                 FeatureSlowSHLD, FeatureCMOV, Feature64Bit]>;
+                 FeatureSlowSHLD, FeatureCMOV, Feature64Bit,
+                 FeatureFastScalarShiftMasks]>;
 }
 
 foreach P = ["amdfam10", "barcelona"] in {
   def : Proc<P, [FeatureX87, FeatureCMPXCHG8B, FeatureSSE4A, Feature3DNowA,
                  FeatureFXSR, FeatureNOPL, FeatureCMPXCHG16B, FeatureLZCNT,
                  FeaturePOPCNT, FeatureSlowSHLD, FeatureLAHFSAHF, FeatureCMOV,
-                 Feature64Bit]>;
+                 Feature64Bit, FeatureFastScalarShiftMasks]>;
 }
 
 // Bobcat

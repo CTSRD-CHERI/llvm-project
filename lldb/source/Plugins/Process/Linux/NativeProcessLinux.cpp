@@ -206,9 +206,7 @@ static Status EnsureFDFlags(int fd, int flags) {
   return error;
 }
 
-// -----------------------------------------------------------------------------
 // Public Static Methods
-// -----------------------------------------------------------------------------
 
 llvm::Expected<std::unique_ptr<NativeProcessProtocol>>
 NativeProcessLinux::Factory::Launch(ProcessLaunchInfo &launch_info,
@@ -284,9 +282,7 @@ NativeProcessLinux::Factory::Attach(
       pid, -1, native_delegate, Info.GetArchitecture(), mainloop, *tids_or));
 }
 
-// -----------------------------------------------------------------------------
 // Public Instance Methods
-// -----------------------------------------------------------------------------
 
 NativeProcessLinux::NativeProcessLinux(::pid_t pid, int terminal_fd,
                                        NativeDelegate &delegate,
@@ -1011,11 +1007,7 @@ NativeProcessLinux::SetupSoftwareSingleStepping(NativeThreadLinux &thread) {
       // Arm mode
       error = SetSoftwareBreakpoint(next_pc, 4);
     }
-  } else if (m_arch.GetMachine() == llvm::Triple::mips64 ||
-             m_arch.GetMachine() == llvm::Triple::mips64el ||
-             m_arch.GetMachine() == llvm::Triple::mips ||
-             m_arch.GetMachine() == llvm::Triple::mipsel ||
-             m_arch.GetMachine() == llvm::Triple::ppc64le)
+  } else if (m_arch.IsMIPS() || m_arch.GetTriple().isPPC64())
     error = SetSoftwareBreakpoint(next_pc, 4);
   else {
     // No size hint is given for the next breakpoint
@@ -1035,11 +1027,7 @@ NativeProcessLinux::SetupSoftwareSingleStepping(NativeThreadLinux &thread) {
 }
 
 bool NativeProcessLinux::SupportHardwareSingleStepping() const {
-  if (m_arch.GetMachine() == llvm::Triple::arm ||
-      m_arch.GetMachine() == llvm::Triple::mips64 ||
-      m_arch.GetMachine() == llvm::Triple::mips64el ||
-      m_arch.GetMachine() == llvm::Triple::mips ||
-      m_arch.GetMachine() == llvm::Triple::mipsel)
+  if (m_arch.GetMachine() == llvm::Triple::arm || m_arch.IsMIPS())
     return false;
   return true;
 }
@@ -2093,4 +2081,19 @@ Status NativeProcessLinux::StopProcessorTracingOnThread(lldb::user_id_t traceid,
   m_processor_trace_monitor.erase(iter);
 
   return error;
+}
+
+llvm::Optional<uint64_t>
+NativeProcessLinux::GetAuxValue(enum AuxVector::EntryType type) {
+  if (m_aux_vector == nullptr) {
+    auto buffer_or_error = GetAuxvData();
+    if (!buffer_or_error)
+      return llvm::None;
+    DataExtractor auxv_data(buffer_or_error.get()->getBufferStart(),
+                            buffer_or_error.get()->getBufferSize(),
+                            GetByteOrder(), GetAddressByteSize());
+    m_aux_vector = llvm::make_unique<AuxVector>(auxv_data);
+  }
+
+  return m_aux_vector->GetAuxValue(type);
 }

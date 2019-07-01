@@ -317,10 +317,10 @@ static inline std::string formatModuleDetailKind(SymbolKind K) {
 std::vector<StatCollection::KindAndStat>
 StatCollection::getStatsSortedBySize() const {
   std::vector<KindAndStat> SortedStats(Individual.begin(), Individual.end());
-  std::stable_sort(SortedStats.begin(), SortedStats.end(),
-                   [](const KindAndStat &LHS, const KindAndStat &RHS) {
-                     return LHS.second.Size > RHS.second.Size;
-                   });
+  llvm::stable_sort(SortedStats,
+                    [](const KindAndStat &LHS, const KindAndStat &RHS) {
+                      return LHS.second.Size > RHS.second.Size;
+                    });
   return SortedStats;
 }
 
@@ -889,10 +889,10 @@ Error DumpOutputStyle::dumpUdtStats() {
   std::vector<StrAndStat> NamespacedStatsSorted;
   for (const auto &Stat : NamespacedStats)
     NamespacedStatsSorted.push_back({Stat.getKey(), Stat.second});
-  std::stable_sort(NamespacedStatsSorted.begin(), NamespacedStatsSorted.end(),
-                   [](const StrAndStat &L, const StrAndStat &R) {
-                     return L.Stat.Size > R.Stat.Size;
-                   });
+  llvm::stable_sort(NamespacedStatsSorted,
+                    [](const StrAndStat &L, const StrAndStat &R) {
+                      return L.Stat.Size > R.Stat.Size;
+                    });
   for (const auto &Stat : NamespacedStatsSorted) {
     std::string Label = formatv("namespace '{0}'", Stat.Key);
     P.formatLine("{0} | {1:N}  {2:N}",
@@ -995,6 +995,10 @@ Error DumpOutputStyle::dumpInlineeLines() {
           P.formatLine("{0,+8} | {1,+5} | ", Entry.Header->Inlinee,
                        fmtle(Entry.Header->SourceLineNum));
           Strings.formatFromChecksumsOffset(P, Entry.Header->FileID, true);
+          for (const auto &ExtraFileID : Entry.ExtraFiles) {
+            P.formatLine("                   ");
+            Strings.formatFromChecksumsOffset(P, ExtraFileID, true);
+          }
         }
         P.NewLine();
       });
@@ -1376,12 +1380,12 @@ Error DumpOutputStyle::dumpTypesFromObjectFile() {
     else
       continue;
 
-    StringRef Contents;
-    if (auto EC = S.getContents(Contents))
-      return errorCodeToError(EC);
+    Expected<StringRef> ContentsOrErr = S.getContents();
+    if (!ContentsOrErr)
+      return ContentsOrErr.takeError();
 
     uint32_t Magic;
-    BinaryStreamReader Reader(Contents, llvm::support::little);
+    BinaryStreamReader Reader(*ContentsOrErr, llvm::support::little);
     if (auto EC = Reader.readInteger(Magic))
       return EC;
     if (Magic != COFF::DEBUG_SECTION_MAGIC)

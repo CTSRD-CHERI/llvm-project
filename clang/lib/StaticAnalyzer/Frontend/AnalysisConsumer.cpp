@@ -83,10 +83,11 @@ void ento::createTextPathDiagnosticConsumer(AnalyzerOptions &AnalyzerOpts,
 namespace {
 class ClangDiagPathDiagConsumer : public PathDiagnosticConsumer {
   DiagnosticsEngine &Diag;
-  bool IncludePath;
+  bool IncludePath, ShouldEmitAsError;
+
 public:
   ClangDiagPathDiagConsumer(DiagnosticsEngine &Diag)
-    : Diag(Diag), IncludePath(false) {}
+      : Diag(Diag), IncludePath(false), ShouldEmitAsError(false) {}
   ~ClangDiagPathDiagConsumer() override {}
   StringRef getName() const override { return "ClangDiags"; }
 
@@ -101,9 +102,14 @@ public:
     IncludePath = true;
   }
 
+  void enableWerror() { ShouldEmitAsError = true; }
+
   void FlushDiagnosticsImpl(std::vector<const PathDiagnostic *> &Diags,
                             FilesMade *filesMade) override {
-    unsigned WarnID = Diag.getCustomDiagID(DiagnosticsEngine::Warning, "%0");
+    unsigned WarnID =
+        ShouldEmitAsError
+            ? Diag.getCustomDiagID(DiagnosticsEngine::Error, "%0")
+            : Diag.getCustomDiagID(DiagnosticsEngine::Warning, "%0");
     unsigned NoteID = Diag.getCustomDiagID(DiagnosticsEngine::Note, "%0");
 
     for (std::vector<const PathDiagnostic*>::iterator I = Diags.begin(),
@@ -225,6 +231,9 @@ public:
           new ClangDiagPathDiagConsumer(PP.getDiagnostics());
       PathConsumers.push_back(clangDiags);
 
+      if (Opts->AnalyzerWerror)
+        clangDiags->enableWerror();
+
       if (Opts->AnalysisDiagOpt == PD_TEXT) {
         clangDiags->enablePaths();
 
@@ -339,6 +348,35 @@ public:
     AnalysisMode Mode = getModeForDecl(D, RecVisitorMode);
     if (Mode & AM_Syntax)
       checkerMgr->runCheckersOnASTDecl(D, *Mgr, *RecVisitorBR);
+    return true;
+  }
+
+  bool VisitVarDecl(VarDecl *VD) {
+    if (!Opts->IsNaiveCTUEnabled)
+      return true;
+
+    if (VD->hasExternalStorage() || VD->isStaticDataMember()) {
+      if (!cross_tu::containsConst(VD, *Ctx))
+        return true;
+    } else {
+      // Cannot be initialized in another TU.
+      return true;
+    }
+
+    if (VD->getAnyInitializer())
+      return true;
+
+    llvm::Expected<const VarDecl *> CTUDeclOrError =
+      CTU.getCrossTUDefinition(VD, Opts->CTUDir, Opts->CTUIndexName,
+                               Opts->DisplayCTUProgress);
+
+    if (!CTUDeclOrError) {
+      handleAllErrors(CTUDeclOrError.takeError(),
+                      [&](const cross_tu::IndexError &IE) {
+                        CTU.emitCrossTUDiagnostics(IE);
+                      });
+    }
+
     return true;
   }
 

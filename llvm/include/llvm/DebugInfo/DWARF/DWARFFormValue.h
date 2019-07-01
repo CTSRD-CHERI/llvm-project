@@ -104,6 +104,11 @@ public:
   /// getAsFoo functions below return the extracted value as Foo if only
   /// DWARFFormValue has form class is suitable for representing Foo.
   Optional<uint64_t> getAsReference() const;
+  struct UnitOffset {
+    DWARFUnit *Unit;
+    uint64_t Offset;
+  };
+  Optional<UnitOffset> getAsRelativeReference() const;
   Optional<uint64_t> getAsUnsignedConstant() const;
   Optional<int64_t> getAsSignedConstant() const;
   Optional<const char *> getAsCString() const;
@@ -157,6 +162,19 @@ inline Optional<const char *> toString(const Optional<DWARFFormValue> &V) {
   if (V)
     return V->getAsCString();
   return None;
+}
+
+/// Take an optional DWARFFormValue and try to extract a string value from it.
+///
+/// \param V and optional DWARFFormValue to attempt to extract the value from.
+/// \returns an optional value that contains a value if the form value
+/// was valid and was a string.
+inline StringRef toStringRef(const Optional<DWARFFormValue> &V,
+                             StringRef Default = {}) {
+  if (V)
+    if (auto S = V->getAsCString())
+      return *S;
+  return Default;
 }
 
 /// Take an optional DWARFFormValue and extract a string value from it.

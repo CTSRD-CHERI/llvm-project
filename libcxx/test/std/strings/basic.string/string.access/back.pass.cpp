@@ -18,6 +18,7 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
@@ -52,7 +53,7 @@ int main(int, char**)
 #ifdef _LIBCPP_DEBUG
     {
         std::string s;
-        char c = s.back();
+        (void) s.back();
         assert(false);
     }
 #endif

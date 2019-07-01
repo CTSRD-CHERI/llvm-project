@@ -52,7 +52,7 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
   assert(S->Name == "__cap_relocs");
   assert(S->AreRelocsRela && "__cap_relocs should be RELA");
   // make sure the section is no longer processed
-  S->Live = false;
+  S->markDead();
 
   if ((S->getSize() % Entsize) != 0) {
     error("__cap_relocs section size is not a multiple of " + Twine(Entsize) +
@@ -86,24 +86,28 @@ static inline void nonFatalWarning(const Twine &Str) {
     warn(Str);
 }
 
-SymbolAndOffset SymbolAndOffset::fromSectionWithOffset(InputSectionBase *IS,
-                                                       uint64_t Offset,
-                                                       Symbol *Default) {
+SymbolAndOffset
+SymbolAndOffset::fromSectionWithOffset(InputSectionBase *IS, int64_t Offset,
+                                       const SymbolAndOffset *Default) {
   Symbol *FallbackResult = nullptr;
   assert((int64_t)Offset >= 0);
-  uint64_t FallbackOffset = Offset;
+  int64_t FallbackOffset = Offset;
   // For internal symbols we don't have a matching InputFile, just return
   auto* File = IS->File;
-  if (!File)
-    return {Default, (int64_t)Offset};
+  if (!File) {
+    if (Default)
+      return *Default;
+    return {IS, Offset};
+  }
   for (Symbol *B : IS->File->getSymbols()) {
     if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
         continue;
-      if (D->Value <= Offset && Offset <= D->Value + D->Size) {
+      if ((int64_t)D->Value <= Offset &&
+          Offset <= (int64_t)D->Value + (int64_t)D->Size) {
         // XXXAR: should we accept any symbol that encloses or only exact
         // matches?
-        if (D->Value == Offset && (D->isFunc() || D->isObject()))
+        if ((int64_t)D->Value == Offset && (D->isFunc() || D->isObject()))
           return {D, 0}; // perfect match
         FallbackResult = D;
         FallbackOffset = Offset - D->Value;
@@ -120,20 +124,28 @@ SymbolAndOffset SymbolAndOffset::fromSectionWithOffset(InputSectionBase *IS,
     if (!IS->Name.startswith(".rodata.str"))
       nonFatalWarning("Could not find a real symbol for __cap_reloc against " + IS->Name +
            "+0x" + utohexstr(Offset) + " in " + toString(IS->File));
-    FallbackResult = Default;
+    // Could not find a symbol -> return section+offset
+    assert(Offset == FallbackOffset);
+    if (Default)
+      return *Default;
+    return {IS, Offset};
   }
-  // we should have found at least a section symbol
-  assert((Default == nullptr || FallbackResult) && "SHOULD HAVE FOUND A SYMBOL!");
-  return {FallbackResult, (int64_t)FallbackOffset};
+  return {FallbackResult, FallbackOffset};
 }
 
 SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
-  if (!Sym->isSection())
+  // If we only have a section, see if we can resolve section+offset to a
+  // symbol (that may have been added later).
+  if (SymOrSec.is<InputSectionBase *>()) {
+    return SymbolAndOffset::fromSectionWithOffset(
+        SymOrSec.get<InputSectionBase *>(), Offset, this);
+  }
+  auto S = SymOrSec.get<Symbol *>();
+  if (!S->isSection())
     return *this;
-
-  if (Defined *DefinedSym = dyn_cast<Defined>(Sym)) {
+  if (Defined *DefinedSym = dyn_cast<Defined>(S)) {
     if (auto *IS = dyn_cast<InputSectionBase>(DefinedSym->Section)) {
-      return SymbolAndOffset::fromSectionWithOffset(IS, Offset, Sym);
+      return SymbolAndOffset::fromSectionWithOffset(IS, Offset, this);
     }
   }
   return *this;
@@ -142,9 +154,7 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
 std::string CheriCapRelocLocation::toString() const {
   SymbolAndOffset Resolved =
       SymbolAndOffset::fromSectionWithOffset(Section, Offset);
-  if (Resolved.Sym)
-    return Resolved.verboseToString();
-  return Section->getObjMsg(Offset);
+ return Resolved.verboseToString();
 }
 
 template <class ELFT>
@@ -262,7 +272,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     auto *LocationSec = cast<InputSectionBase>(LocationDef->Section);
     addCapReloc({LocationSec, (uint64_t)LocationRel.r_addend, false},
                 RealTarget, TargetNeedsDynReloc, TargetCapabilityOffset,
-                RealLocation.Sym);
+                RealLocation.sym());
   }
 }
 
@@ -289,9 +299,9 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 
   std::string SourceMsg =
       SourceSymbol ? verboseToString(SourceSymbol) : Loc.toString();
-  if (Target.Sym->isUndefined() && !Target.Sym->isUndefWeak()) {
+  if (Target.sym()->isUndefined() && !Target.sym()->isUndefWeak()) {
     std::string Msg =
-        "cap_reloc against undefined symbol: " + toString(*Target.Sym) +
+        "cap_reloc against undefined symbol: " + toString(*Target.sym()) +
         "\n>>> referenced by " + SourceMsg;
     if (Config->UnresolvedSymbols == UnresolvedPolicy::ReportError)
       error(Msg);
@@ -307,7 +317,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 
   bool CanWriteLoc = (Loc.Section->Flags & SHF_WRITE) || !Config->ZText;
   if (!CanWriteLoc) {
-    readOnlyCapRelocsError(*Target.Sym, "\n>>> referenced by " + SourceMsg);
+    readOnlyCapRelocsError(*Target.sym(), "\n>>> referenced by " + SourceMsg);
     return;
   }
 
@@ -344,7 +354,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // full Elf_Rel/Elf_Rela
     // The addend is zero here since it will be written in writeTo()
     assert(!Config->IsRela);
-    In.RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
+    Main->RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
                             true, nullptr, 0});
     ContainsDynamicRelocations = true;
   }
@@ -358,7 +368,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 
     bool RelativeToLoadAddress = false;
     RelType RelocKind;
-    if (Target.Sym->IsPreemptible) {
+    if (Target.sym()->IsPreemptible) {
       RelocKind = *elf::Target->AbsPointerRel;
     } else {
       // If the target is not preemptible we can optimize this to a relative
@@ -373,16 +383,16 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     int64_t Addend = Target.Offset;
     // Capability target is the second field
     assert((CurrentEntryOffset + FieldSize) < getSize());
-    In.RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + FieldSize,
-                            RelativeToLoadAddress, Target.Sym, Addend});
+    Main->RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + FieldSize,
+                            RelativeToLoadAddress, Target.sym(), Addend});
     ContainsDynamicRelocations = true;
     if (!RelativeToLoadAddress) {
       // We also add a size relocation for the size field here
       RelType SizeRel = *elf::Target->SizeRel;
       // Capability size is the fourth field
       assert((CurrentEntryOffset + 3*FieldSize) < getSize());
-      In.RelaDyn->addReloc(SizeRel, this, CurrentEntryOffset + 3*FieldSize,
-                             Target.Sym);
+      Main->RelaDyn->addReloc(SizeRel, this, CurrentEntryOffset + 3*FieldSize,
+                             Target.sym());
     }
   }
 }
@@ -390,13 +400,13 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 template<typename ELFT>
 static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
                               const CheriCapReloc &Reloc, bool Strict) {
-  uint64_t TargetSize = Reloc.Target.Sym->getSize();
+  uint64_t TargetSize = Reloc.Target.sym()->getSize();
   if (TargetSize > INT_MAX) {
     error("Insanely large symbol size for " + Reloc.Target.verboseToString() +
           "for cap_reloc at" + Location.toString());
     return 0;
   }
-  auto TargetSym = Reloc.Target.Sym;
+  auto TargetSym = Reloc.Target.sym();
   if (TargetSize == 0 && !TargetSym->IsPreemptible) {
     StringRef Name = TargetSym->getName();
     // Section end symbols like __preinit_array_end, etc. should actually be
@@ -501,9 +511,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // and add a relocation against the load address?
     // Also this would make llvm-objdump --cap-relocs more useful because it
     // would actually display the symbol that the relocation is against
-    uint64_t TargetVA = Reloc.Target.Sym->getVA(Reloc.Target.Offset);
+    uint64_t TargetVA = Reloc.Target.sym()->getVA(Reloc.Target.Offset);
     bool PreemptibleDynReloc =
-        Reloc.NeedsDynReloc && Reloc.Target.Sym->IsPreemptible;
+        Reloc.NeedsDynReloc && Reloc.Target.sym()->IsPreemptible;
     uint64_t TargetSize = 0;
     if (PreemptibleDynReloc) {
       // If we have a relocation against a preemptible symbol (even in the
@@ -522,10 +532,10 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t Permissions = 0;
     // Fow now Function implies ReadOnly so don't add the flag
-    if (Reloc.Target.Sym->isFunc()) {
+    if (Reloc.Target.sym()->isFunc()) {
       Permissions |= CaptablePermissions<ELFT>::Function;
-    } else if (auto OS = Reloc.Target.Sym->getOutputSection()) {
-      assert(!Reloc.Target.Sym->isTls());
+    } else if (auto OS = Reloc.Target.sym()->getOutputSection()) {
+      assert(!Reloc.Target.sym()->isTls());
       assert((OS->Flags & SHF_TLS) == 0);
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
       if (((OS->Flags & SHF_WRITE) == 0) || isRelroSection(OS)) {
@@ -659,6 +669,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, RelExpr Expr,
   Idx.NeedsSmallImm = false;
   Idx.UsedInCallExpr = false;
   Idx.FirstUse = SymbolAndOffset::fromSectionWithOffset(IS, Offset);
+  assert(!Idx.FirstUse->SymOrSec.isNull());
   switch (Expr) {
   case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
   case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
@@ -880,7 +891,7 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection *DynRelSec =
-        it.second.UsedInCallExpr ? In.RelaPlt : In.RelaDyn;
+        it.second.UsedInCallExpr ? In.RelaPlt : Main->RelaDyn;
     addCapabilityRelocation<ELFT>(
         TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
         R_CHERI_CAPABILITY, 0, it.second.UsedInCallExpr,
@@ -936,7 +947,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     if (S == nullptr) {
       if (!Config->Pic)
         continue;
-      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
     } else {
       // When building a shared library we still need a dynamic relocation
       // for the module index. Therefore only checking for
@@ -944,13 +955,13 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       // thread-locals that have been marked as local through a linker script)
       if (!S->IsPreemptible && !Config->Pic)
         continue;
-      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
       // However, we can skip writing the TLS offset reloc for non-preemptible
       // symbols since it is known even in shared libraries
       if (!S->IsPreemptible)
         continue;
       Offset += Config->Wordsize;
-      In.RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
     }
   }
 
@@ -961,7 +972,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     Symbol *S = it.first;
     uint64_t Offset = CTI.Index.getValue() * Config->Wordsize;
     if (S->IsPreemptible)
-      In.RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
+      Main->RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
   }
 
   ValuesAssigned = true;
@@ -1017,7 +1028,7 @@ void CheriCapTableMappingSection::writeTo(uint8_t *Buf) {
   // Write the mapping from function vaddr -> captable subset for RTLD
   std::vector<CaptableMappingEntry> Entries;
   // Note: Symtab->getSymbols() only returns the symbols in .dynsym. We need
-  // to use In.Symtab instead since we also want to add all local functions!
+  // to use In.sym()tab instead since we also want to add all local functions!
   for (const SymbolTableEntry &STE : In.SymTab->getSymbols()) {
     Symbol* Sym = STE.Sym;
     if (!Sym->isDefined() || !Sym->isFunc())
@@ -1137,10 +1148,10 @@ void addCapabilityRelocation(Symbol *Sym, RelType Type, InputSectionBase *Sec,
     // instead need to use an absolute pointer size relocation to write
     // the offset addend
     if (!DynRelSec)
-      DynRelSec = In.RelaDyn;
+      DynRelSec = Main->RelaDyn;
     // in the case that -local-caprelocs=elf is passed we need to ensure that
     // the target symbol is included in the dynamic symbol table
-    if (!In.DynSymTab) {
+    if (!Main->DynSymTab) {
       error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
       return;
     }

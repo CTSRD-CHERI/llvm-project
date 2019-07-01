@@ -45,7 +45,7 @@ entry:
 define void @call_variadic_one_onstack_cap(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_variadic_one_onstack_cap:
 ; Verify that $c13 is used for one on-stack cap:
-; CHECK:         csetbounds [[VARARG_TMP:\$c[0-9]+]], $c11, [[$CAP_SIZE]]
+; CHECK:         csetbounds [[VARARG_TMP:\$c[0-9]+]], $c11, [[#CAP_SIZE]]
 ; CHECK:         clcbi $c12, %capcall20(variadic)($c
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    candperm $c13, [[VARARG_TMP]], $1
@@ -115,14 +115,14 @@ define void @call_nonvariadic_many_args(i8 addrspace(200)* %in_arg1) {
 ; CHECK-NEXT:    cincoffset $c13, $c3, 107
 ; CHECK-NEXT:    cincoffset $c14, $c3, 117
 ; CHECK-NEXT:    cincoffset $c3, $c3, 127
-; CHECK-NEXT:    csc $c12, $zero, [[@EXPR $CAP_SIZE * 0]]($c11)
-; CHECK-NEXT:    csc $c3, $zero, [[@EXPR $CAP_SIZE * 3]]($c11)
-; CHECK-NEXT:    csc $c14, $zero, [[@EXPR $CAP_SIZE * 2]]($c11)
-; CHECK-NEXT:    csc $c13, $zero, [[@EXPR $CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    csetbounds $c3, $c11, [[@EXPR $CAP_SIZE * 4]]
+; CHECK-NEXT:    csc $c12, $zero, [[#CAP_SIZE * 0]]($c11)
+; CHECK-NEXT:    csc $c3, $zero, [[#CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    csc $c14, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    csc $c13, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    csetbounds $c[[C13_TEMP:[0-9]+]], $c11, [[#CAP_SIZE * 4]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(many_cap_args)($c2)
 ; CHECK-NEXT:    ori $1, $zero, 65495
-; CHECK-NEXT:    candperm $c13, $c3, $1
+; CHECK-NEXT:    candperm $c13, $c[[C13_TEMP]], $1
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c1
 ; CHECK-NEXT:    clc $c17, $zero, {{.*}}($c11)

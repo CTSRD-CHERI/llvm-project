@@ -23,21 +23,19 @@ class AppleObjCRuntime : public lldb_private::ObjCLanguageRuntime {
 public:
   ~AppleObjCRuntime() override;
 
-  //------------------------------------------------------------------
   // Static Functions
-  //------------------------------------------------------------------
   // Note there is no CreateInstance, Initialize & Terminate functions here,
   // because
   // you can't make an instance of this generic runtime.
 
-  static bool classof(const ObjCLanguageRuntime *runtime) {
-    switch (runtime->GetRuntimeVersion()) {
-    case ObjCRuntimeVersions::eAppleObjC_V1:
-    case ObjCRuntimeVersions::eAppleObjC_V2:
-      return true;
-    default:
-      return false;
-    }
+  static char ID;
+
+  bool isA(const void *ClassID) const override {
+    return ClassID == &ID || ObjCLanguageRuntime::isA(ClassID);
+  }
+
+  static bool classof(const LanguageRuntime *runtime) {
+    return runtime->isA(&ID);
   }
 
   // These are generic runtime functions:

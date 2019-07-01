@@ -1,4 +1,4 @@
-//===-- bytemap_test.cc------------------------------------------*- C++ -*-===//
+//===-- bytemap_test.cc -----------------------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -28,13 +28,14 @@ TEST(ScudoByteMapTest, FlatByteMap) {
   const scudo::uptr Size = 1U << 10;
   scudo::FlatByteMap<Size> Map;
   testMap(Map, Size);
+  Map.unmapTestOnly();
 }
 
 TEST(ScudoByteMapTest, TwoLevelByteMap) {
   const scudo::uptr Size1 = 1U << 6, Size2 = 1U << 12;
   scudo::TwoLevelByteMap<Size1, Size2> Map;
   testMap(Map, Size1 * Size2);
-  Map.reset();
+  Map.unmapTestOnly();
 }
 
 using TestByteMap = scudo::TwoLevelByteMap<1U << 12, 1U << 13>;
@@ -69,5 +70,5 @@ TEST(ScudoByteMapTest, ThreadedTwoLevelByteMap) {
   }
   for (scudo::uptr I = 0; I < NumberOfThreads; I++)
     pthread_join(T[I], 0);
-  Map.reset();
+  Map.unmapTestOnly();
 }

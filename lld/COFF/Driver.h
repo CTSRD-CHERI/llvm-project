@@ -77,6 +77,8 @@ public:
 
   MemoryBufferRef takeBuffer(std::unique_ptr<MemoryBuffer> MB);
 
+  void enqueuePath(StringRef Path, bool WholeArchive);
+
 private:
   std::unique_ptr<llvm::TarWriter> Tar; // for /linkrepro
 
@@ -106,6 +108,8 @@ private:
 
   Symbol *addUndefined(StringRef Sym);
 
+  StringRef mangleMaybe(Symbol *S);
+
   // Windows specific -- "main" is not the only main function in Windows.
   // You can choose one from these four -- {w,}{WinMain,main}.
   // There are four different entry point functions for them,
@@ -118,9 +122,7 @@ private:
 
   void addBuffer(std::unique_ptr<MemoryBuffer> MB, bool WholeArchive);
   void addArchiveBuffer(MemoryBufferRef MBRef, StringRef SymName,
-                        StringRef ParentName);
-
-  void enqueuePath(StringRef Path, bool WholeArchive);
+                        StringRef ParentName, uint64_t OffsetInArchive);
 
   void enqueueTask(std::function<void()> Task);
   bool run();
@@ -135,10 +137,6 @@ private:
 // Functions below this line are defined in DriverUtils.cpp.
 
 void printHelp(const char *Argv0);
-
-// For /machine option.
-MachineTypes getMachineType(StringRef Arg);
-StringRef machineToStr(MachineTypes MT);
 
 // Parses a string in the form of "<integer>[,<integer>]".
 void parseNumbers(StringRef Arg, uint64_t *Addr, uint64_t *Size = nullptr);
@@ -166,6 +164,9 @@ void parseManifest(StringRef Arg);
 
 // Parses a string in the form of "level=<string>|uiAccess=<string>"
 void parseManifestUAC(StringRef Arg);
+
+// Parses a string in the form of "cd|net[,(cd|net)]*"
+void parseSwaprun(StringRef Arg);
 
 // Create a resource file containing a manifest XML.
 std::unique_ptr<MemoryBuffer> createManifestRes();

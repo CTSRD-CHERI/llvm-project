@@ -53,6 +53,34 @@ Expected<std::string> MinidumpFile::getString(size_t Offset) const {
   return Result;
 }
 
+template <typename T>
+Expected<ArrayRef<T>> MinidumpFile::getListStream(StreamType Stream) const {
+  auto OptionalStream = getRawStream(Stream);
+  if (!OptionalStream)
+    return createError("No such stream");
+  auto ExpectedSize =
+      getDataSliceAs<support::ulittle32_t>(*OptionalStream, 0, 1);
+  if (!ExpectedSize)
+    return ExpectedSize.takeError();
+
+  size_t ListSize = ExpectedSize.get()[0];
+
+  size_t ListOffset = 4;
+  // Some producers insert additional padding bytes to align the list to an
+  // 8-byte boundary. Check for that by comparing the list size with the overall
+  // stream size.
+  if (ListOffset + sizeof(T) * ListSize < OptionalStream->size())
+    ListOffset = 8;
+
+  return getDataSliceAs<T>(*OptionalStream, ListOffset, ListSize);
+}
+template Expected<ArrayRef<Module>>
+    MinidumpFile::getListStream(StreamType) const;
+template Expected<ArrayRef<Thread>>
+    MinidumpFile::getListStream(StreamType) const;
+template Expected<ArrayRef<MemoryDescriptor>>
+    MinidumpFile::getListStream(StreamType) const;
+
 Expected<ArrayRef<uint8_t>>
 MinidumpFile::getDataSlice(ArrayRef<uint8_t> Data, size_t Offset, size_t Size) {
   // Check for overflow.

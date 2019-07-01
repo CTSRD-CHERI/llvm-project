@@ -81,9 +81,8 @@ template <class RelTy>
 Optional<RelocAddrEntry>
 LLDDwarfObj<ELFT>::findAux(const InputSectionBase &Sec, uint64_t Pos,
                            ArrayRef<RelTy> Rels) const {
-  auto It = std::lower_bound(
-      Rels.begin(), Rels.end(), Pos,
-      [](const RelTy &A, uint64_t B) { return A.r_offset < B; });
+  auto It =
+      llvm::bsearch(Rels, [=](const RelTy &A) { return Pos <= A.r_offset; });
   if (It == Rels.end() || It->r_offset != Pos)
     return None;
   const RelTy &Rel = *It;
@@ -94,8 +93,11 @@ LLDDwarfObj<ELFT>::findAux(const InputSectionBase &Sec, uint64_t Pos,
   uint32_t SecIndex = File->getSectionIndex(Sym);
 
   // Broken debug info can point to a non-Defined symbol.
-  auto *DR = dyn_cast<Defined>(&File->getRelocTargetSym(Rel));
+  Symbol &S = File->getRelocTargetSym(Rel);
+  auto *DR = dyn_cast<Defined>(&S);
   if (!DR) {
+    if (S.isSection())
+      return None;
     RelType Type = Rel.getType(Config->IsMips64EL);
     if (Type != Target->NoneRel)
       error(toString(File) + ": relocation " + lld::toString(Type) + " at 0x" +

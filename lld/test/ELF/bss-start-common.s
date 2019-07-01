@@ -15,9 +15,9 @@
 
 # CHERI: Sections:
 # CHERI: Idx Name          Size      VMA          Type
-# CHERI:   6 .bss          00000010  0000000120010010 BSS
+# CHERI:   6 .bss          00000004  0000000120010010 BSS
 # CHERI: SYMBOL TABLE:
-# CHERI: 0000000120010010  .bss 00000010 __bss_start
+# CHERI: 0000000120010010  .bss 00000004 __bss_start
 
 .global __bss_start
 .text

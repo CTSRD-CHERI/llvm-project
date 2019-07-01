@@ -38,23 +38,22 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   %4 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
   %call = tail call i32 %4(%class.A addrspace(200)* %this.adjusted) #1
   ret i32 %call
-
-  ; CHECK: cmove      $c1, $c3
+  ; CHECK: cincoffset      $c11, $c11, -[[STACK_ADJ:(([0-9]+))]]
+  ; CHECK: csc     $c17, [[STACK_RETURN_ADDR:\$zero, (([0-9]+))\(\$c11\)]]
   ; get adj in $2
-  ; CHECK: dsra    $2, $4, 1
+  ; CHECK: dsra    $[[memptradjshifted:([0-9]+)]], $4, 1
   ; adjust this:
-  ; CHECK: cincoffset      $c2, $c3, $2
-  ; store a copy in c2
-  ; CHECK: cmove      $c3, $c2
-  ; CHECK: andi    $2, $4, 1
-  ; CHECK:      csc     $c4, [[STACK_MEMPTR_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
-  ; CHECK-NEXT: csc     $c1, $zero, {{([0-9]+|sp)}}($c11)
-  ; CHECK-NEXT: csc     $c2, [[STACK_THIS_ADJ:\$zero, (([0-9]+|sp))\(\$c11\)]]
-  ; CHECK-NEXT:      csc     $c3, [[STACK_VTABLE_ADDR:\$zero, (([0-9]+|sp))\(\$c11\)]]
-  ; CHECK-NEXT: beqz    $2, .LBB0_3
+  ; CHECK: cincoffset      $c[[THIS_ADJUSTED:([0-9]+)]], $c3, $[[memptradjshifted]]
+  ; store a copy
+  ; CHECK: cmove      $c[[THIS_ADJUSTED_COPY:([0-9]+)]], $c[[THIS_ADJUSTED]]
+  ; CHECK: andi    $[[irreg0:([0-9]+)]], $4, 1
+  ; CHECK:      csc     $c4, [[STACK_MEMPTR_PTR:\$zero, (([0-9]+))\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c[[THIS_ADJUSTED]], [[STACK_THIS_ADJ:\$zero, (([0-9]+))\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c[[THIS_ADJUSTED_COPY]], [[STACK_THIS_ADJ_COPY:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK-NEXT: beqz    $[[irreg0]], .LBB0_3
 
   ; CHECK: .LBB0_2:                                # %memptr.virtual
-  ; CHECK: clc     $c1, [[STACK_VTABLE_ADDR]]
+  ; CHECK: clc     $c1, [[STACK_THIS_ADJ_COPY]]
   ; CHECK: clc     $c2, $zero, 0($c1)
   ; CHECK: clc     [[MEMPTR:\$c3]], [[STACK_MEMPTR_PTR]]
   ; CHECK: cgetaddr $1, [[MEMPTR]]
@@ -64,7 +63,7 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: nop
 
   ; CHECK: .LBB0_3:                                # %memptr.nonvirtual
-  ; CHECK: clc     $c1, $zero, {{64|160}}($c11)      # {{16|32}}-byte Folded Reload
+  ; CHECK: clc     $c1, [[STACK_MEMPTR_PTR]]      # {{16|32}}-byte Folded Reload
   ; CHECK: csc     $c1, [[STACK_TARGET_FN_PTR]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
@@ -75,8 +74,8 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: cmove   $c12, $c1
   ; CHECK: cjalr   $c12, $c17
   ; CHECK: nop
-  ; CHECK: clc     $c17, $zero, {{96|224}}($c11)    # {{16|32}}-byte Folded Reload
-  ; CHECK: cincoffset      $c11, $c11, {{112|256}}
+  ; CHECK: clc     $c17, [[STACK_RETURN_ADDR]]
+  ; CHECK: cincoffset      $c11, $c11, [[STACK_ADJ]]
   ; CHECK: cjr     $c17
 
 
@@ -90,7 +89,7 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; OPT: cgetaddr  [[VTABLE_OFFSET:\$1]], $c4
   ; OPT: clc     $c4, [[VTABLE_OFFSET]], 0([[VTABLE]])
   ; OPT: .LBB0_2:                                # %memptr.end
-  ; OPT: cincoffset $c11, $c11, -[[$CAP_SIZE]]
+  ; OPT: cincoffset $c11, $c11, -[[#CAP_SIZE]]
   ; OPT: cmove   $c12, $c4
   ; OPT: cjalr   $c12, $c17
   ; OPT: clc     $c17, $zero, 0($c11)      # {{16|32}}-byte Folded Reload

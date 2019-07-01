@@ -89,23 +89,21 @@ sw.bb1:
 
 
 ; NO-OPT-LABEL: %bb.0:                                 # %entry
-; NO-OPT-NEXT:	cincoffset	$c11, $c11, -[[@EXPR 3 * $CAP_SIZE]]
+; NO-OPT-NEXT:	cincoffset	$c11, $c11, -[[#CAP_SIZE * 2]]
 ; NO-OPT-NEXT:	cmove	$c1,  $c26
-; NO-OPT-NEXT:	move	 $1, $4
-; NO-OPT-NEXT:	sltiu	$2, $4, 11
-; NO-OPT-NEXT:	csd	$1, $zero, [[@EXPR (3 * $CAP_SIZE) - 8]]($c11)     # 8-byte Folded Spill
-; NO-OPT-NEXT:	csc	$c1, $zero, [[$CAP_SIZE]]($c11)    # [[$CAP_SIZE]]-byte Folded Spill
-; NO-OPT-NEXT:	csd	$4, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)     # 8-byte Folded Spill
-; NO-OPT-NEXT:	beqz	$2, .LBB0_2
+; NO-OPT-NEXT:	sltiu	$1, $4, 11
+; NO-OPT-NEXT:	csc	$c1, $zero, [[#CAP_SIZE]]($c11)    # [[#CAP_SIZE]]-byte Folded Spill
+; NO-OPT-NEXT:	csd	$4, $zero, [[#CAP_SIZE - 8]]($c11)     # 8-byte Folded Spill
+; NO-OPT-NEXT:	beqz	$1, .LBB0_2
 ; NO-OPT-NEXT:	nop
 ; NO-OPT-LABEL: .LBB0_1:                                # %entry
 ; NO-OPT-NEXT:	cgetpcc	[[PCC:\$c[0-9]+]]
 ; NO-OPT-NEXT:	lui	[[CAPTABLE_INDEX:\$[0-9]+]], %captab_hi(.LJTI0_0)
 ; NO-OPT-NEXT:	daddiu	[[CAPTABLE_INDEX]], [[CAPTABLE_INDEX]], %captab_lo(.LJTI0_0)
-; NO-OPT-NEXT:	clc	[[CAPTABLE:\$c[0-9]+]], $zero, [[$CAP_SIZE]]($c11)    # [[$CAP_SIZE]]-byte Folded Reload
+; NO-OPT-NEXT:	clc	[[CAPTABLE:\$c[0-9]+]], $zero, [[#CAP_SIZE]]($c11)    # [[#CAP_SIZE]]-byte Folded Reload
 ; NO-OPT-NEXT:	clc	[[JUMPTABLE_CAP:\$c[0-9]+]], [[CAPTABLE_INDEX]], 0([[CAPTABLE]])
 ; NO-OPT-NEXT:	csub [[PCC_INCREMENT:\$[0-9]+]], [[JUMPTABLE_CAP]], [[PCC]]
-; NO-OPT-NEXT:	cld	[[JT_INDEX:\$[0-9]+]], $zero, [[@EXPR $CAP_SIZE - 8]]($c11)     # 8-byte Folded Reload
+; NO-OPT-NEXT:	cld	[[JT_INDEX:\$[0-9]+]], $zero, [[#CAP_SIZE - 8]]($c11)     # 8-byte Folded Reload
 ; NO-OPT-NEXT:	dsll	[[JT_ENTRY_OFFSET:\$[0-9]+]], [[JT_INDEX]], 2
 ; NO-OPT-NEXT:	clw	[[JT_CONTENTS:\$[0-9]+]], [[JT_ENTRY_OFFSET]], 0([[JUMPTABLE_CAP]])
 ; NO-OPT-NEXT:	daddu [[FINAL_INCREMENT:\$[0-9]+]], [[PCC_INCREMENT]], [[JT_CONTENTS]]

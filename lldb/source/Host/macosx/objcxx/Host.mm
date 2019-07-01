@@ -547,7 +547,7 @@ static bool GetMacOSXProcessArgs(const ProcessInstanceInfoMatch *match_info_ptr,
                 match_info_ptr->GetNameMatchType(),
                 match_info_ptr->GetProcessInfo().GetName())) {
           // Skip NULLs
-          while (1) {
+          while (true) {
             const uint8_t *p = data.PeekData(offset, 1);
             if ((p == NULL) || (*p != '\0'))
               break;
@@ -1364,8 +1364,11 @@ Status Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
         launch_info.SetWorkingDirectory(working_dir);
       }
     }
+    bool run_in_default_shell = true;
+    bool hide_stderr = true;
     RunShellCommand(expand_command, cwd, &status, nullptr, &output,
-                    std::chrono::seconds(10));
+                    std::chrono::seconds(10), run_in_default_shell,
+                    hide_stderr);
 
     if (status != 0) {
       error.SetErrorStringWithFormat("lldb-argdumper exited with error %d",

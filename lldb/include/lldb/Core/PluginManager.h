@@ -22,17 +22,9 @@
 
 namespace lldb_private {
 class CommandInterpreter;
-}
-namespace lldb_private {
 class ConstString;
-}
-namespace lldb_private {
 class Debugger;
-}
-namespace lldb_private {
 class StringList;
-}
-namespace lldb_private {
 
 class PluginManager {
 public:
@@ -40,9 +32,7 @@ public:
 
   static void Terminate();
 
-  //------------------------------------------------------------------
   // ABI
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              ABICreateInstance create_callback);
 
@@ -53,9 +43,7 @@ public:
   static ABICreateInstance
   GetABICreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // Architecture
-  //------------------------------------------------------------------
   using ArchitectureCreateInstance =
       std::unique_ptr<Architecture> (*)(const ArchSpec &);
 
@@ -68,9 +56,7 @@ public:
   static std::unique_ptr<Architecture>
   CreateArchitectureInstance(const ArchSpec &arch);
 
-  //------------------------------------------------------------------
   // Disassembler
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              DisassemblerCreateInstance create_callback);
 
@@ -82,9 +68,7 @@ public:
   static DisassemblerCreateInstance
   GetDisassemblerCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // DynamicLoader
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  DynamicLoaderCreateInstance create_callback,
@@ -98,9 +82,7 @@ public:
   static DynamicLoaderCreateInstance
   GetDynamicLoaderCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // JITLoader
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  JITLoaderCreateInstance create_callback,
@@ -114,9 +96,7 @@ public:
   static JITLoaderCreateInstance
   GetJITLoaderCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // EmulateInstruction
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              EmulateInstructionCreateInstance create_callback);
 
@@ -129,9 +109,7 @@ public:
   static EmulateInstructionCreateInstance
   GetEmulateInstructionCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // OperatingSystem
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              OperatingSystemCreateInstance create_callback,
                              DebuggerInitializeCallback debugger_init_callback);
@@ -144,9 +122,7 @@ public:
   static OperatingSystemCreateInstance
   GetOperatingSystemCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // Language
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              LanguageCreateInstance create_callback);
 
@@ -157,9 +133,7 @@ public:
   static LanguageCreateInstance
   GetLanguageCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // LanguageRuntime
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  LanguageRuntimeCreateInstance create_callback,
@@ -176,9 +150,7 @@ public:
   static LanguageRuntimeCreateInstance
   GetLanguageRuntimeCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // SystemRuntime
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              SystemRuntimeCreateInstance create_callback);
 
@@ -190,9 +162,7 @@ public:
   static SystemRuntimeCreateInstance
   GetSystemRuntimeCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // ObjectFile
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  ObjectFileCreateInstance create_callback,
@@ -220,9 +190,7 @@ public:
   static Status SaveCore(const lldb::ProcessSP &process_sp,
                          const FileSpec &outfile);
 
-  //------------------------------------------------------------------
   // ObjectContainer
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  ObjectContainerCreateInstance create_callback,
@@ -239,9 +207,7 @@ public:
   static ObjectFileGetModuleSpecifications
   GetObjectContainerGetModuleSpecificationsCallbackAtIndex(uint32_t idx);
 
-  //------------------------------------------------------------------
   // Platform
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  PlatformCreateInstance create_callback,
@@ -260,9 +226,7 @@ public:
 
   static size_t AutoCompletePlatformName(llvm::StringRef partial_name,
                                          StringList &matches);
-  //------------------------------------------------------------------
   // Process
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  ProcessCreateInstance create_callback,
@@ -279,9 +243,7 @@ public:
 
   static const char *GetProcessPluginDescriptionAtIndex(uint32_t idx);
 
-  //------------------------------------------------------------------
   // ScriptInterpreter
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              lldb::ScriptLanguage script_lang,
                              ScriptInterpreterCreateInstance create_callback);
@@ -293,13 +255,10 @@ public:
 
   static lldb::ScriptInterpreterSP
   GetScriptInterpreterForLanguage(lldb::ScriptLanguage script_lang,
-                                  CommandInterpreter &interpreter);
+                                  Debugger &debugger);
 
-  //------------------------------------------------------------------
   // StructuredDataPlugin
-  //------------------------------------------------------------------
 
-  //------------------------------------------------------------------
   /// Register a StructuredDataPlugin class along with optional
   /// callbacks for debugger initialization and Process launch info
   /// filtering and manipulation.
@@ -332,7 +291,6 @@ public:
   ///
   /// \return
   ///    Returns true upon success; otherwise, false.
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  StructuredDataPluginCreateInstance create_callback,
@@ -352,9 +310,7 @@ public:
   GetStructuredDataFilterCallbackAtIndex(uint32_t idx,
                                          bool &iteration_complete);
 
-  //------------------------------------------------------------------
   // SymbolFile
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  SymbolFileCreateInstance create_callback,
@@ -368,9 +324,7 @@ public:
   static SymbolFileCreateInstance
   GetSymbolFileCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // SymbolVendor
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              SymbolVendorCreateInstance create_callback);
 
@@ -382,9 +336,7 @@ public:
   static SymbolVendorCreateInstance
   GetSymbolVendorCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // UnwindAssembly
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              UnwindAssemblyCreateInstance create_callback);
 
@@ -396,9 +348,7 @@ public:
   static UnwindAssemblyCreateInstance
   GetUnwindAssemblyCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // MemoryHistory
-  //------------------------------------------------------------------
   static bool RegisterPlugin(ConstString name, const char *description,
                              MemoryHistoryCreateInstance create_callback);
 
@@ -410,9 +360,7 @@ public:
   static MemoryHistoryCreateInstance
   GetMemoryHistoryCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // InstrumentationRuntime
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  InstrumentationRuntimeCreateInstance create_callback,
@@ -430,9 +378,7 @@ public:
   static InstrumentationRuntimeCreateInstance
   GetInstrumentationRuntimeCreateCallbackForPluginName(ConstString name);
 
-  //------------------------------------------------------------------
   // TypeSystem
-  //------------------------------------------------------------------
   static bool RegisterPlugin(
       ConstString name, const char *description,
       TypeSystemCreateInstance create_callback,
@@ -453,9 +399,7 @@ public:
   GetTypeSystemEnumerateSupportedLanguagesCallbackForPluginName(
       ConstString name);
 
-  //------------------------------------------------------------------
   // REPL
-  //------------------------------------------------------------------
   static bool
   RegisterPlugin(ConstString name, const char *description,
                  REPLCreateInstance create_callback,
@@ -475,13 +419,11 @@ public:
   GetREPLSystemEnumerateSupportedLanguagesCallbackForPluginName(
       ConstString name);
 
-  //------------------------------------------------------------------
   // Some plug-ins might register a DebuggerInitializeCallback callback when
   // registering the plug-in. After a new Debugger instance is created, this
   // DebuggerInitialize function will get called. This allows plug-ins to
   // install Properties and do any other initialization that requires a
   // debugger instance.
-  //------------------------------------------------------------------
   static void DebuggerInitialize(Debugger &debugger);
 
   static lldb::OptionValuePropertiesSP

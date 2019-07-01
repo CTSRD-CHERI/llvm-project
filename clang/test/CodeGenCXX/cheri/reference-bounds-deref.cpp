@@ -87,10 +87,10 @@ TEST_PTR_TO_REF(double)
 
 // Or void*
 TEST_PTR_TO_REF(void *)
-// DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'void * __capability' reference to [[$CAP_SIZE]]
+// DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'void * __capability' reference to [[#CAP_SIZE]]
 // CHECK-LABEL: define void @_Z10test_derefU3capPU3capPv(i8 addrspace(200)* addrspace(200)*
 // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
-// CHECK-SAME: i64 [[$CAP_SIZE]])
+// CHECK-SAME: i64 [[#CAP_SIZE]])
 
 enum Enum1 { E1 };
 // Enum size is known -> set bounds

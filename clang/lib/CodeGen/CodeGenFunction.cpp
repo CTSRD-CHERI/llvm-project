@@ -279,6 +279,7 @@ llvm::DebugLoc CodeGenFunction::EmitReturnBlock() {
     if (CurBB->empty() || ReturnBlock.getBlock()->use_empty()) {
       ReturnBlock.getBlock()->replaceAllUsesWith(CurBB);
       delete ReturnBlock.getBlock();
+      ReturnBlock = JumpDest();
     } else
       EmitBlock(ReturnBlock.getBlock());
     return llvm::DebugLoc();
@@ -298,6 +299,7 @@ llvm::DebugLoc CodeGenFunction::EmitReturnBlock() {
       Builder.SetInsertPoint(BI->getParent());
       BI->eraseFromParent();
       delete ReturnBlock.getBlock();
+      ReturnBlock = JumpDest();
       return Loc;
     }
   }
@@ -472,6 +474,19 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   // 5. Width of vector aguments and return types for functions called by this
   //    function.
   CurFn->addFnAttr("min-legal-vector-width", llvm::utostr(LargestVectorWidth));
+
+  // If we generated an unreachable return block, delete it now.
+  if (ReturnBlock.isValid() && ReturnBlock.getBlock()->use_empty()) {
+    Builder.ClearInsertionPoint();
+    ReturnBlock.getBlock()->eraseFromParent();
+  }
+  if (ReturnValue.isValid()) {
+    auto *RetAlloca = dyn_cast<llvm::AllocaInst>(ReturnValue.getPointer());
+    if (RetAlloca && RetAlloca->use_empty()) {
+      RetAlloca->eraseFromParent();
+      ReturnValue = Address::invalid();
+    }
+  }
 }
 
 /// ShouldInstrumentFunction - Return true if the current function should be
@@ -545,205 +560,6 @@ CodeGenFunction::DecodeAddrUsedInPrologue(llvm::Value *F,
                             "decoded_addr");
 }
 
-static void removeImageAccessQualifier(std::string& TyName) {
-  std::string ReadOnlyQual("__read_only");
-  std::string::size_type ReadOnlyPos = TyName.find(ReadOnlyQual);
-  if (ReadOnlyPos != std::string::npos)
-    // "+ 1" for the space after access qualifier.
-    TyName.erase(ReadOnlyPos, ReadOnlyQual.size() + 1);
-  else {
-    std::string WriteOnlyQual("__write_only");
-    std::string::size_type WriteOnlyPos = TyName.find(WriteOnlyQual);
-    if (WriteOnlyPos != std::string::npos)
-      TyName.erase(WriteOnlyPos, WriteOnlyQual.size() + 1);
-    else {
-      std::string ReadWriteQual("__read_write");
-      std::string::size_type ReadWritePos = TyName.find(ReadWriteQual);
-      if (ReadWritePos != std::string::npos)
-        TyName.erase(ReadWritePos, ReadWriteQual.size() + 1);
-    }
-  }
-}
-
-// Returns the address space id that should be produced to the
-// kernel_arg_addr_space metadata. This is always fixed to the ids
-// as specified in the SPIR 2.0 specification in order to differentiate
-// for example in clGetKernelArgInfo() implementation between the address
-// spaces with targets without unique mapping to the OpenCL address spaces
-// (basically all single AS CPUs).
-static unsigned ArgInfoAddressSpace(LangAS AS) {
-  switch (AS) {
-  case LangAS::opencl_global:   return 1;
-  case LangAS::opencl_constant: return 2;
-  case LangAS::opencl_local:    return 3;
-  case LangAS::opencl_generic:  return 4; // Not in SPIR 2.0 specs.
-  default:
-    return 0; // Assume private.
-  }
-}
-
-// OpenCL v1.2 s5.6.4.6 allows the compiler to store kernel argument
-// information in the program executable. The argument information stored
-// includes the argument name, its type, the address and access qualifiers used.
-static void GenOpenCLArgMetadata(const FunctionDecl *FD, llvm::Function *Fn,
-                                 CodeGenModule &CGM, llvm::LLVMContext &Context,
-                                 CGBuilderTy &Builder, ASTContext &ASTCtx) {
-  // Create MDNodes that represent the kernel arg metadata.
-  // Each MDNode is a list in the form of "key", N number of values which is
-  // the same number of values as their are kernel arguments.
-
-  const PrintingPolicy &Policy = ASTCtx.getPrintingPolicy();
-
-  // MDNode for the kernel argument address space qualifiers.
-  SmallVector<llvm::Metadata *, 8> addressQuals;
-
-  // MDNode for the kernel argument access qualifiers (images only).
-  SmallVector<llvm::Metadata *, 8> accessQuals;
-
-  // MDNode for the kernel argument type names.
-  SmallVector<llvm::Metadata *, 8> argTypeNames;
-
-  // MDNode for the kernel argument base type names.
-  SmallVector<llvm::Metadata *, 8> argBaseTypeNames;
-
-  // MDNode for the kernel argument type qualifiers.
-  SmallVector<llvm::Metadata *, 8> argTypeQuals;
-
-  // MDNode for the kernel argument names.
-  SmallVector<llvm::Metadata *, 8> argNames;
-
-  for (unsigned i = 0, e = FD->getNumParams(); i != e; ++i) {
-    const ParmVarDecl *parm = FD->getParamDecl(i);
-    QualType ty = parm->getType();
-    std::string typeQuals;
-
-    if (ty->isPointerType()) {
-      QualType pointeeTy = ty->getPointeeType();
-
-      // Get address qualifier.
-      addressQuals.push_back(llvm::ConstantAsMetadata::get(Builder.getInt32(
-        ArgInfoAddressSpace(pointeeTy.getAddressSpace()))));
-
-      // Get argument type name.
-      std::string typeName =
-          pointeeTy.getUnqualifiedType().getAsString(Policy) + "*";
-
-      // Turn "unsigned type" to "utype"
-      std::string::size_type pos = typeName.find("unsigned");
-      if (pointeeTy.isCanonical() && pos != std::string::npos)
-        typeName.erase(pos+1, 8);
-
-      argTypeNames.push_back(llvm::MDString::get(Context, typeName));
-
-      std::string baseTypeName =
-          pointeeTy.getUnqualifiedType().getCanonicalType().getAsString(
-              Policy) +
-          "*";
-
-      // Turn "unsigned type" to "utype"
-      pos = baseTypeName.find("unsigned");
-      if (pos != std::string::npos)
-        baseTypeName.erase(pos+1, 8);
-
-      argBaseTypeNames.push_back(llvm::MDString::get(Context, baseTypeName));
-
-      // Get argument type qualifiers:
-      if (ty.isRestrictQualified())
-        typeQuals = "restrict";
-      if (pointeeTy.isConstQualified() ||
-          (pointeeTy.getAddressSpace() == LangAS::opencl_constant))
-        typeQuals += typeQuals.empty() ? "const" : " const";
-      if (pointeeTy.isVolatileQualified())
-        typeQuals += typeQuals.empty() ? "volatile" : " volatile";
-    } else {
-      uint32_t AddrSpc = 0;
-      bool isPipe = ty->isPipeType();
-      if (ty->isImageType() || isPipe)
-        AddrSpc = ArgInfoAddressSpace(LangAS::opencl_global);
-
-      addressQuals.push_back(
-          llvm::ConstantAsMetadata::get(Builder.getInt32(AddrSpc)));
-
-      // Get argument type name.
-      std::string typeName;
-      if (isPipe)
-        typeName = ty.getCanonicalType()->getAs<PipeType>()->getElementType()
-                     .getAsString(Policy);
-      else
-        typeName = ty.getUnqualifiedType().getAsString(Policy);
-
-      // Turn "unsigned type" to "utype"
-      std::string::size_type pos = typeName.find("unsigned");
-      if (ty.isCanonical() && pos != std::string::npos)
-        typeName.erase(pos+1, 8);
-
-      std::string baseTypeName;
-      if (isPipe)
-        baseTypeName = ty.getCanonicalType()->getAs<PipeType>()
-                          ->getElementType().getCanonicalType()
-                          .getAsString(Policy);
-      else
-        baseTypeName =
-          ty.getUnqualifiedType().getCanonicalType().getAsString(Policy);
-
-      // Remove access qualifiers on images
-      // (as they are inseparable from type in clang implementation,
-      // but OpenCL spec provides a special query to get access qualifier
-      // via clGetKernelArgInfo with CL_KERNEL_ARG_ACCESS_QUALIFIER):
-      if (ty->isImageType()) {
-        removeImageAccessQualifier(typeName);
-        removeImageAccessQualifier(baseTypeName);
-      }
-
-      argTypeNames.push_back(llvm::MDString::get(Context, typeName));
-
-      // Turn "unsigned type" to "utype"
-      pos = baseTypeName.find("unsigned");
-      if (pos != std::string::npos)
-        baseTypeName.erase(pos+1, 8);
-
-      argBaseTypeNames.push_back(llvm::MDString::get(Context, baseTypeName));
-
-      if (isPipe)
-        typeQuals = "pipe";
-    }
-
-    argTypeQuals.push_back(llvm::MDString::get(Context, typeQuals));
-
-    // Get image and pipe access qualifier:
-    if (ty->isImageType()|| ty->isPipeType()) {
-      const Decl *PDecl = parm;
-      if (auto *TD = dyn_cast<TypedefType>(ty))
-        PDecl = TD->getDecl();
-      const OpenCLAccessAttr *A = PDecl->getAttr<OpenCLAccessAttr>();
-      if (A && A->isWriteOnly())
-        accessQuals.push_back(llvm::MDString::get(Context, "write_only"));
-      else if (A && A->isReadWrite())
-        accessQuals.push_back(llvm::MDString::get(Context, "read_write"));
-      else
-        accessQuals.push_back(llvm::MDString::get(Context, "read_only"));
-    } else
-      accessQuals.push_back(llvm::MDString::get(Context, "none"));
-
-    // Get argument name.
-    argNames.push_back(llvm::MDString::get(Context, parm->getName()));
-  }
-
-  Fn->setMetadata("kernel_arg_addr_space",
-                  llvm::MDNode::get(Context, addressQuals));
-  Fn->setMetadata("kernel_arg_access_qual",
-                  llvm::MDNode::get(Context, accessQuals));
-  Fn->setMetadata("kernel_arg_type",
-                  llvm::MDNode::get(Context, argTypeNames));
-  Fn->setMetadata("kernel_arg_base_type",
-                  llvm::MDNode::get(Context, argBaseTypeNames));
-  Fn->setMetadata("kernel_arg_type_qual",
-                  llvm::MDNode::get(Context, argTypeQuals));
-  if (CGM.getCodeGenOpts().EmitOpenCLArgMetadata)
-    Fn->setMetadata("kernel_arg_name",
-                    llvm::MDNode::get(Context, argNames));
-}
-
 void CodeGenFunction::EmitOpenCLKernelMetadata(const FunctionDecl *FD,
                                                llvm::Function *Fn)
 {
@@ -752,7 +568,7 @@ void CodeGenFunction::EmitOpenCLKernelMetadata(const FunctionDecl *FD,
 
   llvm::LLVMContext &Context = getLLVMContext();
 
-  GenOpenCLArgMetadata(FD, Fn, CGM, Context, Builder, getContext());
+  CGM.GenOpenCLArgMetadata(Fn, FD, this);
 
   if (const VecTypeHintAttr *A = FD->getAttr<VecTypeHintAttr>()) {
     QualType HintQTy = A->getTypeHint();
@@ -2183,6 +1999,7 @@ void CodeGenFunction::EmitVariablyModifiedType(QualType type) {
     case Type::Attributed:
     case Type::SubstTemplateTypeParm:
     case Type::PackExpansion:
+    case Type::MacroQualified:
       // Keep walking after single level desugaring.
       type = type.getSingleStepDesugaredType(getContext());
       break;
@@ -2222,7 +2039,7 @@ Address CodeGenFunction::EmitMSVAListRef(const Expr *E) {
 
 void CodeGenFunction::EmitDeclRefExprDbgValue(const DeclRefExpr *E,
                                               const APValue &Init) {
-  assert(!Init.isUninit() && "Invalid DeclRefExpr initializer!");
+  assert(Init.hasValue() && "Invalid DeclRefExpr initializer!");
   if (CGDebugInfo *Dbg = getDebugInfo())
     if (CGM.getCodeGenOpts().getDebugInfo() >= codegenoptions::LimitedDebugInfo)
       Dbg->EmitGlobalVariable(E->getDecl(), Init);

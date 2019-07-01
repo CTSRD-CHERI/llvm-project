@@ -67,7 +67,7 @@ bool lldb_private::formatters::LibcxxFunctionSummaryProvider(
   if (process == nullptr)
     return false;
 
-  CPPLanguageRuntime *cpp_runtime = process->GetCPPLanguageRuntime();
+  CPPLanguageRuntime *cpp_runtime = CPPLanguageRuntime::Get(*process);
 
   if (!cpp_runtime)
     return false;
@@ -300,9 +300,9 @@ bool lldb_private::formatters::LibCxxMapIteratorSyntheticFrontEnd::
 
 size_t lldb_private::formatters::LibCxxMapIteratorSyntheticFrontEnd::
     GetIndexOfChildWithName(ConstString name) {
-  if (name == ConstString("first"))
+  if (name == "first")
     return 0;
-  if (name == ConstString("second"))
+  if (name == "second")
     return 1;
   return UINT32_MAX;
 }
@@ -430,11 +430,11 @@ bool lldb_private::formatters::LibcxxSharedPtrSyntheticFrontEnd::
 
 size_t lldb_private::formatters::LibcxxSharedPtrSyntheticFrontEnd::
     GetIndexOfChildWithName(ConstString name) {
-  if (name == ConstString("__ptr_"))
+  if (name == "__ptr_")
     return 0;
-  if (name == ConstString("count"))
+  if (name == "count")
     return 1;
-  if (name == ConstString("weak_count"))
+  if (name == "weak_count")
     return 2;
   return UINT32_MAX;
 }

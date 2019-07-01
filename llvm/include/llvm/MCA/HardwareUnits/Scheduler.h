@@ -149,8 +149,9 @@ class Scheduler : public HardwareUnit {
   bool promoteToReadySet(SmallVectorImpl<InstRef> &Ready);
 
   // Try to promote instructions from the WaitSet to the PendingSet.
+  // Add promoted instructions to the 'Pending' vector in input.
   // Returns true if at least one instruction was promoted.
-  bool promoteToPendingSet();
+  bool promoteToPendingSet(SmallVectorImpl<InstRef> &Pending);
 
 public:
   Scheduler(const MCSchedModel &Model, LSUnit &Lsu)
@@ -190,7 +191,11 @@ public:
   /// Returns true if instruction IR is ready to be issued to the underlying
   /// pipelines. Note that this operation cannot fail; it assumes that a
   /// previous call to method `isAvailable(IR)` returned `SC_AVAILABLE`.
-  bool dispatch(const InstRef &IR);
+  ///
+  /// If IR is a memory operation, then the Scheduler queries the LS unit to
+  /// obtain a LS token. An LS token is used internally to track memory
+  /// dependencies.
+  bool dispatch(InstRef &IR);
 
   /// Issue an instruction and populates a vector of used pipeline resources,
   /// and a vector of instructions that transitioned to the ready state as a
@@ -198,6 +203,7 @@ public:
   void issueInstruction(
       InstRef &IR,
       SmallVectorImpl<std::pair<ResourceRef, ResourceCycles>> &Used,
+      SmallVectorImpl<InstRef> &Pending,
       SmallVectorImpl<InstRef> &Ready);
 
   /// Returns true if IR has to be issued immediately, or if IR is a zero
@@ -211,9 +217,15 @@ public:
   /// have changed in state, and that are now available to new instructions.
   /// Instructions executed are added to vector Executed, while vector Ready is
   /// populated with instructions that have become ready in this new cycle.
+  /// Vector Pending is popluated by instructions that have transitioned through
+  /// the pending stat during this cycle. The Pending and Ready sets may not be
+  /// disjoint. An instruction is allowed to transition from the WAIT state to
+  /// the READY state (going through the PENDING state) within a single cycle.
+  /// That means, instructions may appear in both the Pending and Ready set.
   void cycleEvent(SmallVectorImpl<ResourceRef> &Freed,
-                  SmallVectorImpl<InstRef> &Ready,
-                  SmallVectorImpl<InstRef> &Executed);
+                  SmallVectorImpl<InstRef> &Executed,
+                  SmallVectorImpl<InstRef> &Pending,
+                  SmallVectorImpl<InstRef> &Ready);
 
   /// Convert a resource mask into a valid llvm processor resource identifier.
   unsigned getResourceID(uint64_t Mask) const {

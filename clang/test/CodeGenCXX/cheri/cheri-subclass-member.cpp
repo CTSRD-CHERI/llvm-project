@@ -21,7 +21,7 @@ struct s2 : public s1 {
 const s2 *__capability c_s2;
 
 // CHECK-LABEL: _Z4funcv
-// CHECK: load %struct.s2 addrspace(200)*, %struct.s2 addrspace(200)** @c_s2, align [[$CAP_SIZE]]
+// CHECK: load %struct.s2 addrspace(200)*, %struct.s2 addrspace(200)** @c_s2, align [[#CAP_SIZE]]
 const long &__capability func() {
   return c_s2->size;
 }

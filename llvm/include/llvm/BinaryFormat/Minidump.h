@@ -59,6 +59,14 @@ struct LocationDescriptor {
 };
 static_assert(sizeof(LocationDescriptor) == 8, "");
 
+/// Describes a single memory range (both its VM address and where to find it in
+/// the file) of the process from which this minidump file was generated.
+struct MemoryDescriptor {
+  support::ulittle64_t StartOfMemoryRange;
+  LocationDescriptor Memory;
+};
+static_assert(sizeof(MemoryDescriptor) == 16, "");
+
 /// Specifies the location and type of a single stream in the minidump file. The
 /// minidump stream directory is an array of entries of this type, with its size
 /// given by Header.NumberOfStreams.
@@ -123,6 +131,54 @@ struct SystemInfo {
   CPUInfo CPU;
 };
 static_assert(sizeof(SystemInfo) == 56, "");
+
+struct VSFixedFileInfo {
+  support::ulittle32_t Signature;
+  support::ulittle32_t StructVersion;
+  support::ulittle32_t FileVersionHigh;
+  support::ulittle32_t FileVersionLow;
+  support::ulittle32_t ProductVersionHigh;
+  support::ulittle32_t ProductVersionLow;
+  support::ulittle32_t FileFlagsMask;
+  support::ulittle32_t FileFlags;
+  support::ulittle32_t FileOS;
+  support::ulittle32_t FileType;
+  support::ulittle32_t FileSubtype;
+  support::ulittle32_t FileDateHigh;
+  support::ulittle32_t FileDateLow;
+};
+static_assert(sizeof(VSFixedFileInfo) == 52, "");
+
+inline bool operator==(const VSFixedFileInfo &LHS, const VSFixedFileInfo &RHS) {
+  return memcmp(&LHS, &RHS, sizeof(VSFixedFileInfo)) == 0;
+}
+
+struct Module {
+  support::ulittle64_t BaseOfImage;
+  support::ulittle32_t SizeOfImage;
+  support::ulittle32_t Checksum;
+  support::ulittle32_t TimeDateStamp;
+  support::ulittle32_t ModuleNameRVA;
+  VSFixedFileInfo VersionInfo;
+  LocationDescriptor CvRecord;
+  LocationDescriptor MiscRecord;
+  support::ulittle64_t Reserved0;
+  support::ulittle64_t Reserved1;
+};
+static_assert(sizeof(Module) == 108, "");
+
+/// Describes a single thread in the minidump file. Part of the ThreadList
+/// stream.
+struct Thread {
+  support::ulittle32_t ThreadId;
+  support::ulittle32_t SuspendCount;
+  support::ulittle32_t PriorityClass;
+  support::ulittle32_t Priority;
+  support::ulittle64_t EnvironmentBlock;
+  MemoryDescriptor Stack;
+  LocationDescriptor Context;
+};
+static_assert(sizeof(Thread) == 48, "");
 
 } // namespace minidump
 

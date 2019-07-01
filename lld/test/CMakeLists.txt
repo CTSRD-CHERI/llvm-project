@@ -34,9 +34,9 @@ configure_lit_site_cfg(
 set(LLD_TEST_DEPS lld)
 if (NOT LLD_BUILT_STANDALONE)
   list(APPEND LLD_TEST_DEPS
-    FileCheck capsizefix count llc llvm-ar llvm-as llvm-bcanalyzer llvm-config llvm-dis
-    llvm-dwarfdump llvm-lib llvm-mc llvm-nm llvm-objcopy llvm-objdump
-    llvm-pdbutil llvm-readelf llvm-readobj llvm-strip not obj2yaml opt yaml2obj
+    FileCheck capsizefix count llc llvm-ar llvm-as llvm-bcanalyzer llvm-config llvm-cvtres
+    llvm-dis llvm-dwarfdump llvm-lib llvm-mc llvm-nm llvm-objcopy llvm-objdump
+    llvm-pdbutil llvm-readelf llvm-readobj not obj2yaml opt yaml2obj
     )
 endif()
 

@@ -13,7 +13,7 @@
 // NEWABI-SAME: i8 addrspace(200)* bitcast (void (%class.A addrspace(200)*) addrspace(200)* @_ZN1A1fEv to i8 addrspace(200)*),
 // NEWABI-SAME: i8 addrspace(200)* bitcast (void (%class.B addrspace(200)*) addrspace(200)* @_ZN1B1gEv to i8 addrspace(200)*),
 // NEWABI-SAME: i8 addrspace(200)* bitcast (void () addrspace(200)* @__cxa_deleted_virtual to i8 addrspace(200)*)]
-// CHECK-SAME: }, comdat, align [[$CAP_SIZE]]
+// CHECK-SAME: }, comdat, align [[#CAP_SIZE]]
 // CHECK: @_ZTV1A = linkonce_odr unnamed_addr addrspace(200) constant { [5 x i8 addrspace(200)*] } { [5 x i8 addrspace(200)*] [i8 addrspace(200)* null, i8 addrspace(200)* null,
 // LEGACY-SAME: i8 addrspace(200)* addrspacecast (i8* bitcast (void (%class.A addrspace(200)*)* @_ZN1A1fEv to i8*) to i8 addrspace(200)*),
 // LEGACY-SAME: i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @__cxa_pure_virtual to i8*) to i8 addrspace(200)*),
@@ -21,7 +21,7 @@
 // NEWABI-SAME: i8 addrspace(200)* bitcast (void (%class.A addrspace(200)*) addrspace(200)* @_ZN1A1fEv to i8 addrspace(200)*),
 // NEWABI-SAME: i8 addrspace(200)* bitcast (void () addrspace(200)* @__cxa_pure_virtual to i8 addrspace(200)*),
 // NEWABI-SAME: i8 addrspace(200)* bitcast (void () addrspace(200)* @__cxa_deleted_virtual to i8 addrspace(200)*)]
-// CHECK-SAME: }, comdat, align [[$CAP_SIZE]]
+// CHECK-SAME: }, comdat, align [[#CAP_SIZE]]
 
 
 // Check the layout of the structures and vtables:
@@ -29,15 +29,15 @@
 // CHECK-VTABLE-LAYOUT:      *** Dumping AST Record Layout
 // CHECK-VTABLE-LAYOUT-NEXT:          0 | class A
 // CHECK-VTABLE-LAYOUT-NEXT:          0 |   (A vtable pointer)
-// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=[[$CAP_SIZE]],
-// CHECK-VTABLE-LAYOUT-SAME:               dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
-// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
+// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=[[#CAP_SIZE]],
+// CHECK-VTABLE-LAYOUT-SAME:               dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
+// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
 // CHECK-VTABLE-LAYOUT:      *** Dumping AST Record Layout
 // CHECK-VTABLE-LAYOUT-NEXT:          0 | class B
 // CHECK-VTABLE-LAYOUT-NEXT:          0 |   class A (primary base)
 // CHECK-VTABLE-LAYOUT-NEXT:          0 |     (A vtable pointer)
-// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=[[$CAP_SIZE]], dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
-// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
+// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=[[#CAP_SIZE]], dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
+// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
 // CHECK-VTABLE-LAYOUT:      Layout: <CGRecordLayout
 // CHECK-VTABLE-LAYOUT-NEXT:   LLVMType:%class.A = type { i32 (...) addrspace(200)* addrspace(200)* }
 // CHECK-VTABLE-LAYOUT-NEXT:   NonVirtualBaseLLVMType:%class.A = type { i32 (...) addrspace(200)* addrspace(200)* }

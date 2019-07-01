@@ -176,7 +176,7 @@ void PerTargetMIParsingState::initNames2SubRegIndices() {
   const TargetRegisterInfo *TRI = Subtarget.getRegisterInfo();
   for (unsigned I = 1, E = TRI->getNumSubRegIndices(); I < E; ++I)
     Names2SubRegIndices.insert(
-        std::make_pair(StringRef(TRI->getSubRegIndexName(I)).lower(), I));
+        std::make_pair(TRI->getSubRegIndexName(I), I));
 }
 
 unsigned PerTargetMIParsingState::getSubRegIndex(StringRef Name) {
@@ -1136,7 +1136,8 @@ bool MIParser::parseInstruction(unsigned &OpCode, unsigned &Flags) {
          Token.is(MIToken::kw_reassoc) ||
          Token.is(MIToken::kw_nuw) ||
          Token.is(MIToken::kw_nsw) ||
-         Token.is(MIToken::kw_exact)) {
+         Token.is(MIToken::kw_exact) ||
+         Token.is(MIToken::kw_fpexcept)) {
     // Mine frame and fast math flags
     if (Token.is(MIToken::kw_frame_setup))
       Flags |= MachineInstr::FrameSetup;
@@ -1162,6 +1163,8 @@ bool MIParser::parseInstruction(unsigned &OpCode, unsigned &Flags) {
       Flags |= MachineInstr::NoSWrap;
     if (Token.is(MIToken::kw_exact))
       Flags |= MachineInstr::IsExact;
+    if (Token.is(MIToken::kw_fpexcept))
+      Flags |= MachineInstr::FPExcept;
 
     lex();
   }
@@ -1852,6 +1855,11 @@ bool MIParser::parseDIExpression(MDNode *&Expr) {
         if (unsigned Op = dwarf::getOperationEncoding(Token.stringValue())) {
           lex();
           Elements.push_back(Op);
+          continue;
+        }
+        if (unsigned Enc = dwarf::getAttributeEncoding(Token.stringValue())) {
+          lex();
+          Elements.push_back(Enc);
           continue;
         }
         return error(Twine("invalid DWARF op '") + Token.stringValue() + "'");

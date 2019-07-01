@@ -22,28 +22,28 @@ define i8 addrspace(200)* @load_unaligned(i8 addrspace(200)* %unaligned) local_u
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    .cfi_offset 89, -[[@EXPR 1 * $CAP_SIZE]]
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 1]]
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(load_unaligned)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(load_unaligned)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    csetbounds $c4, $c3, [[$CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c4, $c3, [[#CAP_SIZE]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
 ; stack offset is zero so no need for cincoffset
-; CHECK-NEXT:    csetbounds $c3, $c11, [[$CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c3, $c11, [[#CAP_SIZE]]
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, [[$CAP_SIZE]]
+; CHECK-NEXT:    daddiu $4, $zero, [[#CAP_SIZE]]
 ; CHECK-NEXT:    clc $c3, $zero, 0($c11)
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 
 ; HYBRID-LABEL: load_unaligned:
-; HYBRID:      csetbounds	$c4, $c3, [[$CAP_SIZE]]
+; HYBRID:      csetbounds	$c4, $c3, [[#CAP_SIZE]]
 ; HYBRID-NEXT: daddiu	$16, $sp, 0
 ; HYBRID-NEXT: cfromddc	$c3, $16
 ; HYBRID-NEXT: jal	memcpy_c
-; HYBRID-NEXT: daddiu	$4, $zero, [[$CAP_SIZE]] 
+; HYBRID-NEXT: daddiu	$4, $zero, [[#CAP_SIZE]] 
 ; HYBRID-NEXT: clc	$c3, $16, 0($ddc)
 
 entry:
@@ -57,29 +57,29 @@ define void @store_unaligned(i8 addrspace(200)* %unused, i8 addrspace(200)* %una
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    .cfi_offset 89, -[[@EXPR 1 * $CAP_SIZE]]
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 1]]
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(store_unaligned)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(store_unaligned)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    csetbounds $c3, $c4, [[$CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c3, $c4, [[#CAP_SIZE]]
 ; CHECK-NEXT:    csc $c5, $zero, 0($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
 ; stack offset is zero so no need for cincoffset
-; CHECK-NEXT:    csetbounds $c4, $c11, [[$CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c4, $c11, [[#CAP_SIZE]]
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, [[$CAP_SIZE]]
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    daddiu $4, $zero, [[#CAP_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 
 ; HYBRID-LABEL: store_unaligned:
-; HYBRID:      csetbounds	$c3, $c4, [[$CAP_SIZE]]
+; HYBRID:      csetbounds	$c3, $c4, [[#CAP_SIZE]]
 ; HYBRID-NEXT: daddiu	$1, $sp, 0
 ; HYBRID-NEXT: csc	$c5, $1, 0($ddc)
 ; HYBRID-NEXT: cfromddc	$c4, $1
 ; HYBRID-NEXT: jal	memcpy_c
-; HYBRID-NEXT: daddiu	$4, $zero, [[$CAP_SIZE]]
+; HYBRID-NEXT: daddiu	$4, $zero, [[#CAP_SIZE]]
 
 entry:
   %r.0..sroa_cast = bitcast i8 addrspace(200)* %unaligned to i8 addrspace(200)* addrspace(200)*
@@ -100,11 +100,11 @@ define void @store_of_unaligned_load(i8 addrspace(200)* %src, i8 addrspace(200)*
 ; CHECK-NEXT:    cincoffset $c2, $c12, $1
 ; Bound source abd dest for memmove call:
 ; dest
-; CHECK-NEXT:    csetbounds $c1, $c4, [[$CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c1, $c4, [[#CAP_SIZE]]
 ; src
-; CHECK-NEXT:    csetbounds $c4, $c3, [[$CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c4, $c3, [[#CAP_SIZE]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memmove)($c2)
-; CHECK-NEXT:    daddiu $4, $zero, [[$CAP_SIZE]]
+; CHECK-NEXT:    daddiu $4, $zero, [[#CAP_SIZE]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; Move bounded dest to src (not sure why it is wasting another register here)
 ; CHECK-NEXT:    cmove $c3, $c1
@@ -113,9 +113,9 @@ define void @store_of_unaligned_load(i8 addrspace(200)* %src, i8 addrspace(200)*
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 
 ; HYBRID-LABEL: store_of_unaligned_load:
-; HYBRID:      csetbounds	$c1, $c4, [[$CAP_SIZE]]
-; HYBRID-NEXT: csetbounds	$c4, $c3, [[$CAP_SIZE]]
-; HYBRID-NEXT: daddiu $4, $zero, [[$CAP_SIZE]]
+; HYBRID:      csetbounds	$c1, $c4, [[#CAP_SIZE]]
+; HYBRID-NEXT: csetbounds	$c4, $c3, [[#CAP_SIZE]]
+; HYBRID-NEXT: daddiu $4, $zero, [[#CAP_SIZE]]
 ; HYBRID-NEXT: jal	memmove_c
 ; HYBRID-NEXT: cmove	$c3,  $c1
 

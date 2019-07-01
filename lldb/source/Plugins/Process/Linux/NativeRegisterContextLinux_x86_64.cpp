@@ -21,12 +21,27 @@
 #include <cpuid.h>
 #include <linux/elf.h>
 
+// Newer toolchains define __get_cpuid_count in cpuid.h, but some
+// older-but-still-supported ones (e.g. gcc 5.4.0) don't, so we
+// define it locally here, following the definition in clang/lib/Headers.
+static inline int get_cpuid_count(unsigned int __leaf,
+                                  unsigned int __subleaf,
+                                  unsigned int *__eax, unsigned int *__ebx,
+                                  unsigned int *__ecx, unsigned int *__edx)
+{
+  unsigned int __max_leaf = __get_cpuid_max(__leaf & 0x80000000, nullptr);
+
+  if (__max_leaf == 0 || __max_leaf < __leaf)
+    return 0;
+
+  __cpuid_count(__leaf, __subleaf, *__eax, *__ebx, *__ecx, *__edx);
+  return 1;
+}
+
 using namespace lldb_private;
 using namespace lldb_private::process_linux;
 
-// ----------------------------------------------------------------------------
 // Private namespace.
-// ----------------------------------------------------------------------------
 
 namespace {
 // x86 32-bit general purpose registers.
@@ -207,9 +222,7 @@ static const RegisterSet g_reg_sets_x86_64[k_num_register_sets] = {
 
 #define REG_CONTEXT_SIZE (GetRegisterInfoInterface().GetGPRSize() + sizeof(FPR))
 
-// ----------------------------------------------------------------------------
 // Required ptrace defines.
-// ----------------------------------------------------------------------------
 
 // Support ptrace extensions even when compiled without required kernel support
 #ifndef NT_X86_XSTATE
@@ -225,18 +238,14 @@ static inline unsigned int fxsr_regset(const ArchSpec &arch) {
   return arch.GetAddressByteSize() == 8 ? NT_PRFPREG : NT_PRXFPREG;
 }
 
-// ----------------------------------------------------------------------------
 // Required MPX define.
-// ----------------------------------------------------------------------------
 
 // Support MPX extensions also if compiled with compiler without MPX support.
 #ifndef bit_MPX
 #define bit_MPX 0x4000
 #endif
 
-// ----------------------------------------------------------------------------
 // XCR0 extended register sets masks.
-// ----------------------------------------------------------------------------
 #define mask_XSTATE_AVX (1ULL << 2)
 #define mask_XSTATE_BNDREGS (1ULL << 3)
 #define mask_XSTATE_BNDCFG (1ULL << 4)
@@ -249,9 +258,7 @@ NativeRegisterContextLinux::CreateHostNativeRegisterContextLinux(
       new NativeRegisterContextLinux_x86_64(target_arch, native_thread));
 }
 
-// ----------------------------------------------------------------------------
 // NativeRegisterContextLinux_x86_64 members.
-// ----------------------------------------------------------------------------
 
 static RegisterInfoInterface *
 CreateRegisterInfoInterface(const ArchSpec &target_arch) {
@@ -279,7 +286,7 @@ static std::size_t GetXSTATESize() {
     return sizeof(FPR);
 
   // Then fetch the maximum size of the area.
-  if (!__get_cpuid_count(0x0d, 0, &eax, &ebx, &ecx, &edx))
+  if (!get_cpuid_count(0x0d, 0, &eax, &ebx, &ecx, &edx))
     return sizeof(FPR);
   return std::max<std::size_t>(ecx, sizeof(FPR));
 }

@@ -5,20 +5,20 @@
 
 // CHECK-LABEL: @c(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[D_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)
-// CHECK-NEXT:    [[B:%.*]] = alloca i32 addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[D:%.*]], i8 addrspace(200)* addrspace(200)* [[D_ADDR]], align [[$CAP_SIZE]]
-// CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[D_ADDR]], align [[$CAP_SIZE]]
+// CHECK-NEXT:    [[D_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
+// CHECK-NEXT:    [[B:%.*]] = alloca i32 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
+// CHECK-NEXT:    store i8 addrspace(200)* [[D:%.*]], i8 addrspace(200)* addrspace(200)* [[D_ADDR]], align [[#CAP_SIZE]]
+// CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[D_ADDR]], align [[#CAP_SIZE]]
 // CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARGP_CUR]])
-// CHECK-NEXT:    [[TMP1:%.*]] = add i64 [[TMP0]], [[@EXPR $CAP_SIZE - 1]]
-// CHECK-NEXT:    [[TMP2:%.*]] = and i64 [[TMP1]], -[[$CAP_SIZE]]
+// CHECK-NEXT:    [[TMP1:%.*]] = add i64 [[TMP0]], [[#CAP_SIZE - 1]]
+// CHECK-NEXT:    [[TMP2:%.*]] = and i64 [[TMP1]], -[[#CAP_SIZE]]
 // CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARGP_CUR]], i64 [[TMP2]])
-// CHECK-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP3]], i64 [[$CAP_SIZE]]
-// CHECK-NEXT:    store i8 addrspace(200)* [[ARGP_NEXT]], i8 addrspace(200)* addrspace(200)* [[D_ADDR]], align [[$CAP_SIZE]]
+// CHECK-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP3]], i64 [[#CAP_SIZE]]
+// CHECK-NEXT:    store i8 addrspace(200)* [[ARGP_NEXT]], i8 addrspace(200)* addrspace(200)* [[D_ADDR]], align [[#CAP_SIZE]]
 // CHECK-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)* addrspace(200)*
-// CHECK-NEXT:    [[TMP5:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[TMP4]], align [[$CAP_SIZE]]
-// CHECK-NEXT:    store i32 addrspace(200)* [[TMP5]], i32 addrspace(200)* addrspace(200)* [[B]], align [[$CAP_SIZE]]
-// CHECK-NEXT:    [[TMP6:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[B]], align [[$CAP_SIZE]]
+// CHECK-NEXT:    [[TMP5:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[TMP4]], align [[#CAP_SIZE]]
+// CHECK-NEXT:    store i32 addrspace(200)* [[TMP5]], i32 addrspace(200)* addrspace(200)* [[B]], align [[#CAP_SIZE]]
+// CHECK-NEXT:    [[TMP6:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[B]], align [[#CAP_SIZE]]
 // CHECK-NEXT:    [[TMP7:%.*]] = load i32, i32 addrspace(200)* [[TMP6]], align 4
 // CHECK-NEXT:    ret i32 [[TMP7]]
 //

@@ -63,6 +63,10 @@ struct Symbol {
   /// candidate list. For example, "(X x, Y y) const" is a function signature.
   /// Only set when the symbol is indexed for completion.
   llvm::StringRef Signature;
+  /// Argument list in human-readable format, will be displayed to help
+  /// disambiguate between different specializations of a template. Empty for
+  /// non-specializations. Example: "<int, bool, 3>"
+  llvm::StringRef TemplateSpecializationArgs;
   /// What to insert when completing this symbol, after the symbol name.
   /// This is in LSP snippet syntax (e.g. "({$0})" for a no-args function).
   /// (When snippets are disabled, the symbol name alone is used).
@@ -143,6 +147,7 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, Symbol::SymbolFlag);
 template <typename Callback> void visitStrings(Symbol &S, const Callback &CB) {
   CB(S.Name);
   CB(S.Scope);
+  CB(S.TemplateSpecializationArgs);
   CB(S.Signature);
   CB(S.CompletionSnippetSuffix);
   CB(S.Documentation);
@@ -199,10 +204,13 @@ public:
     /// This is a deep copy: underlying strings will be owned by the slab.
     void insert(const Symbol &S);
 
-    /// Returns the symbol with an ID, if it exists. Valid until next insert().
+    /// Removes the symbol with an ID, if it exists.
+    void erase(const SymbolID &ID) { Symbols.erase(ID); }
+
+    /// Returns the symbol with an ID, if it exists. Valid until insert/remove.
     const Symbol *find(const SymbolID &ID) {
-      auto I = SymbolIndex.find(ID);
-      return I == SymbolIndex.end() ? nullptr : &Symbols[I->second];
+      auto I = Symbols.find(ID);
+      return I == Symbols.end() ? nullptr : &I->second;
     }
 
     /// Consumes the builder to finalize the slab.
@@ -212,9 +220,8 @@ public:
     llvm::BumpPtrAllocator Arena;
     /// Intern table for strings. Contents are on the arena.
     llvm::UniqueStringSaver UniqueStrings;
-    std::vector<Symbol> Symbols;
     /// Values are indices into Symbols vector.
-    llvm::DenseMap<SymbolID, size_t> SymbolIndex;
+    llvm::DenseMap<SymbolID, Symbol> Symbols;
   };
 
 private:

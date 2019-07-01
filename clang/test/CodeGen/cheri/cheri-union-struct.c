@@ -40,10 +40,10 @@ union DeepNoDive {
 
 void test_onelevel_helper(union CallData foo) {
   // CHECK-LABEL: @test_onelevel_helper(
-  // CHECK: [[TMP0:%[a-zA-Z0-9]+]] = alloca %union.CallData, align [[$CAP_SIZE]], addrspace(200)
+  // CHECK: [[TMP0:%[a-zA-Z0-9]+]] = alloca %union.CallData, align [[#CAP_SIZE]], addrspace(200)
   // CHECK-NEXT: [[TMP1:%[0-9]]] = bitcast i8 addrspace(200)* {{.*}}.coerce to %union.CallData addrspace(200)*
-  // CHECK-NEXT: [[TMP2:%[0-9]]] = load %union.CallData, %union.CallData addrspace(200)* [[TMP1]], align [[$CAP_SIZE]]
-  // CHECK-NEXT: store %union.CallData [[TMP2]], %union.CallData addrspace(200)* [[TMP0]], align [[$CAP_SIZE]]
+  // CHECK-NEXT: [[TMP2:%[0-9]]] = load %union.CallData, %union.CallData addrspace(200)* [[TMP1]], align [[#CAP_SIZE]]
+  // CHECK-NEXT: store %union.CallData [[TMP2]], %union.CallData addrspace(200)* [[TMP0]], align [[#CAP_SIZE]]
 }
 
 void test_onelevel() {
@@ -59,7 +59,7 @@ void test_onelevel() {
 void test_zerolevels_helper(union semun s) {
   // CHECK-LABEL: @test_zerolevels_helper(
   // CHECK: [[TMP4:%[a-zA-Z.]+]] = getelementptr inbounds %union.semun, %union.semun addrspace(200)* {{.*}}, i32 0, i32 0
-  // CHECK-NEXT: store i8 addrspace(200)* {{.*}}, i8 addrspace(200)* addrspace(200)* [[TMP4]], align [[$CAP_SIZE]]
+  // CHECK-NEXT: store i8 addrspace(200)* {{.*}}, i8 addrspace(200)* addrspace(200)* [[TMP4]], align [[#CAP_SIZE]]
 }
 
 void test_zerolevels() {
@@ -67,7 +67,7 @@ void test_zerolevels() {
   union semun s;
   s.buf1 = "hello";
   // CHECK: [[TMP5:%[a-zA-Z.]+]] = getelementptr inbounds %union.semun, %union.semun addrspace(200)* {{.*}}, i32 0, i32 0
-  // CHECK-NEXT: [[TMP6:%[0-9]+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP5]], align [[$CAP_SIZE]] 
+  // CHECK-NEXT: [[TMP6:%[0-9]+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP5]], align [[#CAP_SIZE]] 
   // CHECK-NEXT: call void @test_zerolevels_helper(i8 addrspace(200)* inreg [[TMP6]])
   test_zerolevels_helper(s);
 }
@@ -78,7 +78,7 @@ void test_twolevels_dive_helper(union DeepDive d) {
   // CHECK: [[TMP7:%[a-zA-Z0-9.]+]] = getelementptr inbounds %union.DeepDive, %union.DeepDive addrspace(200)* {{.*}}, i32 0, i32 0
   // CHECK-NEXT: [[TMP8:%[a-zA-Z0-9.]+]] = getelementptr inbounds %struct.anon.0, %struct.anon.0 addrspace(200)* [[TMP7]], i32 0, i32 0
   // CHECK-NEXT: [[TMP9:%[a-zA-Z0-9.]+]] = getelementptr inbounds %struct.anon.1, %struct.anon.1 addrspace(200)* [[TMP8]], i32 0, i32 0
-  // CHECK-NEXT: store i8 addrspace(200)* {{.*}}, i8 addrspace(200)* addrspace(200)* [[TMP9]], align [[$CAP_SIZE]]
+  // CHECK-NEXT: store i8 addrspace(200)* {{.*}}, i8 addrspace(200)* addrspace(200)* [[TMP9]], align [[#CAP_SIZE]]
 }
 
 void test_twolevels_dive() {
@@ -88,17 +88,17 @@ void test_twolevels_dive() {
   // CHECK: [[TMP10:%[a-zA-Z0-9.]+]] = getelementptr inbounds %union.DeepDive, %union.DeepDive addrspace(200)* {{.*}}, i32 0, i32 0
   // CHECK-NEXT: [[TMP11:%[a-zA-Z0-9.]+]] = getelementptr inbounds %struct.anon.0, %struct.anon.0 addrspace(200)* [[TMP10]], i32 0, i32 0
   // CHECK-NEXT: [[TMP12:%[a-zA-Z0-9.]+]] = getelementptr inbounds %struct.anon.1, %struct.anon.1 addrspace(200)* [[TMP11]], i32 0, i32 0
-  // CHECK-NEXT: [[TMP13:%[0-9]+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP12]], align [[$CAP_SIZE]] 
+  // CHECK-NEXT: [[TMP13:%[0-9]+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP12]], align [[#CAP_SIZE]] 
   // CHECK-NEXT: call void @test_twolevels_dive_helper(i8 addrspace(200)* inreg [[TMP13]])
   test_twolevels_dive_helper(d);
 }
 
 void test_twolevels_nodive_helper(union DeepNoDive d) {
   // CHECK-LABEL: @test_twolevels_nodive_helper(
-  // CHECK: [[TMP14:%[a-zA-Z0-9]+]] = alloca %union.DeepNoDive, align [[$CAP_SIZE]], addrspace(200)
+  // CHECK: [[TMP14:%[a-zA-Z0-9]+]] = alloca %union.DeepNoDive, align [[#CAP_SIZE]], addrspace(200)
   // CHECK-NEXT: [[TMP15:%[0-9]+]] = bitcast i8 addrspace(200)* {{.*}} to %union.DeepNoDive addrspace(200)*
-  // CHECK-NEXT: [[TMP16:%[0-9]+]] = load %union.DeepNoDive, %union.DeepNoDive addrspace(200)* [[TMP15]], align [[$CAP_SIZE]]
-  // CHECK-NEXT: store %union.DeepNoDive [[TMP16]], %union.DeepNoDive addrspace(200)* [[TMP14]], align [[$CAP_SIZE]]
+  // CHECK-NEXT: [[TMP16:%[0-9]+]] = load %union.DeepNoDive, %union.DeepNoDive addrspace(200)* [[TMP15]], align [[#CAP_SIZE]]
+  // CHECK-NEXT: store %union.DeepNoDive [[TMP16]], %union.DeepNoDive addrspace(200)* [[TMP14]], align [[#CAP_SIZE]]
 }
 
 void test_twolevels_nodive() {
@@ -119,7 +119,7 @@ void test_twolevels_nodive() {
 int test_semun_read_int(union semun s) {
   return s.val + 1;
   // ASM-LABEL: test_semun_read_int:
-  // ASM:      cincoffset	$c11, $c11, -[[$CAP_SIZE]]
+  // ASM:      cincoffset	$c11, $c11, -[[#CAP_SIZE]]
   // ASM-NEXT: csc	$c3, $zero, 0($c11)
   // ASM-NEXT: clw	$1, $zero, 0($c11)
   // ASM-NEXT: addiu	$2, $1, 1

@@ -146,17 +146,13 @@ const char *PlatformMacOSX::GetDescriptionStatic(bool is_host) {
     return "Remote Mac OS X user platform plug-in.";
 }
 
-//------------------------------------------------------------------
 /// Default Constructor
-//------------------------------------------------------------------
 PlatformMacOSX::PlatformMacOSX(bool is_host) : PlatformDarwin(is_host) {}
 
-//------------------------------------------------------------------
 /// Destructor.
 ///
 /// The destructor is virtual since this class is designed to be
 /// inherited from by the plug-in instance.
-//------------------------------------------------------------------
 PlatformMacOSX::~PlatformMacOSX() {}
 
 ConstString PlatformMacOSX::GetSDKDirectory(lldb_private::Target &target) {
@@ -168,7 +164,7 @@ ConstString PlatformMacOSX::GetSDKDirectory(lldb_private::Target &target) {
       std::string default_xcode_sdk;
       FileSpec fspec;
       uint32_t versions[2];
-      if (objfile->GetSDKVersion(versions, sizeof(versions))) {
+      if (objfile->GetSDKVersion(versions, 2)) {
         fspec = HostInfo::GetShlibDir();
         if (fspec) {
           std::string path;
@@ -187,7 +183,7 @@ ConstString PlatformMacOSX::GetSDKDirectory(lldb_private::Target &target) {
             const char *command = "xcrun -sdk macosx --show-sdk-path";
             lldb_private::Status error = RunShellCommand(
                 command, // shell command to run
-                NULL,    // current working directory
+                nullptr, // current working directory
                 &status, // Put the exit status of the process in here
                 &signo,  // Put the signal that caused the process to exit in
                          // here
@@ -313,7 +309,7 @@ lldb_private::Status PlatformMacOSX::GetSharedModule(
     if (module_spec.GetArchitecture().GetCore() ==
         ArchSpec::eCore_x86_64_x86_64h) {
       ObjectFile *objfile = module_sp->GetObjectFile();
-      if (objfile == NULL) {
+      if (objfile == nullptr) {
         // We didn't find an x86_64h slice, fall back to a x86_64 slice
         ModuleSpec module_spec_x86_64(module_spec);
         module_spec_x86_64.GetArchitecture() = ArchSpec("x86_64-apple-macosx");

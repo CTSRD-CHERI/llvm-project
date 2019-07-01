@@ -44,24 +44,6 @@ using __sanitizer::atomic_load;
 using __sanitizer::atomic_store;
 using __sanitizer::atomic_uintptr_t;
 
-bool IsInInterceptorScope() {
-  Thread *t = GetCurrentThread();
-  return t && t->InInterceptorScope();
-}
-
-struct InterceptorScope {
-  InterceptorScope() {
-    Thread *t = GetCurrentThread();
-    if (t)
-      t->EnterInterceptorScope();
-  }
-  ~InterceptorScope() {
-    Thread *t = GetCurrentThread();
-    if (t)
-      t->LeaveInterceptorScope();
-  }
-};
-
 static uptr allocated_for_dlsym;
 static const uptr kDlsymAllocPoolSize = 1024;
 static uptr alloc_memory_for_dlsym[kDlsymAllocPoolSize];
@@ -178,6 +160,11 @@ void * __sanitizer_realloc(void *ptr, usize size) {
   return hwasan_realloc(ptr, size, &stack);
 }
 
+void * __sanitizer_reallocarray(void *ptr, usize nmemb, usize size) {
+  GET_MALLOC_STACK_TRACE;
+  return hwasan_reallocarray(ptr, nmemb, size, &stack);
+}
+
 void * __sanitizer_malloc(usize size) {
   GET_MALLOC_STACK_TRACE;
   if (UNLIKELY(!hwasan_init_is_running))
@@ -204,6 +191,7 @@ INTERCEPTOR_ALIAS(void, free, void *ptr);
 INTERCEPTOR_ALIAS(uptr, malloc_usable_size, const void *ptr);
 INTERCEPTOR_ALIAS(void *, calloc, SIZE_T nmemb, SIZE_T size);
 INTERCEPTOR_ALIAS(void *, realloc, void *ptr, SIZE_T size);
+INTERCEPTOR_ALIAS(void *, reallocarray, void *ptr, SIZE_T nmemb, SIZE_T size);
 INTERCEPTOR_ALIAS(void *, malloc, SIZE_T size);
 
 #if !SANITIZER_FREEBSD && !SANITIZER_NETBSD
@@ -228,8 +216,8 @@ INTERCEPTOR(int, pthread_create, void *th, void *attr,
 #endif
 
 #if HWASAN_WITH_INTERCEPTORS
-DEFINE_REAL(int, vfork);
-DECLARE_EXTERN_INTERCEPTOR_AND_WRAPPER(int, vfork);
+DEFINE_REAL(int, vfork)
+DECLARE_EXTERN_INTERCEPTOR_AND_WRAPPER(int, vfork)
 #endif
 
 static void BeforeFork() {
@@ -247,11 +235,6 @@ INTERCEPTOR(int, fork, void) {
   AfterFork();
   return pid;
 }
-
-
-struct HwasanInterceptorContext {
-  bool in_interceptor_scope;
-};
 
 namespace __hwasan {
 

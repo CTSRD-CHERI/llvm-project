@@ -24,10 +24,8 @@
 using namespace lldb;
 using namespace lldb_private;
 
-//----------------------------------------------------------------------
 // Basic function information is contained in the FunctionInfo class. It is
 // designed to contain the name, linkage name, and declaration location.
-//----------------------------------------------------------------------
 FunctionInfo::FunctionInfo(const char *name, const Declaration *decl_ptr)
     : m_name(name), m_declaration(decl_ptr) {}
 
@@ -129,9 +127,7 @@ size_t InlineFunctionInfo::MemorySize() const {
   return FunctionInfo::MemorySize() + m_mangled.MemorySize();
 }
 
-//----------------------------------------------------------------------
 //
-//----------------------------------------------------------------------
 CallEdge::CallEdge(const char *symbol_name, lldb::addr_t return_pc)
     : return_pc(return_pc), resolved(false) {
   lazy_callee.symbol_name = symbol_name;
@@ -182,15 +178,13 @@ lldb::addr_t CallEdge::GetReturnPCAddress(Function &caller,
   return base.GetLoadAddress(&target) + return_pc;
 }
 
-//----------------------------------------------------------------------
 //
-//----------------------------------------------------------------------
 Function::Function(CompileUnit *comp_unit, lldb::user_id_t func_uid,
                    lldb::user_id_t type_uid, const Mangled &mangled, Type *type,
                    const AddressRange &range)
     : UserID(func_uid), m_comp_unit(comp_unit), m_type_uid(type_uid),
       m_type(type), m_mangled(mangled), m_block(func_uid), m_range(range),
-      m_frame_base(nullptr), m_flags(), m_prologue_byte_size(0) {
+      m_frame_base(), m_flags(), m_prologue_byte_size(0) {
   m_block.SetParentScope(this);
   assert(comp_unit != nullptr);
 }
@@ -552,7 +546,7 @@ uint32_t Function::GetPrologueByteSize() {
 
         // Now calculate the offset to pass the subsequent line 0 entries.
         uint32_t first_non_zero_line = prologue_end_line_idx;
-        while (1) {
+        while (true) {
           LineEntry line_entry;
           if (line_table->GetLineEntryAtIndex(first_non_zero_line,
                                               line_entry)) {

@@ -8,9 +8,6 @@ declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture, i8 add
 define void @test_string_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) addrspace(200) #0 {
 ; CHECK-LABEL: test_string_memmove:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|96]]
-; CHECK-NEXT:    cmove $c1, $c4
-; CHECK-NEXT:    cmove $c2, $c3
 ; CHECK-NEXT:    clc [[CAP0:\$c[0-9]+]], $zero, 0($c4)
 ; CHERI128-NEXT: clc [[CAP16:\$c[0-9]+]], $zero, 16($c4)
 ; CHECK-NEXT:    clc [[CAP32:\$c[0-9]+]], $zero, 32($c4)
@@ -25,9 +22,6 @@ define void @test_string_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %sr
 ; CHECK-NEXT:    csc [[CAP32]], $zero, 32($c3)
 ; CHERI128-NEXT: csc [[CAP16]], $zero, 16($c3)
 ; CHECK-NEXT:    csc [[CAP0]], $zero, 0($c3)
-; CHECK-NEXT:    csc $c1, $zero, {{16|64}}($c11)
-; CHECK-NEXT:    csc $c2, $zero, {{0|32}}($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
@@ -38,9 +32,6 @@ entry:
 define void @test_string_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) addrspace(200) #0 {
 ; CHECK-LABEL: test_string_memcpy:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|96]]
-; CHECK-NEXT:    cmove $c1, $c4
-; CHECK-NEXT:    cmove $c2, $c3
 ; CHECK-NEXT:    clc [[CAP0:\$c[0-9]+]], $zero, 0($c4)
 ; CHECK-NEXT:    csc [[CAP0]], $zero, 0($c3)
 ; CHECK-NEXT:    clb $1, $zero, 76($c4)
@@ -55,9 +46,6 @@ define void @test_string_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src
 ; CHECK-NEXT:    csc [[CAP32]], $zero, 32($c3)
 ; CHERI128-NEXT:    clc [[CAP16:\$c[0-9]+]], $zero, 16($c4)
 ; CHERI128-NEXT:    csc [[CAP16]], $zero, 16($c3)
-; CHECK-NEXT:    csc $c1, $zero, {{16|64}}($c11)
-; CHECK-NEXT:    csc $c2, $zero, {{0|32}}($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:

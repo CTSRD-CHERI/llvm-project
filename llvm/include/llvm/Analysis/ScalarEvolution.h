@@ -598,6 +598,8 @@ public:
   /// \p IndexExprs The expressions for the indices.
   const SCEV *getGEPExpr(GEPOperator *GEP,
                          const SmallVectorImpl<const SCEV *> &IndexExprs);
+  const SCEV *getMinMaxExpr(unsigned Kind,
+                            SmallVectorImpl<const SCEV *> &Operands);
   const SCEV *getSMaxExpr(const SCEV *LHS, const SCEV *RHS);
   const SCEV *getSMaxExpr(SmallVectorImpl<const SCEV *> &Operands);
   const SCEV *getUMaxExpr(const SCEV *LHS, const SCEV *RHS);
@@ -781,6 +783,13 @@ public:
   /// Return true if the specified loop has an analyzable loop-invariant
   /// backedge-taken count.
   bool hasLoopInvariantBackedgeTakenCount(const Loop *L);
+
+  // This method should be called by the client when it made any change that
+  // would invalidate SCEV's answers, and the client wants to remove all loop
+  // information held internally by ScalarEvolution. This is intended to be used
+  // when the alternative to forget a loop is too expensive (i.e. large loop
+  // bodies).
+  void forgetAllLoops();
 
   /// This method should be called by the client when it has changed a loop in
   /// a way that may effect ScalarEvolution's ability to compute a trip count,

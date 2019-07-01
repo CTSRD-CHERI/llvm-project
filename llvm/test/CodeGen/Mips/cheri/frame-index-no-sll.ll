@@ -7,10 +7,10 @@ define i32 @load_store_stack_i32(i32 %arg, i64 addrspace(200)* %padding) addrspa
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
-; CHECK-NEXT:    csw $4, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK-NEXT:    csw $4, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
-; CHECK-NEXT:    clw $2, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK-NEXT:    clw $2, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
 ; CHECK-NEXT:    cjr $c17
@@ -32,10 +32,10 @@ define i16 @load_store_stack_i16(i16 %arg, i64 addrspace(200)* %padding) addrspa
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
-; CHECK-NEXT:    csh $4, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK-NEXT:    csh $4, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
-; CHECK-NEXT:    clhu $2, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK-NEXT:    clhu $2, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
 ; CHECK-NEXT:    cjr $c17
@@ -61,10 +61,10 @@ define i1 @load_store_stack_i1(i1 %arg, i64 addrspace(200)* %padding) addrspace(
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
 ; CHECK-NEXT:    andi $1, $4, 1
-; CHECK-NEXT:    csb $1, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK-NEXT:    csb $1, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
-; CHECK-NEXT:    clbu $2, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK-NEXT:    clbu $2, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
 ; CHECK-NEXT:    cjr $c17

@@ -312,7 +312,7 @@ int opts::breakpoint::evaluateBreakpoints(Debugger &Dbg) {
   while (!Rest.empty()) {
     StringRef Line;
     std::tie(Line, Rest) = Rest.split('\n');
-    Line = Line.ltrim();
+    Line = Line.ltrim().rtrim();
     if (Line.empty() || Line[0] == '#')
       continue;
 
@@ -364,8 +364,10 @@ Error opts::symbols::findFunctions(lldb_private::Module &Module) {
       cu_sp->FindLineEntry(0, Line, &src_file, false, &le);
       if (!le.IsValid())
         continue;
-
-      auto addr = le.GetSameLineContiguousAddressRange().GetBaseAddress();
+      const bool include_inlined_functions = false;
+      auto addr =
+          le.GetSameLineContiguousAddressRange(include_inlined_functions)
+              .GetBaseAddress();
       if (!addr.IsValid())
         continue;
 
@@ -414,8 +416,9 @@ Error opts::symbols::findBlocks(lldb_private::Module &Module) {
     cu_sp->FindLineEntry(0, Line, &src_file, false, &le);
     if (!le.IsValid())
       continue;
-
-    auto addr = le.GetSameLineContiguousAddressRange().GetBaseAddress();
+    const bool include_inlined_functions = false;
+    auto addr = le.GetSameLineContiguousAddressRange(include_inlined_functions)
+                    .GetBaseAddress();
     if (!addr.IsValid())
       continue;
 
@@ -936,7 +939,7 @@ int opts::irmemorymap::evaluateMemoryMapCommands(Debugger &Dbg) {
   while (!Rest.empty()) {
     StringRef Line;
     std::tie(Line, Rest) = Rest.split('\n');
-    Line = Line.ltrim();
+    Line = Line.ltrim().rtrim();
 
     if (Line.empty() || Line[0] == '#')
       continue;

@@ -31,6 +31,7 @@ using RelType = uint32_t;
 enum RelExpr {
   R_ABS,
   R_ADDEND,
+  R_DTPREL,
   R_GOT,
   R_GOT_OFF,
   R_GOT_PC,
@@ -49,8 +50,8 @@ enum RelExpr {
   R_RELAX_GOT_PC_NOPIC,
   R_RELAX_TLS_GD_TO_IE,
   R_RELAX_TLS_GD_TO_IE_ABS,
-  R_RELAX_TLS_GD_TO_IE_END,
   R_RELAX_TLS_GD_TO_IE_GOT_OFF,
+  R_RELAX_TLS_GD_TO_IE_GOTPLT,
   R_RELAX_TLS_GD_TO_LE,
   R_RELAX_TLS_GD_TO_LE_NEG,
   R_RELAX_TLS_IE_TO_LE,
@@ -60,6 +61,7 @@ enum RelExpr {
   R_TLS,
   R_TLSDESC,
   R_TLSDESC_CALL,
+  R_TLSDESC_PC,
   R_TLSGD_GOT,
   R_TLSGD_GOTPLT,
   R_TLSGD_PC,
@@ -89,9 +91,12 @@ enum RelExpr {
   R_MIPS_GOT_OFF32,
   R_MIPS_TLSGD,
   R_MIPS_TLSLD,
-  R_PPC_CALL,
-  R_PPC_CALL_PLT,
-  R_PPC_TOC,
+  R_PPC32_PLTREL,
+  R_PPC64_CALL,
+  R_PPC64_CALL_PLT,
+  R_PPC64_RELAX_TOC,
+  R_PPC64_TOCBASE,
+  R_RISCV_ADD,
   R_RISCV_PC_INDIRECT,
   R_CHERI_CAPABILITY_TABLE_INDEX,
   R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
@@ -101,24 +106,8 @@ enum RelExpr {
   R_MIPS_CHERI_CAPTAB_TLSGD,
   R_MIPS_CHERI_CAPTAB_TLSLD,
   R_MIPS_CHERI_CAPTAB_TPREL,
-  R_CHERI_CAPABILITY,
-
-  // We use a single 64-bit masking operation to quickly check if a relocation
-  // expression matches one on many possible options. This initially worked
-  // for all members of RelExpr, but lately we have come close to the limit of
-  // 64 entries in the RelExpr enum. If a given RelExpr is not used in a
-  // oneof() check with many possibly options, it should be placed at the end
-  // of the enum after whatever LAST_REL_EXPR_USED_IN_oneof aliases so that the
-  // available 64 bits can be used by other more common expressions. We can
-  // also skip the first few relocations.
-  // TODO: If we end up neededing many more expressions we could also start
-  // using two 64-bit masking operations
-  FIRST_REL_EXPR_USED_IN_oneof = R_GOT,
-  LAST_REL_EXPR_USED_IN_oneof = R_CHERI_CAPABILITY_TABLE_REL,
+  R_CHERI_CAPABILITY
 };
-
-static_assert((LAST_REL_EXPR_USED_IN_oneof - FIRST_REL_EXPR_USED_IN_oneof) < 64,
-              "RelExpr is too large for 64-bit mask!");
 
 // Architecture-neutral representation of relocation.
 struct Relocation {
@@ -158,7 +147,8 @@ private:
 
   void createInitialThunkSections(ArrayRef<OutputSection *> OutputSections);
 
-  std::pair<Thunk *, bool> getThunk(Symbol &Sym, RelType Type, uint64_t Src);
+  std::pair<Thunk *, bool> getThunk(InputSection *IS, Relocation &Rel,
+                                    uint64_t Src);
 
   ThunkSection *addThunkSection(OutputSection *OS, InputSectionDescription *,
                                 uint64_t Off);

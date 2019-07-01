@@ -137,6 +137,9 @@ private:
   unsigned selectLoadStoreOpCode(unsigned Opc, unsigned RegBank,
                                  unsigned Size) const;
 
+  void renderVFPF32Imm(MachineInstrBuilder &New, const MachineInstr &Old) const;
+  void renderVFPF64Imm(MachineInstrBuilder &New, const MachineInstr &Old) const;
+
 #define GET_GLOBALISEL_PREDICATES_DECL
 #include "ARMGenGlobalISel.inc"
 #undef GET_GLOBALISEL_PREDICATES_DECL
@@ -229,7 +232,7 @@ static bool selectMergeValues(MachineInstrBuilder &MIB,
                               MachineRegisterInfo &MRI,
                               const TargetRegisterInfo &TRI,
                               const RegisterBankInfo &RBI) {
-  assert(TII.getSubtarget().hasVFP2() && "Can't select merge without VFP");
+  assert(TII.getSubtarget().hasVFP2Base() && "Can't select merge without VFP");
 
   // We only support G_MERGE_VALUES as a way to stick together two scalar GPRs
   // into one DPR.
@@ -260,7 +263,8 @@ static bool selectUnmergeValues(MachineInstrBuilder &MIB,
                                 MachineRegisterInfo &MRI,
                                 const TargetRegisterInfo &TRI,
                                 const RegisterBankInfo &RBI) {
-  assert(TII.getSubtarget().hasVFP2() && "Can't select unmerge without VFP");
+  assert(TII.getSubtarget().hasVFP2Base() &&
+         "Can't select unmerge without VFP");
 
   // We only support G_UNMERGE_VALUES as a way to break up one DPR into two
   // GPRs.
@@ -798,10 +802,35 @@ bool ARMInstructionSelector::selectSelect(MachineInstrBuilder &MIB,
 
 bool ARMInstructionSelector::selectShift(unsigned ShiftOpc,
                                          MachineInstrBuilder &MIB) const {
+  assert(!STI.isThumb() && "Unsupported subtarget");
   MIB->setDesc(TII.get(ARM::MOVsr));
   MIB.addImm(ShiftOpc);
   MIB.add(predOps(ARMCC::AL)).add(condCodeOp());
   return constrainSelectedInstRegOperands(*MIB, TII, TRI, RBI);
+}
+
+void ARMInstructionSelector::renderVFPF32Imm(
+    MachineInstrBuilder &NewInstBuilder, const MachineInstr &OldInst) const {
+  assert(OldInst.getOpcode() == TargetOpcode::G_FCONSTANT &&
+         "Expected G_FCONSTANT");
+
+  APFloat FPImmValue = OldInst.getOperand(1).getFPImm()->getValueAPF();
+  int FPImmEncoding = ARM_AM::getFP32Imm(FPImmValue);
+  assert(FPImmEncoding != -1 && "Invalid immediate value");
+
+  NewInstBuilder.addImm(FPImmEncoding);
+}
+
+void ARMInstructionSelector::renderVFPF64Imm(
+    MachineInstrBuilder &NewInstBuilder, const MachineInstr &OldInst) const {
+  assert(OldInst.getOpcode() == TargetOpcode::G_FCONSTANT &&
+         "Expected G_FCONSTANT");
+
+  APFloat FPImmValue = OldInst.getOperand(1).getFPImm()->getValueAPF();
+  int FPImmEncoding = ARM_AM::getFP64Imm(FPImmValue);
+  assert(FPImmEncoding != -1 && "Invalid immediate value");
+
+  NewInstBuilder.addImm(FPImmEncoding);
 }
 
 bool ARMInstructionSelector::select(MachineInstr &I,
@@ -833,12 +862,8 @@ bool ARMInstructionSelector::select(MachineInstr &I,
     isSExt = true;
     LLVM_FALLTHROUGH;
   case G_ZEXT: {
-    LLT DstTy = MRI.getType(I.getOperand(0).getReg());
-    // FIXME: Smaller destination sizes coming soon!
-    if (DstTy.getSizeInBits() != 32) {
-      LLVM_DEBUG(dbgs() << "Unsupported destination size for extension");
-      return false;
-    }
+    assert(MRI.getType(I.getOperand(0).getReg()).getSizeInBits() <= 32 &&
+           "Unsupported destination size for extension");
 
     LLT SrcTy = MRI.getType(I.getOperand(1).getReg());
     unsigned SrcSize = SrcTy.getSizeInBits();
@@ -954,8 +979,30 @@ bool ARMInstructionSelector::select(MachineInstr &I,
       }
     }
 
+    assert(!STI.isThumb() && "Unsupported subtarget");
     I.setDesc(TII.get(ARM::MOVi));
     MIB.add(predOps(ARMCC::AL)).add(condCodeOp());
+    break;
+  }
+  case G_FCONSTANT: {
+    // Load from constant pool
+    unsigned Size = MRI.getType(I.getOperand(0).getReg()).getSizeInBits() / 8;
+    unsigned Alignment = Size;
+
+    assert((Size == 4 || Size == 8) && "Unsupported FP constant type");
+    auto LoadOpcode = Size == 4 ? ARM::VLDRS : ARM::VLDRD;
+
+    auto ConstPool = MF.getConstantPool();
+    auto CPIndex =
+        ConstPool->getConstantPoolIndex(I.getOperand(1).getFPImm(), Alignment);
+    MIB->setDesc(TII.get(LoadOpcode));
+    MIB->RemoveOperand(1);
+    MIB.addConstantPoolIndex(CPIndex, /*Offset*/ 0, /*TargetFlags*/ 0)
+        .addMemOperand(
+            MF.getMachineMemOperand(MachinePointerInfo::getConstantPool(MF),
+                                    MachineMemOperand::MOLoad, Size, Alignment))
+        .addImm(0)
+        .add(predOps(ARMCC::AL));
     break;
   }
   case G_INTTOPTR:
@@ -990,12 +1037,12 @@ bool ARMInstructionSelector::select(MachineInstr &I,
     return selectCmp(Helper, MIB, MRI);
   }
   case G_FCMP: {
-    assert(STI.hasVFP2() && "Can't select fcmp without VFP");
+    assert(STI.hasVFP2Base() && "Can't select fcmp without VFP");
 
     unsigned OpReg = I.getOperand(2).getReg();
     unsigned Size = MRI.getType(OpReg).getSizeInBits();
 
-    if (Size == 64 && STI.isFPOnlySP()) {
+    if (Size == 64 && !STI.hasFP64()) {
       LLVM_DEBUG(dbgs() << "Subtarget only supports single precision");
       return false;
     }
@@ -1041,7 +1088,7 @@ bool ARMInstructionSelector::select(MachineInstr &I,
     LLT ValTy = MRI.getType(Reg);
     const auto ValSize = ValTy.getSizeInBits();
 
-    assert((ValSize != 64 || STI.hasVFP2()) &&
+    assert((ValSize != 64 || STI.hasVFP2Base()) &&
            "Don't know how to load/store 64-bit value without VFP");
 
     const auto NewOpc = selectLoadStoreOpCode(I.getOpcode(), RegBank, ValSize);

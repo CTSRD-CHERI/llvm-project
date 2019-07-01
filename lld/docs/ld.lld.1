@@ -4,7 +4,7 @@
 .\"
 .\" This man page documents only lld's ELF linking support, obtained originally
 .\" from FreeBSD.
-.Dd February 26, 2019
+.Dd May 12, 2019
 .Dt LD.LLD 1
 .Os
 .Sh NAME
@@ -182,6 +182,8 @@ Set the
 field to the specified value.
 .It Fl -fini Ns = Ns Ar symbol
 Specify a finalizer function.
+.It Fl -force-bti
+Force enable AArch64 BTI instruction in PLT, warn if Input ELF file does not have GNU_PROPERTY_AARCH64_FEATURE_1_BTI property.
 .It Fl -format Ns = Ns Ar input-format , Fl b Ar input-format
 Specify the format of the inputs following this option.
 .Ar input-format
@@ -254,6 +256,8 @@ Set target emulation.
 .It Fl -Map Ns = Ns Ar file , Fl M Ar file
 Print a link map to
 .Ar file .
+.It Fl -nmagic , Fl n
+Do not page align sections, link against static libraries.
 .It Fl -no-allow-shlib-undefined
 Do not allow unresolved references in shared libraries.
 This option is enabled by default when linking an executable.
@@ -277,6 +281,10 @@ Disable garbage collection of unused sections.
 Disable STB_GNU_UNIQUE symbol binding.
 .It Fl -no-merge-exidx-entries
 Disable merging .ARM.exidx entries.
+.It Fl -no-nmagic
+Page align sections.
+.It Fl -no-omagic
+Do not set the text data sections to be writable, page align sections.
 .It Fl -no-rosegment
 Do not put read-only non-executable sections in their own segment.
 .It Fl -no-threads
@@ -325,7 +333,7 @@ is
 .Cm binary ,
 which produces output with no ELF header.
 .It Fl -omagic , Fl N
-Set the text and data sections to be readable and writable.
+Set the text and data sections to be readable and writable, do not page align sections, link against static libraries.
 .It Fl -opt-remarks-filename Ar file
 Write optimization remarks in YAML format to
 .Ar file .
@@ -376,6 +384,8 @@ is the default. If
 .Fl -use-android-relr-tags
 is specified, use SHT_ANDROID_RELR instead of SHT_RELR.
 .Pp
+.It Fl -pac-plt
+AArch64 only, use pointer authentication in PLT.
 .It Fl -pic-veneer
 Always generate position independent thunks.
 .It Fl -pie , Fl -pic-executable
@@ -423,6 +433,8 @@ Set
 .Dv DT_SONAME
 to
 .Ar value .
+.It Fl -sort-common
+This option is ignored for GNU compatibility.
 .It Fl -sort-section Ns = Ns Ar value
 Specifies sections sorting rule when linkerscript is used.
 .It Fl -start-lib
@@ -546,6 +558,14 @@ Sets the
 .Dv DYNAMIC
 section.
 Different loaders can decide how to handle this flag on their own.
+.It Cm ifunc-noplt
+Do not emit PLT entries for ifunc symbols.
+Instead, emit text relocations referencing the resolver.
+This is an experimental optimization and only suitable for standalone
+environments where text relocations do not have the usual drawbacks.
+This option must be combined with the
+.Fl z Li notext
+option.
 .It Cm initfirst
 Sets the
 .Dv DF_1_INITFIRST

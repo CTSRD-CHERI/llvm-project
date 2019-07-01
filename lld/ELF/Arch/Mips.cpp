@@ -47,8 +47,6 @@ public:
 template <class ELFT> MIPS<ELFT>::MIPS() {
   GotPltHeaderEntriesNum = 2;
   DefaultMaxPageSize = 65536;
-  GotEntrySize = sizeof(typename ELFT::uint);
-  GotPltEntrySize = sizeof(typename ELFT::uint);
   GotBaseSymInGotPlt = false;
   PltEntrySize = 16;
   PltHeaderSize = 32;
@@ -64,6 +62,7 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
 
   if (ELFT::Is64Bits) {
     RelativeRel = (R_MIPS_64 << 8) | R_MIPS_REL32;
+    SymbolicRel = R_MIPS_64;
     TlsGotRel = R_MIPS_TLS_TPREL64;
     TlsModuleIndexRel = R_MIPS_TLS_DTPMOD64;
     TlsOffsetRel = R_MIPS_TLS_DTPREL64;
@@ -71,6 +70,7 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
     SizeRel = (R_MIPS_64 << 8) | R_MIPS_CHERI_SIZE;
   } else {
     RelativeRel = R_MIPS_REL32;
+    SymbolicRel = R_MIPS_32;
     TlsGotRel = R_MIPS_TLS_TPREL32;
     TlsModuleIndexRel = R_MIPS_TLS_DTPMOD32;
     TlsOffsetRel = R_MIPS_TLS_DTPREL32;
@@ -374,13 +374,15 @@ void MIPS<ELFT>::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
     return;
   }
 
+  uint32_t LoadInst = ELFT::Is64Bits ? 0xddf90000 : 0x8df90000;
   uint32_t JrInst = isMipsR6() ? (Config->ZHazardplt ? 0x03200409 : 0x03200009)
                                : (Config->ZHazardplt ? 0x03200408 : 0x03200008);
+  uint32_t AddInst = ELFT::Is64Bits ? 0x65f80000 : 0x25f80000;
 
   write32<E>(Buf, 0x3c0f0000);     // lui   $15, %hi(.got.plt entry)
-  write32<E>(Buf + 4, 0x8df90000); // l[wd] $25, %lo(.got.plt entry)($15)
+  write32<E>(Buf + 4, LoadInst);   // l[wd] $25, %lo(.got.plt entry)($15)
   write32<E>(Buf + 8, JrInst);     // jr  $25 / jr.hb $25
-  write32<E>(Buf + 12, 0x25f80000); // addiu $24, $15, %lo(.got.plt entry)
+  write32<E>(Buf + 12, AddInst);   // [d]addiu $24, $15, %lo(.got.plt entry)
   writeValue<E>(Buf, GotPltEntryAddr + 0x8000, 16, 16);
   writeValue<E>(Buf + 4, GotPltEntryAddr, 16, 0);
   writeValue<E>(Buf + 12, GotPltEntryAddr, 16, 0);

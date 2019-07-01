@@ -417,11 +417,11 @@ static bool tryDiagnoseOverloadedCast(Sema &S, CastType CT,
     break;
   }
 
-  S.Diag(range.getBegin(), msg)
-    << CT << srcType << destType
-    << range << src->getSourceRange();
-
-  candidates.NoteCandidates(S, howManyCandidates, src);
+  candidates.NoteCandidates(
+      PartialDiagnosticAt(range.getBegin(),
+                          S.PDiag(msg) << CT << srcType << destType << range
+                                       << src->getSourceRange()),
+      S, howManyCandidates, src);
 
   return true;
 }
@@ -2490,19 +2490,41 @@ void CastOperation::checkAddressSpaceCast(QualType SrcType, QualType DestType) {
   // In OpenCL only conversions between pointers to objects in overlapping
   // addr spaces are allowed. v2.0 s6.5.5 - Generic addr space overlaps
   // with any named one, except for constant.
+
+  // Converting the top level pointee addrspace is permitted for compatible
+  // addrspaces (such as 'generic int *' to 'local int *' or vice versa), but
+  // if any of the nested pointee addrspaces differ, we emit a warning
+  // regardless of addrspace compatibility. This makes
+  //   local int ** p;
+  //   return (generic int **) p;
+  // warn even though local -> generic is permitted.
   if (Self.getLangOpts().OpenCL) {
-    auto SrcPtrType = SrcType->getAs<PointerType>();
-    if (!SrcPtrType)
-      return;
-    auto DestPtrType = DestType->getAs<PointerType>();
-    if (!DestPtrType)
-      return;
-    if (!DestPtrType->isAddressSpaceOverlapping(*SrcPtrType)) {
-      Self.Diag(OpRange.getBegin(),
-                diag::err_typecheck_incompatible_address_space)
-          << SrcType << DestType << Sema::AA_Casting
-          << SrcExpr.get()->getSourceRange();
-      SrcExpr = ExprError();
+    const Type *DestPtr, *SrcPtr;
+    bool Nested = false;
+    unsigned DiagID = diag::err_typecheck_incompatible_address_space;
+    DestPtr = Self.getASTContext().getCanonicalType(DestType.getTypePtr()),
+    SrcPtr  = Self.getASTContext().getCanonicalType(SrcType.getTypePtr());
+
+    while (isa<PointerType>(DestPtr) && isa<PointerType>(SrcPtr)) {
+      const PointerType *DestPPtr = cast<PointerType>(DestPtr);
+      const PointerType *SrcPPtr = cast<PointerType>(SrcPtr);
+      QualType DestPPointee = DestPPtr->getPointeeType();
+      QualType SrcPPointee = SrcPPtr->getPointeeType();
+      if (Nested ? DestPPointee.getAddressSpace() !=
+                   SrcPPointee.getAddressSpace()
+                 : !DestPPtr->isAddressSpaceOverlapping(*SrcPPtr)) {
+        Self.Diag(OpRange.getBegin(), DiagID)
+            << SrcType << DestType << Sema::AA_Casting
+            << SrcExpr.get()->getSourceRange();
+        if (!Nested)
+          SrcExpr = ExprError();
+        return;
+      }
+
+      DestPtr = DestPPtr->getPointeeType().getTypePtr();
+      SrcPtr = SrcPPtr->getPointeeType().getTypePtr();
+      Nested = true;
+      DiagID = diag::ext_nested_pointer_qualifier_mismatch;
     }
   }
 }
@@ -2595,6 +2617,10 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
     tcr = TryAddressSpaceCast(Self, SrcExpr, DestType, /*CStyle*/ true, msg);
     if (SrcExpr.isInvalid())
       return;
+
+    if (isValidCast(tcr))
+      Kind = CK_AddressSpaceConversion;
+
     if (tcr == TC_NotApplicable) {
       // ... or if that is not possible, a static_cast, ignoring const, ...
       tcr = TryStaticCast(Self, SrcExpr, DestType, CCK, OpRange, msg, Kind,

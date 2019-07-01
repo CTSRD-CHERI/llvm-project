@@ -10,7 +10,6 @@
 #include "llvm/ADT/StringRef.h"
 
 #include "CommandObjectExpression.h"
-#include "Plugins/ExpressionParser/Clang/ClangExpressionVariable.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectVariable.h"
@@ -482,8 +481,7 @@ bool CommandObjectExpression::EvaluateExpression(llvm::StringRef expr,
       } else {
         if (result_valobj_sp->GetError().GetError() ==
             UserExpression::kNoResult) {
-          if (format != eFormatVoid &&
-              m_interpreter.GetDebugger().GetNotifyVoid()) {
+          if (format != eFormatVoid && GetDebugger().GetNotifyVoid()) {
             error_stream->PutCString("(void)\n");
           }
 

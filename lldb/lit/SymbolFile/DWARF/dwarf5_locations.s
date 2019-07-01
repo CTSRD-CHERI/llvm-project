@@ -1,10 +1,12 @@
 # This tests that lldb is able to process DW_OP_addrx tags introduced in dwarf5.
-# REQUIRES: lld
+
+# REQUIRES: lld, x86
+
 # RUN: llvm-mc -g -dwarf-version=5 -triple x86_64-unknown-linux-gnu %s -filetype=obj > %t.o
 # RUN: ld.lld -m elf_x86_64 %t.o -o %t 
 # RUN: lldb-test symbols %t | FileCheck %s
 
-# CHECK: Variable{0xffffffff00000011}, name = "color"
+# CHECK: Variable{0x7fffffff00000011}, name = "color"
 # CHECK-SAME: location = DW_OP_addrx(0x0)
 
         .text

@@ -13,16 +13,16 @@
 define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-LABEL: fn1:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    daddiu $1, $zero, -[[STACKFRAME_SIZE:4176|4256]]
+; CHECK-NEXT:    daddiu $1, $zero, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    cincoffset $c11, $c11, $1
-; CHECK-NEXT:    csc $c19, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c18, $zero, [[@EXPR STACKFRAME_SIZE - (2 * $CAP_SIZE)]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - (3 * $CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - #CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
 ; CHECK-NEXT:    cincoffset $c19, $c12, $1
 ; CHECK-NEXT:    daddiu $1, $zero, 4096
-; CHECK-NEXT:    cincoffset $c18, $c11, [[@EXPR (2 * $CAP_SIZE)]]
+; CHECK-NEXT:    cincoffset $c18, $c11, [[#CAP_SIZE * 2]]
 ; CHECK-NEXT:    csetbounds $c18, $c18, $1
 ; CHECK-NEXT:    clcbi $c4, %captab20(a)($c19)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c19)
@@ -30,15 +30,15 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:    csc $c18, $zero, 0($c11)
-; CHECK-NEXT:    csetbounds $c1, $c11, [[$CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c1, $c11, [[#CAP_SIZE]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(fn2)($c19)
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    candperm $c13, $c1, $1
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR STACKFRAME_SIZE - (3 * $CAP_SIZE)]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[@EXPR STACKFRAME_SIZE - (2 * $CAP_SIZE)]]($c11)
-; CHECK-NEXT:    clc $c19, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
-; CHECK-NEXT:    daddiu $1, $zero, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
+; CHECK-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - #CAP_SIZE]]($c11)
+; CHECK-NEXT:    daddiu $1, $zero, [[#STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, $1
 entry:

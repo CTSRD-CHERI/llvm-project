@@ -60,7 +60,8 @@ namespace X86 {
     IP_HAS_REPEAT_NE = 4,
     IP_HAS_REPEAT = 8,
     IP_HAS_LOCK = 16,
-    IP_HAS_NOTRACK = 32
+    IP_HAS_NOTRACK = 32,
+    IP_USE_VEX3 = 64,
   };
 
   enum OperandType : unsigned {
@@ -743,8 +744,7 @@ namespace X86II {
       // has it as the last op.
       if (NumOps == 9 && Desc.getOperandConstraint(2, MCOI::TIED_TO) == 0 &&
           (Desc.getOperandConstraint(3, MCOI::TIED_TO) == 1 ||
-           Desc.getOperandConstraint(8, MCOI::TIED_TO) == 1) &&
-          "Instruction with 2 defs isn't gather?")
+           Desc.getOperandConstraint(8, MCOI::TIED_TO) == 1))
         return 2;
       return 0;
     }

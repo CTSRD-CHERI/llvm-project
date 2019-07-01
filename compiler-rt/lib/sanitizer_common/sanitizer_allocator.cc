@@ -206,6 +206,18 @@ void *InternalRealloc(void *addr, usize size, InternalAllocatorCache *cache) {
   return result;
 }
 
+void *InternalReallocArray(void *addr, usize count, usize size,
+                           InternalAllocatorCache *cache) {
+  if (UNLIKELY(CheckForCallocOverflow(count, size))) {
+    Report(
+        "FATAL: %s: reallocarray parameters overflow: count * size (%zd * %zd) "
+        "cannot be represented in type size_t\n",
+        SanitizerToolName, count, size);
+    Die();
+  }
+  return InternalRealloc(addr, count * size, cache);
+}
+
 void *InternalCalloc(usize count, usize size, InternalAllocatorCache *cache) {
   if (UNLIKELY(CheckForCallocOverflow(count, size))) {
     Report("FATAL: %s: calloc parameters overflow: count * size (%zd * %zd) "

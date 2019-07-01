@@ -42,7 +42,7 @@ quintptr qtHookData[] = {
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* inttoptr (i64 7 to i8 addrspace(200)*),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* inttoptr (i64 331776 to i8 addrspace(200)*),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* null, i8 addrspace(200)* null, i8 addrspace(200)* null,
-// CHECK-PURECAP-SAME:  i8 addrspace(200)* inttoptr (i64 16 to i8 addrspace(200)*)], align [[$CAP_SIZE]]
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* inttoptr (i64 16 to i8 addrspace(200)*)], align [[#CAP_SIZE]]
 
 // HYBRID-ASM-LABEL: qtHookData:
 // HYBRID-ASM-NEXT: 	.8byte	3
@@ -62,7 +62,7 @@ quintptr qtHookData[] = {
 // PURECAP-ASM-NEXT: 	.chericap	0
 // PURECAP-ASM-NEXT: 	.chericap	0
 // PURECAP-ASM-NEXT: 	.chericap	16
-// PURECAP-ASM-NEXT: 	.size	qtHookData, [[@EXPR 7 * $CAP_SIZE]]
+// PURECAP-ASM-NEXT: 	.size	qtHookData, [[#CAP_SIZE * 7]]
 
 
 // Some sanity check that this is actually a codegen problem and not a Sema one@
@@ -95,13 +95,13 @@ quintptr array2[4] = {
 // CHECK-PURECAP-SAME: [i8 addrspace(200)* inttoptr (i64 42 to i8 addrspace(200)*),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* bitcast ([4 x i8 addrspace(200)*] addrspace(200)* @array2 to i8 addrspace(200)*),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* null,
-// CHECK-PURECAP-SAME:  i8 addrspace(200)* null], align [[$CAP_SIZE]]
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* null], align [[#CAP_SIZE]]
 // PURECAP-ASM-LABEL: array2:
 // PURECAP-ASM-NEXT:	.chericap	42
 // PURECAP-ASM-NEXT:	.chericap	array2
 // PURECAP-ASM-NEXT:	.chericap	0
 // PURECAP-ASM-NEXT:	.chericap	0
-// PURECAP-ASM-NEXT: 	.size	array2, [[@EXPR 4 * $CAP_SIZE]]
+// PURECAP-ASM-NEXT: 	.size	array2, [[#CAP_SIZE * 4]]
 
 // Check arrays with run-time initializers:
 quintptr extern_func();
@@ -119,10 +119,10 @@ quintptr array3[4] = {
 // HYBRID-ASM-NEXT:	.space	32
 // HYBRID-ASM-NEXT:	.size	array3, 32
 
-// CHECK-PURECAP: @array3 = addrspace(200) global [4 x i8 addrspace(200)*] zeroinitializer, align [[$CAP_SIZE]]
+// CHECK-PURECAP: @array3 = addrspace(200) global [4 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
 // CHECK-PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void ()*, i8 addrspace(200)* }] [{ i32, void ()*, i8 addrspace(200)* }
 // PURECAP-LEGACY-SAME: { i32 65535, void ()* @_GLOBAL__sub_I_qhooks_array.cpp, i8 addrspace(200)* null }]
 // PURECAP-NEWABI-SAME: { i32 65535,  void ()* addrspacecast (void () addrspace(200)* @_GLOBAL__sub_I_qhooks_array.cpp to void ()*), i8 addrspace(200)* null }]
 // PURECAP-ASM-LABEL: array3:
-// PURECAP-ASM-NEXT:	.space	[[@EXPR 4 * $CAP_SIZE]]
-// PURECAP-ASM-NEXT: 	.size	array3, [[@EXPR 4 * $CAP_SIZE]]
+// PURECAP-ASM-NEXT:	.space	[[#CAP_SIZE * 4]]
+// PURECAP-ASM-NEXT: 	.size	array3, [[#CAP_SIZE * 4]]

@@ -48,9 +48,7 @@ lldb_private::ConstString ObjCLanguage::GetPluginNameStatic() {
   return g_name;
 }
 
-//------------------------------------------------------------------
 // PluginInterface protocol
-//------------------------------------------------------------------
 
 lldb_private::ConstString ObjCLanguage::GetPluginName() {
   return GetPluginNameStatic();
@@ -58,9 +56,7 @@ lldb_private::ConstString ObjCLanguage::GetPluginName() {
 
 uint32_t ObjCLanguage::GetPluginVersion() { return 1; }
 
-//------------------------------------------------------------------
 // Static Functions
-//------------------------------------------------------------------
 
 Language *ObjCLanguage::CreateInstance(lldb::LanguageType language) {
   switch (language) {
@@ -224,43 +220,46 @@ ConstString ObjCLanguage::MethodName::GetFullNameWithoutCategory(
   return ConstString();
 }
 
-size_t ObjCLanguage::MethodName::GetFullNames(std::vector<ConstString> &names,
-                                              bool append) {
-  if (!append)
-    names.clear();
-  if (IsValid(false)) {
+std::vector<ConstString>
+ObjCLanguage::GetMethodNameVariants(ConstString method_name) const {
+  std::vector<ConstString> variant_names;
+  ObjCLanguage::MethodName objc_method(method_name.GetCString(), false);
+  if (!objc_method.IsValid(false)) {
+    return variant_names;
+  }
+
+  const bool is_class_method =
+      objc_method.GetType() == MethodName::eTypeClassMethod;
+  const bool is_instance_method =
+      objc_method.GetType() == MethodName::eTypeInstanceMethod;
+  ConstString name_sans_category =
+      objc_method.GetFullNameWithoutCategory(/*empty_if_no_category*/ true);
+
+  if (is_class_method || is_instance_method) {
+    if (name_sans_category)
+      variant_names.emplace_back(name_sans_category);
+  } else {
     StreamString strm;
-    const bool is_class_method = m_type == eTypeClassMethod;
-    const bool is_instance_method = m_type == eTypeInstanceMethod;
-    ConstString category = GetCategory();
-    if (is_class_method || is_instance_method) {
-      names.push_back(m_full);
-      if (category) {
-        strm.Printf("%c[%s %s]", is_class_method ? '+' : '-',
-                    GetClassName().GetCString(), GetSelector().GetCString());
-        names.emplace_back(strm.GetString());
-      }
-    } else {
-      ConstString class_name = GetClassName();
-      ConstString selector = GetSelector();
-      strm.Printf("+[%s %s]", class_name.GetCString(), selector.GetCString());
-      names.emplace_back(strm.GetString());
+
+    strm.Printf("+%s", objc_method.GetFullName().GetCString());
+    variant_names.emplace_back(strm.GetString());
+    strm.Clear();
+
+    strm.Printf("-%s", objc_method.GetFullName().GetCString());
+    variant_names.emplace_back(strm.GetString());
+    strm.Clear();
+
+    if (name_sans_category) {
+      strm.Printf("+%s", name_sans_category.GetCString());
+      variant_names.emplace_back(strm.GetString());
       strm.Clear();
-      strm.Printf("-[%s %s]", class_name.GetCString(), selector.GetCString());
-      names.emplace_back(strm.GetString());
-      strm.Clear();
-      if (category) {
-        strm.Printf("+[%s(%s) %s]", class_name.GetCString(),
-                    category.GetCString(), selector.GetCString());
-        names.emplace_back(strm.GetString());
-        strm.Clear();
-        strm.Printf("-[%s(%s) %s]", class_name.GetCString(),
-                    category.GetCString(), selector.GetCString());
-        names.emplace_back(strm.GetString());
-      }
+
+      strm.Printf("-%s", name_sans_category.GetCString());
+      variant_names.emplace_back(strm.GetString());
     }
   }
-  return names.size();
+
+  return variant_names;
 }
 
 static void LoadObjCFormatters(TypeCategoryImplSP objc_category_sp) {
@@ -891,7 +890,7 @@ ObjCLanguage::GetPossibleFormattersMatches(ValueObject &valobj,
       lldb::ProcessSP process_sp = valobj.GetProcessSP();
       if (!process_sp)
         break;
-      ObjCLanguageRuntime *runtime = process_sp->GetObjCLanguageRuntime();
+      ObjCLanguageRuntime *runtime = ObjCLanguageRuntime::Get(*process_sp);
       if (runtime == nullptr)
         break;
       ObjCLanguageRuntime::ClassDescriptorSP objc_class_sp(
@@ -935,8 +934,7 @@ std::unique_ptr<Language::TypeScavenger> ObjCLanguage::GetTypeScavenger() {
 
       Process *process = exe_scope->CalculateProcess().get();
       if (process) {
-        const bool create_on_demand = false;
-        auto objc_runtime = process->GetObjCLanguageRuntime(create_on_demand);
+        auto objc_runtime = ObjCLanguageRuntime::Get(*process);
         if (objc_runtime) {
           auto decl_vendor = objc_runtime->GetDeclVendor();
           if (decl_vendor) {
@@ -998,7 +996,7 @@ std::unique_ptr<Language::TypeScavenger> ObjCLanguage::GetTypeScavenger() {
   
   class ObjCDebugInfoScavenger : public Language::ImageListTypeScavenger {
   public:
-    virtual CompilerType AdjustForInclusion(CompilerType &candidate) override {
+    CompilerType AdjustForInclusion(CompilerType &candidate) override {
       LanguageType lang_type(candidate.GetMinimumLanguage());
       if (!Language::LanguageIsObjC(lang_type))
         return CompilerType();

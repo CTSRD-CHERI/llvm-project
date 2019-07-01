@@ -93,18 +93,14 @@ elseif(NOT LLDB_NO_DEBUGSERVER)
   # Default case: on Darwin we need the right code signing ID.
   # See lldb/docs/code-signing.txt for details.
   if(CMAKE_HOST_APPLE AND NOT LLVM_CODESIGNING_IDENTITY STREQUAL "lldb_codesign")
-    set(problem "Cannot code sign debugserver with LLVM_CODESIGNING_IDENTITY '${LLVM_CODESIGNING_IDENTITY}'.")
-    set(advice "Pass -DLLDB_CODESIGN_IDENTITY=lldb_codesign to override the LLVM value for debugserver.")
-    if(system_debugserver)
-      set(effect "Will fall back to system's debugserver.")
-      set(use_system_debugserver ON)
-    else()
-      set(effect "debugserver will not be available.")
-    endif()
-    message(WARNING "${problem} ${effect} ${advice}")
-  else()
-    set(build_and_sign_debugserver ON)
+    message(WARNING "Codesigning debugserver with identity ${LLVM_CODESIGNING_IDENTITY}. "
+                    "The usual setup uses the \"lldb_codesign\" identity created with "
+                    "scripts/macos-setup-codesign.sh. As a result your debugserver might "
+                    "not be able to attach to processes.\n"
+                    "Pass -DLLDB_CODESIGN_IDENTITY=lldb_codesign to use the development "
+                    "signing identity.")
   endif()
+  set(build_and_sign_debugserver ON)
 endif()
 
 # TODO: We don't use the $<TARGET_FILE:debugserver> generator expression here,
@@ -123,6 +119,8 @@ if(use_system_debugserver)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${system_debugserver} ${LLVM_RUNTIME_OUTPUT_INTDIR}
     COMMENT "Copying the system debugserver to LLDB's binaries directory.")
+
+  set_target_properties(debugserver PROPERTIES FOLDER "lldb libraries/debugserver")
 
   # Don't test debugserver itself.
   # Tests that require debugserver will use the copy.
@@ -240,6 +238,7 @@ if(build_and_sign_debugserver)
     ${DEBUGSERVER_VERS_GENERATED_FILE})
 
   add_library(lldbDebugserverCommon ${lldbDebugserverCommonSources})
+  set_target_properties(lldbDebugserverCommon PROPERTIES FOLDER "lldb libraries/debugserver")
 
   target_link_libraries(lldbDebugserverCommon
                         INTERFACE ${COCOA_LIBRARY}
@@ -267,6 +266,12 @@ if(build_and_sign_debugserver)
     ENTITLEMENTS
       ${entitlements}
     )
+
+  set_target_properties(debugserver PROPERTIES FOLDER "lldb libraries/debugserver")
+
+  if(LLDB_BUILD_FRAMEWORK)
+    lldb_add_to_framework(debugserver)
+  endif()
 
   if(IOS)
     set_property(TARGET lldbDebugserverCommon APPEND PROPERTY COMPILE_DEFINITIONS

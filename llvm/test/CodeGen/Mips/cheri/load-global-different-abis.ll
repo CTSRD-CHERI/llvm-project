@@ -64,20 +64,20 @@ entry:
 
 ; PLT-NEXT: liveins: $c26
 ; PLT-NEXT: %0:cherigpr = COPY $c26
-; PLT-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[$CAP_SIZE]] from cap-table)
+; PLT-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[#CAP_SIZE]] from cap-table)
 ; PLT-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 ; FNDESC-NEXT:  liveins: $c26
 ; FNDESC-NEXT:  %0:cherigpr = COPY $c26
-; FNDESC-NEXT:  %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[$CAP_SIZE]] from cap-table)
+; FNDESC-NEXT:  %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[#CAP_SIZE]] from cap-table)
 ; FNDESC-NEXT:  [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 ; PCREL-NEXT: liveins: $c12
-; PCREL-NEXT: %3:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
-; PCREL-NEXT: %4:gpr64 = DADDiu %3:gpr64, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: %0:cherigpr = CIncOffset $c12, %4:gpr64
-; PCREL-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[$CAP_SIZE]] from cap-table)
-; PCREL-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
+; PCREL-NEXT: %1:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
+; PCREL-NEXT: %2:gpr64 = DADDiu %1:gpr64, target-flags(mips-captable-off-lo) @test
+; PCREL-NEXT: %0:cherigpr = CIncOffset $c12, %2:gpr64
+; PCREL-NEXT: %3:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[#CAP_SIZE]] from cap-table)
+; PCREL-NEXT: [[RESULT:%([0-9]+)]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %3:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 
 ; COMMON-NEXT:   $v0_64 = COPY [[RESULT]]

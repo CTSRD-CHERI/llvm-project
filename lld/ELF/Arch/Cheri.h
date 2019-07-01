@@ -14,23 +14,37 @@ namespace lld {
 namespace elf {
 
 struct SymbolAndOffset {
-  SymbolAndOffset(Symbol *S, int64_t O) : Sym(S), Offset(O) {}
+public:
+  SymbolAndOffset(Symbol *S, int64_t O) : SymOrSec(S), Offset(O) {
+    assert(S && "Should not be null");
+  }
   SymbolAndOffset(const SymbolAndOffset &) = default;
   SymbolAndOffset &operator=(const SymbolAndOffset &) = default;
-  Symbol *Sym = nullptr;
-  int64_t Offset = 0;
 
   // for __cap_relocs against local symbols clang emits section+offset instead
   // of the local symbol so that it still works even if the local symbol table
   // is stripped. This function tries to find the local symbol to a better match
   SymbolAndOffset findRealSymbol() const;
 
-  static SymbolAndOffset fromSectionWithOffset(InputSectionBase *IS,
-                                               uint64_t Offset,
-                                               Symbol *Default = nullptr);
+  static SymbolAndOffset
+  fromSectionWithOffset(InputSectionBase *IS, int64_t Offset,
+                        const SymbolAndOffset *Default = nullptr);
 
   inline std::string verboseToString() const {
-    return lld::verboseToString(Sym, Offset);
+    assert(!SymOrSec.isNull());
+    if (SymOrSec.is<Symbol *>())
+      return lld::verboseToString(SymOrSec.get<Symbol *>(), Offset);
+    assert(SymOrSec.is<InputSectionBase *>());
+    InputSectionBase *IS = SymOrSec.get<InputSectionBase *>();
+    return IS->getObjMsg(Offset);
+  }
+  Symbol *sym() const { return SymOrSec.get<Symbol *>(); }
+
+  llvm::PointerUnion<Symbol *, InputSectionBase *> SymOrSec = nullptr;
+  int64_t Offset = 0;
+private:
+  SymbolAndOffset(InputSectionBase *IS, int64_t O) : SymOrSec(IS), Offset(O) {
+    assert(IS && "Should not be null");
   }
 };
 
@@ -51,7 +65,7 @@ struct CheriCapReloc {
   int64_t CapabilityOffset;
   bool NeedsDynReloc;
   bool operator==(const CheriCapReloc &Other) const {
-    return Target.Sym == Other.Target.Sym &&
+    return Target.SymOrSec == Other.Target.SymOrSec &&
            Target.Offset == Other.Target.Offset &&
            CapabilityOffset == Other.CapabilityOffset &&
            NeedsDynReloc == Other.NeedsDynReloc;

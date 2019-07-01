@@ -65,7 +65,8 @@ static StringRef getLineCommentIndentPrefix(StringRef Comment,
 static BreakableToken::Split
 getCommentSplit(StringRef Text, unsigned ContentStartColumn,
                 unsigned ColumnLimit, unsigned TabWidth,
-                encoding::Encoding Encoding, const FormatStyle &Style) {
+                encoding::Encoding Encoding, const FormatStyle &Style,
+                bool DecorationEndsWithStar = false) {
   LLVM_DEBUG(llvm::dbgs() << "Comment split: \"" << Text
                           << "\", Column limit: " << ColumnLimit
                           << ", Content start: " << ContentStartColumn << "\n");
@@ -123,7 +124,10 @@ getCommentSplit(StringRef Text, unsigned ContentStartColumn,
     if (SpaceOffset == 1 && Text[SpaceOffset - 1] == '*')
       return BreakableToken::Split(StringRef::npos, 0);
     StringRef BeforeCut = Text.substr(0, SpaceOffset).rtrim(Blanks);
-    StringRef AfterCut = Text.substr(SpaceOffset).ltrim(Blanks);
+    StringRef AfterCut = Text.substr(SpaceOffset);
+    // Don't trim the leading blanks if it would create a */ after the break.
+    if (!DecorationEndsWithStar || AfterCut.size() <= 1 || AfterCut[1] != '/')
+      AfterCut = AfterCut.ltrim(Blanks);
     return BreakableToken::Split(BeforeCut.size(),
                                  AfterCut.begin() - BeforeCut.end());
   }
@@ -329,7 +333,7 @@ static bool mayReflowContent(StringRef Content) {
 BreakableBlockComment::BreakableBlockComment(
     const FormatToken &Token, unsigned StartColumn,
     unsigned OriginalStartColumn, bool FirstInLine, bool InPPDirective,
-    encoding::Encoding Encoding, const FormatStyle &Style)
+    encoding::Encoding Encoding, const FormatStyle &Style, bool UseCRLF)
     : BreakableComment(Token, StartColumn, InPPDirective, Encoding, Style),
       DelimitersOnNewline(false),
       UnbreakableTailLength(Token.UnbreakableTailLength) {
@@ -338,7 +342,8 @@ BreakableBlockComment::BreakableBlockComment(
 
   StringRef TokenText(Tok.TokenText);
   assert(TokenText.startswith("/*") && TokenText.endswith("*/"));
-  TokenText.substr(2, TokenText.size() - 4).split(Lines, "\n");
+  TokenText.substr(2, TokenText.size() - 4).split(Lines,
+                                                  UseCRLF ? "\r\n" : "\n");
 
   int IndentDelta = StartColumn - OriginalStartColumn;
   Content.resize(Lines.size());
@@ -451,6 +456,18 @@ BreakableBlockComment::BreakableBlockComment(
   });
 }
 
+BreakableToken::Split
+BreakableBlockComment::getSplit(unsigned LineIndex, unsigned TailOffset,
+                           unsigned ColumnLimit, unsigned ContentStartColumn,
+                           llvm::Regex &CommentPragmasRegex) const {
+  // Don't break lines matching the comment pragmas regex.
+  if (CommentPragmasRegex.match(Content[LineIndex]))
+    return Split(StringRef::npos, 0);
+  return getCommentSplit(Content[LineIndex].substr(TailOffset),
+                         ContentStartColumn, ColumnLimit, Style.TabWidth,
+                         Encoding, Style, Decoration.endswith("*"));
+}
+
 void BreakableBlockComment::adjustWhitespace(unsigned LineIndex,
                                              int IndentDelta) {
   // When in a preprocessor directive, the trailing backslash in a block comment
@@ -472,7 +489,7 @@ void BreakableBlockComment::adjustWhitespace(unsigned LineIndex,
   // Calculate the start of the non-whitespace text in the current line.
   size_t StartOfLine = Lines[LineIndex].find_first_not_of(Blanks);
   if (StartOfLine == StringRef::npos)
-    StartOfLine = Lines[LineIndex].rtrim("\r\n").size();
+    StartOfLine = Lines[LineIndex].size();
 
   StringRef Whitespace = Lines[LineIndex].substr(0, StartOfLine);
   // Adjust Lines to only contain relevant text.

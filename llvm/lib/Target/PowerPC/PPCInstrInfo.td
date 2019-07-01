@@ -457,6 +457,17 @@ def nonQuadwOffsetStore : PatFrag<(ops node:$val, node:$ptr),
   return !isOffsetMultipleOf(N, 16);
 }]>;
 
+// PatFrag for binary operation whose operands are both non-constant
+class BinOpWithoutSImm16Operand<SDNode opcode> :
+  PatFrag<(ops node:$left, node:$right), (opcode node:$left, node:$right), [{
+    int16_t Imm;
+    return !isIntS16Immediate(N->getOperand(0), Imm)
+             && !isIntS16Immediate(N->getOperand(1), Imm);
+}]>;
+
+def add_without_simm16 : BinOpWithoutSImm16Operand<add>;
+def mul_without_simm16 : BinOpWithoutSImm16Operand<mul>;
+
 //===----------------------------------------------------------------------===//
 // PowerPC Flag Definitions.
 
@@ -882,11 +893,24 @@ def pred : Operand<OtherVT> {
 }
 
 // Define PowerPC specific addressing mode.
-def iaddr  : ComplexPattern<iPTR, 2, "SelectAddrImm",    [], []>;
-def xaddr  : ComplexPattern<iPTR, 2, "SelectAddrIdx",    [], []>;
+
+// d-form
+def iaddr    : ComplexPattern<iPTR, 2, "SelectAddrImm",     [], []>;  // "stb"
+// ds-form
+def iaddrX4  : ComplexPattern<iPTR, 2, "SelectAddrImmX4",   [], []>;  // "std"
+// dq-form
+def iaddrX16 : ComplexPattern<iPTR, 2, "SelectAddrImmX16",  [], []>;  // "stxv"
+
+// Below forms are all x-form addressing mode, use three different ones so we
+// can make a accurate check for x-form instructions in ISEL.
+// x-form addressing mode whose associated diplacement form is D.
+def xaddr  : ComplexPattern<iPTR, 2, "SelectAddrIdx",     [], []>;    // "stbx"
+// x-form addressing mode whose associated diplacement form is DS.
+def xaddrX4 : ComplexPattern<iPTR, 2, "SelectAddrIdxX4",    [], []>;  // "stdx"
+// x-form addressing mode whose associated diplacement form is DQ.
+def xaddrX16 : ComplexPattern<iPTR, 2, "SelectAddrIdxX16",   [], []>; // "stxvx"
+
 def xoaddr : ComplexPattern<iPTR, 2, "SelectAddrIdxOnly",[], []>;
-def ixaddr : ComplexPattern<iPTR, 2, "SelectAddrImmX4",  [], []>;  // "std"
-def iqaddr : ComplexPattern<iPTR, 2, "SelectAddrImmX16",  [], []>; // "stxv"
 
 // The address in a single register. This is used with the SjLj
 // pseudo-instructions.
@@ -1445,6 +1469,9 @@ let isCall = 1, PPC970_Unit = 7, Defs = [LR] in {
       def BCLn : BForm_4<16, 4, 0, 1, (outs),
                          (ins crbitrc:$bi, condbrtarget:$dst),
                          "bcl 4, $bi, $dst">;
+      def BL_NOP  : IForm_and_DForm_4_zero<18, 0, 1, 24,
+                                           (outs), (ins calltarget:$func),
+                                           "bl $func\n\tnop", IIC_BrB, []>;
     }
   }
   let Uses = [CTR, RM] in {
@@ -2522,6 +2549,7 @@ def CRORC  : XLForm_1<19, 417, (outs crbitrc:$CRD),
                       [(set i1:$CRD, (or i1:$CRA, (not i1:$CRB)))]>;
 
 let isCodeGenOnly = 1 in {
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def CRSET  : XLForm_1_ext<19, 289, (outs crbitrc:$dst), (ins),
               "creqv $dst, $dst, $dst", IIC_BrCR,
               [(set i1:$dst, 1)]>;
@@ -2529,6 +2557,7 @@ def CRSET  : XLForm_1_ext<19, 289, (outs crbitrc:$dst), (ins),
 def CRUNSET: XLForm_1_ext<19, 193, (outs crbitrc:$dst), (ins),
               "crxor $dst, $dst, $dst", IIC_BrCR,
               [(set i1:$dst, 0)]>;
+}
 
 let Defs = [CR1EQ], CRD = 6 in {
 def CR6SET  : XLForm_1_ext<19, 289, (outs), (ins),
@@ -2576,7 +2605,7 @@ def MTCTR : XFXForm_7_ext<31, 467, 9, (outs), (ins gprc:$rS),
             PPC970_DGroup_First, PPC970_Unit_FXU;
 }
 let hasSideEffects = 1, isCodeGenOnly = 1, Defs = [CTR] in {
-let Pattern = [(int_ppc_mtctr i32:$rS)] in
+let Pattern = [(int_set_loop_iterations i32:$rS)] in
 def MTCTRloop : XFXForm_7_ext<31, 467, 9, (outs), (ins gprc:$rS),
                               "mtctr $rS", IIC_SprMTSPR>,
                 PPC970_DGroup_First, PPC970_Unit_FXU;
@@ -3003,8 +3032,15 @@ def : Pat<(and (rotl i32:$in, i32:$sh), maskimm32:$imm),
 // Calls
 def : Pat<(PPCcall (i32 tglobaladdr:$dst)),
           (BL tglobaladdr:$dst)>;
+
 def : Pat<(PPCcall (i32 texternalsym:$dst)),
           (BL texternalsym:$dst)>;
+
+// Calls for AIX only
+def : Pat<(PPCcall (i32 mcsym:$dst)),
+          (BL mcsym:$dst)>;
+def : Pat<(PPCcall_nop (i32 mcsym:$dst)),
+          (BL_NOP mcsym:$dst)>;
 
 def : Pat<(PPCtc_return (i32 tglobaladdr:$dst),  imm:$imm),
           (TCRETURNdi tglobaladdr:$dst, imm:$imm)>;
@@ -4080,6 +4116,10 @@ def SLBMFEV : XLForm_1_gen<31, 851, (outs gprc:$RT), (ins gprc:$RB),
                        "slbmfev $RT, $RB", IIC_SprSLBMFEV, []>;
 
 def SLBIA : XForm_0<31, 498, (outs), (ins), "slbia", IIC_SprSLBIA, []>;
+
+let Defs = [CR0] in
+def SLBFEEo : XForm_26<31, 979, (outs gprc:$RT), (ins gprc:$RB),
+                         "slbfee. $RT, $RB", IIC_SprSLBFEE, []>, isDOT;
 
 def TLBIA : XForm_0<31, 370, (outs), (ins),
                         "tlbia", IIC_SprTLBIA, []>;

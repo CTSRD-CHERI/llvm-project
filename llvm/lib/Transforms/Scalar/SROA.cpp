@@ -2540,8 +2540,7 @@ private:
              "Only integer type loads and stores are split");
       assert(SliceSize < DL.getTypeStoreSize(LI.getType()) &&
              "Split load isn't smaller than original load");
-      assert(LI.getType()->getIntegerBitWidth() ==
-                 DL.getTypeStoreSizeInBits(LI.getType()) &&
+      assert(DL.typeSizeEqualsStoreSize(LI.getType()) &&
              "Non-byte-multiple bit width");
       // Move the insertion point just past the load so that we can refer to it.
       IRB.SetInsertPoint(&*std::next(BasicBlock::iterator(&LI)));
@@ -2636,8 +2635,7 @@ private:
       assert(!SI.isVolatile());
       assert(V->getType()->isIntegerTy() &&
              "Only integer type loads and stores are split");
-      assert(V->getType()->getIntegerBitWidth() ==
-                 DL.getTypeStoreSizeInBits(V->getType()) &&
+      assert(DL.typeSizeEqualsStoreSize(V->getType()) &&
              "Non-byte-multiple bit width");
       IntegerType *NarrowTy = Type::getIntNTy(SI.getContext(), SliceSize * 8);
       V = extractInteger(DL, IRB, V, NarrowTy, NewBeginOffset - BeginOffset,

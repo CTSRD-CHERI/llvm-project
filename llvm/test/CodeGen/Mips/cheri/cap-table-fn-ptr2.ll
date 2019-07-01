@@ -41,13 +41,13 @@ entry:
 ; CHECK-NEXT: 	.p2align	{{5|4}}
 ; CHECK-NEXT: fn:
 ; CHECK-NEXT: 	.chericap	extern_func
-; CHECK-NEXT: 	.size	fn, [[$CAP_SIZE]]
+; CHECK-NEXT: 	.size	fn, [[#CAP_SIZE]]
 
 ; CHECK:      	.type	fn2,@object             # @fn2
 ; CHECK-NEXT: 	.p2align	{{5|4}}
 ; CHECK-NEXT: fn2:
 ; CHECK-NEXT: 	.chericap	extern_func
-; CHECK-NEXT: 	.size	fn2, [[$CAP_SIZE]]
+; CHECK-NEXT: 	.size	fn2, [[#CAP_SIZE]]
 
 attributes #0 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="false" }

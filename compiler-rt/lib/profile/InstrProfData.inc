@@ -169,7 +169,7 @@ VALUE_PROF_FUNC_PARAM(uint64_t, LargeValue, Type::getInt64Ty(Ctx))
 
 /* VALUE_PROF_KIND start */
 #ifndef VALUE_PROF_KIND
-#define VALUE_PROF_KIND(Enumerator, Value)
+#define VALUE_PROF_KIND(Enumerator, Value, Descr)
 #else
 #define INSTR_PROF_DATA_DEFINED
 #endif
@@ -182,16 +182,16 @@ VALUE_PROF_FUNC_PARAM(uint64_t, LargeValue, Type::getInt64Ty(Ctx))
  * For this remapping the ProfData is used.  ProfData contains both the function
  * name hash and the function address.
  */
-VALUE_PROF_KIND(IPVK_IndirectCallTarget, 0)
+VALUE_PROF_KIND(IPVK_IndirectCallTarget, 0, "indirect call target")
 /* For memory intrinsic functions size profiling. */
-VALUE_PROF_KIND(IPVK_MemOPSize, 1)
+VALUE_PROF_KIND(IPVK_MemOPSize, 1, "memory intrinsic functions size")
 /* These two kinds must be the last to be
  * declared. This is to make sure the string
  * array created with the template can be
  * indexed with the kind value.
  */
-VALUE_PROF_KIND(IPVK_First, IPVK_IndirectCallTarget)
-VALUE_PROF_KIND(IPVK_Last, IPVK_MemOPSize)
+VALUE_PROF_KIND(IPVK_First, IPVK_IndirectCallTarget, "first")
+VALUE_PROF_KIND(IPVK_Last, IPVK_MemOPSize, "last")
 
 #undef VALUE_PROF_KIND
 /* VALUE_PROF_KIND end */
@@ -742,7 +742,7 @@ typedef struct InstrProfValueData {
 #endif /* INSTR_PROF_DATA_INC */
 
 #ifndef INSTR_ORDER_FILE_INC
-// The maximal # of functions: 128*1024 (the buffer size will be 128*4 KB).
+/* The maximal # of functions: 128*1024 (the buffer size will be 128*4 KB). */
 #define INSTR_ORDER_FILE_BUFFER_SIZE 131072
 #define INSTR_ORDER_FILE_BUFFER_BITS 17
 #define INSTR_ORDER_FILE_BUFFER_MASK 0x1ffff

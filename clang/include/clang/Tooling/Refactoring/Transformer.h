@@ -19,151 +19,214 @@
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchersInternal.h"
 #include "clang/Tooling/Refactoring/AtomicChange.h"
+#include "clang/Tooling/Refactoring/RangeSelector.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Error.h"
 #include <deque>
 #include <functional>
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace clang {
 namespace tooling {
-/// Determines the part of the AST node to replace.  We support this to work
-/// around the fact that the AST does not differentiate various syntactic
-/// elements into their own nodes, so users can specify them relative to a node,
-/// instead.
-enum class NodePart {
-  /// The node itself.
-  Node,
-  /// Given a \c MemberExpr, selects the member's token.
-  Member,
-  /// Given a \c NamedDecl or \c CxxCtorInitializer, selects that token of the
-  /// relevant name, not including qualifiers.
-  Name,
-};
 
-using TextGenerator =
-    std::function<std::string(const ast_matchers::MatchFinder::MatchResult &)>;
+// Note that \p TextGenerator is allowed to fail, e.g. when trying to access a
+// matched node that was not bound.  Allowing this to fail simplifies error
+// handling for interactive tools like clang-query.
+using TextGenerator = std::function<Expected<std::string>(
+    const ast_matchers::MatchFinder::MatchResult &)>;
 
-/// Description of a source-code transformation.
-//
-// A *rewrite rule* describes a transformation of source code. It has the
-// following components:
-//
-// * Matcher: the pattern term, expressed as clang matchers (with Transformer
-//   extensions).
+/// Wraps a string as a TextGenerator.
+inline TextGenerator text(std::string M) {
+  return [M](const ast_matchers::MatchFinder::MatchResult &)
+             -> Expected<std::string> { return M; };
+}
+
+// Description of a source-code edit, expressed in terms of an AST node.
+// Includes: an ID for the (bound) node, a selector for source related to the
+// node, a replacement and, optionally, an explanation for the edit.
 //
 // * Target: the source code impacted by the rule. This identifies an AST node,
-//   or part thereof (\c TargetPart), whose source range indicates the extent of
-//   the replacement applied by the replacement term.  By default, the extent is
-//   the node matched by the pattern term (\c NodePart::Node). Target's are
-//   typed (\c TargetKind), which guides the determination of the node extent
-//   and might, in the future, statically constrain the set of eligible
-//   NodeParts for a given node.
+//   or part thereof (\c Part), whose source range indicates the extent of the
+//   replacement applied by the replacement term.  By default, the extent is the
+//   node matched by the pattern term (\c NodePart::Node). Target's are typed
+//   (\c Kind), which guides the determination of the node extent.
 //
 // * Replacement: a function that produces a replacement string for the target,
 //   based on the match result.
 //
-// * Explanation: explanation of the rewrite.  This will be displayed to the
-//   user, where possible (for example, in clang-tidy fix descriptions).
+// * Note: (optional) a note specifically for this edit, potentially referencing
+//   elements of the match.  This will be displayed to the user, where possible;
+//   for example, in clang-tidy diagnostics.  Use of notes should be rare --
+//   explanations of the entire rewrite should be set in the rule
+//   (`RewriteRule::Explanation`) instead.  Notes serve the rare cases wherein
+//   edit-specific diagnostics are required.
 //
-// Rules have an additional, implicit, component: the parameters. These are
-// portions of the pattern which are left unspecified, yet named so that we can
-// reference them in the replacement term.  The structure of parameters can be
-// partially or even fully specified, in which case they serve just to identify
-// matched nodes for later reference rather than abstract over portions of the
-// AST.  However, in all cases, we refer to named portions of the pattern as
-// parameters.
-//
-// RewriteRule is constructed in a "fluent" style, by creating a builder and
-// chaining setters of individual components.
+// `ASTEdit` should be built using the `change` convenience functions. For
+// example,
 // \code
-//   RewriteRule MyRule = buildRule(functionDecl(...)).replaceWith(...);
+//   change(name(fun), text("Frodo"))
 // \endcode
-//
-// The \c Transformer class should then be used to apply the rewrite rule and
-// obtain the corresponding replacements.
-struct RewriteRule {
-  // `Matcher` describes the context of this rule. It should always be bound to
-  // at least `RootId`.  The builder class below takes care of this
-  // binding. Here, we bind it to a trivial Matcher to enable the default
-  // constructor, since DynTypedMatcher has no default constructor.
-  ast_matchers::internal::DynTypedMatcher Matcher = ast_matchers::stmt();
-  // The (bound) id of the node whose source will be replaced.  This id should
-  // never be the empty string.
-  std::string Target;
-  ast_type_traits::ASTNodeKind TargetKind;
-  NodePart TargetPart;
+// Or, if we use Stencil for the TextGenerator:
+// \code
+//   using stencil::cat;
+//   change(statement(thenNode), cat("{", thenNode, "}"))
+//   change(callArgs(call), cat(x, ",", y))
+// \endcode
+// Or, if you are changing the node corresponding to the rule's matcher, you can
+// use the single-argument override of \c change:
+// \code
+//   change(cat("different_expr"))
+// \endcode
+struct ASTEdit {
+  RangeSelector TargetRange;
   TextGenerator Replacement;
-  TextGenerator Explanation;
-
-  // Id used as the default target of each match. The node described by the
-  // matcher is guaranteed to be bound to this id, for all rewrite rules
-  // constructed with the builder class.
-  static constexpr llvm::StringLiteral RootId = "___root___";
+  TextGenerator Note;
 };
 
-/// A fluent builder class for \c RewriteRule.  See comments on \c RewriteRule.
-class RewriteRuleBuilder {
-  RewriteRule Rule;
+/// Description of a source-code transformation.
+//
+// A *rewrite rule* describes a transformation of source code. A simple rule
+// contains each of the following components:
+//
+// * Matcher: the pattern term, expressed as clang matchers (with Transformer
+//   extensions).
+//
+// * Edits: a set of Edits to the source code, described with ASTEdits.
+//
+// * Explanation: explanation of the rewrite.  This will be displayed to the
+//   user, where possible; for example, in clang-tidy diagnostics.
+//
+// However, rules can also consist of (sub)rules, where the first that matches
+// is applied and the rest are ignored.  So, the above components are gathered
+// as a `Case` and a rule is a list of cases.
+//
+// Rule cases have an additional, implicit, component: the parameters. These are
+// portions of the pattern which are left unspecified, yet bound in the pattern
+// so that we can reference them in the edits.
+//
+// The \c Transformer class can be used to apply the rewrite rule and obtain the
+// corresponding replacements.
+struct RewriteRule {
+  struct Case {
+    ast_matchers::internal::DynTypedMatcher Matcher;
+    SmallVector<ASTEdit, 1> Edits;
+    TextGenerator Explanation;
+  };
+  // We expect RewriteRules will most commonly include only one case.
+  SmallVector<Case, 1> Cases;
 
-public:
-  RewriteRuleBuilder(ast_matchers::internal::DynTypedMatcher M) {
-    M.setAllowBind(true);
-    // `tryBind` is guaranteed to succeed, because `AllowBind` was set to true.
-    Rule.Matcher = *M.tryBind(RewriteRule::RootId);
-    Rule.Target = RewriteRule::RootId;
-    Rule.TargetKind = M.getSupportedKind();
-    Rule.TargetPart = NodePart::Node;
-  }
-
-  /// (Implicit) "build" operator to build a RewriteRule from this builder.
-  operator RewriteRule() && { return std::move(Rule); }
-
-  // Sets the target kind based on a clang AST node type.
-  template <typename T> RewriteRuleBuilder as();
-
-  template <typename T>
-  RewriteRuleBuilder change(llvm::StringRef Target,
-                            NodePart Part = NodePart::Node);
-
-  RewriteRuleBuilder replaceWith(TextGenerator Replacement);
-  RewriteRuleBuilder replaceWith(std::string Replacement) {
-    return replaceWith(text(std::move(Replacement)));
-  }
-
-  RewriteRuleBuilder because(TextGenerator Explanation);
-  RewriteRuleBuilder because(std::string Explanation) {
-    return because(text(std::move(Explanation)));
-  }
-
-private:
-  // Wraps a string as a TextGenerator.
-  static TextGenerator text(std::string M) {
-    return [M](const ast_matchers::MatchFinder::MatchResult &) { return M; };
-   }
+  // ID used as the default target of each match. The node described by the
+  // matcher is should always be bound to this id.
+  static constexpr llvm::StringLiteral RootID = "___root___";
 };
 
-/// Convenience factory functions for starting construction of a \c RewriteRule.
-inline RewriteRuleBuilder buildRule(ast_matchers::internal::DynTypedMatcher M) {
-  return RewriteRuleBuilder(std::move(M));
+/// Convenience function for constructing a simple \c RewriteRule.
+RewriteRule makeRule(ast_matchers::internal::DynTypedMatcher M,
+                     SmallVector<ASTEdit, 1> Edits,
+                     TextGenerator Explanation = nullptr);
+
+/// Convenience overload of \c makeRule for common case of only one edit.
+inline RewriteRule makeRule(ast_matchers::internal::DynTypedMatcher M,
+                            ASTEdit Edit,
+                            TextGenerator Explanation = nullptr) {
+  SmallVector<ASTEdit, 1> Edits;
+  Edits.emplace_back(std::move(Edit));
+  return makeRule(std::move(M), std::move(Edits), std::move(Explanation));
 }
 
-template <typename T> RewriteRuleBuilder RewriteRuleBuilder::as() {
-  Rule.TargetKind = ast_type_traits::ASTNodeKind::getFromNodeKind<T>();
-  return *this;
+/// Applies the first rule whose pattern matches; other rules are ignored.
+///
+/// N.B. All of the rules must use the same kind of matcher (that is, share a
+/// base class in the AST hierarchy).  However, this constraint is caused by an
+/// implementation detail and should be lifted in the future.
+//
+// `applyFirst` is like an `anyOf` matcher with an edit action attached to each
+// of its cases. Anywhere you'd use `anyOf(m1.bind("id1"), m2.bind("id2"))` and
+// then dispatch on those ids in your code for control flow, `applyFirst` lifts
+// that behavior to the rule level.  So, you can write `applyFirst({makeRule(m1,
+// action1), makeRule(m2, action2), ...});`
+//
+// For example, consider a type `T` with a deterministic serialization function,
+// `serialize()`.  For performance reasons, we would like to make it
+// non-deterministic.  Therefore, we want to drop the expectation that
+// `a.serialize() = b.serialize() iff a = b` (although we'll maintain
+// `deserialize(a.serialize()) = a`).
+//
+// We have three cases to consider (for some equality function, `eq`):
+// ```
+// eq(a.serialize(), b.serialize()) --> eq(a,b)
+// eq(a, b.serialize())             --> eq(deserialize(a), b)
+// eq(a.serialize(), b)             --> eq(a, deserialize(b))
+// ```
+//
+// `applyFirst` allows us to specify each independently:
+// ```
+// auto eq_fun = functionDecl(...);
+// auto method_call = cxxMemberCallExpr(...);
+//
+// auto two_calls = callExpr(callee(eq_fun), hasArgument(0, method_call),
+//                           hasArgument(1, method_call));
+// auto left_call =
+//     callExpr(callee(eq_fun), callExpr(hasArgument(0, method_call)));
+// auto right_call =
+//     callExpr(callee(eq_fun), callExpr(hasArgument(1, method_call)));
+//
+// RewriteRule R = applyFirst({makeRule(two_calls, two_calls_action),
+//                             makeRule(left_call, left_call_action),
+//                             makeRule(right_call, right_call_action)});
+// ```
+RewriteRule applyFirst(ArrayRef<RewriteRule> Rules);
+
+/// Replaces a portion of the source text with \p Replacement.
+ASTEdit change(RangeSelector Target, TextGenerator Replacement);
+
+/// Replaces the entirety of a RewriteRule's match with \p Replacement.  For
+/// example, to replace a function call, one could write:
+/// \code
+///   makeRule(callExpr(callee(functionDecl(hasName("foo")))),
+///            change(text("bar()")))
+/// \endcode
+inline ASTEdit change(TextGenerator Replacement) {
+  return change(node(RewriteRule::RootID), std::move(Replacement));
 }
 
-template <typename T>
-RewriteRuleBuilder RewriteRuleBuilder::change(llvm::StringRef TargetId,
-                                              NodePart Part) {
-  Rule.Target = TargetId;
-  Rule.TargetKind = ast_type_traits::ASTNodeKind::getFromNodeKind<T>();
-  Rule.TargetPart = Part;
-  return *this;
+/// Inserts \p Replacement before \p S, leaving the source selected by \S
+/// unchanged.
+inline ASTEdit insertBefore(RangeSelector S, TextGenerator Replacement) {
+  return change(before(std::move(S)), std::move(Replacement));
 }
+
+/// Inserts \p Replacement after \p S, leaving the source selected by \S
+/// unchanged.
+inline ASTEdit insertAfter(RangeSelector S, TextGenerator Replacement) {
+  return change(after(std::move(S)), std::move(Replacement));
+}
+
+/// Removes the source selected by \p S.
+inline ASTEdit remove(RangeSelector S) {
+  return change(std::move(S), text(""));
+}
+
+/// The following three functions are a low-level part of the RewriteRule
+/// API. We expose them for use in implementing the fixtures that interpret
+/// RewriteRule, like Transformer and TransfomerTidy, or for more advanced
+/// users.
+//
+// FIXME: These functions are really public, if advanced, elements of the
+// RewriteRule API.  Recast them as such.  Or, just declare these functions
+// public and well-supported and move them out of `detail`.
+namespace detail {
+/// Builds a single matcher for the rule, covering all of the rule's cases.
+ast_matchers::internal::DynTypedMatcher buildMatcher(const RewriteRule &Rule);
+
+/// Returns the \c Case of \c Rule that was selected in the match result.
+/// Assumes a matcher built with \c buildMatcher.
+const RewriteRule::Case &
+findSelectedCase(const ast_matchers::MatchFinder::MatchResult &Result,
+                 const RewriteRule &Rule);
 
 /// A source "transformation," represented by a character range in the source to
 /// be replaced and a corresponding replacement string.
@@ -172,22 +235,34 @@ struct Transformation {
   std::string Replacement;
 };
 
-/// Attempts to apply a rule to a match.  Returns an empty transformation if the
-/// match is not eligible for rewriting (certain interactions with macros, for
+/// Attempts to translate `Edits`, which are in terms of AST nodes bound in the
+/// match `Result`, into Transformations, which are in terms of the source code
+/// text.
+///
+/// Returns an empty vector if any of the edits apply to portions of the source
+/// that are ineligible for rewriting (certain interactions with macros, for
 /// example).  Fails if any invariants are violated relating to bound nodes in
-/// the match.
-Expected<Transformation>
-applyRewriteRule(const RewriteRule &Rule,
-                 const ast_matchers::MatchFinder::MatchResult &Match);
+/// the match.  However, it does not fail in the case of conflicting edits --
+/// conflict handling is left to clients.  We recommend use of the \c
+/// AtomicChange or \c Replacements classes for assistance in detecting such
+/// conflicts.
+Expected<SmallVector<Transformation, 1>>
+translateEdits(const ast_matchers::MatchFinder::MatchResult &Result,
+               llvm::ArrayRef<ASTEdit> Edits);
+} // namespace detail
 
 /// Handles the matcher and callback registration for a single rewrite rule, as
 /// defined by the arguments of the constructor.
 class Transformer : public ast_matchers::MatchFinder::MatchCallback {
 public:
   using ChangeConsumer =
-      std::function<void(const clang::tooling::AtomicChange &Change)>;
+      std::function<void(Expected<clang::tooling::AtomicChange> Change)>;
 
-  /// \param Consumer Receives each successful rewrites as an \c AtomicChange.
+  /// \param Consumer Receives each rewrite or error.  Will not necessarily be
+  /// called for each match; for example, if the rewrite is not applicable
+  /// because of macros, but doesn't fail.  Note that clients are responsible
+  /// for handling the case that independent \c AtomicChanges conflict with each
+  /// other.
   Transformer(RewriteRule Rule, ChangeConsumer Consumer)
       : Rule(std::move(Rule)), Consumer(std::move(Consumer)) {}
 

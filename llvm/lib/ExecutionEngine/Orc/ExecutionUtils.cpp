@@ -129,8 +129,7 @@ Error CtorDtorRunner::run() {
 
   auto &ES = JD.getExecutionSession();
   if (auto CtorDtorMap =
-          ES.lookup(JITDylibSearchList({{&JD, true}}), std::move(Names),
-                    NoDependenciesToRegister, true)) {
+          ES.lookup(JITDylibSearchList({{&JD, true}}), std::move(Names))) {
     for (auto &KV : CtorDtorsByPriority) {
       for (auto &Name : KV.second) {
         assert(CtorDtorMap->count(Name) && "No entry for Name");
@@ -139,13 +138,10 @@ Error CtorDtorRunner::run() {
         CtorDtor();
       }
     }
+    CtorDtorsByPriority.clear();
     return Error::success();
   } else
     return CtorDtorMap.takeError();
-
-  CtorDtorsByPriority.clear();
-
-  return Error::success();
 }
 
 void LocalCXXRuntimeOverridesBase::runDestructors() {
@@ -178,22 +174,24 @@ Error LocalCXXRuntimeOverrides::enable(JITDylib &JD,
 }
 
 DynamicLibrarySearchGenerator::DynamicLibrarySearchGenerator(
-    sys::DynamicLibrary Dylib, const DataLayout &DL, SymbolPredicate Allow)
+    sys::DynamicLibrary Dylib, char GlobalPrefix, SymbolPredicate Allow)
     : Dylib(std::move(Dylib)), Allow(std::move(Allow)),
-      GlobalPrefix(DL.getGlobalPrefix()) {}
+      GlobalPrefix(GlobalPrefix) {}
 
 Expected<DynamicLibrarySearchGenerator>
-DynamicLibrarySearchGenerator::Load(const char *FileName, const DataLayout &DL,
+DynamicLibrarySearchGenerator::Load(const char *FileName, char GlobalPrefix,
                                     SymbolPredicate Allow) {
   std::string ErrMsg;
   auto Lib = sys::DynamicLibrary::getPermanentLibrary(FileName, &ErrMsg);
   if (!Lib.isValid())
     return make_error<StringError>(std::move(ErrMsg), inconvertibleErrorCode());
-  return DynamicLibrarySearchGenerator(std::move(Lib), DL, std::move(Allow));
+  return DynamicLibrarySearchGenerator(std::move(Lib), GlobalPrefix,
+                                       std::move(Allow));
 }
 
-SymbolNameSet DynamicLibrarySearchGenerator::
-operator()(JITDylib &JD, const SymbolNameSet &Names) {
+Expected<SymbolNameSet>
+DynamicLibrarySearchGenerator::operator()(JITDylib &JD,
+                                          const SymbolNameSet &Names) {
   orc::SymbolNameSet Added;
   orc::SymbolMap NewSymbols;
 
@@ -209,7 +207,8 @@ operator()(JITDylib &JD, const SymbolNameSet &Names) {
     if (HasGlobalPrefix && (*Name).front() != GlobalPrefix)
       continue;
 
-    std::string Tmp((*Name).data() + (HasGlobalPrefix ? 1 : 0), (*Name).size());
+    std::string Tmp((*Name).data() + HasGlobalPrefix,
+                    (*Name).size() - HasGlobalPrefix);
     if (void *Addr = Dylib.getAddressOfSymbol(Tmp.c_str())) {
       Added.insert(Name);
       NewSymbols[Name] = JITEvaluatedSymbol(

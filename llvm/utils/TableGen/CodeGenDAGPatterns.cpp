@@ -507,22 +507,14 @@ bool TypeInfer::EnforceSmallerThan(TypeSetByHwMode &Small,
            (A.getScalarSizeInBits() == B.getScalarSizeInBits() &&
             A.getSizeInBits() < B.getSizeInBits());
   };
-  auto LE = [](MVT A, MVT B) -> bool {
+  auto LE = [&LT](MVT A, MVT B) -> bool {
     // This function is used when removing elements: when a vector is compared
     // to a non-vector, it should return false (to avoid removal).
     if (A.isVector() != B.isVector())
       return false;
 
-    // Note on the < comparison below:
-    // X86 has patterns like
-    //   (set VR128X:$dst, (v16i8 (X86vtrunc (v4i32 VR128X:$src1)))),
-    // where the truncated vector is given a type v16i8, while the source
-    // vector has type v4i32. They both have the same size in bits.
-    // The minimal type in the result is obviously v16i8, and when we remove
-    // all types from the source that are smaller-or-equal than v8i16, the
-    // only source type would also be removed (since it's equal in size).
-    return A.getScalarSizeInBits() <= B.getScalarSizeInBits() ||
-           A.getSizeInBits() < B.getSizeInBits();
+    return LT(A, B) || (A.getScalarSizeInBits() == B.getScalarSizeInBits() &&
+                        A.getSizeInBits() == B.getSizeInBits());
   };
 
   for (unsigned M : Modes) {
@@ -2157,7 +2149,7 @@ static TypeSetByHwMode getImplicitType(Record *R, unsigned ResNo,
 
   if (R->getName() == "node" || R->getName() == "srcvalue" ||
       R->getName() == "zero_reg" || R->getName() == "immAllOnesV" ||
-      R->getName() == "immAllZerosV") {
+      R->getName() == "immAllZerosV" || R->getName() == "undef_tied_input") {
     // Placeholder.
     return TypeSetByHwMode(); // Unknown.
   }

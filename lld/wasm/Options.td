@@ -31,6 +31,8 @@ defm demangle: B<"demangle",
     "Demangle symbol names",
     "Do not demangle symbol names">;
 
+def emit_relocs: F<"emit-relocs">, HelpText<"Generate relocations in output">;
+
 defm export_dynamic: B<"export-dynamic",
     "Put symbols in the dynamic symbol table",
     "Do not put symbols in the dynamic symbol table (default)">;
@@ -85,6 +87,8 @@ defm print_gc_sections: B<"print-gc-sections",
 
 def relocatable: F<"relocatable">, HelpText<"Create relocatable object file">;
 
+defm reproduce: Eq<"reproduce", "Dump linker invocation and input files for debugging">;
+
 def shared: F<"shared">, HelpText<"Build a shared object">;
 
 def strip_all: F<"strip-all">, HelpText<"Strip all symbols">;
@@ -107,6 +111,9 @@ def version: F<"version">, HelpText<"Display the version number and exit">;
 
 def z: JoinedOrSeparate<["-"], "z">, MetaVarName<"<option>">,
   HelpText<"Linker option extensions">;
+
+defm wrap: Eq<"wrap", "Use wrapper functions for symbol">,
+  MetaVarName<"<symbol>=<symbol>">;
 
 // The follow flags are unique to wasm
 

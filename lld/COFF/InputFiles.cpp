@@ -168,13 +168,15 @@ SectionChunk *ObjFile::readSection(uint32_t SectionNumber,
   const coff_section *Sec = getSection(SectionNumber);
 
   StringRef Name;
-  if (auto EC = COFFObj->getSectionName(Sec, Name))
+  if (Expected<StringRef> E = COFFObj->getSectionName(Sec))
+    Name = *E;
+  else
     fatal("getSectionName failed: #" + Twine(SectionNumber) + ": " +
-          EC.message());
+          toString(E.takeError()));
 
   if (Name == ".drectve") {
     ArrayRef<uint8_t> Data;
-    COFFObj->getSectionContents(Sec, Data);
+    cantFail(COFFObj->getSectionContents(Sec, Data));
     Directives = StringRef((const char *)Data.data(), Data.size());
     return nullptr;
   }
@@ -204,13 +206,17 @@ SectionChunk *ObjFile::readSection(uint32_t SectionNumber,
   if (Def)
     C->Checksum = Def->CheckSum;
 
+  // link.exe uses the presence of .rsrc$01 for LNK4078, so match that.
+  if (Name == ".rsrc$01")
+    IsResourceObjFile = true;
+
   // CodeView sections are stored to a different vector because they are not
   // linked in the regular manner.
   if (C->isCodeView())
     DebugChunks.push_back(C);
-  else if (Config->GuardCF != GuardCFLevel::Off && Name == ".gfids$y")
+  else if (Name == ".gfids$y")
     GuardFidChunks.push_back(C);
-  else if (Config->GuardCF != GuardCFLevel::Off && Name == ".gljmp$y")
+  else if (Name == ".gljmp$y")
     GuardLJmpChunks.push_back(C);
   else if (Name == ".sxdata")
     SXDataChunks.push_back(C);
@@ -242,7 +248,8 @@ void ObjFile::readAssociativeDefinition(COFFSymbolRef Sym,
     COFFObj->getSymbolName(Sym, Name);
 
     const coff_section *ParentSec = getSection(ParentIndex);
-    COFFObj->getSectionName(ParentSec, ParentName);
+    if (Expected<StringRef> E = COFFObj->getSectionName(ParentSec))
+      ParentName = *E;
     error(toString(this) + ": associative comdat " + Name + " (sec " +
           Twine(SectionNumber) + ") has invalid reference to section " +
           ParentName + " (sec " + Twine(ParentIndex) + ")");
@@ -664,7 +671,8 @@ void ObjFile::initializeFlags() {
 // types of external files: Precomp/PCH OBJs, when compiling with /Yc and /Yu.
 // And PDB type servers, when compiling with /Zi. This function extracts these
 // dependencies and makes them available as a TpiSource interface (see
-// DebugTypes.h).
+// DebugTypes.h). Both cases only happen with cl.exe: clang-cl produces regular
+// output even with /Yc and /Yu and with /Zi.
 void ObjFile::initializeDependencies() {
   if (!Config->Debug)
     return;
@@ -769,9 +777,26 @@ void ImportFile::parse() {
         Name, cast_or_null<DefinedImportData>(ImpSym), Hdr->Machine);
 }
 
+BitcodeFile::BitcodeFile(MemoryBufferRef MB, StringRef ArchiveName,
+                         uint64_t OffsetInArchive)
+    : InputFile(BitcodeKind, MB) {
+  std::string Path = MB.getBufferIdentifier().str();
+
+  // ThinLTO assumes that all MemoryBufferRefs given to it have a unique
+  // name. If two archives define two members with the same name, this
+  // causes a collision which result in only one of the objects being taken
+  // into consideration at LTO time (which very likely causes undefined
+  // symbols later in the link stage). So we append file offset to make
+  // filename unique.
+  MemoryBufferRef MBRef(
+      MB.getBuffer(),
+      Saver.save(ArchiveName + Path +
+                 (ArchiveName.empty() ? "" : utostr(OffsetInArchive))));
+
+  Obj = check(lto::InputFile::create(MBRef));
+}
+
 void BitcodeFile::parse() {
-  Obj = check(lto::InputFile::create(MemoryBufferRef(
-      MB.getBuffer(), Saver.save(ParentName + MB.getBufferIdentifier()))));
   std::vector<std::pair<Symbol *, bool>> Comdat(Obj->getComdatTable().size());
   for (size_t I = 0; I != Obj->getComdatTable().size(); ++I)
     // FIXME: lto::InputFile doesn't keep enough data to do correct comdat

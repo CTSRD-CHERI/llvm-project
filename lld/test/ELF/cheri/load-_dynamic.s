@@ -28,10 +28,12 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 .end __start
 
 # STATIC-LABEL: Disassembly of section .text:
+# STATIC-EMPTY:
 # STATIC-NEXT: __start:
 # STATIC-NEXT:   20000:	34 02 00 00 	ori	$2, $zero, 0
 
 # DYNAMIC-LABEL: Disassembly of section .text:
+# DYNAMIC-EMPTY:
 # DYNAMIC-NEXT: __start:
 # DYNAMIC-PIE-NEXT:      10000:	34 02 00 01 	ori	$2, $zero, 1
 # DYNAMIC-SHLIB-NEXT:    10000:	34 02 00 01 	ori	$2, $zero, 1

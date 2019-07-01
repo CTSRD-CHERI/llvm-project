@@ -35,8 +35,8 @@
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t1.o %t2.o -shared -o %t.so --script=%t.script --no-sort-cap-relocs
 // RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED1
 // SHLIB-UNSORTED1-LABEL: CAPABILITY RELOCATION RECORDS:
-// SHLIB-UNSORTED1-NEXT: 0x0000000000010040	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
-// SHLIB-UNSORTED1-NEXT: 0x0000000000020020	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
+// SHLIB-UNSORTED1-NEXT: 0x0000000000010040	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
+// SHLIB-UNSORTED1-NEXT: 0x0000000000020020	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
 // SHLIB-UNSORTED1-LABEL: Sections:
 // SHLIB-UNSORTED1-NEXT:  Idx Name          Size      VMA          Type
 // SHLIB-UNSORTED1-NEXT:    1 __cap_relocs  00000050 0000000000000000 DATA

@@ -162,10 +162,13 @@ public:
   // precompiled object. Any difference indicates out-of-date objects.
   llvm::Optional<uint32_t> PCHSignature;
 
-  // Tells whether this file was compiled with /hotpatch
+  // Whether this is an object file created from .res files.
+  bool IsResourceObjFile = false;
+
+  // Whether this file was compiled with /hotpatch.
   bool HotPatchable = false;
 
-  // Whether the object was already merged into the final PDB or not
+  // Whether the object was already merged into the final PDB.
   bool MergedIntoPDB = false;
 
   // If the OBJ has a .debug$T stream, this tells how it will be handled.
@@ -295,7 +298,8 @@ public:
 // Used for LTO.
 class BitcodeFile : public InputFile {
 public:
-  explicit BitcodeFile(MemoryBufferRef M) : InputFile(BitcodeKind, M) {}
+  BitcodeFile(MemoryBufferRef MB, StringRef ArchiveName,
+              uint64_t OffsetInArchive);
   static bool classof(const InputFile *F) { return F->kind() == BitcodeKind; }
   ArrayRef<Symbol *> getSymbols() { return Symbols; }
   MachineTypes getMachineType() override;

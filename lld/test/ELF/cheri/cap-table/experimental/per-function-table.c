@@ -47,7 +47,7 @@
 // CHECK:      ]
 // CHECK-NEXT: CHERI __cap_relocs [
 // PER-FUNCTION-NEXT:    0x020060 (function3@CAPTABLE@x.6) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
-// PER-FILE-NEXT:        0x020040 (function3@CAPTABLE@per-function-table.c.tmp.o.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
+// PER-FILE-NEXT:        0x020040 (function3@CAPTABLE@per-function-table.c.tmp.o.4) Base: 0x10{{.+}} (function3+0) Length: {{[0-9]+}} Perms: Function
 // GLOBAL-NEXT:          0x020040 (function3@CAPTABLE.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
 // CHECK-NEXT: ]
 // CHECK-NEXT:        CHERI .captable [
@@ -175,7 +175,7 @@ __attribute__((noinline)) static void *function3(void) {
 
 
 // Also check that the raw bytes are correct in addition to the llvm-readobj output
-// RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
+// RUN: llvm-objdump --full-contents --section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
 // MAPPING: Idx Name          Size      VMA          Type
 // MAPPING:   9 .captable_mapping 000000a8 00000000000006e8 DATA
 // MAPPING-EMPTY:
@@ -211,8 +211,8 @@ __attribute__((noinline)) static void *function3(void) {
 // MAPPING-NEXT: SYMBOL TABLE:
 // MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 00000050 function3
 // MAPPING: 00000000[[FUNCTION1_ADDR]] g     F .text		 00000030 function1
-// MAPPING: 00000000[[FUNCTION2_ADDR]] g     F .text		 00000030 function2
-// MAPPING: 00000000[[FUNCTION4_ADDR]] g     F .text		 00000050 function4
+// MAPPING: 00000000[[FUNCTION2_ADDR]] g     F .text		 00000030 .protected function2
+// MAPPING: 00000000[[FUNCTION4_ADDR]] g     F .text		 00000050 .protected function4
 // MAPPING: 00000000[[FUNCTION5_ADDR]] g     F .text		 0000000c function5
 // MAPPING: 0000000000000000         *UND*		 00000000 global_int
 // MAPPING: 00000000[[SAME_GLOBALS_ADDR]] g     F .text		 00000030 same_globals_as_function1

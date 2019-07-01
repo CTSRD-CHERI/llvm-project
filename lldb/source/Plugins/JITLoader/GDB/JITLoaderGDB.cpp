@@ -34,14 +34,8 @@
 using namespace lldb;
 using namespace lldb_private;
 
-//------------------------------------------------------------------
 // Debug Interface Structures
-//------------------------------------------------------------------
-typedef enum {
-  JIT_NOACTION = 0,
-  JIT_REGISTER_FN,
-  JIT_UNREGISTER_FN
-} jit_actions_t;
+enum jit_actions_t { JIT_NOACTION = 0, JIT_REGISTER_FN, JIT_UNREGISTER_FN };
 
 template <typename ptr_t> struct jit_code_entry {
   ptr_t next_entry;   // pointer
@@ -177,9 +171,7 @@ void JITLoaderGDB::ModulesDidLoad(ModuleList &module_list) {
     SetJITBreakpoint(module_list);
 }
 
-//------------------------------------------------------------------
 // Setup the JIT Breakpoint
-//------------------------------------------------------------------
 void JITLoaderGDB::SetJITBreakpoint(lldb_private::ModuleList &module_list) {
   if (DidSetJITBreakpoint())
     return;
@@ -331,6 +323,10 @@ bool JITLoaderGDB::ReadJITDescriptorImpl(bool all_entries) {
           FileSpec(jit_name), symbolfile_addr, symbolfile_size);
 
       if (module_sp && module_sp->GetObjectFile()) {
+        // Object formats (like ELF) have no representation for a JIT type.
+        // We will get it wrong, if we deduce it from the header.
+        module_sp->GetObjectFile()->SetType(ObjectFile::eTypeJIT);
+
         // load the symbol table right away
         module_sp->GetObjectFile()->GetSymtab();
 
@@ -405,9 +401,7 @@ bool JITLoaderGDB::ReadJITDescriptorImpl(bool all_entries) {
   return false; // Continue Running.
 }
 
-//------------------------------------------------------------------
 // PluginInterface protocol
-//------------------------------------------------------------------
 lldb_private::ConstString JITLoaderGDB::GetPluginNameStatic() {
   static ConstString g_name("gdb");
   return g_name;

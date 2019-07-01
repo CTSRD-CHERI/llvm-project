@@ -481,6 +481,12 @@ HANDLE_TARGET_OPCODE(G_UITOFP)
 /// Generic FP absolute value.
 HANDLE_TARGET_OPCODE(G_FABS)
 
+/// FCOPYSIGN(X, Y) - Return the value of X with the sign of Y.  NOTE: This does
+/// not require that X and Y have the same type, just that they are both
+/// floating point. X and the result must have the same type.  FCOPYSIGN(f32,
+/// f64) is allowed.
+HANDLE_TARGET_OPCODE(G_FCOPYSIGN)
+
 /// Generic FP canonicalize value.
 HANDLE_TARGET_OPCODE(G_FCANONICALIZE)
 
@@ -490,6 +496,18 @@ HANDLE_TARGET_OPCODE(G_GEP)
 /// Clear the specified number of low bits in a pointer. This rounds the value
 /// *down* to the given alignment.
 HANDLE_TARGET_OPCODE(G_PTR_MASK)
+
+/// Generic signed integer minimum.
+HANDLE_TARGET_OPCODE(G_SMIN)
+
+/// Generic signed integer maximum.
+HANDLE_TARGET_OPCODE(G_SMAX)
+
+/// Generic unsigned integer maximum.
+HANDLE_TARGET_OPCODE(G_UMIN)
+
+/// Generic unsigned integer maximum.
+HANDLE_TARGET_OPCODE(G_UMAX)
 
 /// Generic BRANCH instruction. This is an unconditional branch.
 HANDLE_TARGET_OPCODE(G_BR)
@@ -536,18 +554,27 @@ HANDLE_TARGET_OPCODE(G_FSQRT)
 /// Floating point floor.
 HANDLE_TARGET_OPCODE(G_FFLOOR)
 
+/// Floating point round to next integer.
+HANDLE_TARGET_OPCODE(G_FRINT)
+
+/// Floating point round to nearest integer.
+HANDLE_TARGET_OPCODE(G_FNEARBYINT)
+
 /// Generic AddressSpaceCast.
 HANDLE_TARGET_OPCODE(G_ADDRSPACE_CAST)
 
 /// Generic block address
 HANDLE_TARGET_OPCODE(G_BLOCK_ADDR)
 
+/// Generic jump table address
+HANDLE_TARGET_OPCODE(G_JUMP_TABLE)
+
 // TODO: Add more generic opcodes as we move along.
 
 /// Marker for the end of the generic opcode.
 /// This is used to check if an opcode is in the range of the
 /// generic opcodes.
-HANDLE_TARGET_OPCODE_MARKER(PRE_ISEL_GENERIC_OPCODE_END, G_BLOCK_ADDR)
+HANDLE_TARGET_OPCODE_MARKER(PRE_ISEL_GENERIC_OPCODE_END, G_JUMP_TABLE)
 
 /// BUILTIN_OP_END - This must be the last enum value in this list.
 /// The target-specific post-isel opcode values start here.

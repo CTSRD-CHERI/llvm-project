@@ -16,40 +16,35 @@ class DWARFDIE : public DWARFBaseDIE {
 public:
   using DWARFBaseDIE::DWARFBaseDIE;
 
-  //----------------------------------------------------------------------
   // Tests
-  //----------------------------------------------------------------------
   bool IsStructUnionOrClass() const;
 
   bool IsMethod() const;
 
-  //----------------------------------------------------------------------
   // Accessors
-  //----------------------------------------------------------------------
   lldb::ModuleSP GetContainingDWOModule() const;
 
   DWARFDIE
   GetContainingDWOModuleDIE() const;
 
-  //----------------------------------------------------------------------
   // Accessing information about a DIE
-  //----------------------------------------------------------------------
   const char *GetMangledName() const;
 
   const char *GetPubname() const;
 
   const char *GetQualifiedName(std::string &storage) const;
 
+  using DWARFBaseDIE::GetName;
+  void GetName(lldb_private::Stream &s) const;
+
+  void AppendTypeName(lldb_private::Stream &s) const;
+
   lldb_private::Type *ResolveType() const;
 
-  //----------------------------------------------------------------------
   // Resolve a type by UID using this DIE's DWARF file
-  //----------------------------------------------------------------------
   lldb_private::Type *ResolveTypeUID(const DIERef &die_ref) const;
 
-  //----------------------------------------------------------------------
   // Functions for obtaining DIE relations and references
-  //----------------------------------------------------------------------
 
   DWARFDIE
   GetParent() const;
@@ -63,11 +58,9 @@ public:
   DWARFDIE
   GetReferencedDIE(const dw_attr_t attr) const;
 
-  //----------------------------------------------------------------------
   // Get a another DIE from the same DWARF file as this DIE. This will
   // check the current DIE's compile unit first to see if "die_offset" is
   // in the same compile unit, and fall back to checking the DWARF file.
-  //----------------------------------------------------------------------
   DWARFDIE
   GetDIE(dw_offset_t die_offset) const;
   using DWARFBaseDIE::GetDIE;
@@ -78,9 +71,7 @@ public:
   DWARFDIE
   GetParentDeclContextDIE() const;
 
-  //----------------------------------------------------------------------
   // DeclContext related functions
-  //----------------------------------------------------------------------
   std::vector<DWARFDIE> GetDeclContextDIEs() const;
 
   void GetDWARFDeclContext(DWARFDeclContext &dwarf_decl_ctx) const;
@@ -90,13 +81,11 @@ public:
   void
   GetDeclContext(std::vector<lldb_private::CompilerContext> &context) const;
 
-  //----------------------------------------------------------------------
   // Getting attribute values from the DIE.
   //
   // GetAttributeValueAsXXX() functions should only be used if you are
   // looking for one or two attributes on a DIE. If you are trying to
   // parse all attributes, use GetAttributes (...) instead
-  //----------------------------------------------------------------------
   DWARFDIE
   GetAttributeValueAsReferenceDIE(const dw_attr_t attr) const;
 
@@ -106,9 +95,7 @@ public:
                             int &call_line, int &call_column,
                             lldb_private::DWARFExpression *frame_base) const;
 
-  //----------------------------------------------------------------------
   // CompilerDecl related functions
-  //----------------------------------------------------------------------
 
   lldb_private::CompilerDecl GetDecl() const;
 

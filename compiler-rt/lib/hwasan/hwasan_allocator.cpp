@@ -341,6 +341,16 @@ void *hwasan_realloc(void *ptr, usize size, StackTrace *stack) {
   return SetErrnoOnNull(HwasanReallocate(stack, ptr, size, sizeof(u64)));
 }
 
+void *hwasan_reallocarray(void *ptr, usize nmemb, usize size, StackTrace *stack) {
+  if (UNLIKELY(CheckForCallocOverflow(size, nmemb))) {
+    errno = errno_ENOMEM;
+    if (AllocatorMayReturnNull())
+      return nullptr;
+    ReportReallocArrayOverflow(nmemb, size, stack);
+  }
+  return hwasan_realloc(ptr, nmemb * size, stack);
+}
+
 void *hwasan_valloc(usize size, StackTrace *stack) {
   return SetErrnoOnNull(
       HwasanAllocate(stack, size, GetPageSizeCached(), false));

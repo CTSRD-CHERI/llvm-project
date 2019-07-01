@@ -638,6 +638,10 @@ private:
     return getFnValueByID(ValNo, Ty);
   }
 
+  /// Upgrades old-style typeless byval attributes by adding the corresponding
+  /// argument's pointee type.
+  void propagateByValTypes(CallBase *CB);
+
   /// Converts alignment exponent (i.e. power of two (or zero)) to the
   /// corresponding alignment to use. If alignment is too large, returns
   /// a corresponding error code.
@@ -893,8 +897,9 @@ static GlobalValueSummary::GVFlags getDecodedGVSummaryFlags(uint64_t RawFlags,
   // values as live.
   bool Live = (RawFlags & 0x2) || Version < 3;
   bool Local = (RawFlags & 0x4);
+  bool AutoHide = (RawFlags & 0x8);
 
-  return GlobalValueSummary::GVFlags(Linkage, NotEligibleToImport, Live, Local);
+  return GlobalValueSummary::GVFlags(Linkage, NotEligibleToImport, Live, Local, AutoHide);
 }
 
 // Decode the flags for GlobalVariable in the summary
@@ -1497,6 +1502,12 @@ Error BitcodeReader::parseAttributeGroupBlock() {
           if (Error Err = parseAttrKind(Record[++i], &Kind))
             return Err;
 
+          // Upgrade old-style byval attribute to one with a type, even if it's
+          // nullptr. We will have to insert the real type when we associate
+          // this AttributeList with a function.
+          if (Kind == Attribute::ByVal)
+            B.addByValAttr(nullptr);
+
           B.addAttribute(Kind);
         } else if (Record[i] == 1) { // Integer attribute
           Attribute::AttrKind Kind;
@@ -1512,9 +1523,7 @@ Error BitcodeReader::parseAttributeGroupBlock() {
             B.addDereferenceableOrNullAttr(Record[++i]);
           else if (Kind == Attribute::AllocSize)
             B.addAllocSizeAttrFromRawRepr(Record[++i]);
-        } else {                     // String attribute
-          assert((Record[i] == 3 || Record[i] == 4) &&
-                 "Invalid attribute group entry");
+        } else if (Record[i] == 3 || Record[i] == 4) { // String attribute
           bool HasValue = (Record[i++] == 4);
           SmallString<64> KindStr;
           SmallString<64> ValStr;
@@ -1532,6 +1541,15 @@ Error BitcodeReader::parseAttributeGroupBlock() {
           }
 
           B.addAttribute(KindStr.str(), ValStr.str());
+        } else {
+          assert((Record[i] == 5 || Record[i] == 6) &&
+                 "Invalid attribute group entry");
+          bool HasType = Record[i] == 6;
+          Attribute::AttrKind Kind;
+          if (Error Err = parseAttrKind(Record[++i], &Kind))
+            return Err;
+          if (Kind == Attribute::ByVal)
+            B.addByValAttr(HasType ? getTypeByID(Record[++i]) : nullptr);
         }
       }
 
@@ -2799,8 +2817,14 @@ Error BitcodeReader::globalCleanup() {
   }
 
   // Look for global variables which need to be renamed.
+  std::vector<std::pair<GlobalVariable *, GlobalVariable *>> UpgradedVariables;
   for (GlobalVariable &GV : TheModule->globals())
-    UpgradeGlobalVariable(&GV);
+    if (GlobalVariable *Upgraded = UpgradeGlobalVariable(&GV))
+      UpgradedVariables.emplace_back(&GV, Upgraded);
+  for (auto &Pair : UpgradedVariables) {
+    Pair.first->eraseFromParent();
+    TheModule->getGlobalList().push_back(Pair.second);
+  }
 
   // Force deallocation of memory for these vectors to favor the client that
   // want lazy deserialization.
@@ -2891,7 +2915,8 @@ static void inferDSOLocal(GlobalValue *GV) {
 Error BitcodeReader::parseGlobalVarRecord(ArrayRef<uint64_t> Record) {
   // v1: [pointer type, isconst, initid, linkage, alignment, section,
   // visibility, threadlocal, unnamed_addr, externally_initialized,
-  // dllstorageclass, comdat, attributes, preemption specifier] (name in VST)
+  // dllstorageclass, comdat, attributes, preemption specifier,
+  // partition strtab offset, partition strtab size] (name in VST)
   // v2: [strtab_offset, strtab_size, v1]
   StringRef Name;
   std::tie(Name, Record) = readNameFromStrtab(Record);
@@ -2982,6 +3007,10 @@ Error BitcodeReader::parseGlobalVarRecord(ArrayRef<uint64_t> Record) {
   }
   inferDSOLocal(NewGV);
 
+  // Check whether we have enough values to read a partition name.
+  if (Record.size() > 15)
+    NewGV->setPartition(StringRef(Strtab.data() + Record[14], Record[15]));
+
   return Error::success();
 }
 
@@ -3019,6 +3048,18 @@ Error BitcodeReader::parseFunctionRecord(ArrayRef<uint64_t> Record) {
   uint64_t RawLinkage = Record[3];
   Func->setLinkage(getDecodedLinkage(RawLinkage));
   Func->setAttributes(getAttributes(Record[4]));
+
+  // Upgrade any old-style byval without a type by propagating the argument's
+  // pointee type. There should be no opaque pointers where the byval type is
+  // implicit.
+  for (auto &Arg : Func->args()) {
+    if (Arg.hasByValAttr() &&
+        !Arg.getAttribute(Attribute::ByVal).getValueAsType()) {
+      Arg.removeAttr(Attribute::ByVal);
+      Arg.addAttr(Attribute::getWithByValType(
+          Context, Arg.getType()->getPointerElementType()));
+    }
+  }
 
   unsigned Alignment;
   if (Error Err = parseAlignmentValue(Record[5], Alignment))
@@ -3070,6 +3111,12 @@ Error BitcodeReader::parseFunctionRecord(ArrayRef<uint64_t> Record) {
     Func->setDSOLocal(getDecodedDSOLocal(Record[15]));
   }
   inferDSOLocal(Func);
+
+  // Record[16] is the address space number.
+
+  // Check whether we have enough values to read a partition name.
+  if (Record.size() > 18)
+    Func->setPartition(StringRef(Strtab.data() + Record[17], Record[18]));
 
   ValueList.push_back(Func);
 
@@ -3147,6 +3194,13 @@ Error BitcodeReader::parseGlobalIndirectSymbolRecord(
   if (OpNum != Record.size())
     NewGA->setDSOLocal(getDecodedDSOLocal(Record[OpNum++]));
   inferDSOLocal(NewGA);
+
+  // Check whether we have enough values to read a partition name.
+  if (OpNum + 1 < Record.size()) {
+    NewGA->setPartition(
+        StringRef(Strtab.data() + Record[OpNum], Record[OpNum + 1]));
+    OpNum += 2;
+  }
 
   ValueList.push_back(NewGA);
   IndirectSymbolInits.push_back(std::make_pair(NewGA, Val));
@@ -3418,6 +3472,19 @@ Error BitcodeReader::typeCheckLoadStoreInst(Type *ValType, Type *PtrType) {
   if (!PointerType::isLoadableOrStorableType(ElemType))
     return error("Cannot load/store from pointer");
   return Error::success();
+}
+
+void BitcodeReader::propagateByValTypes(CallBase *CB) {
+  for (unsigned i = 0; i < CB->getNumArgOperands(); ++i) {
+    if (CB->paramHasAttr(i, Attribute::ByVal) &&
+        !CB->getAttribute(i, Attribute::ByVal).getValueAsType()) {
+      CB->removeParamAttr(i, Attribute::ByVal);
+      CB->addParamAttr(
+          i, Attribute::getWithByValType(
+                 Context,
+                 CB->getArgOperand(i)->getType()->getPointerElementType()));
+    }
+  }
 }
 
 /// Lazily parse the specified function body block.
@@ -3834,6 +3901,11 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
 
       I = SelectInst::Create(Cond, TrueVal, FalseVal);
       InstructionList.push_back(I);
+      if (OpNum < Record.size() && isa<FPMathOperator>(I)) {
+        FastMathFlags FMF = getDecodedFastMathFlags(Record[OpNum]);
+        if (FMF.any())
+          I->setFastMathFlags(FMF);
+      }
       break;
     }
 
@@ -4230,6 +4302,8 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       cast<InvokeInst>(I)->setCallingConv(
           static_cast<CallingConv::ID>(CallingConv::MaxID & CCInfo));
       cast<InvokeInst>(I)->setAttributes(PAL);
+      propagateByValTypes(cast<CallBase>(I));
+
       break;
     }
     case bitc::FUNC_CODE_INST_RESUME: { // RESUME: [opval]
@@ -4705,6 +4779,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
         TCK = CallInst::TCK_NoTail;
       cast<CallInst>(I)->setTailCallKind(TCK);
       cast<CallInst>(I)->setAttributes(PAL);
+      propagateByValTypes(cast<CallBase>(I));
       if (FMF.any()) {
         if (!isa<FPMathOperator>(I))
           return error("Fast-math-flags specified for call without "

@@ -98,11 +98,16 @@ def main():
       if m:
         triple_in_cmd = m.groups()[0]
 
+      march_in_cmd = None
+      m = common.MARCH_ARG_RE.search(llc_cmd)
+      if m:
+        march_in_cmd = m.groups()[0]
+
       filecheck_cmd = ''
       if len(commands) > 1:
         filecheck_cmd = commands[1]
       if filecheck_cmd.startswith("%cheri_FileCheck"):
-        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D$CAP_SIZE=16'")
+        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
       if not llc_cmd.startswith('llc '):
         print('WARNING: Skipping non-llc RUN line: ' + l, file=sys.stderr)
         continue
@@ -121,14 +126,14 @@ def main():
 
       # FIXME: We should use multiple check prefixes to common check lines. For
       # now, we just ignore all but the last.
-      run_list.append((check_prefixes, llc_cmd_args, triple_in_cmd, preprocess_cmd))
+      run_list.append((check_prefixes, llc_cmd_args, triple_in_cmd, preprocess_cmd, march_in_cmd))
 
     func_dict = {}
     for p in run_list:
       prefixes = p[0]
       for prefix in prefixes:
         func_dict.update({prefix: dict()})
-    for prefixes, llc_args, triple_in_cmd, preprocess_cmd in run_list:
+    for prefixes, llc_args, triple_in_cmd, preprocess_cmd, march_in_cmd in run_list:
       if args.verbose:
         print('Extracted LLC cmd: llc ' + llc_args, file=sys.stderr)
         print('Extracted FileCheck prefixes: ' + str(prefixes), file=sys.stderr)
@@ -136,11 +141,12 @@ def main():
           print('Extracted pre-processing command: ' + str(preprocess_cmd), file=sys.stderr)
 
       raw_tool_output = common.invoke_tool(args.llc_binary, llc_args, test, preprocess_cmd, verbose=args.verbose)
-      if not (triple_in_cmd or triple_in_ir):
-        print("Cannot find a triple. Assume 'x86'", file=sys.stderr)
+      triple = triple_in_cmd or triple_in_ir
+      if not triple:
+        triple = asm.get_triple_from_march(march_in_cmd)
 
       asm.build_function_body_dictionary_for_triple(args, raw_tool_output,
-          triple_in_cmd or triple_in_ir or 'x86', prefixes, func_dict)
+          triple, prefixes, func_dict)
 
     is_in_function = False
     is_in_function_start = False

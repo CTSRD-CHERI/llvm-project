@@ -19,30 +19,30 @@ MemberPtr global_virt_ptr = &A::virt;
 int (*global_fn_ptr)() = &global_fn;
 
 // CHECK: @global_nonvirt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } {
-// LEGACY-SAME: i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A7nonvirtEv to i8*) to i8 addrspace(200)*), i64 0 }, align [[$CAP_SIZE]]
-// CAPTABLE-SAME: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A7nonvirtEv to i8 addrspace(200)*), i64 0 }, align [[$CAP_SIZE]]
-// CHECK: @global_virt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, align [[$CAP_SIZE]]
-// LEGACY: @global_fn_ptr = addrspace(200) global i32 () addrspace(200)* addrspacecast (i32 ()* @_Z9global_fnv to i32 () addrspace(200)*), align [[$CAP_SIZE]]
-// CAPTABLE: @global_fn_ptr = addrspace(200) global i32 () addrspace(200)* @_Z9global_fnv, align [[$CAP_SIZE]]
+// LEGACY-SAME: i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A7nonvirtEv to i8*) to i8 addrspace(200)*), i64 0 }, align [[#CAP_SIZE]]
+// CAPTABLE-SAME: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A7nonvirtEv to i8 addrspace(200)*), i64 0 }, align [[#CAP_SIZE]]
+// CHECK: @global_virt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, align [[#CAP_SIZE]]
+// LEGACY: @global_fn_ptr = addrspace(200) global i32 () addrspace(200)* addrspacecast (i32 ()* @_Z9global_fnv to i32 () addrspace(200)*), align [[#CAP_SIZE]]
+// CAPTABLE: @global_fn_ptr = addrspace(200) global i32 () addrspace(200)* @_Z9global_fnv, align [[#CAP_SIZE]]
 
 void local_struct_constant_init() {
   struct {
       MemberPtr p;
   } s{&A::nonvirt};
   // CHECK: @__const._Z26local_struct_constant_initv.s = private unnamed_addr addrspace(200) constant %struct.anon { { i8 addrspace(200)*, i64 } {
-  // LEGACY: i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A7nonvirtEv to i8*) to i8 addrspace(200)*), i64 0 } }, align [[$CAP_SIZE]]
-  // CAPTABLE: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A7nonvirtEv to i8 addrspace(200)*), i64 0 } }, align [[$CAP_SIZE]]
+  // LEGACY: i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A7nonvirtEv to i8*) to i8 addrspace(200)*), i64 0 } }, align [[#CAP_SIZE]]
+  // CAPTABLE: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A7nonvirtEv to i8 addrspace(200)*), i64 0 } }, align [[#CAP_SIZE]]
 }
 
 int call_nonvirt(A* a) {
   // CHECK-LABEL: @_Z12call_nonvirtU3capP1A(
-  // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_nonvirt_ptr, align [[$CAP_SIZE]]
+  // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_nonvirt_ptr, align [[#CAP_SIZE]]
   return (a->*global_nonvirt_ptr)();
 }
 
 int call_virt(A* a) {
   // CHECK-LABEL: @_Z9call_virtU3capP1A(
-  // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_virt_ptr, align [[$CAP_SIZE]]
+  // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_virt_ptr, align [[#CAP_SIZE]]
   return (a->*global_virt_ptr)();
 }
 
@@ -60,7 +60,7 @@ int call_local_nonvirt(A* a) {
 int call_local_virt(A* a) {
   MemberPtr local_virt = &A::virt2;
   // CHECK-LABEL: @_Z15call_local_virtU3capP1A(
-  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[$CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)*
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)*
   return (a->*local_virt)();
 }
 

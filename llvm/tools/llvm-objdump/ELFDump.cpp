@@ -18,11 +18,11 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
-using namespace llvm;
 using namespace llvm::object;
 
+namespace llvm {
 template <class ELFT>
-Expected<StringRef> getDynamicStrTab(const ELFFile<ELFT> *Elf) {
+static Expected<StringRef> getDynamicStrTab(const ELFFile<ELFT> *Elf) {
   auto DynamicEntriesOrError = Elf->dynamicEntries();
   if (!DynamicEntriesOrError)
     return DynamicEntriesOrError.takeError();
@@ -50,14 +50,14 @@ Expected<StringRef> getDynamicStrTab(const ELFFile<ELFT> *Elf) {
 }
 
 template <class ELFT>
-static std::error_code getRelocationValueString(const ELFObjectFile<ELFT> *Obj,
-                                                const RelocationRef &RelRef,
-                                                SmallVectorImpl<char> &Result) {
+static Error getRelocationValueString(const ELFObjectFile<ELFT> *Obj,
+                                      const RelocationRef &RelRef,
+                                      SmallVectorImpl<char> &Result) {
   const ELFFile<ELFT> &EF = *Obj->getELFFile();
   DataRefImpl Rel = RelRef.getRawDataRefImpl();
   auto SecOrErr = EF.getSection(Rel.d.a);
   if (!SecOrErr)
-    return errorToErrorCode(SecOrErr.takeError());
+    return SecOrErr.takeError();
 
   int64_t Addend = 0;
   // If there is no Symbol associated with the relocation, we set the undef
@@ -72,7 +72,7 @@ static std::error_code getRelocationValueString(const ELFObjectFile<ELFT> *Obj,
     Addend = ERela->r_addend;
     Undef = ERela->getSymbol(false) == 0;
   } else if ((*SecOrErr)->sh_type != ELF::SHT_REL) {
-    return object_error::parse_failed;
+    return make_error<BinaryError>();
   }
 
   // Default scheme is to print Target, as well as "+ <addend>" for nonzero
@@ -86,17 +86,17 @@ static std::error_code getRelocationValueString(const ELFObjectFile<ELFT> *Obj,
     if (Sym->getType() == ELF::STT_SECTION) {
       Expected<section_iterator> SymSI = SI->getSection();
       if (!SymSI)
-        return errorToErrorCode(SymSI.takeError());
+        return SymSI.takeError();
       const typename ELFT::Shdr *SymSec =
           Obj->getSection((*SymSI)->getRawDataRefImpl());
       auto SecName = EF.getSectionName(SymSec);
       if (!SecName)
-        return errorToErrorCode(SecName.takeError());
+        return SecName.takeError();
       Fmt << *SecName;
     } else {
       Expected<StringRef> SymName = SI->getName();
       if (!SymName)
-        return errorToErrorCode(SymName.takeError());
+        return SymName.takeError();
       if (Demangle)
         Fmt << demangle(*SymName);
       else
@@ -110,11 +110,10 @@ static std::error_code getRelocationValueString(const ELFObjectFile<ELFT> *Obj,
     Fmt << (Addend < 0 ? "" : "+") << Addend;
   Fmt.flush();
   Result.append(FmtBuf.begin(), FmtBuf.end());
-  return std::error_code();
+  return Error::success();
 }
 
-std::error_code
-llvm::getELFRelocationValueString(const ELFObjectFileBase *Obj,
+Error getELFRelocationValueString(const ELFObjectFileBase *Obj,
                                   const RelocationRef &Rel,
                                   SmallVectorImpl<char> &Result) {
   if (auto *ELF32LE = dyn_cast<ELF32LEObjectFile>(Obj))
@@ -132,7 +131,7 @@ static uint64_t getSectionLMA(const ELFFile<ELFT> *Obj,
                               const object::ELFSectionRef &Sec) {
   auto PhdrRangeOrErr = Obj->program_headers();
   if (!PhdrRangeOrErr)
-    report_fatal_error(errorToErrorCode(PhdrRangeOrErr.takeError()).message());
+    report_fatal_error(toString(PhdrRangeOrErr.takeError()));
 
   // Search for a PT_LOAD segment containing the requested section. Use this
   // segment's p_addr to calculate the section's LMA.
@@ -145,7 +144,7 @@ static uint64_t getSectionLMA(const ELFFile<ELFT> *Obj,
   return Sec.getAddress();
 }
 
-uint64_t llvm::getELFSectionLMA(const object::ELFSectionRef &Sec) {
+uint64_t getELFSectionLMA(const object::ELFSectionRef &Sec) {
   if (const auto *ELFObj = dyn_cast<ELF32LEObjectFile>(Sec.getObject()))
     return getSectionLMA(ELFObj->getELFFile(), Sec);
   else if (const auto *ELFObj = dyn_cast<ELF32BEObjectFile>(Sec.getObject()))
@@ -179,7 +178,7 @@ void printDynamicSection(const ELFFile<ELFT> *Elf, StringRef Filename) {
         outs() << (Data + Dyn.d_un.d_val) << "\n";
         continue;
       }
-      warn(errorToErrorCode(StrTabOrErr.takeError()).message());
+      warn(toString(StrTabOrErr.takeError()));
       consumeError(StrTabOrErr.takeError());
     }
     outs() << format(Fmt, (uint64_t)Dyn.d_un.d_val);
@@ -190,8 +189,7 @@ template <class ELFT> void printProgramHeaders(const ELFFile<ELFT> *o) {
   outs() << "Program Header:\n";
   auto ProgramHeaderOrError = o->program_headers();
   if (!ProgramHeaderOrError)
-    report_fatal_error(
-        errorToErrorCode(ProgramHeaderOrError.takeError()).message());
+    report_fatal_error(toString(ProgramHeaderOrError.takeError()));
   for (const typename ELFT::Phdr &Phdr : *ProgramHeaderOrError) {
     switch (Phdr.p_type) {
     case ELF::PT_DYNAMIC:
@@ -329,7 +327,7 @@ void printSymbolVersionInfo(const ELFFile<ELFT> *Elf, StringRef FileName) {
   }
 }
 
-void llvm::printELFFileHeader(const object::ObjectFile *Obj) {
+void printELFFileHeader(const object::ObjectFile *Obj) {
   if (const auto *ELFObj = dyn_cast<ELF32LEObjectFile>(Obj))
     printProgramHeaders(ELFObj->getELFFile());
   else if (const auto *ELFObj = dyn_cast<ELF32BEObjectFile>(Obj))
@@ -340,7 +338,7 @@ void llvm::printELFFileHeader(const object::ObjectFile *Obj) {
     printProgramHeaders(ELFObj->getELFFile());
 }
 
-void llvm::printELFDynamicSection(const object::ObjectFile *Obj) {
+void printELFDynamicSection(const object::ObjectFile *Obj) {
   if (const auto *ELFObj = dyn_cast<ELF32LEObjectFile>(Obj))
     printDynamicSection(ELFObj->getELFFile(), Obj->getFileName());
   else if (const auto *ELFObj = dyn_cast<ELF32BEObjectFile>(Obj))
@@ -351,7 +349,7 @@ void llvm::printELFDynamicSection(const object::ObjectFile *Obj) {
     printDynamicSection(ELFObj->getELFFile(), Obj->getFileName());
 }
 
-void llvm::printELFSymbolVersionInfo(const object::ObjectFile *Obj) {
+void printELFSymbolVersionInfo(const object::ObjectFile *Obj) {
   if (const auto *ELFObj = dyn_cast<ELF32LEObjectFile>(Obj))
     printSymbolVersionInfo(ELFObj->getELFFile(), Obj->getFileName());
   else if (const auto *ELFObj = dyn_cast<ELF32BEObjectFile>(Obj))
@@ -361,3 +359,4 @@ void llvm::printELFSymbolVersionInfo(const object::ObjectFile *Obj) {
   else if (const auto *ELFObj = dyn_cast<ELF64BEObjectFile>(Obj))
     printSymbolVersionInfo(ELFObj->getELFFile(), Obj->getFileName());
 }
+} // namespace llvm

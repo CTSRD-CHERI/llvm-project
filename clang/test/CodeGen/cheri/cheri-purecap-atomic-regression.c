@@ -11,10 +11,10 @@
 // CHECK-LABEL: @main(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[RETVAL:%.*]] = alloca i32, align 4, addrspace(200)
-// CHECK-NEXT:    [[P:%.*]] = alloca i32 addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)
+// CHECK-NEXT:    [[P:%.*]] = alloca i32 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // CHECK-NEXT:    store i32 0, i32 addrspace(200)* [[RETVAL]], align 4
-// CHECK-NEXT:    store i32 addrspace(200)* null, i32 addrspace(200)* addrspace(200)* [[P]], align [[$CAP_SIZE]]
-// CHECK-NEXT:    [[ATOMIC_LOAD:%.*]] = load atomic i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[P]] seq_cst, align [[$CAP_SIZE]]
+// CHECK-NEXT:    store i32 addrspace(200)* null, i32 addrspace(200)* addrspace(200)* [[P]], align [[#CAP_SIZE]]
+// CHECK-NEXT:    [[ATOMIC_LOAD:%.*]] = load atomic i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[P]] seq_cst, align [[#CAP_SIZE]]
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* [[ATOMIC_LOAD]], align 4
 // CHECK-NEXT:    ret i32 [[TMP0]]
 //
@@ -40,9 +40,9 @@ int main(void) {
 // This previously crashed in codegen when generating the *p
 // CHECK-LABEL: @main2(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[P_ADDR:%.*]] = alloca i32 addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)
-// CHECK-NEXT:    store i32 addrspace(200)* [[P:%.*]], i32 addrspace(200)* addrspace(200)* [[P_ADDR]], align [[$CAP_SIZE]]
-// CHECK-NEXT:    [[ATOMIC_LOAD:%.*]] = load atomic i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[P_ADDR]] seq_cst, align [[$CAP_SIZE]]
+// CHECK-NEXT:    [[P_ADDR:%.*]] = alloca i32 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
+// CHECK-NEXT:    store i32 addrspace(200)* [[P:%.*]], i32 addrspace(200)* addrspace(200)* [[P_ADDR]], align [[#CAP_SIZE]]
+// CHECK-NEXT:    [[ATOMIC_LOAD:%.*]] = load atomic i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[P_ADDR]] seq_cst, align [[#CAP_SIZE]]
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* [[ATOMIC_LOAD]], align 4
 // CHECK-NEXT:    ret i32 [[TMP0]]
 //
@@ -67,14 +67,14 @@ _Atomic(int *) a;
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// CHECK-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[$CAP_SIZE]]
+// CHECK-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[#CAP_SIZE]]
 // CHECK-NEXT:    ret void
 //
 // OPT-LABEL: @test_store(
 // OPT-NEXT:  entry:
 // OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
 // OPT-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// OPT-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[$CAP_SIZE]], !tbaa !6
+// OPT-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[#CAP_SIZE]], !tbaa !6
 // OPT-NEXT:    ret void
 //
 void test_store() {

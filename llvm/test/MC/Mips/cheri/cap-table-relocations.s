@@ -74,7 +74,7 @@ foo:
         .word 1
 
 # DUMP-LABEL: Disassembly of section .text:
-# DUMP-NEXT:  .text:
+# DUMP:  .text:
 # DUMP-NEXT:  0:       3c 01 00 00     lui     $1, 0
 # DUMP-NEXT:           0000000000000000:  R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE     foo
 # DUMP-NEXT:  4:       34 21 00 00     ori     $1, $1, 0

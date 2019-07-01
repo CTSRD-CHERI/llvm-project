@@ -28,58 +28,52 @@
 define void @foo(i8 addrspace(200)* %arg) {
 ; N64-LABEL: foo:
 ; N64:       # %bb.0: # %entry
-; N64-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:32|64]]
-; N64-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; N64-NEXT:    sd $ra, [[@EXPR STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Spill
+; N64-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; N64-NEXT:    .cfi_def_cfa_offset [[#STACKFRAME_SIZE]]
+; N64-NEXT:    sd $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Spill
 ; N64-NEXT:    .cfi_offset 31, -8
-; N64-NEXT:    cmove $c1, $c3
-; N64-NEXT:    csc $c1, $sp, 0($ddc)
 ; N64-NEXT:    jal test
 ; N64-NEXT:    nop
-; N64-NEXT:    ld $ra, [[@EXPR STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Reload
-; N64-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
+; N64-NEXT:    ld $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Reload
+; N64-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
 ; N64-NEXT:    jr $ra
 ; N64-NEXT:    nop
 ;
 ; LEGACY-LABEL: foo:
 ; LEGACY:       # %bb.0: # %entry
-; LEGACY-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; LEGACY-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; LEGACY-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; LEGACY-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; LEGACY-NEXT:    .cfi_offset 89, -[[@EXPR 1 * $CAP_SIZE]]
+; LEGACY-NEXT:    csc $c17, $zero, 0($c11)
+; LEGACY-NEXT:    .cfi_offset 89, -[[#CAP_SIZE]]
 ; LEGACY-NEXT:    cgetoffset $25, $c12
 ; LEGACY-NEXT:    lui $1, %hi(%neg(%gp_rel(foo)))
 ; LEGACY-NEXT:    daddu $1, $1, $25
 ; LEGACY-NEXT:    daddiu $1, $1, %lo(%neg(%gp_rel(foo)))
-; LEGACY-NEXT:    cmove $c1, $c3
 ; LEGACY-NEXT:    ld $1, %call16(test)($1)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    cgetnull $c13
-; LEGACY-NEXT:    csc $c1, $zero, 0($c11)
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; LEGACY-NEXT:    clc $c17, $zero, 0($c11)
 ; LEGACY-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; LEGACY-NEXT:    cjr $c17
 ; LEGACY-NEXT:    nop
 ;
 ; CAPTABLE-LABEL: foo:
 ; CAPTABLE:       # %bb.0: # %entry
-; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|16]]
 ; CAPTABLE-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CAPTABLE-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CAPTABLE-NEXT:    .cfi_offset 89, -[[@EXPR 1 * $CAP_SIZE]]
+; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11)
+; CAPTABLE-NEXT:    .cfi_offset 89, -[[#CAP_SIZE]]
 ; CAPTABLE-NEXT:    lui $1, %hi(%neg(%captab_rel(foo)))
 ; CAPTABLE-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foo)))
 ; CAPTABLE-NEXT:    cincoffset $c26, $c12, $1
 ; CAPTABLE-NEXT:    cmove $c1, $c26
-; CAPTABLE-NEXT:    cmove $c2, $c3
 ; CAPTABLE-NEXT:    clcbi $c12, %capcall20(test)($c1)
 ; CAPTABLE-NEXT:    cgetnull $c13
-; CAPTABLE-NEXT:    csc $c2, $zero, 0($c11)
 ; CAPTABLE-NEXT:    cjalr $c12, $c17
 ; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CAPTABLE-NEXT:    clc $c17, $zero, 0($c11)
 ; CAPTABLE-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; CAPTABLE-NEXT:    cjr $c17
 ; CAPTABLE-NEXT:    nop

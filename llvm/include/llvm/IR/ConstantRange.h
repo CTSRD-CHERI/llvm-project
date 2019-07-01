@@ -79,6 +79,14 @@ public:
     return ConstantRange(BitWidth, true);
   }
 
+  /// Create non-empty constant range with the given bounds. If Lower and
+  /// Upper are the same, a full range is returned.
+  static ConstantRange getNonEmpty(APInt Lower, APInt Upper) {
+    if (Lower == Upper)
+      return getFull(Lower.getBitWidth());
+    return ConstantRange(std::move(Lower), std::move(Upper));
+  }
+
   /// Initialize a range based on a known bits constraint. The IsSigned flag
   /// indicates whether the constant range should not wrap in the signed or
   /// unsigned domain.
@@ -116,14 +124,12 @@ public:
   static ConstantRange makeExactICmpRegion(CmpInst::Predicate Pred,
                                            const APInt &Other);
 
-  /// Return the largest range containing all X such that "X BinOpC Y" is
-  /// guaranteed not to wrap (overflow) for all Y in Other.
+  /// Produce the largest range containing all X such that "X BinOp Y" is
+  /// guaranteed not to wrap (overflow) for *all* Y in Other. However, there may
+  /// be *some* Y in Other for which additional X not contained in the result
+  /// also do not overflow.
   ///
-  /// NB! The returned set does *not* contain **all** possible values of X for
-  /// which "X BinOpC Y" does not wrap -- some viable values of X may be
-  /// missing, so you cannot use this to constrain X's range.  E.g. in the
-  /// fourth example, "(-2) + 1" is both nsw and nuw (so the "X" could be -2),
-  /// but (-2) is not in the set returned.
+  /// NoWrapKind must be one of OBO::NoUnsignedWrap or OBO::NoSignedWrap.
   ///
   /// Examples:
   ///  typedef OverflowingBinaryOperator OBO;
@@ -131,16 +137,18 @@ public:
   ///  MGNR(Add, [i8 1, 2), OBO::NoSignedWrap) == [-128, 127)
   ///  MGNR(Add, [i8 1, 2), OBO::NoUnsignedWrap) == [0, -1)
   ///  MGNR(Add, [i8 0, 1), OBO::NoUnsignedWrap) == Full Set
-  ///  MGNR(Add, [i8 1, 2), OBO::NoUnsignedWrap | OBO::NoSignedWrap)
-  ///    == [0,INT_MAX)
   ///  MGNR(Add, [i8 -1, 6), OBO::NoSignedWrap) == [INT_MIN+1, INT_MAX-4)
   ///  MGNR(Sub, [i8 1, 2), OBO::NoSignedWrap) == [-127, 128)
   ///  MGNR(Sub, [i8 1, 2), OBO::NoUnsignedWrap) == [1, 0)
-  ///  MGNR(Sub, [i8 1, 2), OBO::NoUnsignedWrap | OBO::NoSignedWrap)
-  ///    == [1,INT_MAX)
   static ConstantRange makeGuaranteedNoWrapRegion(Instruction::BinaryOps BinOp,
                                                   const ConstantRange &Other,
                                                   unsigned NoWrapKind);
+
+  /// Produce the range that contains X if and only if "X BinOp Other" does
+  /// not wrap.
+  static ConstantRange makeExactNoWrapRegion(Instruction::BinaryOps BinOp,
+                                             const APInt &Other,
+                                             unsigned NoWrapKind);
 
   /// Set up \p Pred and \p RHS such that
   /// ConstantRange::makeExactICmpRegion(Pred, RHS) == *this.  Return true if
@@ -212,9 +220,6 @@ public:
 
   /// Return true if this set contains exactly one member.
   bool isSingleElement() const { return getSingleElement() != nullptr; }
-
-  /// Return the number of elements in this set.
-  APInt getSetSize() const;
 
   /// Compare set size of this range with the range CR.
   bool isSizeStrictlySmallerThan(const ConstantRange &CR) const;
@@ -360,6 +365,23 @@ public:
   ConstantRange udiv(const ConstantRange &Other) const;
 
   /// Return a new range representing the possible values resulting
+  /// from a signed division of a value in this range and a value in
+  /// \p Other. Division by zero and division of SignedMin by -1 are considered
+  /// undefined behavior, in line with IR, and do not contribute towards the
+  /// result.
+  ConstantRange sdiv(const ConstantRange &Other) const;
+
+  /// Return a new range representing the possible values resulting
+  /// from an unsigned remainder operation of a value in this range and a
+  /// value in \p Other.
+  ConstantRange urem(const ConstantRange &Other) const;
+
+  /// Return a new range representing the possible values resulting
+  /// from a signed remainder operation of a value in this range and a
+  /// value in \p Other.
+  ConstantRange srem(const ConstantRange &Other) const;
+
+  /// Return a new range representing the possible values resulting
   /// from a binary-and of a value in this range by a value in \p Other.
   ConstantRange binaryAnd(const ConstantRange &Other) const;
 
@@ -380,12 +402,37 @@ public:
   /// arithmetic right shift of a value in this range and a value in \p Other.
   ConstantRange ashr(const ConstantRange &Other) const;
 
+  /// Perform an unsigned saturating addition of two constant ranges.
+  ConstantRange uadd_sat(const ConstantRange &Other) const;
+
+  /// Perform a signed saturating addition of two constant ranges.
+  ConstantRange sadd_sat(const ConstantRange &Other) const;
+
+  /// Perform an unsigned saturating subtraction of two constant ranges.
+  ConstantRange usub_sat(const ConstantRange &Other) const;
+
+  /// Perform a signed saturating subtraction of two constant ranges.
+  ConstantRange ssub_sat(const ConstantRange &Other) const;
+
   /// Return a new range that is the logical not of the current set.
   ConstantRange inverse() const;
 
+  /// Calculate absolute value range. If the original range contains signed
+  /// min, then the resulting range will also contain signed min.
+  ConstantRange abs() const;
+
   /// Represents whether an operation on the given constant range is known to
   /// always or never overflow.
-  enum class OverflowResult { AlwaysOverflows, MayOverflow, NeverOverflows };
+  enum class OverflowResult {
+    /// Always overflows in the direction of signed/unsigned min value.
+    AlwaysOverflowsLow,
+    /// Always overflows in the direction of signed/unsigned max value.
+    AlwaysOverflowsHigh,
+    /// May or may not overflow.
+    MayOverflow,
+    /// Never overflows.
+    NeverOverflows,
+  };
 
   /// Return whether unsigned add of the two ranges always/never overflows.
   OverflowResult unsignedAddMayOverflow(const ConstantRange &Other) const;
@@ -398,6 +445,9 @@ public:
 
   /// Return whether signed sub of the two ranges always/never overflows.
   OverflowResult signedSubMayOverflow(const ConstantRange &Other) const;
+
+  /// Return whether unsigned mul of the two ranges always/never overflows.
+  OverflowResult unsignedMulMayOverflow(const ConstantRange &Other) const;
 
   /// Print out the bounds to a stream.
   void print(raw_ostream &OS) const;

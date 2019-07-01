@@ -22,7 +22,7 @@ extern int fail2(void);
 // MIPS: @__sancov_gen_.3 = private constant [8 x i64] [i64 ptrtoint (i32 (i32)* @func2 to i64), i64 1, i64 ptrtoint (i8* blockaddress(@func2, %if.then) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.then2) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.end4) to i64), i64 0], section "__sancov_pcs", comdat($func2), align 8, !associated !1
 // MIPS: @__start___sancov_cntrs = external hidden global i8*
 // MIPS: @__stop___sancov_cntrs = external hidden global i8*
-// MIPS: @llvm.global_ctors = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 2, void ()* @sancov.module_ctor, i8* bitcast (void ()* @sancov.module_ctor to i8*) }]
+// MIPS: @llvm.global_ctors = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 2, void ()* @sancov.module_ctor_8bit_counters, i8* bitcast (void ()* @sancov.module_ctor_8bit_counters to i8*) }]
 // MIPS: @__start___sancov_pcs = external hidden global i64*
 // MIPS: @__stop___sancov_pcs = external hidden global i64*
 // MIPS: @llvm.compiler.used = appending global [4 x i8*] [i8* getelementptr inbounds ([1 x i8], [1 x i8]* @__sancov_gen_, i32 0, i32 0), i8* bitcast ([2 x i64]* @__sancov_gen_.1 to i8*), i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i32 0, i32 0), i8* bitcast ([8 x i64]* @__sancov_gen_.3 to i8*)], section "llvm.metadata"
@@ -40,7 +40,7 @@ extern int fail2(void);
 // PURECAP-SAME: section "__sancov_pcs", comdat($func2), align 8, !associated !1
 // PURECAP: @__start___sancov_cntrs = external hidden addrspace(200) global i8 addrspace(200)*
 // PURECAP: @__stop___sancov_cntrs = external hidden addrspace(200) global i8 addrspace(200)*
-// PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void ()*, i8 addrspace(200)* }] [{ i32, void ()*, i8 addrspace(200)* } { i32 2, void ()* addrspacecast (void () addrspace(200)* @sancov.module_ctor to void ()*), i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor to i8 addrspace(200)*) }]
+// PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void ()*, i8 addrspace(200)* }] [{ i32, void ()*, i8 addrspace(200)* } { i32 2, void ()* addrspacecast (void () addrspace(200)* @sancov.module_ctor_8bit_counters to void ()*), i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor_8bit_counters to i8 addrspace(200)*) }]
 // PURECAP: @__start___sancov_pcs = external hidden addrspace(200) global i64 addrspace(200)*
 // PURECAP: @__stop___sancov_pcs = external hidden addrspace(200) global i64 addrspace(200)*
 // PURECAP: @llvm.compiler.used = appending addrspace(200) global [4 x i8*] [i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([1 x i8], [1 x i8] addrspace(200)* @__sancov_gen_, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([2 x i64] addrspace(200)* @__sancov_gen_.1 to i8 addrspace(200)*) to i8*), i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @__sancov_gen_.2, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([8 x i64] addrspace(200)* @__sancov_gen_.3 to i8 addrspace(200)*) to i8*)], section "llvm.metadata"
@@ -172,7 +172,7 @@ int func2(int i) {
 // MIPS: declare void @__sanitizer_cov_trace_pc()
 // MIPS: declare void @__sanitizer_cov_trace_pc_guard(i32*)
 // MIPS: declare void @__sanitizer_cov_8bit_counters_init(i8*, i8*)
-// MIPS: define internal void @sancov.module_ctor() comdat {
+// MIPS: define internal void @sancov.module_ctor_8bit_counters() comdat {
 // MIPS:   call void @__sanitizer_cov_8bit_counters_init(i8* bitcast (i8** @__start___sancov_cntrs to i8*), i8* bitcast (i8** @__stop___sancov_cntrs to i8*))
 // MIPS:   call void @__sanitizer_cov_pcs_init(i64* bitcast (i64** @__start___sancov_pcs to i64*), i64* bitcast (i64** @__stop___sancov_pcs to i64*))
 // MIPS:   ret void
@@ -195,7 +195,7 @@ int func2(int i) {
 // PURECAP: declare void @__sanitizer_cov_trace_pc() addrspace(200)
 // PURECAP: declare void @__sanitizer_cov_trace_pc_guard(i32 addrspace(200)*) addrspace(200)
 // PURECAP: declare void @__sanitizer_cov_8bit_counters_init(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)
-// PURECAP: define internal void @sancov.module_ctor() addrspace(200) comdat {
+// PURECAP: define internal void @sancov.module_ctor_8bit_counters() addrspace(200) comdat {
 // PURECAP:   call void @__sanitizer_cov_8bit_counters_init(i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @__start___sancov_cntrs to i8 addrspace(200)*), i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @__stop___sancov_cntrs to i8 addrspace(200)*))
 // PURECAP:   call void @__sanitizer_cov_pcs_init(i64 addrspace(200)* bitcast (i64 addrspace(200)* addrspace(200)* @__start___sancov_pcs to i64 addrspace(200)*), i64 addrspace(200)* bitcast (i64 addrspace(200)* addrspace(200)* @__stop___sancov_pcs to i64 addrspace(200)*))
 // PURECAP:   ret void

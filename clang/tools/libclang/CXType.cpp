@@ -109,6 +109,7 @@ static CXTypeKind GetTypeKind(QualType T) {
     TKCASE(VariableArray);
     TKCASE(DependentSizedArray);
     TKCASE(Vector);
+    TKCASE(ExtVector);
     TKCASE(MemberPointer);
     TKCASE(Auto);
     TKCASE(Elaborated);
@@ -600,6 +601,7 @@ CXString clang_getTypeKindSpelling(enum CXTypeKind K) {
     TKIND(VariableArray);
     TKIND(DependentSizedArray);
     TKIND(Vector);
+    TKIND(ExtVector);
     TKIND(MemberPointer);
     TKIND(Auto);
     TKIND(Elaborated);
@@ -743,6 +745,8 @@ getExternalExceptionSpecificationKind(ExceptionSpecificationType EST) {
     return CXCursor_ExceptionSpecificationKind_MSAny;
   case EST_BasicNoexcept:
     return CXCursor_ExceptionSpecificationKind_BasicNoexcept;
+  case EST_NoThrow:
+    return CXCursor_ExceptionSpecificationKind_NoThrow;
   case EST_NoexceptFalse:
   case EST_NoexceptTrue:
   case EST_DependentNoexcept:
@@ -807,6 +811,9 @@ CXType clang_getElementType(CXType CT) {
     case Type::Vector:
       ET = cast<VectorType> (TP)->getElementType();
       break;
+    case Type::ExtVector:
+      ET = cast<ExtVectorType>(TP)->getElementType();
+      break;
     case Type::Complex:
       ET = cast<ComplexType> (TP)->getElementType();
       break;
@@ -829,6 +836,9 @@ long long clang_getNumElements(CXType CT) {
       break;
     case Type::Vector:
       result = cast<VectorType> (TP)->getNumElements();
+      break;
+    case Type::ExtVector:
+      result = cast<ExtVectorType>(TP)->getNumElements();
       break;
     default:
       break;
@@ -880,6 +890,10 @@ long long clang_getArraySize(CXType CT) {
   return result;
 }
 
+static bool isIncompleteTypeWithAlignment(QualType QT) {
+  return QT->isIncompleteArrayType() || !QT->isIncompleteType();
+}
+
 long long clang_Type_getAlignOf(CXType T) {
   if (T.kind == CXType_Invalid)
     return CXTypeLayoutError_Invalid;
@@ -890,7 +904,7 @@ long long clang_Type_getAlignOf(CXType T) {
   // [expr.alignof] p3: if reference type, return size of referenced type
   if (QT->isReferenceType())
     QT = QT.getNonReferenceType();
-  if (QT->isIncompleteType())
+  if (!isIncompleteTypeWithAlignment(QT))
     return CXTypeLayoutError_Incomplete;
   if (QT->isDependentType())
     return CXTypeLayoutError_Dependent;
@@ -945,10 +959,14 @@ long long clang_Type_getSizeOf(CXType T) {
   return Ctx.getTypeSizeInChars(QT).getQuantity();
 }
 
+static bool isTypeIncompleteForLayout(QualType QT) {
+  return QT->isIncompleteType() && !QT->isIncompleteArrayType();
+}
+
 static long long visitRecordForValidation(const RecordDecl *RD) {
   for (const auto *I : RD->fields()){
     QualType FQT = I->getType();
-    if (FQT->isIncompleteType())
+    if (isTypeIncompleteForLayout(FQT))
       return CXTypeLayoutError_Incomplete;
     if (FQT->isDependentType())
       return CXTypeLayoutError_Dependent;
@@ -1248,6 +1266,24 @@ unsigned clang_Cursor_isAnonymous(CXCursor C){
 
   return 0;
 }
+
+unsigned clang_Cursor_isAnonymousRecordDecl(CXCursor C){
+  if (!clang_isDeclaration(C.kind))
+    return 0;
+  const Decl *D = cxcursor::getCursorDecl(C);
+  if (const RecordDecl *FD = dyn_cast_or_null<RecordDecl>(D))
+    return FD->isAnonymousStructOrUnion();
+  return 0;
+}
+
+unsigned clang_Cursor_isInlineNamespace(CXCursor C) {
+  if (!clang_isDeclaration(C.kind))
+    return 0;
+  const Decl *D = cxcursor::getCursorDecl(C);
+  const NamespaceDecl *ND = dyn_cast_or_null<NamespaceDecl>(D);
+  return ND ? ND->isInline() : 0;
+}
+
 CXType clang_Type_getNamedType(CXType CT){
   QualType T = GetQualType(CT);
   const Type *TP = T.getTypePtrOrNull();

@@ -14,7 +14,7 @@
 // Build a shared library that uses the function pointer:
 // RUN: ld.lld -shared %t-shlib.o -o %t-shlib.so
 // RUN: llvm-objdump --syms %t-shlib.so | FileCheck %s -check-prefix SHLIB-DUMP
-// SHLIB-DUMP: 0000000000010000 g     F .text		 00000050 use_callback
+// SHLIB-DUMP: 0000000000010000 g     F .text		 000000{{[0-9a-f]+}} use_callback
 
 
 // Should not build with the --building-freebsd-rtld flag
@@ -120,7 +120,7 @@
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
 // STATIC-NEXT:     0x120020000 (return1@CAPTABLE.0) Base: 0x120010080 (return1+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020010 (use_callback@CAPTABLE) Base: 0x120010090 (use_callback+0) Length: 80 Perms: Function
+// STATIC-NEXT:     0x120020010 (use_callback@CAPTABLE) Base: 0x120010090 (use_callback+0) Length: {{[0-9]+}} Perms: Function
 // STATIC-NEXT:     0x120020020 (global_return2@CAPTABLE) Base: 0x120010000 (global_return2+0) Length: 12 Perms: Function
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [

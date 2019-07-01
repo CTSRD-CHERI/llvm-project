@@ -54,11 +54,11 @@ target triple = "cheri-unknown-freebsd"
 ; LEGACY-NEXT: .p2align        {{5|4}}
 ; LEGACY-NEXT: b:
 ; LEGACY-NEXT: .Ltmp0:
-; LEGACY-NEXT: .space [[$CAP_SIZE]]
+; LEGACY-NEXT: .space [[#CAP_SIZE]]
 ; LEGACY-NEXT: .Ltmp1:
-; LEGACY-NEXT: .space [[$CAP_SIZE]]
+; LEGACY-NEXT: .space [[#CAP_SIZE]]
 ; LEGACY-NEXT: .Ltmp2:
-; LEGACY-NEXT: .space [[$CAP_SIZE]]
+; LEGACY-NEXT: .space [[#CAP_SIZE]]
 ; LEGACY-NEXT: .size   b, {{96|48}}
 
 ; LEGACY:      .section	.data.rel.ro,"aw",@progbits
@@ -66,11 +66,11 @@ target triple = "cheri-unknown-freebsd"
 ; LEGACY-NEXT: .p2align        {{5|4}}
 ; LEGACY-NEXT: c:
 ; LEGACY-NEXT: .Ltmp3:
-; LEGACY-NEXT: .space [[$CAP_SIZE]]
+; LEGACY-NEXT: .space [[#CAP_SIZE]]
 ; LEGACY-NEXT: .Ltmp4:
-; LEGACY-NEXT: .space [[$CAP_SIZE]]
+; LEGACY-NEXT: .space [[#CAP_SIZE]]
 ; LEGACY-NEXT: .Ltmp5:
-; LEGACY-NEXT: .space [[$CAP_SIZE]]
+; LEGACY-NEXT: .space [[#CAP_SIZE]]
 ; LEGACY-NEXT: .size   c, {{96|48}}
 
 ; LEGACY:	.section	__cap_relocs,"a",@progbits

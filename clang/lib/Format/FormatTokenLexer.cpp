@@ -39,6 +39,10 @@ FormatTokenLexer::FormatTokenLexer(const SourceManager &SourceMgr, FileID ID,
     Macros.insert({&IdentTable.get(ForEachMacro), TT_ForEachMacro});
   for (const std::string &StatementMacro : Style.StatementMacros)
     Macros.insert({&IdentTable.get(StatementMacro), TT_StatementMacro});
+  for (const std::string &TypenameMacro : Style.TypenameMacros)
+    Macros.insert({&IdentTable.get(TypenameMacro), TT_TypenameMacro});
+  for (const std::string &NamespaceMacro : Style.NamespaceMacros)
+    Macros.insert({&IdentTable.get(NamespaceMacro), TT_NamespaceMacro});
 }
 
 ArrayRef<FormatToken *> FormatTokenLexer::lex() {
@@ -246,7 +250,6 @@ bool FormatTokenLexer::tryMergeCSharpNullConditionals() {
       StringRef(Identifier->TokenText.begin(),
                 Question->TokenText.end() - Identifier->TokenText.begin());
   Identifier->ColumnWidth += Question->ColumnWidth;
-  Identifier->Type = Identifier->Type;
   Tokens.erase(Tokens.end() - 1);
   return true;
 }

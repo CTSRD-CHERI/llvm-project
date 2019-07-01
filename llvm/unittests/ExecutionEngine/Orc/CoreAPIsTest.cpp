@@ -10,6 +10,7 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
 #include "llvm/ExecutionEngine/Orc/OrcError.h"
+#include "llvm/Testing/Support/Error.h"
 
 #include <set>
 #include <thread>
@@ -22,21 +23,16 @@ class CoreAPIsStandardTest : public CoreAPIsBasedStandardTest {};
 namespace {
 
 TEST_F(CoreAPIsStandardTest, BasicSuccessfulLookup) {
-  bool OnResolutionRun = false;
-  bool OnReadyRun = false;
+  bool OnCompletionRun = false;
 
-  auto OnResolution = [&](Expected<SymbolMap> Result) {
+  auto OnCompletion = [&](Expected<SymbolMap> Result) {
     EXPECT_TRUE(!!Result) << "Resolution unexpectedly returned error";
     auto &Resolved = *Result;
     auto I = Resolved.find(Foo);
     EXPECT_NE(I, Resolved.end()) << "Could not find symbol definition";
     EXPECT_EQ(I->second.getAddress(), FooAddr)
         << "Resolution returned incorrect result";
-    OnResolutionRun = true;
-  };
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
-    OnReadyRun = true;
+    OnCompletionRun = true;
   };
 
   std::shared_ptr<MaterializationResponsibility> FooMR;
@@ -47,65 +43,51 @@ TEST_F(CoreAPIsStandardTest, BasicSuccessfulLookup) {
         FooMR = std::make_shared<MaterializationResponsibility>(std::move(R));
       })));
 
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, OnResolution, OnReady,
-            NoDependenciesToRegister);
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, SymbolState::Ready,
+            OnCompletion, NoDependenciesToRegister);
 
-  EXPECT_FALSE(OnResolutionRun) << "Should not have been resolved yet";
-  EXPECT_FALSE(OnReadyRun) << "Should not have been marked ready yet";
+  EXPECT_FALSE(OnCompletionRun) << "Should not have been resolved yet";
 
   FooMR->resolve({{Foo, FooSym}});
 
-  EXPECT_TRUE(OnResolutionRun) << "Should have been resolved";
-  EXPECT_FALSE(OnReadyRun) << "Should not have been marked ready yet";
+  EXPECT_FALSE(OnCompletionRun) << "Should not be ready yet";
 
   FooMR->emit();
 
-  EXPECT_TRUE(OnReadyRun) << "Should have been marked ready";
+  EXPECT_TRUE(OnCompletionRun) << "Should have been marked ready";
 }
 
 TEST_F(CoreAPIsStandardTest, ExecutionSessionFailQuery) {
-  bool OnResolutionRun = false;
-  bool OnReadyRun = false;
+  bool OnCompletionRun = false;
 
-  auto OnResolution = [&](Expected<SymbolMap> Result) {
+  auto OnCompletion = [&](Expected<SymbolMap> Result) {
     EXPECT_FALSE(!!Result) << "Resolution unexpectedly returned success";
     auto Msg = toString(Result.takeError());
     EXPECT_EQ(Msg, "xyz") << "Resolution returned incorrect result";
-    OnResolutionRun = true;
-  };
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
-    OnReadyRun = true;
+    OnCompletionRun = true;
   };
 
-  AsynchronousSymbolQuery Q(SymbolNameSet({Foo}), OnResolution, OnReady);
+  AsynchronousSymbolQuery Q(SymbolNameSet({Foo}), SymbolState::Ready,
+                            OnCompletion);
 
   ES.legacyFailQuery(Q,
                      make_error<StringError>("xyz", inconvertibleErrorCode()));
 
-  EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
-  EXPECT_FALSE(OnReadyRun) << "OnReady unexpectedly run";
+  EXPECT_TRUE(OnCompletionRun) << "OnCompletionCallback was not run";
 }
 
 TEST_F(CoreAPIsStandardTest, EmptyLookup) {
-  bool OnResolvedRun = false;
-  bool OnReadyRun = false;
+  bool OnCompletionRun = false;
 
-  auto OnResolution = [&](Expected<SymbolMap> Result) {
+  auto OnCompletion = [&](Expected<SymbolMap> Result) {
     cantFail(std::move(Result));
-    OnResolvedRun = true;
+    OnCompletionRun = true;
   };
 
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
-    OnReadyRun = true;
-  };
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {}, SymbolState::Ready,
+            OnCompletion, NoDependenciesToRegister);
 
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {}, OnResolution, OnReady,
-            NoDependenciesToRegister);
-
-  EXPECT_TRUE(OnResolvedRun) << "OnResolved was not run for empty query";
-  EXPECT_TRUE(OnReadyRun) << "OnReady was not run for empty query";
+  EXPECT_TRUE(OnCompletionRun) << "OnCompletion was not run for empty query";
 }
 
 TEST_F(CoreAPIsStandardTest, RemoveSymbolsTest) {
@@ -147,20 +129,14 @@ TEST_F(CoreAPIsStandardTest, RemoveSymbolsTest) {
         ADD_FAILURE() << "\"Baz\" discarded unexpectedly";
       })));
 
-  bool OnResolvedRun = false;
-  bool OnReadyRun = false;
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo, Baz},
-            [&](Expected<SymbolMap> Result) {
-              EXPECT_TRUE(!!Result) << "OnResolved failed unexpectedly";
-              consumeError(Result.takeError());
-              OnResolvedRun = true;
-            },
-            [&](Error Err) {
-              EXPECT_FALSE(!!Err) << "OnReady failed unexpectedly";
-              consumeError(std::move(Err));
-              OnReadyRun = true;
-            },
-            NoDependenciesToRegister);
+  bool OnCompletionRun = false;
+  ES.lookup(
+      JITDylibSearchList({{&JD, false}}), {Foo, Baz}, SymbolState::Ready,
+      [&](Expected<SymbolMap> Result) {
+        cantFail(Result.takeError());
+        OnCompletionRun = true;
+      },
+      NoDependenciesToRegister);
 
   {
     // Attempt 1: Search for a missing symbol, Qux.
@@ -192,8 +168,7 @@ TEST_F(CoreAPIsStandardTest, RemoveSymbolsTest) {
   EXPECT_TRUE(BarDiscarded) << "\"Bar\" should have been discarded";
   EXPECT_TRUE(BarMaterializerDestructed)
       << "\"Bar\"'s materializer should have been destructed";
-  EXPECT_TRUE(OnResolvedRun) << "OnResolved should have been run";
-  EXPECT_TRUE(OnReadyRun) << "OnReady should have been run";
+  EXPECT_TRUE(OnCompletionRun) << "OnCompletion should have been run";
 }
 
 TEST_F(CoreAPIsStandardTest, ChainedJITDylibLookup) {
@@ -201,24 +176,18 @@ TEST_F(CoreAPIsStandardTest, ChainedJITDylibLookup) {
 
   auto &JD2 = ES.createJITDylib("JD2");
 
-  bool OnResolvedRun = false;
-  bool OnReadyRun = false;
+  bool OnCompletionRun = false;
 
   auto Q = std::make_shared<AsynchronousSymbolQuery>(
-      SymbolNameSet({Foo}),
+      SymbolNameSet({Foo}), SymbolState::Ready,
       [&](Expected<SymbolMap> Result) {
         cantFail(std::move(Result));
-        OnResolvedRun = true;
-      },
-      [&](Error Err) {
-        cantFail(std::move(Err));
-        OnReadyRun = true;
+        OnCompletionRun = true;
       });
 
-  JD2.legacyLookup(Q, JD.legacyLookup(Q, {Foo}));
+  cantFail(JD2.legacyLookup(Q, cantFail(JD.legacyLookup(Q, {Foo}))));
 
-  EXPECT_TRUE(OnResolvedRun) << "OnResolved was not run for empty query";
-  EXPECT_TRUE(OnReadyRun) << "OnReady was not run for empty query";
+  EXPECT_TRUE(OnCompletionRun) << "OnCompletion was not run for empty query";
 }
 
 TEST_F(CoreAPIsStandardTest, LookupWithHiddenSymbols) {
@@ -259,7 +228,7 @@ TEST_F(CoreAPIsStandardTest, LookupFlagsTest) {
 
   SymbolNameSet Names({Foo, Bar, Baz});
 
-  auto SymbolFlags = JD.lookupFlags(Names);
+  auto SymbolFlags = cantFail(JD.lookupFlags(Names));
 
   EXPECT_EQ(SymbolFlags.size(), 2U)
       << "Returned symbol flags contains unexpected results";
@@ -270,6 +239,27 @@ TEST_F(CoreAPIsStandardTest, LookupFlagsTest) {
       << "Missing  lookupFlags result for Bar";
   EXPECT_EQ(SymbolFlags[Bar], BarSym.getFlags())
       << "Incorrect flags returned for Bar";
+}
+
+TEST_F(CoreAPIsStandardTest, LookupWithGeneratorFailure) {
+
+  class BadGenerator {
+  public:
+    Expected<SymbolNameSet> operator()(JITDylib &, const SymbolNameSet &) {
+      return make_error<StringError>("BadGenerator", inconvertibleErrorCode());
+    }
+  };
+
+  JD.setGenerator(BadGenerator());
+
+  EXPECT_THAT_ERROR(JD.lookupFlags({Foo}).takeError(), Failed<StringError>())
+      << "Generator failure did not propagate through lookupFlags";
+
+  EXPECT_THAT_ERROR(
+      ES.lookup(JITDylibSearchList({{&JD, false}}), SymbolNameSet({Foo}))
+          .takeError(),
+      Failed<StringError>())
+      << "Generator failure did not propagate through lookup";
 }
 
 TEST_F(CoreAPIsStandardTest, TestBasicAliases) {
@@ -355,7 +345,7 @@ TEST_F(CoreAPIsStandardTest, TestReexportsGenerator) {
 
   JD.setGenerator(ReexportsGenerator(JD2, false, Filter));
 
-  auto Flags = JD.lookupFlags({Foo, Bar, Baz});
+  auto Flags = cantFail(JD.lookupFlags({Foo, Bar, Baz}));
   EXPECT_EQ(Flags.size(), 1U) << "Unexpected number of results";
   EXPECT_EQ(Flags[Foo], FooSym.getFlags()) << "Unexpected flags for Foo";
 
@@ -374,14 +364,13 @@ TEST_F(CoreAPIsStandardTest, TestTrivialCircularDependency) {
   cantFail(JD.define(FooMU));
 
   bool FooReady = false;
-  auto OnResolution = [](Expected<SymbolMap> R) { cantFail(std::move(R)); };
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
+  auto OnCompletion = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
     FooReady = true;
   };
 
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, std::move(OnResolution),
-            std::move(OnReady), NoDependenciesToRegister);
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, SymbolState::Ready,
+            OnCompletion, NoDependenciesToRegister);
 
   FooR->resolve({{Foo, FooSym}});
   FooR->emit();
@@ -430,16 +419,18 @@ TEST_F(CoreAPIsStandardTest, TestCircularDependenceInOneJITDylib) {
     FooResolved = true;
   };
 
-  auto OnFooReady = [&](Error Err) {
-    cantFail(std::move(Err));
+  auto OnFooReady = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
     FooReady = true;
   };
 
-  // Issue a lookup for Foo. Use NoDependenciesToRegister: We're going to add
+  // Issue lookups for Foo. Use NoDependenciesToRegister: We're going to add
   // the dependencies manually below.
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo},
-            std::move(OnFooResolution), std::move(OnFooReady),
-            NoDependenciesToRegister);
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, SymbolState::Resolved,
+            std::move(OnFooResolution), NoDependenciesToRegister);
+
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, SymbolState::Ready,
+            std::move(OnFooReady), NoDependenciesToRegister);
 
   bool BarResolved = false;
   bool BarReady = false;
@@ -448,14 +439,16 @@ TEST_F(CoreAPIsStandardTest, TestCircularDependenceInOneJITDylib) {
     BarResolved = true;
   };
 
-  auto OnBarReady = [&](Error Err) {
-    cantFail(std::move(Err));
+  auto OnBarReady = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
     BarReady = true;
   };
 
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Bar},
-            std::move(OnBarResolution), std::move(OnBarReady),
-            NoDependenciesToRegister);
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Bar}, SymbolState::Resolved,
+            std::move(OnBarResolution), NoDependenciesToRegister);
+
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Bar}, SymbolState::Ready,
+            std::move(OnBarReady), NoDependenciesToRegister);
 
   bool BazResolved = false;
   bool BazReady = false;
@@ -465,14 +458,16 @@ TEST_F(CoreAPIsStandardTest, TestCircularDependenceInOneJITDylib) {
     BazResolved = true;
   };
 
-  auto OnBazReady = [&](Error Err) {
-    cantFail(std::move(Err));
+  auto OnBazReady = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
     BazReady = true;
   };
 
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Baz},
-            std::move(OnBazResolution), std::move(OnBazReady),
-            NoDependenciesToRegister);
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Baz}, SymbolState::Resolved,
+            std::move(OnBazResolution), NoDependenciesToRegister);
+
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Baz}, SymbolState::Ready,
+            std::move(OnBazReady), NoDependenciesToRegister);
 
   // Add a circular dependency: Foo -> Bar, Bar -> Baz, Baz -> Foo.
   FooR->addDependenciesForAll({{&JD, SymbolNameSet({Bar})}});
@@ -577,30 +572,23 @@ TEST_F(CoreAPIsStandardTest, AddAndMaterializeLazySymbol) {
 
   SymbolNameSet Names({Foo});
 
-  bool OnResolutionRun = false;
-  bool OnReadyRun = false;
+  bool OnCompletionRun = false;
 
-  auto OnResolution = [&](Expected<SymbolMap> Result) {
+  auto OnCompletion = [&](Expected<SymbolMap> Result) {
     EXPECT_TRUE(!!Result) << "Resolution unexpectedly returned error";
     auto I = Result->find(Foo);
     EXPECT_NE(I, Result->end()) << "Could not find symbol definition";
     EXPECT_EQ(I->second.getAddress(), FooSym.getAddress())
         << "Resolution returned incorrect result";
-    OnResolutionRun = true;
+    OnCompletionRun = true;
   };
 
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
-    OnReadyRun = true;
-  };
-
-  ES.lookup(JITDylibSearchList({{&JD, false}}), Names, std::move(OnResolution),
-            std::move(OnReady), NoDependenciesToRegister);
+  ES.lookup(JITDylibSearchList({{&JD, false}}), Names, SymbolState::Ready,
+            std::move(OnCompletion), NoDependenciesToRegister);
 
   EXPECT_TRUE(FooMaterialized) << "Foo was not materialized";
   EXPECT_TRUE(BarDiscarded) << "Bar was not discarded";
-  EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
-  EXPECT_TRUE(OnReadyRun) << "OnReady was not run";
+  EXPECT_TRUE(OnCompletionRun) << "OnResolutionCallback was not run";
 }
 
 TEST_F(CoreAPIsStandardTest, TestBasicWeakSymbolMaterialization) {
@@ -630,24 +618,17 @@ TEST_F(CoreAPIsStandardTest, TestBasicWeakSymbolMaterialization) {
   cantFail(JD.define(MU1));
   cantFail(JD.define(MU2));
 
-  bool OnResolvedRun = false;
-  bool OnReadyRun = false;
+  bool OnCompletionRun = false;
 
-  auto OnResolution = [&](Expected<SymbolMap> Result) {
+  auto OnCompletion = [&](Expected<SymbolMap> Result) {
     cantFail(std::move(Result));
-    OnResolvedRun = true;
+    OnCompletionRun = true;
   };
 
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
-    OnReadyRun = true;
-  };
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Bar}, SymbolState::Ready,
+            std::move(OnCompletion), NoDependenciesToRegister);
 
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Bar}, std::move(OnResolution),
-            std::move(OnReady), NoDependenciesToRegister);
-
-  EXPECT_TRUE(OnResolvedRun) << "OnResolved not run";
-  EXPECT_TRUE(OnReadyRun) << "OnReady not run";
+  EXPECT_TRUE(OnCompletionRun) << "OnCompletion not run";
   EXPECT_TRUE(BarMaterialized) << "Bar was not materialized at all";
   EXPECT_TRUE(DuplicateBarDiscarded)
       << "Duplicate bar definition not discarded";
@@ -703,7 +684,11 @@ TEST_F(CoreAPIsStandardTest, FailResolution) {
   auto MU = llvm::make_unique<SimpleMaterializationUnit>(
       SymbolFlagsMap({{Foo, JITSymbolFlags::Exported | JITSymbolFlags::Weak},
                       {Bar, JITSymbolFlags::Exported | JITSymbolFlags::Weak}}),
-      [&](MaterializationResponsibility R) { R.failMaterialization(); });
+      [&](MaterializationResponsibility R) {
+        dbgs() << "Before failMat:\n";
+        ES.dump(dbgs());
+        R.failMaterialization();
+      });
 
   cantFail(JD.define(MU));
 
@@ -728,6 +713,41 @@ TEST_F(CoreAPIsStandardTest, FailResolution) {
                           << ErrMsg;
                     });
   }
+}
+
+TEST_F(CoreAPIsStandardTest, FailEmissionEarly) {
+
+  cantFail(JD.define(absoluteSymbols({{Baz, BazSym}})));
+
+  auto MU = llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Foo, FooSym.getFlags()}, {Bar, BarSym.getFlags()}}),
+      [&](MaterializationResponsibility R) {
+        R.resolve(SymbolMap({{Foo, FooSym}, {Bar, BarSym}}));
+
+        ES.lookup(
+            JITDylibSearchList({{&JD, false}}), SymbolNameSet({Baz}),
+            SymbolState::Resolved,
+            [&R](Expected<SymbolMap> Result) {
+              // Called when "baz" is resolved. We don't actually depend
+              // on or care about baz, but use it to trigger failure of
+              // this materialization before Baz has been finalized in
+              // order to test that error propagation is correct in this
+              // scenario.
+              cantFail(std::move(Result));
+              R.failMaterialization();
+            },
+            [&](const SymbolDependenceMap &Deps) {
+              R.addDependenciesForAll(Deps);
+            });
+      });
+
+  cantFail(JD.define(MU));
+
+  SymbolNameSet Names({Foo, Bar});
+  auto Result = ES.lookup(JITDylibSearchList({{&JD, false}}), Names);
+
+  EXPECT_THAT_EXPECTED(std::move(Result), Failed())
+      << "Unexpected success while trying to test error propagation";
 }
 
 TEST_F(CoreAPIsStandardTest, TestLookupWithUnthreadedMaterialization) {
@@ -866,14 +886,12 @@ TEST_F(CoreAPIsStandardTest, TestMaterializeWeakSymbol) {
       });
 
   cantFail(JD.define(MU));
-  auto OnResolution = [](Expected<SymbolMap> Result) {
+  auto OnCompletion = [](Expected<SymbolMap> Result) {
     cantFail(std::move(Result));
   };
 
-  auto OnReady = [](Error Err) { cantFail(std::move(Err)); };
-
-  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, std::move(OnResolution),
-            std::move(OnReady), NoDependenciesToRegister);
+  ES.lookup(JITDylibSearchList({{&JD, false}}), {Foo}, SymbolState::Ready,
+            std::move(OnCompletion), NoDependenciesToRegister);
 
   auto MU2 = llvm::make_unique<SimpleMaterializationUnit>(
       SymbolFlagsMap({{Foo, JITSymbolFlags::Exported}}),

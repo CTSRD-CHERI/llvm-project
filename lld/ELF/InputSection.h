@@ -26,10 +26,13 @@ struct SectionPiece;
 class DynamicReloc;
 
 class Defined;
+struct Partition;
 class SyntheticSection;
 class MergeSyntheticSection;
 template <class ELFT> class ObjFile;
 class OutputSection;
+
+extern std::vector<Partition> Partitions;
 
 // This is the base class of all sections that lld handles. Some are sections in
 // input files, some are sections in the produced output file and some exist
@@ -55,10 +58,6 @@ public:
   // The next three bit fields are only used by InputSectionBase, but we
   // put them here so the struct packs better.
 
-  // The garbage collector sets sections' Live bits.
-  // If GC is disabled, all sections are considered live by default.
-  unsigned Live : 1;
-
   // True if this section has already been placed to a linker script
   // output section. This is needed because, in a linker script, you
   // can refer to the same section more than once. For example, in
@@ -76,6 +75,12 @@ public:
 
   // Set for sections that should not be folded by ICF.
   unsigned KeepUnique : 1;
+
+  // The 1-indexed partition that this section is assigned to by the garbage
+  // collector, or 0 if this section is dead. Normally there is only one
+  // partition, so this will either be 0 or 1.
+  uint8_t Partition;
+  elf::Partition &getPartition() const;
 
   // These corresponds to the fields in Elf_Shdr.
   uint32_t Alignment;
@@ -96,12 +101,16 @@ public:
 
   uint64_t getVA(uint64_t Offset = 0) const;
 
+  bool isLive() const { return Partition != 0; }
+  void markLive() { Partition = 1; }
+  void markDead() { Partition = 0; }
+
 protected:
   SectionBase(Kind SectionKind, StringRef Name, uint64_t Flags,
               uint64_t Entsize, uint64_t Alignment, uint32_t Type,
               uint32_t Info, uint32_t Link)
-      : Name(Name), Repl(this), SectionKind(SectionKind), Live(false),
-        Assigned(false), Bss(false), KeepUnique(false), Alignment(Alignment),
+      : Name(Name), Repl(this), SectionKind(SectionKind), Assigned(false),
+        Bss(false), KeepUnique(false), Partition(0), Alignment(Alignment),
         Flags(Flags), Entsize(Entsize), Type(Type), Link(Link), Info(Info) {}
 };
 
@@ -229,13 +238,12 @@ protected:
 // be found by looking at the next one).
 struct SectionPiece {
   SectionPiece(size_t Off, uint32_t Hash, bool Live)
-      : InputOff(Off), Hash(Hash), OutputOff(0),
-        Live(Live || !Config->GcSections) {}
+      : InputOff(Off), Live(Live || !Config->GcSections), Hash(Hash >> 1) {}
 
   uint32_t InputOff;
-  uint32_t Hash;
-  int64_t OutputOff : 63;
-  uint64_t Live : 1;
+  uint32_t Live : 1;
+  uint32_t Hash : 31;
+  uint64_t OutputOff = 0;
 };
 
 static_assert(sizeof(SectionPiece) == 16, "SectionPiece is too big");

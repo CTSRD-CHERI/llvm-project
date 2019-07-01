@@ -482,3 +482,12 @@ void test_fn_pointer_typedef() {
   // CHECK: store i32 0
   gi = __builtin_object_size(calloc_function_pointer_with_typedef(0, 1), 0);
 }
+
+void *alloc_uchar(unsigned char) __attribute__((alloc_size(1)));
+
+// CHECK-LABEL: @test13
+void test13() {
+  // If 128 were incorrectly seen as negative, the result would become -1.
+  // CHECK: store i32 128,
+  gi = OBJECT_SIZE_BUILTIN(alloc_uchar(128), 0);
+}

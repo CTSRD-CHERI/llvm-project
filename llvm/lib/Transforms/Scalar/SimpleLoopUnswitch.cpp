@@ -1722,10 +1722,9 @@ static bool rebuildLoopAfterUnswitch(Loop &L, ArrayRef<BasicBlock *> ExitBlocks,
 
   // Sort the exits in ascending loop depth, we'll work backwards across these
   // to process them inside out.
-  std::stable_sort(ExitsInLoops.begin(), ExitsInLoops.end(),
-                   [&](BasicBlock *LHS, BasicBlock *RHS) {
-                     return LI.getLoopDepth(LHS) < LI.getLoopDepth(RHS);
-                   });
+  llvm::stable_sort(ExitsInLoops, [&](BasicBlock *LHS, BasicBlock *RHS) {
+    return LI.getLoopDepth(LHS) < LI.getLoopDepth(RHS);
+  });
 
   // We'll build up a set for each exit loop.
   SmallPtrSet<BasicBlock *, 16> NewExitLoopBlocks;
@@ -2862,7 +2861,11 @@ PreservedAnalyses SimpleLoopUnswitchPass::run(Loop &L, LoopAnalysisManager &AM,
   // Historically this pass has had issues with the dominator tree so verify it
   // in asserts builds.
   assert(AR.DT.verify(DominatorTree::VerificationLevel::Fast));
-  return getLoopPassPreservedAnalyses();
+
+  auto PA = getLoopPassPreservedAnalyses();
+  if (EnableMSSALoopDependency)
+    PA.preserve<MemorySSAAnalysis>();
+  return PA;
 }
 
 namespace {

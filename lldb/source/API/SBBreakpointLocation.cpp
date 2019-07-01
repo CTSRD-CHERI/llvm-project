@@ -179,7 +179,7 @@ const char *SBBreakpointLocation::GetCondition() {
         loc_sp->GetTarget().GetAPIMutex());
     return loc_sp->GetConditionText();
   }
-  return NULL;
+  return nullptr;
 }
 
 void SBBreakpointLocation::SetAutoContinue(bool auto_continue) {
@@ -220,7 +220,6 @@ void SBBreakpointLocation::SetScriptCallbackFunction(
     loc_sp->GetBreakpoint()
         .GetTarget()
         .GetDebugger()
-        .GetCommandInterpreter()
         .GetScriptInterpreter()
         ->SetBreakpointCommandCallbackFunction(bp_options,
                                                callback_function_name);
@@ -243,7 +242,6 @@ SBBreakpointLocation::SetScriptCallbackBody(const char *callback_body_text) {
         loc_sp->GetBreakpoint()
             .GetTarget()
             .GetDebugger()
-            .GetCommandInterpreter()
             .GetScriptInterpreter()
             ->SetBreakpointCommandCallback(bp_options, callback_body_text);
     sb_error.SetError(error);
@@ -359,7 +357,7 @@ const char *SBBreakpointLocation::GetThreadName() const {
         loc_sp->GetTarget().GetAPIMutex());
     return loc_sp->GetThreadName();
   }
-  return NULL;
+  return nullptr;
 }
 
 void SBBreakpointLocation::SetQueueName(const char *queue_name) {
@@ -384,7 +382,7 @@ const char *SBBreakpointLocation::GetQueueName() const {
         loc_sp->GetTarget().GetAPIMutex());
     loc_sp->GetQueueName();
   }
-  return NULL;
+  return nullptr;
 }
 
 bool SBBreakpointLocation::IsResolved() {

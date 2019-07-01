@@ -10,13 +10,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/AST/Expr.h"
+#include "clang/AST/APValue.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/EvaluatedExprVisitor.h"
-#include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/Mangle.h"
 #include "clang/AST/RecordLayout.h"
@@ -343,7 +344,8 @@ void DeclRefExpr::computeDependence(const ASTContext &Ctx) {
 DeclRefExpr::DeclRefExpr(const ASTContext &Ctx, ValueDecl *D,
                          bool RefersToEnclosingVariableOrCapture, QualType T,
                          ExprValueKind VK, SourceLocation L,
-                         const DeclarationNameLoc &LocInfo)
+                         const DeclarationNameLoc &LocInfo,
+                         NonOdrUseReason NOUR)
     : Expr(DeclRefExprClass, T, VK, OK_Ordinary, false, false, false, false),
       D(D), DNLoc(LocInfo) {
   DeclRefExprBits.HasQualifier = false;
@@ -352,6 +354,7 @@ DeclRefExpr::DeclRefExpr(const ASTContext &Ctx, ValueDecl *D,
   DeclRefExprBits.HadMultipleCandidates = false;
   DeclRefExprBits.RefersToEnclosingVariableOrCapture =
       RefersToEnclosingVariableOrCapture;
+  DeclRefExprBits.NonOdrUseReason = NOUR;
   DeclRefExprBits.Loc = L;
   computeDependence(Ctx);
 }
@@ -362,7 +365,7 @@ DeclRefExpr::DeclRefExpr(const ASTContext &Ctx,
                          bool RefersToEnclosingVariableOrCapture,
                          const DeclarationNameInfo &NameInfo, NamedDecl *FoundD,
                          const TemplateArgumentListInfo *TemplateArgs,
-                         QualType T, ExprValueKind VK)
+                         QualType T, ExprValueKind VK, NonOdrUseReason NOUR)
     : Expr(DeclRefExprClass, T, VK, OK_Ordinary, false, false, false, false),
       D(D), DNLoc(NameInfo.getInfo()) {
   DeclRefExprBits.Loc = NameInfo.getLoc();
@@ -383,6 +386,7 @@ DeclRefExpr::DeclRefExpr(const ASTContext &Ctx,
     = (TemplateArgs || TemplateKWLoc.isValid()) ? 1 : 0;
   DeclRefExprBits.RefersToEnclosingVariableOrCapture =
       RefersToEnclosingVariableOrCapture;
+  DeclRefExprBits.NonOdrUseReason = NOUR;
   if (TemplateArgs) {
     bool Dependent = false;
     bool InstantiationDependent = false;
@@ -404,30 +408,27 @@ DeclRefExpr::DeclRefExpr(const ASTContext &Ctx,
 
 DeclRefExpr *DeclRefExpr::Create(const ASTContext &Context,
                                  NestedNameSpecifierLoc QualifierLoc,
-                                 SourceLocation TemplateKWLoc,
-                                 ValueDecl *D,
+                                 SourceLocation TemplateKWLoc, ValueDecl *D,
                                  bool RefersToEnclosingVariableOrCapture,
-                                 SourceLocation NameLoc,
-                                 QualType T,
-                                 ExprValueKind VK,
-                                 NamedDecl *FoundD,
-                                 const TemplateArgumentListInfo *TemplateArgs) {
+                                 SourceLocation NameLoc, QualType T,
+                                 ExprValueKind VK, NamedDecl *FoundD,
+                                 const TemplateArgumentListInfo *TemplateArgs,
+                                 NonOdrUseReason NOUR) {
   return Create(Context, QualifierLoc, TemplateKWLoc, D,
                 RefersToEnclosingVariableOrCapture,
                 DeclarationNameInfo(D->getDeclName(), NameLoc),
-                T, VK, FoundD, TemplateArgs);
+                T, VK, FoundD, TemplateArgs, NOUR);
 }
 
 DeclRefExpr *DeclRefExpr::Create(const ASTContext &Context,
                                  NestedNameSpecifierLoc QualifierLoc,
-                                 SourceLocation TemplateKWLoc,
-                                 ValueDecl *D,
+                                 SourceLocation TemplateKWLoc, ValueDecl *D,
                                  bool RefersToEnclosingVariableOrCapture,
                                  const DeclarationNameInfo &NameInfo,
-                                 QualType T,
-                                 ExprValueKind VK,
+                                 QualType T, ExprValueKind VK,
                                  NamedDecl *FoundD,
-                                 const TemplateArgumentListInfo *TemplateArgs) {
+                                 const TemplateArgumentListInfo *TemplateArgs,
+                                 NonOdrUseReason NOUR) {
   // Filter out cases where the found Decl is the same as the value refenenced.
   if (D == FoundD)
     FoundD = nullptr;
@@ -442,8 +443,8 @@ DeclRefExpr *DeclRefExpr::Create(const ASTContext &Context,
 
   void *Mem = Context.Allocate(Size, alignof(DeclRefExpr));
   return new (Mem) DeclRefExpr(Context, QualifierLoc, TemplateKWLoc, D,
-                               RefersToEnclosingVariableOrCapture,
-                               NameInfo, FoundD, TemplateArgs, T, VK);
+                               RefersToEnclosingVariableOrCapture, NameInfo,
+                               FoundD, TemplateArgs, T, VK, NOUR);
 }
 
 DeclRefExpr *DeclRefExpr::CreateEmpty(const ASTContext &Context,
@@ -1537,29 +1538,46 @@ UnaryExprOrTypeTraitExpr::UnaryExprOrTypeTraitExpr(
   }
 }
 
+MemberExpr::MemberExpr(Expr *Base, bool IsArrow, SourceLocation OperatorLoc,
+                       ValueDecl *MemberDecl,
+                       const DeclarationNameInfo &NameInfo, QualType T,
+                       ExprValueKind VK, ExprObjectKind OK,
+                       NonOdrUseReason NOUR)
+    : Expr(MemberExprClass, T, VK, OK, Base->isTypeDependent(),
+           Base->isValueDependent(), Base->isInstantiationDependent(),
+           Base->containsUnexpandedParameterPack()),
+      Base(Base), MemberDecl(MemberDecl), MemberDNLoc(NameInfo.getInfo()),
+      MemberLoc(NameInfo.getLoc()) {
+  assert(!NameInfo.getName() ||
+         MemberDecl->getDeclName() == NameInfo.getName());
+  MemberExprBits.IsArrow = IsArrow;
+  MemberExprBits.HasQualifierOrFoundDecl = false;
+  MemberExprBits.HasTemplateKWAndArgsInfo = false;
+  MemberExprBits.HadMultipleCandidates = false;
+  MemberExprBits.NonOdrUseReason = NOUR;
+  MemberExprBits.OperatorLoc = OperatorLoc;
+}
+
 MemberExpr *MemberExpr::Create(
-    const ASTContext &C, Expr *base, bool isarrow, SourceLocation OperatorLoc,
+    const ASTContext &C, Expr *Base, bool IsArrow, SourceLocation OperatorLoc,
     NestedNameSpecifierLoc QualifierLoc, SourceLocation TemplateKWLoc,
-    ValueDecl *memberdecl, DeclAccessPair founddecl,
-    DeclarationNameInfo nameinfo, const TemplateArgumentListInfo *targs,
-    QualType ty, ExprValueKind vk, ExprObjectKind ok) {
-
-  bool hasQualOrFound = (QualifierLoc ||
-                         founddecl.getDecl() != memberdecl ||
-                         founddecl.getAccess() != memberdecl->getAccess());
-
-  bool HasTemplateKWAndArgsInfo = targs || TemplateKWLoc.isValid();
+    ValueDecl *MemberDecl, DeclAccessPair FoundDecl,
+    DeclarationNameInfo NameInfo, const TemplateArgumentListInfo *TemplateArgs,
+    QualType T, ExprValueKind VK, ExprObjectKind OK, NonOdrUseReason NOUR) {
+  bool HasQualOrFound = QualifierLoc || FoundDecl.getDecl() != MemberDecl ||
+                        FoundDecl.getAccess() != MemberDecl->getAccess();
+  bool HasTemplateKWAndArgsInfo = TemplateArgs || TemplateKWLoc.isValid();
   std::size_t Size =
       totalSizeToAlloc<MemberExprNameQualifier, ASTTemplateKWAndArgsInfo,
-                       TemplateArgumentLoc>(hasQualOrFound ? 1 : 0,
-                                            HasTemplateKWAndArgsInfo ? 1 : 0,
-                                            targs ? targs->size() : 0);
+                       TemplateArgumentLoc>(
+          HasQualOrFound ? 1 : 0, HasTemplateKWAndArgsInfo ? 1 : 0,
+          TemplateArgs ? TemplateArgs->size() : 0);
 
   void *Mem = C.Allocate(Size, alignof(MemberExpr));
-  MemberExpr *E = new (Mem)
-      MemberExpr(base, isarrow, OperatorLoc, memberdecl, nameinfo, ty, vk, ok);
+  MemberExpr *E = new (Mem) MemberExpr(Base, IsArrow, OperatorLoc, MemberDecl,
+                                       NameInfo, T, VK, OK, NOUR);
 
-  if (hasQualOrFound) {
+  if (HasQualOrFound) {
     // FIXME: Wrong. We should be looking at the member declaration we found.
     if (QualifierLoc && QualifierLoc.getNestedNameSpecifier()->isDependent()) {
       E->setValueDependent(true);
@@ -1575,19 +1593,20 @@ MemberExpr *MemberExpr::Create(
     MemberExprNameQualifier *NQ =
         E->getTrailingObjects<MemberExprNameQualifier>();
     NQ->QualifierLoc = QualifierLoc;
-    NQ->FoundDecl = founddecl;
+    NQ->FoundDecl = FoundDecl;
   }
 
   E->MemberExprBits.HasTemplateKWAndArgsInfo =
-      (targs || TemplateKWLoc.isValid());
+      TemplateArgs || TemplateKWLoc.isValid();
 
-  if (targs) {
+  if (TemplateArgs) {
     bool Dependent = false;
     bool InstantiationDependent = false;
     bool ContainsUnexpandedParameterPack = false;
     E->getTrailingObjects<ASTTemplateKWAndArgsInfo>()->initializeFrom(
-        TemplateKWLoc, *targs, E->getTrailingObjects<TemplateArgumentLoc>(),
-        Dependent, InstantiationDependent, ContainsUnexpandedParameterPack);
+        TemplateKWLoc, *TemplateArgs,
+        E->getTrailingObjects<TemplateArgumentLoc>(), Dependent,
+        InstantiationDependent, ContainsUnexpandedParameterPack);
     if (InstantiationDependent)
       E->setInstantiationDependent(true);
   } else if (TemplateKWLoc.isValid()) {
@@ -1596,6 +1615,22 @@ MemberExpr *MemberExpr::Create(
   }
 
   return E;
+}
+
+MemberExpr *MemberExpr::CreateEmpty(const ASTContext &Context,
+                                    bool HasQualifier, bool HasFoundDecl,
+                                    bool HasTemplateKWAndArgsInfo,
+                                    unsigned NumTemplateArgs) {
+  assert((!NumTemplateArgs || HasTemplateKWAndArgsInfo) &&
+         "template args but no template arg info?");
+  bool HasQualOrFound = HasQualifier || HasFoundDecl;
+  std::size_t Size =
+      totalSizeToAlloc<MemberExprNameQualifier, ASTTemplateKWAndArgsInfo,
+                       TemplateArgumentLoc>(HasQualOrFound ? 1 : 0,
+                                            HasTemplateKWAndArgsInfo ? 1 : 0,
+                                            NumTemplateArgs);
+  void *Mem = Context.Allocate(Size, alignof(MemberExpr));
+  return new (Mem) MemberExpr(EmptyShell());
 }
 
 SourceLocation MemberExpr::getBeginLoc() const {
@@ -2028,6 +2063,91 @@ bool BinaryOperator::isNullPointerArithmeticExtension(ASTContext &Ctx,
 
   return true;
 }
+
+static QualType getDecayedSourceLocExprType(const ASTContext &Ctx,
+                                            SourceLocExpr::IdentKind Kind) {
+  switch (Kind) {
+  case SourceLocExpr::File:
+  case SourceLocExpr::Function: {
+    QualType ArrTy = Ctx.getStringLiteralArrayType(Ctx.CharTy, 0);
+    return Ctx.getPointerType(ArrTy->getAsArrayTypeUnsafe()->getElementType());
+  }
+  case SourceLocExpr::Line:
+  case SourceLocExpr::Column:
+    return Ctx.UnsignedIntTy;
+  }
+  llvm_unreachable("unhandled case");
+}
+
+SourceLocExpr::SourceLocExpr(const ASTContext &Ctx, IdentKind Kind,
+                             SourceLocation BLoc, SourceLocation RParenLoc,
+                             DeclContext *ParentContext)
+    : Expr(SourceLocExprClass, getDecayedSourceLocExprType(Ctx, Kind),
+           VK_RValue, OK_Ordinary, false, false, false, false),
+      BuiltinLoc(BLoc), RParenLoc(RParenLoc), ParentContext(ParentContext) {
+  SourceLocExprBits.Kind = Kind;
+}
+
+StringRef SourceLocExpr::getBuiltinStr() const {
+  switch (getIdentKind()) {
+  case File:
+    return "__builtin_FILE";
+  case Function:
+    return "__builtin_FUNCTION";
+  case Line:
+    return "__builtin_LINE";
+  case Column:
+    return "__builtin_COLUMN";
+  }
+  llvm_unreachable("unexpected IdentKind!");
+}
+
+APValue SourceLocExpr::EvaluateInContext(const ASTContext &Ctx,
+                                         const Expr *DefaultExpr) const {
+  SourceLocation Loc;
+  const DeclContext *Context;
+
+  std::tie(Loc,
+           Context) = [&]() -> std::pair<SourceLocation, const DeclContext *> {
+    if (auto *DIE = dyn_cast_or_null<CXXDefaultInitExpr>(DefaultExpr))
+      return {DIE->getUsedLocation(), DIE->getUsedContext()};
+    if (auto *DAE = dyn_cast_or_null<CXXDefaultArgExpr>(DefaultExpr))
+      return {DAE->getUsedLocation(), DAE->getUsedContext()};
+    return {this->getLocation(), this->getParentContext()};
+  }();
+
+  PresumedLoc PLoc = Ctx.getSourceManager().getPresumedLoc(
+      Ctx.getSourceManager().getExpansionRange(Loc).getEnd());
+
+  auto MakeStringLiteral = [&](StringRef Tmp) {
+    using LValuePathEntry = APValue::LValuePathEntry;
+    StringLiteral *Res = Ctx.getPredefinedStringLiteralFromCache(Tmp);
+    // Decay the string to a pointer to the first character.
+    LValuePathEntry Path[1] = {LValuePathEntry::ArrayIndex(0)};
+    return APValue(Res, CharUnits::Zero(), Path, /*OnePastTheEnd=*/false);
+  };
+
+  switch (getIdentKind()) {
+  case SourceLocExpr::File:
+    return MakeStringLiteral(PLoc.getFilename());
+  case SourceLocExpr::Function: {
+    const Decl *CurDecl = dyn_cast_or_null<Decl>(Context);
+    return MakeStringLiteral(
+        CurDecl ? PredefinedExpr::ComputeName(PredefinedExpr::Function, CurDecl)
+                : std::string(""));
+  }
+  case SourceLocExpr::Line:
+  case SourceLocExpr::Column: {
+    llvm::APSInt IntVal(Ctx.getIntWidth(Ctx.UnsignedIntTy),
+                        /*IsUnsigned=*/true);
+    IntVal = getIdentKind() == SourceLocExpr::Line ? PLoc.getLine()
+                                                   : PLoc.getColumn();
+    return APValue(IntVal);
+  }
+  }
+  llvm_unreachable("unhandled case");
+}
+
 InitListExpr::InitListExpr(const ASTContext &C, SourceLocation lbraceloc,
                            ArrayRef<Expr*> initExprs, SourceLocation rbraceloc)
   : Expr(InitListExprClass, QualType(), VK_RValue, OK_Ordinary, false, false,
@@ -2924,6 +3044,9 @@ bool Expr::hasAnyTypeDependentArguments(ArrayRef<Expr *> Exprs) {
 
 bool Expr::isConstantInitializer(ASTContext &Ctx, bool IsForRef,
                                  const Expr **Culprit) const {
+  assert(!isValueDependent() &&
+         "Expression evaluator can't be called on a dependent expression.");
+
   // This function is attempting whether an expression is an initializer
   // which can be evaluated at compile-time. It very closely parallels
   // ConstExprEmitter in CGExprConstant.cpp; if they don't match, it
@@ -2983,6 +3106,7 @@ bool Expr::isConstantInitializer(ASTContext &Ctx, bool IsForRef,
   }
   case InitListExprClass: {
     const InitListExpr *ILE = cast<InitListExpr>(this);
+    assert(ILE->isSemanticForm() && "InitListExpr must be in semantic form");
     if (ILE->getType()->isArrayType()) {
       unsigned numInits = ILE->getNumInits();
       for (unsigned i = 0; i < numInits; i++) {
@@ -3191,6 +3315,7 @@ bool Expr::HasSideEffects(const ASTContext &Ctx,
   case ObjCAvailabilityCheckExprClass:
   case CXXUuidofExprClass:
   case OpaqueValueExprClass:
+  case SourceLocExprClass:
     // These never have a side-effect.
     return false;
 

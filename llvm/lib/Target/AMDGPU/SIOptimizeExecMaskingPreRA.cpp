@@ -83,12 +83,17 @@ FunctionPass *llvm::createSIOptimizeExecMaskingPreRAPass() {
 }
 
 static bool isEndCF(const MachineInstr& MI, const SIRegisterInfo* TRI) {
-  return MI.getOpcode() == AMDGPU::S_OR_B64_term &&
+  return MI.getOpcode() == AMDGPU::S_OR_B64 &&
          MI.modifiesRegister(AMDGPU::EXEC, TRI);
 }
 
 static bool isFullExecCopy(const MachineInstr& MI) {
-  return MI.getOperand(1).getReg() == AMDGPU::EXEC;
+  if (MI.isCopy() && MI.getOperand(1).getReg() == AMDGPU::EXEC) {
+    assert(MI.isFullCopy());
+    return true;
+  }
+
+  return false;
 }
 
 static unsigned getOrNonExecReg(const MachineInstr &MI,
@@ -223,7 +228,7 @@ static unsigned optimizeVcndVcmpPair(MachineBasicBlock &MBB,
     return AMDGPU::NoRegister;
 
   if (TII->hasModifiersSet(*Sel, AMDGPU::OpName::src0_modifiers) ||
-      TII->hasModifiersSet(*Sel, AMDGPU::OpName::src0_modifiers))
+      TII->hasModifiersSet(*Sel, AMDGPU::OpName::src1_modifiers))
     return AMDGPU::NoRegister;
 
   Op1 = TII->getNamedOperand(*Sel, AMDGPU::OpName::src0);
@@ -241,7 +246,7 @@ static unsigned optimizeVcndVcmpPair(MachineBasicBlock &MBB,
   MachineInstr *Andn2 = BuildMI(MBB, *And, And->getDebugLoc(),
                                 TII->get(Andn2Opc), And->getOperand(0).getReg())
                             .addReg(ExecReg)
-                            .addReg(CCReg, CC->getSubReg());
+                            .addReg(CCReg, 0, CC->getSubReg());
   And->eraseFromParent();
   LIS->InsertMachineInstrInMaps(*Andn2);
 
@@ -362,7 +367,7 @@ bool SIOptimizeExecMaskingPreRA::runOnMachineFunction(MachineFunction &MF) {
 
     // Try to collapse adjacent endifs.
     auto E = MBB.end();
-    auto Lead = MBB.getFirstTerminator();
+    auto Lead = skipDebugInstructionsForward(MBB.begin(), E);
     if (MBB.succ_size() != 1 || Lead == E || !isEndCF(*Lead, TRI))
       continue;
 

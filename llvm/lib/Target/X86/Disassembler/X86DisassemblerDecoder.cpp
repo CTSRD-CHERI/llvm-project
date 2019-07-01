@@ -376,8 +376,7 @@ static int readPrefixes(struct InternalInstruction* insn) {
       if (byte == 0xf3 && (nextByte == 0x88 || nextByte == 0x89 ||
                            nextByte == 0xc6 || nextByte == 0xc7)) {
         insn->xAcquireRelease = true;
-        if (nextByte != 0x90) // PAUSE instruction support
-          break;
+        break;
       }
       if (isREX(insn, nextByte)) {
         uint8_t nnextByte;
@@ -1469,6 +1468,10 @@ static int readModRM(struct InternalInstruction* insn) {
       if (index > 7)                                      \
         *valid = 0;                                       \
       return prefix##_K0 + index;                         \
+    case TYPE_VK_PAIR:                                    \
+      if (index > 7)                                      \
+        *valid = 0;                                       \
+      return prefix##_K0_K1 + (index / 2);                \
     case TYPE_MM64:                                       \
       return prefix##_MM0 + (index & 0x7);                \
     case TYPE_SEGMENTREG:                                 \

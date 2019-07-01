@@ -28,6 +28,6 @@ void fn1() {
 // CHECK: declare i32 @__gxx_personality_v0(...)
 
 // ASM: .type	DW.ref.__gxx_personality_v0,@object
-// ASM: .size	DW.ref.__gxx_personality_v0, [[$CAP_SIZE]]
+// ASM: .size	DW.ref.__gxx_personality_v0, [[#CAP_SIZE]]
 // ASM: DW.ref.__gxx_personality_v0:
 // ASM:	.chericap	__gxx_personality_v0

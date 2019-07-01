@@ -20,16 +20,17 @@ declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeon
 define void @fn1() addrspace(200) #0 {
 ; ASM-LABEL: fn1:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    daddiu $1, $zero, -[[STACKFRAME_SIZE:4160|4224]]
+; ASM-NEXT:    daddiu $1, $zero, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    cincoffset $c11, $c11, $1
-; ASM-NEXT:    csc $c19, $zero, [[@EXPR STACKFRAME_SIZE - (1 * $CAP_SIZE)]]($c11)
-; ASM-NEXT:    csc $c18, $zero, [[@EXPR STACKFRAME_SIZE - (2 * $CAP_SIZE)]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - (3 * $CAP_SIZE)]]($c11)
+; ASM-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
-; ASM-NEXT:    cincoffset $c19, $c12, $1
+; ASM-NEXT:    cincoffset $c26, $c12, $1
+; ASM-NEXT:    cmove $c19, $c26
 ; ASM-NEXT:    daddiu $1, $zero, 4096
-; ASM-NEXT:    cincoffset $c18, $c11, [[$CAP_SIZE]]
+; ASM-NEXT:    cincoffset $c18, $c11, [[#CAP_SIZE]]
 ; ASM-NEXT:    csetbounds $c18, $c18, $1
 ; ASM-NEXT:    clcbi $c4, %captab20(a)($c19)
 ; ASM-NEXT:    clcbi $c12, %capcall20(memcpy)($c19)
@@ -41,10 +42,10 @@ define void @fn1() addrspace(200) #0 {
 ; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cgetnull $c13
-; ASM-NEXT:    clc $c17, $zero, [[@EXPR STACKFRAME_SIZE - (3 * $CAP_SIZE)]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[@EXPR STACKFRAME_SIZE - (2 * $CAP_SIZE)]]($c11)
-; ASM-NEXT:    clc $c19, $zero, [[@EXPR STACKFRAME_SIZE - (1 * $CAP_SIZE)]]($c11)
-; ASM-NEXT:    daddiu $1, $zero, [[STACKFRAME_SIZE]]
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    daddiu $1, $zero, [[#STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, $1
 entry:
@@ -56,16 +57,16 @@ entry:
 }
 
 ; CHECK-LABEL: name: fn1
-; CHECK: %1:gpr64 = DADDiu $zero_64, 4096
-; CHECK: %2:cherigpr = CheriBoundedStackPseudo %stack.0.byval-temp, 0, %1
-; CHECK: $c3 = COPY %2
-; CHECK: $c4 = COPY %3
+; CHECK: %3:gpr64 = DADDiu $zero_64, 4096
+; CHECK: %4:cherigpr = CheriBoundedStackPseudo %stack.0.byval-temp, 0, %3
+; CHECK: $c3 = COPY %4
+; CHECK: $c4 = COPY %5
 ; CHECK: $a0_64 = DADDiu $zero_64, 4096
 ; This previously got turned into a duplicate of the CheriBoundedStackPseudo but that used the killed %1 register!
 ; CHECK: LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
-; CHECK-NEXT: $c3 = COPY %2
+; CHECK-NEXT: $c3 = COPY %4
 ; CHECK-NEXT: $c13 = CMove $cnull
-; CHECK-NEXT: $c12 = COPY %7
+; CHECK-NEXT: $c12 = COPY %9
 ; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 
 
@@ -73,28 +74,29 @@ entry:
 define void @small_stack_fn1() addrspace(200) #0 {
 ; ASM-LABEL: small_stack_fn1:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:560|608]]
-; ASM-NEXT:    csc $c18, $zero, [[@EXPR STACKFRAME_SIZE - (1 * $CAP_SIZE)]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - (2 * $CAP_SIZE)]]($c11)
+; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(small_stack_fn1)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(small_stack_fn1)))
-; ASM-NEXT:    cincoffset $c18, $c12, $1
+; ASM-NEXT:    cincoffset $c26, $c12, $1
+; ASM-NEXT:    cmove $c18, $c26
 ; ASM-NEXT:    clcbi $c4, %captab20(a_small)($c18)
 ; ASM-NEXT:    clcbi $c12, %capcall20(memcpy)($c18)
-; ASM-NEXT:    cincoffset $c3, $c11, [[$CAP_SIZE]]
+; ASM-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE]]
 ; ASM-NEXT:    csetbounds $c3, $c3, 512
 ; ASM-NEXT:    daddiu $4, $zero, 512
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cgetnull $c13
 ; ASM-NEXT:    clcbi $c12, %capcall20(fn2)($c18)
-; ASM-NEXT:    cincoffset $c3, $c11, [[$CAP_SIZE]]
+; ASM-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE]]
 ; ASM-NEXT:    csetbounds $c3, $c3, 512
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cgetnull $c13
-; ASM-NEXT:    clc $c17, $zero, [[@EXPR STACKFRAME_SIZE - (2 * $CAP_SIZE)]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[@EXPR STACKFRAME_SIZE - (1 * $CAP_SIZE)]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
 ; ASM-NEXT:    cjr $c17
-; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %byval-temp = alloca %struct.Dwarf_Error_small, align 8, addrspace(200)
   %0 = bitcast %struct.Dwarf_Error_small addrspace(200)* %byval-temp to i8 addrspace(200)*
@@ -113,7 +115,7 @@ entry:
 ; CHECK: LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
 ; CHECK-NEXT: $c3 = CheriBoundedStackPseudo %stack.0.byval-temp, 0, 512
 ; CHECK-NEXT: $c13 = CMove $cnull
-; CHECK-NEXT: $c12 = COPY %7
+; CHECK-NEXT: $c12 = COPY %9
 ; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 ; CHECK-NOT: CheriBoundedStackPseudo
 

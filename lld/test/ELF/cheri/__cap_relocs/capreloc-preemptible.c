@@ -21,7 +21,7 @@
 // RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 // 10000 is the address of foo_ptr
-// CHECK-NEXT: 0x0000000000020000	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
+// CHECK-NEXT: 0x0000000000020000	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 // CHECK-LABEL: Sections:
 // CHECK:  __cap_relocs     00000028 0000000000010000 DATA
 // CHERI128:  .data         00000010 0000000000020000 DATA

@@ -51,21 +51,14 @@ struct ChunkMetadata {
 
 #if defined(__mips64) || defined(__aarch64__) || defined(__i386__) || \
     defined(__arm__)
-static const usize kRegionSizeLog = 20;
-static const usize kNumRegions = SANITIZER_MMAP_RANGE_SIZE >> kRegionSizeLog;
-template <typename AddressSpaceView>
-using ByteMapASVT =
-    TwoLevelByteMap<(kNumRegions >> 12), 1 << 12, AddressSpaceView>;
-
 template <typename AddressSpaceViewTy>
 struct AP32 {
   static const vaddr kSpaceBeg = 0;
   static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
   static const usize kMetadataSize = sizeof(ChunkMetadata);
   typedef __sanitizer::CompactSizeClassMap SizeClassMap;
-  static const usize kRegionSizeLog = __lsan::kRegionSizeLog;
+  static const usize kRegionSizeLog = 20;
   using AddressSpaceView = AddressSpaceViewTy;
-  using ByteMap = __lsan::ByteMapASVT<AddressSpaceView>;
   typedef NoOpMapUnmapCallback MapUnmapCallback;
   static const usize kFlags = 0;
 };
@@ -97,24 +90,11 @@ using PrimaryAllocator = PrimaryAllocatorASVT<LocalAddressSpaceView>;
 #endif
 
 template <typename AddressSpaceView>
-using AllocatorCacheASVT =
-    SizeClassAllocatorLocalCache<PrimaryAllocatorASVT<AddressSpaceView>>;
-using AllocatorCache = AllocatorCacheASVT<LocalAddressSpaceView>;
-
-template <typename AddressSpaceView>
-using SecondaryAllocatorASVT =
-    LargeMmapAllocator<NoOpMapUnmapCallback, DefaultLargeMmapAllocatorPtrArray,
-                       AddressSpaceView>;
-
-template <typename AddressSpaceView>
-using AllocatorASVT =
-    CombinedAllocator<PrimaryAllocatorASVT<AddressSpaceView>,
-                      AllocatorCacheASVT<AddressSpaceView>,
-                      SecondaryAllocatorASVT<AddressSpaceView>,
-                      AddressSpaceView>;
+using AllocatorASVT = CombinedAllocator<PrimaryAllocatorASVT<AddressSpaceView>>;
 using Allocator = AllocatorASVT<LocalAddressSpaceView>;
+using AllocatorCache = Allocator::AllocatorCache;
 
-AllocatorCache *GetAllocatorCache();
+Allocator::AllocatorCache *GetAllocatorCache();
 
 int lsan_posix_memalign(void **memptr, usize alignment, usize size,
                         const StackTrace &stack);
@@ -123,6 +103,8 @@ void *lsan_memalign(usize alignment, usize size, const StackTrace &stack);
 void *lsan_malloc(usize size, const StackTrace &stack);
 void lsan_free(void *p);
 void *lsan_realloc(void *p, usize size, const StackTrace &stack);
+void *lsan_reallocarray(void *p, usize nmemb, usize size,
+                        const StackTrace &stack);
 void *lsan_calloc(usize nmemb, usize size, const StackTrace &stack);
 void *lsan_valloc(usize size, const StackTrace &stack);
 void *lsan_pvalloc(usize size, const StackTrace &stack);

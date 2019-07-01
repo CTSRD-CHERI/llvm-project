@@ -53,32 +53,32 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-LABEL: multi_use:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
-; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(multi_use)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(multi_use)))
 ; CHECK-NEXT:    cincoffset $c18, $c12, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR $CAP_SIZE - 8]]
+; CHECK-NEXT:    cincoffset $c1, $c11, [[#CAP_SIZE - 8]]
 ; CHECK-NEXT:    csetbounds $c1, $c1, 4
 ; CHECK-NEXT:    cincoffset $c4, $c1, 4
 ; CHECK-NEXT:    cincoffset $c5, $c1, 1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(multi_arg)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
+; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 4]]
+; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 4]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
+; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 

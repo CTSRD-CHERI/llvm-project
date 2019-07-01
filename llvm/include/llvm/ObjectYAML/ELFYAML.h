@@ -95,6 +95,7 @@ struct ProgramHeader {
 
 struct Symbol {
   StringRef Name;
+  Optional<uint32_t> NameIndex;
   ELF_STT Type;
   StringRef Section;
   Optional<ELF_SHN> Index;
@@ -150,8 +151,8 @@ struct DynamicSection : Section {
 };
 
 struct RawContentSection : Section {
-  yaml::BinaryRef Content;
-  llvm::yaml::Hex64 Size;
+  Optional<yaml::BinaryRef> Content;
+  Optional<llvm::yaml::Hex64> Size;
   llvm::yaml::Hex64 Info;
 
   RawContentSection() : Section(SectionKind::RawContent) {}

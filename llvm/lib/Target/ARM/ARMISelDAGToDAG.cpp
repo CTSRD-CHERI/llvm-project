@@ -2092,10 +2092,12 @@ void ARMDAGToDAGISel::SelectVLDSTLane(SDNode *N, bool IsLoad, bool isUpdating,
   default: llvm_unreachable("unhandled vld/vst lane type");
     // Double-register operations:
   case MVT::v8i8:  OpcodeIndex = 0; break;
+  case MVT::v4f16:
   case MVT::v4i16: OpcodeIndex = 1; break;
   case MVT::v2f32:
   case MVT::v2i32: OpcodeIndex = 2; break;
     // Quad-register operations:
+  case MVT::v8f16:
   case MVT::v8i16: OpcodeIndex = 0; break;
   case MVT::v4f32:
   case MVT::v4i32: OpcodeIndex = 1; break;
@@ -2212,7 +2214,10 @@ void ARMDAGToDAGISel::SelectVLDDup(SDNode *N, bool IsIntrinsic,
   case MVT::v8i8:
   case MVT::v16i8: OpcodeIndex = 0; break;
   case MVT::v4i16:
-  case MVT::v8i16: OpcodeIndex = 1; break;
+  case MVT::v8i16:
+  case MVT::v4f16:
+  case MVT::v8f16:
+                  OpcodeIndex = 1; break;
   case MVT::v2f32:
   case MVT::v2i32:
   case MVT::v4f32:
@@ -4038,9 +4043,9 @@ bool ARMDAGToDAGISel::tryReadRegister(SDNode *N){
 
   // If an opcode was found then we can lower the read to a VFP instruction.
   if (Opcode) {
-    if (!Subtarget->hasVFP2())
+    if (!Subtarget->hasVFP2Base())
       return false;
-    if (Opcode == ARM::VMRS_MVFR2 && !Subtarget->hasFPARMv8())
+    if (Opcode == ARM::VMRS_MVFR2 && !Subtarget->hasFPARMv8Base())
       return false;
 
     Ops = { getAL(CurDAG, DL), CurDAG->getRegister(0, MVT::i32),
@@ -4149,7 +4154,7 @@ bool ARMDAGToDAGISel::tryWriteRegister(SDNode *N){
                     .Default(0);
 
   if (Opcode) {
-    if (!Subtarget->hasVFP2())
+    if (!Subtarget->hasVFP2Base())
       return false;
     Ops = { N->getOperand(2), getAL(CurDAG, DL),
             CurDAG->getRegister(0, MVT::i32), N->getOperand(0) };

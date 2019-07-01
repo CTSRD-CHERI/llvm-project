@@ -29,7 +29,7 @@ extern int procctl(idtype_t, pid_t, int, void *);
 // CHECK-NEXT:    [[PARENT_ADDR:%.*]] = alloca i32, align 4, addrspace(200)
 // CHECK-NEXT:    [[INFO:%.*]] = alloca [10 x %struct.procctl_reaper_pidinfo], align 4, addrspace(200)
 // CHECK-NEXT:    [[R:%.*]] = alloca i32, align 4, addrspace(200)
-// CHECK-NEXT:    [[DOTCOMPOUNDLITERAL:%.*]] = alloca [[STRUCT_PROCCTL_REAPER_PIDS:%.*]], align [[$CAP_SIZE]], addrspace(200)
+// CHECK-NEXT:    [[DOTCOMPOUNDLITERAL:%.*]] = alloca [[STRUCT_PROCCTL_REAPER_PIDS:%.*]], align [[#CAP_SIZE]], addrspace(200)
 // CHECK-NEXT:    store i32 [[PARENT:%.*]], i32 addrspace(200)* [[PARENT_ADDR]], align 4
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [10 x %struct.procctl_reaper_pidinfo], [10 x %struct.procctl_reaper_pidinfo] addrspace(200)* [[INFO]], i64 0, i64 0
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_PROCCTL_REAPER_PIDINFO:%.*]] addrspace(200)* [[ARRAYDECAY]] to i8 addrspace(200)*
@@ -44,13 +44,13 @@ extern int procctl(idtype_t, pid_t, int, void *);
 // CHERI256-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 4 [[TMP2]], i8 0, i64 60, i1 false)
 
 // CHERI128-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_PROCCTL_REAPER_PIDS]] addrspace(200)* [[DOTCOMPOUNDLITERAL]] to i8 addrspace(200)*
-// CHERI128-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align [[$CAP_SIZE]] [[TMP2]], i8 0, i64 80, i1 false)
+// CHERI128-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align [[#CAP_SIZE]] [[TMP2]], i8 0, i64 80, i1 false)
 // CHERI128-NEXT:    [[RP_COUNT:%.*]] = getelementptr inbounds [[STRUCT_PROCCTL_REAPER_PIDS]], [[STRUCT_PROCCTL_REAPER_PIDS]] addrspace(200)* [[DOTCOMPOUNDLITERAL]], i32 0, i32 0
-// CHERI128-NEXT:    store i32 10, i32 addrspace(200)* [[RP_COUNT]], align [[$CAP_SIZE]]
+// CHERI128-NEXT:    store i32 10, i32 addrspace(200)* [[RP_COUNT]], align [[#CAP_SIZE]]
 
 // CHECK-NEXT:    [[RP_PIDS:%.*]] = getelementptr inbounds [[STRUCT_PROCCTL_REAPER_PIDS]], [[STRUCT_PROCCTL_REAPER_PIDS]] addrspace(200)* [[DOTCOMPOUNDLITERAL]], i32 0, i32 2
 // CHECK-NEXT:    [[ARRAYDECAY1:%.*]] = getelementptr inbounds [10 x %struct.procctl_reaper_pidinfo], [10 x %struct.procctl_reaper_pidinfo] addrspace(200)* [[INFO]], i64 0, i64 0
-// CHECK-NEXT:    store [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* [[ARRAYDECAY1]], [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* addrspace(200)* [[RP_PIDS]], align [[$CAP_SIZE]]
+// CHECK-NEXT:    store [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* [[ARRAYDECAY1]], [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* addrspace(200)* [[RP_PIDS]], align [[#CAP_SIZE]]
 // CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_PROCCTL_REAPER_PIDS]] addrspace(200)* [[DOTCOMPOUNDLITERAL]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @procctl(i32 signext 0, i32 signext [[TMP1]], i32 signext 22, i8 addrspace(200)* [[TMP3]])
 // CHECK-NEXT:    store i32 [[CALL]], i32 addrspace(200)* [[R]], align 4

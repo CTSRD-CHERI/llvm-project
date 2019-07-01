@@ -60,6 +60,12 @@ def FeatureFlatScratchInsts : SubtargetFeature<"flat-scratch-insts",
   "Have scratch_* flat memory instructions"
 >;
 
+def FeatureScalarFlatScratchInsts : SubtargetFeature<"scalar-flat-scratch-insts",
+  "ScalarFlatScratchInsts",
+  "true",
+  "Have s_scratch_* flat memory instructions"
+>;
+
 def FeatureAddNoCarryInsts : SubtargetFeature<"add-no-carry-insts",
   "AddNoCarryInsts",
   "true",
@@ -102,6 +108,12 @@ def FeatureFmaMixInsts : SubtargetFeature<"fma-mix-insts",
   "Has v_fma_mix_f32, v_fma_mixlo_f16, v_fma_mixhi_f16 instructions"
 >;
 
+def FeatureDoesNotSupportXNACK : SubtargetFeature<"no-xnack-support",
+  "DoesNotSupportXNACK",
+  "true",
+  "Hardware does not support XNACK"
+>;
+
 // XNACK is disabled if SH_MEM_CONFIG.ADDRESS_MODE = GPUVM on chips that support
 // XNACK. The current default kernel driver setting is:
 // - graphics ring: XNACK disabled
@@ -115,10 +127,70 @@ def FeatureXNACK : SubtargetFeature<"xnack",
   "Enable XNACK support"
 >;
 
+def FeatureCuMode : SubtargetFeature<"cumode",
+  "EnableCuMode",
+  "true",
+  "Enable CU wavefront execution mode"
+>;
+
 def FeatureSGPRInitBug : SubtargetFeature<"sgpr-init-bug",
   "SGPRInitBug",
   "true",
   "VI SGPR initialization bug requiring a fixed SGPR allocation size"
+>;
+
+def FeatureLdsMisalignedBug : SubtargetFeature<"lds-misaligned-bug",
+  "LDSMisalignedBug",
+  "true",
+  "Some GFX10 bug with misaligned multi-dword LDS access in WGP mode"
+>;
+
+def FeatureVcmpxPermlaneHazard : SubtargetFeature<"vcmpx-permlane-hazard",
+  "HasVcmpxPermlaneHazard",
+  "true",
+  "TODO: describe me"
+>;
+
+def FeatureVMEMtoScalarWriteHazard : SubtargetFeature<"vmem-to-scalar-write-hazard",
+  "HasVMEMtoScalarWriteHazard",
+  "true",
+  "VMEM instruction followed by scalar writing to EXEC mask, M0 or SGPR leads to incorrect execution."
+>;
+
+def FeatureSMEMtoVectorWriteHazard : SubtargetFeature<"smem-to-vector-write-hazard",
+  "HasSMEMtoVectorWriteHazard",
+  "true",
+  "s_load_dword followed by v_cmp page faults"
+>;
+
+def FeatureInstFwdPrefetchBug : SubtargetFeature<"inst-fwd-prefetch-bug",
+  "HasInstFwdPrefetchBug",
+  "true",
+  "S_INST_PREFETCH instruction causes shader to hang"
+>;
+
+def FeatureVcmpxExecWARHazard : SubtargetFeature<"vcmpx-exec-war-hazard",
+  "HasVcmpxExecWARHazard",
+  "true",
+  "V_CMPX WAR hazard on EXEC (V_CMPX issue ONLY)"
+>;
+
+def FeatureLdsBranchVmemWARHazard : SubtargetFeature<"lds-branch-vmem-war-hazard",
+  "HasLdsBranchVmemWARHazard",
+  "true",
+  "Switching between LDS and VMEM-tex not waiting VM_VSRC=0"
+>;
+
+def FeatureNSAtoVMEMBug : SubtargetFeature<"nsa-to-vmem-bug",
+  "HasNSAtoVMEMBug",
+  "true",
+  "MIMG-NSA followed by VMEM fail if EXEC_LO or EXEC_HI equals zero"
+>;
+
+def FeatureFlatSegmentOffsetBug : SubtargetFeature<"flat-segment-offset-bug",
+  "HasFlatSegmentOffsetBug",
+  "true",
+  "GFX10 bug, inst_offset ignored in flat segment"
 >;
 
 class SubtargetFeatureLDSBankCount <int Value> : SubtargetFeature <
@@ -153,6 +225,12 @@ def FeatureGFX9Insts : SubtargetFeature<"gfx9-insts",
   "GFX9Insts",
   "true",
   "Additional instructions for GFX9+"
+>;
+
+def FeatureGFX10Insts : SubtargetFeature<"gfx10-insts",
+  "GFX10Insts",
+  "true",
+  "Additional instructions for GFX10+"
 >;
 
 def FeatureGFX7GFX8GFX9Insts : SubtargetFeature<"gfx7-gfx8-gfx9-insts",
@@ -251,10 +329,23 @@ def FeatureDPP : SubtargetFeature<"dpp",
   "Support DPP (Data Parallel Primitives) extension"
 >;
 
+// DPP8 allows arbitrary cross-lane swizzling withing groups of 8 lanes.
+def FeatureDPP8 : SubtargetFeature<"dpp8",
+  "HasDPP8",
+  "true",
+  "Support DPP8 (Data Parallel Primitives) extension"
+>;
+
 def FeatureR128A16 : SubtargetFeature<"r128-a16",
   "HasR128A16",
   "true",
   "Support 16 bit coordindates/gradients/lod/clamp/mip types on gfx9"
+>;
+
+def FeatureNSAEncoding : SubtargetFeature<"nsa-encoding",
+  "HasNSAEncoding",
+  "true",
+  "Support NSA encoding for image instructions"
 >;
 
 def FeatureIntClamp : SubtargetFeature<"int-clamp-insts",
@@ -297,6 +388,36 @@ def FeatureSRAMECC : SubtargetFeature<"sram-ecc",
   "EnableSRAMECC",
   "true",
   "Enable SRAM ECC"
+>;
+
+def FeatureNoSdstCMPX : SubtargetFeature<"no-sdst-cmpx",
+  "HasNoSdstCMPX",
+  "true",
+  "V_CMPX does not write VCC/SGPR in addition to EXEC"
+>;
+
+def FeatureVscnt : SubtargetFeature<"vscnt",
+  "HasVscnt",
+  "true",
+  "Has separate store vscnt counter"
+>;
+
+def FeatureRegisterBanking : SubtargetFeature<"register-banking",
+  "HasRegisterBanking",
+  "true",
+  "Has register banking"
+>;
+
+def FeatureVOP3Literal : SubtargetFeature<"vop3-literal",
+  "HasVOP3Literal",
+  "true",
+  "Can use one literal in VOP3"
+>;
+
+def FeatureNoDataDepHazard : SubtargetFeature<"no-data-dep-hazard",
+  "HasNoDataDepHazard",
+  "true",
+  "Does not need SW waitstates"
 >;
 
 //===------------------------------------------------------------===//
@@ -343,13 +464,6 @@ class FeatureMaxPrivateElementSize<int size> : SubtargetFeature<
 def FeatureMaxPrivateElementSize4 : FeatureMaxPrivateElementSize<4>;
 def FeatureMaxPrivateElementSize8 : FeatureMaxPrivateElementSize<8>;
 def FeatureMaxPrivateElementSize16 : FeatureMaxPrivateElementSize<16>;
-
-def FeatureEnableHugePrivateBuffer : SubtargetFeature<
-  "huge-private-buffer",
-  "EnableHugePrivateBuffer",
-  "true",
-  "Enable private/scratch buffer sizes greater than 128 GB"
->;
 
 def FeatureDumpCode : SubtargetFeature <"DumpCode",
   "DumpCode",
@@ -452,7 +566,7 @@ def FeatureSouthernIslands : GCNSubtargetFeatureGeneration<"SOUTHERN_ISLANDS",
   [FeatureFP64, FeatureLocalMemorySize32768, FeatureMIMG_R128,
   FeatureWavefrontSize64,
   FeatureLDSBankCount32, FeatureMovrel, FeatureTrigReducedRange,
-  FeatureDoesNotSupportSRAMECC]
+  FeatureDoesNotSupportSRAMECC, FeatureDoesNotSupportXNACK]
 >;
 
 def FeatureSeaIslands : GCNSubtargetFeatureGeneration<"SEA_ISLANDS",
@@ -487,7 +601,24 @@ def FeatureGFX9 : GCNSubtargetFeatureGeneration<"GFX9",
    FeatureSDWA, FeatureSDWAOmod, FeatureSDWAScalar, FeatureSDWASdst,
    FeatureFlatInstOffsets, FeatureFlatGlobalInsts, FeatureFlatScratchInsts,
    FeatureAddNoCarryInsts, FeatureGFX8Insts, FeatureGFX7GFX8GFX9Insts,
-   FeatureScalarAtomics, FeatureR128A16
+   FeatureScalarFlatScratchInsts, FeatureScalarAtomics, FeatureR128A16
+  ]
+>;
+
+def FeatureGFX10 : GCNSubtargetFeatureGeneration<"GFX10",
+  "gfx10",
+  [FeatureFP64, FeatureLocalMemorySize65536, FeatureMIMG_R128,
+   FeatureFlatAddressSpace,
+   FeatureCIInsts, Feature16BitInsts,
+   FeatureSMemRealTime, FeatureInv2PiInlineImm,
+   FeatureApertureRegs, FeatureGFX9Insts, FeatureGFX10Insts, FeatureVOP3P,
+   FeatureMovrel, FeatureFastFMAF32, FeatureDPP, FeatureIntClamp,
+   FeatureSDWA, FeatureSDWAOmod, FeatureSDWAScalar, FeatureSDWASdst,
+   FeatureFlatInstOffsets, FeatureFlatGlobalInsts, FeatureFlatScratchInsts,
+   FeatureAddNoCarryInsts, FeatureFmaMixInsts, FeatureGFX8Insts,
+   FeatureNoSdstCMPX, FeatureVscnt, FeatureRegisterBanking,
+   FeatureVOP3Literal, FeatureDPP8, FeatureNoDataDepHazard,
+   FeatureDoesNotSupportSRAMECC
   ]
 >;
 
@@ -499,16 +630,19 @@ def FeatureISAVersion6_0_0 : FeatureSet<[FeatureSouthernIslands,
    FeatureFastFMAF32,
    HalfRate64Ops,
    FeatureLDSBankCount32,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion6_0_1 : FeatureSet<
   [FeatureSouthernIslands,
    FeatureLDSBankCount32,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion7_0_0 : FeatureSet<
   [FeatureSeaIslands,
    FeatureLDSBankCount32,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion7_0_1 : FeatureSet<
@@ -516,22 +650,26 @@ def FeatureISAVersion7_0_1 : FeatureSet<
    HalfRate64Ops,
    FeatureLDSBankCount32,
    FeatureFastFMAF32,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion7_0_2 : FeatureSet<
   [FeatureSeaIslands,
    FeatureLDSBankCount16,
    FeatureFastFMAF32,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion7_0_3 : FeatureSet<
   [FeatureSeaIslands,
    FeatureLDSBankCount16,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion7_0_4 : FeatureSet<
   [FeatureSeaIslands,
    FeatureLDSBankCount32,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion8_0_1 : FeatureSet<
@@ -548,12 +686,14 @@ def FeatureISAVersion8_0_2 : FeatureSet<
    FeatureLDSBankCount32,
    FeatureSGPRInitBug,
    FeatureUnpackedD16VMem,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion8_0_3 : FeatureSet<
   [FeatureVolcanicIslands,
    FeatureLDSBankCount32,
    FeatureUnpackedD16VMem,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion8_1_0 : FeatureSet<
@@ -567,6 +707,7 @@ def FeatureISAVersion9_0_0 : FeatureSet<
    FeatureMadMixInsts,
    FeatureLDSBankCount32,
    FeatureCodeObjectV3,
+   FeatureDoesNotSupportXNACK,
    FeatureDoesNotSupportSRAMECC]>;
 
 def FeatureISAVersion9_0_2 : FeatureSet<
@@ -581,6 +722,7 @@ def FeatureISAVersion9_0_4 : FeatureSet<
   [FeatureGFX9,
    FeatureLDSBankCount32,
    FeatureFmaMixInsts,
+   FeatureDoesNotSupportXNACK,
    FeatureDoesNotSupportSRAMECC,
    FeatureCodeObjectV3]>;
 
@@ -592,6 +734,7 @@ def FeatureISAVersion9_0_6 : FeatureSet<
    FeatureDLInsts,
    FeatureDot1Insts,
    FeatureDot2Insts,
+   FeatureDoesNotSupportXNACK,
    FeatureCodeObjectV3]>;
 
 def FeatureISAVersion9_0_9 : FeatureSet<
@@ -600,6 +743,35 @@ def FeatureISAVersion9_0_9 : FeatureSet<
    FeatureLDSBankCount32,
    FeatureXNACK,
    FeatureCodeObjectV3]>;
+
+// TODO: Organize more features into groups.
+def FeatureGroup {
+  // Bugs present on gfx10.1.
+  list<SubtargetFeature> GFX10_1_Bugs = [
+    FeatureVcmpxPermlaneHazard,
+    FeatureVMEMtoScalarWriteHazard,
+    FeatureSMEMtoVectorWriteHazard,
+    FeatureInstFwdPrefetchBug,
+    FeatureVcmpxExecWARHazard,
+    FeatureLdsBranchVmemWARHazard,
+    FeatureNSAtoVMEMBug,
+    FeatureFlatSegmentOffsetBug
+   ];
+}
+
+def FeatureISAVersion10_1_0 : FeatureSet<
+  !listconcat(FeatureGroup.GFX10_1_Bugs,
+    [FeatureGFX10,
+     FeatureLDSBankCount32,
+     FeatureDLInsts,
+     FeatureNSAEncoding,
+     FeatureWavefrontSize64,
+     FeatureScalarStores,
+     FeatureScalarAtomics,
+     FeatureScalarFlatScratchInsts,
+     FeatureLdsMisalignedBug,
+     FeatureDoesNotSupportXNACK,
+     FeatureCodeObjectV3])>;
 
 //===----------------------------------------------------------------------===//
 
@@ -687,10 +859,21 @@ def isGFX6 :
 def isGFX6GFX7 :
   Predicate<"Subtarget->getGeneration() == AMDGPUSubtarget::SOUTHERN_ISLANDS ||"
             "Subtarget->getGeneration() == AMDGPUSubtarget::SEA_ISLANDS">,
+  AssemblerPredicate<"!FeatureGCN3Encoding,!FeatureGFX10Insts">;
+
+def isGFX6GFX7GFX10 :
+  Predicate<"Subtarget->getGeneration() == AMDGPUSubtarget::SOUTHERN_ISLANDS ||"
+            "Subtarget->getGeneration() == AMDGPUSubtarget::SEA_ISLANDS ||"
+            "Subtarget->getGeneration() == AMDGPUSubtarget::GFX10">,
   AssemblerPredicate<"!FeatureGCN3Encoding">;
 
 def isGFX7Only :
   Predicate<"Subtarget->getGeneration() == AMDGPUSubtarget::SEA_ISLANDS">,
+  AssemblerPredicate<"!FeatureGCN3Encoding,FeatureCIInsts,!FeatureGFX10Insts">;
+
+def isGFX7GFX10 :
+  Predicate<"Subtarget->getGeneration() == AMDGPUSubtarget::SEA_ISLANDS ||"
+            "Subtarget->getGeneration() == AMDGPUSubtarget::GFX10">,
   AssemblerPredicate<"!FeatureGCN3Encoding,FeatureCIInsts">;
 
 def isGFX7GFX8GFX9 :
@@ -698,6 +881,13 @@ def isGFX7GFX8GFX9 :
             "Subtarget->getGeneration() == AMDGPUSubtarget::VOLCANIC_ISLANDS ||"
             "Subtarget->getGeneration() == AMDGPUSubtarget::GFX9">,
   AssemblerPredicate<"FeatureGFX7GFX8GFX9Insts">;
+
+def isGFX6GFX7GFX8GFX9 :
+  Predicate<"Subtarget->getGeneration() == AMDGPUSubtarget::SOUTHERN_ISLANDS ||"
+            "Subtarget->getGeneration() == AMDGPUSubtarget::SEA_ISLANDS ||"
+            "Subtarget->getGeneration() == AMDGPUSubtarget::VOLCANIC_ISLANDS ||"
+            "Subtarget->getGeneration() == AMDGPUSubtarget::GFX9">,
+  AssemblerPredicate<"!FeatureGFX10Insts">;
 
 def isGFX7Plus :
   Predicate<"Subtarget->getGeneration() >= AMDGPUSubtarget::SEA_ISLANDS">,
@@ -724,6 +914,10 @@ def isGFX8GFX9 :
             "Subtarget->getGeneration() == AMDGPUSubtarget::GFX9">,
   AssemblerPredicate<"FeatureGFX8Insts,FeatureGCN3Encoding">;
 
+def isGFX10Plus :
+  Predicate<"Subtarget->getGeneration() >= AMDGPUSubtarget::GFX10">,
+  AssemblerPredicate<"FeatureGFX10Insts">;
+
 def HasFlatAddressSpace : Predicate<"Subtarget->hasFlatAddressSpace()">,
   AssemblerPredicate<"FeatureFlatAddressSpace">;
 
@@ -731,6 +925,8 @@ def HasFlatGlobalInsts : Predicate<"Subtarget->hasFlatGlobalInsts()">,
   AssemblerPredicate<"FeatureFlatGlobalInsts">;
 def HasFlatScratchInsts : Predicate<"Subtarget->hasFlatScratchInsts()">,
   AssemblerPredicate<"FeatureFlatScratchInsts">;
+def HasScalarFlatScratchInsts : Predicate<"Subtarget->hasScalarFlatScratchInsts()">,
+  AssemblerPredicate<"FeatureScalarFlatScratchInsts">;
 def HasD16LoadStore : Predicate<"Subtarget->hasD16LoadStore()">,
   AssemblerPredicate<"FeatureGFX9Insts">;
 
@@ -766,11 +962,21 @@ def HasSDWA9 :
   Predicate<"Subtarget->hasSDWA()">,
   AssemblerPredicate<"FeatureGCN3Encoding,FeatureGFX9Insts,FeatureSDWA">;
 
+def HasSDWA10 :
+  Predicate<"Subtarget->hasSDWA()">,
+  AssemblerPredicate<"!FeatureGCN3Encoding,FeatureGFX10Insts,FeatureSDWA">;
+
 def HasDPP : Predicate<"Subtarget->hasDPP()">,
   AssemblerPredicate<"FeatureGCN3Encoding,FeatureDPP">;
 
+def HasDPP8 : Predicate<"Subtarget->hasDPP8()">,
+  AssemblerPredicate<"!FeatureGCN3Encoding,FeatureGFX10Insts,FeatureDPP8">;
+
 def HasR128A16 : Predicate<"Subtarget->hasR128A16()">,
   AssemblerPredicate<"FeatureR128A16">;
+
+def HasDPP16 : Predicate<"Subtarget->hasDPP()">,
+  AssemblerPredicate<"!FeatureGCN3Encoding,FeatureGFX10Insts,FeatureDPP">;
 
 def HasIntClamp : Predicate<"Subtarget->hasIntClamp()">,
   AssemblerPredicate<"FeatureIntClamp">;
@@ -778,8 +984,17 @@ def HasIntClamp : Predicate<"Subtarget->hasIntClamp()">,
 def HasMadMixInsts : Predicate<"Subtarget->hasMadMixInsts()">,
   AssemblerPredicate<"FeatureMadMixInsts">;
 
+def HasScalarStores : Predicate<"Subtarget->hasScalarStores()">,
+  AssemblerPredicate<"FeatureScalarStores">;
+
 def HasScalarAtomics : Predicate<"Subtarget->hasScalarAtomics()">,
   AssemblerPredicate<"FeatureScalarAtomics">;
+
+def HasNoSdstCMPX : Predicate<"Subtarget->hasNoSdstCMPX()">,
+  AssemblerPredicate<"FeatureNoSdstCMPX">;
+
+def HasSdstCMPX : Predicate<"!Subtarget->hasNoSdstCMPX()">,
+  AssemblerPredicate<"!FeatureNoSdstCMPX">;
 
 def has16BankLDS : Predicate<"Subtarget->getLDSBankCount() == 16">;
 def has32BankLDS : Predicate<"Subtarget->getLDSBankCount() == 32">;

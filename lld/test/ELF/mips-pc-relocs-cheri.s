@@ -23,6 +23,7 @@ __start:
   .data
 
 # CHECK:      Disassembly of section .text:
+# CHECK-EMPTY:
 # CHECK-NEXT: __start:
 # CHECK-NEXT:    20000:       3c 02 00 00     lui     $2, 0
 #                                      ^-- (0x20020-0x4-0x20000)>>2

@@ -31,7 +31,7 @@ struct Pod {
   bool a = true;
   bool b = false;
   char c = 'a';
-  float d = 1.1;
+  float d = 1.1f;
   int e = 2;
   long long f = 3;
   long g = 4;
@@ -54,7 +54,7 @@ static llvm::Optional<Serializer> g_serializer;
 static llvm::Optional<TestingRegistry> g_registry;
 
 #define LLDB_GET_INSTRUMENTATION_DATA()                                        \
-  InstrumentationData(*g_serializer, *g_registry)
+  g_serializer ? InstrumentationData(*g_serializer, *g_registry) : InstrumentationData()
 
 class InstrumentedFoo {
 public:
@@ -109,6 +109,8 @@ static std::vector<InstrumentedFoo *> g_foos;
 static std::vector<InstrumentedBar *> g_bars;
 
 void ClearObjects() {
+  g_registry.reset();
+  g_serializer.reset();
   g_foos.clear();
   g_bars.clear();
 }
@@ -441,7 +443,7 @@ TEST(RecordReplayTest, InstrumentedFoo) {
 
   {
     int b = 200;
-    float c = 300.3;
+    float c = 300.3f;
     double e = 400.4;
 
     InstrumentedFoo foo(0);
@@ -469,7 +471,7 @@ TEST(RecordReplayTest, InstrumentedFooSameThis) {
   g_serializer.emplace(os);
 
   int b = 200;
-  float c = 300.3;
+  float c = 300.3f;
   double e = 400.4;
 
   InstrumentedFoo *foo = new InstrumentedFoo(0);
@@ -515,7 +517,7 @@ TEST(RecordReplayTest, InstrumentedBar) {
 #endif
 
     int b = 200;
-    float c = 300.3;
+    float c = 300.3f;
     double e = 400.4;
 
     foo.A(100);
@@ -550,7 +552,7 @@ TEST(RecordReplayTest, InstrumentedBarRef) {
     InstrumentedFoo &foo = bar.GetInstrumentedFooRef();
 
     int b = 200;
-    float c = 300.3;
+    float c = 300.3f;
     double e = 400.4;
 
     foo.A(100);
@@ -585,7 +587,7 @@ TEST(RecordReplayTest, InstrumentedBarPtr) {
     InstrumentedFoo &foo = *(bar.GetInstrumentedFooPtr());
 
     int b = 200;
-    float c = 300.3;
+    float c = 300.3f;
     double e = 400.4;
 
     foo.A(100);

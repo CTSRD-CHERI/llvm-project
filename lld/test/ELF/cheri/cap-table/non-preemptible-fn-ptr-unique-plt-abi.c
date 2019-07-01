@@ -16,7 +16,7 @@
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t2.o -DOTHER_FILE %s
 // RUN: llvm-objdump --syms %t2.o | FileCheck %s -check-prefix OTHER_FILE-SYMS
-// OTHER_FILE-SYMS: 0000000000000000 g F .text 00000034 check_if_default
+// OTHER_FILE-SYMS: 0000000000000000 g F .text 00000028 .protected check_if_default
 
 // Check that we emit a R_CHERI_CAPABILITY relocation instead of __cap_relocs for shlib/pie/dynamically linked exe
 // Also check that we only emit exactly one fake symbol for each function pointer!
@@ -95,7 +95,7 @@
 // CHECK-SHLIB-NEXT:  Symbol {
 // CHECK-SHLIB-NEXT:    Name: check_if_default (
 // CHECK-SHLIB-NEXT:    Value: 0x{{12001|1}}0270
-// CHECK-SHLIB-NEXT:    Size: 52
+// CHECK-SHLIB-NEXT:    Size: 40
 // CHECK-SHLIB-NEXT:    Binding: Global (0x1)
 // CHECK-SHLIB-NEXT:    Type: Function (0x2)
 // CHECK-SHLIB-NEXT:    Other [ (0x3)
@@ -115,7 +115,7 @@
 // CHECK-NEXT: ]
 // __cap_relocs should be empty other than the one global reference to callbacks
 // CHECK-NEXT: CHERI __cap_relocs [
-// CHECK-NEXT:   0x{{.+}} (check_if_default@CAPTABLE) Base: 0x{{.+}} (check_if_default+0) Length: 52 Perms: Function
+// CHECK-NEXT:   0x{{.+}} (check_if_default@CAPTABLE) Base: 0x{{.+}} (check_if_default+0) Length: {{.+}} Perms: Function
 // CHECK-NEXT:   0x{{.+}} (callbacks@CAPTABLE.3) Base: 0x{{.+}} (callbacks+0) Length: 64 Perms: Constant
 // CHECK-NEXT: ]
 // CHECK-NEXT: CHERI .captable [
@@ -146,7 +146,7 @@
 // STATIC-NEXT:     0x120020020 Base: 0x120010000 (default_callback+0) Length: 12 Perms: Function
 // STATIC-NEXT:     0x120020030 Base: 0x120010098 (static_callback+0) Length: 12 Perms: Function
 // STATIC-NEXT:     0x120020040 (default_callback@CAPTABLE) Base: 0x120010000 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020050 (check_if_default@CAPTABLE) Base: 0x120010270 (check_if_default+0) Length: 52 Perms: Function
+// STATIC-NEXT:     0x120020050 (check_if_default@CAPTABLE) Base: 0x120010270 (check_if_default+0) Length: {{.+}} Perms: Function
 // STATIC-NEXT:     0x120020060 (static_callback@CAPTABLE.2) Base: 0x120010098 (static_callback+0) Length: 12 Perms: Function
 // STATIC-NEXT:     0x120020070 (callbacks@CAPTABLE.3) Base: 0x120020000 (callbacks+0) Length: 64 Perms: Constant
 // STATIC-NEXT:  ]

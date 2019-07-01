@@ -21,8 +21,8 @@ int* test(int i) {
 // CHECK-LABEL: 00000000
 // CHECK: Return address column
 // CHECK-EMPTY:
-// HYBRID-NEXT: DW_CFA_def_cfa: reg29 +0
-// PURECAP-NEXT: DW_CFA_def_cfa: reg83 +0
+// HYBRID-NEXT: DW_CFA_def_cfa_register: reg29
+// PURECAP-NEXT: DW_CFA_def_cfa_register: reg83
 // CHECK-NEXT: DW_CFA_nop
 
 // CHECK-LABEL: 00000018

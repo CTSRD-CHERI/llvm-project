@@ -33,9 +33,9 @@ extern void* foo;
 // PURECAP_IR-NEXT:    [[TOBOOL_I:%.*]] = icmp ne i8 [[TMP0]], 0
 // PURECAP_IR-NEXT:    [[TMP1:%.*]] = tail call i8 asm sideeffect "", "=r|m,0,~{memory},~{$1}"(i1 [[TOBOOL_I]]) #1, !srcloc !7
 // PURECAP_IR-NEXT:    store i8 [[TMP1]], i8 addrspace(200)* @cancel, align 1, !tbaa !2
-// PURECAP_IR-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @foo, align [[$CAP_SIZE]], !tbaa !8
+// PURECAP_IR-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @foo, align [[#CAP_SIZE]], !tbaa !8
 // PURECAP_IR-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* asm sideeffect "", "=r|m,0,~{memory},~{$1}"(i8 addrspace(200)* [[TMP2]]) #1, !srcloc !7
-// PURECAP_IR-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)* addrspace(200)* @foo, align [[$CAP_SIZE]], !tbaa !8
+// PURECAP_IR-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)* addrspace(200)* @foo, align [[#CAP_SIZE]], !tbaa !8
 // PURECAP_IR-NEXT:    ret void
 //
 // N64_IR-LABEL: @test(
@@ -76,9 +76,9 @@ inline void DoNotOptimize2(Tp& value) {
 // WITH_ERROR_IR-NEXT:    [[TOBOOL_I:%.*]] = icmp ne i8 [[TMP0]], 0
 // WITH_ERROR_IR-NEXT:    [[TMP1:%.*]] = tail call i8 asm sideeffect "", "=C|m,0,~{memory},~{$1}"(i1 [[TOBOOL_I]]) #1, !srcloc !10
 // WITH_ERROR_IR-NEXT:    store i8 [[TMP1]], i8 addrspace(200)* @cancel, align 1, !tbaa !2
-// WITH_ERROR_IR-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @foo, align [[$CAP_SIZE]], !tbaa !8
+// WITH_ERROR_IR-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @foo, align [[#CAP_SIZE]], !tbaa !8
 // WITH_ERROR_IR-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* asm sideeffect "", "=C|m,0,~{memory},~{$1}"(i8 addrspace(200)* [[TMP2]]) #1, !srcloc !10
-// WITH_ERROR_IR-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)* addrspace(200)* @foo, align [[$CAP_SIZE]], !tbaa !8
+// WITH_ERROR_IR-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)* addrspace(200)* @foo, align [[#CAP_SIZE]], !tbaa !8
 // WITH_ERROR_IR-NEXT:    ret void
 //
 extern "C" void test2() {

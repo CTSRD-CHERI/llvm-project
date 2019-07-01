@@ -36,6 +36,14 @@ static cl::opt<unsigned> MemCmpEqZeroNumLoadsPerBlock(
     cl::desc("The number of loads per basic block for inline expansion of "
              "memcmp that is only being compared against zero."));
 
+static cl::opt<unsigned> MaxLoadsPerMemcmp(
+    "max-loads-per-memcmp", cl::Hidden,
+    cl::desc("Set maximum number of loads used in expanded memcmp"));
+
+static cl::opt<unsigned> MaxLoadsPerMemcmpOptSize(
+    "max-loads-per-memcmp-opt-size", cl::Hidden,
+    cl::desc("Set maximum number of loads used in expanded memcmp for -Os/Oz"));
+
 namespace {
 
 
@@ -315,7 +323,7 @@ Value *MemCmpExpansion::getCompareLoadPairs(unsigned BlockIndex,
   assert(LoadIndex < getNumLoads() &&
          "getCompareLoadPairs() called with no remaining loads");
   std::vector<Value *> XorList, OrList;
-  Value *Diff;
+  Value *Diff = nullptr;
 
   const unsigned NumLoads =
       std::min(getNumLoads() - LoadIndex, NumLoadsPerBlockForZeroCmp);
@@ -392,6 +400,8 @@ Value *MemCmpExpansion::getCompareLoadPairs(unsigned BlockIndex,
     while (OrList.size() != 1) {
       OrList = pairWiseOr(OrList);
     }
+
+    assert(Diff && "Failed to find comparison diff");
     Cmp = Builder.CreateICmpNE(OrList[0], ConstantInt::get(Diff->getType(), 0));
   }
 
@@ -741,8 +751,13 @@ static bool expandMemCmp(CallInst *CI, const TargetTransformInfo *TTI,
   const auto *const Options = TTI->enableMemCmpExpansion(IsUsedForZeroCmp);
   if (!Options) return false;
 
-  const unsigned MaxNumLoads =
-      TLI->getMaxExpandSizeMemcmp(CI->getFunction()->hasOptSize());
+  const unsigned MaxNumLoads = CI->getFunction()->hasOptSize()
+      ? (MaxLoadsPerMemcmpOptSize.getNumOccurrences()
+         ? MaxLoadsPerMemcmpOptSize
+         : TLI->getMaxExpandSizeMemcmp(true))
+      : (MaxLoadsPerMemcmp.getNumOccurrences()
+         ? MaxLoadsPerMemcmp
+         : TLI->getMaxExpandSizeMemcmp(false));
 
   unsigned NumLoadsPerBlock = MemCmpEqZeroNumLoadsPerBlock.getNumOccurrences()
                                   ? MemCmpEqZeroNumLoadsPerBlock

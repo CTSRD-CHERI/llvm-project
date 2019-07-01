@@ -190,6 +190,13 @@ public:
     return true;
   }
 
+  bool isHardwareLoopProfitable(Loop *L, ScalarEvolution &SE,
+                                AssumptionCache &AC,
+                                TargetLibraryInfo *LibInfo,
+                                TTI::HardwareLoopInfo &HWLoopInfo) {
+    return false;
+  }
+
   void getUnrollingPreferences(Loop *, ScalarEvolution &,
                                TTI::UnrollingPreferences &) {}
 
@@ -681,14 +688,12 @@ public:
 
   int getGEPCost(Type *PointeeType, const Value *Ptr,
                  ArrayRef<const Value *> Operands) {
-    const GlobalValue *BaseGV = nullptr;
-    if (Ptr != nullptr) {
-      // TODO: will remove this when pointers have an opaque type.
-      assert(Ptr->getType()->getScalarType()->getPointerElementType() ==
-                 PointeeType &&
-             "explicit pointee type doesn't match operand's pointee type");
-      BaseGV = dyn_cast<GlobalValue>(Ptr->stripPointerCasts());
-    }
+    assert(PointeeType && Ptr && "can't get GEPCost of nullptr");
+    // TODO: will remove this when pointers have an opaque type.
+    assert(Ptr->getType()->getScalarType()->getPointerElementType() ==
+               PointeeType &&
+           "explicit pointee type doesn't match operand's pointee type");
+    auto *BaseGV = dyn_cast<GlobalValue>(Ptr->stripPointerCasts());
     bool HasBaseReg = (BaseGV == nullptr);
 
     auto PtrSizeBits = DL.getPointerTypeSizeInBits(Ptr->getType());
@@ -731,13 +736,10 @@ public:
       }
     }
 
-    // Assumes the address space is 0 when Ptr is nullptr.
-    unsigned AS =
-        (Ptr == nullptr ? 0 : Ptr->getType()->getPointerAddressSpace());
-
     if (static_cast<T *>(this)->isLegalAddressingMode(
             TargetType, const_cast<GlobalValue *>(BaseGV),
-            BaseOffset.sextOrTrunc(64).getSExtValue(), HasBaseReg, Scale, AS))
+            BaseOffset.sextOrTrunc(64).getSExtValue(), HasBaseReg, Scale,
+            Ptr->getType()->getPointerAddressSpace()))
       return TTI::TCC_Free;
     return TTI::TCC_Basic;
   }
@@ -826,15 +828,11 @@ public:
       return static_cast<T *>(this)->getCallCost(F, Arguments, U);
     }
 
-    if (const CastInst *CI = dyn_cast<CastInst>(U)) {
-      // Result of a cmp instruction is often extended (to be used by other
-      // cmp instructions, logical or return instructions). These are usually
-      // nop on most sane targets.
-      if (isa<CmpInst>(CI->getOperand(0)))
-        return TTI::TCC_Free;
-      if (isa<SExtInst>(CI) || isa<ZExtInst>(CI) || isa<FPExtInst>(CI))
-        return static_cast<T *>(this)->getExtCost(CI, Operands.back());
-    }
+    if (isa<SExtInst>(U) || isa<ZExtInst>(U) || isa<FPExtInst>(U))
+      // The old behaviour of generally treating extensions of icmp to be free
+      // has been removed. A target that needs it should override getUserCost().
+      return static_cast<T *>(this)->getExtCost(cast<Instruction>(U),
+                                                Operands.back());
 
     return static_cast<T *>(this)->getOperationCost(
         Operator::getOpcode(U), U->getType(),

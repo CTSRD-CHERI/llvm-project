@@ -39,15 +39,14 @@
 #include "lldb/Symbol/Function.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Target/ABI.h"
-#include "lldb/Target/CPPLanguageRuntime.h"
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Target/InstrumentationRuntime.h"
 #include "lldb/Target/JITLoader.h"
 #include "lldb/Target/JITLoaderList.h"
+#include "lldb/Target/Language.h"
 #include "lldb/Target/LanguageRuntime.h"
 #include "lldb/Target/MemoryHistory.h"
 #include "lldb/Target/MemoryRegionInfo.h"
-#include "lldb/Target/ObjCLanguageRuntime.h"
 #include "lldb/Target/OperatingSystem.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
@@ -660,7 +659,10 @@ void Process::Finalize() {
   m_image_tokens.clear();
   m_memory_cache.Clear();
   m_allocated_memory_cache.Clear();
-  m_language_runtimes.clear();
+  {
+    std::lock_guard<std::recursive_mutex> guard(m_language_runtimes_mutex);
+    m_language_runtimes.clear();
+  }
   m_instrumentation_runtimes.clear();
   m_next_event_action_up.reset();
   // Clear the last natural stop ID since it has a strong reference to this
@@ -1422,7 +1424,7 @@ Status Process::ResumeSynchronous(Stream *stream) {
   Status error = PrivateResume();
   if (error.Success()) {
     StateType state =
-        WaitForProcessToStop(llvm::None, NULL, true, listener_sp, stream);
+        WaitForProcessToStop(llvm::None, nullptr, true, listener_sp, stream);
     const bool must_be_alive =
         false; // eStateExited is ok, so this must be false
     if (!StateIsStoppedState(state, must_be_alive))
@@ -1544,38 +1546,54 @@ const lldb::ABISP &Process::GetABI() {
   return m_abi_sp;
 }
 
+std::vector<LanguageRuntime *>
+Process::GetLanguageRuntimes(bool retry_if_null) {
+  std::vector<LanguageRuntime *> language_runtimes;
+
+  if (m_finalizing)
+    return language_runtimes;
+
+  std::lock_guard<std::recursive_mutex> guard(m_language_runtimes_mutex);
+  // Before we pass off a copy of the language runtimes, we must make sure that
+  // our collection is properly populated. It's possible that some of the
+  // language runtimes were not loaded yet, either because nobody requested it
+  // yet or the proper condition for loading wasn't yet met (e.g. libc++.so
+  // hadn't been loaded).
+  for (const lldb::LanguageType lang_type : Language::GetSupportedLanguages()) {
+    if (LanguageRuntime *runtime = GetLanguageRuntime(lang_type, retry_if_null))
+      language_runtimes.emplace_back(runtime);
+  }
+
+  return language_runtimes;
+}
+
 LanguageRuntime *Process::GetLanguageRuntime(lldb::LanguageType language,
                                              bool retry_if_null) {
   if (m_finalizing)
     return nullptr;
 
+  LanguageRuntime *runtime = nullptr;
+
+  std::lock_guard<std::recursive_mutex> guard(m_language_runtimes_mutex);
   LanguageRuntimeCollection::iterator pos;
   pos = m_language_runtimes.find(language);
-  if (pos == m_language_runtimes.end() || (retry_if_null && !(*pos).second)) {
+  if (pos == m_language_runtimes.end() || (retry_if_null && !pos->second)) {
     lldb::LanguageRuntimeSP runtime_sp(
         LanguageRuntime::FindPlugin(this, language));
 
     m_language_runtimes[language] = runtime_sp;
-    return runtime_sp.get();
+    runtime = runtime_sp.get();
   } else
-    return (*pos).second.get();
-}
+    runtime = pos->second.get();
 
-CPPLanguageRuntime *Process::GetCPPLanguageRuntime(bool retry_if_null) {
-  LanguageRuntime *runtime =
-      GetLanguageRuntime(eLanguageTypeC_plus_plus, retry_if_null);
-  if (runtime != nullptr &&
-      runtime->GetLanguageType() == eLanguageTypeC_plus_plus)
-    return static_cast<CPPLanguageRuntime *>(runtime);
-  return nullptr;
-}
+  if (runtime)
+    // It's possible that a language runtime can support multiple LanguageTypes,
+    // for example, CPPLanguageRuntime will support eLanguageTypeC_plus_plus,
+    // eLanguageTypeC_plus_plus_03, etc. Because of this, we should get the
+    // primary language type and make sure that our runtime supports it.
+    assert(runtime->GetLanguageType() == Language::GetPrimaryLanguage(language));
 
-ObjCLanguageRuntime *Process::GetObjCLanguageRuntime(bool retry_if_null) {
-  LanguageRuntime *runtime =
-      GetLanguageRuntime(eLanguageTypeObjC, retry_if_null);
-  if (runtime != nullptr && runtime->GetLanguageType() == eLanguageTypeObjC)
-    return static_cast<ObjCLanguageRuntime *>(runtime);
-  return nullptr;
+  return runtime;
 }
 
 bool Process::IsPossibleDynamicValue(ValueObject &in_value) {
@@ -1591,12 +1609,12 @@ bool Process::IsPossibleDynamicValue(ValueObject &in_value) {
     return runtime ? runtime->CouldHaveDynamicValue(in_value) : false;
   }
 
-  LanguageRuntime *cpp_runtime = GetLanguageRuntime(eLanguageTypeC_plus_plus);
-  if (cpp_runtime && cpp_runtime->CouldHaveDynamicValue(in_value))
-    return true;
+  for (LanguageRuntime *runtime : GetLanguageRuntimes()) {
+    if (runtime->CouldHaveDynamicValue(in_value))
+      return true;
+  }
 
-  LanguageRuntime *objc_runtime = GetLanguageRuntime(eLanguageTypeObjC);
-  return objc_runtime ? objc_runtime->CouldHaveDynamicValue(in_value) : false;
+  return false;
 }
 
 void Process::SetDynamicCheckers(DynamicCheckerFunctions *dynamic_checkers) {
@@ -2690,7 +2708,7 @@ DynamicLoader *Process::GetDynamicLoader() {
   return m_dyld_up.get();
 }
 
-const lldb::DataBufferSP Process::GetAuxvData() { return DataBufferSP(); }
+DataExtractor Process::GetAuxvData() { return DataExtractor(); }
 
 JITLoaderList &Process::GetJITLoaders() {
   if (!m_jit_loaders_up) {
@@ -3632,7 +3650,7 @@ void Process::ControlPrivateStateThread(uint32_t signal) {
     }
 
     if (signal == eBroadcastInternalStateControlStop) {
-      thread_result_t result = NULL;
+      thread_result_t result = {};
       m_private_state_thread.Join(&result);
       m_private_state_thread.Reset();
     }
@@ -3907,12 +3925,10 @@ thread_result_t Process::RunPrivateStateThread(bool is_secondary_thread) {
   // it was doing yet, so don't try to change it on the way out.
   if (!is_secondary_thread)
     m_public_run_lock.SetStopped();
-  return NULL;
+  return {};
 }
 
-//------------------------------------------------------------------
 // Process Event Data
-//------------------------------------------------------------------
 
 Process::ProcessEventData::ProcessEventData()
     : EventData(), m_process_wp(), m_state(eStateInvalid), m_restarted(false),
@@ -4068,15 +4084,15 @@ void Process::ProcessEventData::DoOnRemoval(Event *event_ptr) {
         // public resume.
         process_sp->PrivateResume();
       } else {
-        bool hijacked = 
-          process_sp->IsHijackedForEvent(eBroadcastBitStateChanged)
-          && !process_sp->StateChangedIsHijackedForSynchronousResume();
+        bool hijacked =
+            process_sp->IsHijackedForEvent(eBroadcastBitStateChanged) &&
+            !process_sp->StateChangedIsHijackedForSynchronousResume();
 
         if (!hijacked) {
           // If we didn't restart, run the Stop Hooks here.
           // Don't do that if state changed events aren't hooked up to the
-          // public (or SyncResume) broadcasters.  StopHooks are just for 
-          // real public stops.  They might also restart the target, 
+          // public (or SyncResume) broadcasters.  StopHooks are just for
+          // real public stops.  They might also restart the target,
           // so watch for that.
           process_sp->GetTarget().RunStopHooks();
           if (process_sp->GetPrivateState() == eStateRunning)
@@ -4288,9 +4304,7 @@ size_t Process::GetAsyncProfileData(char *buf, size_t buf_size, Status &error) {
   return bytes_available;
 }
 
-//------------------------------------------------------------------
 // Process STDIO
-//------------------------------------------------------------------
 
 size_t Process::GetSTDOUT(char *buf, size_t buf_size, Status &error) {
   std::lock_guard<std::recursive_mutex> guard(m_stdio_communication_mutex);
@@ -5348,7 +5362,7 @@ Process::RunThreadPlan(ExecutionContext &exe_ctx,
 
             event_explanation = ts.GetData();
           }
-        } while (0);
+        } while (false);
 
         if (event_explanation)
           log->Printf("Process::RunThreadPlan(): execution interrupted: %s %s",
@@ -5608,7 +5622,10 @@ void Process::DidExec() {
   m_jit_loaders_up.reset();
   m_image_tokens.clear();
   m_allocated_memory_cache.Clear();
-  m_language_runtimes.clear();
+  {
+    std::lock_guard<std::recursive_mutex> guard(m_language_runtimes_mutex);
+    m_language_runtimes.clear();
+  }
   m_instrumentation_runtimes.clear();
   m_thread_list.DiscardThreadPlans();
   m_memory_cache.Clear(true);
@@ -5677,14 +5694,17 @@ void Process::ModulesDidLoad(ModuleList &module_list) {
   // Iterate over a copy of this language runtime list in case the language
   // runtime ModulesDidLoad somehow causes the language runtime to be
   // unloaded.
-  LanguageRuntimeCollection language_runtimes(m_language_runtimes);
-  for (const auto &pair : language_runtimes) {
-    // We must check language_runtime_sp to make sure it is not nullptr as we
-    // might cache the fact that we didn't have a language runtime for a
-    // language.
-    LanguageRuntimeSP language_runtime_sp = pair.second;
-    if (language_runtime_sp)
-      language_runtime_sp->ModulesDidLoad(module_list);
+  {
+    std::lock_guard<std::recursive_mutex> guard(m_language_runtimes_mutex);
+    LanguageRuntimeCollection language_runtimes(m_language_runtimes);
+    for (const auto &pair : language_runtimes) {
+      // We must check language_runtime_sp to make sure it is not nullptr as we
+      // might cache the fact that we didn't have a language runtime for a
+      // language.
+      LanguageRuntimeSP language_runtime_sp = pair.second;
+      if (language_runtime_sp)
+        language_runtime_sp->ModulesDidLoad(module_list);
+    }
   }
 
   // If we don't have an operating system plug-in, try to load one since
@@ -5836,7 +5856,8 @@ Process::AdvanceAddressToNextBranchInstruction(Address default_stop_addr,
   }
 
   uint32_t branch_index =
-      insn_list->GetIndexOfNextBranchInstruction(insn_offset, target);
+      insn_list->GetIndexOfNextBranchInstruction(insn_offset, target,
+                                                 false /* ignore_calls*/);
   if (branch_index == UINT32_MAX) {
     return retval;
   }

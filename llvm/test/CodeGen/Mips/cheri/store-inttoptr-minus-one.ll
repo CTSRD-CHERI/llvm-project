@@ -72,10 +72,10 @@ attributes #0 = { noinline nounwind  }
 
 ; CHECK-LABEL: global_minus_1:
 ; CHECK-NEXT:  .chericap	-1
-; CHECK-NEXT:  .size	global_minus_1, [[$CAP_SIZE]]
+; CHECK-NEXT:  .size	global_minus_1, [[#CAP_SIZE]]
 ; CHECK-LABEL: global_minus_10:
 ; CHECK-NEXT:  .chericap	-10
-; CHECK-NEXT:  .size	global_minus_10, [[$CAP_SIZE]]
+; CHECK-NEXT:  .size	global_minus_10, [[#CAP_SIZE]]
 ; CHECK-LABEL: global_123456:
 ; CHECK-NEXT:  .chericap	123456
-; CHECK-NEXT:  .size	global_123456, [[$CAP_SIZE]]
+; CHECK-NEXT:  .size	global_123456, [[#CAP_SIZE]]

@@ -109,7 +109,8 @@ Status PlatformRemoteGDBServer::ResolveExecutable(
     if (resolved_module_spec.GetArchitecture().IsValid() ||
         resolved_module_spec.GetUUID().IsValid()) {
       error = ModuleList::GetSharedModule(resolved_module_spec, exe_module_sp,
-                                          module_search_paths_ptr, NULL, NULL);
+                                          module_search_paths_ptr, nullptr,
+                                          nullptr);
 
       if (exe_module_sp && exe_module_sp->GetObjectFile())
         return error;
@@ -123,7 +124,8 @@ Status PlatformRemoteGDBServer::ResolveExecutable(
              idx, resolved_module_spec.GetArchitecture());
          ++idx) {
       error = ModuleList::GetSharedModule(resolved_module_spec, exe_module_sp,
-                                          module_search_paths_ptr, NULL, NULL);
+                                          module_search_paths_ptr, nullptr,
+                                          nullptr);
       // Did we find an executable using one of the
       if (error.Success()) {
         if (exe_module_sp && exe_module_sp->GetObjectFile())
@@ -195,19 +197,15 @@ Status PlatformRemoteGDBServer::GetFileWithUUID(const FileSpec &platform_file,
   return Status();
 }
 
-//------------------------------------------------------------------
 /// Default Constructor
-//------------------------------------------------------------------
 PlatformRemoteGDBServer::PlatformRemoteGDBServer()
     : Platform(false), // This is a remote platform
       m_gdb_client() {}
 
-//------------------------------------------------------------------
 /// Destructor.
 ///
 /// The destructor is virtual since this class is designed to be
 /// inherited from by the plug-in instance.
-//------------------------------------------------------------------
 PlatformRemoteGDBServer::~PlatformRemoteGDBServer() {}
 
 bool PlatformRemoteGDBServer::GetSupportedArchitectureAtIndex(uint32_t idx,
@@ -337,7 +335,7 @@ Status PlatformRemoteGDBServer::DisconnectRemote() {
 const char *PlatformRemoteGDBServer::GetHostname() {
   m_gdb_client.GetHostname(m_name);
   if (m_name.empty())
-    return NULL;
+    return nullptr;
   return m_name.c_str();
 }
 
@@ -473,11 +471,11 @@ lldb::ProcessSP PlatformRemoteGDBServer::DebugProcess(
         error.SetErrorStringWithFormat("unable to launch a GDB server on '%s'",
                                        GetHostname());
       } else {
-        if (target == NULL) {
+        if (target == nullptr) {
           TargetSP new_target_sp;
 
           error = debugger.GetTargetList().CreateTarget(
-              debugger, "", "", eLoadDependentsNo, NULL, new_target_sp);
+              debugger, "", "", eLoadDependentsNo, nullptr, new_target_sp);
           target = new_target_sp.get();
         } else
           error.Clear();
@@ -488,7 +486,7 @@ lldb::ProcessSP PlatformRemoteGDBServer::DebugProcess(
           // The darwin always currently uses the GDB remote debugger plug-in
           // so even when debugging locally we are debugging remotely!
           process_sp = target->CreateProcess(launch_info.GetListener(),
-                                             "gdb-remote", NULL);
+                                             "gdb-remote", nullptr);
 
           if (process_sp) {
             error = process_sp->ConnectRemote(nullptr, connect_url.c_str());
@@ -559,11 +557,11 @@ lldb::ProcessSP PlatformRemoteGDBServer::Attach(
         error.SetErrorStringWithFormat("unable to launch a GDB server on '%s'",
                                        GetHostname());
       } else {
-        if (target == NULL) {
+        if (target == nullptr) {
           TargetSP new_target_sp;
 
           error = debugger.GetTargetList().CreateTarget(
-              debugger, "", "", eLoadDependentsNo, NULL, new_target_sp);
+              debugger, "", "", eLoadDependentsNo, nullptr, new_target_sp);
           target = new_target_sp.get();
         } else
           error.Clear();
@@ -573,8 +571,9 @@ lldb::ProcessSP PlatformRemoteGDBServer::Attach(
 
           // The darwin always currently uses the GDB remote debugger plug-in
           // so even when debugging locally we are debugging remotely!
-          process_sp = target->CreateProcess(
-              attach_info.GetListenerForProcess(debugger), "gdb-remote", NULL);
+          process_sp =
+              target->CreateProcess(attach_info.GetListenerForProcess(debugger),
+                                    "gdb-remote", nullptr);
           if (process_sp) {
             error = process_sp->ConnectRemote(nullptr, connect_url.c_str());
             if (error.Success()) {

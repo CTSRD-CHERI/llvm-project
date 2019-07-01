@@ -8,14 +8,14 @@ define i32 @a() {
 ; Make sure we don't use $gp and save $cgp prior to every external call
 ; CHECK-LABEL: a:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csd $16, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
-; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    .cfi_def_cfa_offset [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
+; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    .cfi_offset 16, -[[@EXPR 0 * $CAP_SIZE + 8]]
-; CHECK-NEXT:    .cfi_offset 90, -[[@EXPR 2 * $CAP_SIZE]]
-; CHECK-NEXT:    .cfi_offset 89, -[[@EXPR 3 * $CAP_SIZE]]
+; CHECK-NEXT:    .cfi_offset 16, -8
+; CHECK-NEXT:    .cfi_offset 90, -[[#CAP_SIZE * 2]]
+; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 3]]
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn1)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -29,10 +29,10 @@ define i32 @a() {
 ; restore $cgp after return from potential external call
 ; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    cld $16, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    cld $16, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %call = call i32 (...) @external_fn1()
   %call2 = call i32 @external_fn2()

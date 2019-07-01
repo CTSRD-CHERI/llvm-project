@@ -51,6 +51,18 @@ void NORETURN ReportCallocOverflow(uptr count, usize size,
   Die();
 }
 
+void NORETURN ReportReallocArrayOverflow(usize count, usize size,
+                                         const StackTrace *stack) {
+  {
+    ScopedAllocatorErrorReport report("reallocarray-overflow", stack);
+    Report(
+        "ERROR: %s: reallocarray parameters overflow: count * size (%zd * %zd) "
+        "cannot be represented in type size_t\n",
+        SanitizerToolName, count, size);
+  }
+  Die();
+}
+
 void NORETURN ReportPvallocOverflow(usize size, const StackTrace *stack) {
   {
     ScopedAllocatorErrorReport report("pvalloc-overflow", stack);

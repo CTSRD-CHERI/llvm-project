@@ -220,11 +220,12 @@ enum IIT_Info {
   IIT_STRUCT7 = 39,
   IIT_STRUCT8 = 40,
   IIT_F128 = 41,
-  IIT_IFATPTR64 = 42,
-  IIT_IFATPTR128 = 43,
-  IIT_IFATPTR256 = 44,
-  IIT_IFATPTR512 = 45,
-  IIT_IFATPTRAny = 46,
+  IIT_VEC_ELEMENT = 42,
+  IIT_IFATPTR64 = 43,
+  IIT_IFATPTR128 = 44,
+  IIT_IFATPTR256 = 45,
+  IIT_IFATPTR512 = 46,
+  IIT_IFATPTRAny = 47,
 };
 
 static void EncodeFixedValueType(MVT::SimpleValueType VT,
@@ -268,10 +269,12 @@ static void EncodeFixedValueType(MVT::SimpleValueType VT,
 #endif
 
 static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
-                            std::vector<unsigned char> &Sig) {
+                            unsigned &NextArgCode,
+                            std::vector<unsigned char> &Sig,
+                            ArrayRef<unsigned char> Mapping) {
 
   if (R->isSubClassOf("LLVMMatchType")) {
-    unsigned Number = R->getValueAsInt("Number");
+    unsigned Number = Mapping[R->getValueAsInt("Number")];
     assert(Number < ArgCodes.size() && "Invalid matching number!");
     if (R->isSubClassOf("LLVMExtendedType"))
       Sig.push_back(IIT_EXTEND_ARG);
@@ -290,18 +293,18 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
       Sig.push_back(IIT_PTR_TO_ARG);
     else if (R->isSubClassOf("LLVMVectorOfAnyPointersToElt")) {
       Sig.push_back(IIT_VEC_OF_ANYPTRS_TO_ELT);
-      unsigned ArgNo = ArgCodes.size();
-      ArgCodes.push_back(3 /*vAny*/);
       // Encode overloaded ArgNo
-      Sig.push_back(ArgNo);
+      Sig.push_back(NextArgCode++);
       // Encode LLVMMatchType<Number> ArgNo
       Sig.push_back(Number);
       return;
     } else if (R->isSubClassOf("LLVMPointerToElt"))
       Sig.push_back(IIT_PTR_TO_ELT);
+    else if (R->isSubClassOf("LLVMVectorElementType"))
+      Sig.push_back(IIT_VEC_ELEMENT);
     else
       Sig.push_back(IIT_ARG);
-    return Sig.push_back((Number << 3) | ArgCodes[Number]);
+    return Sig.push_back((Number << 3) | 7 /*IITDescriptor::AK_MatchType*/);
   }
 
   MVT::SimpleValueType VT = getValueType(R->getValueAsDef("VT"));
@@ -319,8 +322,9 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
     Sig.push_back(IIT_ARG);
 
     // Figure out what arg # this is consuming, and remember what kind it was.
-    unsigned ArgNo = ArgCodes.size();
-    ArgCodes.push_back(Tmp);
+    assert(NextArgCode < ArgCodes.size() && ArgCodes[NextArgCode] == Tmp &&
+           "Invalid or no ArgCode associated with overloaded VT!");
+    unsigned ArgNo = NextArgCode++;
 
     // Encode what sort of argument it must be in the low 3 bits of the ArgNo.
     return Sig.push_back((ArgNo << 3) | Tmp);
@@ -338,7 +342,8 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
     } else {
       Sig.push_back(IIT_PTR);
     }
-    return EncodeFixedType(R->getValueAsDef("ElTy"), ArgCodes, Sig);
+    return EncodeFixedType(R->getValueAsDef("ElTy"), ArgCodes, NextArgCode, Sig,
+                           Mapping);
   }
   case MVT::iFATPTR64:
   case MVT::iFATPTR128:
@@ -354,7 +359,8 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
     case MVT::iFATPTRAny: Sig.push_back(IIT_IFATPTRAny); break;
     }
     Sig.push_back(200);
-    return EncodeFixedType(R->getValueAsDef("ElTy"), ArgCodes, Sig);
+    return EncodeFixedType(R->getValueAsDef("ElTy"), ArgCodes, NextArgCode, Sig,
+                           Mapping);
   }
   }
 
@@ -379,6 +385,42 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
   EncodeFixedValueType(VT, Sig);
 }
 
+static void UpdateArgCodes(Record *R, std::vector<unsigned char> &ArgCodes,
+                           unsigned int &NumInserted,
+                           SmallVectorImpl<unsigned char> &Mapping) {
+  if (R->isSubClassOf("LLVMMatchType")) {
+    if (R->isSubClassOf("LLVMVectorOfAnyPointersToElt")) {
+      ArgCodes.push_back(3 /*vAny*/);
+      ++NumInserted;
+    }
+    return;
+  }
+
+  unsigned Tmp = 0;
+  switch (getValueType(R->getValueAsDef("VT"))) {
+  default: break;
+  case MVT::iPTRAny:
+    ++Tmp;
+    LLVM_FALLTHROUGH;
+  case MVT::vAny:
+    ++Tmp;
+    LLVM_FALLTHROUGH;
+  case MVT::fAny:
+    ++Tmp;
+    LLVM_FALLTHROUGH;
+  case MVT::iAny:
+    ++Tmp;
+    LLVM_FALLTHROUGH;
+  case MVT::Any:
+    unsigned OriginalIdx = ArgCodes.size() - NumInserted;
+    assert(OriginalIdx >= Mapping.size());
+    Mapping.resize(OriginalIdx+1);
+    Mapping[OriginalIdx] = ArgCodes.size();
+    ArgCodes.push_back(Tmp);
+    break;
+  }
+}
+
 #if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("",on)
 #endif
@@ -389,6 +431,17 @@ static void ComputeFixedEncoding(const CodeGenIntrinsic &Int,
                                  std::vector<unsigned char> &TypeSig) {
   std::vector<unsigned char> ArgCodes;
 
+  // Add codes for any overloaded result VTs.
+  unsigned int NumInserted = 0;
+  SmallVector<unsigned char, 8> ArgMapping;
+  for (unsigned i = 0, e = Int.IS.RetVTs.size(); i != e; ++i)
+    UpdateArgCodes(Int.IS.RetTypeDefs[i], ArgCodes, NumInserted, ArgMapping);
+
+  // Add codes for any overloaded operand VTs.
+  for (unsigned i = 0, e = Int.IS.ParamTypeDefs.size(); i != e; ++i)
+    UpdateArgCodes(Int.IS.ParamTypeDefs[i], ArgCodes, NumInserted, ArgMapping);
+
+  unsigned NextArgCode = 0;
   if (Int.IS.RetVTs.empty())
     TypeSig.push_back(IIT_Done);
   else if (Int.IS.RetVTs.size() == 1 &&
@@ -408,11 +461,13 @@ static void ComputeFixedEncoding(const CodeGenIntrinsic &Int,
     }
 
     for (unsigned i = 0, e = Int.IS.RetVTs.size(); i != e; ++i)
-      EncodeFixedType(Int.IS.RetTypeDefs[i], ArgCodes, TypeSig);
+      EncodeFixedType(Int.IS.RetTypeDefs[i], ArgCodes, NextArgCode, TypeSig,
+                      ArgMapping);
   }
 
   for (unsigned i = 0, e = Int.IS.ParamTypeDefs.size(); i != e; ++i)
-    EncodeFixedType(Int.IS.ParamTypeDefs[i], ArgCodes, TypeSig);
+    EncodeFixedType(Int.IS.ParamTypeDefs[i], ArgCodes, NextArgCode, TypeSig,
+                    ArgMapping);
 }
 
 static void printIITEntry(raw_ostream &OS, unsigned char X) {

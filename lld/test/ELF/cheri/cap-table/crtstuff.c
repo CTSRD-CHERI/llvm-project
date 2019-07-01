@@ -35,8 +35,8 @@ __attribute__((noreturn)) void exit(int code) {
 }
 
 // CHECK-LABEL: CHERI __cap_relocs [
-// CHECK-NEXT:            0x12002{{.+}} (__auxargs@CAPTABLE) Base: 0x120030020 (__auxargs+0) Length: 16 Perms: Object
-// CHECK-NEXT:            0x12002{{.+}} (environ@CAPTABLE) Base: 0x120030040 (environ+0) Length: 16 Perms: Object
+// CHECK-NEXT:            0x12002{{.+}} (__auxargs@CAPTABLE) Base: 0x120030030 (__auxargs+0) Length: 16 Perms: Object
+// CHECK-NEXT:            0x12002{{.+}} (environ@CAPTABLE) Base: 0x120030020 (environ+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12002{{.+}} (__progname@CAPTABLE) Base: 0x120030000 (__progname+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12002{{.+}} (_DYNAMIC@CAPTABLE) Base: 0x0 (<unknown symbol>+0) Length: 0 Perms: Object
 // CHECK-NEXT:            0x12002{{.+}} (atexit@CAPTABLE) Base: 0x12001{{.+}} (atexit+0) Length: 8 Perms: Function
@@ -62,7 +62,7 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT:            0x12002{{.+}} (__CTOR_END__@CAPTABLE) Base: 0x120020008 (__CTOR_END__+0) Length: 8 Perms: Constant
 // CHECK-NEXT:            0x12002{{.+}} (__start___cap_relocs@CAPTABLE) Base: 0x1200002d0 (__start___cap_relocs+0) Length: 920 Perms: Constant
 // CHECK-NEXT:            0x12002{{.+}} (__stop___cap_relocs@CAPTABLE) Base: 0x120000668 (__stop___cap_relocs+0) Length: 0 Perms: Constant
-// CHECK-NEXT:            0x12002{{.+}} (_int@CAPTABLE) Base: 0x120030030 (_int+0) Length: 4 Perms: Object
+// CHECK-NEXT:            0x12002{{.+}} (_int@CAPTABLE) Base: 0x120030040 (_int+0) Length: 4 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__progname)    Base: 0x1200002c8 (<unknown symbol>+0) Length: 1 Perms: Constant
 // CHECK-NEXT: ]
 
@@ -79,5 +79,5 @@ __attribute__((noreturn)) void exit(int code) {
 // WITH_CTORS-SYMS:    0000000120020020       .init_array    00000008 .hidden __init_array_start
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_end
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_start
-// CHECK-SYMS:         00000001200002d0         __cap_relocs		 00000398 __start___cap_relocs
-// CHECK-SYMS:         0000000120000668         __cap_relocs		 00000000 __stop___cap_relocs
+// CHECK-SYMS:         00000001200002d0         __cap_relocs		 00000398 .protected __start___cap_relocs
+// CHECK-SYMS:         0000000120000668         __cap_relocs		 00000000 .protected __stop___cap_relocs

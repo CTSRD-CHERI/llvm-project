@@ -1,5 +1,5 @@
-; RUN: %cheri128_purecap_llc -O0 %s -o - | FileCheck --enable-var-scope %s -check-prefixes CHECK,CHERI128 '-D$CAP_SIZE=16'
-; RUN: %cheri256_purecap_llc -O0 %s -o - | FileCheck --enable-var-scope %s -check-prefixes CHECK,CHERI256 '-D$CAP_SIZE=32'
+; RUN: %cheri128_purecap_llc -O0 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI128 '-D#CAP_SIZE=16'
+; RUN: %cheri256_purecap_llc -O0 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI256 '-D#CAP_SIZE=32'
 ; ModuleID = 'cheri-stack.c'
 source_filename = "cheri-stack.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -32,7 +32,7 @@ entry:
 ; Check that a function that allocates a buffer on the stack correctly derives
 ; it from the frame capability
 ; CHECK-LABEL: has_alloca
-; CHECK: cincoffset	$c[[ALLOCREG:([0-9]+|sp)]], $c11, [[@EXPR $CAP_SIZE - 4]]
+; CHECK: cincoffset	$c[[ALLOCREG:([0-9]+|sp)]], $c11, [[#CAP_SIZE - 4]]
 ; CHECK-NEXT: csetbounds	$c3, $c[[ALLOCREG]], 4
 
   %var = alloca i32, align 4, addrspace(200)
@@ -53,9 +53,9 @@ entry:
 ; CHECK: cincoffset	$c11, $c11, -[[FRAMESIZE:([0-9]+)]]
 ; CHECK: csc	$c17, $zero, [[C17OFFSET:([0-9]+|sp)]]($c11)
 ; CHECK: clcbi $c12, %capcall20(use_arg)
-; CHECK: csw    $2, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK: csw    $2, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK: cjalr	$c12, $c17
-; CHECK: clw	${{([0-9]+)}}, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK: clw	${{([0-9]+)}}, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK: clc	$c17, $zero, [[C17OFFSET]]($c11)
 ; CHECK: cincoffset	$c11, $c11, [[FRAMESIZE]]
 
@@ -73,7 +73,7 @@ entry:
 ; Again, because we're at -O0, we get a load of redundant copies
 ; CHECK-LABEL: dynamic_alloca
 ; CHECK: cincoffset	$c24, $c11, $zero
-; CHECK:      dsll $2, $4, 2
+; CHECK:      dsll $1, $4, 2
 ; CHECK:      cmove $c[[TEMPCAP:[0-9]+]], $c11
 ; CHECK-NEXT: cgetoffset	$[[OFFSET:([0-9]+|sp)]], $c[[TEMPCAP]]
 ; CHECK-NEXT: dsubu	$[[OFFSET]], $[[OFFSET]], ${{([0-9]+|sp)}}

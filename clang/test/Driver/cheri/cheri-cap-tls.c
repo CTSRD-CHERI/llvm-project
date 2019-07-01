@@ -21,7 +21,7 @@
 // Passing mllvm -cheri-cap-tls-abi to clang breaks all code since clang will then assume it needs to pass abi=legacy
 // RUN: not %cheri_purecap_clang -cheri-cap-table-abi=pcrel -mllvm -cheri-cap-tls-abi=cap-equiv -c %s -o /dev/null 2>&1 | FileCheck %s -check-prefix BAD_MLLVM
 
-// BAD_MLLVM: error: unsupported option '-mllvm -cheri-cap-tls-abi=cap-equiv', did you mean '-cheri-cap-tls-abi=cap-equiv'?
+// BAD_MLLVM: error: unsupported option '-mllvm -cheri-cap-tls-abi=cap-equiv'; did you mean '-cheri-cap-tls-abi=cap-equiv'?
 
 // CAP-EQUIV: "-mllvm" "-cheri-cap-tls-abi=cap-equiv"
 //  "-mllvm" "-cheri-cap-table-abi=legacy" implies "-mllvm" "-cheri-cap-tls-abi=legacy"

@@ -291,7 +291,10 @@ static Error parseSegmentLoadCommand(
     for (unsigned J = 0; J < S.nsects; ++J) {
       const char *Sec = getSectionPtr(Obj, Load, J);
       Sections.push_back(Sec);
-      Section s = getStruct<Section>(Obj, Sec);
+      auto SectionOrErr = getStructOrErr<Section>(Obj, Sec);
+      if (!SectionOrErr)
+        return SectionOrErr.takeError();
+      Section s = SectionOrErr.get();
       if (Obj.getHeader().filetype != MachO::MH_DYLIB_STUB &&
           Obj.getHeader().filetype != MachO::MH_DSYM &&
           s.flags != MachO::S_ZEROFILL &&
@@ -401,8 +404,10 @@ static Error checkSymtabCommand(const MachOObjectFile &Obj,
                           " LC_SYMTAB cmdsize too small");
   if (*SymtabLoadCmd != nullptr)
     return malformedError("more than one LC_SYMTAB command");
-  MachO::symtab_command Symtab =
-    getStruct<MachO::symtab_command>(Obj, Load.Ptr);
+  auto SymtabOrErr = getStructOrErr<MachO::symtab_command>(Obj, Load.Ptr);
+  if (!SymtabOrErr)
+    return SymtabOrErr.takeError();
+  MachO::symtab_command Symtab = SymtabOrErr.get();
   if (Symtab.cmdsize != sizeof(MachO::symtab_command))
     return malformedError("LC_SYMTAB command " + Twine(LoadCommandIndex) +
                           " has incorrect cmdsize");
@@ -457,8 +462,11 @@ static Error checkDysymtabCommand(const MachOObjectFile &Obj,
                           " LC_DYSYMTAB cmdsize too small");
   if (*DysymtabLoadCmd != nullptr)
     return malformedError("more than one LC_DYSYMTAB command");
-  MachO::dysymtab_command Dysymtab =
-    getStruct<MachO::dysymtab_command>(Obj, Load.Ptr);
+  auto DysymtabOrErr =
+    getStructOrErr<MachO::dysymtab_command>(Obj, Load.Ptr);
+  if (!DysymtabOrErr)
+    return DysymtabOrErr.takeError();
+  MachO::dysymtab_command Dysymtab = DysymtabOrErr.get();
   if (Dysymtab.cmdsize != sizeof(MachO::dysymtab_command))
     return malformedError("LC_DYSYMTAB command " + Twine(LoadCommandIndex) +
                           " has incorrect cmdsize");
@@ -588,8 +596,11 @@ static Error checkLinkeditDataCommand(const MachOObjectFile &Obj,
                           CmdName + " cmdsize too small");
   if (*LoadCmd != nullptr)
     return malformedError("more than one " + Twine(CmdName) + " command");
-  MachO::linkedit_data_command LinkData =
-    getStruct<MachO::linkedit_data_command>(Obj, Load.Ptr);
+  auto LinkDataOrError =
+    getStructOrErr<MachO::linkedit_data_command>(Obj, Load.Ptr);
+  if (!LinkDataOrError)
+    return LinkDataOrError.takeError();
+  MachO::linkedit_data_command LinkData = LinkDataOrError.get();
   if (LinkData.cmdsize != sizeof(MachO::linkedit_data_command))
     return malformedError(Twine(CmdName) + " command " +
                           Twine(LoadCommandIndex) + " has incorrect cmdsize");
@@ -623,8 +634,11 @@ static Error checkDyldInfoCommand(const MachOObjectFile &Obj,
   if (*LoadCmd != nullptr)
     return malformedError("more than one LC_DYLD_INFO and or LC_DYLD_INFO_ONLY "
                           "command");
-  MachO::dyld_info_command DyldInfo =
-    getStruct<MachO::dyld_info_command>(Obj, Load.Ptr);
+  auto DyldInfoOrErr =
+    getStructOrErr<MachO::dyld_info_command>(Obj, Load.Ptr);
+  if (!DyldInfoOrErr)
+    return DyldInfoOrErr.takeError();
+  MachO::dyld_info_command DyldInfo = DyldInfoOrErr.get();
   if (DyldInfo.cmdsize != sizeof(MachO::dyld_info_command))
     return malformedError(Twine(CmdName) + " command " +
                           Twine(LoadCommandIndex) + " has incorrect cmdsize");
@@ -714,7 +728,10 @@ static Error checkDylibCommand(const MachOObjectFile &Obj,
   if (Load.C.cmdsize < sizeof(MachO::dylib_command))
     return malformedError("load command " + Twine(LoadCommandIndex) + " " +
                           CmdName + " cmdsize too small");
-  MachO::dylib_command D = getStruct<MachO::dylib_command>(Obj, Load.Ptr);
+  auto CommandOrErr = getStructOrErr<MachO::dylib_command>(Obj, Load.Ptr);
+  if (!CommandOrErr)
+    return CommandOrErr.takeError();
+  MachO::dylib_command D = CommandOrErr.get();
   if (D.dylib.name < sizeof(MachO::dylib_command))
     return malformedError("load command " + Twine(LoadCommandIndex) + " " +
                           CmdName + " name.offset field too small, not past "
@@ -760,7 +777,10 @@ static Error checkDyldCommand(const MachOObjectFile &Obj,
   if (Load.C.cmdsize < sizeof(MachO::dylinker_command))
     return malformedError("load command " + Twine(LoadCommandIndex) + " " +
                           CmdName + " cmdsize too small");
-  MachO::dylinker_command D = getStruct<MachO::dylinker_command>(Obj, Load.Ptr);
+  auto CommandOrErr = getStructOrErr<MachO::dylinker_command>(Obj, Load.Ptr);
+  if (!CommandOrErr)
+    return CommandOrErr.takeError();
+  MachO::dylinker_command D = CommandOrErr.get();
   if (D.name < sizeof(MachO::dylinker_command))
     return malformedError("load command " + Twine(LoadCommandIndex) + " " +
                           CmdName + " name.offset field too small, not past "
@@ -805,7 +825,10 @@ static Error checkNoteCommand(const MachOObjectFile &Obj,
   if (Load.C.cmdsize != sizeof(MachO::note_command))
     return malformedError("load command " + Twine(LoadCommandIndex) +
                           " LC_NOTE has incorrect cmdsize");
-  MachO::note_command Nt = getStruct<MachO::note_command>(Obj, Load.Ptr);
+  auto NoteCmdOrErr = getStructOrErr<MachO::note_command>(Obj, Load.Ptr);
+  if (!NoteCmdOrErr)
+    return NoteCmdOrErr.takeError();
+  MachO::note_command Nt = NoteCmdOrErr.get();
   uint64_t FileSize = Obj.getData().size();
   if (Nt.offset > FileSize)
     return malformedError("offset field of LC_NOTE command " +
@@ -828,8 +851,11 @@ parseBuildVersionCommand(const MachOObjectFile &Obj,
                          const MachOObjectFile::LoadCommandInfo &Load,
                          SmallVectorImpl<const char*> &BuildTools,
                          uint32_t LoadCommandIndex) {
-  MachO::build_version_command BVC =
-      getStruct<MachO::build_version_command>(Obj, Load.Ptr);
+  auto BVCOrErr =
+    getStructOrErr<MachO::build_version_command>(Obj, Load.Ptr);
+  if (!BVCOrErr)
+    return BVCOrErr.takeError();
+  MachO::build_version_command BVC = BVCOrErr.get();
   if (Load.C.cmdsize !=
       sizeof(MachO::build_version_command) +
           BVC.ntools * sizeof(MachO::build_tool_version))
@@ -850,7 +876,10 @@ static Error checkRpathCommand(const MachOObjectFile &Obj,
   if (Load.C.cmdsize < sizeof(MachO::rpath_command))
     return malformedError("load command " + Twine(LoadCommandIndex) +
                           " LC_RPATH cmdsize too small");
-  MachO::rpath_command R = getStruct<MachO::rpath_command>(Obj, Load.Ptr);
+  auto ROrErr = getStructOrErr<MachO::rpath_command>(Obj, Load.Ptr);
+  if (!ROrErr)
+    return ROrErr.takeError();
+  MachO::rpath_command R = ROrErr.get();
   if (R.path < sizeof(MachO::rpath_command))
     return malformedError("load command " + Twine(LoadCommandIndex) +
                           " LC_RPATH path.offset field too small, not past "
@@ -903,8 +932,11 @@ static Error checkLinkerOptCommand(const MachOObjectFile &Obj,
   if (Load.C.cmdsize < sizeof(MachO::linker_option_command))
     return malformedError("load command " + Twine(LoadCommandIndex) +
                           " LC_LINKER_OPTION cmdsize too small");
-  MachO::linker_option_command L =
-    getStruct<MachO::linker_option_command>(Obj, Load.Ptr);
+  auto LinkOptionOrErr =
+    getStructOrErr<MachO::linker_option_command>(Obj, Load.Ptr);
+  if (!LinkOptionOrErr)
+    return LinkOptionOrErr.takeError();
+  MachO::linker_option_command L = LinkOptionOrErr.get();
   // Make sure the count of strings is correct.
   const char *string = (const char *)Load.Ptr +
                        sizeof(struct MachO::linker_option_command);
@@ -968,8 +1000,11 @@ static Error checkThreadCommand(const MachOObjectFile &Obj,
   if (Load.C.cmdsize < sizeof(MachO::thread_command))
     return malformedError("load command " + Twine(LoadCommandIndex) +
                           CmdName + " cmdsize too small");
-  MachO::thread_command T =
-    getStruct<MachO::thread_command>(Obj, Load.Ptr);
+  auto ThreadCommandOrErr =
+    getStructOrErr<MachO::thread_command>(Obj, Load.Ptr);
+  if (!ThreadCommandOrErr)
+    return ThreadCommandOrErr.takeError();
+  MachO::thread_command T = ThreadCommandOrErr.get();
   const char *state = Load.Ptr + sizeof(MachO::thread_command);
   const char *end = Load.Ptr + T.cmdsize;
   uint32_t nflavor = 0;
@@ -1100,7 +1135,8 @@ static Error checkThreadCommand(const MachOObjectFile &Obj,
                               "flavor number " + Twine(nflavor) + " in " +
                               CmdName + " command");
       }
-    } else if (cputype == MachO::CPU_TYPE_ARM64) {
+    } else if (cputype == MachO::CPU_TYPE_ARM64 ||
+               cputype == MachO::CPU_TYPE_ARM64_32) {
       if (flavor == MachO::ARM_THREAD_STATE64) {
         if (count != MachO::ARM_THREAD_STATE64_COUNT)
           return malformedError("load command " + Twine(LoadCommandIndex) +
@@ -1159,8 +1195,10 @@ static Error checkTwoLevelHintsCommand(const MachOObjectFile &Obj,
                           " LC_TWOLEVEL_HINTS has incorrect cmdsize");
   if (*LoadCmd != nullptr)
     return malformedError("more than one LC_TWOLEVEL_HINTS command");
-  MachO::twolevel_hints_command Hints =
-    getStruct<MachO::twolevel_hints_command>(Obj, Load.Ptr);
+  auto HintsOrErr = getStructOrErr<MachO::twolevel_hints_command>(Obj, Load.Ptr);
+  if(!HintsOrErr)
+    return HintsOrErr.takeError();
+  MachO::twolevel_hints_command Hints = HintsOrErr.get();
   uint64_t FileSize = Obj.getData().size();
   if (Hints.offset > FileSize)
     return malformedError("offset field of LC_TWOLEVEL_HINTS command " +
@@ -1661,7 +1699,6 @@ Error MachOObjectFile::checkSymbolTable() const {
     } else {
       MachO::nlist STE = getSymbolTableEntry(SymDRI);
       NType = STE.n_type;
-      NType = STE.n_type;
       NSect = STE.n_sect;
       NDesc = STE.n_desc;
       NStrx = STE.n_strx;
@@ -1864,11 +1901,9 @@ void MachOObjectFile::moveSectionNext(DataRefImpl &Sec) const {
   Sec.d.a++;
 }
 
-std::error_code MachOObjectFile::getSectionName(DataRefImpl Sec,
-                                                StringRef &Result) const {
+Expected<StringRef> MachOObjectFile::getSectionName(DataRefImpl Sec) const {
   ArrayRef<char> Raw = getSectionRawName(Sec);
-  Result = parseSegmentOrSectionName(Raw.data());
-  return std::error_code();
+  return parseSegmentOrSectionName(Raw.data());
 }
 
 uint64_t MachOObjectFile::getSectionAddress(DataRefImpl Sec) const {
@@ -1910,8 +1945,8 @@ uint64_t MachOObjectFile::getSectionSize(DataRefImpl Sec) const {
   return SectSize;
 }
 
-std::error_code MachOObjectFile::getSectionContents(DataRefImpl Sec,
-                                                    StringRef &Res) const {
+Expected<ArrayRef<uint8_t>>
+MachOObjectFile::getSectionContents(DataRefImpl Sec) const {
   uint32_t Offset;
   uint64_t Size;
 
@@ -1925,8 +1960,7 @@ std::error_code MachOObjectFile::getSectionContents(DataRefImpl Sec,
     Size = Sect.size;
   }
 
-  Res = this->getData().substr(Offset, Size);
-  return std::error_code();
+  return arrayRefFromStringRef(getData().substr(Offset, Size));
 }
 
 uint64_t MachOObjectFile::getSectionAlignment(DataRefImpl Sec) const {
@@ -2001,9 +2035,8 @@ bool MachOObjectFile::isSectionVirtual(DataRefImpl Sec) const {
 
 bool MachOObjectFile::isSectionBitcode(DataRefImpl Sec) const {
   StringRef SegmentName = getSectionFinalSegmentName(Sec);
-  StringRef SectName;
-  if (!getSectionName(Sec, SectName))
-    return (SegmentName == "__LLVM" && SectName == "__bitcode");
+  if (Expected<StringRef> NameOrErr = getSectionName(Sec))
+    return (SegmentName == "__LLVM" && *NameOrErr == "__bitcode");
   return false;
 }
 
@@ -2175,7 +2208,8 @@ void MachOObjectFile::getRelocationTypeName(
         res = Table[RType];
       break;
     }
-    case Triple::aarch64: {
+    case Triple::aarch64:
+    case Triple::aarch64_32: {
       static const char *const Table[] = {
         "ARM64_RELOC_UNSIGNED",           "ARM64_RELOC_SUBTRACTOR",
         "ARM64_RELOC_BRANCH26",           "ARM64_RELOC_PAGE21",
@@ -2399,8 +2433,11 @@ std::error_code MachOObjectFile::getLibraryShortNameByIndex(unsigned Index,
   // all the Libraries.
   if (LibrariesShortNames.size() == 0) {
     for (unsigned i = 0; i < Libraries.size(); i++) {
-      MachO::dylib_command D =
-        getStruct<MachO::dylib_command>(*this, Libraries[i]);
+      auto CommandOrErr =
+        getStructOrErr<MachO::dylib_command>(*this, Libraries[i]);
+      if (!CommandOrErr)
+        return object_error::parse_failed;
+      MachO::dylib_command D = CommandOrErr.get();
       if (D.dylib.name >= D.cmdsize)
         return object_error::parse_failed;
       const char *P = (const char *)(Libraries[i]) + D.dylib.name;
@@ -2503,6 +2540,8 @@ StringRef MachOObjectFile::getFileFormatName() const {
       return "Mach-O 32-bit i386";
     case MachO::CPU_TYPE_ARM:
       return "Mach-O arm";
+    case MachO::CPU_TYPE_ARM64_32:
+      return "Mach-O arm64 (ILP32)";
     case MachO::CPU_TYPE_POWERPC:
       return "Mach-O 32-bit ppc";
     default:
@@ -2532,6 +2571,8 @@ Triple::ArchType MachOObjectFile::getArch(uint32_t CPUType) {
     return Triple::arm;
   case MachO::CPU_TYPE_ARM64:
     return Triple::aarch64;
+  case MachO::CPU_TYPE_ARM64_32:
+    return Triple::aarch64_32;
   case MachO::CPU_TYPE_POWERPC:
     return Triple::ppc;
   case MachO::CPU_TYPE_POWERPC64:
@@ -2638,6 +2679,17 @@ Triple MachOObjectFile::getArchTriple(uint32_t CPUType, uint32_t CPUSubType,
     default:
       return Triple();
     }
+  case MachO::CPU_TYPE_ARM64_32:
+    switch (CPUSubType & ~MachO::CPU_SUBTYPE_MASK) {
+    case MachO::CPU_SUBTYPE_ARM64_32_V8:
+      if (McpuDefault)
+        *McpuDefault = "cyclone";
+      if (ArchFlag)
+        *ArchFlag = "arm64_32";
+      return Triple("arm64_32-apple-darwin");
+    default:
+      return Triple();
+    }
   case MachO::CPU_TYPE_POWERPC:
     switch (CPUSubType & ~MachO::CPU_SUBTYPE_MASK) {
     case MachO::CPU_SUBTYPE_POWERPC_ALL:
@@ -2681,6 +2733,7 @@ bool MachOObjectFile::isValidArch(StringRef ArchFlag) {
       .Case("armv7m", true)
       .Case("armv7s", true)
       .Case("arm64", true)
+      .Case("arm64_32", true)
       .Case("ppc", true)
       .Case("ppc64", true)
       .Default(false);
@@ -4478,8 +4531,11 @@ ArrayRef<uint8_t> MachOObjectFile::getDyldInfoRebaseOpcodes() const {
   if (!DyldInfoLoadCmd)
     return None;
 
-  MachO::dyld_info_command DyldInfo =
-      getStruct<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  auto DyldInfoOrErr =
+    getStructOrErr<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  if (!DyldInfoOrErr)
+    return None;
+  MachO::dyld_info_command DyldInfo = DyldInfoOrErr.get();
   const uint8_t *Ptr =
       reinterpret_cast<const uint8_t *>(getPtr(*this, DyldInfo.rebase_off));
   return makeArrayRef(Ptr, DyldInfo.rebase_size);
@@ -4489,8 +4545,11 @@ ArrayRef<uint8_t> MachOObjectFile::getDyldInfoBindOpcodes() const {
   if (!DyldInfoLoadCmd)
     return None;
 
-  MachO::dyld_info_command DyldInfo =
-      getStruct<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  auto DyldInfoOrErr =
+    getStructOrErr<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  if (!DyldInfoOrErr)
+    return None;
+  MachO::dyld_info_command DyldInfo = DyldInfoOrErr.get();
   const uint8_t *Ptr =
       reinterpret_cast<const uint8_t *>(getPtr(*this, DyldInfo.bind_off));
   return makeArrayRef(Ptr, DyldInfo.bind_size);
@@ -4500,8 +4559,11 @@ ArrayRef<uint8_t> MachOObjectFile::getDyldInfoWeakBindOpcodes() const {
   if (!DyldInfoLoadCmd)
     return None;
 
-  MachO::dyld_info_command DyldInfo =
-      getStruct<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  auto DyldInfoOrErr =
+    getStructOrErr<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  if (!DyldInfoOrErr)
+    return None;
+  MachO::dyld_info_command DyldInfo = DyldInfoOrErr.get();
   const uint8_t *Ptr =
       reinterpret_cast<const uint8_t *>(getPtr(*this, DyldInfo.weak_bind_off));
   return makeArrayRef(Ptr, DyldInfo.weak_bind_size);
@@ -4511,8 +4573,11 @@ ArrayRef<uint8_t> MachOObjectFile::getDyldInfoLazyBindOpcodes() const {
   if (!DyldInfoLoadCmd)
     return None;
 
-  MachO::dyld_info_command DyldInfo =
-      getStruct<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  auto DyldInfoOrErr =
+    getStructOrErr<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  if (!DyldInfoOrErr)
+    return None;
+  MachO::dyld_info_command DyldInfo = DyldInfoOrErr.get();
   const uint8_t *Ptr =
       reinterpret_cast<const uint8_t *>(getPtr(*this, DyldInfo.lazy_bind_off));
   return makeArrayRef(Ptr, DyldInfo.lazy_bind_size);
@@ -4522,8 +4587,11 @@ ArrayRef<uint8_t> MachOObjectFile::getDyldInfoExportsTrie() const {
   if (!DyldInfoLoadCmd)
     return None;
 
-  MachO::dyld_info_command DyldInfo =
-      getStruct<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  auto DyldInfoOrErr =
+    getStructOrErr<MachO::dyld_info_command>(*this, DyldInfoLoadCmd);
+  if (!DyldInfoOrErr)
+    return None;
+  MachO::dyld_info_command DyldInfo = DyldInfoOrErr.get();
   const uint8_t *Ptr =
       reinterpret_cast<const uint8_t *>(getPtr(*this, DyldInfo.export_off));
   return makeArrayRef(Ptr, DyldInfo.export_size);

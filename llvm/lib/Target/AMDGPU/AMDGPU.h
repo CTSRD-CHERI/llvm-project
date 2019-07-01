@@ -221,8 +221,11 @@ ModulePass *createAMDGPUOpenCLEnqueuedBlockLoweringPass();
 void initializeAMDGPUOpenCLEnqueuedBlockLoweringPass(PassRegistry &);
 extern char &AMDGPUOpenCLEnqueuedBlockLoweringID;
 
-Target &getTheAMDGPUTarget();
-Target &getTheGCNTarget();
+void initializeGCNRegBankReassignPass(PassRegistry &);
+extern char &GCNRegBankReassignID;
+
+void initializeGCNNSAReassignPass(PassRegistry &);
+extern char &GCNNSAReassignID;
 
 namespace AMDGPU {
 enum TargetIndex {

@@ -6,14 +6,14 @@ struct cap_struct {
   int x;
 };
 struct cap_struct cap_struct_global;
-// CHECK: @cap_struct_global = common addrspace(200) global %struct.cap_struct zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @cap_struct_global = common addrspace(200) global %struct.cap_struct zeroinitializer, align [[#CAP_SIZE]]
 
 struct padded_cap {
   int i;
   void* __capability cap;
 };
 struct padded_cap padded_cap_global;
-// CHECK: @padded_cap_global = common addrspace(200) global %struct.padded_cap zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @padded_cap_global = common addrspace(200) global %struct.padded_cap zeroinitializer, align [[#CAP_SIZE]]
 
 
 struct packed_cap { // expected-warning{{alignment (1) of 'struct packed_cap' is less than the required capability alignment}}
@@ -29,7 +29,7 @@ struct padded_cap_struct {
   struct cap_struct cap;
 };
 struct padded_cap_struct padded_cap_struct_global;
-// CHECK: @padded_cap_struct_global = common addrspace(200) global %struct.padded_cap_struct zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @padded_cap_struct_global = common addrspace(200) global %struct.padded_cap_struct zeroinitializer, align [[#CAP_SIZE]]
 
 struct packed_cap_struct { // expected-warning{{alignment (1) of 'struct packed_cap_struct' is less than the required capability alignment}}
   // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
@@ -45,7 +45,7 @@ struct padded_uintptr_t {
   __UINTPTR_TYPE__ cap;
 };
 struct padded_uintptr_t padded_uintptr_t_global;
-// CHECK: @padded_uintptr_t_global = common addrspace(200) global %struct.padded_uintptr_t zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @padded_uintptr_t_global = common addrspace(200) global %struct.padded_uintptr_t zeroinitializer, align [[#CAP_SIZE]]
 
 struct packed_uintptr_t {
   int i;
@@ -62,7 +62,7 @@ struct correctly_aligned_but_size_not_multiple {
   char after[1];
 };
 struct correctly_aligned_but_size_not_multiple correctly_aligned_but_size_not_multiple_global;
-// CHECK: @correctly_aligned_but_size_not_multiple_global = common addrspace(200) global %struct.correctly_aligned_but_size_not_multiple zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @correctly_aligned_but_size_not_multiple_global = common addrspace(200) global %struct.correctly_aligned_but_size_not_multiple zeroinitializer, align [[#CAP_SIZE]]
 
 
 struct correct_when_used_in_array_but_bad_alignof {

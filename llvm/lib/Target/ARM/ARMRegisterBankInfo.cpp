@@ -181,6 +181,13 @@ const RegisterBank &ARMRegisterBankInfo::getRegBankFromRegClass(
   case tGPR_and_tcGPRRegClassID:
   case tcGPRRegClassID:
   case tGPRRegClassID:
+  case tGPREvenRegClassID:
+  case tGPROddRegClassID:
+  case tGPR_and_tGPREvenRegClassID:
+  case tGPR_and_tGPROddRegClassID:
+  case tGPREven_and_tcGPRRegClassID:
+  case tGPREven_and_tGPR_and_tcGPRRegClassID:
+  case tGPROdd_and_tcGPRRegClassID:
     return getRegBank(ARM::GPRRegBankID);
   case HPRRegClassID:
   case SPR_8RegClassID:
@@ -336,6 +343,14 @@ ARMRegisterBankInfo::getInstrMapping(const MachineInstr &MI) const {
                                     &ARM::ValueMappings[ARM::GPR3OpsIdx]});
     break;
   }
+  case G_FCONSTANT: {
+    LLT Ty = MRI.getType(MI.getOperand(0).getReg());
+    OperandsMapping = getOperandsMapping(
+        {Ty.getSizeInBits() == 64 ? &ARM::ValueMappings[ARM::DPR3OpsIdx]
+                                  : &ARM::ValueMappings[ARM::SPR3OpsIdx],
+         nullptr});
+    break;
+  }
   case G_CONSTANT:
   case G_FRAME_INDEX:
   case G_GLOBAL_VALUE:
@@ -425,8 +440,14 @@ ARMRegisterBankInfo::getInstrMapping(const MachineInstr &MI) const {
     break;
   case DBG_VALUE: {
     SmallVector<const ValueMapping *, 4> OperandBanks(NumOperands);
-    if (MI.getOperand(0).isReg() && MI.getOperand(0).getReg())
-      OperandBanks[0] = &ARM::ValueMappings[ARM::GPR3OpsIdx];
+    const MachineOperand &MaybeReg = MI.getOperand(0);
+    if (MaybeReg.isReg() && MaybeReg.getReg()) {
+      unsigned Size = MRI.getType(MaybeReg.getReg()).getSizeInBits();
+      if (Size > 32 && Size != 64)
+        return getInvalidInstructionMapping();
+      OperandBanks[0] = Size == 64 ? &ARM::ValueMappings[ARM::DPR3OpsIdx]
+                                   : &ARM::ValueMappings[ARM::GPR3OpsIdx];
+    }
     OperandsMapping = getOperandsMapping(OperandBanks);
     break;
   }
@@ -439,7 +460,7 @@ ARMRegisterBankInfo::getInstrMapping(const MachineInstr &MI) const {
     for (const auto &Mapping : OperandsMapping[i]) {
       assert(
           (Mapping.RegBank->getID() != ARM::FPRRegBankID ||
-           MF.getSubtarget<ARMSubtarget>().hasVFP2()) &&
+           MF.getSubtarget<ARMSubtarget>().hasVFP2Base()) &&
           "Trying to use floating point register bank on target without vfp");
     }
   }

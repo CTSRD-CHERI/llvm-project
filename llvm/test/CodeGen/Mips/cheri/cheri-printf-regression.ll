@@ -23,25 +23,25 @@ entry:
 ; CHECK-NEXT: 	.loc	1 528 0                 # /exports/users/alr48/sources/cheribsd/lib/libc_cheri/cheri_printf.c:528:0
 ; CHECK-NEXT: 	.cfi_sections .debug_frame
 ; CHECK-NEXT: 	.cfi_startproc
-; CHECK-NEXT: 	.frame	$c24,[[$CAP_SIZE]],$c17
+; CHECK-NEXT: 	.frame	$c24,[[#CAP_SIZE]],$c17
 ; CHECK-NEXT: 	.mask 	0x00000000,0
 ; CHECK-NEXT: 	.fmask	0x00000000,0
 ; CHECK-NEXT: 	.set	noreorder
 ; CHECK-NEXT: 	.set	nomacro
 ; CHECK-NEXT: 	.set	noat
 ; CHECK-NEXT: # %bb.0:                                # %entry
-; CHECK-NEXT: 	cincoffset	$c11, $c11, -[[$CAP_SIZE]]
-; CHECK-NEXT: 	.cfi_def_cfa_offset [[$CAP_SIZE]]
-; CHECK-NEXT: 	csc	$c24, $zero, 0($c11)    # [[$CAP_SIZE]]-byte Folded Spill
-; CHECK-NEXT: 	.cfi_offset 96, -[[$CAP_SIZE]]
+; CHECK-NEXT: 	cincoffset	$c11, $c11, -[[#CAP_SIZE]]
+; CHECK-NEXT: 	.cfi_def_cfa_offset [[#CAP_SIZE]]
+; CHECK-NEXT: 	csc	$c24, $zero, 0($c11)    # [[#CAP_SIZE]]-byte Folded Spill
+; CHECK-NEXT: 	.cfi_offset 96, -[[#CAP_SIZE]]
 ; CHECK-NEXT: 	cincoffset	$c24, $c11, $zero
 ; CHECK-NEXT: 	.cfi_def_cfa_register 96
 ; CHECK-NEXT: .Ltmp1:
 ; CHECK-NEXT: 	.loc	1 531 1 prologue_end    # /exports/users/alr48/sources/cheribsd/lib/libc_cheri/cheri_printf.c:531:1
 ; CHECK-NEXT: 	cincoffset	$c11, $c24, $zero
-; CHECK-NEXT: 	clc	$c24, $zero, 0($c11)    # [[$CAP_SIZE]]-byte Folded Reload
+; CHECK-NEXT: 	clc	$c24, $zero, 0($c11)    # [[#CAP_SIZE]]-byte Folded Reload
 ; CHECK-NEXT: 	cjr	$c17
-; CHECK-NEXT: 	cincoffset	$c11, $c11, [[$CAP_SIZE]]
+; CHECK-NEXT: 	cincoffset	$c11, $c11, [[#CAP_SIZE]]
 ; CHECK-NEXT: .Ltmp2:
 
 attributes #0 = { nounwind readnone speculatable }

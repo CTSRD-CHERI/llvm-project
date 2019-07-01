@@ -92,15 +92,13 @@ INITIALIZE_PASS(SIInsertSkips, DEBUG_TYPE,
 
 char &llvm::SIInsertSkipsPassID = SIInsertSkips::ID;
 
-static bool opcodeEmitsNoInsts(unsigned Opc) {
-  switch (Opc) {
-  case TargetOpcode::IMPLICIT_DEF:
-  case TargetOpcode::KILL:
-  case TargetOpcode::BUNDLE:
-  case TargetOpcode::CFI_INSTRUCTION:
-  case TargetOpcode::EH_LABEL:
-  case TargetOpcode::GC_LABEL:
-  case TargetOpcode::DBG_VALUE:
+static bool opcodeEmitsNoInsts(const MachineInstr &MI) {
+  if (MI.isMetaInstruction())
+    return true;
+
+  // Handle target specific opcodes.
+  switch (MI.getOpcode()) {
+  case AMDGPU::SI_MASK_BRANCH:
     return true;
   default:
     return false;
@@ -109,9 +107,6 @@ static bool opcodeEmitsNoInsts(unsigned Opc) {
 
 bool SIInsertSkips::shouldSkip(const MachineBasicBlock &From,
                                const MachineBasicBlock &To) const {
-  if (From.succ_empty())
-    return false;
-
   unsigned NumInstr = 0;
   const MachineFunction *MF = From.getParent();
 
@@ -121,7 +116,7 @@ bool SIInsertSkips::shouldSkip(const MachineBasicBlock &From,
 
     for (MachineBasicBlock::const_iterator I = MBB.begin(), E = MBB.end();
          NumInstr < SkipThreshold && I != E; ++I) {
-      if (opcodeEmitsNoInsts(I->getOpcode()))
+      if (opcodeEmitsNoInsts(*I))
         continue;
 
       // FIXME: Since this is required for correctness, this should be inserted
@@ -135,6 +130,11 @@ bool SIInsertSkips::shouldSkip(const MachineBasicBlock &From,
         return true;
 
       if (TII->hasUnwantedEffectsWhenEXECEmpty(*I))
+        return true;
+
+      // These instructions are potentially expensive even if EXEC = 0.
+      if (TII->isSMRD(*I) || TII->isVMEM(*I) || TII->isFLAT(*I) ||
+          I->getOpcode() == AMDGPU::S_WAITCNT)
         return true;
 
       ++NumInstr;
@@ -244,6 +244,10 @@ void SIInsertSkips::kill(MachineInstr &MI) {
       llvm_unreachable("invalid ISD:SET cond code");
     }
 
+    const GCNSubtarget &ST = MBB.getParent()->getSubtarget<GCNSubtarget>();
+    if (ST.hasNoSdstCMPX())
+      Opcode = AMDGPU::getVCMPXNoSDstOp(Opcode);
+
     assert(MI.getOperand(0).isReg());
 
     if (TRI->isVGPR(MBB.getParent()->getRegInfo(),
@@ -253,13 +257,16 @@ void SIInsertSkips::kill(MachineInstr &MI) {
           .add(MI.getOperand(1))
           .add(MI.getOperand(0));
     } else {
-      BuildMI(MBB, &MI, DL, TII->get(Opcode))
-          .addReg(AMDGPU::VCC, RegState::Define)
-          .addImm(0)  // src0 modifiers
-          .add(MI.getOperand(1))
-          .addImm(0)  // src1 modifiers
-          .add(MI.getOperand(0))
-          .addImm(0);  // omod
+      auto I = BuildMI(MBB, &MI, DL, TII->get(Opcode));
+      if (!ST.hasNoSdstCMPX())
+        I.addReg(AMDGPU::VCC, RegState::Define);
+
+      I.addImm(0)  // src0 modifiers
+        .add(MI.getOperand(1))
+        .addImm(0)  // src1 modifiers
+        .add(MI.getOperand(0));
+
+      I.addImm(0);  // omod
     }
     break;
   }
