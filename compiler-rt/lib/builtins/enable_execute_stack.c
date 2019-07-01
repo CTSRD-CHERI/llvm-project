@@ -57,8 +57,10 @@ COMPILER_RT_ABI void __enable_execute_stack(void *addr) {
 #endif // __APPLE__
 
 #if __has_builtin(__builtin_align_down)
-  unsigned char* startPage = (unsigned char*)__builtin_align_down(p, pageSize);
-  unsigned char* endPage = (unsigned char*)__builtin_align_up(p+TRAMPOLINE_SIZE, pageSize);
+  unsigned char *startPage =
+      (unsigned char *)__builtin_align_down(addr, pageSize);
+  unsigned char *endPage = (unsigned char *)__builtin_align_up(
+      (unsigned char *)addr + TRAMPOLINE_SIZE, pageSize);
 #else
   const uintptr_t pageAlignMask = ~(pageSize - 1);
   uintptr_t p = (uintptr_t)addr;
