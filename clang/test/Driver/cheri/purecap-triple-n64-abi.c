@@ -17,6 +17,17 @@
 // RUN: %clang -cc1as -triple cheri-unknown-freebsd-purecap -cheri-size 128 -target-cpu mips4 %s -o /dev/null
 // RUN: %clang -cc1as -triple cheri-unknown-freebsd-gnuabi64 -cheri-size 128 -target-cpu mips4 %s -o /dev/null
 
+// Check that we infer the correct mabi= from the triple if no ABI flag is set:
+// RUN: %clang -target mips64-unknown-freebsd-purecap -cheri=128 -mcpu=mips4 -c %s -o /dev/null -### 2>&1 | FileCheck %s -check-prefix INFER-PURECAP
+// RUN: %clang -target mips64-unknown-freebsd-gnuabi64 -cheri=128 -mcpu=mips4 -c %s -o /dev/null -### 2>&1 | FileCheck %s -check-prefix INFER-N64
+// RUN: %clang -target mips64-unknown-freebsd -cheri=128 -mcpu=mips4 -c %s -o /dev/null -### 2>&1 | FileCheck %s -check-prefix INFER-N64
+// RUN: %clang -target mips64-unknown-freebsd-purecap -cheri=128 -mcpu=mips4 -E %s -o /dev/null -### 2>&1 | FileCheck %s -check-prefix INFER-PURECAP
+// RUN: %clang -target mips64-unknown-freebsd-gnuabi64 -cheri=128 -mcpu=mips4 -E %s -o /dev/null -### 2>&1 | FileCheck %s -check-prefix INFER-N64
+// RUN: %clang -target mips64-unknown-freebsd -cheri=128 -mcpu=mips4 -E %s -o /dev/null -### 2>&1 | FileCheck %s -check-prefix INFER-N64
+// INFER-PURECAP: "-triple" "mips64-unknown-freebsd-purecap"
+// INFER-PURECAP-SAME: "-target-abi" "purecap"
+// INFER-N64: "-triple" "mips64-unknown-freebsd{{(-gnuabi64)?}}"
+// INFER-N64-SAME: "-target-abi" "n64"
 
 // Now check that the driver converts the triple if -mabi= is passed (but with a warning)
 

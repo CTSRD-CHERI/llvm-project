@@ -68,15 +68,6 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
     DefMips64CPU = "mips3";
   }
 
-  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap" ||
-      Triple.getEnvironment() == llvm::Triple::CheriPurecap ||
-      Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri64 ||
-      Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri128 ||
-      Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri256) {
-    DefMips32CPU = CHERICPU;
-    DefMips64CPU = CHERICPU;
-  }
-
   if (Arg *A = Args.getLastArg(clang::driver::options::OPT_march_EQ,
                                options::OPT_mcpu_EQ))
     CPUName = A->getValue();
@@ -89,6 +80,22 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                   .Case("32", "o32")
                   .Case("64", "n64")
                   .Default(ABIName);
+  }
+
+  if (ABIName.empty() && (Triple.getEnvironment() == llvm::Triple::CheriPurecap))
+    ABIName = "purecap";
+  else if (ABIName.empty() && (Triple.getEnvironment() == llvm::Triple::GNUABIN32))
+    ABIName = "n32";
+  else if (ABIName.empty() && (Triple.getEnvironment() == llvm::Triple::GNUABI64))
+    ABIName = "n64";
+
+  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap" ||
+      Triple.getEnvironment() == llvm::Triple::CheriPurecap ||
+      Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri64 ||
+      Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri128 ||
+      Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri256) {
+    DefMips32CPU = CHERICPU;
+    DefMips64CPU = CHERICPU;
   }
 
   // Setup default CPU and ABI names.
@@ -106,13 +113,9 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
       break;
     case llvm::Triple::cheri:
       CPUName = CHERICPU;
-      ABIName = "n64";
       break;
     }
   }
-
-  if (ABIName.empty() && (Triple.getEnvironment() == llvm::Triple::GNUABIN32))
-    ABIName = "n32";
 
   if (ABIName.empty() &&
       (Triple.getVendor() == llvm::Triple::MipsTechnologies ||

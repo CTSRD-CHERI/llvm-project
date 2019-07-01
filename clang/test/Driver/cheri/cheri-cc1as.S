@@ -67,6 +67,14 @@
 // RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -mabi=purecap -c %s -o - -mcpu=cheri128 \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-SANDBOX-HEADERS %s
 
+
+// mips64c128 should generate a purecap 128 binary
+// RUN: %plain_clang_cheri_triple_allowed -target mips64c128-unknown-freebsd -c %s -o - \
+// RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-SANDBOX-HEADERS %s
+// And mips64c128hybrid should generate a hybrid 128 binary
+// RUN: %plain_clang_cheri_triple_allowed -target mips64c128hybrid-unknown-freebsd -c %s -o - \
+// RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-N64-HEADERS %s
+
 // CHERI128-HEADERS:     Arch: cheri
 // CHERI128-HEADERS:     Flags [ (0x30C10006)
 // CHERI128-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
