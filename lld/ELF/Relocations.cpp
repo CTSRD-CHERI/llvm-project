@@ -1017,10 +1017,9 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
     // FIXME Improve the way we handle absolute relocation types that will
     // change to relative relocations. ARM has a relocation type R_ARM_TARGET1
     // that is similar to SymbolicRel. PPC64 may have similar relocation types.
-    // Same for MIPS
     if ((!IsPreemptibleValue &&
          (Config->EMachine == EM_ARM || Config->EMachine == EM_PPC64 ||
-          Config->EMachine == EM_MIPS || Type == Target->SymbolicRel)) ||
+          Type == Target->SymbolicRel)) ||
         Expr == R_GOT) {
       // If this is a symbolic relocation to a non-preemptable symbol, or an
       // R_GOT, its address is its link-time value plus load address. Represent
