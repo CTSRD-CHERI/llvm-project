@@ -5874,8 +5874,7 @@ static bool getTargetConstantBitsFromNode(SDValue Op, unsigned EltSizeInBits,
       if (UndefEltBits.getBoolValue() && !AllowPartialUndefs)
         return false;
 
-      APInt Bits = MaskBits.extractBits(EltSizeInBits, BitOffset);
-      EltBits[i] = Bits.getZExtValue();
+      EltBits[i] = MaskBits.extractBits(EltSizeInBits, BitOffset);
     }
     return true;
   };
