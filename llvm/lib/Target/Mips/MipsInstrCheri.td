@@ -493,7 +493,7 @@ def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
 // Int to pointer in address space 0
 def : Pat<(inttoptr (i64 0)),
           (CMove CNULL)>;
-let Predicates=[IsCHERIABI] in {
+let Predicates=[IsCHERI,IsCHERIABI] in {
 def : Pat<(inttoptr simm11s0Pattern:$imm),
           (CIncOffsetImm CNULL, simm11s0Pattern: $imm)>;
 def : Pat<(inttoptr GPR64Opnd:$rt),
@@ -644,7 +644,7 @@ def : Pat<(int_mips_kr2c_get), (CReadHwr CAPHWR23)>;
 def : Pat<(int_mips_kcc_get),  (CReadHwr CAPHWR29)>;
 def : Pat<(int_mips_kdc_get),  (CReadHwr CAPHWR30)>;
 def : Pat<(int_mips_epcc_get), (CReadHwr CAPHWR31)>;
-let Predicates=[IsCHERIABI] in {
+let Predicates=[IsCHERI,IsCHERIABI] in {
   // C11 is only defined in the purecap ABI
   def : Pat<(int_cheri_stack_cap_get), (CMove C11)>;
 }
@@ -886,9 +886,11 @@ def CapJumpLinkPseudo :
 def CapRet : SDNode<"MipsISD::CapRet", SDTNone,
                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
+let Predicates=[IsCHERI], hasNoSchedulingInfo=1 in
 def PseudoReturnCap: PseudoReturnBase<CheriOpnd>;
 
-let isReturn=1, isTerminator=1, hasDelaySlot=1, isBarrier=1, hasCtrlDep=1 in
+let isReturn=1, isTerminator=1, hasDelaySlot=1, isBarrier=1, hasCtrlDep=1,
+    Predicates=[IsCHERI], hasNoSchedulingInfo=1 in
 def CapRetPseudo : PseudoSE<(outs), (ins), [(CapRet)]>;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1071,13 +1073,14 @@ defm : StackCapPatterns<iFATPTR256, AddrFI256>;
 // def addrRegImm256 : ComplexPattern<iFATPTR256, 2, "selectAddrRegImm", [frameindex]>;
 
 
-let Defs = [C11], Uses = [C11], hasSideEffects = 1, Predicates=[IsCHERIABI] in {
+let Defs = [C11], Uses = [C11], hasSideEffects = 1, hasNoSchedulingInfo=1, Predicates=[IsCHERI,IsCHERIABI] in {
 def ADJCALLSTACKCAPDOWN : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                   [(callseq_start timm:$amt1, timm:$amt2)]>;
 def ADJCALLSTACKCAPUP   : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                   [(callseq_end timm:$amt1, timm:$amt2)]>;
 }
 
+let Predicates=[IsCHERI], hasNoSchedulingInfo=1 in
 def PseudoIndirectBranchCap : PseudoIndirectBranchBase<CJR, CheriOpnd>;
 
 
@@ -1133,4 +1136,5 @@ def : Pat<(load CheriOpnd:$cb),
 
 def PseudoPccRelativeAddress : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $addr),
                                            "#PseudoPccRelBlockAddress $cd, $addr", []>;
+let Predicates=[IsCHERI], hasNoSchedulingInfo=1 in
 def PseudoPccRelativeAddressPostRA : PseudoSE<(outs CheriOpnd:$dst), (ins CheriOpnd:$addr), []>;
