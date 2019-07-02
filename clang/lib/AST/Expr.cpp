@@ -1898,6 +1898,7 @@ bool CastExpr::CastConsistency() const {
   case CK_FloatingComplexToBoolean:
   case CK_IntegralComplexToBoolean:
   case CK_LValueBitCast:            // -> bool&
+  case CK_LValueToRValueBitCast:
   case CK_UserDefinedConversion:    // operator bool()
   case CK_BuiltinFnToFnPtr:
   case CK_FixedPointToBoolean:
@@ -3562,7 +3563,8 @@ bool Expr::HasSideEffects(const ASTContext &Ctx,
   case CXXStaticCastExprClass:
   case CXXReinterpretCastExprClass:
   case CXXConstCastExprClass:
-  case CXXFunctionalCastExprClass: {
+  case CXXFunctionalCastExprClass:
+  case BuiltinBitCastExprClass: {
     // While volatile reads are side-effecting in both C and C++, we treat them
     // as having possible (not definite) side-effects. This allows idiomatic
     // code to behave without warning, such as sizeof(*v) for a volatile-

@@ -1046,6 +1046,7 @@ static bool rewriteToNumericBoxedExpression(const ObjCMessageExpr *Msg,
     case CK_Dependent:
     case CK_BitCast:
     case CK_LValueBitCast:
+    case CK_LValueToRValueBitCast:
     case CK_BaseToDerived:
     case CK_DerivedToBase:
     case CK_UncheckedDerivedToBase:
