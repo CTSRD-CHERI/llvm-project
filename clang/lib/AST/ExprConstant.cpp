@@ -5493,6 +5493,7 @@ class APValueToBufferConverter {
     case APValue::LValue:
       llvm_unreachable("LValue subobject in bit_cast?");
     }
+    llvm_unreachable("Unhandled APValue::ValueKind");
   }
 
   bool visitRecord(const APValue &Val, QualType Ty, CharUnits Offset) {
@@ -5761,6 +5762,7 @@ class BufferToAPValueConverter {
     llvm_unreachable("either dependent or not canonical!");
 #include "clang/AST/TypeNodes.def"
     }
+    llvm_unreachable("Unhandled Type::TypeClass");
   }
 
 public:
