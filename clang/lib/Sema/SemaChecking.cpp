@@ -222,9 +222,6 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
 
   clang::Expr *Source = TheCall->getArg(0);
   clang::Expr *AlignOp = TheCall->getArg(1);
-  // Can't do anything for dependent types
-  if (Source->isInstantiationDependent() || AlignOp->isInstantiationDependent())
-    return true;
   bool IsBooleanAlignBuiltin = ID == Builtin::BI__builtin_is_aligned ||
                                ID == Builtin::BI__builtin_is_p2aligned;
 
@@ -253,7 +250,8 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
   // TODO: allow zero as an always true result?
   Expr::EvalResult AlignResult;
   unsigned MaxAlignmentBits = S.Context.getIntRange(SrcTy) - 1;
-  if (AlignOp->EvaluateAsInt(AlignResult, S.Context, Expr::SE_AllowSideEffects)) {
+  // Can't check validity of alignment if it is type dependent
+  if (!AlignOp->isInstantiationDependent() && AlignOp->EvaluateAsInt(AlignResult, S.Context, Expr::SE_AllowSideEffects)) {
     llvm::APSInt AlignValue = AlignResult.Val.getInt();
     if (PowerOfTwo) {
      if (AlignValue == 0) {

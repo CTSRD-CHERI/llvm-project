@@ -20,3 +20,21 @@ void test(void* value) {
   c<struct x, foo>(value); // expected-error{{no matching function for call to 'c'}}
 #endif
 }
+
+
+// The fix for the issue above broke some legitimate code. Here is a regression test:
+typedef __SIZE_TYPE__ size_t;
+void* allocate_impl(size_t size);
+template<typename T>
+T* allocate() {
+       constexpr size_t allocation_size =
+           __builtin_align_up(sizeof(T), sizeof(void*));
+       return static_cast<T*>(
+          __builtin_assume_aligned(allocate_impl(allocation_size), sizeof(void*)));
+}
+struct Foo {
+  int value;
+};
+void* test2() {
+  return allocate<struct Foo>();
+}
