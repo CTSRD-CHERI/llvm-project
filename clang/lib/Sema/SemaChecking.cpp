@@ -222,6 +222,9 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
 
   clang::Expr *Source = TheCall->getArg(0);
   clang::Expr *AlignOp = TheCall->getArg(1);
+  // Can't do anything for dependent types
+  if (Source->isInstantiationDependent() || AlignOp->isInstantiationDependent())
+    return true;
   bool IsBooleanAlignBuiltin = ID == Builtin::BI__builtin_is_aligned ||
                                ID == Builtin::BI__builtin_is_p2aligned;
 
