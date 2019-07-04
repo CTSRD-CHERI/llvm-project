@@ -239,6 +239,7 @@ public:
 
 static MCTargetStreamer *createAsmTargetStreamer(MCStreamer &S,
                                                  formatted_raw_ostream &OS,
+                                                 const MCAsmBackend &MAB,
                                                  MCInstPrinter *InstPrint,
                                                  bool isVerboseAsm) {
   return new PPCTargetAsmStreamer(S, OS);

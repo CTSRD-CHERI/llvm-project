@@ -1,21 +1,7 @@
 ; RUN: %cheri128_purecap_opt -cheri-purecap-alloca %s -o - -S | FileCheck %s
-
 target datalayout = "E-m:m-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 declare i32 @use32(i32 addrspace(200)*) #1
 declare i32 @use8(i8 addrspace(200)*) #1
-
-@global_128 = common global [128 x i8] zeroinitializer, align 1
-; no need to increase alignment for 128 bytes
-@global_4096 = common global [4096 x i8] zeroinitializer, align 1
-; CHECK: @global_4096 = common global [4096 x i8] zeroinitializer, align 8
-@global_32768 = common global [32768 x i8] zeroinitializer, align 1
-; CHECK: @global_32768 = common global [32768 x i8] zeroinitializer, align 64
-@global_65536_const = internal constant [65536 x i8] zeroinitializer, align 1
-; CHECK: @global_65536_const = internal constant [65536 x i8] zeroinitializer, align 128
-@global_65537 = common global [65537 x i8] zeroinitializer, align 1
-; CHECK: @global_65537 = common global [65537 x i8] zeroinitializer, align 128
-@global_65537_int = internal global [65537 x i8] zeroinitializer, align 1
-; CHECK: @global_65537_int = internal global [65537 x i8] zeroinitializer, align 128
 
 define i32 @foo() nounwind {
 entry:

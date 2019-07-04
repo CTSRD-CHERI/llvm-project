@@ -26,6 +26,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
 
+#include "../cheri-compressed-cap/cheri_compressed_cap.h"
+
 using namespace llvm;
 
 namespace {
@@ -34,8 +36,27 @@ static cl::opt<bool> RoundSectionSizes(
     cl::desc("Round section sizes up to the section alignment"), cl::Hidden);
 } // end anonymous namespace
 
-MipsTargetStreamer::MipsTargetStreamer(MCStreamer &S)
-    : MCTargetStreamer(S), ModuleDirectiveAllowed(true) {
+llvm::Optional<unsigned> llvm::getCheriCapabilitySize(FeatureBitset Features) {
+  if (Features[Mips::FeatureMipsCheri256]) {
+    assert(Features[Mips::FeatureMipsCheri]);
+    return 32;
+  }
+  if (Features[Mips::FeatureMipsCheri128]) {
+    assert(Features[Mips::FeatureMipsCheri]);
+    return 16;
+  }
+  if (Features[Mips::FeatureMipsCheri64]) {
+    assert(Features[Mips::FeatureMipsCheri]);
+    return 8;
+  }
+  assert(!Features[Mips::FeatureMipsCheri]);
+  return None;
+}
+
+MipsTargetStreamer::MipsTargetStreamer(MCStreamer &S,
+                                       llvm::Optional<unsigned> CheriCapSize)
+    : MCTargetStreamer(S), CheriCapSize(CheriCapSize),
+      ModuleDirectiveAllowed(true) {
   GPRInfoSet = FPRInfoSet = FrameInfoSet = false;
 }
 void MipsTargetStreamer::emitDirectiveSetMicroMips() {}
@@ -372,9 +393,36 @@ void MipsTargetStreamer::emitLoadWithSymOffset(unsigned Opcode, unsigned DstReg,
   emitRRX(Opcode, DstReg, TmpReg, LoOperand, IDLoc, STI);
 }
 
-MipsTargetAsmStreamer::MipsTargetAsmStreamer(MCStreamer &S,
-                                             formatted_raw_ostream &OS)
-    : MipsTargetStreamer(S), OS(OS) {}
+TailPaddingAmount
+MipsTargetStreamer::getTailPaddingForPreciseBounds(unsigned Size) {
+  // TODO: make this a check whether the optional is set
+  if (!CheriCapSize)
+    return TailPaddingAmount::None;
+  if (*CheriCapSize == 16) {
+    return static_cast<TailPaddingAmount>(
+        llvm::alignTo(Size, cc128_get_required_alignment(Size)) - Size);
+  }
+  assert(*CheriCapSize == 32);
+  // No padding required for CHERI256
+  return TailPaddingAmount::None;
+}
+
+unsigned MipsTargetStreamer::getAlignmentForPreciseBounds(unsigned Size) {
+  // TODO: make this a check whether the optional is set
+  if (!CheriCapSize)
+    return 1;
+  if (*CheriCapSize == 16) {
+    return cc128_get_required_alignment(Size);
+  }
+  assert(*CheriCapSize == 32);
+  // No padding required for CHERI256
+  return 1;
+}
+
+MipsTargetAsmStreamer::MipsTargetAsmStreamer(
+    MCStreamer &S, llvm::Optional<unsigned> CheriCapSize,
+    formatted_raw_ostream &OS)
+    : MipsTargetStreamer(S, CheriCapSize), OS(OS) {}
 
 void MipsTargetAsmStreamer::emitDirectiveSetMicroMips() {
   OS << "\t.set\tmicromips\n";
@@ -769,7 +817,8 @@ void MipsTargetAsmStreamer::emitDirectiveModuleNoGINV() {
 // This part is for ELF object output.
 MipsTargetELFStreamer::MipsTargetELFStreamer(MCStreamer &S,
                                              const MCSubtargetInfo &STI)
-    : MipsTargetStreamer(S), MicroMipsEnabled(false), STI(STI) {
+    : MipsTargetStreamer(S, getCheriCapabilitySize(STI.getFeatureBits())),
+      MicroMipsEnabled(false), STI(STI) {
   MCAssembler &MCA = getStreamer().getAssembler();
 
   // It's possible that MCObjectFileInfo isn't fully initialized at this point

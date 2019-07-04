@@ -4852,11 +4852,13 @@ bool AsmParser::parseDirectiveComm(bool IsLocal) {
 
   // Create the Symbol as a common or local common with Size and Pow2Alignment
   if (IsLocal) {
-    getStreamer().EmitLocalCommonSymbol(Sym, Size, 1 << Pow2Alignment);
+    getStreamer().EmitLocalCommonSymbol(Sym, Size, 1 << Pow2Alignment,
+                                        TailPaddingAmount::None);
     return false;
   }
 
-  getStreamer().EmitCommonSymbol(Sym, Size, 1 << Pow2Alignment);
+  getStreamer().EmitCommonSymbol(Sym, Size, 1 << Pow2Alignment,
+                                 TailPaddingAmount::None);
   return false;
 }
 

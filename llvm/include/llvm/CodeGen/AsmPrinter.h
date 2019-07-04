@@ -353,7 +353,8 @@ public:
   virtual const MCExpr *lowerConstant(const Constant *CV);
 
   /// Print a general LLVM constant to the .s file.
-  void EmitGlobalConstant(const DataLayout &DL, const Constant *CV);
+  void EmitGlobalConstant(const DataLayout &DL, const Constant *CV,
+                          unsigned TailPadding);
 
   /// Unnamed constant global variables solely contaning a pointer to
   /// another globals variable act like a global variable "proxy", or GOT
@@ -420,7 +421,7 @@ public:
   /// Targets can override this to change how global constants that are part of
   /// a C++ static/global constructor list are emitted.
   virtual void EmitXXStructor(const DataLayout &DL, const Constant *CV) {
-    EmitGlobalConstant(DL, CV);
+    EmitGlobalConstant(DL, CV, 0);
   }
 
   /// Return true if the basic block has exactly one predecessor and the control

@@ -85,6 +85,7 @@ createObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
 
 static MCTargetStreamer *createAsmTargetStreamer(MCStreamer &S,
                                                  formatted_raw_ostream &OS,
+                                                 const MCAsmBackend &MAB,
                                                  MCInstPrinter * /*InstPrint*/,
                                                  bool /*isVerboseAsm*/) {
   return new WebAssemblyTargetAsmStreamer(S, OS);

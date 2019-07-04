@@ -16,6 +16,7 @@
 #include "MCTargetDesc/MipsFixupKinds.h"
 #include "MCTargetDesc/MipsMCExpr.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
+#include "MipsTargetStreamer.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
@@ -695,5 +696,7 @@ MCAsmBackend *llvm::createMipsAsmBackend(const Target &T,
                                          const MCRegisterInfo &MRI,
                                          const MCTargetOptions &Options) {
   MipsABIInfo ABI = MipsABIInfo::computeTargetABI(STI.getTargetTriple(), STI.getCPU(), Options);
-  return new MipsAsmBackend(T, MRI, STI.getTargetTriple(), STI.getCPU(), ABI.IsN32());
+  auto CapSize = getCheriCapabilitySize(STI.getFeatureBits());
+  return new MipsAsmBackend(T, MRI, STI.getTargetTriple(), STI.getCPU(),
+                            ABI.IsN32(), CapSize);
 }

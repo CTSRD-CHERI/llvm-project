@@ -185,6 +185,9 @@ public:
     return false;
   }
 
+  /// \returns the size of a CHERI capability or None if not supported
+  virtual llvm::Optional<unsigned> getCheriCapSize() const { return None; }
+
   /// Handles all target related code padding when starting to write a new
   /// basic block to an object file.
   ///

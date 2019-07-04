@@ -125,13 +125,14 @@ static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
 
 static MCTargetStreamer *createMipsAsmTargetStreamer(MCStreamer &S,
                                                      formatted_raw_ostream &OS,
+                                                     const MCAsmBackend &MAB,
                                                      MCInstPrinter *InstPrint,
                                                      bool isVerboseAsm) {
-  return new MipsTargetAsmStreamer(S, OS);
+  return new MipsTargetAsmStreamer(S, MAB.getCheriCapSize(), OS);
 }
 
 static MCTargetStreamer *createMipsNullTargetStreamer(MCStreamer &S) {
-  return new MipsTargetStreamer(S);
+  return new MipsTargetStreamer(S, None);
 }
 
 static MCTargetStreamer *

@@ -444,6 +444,7 @@ bool X86WinCOFFTargetStreamer::emitFPOData(const MCSymbol *ProcSym, SMLoc L) {
 
 MCTargetStreamer *llvm::createX86AsmTargetStreamer(MCStreamer &S,
                                                    formatted_raw_ostream &OS,
+                                                   const MCAsmBackend &MAB,
                                                    MCInstPrinter *InstPrinter,
                                                    bool IsVerboseAsm) {
   // FIXME: This makes it so we textually assemble COFF directives on ELF.

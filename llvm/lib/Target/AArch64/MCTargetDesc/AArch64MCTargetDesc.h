@@ -59,6 +59,7 @@ std::unique_ptr<MCObjectTargetWriter> createAArch64WinCOFFObjectWriter();
 
 MCTargetStreamer *createAArch64AsmTargetStreamer(MCStreamer &S,
                                                  formatted_raw_ostream &OS,
+                                                 const MCAsmBackend &MAB,
                                                  MCInstPrinter *InstPrint,
                                                  bool isVerboseAsm);
 

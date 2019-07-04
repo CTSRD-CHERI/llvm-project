@@ -379,6 +379,7 @@ public:
     for (Function &F : Mod)
       Modified |= runOnFunction(F);
 
+#if 0
     auto &DL = Mod.getDataLayout();
     if (IsCheri128) {
       for (auto &G : Mod.globals()) {
@@ -400,6 +401,7 @@ public:
         }
       }
     }
+#endif
     return Modified;
   }
 

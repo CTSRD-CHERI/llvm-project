@@ -870,11 +870,11 @@ bool DarwinAsmParser::parseDirectiveTBSS(StringRef, SMLoc) {
   if (!Sym->isUndefined())
     return Error(IDLoc, "invalid symbol redefinition of " + Sym->getName());
 
-  getStreamer().EmitTBSSSymbol(getContext().getMachOSection(
-                                 "__DATA", "__thread_bss",
-                                 MachO::S_THREAD_LOCAL_ZEROFILL,
-                                 0, SectionKind::getThreadBSS()),
-                               Sym, Size, 1 << Pow2Alignment);
+  getStreamer().EmitTBSSSymbol(
+      getContext().getMachOSection("__DATA", "__thread_bss",
+                                   MachO::S_THREAD_LOCAL_ZEROFILL, 0,
+                                   SectionKind::getThreadBSS()),
+      Sym, Size, TailPaddingAmount::None, 1 << Pow2Alignment);
 
   return false;
 }
@@ -904,7 +904,8 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
     getStreamer().EmitZerofill(
         getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
                                      SectionKind::getBSS()),
-        /*Symbol=*/nullptr, /*Size=*/0, /*ByteAlignment=*/0, SectionLoc);
+        /*Symbol=*/nullptr, /*Size=*/0, /*ByteAlignment=*/0,
+        TailPaddingAmount::None, SectionLoc);
     return false;
   }
 
@@ -960,10 +961,10 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
   // Create the zerofill Symbol with Size and Pow2Alignment
   //
   // FIXME: Arch specific.
-  getStreamer().EmitZerofill(getContext().getMachOSection(
-                               Segment, Section, MachO::S_ZEROFILL,
-                               0, SectionKind::getBSS()),
-                             Sym, Size, 1 << Pow2Alignment, SectionLoc);
+  getStreamer().EmitZerofill(
+      getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
+                                   SectionKind::getBSS()),
+      Sym, Size, 1 << Pow2Alignment, TailPaddingAmount::None, SectionLoc);
 
   return false;
 }

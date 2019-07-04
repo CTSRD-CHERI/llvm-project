@@ -502,6 +502,26 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   // sections and expected to be contiguous (e.g. ObjC metadata).
   unsigned AlignLog = getGVAlignmentLog2(GV, DL);
 
+  auto TS = OutStreamer->getTargetStreamer();
+  const TailPaddingAmount TailPadding =
+      TS ? TS->getTailPaddingForPreciseBounds(Size) : TailPaddingAmount::None;
+  const unsigned PreciseAlignment =
+      TS ? TS->getAlignmentForPreciseBounds(Size) : 1;
+
+  if (PreciseAlignment > (1u << AlignLog)) {
+    LLVM_DEBUG(dbgs() << "\nIncreased alignment for global from "
+                      << (1u << AlignLog) << " to " << PreciseAlignment << ": ";
+               GV->dump(););
+    // Don't increase alignment if a custom section has been specified:
+    if (!GV->hasSection()) {
+      AlignLog = Log2_32(PreciseAlignment);
+    } else {
+      // TODO: add some attribute, emit a sensible warning?
+      errs() << "Not overriding global variable alignment for " << GV->getName()
+             << " since it has a section assigned.";
+    }
+  }
+
   for (const HandlerInfo &HI : Handlers) {
     NamedRegionTimer T(HI.TimerName, HI.TimerDescription,
                        HI.TimerGroupName, HI.TimerGroupDescription,
@@ -517,7 +537,7 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
       Align = 0;
 
     // .comm _foo, 42, 4
-    OutStreamer->EmitCommonSymbol(GVSym, Size, Align);
+    OutStreamer->EmitCommonSymbol(GVSym, Size, Align, TailPadding);
     return;
   }
 
@@ -533,7 +553,7 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
     unsigned Align = 1 << AlignLog;
     EmitLinkage(GV, GVSym);
     // .zerofill __DATA, __bss, _foo, 400, 5
-    OutStreamer->EmitZerofill(TheSection, GVSym, Size, Align);
+    OutStreamer->EmitZerofill(TheSection, GVSym, Size, Align, TailPadding);
     return;
   }
 
@@ -553,7 +573,7 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
     // Prefer to simply fall back to .local / .comm in this case.
     if (MAI->getLCOMMDirectiveAlignmentType() != LCOMM::NoAlignment) {
       // .lcomm _foo, 42
-      OutStreamer->EmitLocalCommonSymbol(GVSym, Size, Align);
+      OutStreamer->EmitLocalCommonSymbol(GVSym, Size, Align, TailPadding);
       return;
     }
 
@@ -563,7 +583,7 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
     // .local _foo
     OutStreamer->EmitSymbolAttribute(GVSym, MCSA_Local);
     // .comm _foo, 42, 4
-    OutStreamer->EmitCommonSymbol(GVSym, Size, Align);
+    OutStreamer->EmitCommonSymbol(GVSym, Size, Align, TailPadding);
     return;
   }
 
@@ -584,15 +604,16 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
 
     if (GVKind.isThreadBSS()) {
       TheSection = getObjFileLowering().getTLSBSSSection();
-      OutStreamer->EmitTBSSSymbol(TheSection, MangSym, Size, 1 << AlignLog);
+      OutStreamer->EmitTBSSSymbol(TheSection, MangSym, Size, TailPadding,
+                                  1 << AlignLog);
     } else if (GVKind.isThreadData()) {
       OutStreamer->SwitchSection(TheSection);
 
       EmitAlignment(AlignLog, GV);
       OutStreamer->EmitLabel(MangSym);
 
-      EmitGlobalConstant(GV->getParent()->getDataLayout(),
-                         GV->getInitializer());
+      EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
+                         static_cast<unsigned>(TailPadding));
     }
 
     OutStreamer->AddBlankLine();
@@ -628,7 +649,8 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
 
   OutStreamer->EmitLabel(EmittedInitSym);
 
-  EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer());
+  EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
+                     static_cast<unsigned>(TailPadding));
 
   if (MAI->hasDotTypeDotSizeDirective())
     // .size foo, 42
@@ -689,12 +711,12 @@ void AsmPrinter::EmitFunctionHeader() {
       MCSymbol *PrefixSym = OutContext.createLinkerPrivateTempSymbol();
       OutStreamer->EmitLabel(PrefixSym);
 
-      EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData());
+      EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData(), 0);
 
       // Emit an .alt_entry directive for the actual function symbol.
       OutStreamer->EmitSymbolAttribute(CurrentFnSym, MCSA_AltEntry);
     } else {
-      EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData());
+      EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData(), 0);
     }
   }
 
@@ -732,7 +754,7 @@ void AsmPrinter::EmitFunctionHeader() {
 
   // Emit the prologue data.
   if (F.hasPrologueData())
-    EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrologueData());
+    EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrologueData(), 0);
 }
 
 /// EmitFunctionEntryLabel - Emit the label that is the entrypoint for the
@@ -1787,7 +1809,7 @@ void AsmPrinter::EmitConstantPool() {
       if (CPE.isMachineConstantPoolEntry())
         EmitMachineConstantPoolValue(CPE.Val.MachineCPVal);
       else
-        EmitGlobalConstant(getDataLayout(), CPE.Val.ConstVal);
+        EmitGlobalConstant(getDataLayout(), CPE.Val.ConstVal, 0);
     }
   }
 }
@@ -2820,7 +2842,8 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 }
 
 /// EmitGlobalConstant - Print a general LLVM constant to the .s file.
-void AsmPrinter::EmitGlobalConstant(const DataLayout &DL, const Constant *CV) {
+void AsmPrinter::EmitGlobalConstant(const DataLayout &DL, const Constant *CV,
+                                    unsigned TailPadding) {
   uint64_t Size = DL.getTypeAllocSize(CV->getType());
   if (Size)
     emitGlobalConstantImpl(DL, CV, *this);
@@ -2828,6 +2851,10 @@ void AsmPrinter::EmitGlobalConstant(const DataLayout &DL, const Constant *CV) {
     // If the global has zero size, emit a single byte so that two labels don't
     // look like they are at the same location.
     OutStreamer->EmitIntValue(0, 1);
+  }
+  if (TailPadding != 0) {
+    OutStreamer->AddComment("Tail padding to ensure precise bounds");
+    OutStreamer->EmitZeros(TailPadding);
   }
 }
 

@@ -16,14 +16,18 @@
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/SubtargetFeature.h"
 
 namespace llvm {
 
 struct MipsABIFlagsSection;
 
+// TODO: move this somewhere common
+llvm::Optional<unsigned> getCheriCapabilitySize(FeatureBitset Features);
+
 class MipsTargetStreamer : public MCTargetStreamer {
 public:
-  MipsTargetStreamer(MCStreamer &S);
+  MipsTargetStreamer(MCStreamer &S, llvm::Optional<unsigned> CheriCapSize);
 
   virtual void setPic(bool Value) {}
 
@@ -184,9 +188,19 @@ public:
     return *ABI;
   }
 
+  /// CHERI128 uses compressed capabilities. If we would like to guarantee
+  /// non-overlapping bounds for all global symbols we must over-align the
+  /// symbol if the size is no precisely representable. We also add padding at
+  /// the end to ensure that we cannot access another variable that happens to
+  /// be located in the bytes that are accessible after the end of the object
+  /// due to the bounds having been rounded up.
+  TailPaddingAmount getTailPaddingForPreciseBounds(unsigned Size) override;
+  unsigned getAlignmentForPreciseBounds(unsigned Size) override;
+
 protected:
   llvm::Optional<MipsABIInfo> ABI;
   MipsABIFlagsSection ABIFlagsSection;
+  llvm::Optional<unsigned> CheriCapSize = 0;
 
   bool GPRInfoSet;
   unsigned GPRBitMask;
@@ -210,7 +224,8 @@ class MipsTargetAsmStreamer : public MipsTargetStreamer {
   formatted_raw_ostream &OS;
 
 public:
-  MipsTargetAsmStreamer(MCStreamer &S, formatted_raw_ostream &OS);
+  MipsTargetAsmStreamer(MCStreamer &S, llvm::Optional<unsigned> CheriCapSize,
+                        formatted_raw_ostream &OS);
   void emitDirectiveSetMicroMips() override;
   void emitDirectiveSetNoMicroMips() override;
   void emitDirectiveSetMips16() override;

@@ -232,8 +232,10 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     const MachineConstantPoolEntry &MCPE = MCP->getConstants()[CPIdx];
     if (MCPE.isMachineConstantPoolEntry())
       EmitMachineConstantPoolValue(MCPE.Val.MachineCPVal);
-    else
-      EmitGlobalConstant(MF->getDataLayout(), MCPE.Val.ConstVal);
+    else {
+      // XXXAR: should not need tail padding here since all entries are small
+      EmitGlobalConstant(MF->getDataLayout(), MCPE.Val.ConstVal, 0);
+    }
     return;
   }
 
