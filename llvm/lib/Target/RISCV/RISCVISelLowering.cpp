@@ -3015,6 +3015,37 @@ Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilder<> &Builder,
   return nullptr;
 }
 
+EVT RISCVTargetLowering::getOptimalMemOpType(
+    uint64_t Size, unsigned DstAlign, unsigned SrcAlign, bool IsMemset,
+    bool ZeroMemset, bool MemcpyStrSrc,
+    const AttributeList &FuncAttributes) const {
+  // CHERI memcpy/memmove must be tag-preserving, either through explicit
+  // capability loads/stores or by making a runtime library call. We can't use
+  // capability stores as an optimisation for memset unless zeroing.
+  if (Subtarget.hasCheri() && (!IsMemset || ZeroMemset)) {
+    unsigned CapSize = Subtarget.typeForCapabilities().getSizeInBits() / 8;
+    if (Size >= CapSize) {
+      unsigned MinSrcAlign = SrcAlign == 0 ? DstAlign : SrcAlign;
+      unsigned MinDstAlign = DstAlign == 0 ? SrcAlign : DstAlign;
+      unsigned Align = IsMemset ? DstAlign : std::min(MinSrcAlign, MinDstAlign);
+      // If sufficiently aligned, we must use capability loads/stores if
+      // copying, and can use cnull for a zeroing memset.
+      if (Align >= CapSize || Align == 0)
+        return CapType;
+      // Otherwise if this is a copy then tell SelectionDAG to do a real
+      // memcpy/memmove call, since it could still contain a capability if
+      // sufficiently aligned at runtime. Zeroing memsets can fall back on
+      // non-capability loads/stores.
+      if (!IsMemset)
+        return MVT::isVoid;
+    }
+  }
+
+  return TargetLowering::getOptimalMemOpType(
+      Size, DstAlign, SrcAlign, IsMemset, ZeroMemset, MemcpyStrSrc,
+      FuncAttributes);
+}
+
 TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // atomicrmw {fadd,fsub} must be expanded to use compare-exchange, as floating
