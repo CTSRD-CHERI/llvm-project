@@ -1205,9 +1205,6 @@ public:
   }
 
   Value *CreateAnd(Value *LHS, Value *RHS, const Twine &Name = "") {
-    if (auto *LC = dyn_cast<ConstantInt>(LHS))
-      if (LC->isMinusOne())
-        return RHS;  // -1 & RHS = RHS
     if (auto *RC = dyn_cast<Constant>(RHS)) {
       if (isa<ConstantInt>(RC) && cast<ConstantInt>(RC)->isMinusOne())
         return LHS;  // LHS & -1 -> LHS
@@ -1234,9 +1231,6 @@ public:
   }
 
   Value *CreateOr(Value *LHS, Value *RHS, const Twine &Name = "") {
-    if (auto *LC = dyn_cast<Constant>(LHS))
-      if (LC->isNullValue())
-        return RHS;  //  0 | RHS -> RHS
     if (auto *RC = dyn_cast<Constant>(RHS)) {
       if (RC->isNullValue())
         return LHS;  // LHS | 0 -> LHS
