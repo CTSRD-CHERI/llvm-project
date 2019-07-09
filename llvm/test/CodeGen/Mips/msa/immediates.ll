@@ -1,4 +1,5 @@
-; RUN: llc -march=mips -mattr=+msa,+fp64 -relocation-model=pic < %s | FileCheck %s -check-prefixes=CHECK,MSA32
+; RUN: llc -march=mips -mattr=+msa,+fp64,+mips32r2 -relocation-model=pic < %s \
+; RUN:      | FileCheck %s -check-prefixes=CHECK,MSA32
 ; RUN: llc -march=mips64 -mattr=+msa,+fp64 -relocation-model=pic -target-abi n32 < %s \
 ; RUN:      | FileCheck %s -check-prefixes=CHECK,MSA64,MSA64N32
 ; For some hard to debug reason this is broken with CHERI clang, but we don't care about MSA
