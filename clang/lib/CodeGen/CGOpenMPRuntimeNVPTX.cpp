@@ -4932,6 +4932,7 @@ void CGOpenMPRuntimeNVPTX::checkArchForUnifiedAddressing(
       case CudaArch::GFX902:
       case CudaArch::GFX904:
       case CudaArch::GFX906:
+      case CudaArch::GFX908:
       case CudaArch::GFX909:
       case CudaArch::UNKNOWN:
         break;
@@ -4986,6 +4987,7 @@ static std::pair<unsigned, unsigned> getSMsBlocksPerSM(CodeGenModule &CGM) {
   case CudaArch::GFX902:
   case CudaArch::GFX904:
   case CudaArch::GFX906:
+  case CudaArch::GFX908:
   case CudaArch::GFX909:
   case CudaArch::UNKNOWN:
     break;
