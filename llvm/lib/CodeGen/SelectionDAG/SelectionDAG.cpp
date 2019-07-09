@@ -5855,6 +5855,7 @@ static SDValue getMemcpyLoadsAndStores(
     MachinePointerInfo SrcPtrInfo, StringRef CopyTy,
     CodeGenOpt::Level OptLevel) {
   // Turn a memcpy of undef to nop.
+  // FIXME: We need to honor volatile even is Src is undef.
   if (Src.isUndef())
     return Chain;
 
@@ -5880,13 +5881,13 @@ static SDValue getMemcpyLoadsAndStores(
   bool CopyFromConstant = isMemSrcFromConstant(Src, Slice);
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
-  const bool FoundLowering = TLI.findOptimalMemOpLowering(MemOps, Limit, Size,
-                                    (DstAlignCanChange ? 0 : Align),
-                                    (isZeroConstant ? 0 : SrcAlign),
-                                    false, false, CopyFromConstant, true, MustPreserveCheriCapabilities,
-                                    DstPtrInfo.getAddrSpace(),
-                                    SrcPtrInfo.getAddrSpace(),
-                                    MF.getFunction().getAttributes());
+  const bool FoundLowering = TLI.findOptimalMemOpLowering(
+          MemOps, Limit, Size, (DstAlignCanChange ? 0 : Align),
+          (isZeroConstant ? 0 : SrcAlign), /*IsMemset=*/false,
+          /*ZeroMemset=*/false, /*MemcpyStrSrc=*/CopyFromConstant,
+          /*AllowOverlap=*/!isVol, MustPreserveCheriCapabilities,
+          DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
+          MF.getFunction().getAttributes());
 
   // Don't warn about inefficient memcpy if we reached the inline memcpy limit
   // Also don't warn about copies of less than CapSize
@@ -6074,6 +6075,7 @@ static SDValue getMemmoveLoadsAndStores(
     MachinePointerInfo SrcPtrInfo, StringRef MoveTy,
     CodeGenOpt::Level OptLevel) {
   // Turn a memmove of undef to nop.
+  // FIXME: We need to honor volatile even is Src is undef.
   if (Src.isUndef())
     return Chain;
 
@@ -6094,12 +6096,16 @@ static SDValue getMemmoveLoadsAndStores(
   if (Align > SrcAlign)
     SrcAlign = Align;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemmove(OptSize);
-  const bool FoundLowering = TLI.findOptimalMemOpLowering(MemOps, Limit, Size,
-                                    (DstAlignCanChange ? 0 : Align), SrcAlign,
-                                    false, false, false, false, MustPreserveCheriCapabilities,
-                                    DstPtrInfo.getAddrSpace(),
-                                    SrcPtrInfo.getAddrSpace(),
-                                    MF.getFunction().getAttributes());
+  // FIXME: `AllowOverlap` should really be `!isVol` but there is a bug in
+  // findOptimalMemOpLowering. Meanwhile, setting it to `false` produces the
+  // correct code.
+  bool AllowOverlap = false;
+  const bool FoundLowering = TLI.findOptimalMemOpLowering(
+          MemOps, Limit, Size, (DstAlignCanChange ? 0 : Align), SrcAlign,
+          /*IsMemset=*/false, /*ZeroMemset=*/false, /*MemcpyStrSrc=*/false,
+          AllowOverlap, MustPreserveCheriCapabilities,
+          DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
+          MF.getFunction().getAttributes());
 
   // Don't warn about inefficient memcpy if we reached the inline memmove limit
   // Also don't warn about copies of less than CapSize
@@ -6207,6 +6213,7 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
                                uint64_t Size, unsigned Align, bool isVol,
                                MachinePointerInfo DstPtrInfo) {
   // Turn a memset of undef to nop.
+  // FIXME: We need to honor volatile even is Src is undef.
   if (Src.isUndef())
     return Chain;
 
@@ -6223,11 +6230,12 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
     DstAlignCanChange = true;
   bool IsZeroVal =
     isa<ConstantSDNode>(Src) && cast<ConstantSDNode>(Src)->isNullValue();
-  if (!TLI.findOptimalMemOpLowering(MemOps, TLI.getMaxStoresPerMemset(OptSize),
-                                    Size, (DstAlignCanChange ? 0 : Align), 0,
-                                    true, IsZeroVal, false, true, false,
-                                    DstPtrInfo.getAddrSpace(), ~0u,
-                                    MF.getFunction().getAttributes()))
+  if (!TLI.findOptimalMemOpLowering(
+          MemOps, TLI.getMaxStoresPerMemset(OptSize), Size,
+          (DstAlignCanChange ? 0 : Align), 0, /*IsMemset=*/true,
+          /*ZeroMemset=*/IsZeroVal, /*MemcpyStrSrc=*/false,
+          /*AllowOverlap=*/!isVol, /*MustPreserveCheriCaps=*/false,
+          DstPtrInfo.getAddrSpace(), ~0u, MF.getFunction().getAttributes()))
     return SDValue();
 
   if (DstAlignCanChange) {
