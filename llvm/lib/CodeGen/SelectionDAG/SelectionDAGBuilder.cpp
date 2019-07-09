@@ -4043,7 +4043,8 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
   bool isVolatile = I.isVolatile();
   bool isNonTemporal = I.getMetadata(LLVMContext::MD_nontemporal) != nullptr;
   bool isInvariant = I.getMetadata(LLVMContext::MD_invariant_load) != nullptr;
-  bool isDereferenceable = isDereferenceablePointer(SV, DAG.getDataLayout());
+  bool isDereferenceable =
+      isDereferenceablePointer(SV, I.getType(), DAG.getDataLayout());
   unsigned Alignment = I.getAlignment();
 
   AAMDNodes AAInfo;
@@ -4665,7 +4666,8 @@ void SelectionDAGBuilder::visitAtomicLoad(const LoadInst &I) {
     Flags |= MachineMemOperand::MOVolatile;
   if (I.getMetadata(LLVMContext::MD_invariant_load) != nullptr)
     Flags |= MachineMemOperand::MOInvariant;
-  if (isDereferenceablePointer(I.getPointerOperand(), DAG.getDataLayout()))
+  if (isDereferenceablePointer(I.getPointerOperand(), I.getType(),
+                               DAG.getDataLayout()))
     Flags |= MachineMemOperand::MODereferenceable;
 
   Flags |= TLI.getMMOFlags(I);
