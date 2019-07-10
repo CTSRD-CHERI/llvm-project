@@ -163,8 +163,8 @@ public:
   void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
   void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) override;
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
-  void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                        unsigned ByteAlignment) override;
+  void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+                        TailPaddingAmount TailPadding) override;
 
   /// Emit a local common (.lcomm) symbol.
   ///
@@ -172,14 +172,16 @@ public:
   /// @param Size - The size of the common symbol.
   /// @param ByteAlignment - The alignment of the common symbol in bytes.
   void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                             unsigned ByteAlignment) override;
+                             unsigned ByteAlignment,
+                             TailPaddingAmount TailPadding) override;
 
-  void EmitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+  void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
+                    unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override;
 
   void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                      unsigned ByteAlignment = 0) override;
+                      unsigned ByteAlignment,
+                      TailPaddingAmount TailPadding) override;
 
   void EmitBinaryData(StringRef Data) override;
 
@@ -753,10 +755,15 @@ void MCAsmStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {
 }
 
 void MCAsmStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                     unsigned ByteAlignment) {
+                                     unsigned ByteAlignment,
+                                     TailPaddingAmount TailPadding) {
+  if (TailPadding != TailPaddingAmount::None) {
+    AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+  }
   OS << "\t.comm\t";
   Symbol->print(OS, MAI);
-  OS << ',' << Size;
+  OS << ',' << (Size + static_cast<unsigned>(TailPadding));
 
   if (ByteAlignment != 0) {
     if (MAI->getCOMMDirectiveAlignmentIsInBytes())
@@ -765,13 +772,19 @@ void MCAsmStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
       OS << ',' << Log2_32(ByteAlignment);
   }
   EmitEOL();
+  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
 }
 
 void MCAsmStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                          unsigned ByteAlign) {
+                                          unsigned ByteAlign,
+                                          TailPaddingAmount TailPadding) {
+  if (TailPadding != TailPaddingAmount::None) {
+    AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+  }
   OS << "\t.lcomm\t";
   Symbol->print(OS, MAI);
-  OS << ',' << Size;
+  OS << ',' << (Size + static_cast<unsigned>(TailPadding));
 
   if (ByteAlign > 1) {
     switch (MAI->getLCOMMDirectiveAlignmentType()) {
@@ -787,14 +800,19 @@ void MCAsmStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
     }
   }
   EmitEOL();
+  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
 }
 
 void MCAsmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
                                  uint64_t Size, unsigned ByteAlignment,
-                                 SMLoc Loc) {
+                                 TailPaddingAmount TailPadding, SMLoc Loc) {
   if (Symbol)
     AssignFragment(Symbol, &Section->getDummyFragment());
 
+  if (TailPadding != TailPaddingAmount::None) {
+    AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+  }
   // Note: a .zerofill directive does not switch sections.
   OS << ".zerofill ";
 
@@ -808,18 +826,20 @@ void MCAsmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
   if (Symbol) {
     OS << ',';
     Symbol->print(OS, MAI);
-    OS << ',' << Size;
+    OS << ',' << (Size + static_cast<unsigned>(TailPadding));
     if (ByteAlignment != 0)
       OS << ',' << Log2_32(ByteAlignment);
   }
   EmitEOL();
+  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
 }
 
 // .tbss sym, size, align
 // This depends that the symbol has already been mangled from the original,
 // e.g. _a.
 void MCAsmStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                                   uint64_t Size, unsigned ByteAlignment) {
+                                   uint64_t Size, unsigned ByteAlignment,
+                                   TailPaddingAmount TailPadding) {
   AssignFragment(Symbol, &Section->getDummyFragment());
 
   assert(Symbol && "Symbol shouldn't be NULL!");
@@ -828,16 +848,20 @@ void MCAsmStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
   assert(Section->getVariant() == MCSection::SV_MachO &&
          ".zerofill is a Mach-O specific directive");
   // This is a mach-o specific directive and section.
-
+  if (TailPadding != TailPaddingAmount::None) {
+    AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+  }
   OS << ".tbss ";
   Symbol->print(OS, MAI);
-  OS << ", " << Size;
+  OS << ", " << (Size + static_cast<unsigned>(TailPadding));
 
   // Output align if we have it.  We default to 1 so don't bother printing
   // that.
   if (ByteAlignment > 1) OS << ", " << Log2_32(ByteAlignment);
 
   EmitEOL();
+  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
 }
 
 static inline char toOctal(int X) { return (X&7)+'0'; }

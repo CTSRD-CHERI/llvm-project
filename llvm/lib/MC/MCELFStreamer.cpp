@@ -283,7 +283,8 @@ bool MCELFStreamer::EmitSymbolAttribute(MCSymbol *S, MCSymbolAttr Attribute) {
 }
 
 void MCELFStreamer::EmitCommonSymbol(MCSymbol *S, uint64_t Size,
-                                     unsigned ByteAlignment) {
+                                     unsigned ByteAlignment,
+                                     TailPaddingAmount TailPadding) {
   auto *Symbol = cast<MCSymbolELF>(S);
   getAssembler().registerSymbol(*Symbol);
 
@@ -302,7 +303,7 @@ void MCELFStreamer::EmitCommonSymbol(MCSymbol *S, uint64_t Size,
 
     EmitValueToAlignment(ByteAlignment, 0, 1, 0);
     EmitLabel(Symbol);
-    EmitZeros(Size);
+    EmitZeros(Size + static_cast<unsigned>(TailPadding));
 
     // Update the maximum alignment of the section if necessary.
     if (ByteAlignment > Section.getAlignment())
@@ -310,7 +311,8 @@ void MCELFStreamer::EmitCommonSymbol(MCSymbol *S, uint64_t Size,
 
     SwitchSection(P.first, P.second);
   } else {
-    if(Symbol->declareCommon(Size, ByteAlignment))
+    if (Symbol->declareCommon(Size + static_cast<unsigned>(TailPadding),
+                              ByteAlignment))
       report_fatal_error("Symbol: " + Symbol->getName() +
                          " redeclared as different type");
   }
@@ -329,13 +331,14 @@ void MCELFStreamer::emitELFSymverDirective(StringRef AliasName,
 }
 
 void MCELFStreamer::EmitLocalCommonSymbol(MCSymbol *S, uint64_t Size,
-                                          unsigned ByteAlignment) {
+                                          unsigned ByteAlignment,
+                                          TailPaddingAmount TailPadding) {
   auto *Symbol = cast<MCSymbolELF>(S);
   // FIXME: Should this be caught and done earlier?
   getAssembler().registerSymbol(*Symbol);
   Symbol->setBinding(ELF::STB_LOCAL);
   Symbol->setExternal(false);
-  EmitCommonSymbol(Symbol, Size, ByteAlignment);
+  EmitCommonSymbol(Symbol, Size, ByteAlignment, TailPadding);
 }
 
 void MCELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
@@ -686,12 +689,13 @@ void MCELFStreamer::EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {
 
 void MCELFStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
                                  uint64_t Size, unsigned ByteAlignment,
-                                 SMLoc Loc) {
+                                 TailPaddingAmount TailPadding, SMLoc Loc) {
   llvm_unreachable("ELF doesn't support this directive");
 }
 
 void MCELFStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                                   uint64_t Size, unsigned ByteAlignment) {
+                                   uint64_t Size, unsigned ByteAlignment,
+                                   TailPaddingAmount TailPadding) {
   llvm_unreachable("ELF doesn't support this directive");
 }
 

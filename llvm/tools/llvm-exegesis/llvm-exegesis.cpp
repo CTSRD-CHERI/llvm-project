@@ -278,7 +278,8 @@ public:
 private:
   // We only care about instructions, we don't implement this part of the API.
   void EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size,
-                        unsigned ByteAlignment) override {}
+                        unsigned ByteAlignment,
+                        TailPaddingAmount TailPadding) override {}
   bool EmitSymbolAttribute(llvm::MCSymbol *Symbol,
                            llvm::MCSymbolAttr Attribute) override {
     return false;
@@ -288,7 +289,7 @@ private:
                             unsigned MaxBytesToEmit) override {}
   void EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol,
                     uint64_t Size, unsigned ByteAlignment,
-                    llvm::SMLoc Loc) override {}
+                    TailPaddingAmount TailPadding, llvm::SMLoc Loc) override {}
 
   unsigned findRegisterByName(const llvm::StringRef RegName) const {
     // FIXME: Can we do better than this ?

@@ -874,7 +874,7 @@ bool DarwinAsmParser::parseDirectiveTBSS(StringRef, SMLoc) {
       getContext().getMachOSection("__DATA", "__thread_bss",
                                    MachO::S_THREAD_LOCAL_ZEROFILL, 0,
                                    SectionKind::getThreadBSS()),
-      Sym, Size, TailPaddingAmount::None, 1 << Pow2Alignment);
+      Sym, Size, 1 << Pow2Alignment, TailPaddingAmount::None);
 
   return false;
 }

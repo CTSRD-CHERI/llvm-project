@@ -575,51 +575,6 @@ public:
   /// \param Args - Arguments of the LOH.
   virtual void EmitLOHDirective(MCLOHType Kind, const MCLOHArgs &Args) {}
 
-public:
-  void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
-                        TailPaddingAmount TailPadding) {
-    if (TailPadding != TailPaddingAmount::None) {
-      AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
-                 " bytes of tail padding for precise bounds.");
-    }
-    return EmitCommonSymbol(Symbol, Size + static_cast<unsigned>(TailPadding),
-                            ByteAlignment);
-  }
-  virtual void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                     unsigned ByteAlignment,
-                                     TailPaddingAmount TailPadding) {
-    if (TailPadding != TailPaddingAmount::None) {
-      AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
-                 " bytes of tail padding for precise bounds.");
-    }
-    return EmitLocalCommonSymbol(
-        Symbol, Size + static_cast<unsigned>(TailPadding), ByteAlignment);
-  }
-
-  void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    unsigned ByteAlignment, TailPaddingAmount TailPadding,
-                    SMLoc Loc = SMLoc()) {
-    if (TailPadding != TailPaddingAmount::None) {
-      AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
-                 " bytes of tail padding for precise bounds.");
-    }
-    return EmitZerofill(Section, Symbol,
-                        Size + static_cast<unsigned>(TailPadding),
-                        ByteAlignment, Loc);
-  }
-
-  void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                      TailPaddingAmount TailPadding, unsigned ByteAlignment) {
-    if (TailPadding != TailPaddingAmount::None) {
-      AddComment("adding " + Twine(static_cast<unsigned>(TailPadding)) +
-                 " bytes of tail padding for precise bounds.");
-    }
-    return EmitTBSSSymbol(Section, Symbol,
-                          Size + static_cast<unsigned>(TailPadding),
-                          ByteAlignment);
-  }
-
-private:
   /// Emit a common symbol.
   ///
   /// \param Symbol - The common symbol to emit.
@@ -627,7 +582,8 @@ private:
   /// \param ByteAlignment - The alignment of the symbol if
   /// non-zero. This must be a power of 2.
   virtual void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                unsigned ByteAlignment) = 0;
+                                unsigned ByteAlignment,
+                                TailPaddingAmount TailPadding) = 0;
 
   /// Emit a local common (.lcomm) symbol.
   ///
@@ -635,7 +591,8 @@ private:
   /// \param Size - The size of the common symbol.
   /// \param ByteAlignment - The alignment of the common symbol in bytes.
   virtual void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                     unsigned ByteAlignment);
+                                     unsigned ByteAlignment,
+                                     TailPaddingAmount TailPadding);
 
   /// Emit the zerofill section and an optional symbol.
   ///
@@ -645,7 +602,9 @@ private:
   /// \param ByteAlignment - The alignment of the zerofill symbol if
   /// non-zero. This must be a power of 2 on some targets.
   virtual void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                            unsigned ByteAlignment, SMLoc Loc = SMLoc()) = 0;
+                            unsigned ByteAlignment,
+                            TailPaddingAmount TailPadding,
+                            SMLoc Loc = SMLoc()) = 0;
 
   /// Emit a thread local bss (.tbss) symbol.
   ///
@@ -655,9 +614,9 @@ private:
   /// \param ByteAlignment - The alignment of the thread local common symbol
   /// if non-zero.  This must be a power of 2 on some targets.
   virtual void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                              uint64_t Size, unsigned ByteAlignment);
+                              uint64_t Size, unsigned ByteAlignment,
+                              TailPaddingAmount TailPadding);
 
-public:
   /// @}
   /// \name Generating Data
   /// @{

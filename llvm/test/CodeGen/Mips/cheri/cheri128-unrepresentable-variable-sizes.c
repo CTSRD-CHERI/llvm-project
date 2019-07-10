@@ -2,8 +2,11 @@
 // TODO: convert to IR test (but that requires filling in the full @llvm.used array which is annoying
 
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o - -emit-llvm | FileCheck %s -check-prefix IR
-// RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o - | FileCheck %s -check-prefix ASM
+// RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o %t.s
+// RUN: FileCheck %s -check-prefix ASM -input-file=%t.s
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -c -o - | llvm-readelf --sections --symbols - | FileCheck %s -check-prefix SECTIONS
+// Check that we can compile the generated assembly and it matches the direct emission
+// RUN: %cheri_purecap_clang %t.s -c -o - | llvm-readelf --sections --symbols - | FileCheck %s -check-prefix SECTIONS
 
 // Check that all data sections in the ELF file are appropriately aligned and the size has been rounded up:
 // SECTIONS-LABEL: Name                          Type            Address          Off          Size   ES Flg Lk Inf Al
@@ -49,10 +52,10 @@
 // SECTIONS-NEXT: 0000000000000000 65535 OBJECT  GLOBAL DEFAULT    6 char65535
 // SECTIONS-NEXT: 0000000000000000 65537 OBJECT  GLOBAL HIDDEN     7 char65537
 // SECTIONS-NEXT: 0000000000000001   128 OBJECT  GLOBAL DEFAULT  COM common128
-// SECTIONS-NEXT: 0000000000000100 139520 OBJECT GLOBAL PROTECTED COM common139267
+// SECTIONS-NEXT: 0000000000000100 139267 OBJECT GLOBAL PROTECTED COM common139267
 // SECTIONS-NEXT: 0000000000000008  4096 OBJECT  GLOBAL DEFAULT  COM common4096
-// SECTIONS-NEXT: 0000000000000080 65536 OBJECT  GLOBAL DEFAULT  COM common65535
-// SECTIONS-NEXT: 0000000000000080 65664 OBJECT  GLOBAL HIDDEN   COM common65537
+// SECTIONS-NEXT: 0000000000000080 65535 OBJECT  GLOBAL DEFAULT  COM common65535
+// SECTIONS-NEXT: 0000000000000080 65537 OBJECT  GLOBAL HIDDEN   COM common65537
 // SECTIONS-NEXT: 0000000000000000 139267 TLS    GLOBAL PROTECTED  13 thread_char139267
 // SECTIONS-NEXT: 0000000000000000 65535 TLS     GLOBAL DEFAULT   11 thread_char65535
 // SECTIONS-NEXT: 0000000000000000 65537 TLS     GLOBAL HIDDEN    12 thread_char65537
@@ -253,16 +256,21 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-EMPTY:
 // ASM-NEXT: 	.type	common128,@object       # @common128
 // ASM-NEXT: 	.comm	common128,128,1
+// ASM-NEXT: 	.size common128, 128
 // ASM-NEXT: 	.type	common4096,@object      # @common4096
 // ASM-NEXT: 	.comm	common4096,4096,8
+// ASM-NEXT: 	.size common4096, 4096
 // ASM-NEXT: 	.type	common65535,@object     # @common65535
 // ASM-NEXT: 	.comm	common65535,65536,128   # adding 1 bytes of tail padding for precise bounds.
+// ASM-NEXT: 	.size common65535, 65535
 // ASM-NEXT: 	.hidden	common65537             # @common65537
 // ASM-NEXT: 	.type	common65537,@object
 // ASM-NEXT: 	.comm	common65537,65664,128   # adding 127 bytes of tail padding for precise bounds.
+// ASM-NEXT: 	.size common65537, 65537
 // ASM-NEXT: 	.protected	common139267    # @common139267
 // ASM-NEXT: 	.type	common139267,@object
 // ASM-NEXT: 	.comm	common139267,139520,256 # adding 253 bytes of tail padding for precise bounds.
+// ASM-NEXT: 	.size common139267, 139267
 // ASM-NEXT: 	.type	thread_zero128,@object  # @thread_zero128
 // ASM-NEXT: 	.section	.tbss.thread_zero128,"awT",@nobits
 // ASM-NEXT: 	.globl	thread_zero128
