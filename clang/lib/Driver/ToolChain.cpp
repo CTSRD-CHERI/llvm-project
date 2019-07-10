@@ -902,6 +902,7 @@ SanitizerMask ToolChain::getSupportedSanitizers() const {
                        ~SanitizerKind::Function) |
                       (SanitizerKind::CFI & ~SanitizerKind::CFIICall) |
                       SanitizerKind::CFICastStrict |
+                      SanitizerKind::FloatDivideByZero |
                       SanitizerKind::UnsignedIntegerOverflow |
                       SanitizerKind::ImplicitConversion |
                       SanitizerKind::Nullability | SanitizerKind::LocalBounds;
