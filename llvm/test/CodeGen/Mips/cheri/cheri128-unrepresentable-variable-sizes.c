@@ -2,6 +2,7 @@
 // TODO: convert to IR test (but that requires filling in the full @llvm.used array which is annoying
 
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o - -emit-llvm | FileCheck %s -check-prefix IR
+// RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o -
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o %t.s
 // RUN: FileCheck %s -check-prefix ASM -input-file=%t.s
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -c -o - | llvm-readelf --sections --symbols - | FileCheck %s -check-prefix SECTIONS
@@ -256,21 +257,19 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-EMPTY:
 // ASM-NEXT: 	.type	common128,@object       # @common128
 // ASM-NEXT: 	.comm	common128,128,1
-// ASM-NEXT: 	.size common128, 128
 // ASM-NEXT: 	.type	common4096,@object      # @common4096
 // ASM-NEXT: 	.comm	common4096,4096,8
-// ASM-NEXT: 	.size common4096, 4096
 // ASM-NEXT: 	.type	common65535,@object     # @common65535
 // ASM-NEXT: 	.comm	common65535,65536,128   # adding 1 bytes of tail padding for precise bounds.
-// ASM-NEXT: 	.size common65535, 65535
+// ASM-NEXT: 	.size	common65535, 65535      # explicit size directive required due to 1 bytes of tail padding for precise bounds.
 // ASM-NEXT: 	.hidden	common65537             # @common65537
 // ASM-NEXT: 	.type	common65537,@object
 // ASM-NEXT: 	.comm	common65537,65664,128   # adding 127 bytes of tail padding for precise bounds.
-// ASM-NEXT: 	.size common65537, 65537
+// ASM-NEXT: 	.size	common65537, 65537      # explicit size directive required due to 127 bytes of tail padding for precise bounds.
 // ASM-NEXT: 	.protected	common139267    # @common139267
 // ASM-NEXT: 	.type	common139267,@object
 // ASM-NEXT: 	.comm	common139267,139520,256 # adding 253 bytes of tail padding for precise bounds.
-// ASM-NEXT: 	.size common139267, 139267
+// ASM-NEXT: 	.size	common139267, 139267    # explicit size directive required due to 253 bytes of tail padding for precise bounds.
 // ASM-NEXT: 	.type	thread_zero128,@object  # @thread_zero128
 // ASM-NEXT: 	.section	.tbss.thread_zero128,"awT",@nobits
 // ASM-NEXT: 	.globl	thread_zero128

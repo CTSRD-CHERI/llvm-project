@@ -772,7 +772,13 @@ void MCAsmStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
       OS << ',' << Log2_32(ByteAlignment);
   }
   EmitEOL();
-  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  if (TailPadding != TailPaddingAmount::None) {
+    // If we added padding, we need to emit an explicit symbol size directive
+    AddComment("explicit size directive required due to " +
+               Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+    emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  }
 }
 
 void MCAsmStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
@@ -800,7 +806,13 @@ void MCAsmStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
     }
   }
   EmitEOL();
-  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  if (TailPadding != TailPaddingAmount::None) {
+    // If we added padding, we need to emit an explicit symbol size directive
+    AddComment("explicit size directive required due to " +
+               Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+    emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  }
 }
 
 void MCAsmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
@@ -831,7 +843,13 @@ void MCAsmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
       OS << ',' << Log2_32(ByteAlignment);
   }
   EmitEOL();
-  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  if (TailPadding != TailPaddingAmount::None) {
+    // If we added padding, we need to emit an explicit symbol size directive
+    AddComment("explicit size directive required due to " +
+               Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+    emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  }
 }
 
 // .tbss sym, size, align
@@ -861,7 +879,13 @@ void MCAsmStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
   if (ByteAlignment > 1) OS << ", " << Log2_32(ByteAlignment);
 
   EmitEOL();
-  emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  if (TailPadding != TailPaddingAmount::None) {
+    // If we added padding, we need to emit an explicit symbol size directive
+    AddComment("explicit size directive required due to " +
+               Twine(static_cast<unsigned>(TailPadding)) +
+               " bytes of tail padding for precise bounds.");
+    emitELFSize(Symbol, MCConstantExpr::create(Size, getContext()));
+  }
 }
 
 static inline char toOctal(int X) { return (X&7)+'0'; }
