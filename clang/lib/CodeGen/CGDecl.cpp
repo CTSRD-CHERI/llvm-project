@@ -989,11 +989,12 @@ static bool shouldUseBZeroPlusStoresToInitialize(llvm::Constant *Init,
 /// FIXME We could be more clever, as we are for bzero above, and generate
 ///       memset followed by stores. It's unclear that's worth the effort.
 static llvm::Value *shouldUseMemSetToInitialize(llvm::Constant *Init,
-                                                uint64_t GlobalSize) {
+                                                uint64_t GlobalSize,
+                                                const llvm::DataLayout &DL) {
   uint64_t SizeLimit = 32;
   if (GlobalSize <= SizeLimit)
     return nullptr;
-  return llvm::isBytewiseValue(Init);
+  return llvm::isBytewiseValue(Init, DL);
 }
 
 /// Decide whether we want to split a constant structure or array store into a
@@ -1206,7 +1207,8 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
 
   // FIXME: is this fine with capabilities?
   // If the initializer is a repeated byte pattern, use memset.
-  llvm::Value *Pattern = shouldUseMemSetToInitialize(constant, ConstantSize);
+  llvm::Value *Pattern =
+      shouldUseMemSetToInitialize(constant, ConstantSize, CGM.getDataLayout());
   if (Pattern) {
     uint64_t Value = 0x00;
     if (!isa<llvm::UndefValue>(Pattern)) {
