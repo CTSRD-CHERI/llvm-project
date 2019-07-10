@@ -3657,6 +3657,7 @@ void TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
 
     GlobalAddressSDNode *GA;
     ConstantSDNode *C;
+    BlockAddressSDNode *BA;
     uint64_t Offset = 0;
 
     // Match (GA) or (C) or (GA+C) or (GA-C) or ((GA+C)+C) or (((GA+C)+C)+C),
@@ -3683,6 +3684,12 @@ void TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
                                                     : C->getSExtValue();
         Ops.push_back(DAG.getTargetConstant(Offset + ExtVal,
                                             SDLoc(C), MVT::i64));
+        return;
+      } else if ((BA = dyn_cast<BlockAddressSDNode>(Op)) &&
+                 ConstraintLetter != 'n') {
+        Ops.push_back(DAG.getTargetBlockAddress(
+            BA->getBlockAddress(), BA->getValueType(0),
+            Offset + BA->getOffset(), BA->getTargetFlags()));
         return;
       } else {
         const unsigned OpCode = Op.getOpcode();
