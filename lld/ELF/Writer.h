@@ -25,8 +25,8 @@ template <class ELFT> void writeResult();
 // Each contains type, access flags and range of output sections that will be
 // placed in it.
 struct PhdrEntry {
-  PhdrEntry(unsigned Type, unsigned Flags) : p_type(Type), p_flags(Flags) {}
-  void add(OutputSection *Sec);
+  PhdrEntry(unsigned type, unsigned flags) : p_type(type), p_flags(flags) {}
+  void add(OutputSection *sec);
 
   uint64_t p_paddr = 0;
   uint64_t p_vaddr = 0;
@@ -37,27 +37,27 @@ struct PhdrEntry {
   uint32_t p_type = 0;
   uint32_t p_flags = 0;
 
-  OutputSection *FirstSec = nullptr;
-  OutputSection *LastSec = nullptr;
-  bool HasLMA = false;
+  OutputSection *firstSec = nullptr;
+  OutputSection *lastSec = nullptr;
+  bool hasLMA = false;
 
-  uint64_t LMAOffset = 0;
+  uint64_t lmaOffset = 0;
 };
 
 void addReservedSymbols();
-llvm::StringRef getOutputSectionName(const InputSectionBase *S);
+llvm::StringRef getOutputSectionName(const InputSectionBase *s);
 
 template <class ELFT> uint32_t calcMipsEFlags();
 
-uint8_t getMipsFpAbiFlag(uint8_t OldFlag, llvm::StringRef OldFile,
-                         uint8_t NewFlag, llvm::StringRef NewFile);
-uint8_t getMipsIsaExt(uint64_t OldExt, llvm::StringRef OldFile, uint64_t NewExt,
-                      llvm::StringRef NewFile);
-void checkMipsShlibCompatible(InputFile *F, uint64_t ShlibCheriFlags,
-                              uint64_t TargetCheriFlags);
-bool isRelroSection(const OutputSection *Sec);
+uint8_t getMipsFpAbiFlag(uint8_t oldFlag, llvm::StringRef oldFile,
+                         uint8_t newFlag, llvm::StringRef newFile);
+uint8_t getMipsIsaExt(uint64_t oldExt, llvm::StringRef oldFile, uint64_t newExt,
+                      llvm::StringRef newFile);
+void checkMipsShlibCompatible(InputFile *f, uint64_t shlibCheriFlags,
+                              uint64_t targetCheriFlags);
+bool isRelroSection(const OutputSection *sec);
 
-bool isMipsN32Abi(const InputFile *F);
+bool isMipsN32Abi(const InputFile *f);
 bool isMicroMips();
 bool isMipsR6();
 

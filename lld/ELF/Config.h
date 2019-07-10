@@ -66,17 +66,17 @@ enum class Target2Policy { Abs, Rel, GotRel };
 enum class ARMVFPArgKind { Default, Base, VFP, ToolChain };
 
 struct SymbolVersion {
-  llvm::StringRef Name;
-  bool IsExternCpp;
-  bool HasWildcard;
+  llvm::StringRef name;
+  bool isExternCpp;
+  bool hasWildcard;
 };
 
 // This struct contains symbols version definition that
 // can be found in version script if it is used for link.
 struct VersionDefinition {
-  llvm::StringRef Name;
-  uint16_t Id = 0;
-  std::vector<SymbolVersion> Globals;
+  llvm::StringRef name;
+  uint16_t id = 0;
+  std::vector<SymbolVersion> globals;
 };
 
 // This struct contains the global configuration for the linker.
@@ -84,195 +84,195 @@ struct VersionDefinition {
 // and such fields have the same name as the corresponding options.
 // Most fields are initialized by the driver.
 struct Configuration {
-  uint8_t OSABI = 0;
-  uint32_t AndFeatures = 0;
-  llvm::CachePruningPolicy ThinLTOCachePolicy;
-  llvm::StringMap<uint64_t> SectionStartMap;
-  llvm::StringRef Chroot;
-  llvm::StringRef DynamicLinker;
-  llvm::StringRef DwoDir;
-  llvm::StringRef Entry;
-  llvm::StringRef Emulation;
-  llvm::StringRef Fini;
-  llvm::StringRef Init;
-  llvm::StringRef LTOAAPipeline;
-  llvm::StringRef LTOCSProfileFile;
-  llvm::StringRef LTONewPmPasses;
-  llvm::StringRef LTOObjPath;
-  llvm::StringRef LTOSampleProfile;
-  llvm::StringRef MapFile;
-  llvm::StringRef OutputFile;
-  llvm::StringRef OptRemarksFilename;
-  llvm::StringRef OptRemarksPasses;
-  llvm::StringRef OptRemarksFormat;
-  llvm::StringRef ProgName;
-  llvm::StringRef PrintSymbolOrder;
-  llvm::StringRef SoName;
-  llvm::StringRef Sysroot;
-  llvm::StringRef ThinLTOCacheDir;
-  llvm::StringRef ThinLTOIndexOnlyArg;
-  std::pair<llvm::StringRef, llvm::StringRef> ThinLTOObjectSuffixReplace;
-  std::pair<llvm::StringRef, llvm::StringRef> ThinLTOPrefixReplace;
-  std::string Rpath;
-  std::vector<VersionDefinition> VersionDefinitions;
-  std::vector<llvm::StringRef> AuxiliaryList;
-  std::vector<llvm::StringRef> FilterList;
-  std::vector<llvm::StringRef> SearchPaths;
-  std::vector<llvm::StringRef> SymbolOrderingFile;
-  std::vector<llvm::StringRef> WarnIfFileLinked;
-  std::vector<llvm::StringRef> Undefined;
-  std::vector<SymbolVersion> DynamicList;
-  std::vector<SymbolVersion> VersionScriptGlobals;
-  std::vector<SymbolVersion> VersionScriptLocals;
-  std::vector<uint8_t> BuildIdVector;
+  uint8_t osabi = 0;
+  uint32_t andFeatures = 0;
+  llvm::CachePruningPolicy thinLTOCachePolicy;
+  llvm::StringMap<uint64_t> sectionStartMap;
+  llvm::StringRef chroot;
+  llvm::StringRef dynamicLinker;
+  llvm::StringRef dwoDir;
+  llvm::StringRef entry;
+  llvm::StringRef emulation;
+  llvm::StringRef fini;
+  llvm::StringRef init;
+  llvm::StringRef ltoAAPipeline;
+  llvm::StringRef ltoCSProfileFile;
+  llvm::StringRef ltoNewPmPasses;
+  llvm::StringRef ltoObjPath;
+  llvm::StringRef ltoSampleProfile;
+  llvm::StringRef mapFile;
+  llvm::StringRef outputFile;
+  llvm::StringRef optRemarksFilename;
+  llvm::StringRef optRemarksPasses;
+  llvm::StringRef optRemarksFormat;
+  llvm::StringRef progName;
+  llvm::StringRef printSymbolOrder;
+  llvm::StringRef soName;
+  llvm::StringRef sysroot;
+  llvm::StringRef thinLTOCacheDir;
+  llvm::StringRef thinLTOIndexOnlyArg;
+  std::pair<llvm::StringRef, llvm::StringRef> thinLTOObjectSuffixReplace;
+  std::pair<llvm::StringRef, llvm::StringRef> thinLTOPrefixReplace;
+  std::string rpath;
+  std::vector<VersionDefinition> versionDefinitions;
+  std::vector<llvm::StringRef> auxiliaryList;
+  std::vector<llvm::StringRef> filterList;
+  std::vector<llvm::StringRef> searchPaths;
+  std::vector<llvm::StringRef> symbolOrderingFile;
+  std::vector<llvm::StringRef> warnIfFileLinked;
+  std::vector<llvm::StringRef> undefined;
+  std::vector<SymbolVersion> dynamicList;
+  std::vector<SymbolVersion> versionScriptGlobals;
+  std::vector<SymbolVersion> versionScriptLocals;
+  std::vector<uint8_t> buildIdVector;
   llvm::MapVector<std::pair<const InputSectionBase *, const InputSectionBase *>,
                   uint64_t>
-      CallGraphProfile;
-  bool AllowMultipleDefinition;
-  bool AllowShlibUndefined;
-  bool AllowUndefinedCapRelocs = false;
-  bool AndroidPackDynRelocs;
-  bool ARMHasBlx = false;
-  bool ARMHasMovtMovw = false;
-  bool ARMJ1J2BranchEncoding = false;
-  bool AsNeeded = false;
-  bool Bsymbolic;
-  bool BsymbolicFunctions;
+      callGraphProfile;
+  bool allowMultipleDefinition;
+  bool allowShlibUndefined;
+  bool allowUndefinedCapRelocs = false;
+  bool androidPackDynRelocs;
+  bool armHasBlx = false;
+  bool armHasMovtMovw = false;
+  bool armJ1J2BranchEncoding = false;
+  bool asNeeded = false;
+  bool bsymbolic;
+  bool bsymbolicFunctions;
   // make dynamic relocations that are not supported by
   // FreeBSD _rtld_relocate_nonplt_self an error.
-  bool BuildingFreeBSDRtld;
-  bool CallGraphProfileSort;
-  bool CheckSections;
-  bool CompressDebugSections;
-  bool Cref;
-  bool DefineCommon;
-  bool Demangle = true;
-  bool DependentLibraries;
-  bool DisableVerify;
-  bool EhFrameHdr;
-  bool EmitLLVM;
-  bool EmitRelocs;
-  bool EnableNewDtags;
-  bool ExecuteOnly;
-  bool ExportDynamic;
-  bool FixCortexA53Errata843419;
-  bool ForceBTI;
-  bool FormatBinary = false;
-  bool RequireCET;
-  bool GcSections;
-  bool GdbIndex;
-  bool GnuHash = false;
-  bool GnuUnique;
-  bool HasDynamicList = false;
-  bool HasDynSymTab;
-  bool IgnoreDataAddressEquality;
-  bool IgnoreFunctionAddressEquality;
-  bool LTOCSProfileGenerate;
-  bool LTODebugPassManager;
-  bool LTONewPassManager;
-  bool MergeArmExidx;
-  bool MipsN32Abi = false;
-  bool Nmagic;
-  bool NoinhibitExec;
-  bool Nostdlib;
-  bool OFormatBinary;
-  bool Omagic;
-  bool OptRemarksWithHotness;
-  bool PacPlt;
-  bool PicThunk;
-  bool Pie;
-  bool PrintGcSections;
-  bool PrintIcfSections;
-  bool ProcessCapRelocs = false;
-  bool Relocatable;
-  bool RelrPackDynRelocs;
-  bool SaveTemps;
-  bool SortCapRelocs;
-  bool SingleRoRx;
-  bool Shared;
-  bool Static = false;
-  bool SysvHash = false;
-  bool Target1Rel;
-  bool Trace;
-  bool ThinLTOEmitImportsFiles;
-  bool ThinLTOIndexOnly;
-  bool TocOptimize;
-  bool UndefinedVersion;
-  bool UseAndroidRelrTags = false;
-  bool VerboseCapRelocs = false;
-  bool WarnBackrefs;
-  bool WarnCommon;
-  bool WarnIfuncTextrel;
-  bool WarnMissingEntry;
-  bool WarnSymbolOrdering;
-  bool WriteAddends;
+  bool buildingFreeBSDRtld;
+  bool callGraphProfileSort;
+  bool checkSections;
+  bool compressDebugSections;
+  bool cref;
+  bool defineCommon;
+  bool demangle = true;
+  bool dependentLibraries;
+  bool disableVerify;
+  bool ehFrameHdr;
+  bool emitLLVM;
+  bool emitRelocs;
+  bool enableNewDtags;
+  bool executeOnly;
+  bool exportDynamic;
+  bool fixCortexA53Errata843419;
+  bool forceBTI;
+  bool formatBinary = false;
+  bool requireCET;
+  bool gcSections;
+  bool gdbIndex;
+  bool gnuHash = false;
+  bool gnuUnique;
+  bool hasDynamicList = false;
+  bool hasDynSymTab;
+  bool ignoreDataAddressEquality;
+  bool ignoreFunctionAddressEquality;
+  bool ltoCSProfileGenerate;
+  bool ltoDebugPassManager;
+  bool ltoNewPassManager;
+  bool mergeArmExidx;
+  bool mipsN32Abi = false;
+  bool nmagic;
+  bool noinhibitExec;
+  bool nostdlib;
+  bool oFormatBinary;
+  bool omagic;
+  bool optRemarksWithHotness;
+  bool pacPlt;
+  bool picThunk;
+  bool pie;
+  bool printGcSections;
+  bool printIcfSections;
+  bool processCapRelocs = false;
+  bool relocatable;
+  bool relrPackDynRelocs;
+  bool saveTemps;
+  bool sortCapRelocs;
+  bool singleRoRx;
+  bool shared;
+  bool isStatic = false;
+  bool sysvHash = false;
+  bool target1Rel;
+  bool trace;
+  bool thinLTOEmitImportsFiles;
+  bool thinLTOIndexOnly;
+  bool tocOptimize;
+  bool undefinedVersion;
+  bool useAndroidRelrTags = false;
+  bool verboseCapRelocs = false;
+  bool warnBackrefs;
+  bool warnCommon;
+  bool warnIfuncTextrel;
+  bool warnMissingEntry;
+  bool warnSymbolOrdering;
+  bool writeAddends;
   // -z captabledebug: add additional symbols $captable_load_<symbols> before
   // each captable clc instruction that indicates which symbol should be loaded
-  bool ZCapTableDebug;
-  bool ZCombreloc;
-  bool ZCopyreloc;
-  bool ZExecstack;
-  bool ZGlobal;
-  bool ZHazardplt;
-  bool ZIfuncNoplt;
-  bool ZInitfirst;
-  bool ZInterpose;
-  bool ZKeepTextSectionPrefix;
-  bool ZNodefaultlib;
-  bool ZNodelete;
-  bool ZNodlopen;
-  bool ZNow;
-  bool ZOrigin;
-  bool ZRelro;
-  bool ZRodynamic;
-  bool ZText;
-  bool ZRetpolineplt;
-  bool ZWxneeded;
-  DiscardPolicy Discard;
-  ICFLevel ICF;
-  OrphanHandlingPolicy OrphanHandling;
-  SortSectionPolicy SortSection;
-  StripPolicy Strip;
-  UnresolvedPolicy UnresolvedSymbols;
-  Target2Policy Target2;
+  bool zCapTableDebug;
+  bool zCombreloc;
+  bool zCopyreloc;
+  bool zExecstack;
+  bool zGlobal;
+  bool zHazardplt;
+  bool zIfuncNoplt;
+  bool zInitfirst;
+  bool zInterpose;
+  bool zKeepTextSectionPrefix;
+  bool zNodefaultlib;
+  bool zNodelete;
+  bool zNodlopen;
+  bool zNow;
+  bool zOrigin;
+  bool zRelro;
+  bool zRodynamic;
+  bool zText;
+  bool zRetpolineplt;
+  bool zWxneeded;
+  DiscardPolicy discard;
+  ICFLevel icf;
+  OrphanHandlingPolicy orphanHandling;
+  SortSectionPolicy sortSection;
+  StripPolicy strip;
+  UnresolvedPolicy unresolvedSymbols;
+  Target2Policy target2;
   // Method used for capability relocations for preemptible symbols
-  CapRelocsMode PreemptibleCapRelocsMode;
+  CapRelocsMode preemptibleCapRelocsMode;
   // Method used for capability relocations for non-preemptible symbols
-  CapRelocsMode LocalCapRelocsMode;
-  CapTableScopePolicy CapTableScope;
-  bool RelativeCapRelocsOnly;
+  CapRelocsMode localCapRelocsMode;
+  CapTableScopePolicy capTableScope;
+  bool relativeCapRelocsOnly;
 
-  ARMVFPArgKind ARMVFPArgs = ARMVFPArgKind::Default;
-  BuildIdKind BuildId = BuildIdKind::None;
-  ELFKind EKind = ELFNoneKind;
-  uint16_t DefaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;
-  uint16_t EMachine = llvm::ELF::EM_NONE;
-  llvm::Optional<uint64_t> ImageBase;
-  uint64_t CommonPageSize;
-  uint64_t MaxPageSize;
-  uint64_t MipsGotSize;
-  uint64_t ZStackSize;
-  unsigned LTOPartitions;
-  unsigned LTOO;
-  unsigned Optimize;
-  unsigned ThinLTOJobs;
-  int32_t SplitStackAdjustSize;
+  ARMVFPArgKind armVFPArgs = ARMVFPArgKind::Default;
+  BuildIdKind buildId = BuildIdKind::None;
+  ELFKind ekind = ELFNoneKind;
+  uint16_t defaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;
+  uint16_t emachine = llvm::ELF::EM_NONE;
+  llvm::Optional<uint64_t> imageBase;
+  uint64_t commonPageSize;
+  uint64_t maxPageSize;
+  uint64_t mipsGotSize;
+  uint64_t zStackSize;
+  unsigned ltoPartitions;
+  unsigned ltoo;
+  unsigned optimize;
+  unsigned thinLTOJobs;
+  int32_t splitStackAdjustSize;
 
   // The following config options do not directly correspond to any
   // particualr command line options.
 
   // True if we need to pass through relocations in input files to the
   // output file. Usually false because we consume relocations.
-  bool CopyRelocs;
+  bool copyRelocs;
 
   // True if the target is ELF64. False if ELF32.
-  bool Is64;
+  bool is64;
 
   // True if the target is little-endian. False if big-endian.
-  bool IsLE;
+  bool isLE;
 
   // endianness::little if IsLE is true. endianness::big otherwise.
-  llvm::support::endianness Endianness;
+  llvm::support::endianness endianness;
 
   // True if the target is the little-endian MIPS64.
   //
@@ -286,7 +286,7 @@ struct Configuration {
   // name whatever that means. A fun hypothesis is that "EL" is short for
   // little-endian written in the little-endian order, but I don't know
   // if that's true.)
-  bool IsMips64EL;
+  bool isMips64EL;
 
   // True if we need to set the DF_STATIC_TLS flag to an output file,
   // which works as a hint to the dynamic loader that the file contains
@@ -300,10 +300,10 @@ struct Configuration {
   // Since the flag is updated by multi-threaded code, we use std::atomic.
   // (Writing to a variable is not considered thread-safe even if the
   // variable is boolean and we always set the same value from all threads.)
-  std::atomic<bool> HasStaticTlsModel{false};
+  std::atomic<bool> hasStaticTlsModel{false};
 
   // Holds set of ELF header flags for the target.
-  uint32_t EFlags = 0;
+  uint32_t eflags = 0;
 
   // The ELF spec defines two types of relocation table entries, RELA and
   // REL. RELA is a triplet of (offset, info, addend) while REL is a
@@ -319,45 +319,45 @@ struct Configuration {
   // Each ABI defines its relocation type. IsRela is true if target
   // uses RELA. As far as we know, all 64-bit ABIs are using RELA. A
   // few 32-bit ABIs are using RELA too.
-  bool IsRela;
+  bool isRela;
 
   // True if we are creating position-independent code.
-  bool Pic;
+  bool isPic;
 
   // 4 for ELF32, 8 for ELF64.
-  int Wordsize;
+  int wordsize;
 
   // Size of a CHERI capability
-  int CapabilitySize = 0;
+  int capabilitySize = 0;
 
-  inline bool isCheriABI() const { return CheriABI; }
+  inline bool isCheriABI() const { return cheriABI; }
   // We need to set the searchPaths before createFiles() is called since linker
   // scripts might contain INPUT() commands. Add a getter and setter for
   // CheriABI to ensure this is always the case
-  inline void setIsCheriABI(bool Set) {
-    if (!Set)
+  inline void setIsCheriABI(bool set) {
+    if (!set)
       return;
-    CheriABI = true;
-    if (DynamicLinker.empty())
-      DynamicLinker = "/libexec/ld-cheri-elf.so.1";
+    cheriABI = true;
+    if (dynamicLinker.empty())
+      dynamicLinker = "/libexec/ld-cheri-elf.so.1";
     // add the default search paths for CheriABI
-    SearchPaths.emplace_back("=/libcheri");
-    SearchPaths.emplace_back("=/usr/libcheri");
-    SearchPaths.emplace_back("=/usr/local/libcheri");
+    searchPaths.emplace_back("=/libcheri");
+    searchPaths.emplace_back("=/usr/libcheri");
+    searchPaths.emplace_back("=/usr/local/libcheri");
   }
 
 private:
-  bool CheriABI = false;
+  bool cheriABI = false;
 };
 
 // The only instance of Configuration struct.
-extern Configuration *Config;
+extern Configuration *config;
 
-static inline void errorOrWarn(const Twine &Msg) {
-  if (!Config->NoinhibitExec)
-    error(Msg);
+static inline void errorOrWarn(const Twine &msg) {
+  if (!config->noinhibitExec)
+    error(msg);
   else
-    warn(Msg);
+    warn(msg);
 }
 } // namespace elf
 } // namespace lld
