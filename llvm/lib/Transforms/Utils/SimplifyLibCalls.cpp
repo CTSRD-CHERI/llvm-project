@@ -1477,6 +1477,9 @@ Value *LibCallSimplifier::optimizePow(CallInst *Pow, IRBuilder<> &B) {
   if (match(Base, m_FPOne()))
     return Base;
 
+  if (Value *Exp = replacePowWithExp(Pow, B))
+    return Exp;
+
   // powf(x, sitofp(e)) -> powi(x, e)
   // powf(x, uitofp(e)) -> powi(x, e)
   if (AllowApprox && (isa<SIToFPInst>(Expo) || isa<UIToFPInst>(Expo))) {
@@ -1491,9 +1494,6 @@ Value *LibCallSimplifier::optimizePow(CallInst *Pow, IRBuilder<> &B) {
     if (NewExpo)
       return createPowWithIntegerExponent(Base, NewExpo, M, B);
   }
-
-  if (Value *Exp = replacePowWithExp(Pow, B))
-    return Exp;
 
   // Evaluate special cases related to the exponent.
 
