@@ -206,6 +206,7 @@ enum Kind {
   kw_nonnull,
   kw_noredzone,
   kw_noreturn,
+  kw_nosync,
   kw_nocf_check,
   kw_nounwind,
   kw_optforfuzzing,
