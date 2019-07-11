@@ -9592,7 +9592,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     // pass them in capability registers
     bool isArgCHERICapability = isCheriPointer(FinalType, &DAG.getDataLayout());
     if (Arg.hasAttribute(Attribute::ByVal) && !isArgCHERICapability)
-      FinalType = cast<PointerType>(FinalType)->getElementType();
+      FinalType = Arg.getParamByValType();
     bool NeedsRegBlock = TLI->functionArgumentNeedsConsecutiveRegisters(
         FinalType, F.getCallingConv(), F.isVarArg());
     for (unsigned Value = 0, NumValues = ValueVTs.size();
@@ -9652,8 +9652,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
           Flags.setByVal();
       }
       if (Flags.isByVal() || Flags.isInAlloca()) {
-        PointerType *Ty = cast<PointerType>(Arg.getType());
-        Type *ElementTy = Ty->getElementType();
+        Type *ElementTy = Arg.getParamByValType();
 
         // For ByVal, size and alignment should be passed from FE.  BE will
         // guess if this info is not there but there are cases it cannot get
