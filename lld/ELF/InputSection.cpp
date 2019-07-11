@@ -1033,7 +1033,7 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
               " offset=0x" + utohexstr(reloc.getOffset()) + " Type: 0x" + utohexstr(reloc.type));
     }
     uint8_t *bufLoc = buf + offset;
-    target->relocateOne(bufLoc, reloc.type, /*TargetVA=*/addend);
+    target->relocateOne(bufLoc, reloc.type, /*targetVA=*/addend);
   }
 
 }

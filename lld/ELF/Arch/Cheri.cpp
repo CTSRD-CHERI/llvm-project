@@ -527,7 +527,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
     } else {
       // For non-preemptible symbols we can write the target size:
       targetSize = getTargetSize<ELFT>(location, reloc,
-                                       /*Strict=*/!containsLegacyCapRelocs());
+                                       /*strict=*/!containsLegacyCapRelocs());
     }
     uint64_t targetOffset = reloc.capabilityOffset;
     uint64_t permissions = 0;

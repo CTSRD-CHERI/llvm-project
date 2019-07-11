@@ -228,8 +228,8 @@ static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
   if (!s || s->isDefined())
     return nullptr;
 
-  s->resolve(Defined{/*File=*/nullptr, name, binding, stOther, STT_NOTYPE, val,
-                     /*Size=*/0, sec});
+  s->resolve(Defined{/*file=*/nullptr, name, binding, stOther, STT_NOTYPE, val,
+                     /*size=*/0, sec});
   // If Val == 0 assume this symbol references the start of a section.
   // When targetting CHERI we set the size of that symbol since otherwise
   // an expression like foo = &_DYNAMIC will create a zero-length capability
@@ -300,8 +300,8 @@ void elf::addReservedSymbols() {
     if (config->emachine == EM_PPC64)
       gotOff = 0x8000;
 
-    s->resolve(Defined{/*File=*/nullptr, gotSymName, STB_GLOBAL, STV_HIDDEN,
-                       STT_NOTYPE, gotOff, /*Size=*/0, Out::elfHeader});
+    s->resolve(Defined{/*file=*/nullptr, gotSymName, STB_GLOBAL, STV_HIDDEN,
+                       STT_NOTYPE, gotOff, /*size=*/0, Out::elfHeader});
     ElfSym::globalOffsetTable = cast<Defined>(s);
   }
 
@@ -553,7 +553,7 @@ template <class ELFT> static void createSyntheticSections() {
   // We always need to add rel[a].plt to output if it has entries.
   // Even for static linking it can contain R_[*]_IRELATIVE relocations.
   in.relaPlt = make<RelocationSection<ELFT>>(
-      config->isRela ? ".rela.plt" : ".rel.plt", false /*Sort*/);
+      config->isRela ? ".rela.plt" : ".rel.plt", /*sort=*/false);
   add(in.relaPlt);
 
   // The RelaIplt immediately follows .rel.plt (.rel.dyn for ARM) to ensure
@@ -566,7 +566,7 @@ template <class ELFT> static void createSyntheticSections() {
       (config->emachine == EM_ARM && !config->androidPackDynRelocs)
           ? ".rel.dyn"
           : in.relaPlt->name,
-      false /*Sort*/);
+      /*sort=*/false);
   add(in.relaIplt);
 
   in.plt = make<PltSection>(false);
@@ -808,8 +808,8 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
       continue;
 
     auto *sym =
-        make<Defined>(isec->file, "", STB_LOCAL, /*StOther=*/0, STT_SECTION,
-                      /*Value=*/0, /*Size=*/0, isec);
+        make<Defined>(isec->file, "", STB_LOCAL, /*stOther=*/0, STT_SECTION,
+                      /*value=*/0, /*size=*/0, isec);
     sym->isSectionStartSymbol = true;
     in.symTab->addSymbol(sym);
   }
@@ -1762,9 +1762,9 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // if they are dynamically linked using `if (&_DYNAMIC != 0)` so we should
     // keep this check working.
 
-    auto *s = symtab->addSymbol(Defined{/*File=*/nullptr, "_DYNAMIC", STB_WEAK,
+    auto *s = symtab->addSymbol(Defined{/*file=*/nullptr, "_DYNAMIC", STB_WEAK,
                               STV_HIDDEN, STT_NOTYPE,
-                              /*Value=*/0, /*Size=*/0, mainPart->dynamic});
+                              /*value=*/0, /*size=*/0, mainPart->dynamic});
     // In CheriABI we want sensible bounds if we do &_DYNAMIC in C code
     s->isSectionStartSymbol = true;
   }
@@ -1803,9 +1803,9 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // define _TLS_MODULE_BASE_ relative to the first TLS section.
     Symbol *s = symtab->find("_TLS_MODULE_BASE_");
     if (s && s->isUndefined()) {
-      s->resolve(Defined{/*File=*/nullptr, s->getName(), STB_GLOBAL, STV_HIDDEN,
-                         STT_TLS, /*Value=*/0, 0,
-                         /*Section=*/nullptr});
+      s->resolve(Defined{/*file=*/nullptr, s->getName(), STB_GLOBAL, STV_HIDDEN,
+                         STT_TLS, /*value=*/0, 0,
+                         /*section=*/nullptr});
       ElfSym::tlsModuleBase = cast<Defined>(s);
     }
   }
@@ -2148,14 +2148,14 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
       addOptionalRegular(start, os, 0);
       addOptionalRegular(end, os, -1);
     } else {
-      // Since this is an empty section we don't want to set CanBeSectionStart
+      // Since this is an empty section we don't want to set canBeSectionStart
       // Iterating over this should terminate immediately so setting the size
       // to zero is fine
       addOptionalRegular(start, Default, 0, STV_HIDDEN, STB_GLOBAL,
-                         /*CanBeSectionStart=*/false);
+                         /*canBeSectionStart=*/false);
       // End is not a section start symbol even though it has value 0:
       addOptionalRegular(end, Default, 0, STV_HIDDEN, STB_GLOBAL,
-                         /*CanBeSectionStart=*/false);
+                         /*canBeSectionStart=*/false);
     }
   };
 
