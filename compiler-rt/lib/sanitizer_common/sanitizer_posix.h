@@ -55,7 +55,11 @@ usize internal_unlink(const char *path);
 usize internal_rename(const char *oldpath, const char *newpath);
 usize internal_lseek(fd_t fd, OFF_T offset, int whence);
 
+#if SANITIZER_NETBSD
+usize internal_ptrace(int request, int pid, void *addr, int data);
+#else
 usize internal_ptrace(int request, int pid, void *addr, void *data);
+#endif
 usize internal_waitpid(int pid, int *status, int options);
 
 int internal_fork();
