@@ -149,7 +149,7 @@ void InputSectionBase::uncompress() const {
   {
     static std::mutex mu;
     std::lock_guard<std::mutex> lock(mu);
-    uncompressedBuf = BAlloc.Allocate<char>(size);
+    uncompressedBuf = bAlloc.Allocate<char>(size);
   }
 
   if (Error e = zlib::uncompress(toStringRef(rawData), uncompressedBuf, size))
@@ -232,7 +232,7 @@ void InputSectionBase::parseCompressedHeader() {
 
     // Restore the original section name.
     // (e.g. ".zdebug_info" -> ".debug_info")
-    name = Saver.save("." + name.substr(2));
+    name = saver.save("." + name.substr(2));
     return;
   }
 
@@ -1028,7 +1028,7 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
     int64_t addend = reloc.computeAddend();
     // getOffset adds the output section base address here
     uint64_t offset = reloc.getOffset() - getOutputSection()->addr;
-    if (errorHandler().Verbose) {
+    if (errorHandler().verbose) {
       message("Adding hack: addend=0x" + utohexstr(addend) +
               " offset=0x" + utohexstr(reloc.getOffset()) + " Type: 0x" + utohexstr(reloc.type));
     }
@@ -1045,7 +1045,7 @@ static void fillGlobalSizesSection(InputSection* isec, uint8_t* buf, uint8_t* bu
   const endianness e = ELFT::TargetEndianness;
 
 #ifdef DEBUG_CAP_RELOCS
-  if (Config->VerboseCapRelocs)
+  if (Config->verboseCapRelocs)
     message("Write .global_sizes: IS = " + toString(IS));
 #endif
 

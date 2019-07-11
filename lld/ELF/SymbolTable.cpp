@@ -53,7 +53,7 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   }
   auto localDef = cast<Defined>(original);
   Defined* newSym = cast<Defined>(symtab->addSymbol(Defined{localDef->file,
-      Saver.save(uniqueName), llvm::ELF::STB_GLOBAL, llvm::ELF::STV_HIDDEN,
+      saver.save(uniqueName), llvm::ELF::STB_GLOBAL, llvm::ELF::STV_HIDDEN,
       localDef->type, localDef->value, localDef->size, localDef->section}));
 
   assert(newSym->isFunc() && "This should only be used for functions");

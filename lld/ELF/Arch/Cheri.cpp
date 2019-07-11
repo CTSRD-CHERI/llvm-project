@@ -80,7 +80,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
 }
 
 static inline void nonFatalWarning(const Twine &str) {
-  if (errorHandler().FatalWarnings)
+  if (errorHandler().fatalWarnings)
     message("warning: " + str);
   else
     warn(str);
@@ -310,7 +310,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
   }
 
   // assert(CapabilityOffset >= 0 && "Negative offsets not supported");
-  if (errorHandler().Verbose && capabilityOffset < 0)
+  if (errorHandler().verbose && capabilityOffset < 0)
     message("global capability offset " + Twine(capabilityOffset) +
             " is less than 0:\n>>> Location: " + loc.toString() +
             "\n>>> Target: " + target.verboseToString());
@@ -334,7 +334,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
                                   Filename).str();
     auto LocationSym = Symtab->find(SymbolHackName);
     if (!LocationSym) {
-      Symtab->addDefined(Saver.save(SymbolHackName), STV_DEFAULT, STT_OBJECT,
+      Symtab->addDefined(saver.save(SymbolHackName), STV_DEFAULT, STT_OBJECT,
                          Loc.Offset, Config->CapabilitySize, STB_GLOBAL,
                          Loc.Section, Loc.Section->File);
       LocationSym = Symtab->find(SymbolHackName);
@@ -446,7 +446,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
     }
     // TODO: are there any other cases that can be ignored?
 
-    if (warnAboutUnknownSize || errorHandler().Verbose) {
+    if (warnAboutUnknownSize || errorHandler().verbose) {
       std::string msg = "could not determine size of cap reloc against " +
                         reloc.target.verboseToString() +
                         "\n>>> referenced by " + location.toString();
@@ -465,7 +465,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
       assert(offsetInOS <= os->size);
       targetSize = os->size - offsetInOS;
 #ifdef DEBUG_CAP_RELOCS
-      if (Config->VerboseCapRelocs)
+      if (Config->verboseCapRelocs)
           errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
                  << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
                  << " -> target size 0x" << utohexstr(TargetSize) << "\n";
@@ -554,7 +554,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
     InMemoryCapRelocEntry<ELFT> entry(locationVA, targetVA, targetOffset,
                                       targetSize, permissions);
     memcpy(buf + offset, &entry, sizeof(entry));
-    //     if (errorHandler().Verbose) {
+    //     if (errorHandler().verbose) {
     //       errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
     //              << ", object=" << utohexstr(TargetVA)
     //              << ", offset=" << utohexstr(TargetOffset)
@@ -705,7 +705,7 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   CaptableMap &entries = getCaptableMapForFileAndOffset(isec, offset);
   if (config->zCapTableDebug) {
     // Add a local helper symbol to improve disassembly:
-    StringRef helperSymName = Saver.save("$captable_load_" + (sym.getName().empty() ? "$anonymous_symbol" : sym.getName()));
+    StringRef helperSymName = saver.save("$captable_load_" + (sym.getName().empty() ? "$anonymous_symbol" : sym.getName()));
     addSyntheticLocal(helperSymName, STT_NOTYPE, offset, 0, *isec);
   }
 
@@ -815,7 +815,7 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
           "current maximum is " + Twine(maxSmallEntries) + "; try recompiling "
           "non-performance critical source files with -mxcaptable");
     }
-    if (errorHandler().Verbose) {
+    if (errorHandler().verbose) {
       message("Total " + Twine(entries.size()) + " .captable entries: " +
           Twine(smallEntryCount) + " use a small immediate and " +
           Twine(entries.size() - smallEntryCount) + " use -mxcaptable. ");
@@ -823,9 +823,9 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
   }
 
   // Only add the @CAPTABLE symbols when running the LLD unit tests
-  // errorHandler().ExitEarly is set to false if LLD_IN_TEST=1 so just reuse
+  // errorHandler().exitEarly is set to false if LLD_IN_TEST=1 so just reuse
   // that instead of calling getenv on every iteration
-  const bool shouldAddAtCaptableSymbols = !errorHandler().ExitEarly;
+  const bool shouldAddAtCaptableSymbols = !errorHandler().exitEarly;
   uint32_t assignedSmallIndexes = 0;
   uint32_t assignedLargeIndexes = 0;
   for (auto &it : entries.map) {
@@ -850,9 +850,9 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     // might not be unique. If there is a global with the same name we always
     // want the global to have the plain @CAPTABLE name
     if (name.empty() /* || Name.startswith(".L") */ || targetSym->isLocal())
-      refName = Saver.save(name + "@CAPTABLE" + symContext + "." + Twine(index));
+      refName = saver.save(name + "@CAPTABLE" + symContext + "." + Twine(index));
     else
-      refName = Saver.save(name + "@CAPTABLE" + symContext);
+      refName = saver.save(name + "@CAPTABLE" + symContext);
     // XXXAR: This should no longer be necessary now that I am using addSyntheticLocal?
 #if 0
     if (Symtab->find(RefName)) {
