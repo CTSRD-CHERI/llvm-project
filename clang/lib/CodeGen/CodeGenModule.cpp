@@ -3695,9 +3695,12 @@ llvm::Constant *
 CodeGenModule::CreateRuntimeVariable(llvm::Type *Ty,
                                      StringRef Name,
                                      unsigned AddressSpace) {
-  auto *Ret =
-      GetOrCreateLLVMGlobal(Name, llvm::PointerType::get(Ty, AddressSpace),
-                            nullptr);
+  auto PtrTy =
+      getContext().getLangOpts().OpenCL
+          ? llvm::PointerType::get(
+                Ty, getContext().getTargetAddressSpace(LangAS::opencl_global))
+          : llvm::PointerType::get(Ty, AddressSpace);
+  auto *Ret = GetOrCreateLLVMGlobal(Name, PtrTy, nullptr);
   setDSOLocal(cast<llvm::GlobalValue>(Ret->stripPointerCasts()));
   return Ret;
 }
