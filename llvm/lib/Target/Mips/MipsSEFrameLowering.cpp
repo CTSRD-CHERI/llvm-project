@@ -559,7 +559,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       unsigned IntSP = SP;
       if (ABI.IsCheriPureCap()) {
         IntSP = MF.getRegInfo().createVirtualRegister(RC);
-        BuildMI(MBB, MBBI, dl, TII.get(Mips::CGetOffset), IntSP).addReg(SP);
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CGetAddr), IntSP).addReg(SP);
       }
 
 
@@ -567,8 +567,9 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       BuildMI(MBB, MBBI, dl, TII.get(AND), IntSP).addReg(IntSP).addReg(VR);
 
       if (ABI.IsCheriPureCap())
-        BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetOffset), SP).addReg(SP)
-          .addReg(IntSP);
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetAddr), SP)
+            .addReg(SP)
+            .addReg(IntSP);
 
       if (hasBP(MF)) {
         // move $s7, $sp
