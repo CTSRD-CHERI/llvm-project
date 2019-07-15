@@ -207,7 +207,7 @@ namespace llvm {
                                // unspecified type.  The register class
                                // will be determined by the opcode.
 
-      ExceptRef      = 129,    // WebAssembly's except_ref type
+      exnref         =  129,   // WebAssembly's exnref type
 
       iFATPTR64      =  130,   // 64-bit fat pointer type
       iFATPTR128     =  131,   // 128-bit fat pointer type
@@ -833,7 +833,7 @@ namespace llvm {
       case v1024f32:  return 32768;
       case v2048i32:
       case v2048f32:  return 65536;
-      case ExceptRef: return 0; // opaque type
+      case exnref: return 0; // opaque type
       }
     }
 
