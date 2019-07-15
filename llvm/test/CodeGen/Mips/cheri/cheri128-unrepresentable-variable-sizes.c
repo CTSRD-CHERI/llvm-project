@@ -1,6 +1,5 @@
-// REQUIRES: clang
+// REQUIRES: clang, cheri_is_128
 // TODO: convert to IR test (but that requires filling in the full @llvm.used array which is annoying
-
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o - -emit-llvm | FileCheck %s -check-prefix IR
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o -
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o %t.s
