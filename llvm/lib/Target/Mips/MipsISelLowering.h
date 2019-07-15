@@ -814,7 +814,7 @@ extern bool LargeCapTable;
     getInlineAsmMemConstraint(StringRef ConstraintCode) const override {
       if (ConstraintCode == "R")
         return InlineAsm::Constraint_R;
-      else if (ConstraintCode == "ZC")
+      if (ConstraintCode == "ZC")
         return InlineAsm::Constraint_ZC;
       return TargetLowering::getInlineAsmMemConstraint(ConstraintCode);
     }
