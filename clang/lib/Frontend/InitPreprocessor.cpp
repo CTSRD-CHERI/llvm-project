@@ -796,6 +796,9 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
       // See https://github.com/CTSRD-CHERI/llvm-project/issues/316
       IntPtrRangeTy = TI.getIntTypeByWidth(CapRange, true);
       UIntPtrRangeTy = TI.getIntTypeByWidth(CapRange, false);
+      if (LangOpts.getCheriBounds() > LangOptions::CBM_Conservative)
+        Builder.defineMacro("__CHERI_SUBOBJECT_BOUNDS__",
+                            Twine(LangOpts.getCheriBounds()));
     }
   }
 
