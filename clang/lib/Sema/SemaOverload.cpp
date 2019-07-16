@@ -1966,7 +1966,7 @@ IsTransparentUnionStandardConversion(Sema &S, Expr* From,
   // It's compatible if the expression matches any of the fields.
   for (const auto *it : UD->fields()) {
     if (IsStandardConversion(S, From, it->getType(), InOverloadResolution, SCS,
-                             CStyle, /*ObjCWritebackConversion=*/false)) {
+                             CStyle, /*AllowObjCWritebackConversion=*/false)) {
       ToType = it->getType();
       return true;
     }
@@ -5439,7 +5439,7 @@ static ExprResult CheckConvertedConstantExpression(Sema &S, Expr *From,
           : TryCopyInitialization(S, From, T,
                                   /*SuppressUserConversions=*/false,
                                   /*InOverloadResolution=*/false,
-                                  /*AllowObjcWritebackConversion=*/false,
+                                  /*AllowObjCWritebackConversion=*/false,
                                   /*AllowExplicit=*/false);
   StandardConversionSequence *SCS = nullptr;
   switch (ICS.getKind()) {
@@ -7335,7 +7335,7 @@ void Sema::AddMemberOperatorCandidates(OverloadedOperatorKind Op,
          ++Oper)
       AddMethodCandidate(Oper.getPair(), Args[0]->getType(),
                          Args[0]->Classify(Context), Args.slice(1),
-                         CandidateSet, /*SuppressUserConversions=*/false);
+                         CandidateSet, /*SuppressUserConversion=*/false);
   }
 }
 
@@ -8450,7 +8450,7 @@ public:
         isEqualOp ? *Ptr : S.Context.getPointerDiffType(),
       };
       S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                            /*IsAssigmentOperator=*/ isEqualOp);
+                            /*IsAssignmentOperator=*/ isEqualOp);
 
       bool NeedVolatile = !(*Ptr).isVolatileQualified() &&
                           VisibleTypeConversionsQuals.hasVolatile();
@@ -8459,7 +8459,7 @@ public:
         ParamTypes[0] =
           S.Context.getLValueReferenceType(S.Context.getVolatileType(*Ptr));
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                              /*IsAssigmentOperator=*/isEqualOp);
+                              /*IsAssignmentOperator=*/isEqualOp);
       }
 
       if (!(*Ptr).isRestrictQualified() &&
@@ -8468,7 +8468,7 @@ public:
         ParamTypes[0]
           = S.Context.getLValueReferenceType(S.Context.getRestrictType(*Ptr));
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                              /*IsAssigmentOperator=*/isEqualOp);
+                              /*IsAssignmentOperator=*/isEqualOp);
 
         if (NeedVolatile) {
           // volatile restrict version
@@ -8478,7 +8478,7 @@ public:
                                               (Qualifiers::Volatile |
                                                Qualifiers::Restrict)));
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                                /*IsAssigmentOperator=*/isEqualOp);
+                                /*IsAssignmentOperator=*/isEqualOp);
         }
       }
     }
@@ -8499,7 +8499,7 @@ public:
 
         // non-volatile version
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                              /*IsAssigmentOperator=*/true);
+                              /*IsAssignmentOperator=*/true);
 
         bool NeedVolatile = !(*Ptr).isVolatileQualified() &&
                            VisibleTypeConversionsQuals.hasVolatile();
@@ -8508,7 +8508,7 @@ public:
           ParamTypes[0] =
             S.Context.getLValueReferenceType(S.Context.getVolatileType(*Ptr));
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                                /*IsAssigmentOperator=*/true);
+                                /*IsAssignmentOperator=*/true);
         }
 
         if (!(*Ptr).isRestrictQualified() &&
@@ -8517,7 +8517,7 @@ public:
           ParamTypes[0]
             = S.Context.getLValueReferenceType(S.Context.getRestrictType(*Ptr));
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                                /*IsAssigmentOperator=*/true);
+                                /*IsAssignmentOperator=*/true);
 
           if (NeedVolatile) {
             // volatile restrict version
@@ -8527,7 +8527,7 @@ public:
                                                 (Qualifiers::Volatile |
                                                  Qualifiers::Restrict)));
             S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                                  /*IsAssigmentOperator=*/true);
+                                  /*IsAssignmentOperator=*/true);
           }
         }
       }
@@ -8560,14 +8560,14 @@ public:
         // Add this built-in operator as a candidate (VQ is empty).
         ParamTypes[0] = S.Context.getLValueReferenceType(LeftBaseTy);
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                              /*IsAssigmentOperator=*/isEqualOp);
+                              /*IsAssignmentOperator=*/isEqualOp);
 
         // Add this built-in operator as a candidate (VQ is 'volatile').
         if (VisibleTypeConversionsQuals.hasVolatile()) {
           ParamTypes[0] = S.Context.getVolatileType(LeftBaseTy);
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                                /*IsAssigmentOperator=*/isEqualOp);
+                                /*IsAssignmentOperator=*/isEqualOp);
         }
       }
     }
@@ -8586,14 +8586,14 @@ public:
         // Add this built-in operator as a candidate (VQ is empty).
         ParamTypes[0] = S.Context.getLValueReferenceType(*Vec1);
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                              /*IsAssigmentOperator=*/isEqualOp);
+                              /*IsAssignmentOperator=*/isEqualOp);
 
         // Add this built-in operator as a candidate (VQ is 'volatile').
         if (VisibleTypeConversionsQuals.hasVolatile()) {
           ParamTypes[0] = S.Context.getVolatileType(*Vec1);
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
-                                /*IsAssigmentOperator=*/isEqualOp);
+                                /*IsAssignmentOperator=*/isEqualOp);
         }
       }
     }
@@ -9042,7 +9042,7 @@ Sema::AddArgumentDependentLookupCandidates(DeclarationName Name,
         continue;
 
       AddOverloadCandidate(FD, FoundDecl, Args, CandidateSet,
-                           /*SupressUserConversions=*/false, PartialOverloading,
+                           /*SuppressUserConversions=*/false, PartialOverloading,
                            /*AllowExplicit*/ true,
                            /*AllowExplicitConversions*/ false,
                            ADLCallKind::UsesADL);
@@ -11795,7 +11795,7 @@ static void AddOverloadedCallCandidate(Sema &S,
       return;
 
     S.AddOverloadCandidate(Func, FoundDecl, Args, CandidateSet,
-                           /*SuppressUsedConversions=*/false,
+                           /*SuppressUserConversions=*/false,
                            PartialOverloading);
     return;
   }
@@ -11804,7 +11804,7 @@ static void AddOverloadedCallCandidate(Sema &S,
       = dyn_cast<FunctionTemplateDecl>(Callee)) {
     S.AddTemplateOverloadCandidate(FuncTemplate, FoundDecl,
                                    ExplicitTemplateArgs, Args, CandidateSet,
-                                   /*SuppressUsedConversions=*/false,
+                                   /*SuppressUserConversions=*/false,
                                    PartialOverloading);
     return;
   }
@@ -13098,7 +13098,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
         AddMethodTemplateCandidate(
             cast<FunctionTemplateDecl>(Func), I.getPair(), ActingDC,
             TemplateArgs, ObjectType, ObjectClassification, Args, CandidateSet,
-            /*SuppressUsedConversions=*/false);
+            /*SuppressUserConversions=*/false);
       }
     }
 
@@ -13294,7 +13294,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
        Oper != OperEnd; ++Oper) {
     AddMethodCandidate(Oper.getPair(), Object.get()->getType(),
                        Object.get()->Classify(Context), Args, CandidateSet,
-                       /*SuppressUserConversions=*/false);
+                       /*SuppressUserConversion=*/false);
   }
 
   // C++ [over.call.object]p2:
@@ -13569,7 +13569,7 @@ Sema::BuildOverloadedArrowExpr(Scope *S, Expr *Base, SourceLocation OpLoc,
   for (LookupResult::iterator Oper = R.begin(), OperEnd = R.end();
        Oper != OperEnd; ++Oper) {
     AddMethodCandidate(Oper.getPair(), Base->getType(), Base->Classify(Context),
-                       None, CandidateSet, /*SuppressUserConversions=*/false);
+                       None, CandidateSet, /*SuppressUserConversion=*/false);
   }
 
   bool HadMultipleCandidates = (CandidateSet.size() > 1);
@@ -13951,7 +13951,7 @@ Expr *Sema::FixOverloadedFunctionReference(Expr *E, DeclAccessPair Found,
         if (MemExpr->getQualifier())
           Loc = MemExpr->getQualifierLoc().getBeginLoc();
         Base =
-            BuildCXXThisExpr(Loc, MemExpr->getBaseType(), /*isImplicit=*/true);
+            BuildCXXThisExpr(Loc, MemExpr->getBaseType(), /*IsImplicit=*/true);
       }
     } else
       Base = MemExpr->getBase();

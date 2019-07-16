@@ -2564,7 +2564,7 @@ void PragmaDetectMismatchHandler::HandlePragma(Preprocessor &PP,
   std::string NameString;
   if (!PP.LexStringLiteral(Tok, NameString,
                            "pragma detect_mismatch",
-                           /*MacroExpansion=*/true))
+                           /*AllowMacroExpansion=*/true))
     return;
 
   // Read the comma followed by a second string literal.
@@ -2575,7 +2575,7 @@ void PragmaDetectMismatchHandler::HandlePragma(Preprocessor &PP,
   }
 
   if (!PP.LexStringLiteral(Tok, ValueString, "pragma detect_mismatch",
-                           /*MacroExpansion=*/true))
+                           /*AllowMacroExpansion=*/true))
     return;
 
   if (Tok.isNot(tok::r_paren)) {
@@ -2657,7 +2657,7 @@ void PragmaCommentHandler::HandlePragma(Preprocessor &PP,
   std::string ArgumentString;
   if (Tok.is(tok::comma) && !PP.LexStringLiteral(Tok, ArgumentString,
                                                  "pragma comment",
-                                                 /*MacroExpansion=*/true))
+                                                 /*AllowMacroExpansion=*/true))
     return;
 
   // FIXME: warn that 'exestr' is deprecated.

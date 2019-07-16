@@ -281,7 +281,7 @@ void LinkerDriver::addFile(StringRef path, bool withLOption) {
 // Add a given library by searching it from input search paths.
 void LinkerDriver::addLibrary(StringRef name) {
   if (Optional<std::string> path = searchLibrary(name))
-    addFile(*path, /*WithLOption=*/true);
+    addFile(*path, /*withLOption=*/true);
   else
     error("unable to find library -l" + name);
 }
@@ -1211,7 +1211,7 @@ void LinkerDriver::createFiles(opt::InputArgList &args) {
       addLibrary(arg->getValue());
       break;
     case OPT_INPUT:
-      addFile(arg->getValue(), /*WithLOption=*/false);
+      addFile(arg->getValue(), /*withLOption=*/false);
       break;
     case OPT_defsym: {
       StringRef from;
@@ -1482,7 +1482,7 @@ static void replaceCommonSymbols() {
     bss->markDead();
     inputSections.push_back(bss);
     s->replace(Defined{s->file, s->getName(), s->binding, s->stOther, s->type,
-                       /*Value=*/0, s->size, bss});
+                       /*value=*/0, s->size, bss});
   });
 }
 
@@ -1636,7 +1636,7 @@ template <class ELFT> void LinkerDriver::compileBitcodeFiles() {
 
   for (InputFile *file : lto->compile()) {
     auto *obj = cast<ObjFile<ELFT>>(file);
-    obj->parse(/*IgnoreComdats=*/true);
+    obj->parse(/*ignoreComdats=*/true);
     for (Symbol *sym : obj->getGlobalSymbols())
       sym->parseSymbolVersion();
     objectFiles.push_back(file);

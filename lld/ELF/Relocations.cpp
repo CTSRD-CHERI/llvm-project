@@ -1035,7 +1035,7 @@ static void processRelocAux(InputSectionBase &sec, RelExpr expr, RelType type,
       return;
     }
     addCapabilityRelocation<ELFT>(&sym, type, &sec, offset, expr, addend,
-                                  /* IsCallExpr=*/false,
+                                  /* isCallExpr=*/false,
                                   getRelocTargetLocation);
     // TODO: check if it is a call and needs a plt stub
     return;

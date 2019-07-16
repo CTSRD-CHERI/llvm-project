@@ -3739,7 +3739,7 @@ void CodeGenModule::emitAtAvailableLinkGuard() {
   llvm::FunctionType *CheckFTy = llvm::FunctionType::get(VoidTy, {}, false);
   llvm::FunctionCallee CFLinkCheckFuncRef = CreateRuntimeFunction(
       CheckFTy, "__clang_at_available_requires_core_foundation_framework",
-      llvm::AttributeList(), /*IsLocal=*/true);
+      llvm::AttributeList(), /*Local=*/true);
   llvm::Function *CFLinkCheckFunc =
       cast<llvm::Function>(CFLinkCheckFuncRef.getCallee()->stripPointerCasts());
   if (CFLinkCheckFunc->empty()) {

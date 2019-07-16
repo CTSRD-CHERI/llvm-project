@@ -1280,7 +1280,7 @@ static RValue EmitNewDeleteCall(CodeGenFunction &CGF,
   CGCallee Callee = CGCallee::forDirect(CalleePtr, GlobalDecl(CalleeDecl));
   RValue RV =
       CGF.EmitCall(CGF.CGM.getTypes().arrangeFreeFunctionCall(
-                       Args, CalleeType, /*chainCall=*/false),
+                       Args, CalleeType, /*ChainCall=*/false),
                    Callee, ReturnValueSlot(), Args, &CallOrInvoke);
 
   /// C++1y [expr.new]p10:
@@ -1572,7 +1572,7 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
                            "new.with.bounds",
                            E->isArray() ? "non-allocating placement new"
                                         : "non-allocating placement new[]",
-                           /*IsSubObject=*/false,
+                           /*isSubObject=*/false,
                            "for type " + allocType.getAsString(),
                            allocation.getAlignment().getQuantity()),
           allocation.getAlignment());
