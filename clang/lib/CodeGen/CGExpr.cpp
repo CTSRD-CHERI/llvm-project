@@ -4898,6 +4898,23 @@ LValue CodeGenFunction::EmitLValueForLambdaField(const FieldDecl *Field) {
   return EmitLValueForField(LambdaLV, Field);
 }
 
+/// Get the field index in the debug info. The debug info structure/union
+/// will ignore the unnamed bitfields.
+unsigned CodeGenFunction::getDebugInfoFIndex(const RecordDecl *Rec,
+                                             unsigned FieldIndex) {
+  unsigned I = 0, Skipped = 0;
+
+  for (auto F : Rec->getDefinition()->fields()) {
+    if (I == FieldIndex)
+      break;
+    if (F->isUnnamedBitfield())
+      Skipped++;
+    I++;
+  }
+
+  return FieldIndex - Skipped;
+}
+
 /// Get the address of a zero-sized field within a record. The resulting
 /// address doesn't necessarily have the right type.
 static Address emitAddrOfZeroSizeField(CodeGenFunction &CGF, Address Base,
@@ -4937,7 +4954,7 @@ static Address emitPreserveStructAccess(CodeGenFunction &CGF, Address base,
       CGF.CGM.getTypes().getCGRecordLayout(rec).getLLVMFieldNo(field);
 
   return CGF.Builder.CreatePreserveStructAccessIndex(
-      base, idx, field->getFieldIndex(), DbgInfo);
+      base, idx, CGF.getDebugInfoFIndex(rec, field->getFieldIndex()), DbgInfo);
 }
 
 static bool hasAnyVptr(const QualType Type, const ASTContext &Context) {
@@ -5054,7 +5071,7 @@ LValue CodeGenFunction::EmitLValueForField(LValue base,
           getContext().getRecordType(rec), rec->getLocation());
       addr = Address(
           Builder.CreatePreserveUnionAccessIndex(
-              addr.getPointer(), field->getFieldIndex(), DbgInfo),
+              addr.getPointer(), getDebugInfoFIndex(rec, field->getFieldIndex()), DbgInfo),
           addr.getAlignment());
     }
   } else {
