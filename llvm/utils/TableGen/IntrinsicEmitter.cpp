@@ -712,7 +712,7 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
     }
 
     if (!intrinsic.canThrow ||
-        intrinsic.ModRef != CodeGenIntrinsic::ReadWriteMem ||
+        (intrinsic.ModRef != CodeGenIntrinsic::ReadWriteMem && !intrinsic.hasSideEffects) ||
         intrinsic.isNoReturn || intrinsic.isCold || intrinsic.isNoDuplicate ||
         intrinsic.isConvergent || intrinsic.isSpeculatable ||
         intrinsic.hasSideEffects) {
@@ -761,6 +761,8 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
 
       switch (intrinsic.ModRef) {
       case CodeGenIntrinsic::NoMem:
+        if (intrinsic.hasSideEffects)
+          break;
         if (addComma)
           OS << ",";
         OS << "Attribute::ReadNone";
