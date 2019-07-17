@@ -3803,7 +3803,8 @@ bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
          Call->getIntrinsicID() == Intrinsic::cheri_bounded_stack_cap || */
          Call->getIntrinsicID() == Intrinsic::launder_invariant_group ||
          Call->getIntrinsicID() == Intrinsic::strip_invariant_group ||
-         Call->getIntrinsicID() == Intrinsic::aarch64_irg;
+         Call->getIntrinsicID() == Intrinsic::aarch64_irg ||
+         Call->getIntrinsicID() == Intrinsic::aarch64_tagp;
 }
 
 /// \p PN defines a loop-variant pointer to an object.  Check if the
