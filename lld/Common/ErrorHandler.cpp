@@ -16,6 +16,7 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/raw_ostream.h"
 #include <mutex>
+#include <regex>
 
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -84,8 +85,42 @@ void lld::checkError(Error e) {
                   [&](ErrorInfoBase &eib) { error(eib.message()); });
 }
 
-void ErrorHandler::print(StringRef s, raw_ostream::Colors c) {
-  *errorOS << logName << ": ";
+static std::string getLocation(std::string msg, std::string defaultMsg) {
+  static std::vector<std::regex> Regexes{
+      std::regex(R"(^undefined symbol:.*\n>>> referenced by (\S+):(\d+)\n.*)"),
+      std::regex(R"(^undefined symbol:.*\n>>> referenced by (.*):)"),
+      std::regex(
+          R"(^duplicate symbol: .*\n>>> defined in (\S+)\n>>> defined in.*)"),
+      std::regex(
+          R"(^duplicate symbol: .*\n>>> defined at (\S+):(\d+).*)"),
+      std::regex(
+          R"(.*\n>>> defined in .*\n>>> referenced by (\S+):(\d+))"),
+      std::regex(
+          R"(^undefined (internal|hidden|protected) symbol: .*\n>>> referenced by (\S+):(\d+)\n.*)"),
+      std::regex(R"((\S+):(\d+): unclosed quote)"),
+  };
+
+  std::smatch Match;
+  for (std::regex &Re : Regexes) {
+    if (std::regex_search(msg, Match, Re)) {
+      return Match.size() > 2 ? Match.str(1) + "(" + Match.str(2) + ")"
+                              : Match.str(1);
+    }
+  }
+  return defaultMsg;
+}
+
+void ErrorHandler::printHeader(StringRef s, raw_ostream::Colors c,
+                               const Twine &msg) {
+
+  if (vsDiagnostics) {
+    // A Visual Studio-style error message starts with an error location.
+    // If a location cannot be extracted then we default to LogName.
+    *errorOS << getLocation(msg.str(), logName) << ": ";
+  } else {
+    *errorOS << logName << ": ";
+  }
+
   if (colorDiagnostics) {
     errorOS->changeColor(c, true);
     *errorOS << s;
@@ -117,13 +152,13 @@ void ErrorHandler::warn(const Twine &msg) {
   std::lock_guard<std::mutex> lock(mu);
   if (warningLimit == 0 || warningCount < warningLimit) {
     newline(errorOS, msg);
-    print("warning: ", raw_ostream::MAGENTA);
+    printHeader("warning: ", raw_ostream::MAGENTA, msg);
     *errorOS << msg << "\n";
   } else if (warningCount == warningLimit) {
     // Set newline flag based on limit exceeded flag and not the message that
     // wasn't printed:
     newline(errorOS, warningLimitExceededMsg);
-    print("warning: ", raw_ostream::MAGENTA);
+    printHeader("warning: ", raw_ostream::MAGENTA, warningLimitExceededMsg);
     *errorOS << warningLimitExceededMsg << "\n";
   }
   ++warningCount;
@@ -134,13 +169,13 @@ void ErrorHandler::error(const Twine &msg) {
 
   if (errorLimit == 0 || errorCount < errorLimit) {
     newline(errorOS, msg);
-    print("error: ", raw_ostream::RED);
+    printHeader("error: ", raw_ostream::RED, msg);
     *errorOS << msg << "\n";
   } else if (errorCount == errorLimit) {
     // Set newline flag based on limit exceeded flag and not the message that
     // wasn't printed:
     newline(errorOS, errorLimitExceededMsg);
-    print("error: ", raw_ostream::RED);
+    printHeader("error: ", raw_ostream::RED, errorLimitExceededMsg);
     *errorOS << errorLimitExceededMsg << "\n";
     if (exitEarly)
       exitLld(1);
