@@ -230,7 +230,7 @@ private:
   DynRegionInfo DynSymRegion;
   DynRegionInfo DynamicTable;
   StringRef DynamicStringTable;
-  StringRef SOName = "<Not found>";
+  std::string SOName = "<Not found>";
   const Elf_Hash *HashTable = nullptr;
   const Elf_GnuHash *GnuHashTable = nullptr;
   const Elf_Shdr *DotSymtabSec = nullptr;
@@ -297,6 +297,7 @@ public:
                            StringRef &SectionName,
                            unsigned &SectionIndex) const;
   std::string getStaticSymbolName(uint32_t Index) const;
+  std::string getDynamicString(uint64_t Value) const;
   StringRef getSymbolVersionByIndex(StringRef StrTab,
                                     uint32_t VersionSymbolIndex,
                                     bool &IsDefault) const;
@@ -1644,8 +1645,7 @@ template <typename ELFT> void ELFDumper<ELFT>::parseDynamicTable() {
   }
   if (StringTableBegin)
     DynamicStringTable = StringRef(StringTableBegin, StringTableSize);
-  if (SONameOffset && SONameOffset < DynamicStringTable.size())
-    SOName = DynamicStringTable.data() + SONameOffset;
+  SOName = getDynamicString(SONameOffset);
 }
 
 template <typename ELFT>
@@ -1989,13 +1989,7 @@ void ELFDumper<ELFT>::printDynamicEntry(raw_ostream &OS, uint64_t Type,
       {DT_RPATH,     "Library rpath"},
       {DT_RUNPATH,   "Library runpath"},
     };
-    OS << TagNames.at(Type) << ": ";
-    if (DynamicStringTable.empty())
-      OS << "<String table is empty or was not found> ";
-    else if (Value < DynamicStringTable.size())
-      OS << "[" << StringRef(DynamicStringTable.data() + Value) << "]";
-    else
-      OS << "<Invalid offset 0x" << utohexstr(Value) << ">";
+    OS << TagNames.at(Type) << ": [" << getDynamicString(Value) << "]";
     break;
   }
   case DT_FLAGS:
@@ -2008,6 +2002,15 @@ void ELFDumper<ELFT>::printDynamicEntry(raw_ostream &OS, uint64_t Type,
     OS << format(ConvChar, Value);
     break;
   }
+}
+
+template <class ELFT>
+std::string ELFDumper<ELFT>::getDynamicString(uint64_t Value) const {
+  if (DynamicStringTable.empty())
+    return "<String table is empty or was not found>";
+  if (Value < DynamicStringTable.size())
+    return DynamicStringTable.data() + Value;
+  return Twine("<Invalid offset 0x" + utohexstr(Value) + ">").str();
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printUnwindInfo() {
@@ -2037,17 +2040,10 @@ template <class ELFT> void ELFDumper<ELFT>::printDynamicTable() {
 template <class ELFT> void ELFDumper<ELFT>::printNeededLibraries() {
   ListScope D(W, "NeededLibraries");
 
-  using LibsTy = std::vector<StringRef>;
-  LibsTy Libs;
-
+  std::vector<std::string> Libs;
   for (const auto &Entry : dynamic_table())
-    if (Entry.d_tag == ELF::DT_NEEDED) {
-      uint64_t Value = Entry.d_un.d_val;
-      if (Value < DynamicStringTable.size())
-        Libs.push_back(StringRef(DynamicStringTable.data() + Value));
-      else
-        Libs.push_back("<Library name index out of range>");
-    }
+    if (Entry.d_tag == ELF::DT_NEEDED)
+      Libs.push_back(getDynamicString(Entry.d_un.d_val));
 
   llvm::stable_sort(Libs);
 
