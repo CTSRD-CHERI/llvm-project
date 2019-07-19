@@ -18,10 +18,10 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
 ; CHECK-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 3]]($c11)
 ; CHECK-NEXT:    cincoffset $c24, $c11, $zero
-; CHECK-NEXT:    cgetoffset $1, $c11
+; CHECK-NEXT:    cgetaddr $1, $c11
 ; CHECK-NEXT:    daddiu $2, $zero, -32
 ; CHECK-NEXT:    and $1, $1, $2
-; CHECK-NEXT:    csetoffset $c11, $c11, $1
+; CHECK-NEXT:    csetaddr $c11, $c11, $1
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(main)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(main)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1

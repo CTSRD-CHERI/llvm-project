@@ -21,10 +21,10 @@ define i32 @d(i64 %i) {
 ; C128-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 3]]
 ; C128-NEXT:    cincoffset $c24, $c11, $zero
 ; C128-NEXT:    .cfi_def_cfa_register 96
-; C128-NEXT:    cgetoffset $1, $c11
+; C128-NEXT:    cgetaddr $1, $c11
 ; C128-NEXT:    daddiu $2, $zero, -8192
 ; C128-NEXT:    and $1, $1, $2
-; C128-NEXT:    csetoffset $c11, $c11, $1
+; C128-NEXT:    csetaddr $c11, $c11, $1
 ; C128-NEXT:    cincoffset $c25, $c11, $zero
 ; C128-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
 ; C128-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
