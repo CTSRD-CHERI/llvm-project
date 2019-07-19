@@ -556,6 +556,7 @@ namespace clang {
     ExpectedStmt VisitAddrLabelExpr(AddrLabelExpr *E);
     ExpectedStmt VisitConstantExpr(ConstantExpr *E);
     ExpectedStmt VisitParenExpr(ParenExpr *E);
+    ExpectedStmt VisitNoChangeBoundsExpr(NoChangeBoundsExpr *E);
     ExpectedStmt VisitParenListExpr(ParenListExpr *E);
     ExpectedStmt VisitStmtExpr(StmtExpr *E);
     ExpectedStmt VisitUnaryOperator(UnaryOperator *E);
@@ -6389,6 +6390,19 @@ ExpectedStmt ASTNodeImporter::VisitParenExpr(ParenExpr *E) {
 
   return new (Importer.getToContext())
       ParenExpr(ToLParen, ToRParen, ToSubExpr);
+}
+
+ExpectedStmt ASTNodeImporter::VisitNoChangeBoundsExpr(NoChangeBoundsExpr *E) {
+  auto Imp = importSeq(E->getBuiltinLoc(), E->getRParen(), E->getSubExpr());
+  if (!Imp)
+    return Imp.takeError();
+
+  SourceLocation ToBuiltinLoc, ToRParenLoc;
+  Expr *ToSubExpr;
+  std::tie(ToBuiltinLoc, ToRParenLoc, ToSubExpr) = *Imp;
+
+  return NoChangeBoundsExpr::Create(Importer.getToContext(), ToBuiltinLoc,
+                                    ToRParenLoc, ToSubExpr);
 }
 
 ExpectedStmt ASTNodeImporter::VisitParenListExpr(ParenListExpr *E) {

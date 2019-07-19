@@ -1108,6 +1108,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
   case tok::kw___builtin_va_arg:
   case tok::kw___builtin_offsetof:
   case tok::kw___builtin_choose_expr:
+  case tok::kw___builtin_no_change_bounds:
   case tok::kw___builtin_astype: // primary-expression: [OCL] as_type()
   case tok::kw___builtin_convertvector:
   case tok::kw___builtin_COLUMN:
@@ -2238,6 +2239,20 @@ ExprResult Parser::ParseBuiltinPrimaryExpression() {
     }
     Res = Actions.ActOnChooseExpr(StartLoc, Cond.get(), Expr1.get(),
                                   Expr2.get(), ConsumeParen());
+    break;
+  }
+  case tok::kw___builtin_no_change_bounds: {
+    ExprResult Expr(ParseAssignmentExpression());
+    if (Expr.isInvalid()) {
+      SkipUntil(tok::r_paren, StopAtSemi);
+      return Expr;
+    }
+    if (Tok.isNot(tok::r_paren)) {
+      Diag(Tok, diag::err_expected) << tok::r_paren;
+      return ExprError();
+    }
+    // TODO: optional second argument indicating kind of opt-out?
+    Res = Actions.ActOnNoChangeBoundsExpr(StartLoc, ConsumeParen(), Expr.get());
     break;
   }
   case tok::kw___builtin_astype: {

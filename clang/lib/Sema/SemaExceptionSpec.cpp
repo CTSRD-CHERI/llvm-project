@@ -1212,6 +1212,7 @@ CanThrowResult Sema::canThrow(const Expr *E) {
   case Expr::ObjCIsaExprClass:
   case Expr::ObjCIvarRefExprClass:
   case Expr::ParenExprClass:
+  case Expr::NoChangeBoundsExprClass:
   case Expr::ParenListExprClass:
   case Expr::ShuffleVectorExprClass:
   case Expr::ConvertVectorExprClass:

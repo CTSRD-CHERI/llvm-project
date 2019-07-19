@@ -1666,6 +1666,9 @@ namespace serialization {
       /// A ParenExpr record.
       EXPR_PAREN,
 
+      /// A NoChangeBoundsExpr record.
+      EXPR_NO_CHANGE_BOUNDS,
+
       /// A ParenListExpr record.
       EXPR_PAREN_LIST,
 
@@ -1881,21 +1884,21 @@ namespace serialization {
       /// A CXXBoolLiteralExpr record.
       EXPR_CXX_BOOL_LITERAL,
 
-      EXPR_CXX_NULL_PTR_LITERAL,  // CXXNullPtrLiteralExpr
-      EXPR_CXX_TYPEID_EXPR,       // CXXTypeidExpr (of expr).
-      EXPR_CXX_TYPEID_TYPE,       // CXXTypeidExpr (of type).
-      EXPR_CXX_THIS,              // CXXThisExpr
-      EXPR_CXX_THROW,             // CXXThrowExpr
-      EXPR_CXX_DEFAULT_ARG,       // CXXDefaultArgExpr
-      EXPR_CXX_DEFAULT_INIT,      // CXXDefaultInitExpr
-      EXPR_CXX_BIND_TEMPORARY,    // CXXBindTemporaryExpr
+      EXPR_CXX_NULL_PTR_LITERAL, // CXXNullPtrLiteralExpr
+      EXPR_CXX_TYPEID_EXPR,      // CXXTypeidExpr (of expr).
+      EXPR_CXX_TYPEID_TYPE,      // CXXTypeidExpr (of type).
+      EXPR_CXX_THIS,             // CXXThisExpr
+      EXPR_CXX_THROW,            // CXXThrowExpr
+      EXPR_CXX_DEFAULT_ARG,      // CXXDefaultArgExpr
+      EXPR_CXX_DEFAULT_INIT,     // CXXDefaultInitExpr
+      EXPR_CXX_BIND_TEMPORARY,   // CXXBindTemporaryExpr
 
       EXPR_CXX_SCALAR_VALUE_INIT, // CXXScalarValueInitExpr
       EXPR_CXX_NEW,               // CXXNewExpr
       EXPR_CXX_DELETE,            // CXXDeleteExpr
       EXPR_CXX_PSEUDO_DESTRUCTOR, // CXXPseudoDestructorExpr
 
-      EXPR_EXPR_WITH_CLEANUPS,    // ExprWithCleanups
+      EXPR_EXPR_WITH_CLEANUPS, // ExprWithCleanups
 
       EXPR_CXX_DEPENDENT_SCOPE_MEMBER,   // CXXDependentScopeMemberExpr
       EXPR_CXX_DEPENDENT_SCOPE_DECL_REF, // DependentScopeDeclRefExpr
@@ -1903,37 +1906,37 @@ namespace serialization {
       EXPR_CXX_UNRESOLVED_MEMBER,        // UnresolvedMemberExpr
       EXPR_CXX_UNRESOLVED_LOOKUP,        // UnresolvedLookupExpr
 
-      EXPR_CXX_EXPRESSION_TRAIT,  // ExpressionTraitExpr
-      EXPR_CXX_NOEXCEPT,          // CXXNoexceptExpr
+      EXPR_CXX_EXPRESSION_TRAIT, // ExpressionTraitExpr
+      EXPR_CXX_NOEXCEPT,         // CXXNoexceptExpr
 
-      EXPR_OPAQUE_VALUE,          // OpaqueValueExpr
-      EXPR_BINARY_CONDITIONAL_OPERATOR,  // BinaryConditionalOperator
-      EXPR_TYPE_TRAIT,            // TypeTraitExpr
-      EXPR_ARRAY_TYPE_TRAIT,      // ArrayTypeTraitIntExpr
+      EXPR_OPAQUE_VALUE,                // OpaqueValueExpr
+      EXPR_BINARY_CONDITIONAL_OPERATOR, // BinaryConditionalOperator
+      EXPR_TYPE_TRAIT,                  // TypeTraitExpr
+      EXPR_ARRAY_TYPE_TRAIT,            // ArrayTypeTraitIntExpr
 
-      EXPR_PACK_EXPANSION,        // PackExpansionExpr
-      EXPR_SIZEOF_PACK,           // SizeOfPackExpr
-      EXPR_SUBST_NON_TYPE_TEMPLATE_PARM, // SubstNonTypeTemplateParmExpr
-      EXPR_SUBST_NON_TYPE_TEMPLATE_PARM_PACK,// SubstNonTypeTemplateParmPackExpr
-      EXPR_FUNCTION_PARM_PACK,    // FunctionParmPackExpr
-      EXPR_MATERIALIZE_TEMPORARY, // MaterializeTemporaryExpr
-      EXPR_CXX_FOLD,              // CXXFoldExpr
+      EXPR_PACK_EXPANSION,                    // PackExpansionExpr
+      EXPR_SIZEOF_PACK,                       // SizeOfPackExpr
+      EXPR_SUBST_NON_TYPE_TEMPLATE_PARM,      // SubstNonTypeTemplateParmExpr
+      EXPR_SUBST_NON_TYPE_TEMPLATE_PARM_PACK, // SubstNonTypeTemplateParmPackExpr
+      EXPR_FUNCTION_PARM_PACK,                // FunctionParmPackExpr
+      EXPR_MATERIALIZE_TEMPORARY,             // MaterializeTemporaryExpr
+      EXPR_CXX_FOLD,                          // CXXFoldExpr
 
       // CUDA
-      EXPR_CUDA_KERNEL_CALL,       // CUDAKernelCallExpr
+      EXPR_CUDA_KERNEL_CALL, // CUDAKernelCallExpr
 
       // OpenCL
-      EXPR_ASTYPE,                 // AsTypeExpr
+      EXPR_ASTYPE, // AsTypeExpr
 
       // Microsoft
-      EXPR_CXX_PROPERTY_REF_EXPR, // MSPropertyRefExpr
+      EXPR_CXX_PROPERTY_REF_EXPR,       // MSPropertyRefExpr
       EXPR_CXX_PROPERTY_SUBSCRIPT_EXPR, // MSPropertySubscriptExpr
-      EXPR_CXX_UUIDOF_EXPR,       // CXXUuidofExpr (of expr).
-      EXPR_CXX_UUIDOF_TYPE,       // CXXUuidofExpr (of type).
-      STMT_SEH_LEAVE,             // SEHLeaveStmt
-      STMT_SEH_EXCEPT,            // SEHExceptStmt
-      STMT_SEH_FINALLY,           // SEHFinallyStmt
-      STMT_SEH_TRY,               // SEHTryStmt
+      EXPR_CXX_UUIDOF_EXPR,             // CXXUuidofExpr (of expr).
+      EXPR_CXX_UUIDOF_TYPE,             // CXXUuidofExpr (of type).
+      STMT_SEH_LEAVE,                   // SEHLeaveStmt
+      STMT_SEH_EXCEPT,                  // SEHExceptStmt
+      STMT_SEH_FINALLY,                 // SEHFinallyStmt
+      STMT_SEH_TRY,                     // SEHTryStmt
 
       // OpenMP directives
       STMT_OMP_PARALLEL_DIRECTIVE,
@@ -1986,10 +1989,10 @@ namespace serialization {
       EXPR_OMP_ARRAY_SECTION,
 
       // ARC
-      EXPR_OBJC_BRIDGED_CAST,     // ObjCBridgedCastExpr
+      EXPR_OBJC_BRIDGED_CAST, // ObjCBridgedCastExpr
 
-      STMT_MS_DEPENDENT_EXISTS,   // MSDependentExistsStmt
-      EXPR_LAMBDA,                // LambdaExpr
+      STMT_MS_DEPENDENT_EXISTS, // MSDependentExistsStmt
+      EXPR_LAMBDA,              // LambdaExpr
       STMT_COROUTINE_BODY,
       STMT_CORETURN,
       EXPR_COAWAIT,

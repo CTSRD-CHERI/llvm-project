@@ -2328,6 +2328,7 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
     Loc = getExprLoc();
     R1 = getSourceRange();
     return true;
+  case NoChangeBoundsExprClass:
   case ParenExprClass:
     return cast<ParenExpr>(this)->getSubExpr()->
       isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx);
@@ -2793,9 +2794,13 @@ static Expr *IgnoreImplicitSingleStep(Expr *E) {
   return E;
 }
 
-static Expr *IgnoreParensSingleStep(Expr *E) {
-  if (auto *PE = dyn_cast<ParenExpr>(E))
-    return PE->getSubExpr();
+static Expr *IgnoreParensSingleStepImpl(Expr *E, bool IgnoreNoBounds) {
+  if (auto *PE = dyn_cast<ParenExpr>(E)) {
+    // XXXAR: also look through __builtin_no_change_bounds() if IgnoreNoBounds
+    // is set
+    if (IgnoreNoBounds || !isa<NoChangeBoundsExpr>(E))
+      return PE->getSubExpr();
+  }
 
   if (auto *UO = dyn_cast<UnaryOperator>(E)) {
     if (UO->getOpcode() == UO_Extension)
@@ -2816,6 +2821,14 @@ static Expr *IgnoreParensSingleStep(Expr *E) {
     return CE->getSubExpr();
 
   return E;
+}
+
+static Expr *IgnoreParensSingleStep(Expr *E) {
+  return IgnoreParensSingleStepImpl(E, /*IgnoreNoBounds=*/true);
+}
+
+static Expr *IgnoreParensExceptForNoChangeBoundsSingleStep(Expr *E) {
+  return IgnoreParensSingleStepImpl(E, /*IgnoreNoBounds=*/false);
 }
 
 static Expr *IgnoreNoopCastsSingleStep(const ASTContext &Ctx, Expr *E) {
@@ -2878,6 +2891,11 @@ Expr *Expr::IgnoreParens() {
 
 Expr *Expr::IgnoreParenImpCasts() {
   return IgnoreExprNodes(this, IgnoreParensSingleStep,
+                         IgnoreImpCastsExtraSingleStep);
+}
+
+Expr *Expr::IgnoreParenImpCastsExceptForNoChangeBounds() {
+  return IgnoreExprNodes(this, IgnoreParensExceptForNoChangeBoundsSingleStep,
                          IgnoreImpCastsExtraSingleStep);
 }
 
@@ -3153,6 +3171,7 @@ bool Expr::isConstantInitializer(ASTContext &Ctx, bool IsForRef,
   case ImplicitValueInitExprClass:
   case NoInitExprClass:
     return true;
+  case NoChangeBoundsExprClass:
   case ParenExprClass:
     return cast<ParenExpr>(this)->getSubExpr()
       ->isConstantInitializer(Ctx, IsForRef, Culprit);
@@ -3373,6 +3392,7 @@ bool Expr::HasSideEffects(const ASTContext &Ctx,
     break;
 
   case ParenExprClass:
+  case NoChangeBoundsExprClass:
   case ArraySubscriptExprClass:
   case OMPArraySectionExprClass:
   case MemberExprClass:

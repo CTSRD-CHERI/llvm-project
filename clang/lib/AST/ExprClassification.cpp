@@ -282,6 +282,9 @@ static Cl::Kinds ClassifyInternal(ASTContext &Ctx, const Expr *E) {
     // C++ [expr.prim.general]p4: The presence of parentheses does not affect
     //   whether the expression is an lvalue.
   case Expr::ParenExprClass:
+  // The same also applies to the __builtin_no_change_bounds expression, it is
+  // just a hint to the subobject bounds pass.
+  case Expr::NoChangeBoundsExprClass:
     return ClassifyInternal(Ctx, cast<ParenExpr>(E)->getSubExpr());
 
     // C11 6.5.1.1p4: [A generic selection] is an lvalue, a function designator,

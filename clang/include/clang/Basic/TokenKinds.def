@@ -601,6 +601,11 @@ KEYWORD(__cheri_addr                , KEYALL) // convert capability to an addres
 KEYWORD(__cheri_cast                , KEYALL) // old name for ptr <-> capability
                                               // casts. Now an error.
 
+// Do not attempt to tighten (sub)-object bounds for the given expression if
+// CHERI subobject bounds are enabled. This can be used for fine-grained control
+// over bounds.
+KEYWORD(__builtin_no_change_bounds , KEYALL)
+
 
 // Objective-C keywords.
 KEYWORD(__covariant                  , KEYOBJC)

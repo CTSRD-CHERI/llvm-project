@@ -12377,6 +12377,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     return CheckICE(cast<ConstantExpr>(E)->getSubExpr(), Ctx);
 
   case Expr::ParenExprClass:
+  case Expr::NoChangeBoundsExprClass:
     return CheckICE(cast<ParenExpr>(E)->getSubExpr(), Ctx);
   case Expr::GenericSelectionExprClass:
     return CheckICE(cast<GenericSelectionExpr>(E)->getResultExpr(), Ctx);

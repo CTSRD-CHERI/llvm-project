@@ -197,6 +197,91 @@ void test_dhclient_cast_opt_out(struct ip* ip) {
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type has opt-out attribute -> not setting bounds
 }
 
+struct foo {
+  struct bar {
+    int a;
+    char array[10];
+  } bar;
+  float other;
+};
+
+// TODO: __builtin_no_change_bounds(&(&foo.bar)->a)
+
+void test_expression_opt_out(void) {
+  struct foo f;
+  // Need to wrap the whole address-of expression -> set bounds for all of these cases:
+  do_stuff(&(&f.bar)->a); // expected-remark{{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
+  // CHECK-NEXT: address 'int' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
+  do_stuff(__builtin_no_change_bounds(&(&f.bar)->a)); // expected-remark{{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
+  // CHECK-NEXT: address 'int' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
+  do_stuff(&__builtin_no_change_bounds(&f.bar)->a); // expected-remark{{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
+  // CHECK-NEXT: address 'int' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
+  do_stuff(&(__builtin_no_change_bounds(&f.bar)->a)); // expected-remark{{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
+  // CHECK-NEXT: address 'int' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
+
+  // Do not set bounds if the outermost expression has a nobounds
+  do_stuff(&__builtin_no_change_bounds(f.bar.a));  // expected-remark{{not setting bounds for pointer to 'int' (__builtin_no_change_bounds() expression)}}
+  // CHECK-NEXT: address 'int' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  do_stuff(&__builtin_no_change_bounds(f.bar));  // expected-remark{{not setting bounds for pointer to 'struct bar' (__builtin_no_change_bounds() expression}}
+  // CHECK-NEXT: address 'struct bar' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  do_stuff(&__builtin_no_change_bounds((&f.bar)->a)); // expected-remark{{not setting bounds for pointer to 'int' (__builtin_no_change_bounds() expression)}}
+  // CHECK-NEXT: address 'int' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+
+  // bounds on array decay+subobject addressof
+  do_stuff(&(((struct foo *)(f.bar.array))->other));
+  // expected-remark@-1{{setting sub-object bounds for field 'array' (array decay on 'char [10]') to 10 bytes}}
+  // expected-remark@-2{{setting sub-object bounds for field 'other' (pointer to 'float') to 4 bytes}}
+  // CHECK-NEXT: decay 'char [10]' subobj bounds check: got MemberExpr -> decay on constant size array -> setting bounds for 'char [10]' decay to 10
+  // CHECK-NEXT: address 'float' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'float' address to 4
+  // no bounds on array decay but bounds on addressof
+  do_stuff(&(((struct foo *)__builtin_no_change_bounds(f.bar.array))->other));
+  // expected-remark@-1{{not setting bounds for array decay on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-2{{setting sub-object bounds for field 'other' (pointer to 'float') to 4 bytes}}
+  // CHECK-NEXT: decay 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: address 'float' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'float' address to 4
+  // no bounds on either
+  do_stuff(&__builtin_no_change_bounds(((struct foo *)__builtin_no_change_bounds(f.bar.array))->other));
+  // expected-remark@-1{{not setting bounds for array decay on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-2{{not setting bounds for pointer to 'float' (__builtin_no_change_bounds() expression)}}
+  // CHECK-NEXT: decay 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: address 'float' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+
+  // no bounds on the subscript, but bounds on the addressoff
+  do_stuff(&(__builtin_no_change_bounds(f.bar.array)[0]));
+  // expected-remark@-1{{not setting bounds for array subscript on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-2{{setting sub-object bounds for pointer to 'char' to 1 bytes}}
+  // CHECK-NEXT: subscript 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: address 'char' subobj bounds check: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'char' address to 1
+  do_stuff(&__builtin_no_change_bounds(__builtin_no_change_bounds(f.bar.array)[0]));
+  // expected-remark@-1{{not setting bounds for array subscript on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-2{{not setting bounds for pointer to 'char' (__builtin_no_change_bounds() expression)}}
+
+  // CHECK-NEXT: subscript 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: address 'char' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+}
+
+#define __PAST_END(array, offset) (((__typeof__(*(array)) *)__builtin_no_change_bounds(array))[offset])
+struct fake_vla {
+  int first;
+  void *data[1];
+};
+
+void test_past_end_macro(struct fake_vla *fv) {
+  do_stuff(fv->data[1]); // expected-remark-re{{setting sub-object bounds for field 'data' (array subscript on 'void * __capability [1]') to {{16|32}} bytes}}
+  // CHECK-NEXT: subscript 'void * __capability [1]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'void * __capability [1]' subscript to {{16|32}}
+  do_stuff(__PAST_END(fv->data, 1)); // expected-remark{{not setting bounds for array subscript on 'typeof (*(fv->data)) * __capability' (aka 'void * __capability * __capability') (array subscript on non-array type)}}
+  // expected-remark@-1 {{not setting bounds for array decay on 'void * __capability [1]' (__builtin_no_change_bounds() expression)}}
+  // CHECK-NEXT: decay 'void * __capability [1]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'typeof (*(fv->data)) * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
+}
+
+#define cheri_unbounded_addressof(expr) (&__builtin_no_change_bounds(expr))
+
+void test_cheri_unbounded_addressof(struct ip *ip) {
+  // Check the opt-out macro
+  do_stuff((unsigned char *)cheri_unbounded_addressof(ip->ip_src)); // expected-remark{{not setting bounds for pointer to 'struct in_addr' (__builtin_no_change_bounds() expression)}}
+  // CHECK-NEXT: address 'struct in_addr' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+}
 
 #ifdef NOTYET
 struct TestStruct {
@@ -232,3 +317,5 @@ void expr_opt_out_ref(struct TestStruct& t) {
 #endif
 
 #endif
+
+// CHECK-EMPTY:

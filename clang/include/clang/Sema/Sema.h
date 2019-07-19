@@ -4389,6 +4389,8 @@ public:
   ExprResult ActOnCharacterConstant(const Token &Tok,
                                     Scope *UDLScope = nullptr);
   ExprResult ActOnParenExpr(SourceLocation L, SourceLocation R, Expr *E);
+  ExprResult ActOnNoChangeBoundsExpr(SourceLocation L, SourceLocation R,
+                                     Expr *E);
   ExprResult ActOnParenListExpr(SourceLocation L,
                                 SourceLocation R,
                                 MultiExprArg Val);

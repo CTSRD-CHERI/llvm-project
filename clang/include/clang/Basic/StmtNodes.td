@@ -105,6 +105,9 @@ def ConstantExpr : DStmt<FullExpr>;
 // Atomic expressions
 def AtomicExpr : DStmt<Expr>;
 
+// CHERI no bounds expression (pretend it's the same as a ParenExpr except in a few cases)
+def NoChangeBoundsExpr : DStmt<ParenExpr>;
+
 // GNU Extensions.
 def AddrLabelExpr : DStmt<Expr>;
 def StmtExpr : DStmt<Expr>;

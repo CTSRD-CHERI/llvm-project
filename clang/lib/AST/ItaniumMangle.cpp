@@ -4129,6 +4129,7 @@ recurse:
   }
 
   case Expr::ParenExprClass:
+  case Expr::NoChangeBoundsExprClass:
     mangleExpression(cast<ParenExpr>(E)->getSubExpr(), Arity);
     break;
 

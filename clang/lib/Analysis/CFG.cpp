@@ -4539,6 +4539,7 @@ tryAgain:
       goto tryAgain;
 
     case Stmt::ParenExprClass:
+    case Stmt::NoChangeBoundsExprClass:
       E = cast<ParenExpr>(E)->getSubExpr();
       goto tryAgain;
 

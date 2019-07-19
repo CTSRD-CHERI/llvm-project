@@ -2185,6 +2185,11 @@ public:
     return getSema().ActOnParenExpr(LParen, RParen, SubExpr);
   }
 
+  ExprResult RebuildNoChangeBoundsExpr(Expr *SubExpr, SourceLocation Start,
+                                       SourceLocation End) {
+    return getSema().ActOnNoChangeBoundsExpr(Start, End, SubExpr);
+  }
+
   /// Build a new pseudo-destructor expression.
   ///
   /// By default, performs semantic analysis to build the new expression.
@@ -9313,6 +9318,20 @@ TreeTransform<Derived>::TransformParenExpr(ParenExpr *E) {
 
   return getDerived().RebuildParenExpr(SubExpr.get(), E->getLParen(),
                                        E->getRParen());
+}
+
+template <typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformNoChangeBoundsExpr(NoChangeBoundsExpr *E) {
+  ExprResult SubExpr = getDerived().TransformExpr(E->getSubExpr());
+  if (SubExpr.isInvalid())
+    return ExprError();
+
+  if (!getDerived().AlwaysRebuild() && SubExpr.get() == E->getSubExpr())
+    return E;
+
+  return getDerived().RebuildNoChangeBoundsExpr(SubExpr.get(), E->getBeginLoc(),
+                                                E->getEndLoc());
 }
 
 /// The operand of a unary address-of operator has special rules: it's

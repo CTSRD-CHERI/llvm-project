@@ -827,7 +827,8 @@ CodeGenFunction::setCHERIBoundsOnArraySubscript(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
   // We want to set the bounds on the subscript base type (NOT the result of
   // the ASE which will be char for a char[10] subscript!)
-  const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
+  const Expr *Base =
+      ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
   QualType Ty = Base->getType();
   NumArraySubscriptCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::ArraySubscript;
@@ -852,7 +853,7 @@ CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on array decay ";
   //                  E->dump(llvm::dbgs()));
 
-  const Expr *Base = E->IgnoreParenImpCasts();
+  const Expr *Base = E->IgnoreParenImpCastsExceptForNoChangeBounds();
   QualType Ty = Base->getType();
   assert(Ty->isArrayType());
   NumArrayDecayCheckedForBoundsTightening++;
@@ -953,7 +954,8 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   // which kinds of narrowing are fine
   if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), Kind, "array type"))
     return ArrayBoundsResult::Never;
-  const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
+  const Expr *Base =
+      ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
   const QualType BaseTy = Base->getType();
   if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, Kind, "array base type"))
     return ArrayBoundsResult::Never;
@@ -1107,9 +1109,16 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   }
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
-  E = E->IgnoreParenImpCasts(); // ignore array-to-pointer decay, etc
+  E = E->IgnoreParenImpCastsExceptForNoChangeBounds(); // ignore
+                                                       // array-to-pointer
+                                                       // decay, etc
   // And we also neede to ignore parenexprs since oterwise we get a ParenExpr
   // instead of ArraySubscriptExpr/MemberExpr!
+  // Important: We must not ignore NoChangeBoundsExprs
+  if (isa<NoChangeBoundsExpr>(E)) {
+    return cannotSetBounds(*this, E, Ty, Kind,
+                           "__builtin_no_change_bounds() expression");
+  }
 
   // Any expression other than DeclRefExpr (e.g. in the case &x) will be a
   // sub-object expression (array index, member expression (&x.a)
@@ -1296,7 +1305,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   // -fsanitize=array-size and is equivalent to having a trap if index greater
   // constant size (but with a CHERI bounds violation instead)
   if (Kind == SubObjectBoundsKind::ArraySubscript || Kind == SubObjectBoundsKind::ArrayDecay) {
-    // E->dumpColor();
     // E->dumpPretty(getContext());
     // For array subscripts we can only set bounds for array types, and not
     // pointers since those have an unknown size
@@ -1321,8 +1329,13 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     case ArrayBoundsResult::Always:
       return ExactBounds(TypeSize);
     case ArrayBoundsResult::UseFullArray: {
-      const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
-      if (Base->getType()->isConstantArrayType()) {
+      const Expr *Base =
+          ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
+      if (isa<NoChangeBoundsExpr>(E)) {
+        return cannotSetBounds(
+            *this, E, Ty, Kind,
+            "__builtin_no_change_bounds() used for array base");
+      } else if (Base->getType()->isConstantArrayType()) {
         return BoundsOnContainer(Base->getType());
       } else if (Base->getType()->isArrayType()) {
         UseRemainingSize("bounds on full array but size not known", 0, true);
@@ -2141,6 +2154,7 @@ LValue CodeGenFunction::EmitLValue(const Expr *E) {
   case Expr::ConstantExprClass:
     return EmitLValue(cast<ConstantExpr>(E)->getSubExpr());
   case Expr::ParenExprClass:
+  case Expr::NoChangeBoundsExprClass:
     return EmitLValue(cast<ParenExpr>(E)->getSubExpr());
   case Expr::GenericSelectionExprClass:
     return EmitLValue(cast<GenericSelectionExpr>(E)->getResultExpr());

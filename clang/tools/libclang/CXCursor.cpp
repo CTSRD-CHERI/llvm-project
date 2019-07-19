@@ -279,6 +279,7 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
   case Stmt::MaterializeTemporaryExprClass:
   case Stmt::ObjCIndirectCopyRestoreExprClass:
   case Stmt::OffsetOfExprClass:
+  case Stmt::NoChangeBoundsExprClass:
   case Stmt::ParenListExprClass:
   case Stmt::PredefinedExprClass:
   case Stmt::ShuffleVectorExprClass:

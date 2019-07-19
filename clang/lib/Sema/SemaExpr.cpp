@@ -3732,6 +3732,12 @@ ExprResult Sema::ActOnParenExpr(SourceLocation L, SourceLocation R, Expr *E) {
   return new (Context) ParenExpr(L, R, E);
 }
 
+ExprResult Sema::ActOnNoChangeBoundsExpr(SourceLocation L, SourceLocation R,
+                                         Expr *E) {
+  assert(E && "ActOnNoChangeBoundsExpr() missing expr");
+  return NoChangeBoundsExpr::Create(Context, L, R, E);
+}
+
 static bool CheckVecStepTraitOperandType(Sema &S, QualType T,
                                          SourceLocation Loc,
                                          SourceRange ArgRange) {
@@ -16319,6 +16325,8 @@ static ExprResult rebuildPotentialResultsAsNonOdrUsed(Sema &S, Expr *E,
   //   -- If e is a pointer-to-member expression of the form e1 .* e2 ...
 
   //   -- If e has the form (e1)...
+  // XXXAR: and do the same for NoChangeBoundsExpr
+  case Expr::NoChangeBoundsExprClass:
   case Expr::ParenExprClass: {
     auto *PE = dyn_cast<ParenExpr>(E);
     ExprResult Sub = Rebuild(PE->getSubExpr());

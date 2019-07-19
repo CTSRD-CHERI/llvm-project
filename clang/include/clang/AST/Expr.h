@@ -809,6 +809,14 @@ public:
     return const_cast<Expr *>(this)->IgnoreParenImpCasts();
   }
 
+  /// XXXAR: This is the same as IgnoreParenImpCasts but doesn't ignore
+  /// NoChangeBoundsExpr. Needed for CHERI subobject bounds
+  Expr *IgnoreParenImpCastsExceptForNoChangeBounds() LLVM_READONLY;
+  const Expr *IgnoreParenImpCastsExceptForNoChangeBounds() const {
+    return const_cast<Expr *>(this)
+        ->IgnoreParenImpCastsExceptForNoChangeBounds();
+  }
+
   /// Skip past any parentheses and casts which might surround this expression
   /// until reaching a fixed point. Skips:
   /// * What IgnoreParens() skips
@@ -1908,14 +1916,18 @@ public:
 class ParenExpr : public Expr {
   SourceLocation L, R;
   Stmt *Val;
+protected:
+  ParenExpr(StmtClass SC, EmptyShell Empty) : Expr(SC, Empty) {}
+  ParenExpr(StmtClass SC, SourceLocation l, SourceLocation r, Expr *val)
+      : Expr(SC, val->getType(), val->getValueKind(), val->getObjectKind(),
+             val->isTypeDependent(), val->isValueDependent(),
+             val->isInstantiationDependent(),
+             val->containsUnexpandedParameterPack()),
+        L(l), R(r), Val(val) {}
+
 public:
   ParenExpr(SourceLocation l, SourceLocation r, Expr *val)
-    : Expr(ParenExprClass, val->getType(),
-           val->getValueKind(), val->getObjectKind(),
-           val->isTypeDependent(), val->isValueDependent(),
-           val->isInstantiationDependent(),
-           val->containsUnexpandedParameterPack()),
-      L(l), R(r), Val(val) {}
+      : ParenExpr(ParenExprClass, l, r, val) {}
 
   /// Construct an empty parenthesized expression.
   explicit ParenExpr(EmptyShell Empty)
@@ -1937,13 +1949,58 @@ public:
   void setRParen(SourceLocation Loc) { R = Loc; }
 
   static bool classof(const Stmt *T) {
-    return T->getStmtClass() == ParenExprClass;
+    return T->getStmtClass() >= firstParenExprConstant &&
+           T->getStmtClass() <= lastParenExprConstant;
   }
 
   // Iterators
   child_range children() { return child_range(&Val, &Val+1); }
   const_child_range children() const {
     return const_child_range(&Val, &Val + 1);
+  }
+};
+
+/// NoChangeBoundsExpr - A __builtin_no_change_bounds() expression.
+/// This expression only has an effect if CHERI sub-object bounds are enabled,
+/// otherwise it can be ignored.
+/// In case sub-object bounds are enabled, this expression can be used to
+/// disable the tightening of bounds that would normally happen for the given
+/// expression: e.g. __builtin_no_change_bounds(my_array) will not set bounds
+/// on the resulting array decay, or __builtin_no_change_bounds(&foo.b) will
+/// not attempt to set bounds to the size of member b.
+/// The orginal bounds of the expression will be used.
+/// Note: this only applies to the expression immediately below, so for example
+/// __builtin_no_change_bounds(&(&foo.bar)->a) will still set bounds on bar.
+///
+/// XXXAR: inheriting from ParenExpr is probably wrong, but it means I need to
+/// chage a lot less code since this almost always behaves in the same way as
+/// a ParenExpr.
+/// This means a parentExpr might report a LParenLoc that is actually the start
+/// of the __builtin_ identifier and not the paren. I doubt this should matter
+/// in practise though.
+class NoChangeBoundsExpr : public ParenExpr {
+  NoChangeBoundsExpr(SourceLocation start, SourceLocation end, Expr *val)
+      : ParenExpr(NoChangeBoundsExprClass, start, end, val) {}
+
+public:
+  static NoChangeBoundsExpr *Create(const ASTContext &Context, SourceLocation L,
+                                    SourceLocation R, Expr *E) {
+    return new (Context) NoChangeBoundsExpr(L, R, E);
+  }
+
+  // The LParen and accessors should be inaccessible when casted to
+  // NoChangeBoundsExpr
+  SourceLocation getLParen() const = delete;
+  void setLParen(SourceLocation L) = delete;
+  SourceLocation getBuiltinLoc() const { return ParenExpr::getLParen(); }
+  void setBuiltinLoc(SourceLocation Loc) { ParenExpr::setLParen(Loc); }
+
+  /// Construct an empty no change bounds expression.
+  explicit NoChangeBoundsExpr(EmptyShell Empty)
+      : ParenExpr(NoChangeBoundsExprClass, Empty) {}
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == NoChangeBoundsExprClass;
   }
 };
 

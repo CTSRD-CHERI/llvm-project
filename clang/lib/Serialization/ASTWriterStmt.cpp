@@ -563,6 +563,14 @@ void ASTStmtWriter::VisitParenExpr(ParenExpr *E) {
   Code = serialization::EXPR_PAREN;
 }
 
+void ASTStmtWriter::VisitNoChangeBoundsExpr(NoChangeBoundsExpr *E) {
+  VisitExpr(E);
+  Record.AddSourceLocation(E->getBuiltinLoc());
+  Record.AddSourceLocation(E->getRParen());
+  Record.AddStmt(E->getSubExpr());
+  Code = serialization::EXPR_NO_CHANGE_BOUNDS;
+}
+
 void ASTStmtWriter::VisitParenListExpr(ParenListExpr *E) {
   VisitExpr(E);
   Record.push_back(E->getNumExprs());

@@ -2545,6 +2545,7 @@ DEF_TRAVERSE_STMT(ObjCBridgedCastExpr, {
 
 DEF_TRAVERSE_STMT(ObjCAvailabilityCheckExpr, {})
 DEF_TRAVERSE_STMT(ParenExpr, {})
+DEF_TRAVERSE_STMT(NoChangeBoundsExpr, {})
 DEF_TRAVERSE_STMT(ParenListExpr, {})
 DEF_TRAVERSE_STMT(PredefinedExpr, {})
 DEF_TRAVERSE_STMT(ShuffleVectorExpr, {})

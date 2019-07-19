@@ -1184,6 +1184,12 @@ void StmtPrinter::VisitParenExpr(ParenExpr *Node) {
   OS << ")";
 }
 
+void StmtPrinter::VisitNoChangeBoundsExpr(NoChangeBoundsExpr *Node) {
+  OS << "__builtin_no_change_bounds(";
+  PrintExpr(Node->getSubExpr());
+  OS << ")";
+}
+
 void StmtPrinter::VisitUnaryOperator(UnaryOperator *Node) {
   if (!Node->isPostfix()) {
     OS << UnaryOperator::getOpcodeStr(Node->getOpcode());
