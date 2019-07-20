@@ -143,6 +143,7 @@ def CXX11CompatDeprecatedWritableStr :
   DiagGroup<"c++11-compat-deprecated-writable-strings">;
 
 def DeprecatedAttributes : DiagGroup<"deprecated-attributes">;
+def DeprecatedCommaSubscript : DiagGroup<"deprecated-comma-subscript">;
 def DeprecatedDeclarations : DiagGroup<"deprecated-declarations">;
 def UnavailableDeclarations : DiagGroup<"unavailable-declarations">;
 def UnguardedAvailabilityNew : DiagGroup<"unguarded-availability-new">;
@@ -160,6 +161,7 @@ def DeprecatedWritableStr : DiagGroup<"deprecated-writable-strings",
                                       [CXX11CompatDeprecatedWritableStr]>;
 // FIXME: Why is DeprecatedImplementations not in this group?
 def Deprecated : DiagGroup<"deprecated", [DeprecatedAttributes,
+                                          DeprecatedCommaSubscript,
                                           DeprecatedDeclarations,
                                           DeprecatedDynamicExceptionSpec,
                                           DeprecatedIncrementBool,
