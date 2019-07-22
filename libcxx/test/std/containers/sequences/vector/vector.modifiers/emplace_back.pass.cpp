@@ -20,6 +20,7 @@
 #include "min_allocator.h"
 #include "test_allocator.h"
 #include "asan_testing.h"
+TEST_CHERI_NO_SUBOBJECT_WARNING
 
 class A
 {
