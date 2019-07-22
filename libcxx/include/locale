@@ -3793,7 +3793,7 @@ wstring_convert<_Codecvt, _Elem, _Wide_alloc, _Byte_alloc>::
         state_type __st = __cvtstate_;
         if (__frm != __frm_end)
         {
-            _Elem* __to = &__ws[0];
+            _Elem* __to = /*&__ws[0]*/__ws.begin().base();
             _Elem* __to_end = __to + __ws.size();
             const char* __frm_nxt;
             do
@@ -3808,7 +3808,7 @@ wstring_convert<_Codecvt, _Elem, _Wide_alloc, _Byte_alloc>::
                 }
                 else if (__r == codecvt_base::noconv)
                 {
-                    __ws.resize(__to - &__ws[0]);
+                    __ws.resize(__to - /*&__ws[0]*/__ws.begin().base());
                     // This only gets executed if _Elem is char
                     __ws.append((const _Elem*)__frm, (const _Elem*)__frm_end);
                     __frm = __frm_nxt;
@@ -3816,15 +3816,15 @@ wstring_convert<_Codecvt, _Elem, _Wide_alloc, _Byte_alloc>::
                 }
                 else if (__r == codecvt_base::ok)
                 {
-                    __ws.resize(__to_nxt - &__ws[0]);
+                    __ws.resize(__to_nxt - /*&__ws[0]*/__ws.begin().base());
                     __frm = __frm_nxt;
                 }
                 else if (__r == codecvt_base::partial)
                 {
-                    ptrdiff_t __s = __to_nxt - &__ws[0];
+                    ptrdiff_t __s = __to_nxt - /*&__ws[0]*/__ws.begin().base();
                     __ws.resize(2 * __s);
-                    __to = &__ws[0] + __s;
-                    __to_end = &__ws[0] + __ws.size();
+                    __to = /*&__ws[0]*/__ws.begin().base() + __s;
+                    __to_end = /*&__ws[0]*/__ws.begin().base() + __ws.size();
                     __frm = __frm_nxt;
                 }
             } while (__r == codecvt_base::partial && __frm_nxt < __frm_end);
