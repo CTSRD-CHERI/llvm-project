@@ -6386,9 +6386,13 @@ private:
     void __establish_result () {
         if (__subs_[__n_] == -1)
             __result_ = &__position_->prefix();
-        else
-            __result_ = &(*__position_)[__subs_[__n_]];
+        else {
+            // XXXAR: this appears to be fine for sub-object purposes.
+            // Use std::addressof to silence the warning
+            // __result_ = &(*__position_)[__subs_[__n_]];
+            __result_ = std::addressof((*__position_)[__subs_[__n_]]);
         }
+      }
 };
 
 template <class _BidirectionalIterator, class _CharT, class _Traits>
