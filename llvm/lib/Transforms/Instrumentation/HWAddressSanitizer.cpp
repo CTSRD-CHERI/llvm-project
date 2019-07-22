@@ -778,11 +778,9 @@ Value *HWAddressSanitizer::getStackBaseTag(IRBuilder<> &IRB) {
   // FIXME: use addressofreturnaddress (but implement it in aarch64 backend
   // first).
   Module *M = IRB.GetInsertBlock()->getParent()->getParent();
-
-  auto ProgramASPtr = Type::getInt8PtrTy(
-      M->getContext(), M->getDataLayout().getProgramAddressSpace());
-  auto GetStackPointerFn =
-      Intrinsic::getDeclaration(M, Intrinsic::frameaddress, ProgramASPtr);
+  auto GetStackPointerFn = Intrinsic::getDeclaration(
+      M, Intrinsic::frameaddress,
+      IRB.getInt8PtrTy(M->getDataLayout().getAllocaAddrSpace()));
   Value *StackPointer = IRB.CreateCall(
       GetStackPointerFn, {Constant::getNullValue(IRB.getInt32Ty())});
 
@@ -915,11 +913,10 @@ void HWAddressSanitizer::emitPrologue(IRBuilder<> &IRB, bool WithFrameRecord) {
       PC = readRegister(IRB, "pc");
     else
       PC = IRB.CreatePtrToInt(F, IntptrTy);
-    auto ProgramASPtr = Type::getInt8PtrTy(
-        F->getParent()->getContext(),
-        F->getParent()->getDataLayout().getProgramAddressSpace());
+    Module *M = F->getParent();
     auto GetStackPointerFn = Intrinsic::getDeclaration(
-        F->getParent(), Intrinsic::frameaddress, ProgramASPtr);
+        M, Intrinsic::frameaddress,
+        IRB.getInt8PtrTy(M->getDataLayout().getAllocaAddrSpace()));
     Value *SP = IRB.CreatePtrToInt(
         IRB.CreateCall(GetStackPointerFn,
                        {Constant::getNullValue(IRB.getInt32Ty())}),

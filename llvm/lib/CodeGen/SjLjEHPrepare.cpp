@@ -477,14 +477,14 @@ bool SjLjEHPrepare::runOnFunction(Function &F) {
   UnregisterFn = M.getOrInsertFunction(
       "_Unwind_SjLj_Unregister", Type::getVoidTy(M.getContext()),
       PointerType::getUnqual(FunctionContextTy));
-  auto ProgramASPtr = Type::getInt8PtrTy(
-      M.getContext(), M.getDataLayout().getProgramAddressSpace());
+  auto AllocaASPtr = Type::getInt8PtrTy(
+      M.getContext(), M.getDataLayout().getAllocaAddrSpace());
   FrameAddrFn =
-      Intrinsic::getDeclaration(&M, Intrinsic::frameaddress, {ProgramASPtr});
+      Intrinsic::getDeclaration(&M, Intrinsic::frameaddress, {AllocaASPtr});
   StackAddrFn =
-      Intrinsic::getDeclaration(&M, Intrinsic::stacksave, {ProgramASPtr});
+      Intrinsic::getDeclaration(&M, Intrinsic::stacksave, {AllocaASPtr});
   StackRestoreFn =
-      Intrinsic::getDeclaration(&M, Intrinsic::stackrestore, {ProgramASPtr});
+      Intrinsic::getDeclaration(&M, Intrinsic::stackrestore, {AllocaASPtr});
   BuiltinSetupDispatchFn =
     Intrinsic::getDeclaration(&M, Intrinsic::eh_sjlj_setup_dispatch);
   LSDAAddrFn = Intrinsic::getDeclaration(&M, Intrinsic::eh_sjlj_lsda);

@@ -5624,14 +5624,11 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     return;
   case Intrinsic::sponentry:
     setValue(&I, DAG.getNode(ISD::SPONENTRY, sdl,
-                             TLI.getPointerTy(
-                                 DAG.getDataLayout(),
-                                 DAG.getDataLayout().getAllocaAddrSpace())));
+                             TLI.getFrameIndexTy(DAG.getDataLayout())));
     return;
   case Intrinsic::frameaddress:
     setValue(&I, DAG.getNode(ISD::FRAMEADDR, sdl,
-                             TLI.getPointerTy(DAG.getDataLayout(),
-                                         I.getType()->getPointerAddressSpace()),
+                             TLI.getFrameIndexTy(DAG.getDataLayout()),
                              getValue(I.getArgOperand(0))));
     return;
   case Intrinsic::read_register: {

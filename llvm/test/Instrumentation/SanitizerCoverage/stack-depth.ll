@@ -14,7 +14,7 @@ target triple = "x86_64-unknown-linux-gnu"
 define i32 @foo() {
 entry:
 ; CHECK-LABEL: define i32 @foo
-; CHECK-NOT: call i8* @llvm.frameaddress(i32 0)
+; CHECK-NOT: call i8* @llvm.frameaddress.p0i8(i32 0)
 ; CHECK-NOT: @__sancov_lowest_stack
 ; CHECK: ret i32 7
 

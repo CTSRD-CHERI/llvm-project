@@ -344,7 +344,7 @@ void WinEHStatePass::emitExceptionRegistrationRecord(Function *F) {
           Intrinsic::getDeclaration(
               TheModule, Intrinsic::frameaddress,
               Builder.getInt8PtrTy(
-                  F->getParent()->getDataLayout().getProgramAddressSpace())),
+                  TheModule->getDataLayout().getAllocaAddrSpace())),
           Builder.getInt32(0), "frameaddr");
       Value *FrameAddrI32 = Builder.CreatePtrToInt(FrameAddr, Int32Ty);
       FrameAddrI32 = Builder.CreateXor(FrameAddrI32, Val);
