@@ -844,12 +844,12 @@ static RValue EmitMSVCRTSetJmp(CodeGenFunction &CGF, MSVCSetJmpKind SJKind,
     Name = SJKind == MSVCSetJmpKind::_setjmp ? "_setjmp" : "_setjmpex";
     Arg1Ty = CGF.Int8PtrTy;
     if (CGF.getTarget().getTriple().getArch() == llvm::Triple::aarch64) {
-      Arg1 = CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::sponentry,
-                                                         {CGF.CGM.ProgramInt8PtrTy}));
+      Arg1 = CGF.Builder.CreateCall(
+          CGF.CGM.getIntrinsic(Intrinsic::sponentry, CGF.AllocaInt8PtrTy));
     } else
-      Arg1 = CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::frameaddress,
-                                                         {CGF.CGM.ProgramInt8PtrTy}),
-                                    llvm::ConstantInt::get(CGF.Int32Ty, 0));
+      Arg1 = CGF.Builder.CreateCall(
+          CGF.CGM.getIntrinsic(Intrinsic::frameaddress, CGF.AllocaInt8PtrTy),
+          llvm::ConstantInt::get(CGF.Int32Ty, 0));
   }
 
   // Mark the call site and declaration with ReturnsTwice.
@@ -2707,8 +2707,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_frame_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
-    Function *F =
-        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.AllocaInt8PtrTy});
+    Function *F = CGM.getIntrinsic(Intrinsic::frameaddress, AllocaInt8PtrTy);
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI__builtin_extract_return_addr: {
@@ -2792,7 +2791,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     // Store the frame pointer to the setjmp buffer.
     Value *FrameAddr = Builder.CreateCall(
-        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.AllocaInt8PtrTy}),
+        CGM.getIntrinsic(Intrinsic::frameaddress, AllocaInt8PtrTy),
         ConstantInt::get(Int32Ty, 0));
     Builder.CreateStore(FrameAddr, Buf);
 
@@ -7593,14 +7592,13 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
 
   if (BuiltinID == AArch64::BI_AddressOfReturnAddress) {
-    llvm::Function *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress,
-                                         {CGM.ProgramInt8PtrTy});
+    llvm::Function *F =
+        CGM.getIntrinsic(Intrinsic::addressofreturnaddress, AllocaInt8PtrTy);
     return Builder.CreateCall(F);
   }
 
   if (BuiltinID == AArch64::BI__builtin_sponentry) {
-    llvm::Function *F = CGM.getIntrinsic(Intrinsic::sponentry,
-                                         {CGM.ProgramInt8PtrTy});
+    llvm::Function *F = CGM.getIntrinsic(Intrinsic::sponentry, AllocaInt8PtrTy);
     return Builder.CreateCall(F);
   }
 
@@ -12416,10 +12414,8 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   }
 
   case X86::BI_AddressOfReturnAddress: {
-    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
-                      ? CGM.Int8CheriCapTy
-                      : CGM.Int8PtrTy;
-    Function *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress, {RetTy});
+    Function *F =
+        CGM.getIntrinsic(Intrinsic::addressofreturnaddress, AllocaInt8PtrTy);
     return Builder.CreateCall(F);
   }
   case X86::BI__stosb: {
