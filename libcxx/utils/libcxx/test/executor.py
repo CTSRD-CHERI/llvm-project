@@ -189,7 +189,10 @@ class RemoteExecutor(Executor):
                 cmd = [target_exe_path]
 
             if self.config and self.config.lit_config.run_with_debugger:
-                cmd = "gdb --quiet --batch --return-child-result -ex=r -ex=bt --args".split() + cmd
+                # Use "thread apply all bt" instead of "bt" to ensure a successful exit doesn't
+                # result in GDB returning a non-zero exit code due to missing stack
+                cmd = ["gdb", "--quiet", "--batch", "--return-child-result", "-ex=r",
+                       "-ex=thread apply all bt", "--args"] + cmd
 
             srcs = [exe_path]
             dsts = [target_exe_path]
