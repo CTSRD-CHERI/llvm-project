@@ -13,6 +13,7 @@ import errno
 import tempfile
 import datetime
 import shutil
+import pipes
 import sys
 
 from libcxx.test import tracing
@@ -267,12 +268,12 @@ class SSHExecutor(RemoteExecutor):
         ssh_cmd = self.ssh_command + ['-tt', '-oBatchMode=yes', remote]
         # FIXME: doesn't handle spaces... and Py2.7 doesn't have shlex.quote()
         if env:
-            env_cmd = ['env'] + ['\'%s=%s\'' % (k, v) for k, v in env.items()]
+            env_cmd = ['env'] + ['%s=%s' % (k, v) for k, v in env.items()]
         else:
             env_cmd = []
-        remote_cmd = ' '.join(env_cmd + cmd)  # TODO: shlex.quote()
+        remote_cmd = ' '.join(map(pipes.quote, env_cmd + cmd))
         if remote_work_dir != '.':
-            remote_cmd = 'cd \'' + remote_work_dir + '\' && ' + remote_cmd
+            remote_cmd = 'cd ' + pipes.quote(remote_work_dir) + ' && ' + remote_cmd
         if self.config and self.config.lit_config.debug:
             print('{}: About to run {}'.format(datetime.datetime.now(), remote_cmd), file=sys.stderr)
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd], timeout=self.config.lit_config.maxIndividualTestTime)
