@@ -336,6 +336,8 @@ class SSHExecutorWithNFSMount(SSHExecutor):
         if not dst.startswith(self.nfs_dir):
             raise NotImplementedError('Cannot copy file %s to directory that is not below %s: %s'
                                       % (src, self.nfs_dir, dst))
+        if self.config and self.config.lit_config.debug:
+            print('{}: About to run cp \'{}\' \'{}\''.format(datetime.datetime.now(), src, dst), file=sys.stderr)
         shutil.copy(src, dst)
 
     def delete_remote(self, remote):
@@ -344,6 +346,8 @@ class SSHExecutorWithNFSMount(SSHExecutor):
             raise NotImplementedError('Cannot delete file that is not below %s: %s'
                                       % (self.nfs_dir, remote))
         else:
+            if self.config and self.config.lit_config.debug:
+                print('{}: About to run rm -rf {}'.format(datetime.datetime.now(), remote), file=sys.stderr)
             shutil.rmtree(remote)
 
     def _remote_temp(self, is_dir, is_retry=False):
