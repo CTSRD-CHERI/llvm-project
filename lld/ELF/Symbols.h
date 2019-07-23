@@ -34,7 +34,11 @@ class Undefined;
 
 std::string toString(const elf::Symbol &);
 std::string verboseToString(elf::Symbol *b, uint64_t symOffset = 0);
-std::string toString(const elf::InputFile *);
+
+// There are two different ways to convert an Archive::Symbol to a string:
+// One for Microsoft name mangling and one for Itanium name mangling.
+// Call the functions toCOFFString and toELFString, not just toString.
+std::string toELFString(const elf::Archive::Symbol &);
 
 namespace elf {
 
