@@ -1454,6 +1454,14 @@ public:
     return false;
   }
 
+  /// LLT handling variant.
+  virtual bool allowsMisalignedMemoryAccesses(
+      LLT, unsigned AddrSpace = 0, unsigned Align = 1,
+      MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
+      bool * /*Fast*/ = nullptr) const {
+    return false;
+  }
+
   /// Return true if the target supports a memory access of this type for the
   /// given address space and alignment. If the access is allowed, the optional
   /// final parameter returns if the access is also fast (as defined by the
@@ -1489,6 +1497,16 @@ public:
                       bool /*ZeroMemset*/, bool /*MemcpyStrSrc*/,
                       const AttributeList & /*FuncAttributes*/) const {
     return MVT::Other;
+  }
+
+
+  /// LLT returning variant.
+  virtual LLT
+  getOptimalMemOpLLT(uint64_t /*Size*/, unsigned /*DstAlign*/,
+                     unsigned /*SrcAlign*/, bool /*IsMemset*/,
+                     bool /*ZeroMemset*/, bool /*MemcpyStrSrc*/,
+                     const AttributeList & /*FuncAttributes*/) const {
+    return LLT();
   }
 
   /// Returns true if it's safe to use load / store of the specified type to
