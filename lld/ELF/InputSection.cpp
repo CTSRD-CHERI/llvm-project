@@ -638,13 +638,18 @@ static int64_t getTlsTpOffset(const Symbol &s) {
   case EM_X86_64:
     // Variant 2. The TLS segment is located just before the thread pointer.
     return s.getVA(0) - alignTo(Out::tlsPhdr->p_memsz, Out::tlsPhdr->p_align);
+  case EM_MIPS:
   case EM_PPC:
   case EM_PPC64:
     // The thread pointer points to a fixed offset from the start of the
     // executable's TLS segment. An offset of 0x7000 allows a signed 16-bit
     // offset to reach 0x1000 of TCB/thread-library data and 0xf000 of the
     // program's TLS segment.
-    return s.getVA(0) - 0x7000;
+    //
+    // For CheriABI we always use an offset of 0 to stay representable.
+    if (!config->isCheriABI())
+      return s.getVA(0) - 0x7000;
+    LLVM_FALLTHROUGH;
   case EM_RISCV:
     return s.getVA(0);
   default:
