@@ -1818,6 +1818,10 @@ bool HexagonTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   return false;
 }
 
+bool HexagonTargetLowering::hasBitTest(SDValue X, SDValue Y) const {
+  return X.getValueType().isScalarInteger(); // 'tstbit'
+}
+
 bool HexagonTargetLowering::isTruncateFree(Type *Ty1, Type *Ty2) const {
   return isTruncateFree(EVT::getEVT(Ty1), EVT::getEVT(Ty2));
 }
