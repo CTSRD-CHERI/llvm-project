@@ -807,7 +807,18 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       }
     }
     break;
+
   case 'p':
+    if (Name == "prefetch") {
+      // Handle address space overloading.
+      Type *Tys[] = {F->arg_begin()->getType()};
+      if (F->getName() != Intrinsic::getName(Intrinsic::prefetch, Tys)) {
+        rename(F);
+        NewFn =
+            Intrinsic::getDeclaration(F->getParent(), Intrinsic::prefetch, Tys);
+        return true;
+      }
+    }
    if (Name == "ptr.annotation") {
       Type *Tys[] = {F->getReturnType(), F->getFunctionType()->params()[1] };
       NewFn = Intrinsic::getDeclaration(F->getParent(),
@@ -815,6 +826,7 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       return true;
     }
     break;
+
   case 'r':
     if (Name == "returnaddress") {
       NewFn = Intrinsic::getDeclaration(
@@ -822,6 +834,7 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       return true;
     }
     break;
+
   case 's':
     if (Name == "stackprotectorcheck") {
       NewFn = nullptr;
