@@ -1191,7 +1191,7 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(Instruction *TI,
       Builder.SetInsertPoint(PTI);
       // Convert pointer to int before we switch.
       if (CV->getType()->isPointerTy()) {
-        CV = Builder.CreatePtrToInt(CV, DL.getIntPtrType(CV->getType()), 
+        CV = Builder.CreatePtrToInt(CV, DL.getIntPtrType(CV->getType()),
                                     "magicptr");
       }
 
@@ -3703,6 +3703,14 @@ static bool SimplifyBranchOnICmpChain(BranchInst *BI, IRBuilder<> &Builder,
   if (UsedICmps <= 1)
     return false;
 
+  if (CompVal->getType()->isPointerTy() && isCheriPointer(CompVal->getType(), &DL)) {
+    if (!cheri::isKnownUntaggedCapability(CompVal, &DL)) {
+      LLVM_DEBUG(dbgs() << "Not converting 'icmp' chain with " << Values.size()
+                    << " cases into vaddr SWITCH since the source could be a tagged capability\n");
+      return false;
+    }
+  }
+
   bool TrueWhenEqual = (Cond->getOpcode() == Instruction::Or);
 
   // There might be duplicate constants in the list, which the switch
@@ -3765,7 +3773,7 @@ static bool SimplifyBranchOnICmpChain(BranchInst *BI, IRBuilder<> &Builder,
     if (isCheriPointer(CompVal->getType(), &DL)) {
       assert(cheri::isKnownUntaggedCapability(CompVal, &DL) && "This optimization should only be used with known untagged values");
       CompVal = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get, DL.getIntPtrType(CompVal->getType()),
-        CompVal, nullptr, "magicptr");
+        Builder.CreatePointerCast(CompVal, Builder.getInt8PtrTy(CompVal->getType()->getPointerAddressSpace())), nullptr, "magicptr");
     } else {
       CompVal = Builder.CreatePtrToInt(
         CompVal, DL.getIntPtrType(CompVal->getType()), "magicptr");
