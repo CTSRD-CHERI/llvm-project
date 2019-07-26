@@ -25,10 +25,13 @@ declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeon
 define void @spgFormLeafTuple() addrspace(200) #0 {
 ; SROA-LABEL: @spgFormLeafTuple(
 ; SROA-NEXT:  entry:
+; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 ; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 1
+; SROA-NEXT:    [[C_0__SROA_CAST1:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
+; SROA-NEXT:    [[C_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C]], align 16
+; SROA-NEXT:    store i8 addrspace(200)* [[C_0_COPYLOAD]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST1]], align 1
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
@@ -70,10 +73,13 @@ entry:
 define void @align2_should_call_memcpy() addrspace(200) #0 {
 ; SROA-LABEL: @align2_should_call_memcpy(
 ; SROA-NEXT:  entry:
+; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 ; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 2
+; SROA-NEXT:    [[C_0__SROA_CAST1:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
+; SROA-NEXT:    [[C_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C]], align 16
+; SROA-NEXT:    store i8 addrspace(200)* [[C_0_COPYLOAD]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST1]], align 2
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
@@ -95,10 +101,13 @@ entry:
 define void @align4_should_call_memcpy() addrspace(200) #0 {
 ; SROA-LABEL: @align4_should_call_memcpy(
 ; SROA-NEXT:  entry:
+; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 ; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 4
+; SROA-NEXT:    [[C_0__SROA_CAST1:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
+; SROA-NEXT:    [[C_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C]], align 16
+; SROA-NEXT:    store i8 addrspace(200)* [[C_0_COPYLOAD]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST1]], align 4
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
@@ -118,10 +127,13 @@ entry:
 define void @align8_should_call_memcpy() addrspace(200) #0 {
 ; SROA-LABEL: @align8_should_call_memcpy(
 ; SROA-NEXT:  entry:
+; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 ; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 8
+; SROA-NEXT:    [[C_0__SROA_CAST1:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
+; SROA-NEXT:    [[C_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C]], align 16
+; SROA-NEXT:    store i8 addrspace(200)* [[C_0_COPYLOAD]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST1]], align 8
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
@@ -143,10 +155,13 @@ entry:
 define void @align16_can_be_inlined() addrspace(200) #0 {
 ; SROA-LABEL: @align16_can_be_inlined(
 ; SROA-NEXT:  entry:
+; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 ; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 16
+; SROA-NEXT:    [[C_0__SROA_CAST1:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
+; SROA-NEXT:    [[C_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C]], align 16
+; SROA-NEXT:    store i8 addrspace(200)* [[C_0_COPYLOAD]], i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST1]], align 16
 ; SROA-NEXT:    ret void
 ;
 ; The memcpy can be turned into a store by sroa:
