@@ -163,6 +163,9 @@ class Slice {
   /// The ending offset, not included in the range.
   uint64_t EndOffset = 0;
 
+  /// The minimum alignment requirement of this slice.
+  uint64_t MinAlignment = 1;
+
   /// Storage for both the use of this slice and whether it can be
   /// split.
   PointerIntPair<Use *, 1, bool> UseAndIsSplittable;
@@ -170,12 +173,18 @@ class Slice {
 public:
   Slice() = default;
 
-  Slice(uint64_t BeginOffset, uint64_t EndOffset, Use *U, bool IsSplittable)
+  Slice(uint64_t BeginOffset, uint64_t EndOffset, uint64_t MinAlignment,
+        Use *U, bool IsSplittable)
       : BeginOffset(BeginOffset), EndOffset(EndOffset),
         UseAndIsSplittable(U, IsSplittable) {}
 
   uint64_t beginOffset() const { return BeginOffset; }
   uint64_t endOffset() const { return EndOffset; }
+  uint64_t minAlignment() const { return MinAlignment; }
+  bool isAligned(uint64_t Offset) const {
+    assert(!(isSplittable() && minAlignment() > 1));
+    return (Offset & (minAlignment() - 1)) == 0;
+  }
 
   bool isSplittable() const { return UseAndIsSplittable.getInt(); }
   void makeUnsplittable() { UseAndIsSplittable.setInt(false); }
@@ -198,6 +207,8 @@ public:
       return false;
     if (isSplittable() != RHS.isSplittable())
       return !isSplittable();
+    if (minAlignment() > RHS.minAlignment())
+      return true;
     if (endOffset() > RHS.endOffset())
       return true;
     return false;
@@ -215,6 +226,7 @@ public:
 
   bool operator==(const Slice &RHS) const {
     return isSplittable() == RHS.isSplittable() &&
+           minAlignment() == RHS.minAlignment() &&
            beginOffset() == RHS.beginOffset() && endOffset() == RHS.endOffset();
   }
   bool operator!=(const Slice &RHS) const { return !operator==(RHS); }
@@ -547,7 +559,8 @@ class AllocaSlices::partition_iterator
 
       // Form a partition including all of the overlapping slices with this
       // unsplittable slice.
-      while (P.SJ != SE && P.SJ->beginOffset() < P.EndOffset) {
+      while (P.SJ != SE && P.SJ->beginOffset() < P.EndOffset &&
+             P.SJ->isAligned(P.BeginOffset)) {
         if (!P.SJ->isSplittable())
           P.EndOffset = std::max(P.EndOffset, P.SJ->endOffset());
         ++P.SJ;
@@ -672,7 +685,7 @@ private:
   }
 
   void insertUse(Instruction &I, const APInt &Offset, uint64_t Size,
-                 bool IsSplittable = false) {
+                 bool IsSplittable = false, uint64_t MinAlign = 1) {
     // Completely skip uses which have a zero size or start either before or
     // past the end of the allocation.
     if (Size == 0 || Offset.uge(AllocSize)) {
@@ -704,7 +717,8 @@ private:
       EndOffset = AllocSize;
     }
 
-    AS.Slices.push_back(Slice(BeginOffset, EndOffset, U, IsSplittable));
+    AS.Slices.push_back(
+        Slice(BeginOffset, EndOffset, MinAlign, U, IsSplittable));
   }
 
   void visitBitCastInst(BitCastInst &BC) {
@@ -766,8 +780,11 @@ private:
     // integer type. These may be used to implement 'memcpy' or other "transfer
     // of bits" patterns.
     bool IsSplittable = Ty->isIntegerTy() && !IsVolatile;
+    const DataLayout &DL = I.getModule()->getDataLayout();
+    uint64_t MinAlign =
+        DL.isFatPointer(Ty) ? DL.getABITypeAlignment(Ty) : 1;
 
-    insertUse(I, Offset, Size, IsSplittable);
+    insertUse(I, Offset, Size, IsSplittable, MinAlign);
   }
 
   void visitLoadInst(LoadInst &LI) {
@@ -829,6 +846,99 @@ private:
               (bool)Length);
   }
 
+  void insertStrictAlignmentSlicesForRange(Instruction &I,
+                                           unsigned OffsetWidth,
+                                           uint64_t BeginOffset,
+                                           uint64_t EndOffset) {
+    const DataLayout &DL = I.getModule()->getDataLayout();
+    // TODO: Better way to get capability type
+    if (!DL.isFatPointer(200))
+      return;
+    unsigned CapAlign = DL.getPointerABIAlignment(200);
+    unsigned CapSize = DL.getPointerSize(200);
+
+    unsigned AIAlign = AS.AI.getAlignment();
+    if (!AIAlign)
+      AIAlign = DL.getABITypeAlignment(AS.AI.getAllocatedType());
+
+    if (AIAlign < CapAlign)
+      return;
+
+    std::function<void(Type *, uint64_t)> RecurseType;
+    RecurseType = [&](Type *Ty, uint64_t Offset) {
+      uint64_t Size = DL.getTypeAllocSize(Ty);
+
+      // BeginOffset and EndOffset, relative to the current type, and clamped.
+      uint64_t InnerBeginOffset =
+          std::min(std::max(BeginOffset, Offset) - Offset, Size);
+      uint64_t InnerEndOffset =
+          std::min(std::max(EndOffset, Offset) - Offset, Size);
+
+      if (InnerBeginOffset == InnerEndOffset)
+        return;
+
+      if (DL.isFatPointer(Ty)) {
+        if (InnerBeginOffset == 0 && CapSize == InnerEndOffset)
+          insertUse(I, APInt(OffsetWidth, Offset), CapSize, false, CapAlign);
+        return;
+      }
+
+      if (SequentialType *SeqTy = dyn_cast<SequentialType>(Ty)) {
+        Type *ElementTy = SeqTy->getElementType();
+
+        if (ElementTy->isIntegerTy(8)) {
+          uint64_t AbsStartRange = std::max(BeginOffset, Offset);
+          uint64_t AbsEndRange = std::min(EndOffset, Offset + Size);
+          // Aligned byte buffers are a special case and may contain
+          // capabilities.
+          for (uint64_t CapOffset = alignTo(AbsStartRange, CapAlign);
+               CapOffset + CapSize <= AbsEndRange; CapOffset += CapSize)
+            insertUse(I, APInt(OffsetWidth, CapOffset), CapSize, false,
+                      CapAlign);
+          return;
+        }
+
+        uint64_t ElementSize = DL.getTypeAllocSize(ElementTy);
+        if (ElementSize < CapSize)
+          return;
+
+        uint64_t StartRange = (InnerBeginOffset / ElementSize) * ElementSize;
+        uint64_t EndRange =
+            ((InnerEndOffset + ElementSize - 1) / ElementSize) * ElementSize;
+        for (uint64_t ElementOffset = StartRange; ElementOffset < EndRange;
+             ElementOffset += ElementSize)
+          RecurseType(ElementTy, Offset + ElementOffset);
+      }
+
+      StructType *STy = dyn_cast<StructType>(Ty);
+      if (!STy)
+        return;
+
+      const StructLayout *SL = DL.getStructLayout(STy);
+      unsigned BeginIndex =
+        SL->getElementContainingOffset(InnerBeginOffset);
+      Type *ElementTy = STy->getElementType(BeginIndex);
+      if (InnerBeginOffset >= DL.getTypeAllocSize(ElementTy))
+        ++BeginIndex; // The offset points into alignment padding.
+
+      StructType::element_iterator EB = STy->element_begin(),
+                                   EE = STy->element_end();
+      if (InnerEndOffset < Size) {
+        unsigned EndIndex = SL->getElementContainingOffset(InnerEndOffset);
+        if (SL->getElementOffset(EndIndex) != InnerEndOffset)
+          ++EndIndex; // Part of the next field must be examined.
+        EE = EB + EndIndex;
+      }
+
+      for (StructType::element_iterator EI = EB + BeginIndex; EI != EE; ++EI) {
+        unsigned ElementBeginOffset = SL->getElementOffset(EI - EB);
+        RecurseType(*EI, Offset + ElementBeginOffset);
+      }
+    };
+
+    RecurseType(AS.AI.getAllocatedType(), 0);
+  }
+
   void visitMemTransferInst(MemTransferInst &II) {
     ConstantInt *Length = dyn_cast<ConstantInt>(II.getLength());
     if (Length && Length->getValue() == 0)
@@ -852,7 +962,10 @@ private:
       SmallDenseMap<Instruction *, unsigned>::iterator MTPI =
           MemTransferSliceMap.find(&II);
       if (MTPI != MemTransferSliceMap.end())
-        AS.Slices[MTPI->second].kill();
+        for (unsigned I = MTPI->second;
+             I < AS.Slices.size() && AS.Slices[I].getUse()->getUser() == &II;
+             I++)
+          AS.Slices[I].kill();
       return markAsDead(II);
     }
 
@@ -865,6 +978,9 @@ private:
       // For non-volatile transfers this is a no-op.
       if (!II.isVolatile())
         return markAsDead(II);
+
+      insertStrictAlignmentSlicesForRange(II, Offset.getBitWidth(), RawOffset,
+                                          RawOffset + Size);
 
       return insertUse(II, Offset, Size, /*IsSplittable=*/false);
     }
@@ -882,7 +998,10 @@ private:
       // Check if the begin offsets match and this is a non-volatile transfer.
       // In that case, we can completely elide the transfer.
       if (!II.isVolatile() && PrevP.beginOffset() == RawOffset) {
-        PrevP.kill();
+        for (unsigned I = PrevIdx;
+             I < AS.Slices.size() && AS.Slices[I].getUse()->getUser() == &II;
+             I++)
+          AS.Slices[I].kill();
         return markAsDead(II);
       }
 
@@ -890,6 +1009,9 @@ private:
       // split those.
       PrevP.makeUnsplittable();
     }
+
+    insertStrictAlignmentSlicesForRange(II, Offset.getBitWidth(), RawOffset,
+                                        RawOffset + Size);
 
     // Insert the use now that we've fixed up the splittable nature.
     insertUse(II, Offset, Size, /*IsSplittable=*/Inserted && Length);
@@ -3855,7 +3977,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
 
       // Now build a new slice for the alloca.
       NewSlices.push_back(
-          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize,
+          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize, 1,
                 &PLoad->getOperandUse(PLoad->getPointerOperandIndex()),
                 /*IsSplittable*/ false));
       LLVM_DEBUG(dbgs() << "    new slice [" << NewSlices.back().beginOffset()
@@ -4002,7 +4124,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
 
       // Now build a new slice for the alloca.
       NewSlices.push_back(
-          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize,
+          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize, 1,
                 &PStore->getOperandUse(PStore->getPointerOperandIndex()),
                 /*IsSplittable*/ false));
       LLVM_DEBUG(dbgs() << "    new slice [" << NewSlices.back().beginOffset()
