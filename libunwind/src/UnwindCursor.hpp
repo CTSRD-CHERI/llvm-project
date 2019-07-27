@@ -1850,6 +1850,17 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   pc &= (pint_t)~0x1;
 #endif
 
+  CHERI_DBG("%s(%d): pc=%#p\n", __func__, isReturnAddress, (void*)pc);
+  if (isReturnAddress && (void*)pc == nullptr) {
+    CHERI_DBG("%s(%d): return pc was NULL, stopping unwinding\n", __func__, isReturnAddress);
+    // If the return address is zero that usually means that we have reached
+    // the end of the thread's stack and can't continue unwinding
+    // TODO: are there any systems where a return PC of 0 is valid?
+    // no unwind info, flag that we can't reliably unwind
+    _unwindInfoMissing = true;
+    return;
+  }
+
   // If the last line of a function is a "throw" the compiler sometimes
   // emits no instructions after the call to __cxa_throw.  This means
   // the return address is actually the start of the next function.
@@ -1978,9 +1989,10 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
 template <typename A, typename R>
 int UnwindCursor<A, R>::step() {
   // Bottom of stack is defined is when unwind info cannot be found.
-  if (_unwindInfoMissing)
+  if (_unwindInfoMissing) {
+    _LIBUNWIND_TRACE_UNWINDING("%s: _unwindInfoMissing -> UNW_STEP_END", __func__);
     return UNW_STEP_END;
-
+  }
   // Use unwinding info to modify register set as if function returned.
   int result;
 #if defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
@@ -2001,10 +2013,13 @@ int UnwindCursor<A, R>::step() {
   // update info based on new PC
   if (result == UNW_STEP_SUCCESS) {
     this->setInfoBasedOnIPRegister(true);
-    if (_unwindInfoMissing)
+    if (_unwindInfoMissing) {
+      _LIBUNWIND_TRACE_UNWINDING("%s: step returned UNW_STEP_SUCCESS but "
+                                 "_unwindInfoMissing -> UNW_STEP_END", __func__);
       return UNW_STEP_END;
+    }
   }
-
+  _LIBUNWIND_TRACE_UNWINDING("%s: result = %d", __func__, result);
   return result;
 }
 
