@@ -91,6 +91,7 @@ int main() {
   size_t expected_r14 = 0x87654321;
   size_t expected_r15 = 0x12345678;
   auto check_reg_values = [=](unw_context_t *context, unw_cursor_t *cursor) {
+    (void)context;
     CHECK_REG(UNW_X86_64_R14, expected_r14);
     CHECK_REG(UNW_X86_64_R15, expected_r15);
   };

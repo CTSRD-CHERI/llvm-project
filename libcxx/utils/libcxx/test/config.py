@@ -864,7 +864,6 @@ class Configuration(object):
         if self.default_cxx_abi_library is None:
             self.default_cxx_abi_library = self.target_info.default_cxx_abi_library()
         cxx_abi = self.get_lit_conf('cxx_abi', self.default_cxx_abi_library)
-        # print("self.default_cxx_abi_library:", self.default_cxx_abi_library)
         link_flags = []
         if cxx_abi == 'libstdc++':
             link_flags += ['-lstdc++']
@@ -873,9 +872,10 @@ class Configuration(object):
         elif cxx_abi == 'libcxxabi':
             # If the C++ library requires explicitly linking to libc++abi, or
             # if we're testing libc++abi itself (the test configs are shared),
-            # then link it.
+            # then link it. Also allow linking when testing libunwind.
             testing_libcxxabi = self.get_lit_conf('name', '') == 'libc++abi'
-            if self.target_info.allow_cxxabi_link() or testing_libcxxabi:
+            testing_libunwind = self.get_lit_conf('name', '') == 'libunwind'
+            if self.target_info.allow_cxxabi_link() or testing_libcxxabi or testing_libunwind:
                 libcxxabi_shared = self.get_lit_bool('libcxxabi_shared', default=True)
                 if self.link_shared and libcxxabi_shared:
                     link_flags += ['-lc++abi']

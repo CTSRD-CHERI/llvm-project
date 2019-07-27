@@ -155,8 +155,8 @@ class LibcxxTestFormat(object):
         if self._get_parser('LINK_PTHREADS_LIBRARY.', parsers).getValue():
             # one of the libunwind tests uses pthreads -> link it here
             # For FreeBSD -pthreads must come before -lc:
-            test_cxx.link_flags = ["-pthreads"] + test_cxx.link_flags
-            lit_config.note('Adding -pthreads flag for: ' + test.getSourcePath() +
+            test_cxx.link_flags = ["-lpthread"] + test_cxx.link_flags
+            lit_config.note('Adding -lpthread flag for: ' + test.getSourcePath() +
                             ': ' + str(test_cxx.link_flags))
         if self._get_parser('LINK_CXX_ABI_LIBRARY.', parsers).getValue():
             # For the libunwind exception test we need to add the C++ ABI
