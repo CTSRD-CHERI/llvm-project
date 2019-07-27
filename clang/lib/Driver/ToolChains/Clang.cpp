@@ -3633,6 +3633,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       case llvm::Triple::thumb:
       case llvm::Triple::thumbeb:
         Args.ClaimAllArgs(options::OPT_mimplicit_it_EQ);
+        break;
       default:
         break;
       }
