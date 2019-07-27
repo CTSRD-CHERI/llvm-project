@@ -596,7 +596,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
 SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
     SDValue Op, const APInt &DemandedBits, const APInt &DemandedElts,
     SelectionDAG &DAG, unsigned Depth) const {
-  if (Depth == 6) // Limit search depth.
+  if (Depth >= 6) // Limit search depth.
     return SDValue();
 
   KnownBits LHSKnown, RHSKnown;
@@ -734,7 +734,7 @@ bool TargetLowering::SimplifyDemandedBits(
   } else if (OriginalDemandedBits == 0 || OriginalDemandedElts == 0) {
     // Not demanding any bits/elts from Op.
     return TLO.CombineTo(Op, TLO.DAG.getUNDEF(VT));
-  } else if (Depth == 6) { // Limit search depth.
+  } else if (Depth >= 6) { // Limit search depth.
     return false;
   }
 
