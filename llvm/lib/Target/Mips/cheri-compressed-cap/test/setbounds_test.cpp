@@ -25,7 +25,7 @@ struct setbounds_regressions {
 #endif
 
 static inline void check_csetbounds_invariants(const cap_register_t& initial_cap, const cap_register_t& with_bounds,
-                                               bool was_exact, uint64_t requested_base, unsigned __int128 requested_top) {
+                                               bool was_exact, uint64_t requested_base, cc128_length_t requested_top) {
     CAPTURE(initial_cap, with_bounds, was_exact);
     // Address should be the same!
     REQUIRE(with_bounds.address() == initial_cap.address());
@@ -43,7 +43,7 @@ static inline void check_csetbounds_invariants(const cap_register_t& initial_cap
     REQUIRE(cc128_is_representable_cap_exact(&with_bounds)); // result of csetbounds must be representable
 }
 
-static cap_register_t do_csetbounds(const cap_register_t& initial_cap, unsigned __int128 requested_top, bool* was_exact) {
+static cap_register_t do_csetbounds(const cap_register_t& initial_cap, cc128_length_t requested_top, bool* was_exact) {
     CAPTURE(initial_cap);
     cap_register_t with_bounds = initial_cap;
     uint64_t requested_base = initial_cap.address();
@@ -57,8 +57,8 @@ static cap_register_t do_csetbounds(const cap_register_t& initial_cap, unsigned 
     return with_bounds;
 }
 
-static cap_register_t check_bounds_exact(const cap_register_t& initial_cap, unsigned __int128 requested_length, bool should_be_exact) {
-    unsigned __int128 req_top = initial_cap.cr_base + initial_cap.cr_offset + (unsigned __int128)requested_length;
+static cap_register_t check_bounds_exact(const cap_register_t& initial_cap, cc128_length_t requested_length, bool should_be_exact) {
+    cc128_length_t req_top = initial_cap.cr_base + initial_cap.cr_offset + (cc128_length_t)requested_length;
     bool exact = false;
     cap_register_t with_bounds = do_csetbounds(initial_cap, req_top, &exact);
     CHECK(exact == should_be_exact);
@@ -127,14 +127,14 @@ TEST_CASE("Cheritest regression case", "[regression]") {
 
 #include "setbounds_inputs.cpp"
 
-static inline unsigned __int128 round_up_with_cram_mask(unsigned __int128 value, unsigned __int128 round_down_mask) {
+static inline cc128_length_t round_up_with_cram_mask(cc128_length_t value, cc128_length_t round_down_mask) {
     // mask has all ones in the top
     REQUIRE(cc128_idx_MSNZ((uint64_t)round_down_mask) == 63);
     // Round up using by adding ~mask to go over boundary and then round down with & mask
     return (value + ~round_down_mask) & (round_down_mask);
 }
 
-static inline void check_cram_matches_setbounds(unsigned __int128 req_top, const cap_register_t& cap_to_bound,
+static inline void check_cram_matches_setbounds(cc128_length_t req_top, const cap_register_t& cap_to_bound,
                                                 const cap_register_t& setbounds_result) {
     // Check that rounding with cram is equivalent to setbounds rounding:
     uint64_t cram_value = cc128_get_alignment_mask((uint64_t)(req_top - cap_to_bound.address()));

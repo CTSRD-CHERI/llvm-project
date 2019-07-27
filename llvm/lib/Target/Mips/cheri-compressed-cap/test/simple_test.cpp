@@ -124,7 +124,7 @@ TEST_CASE("Old format test 1", "[old]") {
     CHECK_FIELD(result, offset, 0x9000000040001650);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xfae);
-    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)CAP_MAX_ADDRESS_PLUS_ONE);
+    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)CAP_MAX_ADDRESS_PLUS_ONE);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -134,7 +134,7 @@ TEST_CASE("Old format test 2", "[old]") {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)6);
+    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)6);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -144,7 +144,7 @@ TEST_CASE("Old format test 3", "[old]") {
     CHECK_FIELD(result, offset, 0x266);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)0x400);
+    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)0x400);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -160,7 +160,7 @@ TEST_CASE("Old format test 4", "[old]") {
     CHECK_FIELD(result, offset, 0x1010);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
-    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)0x130000000);
+    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -175,7 +175,7 @@ TEST_CASE("Old format test 5", "[old]") {
     CHECK_FIELD(result, offset, 0xff0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
-    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)0x130000000);
+    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -248,7 +248,7 @@ TEST_CASE("New format max length regression", "[new]") {
 }
 #endif
 
-static void check_representable(uint64_t base, unsigned __int128 length, uint64_t offset, bool should_work, const std::string& ctx) {
+static void check_representable(uint64_t base, cc128_length_t length, uint64_t offset, bool should_work, const std::string& ctx) {
     // INFO("Checking representability for " << ctx);
     // INFO("Base = " << base);
     // INFO("Length = " << length);

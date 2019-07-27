@@ -19,7 +19,7 @@ static_assert(CC128_FIELD_OTYPE_LAST == 44, "");
 
 static bool check_fields_match(const cap_register_t& result, const test_input& ti, const std::string& prefix) {
         uint64_t top64 = (uint64_t)(result.cr_base + result._cr_length);
-        unsigned __int128 top_full = result.cr_base + result._cr_length;
+        cc128_length_t top_full = result.cr_base + result._cr_length;
         bool top_bit65 = (top_full >> 64) & 1;
 
         bool success = true;
@@ -57,7 +57,7 @@ static bool test_one_entry(const test_input& ti) {
 
 
     // Now try recompressing and compare pesbt (for valid capabilities)
-    unsigned __int128 top_full = result.cr_base + result._cr_length;
+    cc128_length_t top_full = result.cr_base + result._cr_length;
     // Also don't attempt to recompress massively out-of-bounds caps since that might not work:
     if (top_full >= result.cr_base && top_full <= CAP_MAX_ADDRESS_PLUS_ONE && result.cr_offset <= result._cr_length) {
         uint64_t recompressed_pesbt = compress_128cap_without_xor(&result);

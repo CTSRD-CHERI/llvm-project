@@ -2,9 +2,9 @@
 #include <ostream>
 #include <string>
 
-std::ostream& operator<<(std::ostream& os, unsigned __int128 value);
+std::ostream& operator<<(std::ostream& os, cc128_length_t value);
 
-std::ostream& operator<<(std::ostream& os, unsigned __int128 value) {
+std::ostream& operator<<(std::ostream& os, cc128_length_t value) {
     char buffer[128];
     snprintf(buffer, sizeof(buffer), "{0x%" PRIx64 " %016" PRIx64 "}", (uint64_t)(value >> 64), (uint64_t)(value));
     return os << buffer;
@@ -43,7 +43,7 @@ std::ostream& operator<<(std::ostream& os, const cap_register_t& value);
 
 std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
     char buffer[4096];
-    unsigned __int128 top_full = value.cr_base + value._cr_length;
+    cc128_length_t top_full = value.cr_base + value._cr_length;
     snprintf(buffer, sizeof(buffer),
              "\tPermissions: 0x%" PRIx32 "\n"
              "\tUser Perms:  0x%" PRIx32 "\n"
@@ -82,7 +82,7 @@ static void dump_cap_fields(const cap_register_t& result) {
     fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result.cr_offset);
     fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(result._cr_length >> 64),
             (uint64_t)result._cr_length, result._cr_length > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    unsigned __int128 top_full = result.cr_base + result._cr_length;
+    cc128_length_t top_full = result.cr_base + result._cr_length;
     fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
     fprintf(stderr, "Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
@@ -102,7 +102,7 @@ __attribute__((used)) static cap_register_t decompress_representable(uint64_t pe
     return result;
 }
 
-inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, unsigned __int128 length) {
+inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_length_t length) {
     cap_register_t creg;
     memset(&creg, 0, sizeof(creg));
     creg.cr_base = base;

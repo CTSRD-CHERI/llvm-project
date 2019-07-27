@@ -39,6 +39,9 @@
 #include <string.h>
 #include <sys/param.h> /* for MIN() */
 
+/* Use __uint128 to represent 65 bit length */
+__extension__ typedef unsigned __int128 cc128_length_t;
+
 // QEMU already provides cap_register_t but if used in other programs
 // we want to define it here:
 #ifndef HAVE_CAP_REGISTER_T
@@ -46,7 +49,7 @@ struct cap_register {
     /* offset = cursor - base */
     uint64_t cr_offset; /* Capability offset */
     uint64_t cr_base;   /* Capability base addr */
-    unsigned __int128 _cr_length; /* Capability length */
+    cc128_length_t _cr_length; /* Capability length */
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
     uint64_t cr_pesbt_xored_for_mem;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
@@ -60,11 +63,11 @@ struct cap_register {
     inline uint64_t address() const {
        return cr_base + cr_offset;
     }
-    inline unsigned __int128 top() const {
+    inline cc128_length_t top() const {
        return cr_base + _cr_length;
     }
     inline uint64_t top64() const {
-        const unsigned __int128 t = top();
+        const cc128_length_t t = top();
         return t > UINT64_MAX ? UINT64_MAX : (uint64_t)t;
     }
 #endif
@@ -80,7 +83,7 @@ typedef struct cap_register cap_register_t;
 #define CC128_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
 #endif
 
-#define CAP_MAX_ADDRESS_PLUS_ONE ((unsigned __int128)1u << 64)
+#define CAP_MAX_ADDRESS_PLUS_ONE ((cc128_length_t)1u << 64)
 
 #define CC128_PERM_GLOBAL          (1 << 0)
 #define CC128_PERM_EXECUTE         (1 << 1)
@@ -120,7 +123,7 @@ typedef struct cap_register cap_register_t;
 #define CC256_OTYPE_ALL_BITS          ((1 << 24) - 1)
 #define CC256_OTYPE_MEM_SHFT          (32)
 #define CC256_OTYPE_BITS              (24)
-#define CC256_NULL_LENGTH ((unsigned __int128)UINT64_MAX)
+#define CC256_NULL_LENGTH ((cc128_length_t)UINT64_MAX)
 
 // Offsets based on capBitsToCapability() from cheri_prelude_128.sail
 // (Note: we subtract 64 since we only access the high 64 bits when (de)compressing)
@@ -209,6 +212,9 @@ typedef struct cap_register cap_register_t;
  *  B:        2-0   (3 bits) (completely implied by cursor. Keep 3 bits for
  * exponent)
  */
+/* ignore ISO C restricts enumerator values to range of 'int' */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 enum {
     CC128_FIELD(UPERMS, 127, 124),
     CC128_FIELD(HWPERMS, 123, 112),
@@ -228,6 +234,7 @@ enum {
     CC128_FIELD(EXP_NONZERO_BOTTOM, 86, 67),
     CC128_FIELD(EXPONENT_HIGH_PART, 66, 64),
 };
+#pragma GCC diagnostic pop
 CC128_STATIC_ASSERT(CC128_FIELD_INTERNAL_EXPONENT_START == CC_L_IE_OFF, "");
 CC128_STATIC_ASSERT(CC128_FIELD_LH_START == CC_L_LH_OFF, "");
 CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_BOTTOM_START == CC_L_B_OFF, "");
@@ -243,6 +250,9 @@ CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_EXPONENT_L
 CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_LOW_PART_SIZE == CC_L_LOWWIDTH, "");
 CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_LH_SIZE == CC_L_EWIDTH - CC_L_LOWWIDTH, "");
 #else
+/* ignore ISO C restricts enumerator values to range of 'int' */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 enum {
     CC128_FIELD(UPERMS, 127, 124),
     CC128_FIELD(HWPERMS, 123, 112),
@@ -262,6 +272,7 @@ enum {
     CC128_FIELD(EXP_NONZERO_BOTTOM, 77, 67),
     CC128_FIELD(EXPONENT_LOW_PART, 66, 64),
 };
+#pragma GCC diagnostic pop
 
 #define CC128_OTYPE_BITS CC128_FIELD_OTYPE_SIZE
 #define CC128_BOT_WIDTH CC128_FIELD_EXP_ZERO_BOTTOM_SIZE
@@ -318,6 +329,10 @@ enum CC_OTypes {
 #define CAP_LAST_SPECIAL_OTYPE_SIGN_EXTENDED ((uint64_t)-3)
 #define CAP_MAX_SEALED_OTYPE (CAP_LAST_SPECIAL_OTYPE - 1u)
 
+
+/* Silence ISO C restricts enumerator values to range of 'int' */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #ifndef CC128_OLD_FORMAT
 /* From sail:
 let null_cap : Capability = struct {
@@ -386,6 +401,8 @@ enum {
  * is invisibly keeps null 0 whatever we choose it to be */
 #define CC128_NULL_XOR_MASK UINT64_C(0x200001800005)
 #endif /* CC128_OLD_FORMAT */
+#pragma GCC diagnostic pop
+
 
 #ifdef __cplusplus
 template<size_t a, size_t b>
@@ -413,12 +430,12 @@ CC128_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE)
 
 /* Returns the index of the most significant bit set in x */
 static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
-#if defined(__has_builtin)
+#if defined(__GNUC__) && !defined(__clang__)
+#define CAP_HAVE_BUILTIN_CLZ
+#elif defined(__has_builtin)
 #if __has_builtin(__builtin_clzll)
 #define CAP_HAVE_BUILTIN_CLZ
 #endif
-#elif defined(__GNUC__)
-#define CAP_HAVE_BUILTIN_CLZ
 #endif
 
 #ifndef CAP_HAVE_BUILTIN_CLZ
@@ -449,7 +466,7 @@ static inline uint32_t _cc128_compute_e(uint64_t rlength, uint32_t bwidth) {
     return (cc128_idx_MSNZ(rlength) - (bwidth - 2));
 }
 
-static inline uint32_t cc128_get_exponent(unsigned __int128 length) {
+static inline uint32_t cc128_get_exponent(cc128_length_t length) {
     const uint32_t bwidth = CC128_BOT_WIDTH;
     if (length > UINT64_MAX) {
         return 65 - (bwidth - 1);
@@ -604,18 +621,18 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint64_t a_top = a_top_shift >= CC128_CAP_ADDR_WIDTH ? 0 :  cursor >> a_top_shift;
 
     // base : CapLenBits = truncate((a_top + correction_base) @ c.B @ zeros(E), cap_len_width);
-    unsigned __int128 base = (uint64_t)((int64_t)a_top + correction_base);
+    cc128_length_t base = (uint64_t)((int64_t)a_top + correction_base);
     base <<= CC128_MANTISSA_WIDTH;
     base |= B;
     base <<= E;
-    base &= ((unsigned __int128)1 << CC128_CAP_LEN_WIDTH) - 1;
+    base &= ((cc128_length_t)1 << CC128_CAP_LEN_WIDTH) - 1;
     assert((uint64_t)(base >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
     // top  : truncate((a_top + correction_top)  @ c.T @ zeros(E), cap_len_width);
-    unsigned __int128 top = (uint64_t)((int64_t)a_top + correction_top);
+    cc128_length_t top = (uint64_t)((int64_t)a_top + correction_top);
     top <<= CC128_MANTISSA_WIDTH;
     top |= T;
     top <<= E;
-    top &= ((unsigned __int128)1 << CC128_CAP_LEN_WIDTH) - 1;
+    top &= ((cc128_length_t)1 << CC128_CAP_LEN_WIDTH) - 1;
     assert((uint64_t)(top >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
 
     // if (base[cap_addr_width] == bitone) then {
@@ -628,7 +645,7 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
            */
         // top[cap_addr_width] = if (aHi == 1) & (tHi == 1) then bitone else bitzero;
         if (aHi && tHi) {
-            top |= ((unsigned __int128)1 << 64);
+            top |= ((cc128_length_t)1 << 64);
         } else {
             top &= UINT64_MAX; // clear top bit
         }
@@ -650,7 +667,7 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     cdp->_cr_length = top - base;
     if (top < base) {
         // This can happen for invalid capabilities with arbitrary bit patterns
-        assert((signed __int128)cdp->_cr_length < 0); // must be negative
+        assert((int64_t)(cdp->_cr_length >> 64) < 0); // must be negative
     }
     cdp->cr_offset = cursor - (uint64_t)base;
     cdp->cr_base = (uint64_t)base;
@@ -686,8 +703,8 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "This code assumes 14-bit bot");
 #endif
     uint64_t base = csp->cr_base;
-    const unsigned __int128 top = csp->cr_base + csp->_cr_length;
-    const unsigned __int128 length = csp->_cr_length;
+    const cc128_length_t top = csp->cr_base + csp->_cr_length;
+    const cc128_length_t length = csp->_cr_length;
 
     uint8_t E = (uint8_t)cc128_get_exponent(length);
     const uint64_t length64 = (uint64_t)length;
@@ -705,7 +722,7 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
         Te = (UINT64_C(1) << (64 - E)) & TMask;
     } else {
         E = (uint8_t)_cc128_compute_e(length64, BWidth);
-        Te = (top64 >> E) & TMask;
+        Te = ((uint64_t)top >> E) & TMask;
     }
     Be = (base >> E) & BMask;
     if (IE) {
@@ -743,9 +760,9 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
         //    z65    : bits(65) = zeros();
         //    lostSignificantBase = (base65 & maskLo) != z65;
         //    lostSignificantTop = (top & maskLo) != z65;
-        // TODO: stop using unsigned __int128 and just handle bit65 set specially?
-        const unsigned __int128 maskLo = (((unsigned __int128)1u) << (E + CC128_EXP_LOW_WIDTH)) - 1;
-        const unsigned __int128 zero65 = 0;
+        // TODO: stop using cc128_length_t and just handle bit65 set specially?
+        const cc128_length_t maskLo = (((cc128_length_t)1u) << (E + CC128_EXP_LOW_WIDTH)) - 1;
+        const cc128_length_t zero65 = 0;
         bool lostSignificantBase = (base & maskLo) != zero65;
         bool lostSignificantTop = (top & maskLo) != zero65;
         //    if lostSignificantTop then {
@@ -845,7 +862,7 @@ static inline bool cc128_all_zeroes(uint64_t offset, uint32_t e, uint32_t bwidth
 }
 #endif /* ! SIMPLE_REPRESENT_CHECK */
 
-static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __int128 length, uint64_t offset, uint64_t new_offset);
+static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset, uint64_t new_offset);
 
 /// Check that a capability is representable by compressing and recompressing
 static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
@@ -882,7 +899,7 @@ static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
  *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
  *   base + offset.
  */
-static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned __int128 length, uint64_t offset,
+static inline bool cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset,
                                           uint64_t new_offset) {
 #if defined(CC128_USE_FAST_REP_CHECK)
     const bool slow_representable_check = false;
@@ -910,13 +927,13 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned _
     }
 }
 
-static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __int128 length, uint64_t offset,
+static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset,
                                         uint64_t new_offset) {
     (void)sealed;
     uint32_t bwidth = CC128_BOT_WIDTH;
     uint32_t highest_exp = (64 - bwidth + 2);
 
-    unsigned __int128 top = base + length;
+    cc128_length_t top = base + length;
     // If top is 0xffff... we assume we meant it to be 1 << 64
     if (top == CAP_MAX_ADDRESS_PLUS_ONE && base == 0) {
         return true; // 1 << 65 is always representable
@@ -956,7 +973,7 @@ static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __i
 }
 
 /* @return whether the operation was able to set precise bounds precise or not */
-static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top, uint64_t* alignment_mask) {
+static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, cc128_length_t req_top, uint64_t* alignment_mask) {
     assert(cap->cr_tag && "Cannot be used on untagged capabilities");
     assert(!cc128_is_cap_sealed(cap) && "Cannot be used on sealed capabilities");
     assert(req_base <= req_top && "Cannot grow capabilities");
@@ -967,8 +984,8 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
      */
     const uint64_t cursor = cap->cr_base + cap->cr_offset;
     assert(req_base == cursor && "CSetbounds should set base to current cursor");
-    unsigned __int128 orig_length65 = cap->_cr_length;
-    unsigned __int128 req_length65 = req_top - cursor;
+    cc128_length_t orig_length65 = cap->_cr_length;
+    cc128_length_t req_length65 = req_top - cursor;
     assert((orig_length65 >> 64) <= 1 && "Length cannot be bigger than 1 << 64");
     assert((req_top >> 64) <= 1 && "New top cannot be bigger than 1 << 64");
     assert(req_length65 <= orig_length65 && "Cannot grow capabilities");
@@ -1001,7 +1018,7 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
     const bool InternalExponent = E != 0 || cc128_getbits(req_length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
     bool exact = false;
     bool incE = false;
-    unsigned __int128 new_top;
+    cc128_length_t new_top;
     uint64_t new_base;
     if (!InternalExponent) {
         //  /* The non-ie e == 0 case is easy. It is exact so just extract relevant bits. */
@@ -1034,9 +1051,9 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
         //    z65    : bits(65) = zeros();
         //    lostSignificantBase = (base65 & maskLo) != z65;
         //    lostSignificantTop = (top & maskLo) != z65;
-        // TODO: stop using unsigned __int128 and just handle bit65 set specially?
-        const unsigned __int128 maskLo = (((unsigned __int128)1u) << (E + CC128_EXP_LOW_WIDTH)) - 1;
-        const unsigned __int128 zero65 = 0;
+        // TODO: stop using cc128_length_t and just handle bit65 set specially?
+        const cc128_length_t maskLo = (((cc128_length_t)1u) << (E + CC128_EXP_LOW_WIDTH)) - 1;
+        const cc128_length_t zero65 = 0;
         bool lostSignificantBase = (req_base & maskLo) != zero65;
         bool lostSignificantTop = (req_top & maskLo) != zero65;
 
@@ -1130,7 +1147,7 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
 }
 
 /* @return whether the operation was able to set precise bounds precise or not */
-static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top) {
+static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, cc128_length_t req_top) {
     return cc128_setbounds_impl(cap, req_base, req_top, NULL);
 }
 
