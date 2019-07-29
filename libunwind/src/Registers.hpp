@@ -3406,6 +3406,20 @@ public:
     _registers.__c[32] = value;
   }
 
+  void dump(const char* where) {
+    fprintf(stderr, "Dumping registers from %s\n", where);
+    for (int i=0 ; i<32 ; i++) {
+        fprintf(stderr, "  %s = 0x%lx\n", getRegisterName(i), (long)addr_get(getRegister(i)));
+        // usleep(1);
+    }
+    fprintf(stderr, "  lo = 0x%lx\n", (long)addr_get(getRegister(UNW_MIPS_LO)));
+    fprintf(stderr, "  hi = 0x%lx\n", (long)addr_get(getRegister(UNW_MIPS_HI)));
+    for (int i=UNW_MIPS_DDC ; i<=UNW_MIPS_C31 ; i++) {
+        fprintf(stderr, "  %s = %#p\n",  getRegisterName(i), (void*)getRegister(i));
+        // usleep(1);
+    }
+    fprintf(stderr, "  $pcc = %#p\n", (void*)getIP());
+  }
 private:
   template<typename T>
   int64_t offset_get(T x) const {
@@ -3440,21 +3454,9 @@ inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
   memcpy(&_registers, static_cast<const uint8_t *>(registers),
          sizeof(_registers));
 #if defined(CHERI_DUMP_REGISTERS)
-  for (int i=0 ; i<32 ; i++)
-  {
-      fprintf(stderr, "%s = 0x%lx\n", getRegisterName(i), (long)addr_get(getRegister(i)));
-      // usleep(1);
-  }
-  fprintf(stderr, "lo = 0x%lx\n", (long)addr_get(getRegister(UNW_MIPS_LO)));
-  fprintf(stderr, "hi = 0x%lx\n", (long)addr_get(getRegister(UNW_MIPS_HI)));
-  for (int i=UNW_MIPS_DDC ; i<=UNW_MIPS_C31 ; i++)
-  {
-      fprintf(stderr, "%s = %#p\n",  getRegisterName(i), (void*)getRegister(i));
-      // usleep(1);
-  }
-  fprintf(stderr, "current pcc = %#p\n", __builtin_cheri_program_counter_get());
-
+  dump("Registers_mips_cheri::Registers_mips_cheri(const void *registers)");
 #endif
+
 }
 
 inline uintcap_t Registers_mips_cheri::getCapabilityRegister(int regNum) const {
