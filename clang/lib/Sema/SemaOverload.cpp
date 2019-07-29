@@ -7068,10 +7068,9 @@ void Sema::AddConversionCandidate(
   // allocator).
   QualType CallResultType = ConversionType.getNonLValueExprType(Context);
 
-  llvm::AlignedCharArray<alignof(CallExpr), sizeof(CallExpr) + sizeof(Stmt *)>
-      Buffer;
+  alignas(CallExpr) char Buffer[sizeof(CallExpr) + sizeof(Stmt *)];
   CallExpr *TheTemporaryCall = CallExpr::CreateTemporary(
-      Buffer.buffer, &ConversionFn, CallResultType, VK, From->getBeginLoc());
+      Buffer, &ConversionFn, CallResultType, VK, From->getBeginLoc());
 
   ImplicitConversionSequence ICS =
       TryCopyInitialization(*this, TheTemporaryCall, ToType,
