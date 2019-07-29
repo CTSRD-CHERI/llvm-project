@@ -115,6 +115,7 @@ def main():
         tool_cmd = tool_cmd.replace("%cheri128_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri256_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
 
+      common.verify_filecheck_prefixes(filecheck_cmd)
       if not tool_cmd.startswith(opt_basename + ' '):
         print('WARNING: Skipping non-%s RUN line: %s' % (opt_basename, l), file=sys.stderr)
         continue

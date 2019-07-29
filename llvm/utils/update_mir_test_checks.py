@@ -122,6 +122,7 @@ def build_run_list(test, run_lines, verbose=False):
         commands = [cmd.strip() for cmd in l.split('|', 1)]
         llc_cmd = commands[0]
         filecheck_cmd = commands[1] if len(commands) > 1 else ''
+        common.verify_filecheck_prefixes(filecheck_cmd)
 
         if llc_cmd.startswith("%cheri"):
             llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")

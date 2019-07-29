@@ -181,6 +181,7 @@ def main():
         print("After subst:", clang_args)
       # Extract -check-prefix in FileCheck args
       filecheck_cmd = commands[-1]
+      common.verify_filecheck_prefixes(filecheck_cmd)
       if not filecheck_cmd.startswith('FileCheck ') and not filecheck_cmd.startswith('%cheri_FileCheck '):
         print('WARNING: Skipping non-FileChecked RUN line: ' + l, file=sys.stderr)
         continue
