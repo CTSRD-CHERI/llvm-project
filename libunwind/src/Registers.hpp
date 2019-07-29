@@ -3462,7 +3462,7 @@ inline uintcap_t Registers_mips_cheri::getCapabilityRegister(int regNum) const {
   if (regNum == UNW_REG_IP)
     return getIP();
   if (regNum == UNW_REG_SP)
-    return _registers.__c[11];
+    return getSP();
   return _registers.__c[regNum - UNW_MIPS_DDC];
 }
 
@@ -3515,9 +3515,9 @@ inline uintptr_t Registers_mips_cheri::getRegister(int regNum) const {
     return _registers.__hi;
   case UNW_REG_IP:
     CHERI_DBG("GETTING $PCC: %#p\n", (void*)_registers.__c[32]);
-    return _registers.__c[32];
+    return getIP();
   case UNW_REG_SP:
-    return offset_set(_registers.__c[11], _registers.__r[29]);
+    return getSP();
   }
   _LIBUNWIND_ABORT("unsupported mips_cheri register");
 }
@@ -3540,11 +3540,10 @@ inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
     _registers.__hi = addr_get(value);
     return;
   case UNW_REG_IP:
-    CHERI_DBG("SETTING $PCC: %#p\n", (void*)value);
-    _registers.__c[32] = value;
+    setIP(value);
     return;
   case UNW_REG_SP:
-    _registers.__c[11] = value;
+    setSP(value);
     return;
   default:
     _LIBUNWIND_ABORT("unsupported mips_cheri register");
