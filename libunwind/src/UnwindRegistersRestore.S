@@ -209,6 +209,12 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
   RESTORE_CAP(24)
   RESTORE_CAP(25)
   RESTORE_CAP(26)
+  // Also restore 27-31 even though they should be null
+  RESTORE_CAP(27)
+  RESTORE_CAP(28)
+  RESTORE_CAP(29)
+  RESTORE_CAP(30)
+  RESTORE_CAP(31)
 
   // Load the new PC into $cra
   RESTORE_CAP_REG(17, 32)
