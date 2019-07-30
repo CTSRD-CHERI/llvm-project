@@ -34292,6 +34292,7 @@ bool X86TargetLowering::SimplifyDemandedVectorEltsForTargetNode(
   }
 
   // Simplify target shuffles.
+  // TODO: Use resolveTargetShuffleInputs.
   if (!isTargetShuffle(Opc) || !VT.isSimple())
     return false;
 
