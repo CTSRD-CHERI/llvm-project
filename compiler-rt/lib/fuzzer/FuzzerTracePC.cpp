@@ -173,7 +173,7 @@ inline ALWAYS_INLINE VirtAddr GetPreviousInstructionPc(VirtAddr PC) {
 }
 
 /// \return the address of the next instruction.
-/// Note: the logic is copied from `sanitizer_common/sanitizer_stacktrace.cc`
+/// Note: the logic is copied from `sanitizer_common/sanitizer_stacktrace.cpp`
 ALWAYS_INLINE VirtAddr TracePC::GetNextInstructionPc(VirtAddr PC) {
 #if defined(__mips__)
   return PC + 8;
