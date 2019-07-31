@@ -2,7 +2,7 @@
 // RUN: %clang_analyze_cc1 -triple x86_64-apple-darwin10\
 // RUN:     -analyzer-checker=core,osx.coreFoundation.CFRetainRelease\
 // RUN:     -analyzer-checker=osx.cocoa.ClassRelease,osx.cocoa.RetainCount\
-// RUN:     -analyzer-checker=debug.ExprInspection -fblocks -verify=expected,C %s\
+// RUN:     -analyzer-checker=debug.ExprInspection -fblocks -verify %s\
 // RUN:     -Wno-objc-root-class -analyzer-output=plist -o %t.objc.plist
 // RUN: %clang_analyze_cc1 -triple x86_64-apple-darwin10\
 // RUN:     -analyzer-checker=core,osx.coreFoundation.CFRetainRelease\
