@@ -12,6 +12,9 @@
 
 // Check that we can opt out of setting bounds on addrof expressions
 
+#if !__has_builtin(__builtin_no_change_bounds)
+#error __builtin_no_change_bounds not supported!
+#endif
 struct NoBoundsPls {
     int data;
 } __attribute__((cheri_no_subobject_bounds));
