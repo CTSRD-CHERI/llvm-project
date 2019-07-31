@@ -121,6 +121,11 @@ static cl::opt<unsigned> TokenFactorInlineLimit(
     "combiner-tokenfactor-inline-limit", cl::Hidden, cl::init(2048),
     cl::desc("Limit the number of operands to inline for Token Factors"));
 
+static cl::opt<unsigned> StoreMergeDependenceLimit(
+    "combiner-store-merge-dependence-limit", cl::Hidden, cl::init(10),
+    cl::desc("Limit the number of times for the same StoreNode and RootNode "
+             "to bail out in store merging dependence check"));
+
 namespace {
 
   class DAGCombiner {
@@ -157,6 +162,14 @@ namespace {
     /// This is used to allow us to reliably add any operands of a DAG node
     /// which have not yet been combined to the worklist.
     SmallPtrSet<SDNode *, 32> CombinedNodes;
+
+    /// Map from candidate StoreNode to the pair of RootNode and count.
+    /// The count is used to track how many times we have seen the StoreNode
+    /// with the same RootNode bail out in dependence check. If we have seen
+    /// the bail out for the same pair many times over a limit, we won't
+    /// consider the StoreNode with the same RootNode as store merging
+    /// candidate again.
+    DenseMap<SDNode *, std::pair<SDNode *, unsigned>> StoreRootCountMap;
 
     // AA - Used for DAG load/store alias analysis.
     AliasAnalysis *AA;
@@ -242,6 +255,7 @@ namespace {
     void removeFromWorklist(SDNode *N) {
       CombinedNodes.erase(N);
       PruningList.remove(N);
+      StoreRootCountMap.erase(N);
 
       auto It = WorklistMap.find(N);
       if (It == WorklistMap.end())
@@ -15443,6 +15457,18 @@ void DAGCombiner::getStoreMergeCandidates(
     return (BasePtr.equalBaseIndex(Ptr, DAG, Offset));
   };
 
+  // Check if the pair of StoreNode and the RootNode already bail out many
+  // times which is over the limit in dependence check.
+  auto OverLimitInDependenceCheck = [&](SDNode *StoreNode,
+                                        SDNode *RootNode) -> bool {
+    auto RootCount = StoreRootCountMap.find(StoreNode);
+    if (RootCount != StoreRootCountMap.end() &&
+        RootCount->second.first == RootNode &&
+        RootCount->second.second > StoreMergeDependenceLimit)
+      return true;
+    return false;
+  };
+
   // We looking for a root node which is an ancestor to all mergable
   // stores. We search up through a load, to our root and then down
   // through all children. For instance we will find Store{1,2,3} if
@@ -15472,7 +15498,8 @@ void DAGCombiner::getStoreMergeCandidates(
             if (StoreSDNode *OtherST = dyn_cast<StoreSDNode>(*I2)) {
               BaseIndexOffset Ptr;
               int64_t PtrDiff;
-              if (CandidateMatch(OtherST, Ptr, PtrDiff))
+              if (CandidateMatch(OtherST, Ptr, PtrDiff) &&
+                  !OverLimitInDependenceCheck(OtherST, RootNode))
                 StoreNodes.push_back(MemOpLink(OtherST, PtrDiff));
             }
   } else
@@ -15482,7 +15509,8 @@ void DAGCombiner::getStoreMergeCandidates(
         if (StoreSDNode *OtherST = dyn_cast<StoreSDNode>(*I)) {
           BaseIndexOffset Ptr;
           int64_t PtrDiff;
-          if (CandidateMatch(OtherST, Ptr, PtrDiff))
+          if (CandidateMatch(OtherST, Ptr, PtrDiff) &&
+              !OverLimitInDependenceCheck(OtherST, RootNode))
             StoreNodes.push_back(MemOpLink(OtherST, PtrDiff));
         }
 }
@@ -15540,8 +15568,19 @@ bool DAGCombiner::checkMergeStoreCandidatesForDependencies(
   // Search through DAG. We can stop early if we find a store node.
   for (unsigned i = 0; i < NumStores; ++i)
     if (SDNode::hasPredecessorHelper(StoreNodes[i].MemNode, Visited, Worklist,
-                                     Max))
+                                     Max)) {
+      // If the searching bail out, record the StoreNode and RootNode in the
+      // StoreRootCountMap. If we have seen the pair many times over a limit,
+      // we won't add the StoreNode into StoreNodes set again.
+      if (Visited.size() >= Max) {
+        auto &RootCount = StoreRootCountMap[StoreNodes[i].MemNode];
+        if (RootCount.first == RootNode)
+          RootCount.second++;
+        else
+          RootCount = {RootNode, 1};
+      }
       return false;
+    }
   return true;
 }
 
