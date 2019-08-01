@@ -985,7 +985,7 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
     return ArrayBoundsResult::DependsOnType;
   }
   llvm::APSInt ConstLength = ConstLengthResult.Val.getInt();
-  CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
+  CHERI_BOUNDS_DBG(<< "index is a constant -> ");
   if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
     CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on "
                         "array[CONST] are fine -> ");

@@ -254,7 +254,7 @@ void test_expression_opt_out(void) {
   // expected-remark@-1{{not setting bounds for array subscript on 'char [10]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-2{{setting sub-object bounds for pointer to 'char' to 1 bytes}}
   // CHECK-NEXT: subscript 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
-  // CHECK-NEXT: address 'char' subobj bounds check: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'char' address to 1
+  // CHECK-NEXT: address 'char' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'char' address to 1
   do_stuff(&__builtin_no_change_bounds(__builtin_no_change_bounds(f.bar.array)[0]));
   // expected-remark@-1{{not setting bounds for array subscript on 'char [10]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-2{{not setting bounds for pointer to 'char' (__builtin_no_change_bounds() expression)}}
