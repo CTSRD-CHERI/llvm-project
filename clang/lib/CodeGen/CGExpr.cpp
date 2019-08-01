@@ -954,6 +954,7 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   // which kinds of narrowing are fine
   if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), Kind, "array type"))
     return ArrayBoundsResult::Never;
+  // FIXME: handle use-remaining here....
   const Expr *Base =
       ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
   const QualType BaseTy = Base->getType();
@@ -1240,7 +1241,8 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
           "referenced value is a weak symbol and could therefore be NULL");
     }
   }
-  if (auto ME = dyn_cast<MemberExpr>(E)) {
+  auto HandleMemberExpr = [&](const MemberExpr* ME, bool* ReturnValueValid) -> Optional<CodeGenFunction::TightenBoundsResult> {
+    assert(*ReturnValueValid && "API misuse");
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
     // annotated with no bounds should that apply to d?
@@ -1297,8 +1299,16 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       remarkUsingContainerSize(*this, E, BaseTy, Ty, "union member");
       return BoundsOnContainer(BaseTy);
     }
+    *ReturnValueValid = false;
+    return None;
+  };
+  if (auto ME = dyn_cast<MemberExpr>(E)) {
+    // FIXME: refactor this properly to get a sane API...
+    bool ReturnValueValid = true;
+    auto Result = HandleMemberExpr(ME, &ReturnValueValid);
+    if (ReturnValueValid)
+      return Result;
   }
-
   // Array subscripts are the easiest case to handle:
   // We always set bounds if it is a constant size array, otherwise never set
   // them since we can't known the actual size. This is very similar to
@@ -1322,6 +1332,14 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   }
 
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
+    const Expr *Base = ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
+    if (auto ME = dyn_cast<MemberExpr>(Base)) {
+      // FIXME: refactor this properly to get a sane API...
+      bool ReturnValueValid = true;
+      auto Result = HandleMemberExpr(ME, &ReturnValueValid);
+      if (ReturnValueValid)
+        return Result;
+    }
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
     switch (canSetBoundsOnArraySubscript(E, ASE, Kind, BoundsMode, *this)) {
     case ArrayBoundsResult::Never:
@@ -1329,8 +1347,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     case ArrayBoundsResult::Always:
       return ExactBounds(TypeSize);
     case ArrayBoundsResult::UseFullArray: {
-      const Expr *Base =
-          ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
       if (isa<NoChangeBoundsExpr>(E)) {
         return cannotSetBounds(
             *this, E, Ty, Kind,

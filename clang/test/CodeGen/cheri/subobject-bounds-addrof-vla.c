@@ -1,8 +1,8 @@
 // Check that we only set bounds on variable length array member expressions in very-aggressive mode
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm -xc %s -o /dev/null \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify
+// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=expected,aggressive
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c++11 -emit-llvm -xc++ %s -o /dev/null \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify
+// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=expected,aggressive
 
 struct WithVLA {
   float x;
@@ -129,3 +129,25 @@ void test_maybe_vla(void) {
   do_stuff_untyped(&mvla2.data);  //expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [2]') to 2 bytes}}
 }
 #endif
+
+
+// Regression test for addressof on subscript
+// Changes in the subobject bounds code caused the &np->data[0] to set bounds to 1 byte...
+struct names {
+  char* uname;
+  char data[1];
+};
+
+void test_decay(char* arg);
+void ls_regression(struct names* np) {
+  np->uname = &np->data[0];
+  // expected-remark@-1{{setting sub-object bounds for field 'data' (array subscript on 'char [1]') to remaining bytes (member is potential variable length array)}}
+  // expected-remark@-2{{setting sub-object bounds for field 'data' (pointer to 'char') to remaining bytes (member is potential variable length array)}}
+
+  // Also check that we don't tighten bounds for array decay
+  test_decay(np->data);
+  // expected-remark@-1{{setting sub-object bounds for field 'data' (array decay on 'char [1]') to remaining bytes (member is potential variable length array)}}
+  test_decay(&np->data[0]);
+  // expected-remark@-1{{setting sub-object bounds for field 'data' (array subscript on 'char [1]') to remaining bytes (member is potential variable length array)}}
+  // expected-remark@-2{{setting sub-object bounds for field 'data' (pointer to 'char') to remaining bytes (member is potential variable length array)}}
+};
