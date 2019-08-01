@@ -6878,7 +6878,7 @@ entry:
 ; make sure that this assertion in
 ; TwoAddressInstructionPass::TryInstructionTransform does not fail:
 ;
-; line 1203: assert(TargetRegisterInfo::isVirtualRegister(regB) &&
+; line 1203: assert(Register::isVirtualRegister(regB) &&
 ;
 ; it failed when MipsDAGToDAGISel::ReplaceUsesWithZeroReg replaced an
 ; operand of an atomic instruction with register $zero.

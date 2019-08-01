@@ -104,7 +104,7 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     return false;
 
   // Cannot replace uses of physical registers (e.g. setting $c13 to null
-  if (TargetRegisterInfo::isPhysicalRegister(SrcReg))
+  if (Register::isPhysicalRegister(SrcReg))
     return false;
 
   llvm::SmallVector<MachineInstr *, 4> COPYUses;
@@ -120,7 +120,7 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     MachineBasicBlock *MBB = UseMI->getParent();
     auto TargetReg = UseMI->getOperand(0).getReg();
     // FIXME: this assert only works with virtregs so not for $c13
-    if (TargetRegisterInfo::isVirtualRegister(TargetReg)) {
+    if (Register::isVirtualRegister(TargetReg)) {
 #if 0
       if (!MRI->getRegClass(TargetReg)->hasSuperClassEq(&Mips::CheriGPROrCNullRegClass)) {
         errs() << "Not a CHERI reg?!"; UseMI->dump();

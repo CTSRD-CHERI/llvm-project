@@ -1890,7 +1890,7 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
   // If the increment is NULL/ZERO we might not have to make a copy since it
   // will be a constant physical register
   unsigned IncrCopy = Incr;
-  if (TargetRegisterInfo::isVirtualRegister(Incr)) {
+  if (Register::isVirtualRegister(Incr)) {
     IncrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Incr));
     BuildMI(*BB, II, DL, TII->get(Mips::COPY), IncrCopy).addReg(Incr);
   } else {
@@ -2163,13 +2163,13 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
   // need to create a copy in that case.
   unsigned OldValCopy = OldVal;
   unsigned NewValCopy = NewVal;
-  if (TargetRegisterInfo::isVirtualRegister(OldValCopy)) {
+  if (Register::isVirtualRegister(OldValCopy)) {
     OldValCopy = MRI.createVirtualRegister(MRI.getRegClass(OldVal));
     BuildMI(*BB, II, DL, TII->get(Mips::COPY), OldValCopy).addReg(OldVal);
   } else {
     assert(MRI.isConstantPhysReg(OldValCopy));
   }
-  if (TargetRegisterInfo::isVirtualRegister(NewValCopy)) {
+  if (Register::isVirtualRegister(NewValCopy)) {
     NewValCopy = MRI.createVirtualRegister(MRI.getRegClass(NewVal));
     BuildMI(*BB, II, DL, TII->get(Mips::COPY), NewValCopy).addReg(NewVal);
   } else {
