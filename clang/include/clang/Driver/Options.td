@@ -284,7 +284,7 @@ def cheri_conversion_error : Joined<["-"], "cheri-conversion-error=">, Flags<[Dr
   HelpText<"Don't emit errors for conversions between capabilities "
            "and pointers">,
   Values<"error,ignore">;
-def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<cheri_Group>,
+def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option, NoDriverOption]>, Group<cheri_Group>,
   HelpText<"Choose when to tighten bounds on capabilities. Choices are: "
            "'conservative' (only stack allocations, default), "
            "'references-only' (also set bounds on C++ references that are definitely fixed size) "
