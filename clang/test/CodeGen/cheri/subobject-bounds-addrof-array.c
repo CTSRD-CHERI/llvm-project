@@ -73,7 +73,7 @@ void test_len2_array(struct WithLen2Array *s) {
   do_stuff_untyped(&s->values[0]); // &array[0] probably means the full array
   // aggressive-or-less-remark@-1 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on &array[0]}}
   // aggressive-or-less-remark@-2 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
-  // very-aggressive-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
+  // very-aggressive-remark@-3 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
   // common-remark@-4 {{setting sub-object bounds for field 'values' (array subscript on 'struct Foo [3]') to 12 bytes}}
 
   // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
@@ -82,14 +82,14 @@ void test_len2_array(struct WithLen2Array *s) {
 
   // DBG-NEXT: subscript 'struct Foo [3]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'struct Foo [3]' subscript to 12
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
-  // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> &array[0] -> using container size -> setting bounds for 'struct Foo' address to 12
-  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> &array[0] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-AGGRESSIVE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> &array[0] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> &array[0] -> using container size -> setting bounds for 'struct Foo' address to 12
 
   do_stuff_untyped(&s->values[1]); // probably fine to set bounds here in aggressive (but not in safe mode)
   // subobject-safe-remark@-1 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on &array[<CONSTANT>]}}
   // subobject-safe-remark@-2 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
-  // aggressive-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
-  // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
+  // aggressive-remark@-3 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
+  // very-aggressive-remark@-4 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
   // common-remark@-5 {{setting sub-object bounds for field 'values' (array subscript on 'struct Foo [3]') to 12 bytes}}
 
   // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
@@ -99,13 +99,13 @@ void test_len2_array(struct WithLen2Array *s) {
   // DBG-NEXT: subscript 'struct Foo [3]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'struct Foo [3]' subscript to 12
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
   // DBG-AGGRESSIVE-NEXT: Found array subscript -> index is a constant -> const array index is not end and bounds==aggressive -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
-  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
 
   do_stuff_untyped(&s->values[2]); // should only set bounds in very-agressive mode here
   // subobject-safe-remark@-1 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on &array[<CONSTANT>]}}
   // aggressive-remark@-2 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on bounds on &array[<last index>]}}
   // aggressive-or-less-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
-  // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
+  // very-aggressive-remark@-4 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
   // common-remark@-5 {{setting sub-object bounds for field 'values' (array subscript on 'struct Foo [3]') to 12 bytes}}
 
   // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
@@ -114,14 +114,14 @@ void test_len2_array(struct WithLen2Array *s) {
 
   // DBG-NEXT: subscript 'struct Foo [3]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'struct Foo [3]' subscript to 12
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
-  // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' address to 12
-  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-AGGRESSIVE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
 
   do_stuff_untyped(&s->values[3]); // should only set bounds in very-agressive mode here
   // subobject-safe-remark@-1 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on &array[<CONSTANT>]}}
   // aggressive-remark@-2 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on bounds on &array[<last index>]}}
   // aggressive-or-less-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
-  // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
+  // very-aggressive-remark@-4 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
   // common-remark@-5 {{setting sub-object bounds for field 'values' (array subscript on 'struct Foo [3]') to 12 bytes}}
 
   // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
@@ -130,14 +130,14 @@ void test_len2_array(struct WithLen2Array *s) {
 
   // DBG-NEXT: subscript 'struct Foo [3]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'struct Foo [3]' subscript to 12
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
-  // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' address to 12
-  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-AGGRESSIVE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
 
   do_stuff_untyped(&s->values[4]); // should only set bounds in very-agressive mode here
   // subobject-safe-remark@-1 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on &array[<CONSTANT>]}}
   // aggressive-remark@-2 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on bounds on &array[<last index>]}}
   // aggressive-or-less-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
-  // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
+  // very-aggressive-remark@-4 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
   // common-remark@-5 {{setting sub-object bounds for field 'values' (array subscript on 'struct Foo [3]') to 12 bytes}}
 
   // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
@@ -146,8 +146,8 @@ void test_len2_array(struct WithLen2Array *s) {
 
   // DBG-NEXT: subscript 'struct Foo [3]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'struct Foo [3]' subscript to 12
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
-  // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' address to 12
-  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-AGGRESSIVE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' address to 12
+  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> index is a constant -> &array[<CONSTANT>] -> using container size -> setting bounds for 'struct Foo' address to 12
 
   marker2(); // for bounding the filecheck tests
   // CHECK-LABEL: call void @marker2()
@@ -158,8 +158,8 @@ void test_len2_array(struct WithLen2Array *s) {
     do_stuff_untyped(&s->values[i]); // should set bounds here since this will usually be a single object
     // subobject-safe-remark@-1 {{using size of containing type 'struct Foo [3]' instead of object type 'struct Foo' for subobject bounds on &array[n]}}
     // subobject-safe-remark@-2 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
-    // aggressive-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
-    // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
+    // aggressive-remark@-3 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
+    // very-aggressive-remark@-4 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo') to 4 bytes}}
     // common-remark@-5 {{setting sub-object bounds for field 'values' (array subscript on 'struct Foo [3]') to 12 bytes}}
 
     // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
@@ -167,9 +167,9 @@ void test_len2_array(struct WithLen2Array *s) {
     // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
 
     // DBG-NEXT: subscript 'struct Foo [3]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'struct Foo [3]' subscript to 12
-    // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> &array[n] -> using container size -> setting bounds for 'struct Foo' address to 12
-    // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
-    // DBG-VERY-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
+    // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> Index is not a constant (probably in a per-element loop) -> &array[n] -> using container size -> setting bounds for 'struct Foo' address to 12
+    // DBG-AGGRESSIVE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> Index is not a constant (probably in a per-element loop) -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
+    // DBG-VERY-AGGRESSIVE-NEXT: subobj bounds check: got MemberExpr ->  Found array subscript -> Index is not a constant (probably in a per-element loop) -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' address to 4
     }
   // CHECK: ret void
 }
@@ -189,9 +189,9 @@ void test2(int *array) {
   // CHECK: ret void
 
   // DBG-NEXT: subscript 'int * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
-  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> should set bounds on full array but size is not known -> not setting bounds
-  // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> index is a constant -> should set bounds on full array but size is not known -> not setting bounds
-  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found scalar type -> setting bounds for 'int' address to 4
+  // DBG-SUBOBJECT-SAFE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> should set bounds on full array but size is not known -> not setting bounds
+  // DBG-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> should set bounds on full array but size is not known -> not setting bounds
+  // DBG-VERY-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found scalar type -> setting bounds for 'int' address to 4
 }
 
 // DBG-LABEL: ... Statistics Collected ...

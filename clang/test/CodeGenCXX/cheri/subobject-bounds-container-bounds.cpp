@@ -41,7 +41,7 @@ extern "C" void test(struct Foo *f) {
 //
 extern "C" void test2(struct Foo *f) {
   call_ref(f->buffer[64]);
-  // expected-remark@-1{{setting sub-object bounds for reference to 'int' to 4 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for field 'buffer' (reference to 'int') to 4 bytes}}
   // expected-remark@-2{{setting sub-object bounds for field 'buffer' (array subscript on 'int [64]') to 256 bytes}}
 }
 

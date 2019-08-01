@@ -1157,8 +1157,10 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       Result.Size = MaxSize;
     }
     Result.TargetField = TargetField;
-    if (!Msg.isTriviallyEmpty())
+    if (!Msg.isTriviallyEmpty()) {
+      CHERI_BOUNDS_DBG(<< Msg << " -> ");
       Result.DiagMessage = (" (" + Msg + ")").str();
+    }
     return Result;
   };
 

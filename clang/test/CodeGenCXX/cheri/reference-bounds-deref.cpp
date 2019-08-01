@@ -149,11 +149,11 @@ TEST_PTR_TO_REF(FinalClassInheritedWithVTable)
 
 // Shouldn't be able to set bounds here since there is a flexible array member
 TEST_PTR_TO_REF(FlexArrayBase)
-// DEBUG-MSG-NEXT: reference 'struct FlexArrayBase' subobj bounds check: Found record type 'struct FlexArrayBase' -> found real VLA in struct FlexArrayBase -> setting bounds for 'struct FlexArrayBase' reference to remaining
+// DEBUG-MSG-NEXT: reference 'struct FlexArrayBase' subobj bounds check: Found record type 'struct FlexArrayBase' -> found real VLA in struct FlexArrayBase -> record has flexible array member -> setting bounds for 'struct FlexArrayBase' reference to remaining
 // CHECK-LABEL: define void @_Z10test_derefU3capP13FlexArrayBase(
 // CHECK: @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 %remaining_bytes)
 TEST_PTR_TO_REF(FlexArrayFinal)
-// DEBUG-MSG-NEXT: reference 'struct FlexArrayFinal' subobj bounds check: Found record type 'struct FlexArrayFinal' -> found real VLA in struct FlexArrayFinal -> setting bounds for 'struct FlexArrayFinal' reference to remaining
+// DEBUG-MSG-NEXT: reference 'struct FlexArrayFinal' subobj bounds check: Found record type 'struct FlexArrayFinal' -> found real VLA in struct FlexArrayFinal -> record has flexible array member -> setting bounds for 'struct FlexArrayFinal' reference to remaining
 // CHECK-LABEL: define void @_Z10test_derefU3capP14FlexArrayFinal(
 // CHECK: @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 %remaining_bytes)
 
