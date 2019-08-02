@@ -4389,6 +4389,7 @@ static bool CheckUnaryTypeTraitTypeCompleteness(Sema &S, TypeTrait UTT,
   case UTT_IsObject:
   case UTT_IsScalar:
   case UTT_IsCompound:
+  case UTT_MarkedNoSubobjectBounds: /* XXXAR: Should be fine to use on incomplete types */
   case UTT_IsMemberPointer:
     // Fall-through
 
@@ -4526,6 +4527,15 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     return T->isRValueReferenceType();
   case UTT_IsMemberFunctionPointer:
     return T->isMemberFunctionPointerType();
+  case UTT_MarkedNoSubobjectBounds:
+    // Note: checking hasAttr is not sufficient, also need to check the decl
+    // since otherwise we miss some cases.
+    if (T->hasAttr(attr::CHERINoSubobjectBounds))
+      return true;
+    if (RecordDecl *RD = T->getAsRecordDecl())
+      if (RD->hasAttr<CHERINoSubobjectBoundsAttr>())
+        return true;
+    return false;
   case UTT_IsMemberObjectPointer:
     return T->isMemberDataPointerType();
   case UTT_IsEnum:

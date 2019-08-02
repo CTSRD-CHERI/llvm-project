@@ -69,6 +69,7 @@ namespace clang {
     UTT_IsUnsigned,
     UTT_IsVoid,
     UTT_IsVolatile,
+    UTT_MarkedNoSubobjectBounds,
     UTT_HasUniqueObjectRepresentations,
     UTT_Last = UTT_HasUniqueObjectRepresentations,
     BTT_IsBaseOf,

@@ -1621,6 +1621,7 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
                       .Case("__is_target_os", true)
                       .Case("__is_target_environment", true)
                       .Case("__builtin_no_change_bounds", true)
+                      .Case("__builtin_marked_no_subobject_bounds", true)
                       .Case("__builtin_LINE", true)
                       .Case("__builtin_FILE", true)
                       .Case("__builtin_FUNCTION", true)

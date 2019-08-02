@@ -605,7 +605,9 @@ KEYWORD(__cheri_cast                , KEYALL) // old name for ptr <-> capability
 // CHERI subobject bounds are enabled. This can be used for fine-grained control
 // over bounds.
 KEYWORD(__builtin_no_change_bounds , KEYALL)
-
+// TODO: it would be more useful to have a general "has attribute foo" trait
+// This trait is useful to check containerof() uses
+TYPE_TRAIT_1(__builtin_marked_no_subobject_bounds, MarkedNoSubobjectBounds, KEYALL)
 
 // Objective-C keywords.
 KEYWORD(__covariant                  , KEYOBJC)
