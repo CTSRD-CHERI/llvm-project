@@ -85,7 +85,6 @@ bool elf::link(ArrayRef<const char *> args, bool canExitEarly,
       "-warning-limit=0 to see all warnings)\n";
   errorHandler().errorOS = &error;
   errorHandler().exitEarly = canExitEarly;
-  errorHandler().colorDiagnostics = error.has_colors();
 
   inputSections.clear();
   outputSections.clear();
