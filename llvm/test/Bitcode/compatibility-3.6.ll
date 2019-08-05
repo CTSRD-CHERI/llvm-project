@@ -1182,8 +1182,8 @@ define void @intrinsics.codegen() {
 ; CHECK: attributes #29 = { nounwind readnone willreturn }
 ; CHECK: attributes #30 = { argmemonly nounwind readonly }
 ; CHECK: attributes #31 = { argmemonly nounwind }
-; CHECK: attributes #32 = { nounwind readnone }
-; CHECK: attributes #33 = { nounwind readonly }
+; CHECK: attributes #32 = { nounwind readonly }
+; CHECK: attributes #33 = { nounwind readnone }
 ; CHECK: attributes #34 = { inaccessiblemem_or_argmemonly nounwind willreturn }
 ; CHECK: attributes #35 = { builtin }
 

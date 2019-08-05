@@ -1246,8 +1246,8 @@ define void @misc.metadata() {
 ; CHECK: attributes #32 = { nounwind readnone willreturn }
 ; CHECK: attributes #33 = { argmemonly nounwind readonly }
 ; CHECK: attributes #34 = { argmemonly nounwind }
-; CHECK: attributes #35 = { nounwind readnone }
-; CHECK: attributes #36 = { nounwind readonly }
+; CHECK: attributes #35 = { nounwind readonly }
+; CHECK: attributes #36 = { nounwind readnone }
 ; CHECK: attributes #37 = { inaccessiblemem_or_argmemonly nounwind willreturn }
 ; CHECK: attributes #38 = { builtin }
 

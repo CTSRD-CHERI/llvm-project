@@ -1677,8 +1677,8 @@ define i8** @constexpr() {
 ; CHECK: attributes #35 = { nounwind readnone willreturn }
 ; CHECK: attributes #36 = { argmemonly nounwind readonly }
 ; CHECK: attributes #37 = { argmemonly nounwind }
-; CHECK: attributes #38 = { nounwind readnone }
-; CHECK: attributes #39 = { nounwind readonly }
+; CHECK: attributes #38 = { nounwind readonly }
+; CHECK: attributes #39 = { nounwind readnone }
 ; CHECK: attributes #40 = { writeonly }
 ; CHECK: attributes #41 = { speculatable }
 ; CHECK: attributes #42 = { inaccessiblemem_or_argmemonly nounwind willreturn }
