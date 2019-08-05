@@ -80,7 +80,7 @@ namespace llvm {
 
     /// Returns the EVT that represents a vector EC.Min elements in length,
     /// where each element is of type VT.
-    static EVT getVectorVT(LLVMContext &Context, EVT VT, MVT::ElementCount EC) {
+    static EVT getVectorVT(LLVMContext &Context, EVT VT, ElementCount EC) {
       MVT M = MVT::getVectorVT(VT.V, EC);
       if (M.SimpleTy != MVT::INVALID_SIMPLE_VALUE_TYPE)
         return M;
@@ -281,7 +281,7 @@ namespace llvm {
     }
 
     // Given a (possibly scalable) vector type, return the ElementCount
-    MVT::ElementCount getVectorElementCount() const {
+    ElementCount getVectorElementCount() const {
       assert((isVector()) && "Invalid vector type!");
       if (isSimple())
         return V.getVectorElementCount();
