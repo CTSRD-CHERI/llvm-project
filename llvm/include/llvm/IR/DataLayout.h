@@ -29,6 +29,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/Alignment.h"
 #include <cassert>
 #include <cstdint>
 #include <string>
@@ -121,11 +122,11 @@ private:
   bool BigEndian;
 
   unsigned AllocaAddrSpace;
-  unsigned StackNaturalAlign;
+  MaybeAlign StackNaturalAlign;
   unsigned ProgramAddrSpace;
   unsigned GlobalsAddrSpace;
 
-  unsigned FunctionPtrAlign;
+  MaybeAlign FunctionPtrAlign;
   FunctionPtrAlignType TheFunctionPtrAlignType;
 
   enum ManglingModeT {
@@ -264,11 +265,11 @@ public:
   bool isIllegalInteger(uint64_t Width) const { return !isLegalInteger(Width); }
 
   /// Returns true if the given alignment exceeds the natural stack alignment.
-  bool exceedsNaturalStackAlignment(unsigned Align) const {
-    return (StackNaturalAlign != 0) && (Align > StackNaturalAlign);
+  bool exceedsNaturalStackAlignment(llvm::Align Align) const {
+    return StackNaturalAlign && (Align > StackNaturalAlign);
   }
 
-  unsigned getStackAlignment() const { return StackNaturalAlign; }
+  unsigned getStackAlignment() const { return StackNaturalAlign ? StackNaturalAlign->value() : 0; }
   unsigned getAllocaAddrSpace() const { return AllocaAddrSpace; }
   /// Sets the address space used for allocas
   void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
@@ -276,7 +277,7 @@ public:
   /// Returns the alignment of function pointers, which may or may not be
   /// related to the alignment of functions.
   /// \see getFunctionPtrAlignType
-  unsigned getFunctionPtrAlign() const { return FunctionPtrAlign; }
+  MaybeAlign getFunctionPtrAlign() const { return FunctionPtrAlign; }
 
   /// Return the type of function pointer alignment.
   /// \see getFunctionPtrAlign
