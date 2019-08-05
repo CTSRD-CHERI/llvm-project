@@ -75,8 +75,8 @@ struct SymbolVersion {
 // can be found in version script if it is used for link.
 struct VersionDefinition {
   llvm::StringRef name;
-  uint16_t id = 0;
-  std::vector<SymbolVersion> globals;
+  uint16_t id;
+  std::vector<SymbolVersion> patterns;
 };
 
 // This struct contains the global configuration for the linker.
@@ -122,8 +122,6 @@ struct Configuration {
   std::vector<llvm::StringRef> warnIfFileLinked;
   std::vector<llvm::StringRef> undefined;
   std::vector<SymbolVersion> dynamicList;
-  std::vector<SymbolVersion> versionScriptGlobals;
-  std::vector<SymbolVersion> versionScriptLocals;
   std::vector<uint8_t> buildIdVector;
   llvm::MapVector<std::pair<const InputSectionBase *, const InputSectionBase *>,
                   uint64_t>
@@ -246,7 +244,6 @@ struct Configuration {
   ARMVFPArgKind armVFPArgs = ARMVFPArgKind::Default;
   BuildIdKind buildId = BuildIdKind::None;
   ELFKind ekind = ELFNoneKind;
-  uint16_t defaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;
   uint16_t emachine = llvm::ELF::EM_NONE;
   llvm::Optional<uint64_t> imageBase;
   uint64_t commonPageSize;
@@ -353,6 +350,12 @@ private:
 
 // The only instance of Configuration struct.
 extern Configuration *config;
+
+// The first two elements of versionDefinitions represent VER_NDX_LOCAL and
+// VER_NDX_GLOBAL. This helper returns other elements.
+static inline ArrayRef<VersionDefinition> namedVersionDefs() {
+  return llvm::makeArrayRef(config->versionDefinitions).slice(2);
+}
 
 static inline void errorOrWarn(const Twine &msg) {
   if (!config->noinhibitExec)
