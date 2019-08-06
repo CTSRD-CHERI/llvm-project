@@ -1673,6 +1673,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIceill:
     case Builtin::BI__builtin_ceil:
     case Builtin::BI__builtin_ceilf:
+    case Builtin::BI__builtin_ceilf16:
     case Builtin::BI__builtin_ceill:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::ceil));
 
@@ -1681,6 +1682,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIcopysignl:
     case Builtin::BI__builtin_copysign:
     case Builtin::BI__builtin_copysignf:
+    case Builtin::BI__builtin_copysignf16:
     case Builtin::BI__builtin_copysignl:
     case Builtin::BI__builtin_copysignf128:
       return RValue::get(emitBinaryBuiltin(*this, E, Intrinsic::copysign));
@@ -1690,6 +1692,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIcosl:
     case Builtin::BI__builtin_cos:
     case Builtin::BI__builtin_cosf:
+    case Builtin::BI__builtin_cosf16:
     case Builtin::BI__builtin_cosl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::cos));
 
@@ -1698,6 +1701,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIexpl:
     case Builtin::BI__builtin_exp:
     case Builtin::BI__builtin_expf:
+    case Builtin::BI__builtin_expf16:
     case Builtin::BI__builtin_expl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::exp));
 
@@ -1706,6 +1710,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIexp2l:
     case Builtin::BI__builtin_exp2:
     case Builtin::BI__builtin_exp2f:
+    case Builtin::BI__builtin_exp2f16:
     case Builtin::BI__builtin_exp2l:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::exp2));
 
@@ -1714,6 +1719,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIfabsl:
     case Builtin::BI__builtin_fabs:
     case Builtin::BI__builtin_fabsf:
+    case Builtin::BI__builtin_fabsf16:
     case Builtin::BI__builtin_fabsl:
     case Builtin::BI__builtin_fabsf128:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::fabs));
@@ -1723,6 +1729,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIfloorl:
     case Builtin::BI__builtin_floor:
     case Builtin::BI__builtin_floorf:
+    case Builtin::BI__builtin_floorf16:
     case Builtin::BI__builtin_floorl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::floor));
 
@@ -1731,6 +1738,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIfmal:
     case Builtin::BI__builtin_fma:
     case Builtin::BI__builtin_fmaf:
+    case Builtin::BI__builtin_fmaf16:
     case Builtin::BI__builtin_fmal:
       return RValue::get(emitTernaryBuiltin(*this, E, Intrinsic::fma));
 
@@ -1739,6 +1747,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIfmaxl:
     case Builtin::BI__builtin_fmax:
     case Builtin::BI__builtin_fmaxf:
+    case Builtin::BI__builtin_fmaxf16:
     case Builtin::BI__builtin_fmaxl:
       return RValue::get(emitBinaryBuiltin(*this, E, Intrinsic::maxnum));
 
@@ -1747,6 +1756,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIfminl:
     case Builtin::BI__builtin_fmin:
     case Builtin::BI__builtin_fminf:
+    case Builtin::BI__builtin_fminf16:
     case Builtin::BI__builtin_fminl:
       return RValue::get(emitBinaryBuiltin(*this, E, Intrinsic::minnum));
 
@@ -1757,6 +1767,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIfmodl:
     case Builtin::BI__builtin_fmod:
     case Builtin::BI__builtin_fmodf:
+    case Builtin::BI__builtin_fmodf16:
     case Builtin::BI__builtin_fmodl: {
       Value *Arg1 = EmitScalarExpr(E->getArg(0));
       Value *Arg2 = EmitScalarExpr(E->getArg(1));
@@ -1768,6 +1779,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIlogl:
     case Builtin::BI__builtin_log:
     case Builtin::BI__builtin_logf:
+    case Builtin::BI__builtin_logf16:
     case Builtin::BI__builtin_logl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::log));
 
@@ -1776,6 +1788,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIlog10l:
     case Builtin::BI__builtin_log10:
     case Builtin::BI__builtin_log10f:
+    case Builtin::BI__builtin_log10f16:
     case Builtin::BI__builtin_log10l:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::log10));
 
@@ -1784,6 +1797,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIlog2l:
     case Builtin::BI__builtin_log2:
     case Builtin::BI__builtin_log2f:
+    case Builtin::BI__builtin_log2f16:
     case Builtin::BI__builtin_log2l:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::log2));
 
@@ -1800,6 +1814,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIpowl:
     case Builtin::BI__builtin_pow:
     case Builtin::BI__builtin_powf:
+    case Builtin::BI__builtin_powf16:
     case Builtin::BI__builtin_powl:
       return RValue::get(emitBinaryBuiltin(*this, E, Intrinsic::pow));
 
@@ -1808,6 +1823,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIrintl:
     case Builtin::BI__builtin_rint:
     case Builtin::BI__builtin_rintf:
+    case Builtin::BI__builtin_rintf16:
     case Builtin::BI__builtin_rintl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::rint));
 
@@ -1816,6 +1832,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIroundl:
     case Builtin::BI__builtin_round:
     case Builtin::BI__builtin_roundf:
+    case Builtin::BI__builtin_roundf16:
     case Builtin::BI__builtin_roundl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::round));
 
@@ -1824,6 +1841,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIsinl:
     case Builtin::BI__builtin_sin:
     case Builtin::BI__builtin_sinf:
+    case Builtin::BI__builtin_sinf16:
     case Builtin::BI__builtin_sinl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::sin));
 
@@ -1832,6 +1850,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BIsqrtl:
     case Builtin::BI__builtin_sqrt:
     case Builtin::BI__builtin_sqrtf:
+    case Builtin::BI__builtin_sqrtf16:
     case Builtin::BI__builtin_sqrtl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::sqrt));
 
@@ -1840,6 +1859,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     case Builtin::BItruncl:
     case Builtin::BI__builtin_trunc:
     case Builtin::BI__builtin_truncf:
+    case Builtin::BI__builtin_truncf16:
     case Builtin::BI__builtin_truncl:
       return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::trunc));
 
@@ -4267,6 +4287,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     break;
   case Builtin::BI__builtin_canonicalize:
   case Builtin::BI__builtin_canonicalizef:
+  case Builtin::BI__builtin_canonicalizef16:
   case Builtin::BI__builtin_canonicalizel:
     return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::canonicalize));
 
