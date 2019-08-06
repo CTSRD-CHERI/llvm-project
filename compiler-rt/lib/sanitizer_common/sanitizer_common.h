@@ -131,7 +131,7 @@ void ReleaseMemoryPagesToOS(uptr beg, uptr end);
 void IncreaseTotalMmap(usize size);
 void DecreaseTotalMmap(usize size);
 usize GetRSS();
-bool SetShadowRegionHugePageMode(uptr addr, usize length);
+void SetShadowRegionHugePageMode(uptr addr, usize length);
 bool DontDumpShadowMemory(uptr addr, usize length);
 // Check if the built VMA size matches the runtime one.
 void CheckVMASize();
