@@ -72,7 +72,7 @@ void SetShadowRegionHugePageMode(uptr addr, usize size) {
   if (common_flags()->no_huge_pages_for_shadow)
     madvise((char *)addr, size, MADV_NOHUGEPAGE);
   else
-    madvise((char *)addr, size, MADV_HUGEPAGE) == 0;
+    madvise((char *)addr, size, MADV_HUGEPAGE);
 #endif  // MADV_NOHUGEPAGE
 }
 
