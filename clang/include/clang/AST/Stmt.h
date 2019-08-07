@@ -531,7 +531,7 @@ protected:
 
     /// This is only meaningful for operations on floating point
     /// types and 0 otherwise.
-    unsigned FPFeatures : 3;
+    unsigned FPFeatures : 8;
 
     SourceLocation OpLoc;
   };
@@ -602,7 +602,7 @@ protected:
     unsigned OperatorKind : 6;
 
     // Only meaningful for floating point types.
-    unsigned FPFeatures : 3;
+    unsigned FPFeatures : 8;
   };
 
   class CXXRewrittenBinaryOperatorBitfields {
