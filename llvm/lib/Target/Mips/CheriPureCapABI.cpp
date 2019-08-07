@@ -274,6 +274,9 @@ private:
       DBG_INDENTED("Adding stack bounds for alloca that is returned: ";
                   I->dump());
       return true;
+    case Instruction::PtrToInt:
+      DBG_INDENTED("No need for stack bounds for ptrtoint: "; I->dump());
+      return false;
     default:
       // Something else - be conservative and say it needs bounds.
       errs() << "DON'T know how to handle "; I->dump();
