@@ -34,7 +34,7 @@ INLINE constexpr uptr roundDownTo(uptr X, uptr Boundary) {
   return X & ~(Boundary - 1);
 }
 
-INLINE constexpr bool isAligned(uptr X, usize alignment) {
+INLINE constexpr bool isAligned(uptr X, usize Alignment) {
   return (X & (Alignment - 1)) == 0;
 }
 

@@ -58,7 +58,7 @@ public:
     initLinkerInitialized(S);
   }
 
-  void *allocate(uptr Size, uptr AlignmentHint = 0, uptr *BlockEnd = nullptr);
+  void *allocate(uptr Size, usize AlignmentHint = 0, uptr *BlockEnd = nullptr);
 
   void deallocate(void *Ptr);
 

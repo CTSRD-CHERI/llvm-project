@@ -84,7 +84,7 @@ void NORETURN reportSanityCheckError(const char *Field) {
 
 // We enforce a maximum alignment, to keep fields smaller and generally prevent
 // integer overflows, or unexpected corner cases.
-void NORETURN reportAlignmentTooBig(uptr Alignment, uptr MaxAlignment) {
+void NORETURN reportAlignmentTooBig(usize Alignment, uptr MaxAlignment) {
   ScopedErrorReport Report;
   Report.append("invalid allocation alignment: %zu exceeds maximum supported "
                 "alignment of %zu\n",
@@ -152,7 +152,7 @@ void NORETURN reportDeleteSizeMismatch(void *Ptr, usize Size,
       Size, ExpectedSize);
 }
 
-void NORETURN reportAlignmentNotPowerOfTwo(uptr Alignment) {
+void NORETURN reportAlignmentNotPowerOfTwo(usize Alignment) {
   ScopedErrorReport Report;
   Report.append(
       "invalid allocation alignment: %zu, alignment must be a power of two\n",
@@ -166,7 +166,7 @@ void NORETURN reportCallocOverflow(uptr Count, usize Size) {
                 Count, Size);
 }
 
-void NORETURN reportInvalidPosixMemalignAlignment(uptr Alignment) {
+void NORETURN reportInvalidPosixMemalignAlignment(usize Alignment) {
   ScopedErrorReport Report;
   Report.append(
       "invalid alignment requested in posix_memalign: %zu, alignment must be a "
@@ -181,7 +181,7 @@ void NORETURN reportPvallocOverflow(usize Size) {
                 Size, getPageSizeCached());
 }
 
-void NORETURN reportInvalidAlignedAllocAlignment(uptr Alignment, usize Size) {
+void NORETURN reportInvalidAlignedAllocAlignment(usize Alignment, usize Size) {
   ScopedErrorReport Report;
   Report.append("invalid alignment requested in aligned_alloc: %zu, alignment "
                 "must be a power of two and the requested size %zu must be a "

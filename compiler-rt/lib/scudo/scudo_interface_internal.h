@@ -16,6 +16,7 @@
 #include "sanitizer_common/sanitizer_internal_defs.h"
 
 using __sanitizer::uptr;
+using __sanitizer::usize;
 using __sanitizer::s32;
 
 extern "C" {

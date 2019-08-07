@@ -110,14 +110,14 @@ typedef CombinedAllocator::AllocatorCache AllocatorCacheT;
 
 void initScudo();
 
-void *scudoAllocate(usize Size, usize alignment, AllocType Type);
-void scudoDeallocate(void *Ptr, usize Size, usize alignment, AllocType Type);
+void *scudoAllocate(usize Size, usize Alignment, AllocType Type);
+void scudoDeallocate(void *Ptr, usize Size, usize Alignment, AllocType Type);
 void *scudoRealloc(void *Ptr, usize Size);
 void *scudoCalloc(uptr NMemB, usize Size);
 void *scudoValloc(usize Size);
 void *scudoPvalloc(usize Size);
-int scudoPosixMemalign(void **MemPtr, usize alignment, usize Size);
-void *scudoAlignedAlloc(uptr Alignment, usize Size);
+int scudoPosixMemalign(void **MemPtr, usize Alignment, usize Size);
+void *scudoAlignedAlloc(usize Alignment, usize Size);
 uptr scudoMallocUsableSize(void *Ptr);
 
 }  // namespace __scudo

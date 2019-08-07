@@ -27,24 +27,24 @@ void NORETURN reportPvallocOverflow(usize Size) {
       GetPageSizeCached());
 }
 
-void NORETURN reportAllocationAlignmentTooBig(uptr Alignment,
-                                              uptr MaxAlignment) {
+void NORETURN reportAllocationAlignmentTooBig(usize Alignment,
+                                              usize MaxAlignment) {
   dieWithMessage("invalid allocation alignment: %zd exceeds maximum supported "
       "allocation of %zd\n", Alignment, MaxAlignment);
 }
 
-void NORETURN reportAllocationAlignmentNotPowerOfTwo(uptr Alignment) {
+void NORETURN reportAllocationAlignmentNotPowerOfTwo(usize Alignment) {
   dieWithMessage("invalid allocation alignment: %zd, alignment must be a power "
       "of two\n", Alignment);
 }
 
-void NORETURN reportInvalidPosixMemalignAlignment(uptr Alignment) {
+void NORETURN reportInvalidPosixMemalignAlignment(usize Alignment) {
   dieWithMessage("invalid alignment requested in posix_memalign: %zd, alignment"
       " must be a power of two and a multiple of sizeof(void *) == %zd\n",
       Alignment, sizeof(void *));  // NOLINT
 }
 
-void NORETURN reportInvalidAlignedAllocAlignment(usize Size, usize alignment) {
+void NORETURN reportInvalidAlignedAllocAlignment(usize Size, usize Alignment) {
 #if SANITIZER_POSIX
   dieWithMessage("invalid alignment requested in aligned_alloc: %zd, alignment "
       "must be a power of two and the requested size 0x%zx must be a multiple "

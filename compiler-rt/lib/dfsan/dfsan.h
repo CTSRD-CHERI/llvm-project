@@ -18,6 +18,7 @@
 #include "dfsan_platform.h"
 
 using __sanitizer::uptr;
+using __sanitizer::usize;
 using __sanitizer::u16;
 
 // Copy declarations from public sanitizer/dfsan_interface.h header here.

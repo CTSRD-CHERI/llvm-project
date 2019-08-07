@@ -23,7 +23,7 @@ namespace scudo {
 // For allocations requested with an alignment greater than or equal to a page,
 // the committed memory will amount to something close to Size - AlignmentHint
 // (pending rounding and headers).
-void *MapAllocator::allocate(uptr Size, uptr AlignmentHint, uptr *BlockEnd) {
+void *MapAllocator::allocate(uptr Size, usize AlignmentHint, uptr *BlockEnd) {
   DCHECK_GT(Size, AlignmentHint);
   const uptr PageSize = getPageSizeCached();
   const uptr MapSize =

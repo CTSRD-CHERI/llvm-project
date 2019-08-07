@@ -288,7 +288,7 @@ struct Allocator {
   NOINLINE bool isRssLimitExceeded();
 
   // Allocates a chunk.
-  void *allocate(usize Size, usize alignment, AllocType Type,
+  void *allocate(usize Size, usize Alignment, AllocType Type,
                  bool ForceZeroContents = false) {
     initThreadMaybe();
     if (UNLIKELY(Alignment > MaxAlignment)) {
@@ -637,7 +637,7 @@ void ScudoTSD::commitBack() {
   Instance.commitBack(this);
 }
 
-void *scudoAllocate(usize Size, usize alignment, AllocType Type) {
+void *scudoAllocate(usize Size, usize Alignment, AllocType Type) {
   if (Alignment && UNLIKELY(!IsPowerOfTwo(Alignment))) {
     errno = EINVAL;
     if (Instance.canReturnNull())
@@ -647,7 +647,7 @@ void *scudoAllocate(usize Size, usize alignment, AllocType Type) {
   return SetErrnoOnNull(Instance.allocate(Size, Alignment, Type));
 }
 
-void scudoDeallocate(void *Ptr, usize Size, usize alignment, AllocType Type) {
+void scudoDeallocate(void *Ptr, usize Size, usize Alignment, AllocType Type) {
   Instance.deallocate(Ptr, Size, Alignment, Type);
 }
 
@@ -683,7 +683,7 @@ void *scudoPvalloc(usize Size) {
   return SetErrnoOnNull(Instance.allocate(Size, PageSize, FromMemalign));
 }
 
-int scudoPosixMemalign(void **MemPtr, usize alignment, usize Size) {
+int scudoPosixMemalign(void **MemPtr, usize Alignment, usize Size) {
   if (UNLIKELY(!CheckPosixMemalignAlignment(Alignment))) {
     if (!Instance.canReturnNull())
       reportInvalidPosixMemalignAlignment(Alignment);
@@ -696,7 +696,7 @@ int scudoPosixMemalign(void **MemPtr, usize alignment, usize Size) {
   return 0;
 }
 
-void *scudoAlignedAlloc(uptr Alignment, usize Size) {
+void *scudoAlignedAlloc(usize Alignment, usize Size) {
   if (UNLIKELY(!CheckAlignedAllocAlignmentAndSize(Alignment, Size))) {
     errno = EINVAL;
     if (Instance.canReturnNull())
