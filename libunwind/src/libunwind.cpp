@@ -265,15 +265,16 @@ void __unw_add_dynamic_fde(unw_word_t fde) {
   CFI_Parser<LocalAddressSpace>::FDE_Info fdeInfo;
   CFI_Parser<LocalAddressSpace>::CIE_Info cieInfo;
   const char *message = CFI_Parser<LocalAddressSpace>::decodeFDE(
-                           LocalAddressSpace::sThisAddressSpace, 0,
-                          (LocalAddressSpace::pint_t) fde, &fdeInfo, &cieInfo);
+      LocalAddressSpace::sThisAddressSpace,
+      LocalAddressSpace::pc_t{(uintptr_t) nullptr},
+      (LocalAddressSpace::pint_t)fde, &fdeInfo, &cieInfo);
   if (message == NULL) {
     // dynamically registered FDEs don't have a mach_header group they are in.
     // Use fde as mh_group
     unw_word_t mh_group = fdeInfo.fdeStart;
-    DwarfFDECache<LocalAddressSpace>::add((LocalAddressSpace::pint_t)mh_group,
-                                          fdeInfo.pcStart, fdeInfo.pcEnd,
-                                          fdeInfo.fdeStart);
+    DwarfFDECache<LocalAddressSpace>::add(
+        (LocalAddressSpace::pint_t)mh_group, fdeInfo.pcStart.address(),
+        fdeInfo.pcEnd.address(), fdeInfo.fdeStart);
   } else {
     _LIBUNWIND_DEBUG_LOG("__unw_add_dynamic_fde: bad fde: %s", message);
   }

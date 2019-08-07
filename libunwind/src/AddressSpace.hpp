@@ -200,7 +200,6 @@ public:
 #endif
 };
 
-
 /// LocalAddressSpace is used as a template parameter to UnwindCursor when
 /// unwinding a thread in the same process.  The wrappers compile away,
 /// making local unwinds fast.
@@ -220,6 +219,126 @@ public:
 #else
   typedef uint32_t addr_t;
 #endif
+  // A thin wrapper around uintptr_t.
+  // This is used to ensure that return addresses are used correctly for CHERI
+  // where they might be sealed entry ("sentry") capabilities that cannot be
+  // modified.
+  class LocalProgramCounter {
+    void *value;
+#ifdef __CHERI_PURE_CAPABILITY__
+    // the actual pc might be a sentry but libunwind needs to modify it
+    // sometimes
+    uint64_t addend = 0;
+    LocalProgramCounter(void *v, uint64_t a) : value(v), addend(a) {}
+#endif
+
+  public:
+    explicit LocalProgramCounter() : value(nullptr) {}
+    explicit LocalProgramCounter(uintptr_t v) : value((void *)v) {
+#ifdef __CHERI_PURE_CAPABILITY__
+      if (!isNull() && !isValid())
+        _LIBUNWIND_ABORT_FMT("Untagged non-null value " _LIBUNWIND_FMT_PTR
+                             " used as program counter",
+                             value);
+#endif
+    }
+#ifdef __CHERI_PURE_CAPABILITY__
+    // Ensure that we don't accidentally create untagged values from integers
+    LocalProgramCounter(uint64_t) = delete;
+    LocalProgramCounter(int64_t) = delete;
+#endif
+    bool isImmutable() const {
+#ifdef __CHERI_PURE_CAPABILITY__
+      return __builtin_cheri_type_get((void *)value) !=
+             UINT64_MAX; // -1 is unsealed
+#else
+      return false;
+#endif
+    }
+    LocalProgramCounter assertInBounds(addr_t addr) const {
+#ifdef __CHERI_PURE_CAPABILITY__
+      if (!__builtin_cheri_tag_get(value)) {
+        _LIBUNWIND_ABORT_FMT("Untagged value " _LIBUNWIND_FMT_PTR
+                             " used as program counter",
+                             value);
+      }
+      // We might not be able to modify value -> inspect values instead of
+      // adding and the checking if it is in bounds
+      addr_t base = __builtin_cheri_base_get(value);
+      size_t length = __builtin_cheri_length_get(value);
+      if (addr < base || addr >= base + length) {
+        _LIBUNWIND_ABORT_FMT("Address 0x%jx is outside program counter "
+                             "value " _LIBUNWIND_FMT_PTR,
+                             (uintmax_t)addr, value);
+      }
+      if (isImmutable()) {
+        // For sentries we have to modify the addend instead of creating a new
+        // capability from value.
+        return LocalProgramCounter(value, addr - address());
+      } else {
+        return LocalProgramCounter(__builtin_cheri_address_set(value, addr), 0);
+      }
+#else
+      return LocalProgramCounter(addr);
+#endif
+    }
+    bool isNull() const { return value == nullptr; }
+    bool isValid() const {
+#ifdef __CHERI_PURE_CAPABILITY__
+      return __builtin_cheri_tag_get(value);
+#else
+      return !isNull();
+#endif
+    }
+    // explicit operator void*() { return value; }
+    // explicit operator char*() { return (char*)value; }
+    // explicit operator pint_t() { return (pint_t)value; }
+    // Note: this ignores the added so should only be used for printf
+    struct ImmutablePointer {};
+    ImmutablePointer *get() const { return (ImmutablePointer *)value; }
+    // FIXME: need to stop using this for C++ exceptions and sentry caps
+    pint_t mutableValue() const {
+#ifdef __CHERI_PURE_CAPABILITY__
+      if (addend != 0) {
+        assert(!isImmutable());
+        return (pint_t)value + addend;
+      }
+#endif
+      return (pint_t)value;
+    }
+    addr_t address() const {
+#ifdef __CHERI_PURE_CAPABILITY__
+      return __builtin_cheri_address_get(value) + addend;
+#else
+      return (addr_t)(uintptr_t)value;
+#endif
+    }
+    LocalProgramCounter &operator--() {
+#ifdef __CHERI_PURE_CAPABILITY__
+      if (isImmutable()) {
+        addend--;
+        return *this;
+      }
+#else
+      value = (void *)((uintptr_t)value - 1);
+#endif
+      return *this;
+    }
+    LocalProgramCounter &operator&=(addr_t a) {
+#ifdef __CHERI_PURE_CAPABILITY__
+      if (isImmutable()) {
+        addr_t new_addr = address() & a;
+        addend = new_addr - address();
+        return *this;
+      }
+#else
+      value = (void *)((uintptr_t)value & a);
+#endif
+      return *this;
+    }
+  };
+  typedef LocalProgramCounter pc_t;
+
   template<typename T>
   inline T get(pint_t addr) {
     T val;
@@ -256,10 +375,10 @@ public:
 
   pint_t getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
                      pint_t datarelBase = 0);
-  bool findFunctionName(pint_t addr, char *buf, size_t bufLen,
+  bool findFunctionName(pc_t addr, char *buf, size_t bufLen,
                         unw_word_t *offset);
-  bool findUnwindSections(pint_t targetAddr, UnwindInfoSections &info);
-  bool findOtherFDE(pint_t targetAddr, pint_t &fde);
+  bool findUnwindSections(pc_t targetAddr, UnwindInfoSections &info);
+  bool findOtherFDE(addr_t targetAddr, pint_t &fde);
 
   static LocalAddressSpace sThisAddressSpace;
 
@@ -285,6 +404,37 @@ public:
   }
 
 };
+
+// Comparison operators for pc_t:
+// Note: we ignore the tag in these comparisons
+#define PC_T_COMPARATOR(op)                                                    \
+  inline bool operator op(LocalAddressSpace::pint_t lhs,                       \
+                          const LocalAddressSpace::pc_t &rhs) {                \
+    return (__cheri_addr LocalAddressSpace::addr_t)lhs op rhs.address();       \
+  }                                                                            \
+  inline bool operator op(const LocalAddressSpace::pc_t &lhs,                  \
+                          LocalAddressSpace::pint_t rhs) {                     \
+    return lhs.address() op(__cheri_addr LocalAddressSpace::addr_t) rhs;       \
+  }                                                                            \
+  inline bool operator op(LocalAddressSpace::addr_t lhs,                       \
+                          const LocalAddressSpace::pc_t &rhs) {                \
+    return lhs op rhs.address();                                               \
+  }                                                                            \
+  inline bool operator op(const LocalAddressSpace::pc_t &lhs,                  \
+                          LocalAddressSpace::addr_t rhs) {                     \
+    return lhs.address() op rhs;                                               \
+  }                                                                            \
+  inline bool operator op(const LocalAddressSpace::pc_t &lhs,                  \
+                          const LocalAddressSpace::pc_t &rhs) {                \
+    return lhs.address() op rhs.address();                                     \
+  }
+
+PC_T_COMPARATOR(<)
+PC_T_COMPARATOR(<=)
+PC_T_COMPARATOR(>=)
+PC_T_COMPARATOR(>)
+PC_T_COMPARATOR(==)
+PC_T_COMPARATOR(!=)
 
 inline uintptr_t LocalAddressSpace::getP(pint_t addr) {
   return get<uintptr_t>(addr);
@@ -460,11 +610,11 @@ __attribute__((weak)) extern "C" ElfW(Dyn) _DYNAMIC[];
 // #pragma weak _DYNAMIC
 #endif
 
-inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
+inline bool LocalAddressSpace::findUnwindSections(pc_t targetAddr,
                                                   UnwindInfoSections &info) {
 #ifdef __APPLE__
   dyld_unwind_sections dyldInfo;
-  if (_dyld_find_unwind_sections((void *)targetAddr, &dyldInfo)) {
+  if (_dyld_find_unwind_sections((void *)targetAddr.get(), &dyldInfo)) {
     info.dso_base                      = (uintptr_t)dyldInfo.mh;
  #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
     info.set_dwarf_section((uintptr_t)dyldInfo.dwarf_section);
@@ -554,7 +704,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
   struct dl_iterate_cb_data {
     LocalAddressSpace *addressSpace;
     UnwindInfoSections *sects;
-    uintptr_t targetAddr;
+    pc_t targetAddr;
   };
 
   dl_iterate_cb_data cb_data = {this, &info, targetAddr};
@@ -568,20 +718,24 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 
         assert(cbdata);
         assert(cbdata->sects);
-        CHERI_DBG("Checking %s for target %p (%#p). Base=%p->%p(%#p)\n",
-                  pinfo->dlpi_name, (void *)cbdata->targetAddr,
-                  (void *)cbdata->targetAddr, (void *)pinfo->dlpi_addr,
-                  (void*)((char *)pinfo->dlpi_addr + __builtin_cheri_length_get((void *)pinfo->dlpi_addr)),
-                  (void*)pinfo->dlpi_addr);
+        CHERI_DBG(
+            "Checking %s for target 0x%jx (%#p). Base=%p->%p(%#p)\n",
+            pinfo->dlpi_name, (uintmax_t)cbdata->targetAddr.address(),
+            (void *)cbdata->targetAddr.get(), (void *)pinfo->dlpi_addr,
+            (void *)((char *)pinfo->dlpi_addr +
+                     __builtin_cheri_length_get((void *)pinfo->dlpi_addr)),
+            (void *)pinfo->dlpi_addr);
 #ifdef __CHERI_PURE_CAPABILITY__
-        assert(__builtin_cheri_tag_get((void*)cbdata->targetAddr));
+        assert(cbdata->targetAddr.isValid());
         if (!__builtin_cheri_tag_get((void*)pinfo->dlpi_addr)) {
           _LIBUNWIND_ABORT("dlpi_addr was untagged. CheriBSD needs to be updated!");
         }
 #endif
 
         if (cbdata->targetAddr < pinfo->dlpi_addr) {
-          CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
+          CHERI_DBG("0x%jx out of bounds of %#p (%s)\n",
+                    (uintmax_t)cbdata->targetAddr.address(),
+                    (void *)pinfo->dlpi_addr, pinfo->dlpi_name);
           return false;
         }
 #ifdef __CHERI_PURE_CAPABILITY__
@@ -595,8 +749,10 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         // TODO: __builtin_cheri_top_get_would be nice
         if (__builtin_cheri_length_get((void *)pinfo->dlpi_addr) +
                 __builtin_cheri_base_get((void *)pinfo->dlpi_addr) <
-            (__cheri_addr vaddr_t)cbdata->targetAddr) {
-          CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
+            cbdata->targetAddr) {
+          CHERI_DBG("%#p out of bounds of %#p (%s)\n",
+                    (void *)cbdata->targetAddr.get(), (void *)pinfo->dlpi_addr,
+                    pinfo->dlpi_name);
           return false;
         }
 #endif
@@ -743,8 +899,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
   return false;
 }
 
-
-inline bool LocalAddressSpace::findOtherFDE(pint_t targetAddr, pint_t &fde) {
+inline bool LocalAddressSpace::findOtherFDE(addr_t targetAddr, pint_t &fde) {
 #ifdef __APPLE__
   return checkKeyMgrRegisteredFDEs(targetAddr, *((void**)&fde));
 #else
@@ -755,20 +910,21 @@ inline bool LocalAddressSpace::findOtherFDE(pint_t targetAddr, pint_t &fde) {
 #endif
 }
 
-inline bool LocalAddressSpace::findFunctionName(pint_t addr, char *buf,
+inline bool LocalAddressSpace::findFunctionName(pc_t ip, char *buf,
                                                 size_t bufLen,
                                                 unw_word_t *offset) {
 #if _LIBUNWIND_USE_DLADDR
   Dl_info dyldInfo;
-  CHERI_DBG("%s(%p: %#p))\n", __func__, (void*)addr, (void*)addr);
-  if (dladdr((void *)addr, &dyldInfo)) {
+  CHERI_DBG("%s(0x%jx: %#p))\n", __func__, (uintmax_t)ip.address(),
+            (void *)ip.get());
+  if (dladdr((void *)ip.get(), &dyldInfo)) {
     if (dyldInfo.dli_sname != NULL) {
       snprintf(buf, bufLen, "%s", dyldInfo.dli_sname);
-      *offset = (size_t)((char*)addr - (char*)dyldInfo.dli_saddr);
+      *offset = ip.address() - (__cheri_addr addr_t)dyldInfo.dli_saddr;
       return true;
     } else if (dyldInfo.dli_fname != NULL) {
       snprintf(buf, bufLen, "%s", dyldInfo.dli_fname);
-      *offset = (size_t)((char*)addr - (char*)dyldInfo.dli_fbase);
+      *offset = ip.address() - (__cheri_addr addr_t)dyldInfo.dli_fbase;
       return true;
     }
   }
