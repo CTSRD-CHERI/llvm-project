@@ -1179,7 +1179,8 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
       // RHS from matchSelectPattern returns the negation part of abs pattern.
       // If the negate has an NSW flag we can assume the sign bit of the result
       // will be 0 because that makes abs(INT_MIN) undefined.
-      if (Q.IIQ.hasNoSignedWrap(cast<Instruction>(RHS)))
+      if (match(RHS, m_Neg(m_Specific(LHS))) &&
+          Q.IIQ.hasNoSignedWrap(cast<Instruction>(RHS)))
         MaxHighZeros = 1;
     }
 
@@ -5748,7 +5749,7 @@ static void setLimitsForIntrinsic(const IntrinsicInst &II, APInt &Lower,
 }
 
 static void setLimitsForSelectPattern(const SelectInst &SI, APInt &Lower,
-                                      APInt &Upper) {
+                                      APInt &Upper, const InstrInfoQuery &IIQ) {
   const Value *LHS, *RHS;
   SelectPatternResult R = matchSelectPattern(&SI, LHS, RHS);
   if (R.Flavor == SPF_UNKNOWN)
@@ -5761,7 +5762,8 @@ static void setLimitsForSelectPattern(const SelectInst &SI, APInt &Lower,
     // then the result of abs(X) is [0..SIGNED_MAX],
     // otherwise it is [0..SIGNED_MIN], as -SIGNED_MIN == SIGNED_MIN.
     Lower = APInt::getNullValue(BitWidth);
-    if (cast<Instruction>(RHS)->hasNoSignedWrap())
+    if (match(RHS, m_Neg(m_Specific(LHS))) &&
+        IIQ.hasNoSignedWrap(cast<Instruction>(RHS)))
       Upper = APInt::getSignedMaxValue(BitWidth) + 1;
     else
       Upper = APInt::getSignedMinValue(BitWidth) + 1;
@@ -5815,7 +5817,7 @@ ConstantRange llvm::computeConstantRange(const Value *V, bool UseInstrInfo) {
   else if (auto *II = dyn_cast<IntrinsicInst>(V))
     setLimitsForIntrinsic(*II, Lower, Upper);
   else if (auto *SI = dyn_cast<SelectInst>(V))
-    setLimitsForSelectPattern(*SI, Lower, Upper);
+    setLimitsForSelectPattern(*SI, Lower, Upper, IIQ);
 
   ConstantRange CR = ConstantRange::getNonEmpty(Lower, Upper);
 
