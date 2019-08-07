@@ -41,7 +41,9 @@ extern "C" void *__libc_memalign(usize alignment, usize size);
 extern "C" void *__libc_realloc(void *ptr, usize size);
 extern "C" void __libc_free(void *ptr);
 # else
+} // end namespace __sanitizer
 #  include <stdlib.h>
+namespace __sanitizer {
 #  define __libc_malloc malloc
 #  if !SANITIZER_GO
 static void *__libc_memalign(usize alignment, usize size) {
