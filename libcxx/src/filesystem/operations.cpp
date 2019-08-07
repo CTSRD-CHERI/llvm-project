@@ -11,7 +11,7 @@
 //   "updated": 20190429,
 //   "target_type": "lib"
 //   "changes": [
-//     "subobject_bounds",
+//     "subobject_bounds"
 //   ],
 //   "change_comment": "std::string: &str[N] -> str.data()/str.end()",
 // }

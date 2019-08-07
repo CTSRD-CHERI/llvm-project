@@ -15,7 +15,7 @@
 //   "updated": 20190509,
 //   "target_type": "header"
 //   "changes": [
-//     "subobject_bounds",
+//     "subobject_bounds"
 //   ],
 //   "change_comment": "address of std::string::operator[]: `std::string __s; &__s[0] -> __s.begin().base()`",
 // }
