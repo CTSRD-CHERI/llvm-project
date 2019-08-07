@@ -195,9 +195,6 @@ public:
     return *ABI;
   }
 
-  bool isMipsR6(const MCSubtargetInfo *STI) const;
-  bool isMicroMips(const MCSubtargetInfo *STI) const;
-
   /// CHERI128 uses compressed capabilities. If we would like to guarantee
   /// non-overlapping bounds for all global symbols we must over-align the
   /// symbol if the size is no precisely representable. We also add padding at

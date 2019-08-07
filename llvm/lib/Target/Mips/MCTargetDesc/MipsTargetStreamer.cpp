@@ -53,6 +53,15 @@ llvm::Optional<unsigned> llvm::getCheriCapabilitySize(FeatureBitset Features) {
   return None;
 }
 
+static bool isMipsR6(const MCSubtargetInfo *STI) {
+  return STI->getFeatureBits()[Mips::FeatureMips32r6] ||
+         STI->getFeatureBits()[Mips::FeatureMips64r6];
+}
+
+static bool isMicroMips(const MCSubtargetInfo *STI) {
+  return STI->getFeatureBits()[Mips::FeatureMicroMips];
+}
+
 MipsTargetStreamer::MipsTargetStreamer(MCStreamer &S,
                                        llvm::Optional<unsigned> CheriCapSize)
     : MCTargetStreamer(S), CheriCapSize(CheriCapSize), GPReg(Mips::GP),
@@ -449,15 +458,6 @@ void MipsTargetStreamer::emitLoadWithSymOffset(unsigned Opcode, unsigned DstReg,
     emitRRR(Mips::ADDu, TmpReg, TmpReg, BaseReg, IDLoc, STI);
   // Emit the load with the adjusted base and offset.
   emitRRX(Opcode, DstReg, TmpReg, LoOperand, IDLoc, STI);
-}
-
-bool MipsTargetStreamer::isMipsR6(const MCSubtargetInfo *STI) const {
-  return STI->getFeatureBits()[Mips::FeatureMips32r6] ||
-         STI->getFeatureBits()[Mips::FeatureMips64r6];
-}
-
-bool MipsTargetStreamer::isMicroMips(const MCSubtargetInfo *STI) const {
-  return STI->getFeatureBits()[Mips::FeatureMicroMips];
 }
 
 TailPaddingAmount
