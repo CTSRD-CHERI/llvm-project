@@ -29,16 +29,14 @@ using namespace lld;
 // but outs() or errs() are not thread-safe. We protect them using a mutex.
 static std::mutex mu;
 
-// Prints "\n" or does nothing, depending on Msg contents of
-// the previous call of this function.
-static void newline(raw_ostream *errorOS, const Twine &msg) {
-  // True if the previous error message contained "\n".
-  // We want to separate multi-line error messages with a newline.
-  static bool flag;
+// We want to separate multi-line messages with a newline. `sep` is "\n"
+// if the last messages was multi-line. Otherwise "".
+static StringRef sep;
 
-  if (flag)
-    *errorOS << "\n";
-  flag = StringRef(msg.str()).contains('\n');
+static StringRef getSeparator(const Twine &msg) {
+  if (StringRef(msg.str()).contains('\n'))
+    return "\n";
+  return "";
 }
 
 ErrorHandler &lld::errorHandler() {
@@ -161,15 +159,15 @@ void ErrorHandler::warn(const Twine &msg) {
   static uint64_t warningCount = 0;
   std::lock_guard<std::mutex> lock(mu);
   if (warningLimit == 0 || warningCount < warningLimit) {
-    newline(errorOS, msg);
-    *errorOS << getLocation(msg) << ": " << Colors::MAGENTA
+    *errorOS << sep << getLocation(msg) << ": " << Colors::MAGENTA
              << "warning: " << Colors::RESET << msg << "\n";
+    sep = getSeparator(msg);
   } else if (warningCount == warningLimit) {
-    // Set newline flag based on limit exceeded flag and not the message that
-    // wasn't printed:
-    newline(errorOS, warningLimitExceededMsg);
-    *errorOS << getLocation(msg) << ": " << Colors::MAGENTA
+    *errorOS << sep << getLocation(msg) << ": " << Colors::MAGENTA
              << "warning: " << Colors::RESET << warningLimitExceededMsg << "\n";
+    // Set separator based on limit exceeded flag and not the message that
+    // wasn't printed:
+    sep = getSeparator(warningLimitExceededMsg);
   }
   ++warningCount;
 }
@@ -194,17 +192,17 @@ void ErrorHandler::error(const Twine &msg) {
   std::lock_guard<std::mutex> lock(mu);
 
   if (errorLimit == 0 || errorCount < errorLimit) {
-    newline(errorOS, msg);
-    *errorOS << getLocation(msg) << ": " << Colors::RED
+    *errorOS << sep << getLocation(msg) << ": " << Colors::RED
              << "error: " << Colors::RESET << msg << "\n";
+    sep = getSeparator(msg);
   } else if (errorCount == errorLimit) {
-    // Set newline flag based on limit exceeded flag and not the message that
-    // wasn't printed:
-    newline(errorOS, errorLimitExceededMsg);
-    *errorOS << getLocation(msg) << ": " << Colors::RED
+    *errorOS << sep << getLocation(msg) << ": " << Colors::RED
              << "error: " << Colors::RESET << errorLimitExceededMsg << "\n";
     if (exitEarly)
       exitLld(1);
+    // Set separator based on limit exceeded flag and not the message that
+    // wasn't printed:
+    sep = getSeparator(errorLimitExceededMsg);
   }
 
   ++errorCount;
