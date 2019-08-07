@@ -126,9 +126,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       static_cast<const toolchains::FreeBSD &>(getToolChain());
   const Driver &D = ToolChain.getDriver();
   const llvm::Triple::ArchType Arch = ToolChain.getArch();
-  bool IsCHERIPureCapABI = false;
-  if (ToolChain.getTriple().isMIPS())
-    IsCHERIPureCapABI = tools::mips::hasMipsAbiArg(Args, "purecap");
+  bool IsCHERIPureCapABI = ToolChain.isCheriPurecap();
   // For CheriABI default to -pie unless -static is also passed
   // TODO: enable static PIE?
   const bool CheriAbiPIEDefault =
@@ -500,7 +498,10 @@ SanitizerMask FreeBSD::getSupportedSanitizers() const {
   const bool IsX86_64 = getTriple().getArch() == llvm::Triple::x86_64;
   const bool IsMIPS64 = getTriple().isMIPS64();
   SanitizerMask Res = ToolChain::getSupportedSanitizers();
-  Res |= SanitizerKind::Address;
+  if (getTriple().getEnvironment() != llvm::Triple::CheriPurecap) {
+    // ASAN currently crashes when enabled for purecap
+    Res |= SanitizerKind::Address;
+  }
   Res |= SanitizerKind::PointerCompare;
   Res |= SanitizerKind::PointerSubtract;
   Res |= SanitizerKind::Vptr;
