@@ -26,6 +26,8 @@ public:
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override;
   void EmitInstToData(const MCInst &Inst, const MCSubtargetInfo &) override;
+  void EmitXCOFFLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+                                  unsigned ByteAlign) override;
 };
 
 } // end namespace llvm
