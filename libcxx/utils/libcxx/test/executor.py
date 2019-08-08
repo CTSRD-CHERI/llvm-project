@@ -271,7 +271,7 @@ class SSHExecutor(RemoteExecutor):
         ssh_cmd = self.ssh_command + ['-tt', '-oBatchMode=yes', remote]
         # FIXME: doesn't handle spaces... and Py2.7 doesn't have shlex.quote()
         if env:
-            env_cmd = ['env'] + ['%s=%s' % (k, v) for k, v in env.items()]
+            env_cmd = ['env'] + ['%s="%s"' % (k, v) for k, v in env.items()]
         else:
             env_cmd = []
         remote_cmd = ' '.join(map(pipes.quote, env_cmd + cmd))
