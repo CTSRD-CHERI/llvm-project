@@ -7354,6 +7354,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     // Interacts with -fstack-protector options.
     handleSimpleAttribute<NoStackProtectorAttr>(S, D, AL);
     break;
+  case ParsedAttr::AT_CFICanonicalJumpTable:
+    handleSimpleAttribute<CFICanonicalJumpTableAttr>(S, D, AL);
+    break;
   case ParsedAttr::AT_CHERIMethodClass:
     handleCHERIMethodClass(S, D, AL);
     break;
