@@ -6726,7 +6726,7 @@ static void handleGslAnnotatedTypes(IndirectLocalPath &Path, Expr *Call,
     return;
   } else if (auto *OCE = dyn_cast<CXXOperatorCallExpr>(Call)) {
     FunctionDecl *Callee = OCE->getDirectCallee();
-    if (Callee && Callee->isCXXInstanceMember() &&
+    if (Callee->isCXXInstanceMember() &&
         shouldTrackImplicitObjectArg(cast<CXXMethodDecl>(Callee)))
       VisitPointerArg(Callee, OCE->getArg(0));
     return;
@@ -7180,11 +7180,8 @@ static SourceRange nextPathEntryRange(const IndirectLocalPath &Path, unsigned I,
       // supporting lifetime extension.
       break;
 
-    case IndirectLocalPathEntry::VarInit:
-      if (cast<VarDecl>(Path[I].D)->isImplicit())
-        return SourceRange();
-      LLVM_FALLTHROUGH;
     case IndirectLocalPathEntry::DefaultInit:
+    case IndirectLocalPathEntry::VarInit:
       return Path[I].E->getSourceRange();
     }
   }
@@ -7246,7 +7243,7 @@ void Sema::checkInitializerLifetime(const InitializedEntity &Entity,
         return false;
       }
 
-      if (IsGslPtrInitWithGslTempOwner && DiagLoc.isValid()) {
+      if (IsGslPtrInitWithGslTempOwner) {
         Diag(DiagLoc, diag::warn_dangling_lifetime_pointer) << DiagRange;
         return false;
       }
