@@ -335,6 +335,6 @@ void MipsSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
 #endif
 }
 
-const InstructionSelector *MipsSubtarget::getInstructionSelector() const {
+InstructionSelector *MipsSubtarget::getInstructionSelector() const {
   return InstSelector.get();
 }
