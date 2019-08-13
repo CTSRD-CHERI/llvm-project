@@ -183,33 +183,33 @@ static ArchTreeEdge archTree[] = {
     {EF_MIPS_ARCH_2, EF_MIPS_ARCH_1},
 };
 
-static bool isArchMatched(uint32_t New, uint32_t res) {
-  // llvm::errs() << __func__ << ": new=" << utohexstr(New) << " res=" << utohexstr(Res) << "\n";
-  if (New == res)
+static bool isArchMatched(uint32_t newFlags, uint32_t res) {
+  // llvm::errs() << __func__ << ": new=" << utohexstr(newFlags) << " res=" << utohexstr(Res) << "\n";
+  if (newFlags == res)
     return true;
-  if (New == EF_MIPS_ARCH_32 && isArchMatched(EF_MIPS_ARCH_64, res))
+  if (newFlags == EF_MIPS_ARCH_32 && isArchMatched(EF_MIPS_ARCH_64, res))
     return true;
-  if (New == EF_MIPS_ARCH_32R2 && isArchMatched(EF_MIPS_ARCH_64R2, res))
+  if (newFlags == EF_MIPS_ARCH_32R2 && isArchMatched(EF_MIPS_ARCH_64R2, res))
     return true;
 
   // check for cheri128 vs cheri256 and upgrade non-cheri to cheri
-  uint32_t newMach = (New & EF_MIPS_MACH);
+  uint32_t newMach = (newFlags & EF_MIPS_MACH);
   uint32_t resMach = (res & EF_MIPS_MACH);
   if (resMach == EF_MIPS_MACH_CHERI128) {
     if (newMach != 0 && newMach != EF_MIPS_MACH_CHERI128 && newMach != EF_MIPS_MACH_BERI)
       return false;
-    return isArchMatched(New & ~EF_MIPS_MACH, res & ~EF_MIPS_MACH);
+    return isArchMatched(newFlags & ~EF_MIPS_MACH, res & ~EF_MIPS_MACH);
   }
   if (resMach == EF_MIPS_MACH_CHERI256) {
     if (newMach != 0 && newMach != EF_MIPS_MACH_CHERI256 && newMach != EF_MIPS_MACH_BERI)
       return false;
-    return isArchMatched(New & ~EF_MIPS_MACH, res & ~EF_MIPS_MACH);
+    return isArchMatched(newFlags & ~EF_MIPS_MACH, res & ~EF_MIPS_MACH);
   }
 
   for (const auto &edge : archTree) {
     if (res == edge.child) {
       res = edge.parent;
-      if (res == New)
+      if (res == newFlags)
         return true;
     }
   }
@@ -323,29 +323,29 @@ static uint32_t getArchFlags(ArrayRef<FileFlags> files) {
   uint32_t ret = files[0].flags & (EF_MIPS_ARCH | EF_MIPS_MACH);
 
   for (const FileFlags &f : files.slice(1)) {
-    uint32_t New = f.flags & (EF_MIPS_ARCH | EF_MIPS_MACH);
+    uint32_t newFlags = f.flags & (EF_MIPS_ARCH | EF_MIPS_MACH);
 
     // Warn about linking BERI/CHERI and non BERI/CHERI
     // This is required because the default -mcpu=mips4 instruction scheduling
     // results in lots of pipeline bubbles that prevent MIPS performance from
     // being comparable to CHERI performance.
-    if (isBeriOrCheri(ret) != isBeriOrCheri(New)) {
+    if (isBeriOrCheri(ret) != isBeriOrCheri(newFlags)) {
       warn("linking files compiled for BERI/CHERI and non-BERI/CHERI can "
            "result in surprising performance:\n>>> " +
            toString(files[0].file) + ": " + getFullArchName(ret) + "\n>>> " +
-           toString(f.file) + ": " + getFullArchName(New));
+           toString(f.file) + ": " + getFullArchName(newFlags));
     }
 
     // Check ISA compatibility.
-    if (isArchMatched(New, ret))
+    if (isArchMatched(newFlags, ret))
       continue;
-    if (!isArchMatched(ret, New)) {
+    if (!isArchMatched(ret, newFlags)) {
       error("incompatible target ISA:\n>>> " + toString(files[0].file) + ": " +
             getFullArchName(ret) + "\n>>> " + toString(f.file) + ": " +
-            getFullArchName(New));
+            getFullArchName(newFlags));
       return 0;
     }
-    ret = New;
+    ret = newFlags;
   }
   return ret;
 }
