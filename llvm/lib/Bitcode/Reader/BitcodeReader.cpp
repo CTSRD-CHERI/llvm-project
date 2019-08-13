@@ -5318,8 +5318,7 @@ Error BitcodeReader::materializeModule() {
 
   UpgradeModuleFlags(*TheModule);
 
-  UpgradeRetainReleaseMarker(*TheModule);
-  UpgradeARCRuntimeCalls(*TheModule);
+  UpgradeARCRuntime(*TheModule);
 
   return Error::success();
 }
