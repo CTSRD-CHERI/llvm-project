@@ -1834,8 +1834,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     reportUndefinedSymbols<ELFT>();
   }
 
-  addIRelativeRelocs();
-
   // Do the cap table index assignment
   // Must come before CapRelocs->finalizeContents() because it can add
   // __cap_relocs
