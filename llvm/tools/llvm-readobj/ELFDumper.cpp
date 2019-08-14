@@ -5031,11 +5031,7 @@ void DumpStyle<ELFT>::printNonRelocatableStackSizes(
   StringRef FileStr = Obj->getFileName();
   for (const SectionRef &Sec : Obj->sections()) {
     StringRef SectionName;
-    if (Expected<StringRef> NameOrErr = Sec.getName())
-      SectionName = *NameOrErr;
-    else
-      consumeError(NameOrErr.takeError());
-
+    Sec.getName(SectionName);
     const Elf_Shdr *ElfSec = Obj->getSection(Sec.getRawDataRefImpl());
     if (!SectionName.startswith(".stack_sizes"))
       continue;
@@ -5083,11 +5079,7 @@ void DumpStyle<ELFT>::printRelocatableStackSizes(
 
   for (const SectionRef &Sec : Obj->sections()) {
     StringRef SectionName;
-    if (Expected<StringRef> NameOrErr = Sec.getName())
-      SectionName = *NameOrErr;
-    else
-      consumeError(NameOrErr.takeError());
-
+    Sec.getName(SectionName);
     // A stack size section that we haven't encountered yet is mapped to the
     // null section until we find its corresponding relocation section.
     if (SectionName.startswith(".stack_sizes"))
@@ -5124,11 +5116,7 @@ void DumpStyle<ELFT>::printRelocatableStackSizes(
 
     // Warn about stack size sections without a relocation section.
     StringRef StackSizeSectionName;
-    if (Expected<StringRef> NameOrErr = StackSizesSec.getName())
-      StackSizeSectionName = *NameOrErr;
-    else
-      consumeError(NameOrErr.takeError());
-
+    StackSizesSec.getName(StackSizeSectionName);
     if (RelocSec == NullSection) {
       reportWarning(" '" + FileStr + "': section " + StackSizeSectionName +
                     " does not have a corresponding "
@@ -5156,12 +5144,7 @@ void DumpStyle<ELFT>::printRelocatableStackSizes(
     for (const RelocationRef &Reloc : RelocSec.relocations()) {
       if (!IsSupportedFn(Reloc.getType())) {
         StringRef RelocSectionName;
-        Expected<StringRef> NameOrErr = RelocSec.getName();
-        if (NameOrErr)
-          RelocSectionName = *NameOrErr;
-        else
-          consumeError(NameOrErr.takeError());
-
+        RelocSec.getName(RelocSectionName);
         StringRef RelocName = EF->getRelocationTypeName(Reloc.getType());
         reportError(
             createStringError(object_error::parse_failed,

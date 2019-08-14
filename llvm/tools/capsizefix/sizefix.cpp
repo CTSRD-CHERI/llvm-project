@@ -44,21 +44,20 @@ int main(int argc, char *argv[]) {
 
   StringRef Data;
   for (const SectionRef &Sec : OF->getBinary()->sections()) {
-    if (Expected<StringRef> Name = Sec.getName()) {
-      if (*Name == "__cap_relocs") {
+    StringRef Name;
+    if (!Sec.getName(Name)) {
+      if (Name == "__cap_relocs") {
         Expected<StringRef> Contents = Sec.getContents();
         if (!Contents)
           report_fatal_error(Contents.takeError(), false);
         Data = *Contents;
         continue;
-      } else if (*Name == ".global_sizes") {
+      } else if (Name == ".global_sizes") {
         SizesSection = Sec;
         continue;
       }
       Sections.push_back(std::make_tuple(Sec.getAddress(), Sec.getSize(),
                                          Sec.isText()));
-    } else {
-      consumeError(Name.takeError());
     }
   }
 
