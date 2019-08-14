@@ -1050,10 +1050,15 @@ static void lowerLocalAllocas(ArrayRef<CoroAllocaAllocInst*> LocalAllocas,
 
     // Save the stack depth.  Try to avoid doing this if the stackrestore
     // is going to immediately precede a return or something.
+    Type *AllocaASPtrTy = nullptr;
     Value *StackSave = nullptr;
-    if (localAllocaNeedsStackSave(AI))
+    if (localAllocaNeedsStackSave(AI)) {
+      AllocaASPtrTy = Type::getInt8PtrTy(
+          M->getContext(), M->getDataLayout().getAllocaAddrSpace());
       StackSave = Builder.CreateCall(
-                            Intrinsic::getDeclaration(M, Intrinsic::stacksave));
+                            Intrinsic::getDeclaration(M, Intrinsic::stacksave,
+                                                      {AllocaASPtrTy}));
+    }
 
     // Allocate memory.
     auto Alloca = Builder.CreateAlloca(Builder.getInt8Ty(), AI->getSize());
@@ -1072,7 +1077,8 @@ static void lowerLocalAllocas(ArrayRef<CoroAllocaAllocInst*> LocalAllocas,
         if (StackSave) {
           Builder.SetInsertPoint(FI);
           Builder.CreateCall(
-                    Intrinsic::getDeclaration(M, Intrinsic::stackrestore),
+                    Intrinsic::getDeclaration(M, Intrinsic::stackrestore,
+                                              {AllocaASPtrTy}),
                              StackSave);
         }
       }
