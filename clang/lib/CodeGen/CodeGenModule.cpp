@@ -6099,7 +6099,7 @@ llvm::PointerType* CodeGenModule::getPointerInDefaultAS(llvm::Type* T) {
 
 llvm::SanitizerStatReport &CodeGenModule::getSanStats() {
   if (!SanStats)
-    SanStats = llvm::make_unique<llvm::SanitizerStatReport>(&getModule());
+    SanStats = std::make_unique<llvm::SanitizerStatReport>(&getModule());
 
   return *SanStats;
 }

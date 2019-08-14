@@ -2278,7 +2278,7 @@ class FieldInitializerValidatorCCC final : public CorrectionCandidateCallback {
   }
 
   std::unique_ptr<CorrectionCandidateCallback> clone() override {
-    return llvm::make_unique<FieldInitializerValidatorCCC>(*this);
+    return std::make_unique<FieldInitializerValidatorCCC>(*this);
   }
 
  private:

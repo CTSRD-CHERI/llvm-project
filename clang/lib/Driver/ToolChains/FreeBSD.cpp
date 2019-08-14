@@ -114,7 +114,7 @@ void freebsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(II.getFilename());
 
   const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("as"));
-  C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
+  C.addCommand(std::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
 void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
@@ -394,7 +394,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   ToolChain.addProfileRTLibs(Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
-  C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
+  C.addCommand(std::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
   if (Args.hasFlag(options::OPT_external_capsizefix, options::OPT_no_capsizefix,
                    false) &&
       Args.hasFlag(options::OPT_cheri_linker, options::OPT_no_cheri_linker,
@@ -405,7 +405,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       SizeFixArgs.push_back("--verbose");
     SizeFixArgs.push_back(Output.getFilename());
     InputInfoList In= {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
-    C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, SizeFixArgs, In));
+    C.addCommand(std::make_unique<Command>(JA, *this, Exec, SizeFixArgs, In));
   }
 }
 
