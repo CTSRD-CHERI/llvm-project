@@ -12,6 +12,7 @@
 #include "llvm/IR/Cheri.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/TypeSize.h"
 using namespace llvm;
 
 EVT EVT::changeExtendedTypeToInteger() const {
@@ -102,12 +103,12 @@ unsigned EVT::getExtendedVectorNumElements() const {
   return cast<VectorType>(LLVMTy)->getNumElements();
 }
 
-unsigned EVT::getExtendedSizeInBits() const {
+TypeSize EVT::getExtendedSizeInBits() const {
   assert(isExtended() && "Type is not extended!");
   if (IntegerType *ITy = dyn_cast<IntegerType>(LLVMTy))
-    return ITy->getBitWidth();
+    return TypeSize::Fixed(ITy->getBitWidth());
   if (VectorType *VTy = dyn_cast<VectorType>(LLVMTy))
-    return VTy->getBitWidth();
+    return VTy->getPrimitiveSizeInBits();
   llvm_unreachable("Unrecognized extended type!");
 }
 
