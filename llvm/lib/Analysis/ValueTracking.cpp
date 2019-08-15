@@ -2197,7 +2197,7 @@ bool isKnownNonZero(const Value *V, unsigned Depth, const Query &Q) {
     if (const auto *Call = dyn_cast<CallBase>(V)) {
       if (Call->isReturnNonNull())
         return true;
-      if (const auto *RP = getArgumentAliasingToReturnedPointer(Call))
+      if (const auto *RP = getArgumentAliasingToReturnedPointer(Call, true))
         return isKnownNonZero(RP, Depth, Q);
     }
   }
@@ -3782,19 +3782,22 @@ uint64_t llvm::GetStringLength(const Value *V, unsigned CharSize) {
   return Len == ~0ULL ? 1 : Len;
 }
 
-const Value *llvm::getArgumentAliasingToReturnedPointer(const CallBase *Call) {
+const Value *
+llvm::getArgumentAliasingToReturnedPointer(const CallBase *Call,
+                                           bool MustPreserveNullness) {
   assert(Call &&
          "getArgumentAliasingToReturnedPointer only works on nonnull calls");
   if (const Value *RV = Call->getReturnedArgOperand())
     return RV;
   // This can be used only as a aliasing property.
-  if (isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(Call))
+  if (isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
+          Call, MustPreserveNullness))
     return Call->getArgOperand(0);
   return nullptr;
 }
 
 bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
-    const CallBase *Call) {
+    const CallBase *Call, bool MustPreserveNullness) {
   // A CHERI inc-offset of zero aliases the input argument
   if (Call->getIntrinsicID() == Intrinsic::cheri_cap_offset_increment) {
     if (ConstantInt *C = dyn_cast<ConstantInt>(Call->getOperand(1))) {
@@ -3869,7 +3872,7 @@ Value *llvm::GetUnderlyingObject(Value *V, const DataLayout &DL,
         // because it should be in sync with CaptureTracking. Not using it may
         // cause weird miscompilations where 2 aliasing pointers are assumed to
         // noalias.
-        if (auto *RP = getArgumentAliasingToReturnedPointer(Call)) {
+        if (auto *RP = getArgumentAliasingToReturnedPointer(Call, true)) {
           V = RP;
           continue;
         }
