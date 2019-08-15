@@ -35394,9 +35394,9 @@ static SDValue combineReductionToHorizontal(SDNode *ExtElt, SelectionDAG &DAG,
                                             const X86Subtarget &Subtarget) {
   assert(ExtElt->getOpcode() == ISD::EXTRACT_VECTOR_ELT && "Unexpected caller");
 
-  // TODO: Allow FADD with reduction and/or reassociation and no-signed-zeros.
   ISD::NodeType Opc;
-  SDValue Rdx = DAG.matchBinOpReduction(ExtElt, Opc, {ISD::ADD}, true);
+  SDValue Rdx =
+      DAG.matchBinOpReduction(ExtElt, Opc, {ISD::ADD, ISD::FADD}, true);
   if (!Rdx)
     return SDValue();
 
