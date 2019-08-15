@@ -174,7 +174,6 @@ add_llvm_library(LLVMSupport
   Path.cpp
   Process.cpp
   Program.cpp
-  RWMutex.cpp
   Signals.cpp
   TargetRegistry.cpp
   ThreadLocal.cpp
