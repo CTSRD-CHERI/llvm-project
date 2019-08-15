@@ -63,7 +63,7 @@ usize internal_ptrace(int request, int pid, void *addr, void *data);
 usize internal_waitpid(int pid, int *status, int options);
 
 int internal_fork();
-int internal_forkpty(int *amaster);
+fd_t internal_spawn(const char *argv[], pid_t *pid);
 
 int internal_sysctl(const int *name, unsigned int namelen, void *oldp,
                     usize *oldlenp, const void *newp, usize newlen);
