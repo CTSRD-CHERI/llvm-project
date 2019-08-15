@@ -177,7 +177,7 @@ StatsOutputFile::open(StringRef File, ErrorCallback OnOpenError,
   // can't use make_unique here since the ctor is private
   return std::unique_ptr<StatsOutputFile>(new StatsOutputFile(
       StatsFD,
-      llvm::make_unique<llvm::raw_fd_ostream>(StatsFD, CloseOnStreamDelete)));
+      std::make_unique<llvm::raw_fd_ostream>(StatsFD, CloseOnStreamDelete)));
 }
 
 } // namespace cheri

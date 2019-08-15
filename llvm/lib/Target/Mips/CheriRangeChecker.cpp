@@ -115,7 +115,7 @@ public:
   StringRef getPassName() const override { return "CHERI range checker"; }
   bool doInitialization(Module &Mod) override {
     M = &Mod;
-    TD = llvm::make_unique<DataLayout>(M);
+    TD = std::make_unique<DataLayout>(M);
     SizeTy = IntegerType::get(M->getContext(), TD->getIndexSizeInBits(200));
     CapPtrTy = PointerType::get(IntegerType::get(M->getContext(), 8), 200);
     return true;

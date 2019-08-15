@@ -135,7 +135,7 @@ const PseudoSourceValue *
 PseudoSourceValueManager::getFixedStack(int FI) {
   std::unique_ptr<FixedStackPseudoSourceValue> &V = FSValues[FI];
   if (!V)
-    V = llvm::make_unique<FixedStackPseudoSourceValue>(FI, TII);
+    V = std::make_unique<FixedStackPseudoSourceValue>(FI, TII);
   return V.get();
 }
 
@@ -144,7 +144,7 @@ PseudoSourceValueManager::getGlobalValueCallEntry(const GlobalValue *GV) {
   std::unique_ptr<const GlobalValuePseudoSourceValue> &E =
       GlobalCallEntries[GV];
   if (!E)
-    E = llvm::make_unique<GlobalValuePseudoSourceValue>(GV, TII);
+    E = std::make_unique<GlobalValuePseudoSourceValue>(GV, TII);
   return E.get();
 }
 
@@ -153,6 +153,6 @@ PseudoSourceValueManager::getExternalSymbolCallEntry(const char *ES) {
   std::unique_ptr<const ExternalSymbolPseudoSourceValue> &E =
       ExternalCallEntries[ES];
   if (!E)
-    E = llvm::make_unique<ExternalSymbolPseudoSourceValue>(ES, TII);
+    E = std::make_unique<ExternalSymbolPseudoSourceValue>(ES, TII);
   return E.get();
 }
