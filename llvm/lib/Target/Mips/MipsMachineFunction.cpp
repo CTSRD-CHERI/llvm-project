@@ -248,8 +248,8 @@ void MipsFunctionInfo::initCapGlobalBaseReg() {
     // For now I'll just add a new relocation or see if I can convert itm
     MachineRegisterInfo &RegInfo = MF.getRegInfo();
     const GlobalValue *FName = &MF.getFunction();
-    unsigned Tmp1 = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
-    unsigned Tmp2 = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+    Register Tmp1 = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+    Register Tmp2 = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
     BuildMI(MBB, I, DL, TII.get(Mips::LUi64), Tmp1)
         .addGlobalAddress(FName, 0, MipsII::MO_CAPTABLE_OFF_HI);
     BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), Tmp2)

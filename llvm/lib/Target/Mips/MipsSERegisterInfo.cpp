@@ -413,7 +413,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       const TargetRegisterClass *PtrRC =
           ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
-      unsigned Reg = RegInfo.createVirtualRegister(PtrRC);
+      Register Reg = RegInfo.createVirtualRegister(PtrRC);
       BuildMI(MBB, II, DL, TII.get(ABI.GetPtrAddiuOp()), Reg)
           .addReg(FrameReg)
           .addImm(Offset);

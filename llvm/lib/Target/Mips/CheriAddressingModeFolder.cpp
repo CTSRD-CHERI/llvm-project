@@ -432,7 +432,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         AddInst = nullptr;
       MachineBasicBlock *InsertBlock = I.first->getParent();
       auto FirstOperand = I.first->getOperand(0);
-      unsigned FirstReg = FirstOperand.getReg();
+      Register FirstReg = FirstOperand.getReg();
       BuildMI(*InsertBlock, I.first, I.first->getDebugLoc(),
           InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())))
         .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))

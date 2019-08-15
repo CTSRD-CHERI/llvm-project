@@ -289,7 +289,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     else if (Mips::FGR64RegClass.hasSubClassEq(RC)) {
       DebugLoc DL = I->getDebugLoc();
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
-      unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+      Register IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
       BuildMI(MBB, I, DL, get(Mips::DMFC1), IntReg)
         .addReg(SrcReg);
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
@@ -408,7 +408,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     else if (Mips::FGR64RegClass.hasSubClassEq(RC)) {
       DebugLoc DL = I->getDebugLoc();
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
-      unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+      Register IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
       BuildMI(MBB, I, DL, get(Mips::CAPLOAD64), IntReg)
         .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset)
         .addMemOperand(MMO);
@@ -766,7 +766,7 @@ unsigned MipsSEInstrInfo::loadImmediate(int64_t Imm, MachineBasicBlock &MBB,
   // The first instruction can be a LUi, which is different from other
   // instructions (ADDiu, ORI and SLL) in that it does not have a register
   // operand.
-  unsigned Reg = RegInfo.createVirtualRegister(RC);
+  Register Reg = RegInfo.createVirtualRegister(RC);
 
   if (Inst->Opc == LUi)
     BuildMI(MBB, II, DL, get(LUi), Reg).addImm(SignExtend64<16>(Inst->ImmOpnd));
@@ -874,9 +874,9 @@ void MipsSEInstrInfo::expandPseudoMTLoHi(MachineBasicBlock &MBB,
   // Add lo/hi registers if the mtlo/hi instructions created have explicit
   // def registers.
   if (HasExplicitDef) {
-    unsigned DstReg = I->getOperand(0).getReg();
-    unsigned DstLo = getRegisterInfo().getSubReg(DstReg, Mips::sub_lo);
-    unsigned DstHi = getRegisterInfo().getSubReg(DstReg, Mips::sub_hi);
+    Register DstReg = I->getOperand(0).getReg();
+    Register DstLo = getRegisterInfo().getSubReg(DstReg, Mips::sub_lo);
+    Register DstHi = getRegisterInfo().getSubReg(DstReg, Mips::sub_hi);
     LoInst.addReg(DstLo, RegState::Define);
     HiInst.addReg(DstHi, RegState::Define);
   }
@@ -913,14 +913,14 @@ void MipsSEInstrInfo::expandExtractElementF64(MachineBasicBlock &MBB,
                                               MachineBasicBlock::iterator I,
                                               bool isMicroMips,
                                               bool FP64) const {
-  unsigned DstReg = I->getOperand(0).getReg();
-  unsigned SrcReg = I->getOperand(1).getReg();
+  Register DstReg = I->getOperand(0).getReg();
+  Register SrcReg = I->getOperand(1).getReg();
   unsigned N = I->getOperand(2).getImm();
   DebugLoc dl = I->getDebugLoc();
 
   assert(N < 2 && "Invalid immediate");
   unsigned SubIdx = N ? Mips::sub_hi : Mips::sub_lo;
-  unsigned SubReg = getRegisterInfo().getSubReg(SrcReg, SubIdx);
+  Register SubReg = getRegisterInfo().getSubReg(SrcReg, SubIdx);
 
   // FPXX on MIPS-II or MIPS32r1 should have been handled with a spill/reload
   // in MipsSEFrameLowering.cpp.
@@ -955,7 +955,7 @@ void MipsSEInstrInfo::expandExtractElementF64(MachineBasicBlock &MBB,
 void MipsSEInstrInfo::expandBuildPairF64(MachineBasicBlock &MBB,
                                          MachineBasicBlock::iterator I,
                                          bool isMicroMips, bool FP64) const {
-  unsigned DstReg = I->getOperand(0).getReg();
+  Register DstReg = I->getOperand(0).getReg();
   unsigned LoReg = I->getOperand(1).getReg(), HiReg = I->getOperand(2).getReg();
   const MCInstrDesc& Mtc1Tdd = get(Mips::MTC1);
   DebugLoc dl = I->getDebugLoc();
@@ -1023,8 +1023,8 @@ void MipsSEInstrInfo::expandEhReturn(MachineBasicBlock &MBB,
   unsigned RA = Subtarget.isGP64bit() ? Mips::RA_64 : Mips::RA;
   unsigned T9 = Subtarget.isGP64bit() ? Mips::T9_64 : Mips::T9;
   unsigned ZERO = Subtarget.isGP64bit() ? Mips::ZERO_64 : Mips::ZERO;
-  unsigned OffsetReg = I->getOperand(0).getReg();
-  unsigned TargetReg = I->getOperand(1).getReg();
+  Register OffsetReg = I->getOperand(0).getReg();
+  Register TargetReg = I->getOperand(1).getReg();
 
   // addu $ra, $v0, $zero
   // addu $sp, $sp, $v1
@@ -1089,7 +1089,7 @@ bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
 
 void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator I) const {
-  unsigned GP = I->getOperand(0).getReg();
+  Register GP = I->getOperand(0).getReg();
   assert(GP != Mips::T9_64);
   DebugLoc DL = I->getDebugLoc();
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();

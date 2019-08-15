@@ -287,7 +287,7 @@ SDValue HexagonTargetLowering::LowerCallResult(
       SDValue FR0 = DAG.getCopyFromReg(Chain, dl, RVLocs[i].getLocReg(),
                                        MVT::i32, Glue);
       // FR0 = (Value, Chain, Glue)
-      unsigned PredR = MRI.createVirtualRegister(&Hexagon::PredRegsRegClass);
+      Register PredR = MRI.createVirtualRegister(&Hexagon::PredRegsRegClass);
       SDValue TPR = DAG.getCopyToReg(FR0.getValue(1), dl, PredR,
                                      FR0.getValue(0), FR0.getValue(2));
       // TPR = (Chain, Glue)
@@ -737,7 +737,7 @@ SDValue HexagonTargetLowering::LowerFormalArguments(
         RegVT = VA.getValVT();
 
       const TargetRegisterClass *RC = getRegClassFor(RegVT);
-      unsigned VReg = MRI.createVirtualRegister(RC);
+      Register VReg = MRI.createVirtualRegister(RC);
       SDValue Copy = DAG.getCopyFromReg(Chain, dl, VReg, RegVT);
 
       // Treat values of type MVT::i1 specially: they are passed in

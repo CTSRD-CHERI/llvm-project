@@ -46,8 +46,8 @@ struct Cher128FailHardPass : public MachineFunctionPass {
       return false;
     MachineRegisterInfo &RI = MF.getRegInfo();
     for (auto *MI : instrs) {
-      unsigned tag_before = RI.createVirtualRegister(&Mips::GPR64RegClass);
-      unsigned tag_after = RI.createVirtualRegister(&Mips::GPR64RegClass);
+      Register tag_before = RI.createVirtualRegister(&Mips::GPR64RegClass);
+      Register tag_after = RI.createVirtualRegister(&Mips::GPR64RegClass);
       auto &MBB = *MI->getParent();
       BuildMI(MBB, MI,
         MI->getDebugLoc(), InstrInfo->get(Mips::CGetTag))
