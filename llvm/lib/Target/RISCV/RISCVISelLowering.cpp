@@ -2443,6 +2443,8 @@ RISCVTargetLowering::getConstraintType(StringRef Constraint) const {
     case 'J':
     case 'K':
       return C_Immediate;
+    case 'A':
+      return C_Memory;
     }
   }
   return TargetLowering::getConstraintType(Constraint);
@@ -2560,6 +2562,21 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   }
 
   return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+}
+
+unsigned
+RISCVTargetLowering::getInlineAsmMemConstraint(StringRef ConstraintCode) const {
+  // Currently only support length 1 constraints.
+  if (ConstraintCode.size() == 1) {
+    switch (ConstraintCode[0]) {
+    case 'A':
+      return InlineAsm::Constraint_A;
+    default:
+      break;
+    }
+  }
+
+  return TargetLowering::getInlineAsmMemConstraint(ConstraintCode);
 }
 
 void RISCVTargetLowering::LowerAsmOperandForConstraint(
