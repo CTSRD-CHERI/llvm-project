@@ -1163,10 +1163,6 @@ static void processRelocAux(InputSectionBase &sec, RelExpr expr, RelType type,
     return;
   }
 
-  // If the symbol is undefined we already reported any relevant errors.
-  if (sym.isUndefined())
-    return;
-
   errorOrWarn("symbol '" + toString(sym) + "' has no type" +
               getLocation(sec, sym, offset));
 }
