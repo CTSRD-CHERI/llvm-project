@@ -10,7 +10,7 @@
 // RUN:   -cheri-uintcap=offset \
 // RUN:   -cheri-uintcap=addr \
 // RUN:   -cheri \
-// RUN:   -cheri-bounds=subobject-safe \
+// RUN:   -Xclang -cheri-bounds=subobject-safe \
 // RUN:   -mxcaptable \
 // RUN:   -no-mxcaptable \
 // RUN:   -mabi=purecap -shared %t.o -### 2>&1 | FileCheck %s
