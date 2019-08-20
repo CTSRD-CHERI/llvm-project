@@ -80,6 +80,8 @@ static cl::opt<unsigned> GuardWideningWindow(
     cl::desc("How wide an instruction window to bypass looking for "
              "another guard"));
 
+extern cl::opt<bool> CanSimplifyCheriSetBounds;
+
 /// Return the specified type promoted as it would be to pass though a va_arg
 /// area.
 static Type *getPromotedType(Type *Ty) {
@@ -149,7 +151,7 @@ Instruction *InstCombiner::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
     // loads and stores.  It also means that on CHERI we weren't optimising
     // single-pointer copies.  For now, special case pointer signed and aligned
     // things for CHERI.
-    if (!DL.isFatPointer(200)) 
+    if (!DL.isFatPointer(200))
       return nullptr;  // If not 1/2/4/8 bytes, exit.
     uint64_t PtrCpySize = DL.getPointerSize(200);
     uint64_t PtrCpyAlign = DL.getPointerPrefAlignment(200);
@@ -2385,6 +2387,38 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     }
     break;
 
+  // csetbounds(csetbounds(x, len), len) -> csetbounds(x, len)
+  // This can happen with subobject bounds
+  case Intrinsic::cheri_cap_bounds_set:
+  case Intrinsic::cheri_cap_bounds_set_exact: {
+    if (!CanSimplifyCheriSetBounds)
+      break; // To allow benchmarking effectiveness of this transformation
+    // The following happens quite often with sub-object bounds since we set
+    // bounds on array decay and on array subscripts -> two setbounds with
+    // identical arguments that can be folded to a single one
+    auto Op0 = II->getArgOperand(0);
+    auto Op1 = II->getArgOperand(1);
+    if (auto *M0 = dyn_cast<IntrinsicInst>(Op0)) {
+      auto InputIID = M0->getIntrinsicID();
+      // If the input is the same intrinsic we can just return that
+      // For setbounds on a setboundsexact we can use the setboundsexact
+      // csetbounds(csetboundsexact(x, len), len) -> csetboundsexact(x, len)
+      if ((InputIID == IID ||
+           InputIID == Intrinsic::cheri_cap_bounds_set_exact) &&
+          M0->getOperand(1) == Op1) {
+        return replaceInstUsesWith(CI, M0);
+      } else if (InputIID == Intrinsic::cheri_cap_bounds_set &&
+          M0->getOperand(1) == Op1) {
+        assert(IID == Intrinsic::cheri_cap_bounds_set_exact);
+        // csetboundsexact(csetbounds(x, len), len) -> csetboundsexact(x, len)
+        // Update csetboundsexact to use the input argument of csetbounds.
+        // If M0 is dead after this it will also be removed here.
+        II->setArgOperand(0, M0->getArgOperand(0));
+        return II;
+      }
+    }
+    break;
+  }
   case Intrinsic::x86_bmi_bextr_32:
   case Intrinsic::x86_bmi_bextr_64:
   case Intrinsic::x86_tbm_bextri_u32:

@@ -51,6 +51,13 @@ enum { RecursionLimit = 3 };
 STATISTIC(NumExpand,  "Number of expansions");
 STATISTIC(NumReassoc, "Number of reassociations");
 
+// Also used by instcombine
+cl::opt<bool> CanSimplifyCheriSetBounds(
+    "simplify-cheri-setbounds", cl::Hidden, cl::init(true), cl::ZeroOrMore,
+    cl::desc("Allow eliminating redundant CHERI bounds setting intrinisics"));
+
+
+
 static Value *SimplifyAndInst(Value *, Value *, const SimplifyQuery &, unsigned);
 static Value *simplifyUnOp(unsigned, Value *, const SimplifyQuery &, unsigned);
 static Value *simplifyFPUnOp(unsigned, Value *, const FastMathFlags &,
@@ -4874,6 +4881,28 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
   case Intrinsic::cheri_cap_diff:
     if (Constant *Result = computePointerDifference(Q.DL, Op0, Op1))
       return ConstantExpr::getIntegerCast(Result, ReturnType, true);
+    break;
+
+  // csetbounds(csetbounds(x, len), len) -> csetbounds(x, len)
+  // This can happen with subobject bounds
+  case Intrinsic::cheri_cap_bounds_set:
+  case Intrinsic::cheri_cap_bounds_set_exact:
+    // cl::opt exists to allow benchmarking effectiveness of this transformation
+    if (!CanSimplifyCheriSetBounds)
+      break;
+    // The following happens quite often with sub-object bounds since we set
+    // bounds on array decay and on array subscripts -> two setbounds with
+    // identical arguments that can be folded to a single one
+    if (auto *M0 = dyn_cast<IntrinsicInst>(Op0)) {
+      auto InputIID = M0->getIntrinsicID();
+      // If the input is the same intrinsic we can just return that
+      if (InputIID == IID && M0->getOperand(1) == Op1)
+        return Op0;
+      // setbounds on a setboundsexact can just use the setboundsexact
+      // csetbounds(csetboundsexact(x, len), len) -> csetboundsexact(x, len)
+      if (InputIID == Intrinsic::cheri_cap_bounds_set_exact && M0->getOperand(1) == Op1)
+        return Op0;
+    }
     break;
   case Intrinsic::uadd_sat:
     // sat(MAX + X) -> MAX
