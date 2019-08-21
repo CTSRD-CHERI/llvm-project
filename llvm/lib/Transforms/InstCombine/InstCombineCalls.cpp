@@ -2387,12 +2387,13 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
 
   // csetbounds(csetbounds(x, len), len) -> csetbounds(x, len)
   // This can happen with subobject bounds
+  case Intrinsic::cheri_bounded_stack_cap:
   case Intrinsic::cheri_cap_bounds_set:
   case Intrinsic::cheri_cap_bounds_set_exact: {
     // The following happens quite often with sub-object bounds since we set
     // bounds on array decay and on array subscripts -> two setbounds with
     // identical arguments that can be folded to a single one
-    auto Op0 = II->getArgOperand(0);
+    auto Op0 = II->getArgOperand(0)->stripPointerCastsSameRepresentation();
     auto Op1 = II->getArgOperand(1);
     if (auto *M0 = dyn_cast<IntrinsicInst>(Op0)) {
       auto InputIID = M0->getIntrinsicID();
@@ -2400,11 +2401,13 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       // For setbounds on a setboundsexact we can use the setboundsexact
       // csetbounds(csetboundsexact(x, len), len) -> csetboundsexact(x, len)
       if ((InputIID == IID ||
+           (InputIID == Intrinsic::cheri_bounded_stack_cap &&
+            IID == Intrinsic::cheri_cap_bounds_set) ||
            InputIID == Intrinsic::cheri_cap_bounds_set_exact) &&
           M0->getOperand(1) == Op1) {
         return replaceInstUsesWith(CI, M0);
       } else if (InputIID == Intrinsic::cheri_cap_bounds_set &&
-          M0->getOperand(1) == Op1) {
+                 M0->getOperand(1) == Op1) {
         assert(IID == Intrinsic::cheri_cap_bounds_set_exact);
         // csetboundsexact(csetbounds(x, len), len) -> csetboundsexact(x, len)
         // Update csetboundsexact to use the input argument of csetbounds.
