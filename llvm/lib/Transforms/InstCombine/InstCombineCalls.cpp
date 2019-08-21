@@ -2442,14 +2442,34 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       break;
     }
     CheriNeedBoundsChecker C(II, SetBoundsSize, DL);
-    if (C.anyUseNeedsBounds()) {
-      LLVM_DEBUG(dbgs() << " At least one use needs bounds -> can't optimize away setbounds: "; CI.dump());
-      break;
-    } else {
+    bool AllUsesRemoved = true;
+    bool Changed = false;
+    llvm::SmallVector<Use*, 4> UsesToReplace;
+    for (Use &U : II->uses()) {
+      LLVM_DEBUG(dbgs() << " checking if use needs bounds: " << *U.getUser() << "\n");
+      if (C.check(U)) {
+        LLVM_DEBUG(dbgs() << " setbounds use needs bounds -> can't remove: " << *U.getUser() << "\n");
+        AllUsesRemoved = false;
+      } else {
+        UsesToReplace.push_back(&U);
+        Changed = true;
+      }
+    }
+    if (AllUsesRemoved) {
       LLVM_DEBUG(dbgs() << " No uses need bounds, will remove: "; CI.dump());
       // Note: we fetch the operand here again, since Op0 might have a different
-      // pointer type than i8*. Unncessary casts will be removed later.
+      // pointer type than i8*. Unnecessary casts will be removed later.
       return replaceInstUsesWith(CI, II->getArgOperand(0));
+    } else if (Changed) {
+      for (Use* U : UsesToReplace) {
+        // Note: we fetch the operand here again, since Op0 might have a different
+        // pointer type than i8*. Unnecessary casts will be removed later.
+        LLVM_DEBUG(dbgs() << "IC: Replacing setbounds use" << *U->getUser() << "\n");
+        U->set(II->getArgOperand(0));
+        LLVM_DEBUG(dbgs() << "    with " << *U->getUser() << '\n');
+      }
+      MadeIRChange = true;
+      return II;
     }
     break;
   }

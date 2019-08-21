@@ -38,10 +38,8 @@ define signext i32 @stack_int_inlined_escapes() local_unnamed_addr addrspace(200
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 4)
 ; CHECK-NEXT:    call void @use(i8 addrspace(200)* nonnull [[TMP1]])
-; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], align 4
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
-; CHECK-NEXT:    ret i32 [[TMP2]]
+; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    ret i32 2
 ;
 entry:
   %value = alloca i32, align 4, addrspace(200)
@@ -64,10 +62,8 @@ define signext i32 @used_by_smaller_setbounds() local_unnamed_addr addrspace(200
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 4)
 ; CHECK-NEXT:    call void @use(i8 addrspace(200)* nonnull [[TMP1]])
-; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], align 4
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
-; CHECK-NEXT:    ret i32 [[TMP2]]
+; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    ret i32 2
 ;
 entry:
   %value = alloca i32, align 4, addrspace(200)
