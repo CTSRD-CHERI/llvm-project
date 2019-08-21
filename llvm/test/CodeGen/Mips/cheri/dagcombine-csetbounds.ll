@@ -21,9 +21,9 @@ declare i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)*,
 define signext i32 @stack_array() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: stack_array:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|160]]
-; CHECK-NEXT:    csc $c18, $zero, [[# CAP_SIZE * 4]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[# CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 4]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(stack_array)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(stack_array)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
@@ -34,10 +34,10 @@ define signext i32 @stack_array() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:    clw $2, $zero, 20($c18)
-; CHECK-NEXT:    clc $c17, $zero, [[# CAP_SIZE * 3]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[# CAP_SIZE * 4]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 4]]($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %array = alloca [10 x i32], align 4, addrspace(200)
   %0 = bitcast [10 x i32] addrspace(200)* %array to i8 addrspace(200)*
@@ -56,8 +56,8 @@ entry:
 define signext i32 @stack_int() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: stack_int:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; CHECK-NEXT:    csc $c17, $zero, [[# CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(stack_int)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(stack_int)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
@@ -69,9 +69,9 @@ define signext i32 @stack_int() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c2, 4
 ; CHECK-NEXT:    clw $2, $zero, 12($c11)
-; CHECK-NEXT:    clc $c17, $zero, [[# CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %value = alloca i32, align 4, addrspace(200)
   %0 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
@@ -89,8 +89,8 @@ entry:
 define signext i32 @stack_int_exact() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: stack_int_exact:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; CHECK-NEXT:    csc $c17, $zero, [[# CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(stack_int_exact)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(stack_int_exact)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
@@ -103,9 +103,9 @@ define signext i32 @stack_int_exact() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetboundsexact $c3, $c2, $1
 ; CHECK-NEXT:    clw $2, $zero, 12($c11)
-; CHECK-NEXT:    clc $c17, $zero, [[# CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %value = alloca i32, align 4, addrspace(200)
   %0 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
