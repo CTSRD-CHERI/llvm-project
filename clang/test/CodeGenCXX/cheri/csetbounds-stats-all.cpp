@@ -70,9 +70,6 @@ int test(void) {
   return foo(3, 1, 2, 3, 4ULL); // promoted to u64 in variadic call -> 4 * 8 bytes
 }
 
-// CSV-NEXT: 2,4,s,"<somewhere in _Z16test_onstack_intU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst x"
-// CSV-NEXT: 5,4,s,"<somewhere in _Z28test_onstack_int_overalignedU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst x"
-// CSV-NEXT: 0,333,s,"<somewhere in _Z17test__stack_arrayv>","CHERI sandbox ABI setup","set bounds on AllocaInst buf"
 // CSV-NEXT: 11,<unknown>,s,"<somewhere in _Z11test_allocai>","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
 // CSV-NEXT: 11,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst vla"
 // CSV-NEXT: 11,<unknown>,s,"<somewhere in _Z11test_allocai>","ExpandDYNAMIC_STACKALLOC",""

@@ -499,7 +499,7 @@ typedef struct {
 // CHECK-NEXT:    [[ARRAY23_SUB:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 0
 // CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #9
 // CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAY23_SUB]], i64 100)
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 80
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 80
 // CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAYIDX]], i64 10)
 // CHECK-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 [[INDEX:%.*]]
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX2]], align 1, !tbaa !9

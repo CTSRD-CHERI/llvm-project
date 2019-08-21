@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -std=gnu99 -cheri-bounds=conservative %s -fcolor-diagnostics -ast-dump
+// RUNnot: %cheri_purecap_cc1 -std=gnu99 -cheri-bounds=conservative %s -fcolor-diagnostics -ast-dump
 // RUN: %cheri_purecap_cc1 -std=gnu99 -cheri-bounds=conservative %s -verify=nobounds
 // nobounds-no-diagnostics
 // RUN: %cheri_purecap_cc1 -std=gnu99 -cheri-bounds=subobject-safe %s -verify=expected
@@ -16,7 +16,7 @@
 #define __check_safe_type_for_containerof(type, member)				\
     _Static_assert(__builtin_marked_no_subobject_bounds(type) ||		\
 	__builtin_marked_no_subobject_bounds(__typeof(((type *)0)->member)),	\
-	"this type is unsafe for use in containerof() with sub-object"		\
+	"this type is unsafe for use in containerof() with sub-object "		\
 	"bounds. Please mark the member/type with __no_subobject_bounds")
 #else
 // No checks without sub-object bounds
@@ -60,7 +60,7 @@ struct mytype_bad *next_bad_diag(struct mytype_bad *ptr, struct mytype_bad *new_
   struct list_entry *next_entry = ptr->list.next;
   // This should generate an error because list is not annotated as no_subobject_bounds
   return container_of_safe(next_entry, struct mytype_bad, list);
-  // expected-error@-1{{static_assert failed due to requirement '__builtin_marked_no_subobject_bounds(struct list_entry)' "this type is unsafe for use in containerof() with sub-object bounds. Please mark the member/type with __no_subobject_bounds"}}
+  // expected-error@-1{{static_assert failed due to requirement '__builtin_marked_no_subobject_bounds(struct mytype_bad) || __builtin_marked_no_subobject_bounds(struct list_entry)' "this type is unsafe for use in containerof() with sub-object bounds. Please mark the member/type with __no_subobject_bounds"}}
 }
 
 struct mytype_good {
@@ -91,9 +91,9 @@ struct mytype_good2 *next_good2(struct mytype_good2 *ptr, struct mytype_good2 *n
 
 // This was not previously diagnosed as having the attribute because we didn't unwrap the TypeOfExprType
 struct f {
-  __attribute__((cheri_no_subobject_bounds)) int* m;
+  __attribute__((cheri_no_subobject_bounds)) int* m; // This is nonsense since it applies the attribute to int* not the field!
 };
-_Static_assert(__builtin_marked_no_subobject_bounds(__typeof(((struct f*)0)->m)), "");
+_Static_assert(!__builtin_marked_no_subobject_bounds(__typeof(((struct f*)0)->m)), "");
 struct f2 {
   int* m __attribute__((cheri_no_subobject_bounds));
 };

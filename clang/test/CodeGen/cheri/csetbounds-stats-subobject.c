@@ -76,6 +76,5 @@ void test_subobject_addrof_alignas(struct Nested * __capability cap) {
 // global bounds log should not appear in the hybrid log:
 // HYBRID-CSV-EMPTY:
 
-// PURECAP-CSV-NEXT: 7,12,s,"<somewhere in test_subobject_addrof_alignas>","CHERI sandbox ABI setup","set bounds on AllocaInst onstack128"
 // PURECAP-CSV-NEXT: 2,20,g,"<somewhere in test_subobject_addrof_global>","MipsTargetLowering::lowerGlobalAddress","load of global GlobalStruct (alloc size=20)"
 // PURECAP-CSV-EMPTY:

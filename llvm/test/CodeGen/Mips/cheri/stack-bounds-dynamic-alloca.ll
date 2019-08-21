@@ -39,7 +39,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    ret i32 123
 ; ASM-LABEL: alloca_in_entry:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|120]]
+; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_in_entry)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_in_entry)))
@@ -75,7 +75,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:  .LBB0_5: # %exit
 ; ASM-NEXT:    addiu $2, $zero, 123
 ; ASM-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
 ;
@@ -88,7 +88,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    beqz $2, .LBB0_2
 ; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
 ; ASM-OPT-NEXT:  # %bb.1: # %do_alloca
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-OPT-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; ASM-OPT-NEXT:    daddiu $1, $zero, 1234
 ; ASM-OPT-NEXT:    csd $1, $zero, 8($c11)
@@ -96,7 +96,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    cjalr $c12, $c17
 ; ASM-OPT-NEXT:    csetbounds $c3, $c11, 16
 ; ASM-OPT-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; ASM-OPT-NEXT:  .LBB0_2: # %exit
 ; ASM-OPT-NEXT:    cjr $c17
 ; ASM-OPT-NEXT:    addiu $2, $zero, 123
@@ -150,7 +150,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ;
 ; ASM-LABEL: alloca_not_in_entry:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|160]]
+; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 4]]($c11)
 ; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
 ; ASM-NEXT:    cincoffset $c24, $c11, $zero
@@ -174,21 +174,21 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    csetoffset $c1, $c1, $1
 ; ASM-NEXT:    csetbounds $c2, $c1, 16
 ; ASM-NEXT:    cmove $c11, $c1
-; ASM-NEXT:    csetbounds $c3, $c2, 16
+; ASM-NEXT:    cmove $c1, $c2
 ; ASM-NEXT:    csc $c2, $zero, 16($c24) # 16-byte Folded Spill
-; ASM-NEXT:    csc $c3, $zero, 0($c24) # 16-byte Folded Spill
+; ASM-NEXT:    csc $c1, $zero, 0($c24) # 16-byte Folded Spill
 ; ASM-NEXT:    b .LBB1_3
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB1_3: # %use_alloca_no_bounds
 ; ASM-NEXT:    daddiu $1, $zero, 1234
-; ASM-NEXT:    clc $c1, $zero, 16($c24) # 16-byte Folded Reload
+; ASM-NEXT:    clc $c1, $zero, 0($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    csd $1, $zero, 8($c1)
 ; ASM-NEXT:    b .LBB1_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB1_4: # %use_alloca_need_bounds
 ; ASM-NEXT:    clc $c1, $zero, 32($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
-; ASM-NEXT:    clc $c3, $zero, 0($c24) # 16-byte Folded Reload
+; ASM-NEXT:    clc $c3, $zero, 16($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    cgetnull $c13
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
@@ -199,7 +199,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    cincoffset $c11, $c24, $zero
 ; ASM-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
 ; ASM-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 4]]($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
 ;
@@ -212,24 +212,23 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    beqz $2, .LBB1_2
 ; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
 ; ASM-OPT-NEXT:  # %bb.1: # %do_alloca
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-OPT-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
 ; ASM-OPT-NEXT:    csc $c17, $zero, 0($c11)
 ; ASM-OPT-NEXT:    cincoffset $c24, $c11, $zero
 ; ASM-OPT-NEXT:    cgetoffset $1, $c11
 ; ASM-OPT-NEXT:    daddiu $1, $1, -16
 ; ASM-OPT-NEXT:    csetoffset $c2, $c11, $1
-; ASM-OPT-NEXT:    csetbounds $c4, $c2, 16
-; ASM-OPT-NEXT:    cmove $c11, $c2
+; ASM-OPT-NEXT:    csetbounds $c3, $c2, 16
 ; ASM-OPT-NEXT:    daddiu $1, $zero, 1234
-; ASM-OPT-NEXT:    csd $1, $zero, 8($c4)
+; ASM-OPT-NEXT:    csd $1, $zero, 8($c3)
 ; ASM-OPT-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
 ; ASM-OPT-NEXT:    cjalr $c12, $c17
-; ASM-OPT-NEXT:    csetbounds $c3, $c4, 16
+; ASM-OPT-NEXT:    cmove $c11, $c2
 ; ASM-OPT-NEXT:    cincoffset $c11, $c24, $zero
 ; ASM-OPT-NEXT:    clc $c17, $zero, 0($c11)
 ; ASM-OPT-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; ASM-OPT-NEXT:  .LBB1_2: # %exit
 ; ASM-OPT-NEXT:    cjr $c17
 ; ASM-OPT-NEXT:    addiu $2, $zero, 123
@@ -283,7 +282,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ;
 ; ASM-LABEL: crash_reproducer:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|160]]
+; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 4]]($c11)
 ; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
 ; ASM-NEXT:    cincoffset $c24, $c11, $zero
@@ -309,8 +308,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    csetoffset $c1, $c1, $1
 ; ASM-NEXT:    csetbounds $c2, $c1, 16
 ; ASM-NEXT:    cmove $c11, $c1
-; ASM-NEXT:    csetbounds $c1, $c2, 16
-; ASM-NEXT:    csc $c1, $zero, 16($c24) # 16-byte Folded Spill
+; ASM-NEXT:    csc $c2, $zero, 16($c24) # 16-byte Folded Spill
 ; ASM-NEXT:    b .LBB2_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB2_4: # %while.end.loopexit
@@ -329,7 +327,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    cincoffset $c11, $c24, $zero
 ; ASM-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
 ; ASM-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 4]]($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
 ;
@@ -342,7 +340,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    bnez $2, .LBB2_2
 ; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
 ; ASM-OPT-NEXT:  # %bb.1: # %while.body
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-OPT-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
 ; ASM-OPT-NEXT:    csc $c17, $zero, 0($c11)
 ; ASM-OPT-NEXT:    cincoffset $c24, $c11, $zero
@@ -350,16 +348,15 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    daddiu $1, $1, -16
 ; ASM-OPT-NEXT:    csetoffset $c2, $c11, $1
 ; ASM-OPT-NEXT:    csetbounds $c3, $c2, 16
-; ASM-OPT-NEXT:    cmove $c11, $c2
 ; ASM-OPT-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
 ; ASM-OPT-NEXT:    cjalr $c12, $c17
-; ASM-OPT-NEXT:    csetbounds $c3, $c3, 16
+; ASM-OPT-NEXT:    cmove $c11, $c2
 ; ASM-OPT-NEXT:    addiu $2, $2, 1234
 ; ASM-OPT-NEXT:    cincoffset $c11, $c24, $zero
 ; ASM-OPT-NEXT:    clc $c17, $zero, 0($c11)
 ; ASM-OPT-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
 ; ASM-OPT-NEXT:    cjr $c17
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; ASM-OPT-NEXT:  .LBB2_2: # %entry.while.end_crit_edge
 ; ASM-OPT-NEXT:    .insn
 
