@@ -1,33 +1,42 @@
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/DataLayout.h"
 
 namespace llvm {
 
-class StackAllocNeedBoundsChecker {
+class CheriNeedBoundsChecker {
 public:
-  StackAllocNeedBoundsChecker(AllocaInst *AI, const DataLayout &DL)
-      : AI(AI), DL(DL) {
-    AllocaSize = AI->getAllocationSizeInBits(DL);
+  CheriNeedBoundsChecker(AllocaInst *AI, const DataLayout &DL) : I(AI), DL(DL) {
+    auto AllocaSize = AI->getAllocationSizeInBits(DL);
+    if (AllocaSize)
+      MinSizeInBytes = *AllocaSize / 8;
+    PointerAS = AI->getType()->getAddressSpace();
   }
-  bool check(const Use &U);
+  CheriNeedBoundsChecker(Instruction *I, Optional<uint64_t> MinSize,
+                         const DataLayout &DL)
+      : I(I), DL(DL), MinSizeInBytes(MinSize) {
+    assert(I->getType()->isPointerTy());
+    PointerAS = I->getType()->getPointerAddressSpace();
+  }
+  bool check(const Use &U) const;
   void findUsesThatNeedBounds(SmallVectorImpl<const Use *> *UsesThatNeedBounds,
-                              bool BoundAllUses, bool *MustUseSingleIntrinsic);
+                              bool BoundAllUses,
+                              bool *MustUseSingleIntrinsic) const;
+  bool anyUseNeedsBounds() const;
 
 private:
-  bool useNeedsBounds(const Use &U, const APInt &CurrentGEPOffset, unsigned Depth);
-  bool anyUserNeedsBounds(const Instruction *I, const APInt &CurrentGEPOffset, unsigned Depth);
-  bool canLoadStoreBeOutOfBounds(const Instruction *I, const Use& U, const APInt &CurrentGEPOffset, unsigned Depth);
+  bool useNeedsBounds(const Use &U, const APInt &CurrentGEPOffset,
+                      unsigned Depth) const;
+  bool anyUserNeedsBounds(const Instruction *I, const APInt &CurrentGEPOffset,
+                          unsigned Depth) const;
+  bool canLoadStoreBeOutOfBounds(const Instruction *I, const Use &U,
+                                 const APInt &CurrentGEPOffset,
+                                 unsigned Depth) const;
 
-  const AllocaInst *AI;
+  const Instruction *I;
   const DataLayout &DL;
-  Optional<uint64_t> AllocaSize;
+  Optional<uint64_t> MinSizeInBytes;
+  unsigned PointerAS = 0;
 };
-
-// Returns true if a CSetBounds of size @p Size is safe to omit for user @p User
-// and otherwise false.
-// Examples include csetbounds instruction on allocas that are only accessed
-// at statically known in-bounds offsets.
-bool isSafeToOmitCheriSetBounds(const Instruction *User, const Value *Src, const Value* Size);
 
 } // namespace llvm

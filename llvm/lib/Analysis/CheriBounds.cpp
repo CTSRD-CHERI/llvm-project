@@ -1,7 +1,7 @@
 #include "llvm/Analysis/CheriBounds.h"
 #include "llvm/IR/Intrinsics.h"
-#include "llvm/Support/Format.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Format.h"
 
 // TODO: replace this with cheri-bounds
 #define DEBUG_TYPE "cheri-purecap-alloca"
@@ -11,16 +11,14 @@ using namespace llvm;
 #define DBG_INDENTED(...)                                                      \
   DBG_MESSAGE(llvm::right_justify("-", Depth + 1) << __VA_ARGS__)
 
-
 // This is similar to CaptureTracking but we treat way more cases as "captured"
-bool StackAllocNeedBoundsChecker::check(const Use &U) {
-  if (!AllocaSize) {
+bool CheriNeedBoundsChecker::check(const Use &U) const {
+  if (!MinSizeInBytes) {
     DBG_MESSAGE("dyanmic size alloca always needs bounds: ";
                 U.getUser()->dump());
     return true;
   }
-  APInt CurrentGEPOffset =
-      APInt(DL.getIndexSizeInBits(AI->getType()->getAddressSpace()), 0);
+  APInt CurrentGEPOffset = APInt(DL.getIndexSizeInBits(PointerAS), 0);
   bool Result = useNeedsBounds(U, CurrentGEPOffset, 1);
   if (Result) {
     DBG_MESSAGE("Found alloca use that needs bounds: "; U.getUser()->dump());
@@ -28,11 +26,11 @@ bool StackAllocNeedBoundsChecker::check(const Use &U) {
   return Result;
 }
 
-void StackAllocNeedBoundsChecker::findUsesThatNeedBounds(
+void CheriNeedBoundsChecker::findUsesThatNeedBounds(
     SmallVectorImpl<const Use *> *UsesThatNeedBounds, bool BoundAllUses,
-    bool *MustUseSingleIntrinsic) {
+    bool *MustUseSingleIntrinsic) const {
   // TODO: don't replace load/store instructions with the bounded value
-  for (const Use &U : AI->uses()) {
+  for (const Use &U : I->uses()) {
     if (BoundAllUses || check(U)) {
       UsesThatNeedBounds->push_back(&U);
 #if 0 // This should now be fixed
@@ -45,9 +43,19 @@ void StackAllocNeedBoundsChecker::findUsesThatNeedBounds(
   }
 }
 
-bool StackAllocNeedBoundsChecker::useNeedsBounds(const Use &U,
-                                                 const APInt &CurrentGEPOffset,
-                                                 unsigned Depth) {
+bool CheriNeedBoundsChecker::anyUseNeedsBounds() const {
+  // TODO: don't replace load/store instructions with the bounded value
+  for (const Use &U : I->uses()) {
+    if (check(U)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
+                                            const APInt &CurrentGEPOffset,
+                                            unsigned Depth) const {
   const Instruction *I = cast<Instruction>(U.getUser());
   // Value *V = U->get();
   if (Depth > 10) {
@@ -100,10 +108,9 @@ bool StackAllocNeedBoundsChecker::useNeedsBounds(const Use &U,
     case Intrinsic::cheri_cap_bounds_set_exact: {
       auto SizeArg = I->getOperand(1);
       if (auto CI = dyn_cast<ConstantInt>(SizeArg)) {
-        if (AllocaSize) {
-          uint64_t AllocaSizeInBytes = (*AllocaSize / 8);
+        if (MinSizeInBytes) {
           APInt Zero(CurrentGEPOffset.getBitWidth(), 0);
-          APInt Max(CurrentGEPOffset.getBitWidth(), AllocaSizeInBytes);
+          APInt Max(CurrentGEPOffset.getBitWidth(), *MinSizeInBytes);
           APInt LastAddr = CurrentGEPOffset + CI->getValue();
           if (CurrentGEPOffset.slt(Zero) || LastAddr.sgt(Max)) {
             DBG_INDENTED(I->getFunction()->getName()
@@ -113,9 +120,9 @@ bool StackAllocNeedBoundsChecker::useNeedsBounds(const Use &U,
             return true;
           } else {
             // TODO: elide bounds if size <= less and all uses are in bounds
-            DBG_INDENTED("No need for stack bounds for use insetbounds with "
+            DBG_INDENTED("No need for stack bounds for use in setbounds with "
                          "smaller or equal size: original size="
-                             << AllocaSize
+                             << MinSizeInBytes
                              << ", setbounds size=" << CI->getValue()
                              << " current offset=" << CurrentGEPOffset << ":";
                          I->dump());
@@ -230,8 +237,9 @@ bool StackAllocNeedBoundsChecker::useNeedsBounds(const Use &U,
   }
 }
 
-bool StackAllocNeedBoundsChecker::anyUserNeedsBounds(
-    const Instruction *I, const APInt &CurrentGEPOffset, unsigned Depth) {
+bool CheriNeedBoundsChecker::anyUserNeedsBounds(const Instruction *I,
+                                                const APInt &CurrentGEPOffset,
+                                                unsigned Depth) const {
   DBG_INDENTED("Checking if " << I->getOpcodeName() << " needs stack bounds: ";
                I->dump());
   for (const Use &U : I->uses()) {
@@ -247,14 +255,14 @@ bool StackAllocNeedBoundsChecker::anyUserNeedsBounds(
   return false;
 }
 
-bool StackAllocNeedBoundsChecker::canLoadStoreBeOutOfBounds(
+bool CheriNeedBoundsChecker::canLoadStoreBeOutOfBounds(
     const Instruction *I, const Use &U, const APInt &CurrentGEPOffset,
-    unsigned Depth) {
+    unsigned Depth) const {
   DBG_INDENTED("Checking if load/store needs bounds (GEP offset is "
                    << CurrentGEPOffset << "): ";
                I->dump());
   Depth++; // indent the next debug message more
-  assert(AllocaSize && "dynamic size alloca should have been checked earlier");
+  assert(MinSizeInBytes && "dynamic size alloca should have been checked earlier");
   Type *LoadStoreType = nullptr;
   if (auto CmpXchg = dyn_cast<AtomicCmpXchgInst>(I)) {
     if (U.get() != CmpXchg->getPointerOperand()) {
@@ -284,14 +292,12 @@ bool StackAllocNeedBoundsChecker::canLoadStoreBeOutOfBounds(
     llvm_unreachable("Invalid load/store type");
   }
   auto Size = DL.getTypeStoreSize(LoadStoreType);
-  assert((*AllocaSize % 8) == 0 && "AllocaSize must be a multiple of 8 bits");
-  uint64_t AllocaSizeInBytes = (*AllocaSize / 8);
   DBG_INDENTED("Load/store size="
-                   << Size << ", alloca size=" << AllocaSizeInBytes
+                   << Size << ", alloca size=" << MinSizeInBytes
                    << ", current GEP offset=" << CurrentGEPOffset << " for ";
                LoadStoreType->dump(););
   APInt Zero(CurrentGEPOffset.getBitWidth(), 0);
-  APInt Max(CurrentGEPOffset.getBitWidth(), AllocaSizeInBytes);
+  APInt Max(CurrentGEPOffset.getBitWidth(), *MinSizeInBytes);
   APInt LastAddr = CurrentGEPOffset + Size;
   if (CurrentGEPOffset.slt(Zero) || LastAddr.sgt(Max)) {
     DBG_INDENTED(I->getFunction()->getName()

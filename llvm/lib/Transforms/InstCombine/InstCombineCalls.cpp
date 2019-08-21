@@ -22,6 +22,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/CheriBounds.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/Loads.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
@@ -2415,6 +2416,40 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
         II->setArgOperand(0, M0->getArgOperand(0));
         return II;
       }
+    }
+    // Check if we can completely omit the setbounds (all uses are known to be
+    // in bounds and we know that the current source value grants access to the
+    // same range
+    // We don't do this analysis for cheri_bounded_stack_cap since it should
+    // already have been done when creating the bounded_stack_cap
+    // TODO: can do this for csetboundsexact if size < minimum exactly representable size
+    if (IID == Intrinsic::cheri_bounded_stack_cap || IID == Intrinsic::cheri_cap_bounds_set_exact)
+      break;
+    if (!isa<ConstantInt>(Op1))
+      break; // Can't perform this optimization for non-constant sizes
+    uint64_t SetBoundsSize = cast<ConstantInt>(Op1)->getZExtValue();
+    // TODO: do it for non-alloca insts
+    // Infer the minimum accessible bytes:
+    Optional<uint64_t> MinAccessibleBytes;
+    if (auto AI = dyn_cast<AllocaInst>(Op0)) {
+      auto AllocaSizeBits = AI->getAllocationSizeInBits(DL);
+      if (!AllocaSizeBits)
+        break; // Unknown size of alloca -> can't optimize
+      MinAccessibleBytes = *AllocaSizeBits / 8;
+    }
+    if (!MinAccessibleBytes || SetBoundsSize > *MinAccessibleBytes) {
+      LLVM_DEBUG(dbgs() << " Can't optimize away potentially trapping setbounds: "; CI.dump());
+      break;
+    }
+    CheriNeedBoundsChecker C(II, SetBoundsSize, DL);
+    if (C.anyUseNeedsBounds()) {
+      LLVM_DEBUG(dbgs() << " At least one use needs bounds -> can't optimize away setbounds: "; CI.dump());
+      break;
+    } else {
+      LLVM_DEBUG(dbgs() << " No uses need bounds, will remove: "; CI.dump());
+      // Note: we fetch the operand here again, since Op0 might have a different
+      // pointer type than i8*. Unncessary casts will be removed later.
+      return replaceInstUsesWith(CI, II->getArgOperand(0));
     }
     break;
   }

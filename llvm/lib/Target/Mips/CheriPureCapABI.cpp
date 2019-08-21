@@ -207,7 +207,7 @@ public:
       if (BoundsMode == StackBoundsMethod::Never) {
         NeedBounds = false;
       } else {
-        StackAllocNeedBoundsChecker BoundsChecker(AI, DL);
+        CheriNeedBoundsChecker BoundsChecker(AI, DL);
         // With -O0 or =always we set bounds on every stack allocation even
         // if it is not necessary
         bool BoundAll = IsOptNone || BoundsMode == StackBoundsMethod::AllUses;
