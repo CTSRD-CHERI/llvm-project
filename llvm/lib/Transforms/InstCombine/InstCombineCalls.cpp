@@ -2423,8 +2423,12 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     // We don't do this analysis for cheri_bounded_stack_cap since it should
     // already have been done when creating the bounded_stack_cap
     // TODO: can do this for csetboundsexact if size < minimum exactly representable size
-    if (IID == Intrinsic::cheri_bounded_stack_cap || IID == Intrinsic::cheri_cap_bounds_set_exact)
+    if (IID == Intrinsic::cheri_cap_bounds_set_exact) {
+      LLVM_DEBUG(dbgs() << " Can't optimize away setbounds exact uses since "
+                           "size might not be representable: ";
+                 CI.dump());
       break;
+    }
     if (!isa<ConstantInt>(Op1))
       break; // Can't perform this optimization for non-constant sizes
     uint64_t SetBoundsSize = cast<ConstantInt>(Op1)->getZExtValue();
@@ -2436,6 +2440,20 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       if (!AllocaSizeBits)
         break; // Unknown size of alloca -> can't optimize
       MinAccessibleBytes = *AllocaSizeBits / 8;
+    }
+    if (auto SrcII = dyn_cast<IntrinsicInst>(Op0)) {
+      // If the source was a csetbounds(x, len), we know that at least len bytes
+      // will be accessible since otherwise the csetbounds would have trapped.
+      if (SrcII->getIntrinsicID() == Intrinsic::cheri_bounded_stack_cap ||
+          SrcII->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set_exact ||
+          SrcII->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set) {
+        if (auto SrcSize = dyn_cast<ConstantInt>(SrcII->getArgOperand(1))) {
+          MinAccessibleBytes = SrcSize->getZExtValue();
+        }
+      }
+      // Otherwise we don't know anything about the minimum size
+      // TODO: could look through GEPs, cheri intrinsics, etc. to compute the
+      // actual minimum size but I'm not sure this is a big performance win.
     }
     if (!MinAccessibleBytes || SetBoundsSize > *MinAccessibleBytes) {
       LLVM_DEBUG(dbgs() << " Can't optimize away potentially trapping setbounds: "; CI.dump());

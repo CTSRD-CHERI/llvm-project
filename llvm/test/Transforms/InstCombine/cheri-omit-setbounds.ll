@@ -106,10 +106,7 @@ define signext i32 @bounded_arg(i32 addrspace(200)* %value) local_unnamed_addr a
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[VALUE:%.*]] to i8 addrspace(200)*
 ; CHECK-NEXT:    [[LARGE_BOUNDS:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 8)
-; CHECK-NEXT:    [[LARGE_BITCAST:%.*]] = bitcast i8 addrspace(200)* [[LARGE_BOUNDS]] to i32 addrspace(200)*
-; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[LARGE_BITCAST]], align 4
-; CHECK-NEXT:    [[SMALL_BOUNDS:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[LARGE_BOUNDS]], i64 4)
-; CHECK-NEXT:    [[SMALL_BITCAST:%.*]] = bitcast i8 addrspace(200)* [[SMALL_BOUNDS]] to i32 addrspace(200)*
+; CHECK-NEXT:    [[SMALL_BITCAST:%.*]] = bitcast i8 addrspace(200)* [[LARGE_BOUNDS]] to i32 addrspace(200)*
 ; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[SMALL_BITCAST]], align 4
 ; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    ret i32 [[RESULT]]
@@ -152,18 +149,14 @@ entry:
 }
 
 
+; Here we know that the final store is within the bounds of the setbounds(5) so we can use the source value (setbounds(10)) instead
 define signext i32 @csetbounds_sequence(i32 addrspace(200)* %value) local_unnamed_addr addrspace(200) #5 {
 ; CHECK-LABEL: @csetbounds_sequence(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[VALUE:%.*]] to i8 addrspace(200)*
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[I8]], i64 10)
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 9)
-; CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP1]], i64 8)
-; CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP2]], i64 7)
-; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP3]], i64 6)
-; CHECK-NEXT:    [[FINAL_BOUNDED_VALUE:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP4]], i64 5)
-; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[FINAL_BOUNDED_VALUE]] to i32 addrspace(200)*
+; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
 ; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], align 4
 ; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    ret i32 [[RESULT]]
@@ -183,19 +176,17 @@ entry:
   ret i32 %result
 }
 
+
+; However, we can't if the store is OOB: now we need the original (largest) setbounds and the one at the end.
+; We don't remove the first one since the check if there are at least 10 bytes accessible might be intentional.
+; TODO: could probably remove csetbounds(10) and just do csetbounds(3) since the resulting value is never used...
 define signext i32 @csetbounds_sequence_oob(i32 addrspace(200)* %value) local_unnamed_addr addrspace(200) #5 {
 ; CHECK-LABEL: @csetbounds_sequence_oob(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[VALUE:%.*]] to i8 addrspace(200)*
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[I8]], i64 10)
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 9)
-; CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP1]], i64 8)
-; CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP2]], i64 7)
-; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP3]], i64 6)
-; CHECK-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP4]], i64 5)
-; CHECK-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP5]], i64 4)
-; CHECK-NEXT:    [[FINAL_BOUNDED_VALUE:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP6]], i64 3)
+; CHECK-NEXT:    [[FINAL_BOUNDED_VALUE:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 3)
 ; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[FINAL_BOUNDED_VALUE]] to i32 addrspace(200)*
 ; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], align 4
 ; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
