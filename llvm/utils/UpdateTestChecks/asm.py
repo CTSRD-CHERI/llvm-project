@@ -199,9 +199,9 @@ def offset_to_cap_expr(offset, cap_size):
   if offset == 0:
     return "0"
   elif offset % cap_size == 0:
-    return "[[@EXPR " + str(offset // cap_size) + " * $CAP_SIZE]]"
+    return "[[#CAP_SIZE * " + str(offset // cap_size) + "]]"
   else:
-    return "[[@EXPR " + str(offset // cap_size) + " * $CAP_SIZE + " + str(offset % cap_size) + "]]"
+    return "[[#CAP_SIZE * " + str(offset // cap_size) + " + " + str(offset % cap_size) + "]]"
 
 
 def unchanged_match(match):
@@ -250,7 +250,7 @@ def do_save_load_dword_sub(match):
   if difference % 8 != 0:
     print("cld/csd: modulo wrong:" + unchanged_match(match))
     return unchanged_match(match)
-  result = insn + " " + reg + ", $zero, " + offset_sign + "[[@EXPR STACKFRAME_SIZE - " + str(difference) + "]]($c11)"
+  result = insn + " " + reg + ", $zero, " + offset_sign + "[[# STACKFRAME_SIZE - " + str(difference) + "]]($c11)"
   # print('replacing ', match.string[match.start():match.end()], 'with', result)
   return result
 
@@ -272,9 +272,10 @@ def do_stackframe_size_sub_impl(match, with_cfa):
   last_frame_size = int(size)
   # assume double the size for CHERI256 stackframe:
   size_str = size + "|" + str(int(size) * 2)
-  result = instr + ", -[[STACKFRAME_SIZE:" + size_str + "]]\n"
+  #result = instr + ", -[[#STACKFRAME_SIZE:" + size_str + "]]\n"
+  result = instr + ", -[[#STACKFRAME_SIZE:]]\n"
   if with_cfa:
-    result += "  .cfi_def_cfa_offset [[STACKFRAME_SIZE]]"
+    result += "  .cfi_def_cfa_offset [[#STACKFRAME_SIZE]]"
   return result
 
 
@@ -315,11 +316,11 @@ def scrub_asm_mips(asm, args):
   cfi_offset_regex = re.compile(r'\.cfi_offset (?P<reg>[$\w]+), -(?P<offset>\d+)')
   asm = cfi_offset_regex.sub(do_cfi_offset_sub, asm)
   stackframe_inc_return_regex = re.compile(r'cjr \$c17\n *cincoffset \$c11, \$c11, \d+')
-  asm = stackframe_inc_return_regex.sub('cjr $c17\n  cincoffset $c11, $c11, [[STACKFRAME_SIZE]]', asm)
+  asm = stackframe_inc_return_regex.sub('cjr $c17\n  cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]', asm)
   # Finally try to replace all other stack cincoffsets
   if last_frame_size:
-    asm = re.sub("cincoffset\s+\$c11,\s+\$c11, " + str(last_frame_size), "cincoffset $c11, $c11, [[STACKFRAME_SIZE]]", asm)
-    asm = re.sub("daddiu\s+\$sp,\s+\$sp, " + str(last_frame_size), "daddiu $sp, $sp, [[STACKFRAME_SIZE]]", asm)
+    asm = re.sub("cincoffset\s+\$c11,\s+\$c11, " + str(last_frame_size), "cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]", asm)
+    asm = re.sub("daddiu\s+\$sp,\s+\$sp, " + str(last_frame_size), "daddiu $sp, $sp, [[#STACKFRAME_SIZE]]", asm)
   return asm
 
 def scrub_asm_riscv(asm, args):
