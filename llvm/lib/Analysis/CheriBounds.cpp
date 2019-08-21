@@ -97,8 +97,35 @@ bool StackAllocNeedBoundsChecker::useNeedsBounds(const Use &U,
 
     case Intrinsic::cheri_bounded_stack_cap:
     case Intrinsic::cheri_cap_bounds_set:
-    case Intrinsic::cheri_cap_bounds_set_exact:
-    // TODO: elide bounds if size <= less and all uses are in bounds
+    case Intrinsic::cheri_cap_bounds_set_exact: {
+      auto SizeArg = I->getOperand(1);
+      if (auto CI = dyn_cast<ConstantInt>(SizeArg)) {
+        if (AllocaSize) {
+          uint64_t AllocaSizeInBytes = (*AllocaSize / 8);
+          APInt Zero(CurrentGEPOffset.getBitWidth(), 0);
+          APInt Max(CurrentGEPOffset.getBitWidth(), AllocaSizeInBytes);
+          APInt LastAddr = CurrentGEPOffset + CI->getValue();
+          if (CurrentGEPOffset.slt(Zero) || LastAddr.sgt(Max)) {
+            DBG_INDENTED(I->getFunction()->getName()
+                             << ": setbounds use offset OUT OF BOUNDS and will "
+                                "trap -> adding csetbounds: ";
+                         I->dump());
+            return true;
+          } else {
+            // TODO: elide bounds if size <= less and all uses are in bounds
+            DBG_INDENTED("No need for stack bounds for use insetbounds with "
+                         "smaller or equal size: original size="
+                             << AllocaSize
+                             << ", setbounds size=" << CI->getValue()
+                             << " current offset=" << CurrentGEPOffset << ":";
+                         I->dump());
+            return false;
+          }
+        }
+      }
+      DBG_INDENTED("Adding stack bounds for unknown csetbounds: "; I->dump());
+      return true;
+    }
     case Intrinsic::cheri_cap_address_get:
     case Intrinsic::cheri_cap_address_set:
     case Intrinsic::cheri_cap_base_get:
