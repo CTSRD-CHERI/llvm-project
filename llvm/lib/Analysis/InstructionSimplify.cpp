@@ -51,12 +51,6 @@ enum { RecursionLimit = 3 };
 STATISTIC(NumExpand,  "Number of expansions");
 STATISTIC(NumReassoc, "Number of reassociations");
 
-// Also used by instcombine
-cl::opt<bool> CanSimplifyCheriSetBounds(
-    "simplify-cheri-setbounds", cl::Hidden, cl::init(true), cl::ZeroOrMore,
-    cl::desc("Allow eliminating redundant CHERI bounds setting intrinisics"));
-
-
 
 static Value *SimplifyAndInst(Value *, Value *, const SimplifyQuery &, unsigned);
 static Value *simplifyUnOp(unsigned, Value *, const SimplifyQuery &, unsigned);
@@ -4887,9 +4881,6 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
   // This can happen with subobject bounds
   case Intrinsic::cheri_cap_bounds_set:
   case Intrinsic::cheri_cap_bounds_set_exact:
-    // cl::opt exists to allow benchmarking effectiveness of this transformation
-    if (!CanSimplifyCheriSetBounds)
-      break;
     // The following happens quite often with sub-object bounds since we set
     // bounds on array decay and on array subscripts -> two setbounds with
     // identical arguments that can be folded to a single one

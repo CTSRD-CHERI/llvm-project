@@ -80,8 +80,6 @@ static cl::opt<unsigned> GuardWideningWindow(
     cl::desc("How wide an instruction window to bypass looking for "
              "another guard"));
 
-extern cl::opt<bool> CanSimplifyCheriSetBounds;
-
 /// Return the specified type promoted as it would be to pass though a va_arg
 /// area.
 static Type *getPromotedType(Type *Ty) {
@@ -2391,8 +2389,6 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   // This can happen with subobject bounds
   case Intrinsic::cheri_cap_bounds_set:
   case Intrinsic::cheri_cap_bounds_set_exact: {
-    if (!CanSimplifyCheriSetBounds)
-      break; // To allow benchmarking effectiveness of this transformation
     // The following happens quite often with sub-object bounds since we set
     // bounds on array decay and on array subscripts -> two setbounds with
     // identical arguments that can be folded to a single one
