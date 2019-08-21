@@ -41,10 +41,6 @@ class CombinedAllocator {
     secondary_.Init();
   }
 
-  bool CanAllocate(usize size, usize alignment) {
-    return primary_.CanAllocate(size, alignment);
-  }
-
   void *Allocate(AllocatorCache *cache, usize size, usize alignment) {
     // Returning 0 on malloc(0) may break a lot of code.
     if (size == 0)
@@ -197,10 +193,6 @@ class CombinedAllocator {
     primary_.ForEachChunk(callback, arg);
     secondary_.ForEachChunk(callback, arg);
   }
-
-  usize KNumClasses() { return primary_.KNumClasses(); }
-  usize KMaxSize() { return primary_.KMaxSize(); }
-  usize ClassID(usize size) { return primary_.ClassID(size); }
 
  private:
   PrimaryAllocator primary_;

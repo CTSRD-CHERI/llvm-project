@@ -319,9 +319,6 @@ class SizeClassAllocator64 {
   static const usize kNumClasses = SizeClassMap::kNumClasses;
   static const usize kNumClassesRounded = SizeClassMap::kNumClassesRounded;
 
-  static usize KNumClasses() { return SizeClassMap::kNumClasses; }
-  static usize KMaxSize() { return SizeClassMap::kMaxSize; }
-
   // A packed array of counters. Each counter occupies 2^n bits, enough to store
   // counter's max_value. Ctor will try to allocate the required buffer via
   // mapper->MapPackedCounterArrayBuffer and the caller is expected to check
