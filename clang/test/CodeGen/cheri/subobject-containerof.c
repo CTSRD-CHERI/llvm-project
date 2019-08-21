@@ -1,3 +1,4 @@
+// RUN: %cheri_purecap_cc1 -std=gnu99 -cheri-bounds=conservative %s -fcolor-diagnostics -ast-dump
 // RUN: %cheri_purecap_cc1 -std=gnu99 -cheri-bounds=conservative %s -verify=nobounds
 // nobounds-no-diagnostics
 // RUN: %cheri_purecap_cc1 -std=gnu99 -cheri-bounds=subobject-safe %s -verify=expected
@@ -12,17 +13,19 @@
 	((type *)((const char*)__x - offsetof(type, member))); })
 
 #ifdef __CHERI_SUBOBJECT_BOUNDS__
-#define check_safe_type_for_containerof(type)                \
-  _Static_assert(__builtin_marked_no_subobject_bounds(type), \
-                 "this type is unsafe for use in containerof() with sub-object bounds. Please mark the member/type with __no_subobject_bounds")
+#define __check_safe_type_for_containerof(type, member)				\
+    _Static_assert(__builtin_marked_no_subobject_bounds(type) ||		\
+	__builtin_marked_no_subobject_bounds(__typeof(((type *)0)->member)),	\
+	"this type is unsafe for use in containerof() with sub-object"		\
+	"bounds. Please mark the member/type with __no_subobject_bounds")
 #else
 // No checks without sub-object bounds
-#define check_safe_type_for_containerof(type)
+#define __check_safe_type_for_containerof(type, member)
 #endif
 
 #define container_of_safe(ptr, type, member) ({				\
 	const __typeof(((type *)0)->member) *__x = (ptr);		\
-	check_safe_type_for_containerof(__typeof(((type *)0)->member));        \
+	__check_safe_type_for_containerof(type, member);		\
 	((type *)((const char*)__x - offsetof(type, member))); })
 
 struct list_entry {
@@ -85,3 +88,19 @@ struct mytype_good2 *next_good2(struct mytype_good2 *ptr, struct mytype_good2 *n
   // Should not emit a diagnostic
   return container_of_safe(next_entry, struct mytype_good2, list);
 }
+
+// This was not previously diagnosed as having the attribute because we didn't unwrap the TypeOfExprType
+struct f {
+  __attribute__((cheri_no_subobject_bounds)) int* m;
+};
+_Static_assert(__builtin_marked_no_subobject_bounds(__typeof(((struct f*)0)->m)), "");
+struct f2 {
+  int* m __attribute__((cheri_no_subobject_bounds));
+};
+_Static_assert(__builtin_marked_no_subobject_bounds(__typeof(((struct f2*)0)->m)), "");
+
+// It worked fine with non-pointer types
+struct f3 {
+  __attribute__((cheri_no_subobject_bounds)) int m;
+};
+_Static_assert(__builtin_marked_no_subobject_bounds(__typeof(((struct f3*)0)->m)), "");

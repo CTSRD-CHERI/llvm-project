@@ -286,6 +286,54 @@ void test_cheri_unbounded_addressof(struct ip *ip) {
   // CHECK-NEXT: address 'struct in_addr' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
 }
 
+struct with_2d_array {
+  int before;
+  int array2d[3][4];
+  int after;
+};
+
+/* Work around bug in sub-object bounds */
+#define __array2d_start_pointer(expr) &__builtin_no_change_bounds(__builtin_no_change_bounds(expr[0])[0])
+
+void test_multidim_array(struct with_2d_array* s, int index) {
+  // to get the start of a 2d array you have to use &array2d[0][0]
+  do_stuff(&s->array2d[0][0]);
+  // this is fine: expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int [3][4]') to 48 bytes}}
+  // this is not fine! expected-remark@-2{{setting sub-object bounds for array subscript on 'int [4]' to 16 bytes}}
+  // this is not fine! expected-remark@-3{{setting sub-object bounds for pointer to 'int' to 4 byte}}
+  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int [3][4]' subscript to 48
+  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: subscript on constant size array -> setting bounds for 'int [4]' subscript to 16
+  // CHECK-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
+
+  // Also wrong:
+  do_stuff(&__builtin_no_change_bounds(s->array2d)[0][0]);
+  // expected-remark@-1{{not setting bounds for array subscript on 'int [3][4]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-2{{setting sub-object bounds for array subscript on 'int [4]' to 16 bytes}}
+  // expected-remark@-3{{setting sub-object bounds for pointer to 'int' to 4 byte}}
+  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: subscript on constant size array -> setting bounds for 'int [4]' subscript to 16
+  // CHECK-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
+
+  // This works:
+  do_stuff(&__builtin_no_change_bounds(__builtin_no_change_bounds(s->array2d[0])[0]));
+  // expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int [3][4]') to 48 bytes}}
+  // expected-remark@-2{{not setting bounds for array subscript on 'int [4]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-3{{not setting bounds for pointer to 'int' (__builtin_no_change_bounds() expression)}}
+  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int [3][4]' subscript to 48
+  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: address 'int' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+
+  do_stuff(__array2d_start_pointer(s->array2d));
+  // expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int [3][4]') to 48 bytes}}
+  // expected-remark@-2{{not setting bounds for array subscript on 'int [4]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-3{{not setting bounds for pointer to 'int' (__builtin_no_change_bounds() expression)}}
+  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int [3][4]' subscript to 48
+  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: address 'int' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+
+  // do_stuff(&s->array2d[index][index]);
+}
+
 #ifdef NOTYET
 struct TestStruct {
   int first;

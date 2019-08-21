@@ -194,6 +194,15 @@ void test2(int *array) {
   // DBG-VERY-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found scalar type -> setting bounds for 'int' address to 4
 }
 
+#ifdef NOTYET
+// FIXME: should handle this case correctly:
+void test_multidim_array(struct with_2d_array* s, int index) {
+  int array2d[3][4];
+  do_stuff(&(array2d)[0][0]));
+  do_stuff(&(array2d)[index][index]));
+}
+#endif
+
 // DBG-LABEL: ... Statistics Collected ...
 // DBG-NOT: cheri-bounds
 // DBG: 8 cheri-bounds     - Number of & operators checked for tightening bounds
