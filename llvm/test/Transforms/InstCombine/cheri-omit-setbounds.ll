@@ -100,3 +100,120 @@ entry:
   %2 = load i32, i32 addrspace(200)* %value, align 4
   ret i32 %2
 }
+
+define signext i32 @bounded_arg(i32 addrspace(200)* %value) local_unnamed_addr addrspace(200) #5 {
+; CHECK-LABEL: @bounded_arg(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[VALUE:%.*]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[LARGE_BOUNDS:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 8)
+; CHECK-NEXT:    [[LARGE_BITCAST:%.*]] = bitcast i8 addrspace(200)* [[LARGE_BOUNDS]] to i32 addrspace(200)*
+; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[LARGE_BITCAST]], align 4
+; CHECK-NEXT:    [[SMALL_BOUNDS:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[LARGE_BOUNDS]], i64 4)
+; CHECK-NEXT:    [[SMALL_BITCAST:%.*]] = bitcast i8 addrspace(200)* [[SMALL_BOUNDS]] to i32 addrspace(200)*
+; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[SMALL_BITCAST]], align 4
+; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    ret i32 [[RESULT]]
+;
+entry:
+  %0 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
+  %large_bounds = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %0, i64 8)
+  %large_bitcast = bitcast i8 addrspace(200)* %large_bounds to i32 addrspace(200)*
+  store i32 1, i32 addrspace(200)* %large_bitcast, align 4
+  %small_bounds = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %large_bounds, i64 4)
+  %small_bitcast = bitcast i8 addrspace(200)* %small_bounds to i32 addrspace(200)*
+  store i32 2, i32 addrspace(200)* %small_bitcast, align 4
+  %result = load i32, i32 addrspace(200)* %value, align 4
+  ret i32 %result
+}
+
+define signext i32 @bounded_arg_too_small(i32 addrspace(200)* %value) local_unnamed_addr addrspace(200) #5 {
+; CHECK-LABEL: @bounded_arg_too_small(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[VALUE:%.*]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[LARGE_BOUNDS:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 3)
+; CHECK-NEXT:    [[LARGE_BITCAST:%.*]] = bitcast i8 addrspace(200)* [[LARGE_BOUNDS]] to i32 addrspace(200)*
+; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[LARGE_BITCAST]], align 4
+; CHECK-NEXT:    [[SMALL_BOUNDS:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[LARGE_BOUNDS]], i64 4)
+; CHECK-NEXT:    [[SMALL_BITCAST:%.*]] = bitcast i8 addrspace(200)* [[SMALL_BOUNDS]] to i32 addrspace(200)*
+; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[SMALL_BITCAST]], align 4
+; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    ret i32 [[RESULT]]
+;
+entry:
+  %0 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
+  %large_bounds = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %0, i64 3)
+  %large_bitcast = bitcast i8 addrspace(200)* %large_bounds to i32 addrspace(200)*
+  store i32 1, i32 addrspace(200)* %large_bitcast, align 4
+  %small_bounds = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %large_bounds, i64 4)
+  %small_bitcast = bitcast i8 addrspace(200)* %small_bounds to i32 addrspace(200)*
+  store i32 2, i32 addrspace(200)* %small_bitcast, align 4
+  %result = load i32, i32 addrspace(200)* %value, align 4
+  ret i32 %result
+}
+
+
+define signext i32 @csetbounds_sequence(i32 addrspace(200)* %value) local_unnamed_addr addrspace(200) #5 {
+; CHECK-LABEL: @csetbounds_sequence(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[VALUE:%.*]] to i8 addrspace(200)*
+; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[I8]], i64 10)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 9)
+; CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP1]], i64 8)
+; CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP2]], i64 7)
+; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP3]], i64 6)
+; CHECK-NEXT:    [[FINAL_BOUNDED_VALUE:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP4]], i64 5)
+; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[FINAL_BOUNDED_VALUE]] to i32 addrspace(200)*
+; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], align 4
+; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    ret i32 [[RESULT]]
+;
+entry:
+  %i8 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
+  store i32 1, i32 addrspace(200)* %value, align 4
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %i8, i64 10)
+  %1 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %0, i64 9)
+  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %1, i64 8)
+  %3 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %2, i64 7)
+  %4 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %3, i64 6)
+  %final_bounded_value = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %4, i64 5)
+  %address.with.bounds = bitcast i8 addrspace(200)* %final_bounded_value to i32 addrspace(200)*
+  store i32 2, i32 addrspace(200)* %address.with.bounds, align 4
+  %result = load i32, i32 addrspace(200)* %value, align 4
+  ret i32 %result
+}
+
+define signext i32 @csetbounds_sequence_oob(i32 addrspace(200)* %value) local_unnamed_addr addrspace(200) #5 {
+; CHECK-LABEL: @csetbounds_sequence_oob(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[VALUE:%.*]] to i8 addrspace(200)*
+; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[I8]], i64 10)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 9)
+; CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP1]], i64 8)
+; CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP2]], i64 7)
+; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP3]], i64 6)
+; CHECK-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP4]], i64 5)
+; CHECK-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP5]], i64 4)
+; CHECK-NEXT:    [[FINAL_BOUNDED_VALUE:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP6]], i64 3)
+; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[FINAL_BOUNDED_VALUE]] to i32 addrspace(200)*
+; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], align 4
+; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
+; CHECK-NEXT:    ret i32 [[RESULT]]
+;
+entry:
+  %i8 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
+  store i32 1, i32 addrspace(200)* %value, align 4
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %i8, i64 10)
+  %1 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %0, i64 9)
+  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %1, i64 8)
+  %3 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %2, i64 7)
+  %4 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %3, i64 6)
+  %5 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %4, i64 5)
+  %6 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %5, i64 4)
+  %final_bounded_value = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %6, i64 3)
+  %address.with.bounds = bitcast i8 addrspace(200)* %final_bounded_value to i32 addrspace(200)*
+  store i32 2, i32 addrspace(200)* %address.with.bounds, align 4
+  %result = load i32, i32 addrspace(200)* %value, align 4
+  ret i32 %result
+}
