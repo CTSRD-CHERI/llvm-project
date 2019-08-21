@@ -1351,6 +1351,56 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
     return DAG.getSetCC(DL, MVT::i1, IntRes,
                         DAG.getConstant(0, DL, VT), ISD::SETNE);
   }
+  case Intrinsic::cheri_cap_bounds_set:
+  case Intrinsic::cheri_cap_bounds_set_exact:
+  case Intrinsic::cheri_bounded_stack_cap: {
+    auto SrcOperand = N->getOperand(1);
+    auto SizeOperand = N->getOperand(2);
+    if (SrcOperand->getOpcode() != ISD::INTRINSIC_WO_CHAIN)
+      break; // Not an intrinisic  node
+    unsigned SrcIID =
+        cast<ConstantSDNode>(SrcOperand->getOperand(0))->getZExtValue();
+    if (SrcIID != Intrinsic::cheri_cap_bounds_set &&
+        SrcIID != Intrinsic::cheri_cap_bounds_set_exact &&
+        SrcIID != Intrinsic::cheri_bounded_stack_cap) {
+      break; // not a setbounds node
+    }
+    if (!DAG.isEqualTo(SizeOperand, SrcOperand->getOperand(2)))
+      break; // not the same size
+    if (SrcIID == IID) {
+      // We can always replace chains of the same intrinsic
+      LLVM_DEBUG(dbgs() << "  replacing setbounds with same size intrinsic: ";
+                 SrcOperand->print(dbgs(), &DAG));
+      return SrcOperand;
+    } else if (SrcIID == Intrinsic::cheri_cap_bounds_set_exact) {
+      // upgrading imprecise -> precise is safe since it will  lways return same
+      // value csetbounds(csetboundsexact(x, len), len) -> csetboundsexact(x,
+      // len)
+      LLVM_DEBUG(dbgs() << "  replacing imprecise setbounds with same size "
+                           "precise setbounds: ";
+                 SrcOperand->print(dbgs(), &DAG));
+      return SrcOperand;
+    } else if (IID != Intrinsic::cheri_cap_bounds_set_exact) {
+      assert(SrcIID == Intrinsic::cheri_cap_bounds_set ||
+             SrcIID == Intrinsic::cheri_bounded_stack_cap);
+      LLVM_DEBUG(dbgs() << "  replacing imprecise setbounds with same size "
+                           "imprecise setbounds: ";
+                 SrcOperand->print(dbgs(), &DAG));
+      return SrcOperand;
+    } else {
+      assert(IID == Intrinsic::cheri_cap_bounds_set_exact);
+      // However, this is not true for exact setbounds on imprecise setbounds
+      // TODO handle this case:
+      LLVM_DEBUG(dbgs() << "  using source operand of imprecise setbounds for "
+                           "same size precise setbounds: ";
+                 SrcOperand->print(dbgs(), &DAG));
+      return DAG.getNode(
+          ISD::INTRINSIC_WO_CHAIN, DL, N->getValueType(0),
+          DAG.getConstant(Intrinsic::cheri_cap_bounds_set_exact, DL, MVT::i64),
+          SrcOperand, SizeOperand);
+    }
+    break;
+  }
   case Intrinsic::cheri_cap_offset_increment: {
     return performCIncOffsetToCandAddrCombine(N, DAG, DCI, Subtarget);
   }

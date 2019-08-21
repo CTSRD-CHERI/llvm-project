@@ -27,12 +27,12 @@ define signext i32 @stack_array() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(stack_array)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(stack_array)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    cincoffset $c2, $c11, 8
-; CHECK-NEXT:    csetbounds $c2, $c2, 40
-; CHECK-NEXT:    csetbounds $c18, $c2, 40
+; CHECK-NEXT:    cincoffset $c18, $c11, 8
+; CHECK-NEXT:    csetbounds $c18, $c18, 40
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use)($c1)
+; CHECK-NEXT:    cincoffset $c3, $c11, 8
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c3, $c18
+; CHECK-NEXT:    csetbounds $c3, $c3, 40
 ; CHECK-NEXT:    clw $2, $zero, 20($c18)
 ; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 4]]($c11)
@@ -61,13 +61,12 @@ define signext i32 @stack_int() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(stack_int)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(stack_int)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    cincoffset $c2, $c11, 12
-; CHECK-NEXT:    csetbounds $c2, $c2, 4
 ; CHECK-NEXT:    addiu $1, $zero, 1
 ; CHECK-NEXT:    csw $1, $zero, 12($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use)($c1)
+; CHECK-NEXT:    cincoffset $c3, $c11, 12
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    csetbounds $c3, $c2, 4
+; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clw $2, $zero, 12($c11)
 ; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    cjr $c17
