@@ -3574,8 +3574,7 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
   if (Name.startswith("\01"))
     Name = Name.substr(1);
 
-  if (!HasDecl || D->isImplicit() || D->hasAttr<ArtificialAttr>() ||
-      (isa<VarDecl>(D) && GD.getDynamicInitKind() == DynamicInitKind::AtExit)) {
+  if (!HasDecl || D->isImplicit() || D->hasAttr<ArtificialAttr>()) {
     Flags |= llvm::DINode::FlagArtificial;
     // Artificial functions should not silently reuse CurLoc.
     CurLoc = SourceLocation();
