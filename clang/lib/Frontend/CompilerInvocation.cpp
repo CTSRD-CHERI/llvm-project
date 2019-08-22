@@ -1757,11 +1757,14 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
                     frontend::GenerateInterfaceYAMLExpV1)
               .Case("experimental-tapi-elf-v1",
                     frontend::GenerateInterfaceTBEExpV1)
+              .Case("experimental-ifs-v1",
+                    frontend::GenerateInterfaceIfsExpV1)
               .Default(llvm::None);
       if (!ProgramAction)
         Diags.Report(diag::err_drv_invalid_value)
             << "Must specify a valid interface stub format type using "
             << "-interface-stub-version=<experimental-tapi-elf-v1 | "
+               "experimental-ifs-v1 | "
                "experimental-yaml-elf-v1>";
       Opts.ProgramAction = *ProgramAction;
       break;
@@ -3250,6 +3253,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
   case frontend::GeneratePCH:
   case frontend::GenerateInterfaceYAMLExpV1:
   case frontend::GenerateInterfaceTBEExpV1:
+  case frontend::GenerateInterfaceIfsExpV1:
   case frontend::ParseSyntaxOnly:
   case frontend::ModuleFileInfo:
   case frontend::VerifyPCH:
