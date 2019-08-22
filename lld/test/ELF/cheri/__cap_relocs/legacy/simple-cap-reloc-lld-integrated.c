@@ -1,4 +1,5 @@
 // REQUIRES: clang
+// REQUIRES: filecheck_new_syntax, D60389
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/simple-cap-reloc.c -c -o %t.o
 // RUN: llvm-readobj -s -r %t.o | FileCheck -check-prefix READOBJ %S/simple-cap-reloc-common.check
