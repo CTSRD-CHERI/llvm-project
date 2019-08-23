@@ -2235,11 +2235,13 @@ static llvm::Value *createCToPtr(CodeGenFunction &CGF, llvm::Value *Cap,
   auto DDC =
       CGF.Builder.CreateIntrinsic(llvm::Intrinsic::cheri_ddc_get, {}, {});
   auto CToPtr = CGF.Builder.CreateIntrinsic(
-      llvm::Intrinsic::cheri_cap_to_pointer, CGF.PtrDiffTy, {DDC, Cap});
+      llvm::Intrinsic::cheri_cap_to_pointer, CGF.PtrDiffTy,
+      {DDC, CGF.Builder.CreatePointerCast(Cap, CGF.Int8CheriCapTy)});
   // sign extend if the target is a signed integer type otherwise zext.
   // This should only happen when assigning the result to a larger type:
   // i.e. __int128 or int64_t for CHERI64
-  return CGF.Builder.CreateIntCast(CToPtr, LLVMTy, Ty->isSignedIntegerOrEnumerationType());
+  return CGF.Builder.CreateIntCast(CToPtr, LLVMTy,
+                                   Ty->isSignedIntegerOrEnumerationType());
 }
 
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
