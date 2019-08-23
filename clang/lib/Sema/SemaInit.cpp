@@ -6663,11 +6663,13 @@ static bool pathContainsInit(IndirectLocalPath &Path) {
 
 static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
                                              Expr *Init, LocalVisitor Visit,
-                                             bool RevisitSubinits);
+                                             bool RevisitSubinits,
+                                             bool EnableLifetimeWarnings);
 
 static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
                                                   Expr *Init, ReferenceKind RK,
-                                                  LocalVisitor Visit);
+                                                  LocalVisitor Visit,
+                                                  bool EnableLifetimeWarnings);
 
 template <typename T> static bool isRecordWithAttr(QualType Type) {
   if (auto *RD = Type->getAsCXXRecordDecl())
@@ -6756,9 +6758,9 @@ static void handleGslAnnotatedTypes(IndirectLocalPath &Path, Expr *Call,
     Path.push_back({IndirectLocalPathEntry::GslPointerInit, Arg, D});
     if (Arg->isGLValue())
       visitLocalsRetainedByReferenceBinding(Path, Arg, RK_ReferenceBinding,
-                                            Visit);
+                                            Visit, true);
     else
-      visitLocalsRetainedByInitializer(Path, Arg, Visit, true);
+      visitLocalsRetainedByInitializer(Path, Arg, Visit, true, true);
     Path.pop_back();
   };
 
@@ -6833,9 +6835,9 @@ static void visitLifetimeBoundArguments(IndirectLocalPath &Path, Expr *Call,
     Path.push_back({IndirectLocalPathEntry::LifetimeBoundCall, Arg, D});
     if (Arg->isGLValue())
       visitLocalsRetainedByReferenceBinding(Path, Arg, RK_ReferenceBinding,
-                                            Visit);
+                                            Visit, false);
     else
-      visitLocalsRetainedByInitializer(Path, Arg, Visit, true);
+      visitLocalsRetainedByInitializer(Path, Arg, Visit, true, false);
     Path.pop_back();
   };
 
@@ -6854,7 +6856,8 @@ static void visitLifetimeBoundArguments(IndirectLocalPath &Path, Expr *Call,
 /// glvalue expression \c Init.
 static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
                                                   Expr *Init, ReferenceKind RK,
-                                                  LocalVisitor Visit) {
+                                                  LocalVisitor Visit,
+                                                  bool EnableLifetimeWarnings) {
   RevertToOldSizeRAII RAII(Path);
 
   // Walk past any constructs which we can lifetime-extend across.
@@ -6891,7 +6894,8 @@ static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
       else
         // We can't lifetime extend through this but we might still find some
         // retained temporaries.
-        return visitLocalsRetainedByInitializer(Path, Init, Visit, true);
+        return visitLocalsRetainedByInitializer(Path, Init, Visit, true,
+                                                EnableLifetimeWarnings);
     }
 
     // Step into CXXDefaultInitExprs so we can diagnose cases where a
@@ -6906,11 +6910,12 @@ static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
   if (auto *MTE = dyn_cast<MaterializeTemporaryExpr>(Init)) {
     if (Visit(Path, Local(MTE), RK))
       visitLocalsRetainedByInitializer(Path, MTE->GetTemporaryExpr(), Visit,
-                                       true);
+                                       true, EnableLifetimeWarnings);
   }
 
   if (isa<CallExpr>(Init)) {
-    handleGslAnnotatedTypes(Path, Init, Visit);
+    if (EnableLifetimeWarnings)
+      handleGslAnnotatedTypes(Path, Init, Visit);
     return visitLifetimeBoundArguments(Path, Init, Visit);
   }
 
@@ -6931,7 +6936,8 @@ static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
       } else if (VD->getInit() && !isVarOnPath(Path, VD)) {
         Path.push_back({IndirectLocalPathEntry::VarInit, DRE, VD});
         visitLocalsRetainedByReferenceBinding(Path, VD->getInit(),
-                                              RK_ReferenceBinding, Visit);
+                                              RK_ReferenceBinding, Visit,
+                                              EnableLifetimeWarnings);
       }
     }
     break;
@@ -6943,13 +6949,15 @@ static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
     // handling all sorts of rvalues passed to a unary operator.
     const UnaryOperator *U = cast<UnaryOperator>(Init);
     if (U->getOpcode() == UO_Deref)
-      visitLocalsRetainedByInitializer(Path, U->getSubExpr(), Visit, true);
+      visitLocalsRetainedByInitializer(Path, U->getSubExpr(), Visit, true,
+                                       EnableLifetimeWarnings);
     break;
   }
 
   case Stmt::OMPArraySectionExprClass: {
-    visitLocalsRetainedByInitializer(
-        Path, cast<OMPArraySectionExpr>(Init)->getBase(), Visit, true);
+    visitLocalsRetainedByInitializer(Path,
+                                     cast<OMPArraySectionExpr>(Init)->getBase(),
+                                     Visit, true, EnableLifetimeWarnings);
     break;
   }
 
@@ -6957,9 +6965,11 @@ static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
   case Stmt::BinaryConditionalOperatorClass: {
     auto *C = cast<AbstractConditionalOperator>(Init);
     if (!C->getTrueExpr()->getType()->isVoidType())
-      visitLocalsRetainedByReferenceBinding(Path, C->getTrueExpr(), RK, Visit);
+      visitLocalsRetainedByReferenceBinding(Path, C->getTrueExpr(), RK, Visit,
+                                            EnableLifetimeWarnings);
     if (!C->getFalseExpr()->getType()->isVoidType())
-      visitLocalsRetainedByReferenceBinding(Path, C->getFalseExpr(), RK, Visit);
+      visitLocalsRetainedByReferenceBinding(Path, C->getFalseExpr(), RK, Visit,
+                                            EnableLifetimeWarnings);
     break;
   }
 
@@ -6974,7 +6984,8 @@ static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
 /// the prvalue expression \c Init.
 static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
                                              Expr *Init, LocalVisitor Visit,
-                                             bool RevisitSubinits) {
+                                             bool RevisitSubinits,
+                                             bool EnableLifetimeWarnings) {
   RevertToOldSizeRAII RAII(Path);
 
   Expr *Old;
@@ -7014,15 +7025,17 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
             if (VD && VD->getType().isConstQualified() && VD->getInit() &&
                 !isVarOnPath(Path, VD)) {
               Path.push_back({IndirectLocalPathEntry::VarInit, DRE, VD});
-              visitLocalsRetainedByInitializer(Path, VD->getInit(), Visit, true);
+              visitLocalsRetainedByInitializer(Path, VD->getInit(), Visit, true,
+                                               EnableLifetimeWarnings);
             }
           } else if (auto *MTE = dyn_cast<MaterializeTemporaryExpr>(L)) {
             if (MTE->getType().isConstQualified())
               visitLocalsRetainedByInitializer(Path, MTE->GetTemporaryExpr(),
-                                               Visit, true);
+                                               Visit, true,
+                                               EnableLifetimeWarnings);
           }
           return false;
-        });
+        }, EnableLifetimeWarnings);
 
         // We assume that objects can be retained by pointers cast to integers,
         // but not if the integer is cast to floating-point type or to _Complex.
@@ -7052,7 +7065,8 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
         // lvalue.
         Path.push_back({IndirectLocalPathEntry::AddressOf, CE});
         return visitLocalsRetainedByReferenceBinding(Path, CE->getSubExpr(),
-                                                     RK_ReferenceBinding, Visit);
+                                                     RK_ReferenceBinding, Visit,
+                                                     EnableLifetimeWarnings);
 
       default:
         return;
@@ -7067,7 +7081,8 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
   //   lifetime of the array exactly like binding a reference to a temporary.
   if (auto *ILE = dyn_cast<CXXStdInitializerListExpr>(Init))
     return visitLocalsRetainedByReferenceBinding(Path, ILE->getSubExpr(),
-                                                 RK_StdInitializerList, Visit);
+                                                 RK_StdInitializerList, Visit,
+                                                 EnableLifetimeWarnings);
 
   if (InitListExpr *ILE = dyn_cast<InitListExpr>(Init)) {
     // We already visited the elements of this initializer list while
@@ -7078,12 +7093,14 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
 
     if (ILE->isTransparent())
       return visitLocalsRetainedByInitializer(Path, ILE->getInit(0), Visit,
-                                              RevisitSubinits);
+                                              RevisitSubinits,
+                                              EnableLifetimeWarnings);
 
     if (ILE->getType()->isArrayType()) {
       for (unsigned I = 0, N = ILE->getNumInits(); I != N; ++I)
         visitLocalsRetainedByInitializer(Path, ILE->getInit(I), Visit,
-                                         RevisitSubinits);
+                                         RevisitSubinits,
+                                         EnableLifetimeWarnings);
       return;
     }
 
@@ -7096,12 +7113,14 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
       if (RD->isUnion() && ILE->getInitializedFieldInUnion() &&
           ILE->getInitializedFieldInUnion()->getType()->isReferenceType())
         visitLocalsRetainedByReferenceBinding(Path, ILE->getInit(0),
-                                              RK_ReferenceBinding, Visit);
+                                              RK_ReferenceBinding, Visit,
+                                              EnableLifetimeWarnings);
       else {
         unsigned Index = 0;
         for (; Index < RD->getNumBases() && Index < ILE->getNumInits(); ++Index)
           visitLocalsRetainedByInitializer(Path, ILE->getInit(Index), Visit,
-                                           RevisitSubinits);
+                                           RevisitSubinits,
+                                           EnableLifetimeWarnings);
         for (const auto *I : RD->fields()) {
           if (Index >= ILE->getNumInits())
             break;
@@ -7110,13 +7129,15 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
           Expr *SubInit = ILE->getInit(Index);
           if (I->getType()->isReferenceType())
             visitLocalsRetainedByReferenceBinding(Path, SubInit,
-                                                  RK_ReferenceBinding, Visit);
+                                                  RK_ReferenceBinding, Visit,
+                                                  EnableLifetimeWarnings);
           else
             // This might be either aggregate-initialization of a member or
             // initialization of a std::initializer_list object. Regardless,
             // we should recursively lifetime-extend that initializer.
             visitLocalsRetainedByInitializer(Path, SubInit, Visit,
-                                             RevisitSubinits);
+                                             RevisitSubinits,
+                                             EnableLifetimeWarnings);
           ++Index;
         }
       }
@@ -7132,14 +7153,16 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
         continue;
       if (E->isGLValue())
         visitLocalsRetainedByReferenceBinding(Path, E, RK_ReferenceBinding,
-                                              Visit);
+                                              Visit, EnableLifetimeWarnings);
       else
-        visitLocalsRetainedByInitializer(Path, E, Visit, true);
+        visitLocalsRetainedByInitializer(Path, E, Visit, true,
+                                         EnableLifetimeWarnings);
     }
   }
 
   if (isa<CallExpr>(Init) || isa<CXXConstructExpr>(Init)) {
-    handleGslAnnotatedTypes(Path, Init, Visit);
+    if (EnableLifetimeWarnings)
+      handleGslAnnotatedTypes(Path, Init, Visit);
     return visitLifetimeBoundArguments(Path, Init, Visit);
   }
 
@@ -7157,7 +7180,8 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
 
       Path.push_back({IndirectLocalPathEntry::AddressOf, UO});
       visitLocalsRetainedByReferenceBinding(Path, UO->getSubExpr(),
-                                            RK_ReferenceBinding, Visit);
+                                            RK_ReferenceBinding, Visit,
+                                            EnableLifetimeWarnings);
     }
     break;
   }
@@ -7170,9 +7194,11 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
       break;
 
     if (BO->getLHS()->getType()->isPointerType())
-      visitLocalsRetainedByInitializer(Path, BO->getLHS(), Visit, true);
+      visitLocalsRetainedByInitializer(Path, BO->getLHS(), Visit, true,
+                                       EnableLifetimeWarnings);
     else if (BO->getRHS()->getType()->isPointerType())
-      visitLocalsRetainedByInitializer(Path, BO->getRHS(), Visit, true);
+      visitLocalsRetainedByInitializer(Path, BO->getRHS(), Visit, true,
+                                       EnableLifetimeWarnings);
     break;
   }
 
@@ -7182,9 +7208,11 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
     // In C++, we can have a throw-expression operand, which has 'void' type
     // and isn't interesting from a lifetime perspective.
     if (!C->getTrueExpr()->getType()->isVoidType())
-      visitLocalsRetainedByInitializer(Path, C->getTrueExpr(), Visit, true);
+      visitLocalsRetainedByInitializer(Path, C->getTrueExpr(), Visit, true,
+                                       EnableLifetimeWarnings);
     if (!C->getFalseExpr()->getType()->isVoidType())
-      visitLocalsRetainedByInitializer(Path, C->getFalseExpr(), Visit, true);
+      visitLocalsRetainedByInitializer(Path, C->getFalseExpr(), Visit, true,
+                                       EnableLifetimeWarnings);
     break;
   }
 
@@ -7491,12 +7519,16 @@ void Sema::checkInitializerLifetime(const InitializedEntity &Entity,
     return false;
   };
 
+  bool EnableLifetimeWarnings = !getDiagnostics().isIgnored(
+      diag::warn_dangling_lifetime_pointer, SourceLocation());
   llvm::SmallVector<IndirectLocalPathEntry, 8> Path;
   if (Init->isGLValue())
     visitLocalsRetainedByReferenceBinding(Path, Init, RK_ReferenceBinding,
-                                          TemporaryVisitor);
+                                          TemporaryVisitor,
+                                          EnableLifetimeWarnings);
   else
-    visitLocalsRetainedByInitializer(Path, Init, TemporaryVisitor, false);
+    visitLocalsRetainedByInitializer(Path, Init, TemporaryVisitor, false,
+                                     EnableLifetimeWarnings);
 }
 
 static void DiagnoseNarrowingInInitList(Sema &S,
