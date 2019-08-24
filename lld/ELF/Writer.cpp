@@ -65,7 +65,6 @@ private:
   void combineCapRelocsSections();
 
   std::vector<PhdrEntry *> createPhdrs(Partition &part);
-  void removeEmptyPTLoad(std::vector<PhdrEntry *> &phdrEntry);
   void addPhdrForSection(Partition &part, unsigned shType, unsigned pType,
                          unsigned pFlags);
   void assignFileOffsets();
@@ -149,8 +148,7 @@ bool lld::elf::hasDynamicLinker() {
 
 template <class ELFT> void elf::writeResult() { Writer<ELFT>().run(); }
 
-template <class ELFT>
-void Writer<ELFT>::removeEmptyPTLoad(std::vector<PhdrEntry *> &phdrs) {
+static void removeEmptyPTLoad(std::vector<PhdrEntry *> &phdrs) {
   llvm::erase_if(phdrs, [&](const PhdrEntry *p) {
     if (p->p_type != PT_LOAD)
       return false;
