@@ -8517,8 +8517,9 @@ Expected<FileID> ASTImporter::Import(FileID FromID, bool IsBuiltin) {
     if (ToID.isInvalid() || IsBuiltin) {
       // FIXME: We want to re-use the existing MemoryBuffer!
       bool Invalid = true;
-      const llvm::MemoryBuffer *FromBuf = Cache->getBuffer(
-          FromContext.getDiagnostics(), FromSM, SourceLocation{}, &Invalid);
+      const llvm::MemoryBuffer *FromBuf =
+          Cache->getBuffer(FromContext.getDiagnostics(),
+                           FromSM.getFileManager(), SourceLocation{}, &Invalid);
       if (!FromBuf || Invalid)
         // FIXME: Use a new error kind?
         return llvm::make_error<ImportError>(ImportError::Unknown);
