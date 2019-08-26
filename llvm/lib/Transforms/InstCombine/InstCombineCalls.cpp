@@ -4005,6 +4005,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     // Asan needs to poison memory to detect invalid access which is possible
     // even for empty lifetime range.
     if (II->getFunction()->hasFnAttribute(Attribute::SanitizeAddress) ||
+        II->getFunction()->hasFnAttribute(Attribute::SanitizeMemory) ||
         II->getFunction()->hasFnAttribute(Attribute::SanitizeHWAddress))
       break;
 
