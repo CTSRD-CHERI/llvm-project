@@ -2523,10 +2523,10 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
       // %gp_rel relocation
       Global = getAddrGPRel(N, SDLoc(N), Ty, DAG, ABI.IsN64());
     } else {
-                                   // %hi/%lo relocation
+                                    // %hi/%lo relocation
       Global = Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
-                                   // %highest/%higher/%hi/%lo relocation
-                                   : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
+                                    // %highest/%higher/%hi/%lo relocation
+                                    : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
     }
   } else {
 
