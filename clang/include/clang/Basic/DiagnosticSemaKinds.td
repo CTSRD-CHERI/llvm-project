@@ -12,11 +12,11 @@
 
 let Component = "Sema" in {
 let CategoryName = "Semantic Issue" in {
-
 def warn_calling_non_sensitive_from_sensitive : Warning<
   "Calling non-sensitive function %0 from sensitive function %1 may result in"
   " sensitive data being leaked to the stack">,
   InGroup<DiagGroup<"sensitive-function">>;
+
 def note_previous_decl : Note<"%0 declared here">;
 def note_entity_declared_at : Note<"%0 declared here">;
 def note_callee_decl : Note<"%0 declared here">;
