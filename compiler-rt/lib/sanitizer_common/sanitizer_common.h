@@ -101,8 +101,7 @@ void *MmapOrDieOnFatalError(usize size, const char *mem_type);
 bool MmapFixedNoReserve(uptr fixed_addr, usize size, const char *name = nullptr)
      WARN_UNUSED_RESULT;
 bool MmapFixedSuperNoReserve(uptr fixed_addr, usize size,
-                             const char *name = nullptr)
-     WARN_UNUSED_RESULT;
+                             const char *name = nullptr) WARN_UNUSED_RESULT;
 void *MmapNoReserveOrDie(usize size, const char *mem_type);
 void *MmapFixedOrDie(uptr fixed_addr, usize size, const char *name = nullptr);
 // Behaves just like MmapFixedOrDie, but tolerates out of memory condition, in
