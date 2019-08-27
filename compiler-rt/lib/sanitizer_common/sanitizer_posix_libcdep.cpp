@@ -303,11 +303,13 @@ void PlatformPrepareForSandboxing(__sanitizer_sandbox_arguments *args) {
   MemoryMappingLayout::CacheMemoryMappings();
 }
 
-static bool MmapFixed(uptr fixed_addr, usize size, int additional_flags, const char *name) {
+static bool MmapFixed(uptr fixed_addr, usize size,
+                      int additional_flags, const char *name) {
   size = RoundUpTo(size, GetPageSizeCached());
   fixed_addr = RoundDownTo(fixed_addr, GetPageSizeCached());
   uptr p = MmapNamed((void *)fixed_addr, size, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_FIXED | additional_flags | MAP_ANON, name);
+                     MAP_PRIVATE | MAP_FIXED | additional_flags | MAP_ANON,
+                     name);
   int reserrno;
   if (internal_iserror(p, &reserrno)) {
     Report("ERROR: %s failed to "
@@ -333,7 +335,7 @@ bool MmapFixedSuperNoReserve(uptr fixed_addr, usize size, const char *name) {
 #else
   bool r = MmapFixedNoReserve(fixed_addr, size, name);
   if (r)
-   SetShadowRegionHugePageMode(fixed_addr,size);
+    SetShadowRegionHugePageMode(fixed_addr, size);
   return r;
 #endif
 }
