@@ -3131,7 +3131,8 @@ llvm::DICompositeType *CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
 
   SmallString<256> Identifier = getTypeIdentifier(Ty, CGM, TheCU);
 
-  // Explicitly record the calling convention for C++ records.
+  // Explicitly record the calling convention and export symbols for C++
+  // records.
   auto Flags = llvm::DINode::FlagZero;
   if (auto CXXRD = dyn_cast<CXXRecordDecl>(RD)) {
     if (CGM.getCXXABI().getRecordArgABI(CXXRD) == CGCXXABI::RAA_Indirect)
@@ -3142,6 +3143,10 @@ llvm::DICompositeType *CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
     // Record if a C++ record is non-trivial type.
     if (!CXXRD->isTrivial())
       Flags |= llvm::DINode::FlagNonTrivial;
+
+    // Record exports it symbols to the containing structure.
+    if (CXXRD->isAnonymousStructOrUnion())
+        Flags |= llvm::DINode::FlagExportSymbols;
   }
 
   llvm::DICompositeType *RealDecl = DBuilder.createReplaceableCompositeType(
