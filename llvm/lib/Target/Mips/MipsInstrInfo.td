@@ -3183,6 +3183,8 @@ multiclass MipsHiLoRelocs<Instruction Lui, Instruction Addiu,
                 (Addiu GPROpnd:$hi, tconstpool:$lo)>;
   def : MipsPat<(add GPROpnd:$hi, (MipsLo tglobaltlsaddr:$lo)),
                 (Addiu GPROpnd:$hi, tglobaltlsaddr:$lo)>;
+  def : MipsPat<(add GPROpnd:$hi, (MipsLo texternalsym:$lo)),
+                (Addiu GPROpnd:$hi, texternalsym:$lo)>;
 }
 
 // wrapper_pic
