@@ -1842,6 +1842,11 @@ public:
     return IsSigned;
   }
 
+  /// Returns true if arguments should be extended in lib calls.
+  virtual bool shouldExtendTypeInLibCall(EVT Type) const {
+    return true;
+  }
+
   /// Returns how the given (atomic) load should be expanded by the
   /// IR-level AtomicExpand pass.
   virtual AtomicExpansionKind shouldExpandAtomicLoadInIR(LoadInst *LI) const {
@@ -3038,7 +3043,8 @@ public:
 
   void softenSetCCOperands(SelectionDAG &DAG, EVT VT, SDValue &NewLHS,
                            SDValue &NewRHS, ISD::CondCode &CCCode,
-                           const SDLoc &DL) const;
+                           const SDLoc &DL, const SDValue OldLHS,
+                           const SDValue OldRHS) const;
 
   /// Returns a pair of (return value, chain).
   /// It is an error to pass RTLIB::UNKNOWN_LIBCALL as \p LC.
@@ -3585,6 +3591,11 @@ public:
 
   /// This structure is used to pass arguments to makeLibCall function.
   struct MakeLibCallOptions {
+    // By passing the node before soften to makeLibCall, the target hook
+    // shouldExtendTypeInLibCall can get the original type before soften.
+    // It could be generalized by passing orignal type lists if necessary
+    // in the future.
+    SDNode *NodeBeforeSoften = nullptr;
     bool IsSExt : 1;
     bool DoesNotReturn : 1;
     bool IsReturnValueUsed : 1;
@@ -3611,6 +3622,11 @@ public:
 
     MakeLibCallOptions &setIsPostTypeLegalization(bool Value = true) {
       IsPostTypeLegalization = Value;
+      return *this;
+    }
+
+    MakeLibCallOptions &setNodeBeforeSoften(SDNode *N) {
+      NodeBeforeSoften = N;
       return *this;
     }
   };
