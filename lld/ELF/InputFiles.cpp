@@ -1489,7 +1489,9 @@ static Symbol *createBitcodeSymbol(const std::vector<bool> &keptComdats,
     Undefined newSym(&f, name, binding, visibility, type);
     if (canOmitFromDynSym)
       newSym.exportDynamic = false;
-    return symtab->addSymbol(newSym);
+    Symbol *ret = symtab->addSymbol(newSym);
+    ret->referenced = true;
+    return ret;
   }
 
   if (objSym.isCommon())
