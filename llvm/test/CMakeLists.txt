@@ -68,6 +68,7 @@ set(LLVM_TEST_DEPENDS
           llvm-elfabi
           llvm-extract
           llvm-isel-fuzzer
+          llvm-ifs
           llvm-jitlink
           llvm-lib
           llvm-link
