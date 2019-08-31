@@ -4646,7 +4646,7 @@ public:
                            SourceLocation RBraceLoc);
 
   ExprResult ActOnDesignatedInitializer(Designation &Desig,
-                                        SourceLocation Loc,
+                                        SourceLocation EqualOrColonLoc,
                                         bool GNUSyntax,
                                         ExprResult Init);
 
