@@ -3174,7 +3174,6 @@ ExprResult Sema::ActOnDesignatedInitializer(Designation &Desig,
   bool Invalid = false;
   SmallVector<ASTDesignator, 32> Designators;
   SmallVector<Expr *, 32> InitExpressions;
-  bool HasArrayDesignator = false;
 
   // Build designators and check array designator expressions.
   for (unsigned Idx = 0; Idx < Desig.getNumDesignators(); ++Idx) {
@@ -3198,7 +3197,6 @@ ExprResult Sema::ActOnDesignatedInitializer(Designation &Desig,
                                             D.getRBracketLoc()));
         InitExpressions.push_back(Index);
       }
-      HasArrayDesignator = true;
       break;
     }
 
@@ -3242,7 +3240,6 @@ ExprResult Sema::ActOnDesignatedInitializer(Designation &Desig,
           InitExpressions.push_back(EndIndex);
         }
       }
-      HasArrayDesignator = true;
       break;
     }
     }
