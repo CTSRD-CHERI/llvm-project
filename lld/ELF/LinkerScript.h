@@ -275,6 +275,7 @@ public:
   const Defined *assignAddresses();
   void allocateHeaders(std::vector<PhdrEntry *> &phdrs);
   void processSectionCommands();
+  void processSymbolAssignments();
   void declareSymbols();
 
   // Used to handle INSERT AFTER statements.
