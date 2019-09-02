@@ -5750,6 +5750,7 @@ AArch64TargetLowering::getConstraintType(StringRef Constraint) const {
       break;
     case 'x':
     case 'w':
+    case 'y':
       return C_RegisterClass;
     // An address with a single base register. Due to the way we
     // currently handle addresses it is the same as 'r'.
@@ -5792,6 +5793,7 @@ AArch64TargetLowering::getSingleConstraintMatchWeight(
     break;
   case 'x':
   case 'w':
+  case 'y':
     if (type->isFloatingPointTy() || type->isVectorTy())
       weight = CW_Register;
     break;
@@ -5814,6 +5816,8 @@ AArch64TargetLowering::getRegForInlineAsmConstraint(
     case 'w':
       if (!Subtarget->hasFPARMv8())
         break;
+      if (VT.isScalableVector())
+        return std::make_pair(0U, &AArch64::ZPRRegClass);
       if (VT.getSizeInBits() == 16)
         return std::make_pair(0U, &AArch64::FPR16RegClass);
       if (VT.getSizeInBits() == 32)
@@ -5828,8 +5832,15 @@ AArch64TargetLowering::getRegForInlineAsmConstraint(
     case 'x':
       if (!Subtarget->hasFPARMv8())
         break;
+      if (VT.isScalableVector())
+        return std::make_pair(0U, &AArch64::ZPR_4bRegClass);
       if (VT.getSizeInBits() == 128)
         return std::make_pair(0U, &AArch64::FPR128_loRegClass);
+    case 'y':
+      if (!Subtarget->hasFPARMv8())
+        break;
+      if (VT.isScalableVector())
+        return std::make_pair(0U, &AArch64::ZPR_3bRegClass);
       break;
     }
   }
