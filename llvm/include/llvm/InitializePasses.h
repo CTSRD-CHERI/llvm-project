@@ -290,6 +290,7 @@ void initializeMergedLoadStoreMotionLegacyPassPass(PassRegistry&);
 void initializeMetaRenamerPass(PassRegistry&);
 void initializeModuleDebugInfoPrinterPass(PassRegistry&);
 void initializeModuleSummaryIndexWrapperPassPass(PassRegistry&);
+void initializeModuloScheduleTestPass(PassRegistry&);
 void initializeMustExecutePrinterPass(PassRegistry&);
 void initializeMustBeExecutedContextPrinterPass(PassRegistry&);
 void initializeNameAnonGlobalLegacyPassPass(PassRegistry&);
