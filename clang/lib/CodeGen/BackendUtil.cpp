@@ -237,7 +237,6 @@ static void addSanitizerCoveragePass(const PassManagerBuilder &Builder,
   const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
   auto Opts = getSancovOptsFromCGOpts(CGOpts);
   PM.add(createModuleSanitizerCoverageLegacyPassPass(Opts));
-  PM.add(createSanitizerCoverageLegacyPassPass(Opts));
 }
 
 // Check if ASan should use GC-friendly instrumentation for globals.
@@ -1189,11 +1188,6 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
             [SancovOpts](ModulePassManager &MPM) {
               MPM.addPass(ModuleSanitizerCoveragePass(SancovOpts));
             });
-        PB.registerOptimizerLastEPCallback(
-            [SancovOpts](FunctionPassManager &FPM,
-                         PassBuilder::OptimizationLevel Level) {
-              FPM.addPass(SanitizerCoveragePass(SancovOpts));
-            });
       }
 
       // Register callbacks to schedule sanitizer passes at the appropriate part of
@@ -1279,8 +1273,6 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
           CodeGenOpts.SanitizeCoverageTraceCmp) {
         auto SancovOpts = getSancovOptsFromCGOpts(CodeGenOpts);
         MPM.addPass(ModuleSanitizerCoveragePass(SancovOpts));
-        MPM.addPass(createModuleToFunctionPassAdaptor(
-            SanitizerCoveragePass(SancovOpts)));
       }
 
       addSanitizersAtO0(MPM, TargetTriple, LangOpts, CodeGenOpts);
