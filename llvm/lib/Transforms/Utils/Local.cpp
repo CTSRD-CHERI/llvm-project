@@ -1380,7 +1380,12 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
 /// Determine whether this alloca is either a VLA or an array.
 static bool isArray(AllocaInst *AI) {
   return AI->isArrayAllocation() ||
-    AI->getType()->getElementType()->isArrayTy();
+         (AI->getAllocatedType() && AI->getAllocatedType()->isArrayTy());
+}
+
+/// Determine whether this alloca is a structure.
+static bool isStructure(AllocaInst *AI) {
+  return AI->getAllocatedType() && AI->getAllocatedType()->isStructTy();
 }
 
 /// LowerDbgDeclare - Lowers llvm.dbg.declare intrinsics into appropriate set
@@ -1405,7 +1410,7 @@ bool llvm::LowerDbgDeclare(Function &F) {
     // stored on the stack, while the dbg.declare can only describe
     // the stack slot (and at a lexical-scope granularity). Later
     // passes will attempt to elide the stack slot.
-    if (!AI || isArray(AI))
+    if (!AI || isArray(AI) || isStructure(AI))
       continue;
 
     // A volatile load/store means that the alloca can't be elided anyway.
