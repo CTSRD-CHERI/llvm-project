@@ -1806,7 +1806,7 @@ SparcTargetLowering::SparcTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
 
-  setMinFunctionAlignment(2);
+  setMinFunctionLogAlignment(2);
 
   computeRegisterProperties(Subtarget->getRegisterInfo());
 }
