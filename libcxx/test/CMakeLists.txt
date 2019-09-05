@@ -62,6 +62,14 @@ if (NOT DEFINED LIBCXX_TEST_DEPS)
   message(FATAL_ERROR "Expected LIBCXX_TEST_DEPS to be defined")
 endif()
 
+find_program(LIBCXX_GDB gdb)
+if (LIBCXX_GDB)
+  set(LIBCXX_GDB "${LIBCXX_GDB}")
+  message(STATUS "gdb found: ${LIBCXX_GDB}")
+else()
+  message(STATUS "gdb not found. Disabling dependent tests.")
+endif()
+
 if (LIBCXX_INCLUDE_TESTS)
   if (LIBCXX_TARGET_INFO MATCHES "CheriBSDRemoteTI")
     message(STATUS "Test suite to run on CheriBSD -> max one thread possible")
@@ -95,7 +103,6 @@ if (LIBCXX_GENERATE_COVERAGE)
   set(extract_dirs "${LIBCXX_SOURCE_DIR}/include;${LIBCXX_SOURCE_DIR}/src")
   setup_lcov_test_target_coverage("cxx" "${output_dir}" "${capture_dirs}" "${extract_dirs}")
 endif()
-
 
 if (LIBCXX_CONFIGURE_IDE)
   # Create dummy targets for each of the tests in the test suite, this allows
