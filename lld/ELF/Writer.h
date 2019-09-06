@@ -20,7 +20,10 @@ namespace elf {
 class InputFile;
 class OutputSection;
 class InputSectionBase;
+void copySectionsIntoPartitions();
+template <class ELFT> void createSyntheticSections();
 void combineEhSections();
+template <class ELFT> void combineCapRelocsSections();
 template <class ELFT> void writeResult();
 
 // This describes a program header entry.
