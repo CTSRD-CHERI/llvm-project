@@ -353,9 +353,18 @@ void ELFDumper<ELFT>::printSymbolsHelper(bool IsDynamic) const {
   }
   if (Syms.begin() == Syms.end())
     return;
-  ELFDumperStyle->printSymtabMessage(Obj, SymtabName, Entries);
+
+  // The st_other field has 2 logical parts. The first two bits hold the symbol
+  // visibility (STV_*) and the remainder hold other platform-specific values.
+  bool NonVisibilityBitsUsed = llvm::find_if(Syms, [](const Elf_Sym &S) {
+                                 return S.st_other & ~0x3;
+                               }) != Syms.end();
+
+  ELFDumperStyle->printSymtabMessage(Obj, SymtabName, Entries,
+                                     NonVisibilityBitsUsed);
   for (const auto &Sym : Syms)
-    ELFDumperStyle->printSymbol(Obj, &Sym, Syms.begin(), StrTable, IsDynamic);
+    ELFDumperStyle->printSymbol(Obj, &Sym, Syms.begin(), StrTable, IsDynamic,
+                                NonVisibilityBitsUsed);
 }
 
 template <class ELFT> class MipsGOTParser;
@@ -390,10 +399,10 @@ public:
   virtual void printDynamic(const ELFFile<ELFT> *Obj) {}
   virtual void printDynamicRelocations(const ELFFile<ELFT> *Obj) = 0;
   virtual void printSymtabMessage(const ELFFile<ELFT> *Obj, StringRef Name,
-                                  size_t Offset) {}
+                                  size_t Offset, bool NonVisibilityBitsUsed) {}
   virtual void printSymbol(const ELFFile<ELFT> *Obj, const Elf_Sym *Symbol,
                            const Elf_Sym *FirstSym, StringRef StrTable,
-                           bool IsDynamic) = 0;
+                           bool IsDynamic, bool NonVisibilityBitsUsed) = 0;
   virtual void printProgramHeaders(const ELFFile<ELFT> *Obj,
                                    bool PrintProgramHeaders,
                                    cl::boolOrDefault PrintSectionMapping) = 0;
@@ -456,8 +465,8 @@ public:
   void printHashSymbols(const ELFO *Obj) override;
   void printDynamic(const ELFFile<ELFT> *Obj) override;
   void printDynamicRelocations(const ELFO *Obj) override;
-  void printSymtabMessage(const ELFO *Obj, StringRef Name,
-                          size_t Offset) override;
+  void printSymtabMessage(const ELFO *Obj, StringRef Name, size_t Offset,
+                          bool NonVisibilityBitsUsed) override;
   void printProgramHeaders(const ELFO *Obj, bool PrintProgramHeaders,
                            cl::boolOrDefault PrintSectionMapping) override;
   void printVersionSymbolSection(const ELFFile<ELFT> *Obj,
@@ -535,7 +544,8 @@ private:
   void printRelocation(const ELFO *Obj, const Elf_Sym *Sym,
                        StringRef SymbolName, const Elf_Rela &R, bool IsRela);
   void printSymbol(const ELFO *Obj, const Elf_Sym *Symbol, const Elf_Sym *First,
-                   StringRef StrTable, bool IsDynamic) override;
+                   StringRef StrTable, bool IsDynamic,
+                   bool NonVisibilityBitsUsed) override;
   std::string getSymbolSectionNdx(const ELFO *Obj, const Elf_Sym *Symbol,
                                   const Elf_Sym *FirstSym);
   void printDynamicRelocation(const ELFO *Obj, Elf_Rela R, bool IsRela);
@@ -588,7 +598,8 @@ private:
   void printSymbols(const ELFO *Obj);
   void printDynamicSymbols(const ELFO *Obj);
   void printSymbol(const ELFO *Obj, const Elf_Sym *Symbol, const Elf_Sym *First,
-                   StringRef StrTable, bool IsDynamic) override;
+                   StringRef StrTable, bool IsDynamic,
+                   bool /*NonVisibilityBitsUsed*/) override;
   void printProgramHeaders(const ELFO *Obj);
   void printSectionMapping(const ELFO *Obj) {}
 
@@ -3563,7 +3574,8 @@ void GNUStyle<ELFT>::printSectionHeaders(const ELFO *Obj) {
 
 template <class ELFT>
 void GNUStyle<ELFT>::printSymtabMessage(const ELFO *Obj, StringRef Name,
-                                        size_t Entries) {
+                                        size_t Entries,
+                                        bool NonVisibilityBitsUsed) {
   if (!Name.empty())
     OS << "\nSymbol table '" << Name << "' contains " << Entries
        << " entries:\n";
@@ -3571,9 +3583,13 @@ void GNUStyle<ELFT>::printSymtabMessage(const ELFO *Obj, StringRef Name,
     OS << "\n Symbol table for image:\n";
 
   if (ELFT::Is64Bits)
-    OS << "   Num:    Value          Size Type    Bind   Vis      Ndx Name\n";
+    OS << "   Num:    Value          Size Type    Bind   Vis";
   else
-    OS << "   Num:    Value  Size Type    Bind   Vis      Ndx Name\n";
+    OS << "   Num:    Value  Size Type    Bind   Vis";
+
+  if (NonVisibilityBitsUsed)
+    OS << "             ";
+  OS << "       Ndx Name\n";
 }
 
 template <class ELFT>
@@ -3617,7 +3633,7 @@ std::string GNUStyle<ELFT>::getSymbolSectionNdx(const ELFO *Obj,
 template <class ELFT>
 void GNUStyle<ELFT>::printSymbol(const ELFO *Obj, const Elf_Sym *Symbol,
                                  const Elf_Sym *FirstSym, StringRef StrTable,
-                                 bool IsDynamic) {
+                                 bool IsDynamic, bool NonVisibilityBitsUsed) {
   static int Idx = 0;
   static bool Dynamic = true;
 
@@ -3631,7 +3647,7 @@ void GNUStyle<ELFT>::printSymbol(const ELFO *Obj, const Elf_Sym *Symbol,
 
   unsigned Bias = ELFT::Is64Bits ? 8 : 0;
   Field Fields[8] = {0,         8,         17 + Bias, 23 + Bias,
-                     31 + Bias, 38 + Bias, 47 + Bias, 51 + Bias};
+                     31 + Bias, 38 + Bias, 48 + Bias, 51 + Bias};
   Fields[0].Str = to_string(format_decimal(Idx++, 6)) + ":";
   Fields[1].Str = to_string(
       format_hex_no_prefix(Symbol->st_value, ELFT::Is64Bits ? 16 : 8));
@@ -3648,7 +3664,13 @@ void GNUStyle<ELFT>::printSymbol(const ELFO *Obj, const Elf_Sym *Symbol,
       printEnum(Symbol->getBinding(), makeArrayRef(ElfSymbolBindings));
   Fields[5].Str =
       printEnum(Symbol->getVisibility(), makeArrayRef(ElfSymbolVisibilities));
+  if (Symbol->st_other & ~0x3)
+    Fields[5].Str +=
+        " [<other: " + to_string(format_hex(Symbol->st_other, 2)) + ">]";
+
+  Fields[6].Column += NonVisibilityBitsUsed ? 13 : 0;
   Fields[6].Str = getSymbolSectionNdx(Obj, Symbol, FirstSym);
+
   Fields[7].Str =
       this->dumper()->getFullSymbolName(Symbol, StrTable, IsDynamic);
   for (auto &Entry : Fields)
@@ -5680,7 +5702,7 @@ void LLVMStyle<ELFT>::printSectionHeaders(const ELFO *Obj) {
           printSymbol(
               Obj, &Sym,
               unwrapOrError(this->FileName, Obj->symbols(Symtab)).begin(),
-              StrTable, false);
+              StrTable, false, false);
       }
     }
 
@@ -5697,7 +5719,8 @@ void LLVMStyle<ELFT>::printSectionHeaders(const ELFO *Obj) {
 template <class ELFT>
 void LLVMStyle<ELFT>::printSymbol(const ELFO *Obj, const Elf_Sym *Symbol,
                                   const Elf_Sym *First, StringRef StrTable,
-                                  bool IsDynamic) {
+                                  bool IsDynamic,
+                                  bool /*NonVisibilityBitsUsed*/) {
   unsigned SectionIndex = 0;
   StringRef SectionName;
   this->dumper()->getSectionNameIndex(Symbol, First, SectionName, SectionIndex);
