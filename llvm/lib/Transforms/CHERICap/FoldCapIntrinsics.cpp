@@ -46,7 +46,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
   Function *GetOffset;
   Function *SetAddr;
   Function *GetAddr;
-  TargetLibraryInfo *TLI;
+  std::function<const TargetLibraryInfo &(Function &)> GetTLI;
 
   Type* I8CapTy;
   Type* CapAddrTy;
@@ -383,7 +383,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
     }
     for (Instruction* I : ToErase)
-      RecursivelyDeleteTriviallyDeadInstructions(I, TLI);
+      RecursivelyDeleteTriviallyDeadInstructions(I, &GetTLI(*SetFunc));
   }
 
   /// Replace set-offset, inc-offset sequences with a single set-offset
@@ -425,7 +425,9 @@ public:
     if (skipModule(M))
       return false;
 
-    TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+    GetTLI = [this](Function &F) -> const TargetLibraryInfo & {
+      return this->getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
+    };
 
     Modified = false;
     DL = &M.getDataLayout();
