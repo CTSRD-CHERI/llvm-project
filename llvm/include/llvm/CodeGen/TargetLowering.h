@@ -949,6 +949,7 @@ public:
     case ISD::SMULFIX:
     case ISD::SMULFIXSAT:
     case ISD::UMULFIX:
+    case ISD::UMULFIXSAT:
       Supported = isSupportedFixedPointOperation(Op, VT, Scale);
       break;
     }
@@ -4153,8 +4154,8 @@ public:
   /// method accepts integers as its arguments.
   SDValue expandAddSubSat(SDNode *Node, SelectionDAG &DAG) const;
 
-  /// Method for building the DAG expansion of ISD::SMULFIX. This method accepts
-  /// integers as its arguments.
+  /// Method for building the DAG expansion of ISD::[U|S]MULFIX[SAT]. This
+  /// method accepts integers as its arguments.
   SDValue expandFixedPointMul(SDNode *Node, SelectionDAG &DAG) const;
 
   /// Method for building the DAG expansion of ISD::U(ADD|SUB)O. Expansion
