@@ -1207,7 +1207,7 @@ public:
                    bool AllowUnknown = false) const {
     // Lower scalar pointers to native pointer types.
     if (auto *PTy = dyn_cast<PointerType>(Ty))
-      return getPointerTy(DL, Ty->getPointerAddressSpace());
+      return getPointerTy(DL, PTy->getAddressSpace());
 
     if (auto *VTy = dyn_cast<VectorType>(Ty)) {
       Type *EltTy = VTy->getElementType();
