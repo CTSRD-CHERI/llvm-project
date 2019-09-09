@@ -442,7 +442,6 @@ namespace {
     SDValue visitFP_TO_SINT(SDNode *N);
     SDValue visitFP_TO_UINT(SDNode *N);
     SDValue visitFP_ROUND(SDNode *N);
-    SDValue visitFP_ROUND_INREG(SDNode *N);
     SDValue visitFP_EXTEND(SDNode *N);
     SDValue visitFNEG(SDNode *N);
     SDValue visitFABS(SDNode *N);
@@ -1817,7 +1816,6 @@ SDValue DAGCombiner::visit(SDNode *N) {
   case ISD::FP_TO_SINT:         return visitFP_TO_SINT(N);
   case ISD::FP_TO_UINT:         return visitFP_TO_UINT(N);
   case ISD::FP_ROUND:           return visitFP_ROUND(N);
-  case ISD::FP_ROUND_INREG:     return visitFP_ROUND_INREG(N);
   case ISD::FP_EXTEND:          return visitFP_EXTEND(N);
   case ISD::FNEG:               return visitFNEG(N);
   case ISD::FABS:               return visitFABS(N);
@@ -13166,22 +13164,6 @@ SDValue DAGCombiner::visitFP_ROUND(SDNode *N) {
 
   if (SDValue NewVSel = matchVSelectOpSizesWithSetCC(N))
     return NewVSel;
-
-  return SDValue();
-}
-
-SDValue DAGCombiner::visitFP_ROUND_INREG(SDNode *N) {
-  SDValue N0 = N->getOperand(0);
-  EVT VT = N->getValueType(0);
-  EVT EVT = cast<VTSDNode>(N->getOperand(1))->getVT();
-  ConstantFPSDNode *N0CFP = dyn_cast<ConstantFPSDNode>(N0);
-
-  // fold (fp_round_inreg c1fp) -> c1fp
-  if (N0CFP && isTypeLegal(EVT)) {
-    SDLoc DL(N);
-    SDValue Round = DAG.getConstantFP(*N0CFP->getConstantFPValue(), DL, EVT);
-    return DAG.getNode(ISD::FP_EXTEND, DL, VT, Round);
-  }
 
   return SDValue();
 }
