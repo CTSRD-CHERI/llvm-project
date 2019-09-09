@@ -239,6 +239,15 @@ void DontNeedShadowFor(uptr addr, usize size) {
   ReleaseMemoryPagesToOS(MemToShadow(addr), MemToShadow(addr + size));
 }
 
+#if !SANITIZER_GO
+void UnmapShadow(ThreadState *thr, uptr addr, usize size) {
+  if (size == 0) return;
+  DontNeedShadowFor(addr, size);
+  ScopedGlobalProcessor sgp;
+  ctx->metamap.ResetRange(thr->proc(), addr, size);
+}
+#endif
+
 void MapShadow(uptr addr, usize size) {
   // Global data is not 64K aligned, but there are no adjacent mappings,
   // so we can get away with unaligned mapping.
@@ -985,6 +994,14 @@ void MemoryRangeImitateWrite(ThreadState *thr, uptr pc, uptr addr, usize size) {
   s.SetWrite(true);
   s.SetAddr0AndSizeLog(0, 3);
   MemoryRangeSet(thr, pc, addr, size, s.raw());
+}
+
+void MemoryRangeImitateWriteOrResetRange(ThreadState *thr, uptr pc, uptr addr,
+                                         usize size) {
+  if (thr->ignore_reads_and_writes == 0)
+    MemoryRangeImitateWrite(thr, pc, addr, size);
+  else
+    MemoryResetRange(thr, pc, addr, size);
 }
 
 ALWAYS_INLINE USED
