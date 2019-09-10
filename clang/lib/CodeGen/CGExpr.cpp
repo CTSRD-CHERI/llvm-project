@@ -3484,6 +3484,12 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
         // Spill the constant value to a global.
         Addr = CGM.createUnnamedGlobalFrom(*VD, Val,
                                            getContext().getDeclAlign(VD));
+        llvm::Type *VarTy = getTypes().ConvertTypeForMem(VD->getType());
+        auto *PTy = llvm::PointerType::get(
+            VarTy, getContext().getTargetAddressSpace(
+                VD->getType().getAddressSpace()));
+        if (PTy != Addr.getType())
+          Addr = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy);
       } else {
         // If this is a CHERI reference to a function then convert the function
         // address to a capability
