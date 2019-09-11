@@ -37,7 +37,7 @@ struct MemoryMappedSegmentData;
 
 class MemoryMappedSegment {
  public:
-  MemoryMappedSegment(char *buff = nullptr, usize size = 0)
+  explicit MemoryMappedSegment(char *buff = nullptr, usize size = 0)
       : filename(buff), filename_size(size), data_(nullptr) {}
   ~MemoryMappedSegment() {}
 

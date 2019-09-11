@@ -1037,7 +1037,7 @@ INLINE u32 GetNumberOfCPUsCached() {
 }  // namespace __sanitizer
 
 inline void *operator new(__sanitizer::operator_new_size_type size,
-                          __sanitizer::LowLevelAllocator &alloc) {
+                          __sanitizer::LowLevelAllocator &alloc) {  // NOLINT
   return alloc.Allocate(size);
 }
 
