@@ -40,7 +40,7 @@
 ...
 ---
 name:            b
-alignment:       3
+alignment:       8
 exposesReturnsTwice: false
 legalized:       false
 regBankSelected: false

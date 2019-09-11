@@ -30,7 +30,7 @@
 ...
 ---
 name:            pg_interpret_timezone_abbrev
-alignment:       3
+alignment:       8
 exposesReturnsTwice: false
 legalized:       false
 regBankSelected: false

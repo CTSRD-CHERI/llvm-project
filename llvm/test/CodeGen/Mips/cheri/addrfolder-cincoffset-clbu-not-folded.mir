@@ -55,7 +55,7 @@
 ...
 ---
 name:            _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE
-alignment:       3
+alignment:       8
 exposesReturnsTwice: false
 legalized:       false
 regBankSelected: false
@@ -134,7 +134,7 @@ body:             |
 
 ---
 name:            smaller_immediate
-alignment:       3
+alignment:       8
 exposesReturnsTwice: false
 legalized:       false
 regBankSelected: false

@@ -35,7 +35,7 @@
 ...
 ---
 name:            _ZN3JSC8WeakImpl7jsValueEv
-alignment:       3
+alignment:       8
 exposesReturnsTwice: false
 legalized:       false
 regBankSelected: false

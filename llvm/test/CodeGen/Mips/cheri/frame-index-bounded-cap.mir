@@ -41,7 +41,7 @@
 ...
 ---
 name:            test_bounded_stack
-alignment:       3
+alignment:       8
 exposesReturnsTwice: false
 legalized:       false
 regBankSelected: false
