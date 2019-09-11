@@ -234,6 +234,7 @@ private:
   const Elf_Shdr *DotSymtabSec = nullptr;
   const Elf_Shdr *DotCGProfileSec = nullptr;
   const Elf_Shdr *DotAddrsigSec = nullptr;
+  const Elf_Shdr *DynSymSec = nullptr;
   StringRef DynSymtabName;
   ArrayRef<Elf_Word> ShndxTable;
 
@@ -304,6 +305,7 @@ public:
   const Elf_Shdr *getDotSymtabSec() const { return DotSymtabSec; }
   const Elf_Shdr *getDotCGProfileSec() const { return DotCGProfileSec; }
   const Elf_Shdr *getDotAddrsigSec() const { return DotAddrsigSec; }
+  const Elf_Shdr *getDynSymSec() const { return DynSymSec; }
   ArrayRef<Elf_Word> getShndxTable() const { return ShndxTable; }
   StringRef getDynamicStringTable() const { return DynamicStringTable; }
   const DynRegionInfo &getDynRelRegion() const { return DynRelRegion; }
@@ -1437,6 +1439,7 @@ ELFDumper<ELFT>::ELFDumper(const object::ELFObjectFile<ELFT> *ObjF,
       break;
     case ELF::SHT_DYNSYM:
       if (!DynSymRegion.Size) {
+        DynSymSec = &Sec;
         DynSymRegion = createDRIFrom(&Sec);
         // This is only used (if Elf_Shdr present)for naming section in GNU
         // style
@@ -2562,7 +2565,11 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   // errs() << "Found " << CapRelocsDynRels.size()
   //        << " dynamic relocations pointing to __cap_relocs section\n";
 
-  typename ELFT::SymRange DynSyms = dynamic_symbols();
+  // Static binaries won't have a dynamic symbol table, and we only use this
+  // for looking up relocations' symbols.
+  const Elf_Shdr *SymTab = getDynSymSec();
+  if (!SymTab && !CapRelocsDynRels.empty())
+    reportError("No dynamic symbol section");
   using TargetUint = typename ELFT::uint;
   using TargetInt =
       typename std::conditional<ELFT::Is64Bits, int64_t, int32_t>::type;
@@ -2596,8 +2603,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       auto it = CapRelocsDynRels.find(CapRelocsFileOffset + CurrentOffset + 8);
       if (it != CapRelocsDynRels.end()) {
         Elf_Rel R = it->second;
-        uint32_t SymIndex = R.getSymbol(Obj->isMips64EL());
-        const Elf_Sym *Sym = unwrapOrError(getSymbol<ELFT>(DynSyms, SymIndex));
+        const Elf_Sym *Sym = unwrapOrError(Obj->getRelocationSymbol(&R, SymTab));
         BaseSymbol = unwrapOrError(Sym->getName(getDynamicStringTable()));
         // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "
         // Name=" << SymbolName << "\n";
@@ -2717,7 +2723,11 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
   FindRelocs(getDynRelRegion());
   FindRelocs(getDynRelaRegion());
 
-  typename ELFT::SymRange DynSyms = dynamic_symbols();
+  // Static binaries won't have a dynamic symbol table, and we only use this
+  // for looking up relocations' symbols.
+  const Elf_Shdr *SymTab = getDynSymSec();
+  if (!SymTab && !CapTableDynRels.empty())
+    reportError("No dynamic symbol section");
   for (uint64_t Offset = CapTableStartVaddr; Offset < CapTableEndVaddr;
        Offset += CapSize) {
     // Find name:
@@ -2738,9 +2748,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
       SmallString<32> RelocName;
       StringRef TargetName;
       Obj->getRelocationTypeName(R.getType(Obj->isMips64EL()), RelocName);
-      uint32_t SymIndex = R.getSymbol(Obj->isMips64EL());
 
-      const Elf_Sym *Sym = unwrapOrError(getSymbol<ELFT>(DynSyms, SymIndex));
+      const Elf_Sym *Sym = unwrapOrError(Obj->getRelocationSymbol(&R, SymTab));
       if (Sym) {
         TargetName = unwrapOrError(Sym->getName(getDynamicStringTable()));
       }
