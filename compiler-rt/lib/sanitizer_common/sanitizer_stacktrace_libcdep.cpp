@@ -149,9 +149,9 @@ void __sanitizer_symbolize_global(uptr data_addr, const char *fmt,
   out_buf[out_buf_size - 1] = 0;
 }
 
-SANITIZER_INTERFACE_ATTRIBUTE
-int __sanitizer_get_module_and_offset_for_pc( // NOLINT
-    uptr pc, char *module_name, usize module_name_len, usize *pc_offset) {
+int __sanitizer_get_module_and_offset_for_pc(uptr pc, char *module_name,
+                                             usize module_name_len,
+                                             usize *pc_offset) {
   return __sanitizer::GetModuleAndOffsetForPc(pc, module_name, module_name_len,
                                               pc_offset);
 }

@@ -166,8 +166,8 @@ void InitializeCoverage(bool enabled, const char *dir) {
 } // namespace __sanitizer
 
 extern "C" {
-SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_dump_coverage(  // NOLINT
-    const vaddr* pcs, usize len) {
+SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_dump_coverage(const vaddr* pcs,
+                                                             usize len) {
   return __sancov::SanitizerDumpCoverage(pcs, len);
 }
 
