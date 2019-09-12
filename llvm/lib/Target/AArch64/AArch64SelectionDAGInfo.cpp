@@ -31,7 +31,7 @@ SDValue AArch64SelectionDAGInfo::EmitTargetCodeForMemset(
   if (bzeroName && (!SizeValue || SizeValue->getZExtValue() > 256)) {
     const AArch64TargetLowering &TLI = *STI.getTargetLowering();
 
-    Type *IntPtrTy = DAG.getDataLayout().getIntPtrType(*DAG.getContext());
+    Type *IntPtrTy = Type::getInt8PtrTy(*DAG.getContext());
     TargetLowering::ArgListTy Args;
     TargetLowering::ArgListEntry Entry;
     Entry.Node = Dst;
