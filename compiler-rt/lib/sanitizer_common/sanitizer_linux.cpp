@@ -1064,8 +1064,6 @@ vaddr GetMaxUserVirtualAddress() {
 usize GetPageSize() {
 #if SANITIZER_LINUX && (defined(__x86_64__) || defined(__i386__))
   return EXEC_PAGESIZE;
-#elif SANITIZER_USE_GETAUXVAL
-  return getauxval(AT_PAGESZ);
 #elif SANITIZER_FREEBSD || SANITIZER_NETBSD
 // Use sysctl as sysconf can trigger interceptors internally.
   int pz = 0;
@@ -1074,6 +1072,8 @@ usize GetPageSize() {
   int rv = internal_sysctl(mib, 2, &pz, &pzl, nullptr, 0);
   CHECK_EQ(rv, 0);
   return (usize)pz;
+#elif SANITIZER_USE_GETAUXVAL
+  return getauxval(AT_PAGESZ);
 #else
   return sysconf(_SC_PAGESIZE);  // EXEC_PAGESIZE may not be trustworthy.
 #endif
