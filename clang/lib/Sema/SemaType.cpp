@@ -83,7 +83,7 @@ static void diagnoseBadTypeAttribute(Sema &S, const ParsedAttr &attr,
   }
 
   SourceLocation loc = attr.getLoc();
-  StringRef name = attr.getName()->getName();
+  StringRef name = attr.getAttrName()->getName();
 
   // The GC attributes are usually written with macros;  special-case them.
   IdentifierInfo *II = attr.isArgIdent(0) ? attr.getArgAsIdent(0)->Ident
@@ -815,7 +815,7 @@ static bool checkOmittedBlockReturnType(Sema &S, Declarator &declarator,
       continue;
     S.Diag(AL.getLoc(),
            diag::warn_block_literal_attributes_on_omitted_return_type)
-        << AL.getName();
+        << AL;
     ToBeRemoved.push_back(&AL);
   }
   // Remove bad attributes from the list.
@@ -3979,10 +3979,9 @@ static bool IsNoDerefableChunk(DeclaratorChunk Chunk) {
 }
 
 template<typename AttrT>
-static AttrT *createSimpleAttr(ASTContext &Ctx, ParsedAttr &Attr) {
-  Attr.setUsedAsTypeAttr();
-  return ::new (Ctx)
-      AttrT(Attr.getRange(), Ctx, Attr.getAttributeSpellingListIndex());
+static AttrT *createSimpleAttr(ASTContext &Ctx, ParsedAttr &AL) {
+  AL.setUsedAsTypeAttr();
+  return ::new (Ctx) AttrT(Ctx, AL);
 }
 
 static Attr *createNullabilityAttr(ASTContext &Ctx, ParsedAttr &Attr,
@@ -6027,9 +6026,8 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
     }
 
     ASTContext &Ctx = S.Context;
-    auto *ASAttr = ::new (Ctx)
-        AddressSpaceAttr(Attr.getRange(), Ctx, static_cast<unsigned>(ASIdx),
-                         Attr.getAttributeSpellingListIndex());
+    auto *ASAttr =
+        ::new (Ctx) AddressSpaceAttr(Ctx, Attr, static_cast<unsigned>(ASIdx));
 
     // If the expression is not value dependent (not templated), then we can
     // apply the address space qualifiers just to the equivalent type.
@@ -6126,8 +6124,7 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
   else if (II->isStr("autoreleasing"))
     lifetime = Qualifiers::OCL_Autoreleasing;
   else {
-    S.Diag(AttrLoc, diag::warn_attribute_type_not_supported)
-      << attr.getName() << II;
+    S.Diag(AttrLoc, diag::warn_attribute_type_not_supported) << attr << II;
     attr.setInvalid();
     return true;
   }
@@ -6169,7 +6166,7 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
   underlyingType.Quals.addObjCLifetime(lifetime);
 
   if (NonObjCPointer) {
-    StringRef name = attr.getName()->getName();
+    StringRef name = attr.getAttrName()->getName();
     switch (lifetime) {
     case Qualifiers::OCL_None:
     case Qualifiers::OCL_ExplicitNone:
@@ -6208,9 +6205,8 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
   // If we have a valid source location for the attribute, use an
   // AttributedType instead.
   if (AttrLoc.isValid()) {
-    type = state.getAttributedType(::new (S.Context) ObjCOwnershipAttr(
-                                       attr.getRange(), S.Context, II,
-                                       attr.getAttributeSpellingListIndex()),
+    type = state.getAttributedType(::new (S.Context)
+                                       ObjCOwnershipAttr(S.Context, attr, II),
                                    origType, type);
   }
 
@@ -6302,7 +6298,7 @@ static bool handleObjCGCTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
     GCAttr = Qualifiers::Strong;
   else {
     S.Diag(attr.getLoc(), diag::warn_attribute_type_not_supported)
-      << attr.getName() << II;
+        << attr << II;
     attr.setInvalid();
     return true;
   }
@@ -6313,9 +6309,7 @@ static bool handleObjCGCTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
   // Make an attributed type to preserve the source information.
   if (attr.getLoc().isValid())
     type = state.getAttributedType(
-        ::new (S.Context) ObjCGCAttr(attr.getRange(), S.Context, II,
-                                     attr.getAttributeSpellingListIndex()),
-        origType, type);
+        ::new (S.Context) ObjCGCAttr(S.Context, attr, II), origType, type);
 
   return true;
 }
@@ -6487,8 +6481,7 @@ static bool handleMSPointerTypeQualifierAttr(TypeProcessingState &State,
     // You cannot specify duplicate type attributes, so if the attribute has
     // already been applied, flag it.
     if (NewAttrKind == CurAttrKind) {
-      S.Diag(PAttr.getLoc(), diag::warn_duplicate_attribute_exact)
-        << PAttr.getName();
+      S.Diag(PAttr.getLoc(), diag::warn_duplicate_attribute_exact) << PAttr;
       return true;
     }
 
@@ -6757,9 +6750,9 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
     if (chunk.Kind != DeclaratorChunk::MemberPointer) {
       diag << FixItHint::CreateRemoval(attr.getLoc())
            << FixItHint::CreateInsertion(
-                state.getSema().getPreprocessor()
-                  .getLocForEndOfToken(chunk.Loc),
-                " " + attr.getName()->getName().str() + " ");
+                  state.getSema().getPreprocessor().getLocForEndOfToken(
+                      chunk.Loc),
+                  " " + attr.getAttrName()->getName().str() + " ");
     }
 
     moveAttrFromListToList(attr, state.getCurrentAttributes(),
@@ -6837,8 +6830,7 @@ static Attr *getCCTypeAttr(ASTContext &Ctx, ParsedAttr &Attr) {
     PcsAttr::PCSType Type;
     if (!PcsAttr::ConvertStrToPCSType(Str, Type))
       llvm_unreachable("already validated the attribute");
-    return ::new (Ctx) PcsAttr(Attr.getRange(), Ctx, Type,
-                               Attr.getAttributeSpellingListIndex());
+    return ::new (Ctx) PcsAttr(Ctx, Attr, Type);
   }
   case ParsedAttr::AT_CHERICCall:
     return createSimpleAttr<CHERICCallAttr>(Ctx, Attr);
@@ -7363,7 +7355,7 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const ParsedAttr &Attr,
     } else {
       llvm_unreachable("unexpected type");
     }
-    StringRef AttrName = Attr.getName()->getName();
+    StringRef AttrName = Attr.getAttrName()->getName();
     if (PrevAccessQual == AttrName.ltrim("_")) {
       // Duplicated qualifiers
       S.Diag(Attr.getLoc(), diag::warn_duplicate_declspec)
@@ -7419,9 +7411,10 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
       switch (chunk.Kind) {
         case DeclaratorChunk::Pointer: {
           ParsedAttr *attrCopy = declarator.getAttributePool()
-                 .create(attr.getName(), attr.getRange(),
-                         attr.getScopeName(), attr.getScopeLoc(),
-                         nullptr, 0, ParsedAttr::AS_GNU);
+                 .create(const_cast<IdentifierInfo *>(attr.getAttrName()),
+                         attr.getRange(),
+                         const_cast<IdentifierInfo *>(attr.getScopeName()),
+                         attr.getScopeLoc(), nullptr, 0, ParsedAttr::AS_GNU);
           chunk.getAttrs().addAtEnd(attrCopy);
           return;
         }
@@ -7508,7 +7501,7 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
   assert(Attr.getKind() == ParsedAttr::AT_MemoryAddress);
   // XXXAR: FIXME: Why do I get an assertion later if I don't error out here?
   if (TAL == TAL_DeclName) {
-    StringRef Name = Attr.getName()->getName();
+    StringRef Name = Attr.getAttrName()->getName();
     S.Diag(Attr.getLoc(), diag::err_attr_wrong_position) << Name
         << FixItHint::CreateRemoval(Attr.getLoc())
         << FixItHint::CreateInsertion(State.getDeclarator().getDeclSpec().getBeginLoc(), Name);
@@ -7517,13 +7510,13 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
 
   if (!T->isIntegerType() || T->isCHERICapabilityType(S.Context)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_address_integers_only)
-      << Attr.getName() << T;
+      << Attr.getAttrName() << T;
     return true;
   }
 
   // llvm::errs() << __func__ << ": hasAttr():" << T->hasAttr(attr::MemoryAddress) <<  " dump: "; T.dump();
   if (T->hasAttr(attr::MemoryAddress))
-    S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact) << Attr.getName();
+    S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact) << Attr.getAttrName();
   T = State.getAttributedType(
       createSimpleAttr<MemoryAddressAttr>(State.getSema().Context, Attr), T, T);
   // llvm::errs() << __func__ << ": modified type: "; T.dump();
@@ -7707,7 +7700,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                                IsTypeAttr
                                    ? diag::warn_gcc_ignores_type_attr
                                    : diag::warn_cxx11_gnu_attribute_on_type)
-              << attr.getName();
+              << attr;
           if (!IsTypeAttr)
             continue;
         }
@@ -7736,7 +7729,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       if (attr.isCXX11Attribute() && TAL == TAL_DeclChunk)
         state.getSema().Diag(attr.getLoc(),
                              diag::warn_unknown_attribute_ignored)
-          << attr.getName();
+            << attr;
       break;
 
     case ParsedAttr::IgnoredAttribute:
@@ -7880,7 +7873,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       if (type->hasAttr(attr::CHERINoSubobjectBounds))
         state.getSema().Diag(attr.getLoc(),
                              diag::warn_duplicate_attribute_exact)
-            << attr.getName();
+            << attr.getAttrName();
       type =
           state.getAttributedType(createSimpleAttr<CHERINoSubobjectBoundsAttr>(
                                       state.getSema().Context, attr),
@@ -8152,14 +8145,16 @@ static void assignInheritanceModel(Sema &S, CXXRecordDecl *RD) {
       break;
     }
 
-    RD->addAttr(MSInheritanceAttr::CreateImplicit(
-        S.getASTContext(), IM,
-        /*BestCase=*/S.MSPointerToMemberRepresentationMethod ==
-            LangOptions::PPTMK_BestCase,
-        S.ImplicitMSInheritanceAttrLoc.isValid()
-            ? S.ImplicitMSInheritanceAttrLoc
-            : RD->getSourceRange()));
-    S.Consumer.AssignInheritanceModel(RD);
+    SourceRange Loc = 
+    S.ImplicitMSInheritanceAttrLoc.isValid()
+                                 ? S.ImplicitMSInheritanceAttrLoc
+                                 : RD->getSourceRange();
+  RD->addAttr(MSInheritanceAttr::CreateImplicit(
+      S.getASTContext(),
+      /*BestCase=*/S.MSPointerToMemberRepresentationMethod ==
+          LangOptions::PPTMK_BestCase,
+      Loc, AttributeCommonInfo::AS_Microsoft, IM));
+  S.Consumer.AssignInheritanceModel(RD);
   }
 }
 
