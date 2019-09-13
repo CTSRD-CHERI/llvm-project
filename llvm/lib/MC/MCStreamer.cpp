@@ -1034,7 +1034,7 @@ void MCStreamer::Finish() {
   if (!FatRelocs.empty()) {
     MCSection *DefaultRelocSection = Context.getELFSection("__cap_relocs",
         ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
-    DefaultRelocSection->setAlignment(8);
+    DefaultRelocSection->setAlignment(llvm::Align(8));
     for (auto &R : FatRelocs) {
       MCSymbol *Sym;
       const MCExpr *Value;
@@ -1046,7 +1046,7 @@ void MCStreamer::Finish() {
         RelocSection =
           Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
                                 ELF::SHF_ALLOC | ELF::SHF_GROUP, 0, GroupName);
-        RelocSection->setAlignment(8);
+        RelocSection->setAlignment(llvm::Align(8));
       } else {
         RelocSection = DefaultRelocSection;
       }
