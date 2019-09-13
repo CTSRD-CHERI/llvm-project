@@ -2250,6 +2250,8 @@ static void dumpObject(ObjectFile *O, const Archive *A = nullptr,
     printCapRelocations(O);
   if (DynamicRelocations)
     printDynamicRelocations(O);
+  if (PrivateHeaders || FirstPrivateHeader)
+    printPrivateFileHeaders(O, FirstPrivateHeader);
   if (SectionHeaders)
     printSectionHeaders(O);
   if (SectionContents)
@@ -2258,8 +2260,6 @@ static void dumpObject(ObjectFile *O, const Archive *A = nullptr,
     printSymbolTable(O, ArchiveName);
   if (UnwindInfo)
     printUnwindInfo(O);
-  if (PrivateHeaders || FirstPrivateHeader)
-    printPrivateFileHeaders(O, FirstPrivateHeader);
   if (ExportsTrie)
     printExportsTrie(O);
   if (Rebase)
