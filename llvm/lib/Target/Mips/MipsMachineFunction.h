@@ -36,6 +36,7 @@ public:
   Register getGlobalBaseRegUnchecked() const;
 
   bool capGlobalBaseRegSet() const;
+  Register getCapEntryPointReg();
   Register getCapGlobalBaseReg();
   Register getCapGlobalBaseRegForGlobalISel();
   Register getGlobalBaseRegForGlobalISel();
@@ -110,6 +111,7 @@ private:
   /// use as the capability global base register. This is used for all global
   /// accesses in the purecap ABI.
   unsigned CapGlobalBaseReg = 0;
+  Register CapEntryPointReg;
 
   /// VarArgsFrameIndex - FrameIndex for start of varargs area.
   int VarArgsFrameIndex = 0;

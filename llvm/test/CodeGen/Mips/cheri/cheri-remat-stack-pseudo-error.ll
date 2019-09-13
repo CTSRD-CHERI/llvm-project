@@ -22,9 +22,9 @@ define void @fn1() addrspace(200) #0 {
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    daddiu $1, $zero, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    cincoffset $c11, $c11, $1
-; ASM-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
-; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 3)]]($c11)
+; ASM-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - (1 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (3 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
 ; ASM-NEXT:    cincoffset $c26, $c12, $1
@@ -42,9 +42,9 @@ define void @fn1() addrspace(200) #0 {
 ; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cgetnull $c13
-; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 3)]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
-; ASM-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (3 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - (1 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    daddiu $1, $zero, [[#STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, $1
@@ -57,16 +57,17 @@ entry:
 }
 
 ; CHECK-LABEL: name: fn1
-; CHECK: %3:gpr64 = DADDiu $zero_64, 4096
-; CHECK: %4:cherigpr = CheriBoundedStackPseudo %stack.0.byval-temp, 0, %3
-; CHECK: $c3 = COPY %4
-; CHECK: $c4 = COPY %5
+; CHECK: [[OFFSET:%.+]]:gpr64 = DADDiu $zero_64, 4096
+; CHECK: [[STACK_CAP:%.+]]:cherigpr = CheriBoundedStackPseudo %stack.0.byval-temp, 0, [[OFFSET]]
+; CHECK: [[A_CAP:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a
+; CHECK: $c3 = COPY [[STACK_CAP]]
+; CHECK: $c4 = COPY [[A_CAP]]
 ; CHECK: $a0_64 = DADDiu $zero_64, 4096
 ; This previously got turned into a duplicate of the CheriBoundedStackPseudo but that used the killed %1 register!
-; CHECK: LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
-; CHECK-NEXT: $c3 = COPY %4
+; CHECK: [[JUMP_TARGET:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
+; CHECK-NEXT: $c3 = COPY [[STACK_CAP]]
 ; CHECK-NEXT: $c13 = CMove $cnull
-; CHECK-NEXT: $c12 = COPY %9
+; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
 ; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 
 
@@ -75,8 +76,8 @@ define void @small_stack_fn1() addrspace(200) #0 {
 ; ASM-LABEL: small_stack_fn1:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (1 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(small_stack_fn1)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(small_stack_fn1)))
 ; ASM-NEXT:    cincoffset $c26, $c12, $1
@@ -93,8 +94,8 @@ define void @small_stack_fn1() addrspace(200) #0 {
 ; ASM-NEXT:    csetbounds $c3, $c3, 512
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cgetnull $c13
-; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (1 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
@@ -112,10 +113,10 @@ entry:
 ; CHECK-NEXT: $c3 = CheriBoundedStackPseudo %stack.0.byval-temp, 0, 512
 ; CHECK-NOT: CheriBoundedStackPseudo
 ; Remat 2:
-; CHECK: LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
+; CHECK: [[JUMP_TARGET:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
 ; CHECK-NEXT: $c3 = CheriBoundedStackPseudo %stack.0.byval-temp, 0, 512
 ; CHECK-NEXT: $c13 = CMove $cnull
-; CHECK-NEXT: $c12 = COPY %9
+; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
 ; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 ; CHECK-NOT: CheriBoundedStackPseudo
 

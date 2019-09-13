@@ -44,7 +44,8 @@ entry:
 ; Legacy loads the vaddr of global from the got then loads .size.global and
 ; does a cfromptr + csetbounds with those two values:
 ; LEGACY-NEXT:   liveins: $c12
-; LEGACY-NEXT:   $t9_64 = CGetOffset $c12
+; LEGACY-NEXT:   %13:cherigpr = COPY $c12
+; LEGACY-NEXT:   $t9_64 = CGetOffset %13:cherigpr
 ; LEGACY-NEXT:   %11:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
 ; LEGACY-NEXT:   %12:gpr64 = DADDu %11:gpr64, $t9_64
 ; LEGACY-NEXT:   %0:gpr64 = DADDiu %12:gpr64, target-flags(mips-gpoff-lo) @test
@@ -73,11 +74,12 @@ entry:
 ; FNDESC-NEXT:  [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 ; PCREL-NEXT: liveins: $c12
+; PCREL-NEXT: [[ENTRY_CAP:%.+:cherigpr]] = COPY $c12
 ; PCREL-NEXT: %1:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
 ; PCREL-NEXT: %2:gpr64 = DADDiu %1:gpr64, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: %0:cherigpr = CIncOffset $c12, %2:gpr64
-; PCREL-NEXT: %3:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[#CAP_SIZE]] from cap-table)
-; PCREL-NEXT: [[RESULT:%([0-9]+)]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %3:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
+; PCREL-NEXT: [[CAPTABLE:%.+:cherigpr]] = CIncOffset [[ENTRY_CAP]], %2:gpr64
+; PCREL-NEXT: [[GLOBAL_CAP:%.+:cherigpr]] = LOADCAP_BigImm target-flags(mips-captable20) @global, [[CAPTABLE]] :: (load [[#CAP_SIZE]] from cap-table)
+; PCREL-NEXT: [[RESULT:%([0-9]+)]]:gpr64 = CAPLOAD64 $zero_64, 0, killed [[GLOBAL_CAP]] :: (dereferenceable load 8 from @global, addrspace 200)
 
 
 ; COMMON-NEXT:   $v0_64 = COPY [[RESULT]]

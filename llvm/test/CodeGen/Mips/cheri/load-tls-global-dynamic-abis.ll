@@ -64,7 +64,8 @@ entry:
 ; MIPS-NEXT:  [[RESULT:%.+]] = DADDu killed %4:gpr64, killed %10:gpr64
 
 ; LEGACY-NEXT:  liveins: $c12
-; LEGACY-NEXT:  $t9_64 = CGetOffset $c12
+; LEGACY-NEXT:  %24:cherigpr = COPY $c12
+; LEGACY-NEXT:  $t9_64 = CGetOffset %24:cherigpr
 ; LEGACY-NEXT:  %22:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test_gd
 ; LEGACY-NEXT:  %23:gpr64 = DADDu %22:gpr64, $t9_64
 ; LEGACY-NEXT:  %0:gpr64 = DADDiu %23:gpr64, target-flags(mips-gpoff-lo) @test_gd
@@ -108,9 +109,10 @@ entry:
 ; FNDESC-NEXT:  [[CAPTABLE:%0:cherigpr]] = COPY $c26
 ; PCREL needs to derive $cgp so it's not live-in:
 ; PCREL-NEXT: liveins: $c12
+; PCREL-NEXT: [[C12_VREG:%[0-9]+:cherigpr]] = COPY $c12
 ; PCREL-NEXT: [[CGPOFF_HI:%[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
 ; PCREL-NEXT: [[CGPOFF_LO:%[0-9]+]]:gpr64 = DADDiu [[CGPOFF_HI]]:gpr64, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: [[CAPTABLE:%0:cherigpr]] = CIncOffset $c12, [[CGPOFF_LO]]:gpr64
+; PCREL-NEXT: [[CAPTABLE:%0:cherigpr]] = CIncOffset [[C12_VREG]], [[CGPOFF_LO]]:gpr64
 
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
 ; CAP-TABLE-NEXT:   %[[TLSGD_HI16:[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-tlsgd-hi16) @external_gd

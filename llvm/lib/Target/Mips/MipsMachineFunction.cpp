@@ -85,6 +85,37 @@ Register MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel() {
   return CapGlobalBaseReg;
 }
 
+Register MipsFunctionInfo::getCapEntryPointReg() {
+  // Return if it has already been initialized.
+  if (CapEntryPointReg)
+    return CapEntryPointReg;
+
+  const TargetRegisterClass *RC = &Mips::CheriGPRRegClass;
+  const MipsABIInfo &ABI =
+      static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI();
+  assert(ABI.IsCheriPureCap());
+  constexpr unsigned ABIEntryPointReg = Mips::C12; // FIXME: move to ABI?
+
+  // XXXAR: Mips::C12 may already be marked as live-in if we use TLS
+  // FIXME: still needed?
+  MachineBasicBlock &MBB = MF.front();
+  if (MF.getRegInfo().isLiveIn(ABIEntryPointReg)) {
+    assert(usesTlsViaGlobalReg() && "$gp should only be used for TLS");
+    assert(MBB.isLiveIn(
+        ABIEntryPointReg)); // should have been added by the TLS hack
+  } else {
+    MF.getRegInfo().addLiveIn(ABIEntryPointReg);
+    MBB.addLiveIn(ABIEntryPointReg);
+  }
+  Register Tmp = MF.getRegInfo().createVirtualRegister(RC);
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  DebugLoc DL;
+  BuildMI(MBB, MBB.begin(), DL, TII.get(TargetOpcode::COPY), Tmp)
+      .addReg(ABIEntryPointReg);
+  CapEntryPointReg = Tmp;
+  return Tmp;
+}
+
 Register MipsFunctionInfo::getGlobalBaseRegForGlobalISel() {
   if (static_cast<const MipsSubtarget&>(MF.getSubtarget()).useCheriCapTable()) {
     if (!CapGlobalBaseReg) {
@@ -125,12 +156,9 @@ void MipsFunctionInfo::initGlobalBaseReg() {
         assert((CapGlobalBaseReg || !MF.getRegInfo().isLiveIn(Mips::C12)) &&
                     "C12 should not be used yet");
       }
-      if (!MF.getRegInfo().isLiveIn(Mips::C12))
-        MF.getRegInfo().addLiveIn(Mips::C12);
-      MBB.addLiveIn(Mips::C12);
       BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
         .addReg(Mips::T9_64, RegState::Define)
-        .addReg(Mips::C12);
+        .addReg(getCapEntryPointReg());
     } else {
       MF.getRegInfo().addLiveIn(Mips::T9_64);
       MBB.addLiveIn(Mips::T9_64);
@@ -235,15 +263,6 @@ void MipsFunctionInfo::initCapGlobalBaseReg() {
     // write permissions which means we're back to relying only on the MMU to
     // protect the .text segment.
 
-    // XXXAR: Mips::C12 may already be marked as live-in if we use TLS
-    if (MF.getRegInfo().isLiveIn(Mips::C12)) {
-      assert(usesTlsViaGlobalReg() && "$gp should only be used for TLS");
-      assert(MBB.isLiveIn(Mips::C12)); // should have been added by the TLS hack
-    } else {
-      MF.getRegInfo().addLiveIn(Mips::C12);
-      MBB.addLiveIn(Mips::C12);
-    }
-
     // FIXME: there doesn't seem to be an easy way to get a label difference
     // For now I'll just add a new relocation or see if I can convert itm
     MachineRegisterInfo &RegInfo = MF.getRegInfo();
@@ -255,14 +274,6 @@ void MipsFunctionInfo::initCapGlobalBaseReg() {
     BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), Tmp2)
         .addReg(Tmp1)
         .addGlobalAddress(FName, 0, MipsII::MO_CAPTABLE_OFF_LO);
-#if 0
-    BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), CapGlobalBaseReg)
-        .addReg(Mips::C12)
-        .addReg(Tmp2);
-    // XXXAR: the hints are being ignored (probably since $cgp is reserved?)
-    RegInfo.addRegAllocationHint(CapGlobalBaseReg, ABIGlobalCapReg);
-    RegInfo.setSimpleHint(CapGlobalBaseReg, ABIGlobalCapReg);
-#else
     // Generate the globals in $cgp to make the llvm-objdump output more useful
     // since it will guess which global is being loaded. Also I think that if
     // we explicitly use $cgp here the register allocator will be able to use
@@ -271,17 +282,16 @@ void MipsFunctionInfo::initCapGlobalBaseReg() {
     if (MF.getTarget().getOptLevel() == CodeGenOpt::None) {
         // At -O0 ensure that the global register ends up in $c26
         BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), ABIGlobalCapReg)
-            .addReg(Mips::C12)
+            .addReg(getCapEntryPointReg())
             .addReg(Tmp2);
         BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
             .addReg(ABIGlobalCapReg);
     } else {
         // Otherwise we will use the first available callee-save register for $cgp
         BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), CapGlobalBaseReg)
-            .addReg(Mips::C12)
+            .addReg(getCapEntryPointReg())
             .addReg(Tmp2);
     }
-#endif
   } else {
     MF.getRegInfo().addLiveIn(ABIGlobalCapReg);
     MBB.addLiveIn(ABIGlobalCapReg);
