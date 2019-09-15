@@ -12208,7 +12208,7 @@ Expected<unsigned> ASTRecordReader::readRecord(llvm::BitstreamCursor &Cursor,
 ////===----------------------------------------------------------------------===//
 
 OMPClause *OMPClauseReader::readClause() {
-  OMPClause *C;
+  OMPClause *C = nullptr;
   switch (Record.readInt()) {
   case OMPC_if:
     C = new (Context) OMPIfClause();
@@ -12409,6 +12409,8 @@ OMPClause *OMPClauseReader::readClause() {
     C = OMPAllocateClause::CreateEmpty(Context, Record.readInt());
     break;
   }
+  assert(C && "Unknown OMPClause type");
+
   Visit(C);
   C->setLocStart(Record.readSourceLocation());
   C->setLocEnd(Record.readSourceLocation());
