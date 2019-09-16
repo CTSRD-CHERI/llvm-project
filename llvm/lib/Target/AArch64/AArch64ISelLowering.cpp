@@ -5839,6 +5839,21 @@ const char *AArch64TargetLowering::LowerXConstraint(EVT ConstraintVT) const {
   return "r";
 }
 
+enum PredicateConstraint {
+  Upl,
+  Upa,
+  Invalid
+};
+
+PredicateConstraint parsePredicateConstraint(StringRef Constraint) {
+  PredicateConstraint P = PredicateConstraint::Invalid;
+  if (Constraint == "Upa")
+    P = PredicateConstraint::Upa;
+  if (Constraint == "Upl")
+    P = PredicateConstraint::Upl;
+  return P;
+}
+
 /// getConstraintType - Given a constraint letter, return the type of
 /// constraint it is for this target.
 AArch64TargetLowering::ConstraintType
@@ -5868,7 +5883,9 @@ AArch64TargetLowering::getConstraintType(StringRef Constraint) const {
     case 'S': // A symbolic address
       return C_Other;
     }
-  }
+  } else if (parsePredicateConstraint(Constraint) !=
+             PredicateConstraint::Invalid)
+      return C_RegisterClass;
   return TargetLowering::getConstraintType(Constraint);
 }
 
@@ -5898,6 +5915,10 @@ AArch64TargetLowering::getSingleConstraintMatchWeight(
     break;
   case 'z':
     weight = CW_Constant;
+    break;
+  case 'U':
+    if (parsePredicateConstraint(constraint) != PredicateConstraint::Invalid)
+      weight = CW_Register;
     break;
   }
   return weight;
@@ -5942,6 +5963,14 @@ AArch64TargetLowering::getRegForInlineAsmConstraint(
       if (VT.isScalableVector())
         return std::make_pair(0U, &AArch64::ZPR_3bRegClass);
       break;
+    }
+  } else {
+    PredicateConstraint PC = parsePredicateConstraint(Constraint);
+    if (PC != PredicateConstraint::Invalid) {
+      assert(VT.isScalableVector());
+      bool restricted = (PC == PredicateConstraint::Upl);
+      return restricted ? std::make_pair(0U, &AArch64::PPR_3bRegClass)
+                          : std::make_pair(0U, &AArch64::PPRRegClass);
     }
   }
   if (StringRef("{cc}").equals_lower(Constraint))
