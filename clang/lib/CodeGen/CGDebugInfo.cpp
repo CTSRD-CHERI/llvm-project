@@ -2721,6 +2721,8 @@ llvm::DIType *CGDebugInfo::CreateType(const MemberPointerType *Ty,
         break;
       case MSInheritanceAttr::Keyword_unspecified_inheritance:
         break;
+      case MSInheritanceAttr::SpellingNotCalculated:
+        llvm_unreachable("Spelling not yet calculated");
       }
     }
   }
