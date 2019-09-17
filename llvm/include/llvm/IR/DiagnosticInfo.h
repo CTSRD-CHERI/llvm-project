@@ -74,10 +74,11 @@ enum DiagnosticKind {
   DK_LastMachineRemark = DK_MachineOptimizationRemarkAnalysis,
   DK_MIRParser,
   DK_PGOProfile,
-  DK_Unsupported,
+  DK_MisExpect,
   DK_CheriInefficient,
-  DK_FirstPluginKind,
-  DK_MisExpect
+  DK_Unsupported,
+  DK_FirstPluginKind // Must be last value to work with
+                     // getNextAvailablePluginDiagnosticKind
 };
 
 /// Get the next available kind ID for a plugin diagnostic.
@@ -388,7 +389,7 @@ public:
 
   /// Return the absolute path tot the file.
   std::string getAbsolutePath() const;
-  
+
   const Function &getFunction() const { return Fn; }
   DiagnosticLocation getLocation() const { return Loc; }
 
