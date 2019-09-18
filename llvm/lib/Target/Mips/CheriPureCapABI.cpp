@@ -33,7 +33,6 @@
 using namespace llvm;
 #define DBG_MESSAGE(...) LLVM_DEBUG(dbgs() << DEBUG_TYPE ": " << __VA_ARGS__)
 
-// FIXME: if the stack variable itself is stored this will break
 namespace {
 
 // TODO: remove this option after eval
