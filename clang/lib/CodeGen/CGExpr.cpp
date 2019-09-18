@@ -1111,11 +1111,9 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   }
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
-  E = E->IgnoreParenImpCastsExceptForNoChangeBounds(); // ignore
-                                                       // array-to-pointer
-                                                       // decay, etc
-  // And we also neede to ignore parenexprs since oterwise we get a ParenExpr
-  // instead of ArraySubscriptExpr/MemberExpr!
+  E = E->IgnoreParenImpCastsExceptForNoChangeBounds();
+  // ignore array-to-pointer decay, etc. And we also neede to ignore ParenExprs
+  // since oterwise we get a ParenExpr instead of ArraySubscriptExpr/MemberExpr!
   // Important: We must not ignore NoChangeBoundsExprs
   if (isa<NoChangeBoundsExpr>(E)) {
     return cannotSetBounds(*this, E, Ty, Kind,
