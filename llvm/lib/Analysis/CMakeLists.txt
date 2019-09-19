@@ -98,6 +98,7 @@ add_llvm_library(LLVMAnalysis
   ValueLatticeUtils.cpp
   ValueTracking.cpp
   VectorUtils.cpp
+  VFABIDemangling.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/Analysis
