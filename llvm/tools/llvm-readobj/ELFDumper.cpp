@@ -5007,10 +5007,9 @@ void GNUStyle<ELFT>::printNotes(const ELFFile<ELFT> *Obj) {
         OS << "    " << N.Type << ":\n        " << N.Value << '\n';
     } else if (Name == "CORE") {
       if (Type == ELF::NT_FILE) {
-        DataExtractor DescExtractor(
-            StringRef(reinterpret_cast<const char *>(Descriptor.data()),
-                      Descriptor.size()),
-            ELFT::TargetEndianness == support::little, sizeof(Elf_Addr));
+        DataExtractor DescExtractor(Descriptor,
+                                    ELFT::TargetEndianness == support::little,
+                                    sizeof(Elf_Addr));
         Expected<CoreNote> Note = readCoreNote(DescExtractor);
         if (Note)
           printCoreNote<ELFT>(OS, *Note);
@@ -5204,10 +5203,7 @@ void DumpStyle<ELFT>::printNonRelocatableStackSizes(
     const Elf_Shdr *ElfSec = Obj->getSection(Sec.getRawDataRefImpl());
     ArrayRef<uint8_t> Contents =
         unwrapOrError(this->FileName, EF->getSectionContents(ElfSec));
-    DataExtractor Data(
-        StringRef(reinterpret_cast<const char *>(Contents.data()),
-                  Contents.size()),
-        Obj->isLittleEndian(), sizeof(Elf_Addr));
+    DataExtractor Data(Contents, Obj->isLittleEndian(), sizeof(Elf_Addr));
     // A .stack_sizes section header's sh_link field is supposed to point
     // to the section that contains the functions whose stack sizes are
     // described in it.
@@ -5305,10 +5301,7 @@ void DumpStyle<ELFT>::printRelocatableStackSizes(
     RelocationResolver Resolver;
     std::tie(IsSupportedFn, Resolver) = getRelocationResolver(*Obj);
     auto Contents = unwrapOrError(this->FileName, StackSizesSec.getContents());
-    DataExtractor Data(
-        StringRef(reinterpret_cast<const char *>(Contents.data()),
-                  Contents.size()),
-        Obj->isLittleEndian(), sizeof(Elf_Addr));
+    DataExtractor Data(Contents, Obj->isLittleEndian(), sizeof(Elf_Addr));
     for (const RelocationRef &Reloc : RelocSec.relocations()) {
       if (!IsSupportedFn(Reloc.getType()))
         reportError(createStringError(
@@ -6208,10 +6201,9 @@ void LLVMStyle<ELFT>::printNotes(const ELFFile<ELFT> *Obj) {
         W.printString(N.Type, N.Value);
     } else if (Name == "CORE") {
       if (Type == ELF::NT_FILE) {
-        DataExtractor DescExtractor(
-            StringRef(reinterpret_cast<const char *>(Descriptor.data()),
-                      Descriptor.size()),
-            ELFT::TargetEndianness == support::little, sizeof(Elf_Addr));
+        DataExtractor DescExtractor(Descriptor,
+                                    ELFT::TargetEndianness == support::little,
+                                    sizeof(Elf_Addr));
         Expected<CoreNote> Note = readCoreNote(DescExtractor);
         if (Note)
           printCoreNoteLLVMStyle(*Note, W);
