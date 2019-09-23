@@ -269,7 +269,11 @@ public:
     return StackNaturalAlign && (Align > StackNaturalAlign);
   }
 
-  unsigned getStackAlignment() const { return StackNaturalAlign ? StackNaturalAlign->value() : 0; }
+  llvm::Align getStackAlignment() const {
+    assert(StackNaturalAlign && "StackNaturalAlign must be defined");
+    return *StackNaturalAlign;
+  }
+
   unsigned getAllocaAddrSpace() const { return AllocaAddrSpace; }
   /// Sets the address space used for allocas
   void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
