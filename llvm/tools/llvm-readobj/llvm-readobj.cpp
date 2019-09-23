@@ -752,10 +752,8 @@ int main(int argc, const char *argv[]) {
     opts::HashHistogram = true;
     opts::CheriCapRelocs = true;
     opts::CheriCapTable = true;
-    // FIXME: As soon as we implement LLVM-style printing of the .stack_size
-    // section, we will enable it with --all (only for LLVM-style).
     if (opts::Output == opts::LLVM)
-      opts::PrintStackSizes = false;
+      opts::PrintStackSizes = true;
   }
 
   if (opts::Headers) {
