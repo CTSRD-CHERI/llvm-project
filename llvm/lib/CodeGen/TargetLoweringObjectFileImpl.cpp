@@ -379,7 +379,7 @@ void TargetLoweringObjectFileELF::emitPersonalityValue(
   unsigned AS = DL.getProgramAddressSpace();
   unsigned Size = DL.getPointerSize(AS);
   Streamer.SwitchSection(Sec);
-  Streamer.EmitValueToAlignment(DL.getPointerABIAlignment(AS));
+  Streamer.EmitValueToAlignment(DL.getPointerABIAlignment(AS).value());
   Streamer.EmitSymbolAttribute(Label, MCSA_ELF_TypeObject);
   const MCExpr *E = MCConstantExpr::create(Size, getContext());
   Streamer.emitELFSize(Label, E);

@@ -355,12 +355,12 @@ public:
   }
 
   /// Layout pointer alignment
-  unsigned getPointerABIAlignment(unsigned AS) const;
+  llvm::Align getPointerABIAlignment(unsigned AS) const;
 
   /// Return target's alignment for stack-based pointers
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerPrefAlignment(LLVM_DEFAULT_AS_PARAM(AS)) const;
+  llvm::Align getPointerPrefAlignment(LLVM_DEFAULT_AS_PARAM(AS)) const;
 
   /// Get the size of the base address component of a pointer.
   /// For pointers that are simple integer representations this returns the
@@ -524,7 +524,7 @@ public:
 
   /// Returns the minimum ABI-required alignment for an integer type of
   /// the specified bitwidth.
-  unsigned getABIIntegerTypeAlignment(unsigned BitWidth) const;
+  llvm::Align getABIIntegerTypeAlignment(unsigned BitWidth) const;
 
   /// Returns the preferred stack/global alignment for the specified
   /// type.
