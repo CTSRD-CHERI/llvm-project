@@ -847,6 +847,12 @@ Value *llvm::emitStrLen(Value *Ptr, IRBuilder<> &B, const DataLayout &DL,
                      getInt8PtrTy(Ptr), castToCStr(Ptr, B), B, TLI);
 }
 
+Value *llvm::emitStrDup(Value *Ptr, IRBuilder<> &B,
+                        const TargetLibraryInfo *TLI) {
+  return emitLibCall(LibFunc_strdup, B.getInt8PtrTy(), B.getInt8PtrTy(),
+                     castToCStr(Ptr, B), B, TLI);
+}
+
 Value *llvm::emitStrChr(Value *Ptr, char C, IRBuilder<> &B,
                         const TargetLibraryInfo *TLI) {
   Type *I8Ptr = getInt8PtrTy(Ptr);
