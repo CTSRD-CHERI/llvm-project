@@ -3944,7 +3944,7 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
 #include "MipsGenCallingConv.inc"
 
  CCAssignFn *MipsTargetLowering::CCAssignFnForCall() const{
-   return CC_Mips;
+   return CC_Mips_FixedArg;
  }
 
  CCAssignFn *MipsTargetLowering::CCAssignFnForReturn() const{
