@@ -9184,9 +9184,11 @@ void CGOpenMPRuntime::emitUDMapperArrayInitOrDel(
 }
 
 void CGOpenMPRuntime::emitTargetNumIterationsCall(
-    CodeGenFunction &CGF, const OMPExecutableDirective &D, const Expr *Device,
-    const llvm::function_ref<llvm::Value *(
-        CodeGenFunction &CGF, const OMPLoopDirective &D)> &SizeEmitter) {
+    CodeGenFunction &CGF, const OMPExecutableDirective &D,
+    llvm::Value *DeviceID,
+    llvm::function_ref<llvm::Value *(CodeGenFunction &CGF,
+                                     const OMPLoopDirective &D)>
+        SizeEmitter) {
   OpenMPDirectiveKind Kind = D.getDirectiveKind();
   const OMPExecutableDirective *TD = &D;
   // Get nested teams distribute kind directive, if any.
@@ -9195,30 +9197,24 @@ void CGOpenMPRuntime::emitTargetNumIterationsCall(
   if (!TD)
     return;
   const auto *LD = cast<OMPLoopDirective>(TD);
-  auto &&CodeGen = [LD, &Device, &SizeEmitter, this](CodeGenFunction &CGF,
+  auto &&CodeGen = [LD, DeviceID, SizeEmitter, this](CodeGenFunction &CGF,
                                                      PrePostActionTy &) {
-    llvm::Value *NumIterations = SizeEmitter(CGF, *LD);
-
-    // Emit device ID if any.
-    llvm::Value *DeviceID;
-    if (Device)
-      DeviceID = CGF.Builder.CreateIntCast(CGF.EmitScalarExpr(Device),
-                                           CGF.Int64Ty, /*isSigned=*/true);
-    else
-      DeviceID = CGF.Builder.getInt64(OMP_DEVICEID_UNDEF);
-
-    llvm::Value *Args[] = {DeviceID, NumIterations};
-    CGF.EmitRuntimeCall(
-        createRuntimeFunction(OMPRTL__kmpc_push_target_tripcount), Args);
+    if (llvm::Value *NumIterations = SizeEmitter(CGF, *LD)) {
+      llvm::Value *Args[] = {DeviceID, NumIterations};
+      CGF.EmitRuntimeCall(
+          createRuntimeFunction(OMPRTL__kmpc_push_target_tripcount), Args);
+    }
   };
   emitInlinedDirective(CGF, OMPD_unknown, CodeGen);
 }
 
-void CGOpenMPRuntime::emitTargetCall(CodeGenFunction &CGF,
-                                     const OMPExecutableDirective &D,
-                                     llvm::Function *OutlinedFn,
-                                     llvm::Value *OutlinedFnID,
-                                     const Expr *IfCond, const Expr *Device) {
+void CGOpenMPRuntime::emitTargetCall(
+    CodeGenFunction &CGF, const OMPExecutableDirective &D,
+    llvm::Function *OutlinedFn, llvm::Value *OutlinedFnID, const Expr *IfCond,
+    const Expr *Device,
+    llvm::function_ref<llvm::Value *(CodeGenFunction &CGF,
+                                     const OMPLoopDirective &D)>
+        SizeEmitter) {
   if (!CGF.HaveInsertPoint())
     return;
 
@@ -9237,8 +9233,8 @@ void CGOpenMPRuntime::emitTargetCall(CodeGenFunction &CGF,
   llvm::Value *MapTypesArray = nullptr;
   // Fill up the pointer arrays and transfer execution to the device.
   auto &&ThenGen = [this, Device, OutlinedFn, OutlinedFnID, &D, &InputInfo,
-                    &MapTypesArray, &CS, RequiresOuterTask,
-                    &CapturedVars](CodeGenFunction &CGF, PrePostActionTy &) {
+                    &MapTypesArray, &CS, RequiresOuterTask, &CapturedVars,
+                    SizeEmitter](CodeGenFunction &CGF, PrePostActionTy &) {
     // On top of the arrays that were filled up, the target offloading call
     // takes as arguments the device id as well as the host pointer. The host
     // pointer is used by the runtime library to identify the current target
@@ -9269,6 +9265,9 @@ void CGOpenMPRuntime::emitTargetCall(CodeGenFunction &CGF,
 
     llvm::Value *NumTeams = emitNumTeamsForTargetDirective(CGF, D);
     llvm::Value *NumThreads = emitNumThreadsForTargetDirective(CGF, D);
+
+    // Emit tripcount for the target loop-based directive.
+    emitTargetNumIterationsCall(CGF, D, DeviceID, SizeEmitter);
 
     bool HasNowait = D.hasClausesOfKind<OMPNowaitClause>();
     // The target region is an outlined function launched by the runtime
@@ -11293,12 +11292,13 @@ void CGOpenMPSIMDRuntime::emitTargetOutlinedFunction(
   llvm_unreachable("Not supported in SIMD-only mode");
 }
 
-void CGOpenMPSIMDRuntime::emitTargetCall(CodeGenFunction &CGF,
-                                         const OMPExecutableDirective &D,
-                                         llvm::Function *OutlinedFn,
-                                         llvm::Value *OutlinedFnID,
-                                         const Expr *IfCond,
-                                         const Expr *Device) {
+void CGOpenMPSIMDRuntime::emitTargetCall(
+    CodeGenFunction &CGF, const OMPExecutableDirective &D,
+    llvm::Function *OutlinedFn, llvm::Value *OutlinedFnID, const Expr *IfCond,
+    const Expr *Device,
+    llvm::function_ref<llvm::Value *(CodeGenFunction &CGF,
+                                     const OMPLoopDirective &D)>
+        SizeEmitter) {
   llvm_unreachable("Not supported in SIMD-only mode");
 }
 
