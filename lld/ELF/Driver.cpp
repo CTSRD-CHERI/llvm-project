@@ -1058,10 +1058,9 @@ static void readConfigs(opt::InputArgList &args) {
     bool isCheriABI;
     std::tie(config->ekind, config->emachine, config->osabi, isCheriABI) =
         parseEmulation(s);
-
     config->setIsCheriABI(isCheriABI);
-    // TODO: add CHERI128 or CHERI256 flags (command line option?)
-    config->mipsN32Abi = (s == "elf32btsmipn32" || s == "elf32ltsmipn32");
+    config->mipsN32Abi =
+        (s.startswith("elf32btsmipn32") || s.startswith("elf32ltsmipn32"));
     config->emulation = s;
   }
 
