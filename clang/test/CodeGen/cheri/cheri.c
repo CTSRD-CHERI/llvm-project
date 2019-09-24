@@ -84,9 +84,9 @@
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)*{{( %.+)?}}, i64
 // CAPS: define i8* @cheri_cap_to_pointer(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*{{( %.+)?}})
 // CAPS: call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
-// CAPS: define void @cheri_perms_check(i8 addrspace(200)* nocapture{{( %.+)?}}, i16 zeroext
+// CAPS: define void @cheri_perms_check(i8 addrspace(200)*{{( %.+)?}}, i16 zeroext
 // CAPS: call void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)*{{( %.+)?}}, i64
-// CAPS: define void @cheri_type_check(i8 addrspace(200)* nocapture{{( %.+)?}}, i8 addrspace(200)* nocapture
+// CAPS: define void @cheri_type_check(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
 // CAPS: call void @llvm.cheri.cap.type.check(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_global_data_get()
 // CAPS: call i8 addrspace(200)* @llvm.cheri.ddc.get()

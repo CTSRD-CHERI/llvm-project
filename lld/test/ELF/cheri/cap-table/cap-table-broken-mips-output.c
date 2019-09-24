@@ -22,6 +22,6 @@ static int __start(void) {
 
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK-NEXT: 0000000000000000 l    df *ABS*    00000000 cap-table-broken-mips-output.c
-// CHECK-NEXT: 0000000000028000         .got		 00000000 .hidden _gp
-// CHECK-NEXT: 0000000000020000 g     O .data		 00000004 global
-// CHECK-NEXT: 0000000000020008 g     O .data		 00000008 global2
+// CHECK-NEXT: 0000000000038210         .got		 00000000 .hidden _gp
+// CHECK-NEXT: 0000000000030210 g     O .data		 00000004 global
+// CHECK-NEXT: 0000000000030218 g     O .data		 00000008 global2

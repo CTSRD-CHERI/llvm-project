@@ -19,23 +19,23 @@
 
 // PER-FILE: Relocations [
 // PER-FILE-NEXT:   Section ({{.+}}) .rel.dyn {
-// PER-FILE-NEXT:     0x20030 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
-// PER-FILE-NEXT:     0x20060 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
-// PER-FILE-NEXT:     0x20080 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x20A10 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x20A40 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x20A60 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
 // PER-FILE-NEXT:   }
 // PER-FILE-NEXT:   Section ({{.+}}) .rel.plt {
-// PER-FILE-NEXT:     0x20000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
-// PER-FILE-NEXT:     0x20010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
-// PER-FILE-NEXT:     0x20020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
-// PER-FILE-NEXT:     0x20050 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
-// PER-FILE-NEXT:     0x20070 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x209E0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x209F0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x20A00 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x20A30 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// PER-FILE-NEXT:     0x20A50 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
 // PER-FILE-NEXT:   }
 // PER-FILE-NEXT: ]
 // PER-FILE-NEXT: DynamicSection [
 // PER-FILE:       0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE
 // PER-FILE:      ]
 // PER-FILE-NEXT: CHERI __cap_relocs [
-// PER-FILE-NEXT:    0x020040 (function3@CAPTABLE@file1.o.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
+// PER-FILE-NEXT:    0x020a20 (function3@CAPTABLE@file1.o.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
 // PER-FILE-NEXT: ]
 // PER-FILE-NEXT: CHERI .captable [
 // PER-FILE-NEXT:   0x0      extern_void_ptr@CAPTABLE@file1.o   R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_void_ptr
@@ -56,12 +56,12 @@
 // Less entries and relocations with a global captable:
 // GLOBAL: Relocations [
 // GLOBAL-NEXT:   Section (7) .rel.dyn {
-// GLOBAL-NEXT:     0x20030 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
+// GLOBAL-NEXT:     0x208C0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
 // GLOBAL-NEXT:   }
 // GLOBAL-NEXT:   Section (8) .rel.plt {
-// GLOBAL-NEXT:     0x20000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
-// GLOBAL-NEXT:     0x20010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
-// GLOBAL-NEXT:     0x20020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
+// GLOBAL-NEXT:     0x20890 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
+// GLOBAL-NEXT:     0x208A0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// GLOBAL-NEXT:     0x208B0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
 // GLOBAL-NEXT:   }
 // GLOBAL-NEXT: ]
 // GLOBAL-LABEL: CHERI .captable [

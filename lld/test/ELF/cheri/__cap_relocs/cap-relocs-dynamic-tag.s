@@ -7,7 +7,7 @@
 # SEGMENTS-NEXT:   00
 # __cap_relocs should be in the rodata segment (since it uses relative relocations)
 # SEGMENTS-NEXT:   01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rodata __cap_relocs
-# SEGMENTS-NEXT:   02     .text .data .got
+# SEGMENTS-NEXT:   02     .data .got
 # SEGMENTS-NEXT:   03     .dynamic
 
 # RUN: llvm-readobj -sections -dynamic-table %t.so | FileCheck %s

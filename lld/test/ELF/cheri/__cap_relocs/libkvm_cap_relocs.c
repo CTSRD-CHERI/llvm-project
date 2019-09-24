@@ -32,12 +32,12 @@
 // READOBJ-NEXT: ]
 
 // CHECK-LABEL: CHERI __cap_relocs [
-// CHECK-NEXT:    0x020000 Base: 0x{{.+}} (<unknown symbol>+0) Length: 60 Perms: Constant
-// CHECK-NEXT:    0x020020 Base: 0x{{.+}} (<unknown symbol>+0) Length: 206 Perms: Constant
-// CHECK-NEXT:    0x020040 Base: 0x{{.+}} (<unknown symbol>+0) Length: 231 Perms: Constant
-// CHECK-NEXT:    0x020060 Base: 0x{{.+}} (<unknown symbol>+0) Length: 243 Perms: Constant
-// CHECK-NEXT:    0x030000 (kvm_pcpu_nl) Base: 0x74a (<unknown symbol>+0) Length: 189 Perms: Constant
-// CHECK-NEXT:    0x030020 Base: 0x{{.+}} (<unknown symbol>+0) Length: 243 Perms: Constant
-// CHECK-NEXT:    0x030040 Base: 0x{{.+}} (<unknown symbol>+0) Length: 10 Perms: Constant
+// CHECK-NEXT:    0x0217d0 Base: 0x{{.+}} (<unknown symbol>+0) Length: 60 Perms: Constant
+// CHECK-NEXT:    0x0217f0 Base: 0x{{.+}} (<unknown symbol>+0) Length: 206 Perms: Constant
+// CHECK-NEXT:    0x021810 Base: 0x{{.+}} (<unknown symbol>+0) Length: 231 Perms: Constant
+// CHECK-NEXT:    0x021830 Base: 0x{{.+}} (<unknown symbol>+0) Length: 243 Perms: Constant
+// CHECK-NEXT:    0x031870 (kvm_pcpu_nl) Base: 0x74a (<unknown symbol>+0) Length: 189 Perms: Constant
+// CHECK-NEXT:    0x031890 Base: 0x{{.+}} (<unknown symbol>+0) Length: 243 Perms: Constant
+// CHECK-NEXT:    0x0318b0 Base: 0x{{.+}} (<unknown symbol>+0) Length: 10 Perms: Constant
 // CHECK-NEXT: ]
 

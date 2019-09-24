@@ -52,11 +52,11 @@ bar:
 # CHECK-EMPTY:
 
 # EXE: CHERI __cap_relocs [
-# EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x120010000 (__start+4) Length: 16 Perms: Function
-# EXE-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x120000240 (foo+123) Length: {{16|32}} Perms: Constant
+# EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x{{[0-9a-f]+}} (__start+4) Length: 16 Perms: Function
+# EXE-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x{{[0-9a-f]+}} (foo+123) Length: {{16|32}} Perms: Constant
 # EXE-NEXT: ]
 
 # SHLIB: CHERI __cap_relocs [
-# SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x10000 (__start+4) Length: 16 Perms: Function
-# SHLIB-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x{{.+}} (foo+123) Length: {{16|32}} Perms: Constant
+# SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x{{[0-9a-f]+}} (__start+4) Length: 16 Perms: Function
+# SHLIB-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x{{[0-9a-f]+}} (foo+123) Length: {{16|32}} Perms: Constant
 # SHLIB-NEXT: ]

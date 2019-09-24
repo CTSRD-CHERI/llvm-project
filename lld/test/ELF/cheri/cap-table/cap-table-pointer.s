@@ -13,7 +13,7 @@ __start:
 
 // CHECK:      Symbol {
 // CHECK:         Name: _CHERI_CAPABILITY_TABLE_ (35)
-// CHECK-NEXT:    Value: 0x20000
+// CHECK-NEXT:    Value: 0x20{{3F0|400}}
 // CHECK-NEXT:    Size: [[#CAP_SIZE]]
 // CHECK-NEXT:    Binding: Local (0x0)
 // CHECK-NEXT:    Type: None (0x0)
@@ -24,7 +24,8 @@ __start:
 // CHECK-NEXT:  }
 
 // CHECK:      CHERI __cap_relocs [
-// CHECK-NEXT:    0x020000 (_CHERI_CAPABILITY_TABLE_@CAPTABLE) Base: 0x20000 (_CHERI_CAPABILITY_TABLE_@CAPTABLE+0) Length: [[#CAP_SIZE]] Perms: Object
+// CHECK-NEXT:    0x0[[CAPTAB_ADDR:20(3f0|400)]]
+// CHECK-SAME:    (_CHERI_CAPABILITY_TABLE_@CAPTABLE) Base: 0x[[CAPTAB_ADDR]] (_CHERI_CAPABILITY_TABLE_@CAPTABLE+0) Length: [[#CAP_SIZE]] Perms: Object
 // CHECK-NEXT: ]
 // CHECK-NEXT: CHERI .captable [
 // CHECK-NEXT:   0x0      _CHERI_CAPABILITY_TABLE_@CAPTABLE

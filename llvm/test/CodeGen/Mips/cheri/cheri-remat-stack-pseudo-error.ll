@@ -22,9 +22,9 @@ define void @fn1() addrspace(200) #0 {
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    daddiu $1, $zero, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    cincoffset $c11, $c11, $1
-; ASM-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
-; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
+; ASM-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 3)]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
 ; ASM-NEXT:    cincoffset $c26, $c12, $1
@@ -42,9 +42,9 @@ define void @fn1() addrspace(200) #0 {
 ; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cgetnull $c13
-; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
-; ASM-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 3)]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
 ; ASM-NEXT:    daddiu $1, $zero, [[#STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, $1
@@ -75,8 +75,8 @@ define void @small_stack_fn1() addrspace(200) #0 {
 ; ASM-LABEL: small_stack_fn1:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(small_stack_fn1)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(small_stack_fn1)))
 ; ASM-NEXT:    cincoffset $c26, $c12, $1
@@ -93,8 +93,8 @@ define void @small_stack_fn1() addrspace(200) #0 {
 ; ASM-NEXT:    csetbounds $c3, $c3, 512
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cgetnull $c13
-; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 1)]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 1)]]($c11)
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:

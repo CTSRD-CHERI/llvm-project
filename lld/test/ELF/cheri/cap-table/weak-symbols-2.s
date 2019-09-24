@@ -7,7 +7,7 @@
 # STATIC-COMMON-NEXT:  }
 # STATIC-COMMON:       Symbol {
 # STATIC-COMMON:         Name: weak_symbol@CAPTABLE (
-# STATIC-COMMON-NEXT:    Value: 0x120020000
+# STATIC-COMMON-NEXT:    Value: 0x120020{{.+}}
 # STATIC-COMMON-NEXT:    Size: {{16|32}}
 # STATIC-COMMON-NEXT:    Binding: Local (0x0)
 # STATIC-COMMON-NEXT:    Type: Object (0x1)
@@ -63,7 +63,7 @@
 # RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,RESOLVED '-D$RESOLVED_SIZE=8'
 # RESOLVED:       Symbol {
 # RESOLVED:         Name: weak_symbol (
-# RESOLVED-NEXT:    Value: 0x120030000
+# RESOLVED-NEXT:    Value: 0x120030{{.+}}
 # RESOLVED-NEXT:    Size: [[$RESOLVED_SIZE]]
 # RESOLVED-NEXT:    Binding: Global (0x1)
 # RESOLVED-NEXT:    Type: None (0x0)

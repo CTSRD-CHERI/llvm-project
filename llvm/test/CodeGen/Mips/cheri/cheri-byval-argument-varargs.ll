@@ -15,9 +15,9 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    daddiu $1, $zero, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    cincoffset $c11, $c11, $1
-; CHECK-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - #CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
+; CHECK-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 3)]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
 ; CHECK-NEXT:    cincoffset $c19, $c12, $1
@@ -35,9 +35,9 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    candperm $c13, $c1, $1
-; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 3)]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE * 2)]]($c11)
-; CHECK-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - #CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 3)]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
+; CHECK-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; CHECK-NEXT:    daddiu $1, $zero, [[#STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, $1

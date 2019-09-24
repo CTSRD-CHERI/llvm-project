@@ -14,7 +14,7 @@
 // Build a shared library that uses the function pointer:
 // RUN: ld.lld -shared %t-shlib.o -o %t-shlib.so
 // RUN: llvm-objdump --syms %t-shlib.so | FileCheck %s -check-prefix SHLIB-DUMP
-// SHLIB-DUMP: 0000000000010000 g     F .text		 000000{{[0-9a-f]+}} use_callback
+// SHLIB-DUMP: 0000000000010380 g     F .text		 000000{{[0-9a-f]+}} use_callback
 
 
 // Should not build with the --building-freebsd-rtld flag
@@ -38,13 +38,13 @@
 
 // CHECK-LABEL: Dynamic Relocations {
 // We need a R_MIPS_CHERI_CAPABILITY relocation against return1 to ensure that the dynamic linker creates a unique trampoline
-// CHECK-NEXT:    0x{{12002|2}}0000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_return1 0x0
+// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_return1 0x0
 // R_MIPS_CHERI_CAPABILITY against the global function pointer:
-// CHECK-SHLIB:   0x{{12002|2}}0020 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_return2 0x0
+// CHECK-SHLIB-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_return2 0x0
 // In executables with --export-dynamic we add a new hidden symbol:
-// CHECK-NODYN:     0x{{12002|2}}0020 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_global_return2 0x0
+// CHECK-NODYN-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_global_return2 0x0
 // We need a R_MIPS_CHERI_CAPABILITY_CALL relocation against use_callback to call a function in another DSO
-// CHECK-NEXT:    0x{{12002|2}}0010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE use_callback 0x0
+// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE use_callback 0x0
 // CHECK-NEXT:  }
 // CHECK-LABEL: DynamicSymbols [
 // CHECK-NEXT:   Symbol {
@@ -59,7 +59,7 @@
 // CHECK-NEXT:   Symbol {
 // Check that we added a "fake" symbol for the local return1 symbol:
 // CHECK-NEXT:     Name: __cheri_fnptr_return1 ({{.+}})
-// CHECK-NEXT:     Value: 0x{{12001|1}}0080
+// CHECK-NEXT:     Value:
 // CHECK-NEXT:     Size: 12
 // CHECK-NEXT:     Binding: Local (0x0)
 // CHECK-NEXT:     Type: Function (0x2)
@@ -71,7 +71,7 @@
 // For executables without --export-dynamic we also create a "fake" symbol alias for global_return2
 // CHECK-NODYN-NEXT:   Symbol {
 // CHECK-NODYN-NEXT:     Name: __cheri_fnptr_global_return2 ({{.+}})
-// CHECK-NODYN-NEXT:     Value: 0x{{12001|1}}0000
+// CHECK-NODYN-NEXT:     Value:
 // CHECK-NODYN-NEXT:     Size: 12
 // CHECK-NODYN-NEXT:     Binding: Local (0x0)
 // CHECK-NODYN-NEXT:     Type: Function (0x2)
@@ -82,7 +82,7 @@
 // CHECK-NODYN-NEXT:   }
 // CHECK-SHLIB-NEXT:   Symbol {
 // CHECK-SHLIB-NEXT:     Name: global_return2 ({{.+}})
-// CHECK-SHLIB-NEXT:     Value: 0x{{12001|1}}0000
+// CHECK-SHLIB-NEXT:     Value:
 // CHECK-SHLIB-NEXT:     Size: 12
 // CHECK-SHLIB-NEXT:     Binding: Global (0x1)
 // CHECK-SHLIB-NEXT:     Type: Function (0x2)
@@ -119,9 +119,9 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x120020000 (return1@CAPTABLE.0) Base: 0x120010080 (return1+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020010 (use_callback@CAPTABLE) Base: 0x120010090 (use_callback+0) Length: {{[0-9]+}} Perms: Function
-// STATIC-NEXT:     0x120020020 (global_return2@CAPTABLE) Base: 0x120010000 (global_return2+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x1200203d0 (return1@CAPTABLE.0) Base: 0x120010370 (return1+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x1200203e0 (use_callback@CAPTABLE) Base: 0x120010380 (use_callback+0) Length: {{[0-9]+}} Perms: Function
+// STATIC-NEXT:     0x1200203f0 (global_return2@CAPTABLE) Base: 0x1200102f0 (global_return2+0) Length: 12 Perms: Function
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      return1@CAPTABLE.0

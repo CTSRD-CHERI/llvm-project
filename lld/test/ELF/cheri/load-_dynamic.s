@@ -30,14 +30,14 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 # STATIC-LABEL: Disassembly of section .text:
 # STATIC-EMPTY:
 # STATIC-NEXT: __start:
-# STATIC-NEXT:   20000:	34 02 00 00 	ori	$2, $zero, 0
+# STATIC-NEXT:   ori	$2, $zero, 0
 
 # DYNAMIC-LABEL: Disassembly of section .text:
 # DYNAMIC-EMPTY:
 # DYNAMIC-NEXT: __start:
-# DYNAMIC-PIE-NEXT:      10000:	34 02 00 01 	ori	$2, $zero, 1
-# DYNAMIC-SHLIB-NEXT:    10000:	34 02 00 01 	ori	$2, $zero, 1
-# DYNAMIC-NONPIC-NEXT:   20000:	34 02 00 01 	ori	$2, $zero, 1
+# DYNAMIC-PIE-NEXT:      ori	$2, $zero, 1
+# DYNAMIC-SHLIB-NEXT:    ori	$2, $zero, 1
+# DYNAMIC-NONPIC-NEXT:   ori	$2, $zero, 1
 
 .data
 .weak _DYNAMIC
@@ -54,9 +54,9 @@ value_of_HAS__DYNAMIC:
 .8byte 0xfedcba0987654321
 
 # STATIC-LABEL: Contents of section .data:
-# STATIC-NEXT: 30000 00000000 00000000 12345678 90abcdef
+# STATIC-NEXT: 00000000 00000000 12345678 90abcdef
 #                        ^----- _DYNAMIC == 0
-# STATIC-NEXT: 30010 00000000 00000000 fedcba09 87654321
+# STATIC-NEXT: 00000000 00000000 fedcba09 87654321
 #                        ^----- _HAS__DYNAMIC == 0
 # STATIC-LABEL: SYMBOL TABLE:
 
@@ -66,12 +66,12 @@ value_of_HAS__DYNAMIC:
 
 
 # DYNAMIC-LABEL: Contents of section .data:
-# DYNAMIC-PIE-NEXT:    20000 00000000 [[DYNAMIC_ADDR:00000[0-9a-f]+]] 12345678 90abcdef
-# DYNAMIC-SHLIB-NEXT:  20000 00000000 [[DYNAMIC_ADDR:00000[0-9a-f]+]] 12345678 90abcdef
+# DYNAMIC-PIE-NEXT:    00000000 [[DYNAMIC_ADDR:00000[0-9a-f]+]] 12345678 90abcdef
+# DYNAMIC-SHLIB-NEXT:  00000000 [[DYNAMIC_ADDR:00000[0-9a-f]+]] 12345678 90abcdef
 #                        ^----- _DYNAMIC == relocbase + 0x1f8 (addend 0x1f8 is written here since we use REL)
-# DYNAMIC-NONPIC-NEXT: 30000 00000000 [[DYNAMIC_ADDR:000[0-9a-f]+]] 12345678 90abcdef
+# DYNAMIC-NONPIC-NEXT: 00000000 [[DYNAMIC_ADDR:000[0-9a-f]+]] 12345678 90abcdef
 #                        ^----- absolute value for _DYNAMIC in non-pie executable with shlibs
-# DYNAMIC-NEXT: {{3|2}}0010 00000000 00000001 fedcba09 87654321
+# DYNAMIC-NEXT: 00000000 00000001 fedcba09 87654321
 #                        ^----- _HAS__DYNAMIC == 1
 # DYNAMIC-LABEL: SYMBOL TABLE:
 # DYNAMIC-PIE-NEXT:    00000000[[DYNAMIC_ADDR]]        .dynamic  00000000 .hidden _DYNAMIC

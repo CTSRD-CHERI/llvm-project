@@ -18,16 +18,16 @@ __attribute((visibility("protected"))) int __start(int x) {
 }
 
 const char space[16] = {0};
-__attribute((section(".rodata"))) const int(*foo)(int) = &__start + 4;
+__attribute((section(".rodata"))) int (* const foo)(int) = &__start + 4;
 
 // CHECK: error: attempting to add a capability relocation against symbol __start in a read-only section; pass -Wl,-z,notext if you really want to do this
 // CHECK-NEXT: >>> referenced by object foo
 // CHECK-NEXT: >>> defined in capability-in-rodata2.c ({{.+}}capability-in-rodata2.c.tmp.o:(foo))
 
 // EXE: CHERI __cap_relocs [
-// EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x120010000 (__start+4) Length: {{.+}} Perms: Function
+// EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x{{[0-9a-f]+}} (__start+4) Length: {{.+}} Perms: Function
 // EXE-NEXT: ]
 
 // SHLIB: CHERI __cap_relocs [
-// SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x10000 (__start+4) Length: {{.+}} Perms: Function
+// SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x{{[0-9a-f]+}} (__start+4) Length: {{.+}} Perms: Function
 // SHLIB-NEXT: ]

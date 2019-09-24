@@ -33,7 +33,7 @@ define i128 @test2(%class.duration* dereferenceable(16) %e) local_unnamed_addr n
 ; CHERI256-NEXT:    [[REF_TMP:%.*]] = alloca [[CLASS_DURATION:%.*]], align 16
 ; CHERI256-NEXT:    [[TMP0:%.*]] = bitcast %class.duration* [[REF_TMP]] to i8*
 ; CHERI256-NEXT:    [[TMP1:%.*]] = bitcast %class.duration* [[E:%.*]] to i8*
-; CHERI256-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* nonnull align 16 [[TMP0]], i8* nonnull align 16 [[TMP1]], i64 16, i1 false)
+; CHERI256-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* nonnull align 16 dereferenceable(16) [[TMP0]], i8* nonnull align 16 dereferenceable(16) [[TMP1]], i64 16, i1 false)
 ; CHERI256-NEXT:    [[CALL:%.*]] = call i128 @_ZN8durationInE1fEv(%class.duration* nonnull [[REF_TMP]])
 ; CHERI256-NEXT:    ret i128 [[CALL]]
 ;

@@ -24,5 +24,5 @@ __start:
 # CHECK-NOT: .captable
 # CHECK-LABEL: SYMBOL TABLE:
 # CHECK-NEXT: 0000000000000000         *ABS*           00000000 .hidden _CHERI_CAPABILITY_TABLE_
-# CHECK-NEXT: 0000000120027ff0         .got            00000000 .hidden _gp
-# CHECK-NEXT: 0000000120010000         .text           00000000 __start
+# CHECK-NEXT: 0000000120028220         .got            00000000 .hidden _gp
+# CHECK-NEXT: 0000000120010210         .text           00000000 __start

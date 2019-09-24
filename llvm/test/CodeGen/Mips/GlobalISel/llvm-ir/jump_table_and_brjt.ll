@@ -108,11 +108,15 @@ define i32 @mod4_0_to_11(i32 %a) {
 ; MIPS32-NEXT:   .4byte ($BB0_3)
 ; MIPS32-NEXT:   .4byte ($BB0_4)
 ; MIPS32-NEXT:   .4byte ($BB0_5)
+; MIPS32-NEXT:  $$JTI0_0_end0:
+; MIPS32-NEXT:   .size $JTI0_0, ($$JTI0_0_end0)-($JTI0_0)
 ; MIPS32-NEXT:   $JTI0_1:
 ; MIPS32-NEXT:   .4byte ($BB0_9)
 ; MIPS32-NEXT:   .4byte ($BB0_10)
 ; MIPS32-NEXT:   .4byte ($BB0_11)
 ; MIPS32-NEXT:   .4byte ($BB0_12)
+; MIPS32-NEXT:  $$JTI0_1_end0:
+; MIPS32-NEXT:   .size $JTI0_1, ($$JTI0_1_end0)-($JTI0_1)
 
 ;
 ; MIPS32_PIC-LABEL: mod4_0_to_11:
@@ -229,11 +233,15 @@ define i32 @mod4_0_to_11(i32 %a) {
 ; MIPS32_PIC-NEXT:   .gpword ($BB0_3)
 ; MIPS32_PIC-NEXT:   .gpword ($BB0_4)
 ; MIPS32_PIC-NEXT:   .gpword ($BB0_5)
+; MIPS32_PIC-NEXT:  $$JTI0_0_end0:
+; MIPS32_PIC-NEXT:   .size $JTI0_0, ($$JTI0_0_end0)-($JTI0_0)
 ; MIPS32_PIC-NEXT:   $JTI0_1:
 ; MIPS32_PIC-NEXT:   .gpword ($BB0_9)
 ; MIPS32_PIC-NEXT:   .gpword ($BB0_10)
 ; MIPS32_PIC-NEXT:   .gpword ($BB0_11)
 ; MIPS32_PIC-NEXT:   .gpword ($BB0_12)
+; MIPS32_PIC-NEXT:  $$JTI0_1_end0:
+; MIPS32_PIC-NEXT:   .size $JTI0_1, ($$JTI0_1_end0)-($JTI0_1)
 
 entry:
   switch i32 %a, label %sw.default [

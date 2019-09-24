@@ -5070,7 +5070,7 @@
 // CHERI-COMMON-NEXT: #define __UINT_LEAST8_MAX__ 255
 // CHERI-COMMON-NEXT: #define __UINT_LEAST8_TYPE__ unsigned char
 // CHERI-COMMON-NEXT: #define __USER_LABEL_PREFIX__
-// CHERI-COMMON-NEXT: #define __VERSION__ "4.2.1 Compatible Clang
+// CHERI-COMMON-NEXT: #define __VERSION__ "{{.*}}Clang{{.*}}
 // CHERI-COMMON-NEXT: #define __WCHAR_MAX__ 2147483647
 // CHERI-COMMON-NEXT: #define __WCHAR_TYPE__ int
 // CHERI-COMMON-NEXT: #define __WCHAR_WIDTH__ 32

@@ -152,9 +152,9 @@ int __start(void) {
 // WARN-NEXT: >>> defined in cap-table-negative-reloc-offset.c
 
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
-// CHECK: 0x0000000120020440	Base: __man_macros (0x0000000120020000)	Offset: 0xffffffffffffd280	Length: 0x0000000000000440	Permissions: 0x4000000000000000 (Constant)
+// CHECK: 0x[[MAN_MACROS_ADDR:0000000120020c60]]	Base: __man_macros (0x[[__MAN_MACROS_ADDR:0000000120020820]])	Offset: 0xffffffffffffd280	Length: 0x0000000000000440	Permissions: 0x4000000000000000 (Constant)
 
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK: 0000000120020000 g     O .data.rel.ro		 00000440 __man_macros
-// CHECK: 0000000120020440 g     O .data.rel.ro		 00000010 man_macros
+// CHECK: [[__MAN_MACROS_ADDR]] g     O .data.rel.ro		 00000440 __man_macros
+// CHECK: [[MAN_MACROS_ADDR]] g     O .data.rel.ro		 00000010 man_macros
 

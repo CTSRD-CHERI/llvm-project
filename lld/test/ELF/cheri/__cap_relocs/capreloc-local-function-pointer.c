@@ -13,7 +13,7 @@
 
 // Look at shared libraries:
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
-// RUN: llvm-readobj --cap-relocs -t -s -sd -r %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
+// RUN: llvm-readobj --cap-relocs -t -s -sd -r %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,SHLIB,SHLIB-RELOCS %s
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t-legacy.o
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-legacy.o -no-process-cap-relocs -static -o %t-static-external-capsizefix.exe
@@ -71,6 +71,7 @@ void __start(void) {}
 // DUMP-CAPRELOCS:      SectionData (
 // STATIC-NEXT:  0000: CACACACA CACACACA CACACACA CACACACA
 // DYNAMIC-NEXT:  0000: CACACACA CACACACA CACACACA CACACACA
+// SHLIB-NEXT:  0000: CACACACA CACACACA CACACACA CACACACA
 // external capsizefix doesn't initialize capabilities to 0xcacacacaca
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT:  0000: 00000000 00000000 00000000 00000000
 // DUMP-CAPRELOCS-NEXT: )
@@ -78,10 +79,17 @@ void __start(void) {}
 
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20570 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20578 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
+
+// SHLIB-RELOCS-LABEL: Relocations [
+// SHLIB-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
+// SHLIB-RELOCS-NEXT:     0x20620 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x20628 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:   }
+// SHLIB-RELOCS-NEXT: ]
 
 
 // DUMP-CAPRELOCS-LABEL: Symbols [
@@ -107,10 +115,11 @@ void __start(void) {}
 
 
 // DUMP-CAPRELOCS-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:                     0x120020000 (__error_selector) Base: 0x1200100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-NEXT:                     0x120020350 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // PIE exe and shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT:                    0x030000 (__error_selector) Base: 0x100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
+// DYNAMIC-NEXT:                    0x0305a0 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
+// SHLIB-NEXT:                      0x030650 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // The external capsizefix does okay static:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020000 (__error_selector) Base: 0x1200100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020350 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // DUMP-CAPRELOCS-NEXT: ]
 

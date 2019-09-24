@@ -18,7 +18,7 @@ define void @h() #0 {
 entry:
   call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 bitcast (%struct.anon* @g to i8*), i8* align 4 bitcast (void ()* @h to i8*), i64 6, i1 false)
   ; This should not be turned into a load i8 addrspace(200)
-  ; CHECK: call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 bitcast (%struct.anon* @g to i8*), i8* align 4 bitcast (void ()* @h to i8*), i64 6, i1 false)
+  ; CHECK: call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 dereferenceable(6) bitcast (%struct.anon* @g to i8*), i8* align 4 dereferenceable(6) bitcast (void ()* @h to i8*), i64 6, i1 false)
   ret void
 }
 

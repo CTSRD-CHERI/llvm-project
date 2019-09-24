@@ -14,7 +14,7 @@ define hidden void @_ZN19QWebSettingsPrivate5applyEv() local_unnamed_addr addrsp
 ; CHECK-LABEL: _ZN19QWebSettingsPrivate5applyEv:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (#CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN19QWebSettingsPrivate5applyEv)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN19QWebSettingsPrivate5applyEv)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1

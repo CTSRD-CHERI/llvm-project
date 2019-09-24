@@ -167,7 +167,7 @@ TYPE inline_align_down(void) {
   // SLOW: call [[$TYPE]] @align_down({{.+(100|%[0-9]).*}}, i32 signext 32)
   // LONG-OPT: ret i64 96
   // PTR-OPT: ret i8* inttoptr (i64 96 to i8*)
-  // CAPPTR-OPT: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*), i64 96)
+  // CAPPTR-OPT: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* nonnull inttoptr (i64 100 to i8 addrspace(200)*), i64 96)
   // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 96)
   return align_down((TYPE)100, 32);
 }
@@ -177,7 +177,7 @@ TYPE inline_p2align_down(void) {
   // SLOW: call [[$TYPE]] @p2align_down({{.+(100|%[0-9]).*}}, i32 signext 10)
   // LONG-OPT: ret i64 0
   // PTR-OPT: ret i8* null
-  // CAPPTR-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*), i64 0)
+  // CAPPTR-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* nonnull inttoptr (i64 100 to i8 addrspace(200)*), i64 0)
   // UINTCAP-OPT: ret i8 addrspace(200)* null
   return p2align_down((TYPE)100, 10);
 }
@@ -187,7 +187,7 @@ TYPE inline_align_up(void) {
   // SLOW: call [[$TYPE]] @align_up({{.+(100|%[0-9]).*}}, i32 signext 32)
   // LONG-OPT: ret i64 128
   // PTR-OPT: ret i8* inttoptr (i64 128 to i8*)
-  // CAPPTR-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*), i64 128)
+  // CAPPTR-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* nonnull inttoptr (i64 100 to i8 addrspace(200)*), i64 128)
   // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 128)
   return align_up((TYPE)100, 32);
 }
@@ -197,7 +197,7 @@ TYPE inline_p2align_up(void) {
   // SLOW: call [[$TYPE]] @p2align_up({{.+(100|%[0-9]).*}}, i32 signext 10)
   // LONG-OPT: ret i64 1024
   // PTR-OPT: ret i8* inttoptr (i64 1024 to i8*)
-  // CAPPTR-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*), i64 1024)
+  // CAPPTR-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* nonnull inttoptr (i64 100 to i8 addrspace(200)*), i64 1024)
   // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1024)
   return p2align_up((TYPE)100, 10);
 }

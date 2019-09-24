@@ -71,7 +71,7 @@
 // With the version script/when building an executable we also need to add a fake symbol for default_callback
 // CHECK-NONPREEMPTIBLE-NEXT:   Symbol {
 // CHECK-NONPREEMPTIBLE-NEXT:     Name: __cheri_fnptr_default_callback ({{.+}})
-// CHECK-NONPREEMPTIBLE-NEXT:     Value: 0x{{12001|1}}0000
+// CHECK-NONPREEMPTIBLE-NEXT:     Value:
 // CHECK-NONPREEMPTIBLE-NEXT:     Size: 12
 // CHECK-NONPREEMPTIBLE-NEXT:     Binding: Local (0x0)
 // CHECK-NONPREEMPTIBLE-NEXT:     Type: Function (0x2)
@@ -83,7 +83,7 @@
 // CHECK-NEXT:   Symbol {
 // Check that we added a "fake" symbol for the local return1 symbol:
 // CHECK-NEXT:     Name: __cheri_fnptr_static_callback ({{.+}})
-// CHECK-NEXT:     Value: 0x{{12001|1}}0098
+// CHECK-NEXT:     Value:
 // CHECK-NEXT:     Size: 12
 // CHECK-NEXT:     Binding: Local (0x0)
 // CHECK-NEXT:     Type: Function (0x2)
@@ -94,7 +94,7 @@
 // CHECK-NEXT:   }
 // CHECK-SHLIB-NEXT:  Symbol {
 // CHECK-SHLIB-NEXT:    Name: check_if_default (
-// CHECK-SHLIB-NEXT:    Value: 0x{{12001|1}}0270
+// CHECK-SHLIB-NEXT:    Value:
 // CHECK-SHLIB-NEXT:    Size: 40
 // CHECK-SHLIB-NEXT:    Binding: Global (0x1)
 // CHECK-SHLIB-NEXT:    Type: Function (0x2)
@@ -105,7 +105,7 @@
 // CHECK-SHLIB-NEXT:  }
 // CHECK-NO-VERSION-SCRIPT-NEXT:  Symbol {
 // CHECK-NO-VERSION-SCRIPT-NEXT:    Name: default_callback (
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Value: {{0x12001|0x1}}0000
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Value:
 // CHECK-NO-VERSION-SCRIPT-NEXT:    Size: 12
 // CHECK-NO-VERSION-SCRIPT-NEXT:    Binding: Global (0x1)
 // CHECK-NO-VERSION-SCRIPT-NEXT:    Type: Function (0x2)
@@ -141,14 +141,14 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x120020000 (callbacks)     Base: 0x120010000 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020010 Base: 0x120010098 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020020 Base: 0x120010000 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020030 Base: 0x120010098 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020040 (default_callback@CAPTABLE) Base: 0x120010000 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020050 (check_if_default@CAPTABLE) Base: 0x120010270 (check_if_default+0) Length: {{.+}} Perms: Function
-// STATIC-NEXT:     0x120020060 (static_callback@CAPTABLE.2) Base: 0x120010098 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x120020070 (callbacks@CAPTABLE.3) Base: 0x120020000 (callbacks+0) Length: 64 Perms: Constant
+// STATIC-NEXT:     0x120020660 (callbacks)     Base: 0x1200103c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x120020670 Base: 0x120010458 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x120020680 Base: 0x1200103c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x120020690 Base: 0x120010458 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x1200206a0 (default_callback@CAPTABLE) Base: 0x1200103c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x1200206b0 (check_if_default@CAPTABLE) Base: 0x120010630 (check_if_default+0) Length: {{.+}} Perms: Function
+// STATIC-NEXT:     0x1200206c0 (static_callback@CAPTABLE.2) Base: 0x120010458 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x1200206d0 (callbacks@CAPTABLE.3) Base: 0x120020660 (callbacks+0) Length: 64 Perms: Constant
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      default_callback@CAPTABLE

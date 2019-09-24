@@ -30,23 +30,151 @@ declare void @free(i8 addrspace(200)* nocapture) #1
 
 ; Function Attrs: nounwind
 define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x_off) nounwind {
+; CAPTABLE-LABEL: eo_fermion_force:
+; CAPTABLE:       # %bb.0: # %entry
+; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CAPTABLE-NEXT:    dmfc1 $1, $f28
+; CAPTABLE-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
+; CAPTABLE-NEXT:    dmfc1 $1, $f27
+; CAPTABLE-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 16]]($c11)
+; CAPTABLE-NEXT:    dmfc1 $1, $f26
+; CAPTABLE-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 24]]($c11)
+; CAPTABLE-NEXT:    dmfc1 $1, $f25
+; CAPTABLE-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 32]]($c11)
+; CAPTABLE-NEXT:    dmfc1 $1, $f24
+; CAPTABLE-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 40]]($c11)
+; CAPTABLE-NEXT:    csd $16, $zero, [[# STACKFRAME_SIZE - 48]]($c11)
+; CAPTABLE-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
+; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11)
+; CAPTABLE-NEXT:    lui $1, %hi(%neg(%captab_rel(eo_fermion_force)))
+; CAPTABLE-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(eo_fermion_force)))
+; CAPTABLE-NEXT:    cincoffset $c18, $c12, $1
+; CAPTABLE-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c18)
+; CAPTABLE-NEXT:    cld $2, $zero, 0($c1)
+; CAPTABLE-NEXT:    b .LBB0_20
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.1: # %for.cond.30.preheader
+; CAPTABLE-NEXT:    dmtc1 $2, $f24
+; CAPTABLE-NEXT:    neg.d $f26, $f24
+; CAPTABLE-NEXT:    cld $1, $zero, 0($c1)
+; CAPTABLE-NEXT:    div.d $f27, $f24, $f0
+; CAPTABLE-NEXT:    neg.d $f28, $f0
+; CAPTABLE-NEXT:    dmtc1 $1, $f25
+; CAPTABLE-NEXT:    addiu $2, $zero, 1
+; CAPTABLE-NEXT:  .LBB0_2: # %for.body.37
+; CAPTABLE-NEXT:    # =>This Inner Loop Header: Depth=1
+; CAPTABLE-NEXT:    bnez $2, .LBB0_2
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.3: # %if.then
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(u_shift_fermion)($c18)
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
+; CAPTABLE-NEXT:    addiu $16, $zero, 1
+; CAPTABLE-NEXT:    beqz $16, .LBB0_6
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.4: # %if.then.48
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
+; CAPTABLE-NEXT:  .LBB0_5: # %for.inc.172
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    b .LBB0_15
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  .LBB0_6: # %for.body.55
+; CAPTABLE-NEXT:    # =>This Inner Loop Header: Depth=1
+; CAPTABLE-NEXT:    bnez $zero, .LBB0_5
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.7: # %if.then.69
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    bnez $16, .LBB0_17
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.8: # %for.body.84.preheader
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    bnez $zero, .LBB0_12
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.9: # %if.then.105
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    bnez $zero, .LBB0_19
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.10: # %if.then.113
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    mov.d $f13, $f26
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    mov.d $f13, $f24
+; CAPTABLE-NEXT:    bnez $zero, .LBB0_12
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.11: # %for.body.128.preheader
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(scalar_mult_add_su3_vector)($c18)
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    mov.d $f12, $f27
+; CAPTABLE-NEXT:  .LBB0_12: # %for.inc.143
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    b .LBB0_18
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.13: # %if.else.8.i.415
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    mov.d $f13, $f28
+; CAPTABLE-NEXT:    bnez $zero, .LBB0_5
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  # %bb.14: # %for.body.157.preheader
+; CAPTABLE-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(scalar_mult_add_su3_vector)($c18)
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    mov.d $f12, $f25
+; CAPTABLE-NEXT:    b .LBB0_5
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  .LBB0_15: # %for.end.174
+; CAPTABLE-NEXT:    b .LBB0_21
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  .LBB0_16: # %for.body.197
+; CAPTABLE-NEXT:    # =>This Inner Loop Header: Depth=1
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(scalar_mult_add_su3_vector)($c18)
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    mov.d $f12, $f25
+; CAPTABLE-NEXT:    b .LBB0_16
+; CAPTABLE-NEXT:    nop
+; CAPTABLE-NEXT:  .LBB0_17: # %if.then.77
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
+; CAPTABLE-NEXT:  .LBB0_18: # %if.then.6.i.413
+; CAPTABLE-NEXT:    .insn
+; CAPTABLE-NEXT:  .LBB0_19: # %if.else.i.critedge
+; CAPTABLE-NEXT:    .insn
+; CAPTABLE-NEXT:  .LBB0_20: # %for.body.24.lr.ph
+; CAPTABLE-NEXT:    .insn
+; CAPTABLE-NEXT:  .LBB0_21: # %if.then.182
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
+; CAPTABLE-NEXT:    daddiu $4, $zero, 0
+; CAPTABLE-NEXT:    cjalr $c12, $c17
+; CAPTABLE-NEXT:    mov.d $f13, $f24
+;
 ; LEGACY-LABEL: eo_fermion_force:
 ; LEGACY:       # %bb.0: # %entry
 ; LEGACY-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; LEGACY-NEXT:    dmfc1 $1, $f27
-; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
 ; LEGACY-NEXT:    dmfc1 $1, $f26
-; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 16]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 16]]($c11)
 ; LEGACY-NEXT:    dmfc1 $1, $f25
-; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 24]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 24]]($c11)
 ; LEGACY-NEXT:    dmfc1 $1, $f24
-; LEGACY-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 32]]($c11)
-; LEGACY-NEXT:    csd $gp, $zero, [[#STACKFRAME_SIZE - 40]]($c11)
-; LEGACY-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 48]]($c11)
+; LEGACY-NEXT:    csd $1, $zero, [[# STACKFRAME_SIZE - 32]]($c11)
+; LEGACY-NEXT:    csd $gp, $zero, [[# STACKFRAME_SIZE - 40]]($c11)
+; LEGACY-NEXT:    csd $16, $zero, [[# STACKFRAME_SIZE - 48]]($c11)
 ; LEGACY-NEXT:    csc $c17, $zero, 0($c11)
 ; LEGACY-NEXT:    cgetoffset $25, $c12
 ; LEGACY-NEXT:    lui $1, %hi(%neg(%gp_rel(eo_fermion_force)))
-; LEGACY-NEXT:    b .LBB0_19
+; LEGACY-NEXT:    b .LBB0_20
 ; LEGACY-NEXT:    daddu $2, $1, $25
 ; LEGACY-NEXT:  # %bb.1: # %for.cond.30.preheader
 ; LEGACY-NEXT:    daddiu $gp, $2, %lo(%neg(%gp_rel(eo_fermion_force)))
@@ -66,26 +194,35 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    daddiu $4, $zero, 0
 ; LEGACY-NEXT:    addiu $16, $zero, 1
-; LEGACY-NEXT:    bnez $16, .LBB0_20
+; LEGACY-NEXT:    beqz $16, .LBB0_6
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  .LBB0_4: # %for.body.55
+; LEGACY-NEXT:  # %bb.4: # %if.then.48
+; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
+; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
+; LEGACY-NEXT:    cjalr $c12, $c17
+; LEGACY-NEXT:    daddiu $4, $zero, 0
+; LEGACY-NEXT:  .LBB0_5: # %for.inc.172
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; LEGACY-NEXT:    b .LBB0_15
+; LEGACY-NEXT:    nop
+; LEGACY-NEXT:  .LBB0_6: # %for.body.55
 ; LEGACY-NEXT:    # =>This Inner Loop Header: Depth=1
-; LEGACY-NEXT:    bnez $zero, .LBB0_13
+; LEGACY-NEXT:    bnez $zero, .LBB0_5
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.5: # %if.then.69
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; LEGACY-NEXT:    bnez $16, .LBB0_16
+; LEGACY-NEXT:  # %bb.7: # %if.then.69
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; LEGACY-NEXT:    bnez $16, .LBB0_17
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.6: # %for.body.84.preheader
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; LEGACY-NEXT:    bnez $zero, .LBB0_10
+; LEGACY-NEXT:  # %bb.8: # %for.body.84.preheader
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; LEGACY-NEXT:    bnez $zero, .LBB0_12
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.7: # %if.then.105
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; LEGACY-NEXT:    bnez $zero, .LBB0_18
+; LEGACY-NEXT:  # %bb.9: # %if.then.105
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; LEGACY-NEXT:    bnez $zero, .LBB0_19
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.8: # %if.then.113
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
+; LEGACY-NEXT:  # %bb.10: # %if.then.113
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
 ; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    daddiu $4, $zero, 0
@@ -96,64 +233,57 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; LEGACY-NEXT:    daddiu $4, $zero, 0
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    mov.d $f13, $f24
-; LEGACY-NEXT:    bnez $zero, .LBB0_10
+; LEGACY-NEXT:    bnez $zero, .LBB0_12
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.9: # %for.body.128.preheader
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
+; LEGACY-NEXT:  # %bb.11: # %for.body.128.preheader
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
 ; LEGACY-NEXT:    ld $1, %call16(scalar_mult_add_su3_vector)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    mov.d $f12, $f26
-; LEGACY-NEXT:  .LBB0_10: # %for.inc.143
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; LEGACY-NEXT:    b .LBB0_17
+; LEGACY-NEXT:  .LBB0_12: # %for.inc.143
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
+; LEGACY-NEXT:    b .LBB0_18
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.11: # %if.else.8.i.415
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
+; LEGACY-NEXT:  # %bb.13: # %if.else.8.i.415
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
 ; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    daddiu $4, $zero, 0
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    mov.d $f13, $f27
-; LEGACY-NEXT:    bnez $zero, .LBB0_13
+; LEGACY-NEXT:    bnez $zero, .LBB0_5
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.12: # %for.body.157.preheader
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
+; LEGACY-NEXT:  # %bb.14: # %for.body.157.preheader
+; LEGACY-NEXT:    # in Loop: Header=BB0_6 Depth=1
 ; LEGACY-NEXT:    ld $1, %call16(scalar_mult_add_su3_vector)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    mov.d $f12, $f24
-; LEGACY-NEXT:  .LBB0_13: # %for.inc.172
-; LEGACY-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; LEGACY-NEXT:    bnez $zero, .LBB0_4
+; LEGACY-NEXT:    b .LBB0_5
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  # %bb.14: # %for.end.174
+; LEGACY-NEXT:  .LBB0_15: # %for.end.174
 ; LEGACY-NEXT:    b .LBB0_21
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  .LBB0_15: # %for.body.197
+; LEGACY-NEXT:  .LBB0_16: # %for.body.197
 ; LEGACY-NEXT:    # =>This Inner Loop Header: Depth=1
 ; LEGACY-NEXT:    ld $1, %call16(scalar_mult_add_su3_vector)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    mov.d $f12, $f24
-; LEGACY-NEXT:    b .LBB0_15
+; LEGACY-NEXT:    b .LBB0_16
 ; LEGACY-NEXT:    nop
-; LEGACY-NEXT:  .LBB0_16: # %if.then.77
+; LEGACY-NEXT:  .LBB0_17: # %if.then.77
 ; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    daddiu $4, $zero, 0
-; LEGACY-NEXT:  .LBB0_17: # %if.then.6.i.413
+; LEGACY-NEXT:  .LBB0_18: # %if.then.6.i.413
 ; LEGACY-NEXT:    .insn
-; LEGACY-NEXT:  .LBB0_18: # %if.else.i.critedge
+; LEGACY-NEXT:  .LBB0_19: # %if.else.i.critedge
 ; LEGACY-NEXT:    .insn
-; LEGACY-NEXT:  .LBB0_19: # %for.body.24.lr.ph
+; LEGACY-NEXT:  .LBB0_20: # %for.body.24.lr.ph
 ; LEGACY-NEXT:    .insn
-; LEGACY-NEXT:  .LBB0_20: # %if.then.48
-; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
-; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
-; LEGACY-NEXT:    cjalr $c12, $c17
-; LEGACY-NEXT:    daddiu $4, $zero, 0
 ; LEGACY-NEXT:  .LBB0_21: # %if.then.182
 ; LEGACY-NEXT:    ld $1, %call16(add_force_to_mom)($gp)
 ; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
@@ -161,131 +291,6 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    mov.d $f13, $f24
 
-; CAPTABLE-LABEL: eo_fermion_force:
-; CAPTABLE:       # %bb.0: # %entry
-; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CAPTABLE-NEXT:    dmfc1 $1, $f28
-; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
-; CAPTABLE-NEXT:    dmfc1 $1, $f27
-; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 16]]($c11)
-; CAPTABLE-NEXT:    dmfc1 $1, $f26
-; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 24]]($c11)
-; CAPTABLE-NEXT:    dmfc1 $1, $f25
-; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 32]]($c11)
-; CAPTABLE-NEXT:    dmfc1 $1, $f24
-; CAPTABLE-NEXT:    csd $1, $zero, [[#STACKFRAME_SIZE - 40]]($c11)
-; CAPTABLE-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 48]]($c11)
-; CAPTABLE-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
-; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11)
-; CAPTABLE-NEXT:    lui $1, %hi(%neg(%captab_rel(eo_fermion_force)))
-; CAPTABLE-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(eo_fermion_force)))
-; CAPTABLE-NEXT:    cincoffset $c18, $c12, $1
-; CAPTABLE-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c18)
-; CAPTABLE-NEXT:    cld $2, $zero, 0($c1)
-; CAPTABLE-NEXT:    b .LBB0_19
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.1: # %for.cond.30.preheader
-; CAPTABLE-NEXT:    dmtc1 $2, $f24
-; CAPTABLE-NEXT:    neg.d $f26, $f24
-; CAPTABLE-NEXT:    cld $1, $zero, 0($c1)
-; CAPTABLE-NEXT:    div.d $f27, $f24, $f0
-; CAPTABLE-NEXT:    neg.d $f28, $f0
-; CAPTABLE-NEXT:    dmtc1 $1, $f25
-; CAPTABLE-NEXT:    addiu $2, $zero, 1
-; CAPTABLE-NEXT:  .LBB0_2: # %for.body.37
-; CAPTABLE-NEXT:    # =>This Inner Loop Header: Depth=1
-; CAPTABLE-NEXT:    bnez $2, .LBB0_2
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.3: # %if.then
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(u_shift_fermion)($c18)
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
-; CAPTABLE-NEXT:    addiu $16, $zero, 1
-; CAPTABLE-NEXT:    bnez $16, .LBB0_20
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  .LBB0_4: # %for.body.55
-; CAPTABLE-NEXT:    # =>This Inner Loop Header: Depth=1
-; CAPTABLE-NEXT:    bnez $zero, .LBB0_13
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.5: # %if.then.69
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    bnez $16, .LBB0_16
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.6: # %for.body.84.preheader
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    bnez $zero, .LBB0_10
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.7: # %if.then.105
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    bnez $zero, .LBB0_18
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.8: # %if.then.113
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f13, $f26
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f13, $f24
-; CAPTABLE-NEXT:    bnez $zero, .LBB0_10
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.9: # %for.body.128.preheader
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(scalar_mult_add_su3_vector)($c18)
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f12, $f27
-; CAPTABLE-NEXT:  .LBB0_10: # %for.inc.143
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    b .LBB0_17
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.11: # %if.else.8.i.415
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f13, $f28
-; CAPTABLE-NEXT:    bnez $zero, .LBB0_13
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.12: # %for.body.157.preheader
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(scalar_mult_add_su3_vector)($c18)
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f12, $f25
-; CAPTABLE-NEXT:  .LBB0_13: # %for.inc.172
-; CAPTABLE-NEXT:    # in Loop: Header=BB0_4 Depth=1
-; CAPTABLE-NEXT:    bnez $zero, .LBB0_4
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  # %bb.14: # %for.end.174
-; CAPTABLE-NEXT:    b .LBB0_21
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  .LBB0_15: # %for.body.197
-; CAPTABLE-NEXT:    # =>This Inner Loop Header: Depth=1
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(scalar_mult_add_su3_vector)($c18)
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f12, $f25
-; CAPTABLE-NEXT:    b .LBB0_15
-; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:  .LBB0_16: # %if.then.77
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
-; CAPTABLE-NEXT:  .LBB0_17: # %if.then.6.i.413
-; CAPTABLE-NEXT:    .insn
-; CAPTABLE-NEXT:  .LBB0_18: # %if.else.i.critedge
-; CAPTABLE-NEXT:    .insn
-; CAPTABLE-NEXT:  .LBB0_19: # %for.body.24.lr.ph
-; CAPTABLE-NEXT:    .insn
-; CAPTABLE-NEXT:  .LBB0_20: # %if.then.48
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
-; CAPTABLE-NEXT:  .LBB0_21: # %if.then.182
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(add_force_to_mom)($c18)
-; CAPTABLE-NEXT:    daddiu $4, $zero, 0
-; CAPTABLE-NEXT:    cjalr $c12, $c17
-; CAPTABLE-NEXT:    mov.d $f13, $f24
 
 entry:
   %0 = load double, double addrspace(200)* getelementptr inbounds ([6 x double], [6 x double] addrspace(200)* @act_path_coeff, i64 0, i64 5), align 8

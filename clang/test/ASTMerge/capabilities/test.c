@@ -24,7 +24,3 @@
 // AST: |-VarDecl 0x{{.+}} prev [[CAP_ADDR]] <line:2:1, col:20> col:20 cap 'int * __capability'
 // AST: |-VarDecl 0x{{.+}} prev [[CHARPTR_ADDR]] <line:3:1, col:8> col:8 charptr 'char *'
 // AST: |-VarDecl 0x{{.+}} prev [[CHARCAP_ADDR]] <line:4:1, col:21> col:21 charcap 'char * __capability'
-// AST: |-VarDecl 0x{{.+}} <line:5:1, col:21> col:21 should_not_match 'char * __capability'
-// AST: |-VarDecl 0x{{.+}} <line:6:1, col:9> col:9 wrong_type 'float *'
-// AST: |-VarDecl 0x{{.+}} <line:7:1, col:8> col:8 bar 'double'
-// AST: |-FunctionDecl 0x{{.+}} <line:9:1, col:76> col:20 fn_decl_cap_mismatch 'void * __capability (int * __capability)'

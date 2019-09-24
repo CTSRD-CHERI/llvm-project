@@ -152,9 +152,9 @@ body:             |
   ; MIPS32FP32:   [[COPY1:%[0-9]+]]:gpr32 = COPY $a2
   ; MIPS32FP32:   [[COPY2:%[0-9]+]]:gpr32 = COPY $a3
   ; MIPS32FP32:   [[ADDiu:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.0, 0
-  ; MIPS32FP32:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0 :: (load 4 from %fixed-stack.0, align 8)
+  ; MIPS32FP32:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0, implicit $ddc :: (load 4 from %fixed-stack.0, align 8)
   ; MIPS32FP32:   [[ADDiu1:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.1, 0
-  ; MIPS32FP32:   [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu1]], 0 :: (load 4 from %fixed-stack.1)
+  ; MIPS32FP32:   [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu1]], 0, implicit $ddc :: (load 4 from %fixed-stack.1)
   ; MIPS32FP32:   [[ORi:%[0-9]+]]:gpr32 = ORi $zero, 1
   ; MIPS32FP32:   [[AND:%[0-9]+]]:gpr32 = AND [[COPY]], [[ORi]]
   ; MIPS32FP32:   BNE [[AND]], $zero, %bb.1, implicit-def $at
@@ -178,9 +178,9 @@ body:             |
   ; MIPS32FP64:   [[COPY1:%[0-9]+]]:gpr32 = COPY $a2
   ; MIPS32FP64:   [[COPY2:%[0-9]+]]:gpr32 = COPY $a3
   ; MIPS32FP64:   [[ADDiu:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.0, 0
-  ; MIPS32FP64:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0 :: (load 4 from %fixed-stack.0, align 8)
+  ; MIPS32FP64:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0, implicit $ddc :: (load 4 from %fixed-stack.0, align 8)
   ; MIPS32FP64:   [[ADDiu1:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.1, 0
-  ; MIPS32FP64:   [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu1]], 0 :: (load 4 from %fixed-stack.1)
+  ; MIPS32FP64:   [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu1]], 0, implicit $ddc :: (load 4 from %fixed-stack.1)
   ; MIPS32FP64:   [[ORi:%[0-9]+]]:gpr32 = ORi $zero, 1
   ; MIPS32FP64:   [[AND:%[0-9]+]]:gpr32 = AND [[COPY]], [[ORi]]
   ; MIPS32FP64:   BNE [[AND]], $zero, %bb.1, implicit-def $at
@@ -311,7 +311,7 @@ body:             |
   ; MIPS32FP32:   [[COPY:%[0-9]+]]:afgr64 = COPY $d6
   ; MIPS32FP32:   [[COPY1:%[0-9]+]]:afgr64 = COPY $d7
   ; MIPS32FP32:   [[ADDiu:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.0, 0
-  ; MIPS32FP32:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0 :: (load 4 from %fixed-stack.0, align 8)
+  ; MIPS32FP32:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0, implicit $ddc :: (load 4 from %fixed-stack.0, align 8)
   ; MIPS32FP32:   [[ORi:%[0-9]+]]:gpr32 = ORi $zero, 1
   ; MIPS32FP32:   [[AND:%[0-9]+]]:gpr32 = AND [[LW]], [[ORi]]
   ; MIPS32FP32:   BNE [[AND]], $zero, %bb.1, implicit-def $at
@@ -332,7 +332,7 @@ body:             |
   ; MIPS32FP64:   [[COPY:%[0-9]+]]:fgr64 = COPY $d6
   ; MIPS32FP64:   [[COPY1:%[0-9]+]]:fgr64 = COPY $d7
   ; MIPS32FP64:   [[ADDiu:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.0, 0
-  ; MIPS32FP64:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0 :: (load 4 from %fixed-stack.0, align 8)
+  ; MIPS32FP64:   [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0, implicit $ddc :: (load 4 from %fixed-stack.0, align 8)
   ; MIPS32FP64:   [[ORi:%[0-9]+]]:gpr32 = ORi $zero, 1
   ; MIPS32FP64:   [[AND:%[0-9]+]]:gpr32 = AND [[LW]], [[ORi]]
   ; MIPS32FP64:   BNE [[AND]], $zero, %bb.1, implicit-def $at

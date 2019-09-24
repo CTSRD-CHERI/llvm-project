@@ -9,12 +9,12 @@
 # RUN: llvm-objdump --section=.data -s %t-linux.so | FileCheck -check-prefix DATA-REL %s
 
 # 32 bits
-# RUN: llvm-mc -filetype=obj -triple=mips-unknown-freebsd %s -o %t-freebsd32.o
+# RUN: llvm-mc -filetype=obj -triple=mips-unknown-freebsd %s -o %t-freebsd32.o -defsym=MIPS32=1
 # RUN: llvm-objdump --section=.data -s %t-freebsd32.o | FileCheck -check-prefix DATA-REL %s
 
 # RUN: ld.lld -r -o %t-freebsd32-r.o %t-freebsd32.o
 # RUN: llvm-objdump --section=.data -s %t-freebsd32-r.o | FileCheck -check-prefix DATA-REL %s
-# RUN: llvm-readobj -r %t-freebsd32-r.o | FileCheck -check-prefix RELOCATABLE-REL %s
+# RUN: llvm-readobj -r %t-freebsd32-r.o | FileCheck -check-prefix RELOCATABLE-MIPS32 %s
 
 # RUN: ld.lld -shared -o %t-freebsd32.so %t-freebsd32.o
 # RUN: llvm-readobj -r %t-freebsd32.so | FileCheck -check-prefixes SHARED,SHARED-FREEBSD32 %s
@@ -35,16 +35,21 @@
 .extern foo
 
 .data
+.ifdef MIPS32
+.word 0
+.word foo + 0x10
+.else
 .quad foo + 0x10
+.endif
 .quad 0xabcdef0012345678
 
 # SHARED:       Relocations [
 # SHARED-FREEBSD-NEXT: Section (7) .rel.dyn {
-# SHARED-FREEBSD-NEXT:         0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+# SHARED-FREEBSD-NEXT:         0x203A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 # SHARED-FREEBSD32-NEXT: Section (7) .rel.dyn {
-# SHARED-FREEBSD32-NEXT:       0x10000 R_MIPS_REL32 foo 0x0 (real addend unknown)
+# SHARED-FREEBSD32-NEXT:       0x20234 R_MIPS_REL32 foo 0x0 (real addend unknown)
 # SHARED-LINUX-NEXT:   Section (7) .rel.dyn {
-# SHARED-LINUX-NEXT:           0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+# SHARED-LINUX-NEXT:           0x203A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 # SHARED-NEXT:         }
 # SHARED-NEXT: ]
 
@@ -54,17 +59,17 @@
 # RELOCATABLE-NEXT:  }
 # RELOCATABLE-NEXT:]
 
-# RELOCATABLE-REL:     Relocations [
-# RELOCATABLE-REL-NEXT:   Section ({{.+}}) .rel.data {
+# RELOCATABLE-MIPS32:     Relocations [
+# RELOCATABLE-MIPS32-NEXT:   Section ({{.+}}) .rel.data {
 # FIXME: 0x10 is in the location of the relocation but llvm-readobj doesn't print it....
-# RELOCATABLE-REL-NEXT:    0x0 R_MIPS_64 foo 0x0 (real addend unknown)
-# RELOCATABLE-REL-NEXT:  }
-# RELOCATABLE-REL-NEXT:]
+# RELOCATABLE-MIPS32-NEXT:    0x4 R_MIPS_32 foo 0x0 (real addend unknown)
+# RELOCATABLE-MIPS32-NEXT:  }
+# RELOCATABLE-MIPS32-NEXT:]
 
 
 # DATA-RELA:      Contents of section .data:
-# DATA-RELA-NEXT: 0000 00000000 00000000 abcdef00 12345678  .............4Vx
+# DATA-RELA-NEXT: {{[0-9a-f]+}} 00000000 00000000 abcdef00 12345678  .............4Vx
 
 # Rel should have the relocation value 10 in .data
 # DATA-REL:      Contents of section .data:
-# DATA-REL-NEXT: 0000 00000000 00000010 abcdef00 12345678  .............4Vx
+# DATA-REL-NEXT: {{[0-9a-f]+}} 00000000 00000010 abcdef00 12345678  .............4Vx

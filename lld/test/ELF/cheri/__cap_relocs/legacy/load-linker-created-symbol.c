@@ -41,16 +41,15 @@ void __start(void) {
 }
 
 // WITH-CTORS-LABEL: Sections:
-// WITH-CTORS:       .ctors        00000008 0000000120020000 DATA
+// WITH-CTORS:       .ctors        00000008 0000000120020400 DATA
 // WITH-CTORS-LABEL: SYMBOL TABLE:
 // WITH-CTORS-NEXT:  0000000000000000 l df    *ABS* 00000000 load-linker-created-symbol.c
-// WITH-CTORS-NEXT:  0000000120020008         .ctors		 00000000 .hidden __ctors_end
-// WITH-CTORS-NEXT:  0000000120020000         .ctors		 00000008 .hidden __ctors_start
+// WITH-CTORS-NEXT:  0000000120020408         .ctors		 00000000 .hidden __ctors_end
+// WITH-CTORS-NEXT:  0000000120020400         .ctors		 00000008 .hidden __ctors_start
 
 // EMPTY-CTORS-LABEL: Section
 // EMPTY-CTORS-NOT: .ctors
 // EMPTY-CTORS-LABEL: SYMBOL TABLE:
-// EMPTY-CTORS-NEXT:  0000000000000000 l df    *ABS* 00000000
-// load-linker-created-symbol.c EMPTY-CTORS-NEXT:  0000000120010000 .text
-// 00000000 .hidden __ctors_end EMPTY-CTORS-NEXT:  0000000120010000 .text
-// 00000000 .hidden __ctors_start
+// EMPTY-CTORS-NEXT:  0000000000000000 l df    *ABS* 00000000 load-linker-created-symbol.c
+// EMPTY-CTORS-NEXT:  0000000120010220         .text 00000000 .hidden __ctors_end
+// EMPTY-CTORS-NEXT:  0000000120010220         .text 00000000 .hidden __ctors_start

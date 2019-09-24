@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -mdisable-fp-elim -target-cpu mips4 -msoft-float -mfloat-abi soft  -target-linker-version 305 \
+// RUN: %cheri_purecap_cc1 -mframe-pointer=all -target-cpu mips4 -msoft-float -mfloat-abi soft  -target-linker-version 305 \
 // RUN: -std=c++11 -fdeprecated-macro -fcxx-exceptions -fexceptions -o - -O0  -S %s 2>&1
 template <int a, int, int, int, int, class... b> void c(b...) {
   double k __attribute__((__aligned__(a)));

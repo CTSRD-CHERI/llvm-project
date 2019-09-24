@@ -106,7 +106,7 @@ int main(void) {
 // MIPS-NEXT:    [[TMP6:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 3), !nosanitize !5
 // MIPS-NEXT:    [[TMP7:%.*]] = add i8 [[TMP6]], 1
 // MIPS-NEXT:    store i8 [[TMP7]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 3), !nosanitize !5
-// MIPS-NEXT:    [[ADD:%.*]] = add nsw i32 [[I]], 1
+// MIPS-NEXT:    [[ADD:%.*]] = add nuw nsw i32 [[I]], 1
 // MIPS-NEXT:    br label [[RETURN]]
 // MIPS:       return:
 // MIPS-NEXT:    [[RETVAL_0:%.*]] = phi i32 [ [[CALL]], [[IF_THEN]] ], [ [[CALL3]], [[IF_THEN2]] ], [ [[ADD]], [[IF_END4]] ]
@@ -140,7 +140,7 @@ int main(void) {
 // PURECAP-NEXT:    [[TMP6:%.*]] = load i8, i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @__sancov_gen_.2, i64 0, i64 3), !nosanitize !5
 // PURECAP-NEXT:    [[TMP7:%.*]] = add i8 [[TMP6]], 1
 // PURECAP-NEXT:    store i8 [[TMP7]], i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @__sancov_gen_.2, i64 0, i64 3), !nosanitize !5
-// PURECAP-NEXT:    [[ADD:%.*]] = add nsw i32 [[I]], 1
+// PURECAP-NEXT:    [[ADD:%.*]] = add nuw nsw i32 [[I]], 1
 // PURECAP-NEXT:    br label [[RETURN]]
 // PURECAP:       return:
 // PURECAP-NEXT:    [[RETVAL_0:%.*]] = phi i32 [ [[CALL]], [[IF_THEN]] ], [ [[CALL3]], [[IF_THEN2]] ], [ [[ADD]], [[IF_END4]] ]

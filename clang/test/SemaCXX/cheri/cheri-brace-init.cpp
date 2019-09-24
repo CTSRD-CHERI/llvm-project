@@ -94,11 +94,14 @@ void test_arrays(void* __capability cap) {
   void* ptr_array[3] = { nullptr, cap, ptr }; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
   void* __capability cap_array[3] = { nullptr, cap, ptr }; // expected-error {{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
 
-    struct foo foo_array[5] = {
-      {cap, nullptr}, // no-error
-      {cap, cap}, // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
-      {.cap = nullptr, .ptr = nullptr}, // no-error
-      [4] = {.cap = cap, .ptr = cap} // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
+  struct foo foo_array1[3] = {
+    {cap, nullptr}, // no-error
+    {cap, cap}, // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
+    {.cap = nullptr, .ptr = nullptr} // no-error
+  };
+  struct foo foo_array2[2] = {
+    [1] = {.cap = cap, .ptr = cap} // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
+    // expected-warning@-1 {{array designators are a C99 extension}}
   };
 }
 

@@ -25,13 +25,13 @@ __start:
 # CHECK:      Disassembly of section .text:
 # CHECK-EMPTY:
 # CHECK-NEXT: __start:
-# CHECK-NEXT:    20000:       3c 02 00 00     lui     $2, 0
-#                                      ^-- (0x20020-0x4-0x20000)>>2
-# CHECK-NEXT:    20004:       64 42 00 1c     daddiu  $2, $2, 28
-#                                      ^-- (0x20020-0x20004)>>2
-# CHECK-NEXT:    20008:       00 00 00 00     nop
-# CHECK-NEXT:    2000c:       3c 02 00 00 lui $2, 0
-#                                      ^-- (0x20000-0x4-0x2000c))>>2
-# CHECK-NEXT:    20010:       64 42 ff f0     daddiu  $2, $2, -16
-#                                      ^-- (0x20000-0x2000c)>>2
-# CHECK-NEXT:    20014:       00 00 00 00     nop
+# CHECK-NEXT:    20210:       3c 02 00 00     lui     $2, 0
+#                                      ^-- (0x20230-0x4-0x20210)>>2
+# CHECK-NEXT:    20214:       64 42 00 1c     daddiu  $2, $2, 28
+#                                      ^-- (0x20230-0x20214)>>2
+# CHECK-NEXT:    20218:       00 00 00 00     nop
+# CHECK-NEXT:    2021c:       3c 02 00 00 lui $2, 0
+#                                      ^-- (0x20210-0x4-0x2021c))>>2
+# CHECK-NEXT:    20220:       64 42 ff f0     daddiu  $2, $2, -16
+#                                      ^-- (0x20210-0x20220)>>2
+# CHECK-NEXT:    20224:       00 00 00 00     nop
