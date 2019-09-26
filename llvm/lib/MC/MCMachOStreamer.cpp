@@ -332,6 +332,7 @@ bool MCMachOStreamer::EmitSymbolAttribute(MCSymbol *Sym,
   case MCSA_Protected:
   case MCSA_Weak:
   case MCSA_Local:
+  case MCSA_LGlobal:
     return false;
 
   case MCSA_Global:
