@@ -46,8 +46,7 @@ Defined *ElfSym::tlsModuleBase;
 // Returns a symbol for an error message.
 static std::string demangle(StringRef symName) {
   if (config->demangle)
-    if (Optional<std::string> s = demangleItanium(symName))
-      return *s;
+    return demangleItanium(symName);
   return symName;
 }
 namespace lld {
