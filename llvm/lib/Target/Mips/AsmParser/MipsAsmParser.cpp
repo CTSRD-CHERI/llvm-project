@@ -1999,9 +1999,8 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
         break; // We'll deal with this situation later on when applying fixups.
       if (!isIntN(inMicroMipsMode() ? 17 : 18, Offset.getImm()))
         return Error(IDLoc, "branch target out of range");
-      if (offsetToAlignment(
-              Offset.getImm(),
-              (inMicroMipsMode() ? llvm::Align(2) : llvm::Align(4))))
+      if (offsetToAlignment(Offset.getImm(),
+                            (inMicroMipsMode() ? Align(2) : Align(4))))
         return Error(IDLoc, "branch to misaligned address");
       break;
     case Mips::BGEZ:
@@ -2030,9 +2029,8 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
         break; // We'll deal with this situation later on when applying fixups.
       if (!isIntN(inMicroMipsMode() ? 17 : 18, Offset.getImm()))
         return Error(IDLoc, "branch target out of range");
-      if (offsetToAlignment(
-              Offset.getImm(),
-              (inMicroMipsMode() ? llvm::Align(2) : llvm::Align(4))))
+      if (offsetToAlignment(Offset.getImm(),
+                            (inMicroMipsMode() ? Align(2) : Align(4))))
         return Error(IDLoc, "branch to misaligned address");
       break;
     case Mips::BGEC:    case Mips::BGEC_MMR6:
@@ -2047,7 +2045,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
         break; // We'll deal with this situation later on when applying fixups.
       if (!isIntN(18, Offset.getImm()))
         return Error(IDLoc, "branch target out of range");
-      if (offsetToAlignment(Offset.getImm(), llvm::Align(4)))
+      if (offsetToAlignment(Offset.getImm(), Align(4)))
         return Error(IDLoc, "branch to misaligned address");
       break;
     case Mips::BLEZC:   case Mips::BLEZC_MMR6:
@@ -2060,7 +2058,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
         break; // We'll deal with this situation later on when applying fixups.
       if (!isIntN(18, Offset.getImm()))
         return Error(IDLoc, "branch target out of range");
-      if (offsetToAlignment(Offset.getImm(), llvm::Align(4)))
+      if (offsetToAlignment(Offset.getImm(), Align(4)))
         return Error(IDLoc, "branch to misaligned address");
       break;
     case Mips::BEQZC:   case Mips::BEQZC_MMR6:
@@ -2071,7 +2069,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
         break; // We'll deal with this situation later on when applying fixups.
       if (!isIntN(23, Offset.getImm()))
         return Error(IDLoc, "branch target out of range");
-      if (offsetToAlignment(Offset.getImm(), llvm::Align(4)))
+      if (offsetToAlignment(Offset.getImm(), Align(4)))
         return Error(IDLoc, "branch to misaligned address");
       break;
     case Mips::BEQZ16_MM:
@@ -2084,7 +2082,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
         break; // We'll deal with this situation later on when applying fixups.
       if (!isInt<8>(Offset.getImm()))
         return Error(IDLoc, "branch target out of range");
-      if (offsetToAlignment(Offset.getImm(), llvm::Align(2)))
+      if (offsetToAlignment(Offset.getImm(), Align(2)))
         return Error(IDLoc, "branch to misaligned address");
       break;
     }
@@ -3838,7 +3836,7 @@ bool MipsAsmParser::expandUncondBranchMMPseudo(MCInst &Inst, SMLoc IDLoc,
     } else {
       if (!isInt<17>(Offset.getImm()))
         return Error(IDLoc, "branch target out of range");
-      if (offsetToAlignment(Offset.getImm(), llvm::Align(2)))
+      if (offsetToAlignment(Offset.getImm(), Align(2)))
         return Error(IDLoc, "branch to misaligned address");
       Inst.clear();
       Inst.setOpcode(Mips::BEQ_MM);

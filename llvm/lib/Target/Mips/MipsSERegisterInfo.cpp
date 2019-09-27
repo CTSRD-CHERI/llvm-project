@@ -321,7 +321,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     // element size), otherwise it is a 16-bit signed immediate.
     unsigned OffsetBitSize =
         getLoadStoreOffsetSizeInBits(MI.getOpcode(), MI.getOperand(OpNo - 1));
-    const llvm::Align OffsetAlign(getLoadStoreOffsetAlign(MI.getOpcode()));
+    const Align OffsetAlign(getLoadStoreOffsetAlign(MI.getOpcode()));
     auto *STI = TM.getSubtargetImpl(MF.getFunction());
     const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
           STI->getInstrInfo());

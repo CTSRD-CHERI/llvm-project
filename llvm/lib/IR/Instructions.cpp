@@ -1249,7 +1249,7 @@ void AllocaInst::setAlignment(unsigned Align) {
   setAlignment(llvm::MaybeAlign(Align));
 }
 
-void AllocaInst::setAlignment(llvm::MaybeAlign Align) {
+void AllocaInst::setAlignment(MaybeAlign Align) {
   assert((!Align || *Align <= MaximumAlignment) &&
          "Alignment is greater than MaximumAlignment!");
   setInstructionSubclassData((getSubclassDataFromInstruction() & ~31) |
@@ -1344,7 +1344,7 @@ void LoadInst::setAlignment(unsigned Align) {
   setAlignment(llvm::MaybeAlign(Align));
 }
 
-void LoadInst::setAlignment(llvm::MaybeAlign Align) {
+void LoadInst::setAlignment(MaybeAlign Align) {
   assert((!Align || *Align <= MaximumAlignment) &&
          "Alignment is greater than MaximumAlignment!");
   setInstructionSubclassData((getSubclassDataFromInstruction() & ~(31 << 1)) |
@@ -1431,7 +1431,7 @@ void StoreInst::setAlignment(unsigned Align) {
   setAlignment(llvm::MaybeAlign(Align));
 }
 
-void StoreInst::setAlignment(llvm::MaybeAlign Align) {
+void StoreInst::setAlignment(MaybeAlign Align) {
   assert((!Align || *Align <= MaximumAlignment) &&
          "Alignment is greater than MaximumAlignment!");
   setInstructionSubclassData((getSubclassDataFromInstruction() & ~(31 << 1)) |

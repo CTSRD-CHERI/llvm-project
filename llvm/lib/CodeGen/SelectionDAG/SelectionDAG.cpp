@@ -1942,7 +1942,7 @@ SDValue SelectionDAG::expandVAArg(SDNode *Node) {
   EVT VT = Node->getValueType(0);
   SDValue Tmp1 = Node->getOperand(0);
   SDValue Tmp2 = Node->getOperand(1);
-  const llvm::MaybeAlign MA(Node->getConstantOperandVal(3));
+  const MaybeAlign MA(Node->getConstantOperandVal(3));
 
   SDValue VAListLoad = getLoad(
       TLI.getPointerTy(getDataLayout(), getDataLayout().getAllocaAddrSpace()),
@@ -5837,7 +5837,7 @@ diagnoseInefficientCheriMemOp(SelectionDAG &DAG, const DiagnosticLocation &Loc,
 
 static SDValue getMemcpyLoadsAndStores(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
-    uint64_t Size, unsigned Align, bool isVol, bool AlwaysInline,
+    uint64_t Size, unsigned Alignment, bool isVol, bool AlwaysInline,
     bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo, StringRef CopyTy,
     CodeGenOpt::Level OptLevel) {
@@ -5862,14 +5862,14 @@ static SDValue getMemcpyLoadsAndStores(
   if (FI && !MFI.isFixedObjectIndex(FI->getIndex()))
     DstAlignCanChange = true;
   unsigned SrcAlign = DAG.InferPtrAlignment(Src);
-  if (Align > SrcAlign)
-    SrcAlign = Align;
+  if (Alignment > SrcAlign)
+    SrcAlign = Alignment;
   ConstantDataArraySlice Slice;
   bool CopyFromConstant = isMemSrcFromConstant(Src, Slice);
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
   const bool FoundLowering = TLI.findOptimalMemOpLowering(
-          MemOps, Limit, Size, (DstAlignCanChange ? 0 : Align),
+          MemOps, Limit, Size, (DstAlignCanChange ? 0 : Alignment),
           (isZeroConstant ? 0 : SrcAlign), /*IsMemset=*/false,
           /*ZeroMemset=*/false, /*MemcpyStrSrc=*/CopyFromConstant,
           /*AllowOverlap=*/!isVol, MustPreserveCheriCapabilities,
@@ -5916,18 +5916,18 @@ static SDValue getMemcpyLoadsAndStores(
     // realignment.
     const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
     if (!TRI->needsStackRealignment(MF))
-      while (NewAlign > Align &&
+      while (NewAlign > Alignment &&
              DL.exceedsNaturalStackAlignment(llvm::Align(NewAlign)))
           NewAlign /= 2;
     if (MemOps[0].isFatPointer()) {
       assert(NewAlign == (unsigned)DL.getABITypeAlignment(Ty) &&
              "Stack not capability-aligned?");
     }
-    if (NewAlign > Align) {
+    if (NewAlign > Alignment) {
       // Give the stack frame object a larger alignment if needed.
       if (MFI.getObjectAlignment(FI->getIndex()) < NewAlign)
         MFI.setObjectAlignment(FI->getIndex(), NewAlign);
-      Align = NewAlign;
+      Alignment = NewAlign;
     }
   }
 
@@ -5970,10 +5970,9 @@ static SDValue getMemcpyLoadsAndStores(
       }
       Value = getMemsetStringVal(VT, dl, DAG, TLI, SubSlice);
       if (Value.getNode()) {
-        Store = DAG.getStore(Chain, dl, Value,
-                             DAG.getMemBasePlusOffset(Dst, DstOff, dl),
-                             DstPtrInfo.getWithOffset(DstOff), Align,
-                             MMOFlags);
+        Store = DAG.getStore(
+            Chain, dl, Value, DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+            DstPtrInfo.getWithOffset(DstOff), Alignment, MMOFlags);
         OutChains.push_back(Store);
       }
     }
@@ -6001,7 +6000,7 @@ static SDValue getMemcpyLoadsAndStores(
 
       Store = DAG.getTruncStore(
           Chain, dl, Value, DAG.getMemBasePlusOffset(Dst, DstOff, dl),
-          DstPtrInfo.getWithOffset(DstOff), VT, Align, MMOFlags);
+          DstPtrInfo.getWithOffset(DstOff), VT, Alignment, MMOFlags);
       OutStoreChains.push_back(Store);
     }
     SrcOff += VTSize;
