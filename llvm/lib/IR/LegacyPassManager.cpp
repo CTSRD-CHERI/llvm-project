@@ -1682,7 +1682,6 @@ bool FPPassManager::runOnFunction(Function &F) {
 bool FPPassManager::runOnModule(Module &M) {
   bool Changed = false;
 
-  llvm::TimeTraceScope TimeScope("OptModule", M.getName());
   for (Function &F : M)
     Changed |= runOnFunction(F);
 
