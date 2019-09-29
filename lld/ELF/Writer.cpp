@@ -2081,8 +2081,11 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       // marked as live. We still need keep symbols pointing there since they
       // will then point to the first output section
       // See assignment above:   Out::ElfHeader->SectionIndex = 1;
+      // Ditto for LinkerScript's "aether" otherwise we will zero out all
+      // symbol assignments outside output sections.
 
-      if (!outSec->isLive() && outSec != Out::elfHeader) {
+      if (!outSec->isLive() && outSec != Out::elfHeader &&
+          !script->isAether(outSec)) {
         // errs() << "Symbol " << toString(*Reg) << " points to garbage collected output section " << OutSec->Name << "\n";
         reg->type = STT_NOTYPE;
         reg->section = nullptr;

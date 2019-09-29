@@ -258,6 +258,7 @@ public:
   OutputSection *getOrCreateOutputSection(StringRef name);
 
   bool hasPhdrsCommands() { return !phdrsCommands.empty(); }
+  bool isAether(const OutputSection *sec) const { return sec == aether; }
   uint64_t getDot() { return dot; }
   void discard(ArrayRef<InputSection *> v);
 
