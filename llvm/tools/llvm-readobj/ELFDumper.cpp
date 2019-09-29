@@ -2633,8 +2633,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   // TODO: get symbol name for __cap_reloc
   ArrayRef<uint8_t> Data =
       unwrapOrError(ObjF->getFileName(), Obj->getSectionContents(Shdr));
-  const uint64_t CapRelocsFileOffset = Shdr->sh_offset;
-  const uint64_t CapRelocsEnd = Shdr->sh_offset + Shdr->sh_size;
+  const uint64_t CapRelocsStartVaddr = Shdr->sh_addr;
+  const uint64_t CapRelocsEndVaddr = Shdr->sh_addr + Shdr->sh_size;
   const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
   if (Data.size() % entry_size != 0) {
     W.startLine() << "The __cap_relocs section has a wrong size: "
@@ -2654,7 +2654,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   // typedef Elf64_Rel Elf_Rel;
   DenseMap<uint64_t, Elf_Rel> CapRelocsDynRels;
   for (const Elf_Rel &R : dyn_rels()) {
-    if (R.r_offset >= CapRelocsFileOffset && R.r_offset < CapRelocsEnd) {
+    if (R.r_offset >= CapRelocsStartVaddr && R.r_offset < CapRelocsEndVaddr) {
       // No need to store relocations aginst symbol zero since they don't have
       // a name
       if (R.getSymbol(Obj->isMips64EL()) != 0)
@@ -2724,7 +2724,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     if (Base == 0) {
       // Base is 0 -> either it is really NULL or (more likely) there is a
       // dynamic relocation that will set the real address
-      auto it = CapRelocsDynRels.find(CapRelocsFileOffset + CurrentOffset + 8);
+      auto it = CapRelocsDynRels.find(CapRelocsStartVaddr + CurrentOffset + 8);
       if (it != CapRelocsDynRels.end()) {
         Elf_Rel R = it->second;
         const Elf_Sym *Sym = unwrapOrError(
