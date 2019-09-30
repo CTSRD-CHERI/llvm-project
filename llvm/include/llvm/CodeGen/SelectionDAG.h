@@ -1078,7 +1078,7 @@ public:
     unsigned Align = 0,
     MachineMemOperand::Flags Flags
     = MachineMemOperand::MOLoad | MachineMemOperand::MOStore,
-    unsigned Size = 0,
+    uint64_t Size = 0,
     const AAMDNodes &AAInfo = AAMDNodes());
 
   SDValue getMemIntrinsicNode(unsigned Opcode, const SDLoc &dl, SDVTList VTList,
