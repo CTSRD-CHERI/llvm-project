@@ -1393,7 +1393,7 @@ static void speculatePHINodeLoads(PHINode &PN) {
   // matter which one we get and if any differ.
   AAMDNodes AATags;
   SomeLoad->getAAMetadata(AATags);
-  unsigned Align = SomeLoad->getAlignment();
+  const MaybeAlign Align = MaybeAlign(SomeLoad->getAlignment());
 
   // Rewrite all loads of the PN to use the new PHI.
   while (!PN.use_empty()) {
@@ -1491,8 +1491,8 @@ static void speculateSelectInstLoads(SelectInst &SI) {
     NumLoadsSpeculated += 2;
 
     // Transfer alignment and AA info if present.
-    TL->setAlignment(LI->getAlignment());
-    FL->setAlignment(LI->getAlignment());
+    TL->setAlignment(MaybeAlign(LI->getAlignment()));
+    FL->setAlignment(MaybeAlign(LI->getAlignment()));
 
     AAMDNodes Tags;
     LI->getAAMetadata(Tags);
@@ -3273,7 +3273,7 @@ private:
         unsigned LoadAlign = LI->getAlignment();
         if (!LoadAlign)
           LoadAlign = DL.getABITypeAlignment(LI->getType());
-        LI->setAlignment(std::min(LoadAlign, getSliceAlign()));
+        LI->setAlignment(MaybeAlign(std::min(LoadAlign, getSliceAlign())));
         continue;
       }
       if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
