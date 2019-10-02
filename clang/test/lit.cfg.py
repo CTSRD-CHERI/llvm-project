@@ -26,7 +26,7 @@ config.test_format = lit.formats.ShTest(not llvm_config.use_lit_shell)
 
 # suffixes: A list of file extensions to treat as test files.
 config.suffixes = ['.c', '.cpp', '.cppm', '.m', '.mm', '.cu',
-                   '.ll', '.cl', '.s', '.S', '.modulemap', '.test', '.rs']
+                   '.ll', '.cl', '.s', '.S', '.modulemap', '.test', '.rs', '.ifs']
 
 # excludes: A list of directories to exclude from the testsuite. The 'Inputs'
 # subdirectories contain auxiliary inputs for various tests in their parent
@@ -62,11 +62,12 @@ config.substitutions.append(('%PATH%', config.environment['PATH']))
 tool_dirs = [config.clang_tools_dir, config.llvm_tools_dir]
 
 tools = [
-    'llvm-readobj', 'llvm-objdump', 'llvm-dwarfdump', # XXXAR: needed by some CHERI tests
-    'c-index-test', 'clang-diff', 'clang-format', 'clang-tblgen', 'opt',
+    'c-index-test', 'clang-diff', 'clang-format', 'clang-tblgen', 'opt', 'llvm-ifs',
     ToolSubst('%clang_extdef_map', command=FindTool(
         'clang-extdef-mapping'), unresolved='ignore'),
 ]
+# XXXAR: needed by some CHERI tests:
+tools += ['llvm-readobj', 'llvm-objdump', 'llvm-dwarfdump']
 
 if config.clang_examples:
     config.available_features.add('examples')
