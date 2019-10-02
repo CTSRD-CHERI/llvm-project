@@ -2525,14 +2525,12 @@ void CGObjCCommonMac::BuildRCRecordLayout(const llvm::StructLayout *RecLayout,
     }
 
     if (const ArrayType *Array = CGM.getContext().getAsArrayType(FQT)) {
-      const ConstantArrayType *CArray =
-        dyn_cast_or_null<ConstantArrayType>(Array);
+      auto *CArray = cast<ConstantArrayType>(Array);
       uint64_t ElCount = CArray->getSize().getZExtValue();
       assert(CArray && "only array with known element size is supported");
       FQT = CArray->getElementType();
       while (const ArrayType *Array = CGM.getContext().getAsArrayType(FQT)) {
-        const ConstantArrayType *CArray =
-          dyn_cast_or_null<ConstantArrayType>(Array);
+        auto *CArray = cast<ConstantArrayType>(Array);
         ElCount *= CArray->getSize().getZExtValue();
         FQT = CArray->getElementType();
       }
@@ -4910,7 +4908,7 @@ LValue CGObjCMac::EmitObjCValueForIvar(CodeGen::CodeGenFunction &CGF,
                                        const ObjCIvarDecl *Ivar,
                                        unsigned CVRQualifiers) {
   const ObjCInterfaceDecl *ID =
-    ObjectTy->getAs<ObjCObjectType>()->getInterface();
+    ObjectTy->castAs<ObjCObjectType>()->getInterface();
   return EmitValueForIvarAtOffset(CGF, ID, BaseValue, Ivar, CVRQualifiers,
                                   EmitIvarOffset(CGF, ID, Ivar));
 }
@@ -7063,7 +7061,7 @@ LValue CGObjCNonFragileABIMac::EmitObjCValueForIvar(
                                                llvm::Value *BaseValue,
                                                const ObjCIvarDecl *Ivar,
                                                unsigned CVRQualifiers) {
-  ObjCInterfaceDecl *ID = ObjectTy->getAs<ObjCObjectType>()->getInterface();
+  ObjCInterfaceDecl *ID = ObjectTy->castAs<ObjCObjectType>()->getInterface();
   llvm::Value *Offset = EmitIvarOffset(CGF, ID, Ivar);
   return EmitValueForIvarAtOffset(CGF, ID, BaseValue, Ivar, CVRQualifiers,
                                   Offset);
