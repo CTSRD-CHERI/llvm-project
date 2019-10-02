@@ -6272,7 +6272,7 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
       Offsets.first,    // voffset
       Op.getOperand(4), // soffset
       Offsets.second,   // offset
-      Op.getOperand(5), // cachepolicy
+      Op.getOperand(5), // cachepolicy, swizzled buffer
       DAG.getTargetConstant(0, DL, MVT::i1), // idxen
     };
 
@@ -6290,7 +6290,7 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
       Offsets.first,    // voffset
       Op.getOperand(5), // soffset
       Offsets.second,   // offset
-      Op.getOperand(6), // cachepolicy
+      Op.getOperand(6), // cachepolicy, swizzled buffer
       DAG.getTargetConstant(1, DL, MVT::i1), // idxen
     };
 
@@ -6339,7 +6339,7 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
       Op.getOperand(4),  // soffset
       Offsets.second,    // offset
       Op.getOperand(5),  // format
-      Op.getOperand(6),  // cachepolicy
+      Op.getOperand(6),  // cachepolicy, swizzled buffer
       DAG.getTargetConstant(0, DL, MVT::i1), // idxen
     };
 
@@ -6363,7 +6363,7 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
       Op.getOperand(5),  // soffset
       Offsets.second,    // offset
       Op.getOperand(6),  // format
-      Op.getOperand(7),  // cachepolicy
+      Op.getOperand(7),  // cachepolicy, swizzled buffer
       DAG.getTargetConstant(1, DL, MVT::i1), // idxen
     };
 
@@ -6833,7 +6833,7 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
       Op.getOperand(6),  // soffset
       Offsets.second,    // offset
       Op.getOperand(7),  // format
-      Op.getOperand(8),  // cachepolicy
+      Op.getOperand(8),  // cachepolicy, swizzled buffer
       DAG.getTargetConstant(1, DL, MVT::i1), // idexen
     };
     unsigned Opc = IsD16 ? AMDGPUISD::TBUFFER_STORE_FORMAT_D16 :
@@ -6858,7 +6858,7 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
       Op.getOperand(5),  // soffset
       Offsets.second,    // offset
       Op.getOperand(6),  // format
-      Op.getOperand(7),  // cachepolicy
+      Op.getOperand(7),  // cachepolicy, swizzled buffer
       DAG.getTargetConstant(0, DL, MVT::i1), // idexen
     };
     unsigned Opc = IsD16 ? AMDGPUISD::TBUFFER_STORE_FORMAT_D16 :
@@ -6932,7 +6932,7 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
       Offsets.first,    // voffset
       Op.getOperand(5), // soffset
       Offsets.second,   // offset
-      Op.getOperand(6), // cachepolicy
+      Op.getOperand(6), // cachepolicy, swizzled buffer
       DAG.getTargetConstant(0, DL, MVT::i1), // idxen
     };
     unsigned Opc =
@@ -6976,7 +6976,7 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
       Offsets.first,    // voffset
       Op.getOperand(6), // soffset
       Offsets.second,   // offset
-      Op.getOperand(7), // cachepolicy
+      Op.getOperand(7), // cachepolicy, swizzled buffer
       DAG.getTargetConstant(1, DL, MVT::i1), // idxen
     };
     unsigned Opc = IntrinsicID == Intrinsic::amdgcn_struct_buffer_store ?
