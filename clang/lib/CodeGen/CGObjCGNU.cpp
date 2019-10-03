@@ -1296,7 +1296,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
       // Emit a placeholder symbol.
       GV = new llvm::GlobalVariable(TheModule, ProtocolTy, false,
           llvm::GlobalValue::ExternalLinkage, nullptr, Name);
-      GV->setAlignment(CGM.getPointerAlign().getQuantity());
+      GV->setAlignment(CGM.getPointerAlign().getAsAlign());
     }
     return llvm::ConstantExpr::getBitCast(GV, ProtocolPtrTy);
   }
@@ -1320,7 +1320,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
           llvm::ConstantExpr::getBitCast(Protocol, ProtocolPtrTy), RefName);
       GV->setComdat(TheModule.getOrInsertComdat(RefName));
       GV->setSection(sectionName<ProtocolReferenceSection>());
-      GV->setAlignment(CGM.getPointerAlign().getQuantity());
+      GV->setAlignment(CGM.getPointerAlign().getAsAlign());
       Ref = GV;
     }
     EmittedProtocolRef = true;
@@ -1499,7 +1499,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
         Sym->setSection((Section + SecSuffix).str());
         Sym->setComdat(TheModule.getOrInsertComdat((Prefix +
             Section).str()));
-        Sym->setAlignment(CGM.getPointerAlign().getQuantity());
+        Sym->setAlignment(CGM.getPointerAlign().getAsAlign());
         return Sym;
       };
       return { Sym("__start_", "$a"), Sym("__stop", "$z") };
@@ -4129,7 +4129,7 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
           false, llvm::GlobalValue::LinkOnceAnyLinkage,
           llvm::Constant::getNullValue(IntTy), name, nullptr,
           llvm::GlobalVariable::NotThreadLocal, AS);
-      GV->setAlignment(Align.getQuantity());
+      GV->setAlignment(Align.getAsAlign());
       Offset = GV;
     }
     Offset = CGF.Builder.CreateAlignedLoad(Offset, Align);

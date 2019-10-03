@@ -93,7 +93,7 @@ private:
       GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::None);
     }
     if (Alignment)
-      GV->setAlignment(Alignment);
+      GV->setAlignment(llvm::Align(Alignment));
 
     return llvm::ConstantExpr::getGetElementPtr(ConstStr.getElementType(),
                                                 ConstStr.getPointer(), Zeros);
@@ -630,7 +630,7 @@ llvm::Function *CGNVCUDARuntime::makeModuleCtorFunction() {
         Linkage,
         /*Initializer=*/llvm::ConstantPointerNull::get(VoidPtrPtrTy),
         "__hip_gpubin_handle");
-    GpuBinaryHandle->setAlignment(CGM.getPointerAlign().getQuantity());
+    GpuBinaryHandle->setAlignment(CGM.getPointerAlign().getAsAlign());
     // Prevent the weak symbol in different shared libraries being merged.
     if (Linkage != llvm::GlobalValue::InternalLinkage)
       GpuBinaryHandle->setVisibility(llvm::GlobalValue::HiddenVisibility);
@@ -671,7 +671,7 @@ llvm::Function *CGNVCUDARuntime::makeModuleCtorFunction() {
     GpuBinaryHandle = new llvm::GlobalVariable(
         TheModule, VoidPtrPtrTy, false, llvm::GlobalValue::InternalLinkage,
         llvm::ConstantPointerNull::get(VoidPtrPtrTy), "__cuda_gpubin_handle");
-    GpuBinaryHandle->setAlignment(CGM.getPointerAlign().getQuantity());
+    GpuBinaryHandle->setAlignment(CGM.getPointerAlign().getAsAlign());
     CtorBuilder.CreateAlignedStore(RegisterFatbinCall, GpuBinaryHandle,
                                    CGM.getPointerAlign());
 

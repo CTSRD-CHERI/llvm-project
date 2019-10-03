@@ -907,7 +907,7 @@ static ConstantAddress tryEmitGlobalCompoundLiteral(CodeGenModule &CGM,
                                      llvm::GlobalVariable::NotThreadLocal,
                     CGM.getTargetAddressSpace(addressSpace));
   emitter.finalize(GV);
-  GV->setAlignment(Align.getQuantity());
+  GV->setAlignment(Align.getAsAlign());
   CGM.setAddrOfConstantCompoundLiteral(E, GV);
   return ConstantAddress(GV, Align);
 }

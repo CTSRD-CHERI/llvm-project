@@ -82,7 +82,7 @@ ConstantInitBuilderBase::createGlobal(llvm::Constant *initializer,
                                      /*insert before*/ nullptr,
                                      llvm::GlobalValue::NotThreadLocal,
                                      addressSpace);
-  GV->setAlignment(alignment.getQuantity());
+  GV->setAlignment(alignment.getAsAlign());
   resolveSelfReferences(GV);
   return GV;
 }

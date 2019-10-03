@@ -4734,7 +4734,7 @@ Address CGOpenMPRuntimeNVPTX::getAddressOfLocalVariable(CodeGenFunction &CGF,
           /*InsertBefore=*/nullptr, llvm::GlobalValue::NotThreadLocal,
           CGM.getContext().getTargetAddressSpace(LangAS::cuda_constant));
       CharUnits Align = CGM.getContext().getDeclAlign(VD);
-      GV->setAlignment(Align.getQuantity());
+      GV->setAlignment(Align.getAsAlign());
       return Address(GV, Align);
     }
     case OMPAllocateDeclAttr::OMPPTeamMemAlloc: {
@@ -4746,7 +4746,7 @@ Address CGOpenMPRuntimeNVPTX::getAddressOfLocalVariable(CodeGenFunction &CGF,
           /*InsertBefore=*/nullptr, llvm::GlobalValue::NotThreadLocal,
           CGM.getContext().getTargetAddressSpace(LangAS::cuda_shared));
       CharUnits Align = CGM.getContext().getDeclAlign(VD);
-      GV->setAlignment(Align.getQuantity());
+      GV->setAlignment(Align.getAsAlign());
       return Address(GV, Align);
     }
     case OMPAllocateDeclAttr::OMPLargeCapMemAlloc:
@@ -4757,7 +4757,7 @@ Address CGOpenMPRuntimeNVPTX::getAddressOfLocalVariable(CodeGenFunction &CGF,
           llvm::GlobalValue::InternalLinkage,
           llvm::Constant::getNullValue(VarTy), VD->getName());
       CharUnits Align = CGM.getContext().getDeclAlign(VD);
-      GV->setAlignment(Align.getQuantity());
+      GV->setAlignment(Align.getAsAlign());
       return Address(GV, Align);
     }
     }

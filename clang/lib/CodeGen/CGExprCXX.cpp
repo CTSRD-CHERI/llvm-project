@@ -535,7 +535,7 @@ static void EmitNullBaseClassInitialization(CodeGenFunction &CGF,
 
     CharUnits Align = std::max(Layout.getNonVirtualAlignment(),
                                DestPtr.getAlignment());
-    NullVariable->setAlignment(Align.getQuantity());
+    NullVariable->setAlignment(Align.getAsAlign());
 
     Address SrcPtr = Address(CGF.EmitCastToVoidPtr(NullVariable), Align);
 
