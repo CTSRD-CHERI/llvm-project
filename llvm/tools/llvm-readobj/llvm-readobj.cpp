@@ -237,23 +237,6 @@ namespace opts {
   cl::alias ArchSpecifcInfoShort("A", cl::desc("Alias for --arch-specific"),
                                  cl::aliasopt(ArchSpecificInfo), cl::NotHidden);
 
-  // --mips-plt-got
-  cl::opt<bool>
-  MipsPLTGOT("mips-plt-got",
-             cl::desc("Display the MIPS GOT and PLT GOT sections"));
-
-  // --mips-abi-flags
-  cl::opt<bool> MipsABIFlags("mips-abi-flags",
-                             cl::desc("Display the MIPS.abiflags section"));
-
-  // --mips-reginfo
-  cl::opt<bool> MipsReginfo("mips-reginfo",
-                            cl::desc("Display the MIPS .reginfo section"));
-
-  // --mips-options
-  cl::opt<bool> MipsOptions("mips-options",
-                            cl::desc("Display the MIPS .MIPS.options section"));
-
   cl::opt<bool>
       CheriCapRelocs("cap-relocs",
                      cl::desc("Display the CHERI __cap_relocs section"));
@@ -269,6 +252,7 @@ namespace opts {
   cl::opt<bool> CheriCapTableMapping(
       "cap-table-mapping",
       cl::desc("Display the CHERI .captable_mapping section"));
+
   // --coff-imports
   cl::opt<bool>
   COFFImports("coff-imports", cl::desc("Display the PE/COFF import table"));
@@ -546,14 +530,6 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer,
       }
     }
     if (isMipsArch(Obj->getArch())) {
-      if (opts::MipsPLTGOT)
-        Dumper->printMipsPLTGOT();
-      if (opts::MipsABIFlags)
-        Dumper->printMipsABIFlags();
-      if (opts::MipsReginfo)
-        Dumper->printMipsReginfo();
-      if (opts::MipsOptions)
-        Dumper->printMipsOptions();
       if (opts::CheriCapRelocs)
         Dumper->printCheriCapRelocs();
       if (opts::CheriCapTable)
