@@ -219,7 +219,6 @@ private:
   }
 
   void printAttributes();
-  void printMipsPLTGOT();
   void printMipsReginfo();
   void printMipsOptions();
 
@@ -2256,13 +2255,20 @@ template <class ELFT> void ELFDumper<ELFT>::printArchSpecificInfo() {
   case EM_ARM:
     printAttributes();
     break;
-  case EM_MIPS:
+  case EM_MIPS: {
     ELFDumperStyle->printMipsABIFlags(ObjF);
     printMipsOptions();
     printMipsReginfo();
-    printMipsPLTGOT();
+
+    MipsGOTParser<ELFT> Parser(Obj, ObjF->getFileName(), dynamic_table(),
+                               dynamic_symbols());
+    if (Parser.hasGot())
+      ELFDumperStyle->printMipsGOT(Parser);
+    if (Parser.hasPlt())
+      ELFDumperStyle->printMipsPLT(Parser);
     // FIXME: captable here?
     break;
+  };
   default:
     break;
   }
@@ -2573,20 +2579,6 @@ MipsGOTParser<ELFT>::getPltSym(const Entry *E) const {
     return unwrapOrError(FileName,
                          Obj->getRelocationSymbol(&Rels[Offset], PltSymTable));
   }
-}
-
-template <class ELFT> void ELFDumper<ELFT>::printMipsPLTGOT() {
-  const ELFFile<ELFT> *Obj = ObjF->getELFFile();
-  if (Obj->getHeader()->e_machine != EM_MIPS)
-    reportError(createError("MIPS PLT GOT is available for MIPS targets only"),
-                ObjF->getFileName());
-
-  MipsGOTParser<ELFT> Parser(Obj, ObjF->getFileName(), dynamic_table(),
-                             dynamic_symbols());
-  if (Parser.hasGot())
-    ELFDumperStyle->printMipsGOT(Parser);
-  if (Parser.hasPlt())
-    ELFDumperStyle->printMipsPLT(Parser);
 }
 
 static const EnumEntry<unsigned> ElfMipsISAExtType[] = {
