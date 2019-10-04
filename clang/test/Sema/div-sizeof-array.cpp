@@ -21,6 +21,8 @@ void test(void) {
   int a9 = sizeof(arr) / sizeof(unsigned int);
   const char arr3[2] = "A";
   int a10 = sizeof(arr3) / sizeof(char);
+  int a11 = sizeof(arr3) / sizeof(p);
+  int a12 = sizeof(arr3) / sizeof(int);
 
   int arr4[10][12];                         // expected-note 3 {{array 'arr4' declared here}}
   int b1 = sizeof(arr4) / sizeof(arr2[12]); // expected-warning {{expression does not compute the number of elements in this array; element type is 'int [12]', not 'unsigned long long'}}
