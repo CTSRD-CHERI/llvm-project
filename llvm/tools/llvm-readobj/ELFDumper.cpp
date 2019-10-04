@@ -2268,7 +2268,7 @@ template <class ELFT> void ELFDumper<ELFT>::printArchSpecificInfo() {
       ELFDumperStyle->printMipsPLT(Parser);
     // FIXME: captable here?
     break;
-  };
+  }
   default:
     break;
   }
