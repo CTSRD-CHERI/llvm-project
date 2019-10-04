@@ -199,7 +199,7 @@ static void CheckStringInit(Expr *Str, QualType &DeclT, const ArrayType *AT,
     llvm::APInt ConstVal(32, StrLength);
     // Return a new array type (C99 6.7.8p22).
     DeclT = S.Context.getConstantArrayType(IAT->getElementType(),
-                                           ConstVal,
+                                           ConstVal, nullptr,
                                            ArrayType::Normal, 0);
     updateStringLiteralType(Str, DeclT);
     return;
@@ -1977,8 +1977,8 @@ void InitListChecker::CheckArrayType(const InitializedEntity &Entity,
       SemaRef.Diag(IList->getBeginLoc(), diag::ext_typecheck_zero_array_size);
     }
 
-    DeclType = SemaRef.Context.getConstantArrayType(elementType, maxElements,
-                                                     ArrayType::Normal, 0);
+    DeclType = SemaRef.Context.getConstantArrayType(
+        elementType, maxElements, nullptr, ArrayType::Normal, 0);
   }
   if (!hadError) {
     // If there are any members of the array that get value-initialized, check
@@ -3872,9 +3872,10 @@ static bool TryInitializerListConstruction(Sema &S,
 
   // Try initializing a temporary array from the init list.
   QualType ArrayType = S.Context.getConstantArrayType(
-      E.withConst(), llvm::APInt(S.Context.getTypeSize(S.Context.getSizeType()),
-                                 List->getNumInits()),
-      clang::ArrayType::Normal, 0);
+      E.withConst(),
+      llvm::APInt(S.Context.getTypeSize(S.Context.getSizeType()),
+                  List->getNumInits()),
+      nullptr, clang::ArrayType::Normal, 0);
   InitializedEntity HiddenArray =
       InitializedEntity::InitializeTemporary(ArrayType);
   InitializationKind Kind = InitializationKind::CreateDirectList(
@@ -8517,6 +8518,7 @@ ExprResult InitializationSequence::Perform(Sema &S,
             *ResultType = S.Context.getConstantArrayType(
                                              IncompleteDest->getElementType(),
                                              ConstantSource->getSize(),
+                                             ConstantSource->getSizeExpr(),
                                              ArrayType::Normal, 0);
           }
         }
@@ -8759,7 +8761,7 @@ static void diagnoseListInit(Sema &S, const InitializedEntity &Entity,
         E.withConst(),
         llvm::APInt(S.Context.getTypeSize(S.Context.getSizeType()),
                     InitList->getNumInits()),
-        clang::ArrayType::Normal, 0);
+        nullptr, clang::ArrayType::Normal, 0);
     InitializedEntity HiddenArray =
         InitializedEntity::InitializeTemporary(ArrayType);
     return diagnoseListInit(S, HiddenArray, InitList);

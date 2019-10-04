@@ -241,6 +241,7 @@ void ASTTypeWriter::VisitArrayType(const ArrayType *T) {
 void ASTTypeWriter::VisitConstantArrayType(const ConstantArrayType *T) {
   VisitArrayType(T);
   Record.AddAPInt(T->getSize());
+  Record.AddStmt(const_cast<Expr*>(T->getSizeExpr()));
   Code = TYPE_CONSTANT_ARRAY;
 }
 

@@ -118,8 +118,9 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
           llvm::APInt Size(
               /*numBits=*/32,
               C.toCharUnitsFromBits(AtomicSizeInBits).getQuantity());
-          AtomicTy = C.getConstantArrayType(C.CharTy, Size, ArrayType::Normal,
-                                            /*IndexTypeQuals=*/0);
+          AtomicTy =
+              C.getConstantArrayType(C.CharTy, Size, nullptr, ArrayType::Normal,
+                                     /*IndexTypeQuals=*/0);
         }
         AtomicAlign = ValueAlign = lvalue.getAlignment();
       } else if (lvalue.isVectorElt()) {

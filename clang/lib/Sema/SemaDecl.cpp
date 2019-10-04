@@ -5759,8 +5759,8 @@ static QualType TryToFixInvalidVariablyModifiedType(QualType T,
     return QualType();
   }
 
-  return Context.getConstantArrayType(VLATy->getElementType(),
-                                      Res, ArrayType::Normal, 0);
+  return Context.getConstantArrayType(
+      VLATy->getElementType(), Res, VLATy->getSizeExpr(), ArrayType::Normal, 0);
 }
 
 static void
