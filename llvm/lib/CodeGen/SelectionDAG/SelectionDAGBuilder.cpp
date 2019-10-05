@@ -7491,11 +7491,12 @@ bool SelectionDAGBuilder::visitMemPCpyCall(const CallInst &I) {
   DAG.setRoot(MC);
 
   // Check if Size needs to be truncated or extended.
-  Size = DAG.getSExtOrTrunc(Size, sdl, Dst.getValueType());
+  unsigned DstAS = I.getArgOperand(0)->getType()->getPointerAddressSpace();
+  EVT OffsetVT = MVT::getIntegerVT(DAG.getDataLayout().getIndexSizeInBits(DstAS));
+  Size = DAG.getSExtOrTrunc(Size, sdl, OffsetVT);
 
   // Adjust return pointer to point just past the last dst byte.
-  SDValue DstPlusSize = DAG.getNode(ISD::ADD, sdl, Dst.getValueType(),
-                                    Dst, Size);
+  SDValue DstPlusSize = DAG.getPointerAdd(sdl, Dst, Size);
   setValue(&I, DstPlusSize);
   return true;
 }
