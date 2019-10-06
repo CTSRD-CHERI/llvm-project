@@ -263,6 +263,39 @@ public:
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
 
+      if (AI->isStaticAlloca() && ForcedAlignment) {
+        // Pad to ensure bounds don't overlap adjacent objects
+        uint64_t AllocaSize =
+            cast<ConstantInt>(Size)->getValue().getLimitedValue();
+        uint64_t AlignedSize = alignTo(AllocaSize, ForcedAlignment);
+        if (AlignedSize != AllocaSize) {
+          Type *AllocatedType =
+              AI->isArrayAllocation()
+                  ? ArrayType::get(
+                        AI->getAllocatedType(),
+                        cast<ConstantInt>(AI->getArraySize())->getZExtValue())
+                  : AI->getAllocatedType();
+          Type *PaddingType =
+            ArrayType::get(Type::getInt8Ty(F.getContext()),
+                           AlignedSize - AllocaSize);
+          Type *TypeWithPadding = StructType::get(AllocatedType, PaddingType);
+          auto *NewAI =
+            new AllocaInst(TypeWithPadding, AI->getType()->getAddressSpace(),
+                           nullptr, "", AI);
+          NewAI->takeName(AI);
+          NewAI->setAlignment(AI->getAlignment());
+          NewAI->setUsedWithInAlloca(AI->isUsedWithInAlloca());
+          NewAI->setSwiftError(AI->isSwiftError());
+          NewAI->copyMetadata(*AI);
+
+          auto *NewPtr = new BitCastInst(NewAI, AI->getType(), "", AI);
+          AI->replaceAllUsesWith(NewPtr);
+          AI->eraseFromParent();
+          AI = NewAI;
+          Size = ConstantInt::get(Type::getInt64Ty(C), AlignedSize);
+        }
+      }
+
       if (cheri::ShouldCollectCSetBoundsStats) {
         cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
                                  cheri::SetBoundsPointerSource::Stack,
