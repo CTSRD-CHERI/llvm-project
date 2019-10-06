@@ -62,27 +62,27 @@ void __start(void) {}
 // dynamic should have 10 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     0x20570 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20578 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20588 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20590 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 // SHLIB-RELOCS-LABEL: Relocations [
 // SHLIB-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// SHLIB-RELOCS-NEXT:     0x20620 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// SHLIB-RELOCS-NEXT:     0x20628 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x20638 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x20640 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:   }
 // SHLIB-RELOCS-NEXT: ]
 
 
 // DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
-// STATIC-NEXT: Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// STATIC-NEXT: Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function){{$}}
 // PIE exe amd shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT: Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// DYNAMIC-NEXT: Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function){{$}}
 
 
 // The external capsizefix does okay for both cases:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function){{$}}
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function){{$}}
 
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
 

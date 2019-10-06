@@ -79,15 +79,15 @@ void __start(void) {}
 
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     0x20570 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20578 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20588 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20590 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 
 // SHLIB-RELOCS-LABEL: Relocations [
 // SHLIB-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// SHLIB-RELOCS-NEXT:     0x20620 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// SHLIB-RELOCS-NEXT:     0x20628 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x20638 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x20640 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:   }
 // SHLIB-RELOCS-NEXT: ]
 
@@ -115,11 +115,11 @@ void __start(void) {}
 
 
 // DUMP-CAPRELOCS-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:                     0x120020350 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-NEXT:                     0x120020370 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
 // PIE exe and shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT:                    0x0305a0 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
-// SHLIB-NEXT:                      0x030650 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
+// DYNAMIC-NEXT:                    0x0305b0 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
+// SHLIB-NEXT:                      0x030660 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
 // The external capsizefix does okay static:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020350 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020370 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
 // DUMP-CAPRELOCS-NEXT: ]
 
