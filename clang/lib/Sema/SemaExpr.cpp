@@ -9314,7 +9314,6 @@ static void DiagnoseDivisionSizeofPointerOrArray(Sema &S, Expr *LHS, Expr *RHS,
   } else if (const auto *ArrayTy = S.Context.getAsArrayType(LHSTy)) {
     QualType ArrayElemTy = ArrayTy->getElementType();
     if (ArrayElemTy->isDependentType() || RHSTy->isDependentType() ||
-        ArrayElemTy->isCharType() ||
         S.Context.getTypeSize(ArrayElemTy) == S.Context.getTypeSize(RHSTy))
       return;
     S.Diag(Loc, diag::warn_division_sizeof_array)
