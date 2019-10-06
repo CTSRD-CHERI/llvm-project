@@ -10,13 +10,15 @@ define chericcallcc i8 addrspace(200)* @cgetdata(i8 addrspace(200)* inreg readno
 ; CHECK-LABEL: cgetdata:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    daddiu $sp, $sp, -[[#CAP_SIZE]]
-; CHECK-NEXT:    sd $fp, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    sd $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    sd $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    move $fp, $sp
 ; CHECK-NEXT:    daddiu $2, $zero, 0
 ; CHECK-NEXT:    daddiu $3, $zero, 0
 ; CHECK-NEXT:    cmove $c3, $c1
 ; CHECK-NEXT:    move $sp, $fp
-; CHECK-NEXT:    ld $fp, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    daddiu $sp, $sp, [[#CAP_SIZE]]
 entry:
@@ -29,14 +31,16 @@ define chericcallcc i32 @cgetnumber(i8 addrspace(200)* inreg nocapture readnone 
 ; CHECK-LABEL: cgetnumber:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    daddiu $sp, $sp, -[[#CAP_SIZE]]
-; CHECK-NEXT:    sd $fp, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    sd $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    sd $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    move $fp, $sp
 ; The real return value goes in $v0, check that $c3 and $v1 are zeroed:
 ; CHECK-NEXT:    addiu $2, $zero, 42
 ; CHECK-NEXT:    daddiu $3, $zero, 0
 ; CHECK-NEXT:    cgetnull $c3
 ; CHECK-NEXT:    move $sp, $fp
-; CHECK-NEXT:    ld $fp, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    daddiu $sp, $sp, [[#CAP_SIZE]]
 entry:

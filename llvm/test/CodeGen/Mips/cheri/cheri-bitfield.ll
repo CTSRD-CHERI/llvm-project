@@ -17,6 +17,7 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
 ; CHECK-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    cincoffset $c24, $c11, $zero
 ; CHECK-NEXT:    cgetaddr $1, $c11
 ; CHECK-NEXT:    daddiu $2, $zero, -32
@@ -25,9 +26,9 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(main)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(main)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    csw $zero, $zero, 44($c11)
+; CHECK-NEXT:    csw $zero, $zero, 28($c11)
 ; CHECK-NEXT:    clcbi $c1, %captab20(x)($c1)
-; CHECK-NEXT:    csw $4, $zero, 40($c11)
+; CHECK-NEXT:    csw $4, $zero, 24($c11)
 ; CHECK-NEXT:    csc $c3, $zero, 0($c11)
 ; CHECK-NEXT:    cld $1, $zero, 8($c1)
 ; CHECK-NEXT:    lui $2, 65535
@@ -39,6 +40,7 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    addiu $2, $zero, 0
 ; CHECK-NEXT:    csd $1, $zero, 8($c1)
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
+; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 3]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
