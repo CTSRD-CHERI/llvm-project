@@ -3329,6 +3329,8 @@ public:
     SDValue CombineTo(SDNode *N, SDValue Res, bool AddTo = true);
     SDValue CombineTo(SDNode *N, SDValue Res0, SDValue Res1, bool AddTo = true);
 
+    bool recursivelyDeleteUnusedNodes(SDNode *N);
+
     void CommitTargetLoweringOpt(const TargetLoweringOpt &TLO);
   };
 
