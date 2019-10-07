@@ -730,8 +730,10 @@ int main(int argc, const char *argv[]) {
     opts::HashHistogram = true;
     opts::CheriCapRelocs = true;
     opts::CheriCapTable = true;
-    if (opts::Output == opts::LLVM)
+    if (opts::Output == opts::LLVM) {
+      opts::Addrsig = true;
       opts::PrintStackSizes = true;
+    }
   }
 
   if (opts::Headers) {
