@@ -6987,7 +6987,8 @@ public:
   }
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
-  ABIArgInfo classifyArgumentType(QualType RetTy, uint64_t &Offset) const;
+  ABIArgInfo classifyArgumentType(QualType RetTy, uint64_t &Offset,
+                                  bool &HasV0) const;
   void computeInfo(CGFunctionInfo &FI) const override;
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override;
@@ -7355,7 +7356,8 @@ llvm::Type *MipsABIInfo::getPaddingType(uint64_t OrigOffset,
 }
 
 ABIArgInfo
-MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
+MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset,
+                                  bool &HasV0) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
 
   uint64_t OrigOffset = Offset;
@@ -7415,8 +7417,25 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
 
   // All integral types are promoted to the GPR width.
   if (Ty->isIntegralOrEnumerationType() &&
-      !Ty->isCHERICapabilityType(getContext()))
+      !Ty->isCHERICapabilityType(getContext())) {
+    if (HasV0) {
+      // This is the special method number argument; don't count it as a
+      // parameter slot. otherwise we risk inserting padding directly after
+      // this argument if we next see an aggregate, which disagrees with the
+      // non-CCall calling convention when dropping the object and method, but
+      // the two must match to allow cheri_invoke and the libcheri CCall
+      // vectors to act as trampolines.
+      //
+      // TODO: This is insufficient if the first integral type comes as part of
+      //       an aggregate above. Ideally the front-end would enforce that
+      //       CCall functions have sane arguments (two capabilities and an
+      //       integer (up to one machine word) before anything else, with the
+      //       capabilities possibly in a struct).
+      HasV0 = false;
+      Offset = OrigOffset;
+    }
     return extendType(Ty);
+  }
 
   if (Ty->isCHERICapabilityType(getContext()))
     return ABIArgInfo::getDirect(CGT.ConvertType(Ty));
@@ -7530,9 +7549,10 @@ void MipsABIInfo::computeInfo(CGFunctionInfo &FI) const {
 
   // Check if a pointer to an aggregate is passed as a hidden argument.
   uint64_t Offset = RetInfo.isIndirect() ? MinABIStackAlignInBytes : 0;
+  bool HasV0 = FI.getCallingConvention() == llvm::CallingConv::CHERI_CCall;
 
   for (auto &I : FI.arguments())
-    I.info = classifyArgumentType(I.type, Offset);
+    I.info = classifyArgumentType(I.type, Offset, HasV0);
 }
 
 Address MipsABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
