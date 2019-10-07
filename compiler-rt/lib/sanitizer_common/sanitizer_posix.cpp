@@ -313,6 +313,8 @@ const char *SignalContext::Describe() const {
       return "SEGV";
     case SIGBUS:
       return "BUS";
+    case SIGTRAP:
+      return "TRAP";
   }
   return "UNKNOWN SIGNAL";
 }
