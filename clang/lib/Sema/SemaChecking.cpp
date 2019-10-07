@@ -587,7 +587,7 @@ static bool checkOpenCLBlockArgs(Sema &S, Expr *BlockArg) {
   const BlockPointerType *BPT =
       cast<BlockPointerType>(BlockArg->getType().getCanonicalType());
   ArrayRef<QualType> Params =
-      BPT->getPointeeType()->getAs<FunctionProtoType>()->getParamTypes();
+      BPT->getPointeeType()->castAs<FunctionProtoType>()->getParamTypes();
   unsigned ArgCounter = 0;
   bool IllegalParams = false;
   // Iterate through the block parameters until either one is found that is not
@@ -686,7 +686,7 @@ static bool checkOpenCLEnqueueVariadicArgs(Sema &S, CallExpr *TheCall,
   const BlockPointerType *BPT =
       cast<BlockPointerType>(BlockArg->getType().getCanonicalType());
   unsigned NumBlockParams =
-      BPT->getPointeeType()->getAs<FunctionProtoType>()->getNumParams();
+      BPT->getPointeeType()->castAs<FunctionProtoType>()->getNumParams();
   unsigned TotalNumArgs = TheCall->getNumArgs();
 
   // For each argument passed to the block, a corresponding uint needs to
@@ -779,7 +779,7 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
     // we have a block type, check the prototype
     const BlockPointerType *BPT =
         cast<BlockPointerType>(Arg3->getType().getCanonicalType());
-    if (BPT->getPointeeType()->getAs<FunctionProtoType>()->getNumParams() > 0) {
+    if (BPT->getPointeeType()->castAs<FunctionProtoType>()->getNumParams() > 0) {
       S.Diag(Arg3->getBeginLoc(),
              diag::err_opencl_enqueue_kernel_blocks_no_args);
       return true;
@@ -4787,7 +4787,7 @@ ExprResult Sema::BuildAtomicExpr(SourceRange CallRange, SourceRange ExprRange,
           << Ptr->getSourceRange();
       return ExprError();
     }
-    ValType = AtomTy->getAs<AtomicType>()->getValueType();
+    ValType = AtomTy->castAs<AtomicType>()->getValueType();
   } else if (Form != Load && Form != LoadCopy) {
     if (ValType.isConstQualified()) {
       Diag(ExprRange.getBegin(), diag::err_atomic_op_needs_non_const_pointer)
@@ -5612,7 +5612,7 @@ static bool checkVAStartABI(Sema &S, unsigned BuiltinID, Expr *Fn) {
   if (IsX64 || IsAArch64) {
     CallingConv CC = CC_C;
     if (const FunctionDecl *FD = S.getCurFunctionDecl())
-      CC = FD->getType()->getAs<FunctionType>()->getCallConv();
+      CC = FD->getType()->castAs<FunctionType>()->getCallConv();
     if (IsMSVAStart) {
       // Don't allow this in System V ABI functions.
       if (CC == CC_X86_64SysV || (!IsWindows && CC != CC_Win64))
@@ -5742,7 +5742,7 @@ bool Sema::SemaBuiltinVAStart(unsigned BuiltinID, CallExpr *TheCall) {
                return false;
              if (!Type->isEnumeralType())
                return true;
-             const EnumDecl *ED = Type->getAs<EnumType>()->getDecl();
+             const EnumDecl *ED = Type->castAs<EnumType>()->getDecl();
              return !(ED &&
                       Context.typesAreCompatible(ED->getPromotionType(), Type));
            }()) {
@@ -10914,7 +10914,7 @@ static bool AnalyzeBitFieldAssignment(Sema &S, FieldDecl *Bitfield, Expr *Init,
      return false;
 
   if (BitfieldType->isEnumeralType()) {
-    EnumDecl *BitfieldEnumDecl = BitfieldType->getAs<EnumType>()->getDecl();
+    EnumDecl *BitfieldEnumDecl = BitfieldType->castAs<EnumType>()->getDecl();
     // If the underlying enum type was not explicitly specified as an unsigned
     // type and the enum contain only positive values, MSVC++ will cause an
     // inconsistency by storing this as a signed type.
