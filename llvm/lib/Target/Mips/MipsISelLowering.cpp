@@ -79,6 +79,8 @@
 #include <utility>
 #include <vector>
 
+#include "cheri-compressed-cap/cheri_compressed_cap.h"
+
 using namespace llvm;
 
 #define DEBUG_TYPE "mips-lower"
@@ -1406,6 +1408,24 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
   case Intrinsic::cheri_cap_offset_increment: {
     return performCIncOffsetToCandAddrCombine(N, DAG, DCI, Subtarget);
   }
+  case Intrinsic::cheri_round_representable_length: {
+    if (Subtarget.isCheri256())
+      return N->getOperand(1);
+
+    KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
+    if (Known.isConstant())
+      return DAG.getConstant(Known.One, DL, N->getValueType(0));
+    break;
+  }
+  case Intrinsic::cheri_representable_alignment_mask: {
+    if (Subtarget.isCheri256())
+      return DAG.getAllOnesConstant(DL, N->getValueType(0));
+
+    KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
+    if (Known.isConstant())
+      return DAG.getConstant(Known.One, DL, N->getValueType(0));
+    break;
+  }
   }
 
   return SDValue();
@@ -1518,6 +1538,91 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const
   case ISD::BR_JT:              return lowerBR_JT(Op, DAG);
   }
   return SDValue();
+}
+
+void MipsTargetLowering::computeKnownBitsForTargetNode(
+    const SDValue Op, KnownBits &Known, const APInt &DemandedElts,
+    const SelectionDAG &DAG, unsigned Depth) const {
+  Known.resetAll();
+  switch (Op.getOpcode()) {
+  default: break;
+  case ISD::INTRINSIC_WO_CHAIN: {
+    switch (cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue()) {
+    default: break;
+    case Intrinsic::cheri_round_representable_length:
+      if (Subtarget.isCheri256()) {
+        Known = DAG.computeKnownBits(Op.getOperand(1));
+      } else if (Subtarget.isCheri128()) {
+        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
+        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
+        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
+        uint64_t MinMask = cc128_get_alignment_mask(MinLength);
+        uint64_t MaxMask = cc128_get_alignment_mask(MaxLength);
+        uint64_t MinRoundedLength = (MinLength + ~MinMask) & MinMask;
+        uint64_t MaxRoundedLength = (MaxLength + ~MaxMask) & MaxMask;
+        bool MinRoundedOverflow = MinRoundedLength < MinLength;
+        bool MaxRoundedOverflow = MaxRoundedLength < MaxLength;
+
+        // A bit is known if the two different output bits are the same and:
+        //
+        //  (1) All more-significant bits are known. This is regardless of
+        //      whether the corresponding input bits were known, since rounding
+        //      is monotonic.
+        //
+        //  OR
+        //
+        //  (2) All less-significant bits are known and the corresponding input
+        //      bit is known.
+        //
+        // If the two rounded values are the same, repeated application of (1)
+        // yields the expected result that all bits are known.
+        //
+        // Note that the properties as described above are in terms of the
+        // (N+1)-bit outputs, not their truncated forms, with the (N+1)th bit
+        // being the overflow bit, and so we must take that into account.
+        //
+        // This can be improved upon to consider inner and trailing bits that
+        // are still known regardless of the input bits (such as because they
+        // are 1 in the input and the bounds are not rounded up too much to
+        // lose them), but this is a good first start.
+
+        uint64_t MinMaxRoundedAgreeMask = MinRoundedLength ^ ~MaxRoundedLength;
+        uint64_t InputKnownMask =
+          (KnownLengthBits.Zero | KnownLengthBits.One).getZExtValue();
+
+        // Calculate bits for property (1)
+        uint64_t LeadingKnownBits = countLeadingOnes(MinMaxRoundedAgreeMask);
+        uint64_t LeadingKnownMask =
+          MinRoundedOverflow == MaxRoundedOverflow
+            ? maskLeadingOnes<uint64_t>(LeadingKnownBits) : 0;
+
+        // Calculate bits for property (2)
+        uint64_t TrailingKnownBits = countTrailingOnes(MinMaxRoundedAgreeMask);
+        uint64_t TrailingKnownMask =
+            maskTrailingOnes<uint64_t>(TrailingKnownBits) & InputKnownMask;
+
+        // Combine properties
+        uint64_t KnownMask = LeadingKnownMask | TrailingKnownMask;
+
+        Known.Zero |= ~MinRoundedLength & KnownMask;
+        Known.One |= MinRoundedLength & KnownMask;
+      }
+      break;
+    case Intrinsic::cheri_representable_alignment_mask:
+      if (Subtarget.isCheri256()) {
+        Known.setAllOnes();
+      } else if (Subtarget.isCheri128()) {
+        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
+        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
+        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
+
+        Known.Zero |= ~cc128_get_alignment_mask(MinLength);
+        Known.One |= cc128_get_alignment_mask(MaxLength);
+      }
+      break;
+    }
+  }
+  }
 }
 
 //===----------------------------------------------------------------------===//
