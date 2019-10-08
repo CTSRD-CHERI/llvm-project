@@ -226,13 +226,33 @@ last_cap_size = None
 last_frame_size = None  # type: int
 
 
-def offset_to_cap_expr(offset, cap_size):
-  if offset == 0:
-    return "0"
-  elif offset % cap_size == 0:
+def cap_size_multiple(offset, cap_size):
+  if offset % cap_size == 0:
     return "[[#CAP_SIZE * " + str(offset // cap_size) + "]]"
   else:
     return "[[#CAP_SIZE * " + str(offset // cap_size) + " + " + str(offset % cap_size) + "]]"
+
+
+def offset_to_cap_expr(match, offset, cap_size):
+  if offset == 0:
+    return "0"
+  global last_frame_size
+  if not last_frame_size:
+    print("clc/csc: unknown stackframe size:" + unchanged_match(match))
+    return cap_size_multiple(offset, cap_size)
+
+  if offset >= last_frame_size:
+    print("clc/csc: offset bigger than", last_frame_size, ":" + unchanged_match(match))
+    return cap_size_multiple(offset, cap_size)
+
+  difference = last_frame_size - offset
+  if difference % cap_size != 0:
+    print("clc/csc: modulo wrong:" + unchanged_match(match))
+    return cap_size_multiple(offset, cap_size)
+
+  if difference == cap_size:
+    return "[[#STACKFRAME_SIZE - CAP_SIZE]]"
+  return "[[#STACKFRAME_SIZE - (" + str(difference // cap_size) + " * CAP_SIZE)]]"
 
 
 def unchanged_match(match):
@@ -251,7 +271,7 @@ def do_clc_csc_sub(match):
     offset_sign = ""
   cap_size = int(match.group('cap_size'))
   assert cap_size == 16 or cap_size == 32
-  offset_str = offset_to_cap_expr(offset, cap_size)
+  offset_str = offset_to_cap_expr(match, offset, cap_size)
   global last_cap_size
   last_cap_size = cap_size
   result = insn + " " + reg + ", $zero, " + offset_sign + offset_str + "($c11)"
@@ -288,7 +308,7 @@ def do_save_load_dword_sub(match):
 
 def do_cfi_offset_sub(match):
   cap_size = 16 if last_cap_size is None else last_cap_size
-  offset_str = offset_to_cap_expr(int(match.group('offset')), cap_size)
+  offset_str = offset_to_cap_expr(match, int(match.group('offset')), cap_size)
   return ".cfi_offset " + match.group('reg') + ", -" + offset_str
 
 
@@ -327,9 +347,6 @@ def scrub_asm_mips(asm, args):
   global last_frame_size
   last_frame_size = None
 
-  # Expand .cfi offsets and clc offset to @EXPR for CHERI128/256
-  stack_store_cap_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
-  asm = stack_store_cap_re.sub(do_clc_csc_sub, asm)
   stackframe_size_regex = re.compile(r'(?P<instr>cincoffset \$c11, \$c11), -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
   asm = stackframe_size_regex.sub(do_stackframe_size_sub, asm, count=1)
   if not last_frame_size:
@@ -342,6 +359,9 @@ def scrub_asm_mips(asm, args):
     mips_stackframe_size_fallback_regex = re.compile(r'(?P<instr>daddiu \$sp, \$sp), -(?P<size>\d+)\n')
     asm = mips_stackframe_size_fallback_regex.sub(do_stackframe_size_fallback_sub, asm, count=1)
 
+  # Expand .cfi offsets and clc offset to #CAPS_SIZE for CHERI128/256
+  stack_store_cap_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
+  asm = stack_store_cap_re.sub(do_clc_csc_sub, asm)
   stack_store_dword_re = re.compile(r'(?P<insn>csd|cld) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# 8\-byte Folded (Spill|Reload)')
   asm = stack_store_dword_re.sub(do_save_load_dword_sub, asm)
   cfi_offset_regex = re.compile(r'\.cfi_offset (?P<reg>[$\w]+), -(?P<offset>\d+)')
