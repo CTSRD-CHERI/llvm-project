@@ -39,6 +39,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/TypeSize.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -1793,7 +1794,7 @@ ShuffleVectorInst::ShuffleVectorInst(Value *V1, Value *V2, Value *Mask,
                                      const Twine &Name,
                                      Instruction *InsertBefore)
 : Instruction(VectorType::get(cast<VectorType>(V1->getType())->getElementType(),
-                cast<VectorType>(Mask->getType())->getNumElements()),
+                cast<VectorType>(Mask->getType())->getElementCount()),
               ShuffleVector,
               OperandTraits<ShuffleVectorInst>::op_begin(this),
               OperandTraits<ShuffleVectorInst>::operands(this),
@@ -1810,7 +1811,7 @@ ShuffleVectorInst::ShuffleVectorInst(Value *V1, Value *V2, Value *Mask,
                                      const Twine &Name,
                                      BasicBlock *InsertAtEnd)
 : Instruction(VectorType::get(cast<VectorType>(V1->getType())->getElementType(),
-                cast<VectorType>(Mask->getType())->getNumElements()),
+                cast<VectorType>(Mask->getType())->getElementCount()),
               ShuffleVector,
               OperandTraits<ShuffleVectorInst>::op_begin(this),
               OperandTraits<ShuffleVectorInst>::operands(this),
@@ -3010,8 +3011,8 @@ bool CastInst::isCastable(Type *SrcTy, Type *DestTy) {
       }
 
   // Get the bit sizes, we'll need these
-  unsigned SrcBits = SrcTy->getPrimitiveSizeInBits();   // 0 for ptr
-  unsigned DestBits = DestTy->getPrimitiveSizeInBits(); // 0 for ptr
+  auto SrcBits = SrcTy->getPrimitiveSizeInBits();   // 0 for ptr
+  auto DestBits = DestTy->getPrimitiveSizeInBits(); // 0 for ptr
 
   // Run through the possibilities ...
   if (DestTy->isIntegerTy()) {               // Casting to integral
@@ -3058,7 +3059,7 @@ bool CastInst::isBitCastable(Type *SrcTy, Type *DestTy) {
 
   if (VectorType *SrcVecTy = dyn_cast<VectorType>(SrcTy)) {
     if (VectorType *DestVecTy = dyn_cast<VectorType>(DestTy)) {
-      if (SrcVecTy->getNumElements() == DestVecTy->getNumElements()) {
+      if (SrcVecTy->getElementCount() == DestVecTy->getElementCount()) {
         // An element by element cast. Valid if casting the elements is valid.
         SrcTy = SrcVecTy->getElementType();
         DestTy = DestVecTy->getElementType();
@@ -3072,12 +3073,12 @@ bool CastInst::isBitCastable(Type *SrcTy, Type *DestTy) {
     }
   }
 
-  unsigned SrcBits = SrcTy->getPrimitiveSizeInBits();   // 0 for ptr
-  unsigned DestBits = DestTy->getPrimitiveSizeInBits(); // 0 for ptr
+  auto SrcBits = SrcTy->getPrimitiveSizeInBits();   // 0 for ptr
+  auto DestBits = DestTy->getPrimitiveSizeInBits(); // 0 for ptr
 
   // Could still have vectors of pointers if the number of elements doesn't
   // match
-  if (SrcBits == 0 || DestBits == 0)
+  if (SrcBits.getKnownMinSize() == 0 || DestBits.getKnownMinSize() == 0)
     return false;
 
   if (SrcBits != DestBits)
