@@ -1216,13 +1216,7 @@ namespace serialization {
       SPECIAL_TYPE_OBJC_SEL_REDEFINITION       = 6,
 
       /// C ucontext_t typedef type
-      SPECIAL_TYPE_UCONTEXT_T                  = 7,
-
-      /// C pthread_t typedef type
-      SPECIAL_TYPE_PTHREAD_T                   = 8,
-
-      /// C pthread_attr_t typedef type
-      SPECIAL_TYPE_PTHREAD_ATTR_T              = 9
+      SPECIAL_TYPE_UCONTEXT_T                  = 7
     };
 
     /// The number of special type IDs.

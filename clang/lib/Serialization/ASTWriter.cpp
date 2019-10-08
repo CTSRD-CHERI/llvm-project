@@ -4968,8 +4968,6 @@ ASTFileSignature ASTWriter::WriteASTCore(Sema &SemaRef, StringRef isysroot,
   AddTypeRef(Context.ObjCClassRedefinitionType, SpecialTypes);
   AddTypeRef(Context.ObjCSelRedefinitionType, SpecialTypes);
   AddTypeRef(Context.getucontext_tType(), SpecialTypes);
-  AddTypeRef(Context.getpthread_tType(), SpecialTypes);
-  AddTypeRef(Context.getpthread_attr_tType(), SpecialTypes);
 
   if (Chain) {
     // Write the mapping information describing our module dependencies and how

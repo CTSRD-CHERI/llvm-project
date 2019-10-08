@@ -1231,7 +1231,7 @@ typedef __darwin_pthread_attr_t pthread_attr_t;
 typedef unsigned long __darwin_pthread_key_t;
 typedef __darwin_pthread_key_t pthread_key_t;
 
-int pthread_create(pthread_t *, const pthread_attr_t *,  // no-warning
+int pthread_create(pthread_t *, const pthread_attr_t *,
                    void *(*)(void *), void *);
 
 int pthread_setspecific(pthread_key_t key, const void *value);

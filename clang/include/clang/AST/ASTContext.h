@@ -387,12 +387,6 @@ private:
   /// The type for the C ucontext_t type.
   TypeDecl *ucontext_tDecl = nullptr;
 
-  /// The type for the C pthread_t type.
-  TypeDecl *pthread_tDecl = nullptr;
-
-  /// The type for the C pthread_attr_t type.
-  TypeDecl *pthread_attr_tDecl = nullptr;
-
   /// Type for the Block descriptor for Blocks CodeGen.
   ///
   /// Since this is only used for generation of debug info, it is not
@@ -1822,30 +1816,6 @@ public:
     return QualType();
   }
 
-  /// Set the type for the C pthread_t type.
-  void setpthread_tDecl(TypeDecl *pthread_tDecl) {
-    this->pthread_tDecl = pthread_tDecl;
-  }
-
-  /// Retrieve the C pthread_t type.
-  QualType getpthread_tType() const {
-    if (pthread_tDecl)
-      return getTypeDeclType(pthread_tDecl);
-    return QualType();
-  }
-
-  /// Set the type for the C pthread_attr_t type.
-  void setpthread_attr_tDecl(TypeDecl *pthread_attr_tDecl) {
-    this->pthread_attr_tDecl = pthread_attr_tDecl;
-  }
-
-  /// Retrieve the C pthread_attr_t type.
-  QualType getpthread_attr_tType() const {
-    if (pthread_attr_tDecl)
-      return getTypeDeclType(pthread_attr_tDecl);
-    return QualType();
-  }
-
   /// The result type of logical operations, '<', '>', '!=', etc.
   QualType getLogicalOperationType() const {
     return getLangOpts().CPlusPlus ? BoolTy : IntTy;
@@ -2084,10 +2054,7 @@ public:
     GE_Missing_setjmp,
 
     /// Missing a type from <ucontext.h>
-    GE_Missing_ucontext,
-
-    /// Missing a type from <pthread.h>
-    GE_Missing_pthread
+    GE_Missing_ucontext
   };
 
   /// Return the type for the specified builtin.

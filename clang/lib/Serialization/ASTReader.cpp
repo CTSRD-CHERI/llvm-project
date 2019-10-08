@@ -4847,42 +4847,6 @@ void ASTReader::InitializeContext() {
         }
       }
     }
-
-    if (unsigned Pthread_t = SpecialTypes[SPECIAL_TYPE_PTHREAD_T]) {
-      QualType Pthread_tType = GetType(Pthread_t);
-      if (Pthread_tType.isNull()) {
-        Error("pthread_t type is NULL");
-        return;
-      }
-
-      if (!Context.pthread_tDecl) {
-        if (const TypedefType *Typedef = Pthread_tType->getAs<TypedefType>())
-          Context.setpthread_tDecl(Typedef->getDecl());
-        else {
-          const TagType *Tag = Pthread_tType->getAs<TagType>();
-          assert(Tag && "Invalid pthread_t type in AST file");
-          Context.setpthread_tDecl(Tag->getDecl());
-        }
-      }
-    }
-
-    if (unsigned Pthread_attr_t = SpecialTypes[SPECIAL_TYPE_PTHREAD_ATTR_T]) {
-      QualType Pthread_attr_tType = GetType(Pthread_attr_t);
-      if (Pthread_attr_tType.isNull()) {
-        Error("pthread_attr_t type is NULL");
-        return;
-      }
-
-      if (!Context.pthread_attr_tDecl) {
-        if (const TypedefType *Typedef = Pthread_attr_tType->getAs<TypedefType>())
-          Context.setpthread_attr_tDecl(Typedef->getDecl());
-        else {
-          const TagType *Tag = Pthread_attr_tType->getAs<TagType>();
-          assert(Tag && "Invalid pthread_attr_t type in AST file");
-          Context.setpthread_attr_tDecl(Tag->getDecl());
-        }
-      }
-    }
   }
 
   ReadPragmaDiagnosticMappings(Context.getDiagnostics());

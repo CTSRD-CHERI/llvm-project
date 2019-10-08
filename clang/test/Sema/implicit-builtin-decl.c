@@ -68,4 +68,4 @@ void sigsetjmp(struct __jmp_buf_tag[1], int); // expected-warning{{declaration o
 // CHECK:     ReturnsTwiceAttr {{.*}} <{{.*}}> Implicit
 
 // PR40692
-void pthread_create(); // expected-warning{{declaration of built-in function 'pthread_create' requires inclusion of the header <pthread.h>}}
+void pthread_create(); // no warning expected

@@ -44,9 +44,6 @@
 //  SJ -> sigjmp_buf
 //  K -> ucontext_t
 //  p -> pid_t
-//  Q -> pthread_t
-//  SQ -> pthread_attr_t
-//  (T) -> function with type T parsed recursively
 //  . -> "...".  This may only occur at the end of the function list.
 //
 // Types may be prefixed with the following modifiers:
@@ -1005,7 +1002,7 @@ LIBBUILTIN(strncasecmp, "icC*cC*z", "f",   "strings.h", ALL_GNU_LANGUAGES)
 LIBBUILTIN(_exit, "vi",           "fr",    "unistd.h", ALL_GNU_LANGUAGES)
 LIBBUILTIN(vfork, "p",            "fj",    "unistd.h", ALL_LANGUAGES)
 // POSIX pthread.h
-LIBBUILTIN(pthread_create, "iQ*SQC*(v*v*)*v*",  "fC<2,3>", "pthread.h", ALL_GNU_LANGUAGES)
+LIBBUILTIN(pthread_create, "",  "fC<2,3>", "pthread.h", ALL_GNU_LANGUAGES)
 
 // POSIX setjmp.h
 
