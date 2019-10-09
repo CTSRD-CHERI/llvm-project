@@ -1735,7 +1735,7 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
   if (Triple.isMIPS() && ABIName == "purecap")
     CmdArgs.push_back("-Wmips-cheri-prototypes");
 
-  mips::FloatABI ABI = mips::getMipsFloatABI(D, Args);
+  mips::FloatABI ABI = mips::getMipsFloatABI(D, Args, Triple);
   if (ABI == mips::FloatABI::Soft) {
     // Floating point operations and argument passing are soft.
     CmdArgs.push_back("-msoft-float");
