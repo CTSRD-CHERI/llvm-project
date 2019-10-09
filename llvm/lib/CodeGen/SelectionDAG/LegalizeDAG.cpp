@@ -1610,7 +1610,7 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
     }
 
     Tmp1 = DAG.getNode(ISD::SUB, dl, SizeVT, Tmp1, Tmp2);
-    if (Align > StackAlign || !TLI.cheriCapabilityTypeIsUncompressed())
+    if (Align > StackAlign || !TLI.cheriCapabilityTypeHasPreciseBounds())
       Tmp1 = DAG.getNode(ISD::AND, dl, SizeVT, Tmp1, Tmp3);
 
     Tmp1 =
