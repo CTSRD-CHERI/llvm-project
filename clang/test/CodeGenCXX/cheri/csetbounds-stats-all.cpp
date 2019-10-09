@@ -70,10 +70,10 @@ int test(void) {
   return foo(3, 1, 2, 3, 4ULL); // promoted to u64 in variadic call -> 4 * 8 bytes
 }
 
-// CSV-NEXT: 11,<unknown>,s,"<somewhere in _Z11test_allocai>","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
-// CSV-NEXT: 11,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst vla"
-// CSV-NEXT: 11,<unknown>,s,"<somewhere in _Z11test_allocai>","ExpandDYNAMIC_STACKALLOC",""
-// CSV-NEXT: 11,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","ExpandDYNAMIC_STACKALLOC",""
+// CSV-NEXT: 4,<unknown>,s,"<somewhere in _Z11test_allocai>","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
+// CSV-NEXT: 0,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst vla"
+// CSV-NEXT: 0,<unknown>,s,"<somewhere in _Z11test_allocai>","ExpandDYNAMIC_STACKALLOC",""
+// CSV-NEXT: 0,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","ExpandDYNAMIC_STACKALLOC",""
 // CSV-NEXT: 2,12,g,"<somewhere in _Z20load_global_variablev>","MipsTargetLowering::lowerGlobalAddress","load of global global_foo (alloc size=12)"
 // CSV-NEXT: 0,32,s,"<somewhere in _Z4testv>","variadic call lowering","setting varargs bounds for call to _Z3fooiz"
 

@@ -1,4 +1,5 @@
-; RUN: %cheri_purecap_llc -O1 %s -o - | FileCheck --enable-var-scope %s
+; RUN: %cheri128_purecap_llc -O1 %s -o - | FileCheck %s --check-prefixes=CHECK,CHERI128
+; RUN: %cheri256_purecap_llc -O1 %s -o - | FileCheck %s --check-prefixes=CHECK,CHERI256
 ; ModuleID = 'cheri-stack.c'
 source_filename = "cheri-stack.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -22,9 +23,12 @@ for.body:                                         ; preds = %for.body, %for.body
   ; Save the old $csp
   ; CHECK: cmove	$c[[SPSAVE:[0-9]+]], $c11
   ; Adjust $csp and allocate a new bounded stack object
-  ; CHECK: cgetoffset	$[[SPOFFSET:[0-9]+]], $c11
-  ; CHECK-NEXT: dsubu	$[[NEWSPOFFSET:[0-9]+]], $[[SPOFFSET]], $[[SIZE:[0-9]+]]
-  ; CHECK: csetoffset	$c[[TMPSP:[0-9]+]], $c11, $[[NEWSPOFFSET]]
+  ; CHECK: cgetaddr	$[[SPADDR:[0-9]+]], $c11
+  ; CHERI128-NEXT: dsubu	$[[SUBSPADDR:[0-9]+]], $[[SPADDR]], $[[SIZE:[0-9]+]]
+  ; CHERI128-NEXT: crepresentablealignmentmask	$[[MASK:[0-9]+]], ${{[0-9]+}}
+  ; CHERI128-NEXT: and	$[[NEWSPADDR:[0-9]+]], $[[SUBSPADDR]], $[[MASK]]
+  ; CHERI256-NEXT: dsubu	$[[NEWSPADDR:[0-9]+]], $[[SPADDR]], $[[SIZE:[0-9]+]]
+  ; CHECK-NEXT: csetaddr	$c[[TMPSP:[0-9]+]], $c11, $[[NEWSPADDR]]
   ; CHECK-NEXT: csetbounds [[BOUNDED_ALLOCA:\$c[0-9]+]], $c[[TMPSP]], $[[SIZE]]
   ; CHECK-NEXT: cmove	$c11, $c[[TMPSP]]
   ; TODO: this is not needed
