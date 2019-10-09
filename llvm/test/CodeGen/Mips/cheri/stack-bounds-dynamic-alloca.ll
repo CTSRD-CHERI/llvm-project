@@ -170,9 +170,9 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB1_2: # %do_alloca
 ; ASM-NEXT:    cmove $c1, $c11
-; ASM-NEXT:    cgetoffset $1, $c1
+; ASM-NEXT:    cgetaddr $1, $c1
 ; ASM-NEXT:    daddiu $1, $1, -16
-; ASM-NEXT:    csetoffset $c1, $c1, $1
+; ASM-NEXT:    csetaddr $c1, $c1, $1
 ; ASM-NEXT:    csetbounds $c2, $c1, 16
 ; ASM-NEXT:    cmove $c11, $c1
 ; ASM-NEXT:    cmove $c1, $c2
@@ -218,9 +218,9 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_not_in_entry)))
 ; ASM-OPT-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_not_in_entry)))
 ; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
-; ASM-OPT-NEXT:    cgetoffset $1, $c11
+; ASM-OPT-NEXT:    cgetaddr $1, $c11
 ; ASM-OPT-NEXT:    daddiu $1, $1, -16
-; ASM-OPT-NEXT:    csetoffset $c2, $c11, $1
+; ASM-OPT-NEXT:    csetaddr $c2, $c11, $1
 ; ASM-OPT-NEXT:    csetbounds $c3, $c2, 16
 ; ASM-OPT-NEXT:    daddiu $1, $zero, 1234
 ; ASM-OPT-NEXT:    csd $1, $zero, 8($c3)
@@ -234,7 +234,6 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:  .LBB1_2: # %exit
 ; ASM-OPT-NEXT:    cjr $c17
 ; ASM-OPT-NEXT:    addiu $2, $zero, 123
-; TODO: could omit this setbounds since expandDYNAMIC_STACKALLOC already adds it.
 
 
 entry:                                       ; preds = %entry
@@ -305,9 +304,9 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    .insn
 ; ASM-NEXT:  .LBB2_3: # %while.body
 ; ASM-NEXT:    cmove $c1, $c11
-; ASM-NEXT:    cgetoffset $1, $c1
+; ASM-NEXT:    cgetaddr $1, $c1
 ; ASM-NEXT:    daddiu $1, $1, -16
-; ASM-NEXT:    csetoffset $c1, $c1, $1
+; ASM-NEXT:    csetaddr $c1, $c1, $1
 ; ASM-NEXT:    csetbounds $c2, $c1, 16
 ; ASM-NEXT:    cmove $c11, $c1
 ; ASM-NEXT:    csc $c2, $zero, 16($c24) # 16-byte Folded Spill
@@ -347,9 +346,9 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(crash_reproducer)))
 ; ASM-OPT-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(crash_reproducer)))
 ; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
-; ASM-OPT-NEXT:    cgetoffset $1, $c11
+; ASM-OPT-NEXT:    cgetaddr $1, $c11
 ; ASM-OPT-NEXT:    daddiu $1, $1, -16
-; ASM-OPT-NEXT:    csetoffset $c2, $c11, $1
+; ASM-OPT-NEXT:    csetaddr $c2, $c11, $1
 ; ASM-OPT-NEXT:    csetbounds $c3, $c2, 16
 ; ASM-OPT-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
 ; ASM-OPT-NEXT:    cjalr $c12, $c17

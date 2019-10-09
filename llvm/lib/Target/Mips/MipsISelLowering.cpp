@@ -353,6 +353,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
                                        const MipsSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI), ABI(TM.getABI()) {
   CapType = STI.typeForCapabilities();
+  CapTypeHasPreciseBounds = STI.isCheri256();
   assert(cheriCapabilityType().isFatPointer());
 
   // Mips does not have i1 type, so use i32 for

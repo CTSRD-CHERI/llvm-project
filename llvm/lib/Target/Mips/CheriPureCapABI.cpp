@@ -182,15 +182,13 @@ public:
       // For imprecise capabilities, we need to increase the alignment for
       // on-stack allocations to ensure that we can create precise bounds.
       if (IsCheri128) {
-        // TODO: do a sane calculation based on capability precision
-        uint64_t AllocaSize = DL.getTypeAllocSize(AllocationTy);
-        if (ConstantInt *CI = dyn_cast<ConstantInt>(ArraySize))
+        // If not a constant then definitely a DYNAMIC_STACKALLOC; alignment
+        // requirements will be added later during legalisation.
+        if (ConstantInt *CI = dyn_cast<ConstantInt>(ArraySize)) {
+          uint64_t AllocaSize = DL.getTypeAllocSize(AllocationTy);
           AllocaSize *= CI->getValue().getLimitedValue();
-        else
-          AllocaSize *= 1048576;
-        ForcedAlignment = cc128_get_required_alignment(AllocaSize);
-        // MIPS doesn't support stack alignments greater than 2^16
-        ForcedAlignment = std::min(ForcedAlignment, 0x4000U);
+          ForcedAlignment = cc128_get_required_alignment(AllocaSize);
+        }
       }
       AI->setAlignment(std::max(AI->getAlignment(), ForcedAlignment));
       // Only set bounds for allocas that escape this function

@@ -74,15 +74,17 @@ entry:
 ; CHECK-LABEL: dynamic_alloca
 ; CHECK: cincoffset	$c24, $c11, $zero
 ; CHECK:      dsll $1, $4, 2
+; CHERI128:   croundrepresentablelength $[[REPRSIZE:[0-9]+]], $[[SIZE:[0-9]+]]
 ; CHECK:      cmove $c[[TEMPCAP:[0-9]+]], $c11
-; CHECK-NEXT: cgetoffset	$[[OFFSET:([0-9]+|sp)]], $c[[TEMPCAP]]
-; CHECK-NEXT: dsubu	$[[OFFSET]], $[[OFFSET]], ${{([0-9]+|sp)}}
+; CHECK-NEXT: cgetaddr	$[[ADDR:([0-9]+|sp)]], $c[[TEMPCAP]]
+; CHERI128-NEXT: dsubu	$[[ADDR]], $[[ADDR]], $[[REPRSIZE]]
+; CHERI256-NEXT: dsubu	$[[ADDR]], $[[ADDR]], $[[REPRSIZE:([0-9]+|sp)]]
 ; No need to realign the stack for CHERI256
-; CHERI128-NEXT: daddiu $[[SP_ALIGN_MASK:[0-9]+]], $zero, -8192
-; CHERI128-NEXT: and	$[[OFFSET1:([0-9]+|sp)]], $[[OFFSET]], $[[SP_ALIGN_MASK]]
-; CHERI128-NEXT: csetoffset $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET1]]
-; CHERI256-NEXT: csetoffset $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET]]
-; CHECK-NEXT: csetbounds $c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], ${{([0-9]+|sp)}}
+; CHERI128-NEXT: crepresentablealignmentmask $[[SP_ALIGN_MASK:[0-9]+]], $[[SIZE]]
+; CHERI128-NEXT: and	$[[ADDR1:([0-9]+|sp)]], $[[ADDR]], $[[SP_ALIGN_MASK]]
+; CHERI128-NEXT: csetaddr $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[ADDR1]]
+; CHERI256-NEXT: csetaddr $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[ADDR]]
+; CHECK-NEXT: csetbounds $c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], $[[REPRSIZE]]
 ; CHECK-NEXT: cmove $c11, $c[[TEMPCAP1]]
 ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TEMPCAP2]], ${{([0-9]+)}}
 ; CHECK: clcbi	$c12, %capcall20(use_arg)($c1)

@@ -2622,6 +2622,9 @@ public:
   // Return true if the target has a capability set address instruction.
   virtual bool hasCapabilitySetAddress() const { return false; }
   MVT cheriCapabilityType() const { return CapType; }
+  bool cheriCapabilityTypeHasPreciseBounds() const {
+    return CapTypeHasPreciseBounds;
+  }
   bool supportsUnalignedCapabilityMemOps() const {
     return SupportsUnalignedCapabilityMemOps;
   }
@@ -2928,6 +2931,10 @@ protected:
   /// The type to use for CHERI capabilities (if supported)
   /// Should be one of iFATPTR64/128/256
   MVT CapType = MVT();
+
+  /// Whether the CHERI capability type supports precise bounds for any
+  /// allocation. Defaults to false for safety over efficiency.
+  bool CapTypeHasPreciseBounds = false;
 
   /// Whether CHERI Capability loads/stores can be used with unaligned addresses
   /// This makes it possible to do a tag-preserving copy even if the alignment

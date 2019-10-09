@@ -7,25 +7,13 @@ target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A2
 
 declare i32 @a(i32 addrspace(200)*)
 
-define i32 @d(i64 %i) {
+define i32 @d(i64 %i) nounwind {
 ; C128-LABEL: d:
 ; C128:       # %bb.0: # %entry
-; C128-NEXT:    daddiu  $1, $zero, -[[STACKFRAME_SIZE:[0-9]+]]
-; C128-NEXT:    cincoffset      $c11, $c11, $1
-; C128-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; C128-NEXT:    csc $c25, $zero, [[#CAP_SIZE * 511]]($c11)
-; C128-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 510]]($c11)
-; C128-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 509]]($c11)
-; C128-NEXT:    .cfi_offset 97, -[[#CAP_SIZE * 1]]
-; C128-NEXT:    .cfi_offset 96, -[[#CAP_SIZE * 2]]
-; C128-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 3]]
+; C128-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; C128-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
+; C128-NEXT:    csc $c17, $zero, 0($c11)
 ; C128-NEXT:    cincoffset $c24, $c11, $zero
-; C128-NEXT:    .cfi_def_cfa_register 96
-; C128-NEXT:    cgetaddr $1, $c11
-; C128-NEXT:    daddiu $2, $zero, -8192
-; C128-NEXT:    and $1, $1, $2
-; C128-NEXT:    csetaddr $c11, $c11, $1
-; C128-NEXT:    cincoffset $c25, $c11, $zero
 ; C128-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
 ; C128-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
 ; C128-NEXT:    cincoffset $c26, $c12, $1
@@ -34,13 +22,14 @@ define i32 @d(i64 %i) {
 ; C128-NEXT:    daddiu $2, $1, 15
 ; C128-NEXT:    daddiu $3, $zero, -16
 ; C128-NEXT:    and $2, $2, $3
+; C128-NEXT:    croundrepresentablelength $3, $2
 ; C128-NEXT:    cmove $c2, $c11
-; C128-NEXT:    cgetoffset $3, $c2
-; C128-NEXT:    dsubu $3, $3, $2
-; C128-NEXT:    daddiu $4, $zero, -[[STACKFRAME_SIZE]]
-; C128-NEXT:    and $3, $3, $4
-; C128-NEXT:    csetoffset $c2, $c2, $3
-; C128-NEXT:    csetbounds $c3, $c2, $2
+; C128-NEXT:    cgetaddr $4, $c2
+; C128-NEXT:    dsubu $4, $4, $3
+; C128-NEXT:    crepresentablealignmentmask $2, $2
+; C128-NEXT:    and $2, $4, $2
+; C128-NEXT:    csetaddr $c2, $c2, $2
+; C128-NEXT:    csetbounds $c3, $c2, $3
 ; C128-NEXT:    cmove $c11, $c2
 ; C128-NEXT:    csetbounds $c3, $c3, $1
 ; C128-NEXT:    clcbi $c12, %capcall20(a)($c1)
@@ -48,24 +37,18 @@ define i32 @d(i64 %i) {
 ; C128-NEXT:    cjalr $c12, $c17
 ; C128-NEXT:    nop
 ; C128-NEXT:    cincoffset $c11, $c24, $zero
-; C128-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 509]]($c11)
-; C128-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 510]]($c11)
-; C128-NEXT:    clc $c25, $zero, [[#CAP_SIZE * 511]]($c11)
-; C128-NEXT:    daddiu  $1, $zero, [[STACKFRAME_SIZE]]
-; C128-NEXT:    cincoffset      $c11, $c11, $1
+; C128-NEXT:    clc $c17, $zero, 0($c11)
+; C128-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
+; C128-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; C128-NEXT:    cjr $c17
 ; C128-NEXT:    nop
 ;
 ; C256-LABEL: d:
 ; C256:       # %bb.0: # %entry
-; C256-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64]]
-; C256-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
+; C256-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; C256-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
-; C256-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 0]]($c11)
-; C256-NEXT:    .cfi_offset 96, -[[#CAP_SIZE * 1]]
-; C256-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 2]]
+; C256-NEXT:    csc $c17, $zero, 0($c11)
 ; C256-NEXT:    cincoffset $c24, $c11, $zero
-; C256-NEXT:    .cfi_def_cfa_register 96
 ; C256-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
 ; C256-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
 ; C256-NEXT:    cincoffset $c26, $c12, $1
@@ -75,9 +58,9 @@ define i32 @d(i64 %i) {
 ; C256-NEXT:    daddiu $3, $zero, -32
 ; C256-NEXT:    and $2, $2, $3
 ; C256-NEXT:    cmove $c2, $c11
-; C256-NEXT:    cgetoffset $3, $c2
+; C256-NEXT:    cgetaddr $3, $c2
 ; C256-NEXT:    dsubu $3, $3, $2
-; C256-NEXT:    csetoffset $c2, $c2, $3
+; C256-NEXT:    csetaddr $c2, $c2, $3
 ; C256-NEXT:    csetbounds $c3, $c2, $2
 ; C256-NEXT:    cmove $c11, $c2
 ; C256-NEXT:    csetbounds $c3, $c3, $1
@@ -86,9 +69,9 @@ define i32 @d(i64 %i) {
 ; C256-NEXT:    cjalr $c12, $c17
 ; C256-NEXT:    nop
 ; C256-NEXT:    cincoffset $c11, $c24, $zero
-; C256-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 0]]($c11)
+; C256-NEXT:    clc $c17, $zero, 0($c11)
 ; C256-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
-; C256-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; C256-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; C256-NEXT:    cjr $c17
 ; C256-NEXT:    nop
 entry:
