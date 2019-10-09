@@ -344,7 +344,6 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::CapTagGet:         return "MipsISD::CapTagGet";
   case MipsISD::CapSealedGet:      return "MipsISD::CapSealedGet";
   case MipsISD::CapSubsetTest:     return "MipsISD::CapSubsetTest";
-  case MipsISD::CapAndAddr:        return "MipsISD::CapAndAddr";
   }
   return nullptr;
 }
@@ -1308,12 +1307,28 @@ performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
   if (IID == Intrinsic::cheri_cap_address_get) {
     auto SrcCap = AndSrc->getOperand(1);
     if (SrcCap == FirstOperand) {
-      // Same operand -> for getaddr and ptraddr -> can combine
-      // (ptradd CheriOpnd: $r1, (sub (i64 0), (and (int_cheri_cap_address_get CheriOpnd: $r1), GPR64Opnd: $mask)
+      // Same operand -> for getaddr and ptraddr -> can combine into the
+      // pattern for a CAndAddr.
+      //
+      //   (ptradd CheriOpnd:$r1,
+      //           (sub (i64 0),
+      //                (and (int_cheri_cap_address_get CheriOpnd:$r1),
+      //                     GPR64Opnd:$mask)))
+      //
+      // becomes
+      //
+      //   (int_cheri_cap_address_set
+      //       CheriOpnd:$rs1
+      //       (and (int_cheri_cap_address_get CheriOpnd:$rs1),
+      //            (sub (i64 0), GPR64Opnd:$mask)))
       SDLoc DL(N);
       EVT IndexVT = Mask->getValueType(0);
       auto NegatedMask = DAG.getNode(ISD::SUB, DL, IndexVT, DAG.getConstant(0, DL, IndexVT), Mask);
-      return DAG.getNode(MipsISD::CapAndAddr, DL, FirstOperand->getValueType(0), SrcCap, NegatedMask);
+      auto NewAddr = DAG.getNode(ISD::AND, DL, IndexVT, AndSrc, NegatedMask);
+      return DAG.getNode(
+          ISD::INTRINSIC_WO_CHAIN, DL, N->getValueType(0),
+          DAG.getConstant(Intrinsic::cheri_cap_address_set, DL, MVT::i64),
+          SrcCap, NewAddr);
     }
   }
 

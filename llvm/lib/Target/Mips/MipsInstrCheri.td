@@ -43,7 +43,6 @@ def CapSubsetTest : SDNode<"MipsISD::CapSubsetTest", SDT_CheriBoolBinary>;
 def SDT_CheriCapModify : SDTypeProfile<1, 2, [
   SDTCisVT<0, CapRegType>, SDTCisVT<1, CapRegType>, SDTCisInt<2>
 ]>;
-def CapAndAddr : SDNode<"MipsISD::CapAndAddr", SDT_CheriCapModify>;
 
 // Scaled immediate offsets
 
@@ -457,13 +456,12 @@ def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$
   "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (CapSubsetTest CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
 def CGetAndAddr : CheriFmt3Op<0x23, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
   "cgetandaddr\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (and (int_cheri_cap_address_get CheriOpnd: $r2), GPR64Opnd: $r3))]>;
-def CAndAddr : CheriFmt3Op<0x24, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
-  "candaddr\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (CapAndAddr CheriOpnd:$r2, GPR64Opnd:$r3))]>;
-
 // CAndAddr is the same as csetaddr(getaddr(x) & mask):
-def : Pat<(CapRegType (int_cheri_cap_address_set CheriOpnd:$r2,
-                                                (and (int_cheri_cap_address_get CheriOpnd:$r2), GPR64Opnd:$r3))),
-          (CAndAddr CheriOpnd:$r2, GPR64Opnd:$r3)>;
+def CAndAddr : CheriFmt3Op<0x24, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
+  "candaddr\t$r1, $r2, $r3",
+  [(set CheriOpnd: $r1,
+        (CapRegType (int_cheri_cap_address_set CheriOpnd:$r2,
+                     (and (int_cheri_cap_address_get CheriOpnd:$r2), GPR64Opnd:$r3))))]>;
 
 
 // Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason

@@ -225,8 +225,6 @@ extern bool LargeCapTable;
       CapSealedGet,
       /// Legalised int_cheri_cap_subset_test
       CapSubsetTest,
-      /// Bitwise-and of capability address
-      CapAndAddr,
 
       // DSP shift nodes.
       SHLL_DSP,
