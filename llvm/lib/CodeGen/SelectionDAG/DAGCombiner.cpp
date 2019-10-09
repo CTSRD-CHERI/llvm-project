@@ -10171,7 +10171,10 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
     return SDValue();
 
   LoadSDNode *LN0 = cast<LoadSDNode>(N0);
-  if (!isLegalNarrowLdSt(LN0, ExtType, ExtVT, ShAmt))
+  // Reducing the width of a volatile load is illegal.  For atomics, we may be
+  // able to reduce the width provided we never widen again. (see D66309)  
+  if (!LN0->isSimple() ||
+      !isLegalNarrowLdSt(LN0, ExtType, ExtVT, ShAmt))
     return SDValue();
 
   auto AdjustBigEndianShift = [&](unsigned ShAmt) {
@@ -16367,6 +16370,11 @@ SDValue DAGCombiner::visitLIFETIME_END(SDNode *N) {
 ///
 SDValue DAGCombiner::splitMergedValStore(StoreSDNode *ST) {
   if (OptLevel == CodeGenOpt::None)
+    return SDValue();
+
+  // Can't change the number of memory accesses for a volatile store or break
+  // atomicity for an atomic one.
+  if (!ST->isSimple())
     return SDValue();
 
   SDValue Val = ST->getValue();
