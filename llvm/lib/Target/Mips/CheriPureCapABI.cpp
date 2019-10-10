@@ -90,7 +90,8 @@ class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
   Module *M;
   llvm::SmallVector<AllocaInst *, 16> Allocas;
   bool IsCheri128;
-
+  Type *I8CapTy;
+  Type *SizeTy;
 
 public:
   static char ID;
@@ -99,10 +100,18 @@ public:
   void visitAllocaInst(AllocaInst &AI) { Allocas.push_back(&AI); }
   bool runOnModule(Module &Mod) override {
     M = &Mod;
+    const DataLayout &DL = Mod.getDataLayout();
+    unsigned AllocaAS = DL.getAllocaAddrSpace();
+
     // Early abort if we aren't using capabilities on the stack
-    if (Mod.getDataLayout().getAllocaAddrSpace() != 200)
+    if (!DL.isFatPointer(AllocaAS))
       return false;
-    IsCheri128 = Mod.getDataLayout().getPointerSizeInBits(200) == 128;
+
+    LLVMContext &C = M->getContext();
+    I8CapTy = Type::getInt8PtrTy(C, AllocaAS);
+    SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(AllocaAS));
+    IsCheri128 = DL.getPointerSizeInBits(AllocaAS) == 128;
+
     bool Modified = false;
     for (Function &F : Mod)
       Modified |= runOnFunction(F);
@@ -133,8 +142,7 @@ public:
     Intrinsic::ID BoundedStackCap = UseRematerializableIntrinsic
                                         ? Intrinsic::cheri_bounded_stack_cap
                                         : Intrinsic::cheri_cap_bounds_set;
-    const DataLayout &DL = F.getParent()->getDataLayout();
-    Type *SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(200));
+    const DataLayout &DL = M->getDataLayout();
     Function *BoundedStackFn =
         Intrinsic::getDeclaration(M, BoundedStackCap, SizeTy);
     StackBoundsMethod BoundsMode = BoundsSettingMode;
@@ -289,7 +297,7 @@ public:
         NumSingleIntrin++;
         // We need to convert it to an i8* for the intrinisic:
         Instruction *AllocaI8 =
-          cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
+          cast<Instruction>(B.CreateBitCast(AI, I8CapTy));
         SingleBoundedAlloc = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
         SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaTy);
       }
@@ -319,7 +327,7 @@ public:
           // bounded capability everywhere or be doing inc+setoffset in the
           // other block.
           Instruction *AllocaI8 =
-            cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
+            cast<Instruction>(B.CreateBitCast(AI, I8CapTy));
           auto WithBounds = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
           const_cast<Use *>(U)->set(B.CreateBitCast(WithBounds, AllocaTy));
         }
