@@ -239,6 +239,11 @@ def main():
               (len(commands) == 3 and commands[1].startswith('opt'))):
         print('WARNING: Skipping non-clang RUN line: ' + l, file=sys.stderr)
 
+      # Permit piping the output through opt
+      if not (len(commands) == 2 or
+              (len(commands) == 3 and commands[1].startswith('opt'))):
+        print('WARNING: Skipping non-clang RUN line: ' + l, file=sys.stderr)
+
       # Extract -check-prefix in FileCheck args
       filecheck_cmd = commands[-1]
       common.verify_filecheck_prefixes(filecheck_cmd)
