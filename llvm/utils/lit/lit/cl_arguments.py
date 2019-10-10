@@ -10,7 +10,7 @@ from lit.LitConfig import CheriTestMode
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('test_paths',
-            nargs='*',
+            nargs='+',
             help='Files or paths to include in the test suite')
 
     parser.add_argument("--version",
@@ -22,13 +22,12 @@ def parse_args():
             dest="numWorkers",
             metavar="N",
             help="Number of workers used for testing",
-            type=int,
-            default=None)
+            type=_positive_int,
+            default=lit.util.detectCPUs())
     parser.add_argument("--config-prefix",
             dest="configPrefix",
             metavar="NAME",
             help="Prefix for 'lit' config files",
-            action="store",
             default=None)
     parser.add_argument("-D", "--param",
             dest="userParameters",
@@ -68,7 +67,6 @@ def parse_args():
     format_group.add_argument("-o", "--output",
             dest="output_path",
             help="Write test results to the provided path",
-            action="store",
             metavar="PATH")
     format_group.add_argument("--no-progress-bar",
             dest="useProgressBar",
@@ -130,8 +128,7 @@ def parse_args():
     execution_group.add_argument("--max-failures",
             dest="maxFailures",
             help="Stop execution after the given number of failures.",
-            action="store",
-            type=int,
+            type=_positive_int,
             default=None)
 
     selection_group = parser.add_argument_group("Test Selection")
@@ -139,21 +136,18 @@ def parse_args():
             dest="maxTests",
             metavar="N",
             help="Maximum number of tests to run",
-            action="store",
             type=int,
             default=None)
     selection_group.add_argument("--skip-tests",
             dest="skipTests",
             metavar="N",
             help="Number of initial tests to skip",
-            action="store",
             type=int,
             default=None)
     selection_group.add_argument("--max-time",
             dest="maxTime",
             metavar="N",
             help="Maximum time to spend testing (in seconds)",
-            action="store",
             type=float,
             default=None)
     selection_group.add_argument("--shuffle",
@@ -167,25 +161,24 @@ def parse_args():
     selection_group.add_argument("--filter",
             metavar="REGEX",
             help="Only run tests with paths matching the given regular expression",
-            action="store",
             default=os.environ.get("LIT_FILTER"))
+    selection_group.add_argument("--num-shards",
+            dest="numShards",
+            metavar="M",
+            help="Split testsuite into M pieces and only run one",
+            type=_positive_int,
+            default=os.environ.get("LIT_NUM_SHARDS"))
     selection_group.add_argument("--cheri-tests-filter",
             choices=(CheriTestMode.INCLUDE, CheriTestMode.EXCLUDE, CheriTestMode.ONLY),
             help="Selector for CHERI specific test (include, exclude, only). "
                  "This is useful to run only the tests that depend"
                  " on Cheri128 vs Cheri256)",
             default=CheriTestMode.INCLUDE)
-    selection_group.add_argument("--num-shards", dest="numShards", metavar="M",
-            help="Split testsuite into M pieces and only run one",
-            action="store",
-            type=int,
-            default=os.environ.get("LIT_NUM_SHARDS"))
     selection_group.add_argument("--run-shard",
             dest="runShard",
             metavar="N",
             help="Run shard #N of the testsuite",
-            action="store",
-            type=int,
+            type=_positive_int,
             default=os.environ.get("LIT_RUN_SHARD"))
 
     debug_group = parser.add_argument_group("Debug and Experimental Options")
@@ -214,27 +207,27 @@ def parse_args():
     opts = parser.parse_args(sys.argv[1:] +
                              shlex.split(os.environ.get("LIT_OPTS", "")))
 
-    # Validate options
-    if not opts.test_paths:
-        parser.error('No inputs specified')
-
-    if opts.numWorkers is None:
-        opts.numWorkers = lit.util.detectCPUs()
-    elif opts.numWorkers <= 0:
-        parser.error("Option '--workers' or '-j' requires positive integer")
-
-    if opts.maxFailures is not None and opts.maxFailures <= 0:
-        parser.error("Option '--max-failures' requires positive integer")
-
+    # Validate command line options
     if opts.echoAllCommands:
         opts.showOutput = True
 
-    if (opts.numShards is not None) or (opts.runShard is not None):
-        if (opts.numShards is None) or (opts.runShard is None):
+    if opts.numShards or opts.runShard:
+        if not opts.numShards or not opts.runShard:
             parser.error("--num-shards and --run-shard must be used together")
-        if opts.numShards <= 0:
-            parser.error("--num-shards must be positive")
-        if (opts.runShard < 1) or (opts.runShard > opts.numShards):
+        if opts.runShard > opts.numShards:
             parser.error("--run-shard must be between 1 and --num-shards (inclusive)")
 
     return opts
+
+def _positive_int(arg):
+    try:
+        n = int(arg)
+    except ValueError:
+        raise _arg_error('positive integer', arg)
+    if n <= 0:
+        raise _arg_error('positive integer', arg)
+    return n
+
+def _arg_error(desc, arg):
+    msg = "requires %s, but found '%s'" % (desc, arg)
+    return argparse.ArgumentTypeError(msg)
