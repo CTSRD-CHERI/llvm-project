@@ -19,7 +19,7 @@
 // RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck -check-prefixes DUMP-SHLIB %s
 
 // check that we get an undefined symbol error:
-// RUN: not ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o --dynamic-linker /libexec/ld-cheri-elf.so -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
+// RUN: not ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o --dynamic-linker /libexec/ld-elf.so -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
 // RUN: not ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -static -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
 // RUN: not ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -shared -no-undefined -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
 

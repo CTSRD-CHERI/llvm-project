@@ -337,7 +337,7 @@ struct Configuration {
       return;
     cheriABI = true;
     if (dynamicLinker.empty())
-      dynamicLinker = "/libexec/ld-cheri-elf.so.1";
+      dynamicLinker = "/libexec/ld-elf.so.1";
     // add the default search paths for CheriABI
     searchPaths.emplace_back("=/libcheri");
     searchPaths.emplace_back("=/usr/libcheri");
