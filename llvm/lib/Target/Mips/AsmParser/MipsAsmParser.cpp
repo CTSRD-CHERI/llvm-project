@@ -3665,9 +3665,7 @@ bool MipsAsmParser::expandLoadSingleImmToGPR(MCInst &Inst, SMLoc IDLoc,
   unsigned FirstReg = Inst.getOperand(0).getReg();
   uint64_t ImmOp64 = Inst.getOperand(1).getImm();
 
-  ImmOp64 = convertIntToDoubleImm(ImmOp64);
-
-  uint32_t ImmOp32 = covertDoubleImmToSingleImm(ImmOp64);
+  uint32_t ImmOp32 = covertDoubleImmToSingleImm(convertIntToDoubleImm(ImmOp64));
 
   return loadImmediate(ImmOp32, FirstReg, Mips::NoRegister, true, true, IDLoc,
                        Out, STI);
@@ -3740,20 +3738,13 @@ bool MipsAsmParser::expandLoadDoubleImmToGPR(MCInst &Inst, SMLoc IDLoc,
 
   ImmOp64 = convertIntToDoubleImm(ImmOp64);
 
-  uint32_t LoImmOp64 = Lo_32(ImmOp64);
-  uint32_t HiImmOp64 = Hi_32(ImmOp64);
-
-  unsigned TmpReg = getATReg(IDLoc);
-  if (!TmpReg)
-    return true;
-
-  if (LoImmOp64 == 0) {
+  if (Lo_32(ImmOp64) == 0) {
     if (isABI_N32() || isABI_N64()) {
       if (loadImmediate(ImmOp64, FirstReg, Mips::NoRegister, false, true, IDLoc,
                         Out, STI))
         return true;
     } else {
-      if (loadImmediate(HiImmOp64, FirstReg, Mips::NoRegister, true, true,
+      if (loadImmediate(Hi_32(ImmOp64), FirstReg, Mips::NoRegister, true, true,
                         IDLoc, Out, STI))
         return true;
 
@@ -3779,6 +3770,10 @@ bool MipsAsmParser::expandLoadDoubleImmToGPR(MCInst &Inst, SMLoc IDLoc,
   getStreamer().EmitValueToAlignment(8);
   getStreamer().EmitIntValue(ImmOp64, 8);
   getStreamer().SwitchSection(CS);
+
+  unsigned TmpReg = getATReg(IDLoc);
+  if (!TmpReg)
+    return true;
 
   if (emitPartialAddress(TOut, IDLoc, Sym))
     return true;
@@ -3812,9 +3807,6 @@ bool MipsAsmParser::expandLoadDoubleImmToFPR(MCInst &Inst, bool Is64FPU,
 
   ImmOp64 = convertIntToDoubleImm(ImmOp64);
 
-  uint32_t LoImmOp64 = Lo_32(ImmOp64);
-  uint32_t HiImmOp64 = Hi_32(ImmOp64);
-
   unsigned TmpReg = Mips::ZERO;
   if (ImmOp64 != 0) {
     TmpReg = getATReg(IDLoc);
@@ -3822,8 +3814,8 @@ bool MipsAsmParser::expandLoadDoubleImmToFPR(MCInst &Inst, bool Is64FPU,
       return true;
   }
 
-  if ((LoImmOp64 == 0) &&
-      !((HiImmOp64 & 0xffff0000) && (HiImmOp64 & 0x0000ffff))) {
+  if ((Lo_32(ImmOp64) == 0) &&
+      !((Hi_32(ImmOp64) & 0xffff0000) && (Hi_32(ImmOp64) & 0x0000ffff))) {
     if (isABI_N32() || isABI_N64()) {
       if (TmpReg != Mips::ZERO &&
           loadImmediate(ImmOp64, TmpReg, Mips::NoRegister, false, false, IDLoc,
@@ -3834,8 +3826,8 @@ bool MipsAsmParser::expandLoadDoubleImmToFPR(MCInst &Inst, bool Is64FPU,
     }
 
     if (TmpReg != Mips::ZERO &&
-        loadImmediate(HiImmOp64, TmpReg, Mips::NoRegister, true, false, IDLoc,
-                      Out, STI))
+        loadImmediate(Hi_32(ImmOp64), TmpReg, Mips::NoRegister, true, false,
+                      IDLoc, Out, STI))
       return true;
 
     if (hasMips32r2()) {
