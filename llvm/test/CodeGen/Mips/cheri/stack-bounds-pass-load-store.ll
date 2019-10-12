@@ -4,7 +4,7 @@
 ; we were moving the allocation of the register that is only used later to the beginning
 
 ; REQUIRES: asserts
-; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S -cheri-stack-bounds=if-needed -debug-only=cheri-purecap-alloca 2>%t.dbg | FileCheck %s
+; RUN: %cheri_purecap_opt -cheri-bound-allocas %s -o - -S -cheri-stack-bounds=if-needed -debug-only=cheri-bound-allocas 2>%t.dbg | FileCheck %s
 ; RUN: FileCheck %s -input-file=%t.dbg -check-prefix DBG
 
 target datalayout = "Eme-pf200:128:128:128:64-A200-P200-G200"
@@ -30,10 +30,10 @@ entry:
 }
 
 ; DBG-LABEL: Checking function store_stack_to_global
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if load/store needs bounds (GEP offset is 0):   store [16 x i32] addrspace(200)* %x, [16 x i32] addrspace(200)* addrspace(200)* @global_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:   -Stack slot used as value and not pointer -> must set bounds
-; DBG-NEXT: cheri-purecap-alloca: Found alloca use that needs bounds:   store [16 x i32] addrspace(200)* %x, [16 x i32] addrspace(200)* addrspace(200)* @global_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca: store_stack_to_global: 1 of 1 users need bounds for   %x = alloca [16 x i32], align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store [16 x i32] addrspace(200)* %x, [16 x i32] addrspace(200)* addrspace(200)* @global_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:   -Stack slot used as value and not pointer -> must set bounds
+; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   store [16 x i32] addrspace(200)* %x, [16 x i32] addrspace(200)* addrspace(200)* @global_leak, align 16
+; DBG-NEXT: cheri-bound-allocas: store_stack_to_global: 1 of 1 users need bounds for   %x = alloca [16 x i32], align 4, addrspace(200)
 ; DBG-NEXT: store_stack_to_global: setting bounds on stack alloca to 64  %x = alloca [16 x i32], align 4, addrspace(200)
 
 define void @store_stack_to_global_with_offset() addrspace(200) nounwind {
@@ -57,14 +57,14 @@ entry:
 }
 
 ; DBG-LABEL: Checking function store_stack_to_global_with_offset
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if bitcast needs stack bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca:   -Checking if getelementptr needs stack bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
-; DBG-NEXT: cheri-purecap-alloca:    -Checking if load/store needs bounds (GEP offset is 4):   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* @global_leak2, align 16
-; DBG-NEXT: cheri-purecap-alloca:     -Stack slot used as value and not pointer -> must set bounds
-; DBG-NEXT: cheri-purecap-alloca:   -Adding stack bounds since getelementptr user needs bounds:   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* @global_leak2, align 16
-; DBG-NEXT: cheri-purecap-alloca:  -Adding stack bounds since bitcast user needs bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
-; DBG-NEXT: cheri-purecap-alloca: Found alloca use that needs bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca: store_stack_to_global_with_offset: 1 of 1 users need bounds for   %x = alloca [16 x i32], align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Checking if getelementptr needs stack bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
+; DBG-NEXT: cheri-bound-allocas:    -Checking if load/store needs bounds (GEP offset is 4):   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* @global_leak2, align 16
+; DBG-NEXT: cheri-bound-allocas:     -Stack slot used as value and not pointer -> must set bounds
+; DBG-NEXT: cheri-bound-allocas:   -Adding stack bounds since getelementptr user needs bounds:   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* @global_leak2, align 16
+; DBG-NEXT: cheri-bound-allocas:  -Adding stack bounds since bitcast user needs bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
+; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas: store_stack_to_global_with_offset: 1 of 1 users need bounds for   %x = alloca [16 x i32], align 4, addrspace(200)
 ; DBG-NEXT: store_stack_to_global_with_offset: setting bounds on stack alloca to 64  %x = alloca [16 x i32], align 4, addrspace(200)
 ; DBG-EMPTY:
 
@@ -89,19 +89,19 @@ entry:
 }
 
 ; DBG-LABEL: Checking function store_stack_to_other_slot
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if load/store needs bounds (GEP offset is 0):   store [16 x i32] addrspace(200)* %slot_src, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:   -Stack slot used as value and not pointer -> must set bounds
-; DBG-NEXT: cheri-purecap-alloca: Found alloca use that needs bounds:   store [16 x i32] addrspace(200)* %slot_src, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca: store_stack_to_other_slot: 1 of 1 users need bounds for   %slot_src = alloca [16 x i32], align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store [16 x i32] addrspace(200)* %slot_src, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:   -Stack slot used as value and not pointer -> must set bounds
+; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   store [16 x i32] addrspace(200)* %slot_src, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas: store_stack_to_other_slot: 1 of 1 users need bounds for   %slot_src = alloca [16 x i32], align 4, addrspace(200)
 ; DBG-NEXT: store_stack_to_other_slot: setting bounds on stack alloca to 64  %slot_src = alloca [16 x i32], align 4, addrspace(200)
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if load/store needs bounds (GEP offset is 0):   %leaked_value = load [16 x i32] addrspace(200)*, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store size=16, alloca size=16, current GEP offset=0 for [16 x i32] addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store is in bounds -> can reuse $csp for   %leaked_value = load [16 x i32] addrspace(200)*, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if load/store needs bounds (GEP offset is 0):   store [16 x i32] addrspace(200)* %2, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store size=16, alloca size=16, current GEP offset=0 for [16 x i32] addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store is in bounds -> can reuse $csp for   store [16 x i32] addrspace(200)* %2, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca: store_stack_to_other_slot: 0 of 2 users need bounds for   %slot_leak = alloca [16 x i32] addrspace(200)*, align 16, addrspace(200)
-; DBG-NEXT: cheri-purecap-alloca: No need to set bounds on stack alloca  %slot_leak = alloca [16 x i32] addrspace(200)*, align 16, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %leaked_value = load [16 x i32] addrspace(200)*, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:   -Load/store size=16, alloca size=16, current GEP offset=0 for [16 x i32] addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %leaked_value = load [16 x i32] addrspace(200)*, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store [16 x i32] addrspace(200)* %2, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:   -Load/store size=16, alloca size=16, current GEP offset=0 for [16 x i32] addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store [16 x i32] addrspace(200)* %2, [16 x i32] addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas: store_stack_to_other_slot: 0 of 2 users need bounds for   %slot_leak = alloca [16 x i32] addrspace(200)*, align 16, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %slot_leak = alloca [16 x i32] addrspace(200)*, align 16, addrspace(200)
 
 define i8 addrspace(200)* @store_stack_to_other_slot_with_offset() addrspace(200) nounwind {
 ; CHECK-LABEL: @store_stack_to_other_slot_with_offset(
@@ -128,20 +128,20 @@ entry:
 }
 
 ; DBG-LABEL: Checking function store_stack_to_other_slot_with_offset
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if bitcast needs stack bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca:   -Checking if getelementptr needs stack bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
-; DBG-NEXT: cheri-purecap-alloca:    -Checking if load/store needs bounds (GEP offset is 4):   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:     -Stack slot used as value and not pointer -> must set bounds
-; DBG-NEXT: cheri-purecap-alloca:   -Adding stack bounds since getelementptr user needs bounds:   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:  -Adding stack bounds since bitcast user needs bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
-; DBG-NEXT: cheri-purecap-alloca: Found alloca use that needs bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca: store_stack_to_other_slot_with_offset: 1 of 1 users need bounds for   %x = alloca [16 x i32], align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Checking if getelementptr needs stack bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
+; DBG-NEXT: cheri-bound-allocas:    -Checking if load/store needs bounds (GEP offset is 4):   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:     -Stack slot used as value and not pointer -> must set bounds
+; DBG-NEXT: cheri-bound-allocas:   -Adding stack bounds since getelementptr user needs bounds:   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:  -Adding stack bounds since bitcast user needs bounds:   %x_plus_4 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 4
+; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   %x_i8 = bitcast [16 x i32] addrspace(200)* %x to i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas: store_stack_to_other_slot_with_offset: 1 of 1 users need bounds for   %x = alloca [16 x i32], align 4, addrspace(200)
 ; DBG-NEXT: store_stack_to_other_slot_with_offset: setting bounds on stack alloca to 64  %x = alloca [16 x i32], align 4, addrspace(200)
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if load/store needs bounds (GEP offset is 0):   %leaked_value = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store size=16, alloca size=16, current GEP offset=0 for i8 addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store is in bounds -> can reuse $csp for   %leaked_value = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:  -Checking if load/store needs bounds (GEP offset is 0):   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store size=16, alloca size=16, current GEP offset=0 for i8 addrspace(200)*
-; DBG-NEXT: cheri-purecap-alloca:   -Load/store is in bounds -> can reuse $csp for   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
-; DBG-NEXT: cheri-purecap-alloca: store_stack_to_other_slot_with_offset: 0 of 2 users need bounds for   %slot_leak = alloca i8 addrspace(200)*, align 16, addrspace(200)
-; DBG-NEXT: cheri-purecap-alloca: No need to set bounds on stack alloca  %slot_leak = alloca i8 addrspace(200)*, align 16, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %leaked_value = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:   -Load/store size=16, alloca size=16, current GEP offset=0 for i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %leaked_value = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas:   -Load/store size=16, alloca size=16, current GEP offset=0 for i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store i8 addrspace(200)* %x_plus_4, i8 addrspace(200)* addrspace(200)* %slot_leak, align 16
+; DBG-NEXT: cheri-bound-allocas: store_stack_to_other_slot_with_offset: 0 of 2 users need bounds for   %slot_leak = alloca i8 addrspace(200)*, align 16, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %slot_leak = alloca i8 addrspace(200)*, align 16, addrspace(200)

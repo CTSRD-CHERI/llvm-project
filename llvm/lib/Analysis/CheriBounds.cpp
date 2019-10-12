@@ -4,7 +4,7 @@
 #include "llvm/Support/Format.h"
 
 // TODO: replace this with cheri-bounds
-#define DEBUG_TYPE "cheri-purecap-alloca"
+#define DEBUG_TYPE "cheri-bound-allocas"
 
 using namespace llvm;
 #define DBG_MESSAGE(...) LLVM_DEBUG(dbgs() << DEBUG_TYPE ": " << __VA_ARGS__)

@@ -1,4 +1,4 @@
-; RUN: %cheri128_purecap_opt -cheri-purecap-alloca %s -o - -S | FileCheck %s
+; RUN: %cheri128_purecap_opt -cheri-bound-allocas %s -o - -S | FileCheck %s
 target datalayout = "E-m:m-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 declare i32 @use32(i32 addrspace(200)*) #1
 declare i32 @use8(i8 addrspace(200)*) #1

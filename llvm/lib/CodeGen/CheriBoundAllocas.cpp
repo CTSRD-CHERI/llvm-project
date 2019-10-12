@@ -29,7 +29,7 @@
 
 #include "llvm/IR/Verifier.h"
 
-#define DEBUG_TYPE "cheri-purecap-alloca"
+#define DEBUG_TYPE "cheri-bound-allocas"
 using namespace llvm;
 #define DBG_MESSAGE(...) LLVM_DEBUG(dbgs() << DEBUG_TYPE ": " << __VA_ARGS__)
 
