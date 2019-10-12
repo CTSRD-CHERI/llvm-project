@@ -2,8 +2,10 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/CheriBounds.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/Utils/Local.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"
@@ -18,6 +20,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Local.h"
 
@@ -26,8 +29,6 @@
 #include <unordered_map>
 
 #include "llvm/IR/Verifier.h"
-
-#include "cheri-compressed-cap/cheri_compressed_cap.h"
 
 #define DEBUG_TYPE "cheri-purecap-alloca"
 using namespace llvm;
@@ -89,7 +90,6 @@ STATISTIC(NumSingleIntrin, "Number of times that a single intrinisic was used in
 class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
   Module *M;
   llvm::SmallVector<AllocaInst *, 16> Allocas;
-  bool IsCheri128;
   Type *I8CapTy;
   Type *SizeTy;
 
@@ -110,7 +110,6 @@ public:
     LLVMContext &C = M->getContext();
     I8CapTy = Type::getInt8PtrTy(C, AllocaAS);
     SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(AllocaAS));
-    IsCheri128 = DL.getPointerSizeInBits(AllocaAS) == 128;
 
     bool Modified = false;
     for (Function &F : Mod)
@@ -123,9 +122,9 @@ public:
     // always set bounds with optnone
     bool IsOptNone = F.hasFnAttribute(Attribute::OptimizeNone);
     // FIXME: should still ignore lifetime-start + lifetime-end intrinsics even at -O0
-
-
-    // TargetTransformInfo& TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
+    const TargetPassConfig &TPC = getAnalysis<TargetPassConfig>();
+    const TargetMachine &TM = TPC.getTM<TargetMachine>();
+    const TargetLowering *TLI = TM.getSubtargetImpl(F)->getTargetLowering();
 
     LLVMContext &C = M->getContext();
     Allocas.clear();
@@ -166,13 +165,13 @@ public:
       // Create a new (AS 0) alloca
       // For imprecise capabilities, we need to increase the alignment for
       // on-stack allocations to ensure that we can create precise bounds.
-      if (IsCheri128) {
+      if (!TLI->cheriCapabilityTypeHasPreciseBounds()) {
         // If not a constant then definitely a DYNAMIC_STACKALLOC; alignment
         // requirements will be added later during legalisation.
         if (ConstantInt *CI = dyn_cast<ConstantInt>(ArraySize)) {
           uint64_t AllocaSize = DL.getTypeAllocSize(AllocationTy);
           AllocaSize *= CI->getValue().getLimitedValue();
-          ForcedAlignment = cc128_get_required_alignment(AllocaSize);
+          ForcedAlignment = TLI->getAlignmentForPreciseBounds(AllocaSize);
         }
       }
       AI->setAlignment(std::max(AI->getAlignment(), ForcedAlignment));
@@ -250,8 +249,9 @@ public:
         // Pad to ensure bounds don't overlap adjacent objects
         uint64_t AllocaSize =
             cast<ConstantInt>(Size)->getValue().getLimitedValue();
-        uint64_t AlignedSize = alignTo(AllocaSize, ForcedAlignment);
-        if (AlignedSize != AllocaSize) {
+        TailPaddingAmount TailPadding =
+          TLI->getTailPaddingForPreciseBounds(AllocaSize);
+        if (TailPadding != TailPaddingAmount::None) {
           Type *AllocatedType =
               AI->isArrayAllocation()
                   ? ArrayType::get(
@@ -260,7 +260,7 @@ public:
                   : AI->getAllocatedType();
           Type *PaddingType =
             ArrayType::get(Type::getInt8Ty(F.getContext()),
-                           AlignedSize - AllocaSize);
+                           static_cast<uint64_t>(TailPadding));
           Type *TypeWithPadding = StructType::get(AllocatedType, PaddingType);
           auto *NewAI =
             new AllocaInst(TypeWithPadding, AI->getType()->getAddressSpace(),
@@ -275,7 +275,9 @@ public:
           AI->replaceAllUsesWith(NewPtr);
           AI->eraseFromParent();
           AI = NewAI;
-          Size = ConstantInt::get(Type::getInt64Ty(C), AlignedSize);
+          Size =
+            ConstantInt::get(Type::getInt64Ty(C),
+                             AllocaSize + static_cast<uint64_t>(TailPadding));
         }
       }
 
@@ -337,7 +339,7 @@ public:
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<TargetTransformInfoWrapperPass>();
+    AU.addRequired<TargetPassConfig>();
     AU.setPreservesCFG();
   }
 };
