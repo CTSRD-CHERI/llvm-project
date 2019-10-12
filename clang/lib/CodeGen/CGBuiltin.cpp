@@ -2283,10 +2283,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin___clear_cache: {
     Value *Begin = EmitScalarExpr(E->getArg(0));
     Value *End = EmitScalarExpr(E->getArg(1));
-    llvm::Type *ArgType = Builder.getInt8PtrTy(0);
+    llvm::Type *ArgType = CGM.ProgramInt8PtrTy;
     Begin = Builder.CreatePointerBitCastOrAddrSpaceCast(Begin, ArgType);
     End = Builder.CreatePointerBitCastOrAddrSpaceCast(End, ArgType);
-    Function *F = CGM.getIntrinsic(Intrinsic::clear_cache);
+    Function *F = CGM.getIntrinsic(Intrinsic::clear_cache, {ArgType});
     return RValue::get(Builder.CreateCall(F, {Begin, End}));
   }
   case Builtin::BI__builtin_trap:

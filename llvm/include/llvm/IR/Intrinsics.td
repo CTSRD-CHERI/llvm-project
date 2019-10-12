@@ -1076,7 +1076,7 @@ def int_convert_from_fp16 : Intrinsic<[llvm_anyfloat_ty], [llvm_i16_ty]>;
 
 // Clear cache intrinsic, default to ignore (ie. emit nothing)
 // maps to void __clear_cache() on supporting platforms
-def int_clear_cache : Intrinsic<[], [llvm_ptr_ty, llvm_ptr_ty],
+def int_clear_cache : Intrinsic<[], [llvm_anyptr_ty, LLVMMatchType<0>],
                                 [], "llvm.clear_cache">;
 
 // Intrinsic to detect whether its argument is a constant.
