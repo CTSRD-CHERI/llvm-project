@@ -1,4 +1,3 @@
-#include "Mips.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/CheriBounds.h"
@@ -87,7 +86,7 @@ STATISTIC(NumUsesWithBounds, "Number of alloca uses that had CHERI bounds added"
 STATISTIC(NumUsesWithoutBounds, "Number of alloca uses that did not needed CHERI bounds");
 STATISTIC(NumSingleIntrin, "Number of times that a single intrinisic was used instead of per-use");
 
-class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
+class CheriBoundAllocas : public ModulePass, public InstVisitor<CheriBoundAllocas> {
   Module *M;
   llvm::SmallVector<AllocaInst *, 16> Allocas;
   Type *I8CapTy;
@@ -95,7 +94,9 @@ class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
 
 public:
   static char ID;
-  CheriPureCapABI() : ModulePass(ID) {}
+  CheriBoundAllocas() : ModulePass(ID) {
+    initializeCheriBoundAllocasPass(*PassRegistry::getPassRegistry());
+  }
   StringRef getPassName() const override { return "CHERI sandbox ABI setup"; }
   void visitAllocaInst(AllocaInst &AI) { Allocas.push_back(&AI); }
   bool runOnModule(Module &Mod) override {
@@ -346,10 +347,10 @@ public:
 
 } // anonymous namespace
 
-char CheriPureCapABI::ID;
-INITIALIZE_PASS(CheriPureCapABI, DEBUG_TYPE,
+char CheriBoundAllocas::ID;
+INITIALIZE_PASS(CheriBoundAllocas, DEBUG_TYPE,
                 "CHERI add bounds to alloca instructions", false, false)
 
-namespace llvm {
-ModulePass *createCheriPureCapABI(void) { return new CheriPureCapABI(); }
+ModulePass *llvm::createCheriBoundAllocasPass(void) {
+  return new CheriBoundAllocas();
 }

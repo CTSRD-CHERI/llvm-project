@@ -457,6 +457,9 @@ namespace llvm {
   /// Create Hardware Loop pass. \see HardwareLoops.cpp
   FunctionPass *createHardwareLoopsPass();
 
+  /// Create CHERI pass to bound alloca.s
+  ModulePass *createCheriBoundAllocasPass();
+
 } // End llvm namespace
 
 #endif

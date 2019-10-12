@@ -1,4 +1,4 @@
-; Check that the CheriPureCapABI pass doesn't break debug info
+; Check that the CheriBoundAllocas pass doesn't break debug info
 ; It previoulsy moved all the llvm.debug.declare statements from the alloca
 ; to the csetbounds which caused the processDbgDeclares() function in SelectionDAGISel.cpp
 ; to not insert the appropriate local variable entries

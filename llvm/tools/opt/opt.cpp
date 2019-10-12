@@ -538,6 +538,7 @@ int main(int argc, char **argv) {
   initializeHardwareLoopsPass(Registry);
 
   // Add the Cheri IR -> IR passes
+  initializeCheriBoundAllocasPass(Registry);
   initializeCHERICapFoldIntrinsicsPass(Registry);
   initializeCHERICapDirectCallsPass(Registry);
 

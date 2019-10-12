@@ -9,7 +9,7 @@
 ; Function Attrs: nounwind
 ; Check that locally creating a va_list and then storing it to a global works
 ; (Yes, this is an odd thing to do.  See libxo for a real-world example)
-; This is similar to cheri-sandbox-vaargs.ll, but ensures CheriPureCapABI can
+; This is similar to cheri-sandbox-vaargs.ll, but ensures CheriBoundAllocas can
 ; handle the optimiser turning AddrSpaceCast instructions into ConstantExpr's
 define void @xo_emit(i8 addrspace(200)* %fmt, ...) {
 ; CHECK-LABEL: xo_emit:

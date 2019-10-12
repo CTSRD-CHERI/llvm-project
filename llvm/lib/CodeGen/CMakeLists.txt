@@ -11,6 +11,7 @@ add_llvm_library(LLVMCodeGen
   CalcSpillWeights.cpp
   CallingConvLower.cpp
   CFIInstrInserter.cpp
+  CheriBoundAllocas.cpp
   CodeGen.cpp
   CodeGenPrepare.cpp
   CriticalAntiDepBreaker.cpp

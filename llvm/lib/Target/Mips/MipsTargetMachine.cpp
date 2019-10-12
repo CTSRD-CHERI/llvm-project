@@ -72,7 +72,6 @@ extern "C" void LLVMInitializeMipsTarget() {
   initializeCHERICapDirectCallsPass(*PR);
   initializeCHERICapFoldIntrinsicsPass(*PR);
   initializeCheriAddressingModeFolderPass(*PR);
-  initializeCheriPureCapABIPass(*PR);
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,
@@ -325,7 +324,7 @@ void MipsPassConfig::addIRPasses() {
     addPass(createCheriLoopPointerDecanonicalize());
     addPass(createAggressiveDCEPass());
     addPass(createCheriRangeChecker());
-    addPass(createCheriPureCapABI());
+    addPass(createCheriBoundAllocasPass());
   }
 }
 // Install an instruction selector pass using

@@ -1030,7 +1030,7 @@ multiclass StackCapPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
   def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, GPR64Opnd:$off)),
             (CheriBoundedStackPseudo (Addr:$fi), (i64 0), $off)>;
 
-  // These  should not be needed since they would mask bugs in CheriPureCapABI.cpp.
+  // These  should not be needed since they would mask bugs in CheriBoundAllocas.cpp.
   // (but keep them here just in case):
   // let AddedComplexity = -120 in {
   //   // If the incoffset was placed in a different basic block we
