@@ -419,32 +419,6 @@ void MipsTargetStreamer::emitLoadWithImmOffset(unsigned Opcode, unsigned DstReg,
   emitRRI(Opcode, DstReg, TmpReg, LoOffset, IDLoc, STI);
 }
 
-TailPaddingAmount
-MipsTargetStreamer::getTailPaddingForPreciseBounds(unsigned Size) {
-  // TODO: make this a check whether the optional is set
-  if (!CheriCapSize)
-    return TailPaddingAmount::None;
-  if (*CheriCapSize == 16) {
-    return static_cast<TailPaddingAmount>(
-        llvm::alignTo(Size, cc128_get_required_alignment(Size)) - Size);
-  }
-  assert(*CheriCapSize == 32);
-  // No padding required for CHERI256
-  return TailPaddingAmount::None;
-}
-
-unsigned MipsTargetStreamer::getAlignmentForPreciseBounds(unsigned Size) {
-  // TODO: make this a check whether the optional is set
-  if (!CheriCapSize)
-    return 1;
-  if (*CheriCapSize == 16) {
-    return cc128_get_required_alignment(Size);
-  }
-  assert(*CheriCapSize == 32);
-  // No padding required for CHERI256
-  return 1;
-}
-
 MipsTargetAsmStreamer::MipsTargetAsmStreamer(
     MCStreamer &S, llvm::Optional<unsigned> CheriCapSize,
     formatted_raw_ostream &OS)

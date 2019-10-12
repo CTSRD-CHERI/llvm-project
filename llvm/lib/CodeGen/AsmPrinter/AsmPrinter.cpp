@@ -504,11 +504,10 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   // sections and expected to be contiguous (e.g. ObjC metadata).
   llvm::Align Align = getGVAlignment(GV, DL);
 
-  auto TS = OutStreamer->getTargetStreamer();
   const TailPaddingAmount TailPadding =
-      TS ? TS->getTailPaddingForPreciseBounds(Size) : TailPaddingAmount::None;
+      getObjFileLowering().getTailPaddingForPreciseBounds(Size);
   const unsigned PreciseAlignment =
-      TS ? TS->getAlignmentForPreciseBounds(Size) : 1;
+      getObjFileLowering().getAlignmentForPreciseBounds(Size);
 
   if (PreciseAlignment > Align.value()) {
     LLVM_DEBUG(dbgs() << "\nIncreased alignment for global from "
@@ -616,7 +615,7 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
       OutStreamer->EmitLabel(MangSym);
 
       EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
-                         static_cast<unsigned>(TailPadding));
+                         static_cast<uint64_t>(TailPadding));
     }
 
     OutStreamer->AddBlankLine();
@@ -653,7 +652,7 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   OutStreamer->EmitLabel(EmittedInitSym);
 
   EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
-                     static_cast<unsigned>(TailPadding));
+                     static_cast<uint64_t>(TailPadding));
 
   if (MAI->hasDotTypeDotSizeDirective())
     // .size foo, 42
@@ -2808,7 +2807,7 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 
 /// EmitGlobalConstant - Print a general LLVM constant to the .s file.
 void AsmPrinter::EmitGlobalConstant(const DataLayout &DL, const Constant *CV,
-                                    unsigned TailPadding) {
+                                    uint64_t TailPadding) {
   uint64_t Size = DL.getTypeAllocSize(CV->getType());
   if (Size)
     emitGlobalConstantImpl(DL, CV, *this);

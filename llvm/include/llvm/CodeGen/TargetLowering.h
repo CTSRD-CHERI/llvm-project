@@ -48,6 +48,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCStreamer.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Casting.h"
@@ -2627,6 +2628,12 @@ public:
   }
   bool supportsUnalignedCapabilityMemOps() const {
     return SupportsUnalignedCapabilityMemOps;
+  }
+  virtual TailPaddingAmount getTailPaddingForPreciseBounds(uint64_t Size) const {
+    return TailPaddingAmount::None;
+  }
+  virtual unsigned getAlignmentForPreciseBounds(uint64_t Size) const {
+    return 0;
   }
 
   //===--------------------------------------------------------------------===//

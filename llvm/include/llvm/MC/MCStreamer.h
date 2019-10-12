@@ -57,7 +57,7 @@ class Twine;
 
 using MCSectionSubPair = std::pair<MCSection *, const MCExpr *>;
 
-enum class TailPaddingAmount : unsigned { None = 0u };
+enum class TailPaddingAmount : uint64_t { None = 0u };
 
 /// Target specific streamer interface. This is used so that targets can
 /// implement support for target specific assembly directives.
@@ -122,17 +122,6 @@ public:
 
   /// Whether to use the __cap_relocs hack (if the target supports capabilities)
   virtual bool useLegacyCapRelocs() const;
-
-  /// CHERI128 uses compressed capabilities. If we would like to guarantee
-  /// non-overlapping bounds for all global symbols we must over-align the
-  /// symbol if the size is no precisely representable. We also add padding at
-  /// the end to ensure that we cannot access another variable that happens to
-  /// be located in the bytes that are accessible after the end of the object
-  /// due to the bounds having been rounded up.
-  virtual TailPaddingAmount getTailPaddingForPreciseBounds(unsigned Size) {
-    return TailPaddingAmount::None;
-  };
-  virtual unsigned getAlignmentForPreciseBounds(unsigned Size) { return 0; };
 };
 
 // FIXME: declared here because it is used from

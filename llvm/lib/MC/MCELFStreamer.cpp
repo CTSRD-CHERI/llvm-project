@@ -303,7 +303,7 @@ void MCELFStreamer::EmitCommonSymbol(MCSymbol *S, uint64_t Size,
 
     EmitValueToAlignment(ByteAlignment, 0, 1, 0);
     EmitLabel(Symbol);
-    EmitZeros(Size + static_cast<unsigned>(TailPadding));
+    EmitZeros(Size + static_cast<uint64_t>(TailPadding));
 
     // Update the maximum alignment of the section if necessary.
     if (ByteAlignment > Section.getAlignment())
@@ -311,7 +311,7 @@ void MCELFStreamer::EmitCommonSymbol(MCSymbol *S, uint64_t Size,
 
     SwitchSection(P.first, P.second);
   } else {
-    if (Symbol->declareCommon(Size + static_cast<unsigned>(TailPadding),
+    if (Symbol->declareCommon(Size + static_cast<uint64_t>(TailPadding),
                               ByteAlignment))
       report_fatal_error("Symbol: " + Symbol->getName() +
                          " redeclared as different type");

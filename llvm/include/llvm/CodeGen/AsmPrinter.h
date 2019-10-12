@@ -353,7 +353,7 @@ public:
 
   /// Print a general LLVM constant to the .s file.
   void EmitGlobalConstant(const DataLayout &DL, const Constant *CV,
-                          unsigned TailPadding);
+                          uint64_t TailPadding);
 
   /// Unnamed constant global variables solely contaning a pointer to
   /// another globals variable act like a global variable "proxy", or GOT

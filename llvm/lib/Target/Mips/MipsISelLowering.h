@@ -418,6 +418,10 @@ extern bool LargeCapTable;
     // pass handles the intrinsic so we want to keep the intrinsic as-is.
     bool hasCapabilitySetAddress() const override { return true; }
 
+    TailPaddingAmount
+    getTailPaddingForPreciseBounds(uint64_t Size) const override;
+    unsigned getAlignmentForPreciseBounds(uint64_t Size) const override;
+
     CCAssignFn *CCAssignFnForCall() const;
 
     CCAssignFn *CCAssignFnForReturn() const;

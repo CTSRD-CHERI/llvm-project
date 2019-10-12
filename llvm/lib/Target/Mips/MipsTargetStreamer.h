@@ -187,15 +187,6 @@ public:
     return *ABI;
   }
 
-  /// CHERI128 uses compressed capabilities. If we would like to guarantee
-  /// non-overlapping bounds for all global symbols we must over-align the
-  /// symbol if the size is no precisely representable. We also add padding at
-  /// the end to ensure that we cannot access another variable that happens to
-  /// be located in the bytes that are accessible after the end of the object
-  /// due to the bounds having been rounded up.
-  TailPaddingAmount getTailPaddingForPreciseBounds(unsigned Size) override;
-  unsigned getAlignmentForPreciseBounds(unsigned Size) override;
-
 protected:
   llvm::Optional<MipsABIInfo> ABI;
   MipsABIFlagsSection ABIFlagsSection;

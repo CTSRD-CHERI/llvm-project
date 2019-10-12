@@ -1641,6 +1641,31 @@ void MipsTargetLowering::computeKnownBitsForTargetNode(
   }
 }
 
+TailPaddingAmount
+MipsTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
+  if (!Subtarget.isCheri())
+    return TailPaddingAmount::None;
+  if (Subtarget.isCheri128()) {
+    return static_cast<TailPaddingAmount>(
+        llvm::alignTo(Size, cc128_get_required_alignment(Size)) - Size);
+  }
+  assert(Subtarget.isCheri256());
+  // No padding required for CHERI256
+  return TailPaddingAmount::None;
+}
+
+unsigned
+MipsTargetLowering::getAlignmentForPreciseBounds(uint64_t Size) const {
+  if (!Subtarget.isCheri())
+    return 1;
+  if (Subtarget.isCheri128()) {
+    return cc128_get_required_alignment(Size);
+  }
+  assert(Subtarget.isCheri256());
+  // No alignment required for CHERI256
+  return 1;
+}
+
 //===----------------------------------------------------------------------===//
 //  Lower helper functions
 //===----------------------------------------------------------------------===//

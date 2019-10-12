@@ -18,6 +18,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/SectionKind.h"
 #include <cstdint>
 
@@ -210,6 +211,19 @@ public:
   /// metadata. Otherwise, return nullptr.
   virtual MCSection *getSectionForCommandLines() const {
     return nullptr;
+  }
+
+  /// Some CHERI targets have compressed bounds. If we would like to guarantee
+  /// non-overlapping bounds for all global symbols we must over-align the
+  /// symbol if the size is not precisely representable. We also add padding at
+  /// the end to ensure that we cannot access another variable that happens to
+  /// be located in the bytes that are accessible after the end of the object
+  /// due to the bounds having been rounded up.
+  virtual TailPaddingAmount getTailPaddingForPreciseBounds(uint64_t Size) const {
+    return TailPaddingAmount::None;
+  }
+  virtual unsigned getAlignmentForPreciseBounds(uint64_t Size) const {
+    return 0;
   }
 
 protected:

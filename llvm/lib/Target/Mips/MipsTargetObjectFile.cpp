@@ -18,6 +18,9 @@
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetMachine.h"
+
+#include "cheri-compressed-cap/cheri_compressed_cap.h"
+
 using namespace llvm;
 
 static cl::opt<unsigned>
@@ -192,4 +195,33 @@ MipsTargetObjectFile::getDebugThreadLocalSymbol(const MCSymbol *Sym) const {
   Expr = MCBinaryExpr::createAdd(
       Expr, MCConstantExpr::create(0x8000, getContext()), getContext());
   return MipsMCExpr::create(MipsMCExpr::MEK_DTPREL, Expr, getContext());
+}
+
+TailPaddingAmount
+MipsTargetObjectFile::getTailPaddingForPreciseBounds(uint64_t Size) const {
+  const MipsSubtarget &Subtarget =
+      *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
+  if (!Subtarget.isCheri())
+    return TailPaddingAmount::None;
+  if (Subtarget.isCheri128()) {
+    return static_cast<TailPaddingAmount>(
+        llvm::alignTo(Size, cc128_get_required_alignment(Size)) - Size);
+  }
+  assert(Subtarget.isCheri256());
+  // No padding required for CHERI256
+  return TailPaddingAmount::None;
+}
+
+unsigned
+MipsTargetObjectFile::getAlignmentForPreciseBounds(uint64_t Size) const {
+  const MipsSubtarget &Subtarget =
+      *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
+  if (!Subtarget.isCheri())
+    return 1;
+  if (Subtarget.isCheri128()) {
+    return cc128_get_required_alignment(Size);
+  }
+  assert(Subtarget.isCheri256());
+  // No alignment required for CHERI256
+  return 1;
 }
