@@ -244,6 +244,7 @@ void initializeLoopVectorizePass(PassRegistry&);
 void initializeLoopVersioningLICMPass(PassRegistry&);
 void initializeLoopVersioningPassPass(PassRegistry&);
 void initializeLowerAtomicLegacyPassPass(PassRegistry&);
+void initializeLowerConstantIntrinsicsPass(PassRegistry&);
 void initializeLowerEmuTLSPass(PassRegistry&);
 void initializeLowerExpectIntrinsicPass(PassRegistry&);
 void initializeLowerGuardIntrinsicLegacyPassPass(PassRegistry&);
