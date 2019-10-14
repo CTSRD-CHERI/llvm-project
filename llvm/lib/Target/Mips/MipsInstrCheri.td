@@ -358,7 +358,7 @@ def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
 def CSetAddr : CheriFmtCSet<0x22, "addr", "address">;
 
 // CRoundRepresentableLength (a.k.a. CRoundArchitecturalPrecision)
-def CRAP : CheriFmt2Op<0x10, (outs GPR64Opnd:$r1), (ins GPR64Opnd:$r2),
+def CRRL : CheriFmt2Op<0x10, (outs GPR64Opnd:$r1), (ins GPR64Opnd:$r2),
                        "croundrepresentablelength\t$r1, $r2",
                        [(set GPR64Opnd:$r1, (int_cheri_round_representable_length GPR64Opnd:$r2))]>;
 // CRepresentableAlignmentMask
@@ -367,8 +367,8 @@ def CRAM : CheriFmt2Op<0x11, (outs GPR64Opnd:$r1), (ins GPR64Opnd:$r2),
                        [(set GPR64Opnd:$r1, (int_cheri_representable_alignment_mask GPR64Opnd:$r2))]>;
 }
 // CRAM/CRRL (a.k.a. CRAP) aliases
-def : InstAlias<"crap $dst, $len", (CRAP GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
-def : InstAlias<"crrl $dst, $len", (CRAP GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
+def : InstAlias<"crap $dst, $len", (CRRL GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
+def : InstAlias<"crrl $dst, $len", (CRRL GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
 def : InstAlias<"cram $dst, $len", (CRAM GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
 
 // Convert CIncOffsets of the difference to csetaddr
