@@ -12940,6 +12940,7 @@ void OMPClauseReader::VisitOMPPriorityClause(OMPPriorityClause *C) {
 }
 
 void OMPClauseReader::VisitOMPGrainsizeClause(OMPGrainsizeClause *C) {
+  VisitOMPClauseWithPreInit(C);
   C->setGrainsize(Record.readSubExpr());
   C->setLParenLoc(Record.readSourceLocation());
 }
