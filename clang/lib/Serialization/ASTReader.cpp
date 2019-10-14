@@ -12946,6 +12946,7 @@ void OMPClauseReader::VisitOMPGrainsizeClause(OMPGrainsizeClause *C) {
 }
 
 void OMPClauseReader::VisitOMPNumTasksClause(OMPNumTasksClause *C) {
+  VisitOMPClauseWithPreInit(C);
   C->setNumTasks(Record.readSubExpr());
   C->setLParenLoc(Record.readSourceLocation());
 }

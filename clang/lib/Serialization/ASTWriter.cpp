@@ -6947,6 +6947,7 @@ void OMPClauseWriter::VisitOMPGrainsizeClause(OMPGrainsizeClause *C) {
 }
 
 void OMPClauseWriter::VisitOMPNumTasksClause(OMPNumTasksClause *C) {
+  VisitOMPClauseWithPreInit(C);
   Record.AddStmt(C->getNumTasks());
   Record.AddSourceLocation(C->getLParenLoc());
 }
