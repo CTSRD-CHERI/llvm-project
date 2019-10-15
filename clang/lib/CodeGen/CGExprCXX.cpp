@@ -385,7 +385,7 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
       const CXXRecordDecl *RD;
       std::tie(VTable, RD) =
           CGM.getCXXABI().LoadVTablePtr(*this, This.getAddress(),
-                                        MD->getParent());
+                                        CalleeDecl->getParent());
       EmitVTablePtrCheckForCall(RD, VTable, CFITCK_NVCall, CE->getBeginLoc());
     }
 
