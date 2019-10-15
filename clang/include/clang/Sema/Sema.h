@@ -6060,7 +6060,13 @@ public:
                                        Expr *ConstraintExpr,
                                        bool &IsSatisfied);
 
-    // ParseObjCStringLiteral - Parse Objective-C string literals.
+  /// Check that the associated constraints of a template declaration match the
+  /// associated constraints of an older declaration of which it is a
+  /// redeclaration.
+  bool CheckRedeclarationConstraintMatch(TemplateParameterList *Old,
+                                         TemplateParameterList *New);
+
+  // ParseObjCStringLiteral - Parse Objective-C string literals.
   ExprResult ParseObjCStringLiteral(SourceLocation *AtLocs,
                                     ArrayRef<Expr *> Strings);
 
