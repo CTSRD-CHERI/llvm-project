@@ -595,24 +595,37 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 #if !defined(Elf_Phdr)
         typedef ElfW(Phdr) Elf_Phdr;
 #endif
+#if !defined(Elf_Addr)
+        typedef ElfW(Addr) Elf_Addr;
+#endif
+
+        Elf_Addr image_base = pinfo->dlpi_addr;
+
+#if defined(__ANDROID__) && __ANDROID_API__ < 18
+        if (image_base == 0) {
+          // Normally, an image base of 0 indicates a non-PIE executable. On
+          // versions of Android prior to API 18, the dynamic linker reported a
+          // dlpi_addr of 0 for PIE executables. Compute the true image base
+          // using the PT_PHDR segment.
+          // See https://github.com/android/ndk/issues/505.
+          for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
+            const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
+            if (phdr->p_type == PT_PHDR) {
+              image_base = reinterpret_cast<Elf_Addr>(pinfo->dlpi_phdr) -
+                  phdr->p_vaddr;
+              break;
+            }
+          }
+        }
+#endif
 
  #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
   #if !defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
    #error "_LIBUNWIND_SUPPORT_DWARF_UNWIND requires _LIBUNWIND_SUPPORT_DWARF_INDEX on this platform."
   #endif
         size_t object_length;
-#if defined(__ANDROID__)
-#if !defined(Elf_Addr)
-        typedef ElfW(Addr) Elf_Addr;
-#endif
-        Elf_Addr image_base =
-            pinfo->dlpi_phnum
-                ? reinterpret_cast<Elf_Addr>(pinfo->dlpi_phdr) -
-                      reinterpret_cast<const Elf_Phdr *>(pinfo->dlpi_phdr)
-                          ->p_offset
-                : 0;
-#endif
-        auto getPhdrCapability = [](struct dl_phdr_info *pinfo, const Elf_Phdr *phdr) -> pint_t {
+
+        auto getPhdrCapability = [](uintptr_t image_base, const Elf_Phdr *phdr) -> pint_t {
 #ifdef __CHERI_PURE_CAPABILITY__
           // We have to work around the position dependent linking case where dlpi_addr
           // will contain just the binary range (and can't a be massively out of bounds cap
@@ -621,28 +634,24 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
           // match the vaddr
           if (&_DYNAMIC == NULL) {
             // static linking / position dependent workaround:
-            vaddr_t base = __builtin_cheri_base_get((void*)pinfo->dlpi_addr);
-            vaddr_t end = base + __builtin_cheri_length_get((void*)pinfo->dlpi_addr);
+            vaddr_t base = __builtin_cheri_base_get((void*)image_base);
+            vaddr_t end = base + __builtin_cheri_length_get((void*)image_base);
             if (phdr->p_vaddr >= base && phdr->p_vaddr < end) {
-              return pinfo->dlpi_addr + (phdr->p_vaddr - base);
+              return image_base + (phdr->p_vaddr - base);
             }
           }
           // Otherwise just fall back to the default behaviour
-          if (!__builtin_cheri_tag_get((void*)(pinfo->dlpi_addr + phdr->p_vaddr)))
+          if (!__builtin_cheri_tag_get((void*)(image_base + phdr->p_vaddr)))
             _LIBUNWIND_ABORT("phdr cap became unpresentable?");
 #endif
-          return pinfo->dlpi_addr + phdr->p_vaddr;
+          return image_base + phdr->p_vaddr;
         };
 
         for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
           const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
           if (phdr->p_type == PT_LOAD) {
-            uintptr_t begin = getPhdrCapability(pinfo, phdr);
+            uintptr_t begin = getPhdrCapability(image_base, phdr);
             uintptr_t end = begin + phdr->p_memsz;
-#if defined(__ANDROID__)
-            if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
-              begin = begin + image_base;
-#endif
             if (cbdata->targetAddr >= begin && cbdata->targetAddr < end) {
               cbdata->sects->dso_base = begin;
               object_length = phdr->p_memsz;
@@ -650,11 +659,8 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
             }
           } else if (phdr->p_type == PT_GNU_EH_FRAME) {
             EHHeaderParser<LocalAddressSpace>::EHHeaderInfo hdrInfo;
-            uintptr_t eh_frame_hdr_start = getPhdrCapability(pinfo, phdr);
-#if defined(__ANDROID__)
-            if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
-              eh_frame_hdr_start = eh_frame_hdr_start + image_base;
-#endif
+            uintptr_t eh_frame_hdr_start = getPhdrCapability(image_base, phdr);
+            cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
 #ifdef __CHERI_PURE_CAPABILITY__
             if (!__builtin_cheri_tag_get((void*)eh_frame_hdr_start))
               _LIBUNWIND_ABORT("eh_frame_hdr_start cap became unpresentable!");
@@ -676,7 +682,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
           for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
             const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
             if (phdr->p_type == PT_LOAD) {
-              uintptr_t begin = getPhdrCapability(pinfo, phdr);
+              uintptr_t begin = getPhdrCapability(image_base, phdr);
               uintptr_t end = begin + phdr->p_memsz;
 #if defined(__ANDROID__)
               if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
@@ -704,12 +710,12 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
           const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
           if (phdr->p_type == PT_LOAD) {
-            uintptr_t begin = pinfo->dlpi_addr + phdr->p_vaddr;
+            uintptr_t begin = image_base + phdr->p_vaddr;
             uintptr_t end = begin + phdr->p_memsz;
             if (cbdata->targetAddr >= begin && cbdata->targetAddr < end)
               found_obj = true;
           } else if (phdr->p_type == PT_ARM_EXIDX) {
-            uintptr_t exidx_start = pinfo->dlpi_addr + phdr->p_vaddr;
+            uintptr_t exidx_start = image_base + phdr->p_vaddr;
             cbdata->sects->arm_section = exidx_start;
             cbdata->sects->arm_section_length = phdr->p_memsz;
             found_hdr = true;
