@@ -7,7 +7,6 @@ import glob
 import os
 import sys
 
-import lit.run
 from lit.TestingConfig import TestingConfig
 from lit import LitConfig, Test
 
