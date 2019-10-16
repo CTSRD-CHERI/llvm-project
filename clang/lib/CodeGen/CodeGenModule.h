@@ -1384,6 +1384,11 @@ public:
 
   llvm::PointerType* getPointerInDefaultAS(llvm::Type* T);
 
+  /// Set section attributes requested by "#pragma clang section"
+  ///  \param D is the declaration to read semantic attributes from.
+  ///  \param GO is the global object to set section attributes.
+  void setPragmaSectionAttributes(const Decl *D, llvm::GlobalObject *GO);
+
 private:
   llvm::Constant *GetOrCreateLLVMFunction(
       StringRef MangledName, llvm::Type *Ty, GlobalDecl D, bool ForVTable,
