@@ -3278,6 +3278,7 @@ bool RecursiveASTVisitor<Derived>::VisitOMPThreadLimitClause(
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::VisitOMPPriorityClause(
     OMPPriorityClause *C) {
+  TRY_TO(VisitOMPClauseWithPreInit(C));
   TRY_TO(TraverseStmt(C->getPriority()));
   return true;
 }
