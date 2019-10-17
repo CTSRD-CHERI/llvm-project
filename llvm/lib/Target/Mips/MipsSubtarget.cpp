@@ -75,7 +75,7 @@ void MipsSubtarget::anchor() {}
 
 MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
                              bool little, const MipsTargetMachine &TM,
-                             unsigned StackAlignOverride)
+                             MaybeAlign StackAlignOverride)
     : MipsGenSubtargetInfo(TT, CPU, FS), MipsArchVersion(MipsDefault),
       IsLittle(little), IsSoftFloat(false), IsSingleFloat(false), IsFPXX(false),
       NoABICalls(false), Abs2008(false), IsFP64bit(false), UseOddSPReg(true),
@@ -270,17 +270,17 @@ MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
     InMips16HardFloat = true;
 
   if (StackAlignOverride)
-    stackAlignment = StackAlignOverride;
+    stackAlignment = *StackAlignOverride;
   else if (isCheri()) {
-    if (isCheri128())
-      stackAlignment = 16;
+    if (isCheri256())
+      stackAlignment = Align(32);
     else
-      stackAlignment = 32;
+      stackAlignment = Align(16);
   } else if (isABI_N32() || isABI_N64())
-    stackAlignment = 16;
+    stackAlignment = Align(16);
   else {
     assert(isABI_O32() && "Unknown ABI for stack alignment!");
-    stackAlignment = 8;
+    stackAlignment = Align(8);
   }
 
   return *this;
