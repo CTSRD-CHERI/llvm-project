@@ -22,6 +22,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/DebugInfo/CodeView/SymbolRecord.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCCodeView.h"
 #include "llvm/MC/MCContext.h"
@@ -3930,7 +3931,7 @@ bool AsmParser::parseDirectiveCVDefRange() {
         parseAbsoluteExpression(DRRegister))
       return Error(Loc, "expected register number");
 
-    codeview::DefRangeRegisterSym::Header DRHdr;
+    codeview::DefRangeRegisterHeader DRHdr;
     DRHdr.Register = DRRegister;
     DRHdr.MayHaveNoName = 0;
     getStreamer().EmitCVDefRangeDirective(Ranges, DRHdr);
@@ -3943,7 +3944,7 @@ bool AsmParser::parseDirectiveCVDefRange() {
         parseAbsoluteExpression(DROffset))
       return Error(Loc, "expected offset value");
 
-    codeview::DefRangeFramePointerRelSym::Header DRHdr;
+    codeview::DefRangeFramePointerRelHeader DRHdr;
     DRHdr.Offset = DROffset;
     getStreamer().EmitCVDefRangeDirective(Ranges, DRHdr);
     break;
@@ -3960,7 +3961,7 @@ bool AsmParser::parseDirectiveCVDefRange() {
         parseAbsoluteExpression(DROffsetInParent))
       return Error(Loc, "expected offset value");
 
-    codeview::DefRangeSubfieldRegisterSym::Header DRHdr;
+    codeview::DefRangeSubfieldRegisterHeader DRHdr;
     DRHdr.Register = DRRegister;
     DRHdr.MayHaveNoName = 0;
     DRHdr.OffsetInParent = DROffsetInParent;
@@ -3985,7 +3986,7 @@ bool AsmParser::parseDirectiveCVDefRange() {
         parseAbsoluteExpression(DRBasePointerOffset))
       return Error(Loc, "expected base pointer offset value");
 
-    codeview::DefRangeRegisterRelSym::Header DRHdr;
+    codeview::DefRangeRegisterRelHeader DRHdr;
     DRHdr.Register = DRRegister;
     DRHdr.Flags = DRFlags;
     DRHdr.BasePointerOffset = DRBasePointerOffset;

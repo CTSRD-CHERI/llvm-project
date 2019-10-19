@@ -11,6 +11,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/DebugInfo/CodeView/SymbolRecord.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAssembler.h"
@@ -265,19 +266,19 @@ public:
 
   void EmitCVDefRangeDirective(
       ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-      codeview::DefRangeRegisterRelSym::Header DRHdr) override;
+      codeview::DefRangeRegisterRelHeader DRHdr) override;
 
   void EmitCVDefRangeDirective(
       ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-      codeview::DefRangeSubfieldRegisterSym::Header DRHdr) override;
+      codeview::DefRangeSubfieldRegisterHeader DRHdr) override;
 
   void EmitCVDefRangeDirective(
       ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-      codeview::DefRangeRegisterSym::Header DRHdr) override;
+      codeview::DefRangeRegisterHeader DRHdr) override;
 
   void EmitCVDefRangeDirective(
       ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-      codeview::DefRangeFramePointerRelSym::Header DRHdr) override;
+      codeview::DefRangeFramePointerRelHeader DRHdr) override;
 
   void EmitCVStringTableDirective() override;
   void EmitCVFileChecksumsDirective() override;
@@ -1491,7 +1492,7 @@ void MCAsmStreamer::PrintCVDefRangePrefix(
 
 void MCAsmStreamer::EmitCVDefRangeDirective(
     ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-    codeview::DefRangeRegisterRelSym::Header DRHdr) {
+    codeview::DefRangeRegisterRelHeader DRHdr) {
   PrintCVDefRangePrefix(Ranges);
   OS << ", reg_rel, ";
   OS << DRHdr.Register << ", " << DRHdr.Flags << ", "
@@ -1501,7 +1502,7 @@ void MCAsmStreamer::EmitCVDefRangeDirective(
 
 void MCAsmStreamer::EmitCVDefRangeDirective(
     ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-    codeview::DefRangeSubfieldRegisterSym::Header DRHdr) {
+    codeview::DefRangeSubfieldRegisterHeader DRHdr) {
   PrintCVDefRangePrefix(Ranges);
   OS << ", subfield_reg, ";
   OS << DRHdr.Register << ", " << DRHdr.OffsetInParent;
@@ -1510,7 +1511,7 @@ void MCAsmStreamer::EmitCVDefRangeDirective(
 
 void MCAsmStreamer::EmitCVDefRangeDirective(
     ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-    codeview::DefRangeRegisterSym::Header DRHdr) {
+    codeview::DefRangeRegisterHeader DRHdr) {
   PrintCVDefRangePrefix(Ranges);
   OS << ", reg, ";
   OS << DRHdr.Register;
@@ -1519,7 +1520,7 @@ void MCAsmStreamer::EmitCVDefRangeDirective(
 
 void MCAsmStreamer::EmitCVDefRangeDirective(
     ArrayRef<std::pair<const MCSymbol *, const MCSymbol *>> Ranges,
-    codeview::DefRangeFramePointerRelSym::Header DRHdr) {
+    codeview::DefRangeFramePointerRelHeader DRHdr) {
   PrintCVDefRangePrefix(Ranges);
   OS << ", frame_ptr_rel, ";
   OS << DRHdr.Offset;
