@@ -1066,7 +1066,7 @@ public:
     const bool OptForSize = SI->getParent()->getParent()->hasOptSize();
     const unsigned MinDensity = getMinimumJumpTableDensity(OptForSize);
     const unsigned MaxJumpTableSize = getMaximumJumpTableSize();
-    
+
     // Check whether the number of cases is small enough and
     // the range is dense enough for a jump table.
     if ((OptForSize || Range <= MaxJumpTableSize) &&
@@ -2644,6 +2644,12 @@ public:
   // same blocks of its users.
   virtual bool shouldConsiderGEPOffsetSplit() const { return false; }
 
+  // Return the shift amount threshold for profitable transforms into shifts.
+  // Transforms creating shifts above the returned value will be avoided.
+  virtual unsigned getShiftAmountThreshold(EVT VT) const {
+    return VT.getScalarSizeInBits();
+  }
+
   // Return true if the target has a capability set address instruction.
   virtual bool hasCapabilitySetAddress() const { return false; }
   MVT cheriCapabilityType() const { return CapType; }
@@ -3818,7 +3824,7 @@ public:
   /// Should SelectionDAG lower an atomic store of the given kind as a normal
   /// StoreSDNode (as opposed to an AtomicSDNode)?  NOTE: The intention is to
   /// eventually migrate all targets to the using StoreSDNodes, but porting is
-  /// being done target at a time.  
+  /// being done target at a time.
   virtual bool lowerAtomicStoreAsStoreSDNode(const StoreInst &SI) const {
     assert(SI.isAtomic() && "violated precondition");
     return false;
@@ -3827,7 +3833,7 @@ public:
   /// Should SelectionDAG lower an atomic load of the given kind as a normal
   /// LoadSDNode (as opposed to an AtomicSDNode)?  NOTE: The intention is to
   /// eventually migrate all targets to the using LoadSDNodes, but porting is
-  /// being done target at a time.  
+  /// being done target at a time.
   virtual bool lowerAtomicLoadAsLoadSDNode(const LoadInst &LI) const {
     assert(LI.isAtomic() && "violated precondition");
     return false;
