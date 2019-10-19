@@ -605,6 +605,15 @@ protected:
     unsigned FPFeatures : 3;
   };
 
+  class CXXRewrittenBinaryOperatorBitfields {
+    friend class ASTStmtReader;
+    friend class CXXRewrittenBinaryOperator;
+
+    unsigned : NumCallExprBits;
+
+    unsigned IsReversed : 1;
+  };
+
   class CXXBoolLiteralExprBitfields {
     friend class CXXBoolLiteralExpr;
 
@@ -979,6 +988,7 @@ protected:
 
     // C++ Expressions
     CXXOperatorCallExprBitfields CXXOperatorCallExprBits;
+    CXXRewrittenBinaryOperatorBitfields CXXRewrittenBinaryOperatorBits;
     CXXBoolLiteralExprBitfields CXXBoolLiteralExprBits;
     CXXNullPtrLiteralExprBitfields CXXNullPtrLiteralExprBits;
     CXXThisExprBitfields CXXThisExprBits;

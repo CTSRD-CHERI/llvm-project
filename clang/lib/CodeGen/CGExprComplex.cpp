@@ -286,6 +286,10 @@ public:
     return EmitBinDiv(EmitBinOps(E));
   }
 
+  ComplexPairTy VisitCXXRewrittenBinaryOperator(CXXRewrittenBinaryOperator *E) {
+    return Visit(E->getSemanticForm());
+  }
+
   // Compound assignments.
   ComplexPairTy VisitBinAddAssign(const CompoundAssignOperator *E) {
     return EmitCompoundAssign(E, &ComplexExprEmitter::EmitBinAdd);

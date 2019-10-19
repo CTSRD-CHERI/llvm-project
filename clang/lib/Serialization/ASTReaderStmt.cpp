@@ -1447,6 +1447,13 @@ void ASTStmtReader::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
   E->Range = Record.readSourceRange();
 }
 
+void ASTStmtReader::VisitCXXRewrittenBinaryOperator(
+    CXXRewrittenBinaryOperator *E) {
+  VisitExpr(E);
+  E->CXXRewrittenBinaryOperatorBits.IsReversed = Record.readInt();
+  E->SemanticForm = Record.readSubExpr();
+}
+
 void ASTStmtReader::VisitCXXConstructExpr(CXXConstructExpr *E) {
   VisitExpr(E);
 
@@ -3261,6 +3268,10 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     case EXPR_CXX_MEMBER_CALL:
       S = CXXMemberCallExpr::CreateEmpty(
           Context, /*NumArgs=*/Record[ASTStmtReader::NumExprFields], Empty);
+      break;
+
+    case EXPR_CXX_REWRITTEN_BINARY_OPERATOR:
+      S = new (Context) CXXRewrittenBinaryOperator(Empty);
       break;
 
     case EXPR_CXX_CONSTRUCT:
