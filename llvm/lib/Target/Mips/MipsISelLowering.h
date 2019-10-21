@@ -330,11 +330,12 @@ extern bool LargeCapTable;
         unsigned &NumIntermediates, MVT &RegisterVT) const override;
 
     /// Return the correct alignment for the current calling convention.
-    unsigned getABIAlignmentForCallingConv(Type *ArgTy,
-                                           DataLayout DL) const override {
+    Align getABIAlignmentForCallingConv(Type *ArgTy,
+                                        DataLayout DL) const override {
+      const Align ABIAlign(DL.getABITypeAlignment(ArgTy));
       if (ArgTy->isVectorTy())
-        return std::min(DL.getABITypeAlignment(ArgTy), 8U);
-      return DL.getABITypeAlignment(ArgTy);
+        return std::min(ABIAlign, Align(8));
+      return ABIAlign;
     }
 
     ISD::NodeType getExtendForAtomicOps() const override {
