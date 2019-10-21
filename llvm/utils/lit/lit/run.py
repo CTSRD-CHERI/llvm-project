@@ -127,41 +127,26 @@ class ParallelRun(Run):
                 return True
             lit.util.win32api.SetConsoleCtrlHandler(console_ctrl_handler, True)
 
-        try:
-            async_results = [
-                pool.apply_async(lit.worker.execute, args=[test],
-                    callback=lambda r, t=test: self._process_result(t, r))
-                for test in self.tests]
-            pool.close()
+        async_results = [
+            pool.apply_async(lit.worker.execute, args=[test],
+                callback=lambda r, t=test: self._process_result(t, r))
+            for test in self.tests]
+        pool.close()
 
-            # Wait for all results to come in. The callback that runs in the
-            # parent process will update the display.
-            for a in async_results:
-                # This will raise a TimeOutError if it does not complete by
-                # the deadline. It will also raise any exceptions caused
-                # by the worker. Note: we cannot use wait here, because
-                # otherwise we will assert when calling a.successful()
-                # below (since it asserts that a.read() returns True)
-                timeout = deadline - time.time()
-                a.get(timeout)
-                if not a.successful():
-                    # TODO(yln): this also raises on a --max-time time
-                    a.get() # Exceptions raised here come from the worker.
-                if self.hit_max_failures:
-                    break
-        except multiprocessing.TimeoutError:
-            pool.terminate()
-            pool.join()
-            print('\nReached test timeout, terminating.')
-            # Mark any tests that weren't run as FAILED.
-            for test in self.tests:
-                if test.result is None:
-                    test.setResult(lit.Test.Result(lit.Test.TIMEOUT, '', 0.0))
-            return True
-        except:
-            # Stop the workers and wait for any straggling results to come in
-            # if we exited without waiting on every async result.
-            pool.terminate()
-            raise
-        finally:
-            pool.join()
+        for ar in async_results:
+            timeout = deadline - time.time()
+            try:
+                ar.get(timeout)
+            except multiprocessing.TimeoutError:
+                # TODO(yln): print timeout error
+                pool.terminate()
+                pool.join()
+                print('\nReached test timeout, terminating.')
+                # Mark any tests that weren't run as FAILED.
+                for test in self.tests:
+                    if test.result is None:
+                        test.setResult(lit.Test.Result(lit.Test.TIMEOUT, '', 0.0))
+                break
+            if self.hit_max_failures:
+                pool.terminate()
+                break
