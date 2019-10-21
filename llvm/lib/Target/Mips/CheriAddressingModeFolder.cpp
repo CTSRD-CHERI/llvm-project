@@ -471,10 +471,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
   }
 };
 }
-namespace llvm {
-  void initializeCheriAddressingModeFolderPass(PassRegistry&);
-}
-
 
 char CheriAddressingModeFolder::ID = 0;
 INITIALIZE_PASS_BEGIN(CheriAddressingModeFolder, DEBUG_TYPE,
