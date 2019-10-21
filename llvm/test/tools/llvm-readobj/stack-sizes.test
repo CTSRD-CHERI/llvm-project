@@ -58,11 +58,11 @@ Sections:
     Type:    SHT_RELA
     Info:    .stack_sizes
     Relocations:
-## A symbol relative reference. 
+## A symbol relative reference.
       - Offset: 0
-        Symbol: referenced_by_symbol_foo 
+        Symbol: referenced_by_symbol_foo
         Type:   R_X86_64_64
-## A section relative reference. 
+## A section relative reference.
       - Offset: 9
         Addend: 16
         Symbol: .text
@@ -175,7 +175,7 @@ Sections:
     Info:    .stack_sizes
     Relocations:
       - Offset: 1
-        Symbol: foo 
+        Symbol: foo
         Type:   R_X86_64_64
 Symbols:
   - Name:    foo
@@ -304,7 +304,7 @@ Symbols:
     Binding: STB_GLOBAL
 
 ## Check that we report a warning when a relocation symbol does not belong to a
-## valid section. We expect a stack size entry with an unknown symbol in the 
+## valid section. We expect a stack size entry with an unknown symbol in the
 ## output.
 
 # RUN: yaml2obj --docnum=7 %s > %t07
@@ -452,7 +452,7 @@ Sections:
 # MULTIPLE-LLVM-NEXT: ]
 
 ## Check that we do not consider symbols that are not function symbols, even though
-## a relocation references them. 
+## a relocation references them.
 
 # RUN: yaml2obj --docnum=9 %s > %t14
 # RUN: llvm-readelf --stack-sizes %t14 2> %t14-gnu.err | FileCheck %s --check-prefix=NONFUNCTIONSYM-GNU
@@ -492,7 +492,7 @@ Sections:
     Info: .stack_sizes
     Relocations:
       - Offset: 0
-        Symbol: foo 
+        Symbol: foo
         Type:   R_X86_64_64
 Symbols:
   - Name:    foo
@@ -528,7 +528,7 @@ Sections:
     Info: .stack_sizes
     Relocations:
       - Offset: 0
-        Symbol: foo 
+        Symbol: foo
         Type:   R_X86_64_RELATIVE
 Symbols:
   - Name:    foo
@@ -641,3 +641,26 @@ Sections:
     Relocations:
       - Offset: 0
         Type:   123
+
+## Check we report an error when dumping stack sizes if the relocated section
+## identified by the sh_info field is invalid. Here sh_info value is larger than
+## the number of sections.
+
+# RUN: yaml2obj --docnum=13 %s > %t18
+# RUN: not llvm-readelf --stack-sizes %t18 2>&1 | FileCheck %s -DFILE=%t18 --check-prefix=INVALID-TARGET
+# RUN: not llvm-readobj --stack-sizes %t18 2>&1 | FileCheck %s -DFILE=%t18 --check-prefix=INVALID-TARGET
+
+# INVALID-TARGET: error: '[[FILE]]': .rela.stack_sizes: failed to get a relocated section: invalid section index: 255
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS32
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_X86_64
+Sections:
+  - Name: .rela.stack_sizes
+    Type: SHT_RELA
+    Link: 0
+    Info: 0xFF
+    Relocations: []
