@@ -12,6 +12,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
+#include "Mips.h"
 #include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Local.h"
 
@@ -20,6 +21,8 @@
 #include <utility>
 
 #include "llvm/IR/Verifier.h"
+
+#define DEBUG_TYPE "cheri-range-checker"
 
 using namespace llvm;
 using std::pair;
@@ -236,7 +239,9 @@ public:
 }
 
 char CheriRangeChecker::ID;
+INITIALIZE_PASS(CheriRangeChecker, DEBUG_TYPE, "CHERI rage checker", false,
+                false)
 
 namespace llvm {
 FunctionPass *createCheriRangeChecker(void) { return new CheriRangeChecker(); }
-}
+} // namespace llvm

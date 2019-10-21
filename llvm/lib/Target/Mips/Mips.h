@@ -56,6 +56,7 @@ namespace llvm {
   void initializeMipsPreLegalizerCombinerPass(PassRegistry&);
   void initializeMipsOptimizePICCallPass(PassRegistry &);
   void initializeCheriAddressingModeFolderPass(PassRegistry &);
+  void initializeCheriRangeCheckerPass(PassRegistry &);
 } // end namespace llvm;
 
 #endif
