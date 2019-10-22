@@ -50,19 +50,19 @@ void* __capability csetbounds_malloc(void) {
 // JSON-NEXT: 	{
 // JSON-NEXT: 		"alignment": 1,
 // JSON-NEXT: 		"size": 4096,
-// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:19:28",
+// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:19:10",
 // JSON-NEXT: 		"pass": "CHERI range checker"
 // JSON-NEXT: 	},
 // JSON-NEXT: 	{
 // JSON-NEXT: 		"alignment": 4,
 // JSON-NEXT: 		"size": 4,
-// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:24:28",
+// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:24:10",
 // JSON-NEXT: 		"pass": "CHERI range checker"
 // JSON-NEXT: 	},
 // JSON-NEXT: 	{
 // JSON-NEXT: 		"alignment": 1,
 // JSON-NEXT: 		"size": 16,
-// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:43:26",
+// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:43:22",
 // JSON-NEXT: 		"pass": "CHERI range checker"
 // JSON-NEXT: 	}
 // JSON-NEXT: 	]

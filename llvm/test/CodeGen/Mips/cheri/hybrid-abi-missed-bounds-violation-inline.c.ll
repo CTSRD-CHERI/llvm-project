@@ -7,19 +7,19 @@
 @.str.1 = private unnamed_addr constant [9 x i8] c"val: %d\0A\00", align 1
 
 ; Function Attrs: nounwind
-define signext i32 @main2(i32 signext %argc, i8** nocapture readnone %argv) local_unnamed_addr nounwind {
-; CHECK-LABEL: main2:
+define signext i32 @test() local_unnamed_addr nounwind {
+; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd $16, 16($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    sd $ra, 40($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
 ; CHECK-NEXT:    addiu $1, $zero, 7
 ; CHECK-NEXT:    sw $1, 12($sp)
-; CHECK-NEXT:    daddiu $16, $sp, 12
-; CHECK-NEXT:    cfromddc $c1, $16
-; CHECK-NEXT:    csetbounds $c1, $c1, 4
-; CHECK-NEXT:    cgetlen $1, $c1
-; CHECK-NEXT:    cgettag $5, $c1
+; CHECK-NEXT:    daddiu $1, $sp, 12
+; CHECK-NEXT:    cfromddc $c1, $1
+; CHECK-NEXT:    csetbounds $c17, $c1, 4
+; CHECK-NEXT:    cgetlen $1, $c17
+; CHECK-NEXT:    cgettag $5, $c17
 ; CHECK-NEXT:    sll $6, $1, 0
 ; CHECK-NEXT:    lui $1, %highest(.L.str)
 ; CHECK-NEXT:    daddiu $1, $1, %higher(.L.str)
@@ -28,7 +28,7 @@ define signext i32 @main2(i32 signext %argc, i8** nocapture readnone %argv) loca
 ; CHECK-NEXT:    dsll $1, $1, 16
 ; CHECK-NEXT:    jal printf
 ; CHECK-NEXT:    daddiu $4, $1, %lo(.L.str)
-; CHECK-NEXT:    lw $5, 4($16)
+; CHECK-NEXT:    clw $5, $zero, 4($c17)
 ; CHECK-NEXT:    lui $1, %highest(.L.str.1)
 ; CHECK-NEXT:    daddiu $1, $1, %higher(.L.str.1)
 ; CHECK-NEXT:    dsll $1, $1, 16
@@ -37,8 +37,8 @@ define signext i32 @main2(i32 signext %argc, i8** nocapture readnone %argv) loca
 ; CHECK-NEXT:    jal printf
 ; CHECK-NEXT:    daddiu $4, $1, %lo(.L.str.1)
 ; CHECK-NEXT:    daddiu $2, $zero, 0
-; CHECK-NEXT:    ld $16, 16($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; CHECK-NEXT:    ld $ra, 40($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
 entry:
@@ -60,25 +60,96 @@ entry:
   ret i32 0
 }
 
-; RANGE-CHECKER-LABEL:  define signext i32 @main2(i32 signext %argc, i8** nocapture readnone %argv) local_unnamed_addr #0 {
+; RANGE-CHECKER-LABEL:  define signext i32 @test() local_unnamed_addr #0 {
 ; RANGE-CHECKER-NEXT:  entry:
 ; RANGE-CHECKER-NEXT:    %i = alloca i32, align 4
 ; RANGE-CHECKER-NEXT:    %0 = bitcast i32* %i to i8*
 ; RANGE-CHECKER-NEXT:    call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %0)
 ; RANGE-CHECKER-NEXT:    store i32 7, i32* %i, align 4
-; RANGE-CHECKER-NEXT:    %1 = addrspacecast i8* %0 to i8 addrspace(200)*
+; RANGE-CHECKER-NEXT:    %1 = addrspacecast i32* %i to i8 addrspace(200)*
 ; RANGE-CHECKER-NEXT:    %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %1, i64 4)
 ; RANGE-CHECKER-NEXT:    %3 = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* %2)
 ; RANGE-CHECKER-NEXT:    %conv = trunc i64 %3 to i32
 ; RANGE-CHECKER-NEXT:    %4 = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %2)
 ; RANGE-CHECKER-NEXT:    %conv1 = zext i1 %4 to i32
 ; RANGE-CHECKER-NEXT:    %call = call signext i32 (i8*, ...) @printf(i8* getelementptr inbounds ([23 x i8], [23 x i8]* @.str, i64 0, i64 0), i32 signext %conv1, i32 signext %conv)
-; RANGE-CHECKER-NEXT:    %arrayidx8 = getelementptr inbounds i32, i32* %i, i64 1
-; RANGE-CHECKER-NEXT:    %arrayidx = addrspacecast i32* %arrayidx8 to i32 addrspace(200)*
-; RANGE-CHECKER-NEXT:    %5 = load i32, i32 addrspace(200)* %arrayidx, align 4
-; RANGE-CHECKER-NEXT:    %call2 = call signext i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str.1, i64 0, i64 0), i32 signext %5)
+; RANGE-CHECKER-NEXT:    %5 = addrspacecast i32* %i to i8 addrspace(200)*
+; RANGE-CHECKER-NEXT:    %6 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %5, i64 4)
+; RANGE-CHECKER-NEXT:    %offs = getelementptr i8, i8 addrspace(200)* %6, i64 4
+; RANGE-CHECKER-NEXT:    %7 = bitcast i8 addrspace(200)* %offs to i32 addrspace(200)*
+; RANGE-CHECKER-NEXT:    %8 = load i32, i32 addrspace(200)* %7, align 4
+; RANGE-CHECKER-NEXT:    %call2 = call signext i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str.1, i64 0, i64 0), i32 signext %8)
 ; RANGE-CHECKER-NEXT:    call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %0)
 ; RANGE-CHECKER-NEXT:    ret i32 0
+; RANGE-CHECKER-NEXT:  }
+
+
+; one past end:
+define signext i32 @test2() local_unnamed_addr nounwind {
+; CHECK-LABEL: test2:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    daddiu $1, $sp, 4
+; CHECK-NEXT:    cfromddc $c1, $1
+; CHECK-NEXT:    csetbounds $c1, $c1, 4
+; CHECK-NEXT:    jal use_cap
+; CHECK-NEXT:    cincoffset $c3, $c1, 4
+; CHECK-NEXT:    sll $2, $2, 0
+; CHECK-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    jr $ra
+; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+entry:
+  %i = alloca i32, align 4
+  %arrayidx8 = getelementptr i32, i32* %i, i64 1
+  %arrayidx = addrspacecast i32* %arrayidx8 to i32 addrspace(200)*
+  %call = call signext i32 (i32 addrspace(200)*) @use_cap(i32 addrspace(200)* %arrayidx)
+  ret i32 %call
+}
+
+; RANGE-CHECKER-LABEL:  define signext i32 @test2() local_unnamed_addr #0 {
+; RANGE-CHECKER-NEXT:  entry:
+; RANGE-CHECKER-NEXT:    %i = alloca i32, align 4
+; RANGE-CHECKER-NEXT:    %0 = addrspacecast i32* %i to i8 addrspace(200)*
+; RANGE-CHECKER-NEXT:    %1 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %0, i64 4)
+; RANGE-CHECKER-NEXT:    %offs = getelementptr i8, i8 addrspace(200)* %1, i64 4
+; RANGE-CHECKER-NEXT:    %2 = bitcast i8 addrspace(200)* %offs to i32 addrspace(200)*
+; RANGE-CHECKER-NEXT:    %call = call signext i32 @use_cap(i32 addrspace(200)* %2)
+; RANGE-CHECKER-NEXT:    ret i32 %call
+; RANGE-CHECKER-NEXT:  }
+
+; one before end:
+define signext i32 @test3() local_unnamed_addr nounwind {
+; CHECK-LABEL: test3:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    daddiu $1, $sp, 4
+; CHECK-NEXT:    cfromddc $c1, $1
+; CHECK-NEXT:    csetbounds $c1, $c1, 4
+; CHECK-NEXT:    jal use_cap
+; CHECK-NEXT:    cincoffset $c3, $c1, -4
+; CHECK-NEXT:    sll $2, $2, 0
+; CHECK-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    jr $ra
+; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+entry:
+  %i = alloca i32, align 4
+  %arrayidx8 = getelementptr i32, i32* %i, i64 -1
+  %arrayidx = addrspacecast i32* %arrayidx8 to i32 addrspace(200)*
+  %call = call signext i32 (i32 addrspace(200)*) @use_cap(i32 addrspace(200)* %arrayidx)
+  ret i32 %call
+}
+
+; RANGE-CHECKER-LABEL:  define signext i32 @test3() local_unnamed_addr #0 {
+; RANGE-CHECKER-NEXT:  entry:
+; RANGE-CHECKER-NEXT:    %i = alloca i32, align 4
+; RANGE-CHECKER-NEXT:    %0 = addrspacecast i32* %i to i8 addrspace(200)*
+; RANGE-CHECKER-NEXT:    %1 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %0, i64 4)
+; RANGE-CHECKER-NEXT:    %offs = getelementptr i8, i8 addrspace(200)* %1, i64 -4
+; RANGE-CHECKER-NEXT:    %2 = bitcast i8 addrspace(200)* %offs to i32 addrspace(200)*
+; RANGE-CHECKER-NEXT:    %call = call signext i32 @use_cap(i32 addrspace(200)* %2)
+; RANGE-CHECKER-NEXT:    ret i32 %call
 ; RANGE-CHECKER-NEXT:  }
 
 ; Function Attrs: argmemonly nounwind willreturn
@@ -92,6 +163,7 @@ declare i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) #2
 
 ; Function Attrs: nofree nounwind
 declare signext i32 @printf(i8* nocapture readonly, ...) local_unnamed_addr #3
+declare signext i32 @use_cap(i32 addrspace(200)*) local_unnamed_addr #3
 
 ; Function Attrs: argmemonly nounwind willreturn
 declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #1
