@@ -255,6 +255,21 @@ public:
     return DefaultConstrainedRounding;
   }
 
+  void setConstrainedFPFunctionAttr() {
+    assert(BB && "Must have a basic block to set any function attributes!");
+
+    Function *F = BB->getParent();
+    if (!F->hasFnAttribute(Attribute::StrictFP)) {
+      F->addFnAttr(Attribute::StrictFP);
+    }
+  }
+
+  void setConstrainedFPCallAttr(CallInst *I) {
+    if (!I->hasFnAttr(Attribute::StrictFP))
+      I->addAttribute(AttributeList::FunctionIndex, Attribute::StrictFP);
+    setConstrainedFPFunctionAttr();
+  }
+
   //===--------------------------------------------------------------------===//
   // RAII helpers.
   //===--------------------------------------------------------------------===//
@@ -1487,6 +1502,7 @@ public:
 
     CallInst *C = CreateIntrinsic(ID, {L->getType()},
                                   {L, R, RoundingV, ExceptV}, nullptr, Name);
+    setConstrainedFPCallAttr(C);
     setFPAttrs(C, FPMathTag, UseFMF);
     return C;
   }
@@ -2097,6 +2113,8 @@ public:
                           Name);
       break;
     }
+    setConstrainedFPCallAttr(C);
+
     if (isa<FPMathOperator>(C))
       setFPAttrs(C, FPMathTag, UseFMF);
     return C;
@@ -2253,6 +2271,8 @@ public:
                        ArrayRef<Value *> Args = None, const Twine &Name = "",
                        MDNode *FPMathTag = nullptr) {
     CallInst *CI = CallInst::Create(FTy, Callee, Args, DefaultOperandBundles);
+    if (IsFPConstrained)
+      setConstrainedFPCallAttr(CI);
     if (isa<FPMathOperator>(CI))
       setFPAttrs(CI, FPMathTag, FMF);
     return Insert(CI, Name);
@@ -2262,6 +2282,8 @@ public:
                        ArrayRef<OperandBundleDef> OpBundles,
                        const Twine &Name = "", MDNode *FPMathTag = nullptr) {
     CallInst *CI = CallInst::Create(FTy, Callee, Args, OpBundles);
+    if (IsFPConstrained)
+      setConstrainedFPCallAttr(CI);
     if (isa<FPMathOperator>(CI))
       setFPAttrs(CI, FPMathTag, FMF);
     return Insert(CI, Name);
