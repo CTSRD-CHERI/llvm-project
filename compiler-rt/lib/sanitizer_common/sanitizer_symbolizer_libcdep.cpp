@@ -144,7 +144,7 @@ bool Symbolizer::GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
   const char *internal_module_name = nullptr;
   ModuleArch arch;
   if (!FindModuleNameAndOffsetForAddress(pc, &internal_module_name,
-                                         module_offset, &arch))
+                                         module_address, &arch))
     return false;
 
   if (module_name)
