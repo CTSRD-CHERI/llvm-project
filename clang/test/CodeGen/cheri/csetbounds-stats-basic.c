@@ -69,8 +69,8 @@ void* __capability csetbounds_malloc(void) {
 // JSON-NEXT: } }
 
 // CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
-// CSV-NEXT: 0,4096,s,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:19:28","CHERI range checker",""
-// CSV-NEXT: 2,4,s,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:24:28","CHERI range checker",""
-// CSV-NEXT: 0,16,h,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:43:26","CHERI range checker",""
+// CSV-NEXT: 0,4096,s,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:19:10","CHERI range checker",""
+// CSV-NEXT: 2,4,s,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:24:10","CHERI range checker",""
+// CSV-NEXT: 0,16,h,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:43:22","CHERI range checker",""
 // There should not be a header for the second write:
-// CSV-APPEND-NEXT: 0,4096,s,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:19:28","CHERI range checker",""
+// CSV-APPEND-NEXT: 0,4096,s,"{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:19:10","CHERI range checker",""
