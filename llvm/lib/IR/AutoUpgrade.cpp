@@ -931,7 +931,8 @@ GlobalVariable *llvm::UpgradeGlobalVariable(GlobalVariable *GV) {
   Constant *NewInit = ConstantArray::get(ArrayType::get(EltTy, N), NewCtors);
 
   return new GlobalVariable(NewInit->getType(), false, GV->getLinkage(),
-                            NewInit, GV->getName());
+                            NewInit, GV->getName(), GV->getThreadLocalMode(),
+                            GV->getAddressSpace());
 }
 
 // Handles upgrading SSE2/AVX2/AVX512BW PSLLDQ intrinsics by converting them
