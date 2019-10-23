@@ -88,12 +88,12 @@ static MCSubtargetInfo *createMipsMCSubtargetInfo(const Triple &TT,
 }
 
 static MCAsmInfo *createMipsMCAsmInfo(const MCRegisterInfo &MRI,
-                                      const Triple &TT) {
-  MCAsmInfo *MAI = new MipsMCAsmInfo(TT);
-  // FIXME: would be nice if we had a MCTargetOptions instance here instead of
-  // just the triple.
-  unsigned SP = MRI.getDwarfRegNum(
-      TT.getEnvironment() == Triple::CheriPurecap ? Mips::C11 : Mips::SP, true);
+                                      const Triple &TT,
+                                      const MCTargetOptions &Options) {
+  MCAsmInfo *MAI = new MipsMCAsmInfo(TT, Options);
+
+  const bool IsPurecap = TT.getEnvironment() == Triple::CheriPurecap || Options.ABIName == "purecap";
+  unsigned SP = MRI.getDwarfRegNum(IsPurecap ? Mips::C11 : Mips::SP, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfaRegister(nullptr, SP);
   MAI->addInitialFrameState(Inst);
 
