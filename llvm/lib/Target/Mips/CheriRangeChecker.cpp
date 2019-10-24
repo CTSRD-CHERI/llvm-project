@@ -43,10 +43,9 @@ class CheriRangeChecker : public FunctionPass,
     ValueSource ValueSrc;
     cheri::SetBoundsPointerSource Src = cheri::SetBoundsPointerSource::Unknown;
     bool operator!=(const AllocOperands &Other) {
-      return std::tie(Size, SizeMultiplier, ValueSrc.Base, ValueSrc.Offset, Src) !=
-             std::tie(Other.Size, Other.SizeMultiplier, Other.ValueSrc.Base,
-             Other.ValueSrc.Offset,
-                      Other.Src);
+      return Size != Other.Size || SizeMultiplier != Other.SizeMultiplier ||
+             ValueSrc.Base != Other.ValueSrc.Base ||
+             ValueSrc.Offset != Other.ValueSrc.Offset || Src != Other.Src;
     }
   };
   struct ConstantCast {
