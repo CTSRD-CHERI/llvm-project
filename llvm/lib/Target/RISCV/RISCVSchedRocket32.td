@@ -16,8 +16,8 @@ def Rocket32Model : SchedMachineModel {
   let IssueWidth = 1;        // 1 micro-ops are dispatched per cycle.
   let LoadLatency = 3;
   let MispredictPenalty = 3;
-  // FIXME: let CompleteModel = 1;
-  let CompleteModel = 0;
+  let CompleteModel = 1;
+  let UnsupportedFeatures = [HasStdExtV];
 }
 
 //===----------------------------------------------------------------------===//
