@@ -364,23 +364,27 @@ TargetInfo *AllocateTarget(const llvm::Triple &Triple,
     return new AMDGPUTargetInfo(Triple, Opts);
 
   case llvm::Triple::riscv32:
-    // TODO: add cases for NetBSD, RTEMS once tested.
+    // TODO: add cases for NetBSD once tested.
     switch (os) {
     case llvm::Triple::FreeBSD:
       return new FreeBSDTargetInfo<RISCV32TargetInfo>(Triple, Opts);
     case llvm::Triple::Linux:
       return new LinuxTargetInfo<RISCV32TargetInfo>(Triple, Opts);
+    case llvm::Triple::RTEMS:
+      return new RTEMSTargetInfo<RISCV32TargetInfo>(Triple, Opts);
     default:
       return new RISCV32TargetInfo(Triple, Opts);
     }
 
   case llvm::Triple::riscv64:
-    // TODO: add cases for NetBSD, RTEMS once tested.
+    // TODO: add cases for NetBSD once tested.
     switch (os) {
     case llvm::Triple::FreeBSD:
       return new FreeBSDTargetInfo<RISCV64TargetInfo>(Triple, Opts);
     case llvm::Triple::Linux:
       return new LinuxTargetInfo<RISCV64TargetInfo>(Triple, Opts);
+    case llvm::Triple::RTEMS:
+      return new RTEMSTargetInfo<RISCV64TargetInfo>(Triple, Opts);
     default:
       return new RISCV64TargetInfo(Triple, Opts);
     }
