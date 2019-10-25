@@ -5019,8 +5019,10 @@ void CodeGenFunction::EmitOMPTaskLoopBasedDirective(const OMPLoopDirective &S) {
       CGF.incrementProfileCounter(&S);
     }
 
-    if (isOpenMPSimdDirective(S.getDirectiveKind()))
+    if (isOpenMPSimdDirective(S.getDirectiveKind())) {
       CGF.EmitOMPSimdInit(S);
+      (void)CGF.EmitOMPLinearClauseInit(S);
+    }
 
     OMPPrivateScope LoopScope(CGF);
     // Emit helper vars inits.
@@ -5038,6 +5040,7 @@ void CodeGenFunction::EmitOMPTaskLoopBasedDirective(const OMPLoopDirective &S) {
     mapParam(CGF, cast<DeclRefExpr>(S.getIsLastIterVariable()), *LIP,
              LoopScope);
     CGF.EmitOMPPrivateLoopCounters(S, LoopScope);
+    CGF.EmitOMPLinearClause(S, LoopScope);
     bool HasLastprivateClause = CGF.EmitOMPLastprivateClauseInit(S, LoopScope);
     (void)LoopScope.Privatize();
     // Emit the loop iteration variable.
@@ -5075,6 +5078,11 @@ void CodeGenFunction::EmitOMPTaskLoopBasedDirective(const OMPLoopDirective &S) {
               CGF.GetAddrOfLocalVar(*LIP), /*Volatile=*/false,
               (*LIP)->getType(), S.getBeginLoc())));
     }
+    CGF.EmitOMPLinearClauseFinal(S, [LIP, &S](CodeGenFunction &CGF) {
+      return CGF.Builder.CreateIsNotNull(
+          CGF.EmitLoadOfScalar(CGF.GetAddrOfLocalVar(*LIP), /*Volatile=*/false,
+                               (*LIP)->getType(), S.getBeginLoc()));
+    });
   };
   auto &&TaskGen = [&S, SharedsTy, CapturedStruct,
                     IfCond](CodeGenFunction &CGF, llvm::Function *OutlinedFn,
@@ -5146,6 +5154,22 @@ void CodeGenFunction::EmitOMPParallelMasterTaskLoopDirective(
                                             S.getBeginLoc());
   };
   emitCommonOMPParallelDirective(*this, S, OMPD_master_taskloop, CodeGen,
+                                 emitEmptyBoundParameters);
+}
+
+void CodeGenFunction::EmitOMPParallelMasterTaskLoopSimdDirective(
+    const OMPParallelMasterTaskLoopSimdDirective &S) {
+  auto &&CodeGen = [this, &S](CodeGenFunction &CGF, PrePostActionTy &Action) {
+    auto &&TaskLoopCodeGen = [&S](CodeGenFunction &CGF,
+                                  PrePostActionTy &Action) {
+      Action.Enter(CGF);
+      CGF.EmitOMPTaskLoopBasedDirective(S);
+    };
+    OMPLexicalScope Scope(CGF, S, OMPD_parallel, /*EmitPreInitStmt=*/false);
+    CGM.getOpenMPRuntime().emitMasterRegion(CGF, TaskLoopCodeGen,
+                                            S.getBeginLoc());
+  };
+  emitCommonOMPParallelDirective(*this, S, OMPD_master_taskloop_simd, CodeGen,
                                  emitEmptyBoundParameters);
 }
 
