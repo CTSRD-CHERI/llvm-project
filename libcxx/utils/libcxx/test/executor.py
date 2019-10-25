@@ -202,10 +202,16 @@ class RemoteExecutor(Executor):
                 srcs.extend(file_deps)
                 dsts.extend(dev_paths)
             self.copy_in(srcs, dsts)
+
+            # When testing executables that were cross-compiled on Windows for
+            # Linux, we may need to explicitly set the execution permission to
+            # avoid the 'Permission denied' error:
+            chmod_cmd = ['chmod', '+x', target_exe_path]
+
             # TODO(jroelofs): capture the copy_in and delete_remote commands,
             # and conjugate them with '&&'s around the first tuple element
             # returned here:
-            (remote_cmd, out, err, rc) = self._execute_command_remote(cmd, target_cwd, env)
+            (remote_cmd, out, err, rc) = self._execute_command_remote(chmod_cmd + ['&&'] + cmd, target_cwd, env)
             self.keep_test = rc != 0
             return remote_cmd, out, err, rc
         finally:
@@ -271,10 +277,13 @@ class SSHExecutor(RemoteExecutor):
         ssh_cmd = self.ssh_command + ['-tt', '-oBatchMode=yes', remote]
         # FIXME: doesn't handle spaces... and Py2.7 doesn't have shlex.quote()
         if env:
-            env_cmd = ['env'] + ['%s="%s"' % (k, v) for k, v in env.items()]
+            export_cmd = \
+                ['export'] + [pipes.quote('%s=%s' % (k, v)) for k, v in env.items()]
         else:
-            env_cmd = []
-        remote_cmd = ' '.join(map(pipes.quote, env_cmd + cmd))
+            export_cmd = []
+        remote_cmd = ' '.join(map(pipes.quote, cmd))
+        if export_cmd:
+            remote_cmd = ' '.join(map(pipes.quote, export_cmd)) + ' && ' + remote_cmd
         if remote_work_dir != '.':
             remote_cmd = 'cd ' + pipes.quote(remote_work_dir) + ' && ' + remote_cmd
         if self.config and self.config.lit_config.debug:
