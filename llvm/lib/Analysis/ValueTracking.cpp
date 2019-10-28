@@ -344,12 +344,20 @@ static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
       IsZero = Constant->isNullValue();
     return Purecap || IsZero;
   } else if (const auto *CE = dyn_cast<ConstantExpr>(V)) {
-    if (CE->getOpcode() == Instruction::CastOps::IntToPtr) {
+    if (CE->getOpcode() == Instruction::IntToPtr) {
       // IntToPtr returns untagged values in the pure capability ABI
       bool Purecap = DL && isCheriPointer(DL->getAllocaAddrSpace(), DL);
       DEBUG_TAG("is constant inttoptr in" << (Purecap ? "purecap" : "hybrid")
                                           << " ABI -> " << Purecap);
       return Purecap;
+    } else if (CE->getOpcode() == Instruction::GetElementPtr) {
+      if (CE->getOperand(0)->isNullValue()) {
+        DEBUG_TAG("GEP on NULL -> true");
+        return true;
+      } else {
+        DEBUG_TAG("GEP on non-NULL value -> false");
+        return false;
+      }
     }
     DEBUG_TAG("unknown constantexpr -> false");
     return false;
