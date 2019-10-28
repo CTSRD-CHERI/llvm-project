@@ -5082,9 +5082,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   // XXXAR: disallow __sync builtins with capabilities for now
   // It would result in incorrect code generation because we would end up
   // using the _16 versions and generating i256 in the IR
-  bool IsCapabilityAtomicOp = false;
   if (pointerType->getPointeeType()->isCHERICapabilityType(Context)) {
-    IsCapabilityAtomicOp = true;
     switch (FDecl->getBuiltinID()) {
     case Builtin::BI__sync_bool_compare_and_swap:
     case Builtin::BI__sync_val_compare_and_swap:
