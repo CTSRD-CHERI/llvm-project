@@ -2759,8 +2759,9 @@ void SelectionDAGBuilder::visitInvoke(const InvokeInst &I) {
 
   // Deopt bundles are lowered in LowerCallSiteWithDeoptBundle, and we don't
   // have to do anything here to lower funclet bundles.
-  assert(!I.hasOperandBundlesOtherThan(
-             {LLVMContext::OB_deopt, LLVMContext::OB_funclet}) &&
+  assert(!I.hasOperandBundlesOtherThan({LLVMContext::OB_deopt,
+                                        LLVMContext::OB_funclet,
+                                        LLVMContext::OB_cfguardtarget}) &&
          "Cannot lower invokes with arbitrary operand bundles yet!");
 
   const Value *Callee(I.getCalledValue());
@@ -3574,7 +3575,7 @@ void SelectionDAGBuilder::visitShuffleVector(const User &I) {
     // Canonical splat form of first element of first input vector.
     SDValue FirstElt = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL,
                                    SrcVT.getScalarType(), Src1,
-                                   DAG.getConstant(0, DL, 
+                                   DAG.getConstant(0, DL,
                                    TLI.getVectorIdxTy(DAG.getDataLayout())));
     setValue(&I, DAG.getNode(ISD::SPLAT_VECTOR, DL, VT, FirstElt));
     return;
@@ -7221,6 +7222,18 @@ void SelectionDAGBuilder::LowerCallTo(ImmutableCallSite CS, SDValue Callee,
       isTailCall = false;
   }
 
+  // If call site has a cfguardtarget operand bundle, create and add an
+  // additional ArgListEntry.
+  if (auto Bundle = CS.getOperandBundle(LLVMContext::OB_cfguardtarget)) {
+    TargetLowering::ArgListEntry Entry;
+    Value *V = Bundle->Inputs[0];
+    SDValue ArgNode = getValue(V);
+    Entry.Node = ArgNode;
+    Entry.Ty = V->getType();
+    Entry.IsCFGuardTarget = true;
+    Args.push_back(Entry);
+  }
+
   // Check if target-independent constraints permit a tail call here.
   // Target-dependent constraints are checked within TLI->LowerCallTo.
   if (isTailCall && !isInTailCallPosition(CS, DAG.getTarget()))
@@ -7769,8 +7782,10 @@ void SelectionDAGBuilder::visitCall(const CallInst &I) {
 
   // Deopt bundles are lowered in LowerCallSiteWithDeoptBundle, and we don't
   // have to do anything here to lower funclet bundles.
-  assert(!I.hasOperandBundlesOtherThan(
-             {LLVMContext::OB_deopt, LLVMContext::OB_funclet}) &&
+  // CFGuardTarget bundles are lowered in LowerCallTo.
+  assert(!I.hasOperandBundlesOtherThan({LLVMContext::OB_deopt,
+                                        LLVMContext::OB_funclet,
+                                        LLVMContext::OB_cfguardtarget}) &&
          "Cannot lower calls with arbitrary operand bundles!");
 
   SDValue Callee = getValue(I.getCalledValue());
@@ -9120,6 +9135,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     Entry.IsReturned = false;
     Entry.IsSwiftSelf = false;
     Entry.IsSwiftError = false;
+    Entry.IsCFGuardTarget = false;
     Entry.Alignment = Align;
     CLI.getArgs().insert(CLI.getArgs().begin(), Entry);
     CLI.NumFixedArgs += 1;
@@ -9236,6 +9252,8 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
         Flags.setSwiftSelf();
       if (Args[i].IsSwiftError)
         Flags.setSwiftError();
+      if (Args[i].IsCFGuardTarget)
+        Flags.setCFGuardTarget();
       if (Args[i].IsByVal && !isArgCHERICapability)
         Flags.setByVal();
       if (Args[i].IsInAlloca) {

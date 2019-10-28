@@ -1592,6 +1592,10 @@ bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
   if (F && F->hasDLLImportStorageClass())
     return false;
 
+  // FIXME: support control flow guard targets.
+  if (CI.countOperandBundlesOfType(LLVMContext::OB_cfguardtarget))
+    return false;
+
   if (CI.isInlineAsm())
     return translateInlineAsm(CI, MIRBuilder);
 
@@ -1683,6 +1687,10 @@ bool IRTranslator::translateInvoke(const User &U,
 
   // FIXME: support whatever these are.
   if (I.countOperandBundlesOfType(LLVMContext::OB_deopt))
+    return false;
+
+  // FIXME: support control flow guard targets.
+  if (I.countOperandBundlesOfType(LLVMContext::OB_cfguardtarget))
     return false;
 
   // FIXME: support Windows exception handling.
