@@ -29,27 +29,27 @@ using namespace llvm;
 using std::pair;
 
 namespace {
+// Operands for an allocation.  Either one or two integers (constant or
+// variable).  If there are two, then they must be multiplied together.
+struct ValueSource {
+  ValueSource() = default;
+  Value *Base = nullptr;
+  int64_t Offset = 0;
+};
+struct AllocOperands {
+  AllocOperands() = default;
+  Value *Size = nullptr;
+  Value *SizeMultiplier = nullptr;
+  ValueSource ValueSrc;
+  cheri::SetBoundsPointerSource Src = cheri::SetBoundsPointerSource::Unknown;
+  bool operator!=(const AllocOperands &Other) {
+    return Size != Other.Size || SizeMultiplier != Other.SizeMultiplier ||
+        ValueSrc.Base != Other.ValueSrc.Base ||
+        ValueSrc.Offset != Other.ValueSrc.Offset || Src != Other.Src;
+  }
+};
 class CheriRangeChecker : public FunctionPass,
                           public InstVisitor<CheriRangeChecker> {
-  // Operands for an allocation.  Either one or two integers (constant or
-  // variable).  If there are two, then they must be multiplied together.
-  struct ValueSource {
-    ValueSource() = default;
-    Value *Base = nullptr;
-    int64_t Offset = 0;
-  };
-  struct AllocOperands {
-    AllocOperands() = default;
-    Value *Size = nullptr;
-    Value *SizeMultiplier = nullptr;
-    ValueSource ValueSrc;
-    cheri::SetBoundsPointerSource Src = cheri::SetBoundsPointerSource::Unknown;
-    bool operator!=(const AllocOperands &Other) {
-      return Size != Other.Size || SizeMultiplier != Other.SizeMultiplier ||
-             ValueSrc.Base != Other.ValueSrc.Base ||
-             ValueSrc.Offset != Other.ValueSrc.Offset || Src != Other.Src;
-    }
-  };
   struct ConstantCast {
     Instruction *Instr;
     unsigned OpNo;
