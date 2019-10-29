@@ -60,7 +60,7 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   return t;
   // argument is split up into two cap regs, but return value is indirect
   // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret %agg.result, {{.*}}, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
-  // CHECK: [[VAR1:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in.coerce0, i64 1)
+  // CHECK: [[VAR1:%.+]] = getelementptr i8, i8 addrspace(200)* %in.coerce0, i64 1
   // CHECK: [[INTPTR_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 0
   // CHECK: store i8 addrspace(200)* [[VAR1]], i8 addrspace(200)* addrspace(200)* [[INTPTR_MEMBER]], align [[#CAP_SIZE]]
   // CHECK: [[CAP_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 1
@@ -71,7 +71,6 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csc     $c5, $zero, [[#CAP_SIZE]]($c3)
-
 }
 
 typedef union {

@@ -42,7 +42,7 @@ define i8 addrspace(200)* @fold_offset_get_add_set(i8 addrspace(200)* %arg) #1 {
   %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 %new_offset)
   ret i8 addrspace(200)* %ret
   ; CHECK-LABEL: @fold_offset_get_add_set(i8 addrspace(200)* %arg)
-  ; CHECK: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 22)
+  ; CHECK: [[RESULT:%.+]] = getelementptr i8, i8 addrspace(200)* %arg, i64 22
   ; CHECK: ret i8 addrspace(200)* [[RESULT]]
 }
 
@@ -71,7 +71,7 @@ define i8 addrspace(200)* @fold_addr_get_add_set(i8 addrspace(200)* %arg) #1 {
   %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %arg, i64 %new_offset)
   ret i8 addrspace(200)* %ret
   ; CHECK-LABEL: @fold_addr_get_add_set(i8 addrspace(200)* %arg)
-  ; CHECK: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 25)
+  ; CHECK: [[RESULT:%.+]] = getelementptr i8, i8 addrspace(200)* %arg, i64 25
   ; CHECK: ret i8 addrspace(200)* [[RESULT]]
 }
 

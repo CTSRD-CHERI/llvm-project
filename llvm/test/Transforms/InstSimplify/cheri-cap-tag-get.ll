@@ -50,7 +50,7 @@ define i1 @gettag_inttoptr(i8 addrspace(200)* %ptr) {
 
 define i1 @incoffset_nonnull(i8 addrspace(200)* %ptr) {
 ; CHECK-LABEL: @incoffset_nonnull(
-; CHECK-NEXT:    [[CLEARED:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* [[PTR:%.*]], i64 1)
+; CHECK-NEXT:    [[CLEARED:%.*]] = getelementptr i8, i8 addrspace(200)* %ptr, i64 1
 ; CHECK-NEXT:    [[TAG:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[CLEARED]])
 ; CHECK-NEXT:    ret i1 [[TAG]]
 ;

@@ -1421,9 +1421,6 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
     }
     break;
   }
-  case Intrinsic::cheri_cap_offset_increment: {
-    return performCIncOffsetToCandAddrCombine(N, DAG, DCI, Subtarget);
-  }
   case Intrinsic::cheri_round_representable_length: {
     if (Subtarget.isCheri256())
       return N->getOperand(1);

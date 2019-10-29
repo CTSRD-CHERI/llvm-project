@@ -323,10 +323,12 @@ def CGetFlags  : CheriFmtCGet<0x12, "flags">;
 // Versions of property setters that take immediate operands
 // We allow CIncOffset $c1, 10 as an alias for CIncOffset $c1, $c1, 10, and the same for CSetBounds
 let TwoOperandAliasConstraint = "$cd = $cb" in {
-  def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
-  def CSetBoundsImm : CheriFmtCSetImm<0x14, uimm11s0, uimm11s0Pattern, "bounds">;
+  def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, "cincoffset",
+    [(set CheriOpnd:$cd, (ptradd CheriOpnd:$cb, (i64 simm11s0Pattern: $imm)))]>;
+  def CSetBoundsImm : CheriFmtCSetImm<0x14, uimm11s0, "csetbounds",
+    [(set CheriOpnd:$cd, (int_cheri_cap_bounds_set CheriOpnd:$cb, (i64 uimm11s0Pattern: $imm)))]>;
 }
-}
+} // end of isReMaterializable = 1, isAsCheapAsAMove = 1 block
 
 // Accept CIncOffsetImm as an assembler mnemonic because ancient binutils is too stupid to have an opcode
 // with differing encoding depending on the parameters
@@ -351,7 +353,9 @@ def CSetFlags  : CheriFmtCSet<0xe, "flags">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
 def CSetBounds : CheriFmtCSet<0x8, "bounds">;
 def CSetBoundsExact : CheriFmtCSet<0x9, "boundsexact", "bounds", "set", "set_exact">;
-def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
+def CIncOffset : CheriFmt3Op<0x11, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
+                            "cincoffset\t$r1, $r2, $r3",
+                            [(set CheriOpnd:$r1, (ptradd CheriOpnd:$r2, GPR64Opnd:$r3))]>;
 def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
                               "ccleartag\t$r1, $r2",
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
@@ -372,7 +376,7 @@ def : InstAlias<"crrl $dst, $len", (CRRL GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
 def : InstAlias<"cram $dst, $len", (CRAM GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
 
 // Convert CIncOffsets of the difference to csetaddr
-def : Pat<(CapRegType (int_cheri_cap_offset_increment CheriOpnd:$src, (sub GPR64Opnd:$addr, (int_cheri_cap_address_get CheriOpnd:$src)))),
+def : Pat<(CapRegType (ptradd CheriOpnd:$src, (sub GPR64Opnd:$addr, (int_cheri_cap_address_get CheriOpnd:$src)))),
           (CSetAddr $src, $addr)>;
 
 let isMoveReg = 1 in {
@@ -467,11 +471,9 @@ def CAndAddr : CheriFmt3Op<0x24, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64
 // Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason
 multiclass UseCNullPatterns<PatFrag NullPat> {
   def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
-  def : Pat<(int_cheri_cap_offset_increment NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_offset_set NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   // The immediate versions should be used first!
   let AddedComplexity = 10 in {
-    def : Pat<(int_cheri_cap_offset_increment NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
     def : Pat<(int_cheri_cap_offset_set NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
     def : Pat<(int_cheri_cap_address_set NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
   }

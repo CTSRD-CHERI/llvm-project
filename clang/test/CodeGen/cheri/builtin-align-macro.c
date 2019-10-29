@@ -116,14 +116,10 @@ int* align_up_inline(int* ptr, vaddr_t align) {
 // PURECAP-NEXT:    [[SUB:%.*]] = add nsw i64 [[ALIGN:%.*]], -1
 // PURECAP-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[SUB]]
 // PURECAP-NEXT:    [[CMP:%.*]] = icmp eq i64 [[AND]], 0
-// PURECAP-NEXT:    br i1 [[CMP]], label [[COND_END:%.*]], label [[COND_FALSE:%.*]]
-// PURECAP:       cond.false:
 // PURECAP-NEXT:    [[SUB1:%.*]] = sub nsw i64 [[ALIGN]], [[AND]]
-// PURECAP-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* [[TMP0]], i64 [[SUB1]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP0]], i64 [[SUB1]]
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
-// PURECAP-NEXT:    br label [[COND_END]]
-// PURECAP:       cond.end:
-// PURECAP-NEXT:    [[COND:%.*]] = phi i32 addrspace(200)* [ [[TMP3]], [[COND_FALSE]] ], [ [[PTR]], [[ENTRY:%.*]] ]
+// PURECAP-NEXT:    [[COND:%.*]] = select i1 [[CMP]], i32 addrspace(200)* [[PTR]], i32 addrspace(200)* [[TMP3]]
 // PURECAP-NEXT:    ret i32 addrspace(200)* [[COND]]
 //
 // HYBRID-LABEL: @align_up_macro(

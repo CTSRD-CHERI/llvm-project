@@ -144,7 +144,6 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
     case Intrinsic::cheri_cap_length_get:
     case Intrinsic::cheri_cap_load_tags:
     case Intrinsic::cheri_cap_offset_get:
-    case Intrinsic::cheri_cap_offset_increment:
     case Intrinsic::cheri_cap_offset_set:
     case Intrinsic::cheri_cap_perms_and:
     case Intrinsic::cheri_cap_perms_check:

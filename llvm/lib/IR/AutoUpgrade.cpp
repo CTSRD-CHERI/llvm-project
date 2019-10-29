@@ -598,6 +598,10 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
                                         F->arg_begin()->getType());
       return true;
     }
+    if (Name.startswith("cheri.cap.offset.increment") && F->arg_size() == 2) {
+      NewFn = nullptr;
+      return true;
+    }
     break;
   }
   case 'd': {
@@ -3541,6 +3545,9 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
                                    F->getParent(), Intrinsic::convert_from_fp16,
                                    {Builder.getFloatTy()}),
                                CI->getArgOperand(0), "h2f");
+    } else if (!IsX86 && Name.startswith("cheri.cap.offset.increment")) {
+      Rep = Builder.CreateGEP(CI->getArgOperand(0), CI->getArgOperand(1));
+      Rep->takeName(CI);
     } else {
       llvm_unreachable("Unknown function for CallInst upgrade.");
     }

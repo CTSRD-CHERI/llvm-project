@@ -304,7 +304,6 @@ static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
     case Intrinsic::cheri_cap_tag_clear:
       DEBUG_TAG("ccleartag -> true");
       return true;
-    case Intrinsic::cheri_cap_offset_increment:
     case Intrinsic::cheri_cap_offset_set:
     case Intrinsic::cheri_cap_address_set:
     case Intrinsic::cheri_cap_perms_and:
@@ -1592,12 +1591,6 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
         // We can treat it the same as inttoptr:
         // The virtual address after csetaddr will be the second argument.
         computeKnownBits(I->getOperand(1), Known, Depth + 1, Q);
-        break;
-      }
-      case Intrinsic::cheri_cap_offset_increment: {
-        bool NSW = false;
-        computeKnownBitsAddSub(true, I->getOperand(0), I->getOperand(1), NSW,
-                               Known, Known2, Depth, Q);
         break;
       }
       case Intrinsic::cheri_cap_diff: {
@@ -3806,15 +3799,9 @@ llvm::getArgumentAliasingToReturnedPointer(const CallBase *Call,
 
 bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
     const CallBase *Call, bool MustPreserveNullness) {
-  // A CHERI inc-offset of zero aliases the input argument
-  if (Call->getIntrinsicID() == Intrinsic::cheri_cap_offset_increment) {
-    if (ConstantInt *C = dyn_cast<ConstantInt>(Call->getOperand(1))) {
-      return C->isZeroValue();
-    }
-  }
-  // NOTE: we can't return this for setbounds even though the resulting pointer
-  // aliases with the target, but it might not grant access to the last few
-  // bytes. If we return true here for setbounds, then GVN will remove some
+  // NOTE: we can't return true for setbounds even though the resulting pointer
+  // aliases with the target. It might not grant access to the last few bytes!
+  // If we return true here for setbounds, then GVN will remove some
   // loads that would have trapped at runtime. See cheri-intrinisics.ll test.
   return /* Call->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set ||
          Call->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set_exact ||

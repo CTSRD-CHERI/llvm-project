@@ -114,8 +114,6 @@ def int_cheri_pcc_get :
 // Offset-related intrinsics
 ////////////////////////////////////////////////////////////////////////////////
 
-def int_cheri_cap_offset_increment:
-  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_offset_set:
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_offset_get:

@@ -59,8 +59,7 @@ define i8 addrspace(200)* @null_set_offset_dynamic(i64 %arg) {
 
 define i8 addrspace(200)* @null_inc_offset_const() {
 ; IR-LABEL: @null_inc_offset_const(
-; IR-NEXT:    [[RET:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 42)
-; IR-NEXT:    ret i8 addrspace(200)* [[RET]]
+; IR-NEXT:    ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 42)
 ;
 ; CHECK-LABEL: null_inc_offset_const:
 ; CHECK:       # %bb.0:
@@ -72,7 +71,7 @@ define i8 addrspace(200)* @null_inc_offset_const() {
 
 define i8 addrspace(200)* @null_inc_offset_dynamic(i64 %arg) {
 ; IR-LABEL: @null_inc_offset_dynamic(
-; IR-NEXT:    [[RET:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 %arg)
+; IR-NEXT:    [[RET:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 %arg
 ; IR-NEXT:    ret i8 addrspace(200)* [[RET]]
 ;
 ; CHECK-LABEL: null_inc_offset_dynamic:
