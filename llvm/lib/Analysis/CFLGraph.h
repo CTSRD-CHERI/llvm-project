@@ -315,7 +315,7 @@ template <typename CFLAA> class CFLGraphBuilder {
 
     void visitGEP(GEPOperator &GEPOp) {
       uint64_t Offset = UnknownOffset;
-      APInt APOffset(DL.getPointerSizeInBits(GEPOp.getPointerAddressSpace()),
+      APInt APOffset(DL.getIndexSizeInBits(GEPOp.getPointerAddressSpace()),
                      0);
       if (GEPOp.accumulateConstantOffset(DL, APOffset))
         Offset = APOffset.getSExtValue();
