@@ -1405,6 +1405,20 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
     // to determine if we can prove known low zero bits.
     KnownBits LocalKnown(BitWidth);
     computeKnownBits(I->getOperand(0), LocalKnown, Depth + 1, Q);
+
+    const auto *GEP = cast<GEPOperator>(I);
+    if (GEP->hasAllConstantIndices()) {
+      // If the GEP indices are all constant we can treat this as an add
+      APInt GEPOffset(Q.DL.getIndexSizeInBits(GEP->getPointerAddressSpace()), 0);
+      if (GEP->accumulateConstantOffset(Q.DL, GEPOffset)) {
+        Known2.One = GEPOffset;
+        Known2.Zero = ~GEPOffset;
+        Known = KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
+                                            LocalKnown, Known2);
+        break;
+      }
+    }
+
     unsigned TrailZ = LocalKnown.countMinTrailingZeros();
 
     gep_type_iterator GTI = gep_type_begin(I);
