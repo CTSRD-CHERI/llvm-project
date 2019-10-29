@@ -374,6 +374,8 @@ class RunCreduce(ReduceTool):
             creduce.append("--print-diff")
         print("About to run", creduce)
         try:
+            # work around https://github.com/csmith-project/creduce/issues/195 for released versions of creduce
+            shutil.copy(str(input_file), str(Path(tempdir, input_file.name)))
             run(creduce, cwd=tempdir)
         except KeyboardInterrupt:
             print(red("\nCTRL+C detected, stopping creduce.", style="bold"))
