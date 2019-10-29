@@ -108,7 +108,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
     foldGet(M, Intrinsic::cheri_cap_type_get, {CapSizeTy}, inferOther, -1);
   }
 
-  static Constant* getIntToPtrSourceValue(Value* V) {
+  Constant* getIntToPtrSourceValue(Value* V) {
     if (ConstantExpr* CE = dyn_cast<ConstantExpr>(V)) {
       if (CE->isCast() && CE->getOpcode() == Instruction::IntToPtr) {
         assert(CE->getNumOperands() == 1);
@@ -116,7 +116,16 @@ class CHERICapFoldIntrinsics : public ModulePass {
         return Src;
       } else if (CE->getOpcode() == Instruction::GetElementPtr && CE->getOperand(0)->isNullValue()) {
         // GEP on null is the same as inttoptr:
-        return CE->getOperand(1);
+        auto GEP = cast<GEPOperator>(CE);
+        APInt Offset(CapSizeTy->getIntegerBitWidth(), 0, true);
+        if (GEP->accumulateConstantOffset(*DL, Offset)) {
+          return ConstantInt::get(CapSizeTy, Offset);
+        } else if (GEP->getNumIndices() == 1 && GEP->getOperand(1)->getType() == CapSizeTy) {
+          // also handle non-constant GEPs:
+          // XXXAR: not sure this is always profitable...
+          if (GEP->getOperand(1)->getType() == CapSizeTy)
+            return cast<Constant>(GEP->getOperand(1));
+        }
       }
     }
     return nullptr;
@@ -171,14 +180,14 @@ class CHERICapFoldIntrinsics : public ModulePass {
       }
     } else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V)) {
       *Arg = GEP->getOperand(0);
-      // XXXAR: do I need the inbounds check here?
       APInt Offset(CapSizeTy->getIntegerBitWidth(), 0, true);
       if (GEP->accumulateConstantOffset(*DL, Offset)) {
         return ConstantInt::get(CapSizeTy, Offset);
-      } else if (GEP->getOperand(1)->getType() == CapSizeTy) {
+      } else if (GEP->getNumIndices() == 1 && GEP->getOperand(1)->getType() == CapSizeTy) {
         // also handle non-constant GEPs:
         // XXXAR: not sure this is always profitable...
-        return GEP->getOperand(1);
+        if (GEP->getOperand(1)->getType() == CapSizeTy)
+          return GEP->getOperand(1);
       }
     }
     return nullptr;
