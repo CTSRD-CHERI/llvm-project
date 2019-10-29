@@ -2566,7 +2566,13 @@ public:
   /// not legal, but should return true if those types will eventually legalize
   /// to types that support FMAs. After legalization, it will only be called on
   /// types that support FMAs (via Legal or Custom actions)
-  virtual bool isFMAFasterThanFMulAndFAdd(EVT) const {
+  virtual bool isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
+                                          EVT) const {
+    return false;
+  }
+
+  /// IR version
+  virtual bool isFMAFasterThanFMulAndFAdd(const Function &F, Type *) const {
     return false;
   }
 

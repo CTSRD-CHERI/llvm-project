@@ -14947,7 +14947,8 @@ bool PPCTargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
   return true;
 }
 
-bool PPCTargetLowering::isFMAFasterThanFMulAndFAdd(EVT VT) const {
+bool PPCTargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
+                                                   EVT VT) const {
   VT = VT.getScalarType();
 
   if (!VT.isSimple())
