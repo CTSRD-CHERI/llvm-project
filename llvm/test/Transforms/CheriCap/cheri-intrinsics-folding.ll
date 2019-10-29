@@ -1,12 +1,12 @@
-; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o %t.ll
+; RUN: %cheri_opt -S -cheri-fold-intrisics -instcombine %s -o %t.ll
 ; RUN: FileCheck %s -input-file %t.ll
 ; Check that the dynamic GEP is folded properly
 ; RUN: %cheri_llc -O2 %t.ll -o - | FileCheck %s -check-prefix DYNAMIC-GEP-ASM
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
-declare i64 @check_fold(i64) #1
-declare i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)*) #1
+declare i64 @check_fold(i64)
+declare i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)*)
 
 declare i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)*) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.base.set(i8 addrspace(200)*, i64) #1
@@ -78,8 +78,7 @@ define i64 @null_get_sealed() #1 {
   %ret.ext = zext i1 %ret to i64
   ret i64 %ret.ext
   ; CHECK-LABEL: @null_get_sealed()
-  ; CHECK-NEXT: %ret.ext = zext i1 false to i64
-  ; CHECK-NEXT: ret i64 %ret.ext
+  ; CHECK-NEXT: ret i64 0
 }
 
 define i64 @null_get_tag() #1 {
@@ -87,8 +86,7 @@ define i64 @null_get_tag() #1 {
   %ret.ext = zext i1 %ret to i64
   ret i64 %ret.ext
   ; CHECK-LABEL: @null_get_tag()
-  ; CHECK-NEXT: %ret.ext = zext i1 false to i64
-  ; CHECK-NEXT: ret i64 %ret.ext
+  ; CHECK-NEXT: ret i64 0
 }
 
 define void @infer_values_from_null_set_offset() #1 {
@@ -118,8 +116,7 @@ define void @infer_values_from_null_set_offset() #1 {
   %sealed = tail call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %with_offset)
   %sealed.ext = zext i1 %sealed to i64
   %sealed_check = tail call i64 @check_fold(i64 %sealed.ext)
-  ; CHECK:  %sealed.ext = zext i1 false to i64
-  ; CHECK:  %sealed_check = tail call i64 @check_fold(i64 %sealed.ext)
+  ; CHECK:  %sealed_check = tail call i64 @check_fold(i64 0)
 
   %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %with_offset)
   %perms_check = tail call i64 @check_fold(i64 %perms)
@@ -132,8 +129,7 @@ define void @infer_values_from_null_set_offset() #1 {
   %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
   %tag.ext = zext i1 %tag to i64
   %tag_check = tail call i64 @check_fold(i64 %tag.ext)
-  ; CHECK:  %tag.ext = zext i1 false to i64
-  ; CHECK:  %tag_check = tail call i64 @check_fold(i64 %tag.ext)
+  ; CHECK:  %tag_check = tail call i64 @check_fold(i64 0)
 
   ret void
   ; CHECK: ret void
@@ -166,8 +162,7 @@ define void @infer_values_from_null_set_address() #1 {
   %sealed = tail call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %with_offset)
   %sealed.ext = zext i1 %sealed to i64
   %sealed_check = tail call i64 @check_fold(i64 %sealed.ext)
-  ; CHECK:  %sealed.ext = zext i1 false to i64
-  ; CHECK:  %sealed_check = tail call i64 @check_fold(i64 %sealed.ext)
+  ; CHECK:  %sealed_check = tail call i64 @check_fold(i64 0)
 
   %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %with_offset)
   %perms_check = tail call i64 @check_fold(i64 %perms)
@@ -180,8 +175,7 @@ define void @infer_values_from_null_set_address() #1 {
   %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
   %tag.ext = zext i1 %tag to i64
   %tag_check = tail call i64 @check_fold(i64 %tag.ext)
-  ; CHECK:  %tag.ext = zext i1 false to i64
-  ; CHECK:  %tag_check = tail call i64 @check_fold(i64 %tag.ext)
+  ; CHECK:  %tag_check = tail call i64 @check_fold(i64 0)
 
   ret void
   ; CHECK: ret void
@@ -194,17 +188,17 @@ define void @infer_values_from_arg_set_address(i8 addrspace(200)* %arg) #1 {
 
   %base = tail call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* %with_offset)
   %base_check = tail call i64 @check_fold(i64 %base)
-  ; CHECK: %base = tail call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %base = tail call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %base_check = tail call i64 @check_fold(i64 %base)
 
   %length = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* %with_offset)
   %length_check = tail call i64 @check_fold(i64 %length)
-  ; CHECK: %length = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %length = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %length_check = tail call i64 @check_fold(i64 %length)
 
   %offset = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %with_offset)
   %offset_check = tail call i64 @check_fold(i64 %offset)
-  ; CHECK: %offset = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %offset = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %offset_check = tail call i64 @check_fold(i64 %offset)
 
   %address = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %with_offset)
@@ -214,30 +208,30 @@ define void @infer_values_from_arg_set_address(i8 addrspace(200)* %arg) #1 {
 
   %type = tail call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* %with_offset)
   %type_check = tail call i64 @check_fold(i64 %type)
-  ; CHECK: %type = tail call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %type = tail call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %type_check = tail call i64 @check_fold(i64 %type)
 
   %sealed = tail call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %with_offset)
   %sealed.ext = zext i1 %sealed to i64
   %sealed_check = tail call i64 @check_fold(i64 %sealed.ext)
-  ; CHECK: %sealed = tail call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %with_offset)
+  ; CHECK: %sealed = tail call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %sealed.ext = zext i1 %sealed to i64
   ; CHECK: %sealed_check = tail call i64 @check_fold(i64 %sealed.ext)
 
   %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %with_offset)
   %perms_check = tail call i64 @check_fold(i64 %perms)
-  ; CHECK: %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %perms_check = tail call i64 @check_fold(i64 %perms)
 
   %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
   %flags_check = tail call i64 @check_fold(i64 %flags)
-  ; CHECK: %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %flags_check = tail call i64 @check_fold(i64 %flags)
 
   %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
   %tag.ext = zext i1 %tag to i64
   %tag_check = tail call i64 @check_fold(i64 %tag.ext)
-  ; CHECK: %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
+  ; CHECK: %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %tag.ext = zext i1 %tag to i64
   ; CHECK: %tag_check = tail call i64 @check_fold(i64 %tag.ext)
 
@@ -340,7 +334,7 @@ define i64 @no_fold_set_offset_get_tag(i8 addrspace(200)* %arg) #1 {
   ; Since the value might be unrepresentable after setting the address we can't infer the tag:
   ; CHECK-LABEL: @no_fold_set_offset_get_tag(i8 addrspace(200)* %arg)
   ; CHECK: %with_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %arg, i64 42)
-  ; CHECK: %ret = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
+  ; CHECK: %ret = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: %ret.ext = zext i1 %ret to i64
   ; CHECK: ret i64 %ret.ext
 }
@@ -419,7 +413,7 @@ define i64 @fold_set_addr_and_inc_offset_get_offset(i8 addrspace(200)* %arg) #1 
   ret i64 %ret
   ; CHECK-LABEL: @fold_set_addr_and_inc_offset_get_offset(i8 addrspace(200)* %arg)
   ; CHECK: %with_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %arg, i64 142)
-  ; CHECK: %ret = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %ret = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull %with_offset)
   ; CHECK: ret i64 %ret
 }
 
@@ -462,8 +456,7 @@ define i64 @fold_tag_get_inttoptr() #1 {
   %ret.ext = zext i1 %ret to i64
   ret i64 %ret.ext
   ; CHECK-LABEL: @fold_tag_get_inttoptr()
-  ; CHECK: %ret.ext = zext i1 false to i64
-  ; CHECK: ret i64 %ret.ext
+  ; CHECK: ret i64 0
 }
 
 define i64 @fold_type_get_inttoptr() #1 {
@@ -526,7 +519,6 @@ entry:
 }
 
 define i8 addrspace(200)* @fold_set_inc_gep_sequence_arg(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
-entry:
   %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 100)
   %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %set, i64 -4
   %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
@@ -534,11 +526,10 @@ entry:
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %gep3, i64 -10)
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_inc_gep_sequence_arg(i8 addrspace(200)* %arg)
-  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 80)
+  ; CHECK-NEXT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 80)
 }
 
 define i8 addrspace(200)* @fold_set_addr_inc_gep_sequence_arg(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
-entry:
   %set = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %arg, i64 100)
   %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %set, i64 -4
   %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
@@ -546,8 +537,8 @@ entry:
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %gep3, i64 -10)
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_addr_inc_gep_sequence_arg(i8 addrspace(200)* %arg)
-  ; CHECK: %set = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %arg, i64 80)
-  ; CHECK: ret i8 addrspace(200)* %set
+  ; CHECK-NEXT: %set = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %arg, i64 80)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %set
 }
 
 define i8 addrspace(200)* @fold_inc_gep_sequence_null() local_unnamed_addr #1 {
@@ -557,24 +548,24 @@ define i8 addrspace(200)* @fold_inc_gep_sequence_null() local_unnamed_addr #1 {
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %gep2, i64 -10)
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_inc_gep_sequence_null()
-  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 82)
+  ; CHECK-NEXT: ret i8 addrspace(200)* inttoptr (i64 82 to i8 addrspace(200)*)
 }
 
 define i8 addrspace(200)* @fold_inc_gep_sequence_arg(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
-entry:
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 100)
-  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 -4
+  %inc1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 100)
+  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %inc1, i64 -4
   %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
-  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %gep2, i64 -10)
-  ret i8 addrspace(200)* %inc
+  %inc2 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %gep2, i64 -10)
+  ret i8 addrspace(200)* %inc2
   ; CHECK-LABEL: @fold_inc_gep_sequence_arg(i8 addrspace(200)* %arg)
-  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 82)
+  ; CHECK-NEXT: %inc2 = getelementptr i8, i8 addrspace(200)* %arg, i64 82
+  ; CHECK-NEXT: ret i8 addrspace(200)* %inc2
 }
 
 define i8 addrspace(200)* @fold_gep_incoffset(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
-entry:
   ; CHECK-LABEL: @fold_gep_incoffset(i8 addrspace(200)* %arg)
-  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 96)
+  ; CHECK: %gep = getelementptr inbounds i8, i8 addrspace(200)* %arg, i64 96
+  ; CHECK: ret i8 addrspace(200)* %gep
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 100)
   %gep = getelementptr inbounds i8, i8 addrspace(200)* %inc, i64 -4
   ret i8 addrspace(200)* %gep
@@ -582,7 +573,6 @@ entry:
 
 ; TODO: Order of GEP vs incoffset should not matter:
 define i8 addrspace(200)* @fold_gep_incoffset2(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
-entry:
   ; CHECK-LABEL: @fold_gep_incoffset2(i8 addrspace(200)* %arg)
   ; CHECK-NOT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 96)
   %gep = getelementptr inbounds i8, i8 addrspace(200)* %arg, i64 -4
@@ -590,23 +580,16 @@ entry:
   ret i8 addrspace(200)* %inc
 }
 
-; TODO: this can't be folded into adds since it breaks the IR
-; I'm also not sure it makes sense anyway since CIncOffset and add are the same
+; Fold this into setoffset increment+90
 define i8 addrspace(200)* @fold_set_dynamic_gep_arg(i8 addrspace(200)* %arg, i64 %increment) local_unnamed_addr #1 {
-entry:
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 100)
-  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %increment
+  %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 100)
+  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %set, i64 %increment
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %gep1, i64 -10)
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_dynamic_gep_arg(i8 addrspace(200)* %arg, i64 %increment)
-  ; NOCHECK:      %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 100)
-  ; NOCHECK-NEXT: %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %increment
-  ; NOCHECK-NEXT: %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %gep1, i64 -10)
-  ; NOCHECK-NEXT: ret i8 addrspace(200)* %inc
-  ; CHECK: [[ADD:%.+]] = add i64 100, %increment
-  ; CHECK: [[NEW_OFFSET:%.+]] = add i64 [[ADD]], -10
-  ; CHECK: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 [[NEW_OFFSET]])
-  ; CHECK: ret i8 addrspace(200)* [[RESULT]]
+  ; CHECK-NEXT: [[NEW_OFFSET:%.+]] = add i64 %increment, 90
+  ; CHECK-NEXT: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 [[NEW_OFFSET]])
+  ; CHECK-NEXT: ret i8 addrspace(200)* [[RESULT]]
   ; DYNAMIC-GEP-ASM-LABEL: fold_set_dynamic_gep_arg
   ; DYNAMIC-GEP-ASM:       daddiu  $1, $4, 90
   ; DYNAMIC-GEP-ASM-NEXT:  jr      $ra
@@ -618,8 +601,8 @@ define i8 addrspace(200)* @fold_null_setaddr_zero() #1 {
   %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
   ret i8 addrspace(200)* %ret
   ; CHECK-LABEL: @fold_null_setaddr_zero()
-  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
-  ; CHECK: ret i8 addrspace(200)* %ret
+  ; CHECK-NEXT: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %ret
 }
 
 define i8 addrspace(200)* @fold_null_setoffest_zero() #1 {
@@ -627,40 +610,39 @@ define i8 addrspace(200)* @fold_null_setoffest_zero() #1 {
   %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
   ret i8 addrspace(200)* %ret
   ; CHECK-LABEL: @fold_null_setoffest_zero()
-  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
-  ; CHECK: ret i8 addrspace(200)* %ret
+  ; CHECK-NEXT: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %ret
 }
 
-define i8 addrspace(200)* @fold_null_incoffest_zero() #1 {
+define i8 addrspace(200)* @fold_null_incoffset_zero() #1 {
   %arg = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 0)
   %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
   ret i8 addrspace(200)* %ret
-  ; CHECK-LABEL: @fold_null_incoffest_zero()
-  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
-  ; CHECK: ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_null_incoffset_zero()
+  ; CHECK-NEXT: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %ret
 }
 
-define i8 addrspace(200)* @fold_incoffest_zero(i8 addrspace(200)* %arg) #1 {
+define i8 addrspace(200)* @fold_incoffset_zero(i8 addrspace(200)* %arg) #1 {
   %inc0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 0)
   %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %inc0)
   ret i8 addrspace(200)* %ret
-  ; CHECK-LABEL: @fold_incoffest_zero(i8 addrspace(200)* %arg)
-  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
-  ; CHECK: ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_incoffset_zero(i8 addrspace(200)* %arg)
+  ; CHECK-NEXT: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %ret
 }
 
 ; This used to produce a nonnull attribute on a null parameter
-define i8 addrspace(200)* @inline_align_down() local_unnamed_addr #1 {
-entry:
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 100)
-  %1 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* nonnull %0) #3
-  %2 = and i64 %1, -32
-  %3 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* nonnull %0, i64 %2) #3
-  ret i8 addrspace(200)* %3
-  ; CHECK-LABEL: @inline_align_down()
-  ; CHECK: %0 = and i64 100, -32
-  ; CHECK: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 %0)
-  ; CHECK: ret i8 addrspace(200)* %1
+define i8 addrspace(200)* @inline_align_down(i64 %mask) local_unnamed_addr #1 {
+  %a = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 100)
+  %b = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* nonnull %a) #3
+  %c = and i64 %b, %mask
+  %d = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* nonnull %a, i64 %c) #3
+  ret i8 addrspace(200)* %d
+  ; CHECK-LABEL: @inline_align_down(i64 %mask)
+  ; CHECK-NEXT: %c = and i64 %mask, 100
+  ; CHECK-NEXT: %d = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 %c)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %d
 }
 
 attributes #0 = { nounwind }
