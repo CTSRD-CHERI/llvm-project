@@ -11478,6 +11478,7 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
       // integer values, but then the user should be using size_t/vaddr_t and
       // not uintcap_t. Don't warn in address mode since that works just fine
       // (only slightly less efficiently)
+      // FIXME: should warn in address mode (but as a pedantic warning)
       DiagRuntimeBehavior(Loc, RHS.get(),
                           PDiag(diag::warn_uintcap_bad_bitwise_op)
                               << 0 /*=xor*/ << 0 /* usecase is hashing */
