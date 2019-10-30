@@ -1,6 +1,6 @@
 ! Check that flang -fc1 is invoked when in --driver-mode=flang.
 
-! This is a copy of flang.f90 because the driver has logic in it which
+! This is a copy of flang.F90 because the driver has logic in it which
 ! differentiates between F90 and f90 files. Flang will not treat these files
 ! differently.
 
@@ -48,4 +48,4 @@
 ! CHECK-EMIT-OBJ-DAG: "-o" "{{[^"]*}}.o"
 
 ! Should end in the input file.
-! ALL: "{{.*}}flang.F90"{{$}}
+! ALL: "{{.*}}flang.f90"{{$}}
