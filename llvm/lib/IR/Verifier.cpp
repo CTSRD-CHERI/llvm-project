@@ -1529,7 +1529,6 @@ static bool isFuncOnlyAttr(Attribute::AttrKind Kind) {
   case Attribute::NoCfCheck:
   case Attribute::NoUnwind:
   case Attribute::NoInline:
-  case Attribute::NoFree:
   case Attribute::AlwaysInline:
   case Attribute::OptimizeForSize:
   case Attribute::StackProtect:
@@ -1579,7 +1578,7 @@ static bool isFuncOnlyAttr(Attribute::AttrKind Kind) {
 /// arguments.
 static bool isFuncOrArgAttr(Attribute::AttrKind Kind) {
   return Kind == Attribute::ReadOnly || Kind == Attribute::WriteOnly ||
-         Kind == Attribute::ReadNone;
+         Kind == Attribute::ReadNone || Kind == Attribute::NoFree;
 }
 
 void Verifier::verifyAttributeTypes(AttributeSet Attrs, bool IsFunction,
@@ -1726,11 +1725,12 @@ void Verifier::verifyFunctionAttrs(FunctionType *FT, AttributeList Attrs,
           !RetAttrs.hasAttribute(Attribute::Nest) &&
           !RetAttrs.hasAttribute(Attribute::StructRet) &&
           !RetAttrs.hasAttribute(Attribute::NoCapture) &&
+          !RetAttrs.hasAttribute(Attribute::NoFree) &&
           !RetAttrs.hasAttribute(Attribute::Returned) &&
           !RetAttrs.hasAttribute(Attribute::InAlloca) &&
           !RetAttrs.hasAttribute(Attribute::SwiftSelf) &&
           !RetAttrs.hasAttribute(Attribute::SwiftError)),
-         "Attributes 'byval', 'inalloca', 'nest', 'sret', 'nocapture', "
+         "Attributes 'byval', 'inalloca', 'nest', 'sret', 'nocapture', 'nofree'"
          "'returned', 'swiftself', and 'swifterror' do not apply to return "
          "values!",
          V);
