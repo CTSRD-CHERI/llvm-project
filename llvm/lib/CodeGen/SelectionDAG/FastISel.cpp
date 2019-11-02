@@ -1929,7 +1929,8 @@ FastISel::FastISel(FunctionLoweringInfo &FuncInfo,
       TII(*MF->getSubtarget().getInstrInfo()),
       TLI(*MF->getSubtarget().getTargetLowering()),
       TRI(*MF->getSubtarget().getRegisterInfo()), LibInfo(LibInfo),
-      SkipTargetIndependentISel(SkipTargetIndependentISel) {}
+      SkipTargetIndependentISel(SkipTargetIndependentISel),
+      LastLocalValue(nullptr), EmitStartPt(nullptr) {}
 
 FastISel::~FastISel() = default;
 
