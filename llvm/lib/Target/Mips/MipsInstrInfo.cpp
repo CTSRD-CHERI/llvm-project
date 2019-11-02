@@ -278,7 +278,8 @@ MipsInstrInfo::BranchType MipsInstrInfo::analyzeBranch(
   return BT_CondUncond;
 }
 
-bool MipsInstrInfo::isBranchOffsetInRange(unsigned BranchOpc, int64_t BrOffset) const {
+bool MipsInstrInfo::isBranchOffsetInRange(unsigned BranchOpc,
+                                          int64_t BrOffset) const {
   switch (BranchOpc) {
   case Mips::B:
   case Mips::BAL:
@@ -443,7 +444,6 @@ bool MipsInstrInfo::isBranchOffsetInRange(unsigned BranchOpc, int64_t BrOffset) 
 
   llvm_unreachable("Unknown branch instruction!");
 }
-
 
 /// Return the corresponding compact (no delay slot) form of a branch.
 unsigned MipsInstrInfo::getEquivalentCompactForm(

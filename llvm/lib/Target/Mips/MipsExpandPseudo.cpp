@@ -758,10 +758,15 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
       BuildMI(loopMBB, DL, TII->get(OR), Scratch).addReg(Incr).addReg(ZERO);
   }
 
-  auto SCOp = BuildMI(loopMBB, DL, TII->get(SC), Scratch).addReg(SCStoreValue).addReg(Ptr);
+  auto SCOp = BuildMI(loopMBB, DL, TII->get(SC), Scratch)
+      .addReg(Scratch)
+      .addReg(Ptr);
   if (!IsCapOp)
     SCOp.addImm(0);
-  BuildMI(loopMBB, DL, TII->get(BEQ)).addReg(Scratch).addReg(ZERO).addMBB(loopMBB);
+  BuildMI(loopMBB, DL, TII->get(BEQ))
+      .addReg(Scratch)
+      .addReg(ZERO)
+      .addMBB(loopMBB);
 
   NMBBI = BB.end();
   I->eraseFromParent();

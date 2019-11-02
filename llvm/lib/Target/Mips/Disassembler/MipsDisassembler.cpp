@@ -468,16 +468,16 @@ static DecodeStatus DecodeINSVE_DF(MCInst &MI, InsnType insn, uint64_t Address,
                                    const void *Decoder);
 
 template <typename InsnType>
-static DecodeStatus DecodeDAHIDATIMMR6(MCInst &MI, InsnType insn, uint64_t Address,
-                                   const void *Decoder);
+static DecodeStatus DecodeDAHIDATIMMR6(MCInst &MI, InsnType insn,
+                                       uint64_t Address, const void *Decoder);
 
 template <typename InsnType>
 static DecodeStatus DecodeDAHIDATI(MCInst &MI, InsnType insn, uint64_t Address,
                                    const void *Decoder);
 
 template <typename InsnType>
-static DecodeStatus DecodeDAHIDATIMMR6(MCInst &MI, InsnType insn, uint64_t Address,
-                                   const void *Decoder);
+static DecodeStatus DecodeDAHIDATIMMR6(MCInst &MI, InsnType insn,
+                                       uint64_t Address, const void *Decoder);
 
 template <typename InsnType>
 static DecodeStatus DecodeDAHIDATI(MCInst &MI, InsnType insn, uint64_t Address,
@@ -662,8 +662,8 @@ static DecodeStatus DecodeINSVE_DF(MCInst &MI, InsnType insn, uint64_t Address,
 }
 
 template <typename InsnType>
-static DecodeStatus DecodeDAHIDATIMMR6(MCInst &MI, InsnType insn, uint64_t Address,
-                               const void *Decoder) {
+static DecodeStatus DecodeDAHIDATIMMR6(MCInst &MI, InsnType insn,
+                                       uint64_t Address, const void *Decoder) {
   InsnType Rs = fieldFromInstruction(insn, 16, 5);
   InsnType Imm = fieldFromInstruction(insn, 0, 16);
   MI.addOperand(MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID,
@@ -1123,8 +1123,10 @@ static DecodeStatus DecodeDEXT(MCInst &MI, InsnType Insn, uint64_t Address,
   InsnType Rs = fieldFromInstruction(Insn, 21, 5);
   InsnType Rt = fieldFromInstruction(Insn, 16, 5);
 
-  MI.addOperand(MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rt)));
-  MI.addOperand(MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rs)));
+  MI.addOperand(
+      MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rt)));
+  MI.addOperand(
+      MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rs)));
   MI.addOperand(MCOperand::createImm(Pos));
   MI.addOperand(MCOperand::createImm(Size));
 
@@ -1164,8 +1166,10 @@ static DecodeStatus DecodeDINS(MCInst &MI, InsnType Insn, uint64_t Address,
   InsnType Rt = fieldFromInstruction(Insn, 16, 5);
 
   MI.setOpcode(Mips::DINS);
-  MI.addOperand(MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rt)));
-  MI.addOperand(MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rs)));
+  MI.addOperand(
+      MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rt)));
+  MI.addOperand(
+      MCOperand::createReg(getReg(Decoder, Mips::GPR64RegClassID, Rs)));
   MI.addOperand(MCOperand::createImm(Pos));
   MI.addOperand(MCOperand::createImm(Size));
 
@@ -1288,8 +1292,8 @@ DecodeStatus MipsDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
       LLVM_DEBUG(
           dbgs() << "Trying MicroMips32r632 table (32-bit instructions):\n");
       // Calling the auto-generated decoder function.
-      Result = decodeInstruction(DecoderTableMicroMipsR632, Instr, Insn, Address,
-                                 this, STI);
+      Result = decodeInstruction(DecoderTableMicroMipsR632, Instr, Insn,
+                                 Address, this, STI);
       if (Result != MCDisassembler::Fail) {
         Size = 4;
         return Result;
