@@ -10998,7 +10998,7 @@ struct SCEVCollectAddRecMultiplies {
         } else if (Unknown) {
           HasAddRec = true;
         } else {
-          bool ContainsAddRec;
+          bool ContainsAddRec = false;
           SCEVHasAddRec ContiansAddRec(ContainsAddRec);
           visitAll(Op, ContiansAddRec);
           HasAddRec |= ContainsAddRec;
