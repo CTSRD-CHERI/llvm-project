@@ -5145,7 +5145,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
     }
 
     // Non-void values get registered in the value table for future use.
-    if (I && !I->getType()->isVoidTy()) {
+    if (!I->getType()->isVoidTy()) {
       if (!FullTy) {
         FullTy = I->getType();
         assert(
