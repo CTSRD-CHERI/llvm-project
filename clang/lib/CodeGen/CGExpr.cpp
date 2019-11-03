@@ -4309,13 +4309,13 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
   if (TBAAInfo) *TBAAInfo = CGM.getTBAAAccessInfo(EltType);
 
   Addr = Builder.CreateElementBitCast(Addr, ConvertTypeForMem(EltType));
-  // FIXME-cheri-qual: should getTargetAddressSpace return 200? 
+  // FIXME-cheri-qual: should getTargetAddressSpace return 200?
   unsigned AS =
     CGM.getTargetAddressSpace(E->getType().getAddressSpace());
   llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
   if (PtrTy->getPointerAddressSpace() != AS) {
     if (getContext().getTargetInfo().areAllPointersCapabilities()) {
-      assert(PtrTy->getPointerAddressSpace() == 
+      assert(PtrTy->getPointerAddressSpace() ==
                         CGM.getTargetCodeGenInfo().getCHERICapabilityAS() &&
              "Expected memory capability address space in pure capability ABI");
       assert(E->getType().getAddressSpace() == LangAS::Default &&
@@ -4436,9 +4436,9 @@ static Address emitArraySubscriptGEP(CodeGenFunction &CGF, Address addr,
     unsigned idx = LastIndex->getZExtValue();
     llvm::DIType *DbgInfo = nullptr;
     if (arrayType)
-      DbgInfo = CGF.getDebugInfo()->getOrCreateStandaloneType(*arrayType,
-                                                              E->getExprLoc());
-    eltPtr = CGF.Builder.CreatePreserveArrayAccessIndex(addr.getPointer(),
+      DbgInfo = CGF.getDebugInfo()->getOrCreateStandaloneType(*arrayType, loc);
+    eltPtr = CGF.Builder.CreatePreserveArrayAccessIndex(addr.getElementType(),
+                                                        addr.getPointer(),
                                                         indices.size() - 1,
                                                         idx, DbgInfo);
   }

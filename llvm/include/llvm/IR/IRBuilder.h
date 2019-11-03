@@ -2534,8 +2534,9 @@ public:
     return V;
   }
 
-  Value *CreatePreserveArrayAccessIndex(Value *Base, unsigned Dimension,
-                                        unsigned LastIndex, MDNode *DbgInfo) {
+  Value *CreatePreserveArrayAccessIndex(Type *ElTy, Value *Base,
+                                        unsigned Dimension, unsigned LastIndex,
+                                        MDNode *DbgInfo) {
     assert(isa<PointerType>(Base->getType()) &&
            "Invalid Base ptr type for preserve.array.access.index.");
     auto *BaseType = Base->getType();
@@ -2548,7 +2549,7 @@ public:
     IdxList.push_back(LastIndexV);
 
     Type *ResultType =
-        GetElementPtrInst::getGEPReturnType(Base, IdxList);
+        GetElementPtrInst::getGEPReturnType(ElTy, Base, IdxList);
 
     Module *M = BB->getParent()->getParent();
     Function *FnPreserveArrayAccessIndex = Intrinsic::getDeclaration(
@@ -2582,8 +2583,9 @@ public:
     return Fn;
   }
 
-  Value *CreatePreserveStructAccessIndex(Value *Base, unsigned Index,
-                                         unsigned FieldIndex, MDNode *DbgInfo) {
+  Value *CreatePreserveStructAccessIndex(Type *ElTy, Value *Base,
+                                         unsigned Index, unsigned FieldIndex,
+                                         MDNode *DbgInfo) {
     assert(isa<PointerType>(Base->getType()) &&
            "Invalid Base ptr type for preserve.struct.access.index.");
     auto *BaseType = Base->getType();
@@ -2591,7 +2593,7 @@ public:
     Value *GEPIndex = getInt32(Index);
     Constant *Zero = ConstantInt::get(Type::getInt32Ty(Context), 0);
     Type *ResultType =
-        GetElementPtrInst::getGEPReturnType(Base, {Zero, GEPIndex});
+        GetElementPtrInst::getGEPReturnType(ElTy, Base, {Zero, GEPIndex});
 
     Module *M = BB->getParent()->getParent();
     Function *FnPreserveStructAccessIndex = Intrinsic::getDeclaration(
