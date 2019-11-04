@@ -290,6 +290,8 @@ public:
     // a raw cheri here.
     if (CPU == "octeon")
       Features["mips64r2"] = Features["cnmips"] = true;
+    else if (CPU == "octeon+")
+      Features["mips64r2"] = Features["cnmips"] = Features["cnmipsp"] = true;
     else
       Features[CPU] = true;
 
