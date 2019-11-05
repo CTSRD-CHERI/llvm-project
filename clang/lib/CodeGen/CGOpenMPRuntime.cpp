@@ -35,6 +35,7 @@
 
 using namespace clang;
 using namespace CodeGen;
+using namespace llvm::omp;
 
 namespace {
 /// Base class for handling code generation inside OpenMP regions.
