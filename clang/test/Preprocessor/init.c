@@ -5261,6 +5261,7 @@
 // MIPS-ARCH-OCTEON:#define _MIPS_ARCH "octeon"
 // MIPS-ARCH-OCTEON:#define _MIPS_ARCH_OCTEON 1
 // MIPS-ARCH-OCTEON:#define _MIPS_ISA _MIPS_ISA_MIPS64
+// MIPS-ARCH-OCTEON:#define __OCTEON__ 1
 // MIPS-ARCH-OCTEON:#define __mips_isa_rev 2
 //
 // Check MIPS float ABI macros
