@@ -3178,9 +3178,6 @@ void Verifier::visitUnaryOperator(UnaryOperator &U) {
     Assert(U.getType()->isFPOrFPVectorTy(),
            "FNeg operator only works with float types!", &U);
     break;
-  case Instruction::Freeze:
-    // Freeze can take all kinds of types.
-    break;
   default:
     llvm_unreachable("Unknown UnaryOperator opcode!");
   }
