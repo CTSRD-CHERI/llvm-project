@@ -20942,7 +20942,10 @@ SDValue DAGCombiner::buildSqrtEstimateImpl(SDValue Op, SDNodeFlags Flags,
         EVT CCVT = getSetCCResultType(VT);
         ISD::NodeType SelOpcode = VT.isVector() ? ISD::VSELECT : ISD::SELECT;
         DenormalMode DenormMode = DAG.getDenormalMode(VT);
-        if (DenormMode == DenormalMode::IEEE) {
+        if (DenormMode.Input == DenormalMode::IEEE) {
+          // This is specifically a check for the handling of denormal inputs,
+          // not the result.
+
           // fabs(X) < SmallestNormal ? 0.0 : Est
           const fltSemantics &FltSem = DAG.EVTToAPFloatSemantics(VT);
           APFloat SmallestNorm = APFloat::getSmallestNormalized(FltSem);
