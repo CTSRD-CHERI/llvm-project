@@ -3680,9 +3680,9 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
           if ((-AndRHSC).isPowerOf2() && (AndRHSC & C1) == C1) {
             unsigned ShiftBits = AndRHSC.countTrailingZeros();
             auto &DL = DAG.getDataLayout();
-            EVT ShiftTy = getShiftAmountTy(N0.getValueType(), DL,
+            EVT ShiftTy = getShiftAmountTy(ShValTy, DL,
                                            !DCI.isBeforeLegalize());
-            EVT CmpTy = N0.getValueType();
+            EVT CmpTy = ShValTy;
             SDValue Shift = DAG.getNode(ISD::SRL, dl, CmpTy, N0.getOperand(0),
                                         DAG.getConstant(ShiftBits, dl,
                                                         ShiftTy));
@@ -3711,9 +3711,9 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
         if (ShiftBits && NewC.getMinSignedBits() <= 64 &&
           isLegalICmpImmediate(NewC.getSExtValue())) {
           auto &DL = DAG.getDataLayout();
-          EVT ShiftTy = getShiftAmountTy(N0.getValueType(), DL,
+          EVT ShiftTy = getShiftAmountTy(ShValTy, DL,
                                          !DCI.isBeforeLegalize());
-          EVT CmpTy = N0.getValueType();
+          EVT CmpTy = ShValTy;
           SDValue Shift = DAG.getNode(ISD::SRL, dl, CmpTy, N0,
                                       DAG.getConstant(ShiftBits, dl, ShiftTy));
           SDValue CmpRHS = DAG.getConstant(NewC, dl, CmpTy);
