@@ -190,10 +190,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Bshareable");
     } else {
       CmdArgs.push_back("-dynamic-linker");
-      if (IsCHERIPureCapABI)
-        CmdArgs.push_back("/libexec/ld-cheri-elf.so.1");
-      else
-        CmdArgs.push_back("/libexec/ld-elf.so.1");
+      CmdArgs.push_back("/libexec/ld-elf.so.1");
     }
     if (ToolChain.getTriple().getOSMajorVersion() >= 9) {
       if (Arch == llvm::Triple::arm || Arch == llvm::Triple::sparc ||
