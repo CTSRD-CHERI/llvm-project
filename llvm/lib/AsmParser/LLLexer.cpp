@@ -753,6 +753,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(noRecurse);
   KEYWORD(returnDoesNotAlias);
   KEYWORD(noInline);
+  KEYWORD(alwaysInline);
   KEYWORD(calls);
   KEYWORD(callee);
   KEYWORD(hotness);
