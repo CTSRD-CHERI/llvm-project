@@ -7947,17 +7947,17 @@ public:
            "Expect a executable directive");
     const auto *CurExecDir = CurDir.get<const OMPExecutableDirective *>();
     for (const auto *C : CurExecDir->getClausesOfKind<OMPMapClause>())
-      for (const auto &L : C->component_lists()) {
+      for (const auto L : C->component_lists()) {
         InfoGen(L.first, L.second, C->getMapType(), C->getMapTypeModifiers(),
             /*ReturnDevicePointer=*/false, C->isImplicit());
       }
     for (const auto *C : CurExecDir->getClausesOfKind<OMPToClause>())
-      for (const auto &L : C->component_lists()) {
+      for (const auto L : C->component_lists()) {
         InfoGen(L.first, L.second, OMPC_MAP_to, llvm::None,
             /*ReturnDevicePointer=*/false, C->isImplicit());
       }
     for (const auto *C : CurExecDir->getClausesOfKind<OMPFromClause>())
-      for (const auto &L : C->component_lists()) {
+      for (const auto L : C->component_lists()) {
         InfoGen(L.first, L.second, OMPC_MAP_from, llvm::None,
             /*ReturnDevicePointer=*/false, C->isImplicit());
       }
@@ -7973,7 +7973,7 @@ public:
 
     for (const auto *C :
          CurExecDir->getClausesOfKind<OMPUseDevicePtrClause>()) {
-      for (const auto &L : C->component_lists()) {
+      for (const auto L : C->component_lists()) {
         assert(!L.second.empty() && "Not expecting empty list of components!");
         const ValueDecl *VD = L.second.back().getAssociatedDeclaration();
         VD = cast<ValueDecl>(VD->getCanonicalDecl());
@@ -8126,7 +8126,7 @@ public:
 
     for (const auto *C : CurMapperDir->clauselists()) {
       const auto *MC = cast<OMPMapClause>(C);
-      for (const auto &L : MC->component_lists()) {
+      for (const auto L : MC->component_lists()) {
         InfoGen(L.first, L.second, MC->getMapType(), MC->getMapTypeModifiers(),
                 /*ReturnDevicePointer=*/false, MC->isImplicit());
       }
@@ -8295,7 +8295,7 @@ public:
            "Expect a executable directive");
     const auto *CurExecDir = CurDir.get<const OMPExecutableDirective *>();
     for (const auto *C : CurExecDir->getClausesOfKind<OMPMapClause>()) {
-      for (const auto &L : C->decl_component_lists(VD)) {
+      for (const auto L : C->decl_component_lists(VD)) {
         assert(L.first == VD &&
                "We got information for the wrong declaration??");
         assert(!L.second.empty() &&
@@ -8448,7 +8448,7 @@ public:
     // Map other list items in the map clause which are not captured variables
     // but "declare target link" global variables.
     for (const auto *C : CurExecDir->getClausesOfKind<OMPMapClause>()) {
-      for (const auto &L : C->component_lists()) {
+      for (const auto L : C->component_lists()) {
         if (!L.first)
           continue;
         const auto *VD = dyn_cast<VarDecl>(L.first);
