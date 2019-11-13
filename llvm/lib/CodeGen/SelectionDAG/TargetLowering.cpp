@@ -3651,7 +3651,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
           // Perform the xform if the AND RHS is a single bit.
           unsigned ShCt = AndRHS->getAPIntValue().logBase2();
           if (AndRHS->getAPIntValue().isPowerOf2() &&
-              ShCt <= TLI.getShiftAmountThreshold(ShValTy)) {
+              !TLI.shouldAvoidTransformToShift(ShValTy, ShCt)) {
             return DAG.getNode(ISD::TRUNCATE, dl, VT,
                                DAG.getNode(ISD::SRL, dl, ShValTy, N0,
                                            DAG.getConstant(ShCt, dl, ShiftTy)));
@@ -3661,7 +3661,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
           // Perform the xform if C1 is a single bit.
           unsigned ShCt = C1.logBase2();
           if (C1.isPowerOf2() &&
-              ShCt <= TLI.getShiftAmountThreshold(ShValTy)) {
+              !TLI.shouldAvoidTransformToShift(ShValTy, ShCt)) {
             return DAG.getNode(ISD::TRUNCATE, dl, VT,
                                DAG.getNode(ISD::SRL, dl, ShValTy, N0,
                                            DAG.getConstant(ShCt, dl, ShiftTy)));
@@ -3680,7 +3680,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
           const APInt &AndRHSC = AndRHS->getAPIntValue();
           if ((-AndRHSC).isPowerOf2() && (AndRHSC & C1) == C1) {
             unsigned ShiftBits = AndRHSC.countTrailingZeros();
-            if (ShiftBits <= TLI.getShiftAmountThreshold(ShValTy)) {
+            if (!TLI.shouldAvoidTransformToShift(ShValTy, ShiftBits)) {
               SDValue Shift =
                 DAG.getNode(ISD::SRL, dl, ShValTy, N0.getOperand(0),
                             DAG.getConstant(ShiftBits, dl, ShiftTy));
@@ -3709,7 +3709,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
         NewC.lshrInPlace(ShiftBits);
         if (ShiftBits && NewC.getMinSignedBits() <= 64 &&
             isLegalICmpImmediate(NewC.getSExtValue()) &&
-            ShiftBits <= TLI.getShiftAmountThreshold(ShValTy)) {
+            !TLI.shouldAvoidTransformToShift(ShValTy, ShiftBits)) {
           SDValue Shift = DAG.getNode(ISD::SRL, dl, ShValTy, N0,
                                       DAG.getConstant(ShiftBits, dl, ShiftTy));
           SDValue CmpRHS = DAG.getConstant(NewC, dl, ShValTy);
