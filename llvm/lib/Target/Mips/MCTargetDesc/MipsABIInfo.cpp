@@ -13,6 +13,7 @@
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCTargetOptions.h"
+#include "llvm/Support/CommandLine.h"
 
 using namespace llvm;
 
