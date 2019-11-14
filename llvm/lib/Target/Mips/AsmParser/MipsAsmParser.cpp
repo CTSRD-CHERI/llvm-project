@@ -2275,13 +2275,12 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
           (OpInfo.OperandType == MCOI::OPERAND_UNKNOWN)) {
         MCOperand &Op = Inst.getOperand(i);
         if (Op.isImm()) {
-          int64_t MemOffset = Op.getImm();
           if (Inst.getOpcode() == Mips::STORECAP_BigImm ||
               Inst.getOpcode() == Mips::LOADCAP_BigImm) {
             // New clc/csc instructions can have bigger than 16-bit immediates
             continue;
           }
-          if (MemOffset < -32768 || MemOffset > 32767) {
+          if (!isInt<16>(Op.getImm())) {
             // Offset can't exceed 16bit value.
             expandMemInst(Inst, IDLoc, Out, STI, MCID.mayLoad());
             return getParser().hasPendingError();
