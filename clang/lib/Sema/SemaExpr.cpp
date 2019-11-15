@@ -9548,6 +9548,15 @@ static bool checkArithmeticBinOpPointerOperands(Sema &S, SourceLocation Loc,
     }
   }
 
+  if (isLHSPointer && isRHSPointer &&
+      LHSExpr->getType()->isCHERICapabilityType(S.Context) !=
+          RHSExpr->getType()->isCHERICapabilityType(S.Context)) {
+    S.Diag(Loc, diag::err_typecheck_sub_pointer_capability)
+        << LHSExpr->getType() << RHSExpr->getType() << LHSExpr->getSourceRange()
+        << RHSExpr->getSourceRange();
+    return false;
+  }
+
   // Check for arithmetic on pointers to incomplete types.
   bool isLHSVoidPtr = isLHSPointer && LHSPointeeTy->isVoidType();
   bool isRHSVoidPtr = isRHSPointer && RHSPointeeTy->isVoidType();

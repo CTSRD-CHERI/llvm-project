@@ -6108,6 +6108,8 @@ def err_typecheck_logical_vector_expr_gnu_cpp_restrict : Error<
 def err_typecheck_sub_ptr_compatible : Error<
   "%diff{$ and $ are not pointers to compatible types|"
   "pointers to incompatible types}0,1">;
+def err_typecheck_sub_pointer_capability : Error<
+  "subtraction between integer pointer and capability %diff{($ and $)|}0,1">;
 def ext_typecheck_ordered_comparison_of_pointer_integer : ExtWarn<
   "ordered comparison between pointer and integer (%0 and %1)">;
 def ext_typecheck_ordered_comparison_of_pointer_and_zero : Extension<

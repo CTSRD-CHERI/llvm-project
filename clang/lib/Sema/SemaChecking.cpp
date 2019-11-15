@@ -6414,6 +6414,12 @@ bool Sema::SemaBuiltinARMMemoryTaggingCall(unsigned BuiltinID, CallExpr *TheCall
           << ArgTypeA <<  ArgTypeB << ArgA->getSourceRange()
           << ArgB->getSourceRange();
       }
+      if (ArgTypeA->isCHERICapabilityType(Context) !=
+          ArgTypeB->isCHERICapabilityType(Context))
+        return Diag(TheCall->getBeginLoc(),
+                    diag::err_typecheck_sub_pointer_capability)
+            << ArgTypeA << ArgTypeB << ArgA->getSourceRange()
+            << ArgB->getSourceRange();
     }
 
     // at least one argument should be pointer type
