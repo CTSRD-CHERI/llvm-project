@@ -15,7 +15,7 @@
 ;===------------------------------------------------------------------------===;
 
 [component_0]
-type = Library
+type = OptionalLibrary
 name = MCA
 parent = Libraries
 required_libraries = MC Support
