@@ -22,43 +22,43 @@
 ## Similarly linking against mips libraries is also an error!
 
 ## PCREL
-# RUN: not ld.lld -pie -o /dev/null %t-pcrel.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=PCREL -DBAD_ABI=LEGACY
-# RUN: not ld.lld -pie -o /dev/null %t-pcrel.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
-# RUN: ld.lld -pie -o /dev/null %t-pcrel.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PCREL -DBAD_ABI=PLT
-# RUN: ld.lld -pie -o /dev/null %t-pcrel.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PCREL -DBAD_ABI=FNDESC
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-pcrel.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=PCREL -DBAD_ABI=LEGACY
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-pcrel.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
+# RUN: ld.lld -pie --no-as-needed -o /dev/null %t-pcrel.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PCREL -DBAD_ABI=PLT
+# RUN: ld.lld -pie --no-as-needed -o /dev/null %t-pcrel.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PCREL -DBAD_ABI=FNDESC
 
-# RUN: ld.lld -pie -o - %t-lib-pcrel.so %t-pcrel.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix PCREL %s
+# RUN: ld.lld -pie --no-as-needed -o - %t-lib-pcrel.so %t-pcrel.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix PCREL %s
 
 ## PLT
-# RUN: not ld.lld -pie -o /dev/null %t-plt.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=PLT -DBAD_ABI=LEGACY
-# RUN: not ld.lld -pie -o /dev/null %t-plt.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
-# RUN: ld.lld -pie -o /dev/null %t-plt.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PLT -DBAD_ABI=FNDESC
-# RUN: ld.lld -pie -o /dev/null %t-plt.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PLT -DBAD_ABI=PCREL
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-plt.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=PLT -DBAD_ABI=LEGACY
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-plt.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
+# RUN: ld.lld -pie --no-as-needed -o /dev/null %t-plt.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PLT -DBAD_ABI=FNDESC
+# RUN: ld.lld -pie --no-as-needed -o /dev/null %t-plt.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=PLT -DBAD_ABI=PCREL
 
-# RUN: ld.lld -pie -o - %t-lib-plt.so %t-plt.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix PLT %s
+# RUN: ld.lld -pie --no-as-needed -o - %t-lib-plt.so %t-plt.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix PLT %s
 
 ## FNDESC
-# RUN: not ld.lld -pie -o /dev/null %t-fn-desc.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=FNDESC -DBAD_ABI=LEGACY
-# RUN: not ld.lld -pie -o /dev/null %t-fn-desc.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
-# RUN: ld.lld -pie -o /dev/null %t-fn-desc.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=FNDESC -DBAD_ABI=PCREL
-# RUN: ld.lld -pie -o /dev/null %t-fn-desc.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=FNDESC -DBAD_ABI=PLT
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-fn-desc.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=FNDESC -DBAD_ABI=LEGACY
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-fn-desc.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
+# RUN: ld.lld -pie --no-as-needed -o /dev/null %t-fn-desc.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=FNDESC -DBAD_ABI=PCREL
+# RUN: ld.lld -pie --no-as-needed -o /dev/null %t-fn-desc.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix WARN-SHARED -DIN_ABI=FNDESC -DBAD_ABI=PLT
 
-# RUN: ld.lld -pie -o - %t-lib-fn-desc.so %t-fn-desc.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix FNDESC %s
+# RUN: ld.lld -pie --no-as-needed -o - %t-lib-fn-desc.so %t-fn-desc.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix FNDESC %s
 
 ## LEGACY
-# RUN: not ld.lld -pie -o /dev/null %t-legacy.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=LEGACY -DBAD_ABI=PCREL
-# RUN: not ld.lld -pie -o /dev/null %t-legacy.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=LEGACY -DBAD_ABI=PLT
-# RUN: not ld.lld -pie -o /dev/null %t-legacy.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=LEGACY -DBAD_ABI=FNDESC
-# RUN: not ld.lld -pie -o /dev/null %t-legacy.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-legacy.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=LEGACY -DBAD_ABI=PCREL
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-legacy.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=LEGACY -DBAD_ABI=PLT
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-legacy.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix ERR-SHARED -DIN_ABI=LEGACY -DBAD_ABI=FNDESC
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-legacy.o %t-lib-mips.so 2>&1 | FileCheck %s -check-prefix ERR-CHERIABI-LINKING-MIPS
 
-# RUN: ld.lld -pie -o - %t-lib-legacy.so %t-legacy.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix LEGACY %s
+# RUN: ld.lld -pie --no-as-needed -o - %t-lib-legacy.so %t-legacy.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix LEGACY %s
 
 ## MIPS against cheriabi
-# RUN: not ld.lld -pie -o /dev/null %t-mips.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
-# RUN: not ld.lld -pie -o /dev/null %t-mips.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
-# RUN: not ld.lld -pie -o /dev/null %t-mips.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
-# RUN: not ld.lld -pie -o /dev/null %t-mips.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
-# RUN: ld.lld -pie -o - %t-lib-mips.so %t-mips.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix MIPS %s
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
+# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
+# RUN: ld.lld -pie --no-as-needed -o - %t-lib-mips.so %t-mips.o | llvm-readobj -dynamic -h - | FileCheck -check-prefix MIPS %s
 
 
 # LEGACY: 0x000000007000C002 MIPS_CHERI_FLAGS ABI_LEGACY RELATIVE_CAPRELOCS

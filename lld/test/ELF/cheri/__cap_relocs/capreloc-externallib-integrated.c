@@ -9,7 +9,7 @@
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-externs.o -shared -o %t-externs.so
 // RUN: llvm-objdump --cap-relocs -t  %t-externs.so | FileCheck -check-prefixes DUMP-EXTERNALLIB %s
 
-// RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-externs.so %t.o -o %t-dynamic.exe -e entry
+// RUN: ld.lld --dynamic-linker /libexec/ld-elf.so -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-externs.so %t.o -o %t-dynamic.exe -e entry
 // RUN: llvm-objdump -h -r -t --cap-relocs %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %s
 // RUN: llvm-readobj -r %t-dynamic.exe | FileCheck -check-prefix DYNAMIC-EXE-RELOCS %s
 
@@ -50,7 +50,7 @@
 // DUMP-EXTERNALLIB:  00000000000103e0 g     F .text		 00000028 external_func
 
 
-// SHLIB:      Section (8) .rel.dyn {
+// SHLIB:      Section ({{.+}}) .rel.dyn {
 // SHLIB-NEXT:   0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
 // SHLIB-NEXT:   0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
 // SHLIB-NEXT:   0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0

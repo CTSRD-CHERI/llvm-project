@@ -141,7 +141,7 @@ static bool needsInterpSection() {
 }
 
 bool lld::elf::hasDynamicLinker() {
-  return config->shared || needsInterpSection();
+  return config->shared || !sharedFiles.empty();
 }
 
 template <class ELFT> void elf::writeResult() { Writer<ELFT>().run(); }
