@@ -16,7 +16,7 @@ TEST_RELEASE_BUILD = false
 TEST_WITH_SANITIZERS = false
 
 def updateGithubStatus(String message) {
-    setGitHubStatus(llvmRepo, [message: message])
+    setGitHubStatus(llvmRepo + [message: message])
 }
 
 def doGit(String url, String branch, String subdir, String referenceDirName) {
