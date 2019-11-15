@@ -55,10 +55,10 @@
 
 // AMD64-SHLIB-LABEL: Relocations [
 // AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.dyn {
-// AMD64-SHLIB-NEXT:    0x20E0 R_X86_64_GLOB_DAT call 0x0
+// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_GLOB_DAT call 0x0
 // AMD64-SHLIB-NEXT: }
 // AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.plt {
-// AMD64-SHLIB-NEXT:    0x3018 R_X86_64_JUMP_SLOT extern_function 0x0
+// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_JUMP_SLOT extern_function 0x0
 // AMD64-SHLIB-NEXT: }
 // AMD64-SHLIB-LABEL: DynamicSection [
 // AMD64-SHLIB-NEXT: Tag                Type                 Name/Value
@@ -67,7 +67,7 @@
 // AMD64-SHLIB-NEXT: 0x0000000000000009 RELAENT              24 (bytes)
 // AMD64-SHLIB-NEXT: 0x0000000000000017 JMPREL               [[PLT_REL_ADDR]]
 // AMD64-SHLIB-NEXT: 0x0000000000000002 PLTRELSZ             24 (bytes)
-// AMD64-SHLIB-NEXT: 0x0000000000000003 PLTGOT               0x3000
+// AMD64-SHLIB-NEXT: 0x0000000000000003 PLTGOT               0x{{.+}}
 // AMD64-SHLIB-NEXT: 0x0000000000000014 PLTREL               RELA
 
 // RUN: llvm-strip -o /dev/stdout %t-amd64.so | llvm-readobj -file-headers - | FileCheck %s -check-prefix AMD64-STRIPPED
