@@ -67,6 +67,7 @@ public:
 
   llvm::ExceptionHandling GetExceptionModel(
       const llvm::opt::ArgList &Args) const override;
+  bool IsUnwindTablesDefault(const llvm::opt::ArgList &Args) const override;
   bool isPIEDefault() const override;
   bool isCheriPurecap() const { return IsCheriPurecap; };
   SanitizerMask getSupportedSanitizers() const override;
