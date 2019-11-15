@@ -13,19 +13,19 @@ cheri_setaddress(const void *__capability dst, vaddr_t addr) {
 
 // HYBRID-LABEL: @use_sys_cheric_function(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[DST_ADDR_I:%.*]] = alloca i8 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[DST_ADDR_I:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[ADDR_ADDR_I:%.*]] = alloca i64, align 8
-// HYBRID-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8
-// HYBRID-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)** [[IN_ADDR]], align 16
+// HYBRID-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)** [[IN_ADDR]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    store i64 [[NEW_ADDR:%.*]], i64* [[NEW_ADDR_ADDR]], align 8
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[IN_ADDR]], align 16
+// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[IN_ADDR]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[TMP1:%.*]] = load i64, i64* [[NEW_ADDR_ADDR]], align 8
-// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)** [[DST_ADDR_I]], align 16
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)** [[DST_ADDR_I]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    store i64 [[TMP1]], i64* [[ADDR_ADDR_I]], align 8
-// HYBRID-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[DST_ADDR_I]], align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[DST_ADDR_I]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[TMP3:%.*]] = load i64, i64* [[ADDR_ADDR_I]], align 8
-// HYBRID-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[DST_ADDR_I]], align 16
+// HYBRID-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[DST_ADDR_I]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]]) #2
 // HYBRID-NEXT:    [[SUB_I:%.*]] = sub i64 [[TMP3]], [[TMP5]]
 // HYBRID-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT_I:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i64 [[SUB_I]]
@@ -33,19 +33,19 @@ cheri_setaddress(const void *__capability dst, vaddr_t addr) {
 //
 // PURECAP-LABEL: @use_sys_cheric_function(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[DST_ADDR_I:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[DST_ADDR_I:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // PURECAP-NEXT:    [[ADDR_ADDR_I:%.*]] = alloca i64, align 8, addrspace(200)
-// PURECAP-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // PURECAP-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// PURECAP-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align 16
+// PURECAP-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    store i64 [[NEW_ADDR:%.*]], i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align 16
+// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align 16
+// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    store i64 [[TMP1]], i64 addrspace(200)* [[ADDR_ADDR_I]], align 8
-// PURECAP-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    [[TMP3:%.*]] = load i64, i64 addrspace(200)* [[ADDR_ADDR_I]], align 8
-// PURECAP-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align 16
+// PURECAP-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]]) #2
 // PURECAP-NEXT:    [[SUB_I:%.*]] = sub i64 [[TMP3]], [[TMP5]]
 // PURECAP-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT_I:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i64 [[SUB_I]]
@@ -60,22 +60,22 @@ void *__capability use_sys_cheric_function(void *__capability in, vaddr_t new_ad
 
 // HYBRID-LABEL: @use_builtin_function(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8
-// HYBRID-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)** [[IN_ADDR]], align 16
+// HYBRID-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)** [[IN_ADDR]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    store i64 [[NEW_ADDR:%.*]], i64* [[NEW_ADDR_ADDR]], align 8
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[IN_ADDR]], align 16
+// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[IN_ADDR]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[TMP1:%.*]] = load i64, i64* [[NEW_ADDR_ADDR]], align 8
 // HYBRID-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP1]])
 // HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP2]]
 //
 // PURECAP-LABEL: @use_builtin_function(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // PURECAP-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// PURECAP-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align 16
+// PURECAP-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    store i64 [[NEW_ADDR:%.*]], i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align 16
+// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
 // PURECAP-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP1]])
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP2]]
@@ -89,30 +89,30 @@ void *__capability use_builtin_function(void *__capability in, vaddr_t new_addr)
 
 // HYBRID-LABEL: @use_asm(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8
-// HYBRID-NEXT:    [[RESULT:%.*]] = alloca i8 addrspace(200)*, align 16
-// HYBRID-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)** [[IN_ADDR]], align 16
+// HYBRID-NEXT:    [[RESULT:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]]
+// HYBRID-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)** [[IN_ADDR]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    store i64 [[NEW_ADDR:%.*]], i64* [[NEW_ADDR_ADDR]], align 8
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[IN_ADDR]], align 16
+// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[IN_ADDR]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    [[TMP1:%.*]] = load i64, i64* [[NEW_ADDR_ADDR]], align 8
 // HYBRID-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* asm "csetaddr $0, $1, $2\0A\09", "=C,C,r,~{$1}"(i8 addrspace(200)* [[TMP0]], i64 [[TMP1]]) #3, !srcloc !2
-// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[RESULT]], align 16
-// HYBRID-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[RESULT]], align 16
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[RESULT]], align [[#CAP_SIZE]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[RESULT]], align [[#CAP_SIZE]]
 // HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
 // PURECAP-LABEL: @use_asm(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[IN_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // PURECAP-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// PURECAP-NEXT:    [[RESULT:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align 16
+// PURECAP-NEXT:    [[RESULT:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
+// PURECAP-NEXT:    store i8 addrspace(200)* [[IN:%.*]], i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    store i64 [[NEW_ADDR:%.*]], i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align 16
+// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[IN_ADDR]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
 // PURECAP-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* asm "csetaddr $0, $1, $2\0A\09", "=C,C,r,~{$1}"(i8 addrspace(200)* [[TMP0]], i64 [[TMP1]]) #3, !srcloc !2
-// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* addrspace(200)* [[RESULT]], align 16
-// PURECAP-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[RESULT]], align 16
+// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* addrspace(200)* [[RESULT]], align [[#CAP_SIZE]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[RESULT]], align [[#CAP_SIZE]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
 void *__capability use_asm(void *__capability in, vaddr_t new_addr) {
