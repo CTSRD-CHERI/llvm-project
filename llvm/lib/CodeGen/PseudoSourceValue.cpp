@@ -37,7 +37,10 @@ void PseudoSourceValue::printCustom(raw_ostream &O) const {
   if (Kind < TargetCustom)
     O << PSVNames[Kind];
   else
-    O << "TargetCustom" << Kind;
+    O << "TargetCustom" << (Kind - 1);
+  // XXXAR: Kind -1 to offset the added CapTable entry (easier than merge
+  // conflicts in multiple test files)
+  // FIXME: this should probably be (Kind - TargetCustom)
 }
 
 bool PseudoSourceValue::isConstant(const MachineFrameInfo *) const {
