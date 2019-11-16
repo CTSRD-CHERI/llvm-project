@@ -4723,8 +4723,8 @@
 // MIPS64EL:#define mips 1
 //
 
-// RUN: %cheri256_cc1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI256 %s
-// RUN: %cheri128_cc1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI128 %s
+// RUN: %cheri256_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI256 %s
+// RUN: %cheri128_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI128 %s
 
 // CHERI-COMMON: #define MIPSEB 1
 // CHERI-COMMON-NEXT: #define _ABI64 3

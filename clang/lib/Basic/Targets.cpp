@@ -619,6 +619,11 @@ TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
                              const std::shared_ptr<TargetOptions> &Opts) {
   llvm::Triple Triple(Opts->Triple);
 
+  // FIXME: this is probably not the right place to add this
+  if (Triple.isMIPS() && Opts->ABI == "purecap") {
+    Triple.setEnvironment(llvm::Triple::CheriPurecap);
+  }
+
   // Construct the target
   std::unique_ptr<TargetInfo> Target(AllocateTarget(Triple, *Opts));
   if (!Target) {
