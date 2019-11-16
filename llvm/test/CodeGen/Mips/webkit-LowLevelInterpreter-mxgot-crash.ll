@@ -1,4 +1,4 @@
-; RUN: llc -target-abi n64 -relocation-model=pic -mxgot -o /dev/null %s
+; RUN: llc -target-abi n64 -relocation-model=pic -mattr=+xgot -o /dev/null %s
 ; Crash when compiling WebKit LowLevelInterpreter.cpp
 
 ; https://github.com/CTSRD-CHERI/llvm/issues/225

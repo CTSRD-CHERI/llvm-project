@@ -1,9 +1,6 @@
-; This test was crashing llvm with the -mxgot flag (even at -O0)
-; RUN: llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mcpu=mips64r2 -O0 -o /dev/null %s
-; RUN: llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mcpu=mips64r2 -O0 -mxgot -o /dev/null %s
-; RUN: llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mcpu=mips64r2 -O1 -mxgot -o /dev/null %s
-; RUN: llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mcpu=mips64r2 -O2 -mxgot -o /dev/null %s
-; RUN: llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mcpu=mips64r2 -O3 -mxgot -o /dev/null %s
+; This test was crashing llvm with the -mattr=+xgot flag (even at -O0)
+; RUN: llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mcpu=mips64r2 -O0 -mattr=-xgot -o /dev/null %s
+; RUN: llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mcpu=mips64r2 -O0 -mattr=+xgot -o /dev/null %s
 ; ModuleID = '/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGen/cheri-unwind-dw2-crash.creduce.c'
 source_filename = "/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGen/cheri-unwind-dw2-crash.creduce.c"
 target datalayout = "E-m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128"

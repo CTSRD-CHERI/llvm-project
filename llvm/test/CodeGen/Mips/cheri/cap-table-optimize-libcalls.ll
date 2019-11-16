@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc %s -mxgot -cheri-cap-table-abi=plt -o - -O3  | FileCheck %s
+; RUN: %cheri_purecap_llc %s -mattr=+xgot -cheri-cap-table-abi=plt -o - -O3  | FileCheck %s
 ; The optimze libcalls would previously replace constant strings with AS0 strings
 ; Seems like this can't be tested in LLVM, but let's still check that this code is sensible
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cap-table-printf.c'

@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy -mxgot -o - %s | FileCheck %s -check-prefix LEGACY
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy -mattr=+xgot -o - %s | FileCheck %s -check-prefix LEGACY
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel -mxcaptable -o - %s | FileCheck %s -check-prefix PCREL
 ; ModuleID = 'cheri-got-jumptable.c'
 source_filename = "cheri-got-jumptable.c"
