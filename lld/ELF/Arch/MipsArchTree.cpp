@@ -454,8 +454,8 @@ static std::string getMipsIsaExtName(Mips::AFL_EXT ext) {
   }
 }
 
-uint8_t elf::getMipsIsaExt(uint64_t oldExt, StringRef oldFile, uint64_t newExt,
-                           StringRef newFile) {
+uint8_t getMipsIsaExt(uint64_t oldExt, StringRef oldFile, uint64_t newExt,
+                      StringRef newFile) {
   if (oldExt == newExt)
     return newExt;
 
@@ -502,8 +502,8 @@ static Mips::AFL_EXT cheriFlagsToAFL_EXT(uint64_t cheriFlags) {
   return Mips::AFL_EXT::AFL_EXT_NONE;
 }
 
-void elf::checkMipsShlibCompatible(InputFile *f, uint64_t inputCheriFlags,
-                                   uint64_t targetCheriFlags) {
+void checkMipsShlibCompatible(InputFile *f, uint64_t inputCheriFlags,
+                              uint64_t targetCheriFlags) {
   const uint32_t targetABI = config->eflags & (EF_MIPS_ABI | EF_MIPS_ABI2);
   assert(f->emachine == config->emachine);
   uint32_t abi = f->eflags & (EF_MIPS_ABI | EF_MIPS_ABI2);

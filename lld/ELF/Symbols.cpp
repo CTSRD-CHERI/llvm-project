@@ -32,6 +32,78 @@ static std::string demangle(StringRef symName) {
 }
 
 std::string toString(const elf::Symbol &b) { return demangle(b.getName()); }
+namespace elf {
+static std::string getLocationNonTemplate(InputSectionBase *isec,
+                                          uint64_t symOffset);
+}
+std::string verboseToString(elf::Symbol *b, uint64_t symOffset) {
+  std::string msg;
+
+  if (b->isLocal())
+    msg += "local ";
+  if (b->isWeak())
+    msg += "weak ";
+  if (b->isShared())
+    msg += "shared ";
+  // else if (B->isDefined())
+  //  Msg += "defined ";
+  if (b->type == STT_COMMON)
+    msg += "common ";
+  else if (b->type == STT_TLS)
+    msg += "TLS ";
+  if (b->isSection())
+    msg += "section ";
+  else if (b->isTls())
+    msg += "tls ";
+  else if (b->isFunc())
+    msg += "function ";
+  else if (b->isGnuIFunc())
+    msg += "gnu ifunc ";
+  else if (b->isObject())
+    msg += "object ";
+  else if (b->isFile())
+    msg += "file ";
+  else if (b->isUndefined())
+    msg += "<undefined> ";
+  else
+    msg += "<unknown kind> ";
+
+  if (b->isInGot())
+    msg += "(in GOT) ";
+  if (b->isInPlt())
+    msg += "(in PLT) ";
+
+  elf::Defined* dr = dyn_cast<elf::Defined>(b);
+  elf::InputSectionBase* isec = nullptr;
+  if (dr && dr->section) {
+    symOffset = dr->isSection() ? symOffset : dr->section->getOffset(dr->value);
+    isec = dyn_cast<elf::InputSectionBase>(dr->section);
+  }
+  std::string name = toString(*b);
+  if (name.empty()) {
+    if (dr && dr->section) {
+      if (isec) {
+        name = elf::getLocationNonTemplate(isec, symOffset);
+      } else {
+        name = (dr->section->name + "+0x" + utohexstr(symOffset)).str();
+      }
+    } else if (elf::OutputSection* os = b->getOutputSection()) {
+      name = (os->name + "+(unknown offset)").str();
+    }
+  }
+  if (name.empty()) {
+    name = "<unknown symbol>";
+  }
+  msg += name;
+  if (!b->isUndefined()) {
+    std::string src = isec ? isec->getSrcMsg(*b, symOffset) : toString(b->file);
+    if (isec)
+      src += " (" + isec->getObjMsg(symOffset) + ")";
+    msg += "\n>>> defined in " + src;
+  }
+  return msg;
+}
+
 std::string toELFString(const Archive::Symbol &b) {
   return demangle(b.getName());
 }
@@ -372,74 +444,6 @@ static std::string getLocationNonTemplate(InputSectionBase *isec,
   case ELF64BEKind:
     return isec->getLocation<ELF64BE>(symOffset);
   }
-}
-
-std::string lld::verboseToString(Symbol *b, uint64_t symOffset) {
-  std::string msg;
-
-  if (b->isLocal())
-    msg += "local ";
-  if (b->isWeak())
-      msg += "weak ";
-  if (b->isShared())
-    msg += "shared ";
-  // else if (B->isDefined())
-  //  Msg += "defined ";
-  if (b->type == STT_COMMON)
-    msg += "common ";
-  else if (b->type == STT_TLS)
-    msg += "TLS ";
-  if (b->isSection())
-    msg += "section ";
-  else if (b->isTls())
-    msg += "tls ";
-  else if (b->isFunc())
-    msg += "function ";
-  else if (b->isGnuIFunc())
-    msg += "gnu ifunc ";
-  else if (b->isObject())
-    msg += "object ";
-  else if (b->isFile())
-    msg += "file ";
-  else if (b->isUndefined())
-    msg += "<undefined> ";
-  else
-    msg += "<unknown kind> ";
-
-  if (b->isInGot())
-    msg += "(in GOT) ";
-  if (b->isInPlt())
-    msg += "(in PLT) ";
-
-  Defined* dr = dyn_cast<Defined>(b);
-  InputSectionBase* isec = nullptr;
-  if (dr && dr->section) {
-    symOffset = dr->isSection() ? symOffset : dr->section->getOffset(dr->value);
-    isec = dyn_cast<InputSectionBase>(dr->section);
-  }
-  std::string name = toString(*b);
-  if (name.empty()) {
-    if (dr && dr->section) {
-      if (isec) {
-        name = getLocationNonTemplate(isec, symOffset);
-      } else {
-        name = (dr->section->name + "+0x" + utohexstr(symOffset)).str();
-      }
-    } else if (OutputSection* os = b->getOutputSection()) {
-      name = (os->name + "+(unknown offset)").str();
-    }
-  }
-  if (name.empty()) {
-    name = "<unknown symbol>";
-  }
-  msg += name;
-  if (!b->isUndefined()) {
-    std::string src = isec ? isec->getSrcMsg(*b, symOffset) : toString(b->file);
-    if (isec)
-      src += " (" + isec->getObjMsg(symOffset) + ")";
-    msg += "\n>>> defined in " + src;
-  }
-  return msg;
 }
 
 static uint8_t getMinVisibility(uint8_t va, uint8_t vb) {

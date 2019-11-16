@@ -1,4 +1,3 @@
-//===- InputSection.cpp ---------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -1056,7 +1055,6 @@ template <class ELFT>
 static void fillGlobalSizesSection(InputSection* isec, uint8_t* buf, uint8_t* bufEnd) {
   static std::mutex mu;
   std::lock_guard<std::mutex> lock(mu);
-  const endianness e = ELFT::TargetEndianness;
 
 #ifdef DEBUG_CAP_RELOCS
   if (Config->verboseCapRelocs)
@@ -1092,7 +1090,7 @@ static void fillGlobalSizesSection(InputSection* isec, uint8_t* buf, uint8_t* bu
       error("Unknown .global_sizes value for " + realSymName +
             " but section was not marked as writable");
     }
-    uint64_t existing = read64<e>(location);
+    uint64_t existing = read64(location);
     if (existing != 0 && existing != resolvedSize) {
       // The value might not be zero if we are linking against a file built
       // with -r (e.g. openpam_static_modules.o) In that case we need to check
@@ -1103,7 +1101,7 @@ static void fillGlobalSizesSection(InputSection* isec, uint8_t* buf, uint8_t* bu
             utohexstr(resolvedSize));
     }
 
-    write64<e>(location, resolvedSize);
+    write64(location, resolvedSize);
     if (config->verboseCapRelocs)
       message("Writing size 0x" + utohexstr(resolvedSize) + " for " +
               verboseToString(target));
