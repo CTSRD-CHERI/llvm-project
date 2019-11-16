@@ -623,7 +623,7 @@ Symbols:
 # RUN: not llvm-readelf --stack-sizes %t17 2>&1 | FileCheck %s -DFILE=%t17 --check-prefix=UNSUPPRELOC2
 # RUN: not llvm-readobj --stack-sizes %t17 2>&1 | FileCheck %s -DFILE=%t17 --check-prefix=UNSUPPRELOC2
 
-# UNSUPPRELOC2: error: '[[FILE]]': unsupported relocation type in section .rela.stack_sizes: R_X86_64_64
+# UNSUPPRELOC2: error: '[[FILE]]': unsupported relocation type in section .rela.stack_sizes: Unknown
 
 --- !ELF
 FileHeader:
@@ -640,4 +640,4 @@ Sections:
     Info: .stack_sizes
     Relocations:
       - Offset: 0
-        Type:   R_X86_64_64
+        Type:   123
