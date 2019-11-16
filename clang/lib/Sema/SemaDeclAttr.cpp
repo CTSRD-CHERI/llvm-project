@@ -3995,7 +3995,7 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
 
 bool Sema::checkMSInheritanceAttrOnDefinition(
     CXXRecordDecl *RD, SourceRange Range, bool BestCase,
-    MSInheritanceAttr::Spelling SemanticSpelling) {
+    MSInheritanceModel ExplicitModel) {
   assert(RD->hasDefinition() && "RD has no definition!");
 
   // We may not have seen base specifiers or any virtual methods yet.  We will
@@ -4004,14 +4004,14 @@ bool Sema::checkMSInheritanceAttrOnDefinition(
     return false;
 
   // The unspecified model never matches what a definition could need.
-  if (SemanticSpelling == MSInheritanceAttr::Keyword_unspecified_inheritance)
+  if (ExplicitModel == MSInheritanceModel::Unspecified)
     return false;
 
   if (BestCase) {
-    if (RD->calculateInheritanceModel() == SemanticSpelling)
+    if (RD->calculateInheritanceModel() == ExplicitModel)
       return false;
   } else {
-    if (RD->calculateInheritanceModel() <= SemanticSpelling)
+    if (RD->calculateInheritanceModel() <= ExplicitModel)
       return false;
   }
 
@@ -5601,8 +5601,7 @@ static void handleMSInheritanceAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     return;
   }
   MSInheritanceAttr *IA = S.mergeMSInheritanceAttr(
-      D, AL, /*BestCase=*/true,
-      (MSInheritanceAttr::Spelling)AL.getSemanticSpelling());
+      D, AL, /*BestCase=*/true, (MSInheritanceModel)AL.getSemanticSpelling());
   if (IA) {
     D->addAttr(IA);
     S.Consumer.AssignInheritanceModel(cast<CXXRecordDecl>(D));
@@ -6255,9 +6254,9 @@ static void handleDLLAttr(Sema &S, Decl *D, const ParsedAttr &A) {
 MSInheritanceAttr *
 Sema::mergeMSInheritanceAttr(Decl *D, const AttributeCommonInfo &CI,
                              bool BestCase,
-                             MSInheritanceAttr::Spelling SemanticSpelling) {
+                             MSInheritanceModel Model) {
   if (MSInheritanceAttr *IA = D->getAttr<MSInheritanceAttr>()) {
-    if (IA->getSemanticSpelling() == SemanticSpelling)
+    if (IA->getInheritanceModel() == Model)
       return nullptr;
     Diag(IA->getLocation(), diag::err_mismatched_ms_inheritance)
         << 1 /*previous declaration*/;
@@ -6268,7 +6267,7 @@ Sema::mergeMSInheritanceAttr(Decl *D, const AttributeCommonInfo &CI,
   auto *RD = cast<CXXRecordDecl>(D);
   if (RD->hasDefinition()) {
     if (checkMSInheritanceAttrOnDefinition(RD, CI.getRange(), BestCase,
-                                           SemanticSpelling)) {
+                                           Model)) {
       return nullptr;
     }
   } else {
