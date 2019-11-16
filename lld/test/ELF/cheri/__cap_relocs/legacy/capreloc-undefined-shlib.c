@@ -24,10 +24,6 @@
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
 // RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type
-// CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
-// 30520 is the address of foo_ptr
-// CHECK-NEXT: 0x0000000000030520 Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// CHECK-NEXT: 0x00000000000305{{4|6}}0 Base: bar (0x00000000000305{{3|4}}0)  Offset: 0x0000000000000000      Length: 0x0000000000000004      Permissions: 0x00000000
 // CHECK-LABEL: Sections:
 // CHECK:  __cap_relocs  00000050 00000000000204d0 DATA
 // CHERI128:  .data         00000030 0000000000030520 DATA
@@ -38,6 +34,10 @@
 // CHECK: 00000000000305{{4|6}}0 g     O .data  000000{{1|2}}0 bar_ptr
 // CHECK: 0000000000000000               *UND*  00000000 foo
 // CHECK: 0000000000030520       g     O .data  000000{{1|2}}0 foo_ptr
+// CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
+// 30520 is the address of foo_ptr
+// CHECK-NEXT: 0x0000000000030520 Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// CHECK-NEXT: 0x00000000000305{{4|6}}0 Base: bar (0x00000000000305{{3|4}}0)  Offset: 0x0000000000000000      Length: 0x0000000000000004      Permissions: 0x00000000
 
 // But it should with --unresolved-symbols=report-all
 // RUN: not ld.lld --no-relative-cap-relocs -shared --unresolved-symbols=report-all -o %t.so %t.o 2>&1 | FileCheck %s -check-prefix ERR

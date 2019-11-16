@@ -74,28 +74,6 @@ void __start(void) {
 // DUMP-SHLIB-LABEL: Sections:
 // DUMP-SHLIB: .global_sizes 00000030 00000000000005b8 DATA
 
-// GLOBAL_SIZES-LABEL: Contents of section .global_sizes:
-// .size.external_cap then .size.external_buffer (0x10 or 0x20)
-// GLOBAL_SIZES-NEXT: 00000000 000000{{2|1}}0 00000000 000010e1
-// .size.bar (should pick up the value from bar.o) then .size.foo
-// GLOBAL_SIZES-NEXT: 00000000 00000baa 00000000 00000004
-// .size.bar from bar.o (not used because .size.bar points to the first one) and then .size.other_var
-// GLOBAL_SIZES-NEXT: 00000000 00000000 00000000 000000ff
-// GLOBAL_SIZES-NEXT: Contents of section .text:
-
-
-// DUMP-RELOCATABLE-LABEL: Contents of section .global_sizes:
-// DUMP-RELOCATABLE-NEXT: 0000 00000000 00000000 00000000 00000000  ................
-// DUMP-RELOCATABLE-NEXT: 0010 00000000 00000000 00000000 00000000  ................
-// DUMP-RELOCATABLE-NEXT: 0020 00000000 00000000 00000000 00000000  ................
-
-// DUMP-RELOCATABLE-LABEL: SYMBOL TABLE:
-// DUMP-RELOCATABLE: 0000000000000010 gw    O .global_sizes           00000008 .size.bar
-// DUMP-RELOCATABLE: 0000000000000008 gw    O .global_sizes           00000008 .size.external_buffer
-// DUMP-RELOCATABLE: 0000000000000000 gw    O .global_sizes           00000008 .size.external_cap
-// DUMP-RELOCATABLE: 0000000000000018 gw    O .global_sizes           00000008 .size.foo
-// DUMP-RELOCATABLE: 0000000000000028 gw    O .global_sizes           00000008 .size.other_var
-
 // DUMP-EXE-LABEL: SYMBOL TABLE:
 // DUMP-EXE: 0000000120000218 gw    O .global_sizes           00000008 .size.bar
 // DUMP-EXE: 0000000120000210 gw    O .global_sizes           00000008 .size.external_buffer
@@ -109,3 +87,26 @@ void __start(void) {
 // DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.external_cap
 // DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.foo
 // DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.other_var
+
+// GLOBAL_SIZES-LABEL: Contents of section .global_sizes:
+// .size.external_cap then .size.external_buffer (0x10 or 0x20)
+// GLOBAL_SIZES-NEXT: 00000000 000000{{2|1}}0 00000000 000010e1
+// .size.bar (should pick up the value from bar.o) then .size.foo
+// GLOBAL_SIZES-NEXT: 00000000 00000baa 00000000 00000004
+// .size.bar from bar.o (not used because .size.bar points to the first one) and then .size.other_var
+// GLOBAL_SIZES-NEXT: 00000000 00000000 00000000 000000ff
+// GLOBAL_SIZES-NEXT: Contents of section .text:
+
+
+// DUMP-RELOCATABLE-LABEL: SYMBOL TABLE:
+// DUMP-RELOCATABLE: 0000000000000010 gw    O .global_sizes           00000008 .size.bar
+// DUMP-RELOCATABLE: 0000000000000008 gw    O .global_sizes           00000008 .size.external_buffer
+// DUMP-RELOCATABLE: 0000000000000000 gw    O .global_sizes           00000008 .size.external_cap
+// DUMP-RELOCATABLE: 0000000000000018 gw    O .global_sizes           00000008 .size.foo
+// DUMP-RELOCATABLE: 0000000000000028 gw    O .global_sizes           00000008 .size.other_var
+
+// DUMP-RELOCATABLE-LABEL: Contents of section .global_sizes:
+// DUMP-RELOCATABLE-NEXT: 0000 00000000 00000000 00000000 00000000  ................
+// DUMP-RELOCATABLE-NEXT: 0010 00000000 00000000 00000000 00000000  ................
+// DUMP-RELOCATABLE-NEXT: 0020 00000000 00000000 00000000 00000000  ................
+

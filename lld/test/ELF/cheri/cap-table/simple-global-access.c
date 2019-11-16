@@ -22,22 +22,20 @@
 
 
 
+// EXE-LABEL: SYMBOL TABLE:
+// EXE-DAG: [[GLOBAL_CAPTAB:[0-9a-f]+]]  l     O .captable		 000000{{1|2}}0  global@CAPTABLE
+// EXE-DAG: [[GLOBAL2_CAPTAB:[0-9a-f]+]]  l     O .captable		 000000{{1|2}}0  global2@CAPTABLE
+// EXE-LABEL: CAPABILITY RELOCATION RECORDS:
+// EXE-NEXT: 0x[[GLOBAL_CAPTAB]]      Base: global (0x00000001200303{{3|6}}0)       Offset: 0x0000000000000000      Length: 0x0000000000000004    Permissions: 0x00000000
+// EXE-NEXT: 0x[[GLOBAL2_CAPTAB]]      Base: global2 (0x00000001200303{{3|6}}8)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
+
+
 // EXE:          3c 01 00 00 	lui	$1, 0
 // EXE-NEXT:     64 21 00 00 	daddiu	$1, $1, 0
 // EXE:          3c 03 00 00   lui     $3, 0
 // This is the second entry into the cap table so it should be 32/16 bytes
 // EXE128-NEXT:  64 63 00 10   daddiu  $3, $3, 16
 // EXE256-NEXT:  64 63 00 20   daddiu  $3, $3, 32
-
-// EXE-LABEL: CAPABILITY RELOCATION RECORDS:
-// EXE128-NEXT: 0x[[GLOBAL_CAPTAB:0000000120020310]]      Base: global (0x0000000120030330)       Offset: 0x0000000000000000      Length: 0x0000000000000004    Permissions: 0x00000000
-// EXE256-NEXT: 0x[[GLOBAL_CAPTAB:0000000120020320]]      Base: global (0x0000000120030360)       Offset: 0x0000000000000000      Length: 0x0000000000000004    Permissions: 0x00000000
-// EXE128-NEXT: 0x[[GLOBAL2_CAPTAB:0000000120020320]]      Base: global2 (0x0000000120030338)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
-// EXE256-NEXT: 0x[[GLOBAL2_CAPTAB:0000000120020340]]      Base: global2 (0x0000000120030368)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
-
-// EXE-LABEL: SYMBOL TABLE:
-// EXE-DAG: [[GLOBAL_CAPTAB]]  l     O .captable		 000000{{1|2}}0  global@CAPTABLE
-// EXE-DAG: [[GLOBAL2_CAPTAB]] l     O .captable		 000000{{1|2}}0  global2@CAPTABLE
 
 int global = 1;
 long global2 = 3;

@@ -19,9 +19,6 @@
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
 // RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type
-// CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
-// 10000 is the address of foo_ptr
-// CHECK-NEXT: 0x00000000000304c0	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 // CHECK-LABEL: Sections:
 // CHECK:  __cap_relocs     00000028 0000000000020490 DATA
 // CHERI128:  .data         00000010 00000000000304c0 DATA
@@ -29,6 +26,9 @@
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK: 00000000000304{{e|f}}0 g     O .bss  00000004 foo
 // CHECK: 00000000000304c0 g     O .data 000000{{1|2}}0 foo_ptr
+// CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
+// 10000 is the address of foo_ptr
+// CHECK-NEXT: 0x00000000000304c0	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 
 int foo;
 

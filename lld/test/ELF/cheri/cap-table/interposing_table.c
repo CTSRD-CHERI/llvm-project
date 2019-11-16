@@ -57,6 +57,7 @@ int __start(void) {
   return __libc_interposing[1] != (void*)0;
 }
 
+// CHECK: SYMBOL TABLE:
+// CHECK: 0000000[[libc_interposing_addr:[0-9a-f]+]] l     O .data		 00000540 .hidden __libc_interposing
 // CHECK: CAPABILITY RELOCATION RECORDS:
-// CHECK: 0x0000000120031cc0	Base: __wrap_accept (0x0000000120011020)	Offset: 0x0000000000000000	Length: 0x0000000000000038	Permissions: 0x8000000000000000 (Function)
-// CHECK: 0000000120031cc0 l     O .data		 00000540 .hidden __libc_interposing
+// CHECK: 0x0000000[[libc_interposing_addr]]	Base: __wrap_accept (0x0000000120011020)	Offset: 0x0000000000000000	Length: 0x0000000000000038	Permissions: 0x8000000000000000 (Function)

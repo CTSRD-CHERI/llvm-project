@@ -84,6 +84,20 @@ extern int global_int;
 
 // Check that the indices for the per-function table are correct (should be 0 or 16)
 
+// SYMBOLS-LABEL: SYMBOL TABLE:
+// SYMBOLS: 0000000000020920 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function1
+// SYMBOLS: 0000000000020930 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function2
+// SYMBOLS: 0000000000020940 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function4
+// SYMBOLS: 0000000000020950 l     O .captable		 00000010 extern_int@CAPTABLE@function4
+// SYMBOLS: 0000000000020960 l     O .captable		 00000010 global_int@CAPTABLE@function5
+// SYMBOLS: 0000000000020970 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@same_globals_as_function1
+// SYMBOLS: 0000000000020980 l     O .captable		 00000010 function3@CAPTABLE@x.6
+// SYMBOLS: 0000000000020990 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
+// SYMBOLS: 00000000000209a0 l     O .captable		 00000010 extern_int@CAPTABLE@function3
+// SYMBOLS: 0000000000020920         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
+
+
+
 // DISAS-LABEL: Disassembly of section .text:
 void *function1(void) { return extern_void_ptr(); }
 // DISAS: function1:
@@ -149,19 +163,6 @@ __attribute__((noinline)) static void *function3(void) {
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
-
-// SYMBOLS-LABEL: SYMBOL TABLE:
-// SYMBOLS: 0000000000020920 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function1
-// SYMBOLS: 0000000000020930 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function2
-// SYMBOLS: 0000000000020940 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function4
-// SYMBOLS: 0000000000020950 l     O .captable		 00000010 extern_int@CAPTABLE@function4
-// SYMBOLS: 0000000000020960 l     O .captable		 00000010 global_int@CAPTABLE@function5
-// SYMBOLS: 0000000000020970 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@same_globals_as_function1
-// SYMBOLS: 0000000000020980 l     O .captable		 00000010 function3@CAPTABLE@x.6
-// SYMBOLS: 0000000000020990 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
-// SYMBOLS: 00000000000209a0 l     O .captable		 00000010 extern_int@CAPTABLE@function3
-// SYMBOLS: 0000000000020920         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
-
 // RUN: llvm-readobj --cap-table-mapping %t.so | FileCheck %s -check-prefix READOBJ-MAPPING
 // Check that the mapping between functions + captable subsets is sensible:
 
@@ -178,44 +179,45 @@ __attribute__((noinline)) static void *function3(void) {
 
 // Also check that the raw bytes are correct in addition to the llvm-readobj output
 // RUN: llvm-objdump --full-contents --section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
-// MAPPING: Idx Name          Size      VMA          Type
-// MAPPING:   9 .captable_mapping 000000a8 00000000000006e8 DATA
+// MAPPING: Sections:
+// MAPPING-NEXT: Idx Name          Size      VMA          Type
+// MAPPING-NEXT:   9 .captable_mapping 000000a8 00000000000006e8 DATA
 // MAPPING-EMPTY:
+// MAPPING-NEXT: SYMBOL TABLE:
+// MAPPING: 00000000[[FUNCTION3_ADDR:000108d0]] l     F .text		 00000050 function3
+// MAPPING: 00000000[[FUNCTION1_ADDR:000107c0]] g     F .text		 00000030 function1
+// MAPPING: 00000000[[FUNCTION2_ADDR:000107f0]] g     F .text		 00000030 .protected function2
+// MAPPING: 00000000[[FUNCTION4_ADDR:00010820]] g     F .text		 00000050 .protected function4
+// MAPPING: 00000000[[FUNCTION5_ADDR:00010870]] g     F .text		 0000000c function5
+// MAPPING: 0000000000000000         *UND*		 00000000 global_int
+// MAPPING: 00000000[[SAME_GLOBALS_ADDR:00010880]] g     F .text		 00000030 same_globals_as_function1
+// MAPPING: 00000000[[X_ADDR:000108b0]] g     F .text		 00000020 x
 // MAPPING: Contents of section .captable_mapping:
-// MAPPING-NEXT:  06e8 00000000 [[FUNCTION1_ADDR:000107c0]]
+// MAPPING-NEXT:  06e8 00000000 [[FUNCTION1_ADDR]]
 // MAPPING-SAME:       00000000 000107f0
 // MAPPING-NEXT:  06f8 00000000 00000010
 // Start addr  000107c0, size 0x20, captable index 0, size 1
-// MAPPING-SAME:       00000000 [[FUNCTION2_ADDR:000107f0]]
+// MAPPING-SAME:       00000000 [[FUNCTION2_ADDR]]
 // MAPPING-NEXT:  0708 00000000 00010820
 // MAPPING-SAME:       00000010 00000010
 // Start addr  000107f0, size 0x20, captable index 1, size 1
-// MAPPING-NEXT:  0718 00000000 [[FUNCTION4_ADDR:00010820]]
+// MAPPING-NEXT:  0718 00000000 [[FUNCTION4_ADDR]]
 // MAPPING-SAME:       00000000 00010870
 // MAPPING-NEXT:  0728 00000020 00000020
 // Start addr  00010820, size 0x48, captable index 2, size 2
-// MAPPING-SAME:       00000000 [[FUNCTION5_ADDR:00010870]]
+// MAPPING-SAME:       00000000 [[FUNCTION5_ADDR]]
 // MAPPING-NEXT:  0738 00000000 0001087c
 // MAPPING-SAME:       00000040 00000010
 // Start addr  00010870, size 0xc, captable index 4, size 1
-// MAPPING-NEXT:  0748 00000000 [[SAME_GLOBALS_ADDR:00010880]]
+// MAPPING-NEXT:  0748 00000000 [[SAME_GLOBALS_ADDR]]
 // MAPPING-SAME:       00000000 000108b0
 // MAPPING-NEXT:  0758 00000050 00000010
 // Start addr  00010880, size 0x20, captable index 5, size 1
-// MAPPING-SAME:       00000000 [[X_ADDR:000108b0]]
+// MAPPING-SAME:       00000000 [[X_ADDR]]
 // MAPPING-NEXT:  0768 00000000 000108d0
 // MAPPING-SAME:       00000060 00000010
 // Start addr  000108b0, size 0x20, captable index 6, size 1
-// MAPPING-NEXT:  0778 00000000 [[FUNCTION3_ADDR:000108d0]]
+// MAPPING-NEXT:  0778 00000000 [[FUNCTION3_ADDR]]
 // MAPPING-SAME:       00000000 00010920
 // MAPPING-NEXT:  0788 00000070 00000020
 // Start addr  000108d0, size 0x48, captable index 7, size 2
-// MAPPING-NEXT: SYMBOL TABLE:
-// MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 00000050 function3
-// MAPPING: 00000000[[FUNCTION1_ADDR]] g     F .text		 00000030 function1
-// MAPPING: 00000000[[FUNCTION2_ADDR]] g     F .text		 00000030 .protected function2
-// MAPPING: 00000000[[FUNCTION4_ADDR]] g     F .text		 00000050 .protected function4
-// MAPPING: 00000000[[FUNCTION5_ADDR]] g     F .text		 0000000c function5
-// MAPPING: 0000000000000000         *UND*		 00000000 global_int
-// MAPPING: 00000000[[SAME_GLOBALS_ADDR]] g     F .text		 00000030 same_globals_as_function1
-// MAPPING: 00000000[[X_ADDR]] g     F .text		 00000020 x

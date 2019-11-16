@@ -73,6 +73,9 @@ void __start(void) {}
 // SHLIB-RELOCS-NEXT:   }
 // SHLIB-RELOCS-NEXT: ]
 
+// DUMP-CAPRELOCS-LABEL: SYMBOL TABLE:
+// DUMP-CAPRELOCS: {{.+}} gw    O .global_sizes           00000008 .size.errno
+// DUMP-CAPRELOCS: {{.+}} g     O .bss            00000004 errno
 
 // DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
 // STATIC-NEXT: Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function){{$}}
@@ -81,15 +84,12 @@ void __start(void) {}
 
 
 // The external capsizefix does okay for both cases:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function){{$}}
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function){{$}}
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function)
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x000000000000004c Permissions: 0x8000000000000000 (Function)
 
-// DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
+// DUMP-CAPRELOCS-EMPYT:
 
 // DUMP-CAPRELOCS-LABEL: Contents of section .global_sizes:
 // DUMP-CAPRELOCS-NEXT:   00000000 00000004                    ........
 // DUMP-CAPRELOCS-NEXT:  Contents of section
 
-// DUMP-CAPRELOCS-LABEL: SYMBOL TABLE:
-// DUMP-CAPRELOCS: {{.+}} gw    O .global_sizes           00000008 .size.errno
-// DUMP-CAPRELOCS: {{.+}} g     O .bss            00000004 errno

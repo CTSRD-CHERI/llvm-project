@@ -19,13 +19,13 @@ cap:
 
 .endif
 
+# CHECK-LABEL: SYMBOL TABLE:
+# CHECK: 0000000000020400         .data		 00000000 cap
+#                   ^----- Ensure that this is aligned to 0x20
+# CHECK: 0000000000000000         *UND*		 00000000 foo
+
 # CHECK-LABEL: Contents of section .data:
 # CHECK-NEXT:  203e0 00000000 00001234 00000000 00000000
 # CHECK-NEXT:  203f0 00000000 00000000 00000000 00000000
 # CHECK-NEXT:  20400 00000000 00000000 cacacaca cacacaca
 # CHECK-NEXT:  20410 cacacaca cacacaca cacacaca cacacaca
-
-# CHECK-LABEL: SYMBOL TABLE:
-# CHECK: 0000000000020400         .data		 00000000 cap
-#                   ^----- Ensure that this is aligned to 0x20
-# CHECK: 0000000000000000         *UND*		 00000000 foo
