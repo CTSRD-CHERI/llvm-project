@@ -88,10 +88,6 @@ using namespace llvm;
 STATISTIC(NumTailCalls, "Number of tail calls");
 
 static cl::opt<bool>
-LargeGOT("mxgot", cl::Hidden,
-         cl::desc("MIPS: Enable GOT larger than 64k."), cl::init(false));
-
-static cl::opt<bool>
 HugeGOT("mxmxgot", cl::Hidden,
          cl::desc("MIPS: Use large GOT relocations even for local symbols."), cl::init(false),
          cl::ZeroOrMore);
@@ -640,8 +636,9 @@ MipsTargetLowering::createFastISel(FunctionLoweringInfo &funcInfo,
                      !Subtarget.inMicroMipsMode();
 
   // Disable if either of the following is true:
-  // We do not generate PIC, the ABI is not O32, LargeGOT is being used.
-  if (!TM.isPositionIndependent() || !TM.getABI().IsO32() || LargeGOT)
+  // We do not generate PIC, the ABI is not O32, XGOT is being used.
+  if (!TM.isPositionIndependent() || !TM.getABI().IsO32() ||
+      Subtarget.useXGOT())
     UseFastISel = false;
 
   return UseFastISel ? Mips::createFastISel(funcInfo, libInfo) : nullptr;
@@ -2674,7 +2671,6 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                                     : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
     }
   } else {
-
     // Every other architecture would use shouldAssumeDSOLocal in here, but
     // mips is special.
     // * In PIC code mips requires got loads even for local statics!
@@ -2686,22 +2682,21 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     // * Mips linkers don't support creating a page and a full got entry for
     //   the same symbol.
     // * Given all that, we have to use a full got entry for hidden symbols :-(
-    if (GV->hasLocalLinkage() && !HugeGOT)
-      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
-    else if (LargeGOT || HugeGOT)
+    if (GV->hasLocalLinkage())
+      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+
+    else if (Subtarget.useXGOT() || HugeGOT)
       Global = getAddrGlobalLargeGOT(
           N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16, MipsII::MO_GOT_LO16,
           DAG.getEntryNode(),
-          MachinePointerInfo::getGOT(DAG.getMachineFunction()), GV->isThreadLocal());
-    else if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
-      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
+          MachinePointerInfo::getGOT(DAG.getMachineFunction()));
     else
       Global = getAddrGlobal(
           N, SDLoc(N), Ty, DAG,
           (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT,
-          DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()), GV->isThreadLocal());
+          DAG.getEntryNode(),
+          MachinePointerInfo::getGOT(DAG.getMachineFunction()));
   }
-
   if (isCheriPointer(GV->getType(), &DAG.getDataLayout())) {
     assert(!ABI.UsesCapabilityTable());
     // Allow compiling some LLVM IR generated for cap-table:
@@ -4446,13 +4441,13 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       // corrupt the instruction)
       InternalLinkage = GV->hasInternalLinkage();
 
-      if (LargeGOT) {
+      if (InternalLinkage)
+        Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
+      else if (Subtarget.useXGOT()) {
         Callee = getAddrGlobalLargeGOT(G, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                        MipsII::MO_CALL_LO16, Chain,
                                        FuncInfo->callPtrInfo(GV), GV->isThreadLocal());
         IsCallReloc = true;
-      } else if (InternalLinkage)
-        Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
       else {
         Callee = getAddrGlobal(G, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
                                FuncInfo->callPtrInfo(GV), GV->isThreadLocal());
@@ -4477,7 +4472,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       // NOTE: address space zero is correct here since we are in the legacy ABI
       Callee = DAG.getTargetExternalSymbol(
           Sym, getPointerTy(DAG.getDataLayout(), 0), MipsII::MO_NO_FLAG);
-    } else if (LargeGOT) {
+    else if (Subtarget.useXGOT()) {
       Callee = getAddrGlobalLargeGOT(S, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                      MipsII::MO_CALL_LO16, Chain,
                                      FuncInfo->callPtrInfo(Sym), /*IsForTls=*/false);
