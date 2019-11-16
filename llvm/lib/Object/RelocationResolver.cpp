@@ -572,8 +572,6 @@ getRelocationResolver(const ObjectFile &Obj) {
     switch (Obj.getArch()) {
     case Triple::x86:
       return {supportsX86, resolveX86};
-    case Triple::x86_64: // x32 ABI
-      return {supportsX86_64, resolveX86_64};
     case Triple::ppc:
       return {supportsPPC32, resolvePPC32};
     case Triple::arm:
