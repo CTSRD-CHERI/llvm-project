@@ -95,7 +95,7 @@ static std::string getLocation(const InputSectionBase &s, const Symbol &sym,
   return msg + s.getObjMsg(off);
 }
 
-std::string lld::elf::getLocationMessage(const InputSectionBase &s, const Symbol &sym,
+std::string getLocationMessage(const InputSectionBase &s, const Symbol &sym,
                                uint64_t off) {
   return getLocation(s, sym, off);
 }
