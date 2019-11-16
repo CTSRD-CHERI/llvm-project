@@ -153,7 +153,7 @@ Instruction *InstCombiner::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
     if (!DL.isFatPointer(200))
       return nullptr;  // If not 1/2/4/8 bytes, exit.
     uint64_t PtrCpySize = DL.getPointerSize(200);
-    uint64_t PtrCpyAlign = DL.getPointerPrefAlignment(200);
+    uint64_t PtrCpyAlign = DL.getPointerPrefAlignment(200).value();
     if ((Size > PtrCpySize) || (CopyDstAlign < PtrCpyAlign) ||
         (CopySrcAlign < PtrCpyAlign))
       return nullptr;
@@ -4081,7 +4081,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       II->setOperand(2, ConstantInt::get(OpIntTy, GCR.getBasePtrIndex()));
       return II;
     }
-    
+
     // Translate facts known about a pointer before relocating into
     // facts about the relocate value, while being careful to
     // preserve relocation semantics.

@@ -5898,7 +5898,7 @@ static SDValue getMemcpyLoadsAndStores(
     LLVM_DEBUG(dbgs() << " DstAlignCanChange -> using type "; Ty->dump());
     unsigned NewAlign = (unsigned)DL.getABITypeAlignment(Ty);
     LLVM_DEBUG(dbgs() << "\t->NewAlign = " << NewAlign << ", stack alignment="
-                      << DL.getStackAlignment() << "\n");
+                      << DL.getStackAlignment().value() << "\n");
     if (MemOps[0].isFatPointer()) {
       assert(!DL.exceedsNaturalStackAlignment(llvm::Align(NewAlign)) &&
              "Stack not capability-aligned?");

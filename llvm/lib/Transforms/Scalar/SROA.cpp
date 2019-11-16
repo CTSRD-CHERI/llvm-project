@@ -872,7 +872,7 @@ private:
     // TODO: Better way to get capability type
     if (!DL.isFatPointer(200))
       return;
-    unsigned CapAlign = DL.getPointerABIAlignment(200);
+    unsigned CapAlign = DL.getPointerABIAlignment(200).value();
     unsigned CapSize = DL.getPointerSize(200);
 
     unsigned AIAlign = AS.AI.getAlignment();
@@ -2912,7 +2912,7 @@ private:
 
     Type *AllocaTy = NewAI.getAllocatedType();
     Type *ScalarTy = AllocaTy->getScalarType();
-    
+
     const bool CanContinue = [&]() {
       if (VecTy || IntTy)
         return true;
