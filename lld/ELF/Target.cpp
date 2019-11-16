@@ -34,12 +34,9 @@
 using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::ELF;
-using namespace lld;
-using namespace lld::elf;
 
-const TargetInfo *elf::target;
-
-std::string lld::toString(RelType type) {
+namespace lld {
+std::string toString(elf::RelType type) {
   auto machine = elf::config->emachine;
   if (machine == EM_MIPS && type > 0xff) {
     uint32_t type1 = type & 0xff;
@@ -48,7 +45,7 @@ std::string lld::toString(RelType type) {
     uint32_t type3 = (type >> 16) & 0xff;
     if (type2 || type3) {
       return (result + "/" + getELFRelocationTypeName(machine, type2) + "/" +
-              getELFRelocationTypeName(machine, type3)).str();
+          getELFRelocationTypeName(machine, type3)).str();
     }
     return result.str();
   }
@@ -58,7 +55,10 @@ std::string lld::toString(RelType type) {
   return s;
 }
 
-TargetInfo *elf::getTarget() {
+namespace elf {
+const TargetInfo *target;
+
+TargetInfo *getTarget() {
   switch (config->emachine) {
   case EM_386:
   case EM_IAMCU:
@@ -117,7 +117,7 @@ template <class ELFT> static ErrorPlace getErrPlace(const uint8_t *loc) {
   return {};
 }
 
-ErrorPlace elf::getErrorPlace(const uint8_t *loc) {
+ErrorPlace getErrorPlace(const uint8_t *loc) {
   switch (config->ekind) {
   case ELF32LEKind:
     return getErrPlace<ELF32LE>(loc);
@@ -193,3 +193,6 @@ uint64_t TargetInfo::getImageBase() const {
     return *config->imageBase;
   return config->isPic ? 0 : defaultImageBase;
 }
+
+} // namespace elf
+} // namespace lld
