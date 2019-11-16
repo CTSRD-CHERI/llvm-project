@@ -44,7 +44,7 @@
 ; CHECK-NEXT:      Scalarize Masked Memory Intrinsics
 ; CHECK-NEXT:      Expand reduction intrinsics
 ; CHECK-NEXT:      Expand Atomic instructions
-; CHERI-NEXT:      CHERI fold capability intrinsics
+; CHERI-NEXT:    CHERI fold capability intrinsics
 ; CHERI-NEXT:    FunctionPass Manager
 ; CHECK-NEXT:      Dominator Tree Construction
 ; CHECK-NEXT:      Natural Loop Information
@@ -53,8 +53,8 @@
 ; CHERI-NEXT:      Post-Dominator Tree Construction
 ; CHERI-NEXT:      Aggressive Dead Code Elimination
 ; CHERI-NEXT:      CHERI range checker
-; CHERI-NEXT:      CHERI sandbox ABI setup
-; CHERI-NEXT:      FunctionPass Manager
+; CHERI-NEXT:    CHERI sandbox ABI setup
+; CHERI-NEXT:    FunctionPass Manager
 ; CHERI-NEXT:      Dominator Tree Construction
 ; CHERI-NEXT:      Natural Loop Information
 ; CHECK-NEXT:      CodeGen Prepare
@@ -84,12 +84,14 @@
 ; CHECK-NEXT:      MachineDominator Tree Construction
 ; CHECK-NEXT:      Machine Natural Loop Construction
 ; CHECK-NEXT:      Early Machine Loop Invariant Code Motion
+; CHECK-NEXT:      MachineDominator Tree Construction
 ; CHECK-NEXT:      Machine Block Frequency Analysis
 ; CHECK-NEXT:      Machine Common Subexpression Elimination
 ; CHECK-NEXT:      MachinePostDominator Tree Construction
 ; CHECK-NEXT:      Machine code sinking
 ; CHECK-NEXT:      Peephole Optimizations
 ; CHECK-NEXT:      Remove dead machine instructions
+; CHECK-NEXT:      MachineDominator Tree Construction
 ; CHECK-NEXT:      Mips MipsOptimizePICCall
 ; CHERI-NEXT:      MachineDominator Tree Construction
 ; CHERI-NEXT:      Machine Natural Loop Construction
@@ -128,6 +130,7 @@
 ; CHERI-NEXT:      MachineDominator Tree Construction
 ; CHERI-NEXT:      Machine Natural Loop Construction
 ; CHECK-NEXT:      Machine Block Frequency Analysis
+; MIPS-NEXT:      MachineDominator Tree Construction
 ; CHECK-NEXT:      MachinePostDominator Tree Construction
 ; CHECK-NEXT:      Lazy Machine Block Frequency Analysis
 ; CHECK-NEXT:      Machine Optimization Remark Emitter

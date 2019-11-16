@@ -30,9 +30,9 @@
 
 // The dynamic case fills in the offset length and permission fields but doesn't have the base yet
 // DYNAMIC: CAPABILITY RELOCATION RECORDS:
-// DYNAMIC: 0x0000000120030{{.+}}	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
-// DYNAMIC: 0x0000000120030{{.+}}	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000019	Length: 0x0000000000000000	Permissions: 0x00000000
-// DYNAMIC: 0x0000000120030{{.+}}	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
+// DYNAMIC: 0x0000000120020{{.+}}	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
+// DYNAMIC: 0x0000000120020{{.+}}	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000019	Length: 0x0000000000000000	Permissions: 0x00000000
+// DYNAMIC: 0x0000000120020{{.+}}	Base: <Unnamed symbol> (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
 
 // DYNAMIC-EXE-RELOCS: Section ({{.+}}) .rel.dyn {
 // DYNAMIC-EXE-RELOCS-NEXT:    0x1200{{.+}} R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE external_buffer 0x0

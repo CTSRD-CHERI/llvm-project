@@ -175,7 +175,7 @@ public:
           ForcedAlignment = TLI->getAlignmentForPreciseBounds(AllocaSize);
         }
       }
-      AI->setAlignment(Align(std::max(AI->getAlignment(), ForcedAlignment)));
+      AI->setAlignment(MaybeAlign(std::max(AI->getAlignment(), ForcedAlignment)));
       // Only set bounds for allocas that escape this function
       bool NeedBounds = true;
       // Always set bounds if the function has the optnone attribute
@@ -267,7 +267,7 @@ public:
             new AllocaInst(TypeWithPadding, AI->getType()->getAddressSpace(),
                            nullptr, "", AI);
           NewAI->takeName(AI);
-          NewAI->setAlignment(Align(AI->getAlignment()));
+          NewAI->setAlignment(MaybeAlign(AI->getAlignment()));
           NewAI->setUsedWithInAlloca(AI->isUsedWithInAlloca());
           NewAI->setSwiftError(AI->isSwiftError());
           NewAI->copyMetadata(*AI);
