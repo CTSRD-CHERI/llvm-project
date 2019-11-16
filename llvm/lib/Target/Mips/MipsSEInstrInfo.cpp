@@ -1064,7 +1064,7 @@ void MipsSEInstrInfo::expandCCallPseudo(MachineBasicBlock &MBB,
 // For opcodes with the ReMaterializable flag set, this function is called to
 // verify the instruction is really rematable.
 bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
-                                                        AliasAnalysis *AA) const {
+                                                        AAResults *AA) const {
   switch(MI.getOpcode()) {
     // To allow moving CSetBounds on the stack as late as possible.
     case Mips::CheriBoundedStackPseudo:
