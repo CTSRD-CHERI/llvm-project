@@ -68,14 +68,14 @@ extern int printf(const char*, ...);
 // CLEAR-PERM2-NEXT:    [[NEW_LEN9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP3]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS10:%.*]] = icmp ult i64 [[NEW_LEN8]], [[CUR_LEN7]]
 // CLEAR-PERM2-NEXT:    [[RESULT11:%.*]] = select i1 [[NEW_BOUNDS_LESS10]], i8 addrspace(200)* [[NEW_LEN9]], i8 addrspace(200)* [[TMP3]]
-// CLEAR-PERM2-NEXT:    [[CALL:%.*]] = call signext i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* [[RESULT11]], i8 addrspace(200)* [[ADD_PTR]])
+// CLEAR-PERM2-NEXT:    [[CALL:%.*]] = call signext i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* nonnull dereferenceable(1) [[RESULT11]], i8 addrspace(200)* [[ADD_PTR]])
 // CLEAR-PERM2-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* getelementptr inbounds ([22 x i8], [22 x i8] addrspace(200)* @.str.1, i64 0, i64 0), i64 22)
 // CLEAR-PERM2-NEXT:    [[CUR_LEN12:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* getelementptr inbounds ([22 x i8], [22 x i8] addrspace(200)* @.str.1, i64 0, i64 0))
 // CLEAR-PERM2-NEXT:    [[NEW_LEN13:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP4]])
 // CLEAR-PERM2-NEXT:    [[NEW_LEN14:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP4]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS15:%.*]] = icmp ult i64 [[NEW_LEN13]], [[CUR_LEN12]]
 // CLEAR-PERM2-NEXT:    [[RESULT16:%.*]] = select i1 [[NEW_BOUNDS_LESS15]], i8 addrspace(200)* [[NEW_LEN14]], i8 addrspace(200)* [[TMP4]]
-// CLEAR-PERM2-NEXT:    [[CALL17:%.*]] = call signext i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* [[RESULT16]], i8 addrspace(200)* [[RESULT6]])
+// CLEAR-PERM2-NEXT:    [[CALL17:%.*]] = call signext i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* nonnull dereferenceable(1) [[RESULT16]], i8 addrspace(200)* [[RESULT6]])
 // CLEAR-PERM2-NEXT:    call void @llvm.lifetime.end.p200i8(i64 2, i8 addrspace(200)* nonnull [[TMP0]]) #5
 // CLEAR-PERM2-NEXT:    ret i32 0
 //

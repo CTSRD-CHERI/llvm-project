@@ -8,6 +8,6 @@ extern int printf(const char*, ...);
 
 void foo(void) {
   printf("Hello, world!\n");
-  // CHECK: tail call i32 @puts(i8 addrspace(200)* getelementptr inbounds ([14 x i8], [14 x i8] addrspace(200)* @str, i64 0, i64 0))
+  // CHECK: tail call i32 @puts(i8 addrspace(200)* nonnull dereferenceable(1) getelementptr inbounds ([14 x i8], [14 x i8] addrspace(200)* @str, i64 0, i64 0))
 }
 

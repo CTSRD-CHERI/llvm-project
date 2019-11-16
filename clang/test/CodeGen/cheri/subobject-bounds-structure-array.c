@@ -43,7 +43,7 @@ int test_struct_with_array1(struct_with_array *s, long index) {
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_ARRAY:%.*]], [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[S:%.*]], i64 [[INDEX:%.*]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[AGG_RESULT:%.*]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[ARRAYIDX]] to i8 addrspace(200)*
-// CHECK-NEXT:    tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 dereferenceable(56) [[TMP0]], i8 addrspace(200)* align 8 dereferenceable(56) [[TMP1]], i64 56, i1 false), !tbaa.struct !6
+// CHECK-NEXT:    tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nonnull align 8 dereferenceable(56) [[TMP0]], i8 addrspace(200)* nonnull align 8 dereferenceable(56) [[TMP1]], i64 56, i1 false), !tbaa.struct !6
 // CHECK-NEXT:    ret void
 //
 struct_with_array test_struct_with_array2(struct_with_array *s, long index) {
@@ -74,7 +74,7 @@ int test_struct_with_ptr1(struct_with_ptr *s, long index) {
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_PTR:%.*]], [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[S:%.*]], i64 [[INDEX:%.*]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[AGG_RESULT:%.*]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[ARRAYIDX]] to i8 addrspace(200)*
-// CHECK-NEXT:    tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 dereferenceable(48) [[TMP0]], i8 addrspace(200)* align 16 dereferenceable(48) [[TMP1]], i64 48, i1 false), !tbaa.struct !13
+// CHECK-NEXT:    tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nonnull align 16 dereferenceable(48) [[TMP0]], i8 addrspace(200)* nonnull align 16 dereferenceable(48) [[TMP1]], i64 48, i1 false), !tbaa.struct !13
 // CHECK-NEXT:    ret void
 //
 struct_with_ptr test_struct_with_ptr2(struct_with_ptr *s, long index) {
