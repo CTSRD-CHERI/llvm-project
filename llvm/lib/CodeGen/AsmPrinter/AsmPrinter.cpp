@@ -507,20 +507,20 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   // If the alignment is specified, we *must* obey it.  Overaligning a global
   // with a specified alignment is a prompt way to break globals emitted to
   // sections and expected to be contiguous (e.g. ObjC metadata).
-  const Align Alignment = getGVAlignment(GV, DL);
+  Align Alignment = getGVAlignment(GV, DL);
 
   const TailPaddingAmount TailPadding =
       getObjFileLowering().getTailPaddingForPreciseBounds(Size);
   const unsigned PreciseAlignment =
       getObjFileLowering().getAlignmentForPreciseBounds(Size);
 
-  if (PreciseAlignment > Align.value()) {
+  if (PreciseAlignment > Alignment.value()) {
     LLVM_DEBUG(dbgs() << "\nIncreased alignment for global from "
-                      << Align.value() << " to " << PreciseAlignment << ": ";
+                      << Alignment.value() << " to " << PreciseAlignment << ": ";
                GV->dump(););
     // Don't increase alignment if a custom section has been specified:
     if (!GV->hasSection()) {
-      Align = llvm::Align(PreciseAlignment);
+      Alignment = llvm::Align(PreciseAlignment);
     } else {
       // TODO: add some attribute, emit a sensible warning?
       errs() << "Not overriding global variable alignment for " << GV->getName()

@@ -5894,7 +5894,7 @@ static SDValue getMemcpyLoadsAndStores(
     }
     diagnoseInefficientCheriMemOp(DAG, dl.getDebugLoc(), "memcpy", OptLevel,
                                   CopyTy.empty() ? "<unknown type>" : CopyTy,
-                                  std::max(1u, std::min(Align, SrcAlign)),
+                                  std::max(1u, std::min(Alignment, SrcAlign)),
                                   Size, CapSize);
     return SDValue();
   }
