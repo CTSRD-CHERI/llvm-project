@@ -142,7 +142,7 @@ public:
   }
 
   template <class PredicateLibrary>
-  void setISAExtensionFromPredicates(const PredicateLibrary &P) {
+  void setISAExtensionFromPredicates(const PredicateLibrary &P, const MipsABIInfo& ABI) {
     if (ABI.IsCheriPureCap())
       ISAExtension = CheriPurecapISA_EXT(ABI);
     else if (P.hasCnMipsP())

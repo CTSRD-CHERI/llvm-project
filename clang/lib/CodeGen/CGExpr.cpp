@@ -4436,11 +4436,11 @@ static Address emitArraySubscriptGEP(CodeGenFunction &CGF, Address addr,
     unsigned idx = LastIndex->getZExtValue();
     llvm::DIType *DbgInfo = nullptr;
     if (arrayType)
-      DbgInfo = CGF.getDebugInfo()->getOrCreateStandaloneType(*arrayType, loc);
-    eltPtr = CGF.Builder.CreatePreserveArrayAccessIndex(addr.getElementType(),
-                                                        addr.getPointer(),
-                                                        indices.size() - 1,
-                                                        idx, DbgInfo);
+      DbgInfo = CGF.getDebugInfo()->getOrCreateStandaloneType(*arrayType,
+                                                              E->getExprLoc());
+    eltPtr = CGF.Builder.CreatePreserveArrayAccessIndex(
+        addr.getElementType(), addr.getPointer(), indices.size() - 1, idx,
+        DbgInfo);
   }
 
   return Address(eltPtr, eltAlign);

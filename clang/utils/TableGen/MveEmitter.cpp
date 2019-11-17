@@ -205,7 +205,8 @@ public:
     return Name + " *";
   }
   std::string llvmName() const override {
-    return "llvm::PointerType::getUnqual(" + Pointee->llvmName() + ")";
+    // XXXAR: FIXME always AS0?
+    return "llvm::PointerType::get(" + Pointee->llvmName() + ", 0)";
   }
 
   static bool classof(const Type *T) {
