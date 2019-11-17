@@ -36,7 +36,7 @@ namespace elf {
 static std::string getLocationNonTemplate(InputSectionBase *isec,
                                           uint64_t symOffset);
 }
-std::string verboseToString(elf::Symbol *b, uint64_t symOffset) {
+std::string verboseToString(const elf::Symbol *b, uint64_t symOffset) {
   std::string msg;
 
   if (b->isLocal())
@@ -73,7 +73,7 @@ std::string verboseToString(elf::Symbol *b, uint64_t symOffset) {
   if (b->isInPlt())
     msg += "(in PLT) ";
 
-  elf::Defined* dr = dyn_cast<elf::Defined>(b);
+  const elf::Defined* dr = dyn_cast<elf::Defined>(b);
   elf::InputSectionBase* isec = nullptr;
   if (dr && dr->section) {
     symOffset = dr->isSection() ? symOffset : dr->section->getOffset(dr->value);

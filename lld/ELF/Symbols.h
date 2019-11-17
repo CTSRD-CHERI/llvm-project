@@ -22,7 +22,7 @@
 
 namespace lld {
 std::string toString(const elf::Symbol &);
-std::string verboseToString(elf::Symbol *b, uint64_t symOffset = 0);
+std::string verboseToString(const elf::Symbol *b, uint64_t symOffset = 0);
 
 // There are two different ways to convert an Archive::Symbol to a string:
 // One for Microsoft name mangling and one for Itanium name mangling.
