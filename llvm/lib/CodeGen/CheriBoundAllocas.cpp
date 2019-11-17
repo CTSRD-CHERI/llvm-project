@@ -5,6 +5,7 @@
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"

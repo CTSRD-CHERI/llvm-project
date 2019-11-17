@@ -15,6 +15,7 @@
 
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/InstructionSimplify.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"

@@ -6294,15 +6294,30 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
 }
 
+SDValue SelectionDAG::getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset,
+                                    const SDNodeFlags Flags) {
+  if (Offset == 0)
+    return Ptr;
+
+  // For integer pointers the offset and pointer type must be identical
+  // (otherwise we assert later). For CHERI capabilities we use the the pointer
+  // range type as the offset type.
+  EVT OffsetVT = Ptr.getValueType();
+  if (Ptr.getValueType().isFatPointer()) {
+    OffsetVT = TLI->getPointerRangeTy(getDataLayout());
+  }
+  return getPointerAdd(dl, Ptr, getConstant(Offset, dl, OffsetVT), Flags);
+}
+
 SDValue SelectionDAG::getPointerAdd(const SDLoc dl, SDValue Ptr, SDValue Offset,
                                     const SDNodeFlags Flags) {
   assert(Offset.getValueType().isInteger());
+  if (auto *Constant = dyn_cast<ConstantSDNode>(Offset.getNode())) {
+    if (Constant->isNullValue())
+      return Ptr;
+  }
   EVT BasePtrVT = Ptr.getValueType();
   if (BasePtrVT.isFatPointer()) {
-    if (auto *Constant = dyn_cast<ConstantSDNode>(Offset.getNode())) {
-      if (Constant->isNullValue())
-        return Ptr;
-    }
     return getNode(ISD::PTRADD, dl, BasePtrVT, Ptr, Offset, Flags);
   }
   return getNode(ISD::ADD, dl, BasePtrVT, Ptr, Offset, Flags);

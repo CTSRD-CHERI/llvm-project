@@ -1,4 +1,5 @@
 #include "Mips.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
@@ -107,7 +108,7 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
       }
     }
     for (auto R : Replacements) {
-      auto &GEP = std::get<0>(R); 
+      auto &GEP = std::get<0>(R);
       auto *Header = std::get<1>(R);
       auto *Preheader = std::get<2>(R);
       auto *BackBB = std::get<3>(R);

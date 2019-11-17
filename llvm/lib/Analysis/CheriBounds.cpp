@@ -2,6 +2,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/raw_ostream.h"
 
 // TODO: replace this with cheri-bounds
 #define DEBUG_TYPE "cheri-bound-allocas"
