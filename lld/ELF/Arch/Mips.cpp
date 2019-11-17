@@ -108,7 +108,10 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType type, const Symbol &s,
     // If the target symbol is not preemptible and is not microMIPS,
     // it might be possible to replace jalr/jr instruction by bal/b.
     // It depends on the target symbol's offset.
-    if (!s.isPreemptible && !(s.getVA() & 0x1))
+    // Additionally, we can't optimize references to TLS variables (and
+    // s.getVA() will generate a fatal error for TLS symbols since Out::tlsPhdr
+    // will not have been initialized yet).
+    if (!s.isPreemptible && !s.isTls() && !(s.getVA() & 0x1))
       return R_PC;
     return R_NONE;
   case R_MICROMIPS_JALR:
