@@ -17,14 +17,12 @@
 #include "llvm/Analysis/ProfileSummaryInfo.h"
 #include "llvm/Support/CommandLine.h"
 
-using namespace llvm;
-
-extern cl::opt<bool> EnablePGSO;
-extern cl::opt<bool> PGSOLargeWorkingSetSizeOnly;
-extern cl::opt<bool> PGSOColdCodeOnly;
-extern cl::opt<bool> ForcePGSO;
-extern cl::opt<int> PgsoCutoffInstrProf;
-extern cl::opt<int> PgsoCutoffSampleProf;
+extern llvm::cl::opt<bool> EnablePGSO;
+extern llvm::cl::opt<bool> PGSOLargeWorkingSetSizeOnly;
+extern llvm::cl::opt<bool> PGSOColdCodeOnly;
+extern llvm::cl::opt<bool> ForcePGSO;
+extern llvm::cl::opt<int> PgsoCutoffInstrProf;
+extern llvm::cl::opt<int> PgsoCutoffSampleProf;
 
 namespace llvm {
 
