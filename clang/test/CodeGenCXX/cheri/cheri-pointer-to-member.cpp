@@ -291,12 +291,12 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   // N64-NEXT: [[THIS_ADJUSTED:%.+]] = bitcast i8* [[MEMPTR_VTABLE_ADDR]] to %class.A*
   // N64-NEXT: [[VAR0:%.+]] = and i64 [[PTR_COERCE1]], 1
   // N64-NEXT: [[MEMPTR_ISVIRTUAL:%.+]] = icmp eq i64 [[VAR0]], 0
-  // N64-NEXT: br i1 [[MEMPTR_ISVIRTUAL]], label %[[MEMPTR_NONVIRTUAL_LABEL:.+]], label %[[MEMPTR_VIRTUAL_LABEL:.+]]
+  // N64-NEXT: br i1 [[MEMPTR_ISVIRTUAL]], label %[[MEMPTR_NONVIRTUAL_LABEL:.+]], label %[[MEMPTR_VIRTUAL_LABEL:[0-9a-zA-z._]+]]
 
   // N64: [[MEMPTR_VIRTUAL_LABEL]]:
   // N64-NEXT: [[VAR1:%.+]] = bitcast i8* [[MEMPTR_VTABLE_ADDR]] to i8**
   // N64-NEXT: [[VTABLE:%.+]] = load i8*, i8** [[VAR1]], align 8,
-  // N64-NEXT: [[VAR2:%.+]] = getelementptr i8, i8* [[VTABLE]], i64 [[PTR_COERCE0:%.+]]
+  // N64-NEXT: [[VAR2:%.+]] = getelementptr i8, i8* [[VTABLE]], i64 [[PTR_COERCE0:%[0-9a-zA-z._]+]]
   // N64-NEXT: [[VAR3:%.+]] = bitcast i8* [[VAR2]] to i32 (%class.A*)**
   // N64-NEXT: [[MEMPTR_VIRTUALFN:%.+]] = load i32 (%class.A*)*, i32 (%class.A*)** [[VAR3]], align 8
   // N64-NEXT: br label %[[MEMPTR_END_LABEL:.+]]
