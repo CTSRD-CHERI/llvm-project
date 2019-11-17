@@ -101,15 +101,6 @@ public:
                         const TargetOptions &Options,
                         Optional<Reloc::Model> RM, Optional<CodeModel::Model> CM,
                         CodeGenOpt::Level OL, bool JIT);
-  bool isCompatibleDataLayout(const DataLayout &Candidate) const override {
-    if (!isCapabilitySizeCompatible(Candidate))
-      return false;
-    if (TargetMachine::isCompatibleDataLayout(Candidate))
-      return true;
-    DataLayout MutableCandidate(Candidate);
-    MutableCandidate.setAllocaAS(createDataLayout().getAllocaAddrSpace());
-    return TargetMachine::isCompatibleDataLayout(MutableCandidate);
-  }
 
 private:
   bool isCapabilitySizeCompatible(const DataLayout &Candidate) const {
