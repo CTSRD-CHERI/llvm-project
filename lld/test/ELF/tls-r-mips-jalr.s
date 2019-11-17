@@ -1,6 +1,7 @@
 # REQUIRES: mips
 # RUN: llvm-mc -filetype=obj -triple=mips64-none-freebsd %s -o %t.o
 # RUN: ld.lld -shared %t.o -o %t.so
+# RUN: llvm-objdump -d %t.so | FileCheck %s
 ## Minimized test case create from the following C source code
 ## typedef int (*callback_f)(void);
 ## static __thread callback_f callback;
@@ -12,6 +13,7 @@
 ## }
 
 	.set	noat
+	.set	noreorder
 	.globl	test                    # -- Begin function test
 	.p2align	3
 	.type	test,@function
@@ -44,4 +46,17 @@ test:                                   # @test
 callback:
 	.8byte	0
 	.size	callback, 8
+
+## Check that the R_MIPS_JALR relocations did not change jalr to bal:
+# CHECK-LABEL: Disassembly of section .text:
+# CHECK-EMPTY:
+# CHECK-NEXT: test:
+# CHECK-NEXT:    103d0: df 99 80 20                  	ld	$25, -32736($gp)
+# CHECK-NEXT:    103d4: 03 20 f8 09                  	jalr	$25
+# CHECK-NEXT:    103d8: 00 00 00 00                  	nop
+# CHECK-NEXT:    103dc: 3c 01 00 00                  	lui	$1, 0
+# CHECK-NEXT:    103e0: 00 22 08 2d                  	daddu	$1, $1, $2
+# CHECK-NEXT:    103e4: dc 39 80 00                  	ld	$25, -32768($1)
+# CHECK-NEXT:    103e8: 03 20 00 08                  	jr	$25
+# CHECK-NEXT:    103ec: 00 00 00 00                  	nop
 
