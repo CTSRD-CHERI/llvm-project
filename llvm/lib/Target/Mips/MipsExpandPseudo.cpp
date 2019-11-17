@@ -759,7 +759,7 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
   }
 
   auto SCOp = BuildMI(loopMBB, DL, TII->get(SC), Scratch)
-      .addReg(Scratch)
+      .addReg(SCStoreValue)
       .addReg(Ptr);
   if (!IsCapOp)
     SCOp.addImm(0);
