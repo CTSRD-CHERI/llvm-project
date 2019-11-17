@@ -409,4 +409,5 @@ def main():
   r.reduce_clang_args()
 
 if __name__ == '__main__':
+  sys.exit("Use creduce_crash_testcase.py instead!")
   main()
