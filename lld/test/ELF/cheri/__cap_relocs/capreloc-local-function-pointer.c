@@ -1,6 +1,6 @@
 // REQUIRES: clang, cheri_is_128
 
-// RUN: %cheri_purecap_clang -cheri-cap-table-abi=legacy %s -c -o %t.o
+// RUN: %cheri_purecap_cc1 -emit-obj -mllvm -cheri-cap-table-abi=legacy %s -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
@@ -15,7 +15,7 @@
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
 // RUN: llvm-readobj --cap-relocs -t -s -sd -r %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,SHLIB,SHLIB-RELOCS %s
 
-// RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t-legacy.o
+// RUN: %cheri_purecap_cc1 -emit-obj %legacy_caprelocs_flag_cc1 %s -o %t-legacy.o
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-legacy.o -no-process-cap-relocs -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-readobj --cap-relocs -s -t -sd %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
@@ -50,9 +50,11 @@ __error(void)
 
 void __start(void) {}
 
+// OBJ-CAPRELOCS-NOT: .eh_frame
 // OBJ-CAPRELOCS:       Section (8) .rela.data {
 // OBJ-CAPRELOCS-NEXT:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __error_unthreaded 0x0
 // OBJ-CAPRELOCS-NEXT: }
+// OBJ-CAPRELOCS-NOT: .eh_frame
 
 
 // LINKING-EXE-NOT: warning
@@ -79,15 +81,15 @@ void __start(void) {}
 
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     0x20588 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20590 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 
 // SHLIB-RELOCS-LABEL: Relocations [
 // SHLIB-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// SHLIB-RELOCS-NEXT:     0x20638 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// SHLIB-RELOCS-NEXT:     0x20640 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:   }
 // SHLIB-RELOCS-NEXT: ]
 
@@ -115,11 +117,11 @@ void __start(void) {}
 
 
 // DUMP-CAPRELOCS-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:                     0x120020370 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
+// STATIC-NEXT:                     0x1200{{.+}} (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 44 Perms: Function
 // PIE exe and shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT:                    0x0305b0 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
-// SHLIB-NEXT:                      0x030660 (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
-// The external capsizefix does okay static:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020370 (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 76 Perms: Function
+// DYNAMIC-NEXT:                    0x030{{.+}} (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 44 Perms: Function
+// SHLIB-NEXT:                      0x030{{.+}} (__error_selector) Base: 0x10{{.+}} (__error_unthreaded+0) Length: 44 Perms: Function
+// The external capsizefix does okay static
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x1200{{.+}} (__error_selector) Base: 0x120010{{.+}} (__error_unthreaded+0) Length: 44 Perms: Function
 // DUMP-CAPRELOCS-NEXT: ]
 
