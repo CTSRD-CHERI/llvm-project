@@ -13,7 +13,6 @@
 /// registers target binaries in offloading runtime at program startup.
 ///
 //===----------------------------------------------------------------------===//
-#undef LLVM_NO_DEFAULT_ADDRESS_SPACE // TODO: will not work for CHERI
 
 #include "clang/Basic/Version.h"
 #include "llvm/ADT/ArrayRef.h"

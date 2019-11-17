@@ -21,3 +21,6 @@ clang_target_link_libraries(clang-offload-wrapper
   PRIVATE
   ${CLANG_OFFLOAD_WRAPPER_LIB_DEPS}
   )
+
+# TODO: port this to remove getUnqual
+remove_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)
