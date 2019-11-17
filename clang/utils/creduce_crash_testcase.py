@@ -754,6 +754,14 @@ class Reducer(object):
         new_command.append("%s")  # ensure that the command contains %s at the end
         return new_command, infile
 
+    @staticmethod
+    def list_with_flag_at_end(orig: list, flag: str) -> list:
+        result = list(orig)
+        while flag in result:
+            result.remove(flag)
+        result.append(flag)
+        return result
+
     def _simplify_clang_crash_command(self, new_command: list, infile: Path) -> tuple:
         assert new_command[0] == str(self.options.clang_cmd)
         assert "-o" in new_command
@@ -771,15 +779,16 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without debug info crashes:",
             noargs_opts_to_remove=["-dwarf-column-info", "-munwind-tables"],
-            noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning="],
+            noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning=",
+                                              "-fdebug-prefix-map="],
         )
         # try emitting llvm-ir (i.e. frontend bug):
         print("Checking whether -emit-llvm crashes:", end="", flush=True)
-        generate_ir_cmd = new_command + ["-emit-llvm"]
+        generate_ir_cmd = self.list_with_flag_at_end(new_command, "-emit-llvm")
         if "-cc1" in generate_ir_cmd:
             # Don't add the optnone attribute to the generated IR function
-            generate_ir_cmd.append("-disable-O0-optnone")
-        if "-emit-obj" in generate_ir_cmd:
+            generate_ir_cmd = self.list_with_flag_at_end(generate_ir_cmd, "-disable-O0-optnone")
+        while "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile):
             print("Crashed while generating IR -> must be a", blue("frontend crash.", style="bold"),
@@ -918,9 +927,19 @@ class Reducer(object):
         # check if floating point args are relevant
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without floating point arguments crashes:",
-            noargs_opts_to_remove=["-mdisable-fp-elim", "-msoft-float"],
+            noargs_opts_to_remove=["-msoft-float"],
             one_arg_opts_to_remove=["-mfloat-abi"],
             one_arg_opts_to_remove_if={"-target-feature": lambda a: a == "+soft-float"}
+        )
+        # check if math args are relevant
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without math arguments crashes:",
+            noargs_opts_to_remove=["-fno-rounding-math", "-fwrapv"])
+        # check if frame pointer args are relevant
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without frame pointer argument crashes:",
+            noargs_opts_to_remove=["-mdisable-fp-elim"],
+            noargs_opts_to_remove_startswith=["-mframe-pointer="]
         )
 
         new_command = self._try_remove_args(
@@ -938,8 +957,7 @@ class Reducer(object):
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
-            noargs_opts_to_remove=["-cheri-linker"],
-            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot"}
+            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot" or a == "-mgpopt"}
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various CHERI flags crashes:",
@@ -950,15 +968,22 @@ class Reducer(object):
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
             noargs_opts_to_remove=["-mrelax-all"],
         )
-
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -D flags crashes:",
             noargs_opts_to_remove=["-sys-header-deps"],
             one_arg_opts_to_remove=["-D"]
         )
         new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without include flags crashes:",
+            noargs_opts_to_remove=["-nostdsysteminc", "-nobuiltininc"],
+        )
+        new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -x flag crashes:",
             one_arg_opts_to_remove=["-x"]
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -std= flag crashes:",
+            noargs_opts_to_remove_startswith=["-std="]
         )
 
         if "-disable-llvm-verifier" in new_command:
@@ -977,14 +1002,32 @@ class Reducer(object):
 
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether misc optimization options can be removed:",
-            noargs_opts_to_remove=["-vectorize-loops", "-vectorize-slp"],
-            noargs_opts_to_remove_startswith=["-ftls-model="])
-
+            noargs_opts_to_remove=["-vectorize-loops", "-vectorize-slp"])
 
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether addrsig/init-array options can be removed:",
-            noargs_opts_to_remove=["-fuse-init-array", "-faddrsig"],
-            noargs_opts_to_remove_startswith=["-ftls-model="])
+            noargs_opts_to_remove=["-fuse-init-array", "-faddrsig"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether -ffreestanding can be removed:",
+            noargs_opts_to_remove=["-ffreestanding"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether TLS/relocation model options can be removed:",
+            noargs_opts_to_remove_startswith=["-ftls-model="],
+            one_arg_opts_to_remove=["-mrelocation-model"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether -fgnuc-version= can be removed:",
+            noargs_opts_to_remove_startswith=["-fgnuc-version="])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether -target-cpu option can be removed:",
+            one_arg_opts_to_remove=["-target-cpu"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether -target-abi option can be removed:",
+            one_arg_opts_to_remove=["-target-abi"])
 
         # try to remove some arguments that should not be needed
         new_command = self._try_remove_args(
@@ -1058,11 +1101,9 @@ class Reducer(object):
                 llc_args.append("-float-abi=soft")
             elif arg.startswith("-vectorize"):
                 llc_args.append(arg)
-            elif arg == "-mxgot":
-                pass_once_flags.add(arg)  # some bugs only happen if mxgot is also passed
             elif arg.startswith("-O"):
                 if arg == "-Os":
-                    arg = "-O2" # llc doesn't understand -Os
+                    arg = "-O2"  # llc doesn't understand -Os
                 optimization_flag = arg
         if cpu_flag:
             llc_args.append(cpu_flag)
