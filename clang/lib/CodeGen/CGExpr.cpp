@@ -420,7 +420,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
 
 LValue CodeGenFunction::
 EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
-  const Expr *E = M->GetTemporaryExpr();
+  const Expr *E = M->getSubExpr();
 
   assert((!M->getExtendingDecl() || !isa<VarDecl>(M->getExtendingDecl()) ||
           !cast<VarDecl>(M->getExtendingDecl())->isARCPseudoStrong()) &&
