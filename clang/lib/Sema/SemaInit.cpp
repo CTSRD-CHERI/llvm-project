@@ -7056,8 +7056,8 @@ static void visitLocalsRetainedByReferenceBinding(IndirectLocalPath &Path,
 
   if (auto *MTE = dyn_cast<MaterializeTemporaryExpr>(Init)) {
     if (Visit(Path, Local(MTE), RK))
-      visitLocalsRetainedByInitializer(Path, MTE->getSubExpr(), Visit, true,
-                                       EnableLifetimeWarnings);
+      visitLocalsRetainedByInitializer(Path, MTE->GetTemporaryExpr(), Visit,
+                                       true, EnableLifetimeWarnings);
   }
 
   if (isa<CallExpr>(Init)) {
@@ -7177,8 +7177,9 @@ static void visitLocalsRetainedByInitializer(IndirectLocalPath &Path,
             }
           } else if (auto *MTE = dyn_cast<MaterializeTemporaryExpr>(L)) {
             if (MTE->getType().isConstQualified())
-              visitLocalsRetainedByInitializer(Path, MTE->getSubExpr(), Visit,
-                                               true, EnableLifetimeWarnings);
+              visitLocalsRetainedByInitializer(Path, MTE->GetTemporaryExpr(),
+                                               Visit, true,
+                                               EnableLifetimeWarnings);
           }
           return false;
         }, EnableLifetimeWarnings);
