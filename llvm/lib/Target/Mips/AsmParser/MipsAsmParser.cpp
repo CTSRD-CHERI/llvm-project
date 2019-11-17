@@ -6760,6 +6760,7 @@ MipsAsmParser::parseMemOperand(OperandVector &Operands) {
     isParenExpr = true;
   }
 
+  bool HadLParen = false;
   if (getLexer().getKind() != AsmToken::Dollar) {
     if (parseMemOffset(IdVal, isParenExpr))
       return MatchOperand_ParseFail;
@@ -6840,16 +6841,17 @@ MipsAsmParser::parseMemOperand(OperandVector &Operands) {
         return MatchOperand_ParseFail;
       IdVal = MCBinaryExpr::create(Opcode, IdVal, NextExpr, getContext());
     }
-
+    assert(Parser.getTok().is(AsmToken::LParen));
     Parser.Lex(); // Eat the '(' token.
+    HadLParen = true;
   }
 
   Res = parseAnyRegister(Operands);
   if (Res != MatchOperand_Success)
     return Res;
 
-  if (Parser.getTok().isNot(AsmToken::RParen)) {
-    Error(Parser.getTok().getLoc(), "')' expected");
+  if (HadLParen && Parser.getTok().isNot(AsmToken::RParen)) {
+    ErrorIfNotPending(Parser.getTok().getLoc(), "')' expected");
     return MatchOperand_ParseFail;
   }
 
@@ -7217,7 +7219,7 @@ bool MipsAsmParser::parseParenSuffix(StringRef Name, OperandVector &Operands) {
     }
     if (Parser.getTok().isNot(AsmToken::RParen)) {
       SMLoc Loc = getLexer().getLoc();
-      return Error(Loc, "unexpected token, expected ')'");
+      return ErrorIfNotPending(Loc, "unexpected token, expected ')'");
     }
     Operands.push_back(
         MipsOperand::CreateToken(")", getLexer().getLoc(), *this));
