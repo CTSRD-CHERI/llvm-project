@@ -1396,22 +1396,24 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     }
     assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
 
-    if (DstType->isCHERICapabilityType(CGF.getContext())) {
-      Value *Null = llvm::ConstantPointerNull::get(DstPT);
-      if (SrcType->isBooleanType() && !Opts.TreatBooleanAsSigned)
-        Src = Builder.CreateZExtOrTrunc(Src, CGF.IntPtrTy);
-      else
-        Src = Builder.CreateSExtOrTrunc(Src, CGF.IntPtrTy);
-      return CGF.setCapabilityIntegerValue(Null, Src);
-    }
     // First, convert to the correct width so that we control the kind of
     // extension.
     llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DstPT);
     bool InputSigned = SrcType->isSignedIntegerOrEnumerationType();
+    if (SrcType->isBooleanType() && Opts.TreatBooleanAsSigned) {
+      InputSigned = true;
+    }
     assert(!SrcType->isCHERICapabilityType(CGF.getContext()));
     llvm::Value* IntResult =
         Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
     // Then, cast to pointer.
+    if (DstType->isCHERICapabilityType(CGF.getContext())) {
+      // But for capabilities we want to avoid createing a inttoptr instruction
+      // and instead use llvm.cheri.cap.address/offset.set(NULL, value)
+      assert(MiddleTy->getScalarSizeInBits() <= 64 && "Should use pointer range not size");
+      Value *Null = llvm::ConstantPointerNull::get(DstPT);
+      return CGF.setCapabilityIntegerValue(Null, IntResult);
+    }
     return Builder.CreateIntToPtr(IntResult, DstTy, "conv");
   }
 
