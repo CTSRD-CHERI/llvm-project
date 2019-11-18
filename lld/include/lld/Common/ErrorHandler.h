@@ -122,6 +122,13 @@ inline void message(const Twine &msg) { errorHandler().message(msg); }
 inline void warn(const Twine &msg) { errorHandler().warn(msg); }
 inline uint64_t errorCount() { return errorHandler().errorCount; }
 
+static inline void nonFatalWarning(const Twine &str) {
+  if (errorHandler().fatalWarnings)
+    message("warning: " + str);
+  else
+    warn(str);
+}
+
 LLVM_ATTRIBUTE_NORETURN void exitLld(int val);
 
 void diagnosticHandler(const llvm::DiagnosticInfo &di);

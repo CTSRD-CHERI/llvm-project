@@ -1,6 +1,6 @@
 # REQUIRES: mips
 ## Check that we ignore R_MIPS_JALR relocations agains non-function symbols.
-## Older versions of clang was erroneously generating them for function pointers
+## Older versions of clang were erroneously generating them for function pointers
 ## loaded from any table (not just the GOT), so we need to ignore the relocations
 ## to avoid generating binaries that crash when executed.
 

@@ -79,13 +79,6 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
   }
 }
 
-static inline void nonFatalWarning(const Twine &str) {
-  if (errorHandler().fatalWarnings)
-    message("warning: " + str);
-  else
-    warn(str);
-}
-
 SymbolAndOffset
 SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
                                        const SymbolAndOffset *Default) {
