@@ -169,7 +169,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
     default:
       errs() << DEBUG_TYPE
              << ": Don't know how to handle intrinsic. Assuming bounds needed";
-      I->dump();
+      I->print(errs(), true);
       DBG_INDENTED("Adding stack bounds for unknown intrinsic call: ";
                    I->dump());
       return true;
@@ -230,7 +230,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
   default:
     // Something else - be conservative and say it needs bounds.
     errs() << "DON'T know how to handle ";
-    I->dump();
+    I->print(errs(), true);
     DBG_INDENTED("Adding stack bounds since don't know how to handle: ";
                  I->dump());
     return true;
