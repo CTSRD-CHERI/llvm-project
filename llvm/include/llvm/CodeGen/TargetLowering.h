@@ -1261,12 +1261,14 @@ public:
     if (auto *VTy = dyn_cast<VectorType>(Ty)) {
       Type *EltTy = VTy->getElementType();
       // Lower vectors of pointers to native pointer types.
+      EVT ElemVT;
       if (auto *PTy = dyn_cast<PointerType>(EltTy)) {
-        EVT PointerTy(getPointerTy(DL, PTy->getAddressSpace()));
-        EltTy = PointerTy.getTypeForEVT(Ty->getContext());
+        ElemVT = getPointerTy(DL, PTy->getAddressSpace());
+      } else {
+        ElemVT = EVT::getEVT(EltTy, false);
       }
-      return EVT::getVectorVT(Ty->getContext(), EVT::getEVT(EltTy, false),
-                              VTy->getElementCount());
+      assert(!ElemVT.isOverloaded() && "Should not get an overloaded EVT here");
+      return EVT::getVectorVT(Ty->getContext(), ElemVT, VTy->getElementCount());
     }
 
     return EVT::getEVT(Ty, AllowUnknown);
