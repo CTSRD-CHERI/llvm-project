@@ -2648,9 +2648,6 @@ void DAGTypeLegalizer::ExpandIntRes_LLROUND_LLRINT(SDNode *N, SDValue &Lo,
   EVT RetVT = N->getValueType(0);
 
   if (N->isStrictFPOpcode()) {
-    // FIXME: Support softening for strict fp!
-    assert(getTypeAction(VT) != TargetLowering::TypeSoftenFloat &&
-           "Softening strict fp calls not supported yet!");
     std::pair<SDValue, SDValue> Tmp = ExpandChainLibCall(LC, N, true);
     SplitInteger(Tmp.first, Lo, Hi);
     ReplaceValueWith(SDValue(N, 1), Tmp.second);
@@ -2659,12 +2656,6 @@ void DAGTypeLegalizer::ExpandIntRes_LLROUND_LLRINT(SDNode *N, SDValue &Lo,
 
   TargetLowering::MakeLibCallOptions CallOptions;
   CallOptions.setSExt(true);
-
-  if (getTypeAction(VT) == TargetLowering::TypeSoftenFloat) {
-    Op = GetSoftenedFloat(Op);
-    CallOptions.setTypeListBeforeSoften(VT, RetVT, true);
-  }
-
   SplitInteger(TLI.makeLibCall(DAG, LC, RetVT, Op, CallOptions, dl).first,
                Lo, Hi);
 }
