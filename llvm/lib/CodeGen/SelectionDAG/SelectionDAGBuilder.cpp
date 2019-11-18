@@ -9401,7 +9401,6 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
 
     ComputeValueVTs(*this, DL, PtrRetTy, PVTs);
     assert(PVTs.size() == 1 && "Pointers should fit in one register");
-    EVT PtrVT = PVTs[0];
 
     unsigned NumValues = RetTys.size();
     ReturnValues.resize(NumValues);
@@ -9415,8 +9414,8 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     MachineFunction &MF = CLI.DAG.getMachineFunction();
     unsigned HiddenSRetAlign = MF.getFrameInfo().getObjectAlignment(DemoteStackIdx);
     for (unsigned i = 0; i < NumValues; ++i) {
+      assert(DemoteStackSlot.getValueType() == PVTs[0]);
       SDValue Add = CLI.DAG.getPointerAdd(CLI.DL, DemoteStackSlot, Offsets[i], Flags);
-      assert(DemoteStackSlot.getValueType() == PtrVT);
       SDValue L = CLI.DAG.getLoad(
           RetTys[i], CLI.DL, CLI.Chain, Add,
           MachinePointerInfo::getFixedStack(CLI.DAG.getMachineFunction(),

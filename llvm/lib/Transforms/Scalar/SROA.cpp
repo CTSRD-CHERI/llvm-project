@@ -317,10 +317,11 @@ private:
 
   friend class AllocaSlices::SliceBuilder;
 
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+// XXXAR: For CHERI we always use this
+// #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   /// Handle to alloca instruction to simplify method interfaces.
   AllocaInst &AI;
-#endif
+// #endif
 
   /// The instruction responsible for this alloca not having a known set
   /// of slices.
@@ -1173,9 +1174,9 @@ private:
 
 AllocaSlices::AllocaSlices(const DataLayout &DL, AllocaInst &AI)
     :
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+// #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
       AI(AI),
-#endif
+// #endif
       PointerEscapingInstr(nullptr) {
   SliceBuilder PB(DL, AI, *this);
   SliceBuilder::PtrInfo PtrI = PB.visitPtr(AI);

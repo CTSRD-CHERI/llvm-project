@@ -3450,6 +3450,7 @@ static void checkCheriPtrToInt(const DataLayout *DL, Type* SrcTy, Type* Dst) {
     unsigned ValidBitWidth = DL ? DL->getIndexTypeSizeInBits(SrcTy) : 64;
     assert(cast<IntegerType>(Dst)->getIntegerBitWidth() <= ValidBitWidth &&
            "Bad ptrtoint for Cheri capabilities!");
+    (void)ValidBitWidth;
   }
 }
 
@@ -3460,6 +3461,7 @@ static void checkCheriIntToPtr(const DataLayout *DL, Type* SrcTy, Type* Dst) {
     unsigned ValidBitWidth = DL ? DL->getIndexTypeSizeInBits(Dst) : 64;
     assert(cast<IntegerType>(SrcTy)->getIntegerBitWidth() <= ValidBitWidth &&
            "Bad inttoptr for Cheri capabilities!");
+    (void)ValidBitWidth;
   }
 }
 
