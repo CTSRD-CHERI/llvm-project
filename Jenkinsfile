@@ -76,7 +76,10 @@ def doBuild() {
     stage("Checkout sources") {
         timestamps {
             echo("scm=${scm}")
-            llvmRepo = doGit('https://github.com/CTSRD-CHERI/llvm-project.git', llvmBranch, 'llvm-project', 'llvm-project')
+            // llvmRepo = doGit('https://github.com/CTSRD-CHERI/llvm-project.git', llvmBranch, 'llvm-project', 'llvm-project')
+            dir("llvm-project") {
+              llvmRepo = checkout scm
+            }
             echo("LLVM = ${llvmRepo}")
         }
     }
@@ -104,6 +107,12 @@ fi
 git -C "${WORKSPACE}/llvm-project" rev-parse HEAD
 
 cd "${WORKSPACE}/llvm-project" || exit 1
+# Print some git info to verify we are building the right commits:
+git branch
+git status
+git log -3
+
+rm -rf Build
 mkdir -p Build
 
 # Remove some files that may have been created in a previous run:
