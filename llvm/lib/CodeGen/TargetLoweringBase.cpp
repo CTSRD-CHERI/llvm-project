@@ -1683,6 +1683,12 @@ TargetLoweringBase::getTypeLegalizationCost(const DataLayout &DL,
   // the only operation that costs anything is the split. After splitting
   // we need to handle two types.
   while (true) {
+    if (MTy == MVT::iFATPTRAny) {
+      auto T = MTy.getTypeForEVT(C);
+      MTy = MVT::getFatPointerVT(
+          DL.getPointerSizeInBits(T->getPointerAddressSpace()));
+    }
+    assert(!MTy.isOverloaded());
     LegalizeKind LK = getTypeConversion(C, MTy);
 
     if (LK.first == TypeLegal)
