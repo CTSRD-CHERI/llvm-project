@@ -140,6 +140,7 @@ tools = [
     ToolSubst('%opt-viewer', opt_viewer_cmd),
     ToolSubst('%llvm-objcopy', FindTool('llvm-objcopy')),
     ToolSubst('%llvm-strip', FindTool('llvm-strip')),
+    ToolSubst('%llvm-install-name-tool', FindTool('llvm-install-name-tool')),
 ]
 
 llvm_config.add_cheri_tool_substitutions(['llc', 'opt', 'llvm-mc'])
@@ -154,7 +155,8 @@ tools.extend([
     'dsymutil', 'lli', 'lli-child-target', 'llvm-ar', 'llvm-as',
     'llvm-bcanalyzer', 'llvm-config', 'llvm-cov', 'llvm-cxxdump', 'llvm-cvtres',
     'llvm-diff', 'llvm-dis', 'llvm-dwarfdump', 'llvm-exegesis', 'llvm-extract',
-    'llvm-isel-fuzzer', 'llvm-ifs', 'llvm-jitlink', 'llvm-opt-fuzzer', 'llvm-lib',
+    'llvm-isel-fuzzer', 'llvm-ifs', 'llvm-install-name-tool',
+    'llvm-jitlink', 'llvm-opt-fuzzer', 'llvm-lib',
     'llvm-link', 'llvm-lto', 'llvm-lto2', 'llvm-mc', 'llvm-mca',
     'llvm-modextract', 'llvm-nm', 'llvm-objcopy', 'llvm-objdump',
     'llvm-pdbutil', 'llvm-profdata', 'llvm-ranlib', 'llvm-rc', 'llvm-readelf',
