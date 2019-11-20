@@ -421,7 +421,7 @@ extern bool LargeCapTable;
 
     TailPaddingAmount
     getTailPaddingForPreciseBounds(uint64_t Size) const override;
-    unsigned getAlignmentForPreciseBounds(uint64_t Size) const override;
+    Align getAlignmentForPreciseBounds(uint64_t Size) const override;
 
     CCAssignFn *CCAssignFnForCall() const;
 

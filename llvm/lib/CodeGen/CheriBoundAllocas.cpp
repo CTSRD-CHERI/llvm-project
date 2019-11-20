@@ -157,7 +157,7 @@ public:
       // Insert immediately after the alloca
       B.SetInsertPoint(AI);
       B.SetInsertPoint(&*++B.GetInsertPoint());
-      unsigned ForcedAlignment = 0;
+      Align ForcedAlignment;
 
       PointerType *AllocaTy = AI->getType();
       assert(isCheriPointer(AllocaTy, &DL));
@@ -176,7 +176,7 @@ public:
           ForcedAlignment = TLI->getAlignmentForPreciseBounds(AllocaSize);
         }
       }
-      AI->setAlignment(MaybeAlign(std::max(AI->getAlignment(), ForcedAlignment)));
+      AI->setAlignment(max(MaybeAlign(AI->getAlignment()), ForcedAlignment));
       // Only set bounds for allocas that escape this function
       bool NeedBounds = true;
       // Always set bounds if the function has the optnone attribute
@@ -247,7 +247,7 @@ public:
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
 
-      if (AI->isStaticAlloca() && ForcedAlignment) {
+      if (AI->isStaticAlloca() && ForcedAlignment != Align::None()) {
         // Pad to ensure bounds don't overlap adjacent objects
         uint64_t AllocaSize =
             cast<ConstantInt>(Size)->getValue().getLimitedValue();

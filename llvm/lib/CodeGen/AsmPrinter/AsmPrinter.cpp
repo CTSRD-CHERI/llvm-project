@@ -506,16 +506,16 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
 
   const TailPaddingAmount TailPadding =
       getObjFileLowering().getTailPaddingForPreciseBounds(Size);
-  const unsigned PreciseAlignment =
+  const Align PreciseAlignment =
       getObjFileLowering().getAlignmentForPreciseBounds(Size);
 
-  if (PreciseAlignment > Alignment.value()) {
+  if (PreciseAlignment > Alignment) {
     LLVM_DEBUG(dbgs() << "\nIncreased alignment for global from "
-                      << Alignment.value() << " to " << PreciseAlignment << ": ";
+                      << Alignment.value() << " to " << PreciseAlignment.value() << ": ";
                GV->dump(););
     // Don't increase alignment if a custom section has been specified:
     if (!GV->hasSection()) {
-      Alignment = llvm::Align(PreciseAlignment);
+      Alignment = PreciseAlignment;
     } else {
       // TODO: add some attribute, emit a sensible warning?
       errs() << "Not overriding global variable alignment for " << GV->getName()

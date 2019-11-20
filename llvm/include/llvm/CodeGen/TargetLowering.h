@@ -2664,8 +2664,8 @@ public:
   virtual TailPaddingAmount getTailPaddingForPreciseBounds(uint64_t Size) const {
     return TailPaddingAmount::None;
   }
-  virtual unsigned getAlignmentForPreciseBounds(uint64_t Size) const {
-    return 0;
+  virtual Align getAlignmentForPreciseBounds(uint64_t Size) const {
+    return Align::None();
   }
 
   //===--------------------------------------------------------------------===//
