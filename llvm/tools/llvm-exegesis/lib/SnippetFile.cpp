@@ -95,7 +95,8 @@ private:
                             unsigned ValueSize,
                             unsigned MaxBytesToEmit) override {}
   void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    unsigned ByteAlignment, SMLoc Loc) override {}
+                    unsigned ByteAlignment, TailPaddingAmount TailPadding,
+                    SMLoc Loc) override {}
 
   unsigned findRegisterByName(const StringRef RegName) const {
     // FIXME: Can we do better than this ?
