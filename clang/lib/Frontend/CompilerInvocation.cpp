@@ -3544,7 +3544,6 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
   if (T.isMIPS()) {
     if (Opts.ABI != "purecap" && T.getEnvironment() == llvm::Triple::CheriPurecap) {
       // Can't use -mabi=64 with -purecap triple
-      // Can't use -mabi=64 with -purecap triple
       if (Opts.ABI.empty())
         Opts.ABI = "purecap";
       else
