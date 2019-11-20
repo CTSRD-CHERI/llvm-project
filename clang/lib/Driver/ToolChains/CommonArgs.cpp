@@ -1072,7 +1072,7 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
     // When targeting the N64 ABI, PIC is the default, except in the case
     // when the -mno-abicalls option is used. In that case we exit
     // at next check regardless of PIC being set below.
-    if (ABIName == "n64")
+    if (ABIName == "n64" || ABIName == "purecap")
       PIC = true;
     // When targettng MIPS with -mno-abicalls, it's always static.
     if(Args.hasArg(options::OPT_mno_abicalls))
