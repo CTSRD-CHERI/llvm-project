@@ -1298,10 +1298,9 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
 
   // We want both global and local symbols. We get the global ones from the
   // symbol table and iterate the object files for the local ones.
-  symtab->forEachSymbol([&](Symbol *sym) {
+  for (Symbol *sym : symtab->symbols())
     if (!sym->isLazy())
       addSym(*sym);
-  });
 
   for (InputFile *file : objectFiles)
     for (Symbol *sym : file->getSymbols())
@@ -1824,8 +1823,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   for (Partition &part : partitions)
     finalizeSynthetic(part.ehFrame);
 
-  symtab->forEachSymbol(
-      [](Symbol *s) { s->isPreemptible = computeIsPreemptible(*s); });
+  for (Symbol *sym : symtab->symbols())
+    sym->isPreemptible = computeIsPreemptible(*sym);
 
   // Change values of linker-script-defined symbols from placeholders (assigned
   // by declareSymbols) to actual definitions.
@@ -1902,19 +1901,18 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
             return symtab->soNames.count(needed);
           });
 
-    symtab->forEachSymbol([](Symbol *sym) {
+    for (Symbol *sym : symtab->symbols())
       if (sym->isUndefined() && !sym->isWeak())
         if (auto *f = dyn_cast_or_null<SharedFile>(sym->file))
           if (f->allNeededIsKnown)
             error(toString(f) + ": undefined reference to " + toString(*sym));
-    });
   }
 
   // Now that we have defined all possible global symbols including linker-
   // synthesized ones. Visit all symbols to give the finishing touches.
-  symtab->forEachSymbol([](Symbol *sym) {
+  for (Symbol *sym : symtab->symbols()) {
     if (!includeInSymtab(*sym))
-      return;
+      continue;
     if (in.symTab)
       in.symTab->addSymbol(sym);
 
@@ -1924,7 +1922,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         if (file->isNeeded && !sym->isUndefined())
           addVerneed(sym);
     }
-  });
+  }
 
   // We also need to scan the dynamic relocation tables of the other partitions
   // and add any referenced symbols to the partition's dynsym.
