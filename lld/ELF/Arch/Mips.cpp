@@ -109,21 +109,17 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType type, const Symbol &s,
     // against functions (loaded from the GOT) but also against data symbols
     // (e.g. a table of function pointers). When we encounter this, ignore the
     // relocation and emit a warning instead.
-    if (!s.isFunc()) {
-      nonFatalWarning(
-          getErrorLocation(loc) +
-          "found R_MIPS_JALR relocation against non-function symbol " +
-          toString(s) + ". This is invalid and most likely a compiler bug.");
+    if (!s.isFunc() && s.type != STT_NOTYPE) {
+      warn(getErrorLocation(loc) +
+           "found R_MIPS_JALR relocation against non-function symbol " +
+           toString(s) + ". This is invalid and most likely a compiler bug.");
       return R_NONE;
     }
 
     // If the target symbol is not preemptible and is not microMIPS,
     // it might be possible to replace jalr/jr instruction by bal/b.
     // It depends on the target symbol's offset.
-    // Additionally, we can't optimize references to TLS variables (and
-    // s.getVA() will generate a fatal error for TLS symbols since Out::tlsPhdr
-    // will not have been initialized yet).
-    if (!s.isPreemptible && !s.isTls() && !(s.getVA() & 0x1))
+    if (!s.isPreemptible && !(s.getVA() & 0x1))
       return R_PC;
     return R_NONE;
   case R_MICROMIPS_JALR:
