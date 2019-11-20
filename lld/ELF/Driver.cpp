@@ -78,6 +78,9 @@ static void readConfigs(opt::InputArgList &args);
 
 bool link(ArrayRef<const char *> args, bool canExitEarly, raw_ostream &stdoutOS,
           raw_ostream &stderrOS) {
+  lld::stdoutOS = &stdoutOS;
+  lld::stderrOS = &stderrOS;
+
   errorHandler().logName = args::getFilenameWithoutExe(args[0]);
   errorHandler().errorLimitExceededMsg =
       "too many errors emitted, stopping now (use "
@@ -86,10 +89,7 @@ bool link(ArrayRef<const char *> args, bool canExitEarly, raw_ostream &stdoutOS,
       "too many warnings emitted, stopping now (use "
       "-warning-limit=0 to see all warnings)\n";
   errorHandler().exitEarly = canExitEarly;
-  enableColors(stderrOS.has_colors());
-
-  lld::stdoutOS = &stdoutOS;
-  lld::stderrOS = &stderrOS;
+  stderrOS.enable_colors(stderrOS.has_colors());
 
   inputSections.clear();
   outputSections.clear();
