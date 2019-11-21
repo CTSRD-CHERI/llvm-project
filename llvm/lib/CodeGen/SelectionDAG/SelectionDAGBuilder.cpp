@@ -4328,6 +4328,7 @@ void SelectionDAGBuilder::visitMaskedStore(const CallInst &I,
   SDValue Ptr = getValue(PtrOperand);
   SDValue Src0 = getValue(Src0Operand);
   SDValue Mask = getValue(MaskOperand);
+  SDValue Offset = DAG.getUNDEF(Ptr.getValueType());
 
   EVT VT = Src0.getValueType();
   if (!Alignment)
@@ -4344,9 +4345,9 @@ void SelectionDAGBuilder::visitMaskedStore(const CallInst &I,
                           // vectors.
                           VT.getStoreSize().getKnownMinSize(),
                           Alignment, AAInfo);
-  SDValue StoreNode = DAG.getMaskedStore(getRoot(), sdl, Src0, Ptr, Mask, VT,
-                                         MMO, false /* Truncating */,
-                                         IsCompressing);
+  SDValue StoreNode =
+      DAG.getMaskedStore(getRoot(), sdl, Src0, Ptr, Offset, Mask, VT, MMO,
+                         ISD::UNINDEXED, false /* Truncating */, IsCompressing);
   DAG.setRoot(StoreNode);
   setValue(&I, StoreNode);
 }
@@ -4496,6 +4497,7 @@ void SelectionDAGBuilder::visitMaskedLoad(const CallInst &I, bool IsExpanding) {
   SDValue Ptr = getValue(PtrOperand);
   SDValue Src0 = getValue(Src0Operand);
   SDValue Mask = getValue(MaskOperand);
+  SDValue Offset = DAG.getUNDEF(Ptr.getValueType());
 
   EVT VT = Src0.getValueType();
   if (!Alignment)
@@ -4526,8 +4528,9 @@ void SelectionDAGBuilder::visitMaskedLoad(const CallInst &I, bool IsExpanding) {
                           VT.getStoreSize().getKnownMinSize(),
                           Alignment, AAInfo, Ranges);
 
-  SDValue Load = DAG.getMaskedLoad(VT, sdl, InChain, Ptr, Mask, Src0, VT, MMO,
-                                   ISD::NON_EXTLOAD, IsExpanding);
+  SDValue Load =
+      DAG.getMaskedLoad(VT, sdl, InChain, Ptr, Offset, Mask, Src0, VT, MMO,
+                        ISD::UNINDEXED, ISD::NON_EXTLOAD, IsExpanding);
   if (AddToChain)
     PendingLoads.push_back(Load.getValue(1));
   setValue(&I, Load);

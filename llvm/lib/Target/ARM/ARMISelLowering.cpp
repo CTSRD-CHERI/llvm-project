@@ -296,6 +296,8 @@ void ARMTargetLowering::addMVEVectorTypes(bool HasMVEFP) {
          im != (unsigned)ISD::LAST_INDEXED_MODE; ++im) {
       setIndexedLoadAction(im, VT, Legal);
       setIndexedStoreAction(im, VT, Legal);
+      setIndexedMaskedLoadAction(im, VT, Legal);
+      setIndexedMaskedStoreAction(im, VT, Legal);
     }
   }
 
@@ -322,6 +324,8 @@ void ARMTargetLowering::addMVEVectorTypes(bool HasMVEFP) {
          im != (unsigned)ISD::LAST_INDEXED_MODE; ++im) {
       setIndexedLoadAction(im, VT, Legal);
       setIndexedStoreAction(im, VT, Legal);
+      setIndexedMaskedLoadAction(im, VT, Legal);
+      setIndexedMaskedStoreAction(im, VT, Legal);
     }
 
     if (HasMVEFP) {
@@ -374,12 +378,12 @@ void ARMTargetLowering::addMVEVectorTypes(bool HasMVEFP) {
   // Pre and Post inc on these are legal, given the correct extends
   for (unsigned im = (unsigned)ISD::PRE_INC;
        im != (unsigned)ISD::LAST_INDEXED_MODE; ++im) {
-    setIndexedLoadAction(im, MVT::v8i8, Legal);
-    setIndexedStoreAction(im, MVT::v8i8, Legal);
-    setIndexedLoadAction(im, MVT::v4i8, Legal);
-    setIndexedStoreAction(im, MVT::v4i8, Legal);
-    setIndexedLoadAction(im, MVT::v4i16, Legal);
-    setIndexedStoreAction(im, MVT::v4i16, Legal);
+    for (auto VT : {MVT::v8i8, MVT::v4i8, MVT::v4i16}) {
+      setIndexedLoadAction(im, VT, Legal);
+      setIndexedStoreAction(im, VT, Legal);
+      setIndexedMaskedLoadAction(im, VT, Legal);
+      setIndexedMaskedStoreAction(im, VT, Legal);
+    }
   }
 
   // Predicate types
@@ -9010,8 +9014,9 @@ static SDValue LowerMLOAD(SDValue Op, SelectionDAG &DAG) {
   SDValue ZeroVec = DAG.getNode(ARMISD::VMOVIMM, dl, VT,
                                 DAG.getTargetConstant(0, dl, MVT::i32));
   SDValue NewLoad = DAG.getMaskedLoad(
-      VT, dl, N->getChain(), N->getBasePtr(), Mask, ZeroVec, N->getMemoryVT(),
-      N->getMemOperand(), N->getExtensionType(), N->isExpandingLoad());
+      VT, dl, N->getChain(), N->getBasePtr(), N->getOffset(), Mask, ZeroVec,
+      N->getMemoryVT(), N->getMemOperand(), N->getAddressingMode(),
+      N->getExtensionType(), N->isExpandingLoad());
   SDValue Combo = NewLoad;
   if (!PassThru.isUndef() &&
       (PassThru.getOpcode() != ISD::BITCAST ||
@@ -15189,13 +15194,18 @@ static bool getT2IndexedAddressParts(SDNode *Ptr, EVT VT,
 }
 
 static bool getMVEIndexedAddressParts(SDNode *Ptr, EVT VT, unsigned Align,
-                                      bool isSEXTLoad, bool isLE, SDValue &Base,
-                                      SDValue &Offset, bool &isInc,
-                                      SelectionDAG &DAG) {
+                                      bool isSEXTLoad, bool IsMasked, bool isLE,
+                                      SDValue &Base, SDValue &Offset,
+                                      bool &isInc, SelectionDAG &DAG) {
   if (Ptr->getOpcode() != ISD::ADD && Ptr->getOpcode() != ISD::SUB)
     return false;
   if (!isa<ConstantSDNode>(Ptr->getOperand(1)))
     return false;
+
+  // We allow LE non-masked loads to change the type (for example use a vldrb.8
+  // as opposed to a vldrw.32). This can allow extra addressing modes or
+  // alignments for what is otherwise an equivalent instruction.
+  bool CanChangeType = isLE && !IsMasked;
 
   ConstantSDNode *RHS = cast<ConstantSDNode>(Ptr->getOperand(1));
   int RHSC = (int)RHS->getZExtValue();
@@ -15215,7 +15225,7 @@ static bool getMVEIndexedAddressParts(SDNode *Ptr, EVT VT, unsigned Align,
   };
 
   // Try to find a matching instruction based on s/zext, Alignment, Offset and
-  // (in BE) type.
+  // (in BE/masked) type.
   Base = Ptr->getOperand(0);
   if (VT == MVT::v4i16) {
     if (Align >= 2 && IsInRange(RHSC, 0x80, 2))
@@ -15223,13 +15233,15 @@ static bool getMVEIndexedAddressParts(SDNode *Ptr, EVT VT, unsigned Align,
   } else if (VT == MVT::v4i8 || VT == MVT::v8i8) {
     if (IsInRange(RHSC, 0x80, 1))
       return true;
-  } else if (Align >= 4 && (isLE || VT == MVT::v4i32 || VT == MVT::v4f32) &&
+  } else if (Align >= 4 &&
+             (CanChangeType || VT == MVT::v4i32 || VT == MVT::v4f32) &&
              IsInRange(RHSC, 0x80, 4))
     return true;
-  else if (Align >= 2 && (isLE || VT == MVT::v8i16 || VT == MVT::v8f16) &&
+  else if (Align >= 2 &&
+           (CanChangeType || VT == MVT::v8i16 || VT == MVT::v8f16) &&
            IsInRange(RHSC, 0x80, 2))
     return true;
-  else if ((isLE || VT == MVT::v16i8) && IsInRange(RHSC, 0x80, 1))
+  else if ((CanChangeType || VT == MVT::v16i8) && IsInRange(RHSC, 0x80, 1))
     return true;
   return false;
 }
@@ -15249,6 +15261,7 @@ ARMTargetLowering::getPreIndexedAddressParts(SDNode *N, SDValue &Base,
   SDValue Ptr;
   unsigned Align;
   bool isSEXTLoad = false;
+  bool IsMasked = false;
   if (LoadSDNode *LD = dyn_cast<LoadSDNode>(N)) {
     Ptr = LD->getBasePtr();
     VT = LD->getMemoryVT();
@@ -15258,6 +15271,17 @@ ARMTargetLowering::getPreIndexedAddressParts(SDNode *N, SDValue &Base,
     Ptr = ST->getBasePtr();
     VT = ST->getMemoryVT();
     Align = ST->getAlignment();
+  } else if (MaskedLoadSDNode *LD = dyn_cast<MaskedLoadSDNode>(N)) {
+    Ptr = LD->getBasePtr();
+    VT = LD->getMemoryVT();
+    Align = LD->getAlignment();
+    isSEXTLoad = LD->getExtensionType() == ISD::SEXTLOAD;
+    IsMasked = true;
+  } else if (MaskedStoreSDNode *ST = dyn_cast<MaskedStoreSDNode>(N)) {
+    Ptr = ST->getBasePtr();
+    VT = ST->getMemoryVT();
+    Align = ST->getAlignment();
+    IsMasked = true;
   } else
     return false;
 
@@ -15266,8 +15290,8 @@ ARMTargetLowering::getPreIndexedAddressParts(SDNode *N, SDValue &Base,
   if (VT.isVector())
     isLegal = Subtarget->hasMVEIntegerOps() &&
               getMVEIndexedAddressParts(Ptr.getNode(), VT, Align, isSEXTLoad,
-                                        Subtarget->isLittle(), Base, Offset,
-                                        isInc, DAG);
+                                        IsMasked, Subtarget->isLittle(), Base,
+                                        Offset, isInc, DAG);
   else {
     if (Subtarget->isThumb2())
       isLegal = getT2IndexedAddressParts(Ptr.getNode(), VT, isSEXTLoad, Base,
@@ -15295,6 +15319,7 @@ bool ARMTargetLowering::getPostIndexedAddressParts(SDNode *N, SDNode *Op,
   SDValue Ptr;
   unsigned Align;
   bool isSEXTLoad = false, isNonExt;
+  bool IsMasked = false;
   if (LoadSDNode *LD = dyn_cast<LoadSDNode>(N)) {
     VT = LD->getMemoryVT();
     Ptr = LD->getBasePtr();
@@ -15306,6 +15331,19 @@ bool ARMTargetLowering::getPostIndexedAddressParts(SDNode *N, SDNode *Op,
     Ptr = ST->getBasePtr();
     Align = ST->getAlignment();
     isNonExt = !ST->isTruncatingStore();
+  } else if (MaskedLoadSDNode *LD = dyn_cast<MaskedLoadSDNode>(N)) {
+    VT = LD->getMemoryVT();
+    Ptr = LD->getBasePtr();
+    Align = LD->getAlignment();
+    isSEXTLoad = LD->getExtensionType() == ISD::SEXTLOAD;
+    isNonExt = LD->getExtensionType() == ISD::NON_EXTLOAD;
+    IsMasked = true;
+  } else if (MaskedStoreSDNode *ST = dyn_cast<MaskedStoreSDNode>(N)) {
+    VT = ST->getMemoryVT();
+    Ptr = ST->getBasePtr();
+    Align = ST->getAlignment();
+    isNonExt = !ST->isTruncatingStore();
+    IsMasked = true;
   } else
     return false;
 
@@ -15329,7 +15367,7 @@ bool ARMTargetLowering::getPostIndexedAddressParts(SDNode *N, SDNode *Op,
   bool isLegal = false;
   if (VT.isVector())
     isLegal = Subtarget->hasMVEIntegerOps() &&
-              getMVEIndexedAddressParts(Op, VT, Align, isSEXTLoad,
+              getMVEIndexedAddressParts(Op, VT, Align, isSEXTLoad, IsMasked,
                                         Subtarget->isLittle(), Base, Offset,
                                         isInc, DAG);
   else {

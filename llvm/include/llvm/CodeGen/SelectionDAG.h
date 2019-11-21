@@ -1164,14 +1164,19 @@ public:
   SDValue getMemBasePlusOffset(SDValue Base, unsigned Offset, const SDLoc &DL,
                                const SDNodeFlags Flags = SDNodeFlags());
 
-  SDValue getMaskedLoad(EVT VT, const SDLoc &dl, SDValue Chain, SDValue Ptr,
-                        SDValue Mask, SDValue Src0, EVT MemVT,
-                        MachineMemOperand *MMO, ISD::LoadExtType,
-                        bool IsExpanding = false);
+  SDValue getMaskedLoad(EVT VT, const SDLoc &dl, SDValue Chain, SDValue Base,
+                        SDValue Offset, SDValue Mask, SDValue Src0, EVT MemVT,
+                        MachineMemOperand *MMO, ISD::MemIndexedMode AM,
+                        ISD::LoadExtType, bool IsExpanding = false);
+  SDValue getIndexedMaskedLoad(SDValue OrigLoad, const SDLoc &dl, SDValue Base,
+                               SDValue Offset, ISD::MemIndexedMode AM);
   SDValue getMaskedStore(SDValue Chain, const SDLoc &dl, SDValue Val,
-                         SDValue Ptr, SDValue Mask, EVT MemVT,
-                         MachineMemOperand *MMO, bool IsTruncating = false,
-                         bool IsCompressing = false);
+                         SDValue Base, SDValue Offset, SDValue Mask, EVT MemVT,
+                         MachineMemOperand *MMO, ISD::MemIndexedMode AM,
+                         bool IsTruncating = false, bool IsCompressing = false);
+  SDValue getIndexedMaskedStore(SDValue OrigStore, const SDLoc &dl,
+                                SDValue Base, SDValue Offset,
+                                ISD::MemIndexedMode AM);
   SDValue getMaskedGather(SDVTList VTs, EVT VT, const SDLoc &dl,
                           ArrayRef<SDValue> Ops, MachineMemOperand *MMO,
                           ISD::MemIndexType IndexType);
