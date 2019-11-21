@@ -11036,7 +11036,7 @@ Address CGOpenMPRuntime::getAddressOfLocalVariable(CodeGenFunction &CGF,
 
 namespace {
 using OMPContextSelectorData =
-    OpenMPCtxSelectorData<StringRef, ArrayRef<StringRef>, llvm::APSInt>;
+    OpenMPCtxSelectorData<ArrayRef<StringRef>, llvm::APSInt>;
 using CompleteOMPContextSelectorData = SmallVector<OMPContextSelectorData, 4>;
 } // anonymous namespace
 
