@@ -956,6 +956,14 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
   if (Triple.getArch() == llvm::Triple::amdgcn)
     PIC = true;
 
+  // Pure-capability code defaults to PIC
+  // XXX: this will only work with the explicit triple, not if the ABI name
+  if (Triple.getEnvironment() == llvm::Triple::CheriPurecap)
+    PIC = true;
+  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
+    if (StringRef(A->getValue()) == "purecap")
+      PIC = true;
+
   // The last argument relating to either PIC or PIE wins, and no
   // other argument is used. If the last argument is any flavor of the
   // '-fno-...' arguments, both PIC and PIE are disabled. Any PIE
@@ -1072,7 +1080,7 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
     // When targeting the N64 ABI, PIC is the default, except in the case
     // when the -mno-abicalls option is used. In that case we exit
     // at next check regardless of PIC being set below.
-    if (ABIName == "n64" || ABIName == "purecap")
+    if (ABIName == "n64")
       PIC = true;
     // When targettng MIPS with -mno-abicalls, it's always static.
     if(Args.hasArg(options::OPT_mno_abicalls))
