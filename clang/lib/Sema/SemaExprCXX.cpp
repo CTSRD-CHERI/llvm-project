@@ -6882,6 +6882,9 @@ ExprResult Sema::MaybeBindToTemporary(Expr *E) {
                                     VK_RValue);
   }
 
+  if (E->getType().isDestructedType() == QualType::DK_nontrivial_c_struct)
+    Cleanup.setExprNeedsCleanups(true);
+
   if (!getLangOpts().CPlusPlus)
     return E;
 

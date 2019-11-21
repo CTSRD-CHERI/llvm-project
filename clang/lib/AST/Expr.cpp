@@ -3107,6 +3107,9 @@ bool Expr::isConstantInitializer(ASTContext &Ctx, bool IsForRef,
 
   switch (getStmtClass()) {
   default: break;
+  case Stmt::ExprWithCleanupsClass:
+    return cast<ExprWithCleanups>(this)->getSubExpr()->isConstantInitializer(
+        Ctx, IsForRef, Culprit);
   case StringLiteralClass:
   case ObjCEncodeExprClass:
     return true;
