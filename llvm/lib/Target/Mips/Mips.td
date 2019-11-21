@@ -261,6 +261,7 @@ def ImplP5600 : SubtargetFeature<"p5600", "ProcImpl",
 class Proc<string Name, list<SubtargetFeature> Features>
  : ProcessorModel<Name, MipsGenericModel, Features>;
 
+def : Proc<"generic", [FeatureMips32]>;
 def : ProcessorModel<"beri", BeriModel,
                      [FeatureMipsBeri]>;
 def : ProcessorModel<"cheri256", BeriModel,
