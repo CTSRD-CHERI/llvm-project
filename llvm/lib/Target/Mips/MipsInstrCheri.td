@@ -391,9 +391,12 @@ def CWriteHwr : CheriFmt2Op<0xe, (outs CheriHWRegsOpnd:$r2), (ins CheriOpnd:$r1)
 }
 } // isMoveReg = 1
 
+def CSealEntry : CheriFmt2Op<0x1d, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
+    "csealentry\t$r1, $r2",
+    [(set CheriOpnd:$r1, (int_cheri_cap_seal_entry CheriOpnd:$r2))]>;
 def CLoadTags : CheriFmt2Op<0x1e, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2),
-							"cloadtags\t$r1, $r2",
-							[(set GPR64Opnd:$r1, (int_cheri_cap_load_tags CheriOpnd:$r2))]>;
+    "cloadtags\t$r1, $r2",
+    [(set GPR64Opnd:$r1, (int_cheri_cap_load_tags CheriOpnd:$r2))]>;
 
 // PCC access
 def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),

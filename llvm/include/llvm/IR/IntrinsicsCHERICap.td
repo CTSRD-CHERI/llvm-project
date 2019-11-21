@@ -86,6 +86,11 @@ def int_cheri_cap_unseal  :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
+ def int_cheri_cap_seal_entry:
+   GCCBuiltin<"__builtin_cheri_seal_entry">,
+   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty],
+    [IntrNoMem, IntrWillReturn]>;
+
 def int_cheri_cap_perms_check :
   Intrinsic<[], [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem, IntrHasSideEffects, IntrWillReturn]>;
