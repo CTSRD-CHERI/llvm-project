@@ -767,7 +767,7 @@ inline bool LocalAddressSpace::findUnwindSections(pc_t targetAddr,
         typedef ElfW(Addr) Elf_Addr;
 #endif
 
-        Elf_Addr image_base = pinfo->dlpi_addr;
+        Elf_Addr image_base = static_cast<Elf_Addr>(pinfo->dlpi_addr);
 
 #if defined(__ANDROID__) && __ANDROID_API__ < 18
         if (image_base == 0) {
@@ -828,7 +828,6 @@ inline bool LocalAddressSpace::findUnwindSections(pc_t targetAddr,
           } else if (phdr->p_type == PT_GNU_EH_FRAME) {
             EHHeaderParser<LocalAddressSpace>::EHHeaderInfo hdrInfo;
             uintptr_t eh_frame_hdr_start = getPhdrCapability(image_base, phdr);
-            cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
 #ifdef __CHERI_PURE_CAPABILITY__
             if (!__builtin_cheri_tag_get((void*)eh_frame_hdr_start))
               _LIBUNWIND_ABORT("eh_frame_hdr_start cap became unpresentable!");
