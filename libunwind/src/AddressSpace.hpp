@@ -767,7 +767,7 @@ inline bool LocalAddressSpace::findUnwindSections(pc_t targetAddr,
         typedef ElfW(Addr) Elf_Addr;
 #endif
 
-        Elf_Addr image_base = static_cast<Elf_Addr>(pinfo->dlpi_addr);
+        uintptr_t image_base = static_cast<uintptr_t>(pinfo->dlpi_addr);
 
 #if defined(__ANDROID__) && __ANDROID_API__ < 18
         if (image_base == 0) {
@@ -779,7 +779,7 @@ inline bool LocalAddressSpace::findUnwindSections(pc_t targetAddr,
           for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
             const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
             if (phdr->p_type == PT_PHDR) {
-              image_base = reinterpret_cast<Elf_Addr>(pinfo->dlpi_phdr) -
+              image_base = static_cast<uintptr_t>(pinfo->dlpi_phdr) -
                   phdr->p_vaddr;
               break;
             }

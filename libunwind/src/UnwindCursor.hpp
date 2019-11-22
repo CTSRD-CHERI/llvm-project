@@ -1853,9 +1853,15 @@ bool UnwindCursor<A, R>::getInfoFromSEH(pint_t pc) {
 template <typename A, typename R>
 void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   pc_t pc = this->getIP();
-
   CHERI_DBG("%s(%d): pc=%#p\n", __func__, isReturnAddress, (void *)pc.get());
-  if (isReturnAddress && pc.isNull()) {
+
+#if defined(_LIBUNWIND_ARM_EHABI)
+  // Remove the thumb bit so the IP represents the actual instruction address.
+  // This matches the behaviour of _Unwind_GetIP on arm.
+  pc &= (pint_t)~0x1;
+#endif
+
+  if (pc.isNull()) {
     CHERI_DBG("%s(%d): return pc was NULL, stopping unwinding\n", __func__, isReturnAddress);
     // If the return address is zero that usually means that we have reached
     // the end of the thread's stack and can't continue unwinding
@@ -1864,12 +1870,6 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
     _unwindInfoMissing = true;
     return;
   }
-
-#if defined(_LIBUNWIND_ARM_EHABI)
-  // Remove the thumb bit so the IP represents the actual instruction address.
-  // This matches the behaviour of _Unwind_GetIP on arm.
-  pc &= (pint_t)~0x1;
-#endif
 
   assert(pc.isValid() && "Loaded invalid $pcc");
 
