@@ -211,14 +211,14 @@ class RemoteExecutor(Executor):
             # TODO(jroelofs): capture the copy_in and delete_remote commands,
             # and conjugate them with '&&'s around the first tuple element
             # returned here:
-            (remote_cmd, out, err, rc) = self._execute_command_remote(chmod_cmd + ['&&'] + cmd, target_cwd, env)
+            (remote_cmd, out, err, rc) = self._execute_command_remote(cmd, target_cwd, pre_cmd=chmod_cmd, env=env)
             self.keep_test = rc != 0
             return remote_cmd, out, err, rc
         finally:
             if target_cwd and not self.keep_test:
                 self.delete_remote(target_cwd)
 
-    def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
+    def _execute_command_remote(self, cmd, remote_work_dir='.', pre_cmd=None, env=None):
         raise NotImplementedError()
 
 
@@ -270,7 +270,7 @@ class SSHExecutor(RemoteExecutor):
             print('{}: Copying {} to {}'.format(datetime.datetime.now(), src, dst), file=sys.stderr)
         self.local_run(cmd)
 
-    def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
+    def _execute_command_remote(self, cmd, remote_work_dir='.', pre_cmd=None, env=None):
         remote = self.user_prefix + self.host
         # Add -tt to force a TTY allocation so that the remote process is killed
         # when SSH exits.
@@ -282,6 +282,8 @@ class SSHExecutor(RemoteExecutor):
         else:
             export_cmd = []
         remote_cmd = ' '.join(map(pipes.quote, cmd))
+        if pre_cmd:
+            remote_cmd = ' '.join(map(pipes.quote, pre_cmd)) + ' && ' + remote_cmd
         if export_cmd:
             remote_cmd = ' '.join(map(pipes.quote, export_cmd)) + ' && ' + remote_cmd
         if remote_work_dir != '.':
@@ -365,7 +367,7 @@ class SSHExecutorWithNFSMount(SSHExecutor):
         else:
             return tempfile.mkstemp(prefix="libcxx-", dir=self.nfs_dir)
 
-    def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
+    def _execute_command_remote(self, cmd, remote_work_dir='.', pre_cmd=None, env=None):
         if remote_work_dir != ".":
             if not remote_work_dir.startswith(self.nfs_dir):
                 return cmd, None, "Custom remote_work_dir not implemented: %r" % remote_work_dir, 42
@@ -376,4 +378,5 @@ class SSHExecutorWithNFSMount(SSHExecutor):
         if all(self.nfs_dir not in s for s in cmd):
             raise NotImplementedError("Cannot run non-test binaries: Command was: %s" % cmd)
         cmd = [s.replace(self.nfs_dir, self.path_in_target) for s in cmd]
-        return super(SSHExecutorWithNFSMount, self)._execute_command_remote(cmd, remote_work_dir=remote_work_dir, env=env)
+        return super(SSHExecutorWithNFSMount, self)._execute_command_remote(cmd, remote_work_dir=remote_work_dir,
+                                                                            pre_cmd=pre_cmd, env=env)
