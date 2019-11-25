@@ -39,17 +39,26 @@
 #include <string.h>
 #include <sys/param.h> /* for MIN() */
 
+#ifndef cc128_debug_assert
+#ifdef cheri_debug_assert
+#define cc128_debug_assert(cond) cheri_debug_assert(cond)
+#else
+#define cc128_debug_assert(cond) assert(cond)
+#endif
+#endif
+
 /* Use __uint128 to represent 65 bit length */
 __extension__ typedef unsigned __int128 cc128_length_t;
+__extension__ typedef signed __int128 cc128_offset_t;
 
 // QEMU already provides cap_register_t but if used in other programs
 // we want to define it here:
 #ifndef HAVE_CAP_REGISTER_T
 struct cap_register {
     /* offset = cursor - base */
-    uint64_t cr_offset; /* Capability offset */
+    uint64_t _cr_cursor; /* Capability cursor */
     uint64_t cr_base;   /* Capability base addr */
-    cc128_length_t _cr_length; /* Capability length */
+    cc128_length_t _cr_top; /* Capability top */
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
     uint64_t cr_pesbt_xored_for_mem;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
@@ -61,14 +70,33 @@ struct cap_register {
        return cr_base;
     }
     inline uint64_t address() const {
-       return cr_base + cr_offset;
+       return _cr_cursor;
+    }
+    inline cc128_offset_t offset() const {
+       return (cc128_offset_t)_cr_cursor - (cc128_offset_t)cr_base;
     }
     inline cc128_length_t top() const {
-       return cr_base + _cr_length;
+       return _cr_top;
     }
     inline uint64_t top64() const {
         const cc128_length_t t = top();
         return t > UINT64_MAX ? UINT64_MAX : (uint64_t)t;
+    }
+    inline cc128_length_t length() const {
+        return _cr_top - cr_base;
+    }
+    inline uint64_t length64() const {
+        const cc128_length_t l = length();
+        return l > UINT64_MAX ? UINT64_MAX : (uint64_t)l;
+    }
+    inline uint32_t software_permissions() const {
+       return cr_uperms;
+    }
+    inline uint32_t permissions() const {
+       return cr_perms;
+    }
+    inline uint32_t type() const {
+       return cr_otype;
     }
 #endif
 };
@@ -106,9 +134,10 @@ typedef struct cap_register cap_register_t;
 #define CC128_UPERMS_SHFT          (15)
 #define CC128_UPERMS_MEM_SHFT      (12)
 #define CC128_MAX_UPERM            (3)
-#define CC128_NULL_TOP_VALUE CAP_MAX_ADDRESS_PLUS_ONE
+#define CC128_NULL_TOP CAP_MAX_ADDRESS_PLUS_ONE
 #define CC128_NULL_LENGTH CAP_MAX_ADDRESS_PLUS_ONE
 #define CC128_MAX_LENGTH CAP_MAX_ADDRESS_PLUS_ONE
+#define CC128_MAX_TOP CAP_MAX_ADDRESS_PLUS_ONE
 
 
 /* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
@@ -124,6 +153,7 @@ typedef struct cap_register cap_register_t;
 #define CC256_OTYPE_MEM_SHFT          (32)
 #define CC256_OTYPE_BITS              (24)
 #define CC256_NULL_LENGTH ((cc128_length_t)UINT64_MAX)
+#define CC256_NULL_TOP ((cc128_length_t)UINT64_MAX)
 
 // Offsets based on capBitsToCapability() from cheri_prelude_128.sail
 // (Note: we subtract 64 since we only access the high 64 bits when (de)compressing)
@@ -141,115 +171,6 @@ typedef struct cap_register cap_register_t;
 #define CC128_EXTRACT_FIELD(value, name) \
     cc128_getbits((value), CC128_FIELD_ ## name ## _START, CC128_FIELD_ ## name ## _SIZE)
 
-#ifdef CC128_OLD_FORMAT
-// These constants are for a cheri concentrate format for 128. They give either
-// 22 bits or 20 bits of precision depending on object size They give 20 bits
-// for types
-#define CC_L_IE_OFF 45
-#define CC_L_LH_OFF 44
-#define CC_L_B_OFF 0
-#define CC_L_T_OFF 23
-#define CC_L_S_OFF 46
-
-#define CC_L_OHI_OFF 32
-#define CC_L_OLO_OFF 11
-#define CC_L_TYPES 24
-
-#define CC_L_BWIDTH 23
-#define CC_L_SEALED_BWIDTH (CC_L_BWIDTH - (CC_L_TYPES / 2))
-#define CC_L_EWIDTH 7
-#define CC_L_LOWWIDTH (CC_L_EWIDTH >> 1)
-#define CC_L_LOWMASK ((1 << CC_L_LOWWIDTH) - 1)
-
-#define CC128_OTYPE_BITS CC_L_TYPES
-
-#define CC_SEAL_MODE_UNSEALED 0
-#define CC_SEAL_MODE_SEALED 1
-#define CC_SEAL_MODE_SENTRY 3
-
-#define CC128_BOT_WIDTH CC_L_BWIDTH
-#define CC128_BOT_INTERNAL_EXP_WIDTH CC128_BOT_WIDTH - CC_L_LOWWIDTH
-#define CC128_EXP_LOW_WIDTH CC_L_LOWWIDTH
-#define CC128_MANTISSA_WIDTH 23
-
-/*
- * These formats are from cheri concentrate, but I have added an extra sealing
- * mode in order to allow precise sealing of zero offset objects Unsealed CC-L:
- *  perms:    63-48 (16 bits)
- *  S:        47-46 (2 bits) = 0
- *  IE:       45    (1 bit)
- *  LH:       44    (1 bit)
- *  T:        43-23 (21 bit)
- *  B:        22-0  (23 bits)
- *
- * Sealed1 CC-L:
- *  perms:    63-49  (15 bits)
- *  unused:   48     (1 bit)
- *  S:        47-46  (2 bits) = 1
- *  IE:       45     (1 bit)
- *  LH:       44     (1 bit)
- *  otype.hi: 43-34  (10 bits)
- *  T:        33-23  (11 bits)
- *  otype.lo: 22-13  (10 bits)
- *  B:        12-0   (13 bits)
- *
- *  Call-only "sentry" capability
- *  perms:    63-48 (16 bits)
- *  S:        47-46 (2 bits) = 3
- *  IE:       45    (1 bit)
- *  LH:       44    (1 bit)
- *  T:        43-23 (21 bit)
- *  B:        22-0  (23 bits)
- *
- * Sealed2 CC-L:
- *  perms:    63-49 (15 bits)
- *  unused:   48    (1 bit)
- *  S:        47-46 (2 bits) = 2
- *  IE:       45    (1 bit)
- *  LH:       44    (1 bit)
- *  T:        43-23 (21 bits)
- *  otype     22-3  (20 bits)
- *  B:        2-0   (3 bits) (completely implied by cursor. Keep 3 bits for
- * exponent)
- */
-/* ignore ISO C restricts enumerator values to range of 'int' */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-enum {
-    CC128_FIELD(UPERMS, 127, 124),
-    CC128_FIELD(HWPERMS, 123, 112),
-    CC128_FIELD(SEALED_MODE, 111, 110),
-    CC128_FIELD(INTERNAL_EXPONENT, 109, 109),
-    CC128_FIELD(LH, 108, 108),
-    CC128_FIELD(TOP_ENCODED, 107, 87),
-    CC128_FIELD(BOTTOM_ENCODED, 86, 64),
-
-    // Top/bottom offsets depending on INTERNAL_EXPONENT flag:
-    // Without internal exponent:
-    CC128_FIELD(EXP_ZERO_TOP, 107, 87),
-    CC128_FIELD(EXP_ZERO_BOTTOM, 86, 64),
-    // With internal exponent:
-    CC128_FIELD(EXP_NONZERO_TOP, 107, 90),
-    CC128_FIELD(EXPONENT_LOW_PART, 89, 87),
-    CC128_FIELD(EXP_NONZERO_BOTTOM, 86, 67),
-    CC128_FIELD(EXPONENT_HIGH_PART, 66, 64),
-};
-#pragma GCC diagnostic pop
-CC128_STATIC_ASSERT(CC128_FIELD_INTERNAL_EXPONENT_START == CC_L_IE_OFF, "");
-CC128_STATIC_ASSERT(CC128_FIELD_LH_START == CC_L_LH_OFF, "");
-CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_BOTTOM_START == CC_L_B_OFF, "");
-CC128_STATIC_ASSERT(CC128_FIELD_BOTTOM_ENCODED_START == CC_L_B_OFF, "");
-CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_TOP_START == CC_L_T_OFF, "");
-CC128_STATIC_ASSERT(CC128_FIELD_TOP_ENCODED_START == CC_L_T_OFF, "");
-CC128_STATIC_ASSERT(CC128_FIELD_SEALED_MODE_START == CC_L_S_OFF, "");
-CC128_STATIC_ASSERT(CC128_FIELD_BOTTOM_ENCODED_SIZE == CC_L_BWIDTH, "");
-CC128_STATIC_ASSERT(CC128_FIELD_TOP_ENCODED_SIZE == CC_L_BWIDTH - 2, "");
-CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_BOTTOM_SIZE == CC_L_BWIDTH, "");
-CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_TOP_SIZE == CC_L_BWIDTH - 2, "");
-CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_EXPONENT_LOW_PART_SIZE + CC128_FIELD_LH_SIZE== CC_L_EWIDTH, "");
-CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_LOW_PART_SIZE == CC_L_LOWWIDTH, "");
-CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_LH_SIZE == CC_L_EWIDTH - CC_L_LOWWIDTH, "");
-#else
 /* ignore ISO C restricts enumerator values to range of 'int' */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -280,7 +201,6 @@ enum {
 #define CC128_EXP_LOW_WIDTH CC128_FIELD_EXPONENT_LOW_PART_SIZE
 /* These should match the definitions in sail! */
 #define CC128_MANTISSA_WIDTH 14
-#endif
 #define CC128_CAP_SIZE 16
 #define CC128_CAP_BITS 128
 #define CC128_CAP_ADDR_WIDTH 64
@@ -333,7 +253,6 @@ enum CC_OTypes {
 /* Silence ISO C restricts enumerator values to range of 'int' */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-#ifndef CC128_OLD_FORMAT
 /* From sail:
 let null_cap : Capability = struct {
   tag                    = false,
@@ -381,26 +300,6 @@ enum {
 // invisibly keeps null 0 whatever we choose it to be.
 // #define CC128_NULL_XOR_MASK 0x1ffff8000000
 #define CC128_NULL_XOR_MASK UINT64_C(0x00001ffffc018004)
-#else
-enum {
-    CC128_RESET_EXP = 43, // bit 22 in top is implicitly set -> shift by 52 to get 1 << 64
-    // For a NULL capability we use the internal exponent and need bit 12 in top set
-    // to get to 2^65
-    CC128_RESET_TOP = 1u << (12 - CC128_FIELD_EXPONENT_HIGH_PART_SIZE),
-    CC128_NULL_PESBT =
-        CC128_ENCODE_FIELD(0, UPERMS) |
-        CC128_ENCODE_FIELD(0, HWPERMS) |
-        CC128_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
-        CC128_ENCODE_FIELD(0, LH) |
-        CC128_ENCODE_FIELD(0, EXP_NONZERO_TOP) |
-        CC128_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
-        CC128_ENCODE_FIELD(CC128_RESET_EXP >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, EXPONENT_HIGH_PART) |
-        CC128_ENCODE_FIELD(CC128_RESET_EXP & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE, EXPONENT_LOW_PART)
-};
-/* Whatever NULL would encode to is this constant. We mask on store/load so this
- * is invisibly keeps null 0 whatever we choose it to be */
-#define CC128_NULL_XOR_MASK UINT64_C(0x200001800005)
-#endif /* CC128_OLD_FORMAT */
 #pragma GCC diagnostic pop
 
 
@@ -447,7 +346,7 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
                  (ld_neq(x, x & 0x0000ffff0000ffffull) << 4) + (ld_neq(x, x & 0x00000000ffffffffull) << 5);
 #undef ld_neq
 #else
-    assert(x != 0);
+    cc128_debug_assert(x != 0);
     uint32_t r = 63u - (uint32_t)__builtin_clzll(x);
     // printf("%s: %016llx = %d (__builtin_clzll(x) = %d, 63 - clz = %d)\n", __func__, x, r, __builtin_clzll(x), 63 -
     // __builtin_clzll(x));
@@ -501,49 +400,6 @@ TRUNCATE_LSB_FUNC(23)
 #define cc128_truncateLSB_generic(type_width) CC128_CONCAT(cc128_truncateLSB, type_width)
 
 static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
-#ifdef CC128_OLD_FORMAT
-    cdp->cr_perms = (uint32_t)cc128_getbits(pesbt, 48, 12);
-    cdp->cr_uperms = (uint32_t)cc128_getbits(pesbt, 60, 4);
-
-    uint8_t seal_mode = (uint8_t)cc128_getbits(pesbt, CC_L_S_OFF, 2);
-
-    uint32_t BWidth = seal_mode == CC_SEAL_MODE_SEALED ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
-    uint32_t BMask = (1 << BWidth) - 1;
-    uint32_t TMask = BMask >> 2;
-
-    uint8_t IE = (uint8_t)cc128_getbits(pesbt, CC_L_IE_OFF, 1);
-    uint8_t LH = (uint8_t)cc128_getbits(pesbt, CC_L_LH_OFF, 1);
-
-    uint8_t E, L_msb;
-    uint32_t B = (uint32_t)cc128_getbits(pesbt, CC_L_B_OFF, BWidth);
-    uint32_t T = (uint32_t)cc128_getbits(pesbt, CC_L_T_OFF, BWidth - 2);
-
-    if (IE) {
-        // Note: Do not offset by 1. We alsot need to encode E=0 with IE for setbounds!
-        E = ((((LH << CC_L_LOWWIDTH) | (B & CC_L_LOWMASK)) << CC_L_LOWWIDTH) | (T & CC_L_LOWMASK));
-        E = MIN(64 - BWidth + 2, E);
-        B &= ~CC_L_LOWMASK;
-        T &= ~CC_L_LOWMASK;
-        L_msb = 1;
-    } else {
-        E = 0;
-        L_msb = LH;
-    }
-
-    uint32_t type = CAP_OTYPE_UNSEALED;
-
-    if (seal_mode == CC_SEAL_MODE_UNSEALED) {
-        // TODO: remove extra bit for unsealed caps and always store otype
-        type = CAP_OTYPE_UNSEALED;
-    } else if (seal_mode == CC_SEAL_MODE_SEALED) {
-        type = (uint32_t)(cc128_getbits(pesbt, CC_L_OHI_OFF, CC_L_TYPES / 2) << (CC_L_TYPES / 2)) |
-               (uint32_t)cc128_getbits(pesbt, CC_L_OLO_OFF, CC_L_TYPES / 2);
-    } else if (seal_mode == CC_SEAL_MODE_SENTRY) {
-        type = CAP_OTYPE_SENTRY;
-    }
-
-    cdp->cr_otype = type;
-#else
     cdp->cr_perms = (uint32_t)CC128_EXTRACT_FIELD(pesbt, HWPERMS);
     cdp->cr_uperms = (uint32_t)CC128_EXTRACT_FIELD(pesbt, UPERMS);
     uint32_t BWidth = CC128_BOT_WIDTH;
@@ -572,8 +428,6 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
         T = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_TOP);
     }
     cdp->cr_otype = (uint32_t)CC128_EXTRACT_FIELD(pesbt, OTYPE);
-#endif
-
     /*
         Reconstruct top two bits of T given T = B + len and:
         1) the top two bits of B
@@ -626,14 +480,14 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     base |= B;
     base <<= E;
     base &= ((cc128_length_t)1 << CC128_CAP_LEN_WIDTH) - 1;
-    assert((uint64_t)(base >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
+    cc128_debug_assert((uint64_t)(base >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
     // top  : truncate((a_top + correction_top)  @ c.T @ zeros(E), cap_len_width);
     cc128_length_t top = (uint64_t)((int64_t)a_top + correction_top);
     top <<= CC128_MANTISSA_WIDTH;
     top |= T;
     top <<= E;
     top &= ((cc128_length_t)1 << CC128_CAP_LEN_WIDTH) - 1;
-    assert((uint64_t)(top >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
+    cc128_debug_assert((uint64_t)(top >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
 
     // if (base[cap_addr_width] == bitone) then {
     bool base_high = (base >> CC128_CAP_ADDR_WIDTH);
@@ -651,7 +505,7 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
         }
         base = (uint64_t)base; // strip the high bit
     }
-    assert(base <= CC128_CAP_ADDR_MAX);
+    cc128_debug_assert(base <= CC128_CAP_ADDR_MAX);
 
     /* The following is apparently equivalent to above and used by hw. */
     /*
@@ -661,15 +515,11 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
       top[64] = ~(top[64]);
     };
     */
-    assert((uint64_t)(top >> 64) <= 1); // should be at most 1 bit over
+    cc128_debug_assert((uint64_t)(top >> 64) <= 1); // should be at most 1 bit over
 
-    // TODO: should really store top and not length!
-    cdp->_cr_length = top - base;
-    if (top < base) {
-        // This can happen for invalid capabilities with arbitrary bit patterns
-        assert((int64_t)(cdp->_cr_length >> 64) < 0); // must be negative
-    }
-    cdp->cr_offset = cursor - (uint64_t)base;
+    // Note: top<base can happen for invalid capabilities with arbitrary bit patterns
+    cdp->_cr_top = top;
+    cdp->_cr_cursor = cursor;
     cdp->cr_base = (uint64_t)base;
 }
 
@@ -689,22 +539,11 @@ static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr
  * Compress a capability to 128 bits.
  */
 static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
-#ifdef CC128_OLD_FORMAT
-    int seal_mode = csp->cr_otype <= CAP_MAX_SEALED_OTYPE ? CC_SEAL_MODE_SEALED : CC_SEAL_MODE_UNSEALED;
-    if (csp->cr_otype == CAP_OTYPE_SENTRY)
-        seal_mode = CC_SEAL_MODE_SENTRY;
-
-    uint8_t LH;
-    uint32_t BWidth = seal_mode == CC_SEAL_MODE_SEALED ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
-    CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 23, "This code assumes 14-bit bot");
-    CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "This code assumes 14-bit bot");
-#else
     CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 14, "This code assumes 14-bit bot");
     CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "This code assumes 14-bit bot");
-#endif
     uint64_t base = csp->cr_base;
-    const cc128_length_t top = csp->cr_base + csp->_cr_length;
-    const cc128_length_t length = csp->_cr_length;
+    const cc128_length_t top = csp->_cr_top;
+    const cc128_length_t length = csp->_cr_top - csp->cr_base;
 
     uint8_t E = (uint8_t)cc128_get_exponent(length);
     const uint64_t length64 = (uint64_t)length;
@@ -712,48 +551,17 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     // 0x1000 (bwidth - 2 bit set) is the first value that cannot be encoded
     // without the internal exponent:
     // Note: 12 = BWidth - 2  / BWidth with internal exponent plus one
-    bool IE = E != 0 || cc128_getbits(length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
+    bool IE = (E != 0) || cc128_getbits(length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
     uint64_t Be;
     uint64_t Te;
-#ifdef CC128_OLD_FORMAT
-    uint32_t BMask = (1u << BWidth) - 1;
-    uint32_t TMask = BMask >> 2;
-    if (top > UINT64_MAX) {
-        Te = (UINT64_C(1) << (64 - E)) & TMask;
-    } else {
-        E = (uint8_t)_cc128_compute_e(length64, BWidth);
-        Te = ((uint64_t)top >> E) & TMask;
-    }
-    Be = (base >> E) & BMask;
-    if (IE) {
-        LH = E >> (2 * CC_L_LOWWIDTH);
-        Be |= (E >> CC_L_LOWWIDTH) & CC_L_LOWMASK;
-        Te |= E & CC_L_LOWMASK;
-    } else {
-        LH = (length64 >> (BWidth - 2)) & 1;
-    }
-    if (seal_mode == CC_SEAL_MODE_SEALED) {
-        uint64_t hi = ((uint64_t)csp->cr_otype >> (CC_L_TYPES / 2)) & ((1 << (CC_L_TYPES / 2)) - 1);
-        uint64_t lo = (uint64_t)csp->cr_otype & ((1 << (CC_L_TYPES / 2)) - 1);
-        Te |= hi << (CC_L_SEALED_BWIDTH - 2);
-        Be |= lo << CC_L_SEALED_BWIDTH;
-    }
-    // assert(seal_mode <= 3);
-    uint64_t perms = ((uint64_t)csp->cr_uperms << CC128_UPERMS_MEM_SHFT) | (uint64_t)csp->cr_perms;
-    uint64_t pesbt =
-        ((((((((((perms << 2) | (uint64_t)seal_mode) << 1) | (uint64_t)IE) << 1) | (uint64_t)LH) << (CC_L_BWIDTH - 2)) |
-           (uint64_t)Te)
-          << CC_L_BWIDTH) |
-         (uint64_t)Be);
-#else
     if (!IE) {
         // precisely representable -> just extract the bits
-        assert(top <= UINT64_MAX); // must be 64 bits
+        cc128_debug_assert(top <= CAP_MAX_ADDRESS_PLUS_ONE); // must be 64 bits
         Be = cc128_truncate64(base, CC128_FIELD_BOTTOM_ENCODED_SIZE);
         Te = cc128_truncate64((uint64_t)top, CC128_FIELD_TOP_ENCODED_SIZE);
     } else {
         uint64_t bot_ie = cc128_truncate64(base >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
-        uint64_t top_ie = cc128_truncate64((uint64_t)top >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
+        uint64_t top_ie = cc128_truncate64((uint64_t)(top >> (E + CC128_EXP_LOW_WIDTH)), CC128_BOT_INTERNAL_EXP_WIDTH);
         //    /* Find out whether we have lost significant bits of base and top using a
         //       mask of bits that we will lose (including 3 extra for exp). */
         //    maskLo : bits(65) = zero_extend(replicate_bits(0b1, e + 3));
@@ -803,16 +611,14 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
         }
         //    Bbits = B_ie @ 0b000;
         //    Tbits = T_ie @ 0b000;
-        Be = bot_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
-        Te = top_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        const uint64_t Bbits = bot_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        const uint64_t Tbits = top_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
         const uint8_t newE = E + (incE ? 1 : 0);
         // Split E between T and B
         const uint64_t expHighBits = cc128_getbits(newE >> CC128_FIELD_EXPONENT_LOW_PART_SIZE , 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE);
         const uint64_t expLowBits = cc128_getbits(newE, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE);
-        assert(cc128_getbits(Te, 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE) == 0);
-        assert(cc128_getbits(Be, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE) == 0);
-        Te |= expHighBits;
-        Be |= expLowBits;
+        Te = Tbits | expHighBits;
+        Be = Bbits | expLowBits;
     }
     uint64_t pesbt =
         CC128_ENCODE_FIELD(csp->cr_uperms, UPERMS) |
@@ -824,7 +630,6 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     // For untagged values we add the initially loaded reserved bits in the reserved field:
     if (!csp->cr_tag)
         pesbt |= CC128_ENCODE_FIELD(CC128_EXTRACT_FIELD(csp->cr_pesbt_xored_for_mem ^ CC128_NULL_XOR_MASK, RESERVED), RESERVED);
-#endif
     return pesbt;
 }
 
@@ -862,21 +667,22 @@ static inline bool cc128_all_zeroes(uint64_t offset, uint32_t e, uint32_t bwidth
 }
 #endif /* ! SIMPLE_REPRESENT_CHECK */
 
-static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset, uint64_t new_offset);
+static bool fast_cc128_is_representable_new_addr(bool sealed, uint64_t base, cc128_length_t length, uint64_t cursor,
+    uint64_t new_cursor);
 
 /// Check that a capability is representable by compressing and recompressing
 static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
     uint64_t pesbt = compress_128cap_without_xor(cap);
     cap_register_t decompressed_cap;
-    decompress_128cap_already_xored(pesbt, cap->cr_base + cap->cr_offset, &decompressed_cap);
+    decompress_128cap_already_xored(pesbt, cap->_cr_cursor, &decompressed_cap);
     // These fields must not change:
-    assert(decompressed_cap.cr_otype == cap->cr_otype);
-    assert(decompressed_cap.cr_uperms == cap->cr_uperms);
-    assert(decompressed_cap.cr_perms == cap->cr_perms);
+    cc128_debug_assert(decompressed_cap.cr_otype == cap->cr_otype);
+    cc128_debug_assert(decompressed_cap.cr_uperms == cap->cr_uperms);
+    cc128_debug_assert(decompressed_cap.cr_perms == cap->cr_perms);
     // If any of these fields changed then the capability is not representable:
     if (decompressed_cap.cr_base != cap->cr_base ||
-        decompressed_cap._cr_length != cap->_cr_length ||
-        decompressed_cap.cr_offset != cap->cr_offset) {
+        decompressed_cap._cr_top != cap->_cr_top ||
+        decompressed_cap._cr_cursor != cap->_cr_cursor) {
         return false;
     }
     return true;
@@ -899,43 +705,52 @@ static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
  *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
  *   base + offset.
  */
-static inline bool cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset,
-                                          uint64_t new_offset) {
+static inline bool cc128_is_representable_new_addr(bool sealed, uint64_t base, cc128_length_t length, uint64_t cursor, uint64_t new_cursor) {
+    // in-bounds capabilities are always representable
+    if (__builtin_expect(cursor >= base && new_cursor < length, true)) {
+        return true;
+    }
+
 #if defined(CC128_USE_FAST_REP_CHECK)
     const bool slow_representable_check = false;
 #else
     const bool slow_representable_check = true;
 #endif
 
-#if defined(CC128_OLD_FORMAT)
-    // I change the precision going between unsealed->sealed so the fast check
-    // doesn't work. Instead just compress/decompress.
-    if (slow_representable_check || sealed) {
-#else
     if (slow_representable_check) {
-#endif // CC128_OLD_FORMAT
         cap_register_t c;
         memset(&c, 0, sizeof(c));
         /* Simply compress and uncompress to check. */
         c.cr_base = base;
-        c._cr_length = length;
-        c.cr_offset = new_offset;
+        c._cr_top = (cc128_length_t)base + length;
+        c._cr_cursor = new_cursor;
         c.cr_otype = sealed ? 42 : CC128_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
         return cc128_is_representable_cap_exact(&c);
     } else {
-        return fast_cc128_is_representable(sealed, base, length, offset, new_offset);
+        return fast_cc128_is_representable_new_addr(sealed, base, length, cursor, new_cursor);
     }
 }
 
-static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset,
-                                        uint64_t new_offset) {
+static inline bool cc128_is_representable_with_addr(const cap_register_t* cap, uint64_t new_addr) {
+    // in-bounds capabilities are always representable
+    if (__builtin_expect(new_addr >= cap->cr_base && new_addr < cap->_cr_top , true)) {
+        return true;
+    }
+    const cc128_length_t length = cap->_cr_top - cap->cr_base;
+    return cc128_is_representable_new_addr(cc128_is_cap_sealed(cap), cap->cr_base, length, cap->_cr_cursor, new_addr);
+}
+
+
+
+static bool fast_cc128_is_representable_new_addr(bool sealed, uint64_t base, cc128_length_t length, uint64_t cursor,
+                                        uint64_t new_cursor) {
     (void)sealed;
     uint32_t bwidth = CC128_BOT_WIDTH;
     uint32_t highest_exp = (64 - bwidth + 2);
 
     cc128_length_t top = base + length;
     // If top is 0xffff... we assume we meant it to be 1 << 64
-    if (top == CAP_MAX_ADDRESS_PLUS_ONE && base == 0) {
+    if (top == CC128_MAX_TOP && base == 0) {
         return true; // 1 << 65 is always representable
     }
     if (length == 0) {
@@ -946,7 +761,7 @@ static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length
 
     int64_t b, r, Imid, Amid;
     bool inRange, inLimits;
-    int64_t inc = (int64_t)(new_offset - offset);
+    int64_t inc = (int64_t)(new_cursor - cursor);
 
 #define MOD_MASK ((UINT64_C(1) << bwidth) - UINT64_C(1))
 
@@ -954,7 +769,7 @@ static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length
 
     b = (int64_t)((base >> e) & MOD_MASK);
     Imid = (int64_t)((uint64_t)(inc >> e) & MOD_MASK);
-    Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
+    Amid = (int64_t)(((cursor) >> e) & MOD_MASK);
 
     r = (int64_t)(((uint64_t)((b >> (bwidth - 3)) - 1) << (bwidth - 3)) & MOD_MASK);
 
@@ -974,22 +789,24 @@ static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length
 
 /* @return whether the operation was able to set precise bounds precise or not */
 static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, cc128_length_t req_top, uint64_t* alignment_mask) {
-    assert(cap->cr_tag && "Cannot be used on untagged capabilities");
-    assert(!cc128_is_cap_sealed(cap) && "Cannot be used on sealed capabilities");
-    assert(req_base <= req_top && "Cannot grow capabilities");
+    cc128_debug_assert(cap->cr_tag && "Cannot be used on untagged capabilities");
+    cc128_debug_assert(!cc128_is_cap_sealed(cap) && "Cannot be used on sealed capabilities");
+    cc128_debug_assert(req_base <= req_top && "Cannot grow capabilities");
     /*
      * With compressed capabilities we may need to increase the range of
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    const uint64_t cursor = cap->cr_base + cap->cr_offset;
-    assert(req_base == cursor && "CSetbounds should set base to current cursor");
-    cc128_length_t orig_length65 = cap->_cr_length;
+    const uint64_t cursor = cap->_cr_cursor;
+    cc128_debug_assert(req_base == cursor && "CSetbounds should set base to current cursor");
+    cc128_length_t orig_length65 = cap->_cr_top - cap->cr_base;
     cc128_length_t req_length65 = req_top - cursor;
-    assert((orig_length65 >> 64) <= 1 && "Length cannot be bigger than 1 << 64");
-    assert((req_top >> 64) <= 1 && "New top cannot be bigger than 1 << 64");
-    assert(req_length65 <= orig_length65 && "Cannot grow capabilities");
-    assert(cap->cr_offset <= orig_length65 && "Must be used on inbounds caps");
+    cc128_debug_assert((orig_length65 >> 64) <= 1 && "Length cannot be bigger than 1 << 64");
+    cc128_debug_assert((req_top >> 64) <= 1 && "New top cannot be bigger than 1 << 64");
+    cc128_debug_assert(req_length65 <= orig_length65 && "Cannot grow capabilities");
+    assert((cap->_cr_cursor < cap->_cr_top || (cap->_cr_cursor == cap->_cr_top && cap->_cr_top == cap->cr_base)) &&
+           "Must be used on inbounds (or zero-length) caps");
+    assert(cap->_cr_cursor >= cap->cr_base && "Must be used on inbounds caps");
 
     // function setCapBounds(cap, base, top) : (Capability, bits(64), bits(65)) -> (bool, Capability) = {
     //  /* {cap with base=base; length=(bits(64)) length; offset=0} */
@@ -999,16 +816,10 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
     //     second from the top as assumed during decoding. We ignore the bottom
     //     MW - 1 bits because those are handled by the ie = 0 format. */
     //  let e = 52 - CountLeadingZeros(length[64..13]);
-#ifndef CC128_OLD_FORMAT
     // To check that the symbolic constants match sail:
     CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 14, "");
     CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "");
     CC128_STATIC_ASSERT(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
-#else
-    CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 23, "");
-    CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "");
-    CC128_STATIC_ASSERT(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
-#endif
     uint8_t E = (uint8_t)cc128_get_exponent(req_length65);
     const uint64_t req_length64 = (uint64_t)req_length65;
     // Use internal exponent if e is non-zero or if e is zero but
@@ -1044,7 +855,7 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
         if (alignment_mask) {
             *alignment_mask = UINT64_MAX << (E + CC128_EXP_LOW_WIDTH);
         }
-        uint64_t top_ie = cc128_truncate64((uint64_t)req_top >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
+        uint64_t top_ie = cc128_truncate64((uint64_t)(req_top >> (E + CC128_EXP_LOW_WIDTH)), CC128_BOT_INTERNAL_EXP_WIDTH);
         //    /* Find out whether we have lost significant bits of base and top using a
         //       mask of bits that we will lose (including 3 extra for exp). */
         //    maskLo : bits(65) = zero_extend(replicate_bits(0b1, e + 3));
@@ -1111,35 +922,24 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
         // Split E between T and B
         const uint64_t expHighBits = cc128_getbits(newE >> CC128_FIELD_EXPONENT_LOW_PART_SIZE , 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE);
         const uint64_t expLowBits = cc128_getbits(newE, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE);
-#ifdef CC128_OLD_FORMAT
-        // The old format places the low bits of exponent in top instead of in bottom
-        const uint64_t Te = Tbits | expLowBits;
-        const uint64_t Be = Bbits | expHighBits;
-#else
         const uint64_t Te = Tbits | expHighBits;
         const uint64_t Be = Bbits | expLowBits;
-#endif
         const uint64_t pesbt =
             CC128_ENCODE_FIELD(0, UPERMS) |
             CC128_ENCODE_FIELD(0, HWPERMS) |
-#ifdef CC128_OLD_FORMAT
-            CC128_ENCODE_FIELD(CC_SEAL_MODE_UNSEALED, SEALED_MODE) |
-            CC128_ENCODE_FIELD(newE >> (2 * CC_L_LOWWIDTH), LH) |
-#else
             CC128_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) |
-#endif
             CC128_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
             CC128_ENCODE_FIELD(Te, TOP_ENCODED) |
             CC128_ENCODE_FIELD(Be, BOTTOM_ENCODED);
         cap_register_t new_cap;
         decompress_128cap_already_xored(pesbt, req_base, &new_cap);
         new_base = new_cap.cr_base;
-        new_top = new_cap.cr_base + new_cap._cr_length;
+        new_top = new_cap._cr_top;
     }
-    assert(new_top >= new_base);
+    cc128_debug_assert(new_top >= new_base);
     cap->cr_base = new_base;
-    cap->cr_offset = cursor - new_base; // ensure that the address is correct
-    cap->_cr_length = new_top - new_base;
+    cap->_cr_cursor = cursor; // ensure that the address is correct
+    cap->_cr_top = new_top;
     // TODO: update pesbt?
     //  let newCap = {cap with address=base, E=to_bits(6, if incE then e + 1 else e), B=Bbits, T=Tbits, internal_e=ie};
     //  (exact, newCap)
@@ -1165,17 +965,17 @@ static inline uint64_t cc128_get_alignment_mask(uint64_t req_length) {
   memset(&tmpcap, 0, sizeof(tmpcap));
   tmpcap.cr_tag = 1;
   tmpcap.cr_base = 0;
-  tmpcap._cr_length = CC128_MAX_LENGTH;
+  tmpcap._cr_top = CC128_MAX_TOP;
   tmpcap.cr_otype = CC128_OTYPE_UNSEALED;
   uint64_t mask = 0;
   // Ensure that the base always needs rounding down by making it all ones until
   // one bit before the most significant bit in length
   // uint64_t req_base = UINT64_MAX & ~(UINT64_C(1) << cc128_idx_MSNZ(req_length));
   uint64_t req_base = UINT64_MAX - req_length;
-  tmpcap.cr_offset = req_base;
+  tmpcap._cr_cursor = req_base;
   cc128_setbounds_impl(&tmpcap, req_base, req_base + req_length, &mask);
   // base should have been rounded down using this mask:
-  assert((req_base & mask) == tmpcap.cr_base);
+  cc128_debug_assert((req_base & mask) == tmpcap.cr_base);
   return mask;
 }
 
@@ -1211,9 +1011,9 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* c
     cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_UNSEALED;
     cdp->cr_base = mem.u64s[2];
     /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
-    cdp->_cr_length = mem.u64s[3] ^ CC256_NULL_LENGTH;
-    /* TODO: should just have a cr_cursor instead... But that's not the way QEMU works */
-    cdp->cr_offset = mem.u64s[1] - cdp->cr_base;
+    uint64_t length = mem.u64s[3] ^ CC256_NULL_LENGTH;
+    cdp->_cr_top = (cc128_length_t)cdp->cr_base + (cc128_length_t)length;
+    cdp->_cr_cursor = mem.u64s[1];
     cdp->cr_tag = tagged;
 }
 
@@ -1227,9 +1027,10 @@ static inline void compress_256cap(inmemory_chericap256* buffer, const cap_regis
         ((csp->cr_perms & hwperms_mask) << CC256_PERMS_MEM_SHFT) |
         ((csp->cr_uperms & CC256_UPERMS_ALL_BITS) << CC256_UPERMS_MEM_SHFT) |
         ((uint64_t)(csp->cr_otype ^ CC256_OTYPE_UNSEALED) << CC256_OTYPE_MEM_SHFT);
-    buffer->u64s[1] = csp->cr_base + csp->cr_offset;
+    buffer->u64s[1] = csp->_cr_cursor;
     buffer->u64s[2] = csp->cr_base;
-    uint64_t length64 = csp->_cr_length > UINT64_MAX ? UINT64_MAX : (uint64_t)csp->_cr_length;
+    cc128_length_t length65 = csp->_cr_top - csp->cr_base;
+    uint64_t length64 = length65 > UINT64_MAX ? UINT64_MAX : (uint64_t)length65;
     buffer->u64s[3] = length64 ^ CC256_NULL_LENGTH;
 }
 

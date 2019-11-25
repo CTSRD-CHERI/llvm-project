@@ -1,12 +1,14 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2018 Lawrence Esswood
  * Copyright (c) 2018 Alex Richardson
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
- * ("CTSRD"), as part of the DARPA CRASH research programme.
+ * Cambridge Computer Laboratory (Department of Computer Science and
+ * Technology) under DARPA contract HR0011-18-C-0016 ("ECATS"), as part of the
+ * DARPA SSITH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,14 +31,17 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "cheri_compressed_cap.h"
 
-// Just check that everything compiles
-uint64_t test(void) {
-    uint64_t pesbt = 0x1234567;
-    uint64_t cursor = 0x98765431;
+#include "../cheri_compressed_cap.h"
+#include "FuzzedDataProvider.h"
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    FuzzedDataProvider fuzzData(data, size);
+    uint64_t pesbt = fuzzData.ConsumeIntegral<uint64_t>();
+    uint64_t cursor = fuzzData.ConsumeIntegral<uint64_t>();
     cap_register_t result;
+    memset(&result, 0, sizeof(result));
     decompress_128cap(pesbt, cursor, &result);
-    uint64_t new_pesbt = compress_128cap(&result);
-    return cc128_is_representable_cap_exact(&result) + new_pesbt;
+    decompress_128cap_already_xored(pesbt, cursor, &result);
+    return 0;  // Non-zero return values are reserved for future use.
 }

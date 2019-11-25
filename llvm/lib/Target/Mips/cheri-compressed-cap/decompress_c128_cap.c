@@ -62,11 +62,13 @@ static void dump_cap_fields(const cap_register_t* result) {
     fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result->cr_perms); // TODO: decode perms
     fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result->cr_uperms);
     fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result->cr_base);
-    fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result->cr_offset);
+    fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result->_cr_cursor - result->cr_base);
+    fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", result->_cr_cursor);
+    cc128_length_t length = result->_cr_top - result->cr_base;
     fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n",
-            (uint64_t)(result->_cr_length >> 64), (uint64_t)result->_cr_length,
-            result->_cr_length > UINT64_MAX ? " (greater than UINT64_MAX)": "");
-    unsigned __int128 top_full = result->cr_base + result->_cr_length;
+            (uint64_t)(length >> 64), (uint64_t)length,
+            length > UINT64_MAX ? " (greater than UINT64_MAX)": "");
+    cc128_length_t top_full = result->_cr_top;
     fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n",
             (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)": "");
