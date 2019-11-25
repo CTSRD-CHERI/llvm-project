@@ -296,16 +296,6 @@ public:
     // Note: this ignores the added so should only be used for printf
     struct ImmutablePointer {};
     ImmutablePointer *get() const { return (ImmutablePointer *)value; }
-    // FIXME: need to stop using this for C++ exceptions and sentry caps
-    pint_t mutableValue() const {
-#ifdef __CHERI_PURE_CAPABILITY__
-      if (addend != 0) {
-        assert(!isImmutable());
-        return (pint_t)value + addend;
-      }
-#endif
-      return (pint_t)value;
-    }
     addr_t address() const {
 #ifdef __CHERI_PURE_CAPABILITY__
       return __builtin_cheri_address_get(value) + addend;

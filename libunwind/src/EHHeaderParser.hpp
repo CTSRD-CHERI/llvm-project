@@ -135,7 +135,7 @@ bool EHHeaderParser<A>::findFDE(A &addressSpace, pc_t pc, pint_t ehHdrStart,
   tableEntry = hdrInfo.table + low * tableEntrySize;
   if (decodeTableEntry(addressSpace, tableEntry, ehHdrStart, ehHdrEnd,
                        hdrInfo.table_enc, pc, fdeInfo, cieInfo)) {
-    if (pc >= fdeInfo->pcStart && pc < fdeInfo->pcEnd)
+    if (pc.address() >= fdeInfo->pcStart && pc.address() < fdeInfo->pcEnd)
       return true;
   }
 

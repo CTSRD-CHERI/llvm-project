@@ -272,9 +272,9 @@ void __unw_add_dynamic_fde(unw_word_t fde) {
     // dynamically registered FDEs don't have a mach_header group they are in.
     // Use fde as mh_group
     unw_word_t mh_group = fdeInfo.fdeStart;
-    DwarfFDECache<LocalAddressSpace>::add(
-        (LocalAddressSpace::pint_t)mh_group, fdeInfo.pcStart.address(),
-        fdeInfo.pcEnd.address(), fdeInfo.fdeStart);
+    DwarfFDECache<LocalAddressSpace>::add((LocalAddressSpace::pint_t)mh_group,
+                                          fdeInfo.pcStart, fdeInfo.pcEnd,
+                                          fdeInfo.fdeStart);
   } else {
     _LIBUNWIND_DEBUG_LOG("__unw_add_dynamic_fde: bad fde: %s", message);
   }

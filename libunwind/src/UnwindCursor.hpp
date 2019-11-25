@@ -1513,9 +1513,8 @@ bool UnwindCursor<A, R>::getInfoFromDwarfSection(
                                             pc.address(), R::getArch(),
                                             &prolog)) {
       // Save off parsed FDE info
-      _info.start_ip =
-          fdeInfo.pcStart.mutableValue();          // FIXME: could be immutable
-      _info.end_ip = fdeInfo.pcEnd.mutableValue(); // FIXME: could be immutable
+      _info.start_ip          = fdeInfo.pcStart;
+      _info.end_ip            = fdeInfo.pcEnd;
       _info.lsda              = fdeInfo.lsda;
       _info.handler           = cieInfo.personality;
       _info.gp                = prolog.spExtraArgSize;
@@ -1531,8 +1530,8 @@ bool UnwindCursor<A, R>::getInfoFromDwarfSection(
   #if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
         if (sects.dwarf_index_section() == 0)
   #endif
-          DwarfFDECache<A>::add(sects.dso_base, fdeInfo.pcStart.address(),
-                                fdeInfo.pcEnd.address(), fdeInfo.fdeStart);
+          DwarfFDECache<A>::add(sects.dso_base, fdeInfo.pcStart, fdeInfo.pcEnd,
+                                fdeInfo.fdeStart);
       }
       return true;
     }
@@ -1945,10 +1944,8 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
                                               pc.address(), R::getArch(),
                                               &prolog)) {
         // save off parsed FDE info
-        _info.start_ip =
-            fdeInfo.pcStart.mutableValue(); // FIXME: could be immutable
-        _info.end_ip =
-            fdeInfo.pcEnd.mutableValue(); // FIXME: could be immutable
+        _info.start_ip         = fdeInfo.pcStart;
+        _info.end_ip           = fdeInfo.pcEnd;
         _info.lsda             = fdeInfo.lsda;
         _info.handler          = cieInfo.personality;
         _info.gp               = prolog.spExtraArgSize;
@@ -1972,16 +1969,14 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
     CFI_Parser<LocalAddressSpace>::CIE_Info cieInfo;
     if (!CFI_Parser<A>::decodeFDE(_addressSpace, pc, fde, &fdeInfo, &cieInfo)) {
       // Double check this FDE is for a function that includes the pc.
-      if ((fdeInfo.pcStart <= pc) && (pc < fdeInfo.pcEnd)) {
+      if ((fdeInfo.pcStart <= pc.address()) && (pc.address() < fdeInfo.pcEnd)) {
         typename CFI_Parser<A>::PrologInfo prolog;
         if (CFI_Parser<A>::parseFDEInstructions(_addressSpace, fdeInfo, cieInfo,
                                                 pc.address(), R::getArch(),
                                                 &prolog)) {
           // save off parsed FDE info
-          _info.start_ip =
-              fdeInfo.pcStart.mutableValue(); // FIXME: could be immutable
-          _info.end_ip =
-              fdeInfo.pcEnd.mutableValue(); // FIXME: could be immutable
+          _info.start_ip         = fdeInfo.pcStart;
+          _info.end_ip           = fdeInfo.pcEnd;
           _info.lsda             = fdeInfo.lsda;
           _info.handler          = cieInfo.personality;
           _info.gp               = prolog.spExtraArgSize;

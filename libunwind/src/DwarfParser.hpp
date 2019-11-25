@@ -61,8 +61,8 @@ public:
     pint_t  fdeStart;
     size_t  fdeLength; // XXXAR: or uint32_t?
     pint_t  fdeInstructions;
-    pc_t pcStart; // This actually needs to be a valid capability!
-    pc_t pcEnd;   // This one doesn't but we add padding anyway.
+    addr_t pcStart; // Note: This is not a valid capability!
+    addr_t pcEnd;   // Same here.
     pint_t  lsda;
   };
 
@@ -128,6 +128,7 @@ private:
 template <typename A>
 const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pc_t pc, pint_t fdeStart,
                                      FDE_Info *fdeInfo, CIE_Info *cieInfo) {
+  (void)pc;
   pint_t p = fdeStart;
   uint64_t cfiLength = addressSpace.get32(p);
   p += 4;
@@ -198,13 +199,8 @@ const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pc_t pc, pint_t fdeStart,
 #else
   fdeInfo->fdeInstructions = p;
 #endif
-  if (pc.isNull()) {
-    fdeInfo->pcStart = pc_t{(pint_t)pcStart};
-    fdeInfo->pcEnd = pc_t{(pint_t)pcStart + pcRange};
-  } else {
-    fdeInfo->pcStart = pc.assertInBounds(pcStart);
-    fdeInfo->pcEnd = pc.assertInBounds(pcStart + pcRange);
-  }
+  fdeInfo->pcStart = pcStart;
+  fdeInfo->pcEnd = pcStart + pcRange;
   return NULL; // success
 }
 
@@ -304,8 +300,8 @@ bool CFI_Parser<A>::findFDE(A &addressSpace, pc_t pc, pint_t ehSectionStart,
             fdeInfo->fdeInstructions = p;
 
 #endif
-            fdeInfo->pcStart = pc.assertInBounds(pcStart);
-            fdeInfo->pcEnd = pc.assertInBounds(pcStart + pcRange);
+            fdeInfo->pcStart = pc.assertInBounds(pcStart).address();
+            fdeInfo->pcEnd = pc.assertInBounds(pcStart + pcRange).address();
             return true;
           } else {
             // pc is not in begin/range, skip this FDE
@@ -450,8 +446,8 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
                            (size_t)(-1), rememberStack, arch, results) &&
          parseInstructions(addressSpace, fdeInfo.fdeInstructions,
                            fdeInfo.fdeStart + fdeInfo.fdeLength, cieInfo,
-                           upToPC - fdeInfo.pcStart.address(), rememberStack,
-                           arch, results);
+                           upToPC - fdeInfo.pcStart, rememberStack, arch,
+                           results);
 }
 
 /// "run" the DWARF instructions
