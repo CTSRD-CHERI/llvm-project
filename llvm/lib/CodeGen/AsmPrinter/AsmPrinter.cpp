@@ -1461,7 +1461,8 @@ bool AsmPrinter::doFinalization(Module &M) {
       for (const auto &Stub : Stubs) {
         OutStreamer->EmitLabel(Stub.first);
         if (DL.isFatPointer(AS))
-          OutStreamer->EmitCheriCapability(Stub.second.getPointer(), 0, Size);
+          OutStreamer->EmitCheriCapability(Stub.second.getPointer(), nullptr,
+                                           Size);
         else
           OutStreamer->EmitSymbolValue(Stub.second.getPointer(), Size);
       }
@@ -2736,7 +2737,7 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
       report_fatal_error(
           "Cannot emit a global .chericap referring to a temporary since this "
           "will result in the wrong value at runtime!");
-      AP.OutStreamer->EmitCheriCapability(&SRE->getSymbol(), 0, CapWidth);
+      AP.OutStreamer->EmitCheriCapability(&SRE->getSymbol(), nullptr, CapWidth);
       return;
     }
   }

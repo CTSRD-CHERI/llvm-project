@@ -105,16 +105,20 @@ void MipsELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
 }
 
 void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
-                                              int64_t Offset, unsigned CapSize,
-                                              SMLoc Loc) {
+                                              const MCExpr *Addend,
+                                              unsigned CapSize, SMLoc Loc) {
+  assert(Addend && "Should have received a MCConstExpr(0) instead of nullptr");
   visitUsedSymbol(*Symbol);
   MCContext &Context = getContext();
+  assert(!Symbol->isTemporary() &&
+         "Should not be used with temporary symbols since this will generate "
+         "incorrect relocations");
 
   const MCSymbolRefExpr *SRE =
       MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context);
   const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(
-      MipsMCExpr::create(MipsMCExpr::MEK_CHERI_CAP, SRE, Context),
-      MCConstantExpr::create(Offset, Context), Context);
+      MipsMCExpr::create(MipsMCExpr::MEK_CHERI_CAP, SRE, Context), Addend,
+      Context);
 
   const unsigned ByteAlignment = CapSize;
   insert(new MCAlignFragment(ByteAlignment, 0, 1, ByteAlignment));

@@ -74,7 +74,7 @@ public:
   void createPendingLabelRelocs();
 
 protected:
-  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, int64_t Offset,
+  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, const MCExpr *Addend,
                                unsigned CapSize, SMLoc Loc) override;
 };
 

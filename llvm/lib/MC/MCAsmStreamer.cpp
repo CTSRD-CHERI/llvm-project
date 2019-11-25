@@ -339,7 +339,7 @@ public:
   void EmitBundleLock(bool AlignToEnd) override;
   void EmitBundleUnlock() override;
 
-  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, int64_t Offset,
+  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, const MCExpr *Addend,
                                unsigned CapSize, SMLoc Loc = SMLoc()) override;
   void EmitCheriIntcap(int64_t Value, unsigned CapSize,
                        SMLoc Loc = SMLoc()) override;
@@ -2026,14 +2026,22 @@ void MCAsmStreamer::EmitBundleUnlock() {
 }
 
 void MCAsmStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
-                                            int64_t Offset, unsigned CapSize,
-                                            SMLoc Loc) {
+                                            const MCExpr *Addend,
+                                            unsigned CapSize, SMLoc Loc) {
   OS << "\t.chericap\t";
   Symbol->print(OS, MAI);
-  if (Offset > 0)
-    OS << "+" << Offset;
-  else if (Offset < 0)
-    OS << Offset;
+  // Avoid parens,unary minus, and zero for constants:
+  assert(Addend);
+  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Addend)) {
+    int64_t Offset = CE->getValue();
+    if (Offset > 0)
+      OS << "+" << Offset;
+    else if (Offset < 0)
+      OS << Offset;
+  } else {
+    OS << " + ";
+    Addend->print(OS, MAI, /*InParens=*/true);
+  }
   EmitEOL();
 }
 

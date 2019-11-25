@@ -729,6 +729,11 @@ public:
 
   // Emit the expression \p Value into the output as a CHERI capability
   void EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
+                           unsigned CapSize, SMLoc Loc = SMLoc()) {
+    EmitCheriCapability(Value, MCConstantExpr::create(Addend, Context), CapSize,
+                        Loc);
+  }
+  void EmitCheriCapability(const MCSymbol *Value, const MCExpr *Addend,
                            unsigned CapSize, SMLoc Loc = SMLoc());
 
   // Emit \p Value as an untagged capability-size value
@@ -1045,8 +1050,9 @@ public:
   virtual bool mayHaveInstructions(MCSection &Sec) const { return true; }
 
 protected:
-  virtual void EmitCheriCapabilityImpl(const MCSymbol *Value, int64_t Addend,
-                                       unsigned CapSize, SMLoc Loc = SMLoc());
+  virtual void EmitCheriCapabilityImpl(const MCSymbol *Value,
+                                       const MCExpr *Addend, unsigned CapSize,
+                                       SMLoc Loc = SMLoc());
 
   // Emit a CHERI capability using the legacy __cap_relocs hack
   virtual void EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,

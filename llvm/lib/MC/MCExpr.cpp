@@ -468,7 +468,8 @@ bool MCExpr::evaluateAsAbsolute(int64_t &Res, MCStreamer& Out) const {
     return evaluateAsAbsolute(Res, MCAsmLayout(MC->getAssembler()));
   }
 #endif
-  return evaluateAsAbsolute(Res, nullptr, nullptr, nullptr, false);
+  return evaluateAsAbsolute(Res, Out.getAssemblerPtr(), nullptr, nullptr,
+                            false);
 }
 
 bool MCExpr::evaluateAsAbsolute(int64_t &Res,
