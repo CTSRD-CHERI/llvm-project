@@ -217,7 +217,6 @@ struct Configuration {
   bool zCapTableDebug;
   bool zCombreloc;
   bool zCopyreloc;
-  bool zExecstack;
   bool zGlobal;
   bool zHazardplt;
   bool zIfuncNoplt;

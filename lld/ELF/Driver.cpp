@@ -1047,7 +1047,6 @@ static void readConfigs(opt::InputArgList &args) {
   config->zCapTableDebug = getZFlag(args, "captabledebug", "nocaptabledebug", false);
   config->zCombreloc = getZFlag(args, "combreloc", "nocombreloc", true);
   config->zCopyreloc = getZFlag(args, "copyreloc", "nocopyreloc", true);
-  config->zExecstack = getZFlag(args, "execstack", "noexecstack", false);
   config->zGlobal = hasZOption(args, "global");
   config->zGnustack = getZGnuStack(args);
   config->zHazardplt = hasZOption(args, "hazardplt");
