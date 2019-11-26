@@ -221,8 +221,6 @@ void MCStreamer::EmitCheriCapability(const MCSymbol *Value,
   if (!Addend) {
     Addend = MCConstantExpr::create(0, Context);
   }
-  assert(!Value->isTemporary() &&
-         "Should not use EmitCheriCapability against temporary symbols!");
   if (LLVM_UNLIKELY(TargetStreamer->useLegacyCapRelocs())) {
     // XXXAR: The legacy path still exists to allow comparing bounds quality vs
     // the R_CHERI_CAPABILITY approach.

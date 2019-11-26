@@ -110,10 +110,14 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
   assert(Addend && "Should have received a MCConstExpr(0) instead of nullptr");
   visitUsedSymbol(*Symbol);
   MCContext &Context = getContext();
-  assert(!Symbol->isTemporary() &&
-         "Should not be used with temporary symbols since this will generate "
-         "incorrect relocations");
-
+  auto ElfSym = cast<MCSymbolELF>(Symbol);
+  // Assert that we don't create .chericap relocations against temporary symbols
+  // since those will result in wrong relocations (against sec+offset)
+  if (ElfSym->isDefined() && !ElfSym->getSize()) {
+    report_fatal_error("Cannot create a MEK_CHERI_CAP relocation"
+                       " against an unsized symbol: " +
+                       ElfSym->getName());
+  }
   const MCSymbolRefExpr *SRE =
       MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context);
   const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(

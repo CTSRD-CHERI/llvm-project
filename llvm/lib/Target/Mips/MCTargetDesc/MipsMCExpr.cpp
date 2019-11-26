@@ -26,18 +26,6 @@ using namespace llvm;
 
 const MipsMCExpr *MipsMCExpr::create(MipsMCExpr::MipsExprKind Kind,
                                      const MCExpr *Expr, MCContext &Ctx) {
-  // Assert that we don't create .chericap relocations against temporary symbols
-  // since those will result in wrong relocations (against sec+offset)
-  if (Kind == MipsMCExpr::MEK_CHERI_CAP) {
-    if (isa<MCSymbolRefExpr>(Expr)) {
-      assert(!cast<MCSymbolRefExpr>(Expr)->getSymbol().isTemporary());
-    } else if (auto BinExp = dyn_cast<MCBinaryExpr>(Expr)) {
-      assert(isa<MCSymbolRefExpr>(BinExp->getLHS()));
-      assert(
-          !cast<MCSymbolRefExpr>(BinExp->getLHS())->getSymbol().isTemporary());
-      (void)BinExp;
-    }
-  }
   return new (Ctx) MipsMCExpr(Kind, Expr);
 }
 
