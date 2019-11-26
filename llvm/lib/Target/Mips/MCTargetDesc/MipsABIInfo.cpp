@@ -79,6 +79,8 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
   if (TT.getEnvironment() == llvm::Triple::GNUABIN32)
     return MipsABIInfo::N32();
   assert(Options.getABIName().empty() && "Unknown ABI option for MIPS");
+  if (TT.getEnvironment() == llvm::Triple::CheriPurecap)
+    return MipsABIInfo::CheriPureCap();
 
   if (TT.isMIPS64())
     return MipsABIInfo::N64();
@@ -86,20 +88,20 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
 }
 
 unsigned MipsABIInfo::GetStackPtr() const {
-  return IsCheriPureCap() ? 
+  return IsCheriPureCap() ?
     Mips::C11 :
     (ArePtrs64bit() ? Mips::SP_64 : Mips::SP);
 }
 
 unsigned MipsABIInfo::GetFramePtr() const {
-  return IsCheriPureCap() ? 
+  return IsCheriPureCap() ?
     Mips::C24 :
     (ArePtrs64bit() ? Mips::FP_64 : Mips::FP);
 }
 
 unsigned MipsABIInfo::GetBasePtr() const {
   // FIXME: $c25 is probably not sensible here.
-  return IsCheriPureCap() ? 
+  return IsCheriPureCap() ?
     Mips::C25 :
     (ArePtrs64bit() ? Mips::S7_64 : Mips::S7);
 }
