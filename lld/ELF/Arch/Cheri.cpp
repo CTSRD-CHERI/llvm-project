@@ -115,7 +115,7 @@ SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
     // Don't warn if the relocation is against an anonymous string constant
     // since clang won't emit a symbol (and no size) for those
     if (!isec->name.startswith(".rodata.str"))
-      nonFatalWarning("Could not find a real symbol for __cap_reloc against " + isec->name +
+      nonFatalWarning("Could not find a real symbol for " + isec->name +
            "+0x" + utohexstr(offset) + " in " + toString(isec->file));
     // Could not find a symbol -> return section+offset
     assert(offset == fallbackOffset);
@@ -290,12 +290,13 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
   }
   uint64_t currentEntryOffset = relocsMap.size() * relocSize;
 
-  std::string sourceMsg =
-      sourceSymbol ? verboseToString(sourceSymbol) : loc.toString();
+  auto sourceMsg = [&]() -> std::string {
+    return sourceSymbol ? verboseToString(sourceSymbol) : loc.toString();
+  };
   if (target.sym()->isUndefined() && !target.sym()->isUndefWeak()) {
     std::string msg =
         "cap_reloc against undefined symbol: " + toString(*target.sym()) +
-        "\n>>> referenced by " + sourceMsg;
+        "\n>>> referenced by " + sourceMsg();
     if (config->unresolvedSymbols == UnresolvedPolicy::ReportError)
       error(msg);
     else
@@ -310,7 +311,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
 
   bool canWriteLoc = (loc.section->flags & SHF_WRITE) || !config->zText;
   if (!canWriteLoc) {
-    readOnlyCapRelocsError(*target.sym(), "\n>>> referenced by " + sourceMsg);
+    readOnlyCapRelocsError(*target.sym(), "\n>>> referenced by " + sourceMsg());
     return;
   }
 
