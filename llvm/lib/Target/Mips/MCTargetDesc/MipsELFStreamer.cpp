@@ -110,16 +110,8 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
   assert(Addend && "Should have received a MCConstExpr(0) instead of nullptr");
   visitUsedSymbol(*Symbol);
   MCContext &Context = getContext();
-  auto ElfSym = cast<MCSymbolELF>(Symbol);
-  // Assert that we don't create .chericap relocations against temporary symbols
-  // since those will result in wrong relocations (against sec+offset)
-  if (ElfSym->isDefined() && !ElfSym->getSize()) {
-    report_fatal_error("Cannot create a MEK_CHERI_CAP relocation"
-                       " against an unsized symbol: " +
-                       ElfSym->getName());
-  }
   const MCSymbolRefExpr *SRE =
-      MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context);
+      MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context, Loc);
   const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(
       MipsMCExpr::create(MipsMCExpr::MEK_CHERI_CAP, SRE, Context), Addend,
       Context);
@@ -128,8 +120,8 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
   EmitValueToAlignment(CapSize, 0, 1, 0);
 
   MCDataFragment *DF = new MCDataFragment();
-  MCFixup cheriFixup =
-      MCFixup::create(0, CapExpr, MCFixupKind(Mips::fixup_CHERI_CAPABILITY));
+  MCFixup cheriFixup = MCFixup::create(
+      0, CapExpr, MCFixupKind(Mips::fixup_CHERI_CAPABILITY), Loc);
   DF->getFixups().push_back(cheriFixup);
   DF->getContents().resize(DF->getContents().size() + CapSize, '\xca');
   insert(DF);

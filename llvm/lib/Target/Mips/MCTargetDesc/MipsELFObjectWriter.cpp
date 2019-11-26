@@ -15,6 +15,7 @@
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSymbolELF.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
@@ -447,8 +448,18 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
   case Mips::fixup_CHERI_CAPCALL_HI16:
     return ELF::R_MIPS_CHERI_CAPCALL_HI16;
 
-  case Mips::fixup_CHERI_CAPABILITY:
+  case Mips::fixup_CHERI_CAPABILITY: {
+    const auto &ElfSym = cast<const MCSymbolELF>(Target.getSymA()->getSymbol());
+    // Assert that we don't create .chericap relocations against temporary
+    // symbols since those will result in wrong relocations (against sec+offset)
+    if (ElfSym.isDefined() && !ElfSym.getSize()) {
+      Ctx.reportWarning(Fixup.getLoc(),
+          "creating a R_MIPS_CHERI_CAPABILITY relocation against an unsized "
+          "defined symbol: " + ElfSym.getName() +
+          ". This will probably result in incorrect values at run time.");
+    }
     return ELF::R_MIPS_CHERI_CAPABILITY;
+  }
 
   case Mips::fixup_CHERI_CAPTAB_TLSGD_HI16:
     return ELF::R_MIPS_CHERI_CAPTAB_TLS_GD_HI16;
