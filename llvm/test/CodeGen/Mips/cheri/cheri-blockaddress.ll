@@ -1,5 +1,5 @@
-; RUN: %cheri_purecap_llc %s -o - | FileCheck %s -check-prefix ASM
-; RUN: %cheri_purecap_llc -filetype=obj %s -o - | llvm-readobj -r - | FileCheck %s  -check-prefix OBJ
+; RUN: %cheri_purecap_llc %s -o - | %cheri_FileCheck %s --check-prefix ASM
+; RUN: %cheri_purecap_llc -filetype=obj %s -o - | llvm-readobj -r - | %cheri_FileCheck %s --check-prefix OBJ
 ; See address-of-label-crash.c in clang/test/CodeGen/cheri for the C source code
 
 ; Function Attrs: noinline nounwind optnone
@@ -53,7 +53,7 @@ indirectgoto:                                     ; preds = %entry
 
 ; ASM-LABEL: addrof_label_in_static.b:
 ; ASM-NEXT: 	.chericap	addrof_label_in_static + .Ltmp0-addrof_label_in_static
-; ASM-NEXT: 	.size	addrof_label_in_static.b, 16
+; ASM-NEXT: 	.size	addrof_label_in_static.b, [[#CAP_SIZE]]
 
 ; The .o file should contain a relocation against the function with a constant addend (0x1c)
 ; OBJ:       Section (8) .rela.data {
