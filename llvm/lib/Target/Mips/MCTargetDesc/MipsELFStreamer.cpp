@@ -120,12 +120,8 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
       MipsMCExpr::create(MipsMCExpr::MEK_CHERI_CAP, SRE, Context), Addend,
       Context);
 
-  const unsigned ByteAlignment = CapSize;
-  insert(new MCAlignFragment(ByteAlignment, 0, 1, ByteAlignment));
-  // Update the maximum alignment on the current section if necessary.
-  MCSection *CurSec = getCurrentSectionOnly();
-  if (ByteAlignment > CurSec->getAlignment())
-    CurSec->setAlignment(llvm::Align(ByteAlignment));
+  // Pad to ensure that the capability is aligned
+  EmitValueToAlignment(CapSize, 0, 1, 0);
 
   MCDataFragment *DF = new MCDataFragment();
   MCFixup cheriFixup =
@@ -137,6 +133,8 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
 
 void MipsELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
   assert(CapSize == 32 || CapSize == 16);
+  // Pad to ensure that the (u)intcap_t is aligned
+  EmitValueToAlignment(CapSize, 0, 1, 0);
   if (Value == 0) {
     EmitZeros(CapSize);
   } else {
