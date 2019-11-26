@@ -298,6 +298,8 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   TLSExtraDataSection = TLSTLVSection;
 }
 
+MCObjectFileInfo::~MCObjectFileInfo() {}
+
 void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   switch (T.getArch()) {
   case Triple::mips:
@@ -339,19 +341,8 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
     EHSectionFlags |= ELF::SHF_WRITE;
 
   // This is (currently) also true for MIPS
-  // TODO: add a T.isMIPS()?
-  switch (T.getArch()) {
-    case Triple::mips:
-    case Triple::mipsel:
-    case Triple::mips64:
-    case Triple::mips64el:
-    case Triple::cheri:
-      if (PositionIndependent) {
-        EHSectionFlags |= ELF::SHF_WRITE;
-      }
-      break;
-    default:
-      break;
+  if (T.isMIPS() && PositionIndependent) {
+    EHSectionFlags |= ELF::SHF_WRITE;
   }
 
   // ELF
@@ -399,8 +390,18 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   // it contains relocatable pointers.  In PIC mode, this is probably a big
   // runtime hit for C++ apps.  Either the contents of the LSDA need to be
   // adjusted or this should be a data section.
+  unsigned LSDASectionFlags = ELF::SHF_ALLOC;
+
+  // In the CHERI pure-capability ABI we write capabilities to for the landing
+  // pads so the section must be relocated.
+  // XXX: Would be nice if there was a ELF::SHF_RELRO/SHF_INITIALIZED_DATA
+  //   so I don't also have to modify lld.
+  if (isCheriPurecapABI()) {
+    // TODO: Could we (ab)use SHF_OS_NONCONFORMING
+    LSDASectionFlags |= ELF::SHF_WRITE;
+  }
   LSDASection = Ctx->getELFSection(".gcc_except_table", ELF::SHT_PROGBITS,
-                                   ELF::SHF_ALLOC);
+                                   LSDASectionFlags);
 
   COFFDebugSymbolsSection = nullptr;
   COFFDebugTypesSection = nullptr;

@@ -407,7 +407,14 @@ private:
   MCSection *getDwarfComdatSection(const char *Name, uint64_t Hash) const;
 
 public:
+  virtual ~MCObjectFileInfo();
   const Triple &getTargetTriple() const { return TT; }
+
+  /// This can be overridden in subclasses in case they don't set the Triple
+  /// environment for the pure-capability ABI
+  virtual bool isCheriPurecapABI() const {
+    return getTargetTriple().getEnvironment() == Triple::CheriPurecap;
+  }
 
   void setSDKVersion(const VersionTuple &TheSDKVersion) {
     SDKVersion = TheSDKVersion;

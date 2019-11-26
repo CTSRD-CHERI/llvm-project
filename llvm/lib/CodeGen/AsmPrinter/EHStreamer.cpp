@@ -531,17 +531,42 @@ MCSymbol *EHStreamer::emitExceptionTable() {
                                      EndLabel->getName());
       Asm->EmitCallSiteOffset(EndLabel, BeginLabel, CallSiteEncoding);
 
+      const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
       // Offset of the landing pad relative to the start of the procedure.
       if (!S.LPad) {
         if (VerboseAsm)
           Asm->OutStreamer->AddComment("    has no landing pad");
-        Asm->EmitCallSiteValue(0, CallSiteEncoding);
+
+        // In the purecap ABI the C++ ABI library always reads a capability
+        // for the landing pad, so we cannot emit a ULEB128 zero here but must
+        // instead write an aligned capability NULL.
+        if (TLOF.isCheriPurecapABI()) {
+          Asm->OutStreamer->EmitCheriIntcap(0, TLOF.getCheriCapabilitySize());
+        } else {
+          Asm->EmitCallSiteValue(0, CallSiteEncoding);
+        }
       } else {
         if (VerboseAsm)
           Asm->OutStreamer->AddComment(Twine("    jumps to ") +
                                        S.LPad->LandingPadLabel->getName());
-        Asm->EmitCallSiteOffset(S.LPad->LandingPadLabel, EHFuncBeginSym,
-                                CallSiteEncoding);
+        if (TLOF.isCheriPurecapABI()) {
+          // For purecap we currently emit a capability relocation for the
+          // landing pad target since the saved PC value will be an immutable
+          // sentry capability which does not allow adding an offset.
+          // Get the Hi-Lo expression.
+          const MCExpr *DiffToStart = MCBinaryExpr::createSub(
+              MCSymbolRefExpr::create(S.LPad->LandingPadLabel, Asm->OutContext),
+              MCSymbolRefExpr::create(EHFuncBeginSym, Asm->OutContext),
+              Asm->OutContext);
+          // Note: we cannot use EHFuncBeginSym here since that is a local
+          // symbol and then EmitCheriCapability() will create a relocation
+          // against section plus offset rather than function + offset
+          Asm->OutStreamer->EmitCheriCapability(Asm->CurrentFnSym, DiffToStart,
+                                                TLOF.getCheriCapabilitySize());
+        } else {
+          Asm->EmitCallSiteOffset(S.LPad->LandingPadLabel, EHFuncBeginSym,
+                                  CallSiteEncoding);
+        }
       }
 
       // Offset of the first associated action record, relative to the start of

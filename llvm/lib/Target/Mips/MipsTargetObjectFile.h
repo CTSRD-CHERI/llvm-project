@@ -47,6 +47,8 @@ class MipsTargetMachine;
     TailPaddingAmount
     getTailPaddingForPreciseBounds(uint64_t Size) const override;
     Align getAlignmentForPreciseBounds(uint64_t Size) const override;
+    bool isCheriPurecapABI() const override;
+    int getCheriCapabilitySize() const override;
   };
 } // end namespace llvm
 

@@ -225,6 +225,10 @@ public:
   virtual Align getAlignmentForPreciseBounds(uint64_t Size) const {
     return Align::None();
   }
+  virtual int getCheriCapabilitySize() const {
+    llvm_unreachable("getCheriCapabilitySize should only be called for targets"
+                     "that support CHERI");
+  }
 
 protected:
   virtual MCSection *SelectSectionForGlobal(const GlobalObject *GO,

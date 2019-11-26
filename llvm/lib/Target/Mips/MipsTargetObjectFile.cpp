@@ -225,3 +225,19 @@ MipsTargetObjectFile::getAlignmentForPreciseBounds(uint64_t Size) const {
   // No alignment required for CHERI256
   return Align::None();
 }
+
+bool MipsTargetObjectFile::isCheriPurecapABI() const {
+  if (TM) {
+    const MipsSubtarget &Subtarget =
+        *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
+    return Subtarget.getABI().IsCheriPureCap();
+  } else {
+    return getTargetTriple().getEnvironment() == Triple::CheriPurecap;
+  }
+}
+
+int MipsTargetObjectFile::getCheriCapabilitySize() const {
+  const MipsSubtarget &Subtarget =
+      *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
+  return Subtarget.getCapSizeInBytes();
+}
