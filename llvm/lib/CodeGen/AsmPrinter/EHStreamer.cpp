@@ -532,24 +532,27 @@ MCSymbol *EHStreamer::emitExceptionTable() {
       Asm->EmitCallSiteOffset(EndLabel, BeginLabel, CallSiteEncoding);
 
       const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
+      const bool IsPurecap = TLOF.isCheriPurecapABI();
       // Offset of the landing pad relative to the start of the procedure.
       if (!S.LPad) {
         if (VerboseAsm)
           Asm->OutStreamer->AddComment("    has no landing pad");
 
-        // In the purecap ABI the C++ ABI library always reads a capability
-        // for the landing pad, so we cannot emit a ULEB128 zero here but must
-        // instead write an aligned capability NULL.
-        if (TLOF.isCheriPurecapABI()) {
-          Asm->OutStreamer->EmitCheriIntcap(0, TLOF.getCheriCapabilitySize());
-        } else {
-          Asm->EmitCallSiteValue(0, CallSiteEncoding);
-        }
+        Asm->EmitCallSiteValue(0, CallSiteEncoding);
       } else {
+        if (IsPurecap) {
+          // In order to avoid having to pad to capability alignment and use
+          // a full capability for the no landing pad case, we emit a 0xc byte
+          // here to indicate that there is a valid capability at the next
+          // capability-aligned location.
+          Asm->OutStreamer->AddComment("(landing pad is a capability)");
+          Asm->EmitCallSiteValue(0xc, CallSiteEncoding);
+        }
+
         if (VerboseAsm)
           Asm->OutStreamer->AddComment(Twine("    jumps to ") +
                                        S.LPad->LandingPadLabel->getName());
-        if (TLOF.isCheriPurecapABI()) {
+        if (IsPurecap) {
           // For purecap we currently emit a capability relocation for the
           // landing pad target since the saved PC value will be an immutable
           // sentry capability which does not allow adding an offset.

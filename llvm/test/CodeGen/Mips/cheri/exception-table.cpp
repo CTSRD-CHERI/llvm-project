@@ -1,16 +1,40 @@
 // REQUIRES: clang
-// RUN: %cheri_cc1 -O2 -munwind-tables -fcxx-exceptions -fexceptions %s -emit-llvm -o -
+
 // RUN: %cheri_cc1 -O2 -masm-verbose -mframe-pointer=none -fcxx-exceptions -fexceptions %s -S -o - | FileCheck %s --check-prefixes MIPS,CHECK
 // RUN: %cheri_purecap_cc1 -O2 -masm-verbose -mframe-pointer=none -fcxx-exceptions -fexceptions %s -S -o - | %cheri_FileCheck %s --check-prefixes PURECAP,CHECK
-// RUN: %cheri_purecap_cc1 -O2 -masm-verbose -mframe-pointer=none -fcxx-exceptions -fexceptions %s -emit-obj -o %t.o
-// RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix OBJ-RELOCS
-// OBJ-RELOCS: Section ({{.+}}) .rela.gcc_except_table {
-// OBJ-RELOCS:   0x10 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _Z4testll 0x8C
-// OBJ-RELOCS:   0x30 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _Z4testll 0x6C
-// OBJ-RELOCS: }
-// OBJ-RELOCS: Section ({{.+}}) .rela.data.DW.ref.__gxx_personality_v0 {
-// OBJ-RELOCS:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __gxx_personality_v0 0x0
-// OBJ-RELOCS: }
+// RUN: %cheri_purecap_cc1 -O2 -masm-verbose -mframe-pointer=none -fcxx-exceptions -fexceptions %s -emit-obj -o - | llvm-readobj --sections --section-data -r - | FileCheck %s --check-prefix OBJ-RELOCS
+
+// OBJ-RELOCS-LABEL:  Section {
+// OBJ-RELOCS:        Index:
+// OBJ-RELOCS:        Name: .gcc_except_table
+// OBJ-RELOCS-NEXT:   Type: SHT_PROGBITS (0x1)
+// OBJ-RELOCS-NEXT:   Flags [ (0x3)
+// OBJ-RELOCS-NEXT:     SHF_ALLOC (0x2)
+// OBJ-RELOCS-NEXT:     SHF_WRITE (0x1)
+// OBJ-RELOCS-NEXT:   ]
+// OBJ-RELOCS-NEXT:   Address: 0x0
+// OBJ-RELOCS-NEXT:   Offset: 0x110
+// OBJ-RELOCS-NEXT:   Size: 76
+// OBJ-RELOCS-NEXT:   Link: 0
+// OBJ-RELOCS-NEXT:   Info: 0
+// OBJ-RELOCS-NEXT:   AddressAlignment: 16
+// OBJ-RELOCS-NEXT:   EntrySize: 0
+// OBJ-RELOCS-NEXT:   SectionData (
+/// Ensure that the capabilities are correctly aligned and preceded by 0xc:
+// OBJ-RELOCS-NEXT:     0000: FF9B4901 40240C0C 00000000 00000000  |..I.@$..........|
+// OBJ-RELOCS-NEXT:     0010: CACACACA CACACACA CACACACA CACACACA  |................|
+// OBJ-RELOCS-NEXT:     0020: 01380C0C 00000000 00000000 00000000  |.8..............|
+// OBJ-RELOCS-NEXT:     0030: CACACACA CACACACA CACACACA CACACACA  |................|
+// OBJ-RELOCS-NEXT:     0040: 01446800 00010000 00000000           |.Dh.........|
+// OBJ-RELOCS-NEXT:   )
+
+// OBJ-RELOCS-LABEL: Section ({{.+}}) .rela.gcc_except_table {
+// OBJ-RELOCS-NEXT:   0x10 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _Z4testll 0x8C
+// OBJ-RELOCS-NEXT:   0x30 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _Z4testll 0x6C
+// OBJ-RELOCS-NEXT: }
+// OBJ-RELOCS-NEXT: Section ({{.+}}) .rela.data.DW.ref.__gxx_personality_v0 {
+// OBJ-RELOCS-NEXT:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __gxx_personality_v0 0x0
+// OBJ-RELOCS-NEXT: }
 
 bool external_fn(long arg);
 
@@ -51,20 +75,20 @@ long test(long arg, long arg2) {
 // CHECK-NEXT:     .uleb128 .Ltmp1-.Ltmp0          #   Call between .Ltmp0 and .Ltmp1
 /// Landing pads are not relative offsets but real capabilities:
 // MIPS-NEXT:        .uleb128 .Ltmp2-.Lfunc_begin0               # jumps to .Ltmp2
+// PURECAP-NEXT:     .byte 12                                    # (landing pad is a capability)
 // PURECAP-NEXT:     .chericap	_Z4testll + .Ltmp2-.Lfunc_begin0 #     jumps to .Ltmp2
 // CHECK-NEXT:     .byte	1                       #   On action: 1
 // CHECK-NEXT:     .uleb128 .Ltmp3-.Lfunc_begin0   # >> Call Site 2 <<
 // CHECK-NEXT:     .uleb128 .Ltmp4-.Ltmp3          #   Call between .Ltmp3 and .Ltmp4
 // MIPS-NEXT:        .uleb128 .Ltmp5-.Lfunc_begin0               # jumps to .Ltmp5
 /// Landing pads are not relative offsets but real capabilities:
+// PURECAP-NEXT:     .byte 12                                    # (landing pad is a capability)
 // PURECAP-NEXT:     .chericap	_Z4testll + .Ltmp5-.Lfunc_begin0 #     jumps to .Ltmp5
 // CHECK-NEXT:     .byte	1                       #   On action: 1
 // CHECK-NEXT:     .uleb128 .Ltmp4-.Lfunc_begin0   # >> Call Site 3 <<
 // CHECK-NEXT:     .uleb128 .Lfunc_end0-.Ltmp4     #   Call between .Ltmp4 and .Lfunc_end0
-/// For alignment/libc++abi implementation reasons, NULL landing pads can't use a single
-/// zero byte but must use a full NULL CHERI capability
-// MIPS-NEXT:      .byte	0               #     has no landing pad
-// PURECAP-NEXT:   .chericap	0               #     has no landing pad
+/// NULL landing pads are still use a single zero byte (since we indicate real ones with the 0xc ULEB128 value)
+// CHECK-NEXT:     .byte	0               #     has no landing pad
 // CHECK-NEXT:     .byte	0                       #   On action: cleanup
 // CHECK-NEXT: .Lcst_end0:
 // CHECK-NEXT:     .byte	1                       # >> Action Record 1 <<
