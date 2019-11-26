@@ -2731,8 +2731,15 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
                                         CapWidth);
     return;
   } else if (const MCSymbolRefExpr *SRE = dyn_cast<MCSymbolRefExpr>(Expr)) {
-    // emit capability for label whose address is stored in a global variable
-    // FIXME: this is wrong
+    if (auto BA = dyn_cast<BlockAddress>(CV)) {
+      // For block addresses we emit `.chericap FN+(.LtmpN - FN)`
+      auto FnStart = AP.getSymbol(BA->getFunction());
+      const MCExpr *DiffToStart = MCBinaryExpr::createSub(SRE, MCSymbolRefExpr::create(FnStart, AP.OutContext), AP.OutContext);
+      AP.OutStreamer->EmitCheriCapability(FnStart, DiffToStart, CapWidth);
+      return;
+    }
+    // Emit capability for label whose address is stored in a global variable
+    // FIXME: Any more cases to handle other than blockaddress?
     if (SRE->getSymbol().isTemporary()) {
       report_fatal_error(
           "Cannot emit a global .chericap referring to a temporary since this "
