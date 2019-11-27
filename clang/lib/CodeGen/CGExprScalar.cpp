@@ -2860,11 +2860,42 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
   // Most common case by far: integer increment.
   } else if (type->isIntegerType()) {
     llvm::Value *Base = value;
-    if (type->isCHERICapabilityType(CGF.getContext()))
+    const bool IsCapType = type->isCHERICapabilityType(CGF.getContext());
+    if (IsCapType)
       value = CGF.getCapabilityIntegerValue(Base);
-    // Note that signed integer inc/dec with width less than int can't
-    // overflow because of promotion rules; we're just eliding a few steps here.
-    if (E->canOverflow() && type->isSignedIntegerOrEnumerationType()) {
+    assert((!type->isPromotableIntegerType() ||
+            (type->isSignedIntegerOrEnumerationType() ||
+             CGF.getContext()
+                 .getPromotedIntegerType(type)
+                 ->isSignedIntegerOrEnumerationType())) &&
+           "The following check expects that if we do promotion, at least one "
+           "of the types (either base or promoted) will be signed.");
+    if (CGF.SanOpts.hasOneOf(
+            SanitizerKind::ImplicitIntegerArithmeticValueChange) &&
+        type->isPromotableIntegerType()) {
+      // While `x += 1` (for `x` with width less than int) is modeled as
+      // promotion+arithmetics+demotion, and we can catch lossy demotion with
+      // ease; inc/dec with width less than int can't overflow because of
+      // promotion rules, so we omit promotion+demotion, which means that we can
+      // not catch lossy "demotion". Because we still want to catch these cases
+      // when the sanitizer is enabled, we perform the promotion, then perform
+      // the increment/decrement in the wider type, and finally
+      // perform the demotion. This will catch lossy demotions.
+
+      QualType promotedType = CGF.getContext().getPromotedIntegerType(type);
+      assert(promotedType != type && "Shouldn't promote to the same type.");
+      value = EmitScalarConversion(value, type, promotedType, E->getExprLoc());
+      Value *amt = llvm::ConstantInt::get(value->getType(), amount, true);
+      value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
+      // Do pass non-default ScalarConversionOpts so that sanitizer check is
+      // emitted.
+      value = EmitScalarConversion(value, promotedType, type, E->getExprLoc(),
+                                   ScalarConversionOpts(CGF.SanOpts));
+
+      // Note that signed integer inc/dec with width less than int can't
+      // overflow because of promotion rules; we're just eliding a few steps
+      // here.
+    } else if (E->canOverflow() && type->isSignedIntegerOrEnumerationType()) {
       value = EmitIncDecConsiderOverflowBehavior(E, value, isInc);
     } else if (E->canOverflow() && type->isUnsignedIntegerType() &&
                CGF.SanOpts.has(SanitizerKind::UnsignedIntegerOverflow)) {
@@ -2874,7 +2905,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
       llvm::Value *amt = llvm::ConstantInt::get(value->getType(), amount, true);
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
     }
-    if (type->isCHERICapabilityType(CGF.getContext()))
+    if (IsCapType)
       value = CGF.setCapabilityIntegerValue(Base, value);
   // Next most common: pointer increment.
   } else if (const PointerType *ptr = type->getAs<PointerType>()) {
