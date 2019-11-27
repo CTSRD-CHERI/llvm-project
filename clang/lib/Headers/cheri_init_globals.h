@@ -24,7 +24,6 @@
  *
 \*===----------------------------------------------------------------------===*/
 
-// FIXME: this shouldn't be here
 #pragma once
 #if !__has_feature(capabilities)
 #error "This header requires CHERI capability support"
@@ -174,6 +173,14 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
     src = __builtin_cheri_offset_increment(src, reloc->offset);
+#if __has_builtin(__builtin_cheri_seal_entry)
+    if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
+      /* Convert function pointers to sentries: */
+      src = __builtin_cheri_seal_entry(src);
+    }
+#else
+#warning "Sentries not supported, global function pointers will provide unnecessary privilege"
+#endif
     *dest = src;
   }
 }
