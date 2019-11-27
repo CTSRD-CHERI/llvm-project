@@ -843,6 +843,7 @@ def Move : DiagGroup<"move", [
   ]>;
 
 def Extra : DiagGroup<"extra", [
+    DeprecatedCopy,
     MIPSCHERIPrototypesStrict, // this is quite noisy so only on for -Wextra
     MissingFieldInitializers,
     IgnoredQualifiers,
