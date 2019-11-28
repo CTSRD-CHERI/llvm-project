@@ -90,28 +90,43 @@ Register MipsFunctionInfo::getCapEntryPointReg() {
   if (CapEntryPointReg)
     return CapEntryPointReg;
 
-  const TargetRegisterClass *RC = &Mips::CheriGPRRegClass;
   const MipsABIInfo &ABI =
       static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI();
   assert(ABI.IsCheriPureCap());
-  constexpr unsigned ABIEntryPointReg = Mips::C12; // FIXME: move to ABI?
-
-  // XXXAR: Mips::C12 may already be marked as live-in if we use TLS
-  // FIXME: still needed?
   MachineBasicBlock &MBB = MF.front();
-  if (MF.getRegInfo().isLiveIn(ABIEntryPointReg)) {
-    assert(usesTlsViaGlobalReg() && "$gp should only be used for TLS");
-    assert(MBB.isLiveIn(
-        ABIEntryPointReg)); // should have been added by the TLS hack
-  } else {
-    MF.getRegInfo().addLiveIn(ABIEntryPointReg);
-    MBB.addLiveIn(ABIEntryPointReg);
-  }
-  Register Tmp = MF.getRegInfo().createVirtualRegister(RC);
+  Register Tmp = MF.getRegInfo().createVirtualRegister(&Mips::CheriGPRRegClass);
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   DebugLoc DL;
-  BuildMI(MBB, MBB.begin(), DL, TII.get(TargetOpcode::COPY), Tmp)
-      .addReg(ABIEntryPointReg);
+  // FIXME: This is ugly but currently required to unseal $c12 in case it is a
+  // sentry. We should instead add new instructions to improve this pattern
+  // cgetpcc $c1
+  // daddiu $1, $zero, %pcrel_lo(.Lentry_point+4) # +4 since the getpcc is on the previous line
+  // cincoffset $c2, $c1, $1
+#if 0 // For some reason this results in the label not being emitted:
+  MBB.setLabelMustBeEmitted(); // We reference this label -> must be emitted
+  MBB.setHasAddressTaken();    // XXX: is this needed?
+  // Create a pcrel offset
+  MCSymbol* BlockMCSym = MBB.getSymbol();
+  BlockMCSym->setUsedInReloc();
+  auto MBBSym =
+      MachineOperand::CreateMCSymbol(BlockMCSym, MipsII::MO_PCREL_LO);
+  MBBSym.setOffset(4);
+#else
+  // XXX: ugly const_cast to ensure the label is emitted
+  MBB.setHasAddressTaken();
+  auto BA = BlockAddress::get(const_cast<BasicBlock *>(MBB.getBasicBlock()));
+  auto MBBSym = MachineOperand::CreateBA(BA, 4, MipsII::MO_PCREL_LO);
+#endif
+
+  // Since we need to ensure that these instrs are written together we need to
+  // bundle them. However, this is only possible after register allocation so
+  // we convert this to another pseudo instruction first.
+  auto I = MBB.begin();
+  Register Scratch = MF.getRegInfo().createVirtualRegister(&Mips::GPR64RegClass);
+  BuildMI(MBB, I, DL, TII.get(Mips::PseudoPccRelativeAddressPostRA), Tmp)
+      .add(MBBSym)
+      .addReg(Scratch, RegState::Define | RegState::EarlyClobber |
+          RegState::Implicit | RegState::Dead);
   CapEntryPointReg = Tmp;
   return Tmp;
 }
