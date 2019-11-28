@@ -201,7 +201,7 @@ void MachineOperand::ChangeToMCSymbol(MCSymbol *Sym) {
   removeRegFromUses();
 
   OpKind = MO_MCSymbol;
-  Contents.Sym = Sym;
+  Contents.OffsetedInfo.Val.Sym = Sym;
 }
 
 void MachineOperand::ChangeToFrameIndex(int Idx) {

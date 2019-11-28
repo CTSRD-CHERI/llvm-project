@@ -170,7 +170,6 @@ private:
     int64_t ImmVal;          // For MO_Immediate.
     const uint32_t *RegMask; // For MO_RegisterMask and MO_RegisterLiveOut.
     const MDNode *MD;        // For MO_Metadata.
-    MCSymbol *Sym;           // For MO_MCSymbol.
     unsigned CFIIndex;       // For MO_CFI.
     Intrinsic::ID IntrinsicID; // For MO_IntrinsicID.
     unsigned Pred;           // For MO_Predicate
@@ -187,6 +186,7 @@ private:
     struct {
       union {
         int Index;                // For MO_*Index - The index itself.
+        MCSymbol *Sym;            // For MO_MCSymbol.
         const char *SymbolName;   // For MO_ExternalSymbol.
         const GlobalValue *GV;    // For MO_GlobalAddress.
         const BlockAddress *BA;   // For MO_BlockAddress.
@@ -565,7 +565,7 @@ public:
 
   MCSymbol *getMCSymbol() const {
     assert(isMCSymbol() && "Wrong MachineOperand accessor");
-    return Contents.Sym;
+    return Contents.OffsetedInfo.Val.Sym;
   }
 
   unsigned getCFIIndex() const {
@@ -887,7 +887,7 @@ public:
   static MachineOperand CreateMCSymbol(MCSymbol *Sym,
                                        unsigned TargetFlags = 0) {
     MachineOperand Op(MachineOperand::MO_MCSymbol);
-    Op.Contents.Sym = Sym;
+    Op.Contents.OffsetedInfo.Val.Sym = Sym;
     Op.setOffset(0);
     Op.setTargetFlags(TargetFlags);
     return Op;
