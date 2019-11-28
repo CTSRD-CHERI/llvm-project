@@ -53,7 +53,7 @@ typedef __SIZE_TYPE__ size_t;
 
 #if defined(__need_vaddr_t)
 #if !(defined(_VADDR_T) || defined(_VADDR_T_DECLARED)) || __has_feature(modules)
-/* Always define size_t when modules are available. */
+/* Always define vaddr_t when modules are available. */
 #if !__has_feature(modules)
 #define _VADDR_T
 #define _VADDR_T_DECLARED /* FreeBSD */
