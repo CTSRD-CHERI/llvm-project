@@ -1453,6 +1453,7 @@ static const char *getElfSegmentType(unsigned Arch, unsigned Type) {
 
     LLVM_READOBJ_ENUM_CASE(ELF, PT_GNU_STACK);
     LLVM_READOBJ_ENUM_CASE(ELF, PT_GNU_RELRO);
+    LLVM_READOBJ_ENUM_CASE(ELF, PT_GNU_PROPERTY);
 
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_RANDOMIZE);
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_WXNEEDED);
@@ -1477,6 +1478,7 @@ static std::string getElfPtType(unsigned Arch, unsigned Type) {
     LLVM_READOBJ_PHDR_ENUM(ELF, PT_SUNW_UNWIND)
     LLVM_READOBJ_PHDR_ENUM(ELF, PT_GNU_STACK)
     LLVM_READOBJ_PHDR_ENUM(ELF, PT_GNU_RELRO)
+    LLVM_READOBJ_PHDR_ENUM(ELF, PT_GNU_PROPERTY)
   default:
     // All machine specific PT_* types
     switch (Arch) {
