@@ -5554,7 +5554,11 @@ RValue CodeGenFunction::EmitRValueForField(LValue LV,
     if (FD->getType()->isReferenceType())
       return RValue::get(FieldLV.getPointer(*this),
                          FieldLV.getAlignment().getQuantity());
-    return EmitLoadOfLValue(FieldLV, Loc);
+    // Call EmitLoadOfScalar except when the lvalue is a bitfield to emit a
+    // primitive load.
+    if (FieldLV.isBitField())
+      return EmitLoadOfLValue(FieldLV, Loc);
+    return RValue::get(EmitLoadOfScalar(FieldLV, Loc));
   }
   llvm_unreachable("bad evaluation kind");
 }
