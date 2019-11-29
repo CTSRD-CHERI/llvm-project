@@ -3696,34 +3696,30 @@ SDValue
 MipsTargetLowering::convertToPCCDerivedCap(SDValue TargetAddr, const SDLoc &dl,
                                            SelectionDAG &DAG,
                                            SDValue AdditionalOffset) const {
-  // To get a pcc derived capability we can just do the equivalent of SetAddr
+  // To get a pcc derived capability we do a SetAddr on PCC.
+  // The getpcc+setaddr intrinsics will be folded into a single cgetpccsetaddr
+  // instruction due to the MipsInstrCheri.td patterns.
   auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
-  // TODO: it would be nice if we could just create a setaddr node here and
-  // expand it later
   auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, GetPCC);
-  SDValue OffsetFromPCC;
-  if (TargetAddr.getValueType() == MVT::i64) {
-    // If addr is an i64: CIncOfset($pcc, $addr - CGetAddr($pcc))
+  if (TargetAddr.getValueType() == CapType) {
+    // If addr is a capability: CSetAddr($pcc, CGetAddr($tgt))
     auto GetAddr =
         DAG.getConstant(Intrinsic::cheri_cap_address_get, dl, MVT::i64);
-    auto PCCAddrI64 =
-        DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, PCC);
-    OffsetFromPCC = DAG.getNode(ISD::SUB, dl, MVT::i64, TargetAddr, PCCAddrI64);
+    TargetAddr =
+        DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, TargetAddr);
   } else {
-    assert(TargetAddr.getValueType() == CapType);
-    // If addr is a cap: CIncOfset($pcc, CSub($addr  $pcc))
-    auto CSub = DAG.getConstant(Intrinsic::cheri_cap_diff, dl, MVT::i64);
-    OffsetFromPCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, CSub,
-                                TargetAddr, PCC);
+    // Otherwise we should already have an i64: CSetAddr($pcc, $tgt)
+    assert(TargetAddr.getValueType() == MVT::i64);
   }
+  // Potentially add an additional offset:
   if (AdditionalOffset) {
-    // We can't add the AdditionalOffset to either the source or target address
-    // capability since prior to using CSub since it might cause it to become
-    // unrepresentable. Instead add it to the computed OffsetFromPCC now.
-    OffsetFromPCC =
-        DAG.getNode(ISD::ADD, dl, MVT::i64, OffsetFromPCC, AdditionalOffset);
+    TargetAddr =
+        DAG.getNode(ISD::ADD, dl, MVT::i64, TargetAddr, AdditionalOffset);
   }
-  return DAG.getNode(ISD::PTRADD, dl, CapType, PCC, OffsetFromPCC);
+  auto SetAddr =
+      DAG.getConstant(Intrinsic::cheri_cap_address_set, dl, MVT::i64);
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, SetAddr, PCC,
+                     TargetAddr);
 }
 
 SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
@@ -3753,7 +3749,7 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
   Index = DAG.getNode(ISD::SHL, dl, MVT::i64, Index,
                       DAG.getConstant(Log2_32(EntrySize), dl, MVT::i64));
   EVT MemVT = EVT::getIntegerVT(*DAG.getContext(), EntrySize * 8);
-  auto LoadAddr = DAG.getNode(ISD::PTRADD, dl, PTy, Jumptable, Index);
+  auto LoadAddr = DAG.getPointerAdd(dl, Jumptable, Index);
   SDValue JTEntryValue = DAG.getExtLoad(
       ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
       MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);

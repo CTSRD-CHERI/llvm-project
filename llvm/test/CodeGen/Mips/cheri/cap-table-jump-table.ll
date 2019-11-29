@@ -1,5 +1,5 @@
 ; MIPS is inefficient and generates a mul instruction....
-; RUNNOT: %cheri_llc %s -O2 -mattr=+xgot -target-abi n64 -relocation-model=pic -cheri-cap-table-abi=plt -o -
+; RUNs: %cheri_llc %s -O2 -mattr=+xgot -target-abi n64 -relocation-model=pic -cheri-cap-table-abi=plt -o -
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
 ; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefix NO-OPT
@@ -52,10 +52,14 @@ sw.bb1:
 ; CHECK-NEXT:	dsll	$1, $4, 2
 ; CHECK-NEXT:	clw	$1, $1, 0($c1)
 ; TODO: this is not ideal but we need to derive an executable capability
-; CHECK-NEXT:	cgetpcc	$c2
-; CHECK-NEXT:	csub $2, $c1,	$c2
+;; get address of jumptable:
+; TODO: would be nice if we had a add(cap, gpr) to avoid the cgetaddr.
+; (this is not a problem with a merged register file)
+; CHECK-NEXT:	cgetaddr $2, $c1
+;; Add the entry value to compute the basic block address
 ; CHECK-NEXT:	daddu $1, $2, $1
-; CHECK-NEXT:	cincoffset $c1, $c2, $1
+;; Derive an executable capability from $pcc
+; CHECK-NEXT:	cgetpccsetaddr $c1, $1
 ; CHECK-NEXT:	cjr	$c1
 ; CHECK-NEXT:	nop
 
@@ -97,22 +101,17 @@ sw.bb1:
 ; NO-OPT-NEXT:	beqz	$1, .LBB0_2
 ; NO-OPT-NEXT:	nop
 ; NO-OPT-LABEL: .LBB0_1:                                # %entry
-; NO-OPT-NEXT:	cgetpcc	[[PCC:\$c[0-9]+]]
+; NO-OPT-NEXT:	cld	[[JT_INDEX:\$[0-9]+]],  $zero, [[#CAP_SIZE - 8]]($c11)
+; NO-OPT-NEXT:	dsll	[[JT_ENTRY_OFFSET:\$[0-9]+]], [[JT_INDEX]], 2
 ; NO-OPT-NEXT:	lui	[[CAPTABLE_INDEX:\$[0-9]+]], %captab_hi(.LJTI0_0)
 ; NO-OPT-NEXT:	daddiu	[[CAPTABLE_INDEX]], [[CAPTABLE_INDEX]], %captab_lo(.LJTI0_0)
 ; NO-OPT-NEXT:	clc	[[CAPTABLE:\$c[0-9]+]], $zero, [[#CAP_SIZE]]($c11)    # [[#CAP_SIZE]]-byte Folded Reload
 ; NO-OPT-NEXT:	clc	[[JUMPTABLE_CAP:\$c[0-9]+]], [[CAPTABLE_INDEX]], 0([[CAPTABLE]])
-; NO-OPT-NEXT:	csub [[PCC_INCREMENT:\$[0-9]+]], [[JUMPTABLE_CAP]], [[PCC]]
-; NO-OPT-NEXT:	cld	[[JT_INDEX:\$[0-9]+]], $zero, [[#CAP_SIZE - 8]]($c11)     # 8-byte Folded Reload
-; NO-OPT-NEXT:	dsll	[[JT_ENTRY_OFFSET:\$[0-9]+]], [[JT_INDEX]], 2
 ; NO-OPT-NEXT:	clw	[[JT_CONTENTS:\$[0-9]+]], [[JT_ENTRY_OFFSET]], 0([[JUMPTABLE_CAP]])
-; NO-OPT-NEXT:	daddu [[FINAL_INCREMENT:\$[0-9]+]], [[PCC_INCREMENT]], [[JT_CONTENTS]]
-; NO-OPT-NEXT:	cincoffset [[PCC]], [[PCC]], [[FINAL_INCREMENT]]
-; NO-OPT-NEXT:	cjr	[[PCC]]
+; NO-OPT-NEXT:	cgetaddr	[[JT_ADDR:\$[0-9]+]], [[JUMPTABLE_CAP]]
+; NO-OPT-NEXT:	daddu [[BLOCK_ADDR:\$[0-9]+]], [[JT_ADDR]], [[JT_CONTENTS]]
+; NO-OPT-NEXT: cgetpccsetaddr [[BLOCK:\$c[0-9]+]], $2
+; NO-OPT-NEXT:	cjr	[[BLOCK]]
 ; NO-OPT-NEXT:	nop
 
 attributes #0 = { noreturn nounwind }
-
-!llvm.ident = !{!0}
-
-!0 = !{!"clang version 6.0.0 (https://github.com/llvm-mirror/clang.git 41c2892ed18fcb87c7a4c0dc1fb1e62d38ea3119) (https://github.com/llvm-mirror/llvm.git 9fca120cea84d71524a8b1e7738e9788666571e2)"}
