@@ -272,6 +272,10 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
       return ELF::R_MIPS_PCHI16;
     case Mips::fixup_MIPS_PCLO16:
       return ELF::R_MIPS_PCLO16;
+    case Mips::fixup_Mips_HI16:
+      return ELF::R_MIPS_PCHI16;
+    case Mips::fixup_Mips_LO16:
+      return ELF::R_MIPS_PCLO16;
     }
 
     llvm_unreachable("invalid PC-relative fixup kind!");
