@@ -1891,10 +1891,7 @@ CodeGenFunction::EmitAsmInputLValue(const TargetInfo::ConstraintInfo &Info,
     }
   } else {
     Arg = InputValue.getPointer();
-    // An 'm' constraint will have been rewritten to 'C' if the input expr is a
-    // CHERI capability type. However, don't make an indirect input.
-    if (!InputType->isCHERICapabilityType(getContext()))
-      ConstraintStr += '*';
+    ConstraintStr += '*';
   }
 
   return Arg;
@@ -1922,19 +1919,9 @@ llvm::Value* CodeGenFunction::EmitAsmInput(
       return llvm::ConstantInt::get(getLLVMContext(), Result.Val.getInt());
   }
 
-  if (Info.allowsRegister() || !Info.allowsMemory()) {
-    // CHERI: For references, return a pointer to the referenced value
-    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(InputExpr->IgnoreParenNoopCasts(getContext()))) {
-      if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl())) {
-        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
-          if (RT->isCHERICapability())
-            return EmitLValue(InputExpr).getPointer();
-        }
-      }
-    }
-    else if (CodeGenFunction::hasScalarEvaluationKind(InputExpr->getType()))
+  if (Info.allowsRegister() || !Info.allowsMemory())
+    if (CodeGenFunction::hasScalarEvaluationKind(InputExpr->getType()))
       return EmitScalarExpr(InputExpr);
-  }
   if (InputExpr->getStmtClass() == Expr::CXXThisExprClass)
     return EmitScalarExpr(InputExpr);
   InputExpr = InputExpr->IgnoreParenNoopCasts(getContext());
@@ -2220,21 +2207,6 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
         InputConstraint, *InputExpr->IgnoreParenNoopCasts(getContext()),
         getTarget(), CGM, S, false /* No EarlyClobber */);
 
-    // CHERI: Rewrite 'r' and 'm' constraints to C if the input expr is a capability
-    if (Info.allowsRegister() || Info.allowsMemory()) {
-      if(InputExpr->getType()->isCHERICapabilityType(getContext())) {
-        std::size_t rfound = InputConstraint.find("r");
-        std::size_t mfound = InputConstraint.find("m");
-        if (rfound != std::string::npos && mfound != std::string::npos) {
-          InputConstraint.replace(rfound, 1, "C");
-          InputConstraint.erase(mfound, 1);
-        } else if (rfound != std::string::npos)
-          InputConstraint.replace(rfound, 1, "C");
-        else if (mfound != std::string::npos)
-          InputConstraint.replace(mfound, 1, "C");
-      }
-    }
-
     std::string ReplaceConstraint (InputConstraint);
     llvm::Value *Arg = EmitAsmInput(Info, InputExpr, Constraints);
 
@@ -2411,8 +2383,9 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
     // ResultTypeRequiresCast.size() elements of RegResults.
     if ((i < ResultTypeRequiresCast.size()) && ResultTypeRequiresCast[i]) {
       unsigned Size = getContext().getTypeSize(ResultRegQualTys[i]);
-      Address A = Builder.CreateBitCast(Dest.getAddress(),
-                                        ResultRegTypes[i]->getPointerTo());
+      Address A = Builder.CreateBitCast(
+          Dest.getAddress(),
+          ResultRegTypes[i]->getPointerTo(Dest.getAddress().getAddressSpace()));
       QualType Ty = getContext().getIntTypeForBitwidth(Size, /*Signed*/ false);
       if (Ty.isNull()) {
         const Expr *OutExpr = S.getOutputExpr(i);
