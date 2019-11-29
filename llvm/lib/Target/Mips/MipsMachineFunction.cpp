@@ -14,6 +14,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/Support/CommandLine.h"
 
 using namespace llvm;
@@ -268,17 +269,17 @@ void MipsFunctionInfo::initCapGlobalBaseReg() {
   // COPY $capglobalbasereg, $c26
   if (MCTargetOptions::cheriCapabilityTableABI() ==
       CheriCapabilityTableABI::Pcrel) {
-    // However, we also support an experimental mode where we derive the $cgp
-    // register from $pcc (this is closer to what MIPS does and has the
-    // advantage that we don't need to reserve $cgp since we can always derive
-    // it from $pcc. However, in this mode we can't restrict the bounds or
-    // permissions on $pcc very much since we need it to always contain the
-    // whole cap table as well as Load_Capability permission. If we decide to
+    // We also support a mode where we derive the $cgp register from $pcc.
+    // This is closer to what MIPS does and has the advantage that we don't
+    // need to reserve $cgp since we can always derive it from $pcc.
+    // However, in this mode we can't restrict the bounds or permissions on $pcc
+    // very much since we need it to always span the entire captable as well
+    // as have the Load_Capability permission. If we decide to
     // also inline global statics into the cap-table it also needs to contain
-    // write permissions which means we're back to relying only on the MMU to
+    // write permissions which means we'd be back to relying only on the MMU to
     // protect the .text segment.
 
-    // FIXME: there doesn't seem to be an easy way to get a label difference
+#if 0 // old code relative to $c12 (entry point cap), doesn't work with sentries
     // For now I'll just add a new relocation or see if I can convert itm
     MachineRegisterInfo &RegInfo = MF.getRegInfo();
     const GlobalValue *FName = &MF.getFunction();
@@ -307,6 +308,16 @@ void MipsFunctionInfo::initCapGlobalBaseReg() {
             .addReg(getCapEntryPointReg())
             .addReg(Tmp2);
     }
+#else
+    // Since we need to ensure that these instrs are written together we need to
+    // bundle them. However, this is only possible after register allocation so
+    // we convert this to another pseudo instruction first.
+    Register Scratch = MF.getRegInfo().createVirtualRegister(&Mips::GPR64RegClass);
+    BuildMI(MBB, I, DL, TII.get(Mips::PseudoPccRelativeAddressPostRA), CapGlobalBaseReg)
+        .addExternalSymbol("_CHERI_CAPABILITY_TABLE_")
+        .addReg(Scratch, RegState::Define | RegState::EarlyClobber |
+            RegState::Implicit | RegState::Dead);
+#endif
   } else {
     MF.getRegInfo().addLiveIn(ABIGlobalCapReg);
     MBB.addLiveIn(ABIGlobalCapReg);

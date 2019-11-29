@@ -178,6 +178,15 @@ public:
     return *this;
   }
 
+  const MachineInstrBuilder &
+  addExternalSymbolWithDisp(const char *FnName, int64_t Offset,
+                            unsigned TargetFlags = 0) const {
+    auto Op = MachineOperand::CreateES(FnName, TargetFlags);
+    Op.setOffset(Offset);
+    MI->addOperand(*MF, Op);
+    return *this;
+  }
+
   const MachineInstrBuilder &addBlockAddress(const BlockAddress *BA,
                                              int64_t Offset = 0,
                                              unsigned TargetFlags = 0) const {
@@ -292,6 +301,9 @@ public:
       case MachineOperand::MO_GlobalAddress:
         return addGlobalAddress(Disp.getGlobal(), Disp.getOffset() + off,
                                 TargetFlags);
+      case MachineOperand::MO_ExternalSymbol:
+        return addExternalSymbolWithDisp(Disp.getSymbolName(),
+                                         Disp.getOffset() + off, TargetFlags);
       case MachineOperand::MO_BlockAddress:
         return addBlockAddress(Disp.getBlockAddress(), Disp.getOffset() + off,
                                TargetFlags);

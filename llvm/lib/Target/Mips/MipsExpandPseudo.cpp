@@ -555,19 +555,21 @@ bool MipsExpandPseudo::expandPccRelativeAddr(
     MachineBasicBlock::iterator &NMBBI) {
   DebugLoc DL = I->getDebugLoc();
   // TODO: do we want to handle other kinds of instructions?
-  assert(I->getOperand(1).isBlockAddress() && "Only blockaddr handled for now");
-  auto BlockAddr = I->getOperand(1).getBlockAddress();
+  auto& Target = I->getOperand(1);
+  assert(Target.isBlockAddress() || Target.isSymbol());
   Register ResultReg = I->getOperand(0).getReg();
   Register ScratchReg = I->getOperand(2).getReg();
   auto BundleStart =
       BuildMI(BB, I, DL, TII->get(Mips::CGetPCC), ResultReg).getInstr();
+  assert(Target.getOffset() == 0 && "Will be set later");
+  assert(Target.getTargetFlags() == 0 && "Will be set later");
   BuildMI(BB, I, DL, TII->get(Mips::LUi64))
       .addReg(ScratchReg, RegState::Define)
-      .addBlockAddress(BlockAddr, 4, MipsII::MO_PCREL_HI);
+      .addDisp(Target, 4, MipsII::MO_PCREL_HI);
   BuildMI(BB, I, DL, TII->get(Mips::DADDiu))
       .addReg(ScratchReg, RegState::Define)
       .addReg(ScratchReg, RegState::Kill)
-      .addBlockAddress(BlockAddr, 8, MipsII::MO_PCREL_LO);
+      .addDisp(Target, 8, MipsII::MO_PCREL_LO);
   BuildMI(BB, I, DL, TII->get(Mips::CIncOffset), ResultReg)
       .addReg(ResultReg, RegState::Kill)
       .addReg(ScratchReg, RegState::Kill);
