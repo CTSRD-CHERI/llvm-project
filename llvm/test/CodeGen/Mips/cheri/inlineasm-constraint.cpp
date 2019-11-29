@@ -1,3 +1,4 @@
+// REQUIRES: clang
 // RUN: %cheri_cc1 -S -O0 %s -o - | FileCheck %s -check-prefix MIPS
 // RUN: %cheri_purecap_cc1 -S -O0 %s -o - | FileCheck %s -check-prefix PURECAP
 
