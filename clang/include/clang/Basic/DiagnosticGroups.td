@@ -1149,6 +1149,3 @@ def CrossTU : DiagGroup<"ctu">;
 def CTADMaybeUnsupported : DiagGroup<"ctad-maybe-unsupported">;
 
 def FortifySource : DiagGroup<"fortify-source">;
-
-// Register reservation.
-def FixedRegs : DiagGroup<"fixed-registers">;
