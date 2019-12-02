@@ -15,12 +15,17 @@ else:
 ##### Common utilities for update_*test_checks.py
 
 
+_verbose = False
+
 def parse_commandline_args(parser):
   parser.add_argument('-v', '--verbose', action='store_true',
                       help='Show verbose output')
   parser.add_argument('-u', '--update-only', action='store_true',
                       help='Only update test if it was already autogened')
-  return parser.parse_args()
+  args = parser.parse_args()
+  global _verbose
+  _verbose = args.verbose
+  return args
 
 def should_add_line_to_output(input_line, prefix_set):
   # Skip any blank comment lines in the IR.

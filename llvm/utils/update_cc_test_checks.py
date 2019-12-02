@@ -60,41 +60,28 @@ def get_line2spell_and_mangled(args, clang_args):
     sys.stderr.write(status.stderr.decode())
     sys.stderr.write(status.stdout.decode())
     sys.exit(2)
+  ast = json.loads(status.stdout.decode())
+  if ast['kind'] != 'TranslationUnitDecl':
+    common.error('Clang AST dump JSON format changed?')
+    sys.exit(2)
 
-  # Parse the clang JSON and add all children of type FunctionDecl.
+  # Get the inner node and iterate over all children of type FunctionDecl.
   # TODO: Should we add checks for global variables being emitted?
-  def parse_clang_ast_json(node):
-    node_kind = node['kind']
-    # Recurse for the following nodes that can contain nested function decls:
-    if node_kind in ('NamespaceDecl', 'LinkageSpecDecl', 'TranslationUnitDecl', 'CXXRecordDecl'):
-      for inner in node.get('inner', []):
-        parse_clang_ast_json(inner)
-    # Otherwise we ignore everything except functions:
-    if node['kind'] not in ('FunctionDecl', 'CXXMethodDecl'):
-      return
-    # Ignore function declarations without an implementation
-    if node.get('inner') is None:
-      common.debug('Skipping function without body', node['name'], '@', node['loc'])
-      return
+  for node in ast['inner']:
+    if node['kind'] != 'FunctionDecl':
+      continue
     if node.get('isImplicit') is True and node.get('storageClass') == 'extern':
       common.debug('Skipping builtin function:', node['name'], '@', node['loc'])
-      return
+      continue
     common.debug('Found function:', node['kind'], node['name'], '@', node['loc'])
     line = node['loc'].get('line')
     # If there is no line it is probably a builtin function -> skip
     if line is None:
       common.debug('Skipping function without line number:', node['name'], '@', node['loc'])
-      return
+      continue
     spell = node['name']
     mangled = node.get('mangledName', spell)
     ret[int(line)-1] = (spell, mangled)
-
-  ast = json.loads(status.stdout.decode())
-  if ast['kind'] != 'TranslationUnitDecl':
-    common.error('Clang AST dump JSON format changed?')
-    sys.exit(2)
-  parse_clang_ast_json(ast)
-
   for line, func_name in sorted(ret.items()):
     common.debug('line {}: found function {}'.format(line+1, func_name), file=sys.stderr)
   if not ret:
@@ -222,15 +209,11 @@ def main():
 
       # Apply %clang substitution rule, replace %s by `filename`, and append args.clang_args
       clang_args = shlex.split(commands[0])
-      if args.verbose:
-        print("Before subst:", clang_args, file=sys.stderr)
       if clang_args[0] not in SUBST:
         print('WARNING: Skipping non-clang RUN line: ' + l, file=sys.stderr)
         continue
       clang_args[0:1] = SUBST[clang_args[0]]
       clang_args = [filename if i == '%s' else i for i in clang_args] + args.clang_args
-      if args.verbose:
-        print("After subst:", clang_args, file=sys.stderr)
 
       # Permit piping the output through opt
       if not (len(commands) == 2 or
