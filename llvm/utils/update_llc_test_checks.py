@@ -141,13 +141,13 @@ def main():
       prefixes = p[0]
       for prefix in prefixes:
         func_dict.update({prefix: dict()})
-    for prefixes, llc_args, triple_in_cmd, march_in_cmd in run_list:
+    for prefixes, llc_args, triple_in_cmd, preprocess_cmd, march_in_cmd in run_list:
       common.debug('Extracted LLC cmd:', llc_tool, llc_args)
       common.debug('Extracted FileCheck prefixes:', str(prefixes))
-    if preprocess_cmd:
-      common.debug('Extracted pre-processing command: ' + str(preprocess_cmd))
+      if preprocess_cmd:
+        common.debug('Extracted pre-processing command: ' + str(preprocess_cmd))
 
-      raw_tool_output = common.invoke_tool(args.llc_binary, llc_args, test, preprocess_cmd, verbose=args.verbose)
+      raw_tool_output = common.invoke_tool(args.llc_binary, llc_args, test, preprocess_cmd)
       triple = triple_in_cmd or triple_in_ir
       if not triple:
         triple = asm.get_triple_from_march(march_in_cmd)
