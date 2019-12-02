@@ -88,8 +88,8 @@ Register MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel() {
 
 Register MipsFunctionInfo::getCapEntryPointReg() {
   // Return if it has already been initialized.
-  if (CapEntryPointReg)
-    return CapEntryPointReg;
+  if (CapComputedEntryPoint)
+    return CapComputedEntryPoint;
 
   const MipsABIInfo &ABI =
       static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI();
@@ -103,22 +103,12 @@ Register MipsFunctionInfo::getCapEntryPointReg() {
   // cgetpcc $c1
   // daddiu $1, $zero, %pcrel_lo(.Lentry_point+4) # +4 since the getpcc is on the previous line
   // cincoffset $c2, $c1, $1
-#if 0 // For some reason this results in the label not being emitted:
-  MBB.setLabelMustBeEmitted(); // We reference this label -> must be emitted
-  MBB.setHasAddressTaken();    // XXX: is this needed?
-  // Create a pcrel offset
-  MCSymbol* BlockMCSym = MBB.getSymbol();
-  BlockMCSym->setUsedInReloc();
-  auto MBBSym =
-      MachineOperand::CreateMCSymbol(BlockMCSym, MipsII::MO_PCREL_LO);
-  MBBSym.setOffset(4);
-#else
   // XXX: ugly const_cast to ensure the label is emitted
   MBB.setHasAddressTaken();
   auto BA = BlockAddress::get(const_cast<BasicBlock *>(MBB.getBasicBlock()));
-  auto MBBSym = MachineOperand::CreateBA(BA, 4, MipsII::MO_PCREL_LO);
-#endif
-
+  auto MBBSym = MachineOperand::CreateBA(BA, 0, 0);
+  // XXX: we could do this in two instructions instead of three since we
+  // know that the offset will be smaller than 16 bits
   // Since we need to ensure that these instrs are written together we need to
   // bundle them. However, this is only possible after register allocation so
   // we convert this to another pseudo instruction first.
@@ -128,7 +118,7 @@ Register MipsFunctionInfo::getCapEntryPointReg() {
       .add(MBBSym)
       .addReg(Scratch, RegState::Define | RegState::EarlyClobber |
           RegState::Implicit | RegState::Dead);
-  CapEntryPointReg = Tmp;
+  CapComputedEntryPoint = Tmp;
   return Tmp;
 }
 
@@ -172,9 +162,15 @@ void MipsFunctionInfo::initGlobalBaseReg() {
         assert((CapGlobalBaseReg || !MF.getRegInfo().isLiveIn(Mips::C12)) &&
                     "C12 should not be used yet");
       }
+      MF.getRegInfo().addLiveIn(Mips::C12);
+      MBB.addLiveIn(Mips::C12);
+      assert(!CapABIEntryPointReg.isValid() && "Should not be used yet");
+      CapABIEntryPointReg = RegInfo.createVirtualRegister(&Mips::CheriGPRRegClass);
+      BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapABIEntryPointReg)
+          .addReg(Mips::C12);
       BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
         .addReg(Mips::T9_64, RegState::Define)
-        .addReg(getCapEntryPointReg());
+        .addReg(CapABIEntryPointReg);
     } else {
       MF.getRegInfo().addLiveIn(Mips::T9_64);
       MBB.addLiveIn(Mips::T9_64);

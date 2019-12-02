@@ -110,8 +110,9 @@ private:
   /// CapGlobalBaseReg - keeps track of the virtual register initialized for
   /// use as the capability global base register. This is used for all global
   /// accesses in the purecap ABI.
-  unsigned CapGlobalBaseReg = 0;
-  Register CapEntryPointReg;
+  Register CapGlobalBaseReg;
+  Register CapComputedEntryPoint; /// $pcc-derived entry point register
+  Register CapABIEntryPointReg; /// $c12 for the legacy ABI
 
   /// VarArgsFrameIndex - FrameIndex for start of varargs area.
   int VarArgsFrameIndex = 0;
