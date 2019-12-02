@@ -2567,9 +2567,6 @@ Instruction *InstCombiner::foldICmpAddConstant(ICmpInst &Cmp,
   Type *Ty = Add->getType();
   CmpInst::Predicate Pred = Cmp.getPredicate();
 
-  if (!Add->hasOneUse())
-    return nullptr;
-
   // If the add does not wrap, we can always adjust the compare by subtracting
   // the constants. Equality comparisons are handled elsewhere. SGE/SLE/UGE/ULE
   // are canonicalized to SGT/SLT/UGT/ULT.
@@ -2602,6 +2599,9 @@ Instruction *InstCombiner::foldICmpAddConstant(ICmpInst &Cmp,
     if (Upper.isMinValue())
       return new ICmpInst(ICmpInst::ICMP_UGE, X, ConstantInt::get(Ty, Lower));
   }
+
+  if (!Add->hasOneUse())
+    return nullptr;
 
   // X+C <u C2 -> (X & -C2) == C
   //   iff C & (C2-1) == 0
