@@ -3776,6 +3776,9 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
   // But not the following since it might cause JT to become unrepresentable:
   // New PPC = CIncOffset, PCC, (CSub(JT + *(JT[INDEX]), PCC))
   JTEntryValue = convertToPCCDerivedCap(Jumptable, dl, DAG, JTEntryValue);
+  auto SealEntry =
+      DAG.getConstant(Intrinsic::cheri_cap_seal_entry, dl, MVT::i64);
+  JTEntryValue = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, SealEntry, JTEntryValue);
   return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, JTEntryValue);
 }
 

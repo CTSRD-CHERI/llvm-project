@@ -1,18 +1,8 @@
-; MIPS is inefficient and generates a mul instruction....
 ; RUNs: %cheri_llc %s -O2 -mattr=+xgot -target-abi n64 -relocation-model=pic -cheri-cap-table-abi=plt -o -
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
 ; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefix NO-OPT
 ; ModuleID = '/Users/alex/cheri/build/llvm-256-build/cap-table-jump-table-reduce.ll-reduced-simplified.bc'
-source_filename = "cap-table-jump-table-reduce.ll-output-7f90547.bc"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
-
-; XXXAR: if I use i32 for the switch here the MIPS backend does a stupid mask to 32 bits on the arg
-; because it uses the SLTiu nstead of STLiu64 instruction to check the range of the instrs
-
-; XXXAR: also it uses a MUL instead of shift in the MIPS case, I should just make it do a shift
-; in the expandMUL() if the other value is a known constant
 
 ; Function Attrs: noreturn nounwind
 define i64 @c(i64 %arg) local_unnamed_addr #0 {
@@ -59,7 +49,10 @@ sw.bb1:
 ;; Add the entry value to compute the basic block address
 ; CHECK-NEXT:	daddu $1, $2, $1
 ;; Derive an executable capability from $pcc
-; CHECK-NEXT:	cgetpccsetaddr $c1, $1
+; TODO-CHECK-NEXT:	cgetpccsetaddr $c1, $1
+; CHECK-NEXT:	cgetpcc $c1
+; CHECK-NEXT:	csetaddr $c1, $c1, $1
+; CHECK-NEXT:	csealentry $c1, $c1
 ; CHECK-NEXT:	cjr	$c1
 ; CHECK-NEXT:	nop
 
@@ -110,8 +103,11 @@ sw.bb1:
 ; NO-OPT-NEXT:	clw	[[JT_CONTENTS:\$[0-9]+]], [[JT_ENTRY_OFFSET]], 0([[JUMPTABLE_CAP]])
 ; NO-OPT-NEXT:	cgetaddr	[[JT_ADDR:\$[0-9]+]], [[JUMPTABLE_CAP]]
 ; NO-OPT-NEXT:	daddu [[BLOCK_ADDR:\$[0-9]+]], [[JT_ADDR]], [[JT_CONTENTS]]
-; NO-OPT-NEXT: cgetpccsetaddr [[BLOCK:\$c[0-9]+]], $2
-; NO-OPT-NEXT:	cjr	[[BLOCK]]
+; TODO-NO-OPT-NEXT: cgetpccsetaddr [[BLOCK:\$c[0-9]+]], [[BLOCK_ADDR]]
+; NO-OPT-NEXT: cgetpcc [[BLOCK_CAP:\$c[0-9]+]]
+; NO-OPT-NEXT: csetaddr [[BLOCK_CAP]], [[BLOCK_CAP]], [[BLOCK_ADDR]]
+; NO-OPT-NEXT: csealentry [[BLOCK_CAP]], [[BLOCK_CAP]]
+; NO-OPT-NEXT:	cjr	[[BLOCK_CAP]]
 ; NO-OPT-NEXT:	nop
 
 attributes #0 = { noreturn nounwind }
