@@ -408,10 +408,12 @@ def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 [(set CheriOpnd:$r1, (int_cheri_cap_offset_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
 def CGetPccIncOffset : CheriFmt2Op<0x13, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 "cgetpccincoffset\t${r1}, $r2",
-                                [(set CheriOpnd:$r1, (ptradd (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
+                                []>; // XXX: don't generate this pattern until the FPGA supports it.
+                                // [(set CheriOpnd:$r1, (ptradd (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
 def CGetPCCSetAddr : CheriFmt2Op<0x14, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 "cgetpccsetaddr\t${r1}, $r2",
-                                [(set CheriOpnd:$r1, (int_cheri_cap_address_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
+                                []>; // XXX: don't generate this pattern until the FPGA supports it.
+                                // [(set CheriOpnd:$r1, (int_cheri_cap_address_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
 
 // Sealing and unsealing
 def CSeal   : CheriFmt3Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
