@@ -74,16 +74,23 @@ def get_line2spell_and_mangled(args, clang_args):
       return
     if node.get('isImplicit') is True and node.get('storageClass') == 'extern':
       common.debug('Skipping builtin function:', node['name'], '@', node['loc'])
-      continue
+      return
     common.debug('Found function:', node['kind'], node['name'], '@', node['loc'])
     line = node['loc'].get('line')
     # If there is no line it is probably a builtin function -> skip
     if line is None:
       common.debug('Skipping function without line number:', node['name'], '@', node['loc'])
-      continue
+      return
     spell = node['name']
     mangled = node.get('mangledName', spell)
     ret[int(line)-1] = (spell, mangled)
+
+  ast = json.loads(status.stdout.decode())
+  if ast['kind'] != 'TranslationUnitDecl':
+    common.error('Clang AST dump JSON format changed?')
+    sys.exit(2)
+  parse_clang_ast_json(ast)
+
   for line, func_name in sorted(ret.items()):
     common.debug('line {}: found function {}'.format(line+1, func_name), file=sys.stderr)
   if not ret:
