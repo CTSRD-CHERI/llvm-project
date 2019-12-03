@@ -1,7 +1,6 @@
 // RUN: rm -rf %t
 // RUN: mkdir %t
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/libc-stubs.o -DLIBC_STUBS
-// RUN: llvm-objdump -d -t %t/libc-stubs.o
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/libc-exit.o -DLIBC_EXIT
 // RUN: llvm-ar cq %t/libc.a %t/libc-stubs.o %t/libc-exit.o
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/libthr-table.o -DLIBTHR_TABLE
@@ -32,7 +31,7 @@
 // Static linking of libc and libthr must be done in the right order otherwise we get infinite loops
 // FIXME: can we warn about this?
 // USES-LIBC-SYMBOLS: SYMBOL TABLE:
-// USES-LIBC-SYMBOLS: gw    F .text		 000000{{58|5c}} pthread_exit
+// USES-LIBC-SYMBOLS: gw    F .text		 000000{{54|58}} pthread_exit
 
 
 #ifndef EXE

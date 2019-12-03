@@ -17,19 +17,18 @@ declare dso_local i1024 @get_huge_type(i8 addrspace(200)*) unnamed_addr addrspac
 define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind #0 {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:112|224]]
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 6]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c26, $1
-; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_cap)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 32
-; CHECK-NEXT:    csc $c3, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    csc $c3, $zero, [[#STACKFRAME_SIZE - (6 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cmove $c3, $c2
-; CHECK-NEXT:    clc $c4, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c4, $zero, [[#STACKFRAME_SIZE - (6 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c1, $zero, [[#CAP_SIZE * 0]]($c11)
+; CHECK-NEXT:    csc $c1, $zero, 0($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c3, $zero, 80($c11)
@@ -38,8 +37,8 @@ define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 6]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
@@ -52,17 +51,16 @@ start:
 define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test2:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|160]]
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c26, $1
-; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_i64)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 32
-; CHECK-NEXT:    csc $c3, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    csc $c3, $zero, [[#STACKFRAME_SIZE - (4 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cmove $c3, $c2
-; CHECK-NEXT:    clc $c4, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c4, $zero, [[#STACKFRAME_SIZE - (4 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    csc $c1, $zero, 0($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -73,8 +71,8 @@ define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
@@ -87,56 +85,55 @@ start:
 define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test3:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:256|512]]
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 15]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c26, $1
-; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_huge_type)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 112
-; CHECK-NEXT:    csc $c3, $zero, [[#CAP_SIZE * 6]]($c11)
+; CHECK-NEXT:    csc $c3, $zero, [[#STACKFRAME_SIZE - (10 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cmove $c3, $c2
-; CHECK-NEXT:    clc $c4, $zero, [[#CAP_SIZE * 6]]($c11)
+; CHECK-NEXT:    clc $c4, $zero, [[#STACKFRAME_SIZE - (10 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c1, $zero, [[#CAP_SIZE * 5]]($c11)
+; CHECK-NEXT:    csc $c1, $zero, [[#STACKFRAME_SIZE - (11 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    cld     $11, $zero, 168($c11)
-; CHECK-NEXT:    cld     $10, $zero, 160($c11)
-; CHECK-NEXT:    cld     $9, $zero, 152($c11)
-; CHECK-NEXT:    cld     $8, $zero, 144($c11)
-; CHECK-NEXT:    cld     $7, $zero, 136($c11)
-; CHECK-NEXT:    cld     $6, $zero, 128($c11)
-; CHECK-NEXT:    cld     $5, $zero, 120($c11)
-; CHECK-NEXT:    cld     $1, $zero, 184($c11)
-; CHECK-NEXT:    cld     $2, $zero, 192($c11)
-; CHECK-NEXT:    cld     $3, $zero, 200($c11)
-; CHECK-NEXT:    cld     $4, $zero, 208($c11)
-; CHECK-NEXT:    cld     $12, $zero, 216($c11)
-; CHECK-NEXT:    cld     $13, $zero, 224($c11)
-; CHECK-NEXT:    cld     $14, $zero, 232($c11)
-; CHECK-NEXT:    cld     $15, $zero, 176($c11)
-; CHECK-NEXT:    cld     $24, $zero, 112($c11)
-; CHECK-NEXT:    cmove   $c1, $c11
-; CHECK-NEXT:    csd     $15, $zero, 0($c1)
-; CHECK-NEXT:    csd     $14, $zero, 56($c1)
-; CHECK-NEXT:    csd     $13, $zero, 48($c1)
-; CHECK-NEXT:    csd     $12, $zero, 40($c1)
-; CHECK-NEXT:    csd     $4, $zero, 32($c1)
-; CHECK-NEXT:    csd     $3, $zero, 24($c1)
-; CHECK-NEXT:    csd     $2, $zero, 16($c1)
-; CHECK-NEXT:    csd     $1, $zero, 8($c1)
+; CHECK-NEXT:    cld $11, $zero, 168($c11)
+; CHECK-NEXT:    cld $10, $zero, 160($c11)
+; CHECK-NEXT:    cld $9, $zero, 152($c11)
+; CHECK-NEXT:    cld $8, $zero, 144($c11)
+; CHECK-NEXT:    cld $7, $zero, 136($c11)
+; CHECK-NEXT:    cld $6, $zero, 128($c11)
+; CHECK-NEXT:    cld $5, $zero, 120($c11)
+; CHECK-NEXT:    cld $1, $zero, 184($c11)
+; CHECK-NEXT:    cld $2, $zero, 192($c11)
+; CHECK-NEXT:    cld $3, $zero, 200($c11)
+; CHECK-NEXT:    cld $4, $zero, 208($c11)
+; CHECK-NEXT:    cld $12, $zero, 216($c11)
+; CHECK-NEXT:    cld $13, $zero, 224($c11)
+; CHECK-NEXT:    cld $14, $zero, 232($c11)
+; CHECK-NEXT:    cld $15, $zero, 176($c11)
+; CHECK-NEXT:    cld $24, $zero, 112($c11)
+; CHECK-NEXT:    cmove $c1, $c11
+; CHECK-NEXT:    csd $15, $zero, 0($c1)
+; CHECK-NEXT:    csd $14, $zero, 56($c1)
+; CHECK-NEXT:    csd $13, $zero, 48($c1)
+; CHECK-NEXT:    csd $12, $zero, 40($c1)
+; CHECK-NEXT:    csd $4, $zero, 32($c1)
+; CHECK-NEXT:    csd $3, $zero, 24($c1)
+; CHECK-NEXT:    csd $2, $zero, 16($c1)
+; CHECK-NEXT:    csd $1, $zero, 8($c1)
 ; CHECK-NEXT:    csetbounds $c1, $c1, 64
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    candperm $c13, $c1, $1
-; CHECK-NEXT:    clc $c1, $zero, [[#CAP_SIZE * 5]]($c11)
+; CHECK-NEXT:    clc $c1, $zero, [[#STACKFRAME_SIZE - (11 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use_huge_value)($c1)
 ; CHECK-NEXT:    move $4, $24
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 15]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:

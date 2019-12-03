@@ -30,11 +30,10 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP-LABEL: _ZN4main4main17hfe98083a4c87500fE:
 ; PURECAP:       # %bb.0: # %start
 ; PURECAP-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; PURECAP-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
+; PURECAP-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; PURECAP-NEXT:    cgetpccincoffset $c26, $1
-; PURECAP-NEXT:    cmove $c1, $c26
+; PURECAP-NEXT:    cgetpccincoffset $c1, $1
 ; PURECAP-NEXT:    cincoffset $c4, $c11, 48
 ; PURECAP-NEXT:    csetbounds $c4, $c4, 16
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E)($c1)
@@ -51,7 +50,7 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP-NEXT:    cgetnull $c13
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
+; PURECAP-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; PURECAP-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
