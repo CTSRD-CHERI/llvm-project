@@ -22,24 +22,24 @@ target triple = "cheri-unknown-freebsd"
 define void @cannot_fold_tag_unknown(void () addrspace(200)* %fn) local_unnamed_addr addrspace(200) nounwind {
 ; ASM-LABEL: cannot_fold_tag_unknown:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    cbez $c3, .LBB0_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %land.lhs.true
-; ASM-NEXT:    cincoffset $c2, $cnull, 1
-; ASM-NEXT:    ceq $1, $c2, $c3
+; ASM-NEXT:    cincoffset $c1, $cnull, 1
+; ASM-NEXT:    ceq $1, $c1, $c3
 ; ASM-NEXT:    bnez $1, .LBB0_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.2: # %land.lhs.true2
-; ASM-NEXT:    cincoffset $c2, $cnull, 2
-; ASM-NEXT:    ceq $1, $c2, $c3
+; ASM-NEXT:    cincoffset $c1, $cnull, 2
+; ASM-NEXT:    ceq $1, $c1, $c3
 ; ASM-NEXT:    bnez $1, .LBB0_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.3: # %if.then
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; ASM-NEXT:    csc $c17, $zero, 0($c11)
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c1)
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
@@ -150,14 +150,14 @@ define void @can_fold_tag_unset(void () addrspace(200)* %fn_tagged) local_unname
 ; ASM-NEXT:    ccleartag $c1, $c3
 ; ASM-NEXT:    cgetaddr $1, $c1
 ; ASM-NEXT:    sltiu $1, $1, 3
-; ASM-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; ASM-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; ASM-NEXT:    cgetpccincoffset $c1, $2
 ; ASM-NEXT:    bnez $1, .LBB1_2
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %if.then
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; ASM-NEXT:    csc $c17, $zero, 0($c11)
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c1)
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop

@@ -643,10 +643,10 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (5 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (6 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cincoffset $c24, $c11, $zero
+; CHECK-NEXT:    clc $c1, $zero, 80($c3)
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c20, $1
-; CHECK-NEXT:    clc $c1, $zero, 80($c3)
 ; CHECK-NEXT:    cbts $c1, .LBB0_3
 ; CHECK-NEXT:    cmove $c18, $c3
 ; CHECK-NEXT:  .LBB0_1: # %if.then

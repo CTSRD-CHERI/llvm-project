@@ -1143,7 +1143,8 @@ def : Pat<(load CheriOpnd:$cb),
           (LOADCAP ZERO_64, (i64 0), CheriOpnd:$cb)>;
 
 
+let isReMaterializable = 1 /*, isAsCheapAsAMove = 1 */ in
 def PseudoPccRelativeAddress : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $addr),
-                                           "#PseudoPccRelBlockAddress $cd, $addr", []>;
+                                           "#PseudoPccRelBlockAddress $cd, $addr", []>, NeverHasSideEffects;
 let Predicates=[IsCHERI], hasNoSchedulingInfo=1 in
-def PseudoPccRelativeAddressPostRA : PseudoSE<(outs CheriOpnd:$dst), (ins CheriOpnd:$addr), []>;
+def PseudoPccRelativeAddressPostRA : PseudoSE<(outs CheriOpnd:$dst), (ins CheriOpnd:$addr), []>, NeverHasSideEffects;
