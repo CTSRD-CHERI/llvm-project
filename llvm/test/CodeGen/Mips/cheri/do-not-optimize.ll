@@ -21,14 +21,14 @@ define void @test_m_constraint() addrspace(200) #0 {
 entry:
   call void asm sideeffect "# operand is '$0'", "m,~{memory},~{$1}"(i64 addrspace(200)* null) #1
   ; CHECK-LABEL: test_m_constraint:
-  ; CHECK: # operand is '0($C11)'
+  ; CHECK: # operand is '0($c11)'
   ret void
 }
 
 define void @test_rm_constraint() addrspace(200) #0 {
 entry:
   ; CHECK-LABEL: test_rm_constraint:
-  ; CHECK: # operand is '0($C11)'
+  ; CHECK: # operand is '0($c11)'
   call void asm sideeffect "# operand is '$0'", "r|m,~{memory},~{$1}"(i64 addrspace(200)* null) #1
   ret void
 }
@@ -37,7 +37,7 @@ define void @test_crm_constraint() addrspace(200) #0 {
 entry:
   call void asm sideeffect "# operand is '$0'", "C|r|m,~{memory},~{$1}"(i64 addrspace(200)* null) #1
   ; CHECK-LABEL: test_crm_constraint:
-  ; CHECK: # operand is '0($C11)'
+  ; CHECK: # operand is '0($c11)'
   ret void
 }
 
