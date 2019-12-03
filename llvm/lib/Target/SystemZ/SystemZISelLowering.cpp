@@ -3610,7 +3610,7 @@ SDValue SystemZTargetLowering::lowerCTPOP(SDValue Op,
 
   // Get the known-zero mask for the operand.
   KnownBits Known = DAG.computeKnownBits(Op);
-  unsigned NumSignificantBits = (~Known.Zero).getActiveBits();
+  unsigned NumSignificantBits = Known.getMaxValue().getActiveBits();
   if (NumSignificantBits == 0)
     return DAG.getConstant(0, DL, VT);
 
