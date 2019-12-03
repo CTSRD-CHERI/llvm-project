@@ -1882,15 +1882,15 @@ CodeGenFunction::EmitAsmInputLValue(const TargetInfo::ConstraintInfo &Info,
         Ty = llvm::IntegerType::get(getLLVMContext(), Size);
         Ty = CGM.getPointerInDefaultAS(Ty);
 
-        Arg = Builder.CreateLoad(
-            Builder.CreateBitCast(InputValue.getAddress(*this), Ty));
+        Arg = Builder.CreateLoad(Builder.CreateBitCast(InputValue.getAddress(),
+                                                       Ty));
       } else {
-        Arg = InputValue.getPointer(*this);
+        Arg = InputValue.getPointer();
         ConstraintStr += '*';
       }
     }
   } else {
-    Arg = InputValue.getPointer(*this);
+    Arg = InputValue.getPointer();
     ConstraintStr += '*';
   }
 
@@ -2139,8 +2139,8 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
         LargestVectorWidth = std::max((uint64_t)LargestVectorWidth,
                                    VT->getPrimitiveSizeInBits().getFixedSize());
     } else {
-      ArgTypes.push_back(Dest.getAddress(*this).getType());
-      Args.push_back(Dest.getPointer(*this));
+      ArgTypes.push_back(Dest.getAddress().getType());
+      Args.push_back(Dest.getPointer());
       Constraints += "=*";
       Constraints += OutputConstraint;
       ReadOnly = ReadNone = false;
@@ -2437,14 +2437,14 @@ CodeGenFunction::EmitCapturedStmt(const CapturedStmt &S, CapturedRegionKind K) {
   delete CGF.CapturedStmtInfo;
 
   // Emit call to the helper function.
-  EmitCallOrInvoke(F, CapStruct.getPointer(*this));
+  EmitCallOrInvoke(F, CapStruct.getPointer());
 
   return F;
 }
 
 Address CodeGenFunction::GenerateCapturedStmtArgument(const CapturedStmt &S) {
   LValue CapStruct = InitCapturedStruct(S);
-  return CapStruct.getAddress(*this);
+  return CapStruct.getAddress();
 }
 
 /// Creates the outlined function for a CapturedStmt.
