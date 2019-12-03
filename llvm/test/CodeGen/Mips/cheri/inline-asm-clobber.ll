@@ -1,4 +1,4 @@
-; RUNNOT: %cheri_purecap_cc1 -xc -emit-llvm -o - -O2 %s
+; RUN: %cheri_purecap_llc -o - -O0 %s -stop-after=instruction-select | FileCheck %s -check-prefix MIR
 ; RUN: %cheri_purecap_llc -o - -O3 %s | FileCheck %s -enable-var-scope
 ;
 ; https://github.com/CTSRD-CHERI/llvm/issues/274
@@ -15,9 +15,13 @@
 
 ; The capability clobber registers were previously off by one: -> $c3 would save $c4, etc.
 
+
 define i32 @test_clobber_c2(i32 signext %intval, i8 addrspace(200)* %ptrval, i8 addrspace(200)* %ptrval2) local_unnamed_addr #0 {
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c2},~{$1}"() #1
+  ; MIR-LABEL: name: test_clobber_c2
+  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c2, 12, implicit-def early-clobber $at
+  ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1
   %conv = sext i8 %0 to i32
@@ -44,6 +48,9 @@ entry:
 define i32 @test_clobber_c3(i32 signext %intval, i8 addrspace(200)* %ptrval, i8 addrspace(200)* %ptrval2) local_unnamed_addr #0 {
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c3},~{$1}"() #1
+  ; MIR-LABEL: name: test_clobber_c3
+  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c3, 12, implicit-def early-clobber $at
+  ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1
   %conv = sext i8 %0 to i32
@@ -71,6 +78,9 @@ entry:
 define i32 @test_clobber_c4(i32 signext %intval, i8 addrspace(200)* %ptrval, i8 addrspace(200)* %ptrval2) local_unnamed_addr #0 {
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c4},~{$1}"() #1
+  ; MIR-LABEL: name: test_clobber_c4
+  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c4, 12, implicit-def early-clobber $at
+  ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1
   %conv = sext i8 %0 to i32
@@ -98,6 +108,9 @@ entry:
 define i32 @test_clobber_c3_c4(i32 signext %intval, i8 addrspace(200)* %ptrval, i8 addrspace(200)* %ptrval2) local_unnamed_addr #0 {
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c3},~{$c4},~{$1}"() #1
+  ; MIR-LABEL: name: test_clobber_c3_c4
+  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c3, 12, implicit-def early-clobber $c4, 12, implicit-def early-clobber $at
+  ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1
   %conv = sext i8 %0 to i32
@@ -106,7 +119,7 @@ entry:
   %add2 = add nsw i32 %conv2, %add
   ret i32 %add2
   ;
-  ; This function should save $c3 and the int arg:
+  ; This function should save $c3, $c4 and the int arg:
   ;
   ; CHECK-LABEL: test_clobber_c3_c4:
   ; CHECK: # %bb.0:

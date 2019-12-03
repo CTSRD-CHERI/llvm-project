@@ -5295,8 +5295,15 @@ parseRegForInlineAsmConstraint(StringRef C, MVT VT) const {
   else if (Prefix == "$w") { // Parse $w0-$w31.
     RC = getRegClassFor((VT == MVT::Other) ? MVT::v16i8 : VT);
   } else if (Prefix == "$c") { // Parse $c0-$c31.
-    assert(Reg != 0 && "$cnull should not end up as an inline asm constraint");
+    if (Reg == 0)
+      report_fatal_error("$c0 should not be used as an inline asm constraint");
     RC = getRegClassFor(CapType);
+    assert(RC == &Mips::CheriGPRRegClass);
+    assert(!RC->contains(Mips::CNULL));
+    assert(!RC->contains(Mips::DDC));
+    // Note: The CheriGPR register class does not contain CNULL so we have to
+    // subtrace one to get the actual register number.
+    Reg--;
   } else { // Parse $0-$31.
     assert(Prefix == "$");
     RC = getRegClassFor((VT == MVT::Other) ? MVT::i32 : VT);
