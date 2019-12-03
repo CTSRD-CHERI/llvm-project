@@ -46,9 +46,9 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; CAPTABLE-NEXT:    csd $16, $zero, [[# STACKFRAME_SIZE - 48]]($c11)
 ; CAPTABLE-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11)
-; CAPTABLE-NEXT:    lui $1, %hi(%neg(%captab_rel(eo_fermion_force)))
-; CAPTABLE-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(eo_fermion_force)))
-; CAPTABLE-NEXT:    cincoffset $c18, $c12, $1
+; CAPTABLE-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CAPTABLE-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CAPTABLE-NEXT:    cgetpccincoffset $c18, $1
 ; CAPTABLE-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c18)
 ; CAPTABLE-NEXT:    cld $2, $zero, 0($c1)
 ; CAPTABLE-NEXT:    b .LBB0_20

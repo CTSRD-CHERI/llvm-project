@@ -635,20 +635,20 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-LABEL: _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csd $17, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
-; CHECK-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 16]]($c11)
-; CHECK-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 6]]($c11)
-; CHECK-NEXT:    csc $c20, $zero, [[#CAP_SIZE * 5]]($c11)
-; CHECK-NEXT:    csc $c19, $zero, [[#CAP_SIZE * 4]]($c11)
-; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 3]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    csd $17, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
+; CHECK-NEXT:    csd $16, $zero, [[# STACKFRAME_SIZE - 16]]($c11)
+; CHECK-NEXT:    csc $c24, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c20, $zero, [[#STACKFRAME_SIZE - (3 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - (4 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (5 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (6 * CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    cincoffset $c24, $c11, $zero
-; CHECK-NEXT:    cmove $c18, $c3
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c20, $1
 ; CHECK-NEXT:    clc $c1, $zero, 80($c3)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE)))
 ; CHECK-NEXT:    cbts $c1, .LBB0_3
-; CHECK-NEXT:    cincoffset $c20, $c12, $1
+; CHECK-NEXT:    cmove $c18, $c3
 ; CHECK-NEXT:  .LBB0_1: # %if.then
 ; CHECK-NEXT:    clcbi $c4, %captab20(.str.163)($c20)
 ; CHECK-NEXT:    clcbi $c5, %captab20(.str.31)($c20)
@@ -657,13 +657,13 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:  .LBB0_2: # %cleanup44
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 3]]($c11)
-; CHECK-NEXT:    clc $c19, $zero, [[#CAP_SIZE * 4]]($c11)
-; CHECK-NEXT:    clc $c20, $zero, [[#CAP_SIZE * 5]]($c11)
-; CHECK-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 6]]($c11)
-; CHECK-NEXT:    cld $16, $zero, [[#STACKFRAME_SIZE - 16]]($c11)
-; CHECK-NEXT:    cld $17, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (6 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (5 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - (4 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    clc $c20, $zero, [[#STACKFRAME_SIZE - (3 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    clc $c24, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    cld $16, $zero, [[# STACKFRAME_SIZE - 16]]($c11)
+; CHECK-NEXT:    cld $17, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; CHECK-NEXT:  .LBB0_3: # %land.rhs.i

@@ -150,10 +150,10 @@ entry:
 
 
 ; Get $t9 for the tls hack:
-; PCREL-NEXT:           lui     $1, %hi(%neg(%captab_rel(test))) # encoding: [0x3c,0x01,A,A]
-; PCREL-NEXT:                   #   fixup A - offset: 0, value: %hi(%neg(%captab_rel(test))), kind: fixup_Mips_CAPTABLEREL_HI
-; PCREL-NEXT:           daddiu  $1, $1, %lo(%neg(%captab_rel(test))) # encoding: [0x64,0x21,A,A]
-; PCREL-NEXT:                   #   fixup A - offset: 0, value: %lo(%neg(%captab_rel(test))), kind: fixup_Mips_CAPTABLEREL_LO
+; PCREL-NEXT:           lui     $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8) # encoding: [0x3c,0x01,A,A]
+; PCREL-NEXT:                   #   fixup A - offset: 0, value: %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8), kind: fixup_Mips_CAPTABLEREL_HI
+; PCREL-NEXT:           daddiu  $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4) # encoding: [0x64,0x21,A,A]
+; PCREL-NEXT:                   #   fixup A - offset: 0, value: %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4), kind: fixup_Mips_CAPTABLEREL_LO
 ; CAP-TABLE-HACK-NEXT:  cgetoffset      $25, $c12
 ; From now on it's all the same TLS hack:
 ; CAP-TABLE-HACK-NEXT:  lui     [[TLSADDR:\$.+]], %hi(%neg(%gp_rel(test)))

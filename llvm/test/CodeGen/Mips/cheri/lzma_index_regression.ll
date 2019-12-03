@@ -14,10 +14,9 @@
 define void @r() #0 {
 ; CHECK-LABEL: r:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(r)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(r)))
-; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c2, %captab20(q)($c1)
 ; CHECK-NEXT:    clcbi $c1, %captab20(p)($c1)
 ; CHECK-NEXT:    clc $c3, $zero, 16($c1)
@@ -29,10 +28,9 @@ define void @r() #0 {
 ;
 ; CHERI256-LABEL: r:
 ; CHERI256:       # %bb.0:
-; CHERI256-NEXT:    lui $1, %hi(%neg(%captab_rel(r)))
-; CHERI256-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(r)))
-; CHERI256-NEXT:    cincoffset $c26, $c12, $1
-; CHERI256-NEXT:    cmove $c1, $c26
+; CHERI256-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHERI256-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHERI256-NEXT:    cgetpccincoffset $c1, $1
 ; CHERI256-NEXT:    clcbi $c2, %captab20(q)($c1)
 ; CHERI256-NEXT:    clcbi $c1, %captab20(p)($c1)
 ; CHERI256-NEXT:    cld $1, $zero, 32($c1)

@@ -30,10 +30,9 @@ define float @return_constant_pool() nounwind readnone {
 ;
 ; PURECAP-LABEL: return_constant_pool:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(return_constant_pool)))
-; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(return_constant_pool)))
-; PURECAP-NEXT:    cincoffset $c26, $c12, $1
-; PURECAP-NEXT:    cmove $c1, $c26
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c1, $1
 ; PURECAP-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c1)
 ; PURECAP-NEXT:    clw $2, $zero, 0($c1)
 ; PURECAP-NEXT:    mtc1 $2, $f0
@@ -67,10 +66,9 @@ define double @return_constant_pool2() nounwind readnone {
 ;
 ; PURECAP-LABEL: return_constant_pool2:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(return_constant_pool2)))
-; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(return_constant_pool2)))
-; PURECAP-NEXT:    cincoffset $c26, $c12, $1
-; PURECAP-NEXT:    cmove $c1, $c26
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c1, $1
 ; PURECAP-NEXT:    clcbi $c1, %captab20(.LCPI1_0)($c1)
 ; PURECAP-NEXT:    cld $1, $zero, 0($c1)
 ; PURECAP-NEXT:    dmtc1 $1, $f0

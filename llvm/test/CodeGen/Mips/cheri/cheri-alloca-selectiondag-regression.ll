@@ -14,10 +14,9 @@ define i32 @d(i64 %i) nounwind {
 ; C128-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
 ; C128-NEXT:    csc $c17, $zero, 0($c11)
 ; C128-NEXT:    cincoffset $c24, $c11, $zero
-; C128-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
-; C128-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
-; C128-NEXT:    cincoffset $c26, $c12, $1
-; C128-NEXT:    cmove $c1, $c26
+; C128-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; C128-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; C128-NEXT:    cgetpccincoffset $c1, $1
 ; C128-NEXT:    dsll $1, $4, 2
 ; C128-NEXT:    daddiu $2, $1, 15
 ; C128-NEXT:    daddiu $3, $zero, -16
@@ -49,10 +48,9 @@ define i32 @d(i64 %i) nounwind {
 ; C256-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
 ; C256-NEXT:    csc $c17, $zero, 0($c11)
 ; C256-NEXT:    cincoffset $c24, $c11, $zero
-; C256-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
-; C256-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
-; C256-NEXT:    cincoffset $c26, $c12, $1
-; C256-NEXT:    cmove $c1, $c26
+; C256-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; C256-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; C256-NEXT:    cgetpccincoffset $c1, $1
 ; C256-NEXT:    dsll $1, $4, 2
 ; C256-NEXT:    daddiu $2, $1, 31
 ; C256-NEXT:    daddiu $3, $zero, -32

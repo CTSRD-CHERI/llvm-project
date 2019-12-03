@@ -42,9 +42,9 @@ define void @foobar() addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foobar)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foobar)))
-; CHECK-NEXT:    cincoffset $c18, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c18, $1
 ; CHECK-NEXT:    addiu $1, $zero, 123
 ; CHECK-NEXT:    csw $1, $zero, [[#CAP_SIZE - 4]]($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
@@ -101,9 +101,9 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foobar_without_store)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foobar_without_store)))
-; CHECK-NEXT:    cincoffset $c18, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c18, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop

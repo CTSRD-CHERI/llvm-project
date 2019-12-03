@@ -559,27 +559,24 @@ bool MipsExpandPseudo::expandPccRelativeAddr(
   assert(Target.isBlockAddress() || Target.isSymbol());
   Register ResultReg = I->getOperand(0).getReg();
   Register ScratchReg = I->getOperand(2).getReg();
-  auto BundleStart =
-      BuildMI(BB, I, DL, TII->get(Mips::CGetPCC), ResultReg).getInstr();
   assert(Target.getOffset() == 0 && "Will be set later");
   assert(Target.getTargetFlags() == 0 && "Will be set later");
-  BuildMI(BB, I, DL, TII->get(Mips::LUi64))
-      .addReg(ScratchReg, RegState::Define)
-      .addDisp(Target, 4, MipsII::MO_PCREL_HI);
+  auto BundleStart = BuildMI(BB, I, DL, TII->get(Mips::LUi64))
+                         .addReg(ScratchReg, RegState::Define)
+                         .addDisp(Target, -8, MipsII::MO_PCREL_HI)
+                         .getInstr();
   BuildMI(BB, I, DL, TII->get(Mips::DADDiu))
       .addReg(ScratchReg, RegState::Define)
       .addReg(ScratchReg, RegState::Kill)
-      .addDisp(Target, 8, MipsII::MO_PCREL_LO);
-  BuildMI(BB, I, DL, TII->get(Mips::CIncOffset), ResultReg)
-      .addReg(ResultReg, RegState::Kill)
-      .addReg(ScratchReg, RegState::Kill);
-
-  MachineBasicBlock::instr_iterator BundleIt(BundleStart);
-  // Note: the final CIncOffset doesn't need to be in the bundle but I think
-  // this makes it clearer when reading the MIR
-  finalizeBundle(BB, BundleIt, std::next(BundleIt, 4));
+      .addDisp(Target, -4, MipsII::MO_PCREL_LO);
+  auto BundleEnd =
+      BuildMI(BB, I, DL, TII->get(Mips::CGetPccIncOffset), ResultReg)
+          .addReg(ScratchReg, RegState::Kill)
+          .getInstr();
+  // Bundle the three instructions to ensure that the offsets are correct:
+  finalizeBundle(BB, MachineBasicBlock::instr_iterator(BundleStart),
+                 std::next(MachineBasicBlock::instr_iterator(BundleEnd)));
   I->eraseFromParent();
-
   return true;
 }
 

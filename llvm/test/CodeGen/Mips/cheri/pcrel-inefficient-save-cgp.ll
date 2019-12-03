@@ -36,9 +36,9 @@ define %class.QWebSettings addrspace(200)* @_ZN16QGraphicsWebView8settingsEv(%cl
 ; PCREL-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
 ; PCREL-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; PCREL-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN16QGraphicsWebView8settingsEv)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN16QGraphicsWebView8settingsEv)))
-; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c18, $1
 ; PCREL-NEXT:    clcbi $c12, %capcall20(_ZN16QGraphicsWebView4pageEv)($c18)
 ; PCREL-NEXT:    cjalr $c12, $c17
 ; PCREL-NEXT:    nop

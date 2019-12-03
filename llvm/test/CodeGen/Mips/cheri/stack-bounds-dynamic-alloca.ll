@@ -41,10 +41,9 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_in_entry)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_in_entry)))
-; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c1, $c26
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
 ; ASM-NEXT:    sll $2, $4, 0
 ; ASM-NEXT:    andi $2, $2, 1
@@ -83,14 +82,14 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT:       # %bb.0: # %entry
 ; ASM-OPT-NEXT:    sll $1, $4, 0
 ; ASM-OPT-NEXT:    andi $1, $1, 1
+; ASM-OPT-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-OPT-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-OPT-NEXT:    cgetpccincoffset $c1, $2
 ; ASM-OPT-NEXT:    beqz $1, .LBB0_2
 ; ASM-OPT-NEXT:    nop
 ; ASM-OPT-NEXT:  # %bb.1: # %do_alloca
 ; ASM-OPT-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-OPT-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
-; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_in_entry)))
-; ASM-OPT-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_in_entry)))
-; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
 ; ASM-OPT-NEXT:    daddiu $1, $zero, 1234
 ; ASM-OPT-NEXT:    csd $1, $zero, 8($c11)
 ; ASM-OPT-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
@@ -155,10 +154,9 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    csc $c24, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    cincoffset $c24, $c11, $zero
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_not_in_entry)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_not_in_entry)))
-; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c1, $c26
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
 ; ASM-NEXT:    sll $2, $4, 0
 ; ASM-NEXT:    andi $2, $2, 1
@@ -208,6 +206,9 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT:       # %bb.0: # %entry
 ; ASM-OPT-NEXT:    sll $1, $4, 0
 ; ASM-OPT-NEXT:    andi $1, $1, 1
+; ASM-OPT-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-OPT-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-OPT-NEXT:    cgetpccincoffset $c1, $2
 ; ASM-OPT-NEXT:    beqz $1, .LBB1_2
 ; ASM-OPT-NEXT:    nop
 ; ASM-OPT-NEXT:  # %bb.1: # %do_alloca
@@ -215,9 +216,6 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    csc $c24, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; ASM-OPT-NEXT:    csc $c17, $zero, 0($c11)
 ; ASM-OPT-NEXT:    cincoffset $c24, $c11, $zero
-; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_not_in_entry)))
-; ASM-OPT-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_not_in_entry)))
-; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
 ; ASM-OPT-NEXT:    cgetaddr $1, $c11
 ; ASM-OPT-NEXT:    daddiu $1, $1, -16
 ; ASM-OPT-NEXT:    csetaddr $c2, $c11, $1
@@ -287,10 +285,9 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    csc $c24, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    cincoffset $c24, $c11, $zero
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(crash_reproducer)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(crash_reproducer)))
-; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c1, $c26
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
 ; ASM-NEXT:    sll $2, $4, 0
 ; ASM-NEXT:    andi $2, $2, 1
@@ -336,6 +333,9 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT:       # %bb.0: # %entry
 ; ASM-OPT-NEXT:    sll $1, $4, 0
 ; ASM-OPT-NEXT:    andi $1, $1, 1
+; ASM-OPT-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-OPT-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-OPT-NEXT:    cgetpccincoffset $c1, $2
 ; ASM-OPT-NEXT:    bnez $1, .LBB2_2
 ; ASM-OPT-NEXT:    nop
 ; ASM-OPT-NEXT:  # %bb.1: # %while.body
@@ -343,9 +343,6 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    csc $c24, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; ASM-OPT-NEXT:    csc $c17, $zero, 0($c11)
 ; ASM-OPT-NEXT:    cincoffset $c24, $c11, $zero
-; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(crash_reproducer)))
-; ASM-OPT-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(crash_reproducer)))
-; ASM-OPT-NEXT:    cincoffset $c1, $c12, $1
 ; ASM-OPT-NEXT:    cgetaddr $1, $c11
 ; ASM-OPT-NEXT:    daddiu $1, $1, -16
 ; ASM-OPT-NEXT:    csetaddr $c2, $c11, $1

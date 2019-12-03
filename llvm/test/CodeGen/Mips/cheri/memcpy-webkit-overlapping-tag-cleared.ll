@@ -24,9 +24,9 @@ define i1 @insert_padded_test(%struct.PropertyMapEntryPadded addrspace(200)* noc
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(insert_padded_test)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(insert_padded_test)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(find_in_table)($c1)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c18, $c3
@@ -55,9 +55,9 @@ define i1 @insert_padded_but_copy_only_relevant_bytes(%struct.PropertyMapEntryPa
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(insert_padded_but_copy_only_relevant_bytes)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(insert_padded_but_copy_only_relevant_bytes)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(find_in_table)($c1)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c18, $c3
@@ -85,9 +85,9 @@ define i1 @insert_no_padding(%struct.PropertyMapEntryNoPadding addrspace(200)* n
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(insert_no_padding)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(insert_no_padding)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(find_in_table_unpadded)($c1)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c18, $c3

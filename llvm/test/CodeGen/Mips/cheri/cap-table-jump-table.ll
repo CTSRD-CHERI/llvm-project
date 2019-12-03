@@ -49,9 +49,7 @@ sw.bb1:
 ;; Add the entry value to compute the basic block address
 ; CHECK-NEXT:	daddu $1, $2, $1
 ;; Derive an executable capability from $pcc
-; TODO-CHECK-NEXT:	cgetpccsetaddr $c1, $1
-; CHECK-NEXT:	cgetpcc $c1
-; CHECK-NEXT:	csetaddr $c1, $c1, $1
+; CHECK-NEXT:	cgetpccsetaddr $c1, $1
 ; CHECK-NEXT:	csealentry $c1, $c1
 ; CHECK-NEXT:	cjr	$c1
 ; CHECK-NEXT:	nop
@@ -103,9 +101,7 @@ sw.bb1:
 ; NO-OPT-NEXT:	clw	[[JT_CONTENTS:\$[0-9]+]], [[JT_ENTRY_OFFSET]], 0([[JUMPTABLE_CAP]])
 ; NO-OPT-NEXT:	cgetaddr	[[JT_ADDR:\$[0-9]+]], [[JUMPTABLE_CAP]]
 ; NO-OPT-NEXT:	daddu [[BLOCK_ADDR:\$[0-9]+]], [[JT_ADDR]], [[JT_CONTENTS]]
-; TODO-NO-OPT-NEXT: cgetpccsetaddr [[BLOCK:\$c[0-9]+]], [[BLOCK_ADDR]]
-; NO-OPT-NEXT: cgetpcc [[BLOCK_CAP:\$c[0-9]+]]
-; NO-OPT-NEXT: csetaddr [[BLOCK_CAP]], [[BLOCK_CAP]], [[BLOCK_ADDR]]
+; NO-OPT-NEXT: cgetpccsetaddr [[BLOCK_CAP:\$c[0-9]+]], [[BLOCK_ADDR]]
 ; NO-OPT-NEXT: csealentry [[BLOCK_CAP]], [[BLOCK_CAP]]
 ; NO-OPT-NEXT:	cjr	[[BLOCK_CAP]]
 ; NO-OPT-NEXT:	nop

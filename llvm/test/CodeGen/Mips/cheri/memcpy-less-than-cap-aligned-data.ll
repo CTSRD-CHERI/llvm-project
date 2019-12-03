@@ -10,9 +10,9 @@ define void @_Z1av(i8 addrspace(200)* %dst) local_unnamed_addr addrspace(200) no
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(_Z1av)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_Z1av)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c4, %captab20(.L.str)($c1)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
 ; CHECK-NEXT:    cjalr $c12, $c17

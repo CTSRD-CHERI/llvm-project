@@ -16,10 +16,11 @@ void* __capability get_captable() {
   // not-captable-error@-2{{the current ABI does not use a captable}}
   return __builtin_mips_cheri_get_captable();
 
-  // PCREL: lui	$1, %hi(%neg(%captab_rel(get_captable)))
-  // PCREL-NEXT: daddiu	$1, $1, %lo(%neg(%captab_rel(get_captable)))
+  // PCREL: lui	$1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+  // PCREL-NEXT: daddiu	$1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+  // PCREL-NEXT: cgetpccincoffset $c3, $1
   // PCREL-NEXT: cjr	$c17
-  // PCREL-NEXT: cincoffset	$c3, $c12, $1
+  // PCREL-NEXT: nop
 
   // PLT: cjr	$c17
   // PLT-NEXT: cmove $c3, $c26

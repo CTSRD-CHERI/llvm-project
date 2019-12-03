@@ -31,9 +31,9 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP:       # %bb.0: # %start
 ; PURECAP-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; PURECAP-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
-; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
-; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
-; PURECAP-NEXT:    cincoffset $c26, $c12, $1
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c26, $1
 ; PURECAP-NEXT:    cmove $c1, $c26
 ; PURECAP-NEXT:    cincoffset $c4, $c11, 48
 ; PURECAP-NEXT:    csetbounds $c4, $c4, 16

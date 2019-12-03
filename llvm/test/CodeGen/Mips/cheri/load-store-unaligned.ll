@@ -24,9 +24,9 @@ define i8 addrspace(200)* @load_unaligned(i8 addrspace(200)* %unaligned) local_u
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 1]]
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(load_unaligned)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(load_unaligned)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    csetbounds $c4, $c3, [[#CAP_SIZE]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
 ; stack offset is zero so no need for cincoffset
@@ -59,9 +59,9 @@ define void @store_unaligned(i8 addrspace(200)* %unused, i8 addrspace(200)* %una
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 1]]
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(store_unaligned)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(store_unaligned)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    csetbounds $c3, $c4, [[#CAP_SIZE]]
 ; CHECK-NEXT:    csc $c5, $zero, 0($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
@@ -95,9 +95,9 @@ define void @store_of_unaligned_load(i8 addrspace(200)* %src, i8 addrspace(200)*
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    .cfi_offset 89,
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(store_of_unaligned_load)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(store_of_unaligned_load)))
-; CHECK-NEXT:    cincoffset $c2, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c2, $1
 ; Bound source abd dest for memmove call:
 ; dest
 ; CHECK-NEXT:    csetbounds $c1, $c4, [[#CAP_SIZE]]

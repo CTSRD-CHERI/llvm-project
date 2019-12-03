@@ -19,16 +19,12 @@ entry:
 }
 ; COMMON-LABEL: Machine code for function test:
 ; MIPS:   Function Live Ins: $t9_64
-; Legacy gets the GOT via $c12 (->$t9_64)
-; LEGACY: Function Live Ins: $c12
 ; PLT and FNDESC modes both expect $c26 to be live-in
 ; PLT: Function Live Ins: $c26
 ; FNDESC: Function Live Ins: $c26
-; However, PCREL derives it from $pcc so only needs $c12
-; PCREL: Function Live Ins: $c12
+
 
 ; COMMON-LABEL: bb.0.entry:
-
 
 ; MIPS-NEXT: liveins: $t9_64
 ; MIPS-NEXT: %{{5|3}}:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
@@ -73,11 +69,7 @@ entry:
 ; FNDESC-NEXT:  %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[#CAP_SIZE]] from cap-table)
 ; FNDESC-NEXT:  [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
-; PCREL-NEXT: liveins: $c12
-; PCREL-NEXT: [[ENTRY_CAP:%.+:cherigpr]] = COPY $c12
-; PCREL-NEXT: %1:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
-; PCREL-NEXT: %2:gpr64 = DADDiu %1:gpr64, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: [[CAPTABLE:%.+:cherigpr]] = CIncOffset [[ENTRY_CAP]], %2:gpr64
+; PCREL-NEXT: [[CAPTABLE:%.+:cherigpr]] = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %1:gpr64
 ; PCREL-NEXT: [[GLOBAL_CAP:%.+:cherigpr]] = LOADCAP_BigImm target-flags(mips-captable20) @global, [[CAPTABLE]] :: (load [[#CAP_SIZE]] from cap-table)
 ; PCREL-NEXT: [[RESULT:%([0-9]+)]]:gpr64 = CAPLOAD64 $zero_64, 0, killed [[GLOBAL_CAP]] :: (dereferenceable load 8 from @global, addrspace 200)
 
@@ -90,7 +82,7 @@ entry:
 
 ; COMMON: .text
 ; COMMON: test:
-; COMMON-LABEL: # %bb.0:
+; COMMON-LABEL: # %bb.0
 
 
 ; MIPS-NEXT: lui	$1, %hi(%neg(%gp_rel(test))) # encoding: [0x3c,0x01,A,A]
@@ -136,11 +128,11 @@ entry:
 ; FNDESC-NEXT:	cld	$2, $zero, 0($c1)
 
 
-; PCREL-NEXT: lui	$1, %hi(%neg(%captab_rel(test))) # encoding: [0x3c,0x01,A,A]
-; PCREL-NEXT:         #   fixup A - offset: 0, value: %hi(%neg(%captab_rel(test))), kind:
-; PCREL-NEXT: daddiu	$1, $1, %lo(%neg(%captab_rel(test))) # encoding: [0x64,0x21,A,A]
-; PCREL-NEXT:                 #   fixup A - offset: 0, value: %lo(%neg(%captab_rel(test))), kind:
-; PCREL-NEXT: cincoffset	$[[CGP:c1]], $c12, $1
+; PCREL-NEXT: lui	$1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8) # encoding: [0x3c,0x01,A,A]
+; PCREL-NEXT:         #   fixup A - offset: 0, value: %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8), kind:
+; PCREL-NEXT: daddiu	$1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4) # encoding: [0x64,0x21,A,A]
+; PCREL-NEXT:                 #   fixup A - offset: 0, value: %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4), kind:
+; PCREL-NEXT: cgetpccincoffset	$[[CGP:c1]], $1
 ; PCREL-NEXT: clcbi	$c1, %captab20(global)($[[CGP]]) # encoding: [0x74,0x21,A,A]
 ; PCREL-NEXT:            #   fixup A - offset: 0, value: %captab20(global), kind: fixup_CHERI_CAPTABLE20
 ; PCREL-NEXT: cjr	$c17

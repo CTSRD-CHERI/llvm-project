@@ -19,9 +19,9 @@ define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
 ; CHECK:       # %bb.0: # %start
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:112|224]]
 ; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 6]]($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test)))
-; CHECK-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c26, $1
 ; CHECK-NEXT:    cmove $c1, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_cap)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 32
@@ -54,9 +54,9 @@ define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK:       # %bb.0: # %start
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|160]]
 ; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 4]]($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test2)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test2)))
-; CHECK-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c26, $1
 ; CHECK-NEXT:    cmove $c1, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_i64)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 32
@@ -89,9 +89,9 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK:       # %bb.0: # %start
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:256|512]]
 ; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 15]]($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test3)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test3)))
-; CHECK-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c26, $1
 ; CHECK-NEXT:    cmove $c1, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_huge_type)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 112

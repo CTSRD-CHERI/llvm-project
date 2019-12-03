@@ -102,7 +102,7 @@ entry:
 define void @call_nonvariadic_many_args(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_nonvariadic_many_args:
 ; Test that we are passing all the arguments after $c10 on the stack and not zeroing $c13
-; CHECK:         cincoffset $c2, $c12, $1
+; CHECK:         cgetpccincoffset $c2, $1
 ; CHECK-NEXT:    cincoffset $c1, $c3, 17
 ; CHECK-NEXT:    cincoffset $c4, $c3, 27
 ; CHECK-NEXT:    cincoffset $c5, $c3, 37

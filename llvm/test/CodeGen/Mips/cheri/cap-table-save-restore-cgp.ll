@@ -18,9 +18,9 @@ define internal i64 @local_func_no_calls_but_uses_globals(i64 %arg) addrspace(20
 ; $cgp stays the same -> no need to change
 ; CHECK-LABEL: local_func_no_calls_but_uses_globals:
 ; CHECK:       # %bb.0: # %entry
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(local_func_no_calls_but_uses_globals)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(local_func_no_calls_but_uses_globals)))
-; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c1, %captab20(global_int)($c{{1|26}})
 ; CHECK-NEXT:    cld	$1, $zero, 0($c1)
 ; CHECK-NEXT:    daddu $2, $4, $1
@@ -51,9 +51,9 @@ define internal i32 @local_func_calls_external() addrspace(200) nounwind noinlin
 ; Make space for saving $cgp:
 ; PLT-NEXT:      csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(local_func_calls_external)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(local_func_calls_external)))
-; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c1, $1
 ; Save $cgp before first (potential) external call
 ; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c{{1|18}})
@@ -78,9 +78,9 @@ define internal i32 @call_only_local() addrspace(200) nounwind noinline {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_only_local)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_only_local)))
-; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c1, $1
 ; No need to save $cgp before call since it is local
 ; CHECK-NEXT:    clcbi $c12, %capcall20(local_func_calls_external)($c{{1|26}})
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -105,9 +105,9 @@ define i32 @call_two_external_funcs() addrspace(200) nounwind {
 ; CHECK-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_two_external_funcs)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_two_external_funcs)))
-; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c18, $1
 ; Save $cgp before first (potential) external call
 ; $cgp only needs to be restored when not using the pc-relative ABI
 ; PLT-NEXT:      cmove $c18, $c26
@@ -143,9 +143,9 @@ define i32 @call_global_then_local() addrspace(200) nounwind {
 ; CHECK-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_global_then_local)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_global_then_local)))
-; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c18, $1
 ; Save $cgp before first (potential) external call
 ; $cgp only needs to be restored when not using the pc-relative ABI
 ; PLT-NEXT:      cmove $c18, $c26
@@ -188,9 +188,9 @@ define i32 @call_local_then_global() addrspace(200) nounwind {
 ; CHECK-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_local_then_global)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_local_then_global)))
-; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c18, $1
 ; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -224,9 +224,9 @@ define i32 @call_fn_ptr() addrspace(200) nounwind {
 ; CHECK-NEXT:    csd $16, $zero, [[#STACKFRAME_SIZE - 8]]($c11)
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_fn_ptr)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_fn_ptr)))
-; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c18, $1
 ; Save $cgp before calling fn pointer
 ; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
@@ -271,9 +271,9 @@ define i8 addrspace(200)* @access_global_after_external_call() addrspace(200) no
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(access_global_after_external_call)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(access_global_after_external_call)))
-; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c18, $1
 ; We need to save $cgp before the call so it is moved to $c18 (callee-save)
 ; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
@@ -298,9 +298,9 @@ define void @call_two_functions() addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_two_functions)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_two_functions)))
-; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c18, $1
 ; save before calling external function
 ; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
@@ -333,9 +333,9 @@ define i32 @not_needed_after_call(i32 %arg1, i32 %arg2) addrspace(200) nounwind 
 ; CHECK-NEXT:    csd $16, $zero, {{.+}}($c11) # 8-byte Folded Spill
 ; PLT-NEXT:      csc $c18, $zero, [[#CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(not_needed_after_call)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(not_needed_after_call)))
-; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c1, $1
 ; Save $cgp for after external call:
 ; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    sll $16, $5, 0
@@ -367,9 +367,9 @@ define void @tailcall_external(i32 %arg1, i32 %arg2) addrspace(200) nounwind {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; Save $cgp before external call
 ; PLT-NEXT:      cmove $c18, $c26
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(tailcall_external)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(tailcall_external)))
-; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c{{1|18}})
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
@@ -393,9 +393,9 @@ define internal i32 @tailcall_local(i32 %arg1, i32 %arg2) addrspace(200) nounwin
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; no need to save/restore $cgp
-; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(tailcall_local)))
-; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(tailcall_local)))
-; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; PCREL-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PCREL-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PCREL-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c{{1|26}})
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop

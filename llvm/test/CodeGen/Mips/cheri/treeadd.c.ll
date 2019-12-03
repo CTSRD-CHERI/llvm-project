@@ -22,10 +22,10 @@ define signext i32 @TreeAdd(%struct.tree addrspace(200)* readonly %t) local_unna
 ; CHECK-NEXT:    csc $c18, $zero, [[#C18_SAVE_OFFSET:]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, [[#C17_SAVE_OFFSET:]]($c11)
 ; CHECK-NEXT:    cmove $c18, $c3
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(TreeAdd)))
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    clc $c3, $zero, [[#CAP_SIZE]]($c3)
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(TreeAdd)))
-; CHECK-NEXT:    cincoffset $c19, $c12, $1
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c19, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(TreeAdd)($c19)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop

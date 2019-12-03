@@ -23,9 +23,9 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    daddiu $2, $zero, -32
 ; CHECK-NEXT:    and $1, $1, $2
 ; CHECK-NEXT:    csetaddr $c11, $c11, $1
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(main)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(main)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    csw $zero, $zero, 28($c11)
 ; CHECK-NEXT:    clcbi $c1, %captab20(x)($c1)
 ; CHECK-NEXT:    csw $4, $zero, 24($c11)

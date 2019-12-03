@@ -18,9 +18,9 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 2)]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE * 3)]]($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
-; CHECK-NEXT:    cincoffset $c19, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c19, $1
 ; CHECK-NEXT:    daddiu $1, $zero, 4096
 ; CHECK-NEXT:    cincoffset $c18, $c11, [[#CAP_SIZE * 2]]
 ; CHECK-NEXT:    csetbounds $c18, $c18, $1

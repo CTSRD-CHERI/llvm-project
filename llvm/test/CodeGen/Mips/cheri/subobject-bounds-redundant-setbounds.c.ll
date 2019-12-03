@@ -71,9 +71,9 @@ define signext i32 @stack_array() local_unnamed_addr addrspace(200) #1 {
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 4]]($c11)
 ; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(stack_array)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(stack_array)))
-; ASM-NEXT:    cincoffset $c1, $c12, $1
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    cincoffset $c2, $c11, 8
 ; ASM-NEXT:    csetbounds $c18, $c2, 40
 ; ASM-NEXT:    clcbi $c12, %capcall20(use)($c1)
@@ -136,9 +136,9 @@ define signext i32 @stack_int() local_unnamed_addr addrspace(200) #1 {
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(stack_int)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(stack_int)))
-; ASM-NEXT:    cincoffset $c1, $c12, $1
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    addiu $1, $zero, 1
 ; ASM-NEXT:    csw $1, $zero, 12($c11)
 ; ASM-NEXT:    cincoffset $c2, $c11, 12
@@ -287,9 +287,9 @@ define signext i32 @setbounds_escapes() local_unnamed_addr addrspace(200) #5 {
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(setbounds_escapes)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(setbounds_escapes)))
-; ASM-NEXT:    cincoffset $c1, $c12, $1
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    cincoffset $c2, $c11, 12
 ; ASM-NEXT:    csetbounds $c3, $c2, 4
 ; ASM-NEXT:    addiu $1, $zero, 2

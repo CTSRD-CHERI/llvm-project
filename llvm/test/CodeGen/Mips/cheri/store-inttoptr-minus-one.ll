@@ -10,9 +10,9 @@
 define void @c() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: c:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(c)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(c)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c1, %captab20(b)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $cnull, -1
 ; CHECK-NEXT:    cjr $c17
@@ -25,9 +25,9 @@ entry:
 define void @d() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: d:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c1, %captab20(b)($c1)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c1)
@@ -39,9 +39,9 @@ entry:
 define void @e() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: e:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(e)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(e)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c1, %captab20(b)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $cnull, 1
 ; CHECK-NEXT:    cjr $c17
@@ -54,9 +54,9 @@ entry:
 define void @f() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: f:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(f)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(f)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    lui $1, 1
 ; CHECK-NEXT:    clcbi $c1, %captab20(b)($c1)
 ; CHECK-NEXT:    ori $1, $1, 57920

@@ -32,8 +32,6 @@ entry:
 ; LEGACY-HACK: Function Live Ins: $c12
 ; PLT: Function Live Ins: [[CGP:\$c26]]
 ; FNDESC: Function Live Ins: [[CGP:\$c26]]
-; PCREL: Function Live Ins: $c12
-
 ; COMMON-LABEL: bb.0.entry:
 
 
@@ -107,12 +105,8 @@ entry:
 ; PLT-NEXT:  [[CAPTABLE:%0:cherigpr]] = COPY $c26
 ; FNDESC-NEXT: liveins: $c26
 ; FNDESC-NEXT:  [[CAPTABLE:%0:cherigpr]] = COPY $c26
-; PCREL needs to derive $cgp so it's not live-in:
-; PCREL-NEXT: liveins: $c12
-; PCREL-NEXT: [[C12_VREG:%[0-9]+:cherigpr]] = COPY $c12
-; PCREL-NEXT: [[CGPOFF_HI:%[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
-; PCREL-NEXT: [[CGPOFF_LO:%[0-9]+]]:gpr64 = DADDiu [[CGPOFF_HI]]:gpr64, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: [[CAPTABLE:%0:cherigpr]] = CIncOffset [[C12_VREG]], [[CGPOFF_LO]]:gpr64
+;; PCREL needs to derive $cgp so it's not live-in
+; PCREL-NEXT: [[CAPTABLE:%[0-9]+:cherigpr]] = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %1:gpr64
 
 ; CAP-TABLE-NEXT:   ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
 ; CAP-TABLE-NEXT:   %[[TLSGD_HI16:[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-tlsgd-hi16) @external_gd

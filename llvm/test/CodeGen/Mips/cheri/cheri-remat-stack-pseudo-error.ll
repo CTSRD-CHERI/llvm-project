@@ -25,10 +25,9 @@ define void @fn1() addrspace(200) #0 {
 ; ASM-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - (1 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (3 * CAP_SIZE)]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
-; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c19, $c26
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c19, $1
 ; ASM-NEXT:    daddiu $1, $zero, 4096
 ; ASM-NEXT:    cincoffset $c18, $c11, [[#CAP_SIZE]]
 ; ASM-NEXT:    csetbounds $c18, $c18, $1
@@ -68,7 +67,7 @@ entry:
 ; CHECK-NEXT: $c3 = COPY [[STACK_CAP]]
 ; CHECK-NEXT: $c13 = CMove $cnull
 ; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
-; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
+; CHECK-NEXT: CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 
 
 
@@ -78,10 +77,9 @@ define void @small_stack_fn1() addrspace(200) #0 {
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (1 * CAP_SIZE)]]($c11)
 ; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(small_stack_fn1)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(small_stack_fn1)))
-; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c18, $c26
+; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c18, $1
 ; ASM-NEXT:    clcbi $c4, %captab20(a_small)($c18)
 ; ASM-NEXT:    clcbi $c12, %capcall20(memcpy)($c18)
 ; ASM-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE]]
@@ -117,7 +115,7 @@ entry:
 ; CHECK-NEXT: $c3 = CheriBoundedStackPseudo %stack.0.byval-temp, 0, 512
 ; CHECK-NEXT: $c13 = CMove $cnull
 ; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
-; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
+; CHECK-NEXT: CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 ; CHECK-NOT: CheriBoundedStackPseudo
 
 attributes #0 = { noinline nounwind optnone }

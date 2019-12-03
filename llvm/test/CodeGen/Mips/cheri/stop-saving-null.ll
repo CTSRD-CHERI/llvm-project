@@ -12,9 +12,9 @@ define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspac
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[#CAP_SIZE]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE]]
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(call_one_arg_from_many_arg)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_one_arg_from_many_arg)))
-; CHECK-NEXT:    cincoffset [[CGP:\$c1]], $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset [[CGP:\$c1]], $1
 ; CHECK-NEXT:    cincoffset $c3, $c3, 77
 ; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)([[CGP]])
 ; CHECK-NEXT:    cjalr $c12, $c17

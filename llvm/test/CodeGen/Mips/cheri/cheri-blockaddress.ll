@@ -46,14 +46,13 @@ indirectgoto:                                     ; preds = %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE]]
 ; ASM-NEXT:    .cfi_def_cfa_offset [[#CAP_SIZE]]
 ; Generate a pc-relative blockaddress:
-; ASM-NEXT:    cgetpcc $c1
-; ASM-NEXT:    lui $1, %pcrel_hi(.Ltmp0+4)
-; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(.Ltmp0+8)
-; ASM-NEXT:    cincoffset $c1, $c1, $1
+; ASM-NEXT:    lui $1, %pcrel_hi(.Ltmp1-8)
+; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(.Ltmp1-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    cjr $c1
 ; ASM-NEXT:    csc $c1, $zero, 0($c11)
-; ASM-NEXT:  .Ltmp0: # Block address taken
-; ASM-NEXT:  .LBB0_1: # %label2
+; ASM-NEXT:  .Ltmp1: # Block address taken
+; ASM-NEXT:  .LBB1_1: # %label2
 ; ASM-NEXT:    addiu $2, $zero, 2
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE]]
@@ -70,14 +69,14 @@ indirectgoto:                                     ; preds = %entry
 
 
 ; DUMP-LABEL: addrof_label_in_local:
-; DUMP-NEXT:        0:	4a 6b 5f {{f|e}}0 	cincoffset	$c11, $c11, -[[#CAP_SIZE]]
-; DUMP-NEXT:        4:	48 01 07 ff 	cgetpcc	$c1
-; DUMP-NEXT:        8:	3c 01 00 00 	lui	$1, 0
-; DUMP-NEXT:        c:	64 21 00 18 	daddiu	$1, $1, [[PCREL_LOWER:24]]
-; DUMP-NEXT:       10:	48 01 08 51 	cincoffset	$c1, $c1, $1
-; DUMP-NEXT:       14:	48 01 1f ff 	cjr	$c1
-; DUMP-NEXT:       18:	f8 2b 00 00 	csc	$c1, $zero, 0($c11)
+; DUMP-NEXT:        4a 6b 5f {{f|e}}0 	cincoffset	$c11, $c11, -[[#CAP_SIZE]]
+; DUMP-NEXT:        3c 01 00 00 	lui	$1, 0
+; 3 instructions -> value should be 12:
+; DUMP-NEXT:        64 21 00 0c 	daddiu	$1, $1, [[PCREL_LOWER:12]]
+; DUMP-NEXT:        48 01 0c ff 	cgetpccincoffset $c1, $1
+; DUMP-NEXT:        48 01 1f ff 	cjr	$c1
+; DUMP-NEXT:        f8 2b 00 00 	csc	$c1, $zero, 0($c11)
 ; Check that the jump target address is correct
-; DUMP-NEXT:       1c:	24 02 00 02 	addiu	$2, $zero, 2
-; DUMP-NEXT:       20:	48 11 1f ff 	cjr	$c17
-; DUMP-NEXT:       24:	4a 6b 58 {{1|2}}0 	cincoffset	$c11, $c11, [[#CAP_SIZE]]
+; DUMP-NEXT:        24 02 00 02 	addiu	$2, $zero, 2
+; DUMP-NEXT:        48 11 1f ff 	cjr	$c17
+; DUMP-NEXT:        4a 6b 58 {{1|2}}0 	cincoffset	$c11, $c11, [[#CAP_SIZE]]

@@ -45,37 +45,38 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ;
 ; ASM-LABEL: test_phi:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
-; ASM-NEXT:    csc $c19, $zero, [[#CAP_SIZE * 3]]($c11)
-; ASM-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
-; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(test_phi)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test_phi)))
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
-; ASM-NEXT:    beqz $2, .LBB0_2
-; ASM-NEXT:    cincoffset $c19, $c12, $1
+; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; ASM-NEXT:    csc $c19, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; ASM-NEXT:    csc $c18, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (3 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    sll $1, $4, 0
+; ASM-NEXT:    andi $1, $1, 1
+; ASM-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c19, $2
+; ASM-NEXT:    beqz $1, .LBB0_2
+; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %block1
 ; ASM-NEXT:    addiu $1, $zero, 1
-; ASM-NEXT:    csw $1, $zero, {{12|28}}($c11)
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 4]]($c11)
 ; ASM-NEXT:    addiu $1, $zero, 2
-; ASM-NEXT:    csw $1, $zero, {{8|24}}($c11)
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 8]]($c11)
 ; ASM-NEXT:    addiu $1, $zero, 3
-; ASM-NEXT:    csw $1, $zero, {{4|20}}($c11)
-; ASM-NEXT:    cincoffset $c18, $c11, {{8|24}}
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 12]]($c11)
+; ASM-NEXT:    cincoffset $c18, $c11, [[# CAP_SIZE - 8]]
 ; ASM-NEXT:    csetbounds $c18, $c18, 4
 ; ASM-NEXT:    b .LBB0_3
 ; ASM-NEXT:    cgetnull $c3
 ; ASM-NEXT:  .LBB0_2: # %block2
 ; ASM-NEXT:    addiu $1, $zero, 4
-; ASM-NEXT:    csw $1, $zero, {{12|28}}($c11)
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 4]]($c11)
 ; ASM-NEXT:    addiu $1, $zero, 5
-; ASM-NEXT:    csw $1, $zero, {{8|24}}($c11)
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 8]]($c11)
 ; ASM-NEXT:    addiu $1, $zero, 6
-; ASM-NEXT:    csw $1, $zero, {{4|20}}($c11)
-; ASM-NEXT:    cincoffset $c3, $c11, {{12|28}}
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 12]]($c11)
+; ASM-NEXT:    cincoffset $c3, $c11, [[# CAP_SIZE - 4]]
 ; ASM-NEXT:    csetbounds $c3, $c3, 4
-; ASM-NEXT:    cincoffset $c18, $c11, {{4|20}}
+; ASM-NEXT:    cincoffset $c18, $c11, [[# CAP_SIZE - 12]]
 ; ASM-NEXT:    csetbounds $c18, $c18, 4
 ; ASM-NEXT:  .LBB0_3: # %phi_block
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c19)
@@ -84,11 +85,11 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c19)
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    cmove $c3, $c18
-; ASM-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; ASM-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
-; ASM-NEXT:    clc $c19, $zero, [[#CAP_SIZE * 3]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (3 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    clc $c18, $zero, [[#STACKFRAME_SIZE - (2 * CAP_SIZE)]]($c11)
+; ASM-NEXT:    clc $c19, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; ASM-NEXT:    cjr $c17
-; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %alloca1 = alloca i32, align 4, addrspace(200)
   %alloca2 = alloca i32, align 4, addrspace(200)
@@ -141,32 +142,33 @@ define void @test_only_created_in_predecessor_block(i1 %cond) addrspace(200) nou
 ;
 ; ASM-LABEL: test_only_created_in_predecessor_block:
 ; ASM:       # %bb.0: # %entry
-; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; ASM-NEXT:    csc $c17, $zero, [[#CAP_SIZE]]($c11)
-; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(test_only_created_in_predecessor_block)))
-; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test_only_created_in_predecessor_block)))
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
-; ASM-NEXT:    beqz $2, .LBB1_2
-; ASM-NEXT:    cincoffset $c1, $c12, $1
+; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
+; ASM-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; ASM-NEXT:    sll $1, $4, 0
+; ASM-NEXT:    andi $1, $1, 1
+; ASM-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; ASM-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; ASM-NEXT:    cgetpccincoffset $c1, $2
+; ASM-NEXT:    beqz $1, .LBB1_2
+; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %block1
 ; ASM-NEXT:    addiu $1, $zero, 1
-; ASM-NEXT:    csw $1, $zero, {{12|28}}($c11)
-; ASM-NEXT:    cincoffset $c3, $c11, {{12|28}}
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 4]]($c11)
+; ASM-NEXT:    cincoffset $c3, $c11, [[# CAP_SIZE - 4]]
 ; ASM-NEXT:    b .LBB1_3
 ; ASM-NEXT:    csetbounds $c3, $c3, 4
 ; ASM-NEXT:  .LBB1_2: # %block2
 ; ASM-NEXT:    addiu $1, $zero, 5
-; ASM-NEXT:    csw $1, $zero, {{8|24}}($c11)
-; ASM-NEXT:    cincoffset $c3, $c11, {{8|24}}
+; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 8]]($c11)
+; ASM-NEXT:    cincoffset $c3, $c11, [[# CAP_SIZE - 8]]
 ; ASM-NEXT:    csetbounds $c3, $c3, 4
 ; ASM-NEXT:  .LBB1_3: # %phi_block
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c1)
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
-; ASM-NEXT:    clc $c17, $zero, [[#CAP_SIZE]]($c11)
+; ASM-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
 ; ASM-NEXT:    cjr $c17
-; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %alloca1 = alloca i32, align 4, addrspace(200)
   %alloca2 = alloca i32, align 4, addrspace(200)

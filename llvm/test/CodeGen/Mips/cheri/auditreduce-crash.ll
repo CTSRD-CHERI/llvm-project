@@ -41,10 +41,10 @@ define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval, i32 addrspace(2
 ; CHERI:       # %bb.0: # %entry
 ; CHERI-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHERI-NEXT:    csc $c17, $zero, 0($c11)
-; CHERI-NEXT:    lui $1, %hi(%neg(%captab_rel(select_hdr32)))
+; CHERI-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHERI-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHERI-NEXT:    cgetpccincoffset $c1, $1
 ; CHERI-NEXT:    clh $4, $zero, 0($c3)
-; CHERI-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(select_hdr32)))
-; CHERI-NEXT:    cincoffset $c1, $c12, $1
 ; CHERI-NEXT:    clcbi $c3, %captab20(maskp)($c1)
 ; CHERI-NEXT:    clcbi $c12, %capcall20(au_preselect)($c1)
 ; CHERI-NEXT:    daddiu $5, $zero, 3
@@ -96,10 +96,10 @@ define i32 @foo(i512 addrspace(200)* byval %x, %struct.tokenstr addrspace(200)* 
 ; CHERI:       # %bb.0: # %entry
 ; CHERI-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
 ; CHERI-NEXT:    csc $c17, $zero, 0($c11)
-; CHERI-NEXT:    lui $1, %hi(%neg(%captab_rel(foo)))
+; CHERI-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHERI-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHERI-NEXT:    cgetpccincoffset $c1, $1
 ; CHERI-NEXT:    clh $4, $zero, 0($c4)
-; CHERI-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foo)))
-; CHERI-NEXT:    cincoffset $c1, $c12, $1
 ; CHERI-NEXT:    clcbi $c3, %captab20(maskp)($c1)
 ; CHERI-NEXT:    clcbi $c12, %capcall20(au_preselect)($c1)
 ; CHERI-NEXT:    daddiu $5, $zero, 3

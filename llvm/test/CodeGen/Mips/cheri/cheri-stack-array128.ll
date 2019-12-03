@@ -6,9 +6,9 @@ define i32 @foo() nounwind {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE)]]($c11)
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foo)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foo)))
-; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c1)
 ; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
