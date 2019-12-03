@@ -778,7 +778,8 @@ class Reducer(object):
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without debug info crashes:",
-            noargs_opts_to_remove=["-dwarf-column-info", "-munwind-tables"],
+            noargs_opts_to_remove=["-dwarf-column-info", "-munwind-tables", "-ggnu-pubnames"],
+            one_arg_opts_to_remove=["-split-dwarf-file", "-split-dwarf-output"],
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning=",
                                               "-fdebug-prefix-map="],
         )
@@ -976,6 +977,10 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without include flags crashes:",
             noargs_opts_to_remove=["-nostdsysteminc", "-nobuiltininc"],
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without function/data sections crashes:",
+            noargs_opts_to_remove=["-ffunction-sections", "-fdata-sections"],
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -x flag crashes:",
