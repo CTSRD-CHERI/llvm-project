@@ -773,23 +773,32 @@ static void performSink(MachineInstr &MI, MachineBasicBlock &SuccToSinkTo,
 /// instruction out of its current block into a successor.
 bool MachineSinking::SinkInstruction(MachineInstr &MI, bool &SawStore,
                                      AllSuccsCache &AllSuccessors) {
+  LLVM_DEBUG(dbgs() << "Checking: "; MI.dump());
   // Don't sink instructions that the target prefers not to sink.
-  if (!TII->shouldSink(MI))
+  if (!TII->shouldSink(MI)) {
+    LLVM_DEBUG(dbgs() << "  -- !TII->shouldSink() -> no\n";);
     return false;
+  }
 
   // Check if it's safe to move the instruction.
-  if (!MI.isSafeToMove(AA, SawStore))
+  if (!MI.isSafeToMove(AA, SawStore)) {
+    LLVM_DEBUG(dbgs() << "  -- !MI.isSafeToMove() -> no\n";);
     return false;
+  }
 
   // Convergent operations may not be made control-dependent on additional
   // values.
-  if (MI.isConvergent())
+  if (MI.isConvergent()) {
+    LLVM_DEBUG(dbgs() << "  -- MI.isConvergent() -> no\n";);
     return false;
+  }
 
   // Don't break implicit null checks.  This is a performance heuristic, and not
   // required for correctness.
-  if (SinkingPreventsImplicitNullCheck(MI, TII, TRI))
+  if (SinkingPreventsImplicitNullCheck(MI, TII, TRI)) {
+    LLVM_DEBUG(dbgs() << "  -- SinkingPreventsImplicitNullCheck() -> no\n";);
     return false;
+  }
 
   // FIXME: This should include support for sinking instructions within the
   // block they are currently in to shorten the live ranges.  We often get
@@ -805,8 +814,10 @@ bool MachineSinking::SinkInstruction(MachineInstr &MI, bool &SawStore,
       FindSuccToSinkTo(MI, ParentBlock, BreakPHIEdge, AllSuccessors);
 
   // If there are no outputs, it must have side-effects.
-  if (!SuccToSinkTo)
+  if (!SuccToSinkTo) {
+    LLVM_DEBUG(dbgs() << "  -- no outputs, it must have side-effects -> no\n";);
     return false;
+  }
 
   // If the instruction to move defines a dead physical register which is live
   // when leaving the basic block, don't move it because it could turn into a
@@ -817,8 +828,10 @@ bool MachineSinking::SinkInstruction(MachineInstr &MI, bool &SawStore,
     Register Reg = MO.getReg();
     if (Reg == 0 || !Register::isPhysicalRegister(Reg))
       continue;
-    if (SuccToSinkTo->isLiveIn(Reg))
+    if (SuccToSinkTo->isLiveIn(Reg)) {
+      LLVM_DEBUG(dbgs() << "  -- SuccToSinkTo->isLiveIn(Reg) -> no\n";);
       return false;
+    }
   }
 
   LLVM_DEBUG(dbgs() << "Sink instr " << MI << "\tinto block " << *SuccToSinkTo);
