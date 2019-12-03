@@ -989,10 +989,13 @@ private:
       SmallDenseMap<Instruction *, unsigned>::iterator MTPI =
           MemTransferSliceMap.find(&II);
       if (MTPI != MemTransferSliceMap.end())
-        for (unsigned I = MTPI->second;
-             I < AS.Slices.size() && AS.Slices[I].getUse()->getUser() == &II;
-             I++)
+        for (unsigned I = MTPI->second; I < AS.Slices.size(); I++) {
+          if (AS.Slices[I].getUse() == nullptr)
+            continue; // This can happen due to .kill() in a previous iteration
+          if (AS.Slices[I].getUse()->getUser() != &II)
+            break;
           AS.Slices[I].kill();
+        }
       return markAsDead(II);
     }
 
@@ -1025,10 +1028,13 @@ private:
       // Check if the begin offsets match and this is a non-volatile transfer.
       // In that case, we can completely elide the transfer.
       if (!II.isVolatile() && PrevP.beginOffset() == RawOffset) {
-        for (unsigned I = PrevIdx;
-             I < AS.Slices.size() && AS.Slices[I].getUse()->getUser() == &II;
-             I++)
+        for (unsigned I = PrevIdx; I < AS.Slices.size(); I++) {
+          if (AS.Slices[I].getUse() == nullptr)
+            continue; // This can happen due to .kill() in a previous iteration
+          if (AS.Slices[I].getUse()->getUser() != &II)
+            break;
           AS.Slices[I].kill();
+        }
         return markAsDead(II);
       }
 
