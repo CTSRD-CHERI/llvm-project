@@ -66,11 +66,15 @@ def get_line2spell_and_mangled(args, clang_args):
   def parse_clang_ast_json(node):
     node_kind = node['kind']
     # Recurse for the following nodes that can contain nested function decls:
-    if node_kind in ('NamespaceDecl', 'LinkageSpecDecl', 'TranslationUnitDecl'):
-      for inner in node['inner']:
+    if node_kind in ('NamespaceDecl', 'LinkageSpecDecl', 'TranslationUnitDecl', 'CXXRecordDecl'):
+      for inner in node.get('inner', []):
         parse_clang_ast_json(inner)
     # Otherwise we ignore everything except functions:
-    if node['kind'] != 'FunctionDecl':
+    if node['kind'] not in ('FunctionDecl', 'CXXMethodDecl'):
+      return
+    # Ignore function declarations without an implementation
+    if node.get('inner') is None:
+      common.debug('Skipping function without body', node['name'], '@', node['loc'])
       return
     if node.get('isImplicit') is True and node.get('storageClass') == 'extern':
       common.debug('Skipping builtin function:', node['name'], '@', node['loc'])
