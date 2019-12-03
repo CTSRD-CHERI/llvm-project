@@ -234,12 +234,7 @@ HexagonTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
 bool HexagonTargetLowering::mayBeEmittedAsTailCall(const CallInst *CI) const {
   // If either no tail call or told not to tail call at all, don't.
-  auto Attr =
-      CI->getParent()->getParent()->getFnAttribute("disable-tail-calls");
-  if (!CI->isTailCall() || Attr.getValueAsString() == "true")
-    return false;
-
-  return true;
+  return CI->isTailCall();
 }
 
 Register HexagonTargetLowering::getRegisterByName(
@@ -408,10 +403,6 @@ HexagonTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     CCInfo.AnalyzeCallOperands(Outs, CC_Hexagon_HVX);
   else
     CCInfo.AnalyzeCallOperands(Outs, CC_Hexagon);
-
-  auto Attr = MF.getFunction().getFnAttribute("disable-tail-calls");
-  if (Attr.getValueAsString() == "true")
-    CLI.IsTailCall = false;
 
   if (CLI.IsTailCall) {
     bool StructAttrFlag = MF.getFunction().hasStructRetAttr();
