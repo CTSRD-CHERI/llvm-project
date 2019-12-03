@@ -469,6 +469,9 @@ namespace llvm {
   /// Create CHERI pass to bound alloca.s
   ModulePass *createCheriBoundAllocasPass();
 
+  /// Create IR Type Promotion pass. \see TypePromotion.cpp
+  FunctionPass *createTypePromotionPass();
+
 } // End llvm namespace
 
 #endif

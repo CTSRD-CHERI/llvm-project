@@ -562,6 +562,7 @@ int main(int argc, char **argv) {
   initializeWasmEHPreparePass(Registry);
   initializeWriteBitcodePassPass(Registry);
   initializeHardwareLoopsPass(Registry);
+  initializeTypePromotionPass(Registry);
 
   // Add the Cheri IR -> IR passes
   initializeCheriBoundAllocasPass(Registry);
