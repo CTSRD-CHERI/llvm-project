@@ -4032,8 +4032,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     llvm::Value *Queue = EmitScalarExpr(E->getArg(0));
     llvm::Value *Flags = EmitScalarExpr(E->getArg(1));
     LValue NDRangeL = EmitAggExprToLValue(E->getArg(2));
-    llvm::Value *Range = NDRangeL.getAddress().getPointer();
-    llvm::Type *RangeTy = NDRangeL.getAddress().getType();
+    llvm::Value *Range = NDRangeL.getAddress(*this).getPointer();
+    llvm::Type *RangeTy = NDRangeL.getAddress(*this).getType();
 
     if (NumArgs == 4) {
       // The most basic form of the call with parameters:
@@ -4052,7 +4052,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
           Builder.CreatePointerCast(Info.BlockArg, GenericVoidPtrTy);
 
       AttrBuilder B;
-      B.addByValAttr(NDRangeL.getAddress().getElementType());
+      B.addByValAttr(NDRangeL.getAddress(*this).getElementType());
       llvm::AttributeList ByValAttrSet =
           llvm::AttributeList::get(CGM.getModule().getContext(), 3U, B);
 
@@ -4237,7 +4237,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     llvm::Type *GenericVoidPtrTy = Builder.getInt8PtrTy(
         CGM.getTargetAddressSpace(LangAS::opencl_generic));
     LValue NDRangeL = EmitAggExprToLValue(E->getArg(0));
-    llvm::Value *NDRange = NDRangeL.getAddress().getPointer();
+    llvm::Value *NDRange = NDRangeL.getAddress(*this).getPointer();
     auto Info =
         CGM.getOpenCLRuntime().emitOpenCLEnqueuedBlock(*this, E->getArg(1));
     Value *Kernel = Builder.CreatePointerCast(Info.Kernel, GenericVoidPtrTy);
@@ -9758,14 +9758,14 @@ Value *CodeGenFunction::EmitBPFBuiltinExpr(unsigned BuiltinID,
   if (!getDebugInfo()) {
     CGM.Error(E->getExprLoc(), "using builtin_preserve_field_info() without -g");
     return IsBitField ? EmitLValue(Arg).getBitFieldPointer()
-                      : EmitLValue(Arg).getPointer();
+                      : EmitLValue(Arg).getPointer(*this);
   }
 
   // Enable underlying preserve_*_access_index() generation.
   bool OldIsInPreservedAIRegion = IsInPreservedAIRegion;
   IsInPreservedAIRegion = true;
   Value *FieldAddr = IsBitField ? EmitLValue(Arg).getBitFieldPointer()
-                                : EmitLValue(Arg).getPointer();
+                                : EmitLValue(Arg).getPointer(*this);
   IsInPreservedAIRegion = OldIsInPreservedAIRegion;
 
   ConstantInt *C = cast<ConstantInt>(EmitScalarExpr(E->getArg(1)));
