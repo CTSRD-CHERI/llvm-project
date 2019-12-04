@@ -35,10 +35,11 @@ public:
 
   void Initialize(MCContext *C);
   void Lower(const MachineInstr *MI, MCInst &OutMI) const;
-  MCOperand LowerOperand(const MachineOperand& MO, int64_t offset = 0) const;
+  MCOperand LowerOperand(const MachineOperand &MO, int64_t offset = 0) const;
 
 private:
-  MCOperand LowerSymbolOperand(const MachineOperand &MO, MachineOperandType MOTy, int64_t Offset) const;
+  MCOperand LowerSymbolOperand(const MachineOperand &MO,
+                               MachineOperandType MOTy, int64_t Offset) const;
   MCOperand createSub(MachineBasicBlock *BB1, MachineBasicBlock *BB2,
                       MipsMCExpr::MipsExprKind Kind) const;
   void lowerLongBranchLUi(const MachineInstr *MI, MCInst &OutMI) const;
