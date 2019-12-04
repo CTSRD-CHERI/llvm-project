@@ -226,15 +226,13 @@ static bool SemaBuiltinPreserveAI(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
-static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
-                                 bool PowerOfTwo) {
+static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID) {
   if (checkArgCount(S, TheCall, 2))
     return true;
 
   clang::Expr *Source = TheCall->getArg(0);
   clang::Expr *AlignOp = TheCall->getArg(1);
-  bool IsBooleanAlignBuiltin = ID == Builtin::BI__builtin_is_aligned ||
-                               ID == Builtin::BI__builtin_is_p2aligned;
+  bool IsBooleanAlignBuiltin = ID == Builtin::BI__builtin_is_aligned;
 
   auto IsValidIntegerType = [](QualType Ty) {
     return Ty->isIntegerType() && !Ty->isEnumeralType() && !Ty->isBooleanType();
@@ -262,35 +260,25 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
   Expr::EvalResult AlignResult;
   unsigned MaxAlignmentBits = S.Context.getIntRange(SrcTy) - 1;
   // Can't check validity of alignment if it is type dependent
-  if (!AlignOp->isInstantiationDependent() && AlignOp->EvaluateAsInt(AlignResult, S.Context, Expr::SE_AllowSideEffects)) {
+  if (!AlignOp->isInstantiationDependent() &&
+      AlignOp->EvaluateAsInt(AlignResult, S.Context,
+                             Expr::SE_AllowSideEffects)) {
     llvm::APSInt AlignValue = AlignResult.Val.getInt();
-    if (PowerOfTwo) {
-     if (AlignValue == 0) {
-        // aligning to 2^0 is always true/a noop -> add the tautological warning
-        S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
-            << IsBooleanAlignBuiltin;
-      } else if (AlignValue < 0 || AlignValue > MaxAlignmentBits) {
-        S.Diag(AlignOp->getExprLoc(),
-               diag::err_alignment_power_of_two_out_of_range)
-            << AlignValue.toString(10) << 0 << MaxAlignmentBits;
-      }
-    } else {
-      llvm::APSInt MaxValue(
-          llvm::APInt::getOneBitSet(MaxAlignmentBits + 1, MaxAlignmentBits));
-      if (AlignValue < 1) {
-        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_small) << 1;
-        return true;
-      } else if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
-        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_big)
-            << MaxValue.toString(10);
-        return true;
-      } else if (AlignValue == 1) {
-        S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
-            << IsBooleanAlignBuiltin;
-      } else if (!AlignValue.isPowerOf2()) {
-        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_not_power_of_two);
-        return true;
-      }
+    llvm::APSInt MaxValue(
+        llvm::APInt::getOneBitSet(MaxAlignmentBits + 1, MaxAlignmentBits));
+    if (AlignValue < 1) {
+      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_small) << 1;
+      return true;
+    } else if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
+      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_big)
+          << MaxValue.toString(10);
+      return true;
+    } else if (AlignValue == 1) {
+      S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
+          << IsBooleanAlignBuiltin;
+    } else if (!AlignValue.isPowerOf2()) {
+      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_not_power_of_two);
+      return true;
     }
   }
 
@@ -1464,13 +1452,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_is_aligned:
   case Builtin::BI__builtin_align_up:
   case Builtin::BI__builtin_align_down:
-    if (SemaBuiltinAlignment(*this, TheCall, BuiltinID, false))
-      return ExprError();
-    break;
-  case Builtin::BI__builtin_is_p2aligned:
-  case Builtin::BI__builtin_p2align_up:
-  case Builtin::BI__builtin_p2align_down:
-    if (SemaBuiltinAlignment(*this, TheCall, BuiltinID, true))
+    if (SemaBuiltinAlignment(*this, TheCall, BuiltinID))
       return ExprError();
     break;
   case Builtin::BI__builtin_add_overflow:

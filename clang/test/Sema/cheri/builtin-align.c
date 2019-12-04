@@ -1,6 +1,3 @@
-// RUN: %cheri_cc1 -DALIGN_BUILTIN=__builtin_is_p2aligned -DRETURNS_BOOL=1 -DPOW2=1 %s -fsyntax-only -verify -pedantic
-// RUN: %cheri_cc1 -DALIGN_BUILTIN=__builtin_p2align_up   -DRETURNS_BOOL=0 -DPOW2=1 %s -fsyntax-only -verify -pedantic
-// RUN: %cheri_cc1 -DALIGN_BUILTIN=__builtin_p2align_down -DRETURNS_BOOL=0 -DPOW2=1 %s -fsyntax-only -verify -pedantic
 // RUN: %cheri_cc1 -DALIGN_BUILTIN=__builtin_is_aligned   -DRETURNS_BOOL=1 -DPOW2=0 %s -fsyntax-only -verify -pedantic
 // RUN: %cheri_cc1 -DALIGN_BUILTIN=__builtin_align_up     -DRETURNS_BOOL=0 -DPOW2=0 %s -fsyntax-only -verify -pedantic
 // RUN: %cheri_cc1 -DALIGN_BUILTIN=__builtin_align_down   -DRETURNS_BOOL=0 -DPOW2=0 %s -fsyntax-only -verify -pedantic
@@ -164,24 +161,15 @@ void constant_expression(int x) {
   _Static_assert(__builtin_align_up(33, 32) == 64, "");
   _Static_assert(__builtin_align_down(33, 32) == 32, "");
 
-  _Static_assert(__builtin_is_p2aligned(1024, 9), "");
-  _Static_assert(!__builtin_is_p2aligned(3, 2), "");
-  _Static_assert(__builtin_is_p2aligned(8, 3), "");
-  _Static_assert(__builtin_p2align_up(33, 5) == 64, "");
-  _Static_assert(__builtin_p2align_down(33, 5) == 32, "");
-
   // but not if one of the arguments isn't constant
   _Static_assert(ALIGN_BUILTIN(33, x) != 100, ""); // expected-error {{static_assert expression is not an integral constant expression}}
   _Static_assert(ALIGN_BUILTIN(x, 4) != 100, ""); // expected-error {{static_assert expression is not an integral constant expression}}
 }
 
+// Check that it is a constant expression that can be assigned to globals:
 int global1 = __builtin_align_down(33, 8);
 int global2 = __builtin_align_up(33, 8);
 _Bool global3 = __builtin_is_aligned(33, 8);
-
-int global4 = __builtin_p2align_down(33, 8);
-int global5 = __builtin_p2align_up(33, 8);
-_Bool global6 = __builtin_is_p2aligned(33, 8);
 
 // Check that we can use it on array types:
 // https://github.com/CTSRD-CHERI/llvm-project/issues/328

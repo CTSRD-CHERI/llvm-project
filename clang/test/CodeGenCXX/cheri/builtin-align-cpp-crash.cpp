@@ -4,14 +4,14 @@
 // CHECK-LABEL: @test1(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[C:%.*]])
-// CHECK-NEXT:    [[POW2:%.*]] = zext i32 [[B:%.*]] to i64
-// CHECK-NEXT:    [[NOTMASK:%.*]] = shl nsw i64 -1, [[POW2]]
-// CHECK-NEXT:    [[TMP1:%.*]] = and i64 [[TMP0]], [[NOTMASK]]
+// CHECK-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[B:%.*]] to i64
+// CHECK-NEXT:    [[NEGATED_MASK:%.*]] = sub nsw i64 0, [[ALIGNMENT]]
+// CHECK-NEXT:    [[TMP1:%.*]] = and i64 [[TMP0]], [[NEGATED_MASK]]
 // CHECK-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[C]], i64 [[TMP1]])
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
 //
 extern "C" char* test1(char* c, int b) {
-  return __builtin_p2align_down(c, b);
+  return __builtin_align_down(c, b);
 }
 
 // Found while compiling libnv

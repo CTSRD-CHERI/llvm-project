@@ -1481,12 +1481,6 @@ BUILTIN(__builtin_preserve_access_index, "v.", "t")
 BUILTIN(__builtin_is_aligned, "bvC*z", "nct")
 BUILTIN(__builtin_align_up, "v*vC*z", "nct")
 BUILTIN(__builtin_align_down, "v*vC*z", "nct")
-// The same builtins but with the second argument as a power of two instead of an integer
-// undefined behaviour if the requested value is greater than the number of bits
-BUILTIN(__builtin_is_p2aligned, "bvC*z", "nct")
-BUILTIN(__builtin_p2align_up, "v*vC*z", "nct")
-BUILTIN(__builtin_p2align_down, "v*vC*z", "nct")
-
 
 // Memory capability builtins
 BUILTIN(__builtin_cheri_bounds_set, "v*mvC*mz", "nc")

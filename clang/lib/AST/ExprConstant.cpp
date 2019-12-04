@@ -10537,9 +10537,7 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
   return ExprEvaluatorBaseTy::VisitCallExpr(E);
 }
 
-static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
-                                     bool IsPowerOfTwo, APSInt &Val,
-                                     APSInt &Alignment, unsigned *ValWidth) {
+static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info, APSInt &Val, APSInt &Alignment, unsigned *ValWidth) {
   Expr::EvalResult ExprResult;
   if (!E->getArg(0)->EvaluateAsInt(ExprResult, Info.Ctx))
     return false;
@@ -10549,17 +10547,11 @@ static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
   Alignment = ExprResult.Val.getInt();
   if (Alignment < 0)
     return false;
-  if (IsPowerOfTwo) {
-    if (Alignment > 63)
-      return false; // can't evaluate this
-    unsigned SetBit = Alignment.getZExtValue();
-    Alignment = APSInt(llvm::APInt::getOneBitSet(SetBit + 1, SetBit));
-  }
-  // XXXAR: can this ever happen? Will end up here even if Sema causes an error?
-  // I guess this additional check doesn't do any harm
+  // XXX: can this ever happen? Will we end up here even if Sema gives an error?
+  // I guess this additional check doesn't do any harm.
   if (!Alignment.isPowerOf2())
     return false;
-  // ensure both values have the same bit width so that we don't assert later
+  // Ensure both values have the same bit width so that we don't assert later.
   *ValWidth = Val.getBitWidth();
   if (Val.isUnsigned())
     Val = Val.zextOrSelf(Alignment.getBitWidth());
@@ -10611,35 +10603,29 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     return Success(Layout.size().getQuantity(), E);
   }
 
-  case Builtin::BI__builtin_is_aligned:
-  case Builtin::BI__builtin_is_p2aligned: {
+  case Builtin::BI__builtin_is_aligned: {
     APSInt Val;
     APSInt Alignment;
     unsigned ValWidth = -1;
-    bool Pow2 = BuiltinOp == Builtin::BI__builtin_is_p2aligned;
-    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment, &ValWidth))
+    if (!getBuiltinAlignArguments(E, Info, Val, Alignment, &ValWidth))
       return false;
     return Success((Val & (Alignment - 1)) == 0 ? 1 : 0, E);
   }
-  case Builtin::BI__builtin_align_up:
-  case Builtin::BI__builtin_p2align_up: {
+  case Builtin::BI__builtin_align_up: {
     APSInt Val;
     APSInt Alignment;
     unsigned ValWidth = -1;
-    bool Pow2 = BuiltinOp == Builtin::BI__builtin_p2align_up;
-    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment, &ValWidth))
+    if (!getBuiltinAlignArguments(E, Info, Val, Alignment, &ValWidth))
       return false;
     // #define roundup2(x, y) (((x)+((y)-1))&(~((y)-1)))
     APSInt Result = APSInt((Val + (Alignment - 1)) & ~(Alignment - 1), Val.isUnsigned());
     return Success(Result.extOrTrunc(ValWidth), E);
   }
-  case Builtin::BI__builtin_align_down:
-  case Builtin::BI__builtin_p2align_down: {
+  case Builtin::BI__builtin_align_down: {
     APSInt Val;
     APSInt Alignment;
     unsigned ValWidth = -1;
-    bool Pow2 = BuiltinOp == Builtin::BI__builtin_p2align_down;
-    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment, &ValWidth))
+    if (!getBuiltinAlignArguments(E, Info, Val, Alignment, &ValWidth))
       return false;
     // #define rounddown2(x, y) ((x)&(~((y)-1)))
     APSInt Result = APSInt(Val & ~(Alignment - 1), Val.isUnsigned());
