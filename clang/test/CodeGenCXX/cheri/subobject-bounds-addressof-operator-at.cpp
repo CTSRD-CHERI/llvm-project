@@ -1,5 +1,5 @@
-// RUN: %cheri128_purecap_cc1 -cheri-bounds=subobject-safe -O2 -std=c++17 -emit-llvm %s -o - -Rcheri-subobject-bounds -ast-dump -fcolor-diagnostics
-// RUN: %cheri128_purecap_cc1 -cheri-bounds=subobject-safe -O2 -std=c++17 -emit-llvm %s -o /dev/null -Rcheri-subobject-bounds -verify -mllvm -debug-only=cheri-bounds
+// RUNNOT: %cheri128_purecap_cc1 -cheri-bounds=subobject-safe -O2 -std=c++17 -emit-llvm %s -o - -Rcheri-subobject-bounds -ast-dump -fcolor-diagnostics
+// RUN: %cheri128_purecap_cc1 -cheri-bounds=subobject-safe -O2 -std=c++17 -emit-llvm %s -o /dev/null -Rcheri-subobject-bounds -verify
 
 // A reduced version of the original test case: pointer_traits<char*>::pointer_to(std::string::__data[0])
 
