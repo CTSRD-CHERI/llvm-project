@@ -265,8 +265,8 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     if (emitPseudoExpansionLowering(*OutStreamer, &*I))
       continue;
 
-    // FIXME: not sure this is correct
-    if (I->getOpcode() == Mips::BUNDLE)
+    // Skip the BUNDLE pseudo instruction and lower the contents
+    if (I->isBundle())
       continue;
 
     if (I->getOpcode() == Mips::PseudoReturn ||
