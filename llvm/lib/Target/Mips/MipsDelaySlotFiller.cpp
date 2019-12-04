@@ -404,7 +404,7 @@ void RegDefsUses::setCallerSaved(const MachineInstr &MI) {
 
 void RegDefsUses::setUnallocatableRegs(const MachineFunction &MF) {
   BitVector AllocSet = TRI.getAllocatableSet(MF);
-  // If we're not a CHERI target, then the C0 register is just a convenient
+  // If we're not a CHERI target, then the $DDC register is just a convenient
   // fiction and shouldn't impede optimisation.
   if (!MF.getSubtarget<MipsSubtarget>().isCheri())
     AllocSet[Mips::DDC] = true;
