@@ -981,7 +981,7 @@ void CodeGenFunction::GenerateObjCGetter(ObjCImplementationDecl *IMP,
 
   generateObjCGetterBody(IMP, PID, OMD, AtomicHelperFn);
 
-  FinishFunction();
+  FinishFunction(OMD->getEndLoc());
 }
 
 static bool hasTrivialGetExpr(const ObjCPropertyImplDecl *propImpl) {
@@ -1519,7 +1519,7 @@ void CodeGenFunction::GenerateObjCSetter(ObjCImplementationDecl *IMP,
 
   generateObjCSetterBody(IMP, PID, AtomicHelperFn);
 
-  FinishFunction();
+  FinishFunction(OMD->getEndLoc());
 }
 
 namespace {
