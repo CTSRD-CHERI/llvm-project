@@ -1604,6 +1604,9 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::MemoryAddress:
     OS << "memory_address";
     break;
+  case attr::AcquireHandle:
+    OS << "acquire_handle";
+    break;
   }
   OS << "))";
 }
