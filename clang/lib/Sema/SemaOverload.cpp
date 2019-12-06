@@ -5267,7 +5267,7 @@ TryObjectArgumentInitialization(Sema &S, SourceLocation Loc, QualType FromType,
     return ICS;
   }
 
-  if (FromTypeCanon.getQualifiers().hasAddressSpace()) {
+  if (FromTypeCanon.hasAddressSpace()) {
     Qualifiers QualsImplicitParamType = ImplicitParamType.getQualifiers();
     Qualifiers QualsFromType = FromTypeCanon.getQualifiers();
     if (!QualsImplicitParamType.isAddressSpaceSupersetOf(QualsFromType)) {
