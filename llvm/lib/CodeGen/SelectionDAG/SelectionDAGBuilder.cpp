@@ -6988,11 +6988,23 @@ void SelectionDAGBuilder::visitConstrainedFPIntrinsic(
 #include "llvm/IR/ConstrainedOps.def"
   }
 
-  // FIXME: Is AS 0 correct here?  I have no idea why floating point rounding
-  // takes a null pointer argument.
-  if (Opcode == ISD::STRICT_FP_ROUND)
+  // A few strict DAG nodes carry additional operands that are not
+  // set up by the default code above.
+  switch (Opcode) {
+  default: break;
+  case ISD::STRICT_FP_ROUND:
+    // FIXME: Is AS 0 correct here?  I have no idea why floating point rounding
+    // takes a null pointer argument.
     Opers.push_back(DAG.getTargetConstant(
         0, sdl, TLI.getPointerTy(DAG.getDataLayout(), 0)));
+    break;
+  case ISD::STRICT_FSETCC:
+  case ISD::STRICT_FSETCCS: {
+    auto *FPCmp = dyn_cast<ConstrainedFPCmpIntrinsic>(&FPI);
+    Opers.push_back(DAG.getCondCode(getFCmpCondCode(FPCmp->getPredicate())));
+    break;
+  }
+  }
 
   SDVTList VTs = DAG.getVTList(ValueVTs);
   SDValue Result = DAG.getNode(Opcode, sdl, VTs, Opers);
