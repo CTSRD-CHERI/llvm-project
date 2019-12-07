@@ -588,10 +588,10 @@ multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, P
   StoreViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
 
 multiclass StoreViaCap0<Instruction Op, RegisterOperand RC, PatFrag storeType> {
-  def : Pat<(storeType RC:$rd, CheriOpnd0IsDDC:$cb),
-            (Op RC:$rd, ZERO_64, (i64 0), CheriOpnd0IsDDC:$cb)>;
-  def : Pat<(storeType RC:$rd, (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt)),
-            (Op RC:$rd, GPR64Opnd:$rt, (i64 0), CheriOpnd0IsDDC:$cb)>;
+  def : Pat<(storeType RC:$rs, CheriOpnd0IsDDC:$cb),
+            (Op RC:$rs, ZERO_64, (i64 0), CheriOpnd0IsDDC:$cb)>;
+  def : Pat<(storeType RC:$rs, (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt)),
+            (Op RC:$rs, GPR64Opnd:$rt, (i64 0), CheriOpnd0IsDDC:$cb)>;
 }
 
 let isCodeGenOnly = 1 in {
