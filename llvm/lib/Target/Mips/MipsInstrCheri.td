@@ -582,7 +582,7 @@ multiclass StoreViaCapScaled<bits<2> t, bit e, string instr_asm, RegisterOperand
                              (outs),
                              (ins RC:$rs, GPR64Opnd:$rt, simm:$offset, CheriOpnd0IsDDC:$cb),
                              !strconcat(instr_asm, "\t$rs, ${rt}, ${offset}(${cb})"),
-                           [(storeType (CapRegType (ptradd CheriOpnd0IsDDC:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset)))), RC:$rs)]>;
+                           [(storeType RC:$rs, (CapRegType (ptradd CheriOpnd0IsDDC:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset)))))]>;
 }
 multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
   StoreViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
@@ -679,12 +679,12 @@ def CLWC1 : CheriPseudo<(outs FGR32Opnd: $rd),
 def CSDC1 : CheriPseudo<(outs),
   (ins FGR64Opnd:$rs, GPR64Opnd:$rt, simm8s3:$offset, CheriOpnd0IsDDC:$cb),
   "csdc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset)), FGR64Opnd: $rs)]>;
+  [(store FGR64Opnd:$rs, (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset)))]>;
 
 def CSWC1 : CheriPseudo<(outs),
   (ins FGR32Opnd:$rs, GPR64Opnd:$rt, simm8s2:$offset, CheriOpnd0IsDDC:$cb),
   "cswc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset)), FGR32Opnd: $rs)]>;
+  [(store FGR32Opnd:$rs, (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset)))]>;
 
 defm : LoadViaCap0<CLWC1, load>;
 defm : LoadViaCap0<CLDC1, load>;
