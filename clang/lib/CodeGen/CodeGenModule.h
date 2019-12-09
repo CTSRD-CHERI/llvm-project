@@ -1171,7 +1171,7 @@ public:
 
   /// Parses the target attributes passed in, and returns only the ones that are
   /// valid feature names.
-  TargetAttr::ParsedTargetAttr filterFunctionTargetAttrs(const TargetAttr *TD);
+  ParsedTargetAttr filterFunctionTargetAttrs(const TargetAttr *TD);
 
   // Fills in the supplied string map with the set of target features for the
   // passed in function.
