@@ -477,6 +477,10 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       NumIterations++;
       assert(NumIterations < 1000 && "Infinite loop in CheriAddrModeFolder?");
     }
+    if (modified) {
+      // This pass is extremely fragile -> verify if we made any changes
+      MF.verify();
+    }
     return modified;
   }
 };
