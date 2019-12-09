@@ -131,7 +131,7 @@ int alignment_wider_than_source(int a, int b) {
 
 _Bool constant_is_aligned() {
   // Check that this expression gets folded even at -O0:
-  // COMMON-LABEL: @opt_is_aligned3(
+  // COMMON-LABEL: @constant_is_aligned(
   // CHECK: ret i1 true
   return __builtin_is_aligned(1024, 512);
 }
