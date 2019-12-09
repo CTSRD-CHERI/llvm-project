@@ -5,6 +5,7 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "Mips.h"
@@ -18,6 +19,7 @@ using namespace llvm;
 
 static cl::opt<bool> DisableAddressingModeFolder(
     "disable-cheri-addressing-mode-folder", cl::init(false),
+    cl::ZeroOrMore,
     cl::desc("Allow redundant capability manipulations"), cl::Hidden);
 
 namespace {
@@ -39,6 +41,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     AU.setPreservesCFG();
     AU.addRequired<MachineLoopInfo>();
     AU.addRequired<MachineDominatorTree>();
+    AU.addRequired<MachinePostDominatorTree>();
     AU.addPreserved<MachineLoopInfo>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
@@ -158,7 +161,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     llvm::SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> DDCOps;
     std::set<MachineInstr *> GetPCCs;
     bool modified = false;
-    for (auto &MBB : MF)
+    auto& MPDT = getAnalysis<MachinePostDominatorTree>();
+
+    for (auto &MBB : MF) {
       // Iterate backwards to update the last use of the CIncOffsets first
       // This prevents various machine verifier issues
       for (auto I = MBB.rbegin(), IE = MBB.rend(); I != IE; ++I) {
@@ -283,13 +288,16 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               assert(ImmInput->getOperand(1).isReg() || ImmInput->getOperand(1).isFI());
               if (ImmInput->getOperand(1).isReg() && (MemopRegOff == Mips::ZERO_64 || MemopRegOff == Mips::ZERO)) {
                 auto IncRegOff = ImmInput->getOperand(2).getReg();
-                MI.getOperand(1).setReg(IncRegOff);
-                if (std::distance(RI.use_begin(IncRegOff), RI.use_end()) > 2) {
-                  // Don't kill the register if there are other uses
-                  MI.getOperand(1).setIsKill(false);
-                } else {
-                  MI.getOperand(1).setIsKill(true);
+                MachineInstr *OffsetDef = RI.getUniqueVRegDef(IncRegOff);
+                bool KillGPROpnd = false;
+                if (RI.hasOneUse(IncRegOff) && RI.hasOneUse(ImmInput->getOperand(1).getReg())) {
+                  // If there is only one use of both the sequence we can kill the register
+                  // However, we should only do this if it is in the same basic block or is guaranteed to be defined:
+                  if (MPDT.dominates(OffsetDef->getParent(), MI.getParent()))
+                    KillGPROpnd = true;
                 }
+                MI.getOperand(1).setReg(IncRegOff);
+                MI.getOperand(1).setIsKill(KillGPROpnd);
                 assert(IncOffset->getOperand(1).getReg() == ImmInput->getOperand(0).getReg());
                 IncOffset->getOperand(1).setReg(ImmInput->getOperand(1).getReg());
                 if (std::distance(RI.use_begin(IncOffset->getOperand(1).getReg()), RI.use_end()) > 2) {
@@ -407,7 +415,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         IncOffsets.insert(IncOffset);
         modified = true;
       }
-
+    }
     assert((!UseCapTable || DDCOps.empty()) &&
            "This optimization is sometimes wrong -> should "
            "skip (at least for captable)!");
@@ -429,8 +437,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           Offset = MO;
           BaseOperand = &AddInst->getOperand(1);
         }
-      } else
+      } else {
         AddInst = nullptr;
+      }
       MachineBasicBlock *InsertBlock = I.first->getParent();
       auto FirstOperand = I.first->getOperand(0);
       Register FirstReg = FirstOperand.getReg();
@@ -478,6 +487,7 @@ INITIALIZE_PASS_BEGIN(CheriAddressingModeFolder, DEBUG_TYPE,
                     "CHERI addressing mode folder", false, false)
 INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
 INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
+INITIALIZE_PASS_DEPENDENCY(MachinePostDominatorTree)
 INITIALIZE_PASS_END(CheriAddressingModeFolder, DEBUG_TYPE,
                     "CHERI addressing mode folder", false, false)
 
