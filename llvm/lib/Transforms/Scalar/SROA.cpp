@@ -1811,24 +1811,20 @@ static Value *getAdjustedPtr(IRBuilderTy &IRB, const DataLayout &DL, Value *Ptr,
 }
 
 /// Compute the adjusted alignment for a load or store from an offset.
-static unsigned getAdjustedAlignment(Instruction *I, uint64_t Offset,
-                                     const DataLayout &DL) {
-  unsigned Alignment = 0;
+static Align getAdjustedAlignment(Instruction *I, uint64_t Offset,
+                                  const DataLayout &DL) {
+  MaybeAlign Alignment;
   Type *Ty;
   if (auto *LI = dyn_cast<LoadInst>(I)) {
-    Alignment = LI->getAlignment();
+    Alignment = MaybeAlign(LI->getAlignment());
     Ty = LI->getType();
   } else if (auto *SI = dyn_cast<StoreInst>(I)) {
-    Alignment = SI->getAlignment();
+    Alignment = MaybeAlign(SI->getAlignment());
     Ty = SI->getValueOperand()->getType();
   } else {
     llvm_unreachable("Only loads and stores are allowed!");
   }
-
-  if (!Alignment)
-    Alignment = DL.getABITypeAlignment(Ty);
-
-  return MinAlign(Alignment, Offset);
+  return commonAlignment(DL.getValueOrABITypeAlignment(Alignment, Ty), Offset);
 }
 
 /// Test whether we can convert a value from the old to the new type.
@@ -3440,7 +3436,7 @@ private:
     Type *BaseTy;
 
     /// Known alignment of the base pointer.
-    unsigned BaseAlign;
+    Align BaseAlign;
 
     /// To calculate offset of each component so we can correctly deduce
     /// alignments.
@@ -3449,7 +3445,7 @@ private:
     /// Initialize the splitter with an insertion point, Ptr and start with a
     /// single zero GEP index.
     OpSplitter(Instruction *InsertionPoint, Value *Ptr, Type *BaseTy,
-               unsigned BaseAlign, const DataLayout &DL)
+               Align BaseAlign, const DataLayout &DL)
         : IRB(InsertionPoint), GEPIndices(1, IRB.getInt32(0)), Ptr(Ptr),
           BaseTy(BaseTy), BaseAlign(BaseAlign), DL(DL) {}
 
@@ -3471,7 +3467,7 @@ private:
       if (Ty->isSingleValueType()) {
         unsigned Offset = DL.getIndexedOffsetInType(BaseTy, GEPIndices);
         return static_cast<Derived *>(this)->emitFunc(
-            Ty, Agg, MinAlign(BaseAlign, Offset), Name);
+            Ty, Agg, commonAlignment(BaseAlign, Offset), Name);
       }
 
       if (ArrayType *ATy = dyn_cast<ArrayType>(Ty)) {
@@ -3512,18 +3508,20 @@ private:
     AAMDNodes AATags;
 
     LoadOpSplitter(Instruction *InsertionPoint, Value *Ptr, Type *BaseTy,
-                   AAMDNodes AATags, unsigned BaseAlign, const DataLayout &DL)
+                   AAMDNodes AATags, Align BaseAlign, const DataLayout &DL)
         : OpSplitter<LoadOpSplitter>(InsertionPoint, Ptr, BaseTy, BaseAlign,
-                                     DL), AATags(AATags) {}
+                                     DL),
+          AATags(AATags) {}
 
     /// Emit a leaf load of a single value. This is called at the leaves of the
     /// recursive emission to actually load values.
-    void emitFunc(Type *Ty, Value *&Agg, unsigned Align, const Twine &Name) {
+    void emitFunc(Type *Ty, Value *&Agg, Align Alignment, const Twine &Name) {
       assert(Ty->isSingleValueType());
       // Load the single value and insert it using the indices.
       Value *GEP =
           IRB.CreateInBoundsGEP(BaseTy, Ptr, GEPIndices, Name + ".gep");
-      LoadInst *Load = IRB.CreateAlignedLoad(Ty, GEP, Align, Name + ".load");
+      LoadInst *Load =
+          IRB.CreateAlignedLoad(Ty, GEP, Alignment.value(), Name + ".load");
       if (AATags)
         Load->setAAMetadata(AATags);
       Agg = IRB.CreateInsertValue(Agg, Load, Indices, Name + ".insert");
@@ -3551,14 +3549,14 @@ private:
 
   struct StoreOpSplitter : public OpSplitter<StoreOpSplitter> {
     StoreOpSplitter(Instruction *InsertionPoint, Value *Ptr, Type *BaseTy,
-                    AAMDNodes AATags, unsigned BaseAlign, const DataLayout &DL)
+                    AAMDNodes AATags, Align BaseAlign, const DataLayout &DL)
         : OpSplitter<StoreOpSplitter>(InsertionPoint, Ptr, BaseTy, BaseAlign,
                                       DL),
           AATags(AATags) {}
     AAMDNodes AATags;
     /// Emit a leaf store of a single value. This is called at the leaves of the
     /// recursive emission to actually produce stores.
-    void emitFunc(Type *Ty, Value *&Agg, unsigned Align, const Twine &Name) {
+    void emitFunc(Type *Ty, Value *&Agg, Align Alignment, const Twine &Name) {
       assert(Ty->isSingleValueType());
       // Extract the single value and store it using the indices.
       //
@@ -3569,7 +3567,7 @@ private:
       Value *InBoundsGEP =
           IRB.CreateInBoundsGEP(BaseTy, Ptr, GEPIndices, Name + ".gep");
       StoreInst *Store =
-          IRB.CreateAlignedStore(ExtractValue, InBoundsGEP, Align);
+          IRB.CreateAlignedStore(ExtractValue, InBoundsGEP, Alignment.value());
       if (AATags)
         Store->setAAMetadata(AATags);
       LLVM_DEBUG(dbgs() << "          to: " << *Store << "\n");
@@ -4026,8 +4024,8 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
           getAdjustedPtr(IRB, DL, BasePtr,
                          APInt(DL.getIndexSizeInBits(AS), PartOffset),
                          PartPtrTy, BasePtr->getName() + "."),
-          getAdjustedAlignment(LI, PartOffset, DL), /*IsVolatile*/ false,
-          LI->getName());
+          getAdjustedAlignment(LI, PartOffset, DL).value(),
+          /*IsVolatile*/ false, LI->getName());
       PLoad->copyMetadata(*LI, {LLVMContext::MD_mem_parallel_loop_access,
                                 LLVMContext::MD_access_group});
 
@@ -4084,7 +4082,8 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
             getAdjustedPtr(IRB, DL, StoreBasePtr,
                            APInt(DL.getIndexSizeInBits(AS), PartOffset),
                            PartPtrTy, StoreBasePtr->getName() + "."),
-            getAdjustedAlignment(SI, PartOffset, DL), /*IsVolatile*/ false);
+            getAdjustedAlignment(SI, PartOffset, DL).value(),
+            /*IsVolatile*/ false);
         PStore->copyMetadata(*LI, {LLVMContext::MD_mem_parallel_loop_access,
                                    LLVMContext::MD_access_group});
         LLVM_DEBUG(dbgs() << "      +" << PartOffset << ":" << *PStore << "\n");
@@ -4168,8 +4167,8 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
             getAdjustedPtr(IRB, DL, LoadBasePtr,
                            APInt(DL.getIndexSizeInBits(AS), PartOffset),
                            LoadPartPtrTy, LoadBasePtr->getName() + "."),
-            getAdjustedAlignment(LI, PartOffset, DL), /*IsVolatile*/ false,
-            LI->getName());
+            getAdjustedAlignment(LI, PartOffset, DL).value(),
+            /*IsVolatile*/ false, LI->getName());
       }
 
       // And store this partition.
@@ -4180,7 +4179,8 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
           getAdjustedPtr(IRB, DL, StoreBasePtr,
                          APInt(DL.getIndexSizeInBits(AS), PartOffset),
                          StorePartPtrTy, StoreBasePtr->getName() + "."),
-          getAdjustedAlignment(SI, PartOffset, DL), /*IsVolatile*/ false);
+          getAdjustedAlignment(SI, PartOffset, DL).value(),
+          /*IsVolatile*/ false);
 
       // Now build a new slice for the alloca.
       NewSlices.push_back(
