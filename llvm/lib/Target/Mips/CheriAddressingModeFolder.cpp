@@ -256,12 +256,28 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           LLVM_DEBUG(dbgs() << "Trying to fold input CIncOffsetImm: "; IncOffset->dump(););
           if (IsValidOffset(Op, offset + offsetImm)) {
             if (IncOffset->getOperand(1).isReg()) {
-              IncOffset->getOperand(1).setIsKill(false);
               auto IncOffsetArg = IncOffset->getOperand(1).getReg();
+              auto OldBaseReg = IncOffset->getOperand(0).getReg();
+              auto BaseCapDef = RI.getUniqueVRegDef(IncOffsetArg);
+              LLVM_DEBUG(dbgs() << "IncOffset:"; IncOffset->dump(););
+              LLVM_DEBUG(dbgs() << "MI:"; MI.dump(););
+              LLVM_DEBUG(dbgs() << "BaseCapDef:"; BaseCapDef->dump(););
+              // Only kill cap reg if they are in the same basic block
+              // and the only use is the incoffset for this load/store (and that
+              // incoffset only has one use)
+              bool KillCapOpnd = false;
+              if (RI.hasOneUse(IncOffsetArg) && RI.hasOneUse(OldBaseReg) &&
+                  MPDT.dominates(BaseCapDef->getParent(), MI.getParent()))
+                KillCapOpnd = true;
               MI.getOperand(3).setReg(IncOffsetArg);
-              if (std::distance(RI.use_begin(IncOffsetArg), RI.use_end()) > 2) {
-                // Don't kill the register if there are other uses
-                MI.getOperand(3).setIsKill(false);
+              // IncOffset->getOperand(1).setIsKill(false);
+              MI.getOperand(3).setIsKill(KillCapOpnd);
+              for (auto& Earlier : RI.use_operands(IncOffsetArg)) {
+                if (Earlier.getParent() == &MI)
+                  break;
+                // In case the register was killed earlier, remove the flag
+                // since we are now using the register in another instruction
+                Earlier.setIsKill(false);
               }
             } else {
               // If it is a frame index we can just replace the register operand with a frame index operand
