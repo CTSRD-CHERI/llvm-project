@@ -632,15 +632,18 @@ bool MipsDelaySlotFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
       if (MipsCompactBranchPolicy.getValue() != CB_Always ||
            !TII->getEquivalentCompactForm(I)) {
         if (searchBackward(MBB, *I)) {
-          LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot using forward search.\n");
+          LLVM_DEBUG(dbgs() << DEBUG_TYPE ": found instruction for delay slot"
+                                          " in backwards search.\n");
           Filled = true;
         } else if (I->isTerminator()) {
           if (searchSuccBBs(MBB, I)) {
             Filled = true;
-            LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot using successor BB search.\n");
+            LLVM_DEBUG(dbgs() << DEBUG_TYPE ": found instruction for delay slot"
+                                            " in successor BB search.\n");
           }
         } else if (searchForward(MBB, I)) {
-          LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot using forward search.\n");
+          LLVM_DEBUG(dbgs() << DEBUG_TYPE ": found instruction for delay slot"
+                                          " in forwards search.\n");
           Filled = true;
         }
       }
@@ -685,7 +688,7 @@ bool MipsDelaySlotFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
     }
 
     // Bundle the NOP to the instruction with the delay slot.
-    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": could not fill delay slot for";
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": could not fill delay slot for ";
                I->dump());
     BuildMI(MBB, std::next(I), I->getDebugLoc(), TII->get(Mips::NOP));
     MIBundleBuilder(MBB, I, std::next(I, 2));
@@ -704,11 +707,10 @@ bool MipsDelaySlotFiller::searchRange(MachineBasicBlock &MBB, IterTy Begin,
   for (IterTy I = Begin; I != End;) {
     IterTy CurrI = I;
     ++I;
-    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": checking instruction for delay slot: ";
-               CurrI->dump());
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE ": checking instruction: "; CurrI->dump());
     // skip debug value
     if (CurrI->isDebugInstr()) {
-      LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": ignoring debug instruction for delay slot: ";
+      LLVM_DEBUG(dbgs() << DEBUG_TYPE ": ignoring debug instruction: ";
                  CurrI->dump());
       continue;
     }
@@ -720,7 +722,7 @@ bool MipsDelaySlotFiller::searchRange(MachineBasicBlock &MBB, IterTy Begin,
     }
 
     if (terminateSearch(*CurrI)) {
-      LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": should terminate search: ";
+      LLVM_DEBUG(dbgs() << DEBUG_TYPE ": should terminate search: ";
                  CurrI->dump());
       break;
     }
@@ -769,7 +771,7 @@ bool MipsDelaySlotFiller::searchRange(MachineBasicBlock &MBB, IterTy Begin,
        continue;
 
     Filler = CurrI;
-    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot:";
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE ": found instruction for delay slot: ";
                CurrI->dump());
 
     return true;
@@ -793,7 +795,8 @@ bool MipsDelaySlotFiller::searchBackward(MachineBasicBlock &MBB,
   MachineBasicBlock::iterator SlotI = Slot;
   if (!searchRange(MBB, ++SlotI.getReverse(), MBB.rend(), RegDU, MemDU, Slot,
                    Filler)) {
-    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": could not find instruction for delay slot using backwards search.\n");
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE ": could not find instruction for delay "
+                                    "slot using backwards search.\n");
     return false;
   }
 
@@ -816,7 +819,8 @@ bool MipsDelaySlotFiller::searchForward(MachineBasicBlock &MBB,
   RegDU.setCallerSaved(*Slot);
 
   if (!searchRange(MBB, std::next(Slot), MBB.end(), RegDU, NM, Slot, Filler)) {
-    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": could not find instruction for delay slot using forwards search.\n");
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE ": could not find instruction for delay "
+                                    "slot using forwards search.\n");
     return false;
   }
 
