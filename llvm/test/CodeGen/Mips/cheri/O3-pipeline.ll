@@ -96,6 +96,7 @@
 ; CHECK-NEXT:      Mips MipsOptimizePICCall
 ; CHERI-NEXT:      MachineDominator Tree Construction
 ; CHERI-NEXT:      Machine Natural Loop Construction
+; CHERI-NEXT:      MachinePostDominator Tree Construction
 ; CHERI-NEXT:      Cheri Addressing Mode Folder
 ; CHERI-NEXT:      Remove dead machine instructions
 ; CHERI-NEXT:      Cheri128 fail hard
