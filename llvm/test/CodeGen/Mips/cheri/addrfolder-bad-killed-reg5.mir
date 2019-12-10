@@ -90,7 +90,7 @@ body:             |
   ; CHECK:   CAPSTORE32 killed $zero, [[DSLL]], 0, killed [[CIncOffsetImm1]] :: (store 4 into %ir.2, addrspace 200)
   ; CHECK:   [[DSLL1:%[0-9]+]]:gpr64 = DSLL killed [[CAPLOAD16_]], 2
   ; CHECK:   [[CIncOffsetImm2:%[0-9]+]]:cherigpr = CIncOffsetImm [[LOADCAP_BigImm1]], 1
-  ; CHECK:   CAPSTORE32 killed $zero, [[DSLL1]], 0, killed [[CIncOffsetImm2]] :: (store 4 into %ir.2, addrspace 200)
+  ; CHECK:   CAPSTORE32 killed $zero, killed [[DSLL1]], 0, killed [[CIncOffsetImm2]] :: (store 4 into %ir.2, addrspace 200)
   ; CHECK: bb.1.for.cond:
   ; CHECK:   successors: %bb.1(0x80000000)
   ; CHECK:   CAPSTORE32 killed $zero, [[DSLL]], 0, [[CIncOffsetImm]] :: (store 4 into %ir.2, addrspace 200)

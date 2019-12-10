@@ -282,33 +282,56 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             if (ImmInput && ImmInput->getOpcode() == Mips::CIncOffset) {
               LLVM_DEBUG(dbgs()<< "However, the input Reg for CIncOffsetImm is "
                         "CIncOffset. Trying to fold that: "; ImmInput->dump(););
+
               auto MemopRegOff = MI.getOperand(1).getReg();
               // Note: The first operand to CIncOffset could also be a frame Index in which case we
               // cannot fold it.
               assert(ImmInput->getOperand(1).isReg() || ImmInput->getOperand(1).isFI());
               if (ImmInput->getOperand(1).isReg() && (MemopRegOff == Mips::ZERO_64 || MemopRegOff == Mips::ZERO)) {
                 auto IncRegOff = ImmInput->getOperand(2).getReg();
-                MachineInstr *OffsetDef = RI.getUniqueVRegDef(IncRegOff);
+                auto CapReg = ImmInput->getOperand(1).getReg();
+                auto OffsetDef = RI.getUniqueVRegDef(IncRegOff);
+                auto CheriRegDef = RI.getUniqueVRegDef(CapReg);
+                LLVM_DEBUG(dbgs() << "ImmInput:"; ImmInput->dump(););
+                LLVM_DEBUG(dbgs() << "IncOffset:"; IncOffset->dump(););
+                LLVM_DEBUG(dbgs() << "CheriRegDef:"; CheriRegDef->dump(););
+                LLVM_DEBUG(dbgs() << "OffsetDef:"; OffsetDef->dump(););
+                LLVM_DEBUG(dbgs() << "MI:"; MI.dump(););
                 bool KillGPROpnd = false;
-                if (RI.hasOneUse(IncRegOff) && RI.hasOneUse(ImmInput->getOperand(1).getReg())) {
-                  // If there is only one use of both the sequence we can kill the register
-                  // However, we should only do this if it is in the same basic block or is guaranteed to be defined:
-                  if (MPDT.dominates(OffsetDef->getParent(), MI.getParent()))
-                    KillGPROpnd = true;
-                }
+                // Only kill GPR reg if they are in the same basic block
+                // and the only use is the incoffset for this load/store (and that
+                // incoffset only has one use)
+                auto ImmInputReg = ImmInput->getOperand(0).getReg();
+                if (RI.hasOneUse(IncRegOff) && RI.hasOneUse(ImmInputReg) &&
+                    MPDT.dominates(OffsetDef->getParent(), MI.getParent()))
+                  KillGPROpnd = true;
+                // Only kill IncOffset source if they are in the same basic
+                // block and the only use is the incoffset for this load/store
+                // (and that incoffset only has one use)
+                bool KillIncOpnd = false;
+                if (RI.hasOneUse(CapReg) && RI.hasOneUse(ImmInputReg) &&
+                    MPDT.dominates(CheriRegDef->getParent(), IncOffset->getParent()))
+                  KillIncOpnd = true;
+                LLVM_DEBUG(dbgs() << "KillGPROpnd: " << KillGPROpnd
+                                  << " KillIncOpnd: " << KillIncOpnd << "\n");
                 MI.getOperand(1).setReg(IncRegOff);
-                // In case the register was killed by the CIncOffset, remove
-                // the flag since we are now using the register in another
-                // instruction
-                ImmInput->getOperand(2).setIsKill(false);
                 MI.getOperand(1).setIsKill(KillGPROpnd);
+                for (auto& Earlier : RI.use_operands(IncRegOff)) {
+                  if (Earlier.getParent() == &MI)
+                    break;
+                  // In case the register was killed earlier, remove the flag
+                  // since we are now using the register in another instruction
+                  Earlier.setIsKill(false);
+                }
                 assert(IncOffset->getOperand(1).getReg() == ImmInput->getOperand(0).getReg());
-                IncOffset->getOperand(1).setReg(ImmInput->getOperand(1).getReg());
-                if (std::distance(RI.use_begin(IncOffset->getOperand(1).getReg()), RI.use_end()) > 2) {
-                  // Don't kill the IncOffsetImm input register if there are other uses
-                  IncOffset->getOperand(1).setIsKill(false);
-                } else {
-                  IncOffset->getOperand(1).setIsKill(true);
+                IncOffset->getOperand(1).setReg(CapReg);
+                IncOffset->getOperand(1).setIsKill(KillIncOpnd);
+                for (auto& Earlier : RI.use_operands(CapReg)) {
+                  if (Earlier.getParent() == IncOffset)
+                    break;
+                  // In case the register was killed earlier, remove the flag
+                  // since we are now using the register in another instruction
+                  Earlier.setIsKill(false);
                 }
                 IncOffsets.insert(ImmInput);
                 modified = true;
