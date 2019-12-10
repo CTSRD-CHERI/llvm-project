@@ -18,6 +18,7 @@ from pathlib import Path
 try:
     from colors import blue, red, green, bold
 except ImportError:
+    print("Install the ansicolors package for coloured output.")
     # noinspection PyUnusedLocal
     def blue(s, bg=None, style=None):
         return s
@@ -1053,11 +1054,13 @@ class Reducer(object):
         command[command.index("-o") + 1] = str(irfile.absolute())
         if "-discard-value-names" in command:
             command.remove("-discard-value-names")
-        command.append("-emit-llvm")
+        command = self.list_with_flag_at_end(command, "-emit-llvm")
+        command = self.list_with_flag_at_end(command, "-disable-O0-optnone")
+        command = self.list_with_flag_at_end(command, "-O0")
         print("Generating IR file", irfile)
         try:
-            verbose_print(command + ["-O0", str(infile)])
-            subprocess.check_call(command + ["-O0", str(infile)])
+            verbose_print(command + [str(infile)])
+            subprocess.check_call(command + [str(infile)])
         except subprocess.CalledProcessError:
             print("Failed to generate IR from", infile, "will have to reduce using creduce")
             return self._simplify_frontend_crash_cmd(new_command, infile)
