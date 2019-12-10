@@ -471,10 +471,6 @@ public:
   virtual void genCode(raw_ostream &OS, CodeGenParamAllocator &) const = 0;
   virtual bool hasIntegerConstantValue() const { return false; }
   virtual uint32_t integerConstantValue() const { return 0; }
-  virtual bool hasIntegerValue() const { return false; }
-  virtual std::string getIntegerValue(const std::string &) {
-    llvm_unreachable("non-working Result::getIntegerValue called");
-  }
   virtual std::string typeName() const { return "Value *"; }
 
   // Mostly, when a code-generation operation has a dependency on prior
@@ -549,9 +545,8 @@ class BuiltinArgResult : public Result {
 public:
   unsigned ArgNum;
   bool AddressType;
-  bool Immediate;
-  BuiltinArgResult(unsigned ArgNum, bool AddressType, bool Immediate)
-      : ArgNum(ArgNum), AddressType(AddressType), Immediate(Immediate) {}
+  BuiltinArgResult(unsigned ArgNum, bool AddressType)
+      : ArgNum(ArgNum), AddressType(AddressType) {}
   void genCode(raw_ostream &OS, CodeGenParamAllocator &) const override {
     OS << (AddressType ? "EmitPointerWithAlignment" : "EmitScalarExpr")
        << "(E->getArg(" << ArgNum << "))";
@@ -564,11 +559,6 @@ public:
     if (AddressType)
       return "(" + varname() + ".getPointer())";
     return Result::asValue();
-  }
-  bool hasIntegerValue() const override { return Immediate; }
-  std::string getIntegerValue(const std::string &IntType) override {
-    return "GetIntegerConstantValue<" + IntType + ">(E->getArg(" +
-           utostr(ArgNum) + "), getContext())";
   }
 };
 
@@ -644,34 +634,27 @@ public:
   StringRef CallPrefix;
   std::vector<Ptr> Args;
   std::set<unsigned> AddressArgs;
-  std::map<unsigned, std::string> IntegerArgs;
+  std::map<unsigned, std::string> IntConstantArgs;
   IRBuilderResult(StringRef CallPrefix, std::vector<Ptr> Args,
                   std::set<unsigned> AddressArgs,
-                  std::map<unsigned, std::string> IntegerArgs)
-      : CallPrefix(CallPrefix), Args(Args), AddressArgs(AddressArgs),
-        IntegerArgs(IntegerArgs) {}
+                  std::map<unsigned, std::string> IntConstantArgs)
+    : CallPrefix(CallPrefix), Args(Args), AddressArgs(AddressArgs),
+        IntConstantArgs(IntConstantArgs) {}
   void genCode(raw_ostream &OS,
                CodeGenParamAllocator &ParamAlloc) const override {
     OS << CallPrefix;
     const char *Sep = "";
     for (unsigned i = 0, e = Args.size(); i < e; ++i) {
       Ptr Arg = Args[i];
-      auto it = IntegerArgs.find(i);
-
-      OS << Sep;
-      Sep = ", ";
-
-      if (it != IntegerArgs.end()) {
-        if (Arg->hasIntegerConstantValue())
-          OS << "static_cast<" << it->second << ">("
-             << ParamAlloc.allocParam(it->second,
-                                      utostr(Arg->integerConstantValue()))
-             << ")";
-        else if (Arg->hasIntegerValue())
-          OS << ParamAlloc.allocParam(it->second,
-                                      Arg->getIntegerValue(it->second));
+      auto it = IntConstantArgs.find(i);
+      if (it != IntConstantArgs.end()) {
+        assert(Arg->hasIntegerConstantValue());
+        OS << Sep << "static_cast<" << it->second << ">("
+           << ParamAlloc.allocParam("unsigned",
+                                    utostr(Arg->integerConstantValue()))
+           << ")";
       } else {
-        OS << Arg->varname();
+        OS << Sep << Arg->varname();
       }
       Sep = ", ";
     }
@@ -680,8 +663,7 @@ public:
   void morePrerequisites(std::vector<Ptr> &output) const override {
     for (unsigned i = 0, e = Args.size(); i < e; ++i) {
       Ptr Arg = Args[i];
-      if (IntegerArgs.find(i) != IntegerArgs.end() &&
-          Arg->hasIntegerConstantValue())
+      if (IntConstantArgs.find(i) != IntConstantArgs.end())
         continue;
       output.push_back(Arg);
     }
@@ -1000,8 +982,8 @@ public:
                             const Type *Param);
   Result::Ptr getCodeForDagArg(DagInit *D, unsigned ArgNum,
                                const Result::Scope &Scope, const Type *Param);
-  Result::Ptr getCodeForArg(unsigned ArgNum, const Type *ArgType, bool Promote,
-                            bool Immediate);
+  Result::Ptr getCodeForArg(unsigned ArgNum, const Type *ArgType,
+                            bool Promote);
 
   // Constructor and top-level functions.
 
@@ -1174,17 +1156,17 @@ Result::Ptr MveEmitter::getCodeForDag(DagInit *D, const Result::Scope &Scope,
       Args.push_back(getCodeForDagArg(D, i, Scope, Param));
     if (Op->isSubClassOf("IRBuilderBase")) {
       std::set<unsigned> AddressArgs;
-      std::map<unsigned, std::string> IntegerArgs;
+      std::map<unsigned, std::string> IntConstantArgs;
       for (Record *sp : Op->getValueAsListOfDefs("special_params")) {
         unsigned Index = sp->getValueAsInt("index");
         if (sp->isSubClassOf("IRBuilderAddrParam")) {
           AddressArgs.insert(Index);
         } else if (sp->isSubClassOf("IRBuilderIntParam")) {
-          IntegerArgs[Index] = sp->getValueAsString("type");
+          IntConstantArgs[Index] = sp->getValueAsString("type");
         }
       }
-      return std::make_shared<IRBuilderResult>(Op->getValueAsString("prefix"),
-                                               Args, AddressArgs, IntegerArgs);
+      return std::make_shared<IRBuilderResult>(
+          Op->getValueAsString("prefix"), Args, AddressArgs, IntConstantArgs);
     } else if (Op->isSubClassOf("IRIntBase")) {
       std::vector<const Type *> ParamTypes;
       for (Record *RParam : Op->getValueAsListOfDefs("params"))
@@ -1234,9 +1216,9 @@ Result::Ptr MveEmitter::getCodeForDagArg(DagInit *D, unsigned ArgNum,
 }
 
 Result::Ptr MveEmitter::getCodeForArg(unsigned ArgNum, const Type *ArgType,
-                                      bool Promote, bool Immediate) {
-  Result::Ptr V = std::make_shared<BuiltinArgResult>(
-      ArgNum, isa<PointerType>(ArgType), Immediate);
+                                      bool Promote) {
+  Result::Ptr V =
+      std::make_shared<BuiltinArgResult>(ArgNum, isa<PointerType>(ArgType));
 
   if (Promote) {
     if (const auto *ST = dyn_cast<ScalarType>(ArgType)) {
@@ -1310,14 +1292,17 @@ ACLEIntrinsic::ACLEIntrinsic(MveEmitter &ME, Record *R, const Type *Param)
     const Type *ArgType = ME.getType(TypeInit, Param);
     ArgTypes.push_back(ArgType);
 
+    // The argument will usually have a name in the arguments dag, which goes
+    // into the variable-name scope that the code gen will refer to.
+    StringRef ArgName = ArgsDag->getArgNameStr(i);
+    if (!ArgName.empty())
+      Scope[ArgName] = ME.getCodeForArg(i, ArgType, Promote);
+
     // If the argument is a subclass of Immediate, record the details about
     // what values it can take, for Sema checking.
-    bool Immediate = false;
     if (auto TypeDI = dyn_cast<DefInit>(TypeInit)) {
       Record *TypeRec = TypeDI->getDef();
       if (TypeRec->isSubClassOf("Immediate")) {
-        Immediate = true;
-
         Record *Bounds = TypeRec->getValueAsDef("bounds");
         ImmediateArg &IA = ImmediateArgs[i];
         if (Bounds->isSubClassOf("IB_ConstRange")) {
@@ -1331,7 +1316,7 @@ ACLEIntrinsic::ACLEIntrinsic(MveEmitter &ME, Record *R, const Type *Param)
           IA.boundsType = ImmediateArg::BoundsType::ExplicitRange;
           IA.i1 = 0;
           IA.i2 = 128 / Param->sizeInBits() - 1;
-        } else if (Bounds->isSubClassOf("IB_EltBit")) {
+        } else if (Bounds->getName() == "IB_EltBit") {
           IA.boundsType = ImmediateArg::BoundsType::ExplicitRange;
           IA.i1 = Bounds->getValueAsInt("base");
           IA.i2 = IA.i1 + Param->sizeInBits() - 1;
@@ -1348,12 +1333,6 @@ ACLEIntrinsic::ACLEIntrinsic(MveEmitter &ME, Record *R, const Type *Param)
         }
       }
     }
-
-    // The argument will usually have a name in the arguments dag, which goes
-    // into the variable-name scope that the code gen will refer to.
-    StringRef ArgName = ArgsDag->getArgNameStr(i);
-    if (!ArgName.empty())
-      Scope[ArgName] = ME.getCodeForArg(i, ArgType, Promote, Immediate);
   }
 
   // Finally, go through the codegen dag and translate it into a Result object
