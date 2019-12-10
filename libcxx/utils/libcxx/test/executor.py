@@ -9,6 +9,8 @@
 from __future__ import print_function
 import platform
 import os
+import posixpath
+import ntpath
 import errno
 import tempfile
 import datetime
@@ -22,6 +24,9 @@ from libcxx.util import executeCommand, ExecuteCommandTimeoutException
 
 class Executor(object):
     is_remote = False
+
+    def __init__(self):
+        self.target_info = None
 
     def run(self, exe_path, cmd, local_cwd, file_deps=None, env=None):
         """Execute a command.
@@ -38,6 +43,20 @@ class Executor(object):
         """
         raise NotImplementedError
 
+    def merge_environments(self, current_env, updated_env):
+        """Merges two execution environments.
+
+        If both environments contain the PATH variables, they are also merged
+        using the proper separator.
+        """
+        result_env = dict(current_env)
+        for k, v in updated_env.items():
+            if k == 'PATH' and self.target_info:
+                self.target_info.add_path(result_env, v)
+            else:
+                result_env[k] = v
+        return result_env
+
 
 class LocalExecutor(Executor):
     def __init__(self):
@@ -48,6 +67,10 @@ class LocalExecutor(Executor):
         cmd = cmd or [exe_path]
         if work_dir == '.':
             work_dir = os.getcwd()
+
+        if env:
+            env = self.merge_environments(os.environ, env)
+
         out, err, rc = executeCommand(cmd, cwd=work_dir, env=env)
         return (cmd, out, err, rc)
 
@@ -148,6 +171,7 @@ class RemoteExecutor(Executor):
     is_remote = True
 
     def __init__(self):
+        super(RemoteExecutor, self).__init__()
         self.local_run = executeCommand
         self.keep_test = False
 
@@ -181,7 +205,12 @@ class RemoteExecutor(Executor):
         target_cwd = None
         try:
             target_cwd = self.remote_temp_dir()
-            target_exe_path = os.path.join(target_cwd, os.path.basename(exe_path))
+            executable_name = 'libcxx_test.exe'
+            if self.target_info.is_windows():
+                target_exe_path = ntpath.join(target_cwd, executable_name)
+            else:
+                target_exe_path = posixpath.join(target_cwd, executable_name)
+
             if cmd:
                 # Replace exe_path with target_exe_path.
                 cmd = [c if c != exe_path else target_exe_path for c in cmd]
@@ -270,22 +299,36 @@ class SSHExecutor(RemoteExecutor):
             print('{}: Copying {} to {}'.format(datetime.datetime.now(), src, dst), file=sys.stderr)
         self.local_run(cmd)
 
+    def _export_command(self, env):
+        if not env:
+            return []
+
+        export_cmd = ['export']
+
+        for k, v in env.items():
+            v = v.replace('\\', '\\\\')
+            if k == 'PATH':
+                # Pick up the existing paths, so we don't lose any commands
+                if self.target_info and self.target_info.is_windows():
+                    export_cmd.append('PATH="%s;%PATH%"' % v)
+                else:
+                    export_cmd.append('PATH="%s:$PATH"' % v)
+            else:
+                export_cmd.append('"%s"="%s"' % (k, v))
+
+        return export_cmd
+
     def _execute_command_remote(self, cmd, remote_work_dir='.', pre_cmd=None, env=None):
         remote = self.user_prefix + self.host
         # Add -tt to force a TTY allocation so that the remote process is killed
         # when SSH exits.
         ssh_cmd = self.ssh_command + ['-tt', '-oBatchMode=yes', remote]
-        # FIXME: doesn't handle spaces... and Py2.7 doesn't have shlex.quote()
-        if env:
-            export_cmd = \
-                ['export'] + [pipes.quote('%s=%s' % (k, v)) for k, v in env.items()]
-        else:
-            export_cmd = []
+        export_cmd = self._export_command(env)
         remote_cmd = ' '.join(map(pipes.quote, cmd))
         if pre_cmd:
             remote_cmd = ' '.join(map(pipes.quote, pre_cmd)) + ' && ' + remote_cmd
         if export_cmd:
-            remote_cmd = ' '.join(map(pipes.quote, export_cmd)) + ' && ' + remote_cmd
+            remote_cmd = ' '.join(export_cmd) + ' && ' + remote_cmd
         if remote_work_dir != '.':
             remote_cmd = 'cd ' + pipes.quote(remote_work_dir) + ' && ' + remote_cmd
         if self.config and self.config.lit_config.debug:

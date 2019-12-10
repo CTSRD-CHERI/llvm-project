@@ -24,6 +24,12 @@ class DefaultTargetInfo(object):
     def platform(self):
         return sys.platform.lower().strip()
 
+    def is_windows(self):
+        return self.platform() == 'win32'
+
+    def is_darwin(self):
+        return self.platform() == 'darwin'
+
     def add_locale_features(self, features):
         self.full_config.lit_config.warning(
             "No locales entry for target_system: %s" % self.platform())
@@ -35,6 +41,16 @@ class DefaultTargetInfo(object):
     def add_sanitizer_features(self, sanitizer_type, features): pass
     def use_lit_shell_default(self): return False
     def default_cxx_abi_library(self): raise NotImplementedError(self.__class__.__name__)
+
+    def add_path(self, dest_env, new_path):
+        if not new_path:
+            return
+        if 'PATH' not in dest_env:
+            dest_env['PATH'] = new_path
+        else:
+            split_char = ';' if self.is_windows() else ':'
+            dest_env['PATH'] = '%s%s%s' % (new_path, split_char,
+                                           dest_env['PATH'])
 
 
 def test_locale(loc):
