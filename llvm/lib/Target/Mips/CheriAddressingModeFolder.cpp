@@ -297,6 +297,10 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
                     KillGPROpnd = true;
                 }
                 MI.getOperand(1).setReg(IncRegOff);
+                // In case the register was killed by the CIncOffset, remove
+                // the flag since we are now using the register in another
+                // instruction
+                ImmInput->getOperand(2).setIsKill(false);
                 MI.getOperand(1).setIsKill(KillGPROpnd);
                 assert(IncOffset->getOperand(1).getReg() == ImmInput->getOperand(0).getReg());
                 IncOffset->getOperand(1).setReg(ImmInput->getOperand(1).getReg());
