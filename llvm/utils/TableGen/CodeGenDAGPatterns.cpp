@@ -3049,8 +3049,7 @@ CodeGenDAGPatterns::CodeGenDAGPatterns(RecordKeeper &R,
   // support for two types of pointer.
   FatPointers = R.getClass("SupportsFatPointers");
 
-  Intrinsics = CodeGenIntrinsicTable(Records, false);
-  TgtIntrinsics = CodeGenIntrinsicTable(Records, true);
+  Intrinsics = CodeGenIntrinsicTable(Records);
   ParseNodeInfo();
   ParseNodeTransforms();
   ParseComplexPatterns();
