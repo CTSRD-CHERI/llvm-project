@@ -52,9 +52,6 @@ enum CastType {
   CT_Functional   ///< Type(expr)
 };
 
-static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                            const Expr *E, QualType DestType);
-
 namespace {
   struct CastOperation {
     CastOperation(Sema &S, QualType destType, ExprResult src)
@@ -105,13 +102,8 @@ namespace {
     /// Complete an apparently-successful cast operation that yields
     /// the given expression.
     ExprResult complete(CastExpr *castExpr) {
-      SourceRange CastRange = OpRange;
-      if (CXXNamedCastExpr* CNC = dyn_cast<CXXNamedCastExpr>(castExpr)) {
-        CastRange = CNC->getAngleBrackets();
-      }
       if (!isa<CXXConstructExpr>(SrcExpr.get())) {
-        CastKind CK = DiagnoseCapabilityToIntCast(Self, CastRange,
-                                                  SrcExpr.get(), DestType);
+        CastKind CK = checkCapabilityToIntCast();
         // Make sure that the types actually match:
         if (CK == CK_CHERICapabilityToPointer && DestType->isReferenceType()) {
           // return ExprError();
@@ -152,6 +144,9 @@ namespace {
 
     // Language specific cast restrictions for address spaces.
     void checkAddressSpaceCast(QualType SrcType, QualType DestType);
+
+    // Warn about not using __cheri_fromcap/__cheri_tocap
+    CastKind checkCapabilityToIntCast();
 
     void checkCastAlign() {
       Self.CheckCastAlign(SrcExpr.get(), DestType, OpRange);
@@ -1951,14 +1946,15 @@ static void DiagnoseCHERIPtr(Sema &Self, Expr *SrcExpr, QualType DestType,
   }
 }
 
-static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                            const Expr *SrcExpr,
-                                            QualType DestType) {
+CastKind CastOperation::checkCapabilityToIntCast() {
+  if (Kind == CK_CHERICapabilityToPointer)
+    return CK_NoOp;  // Already doing a __cheri_fromcap cast, no need to check
+
   if (Self.Context.getLangOpts().getCheriCapConversion() ==
       LangOptions::CapConv_Ignore)
     return CK_NoOp;
 
-  QualType SrcType = SrcExpr->getRealReferenceType(Self.Context);
+  QualType SrcType = SrcExpr.get()->getRealReferenceType(Self.Context);
   if (SrcType->isDependentType() || DestType->isDependentType())
     return CK_NoOp; // can't diagnose this yet
   // If the source is not a capability or a __uintcap_t we can ignore it
@@ -1975,15 +1971,6 @@ static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
     return CK_NoOp;
   }
 
-  // auto C = DestType.getCanonicalType();
-  // llvm::errs() << "Checking if " << DestType.getAsString() << " is a memoryAddressType -- canonical=" << C.getAsString() << "\n";
-  // DestType.dump("is memaddr?");
-  // C.dump("canonical");
-  // llvm::errs() << "Is integral: " << DestType->isIntegralOrEnumerationType() << " C " << C->isIntegralOrEnumerationType() << "\n";
-  
-  // check if it is a valid type for memory addresses such as vaddr_t
-  // FIXME: is there something simpler that I can do?
-  // bool IsMemAddressType = DestType->getDecl()->hasAttr<MemoryAddressAttr>();
   bool IsMemAddressType = DestType->hasAttr(attr::MemoryAddress);
   if (DestType->isPointerType() || DestType->isReferenceType()) {
     Self.Diag(OpRange.getBegin(), diag::warn_capability_pointer_cast)
