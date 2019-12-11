@@ -5442,18 +5442,21 @@ verifyReturnAddressArgumentIsConstant(SDValue Op, SelectionDAG &DAG) const {
 
 char TargetLowering::isNegatibleForFree(SDValue Op, SelectionDAG &DAG,
                                         bool LegalOperations, bool ForCodeSize,
+                                        bool EnableUseCheck,
                                         unsigned Depth) const {
   // fneg is removable even if it has multiple uses.
   if (Op.getOpcode() == ISD::FNEG)
     return 2;
 
-  // Don't allow anything with multiple uses unless we know it is free.
+  // If the caller requires checking uses, don't allow anything with multiple
+  // uses unless we know it is free.
   EVT VT = Op.getValueType();
   const SDNodeFlags Flags = Op->getFlags();
   const TargetOptions &Options = DAG.getTarget().Options;
-  if (!Op.hasOneUse() && !(Op.getOpcode() == ISD::FP_EXTEND &&
-                           isFPExtFree(VT, Op.getOperand(0).getValueType())))
-    return 0;
+  if (EnableUseCheck)
+    if (!Op.hasOneUse() && !(Op.getOpcode() == ISD::FP_EXTEND &&
+                             isFPExtFree(VT, Op.getOperand(0).getValueType())))
+      return 0;
 
   // Don't recurse exponentially.
   if (Depth > SelectionDAG::MaxRecursionDepth)
@@ -5497,11 +5500,11 @@ char TargetLowering::isNegatibleForFree(SDValue Op, SelectionDAG &DAG,
 
     // fold (fneg (fadd A, B)) -> (fsub (fneg A), B)
     if (char V = isNegatibleForFree(Op.getOperand(0), DAG, LegalOperations,
-                                    ForCodeSize, Depth + 1))
+                                    ForCodeSize, EnableUseCheck, Depth + 1))
       return V;
     // fold (fneg (fadd A, B)) -> (fsub (fneg B), A)
     return isNegatibleForFree(Op.getOperand(1), DAG, LegalOperations,
-                              ForCodeSize, Depth + 1);
+                              ForCodeSize, EnableUseCheck, Depth + 1);
   case ISD::FSUB:
     // We can't turn -(A-B) into B-A when we honor signed zeros.
     if (!Options.NoSignedZerosFPMath && !Flags.hasNoSignedZeros())
@@ -5514,7 +5517,7 @@ char TargetLowering::isNegatibleForFree(SDValue Op, SelectionDAG &DAG,
   case ISD::FDIV:
     // fold (fneg (fmul X, Y)) -> (fmul (fneg X), Y) or (fmul X, (fneg Y))
     if (char V = isNegatibleForFree(Op.getOperand(0), DAG, LegalOperations,
-                                    ForCodeSize, Depth + 1))
+                                    ForCodeSize, EnableUseCheck, Depth + 1))
       return V;
 
     // Ignore X * 2.0 because that is expected to be canonicalized to X + X.
@@ -5523,7 +5526,7 @@ char TargetLowering::isNegatibleForFree(SDValue Op, SelectionDAG &DAG,
         return 0;
 
     return isNegatibleForFree(Op.getOperand(1), DAG, LegalOperations,
-                              ForCodeSize, Depth + 1);
+                              ForCodeSize, EnableUseCheck, Depth + 1);
 
   case ISD::FMA:
   case ISD::FMAD: {
@@ -5533,15 +5536,15 @@ char TargetLowering::isNegatibleForFree(SDValue Op, SelectionDAG &DAG,
     // fold (fneg (fma X, Y, Z)) -> (fma (fneg X), Y, (fneg Z))
     // fold (fneg (fma X, Y, Z)) -> (fma X, (fneg Y), (fneg Z))
     char V2 = isNegatibleForFree(Op.getOperand(2), DAG, LegalOperations,
-                                 ForCodeSize, Depth + 1);
+                                 ForCodeSize, EnableUseCheck, Depth + 1);
     if (!V2)
       return 0;
 
     // One of Op0/Op1 must be cheaply negatible, then select the cheapest.
     char V0 = isNegatibleForFree(Op.getOperand(0), DAG, LegalOperations,
-                                 ForCodeSize, Depth + 1);
+                                 ForCodeSize, EnableUseCheck, Depth + 1);
     char V1 = isNegatibleForFree(Op.getOperand(1), DAG, LegalOperations,
-                                 ForCodeSize, Depth + 1);
+                                 ForCodeSize, EnableUseCheck, Depth + 1);
     char V01 = std::max(V0, V1);
     return V01 ? std::max(V01, V2) : 0;
   }
@@ -5550,7 +5553,7 @@ char TargetLowering::isNegatibleForFree(SDValue Op, SelectionDAG &DAG,
   case ISD::FP_ROUND:
   case ISD::FSIN:
     return isNegatibleForFree(Op.getOperand(0), DAG, LegalOperations,
-                              ForCodeSize, Depth + 1);
+                              ForCodeSize, EnableUseCheck, Depth + 1);
   }
 
   return 0;
@@ -5594,7 +5597,7 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
 
     // fold (fneg (fadd A, B)) -> (fsub (fneg A), B)
     if (isNegatibleForFree(Op.getOperand(0), DAG, LegalOperations, ForCodeSize,
-                           Depth + 1))
+                           false, Depth + 1))
       return DAG.getNode(ISD::FSUB, SDLoc(Op), Op.getValueType(),
                          getNegatedExpression(Op.getOperand(0), DAG,
                                               LegalOperations, ForCodeSize,
@@ -5621,7 +5624,7 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
   case ISD::FDIV:
     // fold (fneg (fmul X, Y)) -> (fmul (fneg X), Y)
     if (isNegatibleForFree(Op.getOperand(0), DAG, LegalOperations, ForCodeSize,
-                           Depth + 1))
+                           false, Depth + 1))
       return DAG.getNode(Op.getOpcode(), SDLoc(Op), Op.getValueType(),
                          getNegatedExpression(Op.getOperand(0), DAG,
                                               LegalOperations, ForCodeSize,
@@ -5645,9 +5648,9 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
                                         ForCodeSize, Depth + 1);
 
     char V0 = isNegatibleForFree(Op.getOperand(0), DAG, LegalOperations,
-                                 ForCodeSize, Depth + 1);
+                                 ForCodeSize, false, Depth + 1);
     char V1 = isNegatibleForFree(Op.getOperand(1), DAG, LegalOperations,
-                                 ForCodeSize, Depth + 1);
+                                 ForCodeSize, false, Depth + 1);
     if (V0 >= V1) {
       // fold (fneg (fma X, Y, Z)) -> (fma (fneg X), Y, (fneg Z))
       SDValue Neg0 = getNegatedExpression(
