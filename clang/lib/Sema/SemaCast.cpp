@@ -3105,17 +3105,17 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
                                        SourceLocation KeywordLoc, bool IsToCap,
                                        TypeSourceInfo *TSInfo,
                                        SourceLocation RParenLoc,
-                                       Expr *SubExpr) {
+                                       Expr *_SubExpr) {
   // NOTE: __cheri_tocap and __cheri_fromcap are no-ops in both the hybrid and
   //       purecap ABI if both source and destination types are capabilities
   //       and the types are compatible.
-  CastOperation Op(*this, TSInfo->getType(), SubExpr);
+  CastOperation Op(*this, TSInfo->getType(), _SubExpr);
   Op.DestRange = TSInfo->getTypeLoc().getSourceRange();
-  Op.OpRange = SourceRange(LParenLoc, SubExpr->getEndLoc());
+  Op.OpRange = SourceRange(LParenLoc, _SubExpr->getEndLoc());
   // Do all the default cast checks (including array-to-pointer decay, etc.)
   Op.CheckCheriCast();
   // Update the SubExpr pointer after potential conversions
-  SubExpr = Op.SrcExpr.get();
+  const Expr* const SubExpr = Op.SrcExpr.get();
   const QualType DestTy = Op.DestType;
   // Use getRealReferenceType() because getType() only returns T for T&
   const QualType SrcTy = SubExpr->getRealReferenceType(Context, false);
@@ -3172,12 +3172,13 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //   if (getLangOpts().CPlusPlus)
   //     return hasSameType(LHS, RHS);
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
-
-  if (!CheckCHERIAssignCompatible(DestTy, SrcTy, SubExpr)) {
-    Diag(SubExpr->getExprLoc(), diag::err_cheri_to_from_cap_unrelated_type)
-         << IsToCap << SrcTy << DestTy;
+  Expr *MaybeImpConv = Op.SrcExpr.get();
+  if (!CheckCHERIAssignCompatible(DestTy, SrcTy, MaybeImpConv)) {
+    Diag(MaybeImpConv->getExprLoc(), diag::err_cheri_to_from_cap_unrelated_type)
+        << IsToCap << SrcTy << DestTy;
     return ExprError();
   }
+  Op.SrcExpr = MaybeImpConv;
 
   // Warn about no-op cheri casts.
   if (Op.Kind == CK_NoOp) {
@@ -3243,14 +3244,14 @@ bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr
 
 ExprResult Sema::BuildCheriOffsetOrAddress(
     SourceLocation LParenLoc, SourceLocation KeywordLoc, bool IsOffsetCast,
-    TypeSourceInfo *TSInfo, SourceLocation RParenLoc, Expr *SubExpr) {
-  CastOperation Op(*this, TSInfo->getType(), SubExpr);
+    TypeSourceInfo *TSInfo, SourceLocation RParenLoc, Expr *_SubExpr) {
+  CastOperation Op(*this, TSInfo->getType(), _SubExpr);
   Op.DestRange = TSInfo->getTypeLoc().getSourceRange();
-  Op.OpRange = SourceRange(LParenLoc, SubExpr->getEndLoc());
+  Op.OpRange = SourceRange(LParenLoc, _SubExpr->getEndLoc());
   // Do all the default cast checks (including array-to-pointer decay, etc.)
   Op.CheckCheriCast();
   // Update the SubExpr pointer after potential conversions
-  SubExpr = Op.SrcExpr.get();
+  const Expr* const SubExpr = Op.SrcExpr.get();
   const QualType DestTy = Op.DestType;
   Op.Kind =
       IsOffsetCast ? CK_CHERICapabilityToOffset : CK_CHERICapabilityToAddress;
