@@ -2623,7 +2623,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     return RValue::get(nullptr);
   }
   case Builtin::BImemcpy:
-  case Builtin::BI__builtin_memcpy: {
+  case Builtin::BI__builtin_memcpy:
+  case Builtin::BImempcpy:
+  case Builtin::BI__builtin_mempcpy: {
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
@@ -2633,7 +2635,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                         E->getArg(1)->getExprLoc(), FD, 1);
     auto CI = Builder.CreateMemCpy(Dest, Src, SizeVal, false);
     diagnoseMisalignedCapabiliyCopyDest(*this, "memcpy", E->getArg(1), CI);
-    return RValue::get(Dest.getPointer(), Dest.getAlignment().getQuantity());
+    if (BuiltinID == Builtin::BImempcpy ||
+        BuiltinID == Builtin::BI__builtin_mempcpy)
+      return RValue::get(Builder.CreateInBoundsGEP(Dest.getPointer(), SizeVal),
+                         Dest.getAlignment().getQuantity());
+    else
+      return RValue::get(Dest.getPointer(), Dest.getAlignment().getQuantity());
   }
 
   case Builtin::BI__builtin_char_memchr:
