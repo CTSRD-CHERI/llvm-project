@@ -8867,19 +8867,21 @@ public:
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
 
-  ExprResult BuildCheriToOrFromCap(SourceLocation LParenLoc, SourceLocation KeywordLoc,
-                                   bool IsToCap, QualType DestTy,
-                                   TypeSourceInfo *TSInfo, SourceLocation
-                                   RParenLoc, Expr *SubExpr);
+  ExprResult BuildCheriToOrFromCap(SourceLocation LParenLoc,
+                                   SourceLocation KeywordLoc, bool IsToCap,
+                                   TypeSourceInfo *TSInfo,
+                                   SourceLocation RParenLoc, Expr *SubExpr);
 
-  ExprResult BuildCheriOffsetOrAddress(SourceLocation LParenLoc, SourceLocation KeywordLoc,
-                                       bool IsOffsetCast, QualType DestTy,
-                                       TypeSourceInfo *TSInfo, SourceLocation
-                                       RParenLoc, Expr *SubExpr);
+  ExprResult BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
+                                       SourceLocation KeywordLoc,
+                                       bool IsOffsetCast,
+                                       TypeSourceInfo *TSInfo,
+                                       SourceLocation RParenLoc, Expr *SubExpr);
 
-  ExprResult ActOnCheriCast(Scope *S, SourceLocation LParenLoc, tok::TokenKind Kind,
-                            SourceLocation CheriPtrKeywordLoc, ParsedType Type,
-                            SourceLocation RParenLoc, Expr *SubExpr);
+  ExprResult ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
+                            tok::TokenKind Kind, SourceLocation KeywordLoc,
+                            ParsedType Type, SourceLocation RParenLoc,
+                            Expr *SubExpr);
 
   bool CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr,
                                   bool InsertBitCast = true);

@@ -9,12 +9,15 @@
 void checkAST(char * __capability c) {
   // AST: |-FunctionDecl {{.+}} line:9:6 checkAST 'void (char * __capability)'
   long x1 = (__cheri_offset long)c;
-  // AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToOffset>
-  // AST: -DeclRefExpr {{.+}} 'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability'
+  // AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToOffset>{{$}}
+  // The part_of_explicit_cast was not being set previously
+  // AST-NEXT: ImplicitCastExpr {{.*}} <col:34> 'char * __capability' <LValueToRValue> part_of_explicit_cast{{$}}
+  // AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability'{{$}}
 
   long x2 = (__cheri_addr long)c;
-  // AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToAddress>
-  // AST: -DeclRefExpr {{.+}} 'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability'
+  // AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToAddress>{{$}}
+  // AST-NEXT: ImplicitCastExpr {{.*}} <col:32> 'char * __capability' <LValueToRValue> part_of_explicit_cast{{$}}
+  // AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability'{{$}}
 }
 
 void types_offset(char * __capability c) {
@@ -61,18 +64,27 @@ void bad_src_type(long l, struct foo foo, struct foo* fooptr) {
 
 
 #ifdef __CHERI_PURE_CAPABILITY__
-void decay() {
+void decay(void) {
   char buf[1];
   long x1 = (__cheri_addr long) buf;
-  // PURECAP-AST: -FunctionDecl {{.*}} line:{{.+}} decay 'void ()'
-  // PURECAP-AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToAddress>
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'char * __capability' <ArrayToPointerDecay>
-  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char [1]' lvalue Var {{.*}} 'buf' 'char [1]'
+  // PURECAP-AST: -FunctionDecl {{.*}} line:[[@LINE-3]]:6 referenced decay 'void (void)'
+  // PURECAP-AST: CStyleCastExpr {{.*}} <col:13, col:33> 'long' <CHERICapabilityToAddress>{{$}}
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:33> 'char * __capability' <ArrayToPointerDecay> part_of_explicit_cast{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char [1]' lvalue Var {{.*}} 'buf' 'char [1]'{{$}}
   long x2 = (__cheri_offset long) buf;
-  // PURECAP-AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToOffset>
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'char * __capability' <ArrayToPointerDecay>
-  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char [1]' lvalue Var {{.*}} 'buf' 'char [1]'
+  // PURECAP-AST: CStyleCastExpr {{.*}} <col:13, col:35> 'long' <CHERICapabilityToOffset>{{$}}
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:35> 'char * __capability' <ArrayToPointerDecay> part_of_explicit_cast{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char [1]' lvalue Var {{.*}} 'buf' 'char [1]'{{$}}
 
+  // Also check function-to-pointer decay:
+  long x3 = (__cheri_addr long) decay;
+  // PURECAP-AST: CStyleCastExpr {{.*}} <col:13, col:33> 'long' <CHERICapabilityToAddress>{{$}}
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:33> 'void (* __capability)(void)' <FunctionToPointerDecay> part_of_explicit_cast{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'void (void)' Function {{.+}} 'decay' 'void (void)'{{$}}
+  long x4 = (__cheri_offset long) decay;
+  // PURECAP-AST: CStyleCastExpr {{.*}} <col:13, col:35> 'long' <CHERICapabilityToOffset>{{$}}
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:35> 'void (* __capability)(void)' <FunctionToPointerDecay> part_of_explicit_cast{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'void (void)' Function {{.+}} 'decay' 'void (void)'{{$}}
 }
 #endif
 
