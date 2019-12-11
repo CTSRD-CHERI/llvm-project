@@ -1034,8 +1034,7 @@ void Sema::ActOnEndOfTranslationUnitFragment(TUFragmentKind Kind) {
   }
 
   {
-    llvm::TimeTraceScope TimeScope("PerformPendingInstantiations",
-                                   StringRef(""));
+    llvm::TimeTraceScope TimeScope("PerformPendingInstantiations");
     PerformPendingInstantiations();
   }
 
