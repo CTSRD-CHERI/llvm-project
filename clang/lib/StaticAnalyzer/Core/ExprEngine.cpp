@@ -1322,6 +1322,11 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::WhileStmtClass:
     case Expr::MSDependentExistsStmtClass:
       llvm_unreachable("Stmt should not be in analyzer evaluation loop");
+    case Stmt::ImplicitValueInitExprClass:
+      // These nodes are shared in the CFG and would case caching out.
+      // Moreover, no additional evaluation required for them, the
+      // analyzer can reconstruct these values from the AST.
+      llvm_unreachable("Should be pruned from CFG");
 
     case Stmt::ObjCSubscriptRefExprClass:
     case Stmt::ObjCPropertyRefExprClass:
@@ -1392,7 +1397,6 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::IntegerLiteralClass:
     case Stmt::FixedPointLiteralClass:
     case Stmt::CharacterLiteralClass:
-    case Stmt::ImplicitValueInitExprClass:
     case Stmt::CXXScalarValueInitExprClass:
     case Stmt::CXXBoolLiteralExprClass:
     case Stmt::ObjCBoolLiteralExprClass:
