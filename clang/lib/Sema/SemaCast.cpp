@@ -77,6 +77,7 @@ namespace {
     BuiltinType::Kind PlaceholderKind;
     CXXCastPath BasePath;
     bool IsARCUnbridgedCast;
+    bool IsCheriFromCap = false;
 
     SourceRange OpRange;
     SourceRange DestRange;
@@ -109,7 +110,6 @@ namespace {
           // return ExprError();
         }
       }
-
 
       // If this is an unbridged cast, wrap the result in an implicit
       // cast that yields the unbridged-cast placeholder type.
@@ -1947,7 +1947,7 @@ static void DiagnoseCHERIPtr(Sema &Self, Expr *SrcExpr, QualType DestType,
 }
 
 CastKind CastOperation::checkCapabilityToIntCast() {
-  if (Kind == CK_CHERICapabilityToPointer)
+  if (IsCheriFromCap)
     return CK_NoOp;  // Already doing a __cheri_fromcap cast, no need to check
 
   if (Self.Context.getLangOpts().getCheriCapConversion() ==
@@ -3112,6 +3112,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   CastOperation Op(*this, TSInfo->getType(), _SubExpr);
   Op.DestRange = TSInfo->getTypeLoc().getSourceRange();
   Op.OpRange = SourceRange(LParenLoc, _SubExpr->getEndLoc());
+  Op.IsCheriFromCap = !IsToCap;
   // Do all the default cast checks (including array-to-pointer decay, etc.)
   Op.CheckCheriCast();
   // Update the SubExpr pointer after potential conversions
