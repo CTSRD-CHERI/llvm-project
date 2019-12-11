@@ -7924,9 +7924,9 @@ public:
 
 static bool EvaluatePointer(const Expr* E, LValue& Result, EvalInfo &Info,
                             bool InvalidBaseOK) {
-  assert(E->isRValue() &&
-         (E->getType()->hasPointerRepresentation() ||
-          E->getType()->isCHERICapabilityType(Info.Ctx, false)));
+  assert(E->isRValue() && (E->getType()->hasPointerRepresentation() ||
+      E->getType()->isCHERICapabilityType(
+          Info.Ctx, /*IncludeIntCap=*/true)));
   return PointerExprEvaluator(Info, Result, InvalidBaseOK).Visit(E);
 }
 
@@ -12235,16 +12235,6 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_LValueToRValueBitCast:
     return ExprEvaluatorBaseTy::VisitCastExpr(E);
 
-  case CK_CHERICapabilityToOffset:
-  case CK_CHERICapabilityToAddress: {
-    // We only seem to get here if we are casting the result of the
-    // __cheri_{offset, addr} cast to an integer type different to what was
-    // specified as part of the CHERI cast.  We return true here to report
-    // that these casts have an integer value. Typechecking will have been
-    // performed earlier.
-    return true;
-  }
-
   case CK_MemberPointerToBoolean:
   case CK_PointerToBoolean:
   case CK_IntegralToBoolean:
@@ -12311,6 +12301,18 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
                                       Result.getInt()), E);
   }
 
+    // We only seem to get here if we are casting the result of the
+    // __cheri_{offset, addr} cast to an integer type different to what was
+    // specified as part of the CHERI cast.
+  case CK_CHERICapabilityToOffset:
+    // __cheri_offset cannot be constant evaluated (yet).
+    // This would be possible for values known to be derived from integer
+    // constants but that can be done in the future.
+    return false;
+  case CK_CHERICapabilityToAddress:
+    // Do the same checks as CK_PointerToIntegral since this is effectively
+    // what __cheri_addr does.
+    LLVM_FALLTHROUGH;
   case CK_PointerToIntegral: {
     CCEDiag(E, diag::note_constexpr_invalid_cast) << 2;
 
