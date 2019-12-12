@@ -2800,23 +2800,13 @@ void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
       getTriple().getArch() == llvm::Triple::riscv32 ||
       getTriple().getArch() == llvm::Triple::riscv64;
 
-  if (getTriple().isOSFreeBSD()) {
-    switch (getTriple().getArch()) {
-      case llvm::Triple::cheri:
-      case llvm::Triple::mips:
-      case llvm::Triple::mipsel:
-      case llvm::Triple::mips64:
-      case llvm::Triple::mips64el:
-        // Default to .init_array for FreeBSD mips since e.g. the CHERI purecap
-        // rtld won't process .ctors anymore.
-        UseInitArrayDefault = true;
-        break;
-      default:
-        break;
-    }
+  if (getTriple().isOSFreeBSD() && getTriple().isMIPS()) {
+    // Default to .init_array for FreeBSD mips since e.g. the CHERI purecap
+    // rtld won't process .ctors anymore.
+    UseInitArrayDefault = true;
   }
 
-  if (DriverArgs.hasFlag(options::OPT_fuse_init_array,
-                         options::OPT_fno_use_init_array, UseInitArrayDefault))
-    CC1Args.push_back("-fuse-init-array");
+  if (!DriverArgs.hasFlag(options::OPT_fuse_init_array,
+                          options::OPT_fno_use_init_array, UseInitArrayDefault))
+    CC1Args.push_back("-fno-use-init-array");
 }
