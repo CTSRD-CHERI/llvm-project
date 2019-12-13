@@ -5795,7 +5795,6 @@ SDValue SelectionDAG::getMemBasePlusOffset(SDValue Ptr, SDValue Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
   assert(Offset.getValueType().isInteger());
-  EVT BasePtrVT = Ptr.getValueType();
   return getPointerAdd(DL, Ptr, Offset, Flags);
 }
 
