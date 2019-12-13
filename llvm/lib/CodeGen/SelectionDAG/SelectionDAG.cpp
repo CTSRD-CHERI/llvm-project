@@ -5784,11 +5784,10 @@ static SDValue getMemsetStringVal(EVT VT, const SDLoc &dl, SelectionDAG &DAG,
   return SDValue(nullptr, 0);
 }
 
-/// getMemBasePlusOffset - Returns base and offset node for the
-///
-SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, unsigned Offset,
+SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, int64_t Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
+  EVT VT = Base.getValueType();
   return getPointerAdd(DL, Base, Offset, Flags);
 }
 
