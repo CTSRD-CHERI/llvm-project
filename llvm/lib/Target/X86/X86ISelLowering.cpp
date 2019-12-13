@@ -4936,7 +4936,7 @@ bool X86TargetLowering::shouldReduceLoadWidth(SDNode *Load,
                                               ISD::LoadExtType ExtTy,
                                               EVT NewVT) const {
   assert(cast<LoadSDNode>(Load)->isSimple() && "illegal to narrow");
-  
+
   // "ELF Handling for Thread-Local Storage" specifies that R_X86_64_GOTTPOFF
   // relocation target a movq or addq instruction: don't let the load shrink.
   SDValue BasePtr = cast<LoadSDNode>(Load)->getBasePtr();
@@ -36886,9 +36886,8 @@ combineVSelectWithAllOnesOrZeros(SDNode *N, SelectionDAG &DAG,
 
     if (TValIsAllZeros || FValIsAllOnes) {
       SDValue CC = Cond.getOperand(2);
-      ISD::CondCode NewCC =
-          ISD::getSetCCInverse(cast<CondCodeSDNode>(CC)->get(),
-                               Cond.getOperand(0).getValueType());
+      ISD::CondCode NewCC = ISD::getSetCCInverse(
+          cast<CondCodeSDNode>(CC)->get(), Cond.getOperand(0).getValueType());
       Cond = DAG.getSetCC(DL, CondVT, Cond.getOperand(0), Cond.getOperand(1),
                           NewCC);
       std::swap(LHS, RHS);
@@ -37410,8 +37409,7 @@ static SDValue combineSelect(SDNode *N, SelectionDAG &DAG,
     SDValue Other;
     if (ISD::isBuildVectorAllZeros(LHS.getNode())) {
       Other = RHS;
-      assert(VT.isInteger());
-      CC = ISD::getSetCCInverse(CC, VT);
+      CC = ISD::getSetCCInverse(CC, VT.getVectorElementType());
     } else if (ISD::isBuildVectorAllZeros(RHS.getNode())) {
       Other = LHS;
     }
@@ -37483,7 +37481,7 @@ static SDValue combineSelect(SDNode *N, SelectionDAG &DAG,
     SDValue Other;
     if (ISD::isBuildVectorAllOnes(LHS.getNode())) {
       Other = RHS;
-      CC = ISD::getSetCCInverse(CC, /*IsInteger = true */MVT::i64);
+      CC = ISD::getSetCCInverse(CC, VT.getVectorElementType());
     } else if (ISD::isBuildVectorAllOnes(RHS.getNode())) {
       Other = LHS;
     }

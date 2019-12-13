@@ -797,7 +797,8 @@ static SDValue performSELECTCombine(SDNode *N, SelectionDAG &DAG,
     assert(TrueVT.isInteger());
 
     SetCC = DAG.getSetCC(DL, SetCC.getValueType(), SetCC.getOperand(0),
-                         SetCC.getOperand(1), ISD::getSetCCInverse(CC, TrueVT));
+                         SetCC.getOperand(1),
+                         ISD::getSetCCInverse(CC, SetCC.getValueType()));
 
     return DAG.getNode(ISD::SELECT, DL, FalseTy, SetCC, False, True);
   }
@@ -833,7 +834,7 @@ static SDValue performSELECTCombine(SDNode *N, SelectionDAG &DAG,
     assert(True.getValueType().isInteger());
     SetCC = DAG.getSetCC(DL, SetCC.getValueType(), SetCC.getOperand(0),
                          SetCC.getOperand(1),
-                         ISD::getSetCCInverse(CC, True.getValueType()));
+                         ISD::getSetCCInverse(CC, SetCC.getValueType()));
     return DAG.getNode(ISD::ADD, DL, SetCC.getValueType(), SetCC, True);
   }
 
