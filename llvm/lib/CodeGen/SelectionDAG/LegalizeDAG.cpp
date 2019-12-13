@@ -474,8 +474,7 @@ SDValue SelectionDAGLegalize::OptimizeFloatStore(StoreSDNode* ST) {
 
         Lo = DAG.getStore(Chain, dl, Lo, Ptr, ST->getPointerInfo(), Alignment,
                           MMOFlags, AAInfo);
-        Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                          DAG.getConstant(4, dl, Ptr.getValueType()));
+        Ptr = DAG.getMemBasePlusOffset(Ptr, 4, dl);
         Hi = DAG.getStore(Chain, dl, Hi, Ptr,
                           ST->getPointerInfo().getWithOffset(4),
                           MinAlign(Alignment, 4U), MMOFlags, AAInfo);
@@ -585,7 +584,7 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
 
       // Store the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
-      Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
+      Ptr = DAG.getMemBasePlusOffset(Ptr, IncrementSize, dl);
       Hi = DAG.getNode(
           ISD::SRL, dl, Value.getValueType(), Value,
           DAG.getConstant(RoundWidth, dl,
@@ -797,9 +796,7 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
 
       // Load the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
-      Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                         DAG.getConstant(IncrementSize, dl,
-                                         Ptr.getValueType()));
+      Ptr = DAG.getMemBasePlusOffset(Ptr, IncrementSize, dl);
       Hi = DAG.getExtLoad(ExtType, dl, Node->getValueType(0), Chain, Ptr,
                           LD->getPointerInfo().getWithOffset(IncrementSize),
                           ExtraVT, MinAlign(Alignment, IncrementSize), MMOFlags,
@@ -828,7 +825,7 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
 
       // Load the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
-      Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
+      Ptr = DAG.getMemBasePlusOffset(Ptr, IncrementSize, dl);
       Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, Node->getValueType(0), Chain, Ptr,
                           LD->getPointerInfo().getWithOffset(IncrementSize),
                           ExtraVT, MinAlign(Alignment, IncrementSize), MMOFlags,
@@ -1416,7 +1413,7 @@ SDValue SelectionDAGLegalize::ExpandVectorBuildThroughStack(SDNode* Node) {
     unsigned Offset = TypeByteSize*i;
 
     SDValue Idx = DAG.getConstant(Offset, dl, FIPtr.getValueType());
-    Idx = DAG.getNode(ISD::ADD, dl, FIPtr.getValueType(), FIPtr, Idx);
+    Idx = DAG.getMemBasePlusOffset(FIPtr, Idx, dl);
 
     // If the destination vector element type is narrower than the source
     // element type, only store the bits necessary.
@@ -1479,8 +1476,7 @@ void SelectionDAGLegalize::getSignAsIntValue(FloatSignAsInt &State,
   } else {
     // Advance the pointer so that the loaded byte will contain the sign bit.
     unsigned ByteOffset = (FloatVT.getSizeInBits() / 8) - 1;
-    IntPtr = DAG.getNode(ISD::ADD, DL, StackPtr.getValueType(), StackPtr,
-                      DAG.getConstant(ByteOffset, DL, StackPtr.getValueType()));
+    IntPtr = DAG.getMemBasePlusOffset(StackPtr, ByteOffset, DL);
     State.IntPointerInfo = MachinePointerInfo::getFixedStack(MF, FI,
                                                              ByteOffset);
   }
