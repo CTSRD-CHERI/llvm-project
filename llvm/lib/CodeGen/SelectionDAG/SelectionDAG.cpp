@@ -5788,7 +5788,15 @@ SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, int64_t Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
   EVT VT = Base.getValueType();
-  return getPointerAdd(DL, Base, Offset, Flags);
+  return getMemBasePlusOffset(Base, getConstant(Offset, DL, VT), DL, Flags);
+}
+
+SDValue SelectionDAG::getMemBasePlusOffset(SDValue Ptr, SDValue Offset,
+                                           const SDLoc &DL,
+                                           const SDNodeFlags Flags) {
+  assert(Offset.getValueType().isInteger());
+  EVT BasePtrVT = Ptr.getValueType();
+  return getPointerAdd(DL, Ptr, Offset, Flags);
 }
 
 /// Returns true if memcpy source is constant data.

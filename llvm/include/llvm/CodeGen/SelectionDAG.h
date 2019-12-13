@@ -1168,6 +1168,8 @@ public:
   /// Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default.
   SDValue getMemBasePlusOffset(SDValue Base, int64_t Offset, const SDLoc &DL,
                                const SDNodeFlags Flags = SDNodeFlags());
+  SDValue getMemBasePlusOffset(SDValue Base, SDValue Offset, const SDLoc &DL,
+                               const SDNodeFlags Flags = SDNodeFlags());
 
   SDValue getMaskedLoad(EVT VT, const SDLoc &dl, SDValue Chain, SDValue Base,
                         SDValue Offset, SDValue Mask, SDValue Src0, EVT MemVT,
