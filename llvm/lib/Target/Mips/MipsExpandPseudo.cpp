@@ -939,6 +939,7 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
     BuildMI(loopMBB, DL, TII->get(NOR), Scratch).addReg(ZERO).addReg(Scratch);
   } else {
     assert(IsOr && OR && "Unknown instruction for atomic pseudo expansion!");
+    (void)IsOr;
     // CHERI can use different registers for store value and result -> skip move
     if (IsCapOp)
       SCStoreValue = Incr;
