@@ -500,14 +500,12 @@ public:
   /// and noalias tags.
   /// FIXME: Remove this function once transition to Align is over.
   /// Use the version that takes MaybeAlign instead of this one.
-  LLVM_ATTRIBUTE_DEPRECATED(
-      CallInst *CreateMemCpy(Value *Dst, unsigned DstAlign, Value *Src,
-                             unsigned SrcAlign, uint64_t Size,
-                             bool isVolatile = false, MDNode *TBAATag = nullptr,
-                             MDNode *TBAAStructTag = nullptr,
-                             MDNode *ScopeTag = nullptr,
-                             MDNode *NoAliasTag = nullptr),
-      "Use the version that takes MaybeAlign instead") {
+  CallInst *CreateMemCpy(Value *Dst, unsigned DstAlign, Value *Src,
+                         unsigned SrcAlign, uint64_t Size,
+                         bool isVolatile = false, MDNode *TBAATag = nullptr,
+                         MDNode *TBAAStructTag = nullptr,
+                         MDNode *ScopeTag = nullptr,
+                         MDNode *NoAliasTag = nullptr) {
     return CreateMemCpy(Dst, MaybeAlign(DstAlign), Src, MaybeAlign(SrcAlign),
                         getInt64(Size), isVolatile, TBAATag, TBAAStructTag,
                         ScopeTag, NoAliasTag);
@@ -526,14 +524,12 @@ public:
 
   /// FIXME: Remove this function once transition to Align is over.
   /// Use the version that takes MaybeAlign instead of this one.
-  LLVM_ATTRIBUTE_DEPRECATED(
-      CallInst *CreateMemCpy(Value *Dst, unsigned DstAlign, Value *Src,
-                             unsigned SrcAlign, Value *Size,
-                             bool isVolatile = false, MDNode *TBAATag = nullptr,
-                             MDNode *TBAAStructTag = nullptr,
-                             MDNode *ScopeTag = nullptr,
-                             MDNode *NoAliasTag = nullptr),
-      "Use the version that takes MaybeAlign instead");
+  CallInst *CreateMemCpy(Value *Dst, unsigned DstAlign, Value *Src,
+                         unsigned SrcAlign, Value *Size,
+                         bool isVolatile = false, MDNode *TBAATag = nullptr,
+                         MDNode *TBAAStructTag = nullptr,
+                         MDNode *ScopeTag = nullptr,
+                         MDNode *NoAliasTag = nullptr);
   CallInst *CreateMemCpy(Value *Dst, MaybeAlign DstAlign, Value *Src,
                          MaybeAlign SrcAlign, Value *Size,
                          bool isVolatile = false, MDNode *TBAATag = nullptr,
@@ -573,12 +569,10 @@ public:
   /// and noalias tags.
   /// FIXME: Remove this function once transition to Align is over.
   /// Use the version that takes MaybeAlign instead of this one.
-  LLVM_ATTRIBUTE_DEPRECATED(
-      CallInst *CreateMemMove(
-          Value *Dst, unsigned DstAlign, Value *Src, unsigned SrcAlign,
-          uint64_t Size, bool isVolatile = false, MDNode *TBAATag = nullptr,
-          MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr),
-      "Use the version that takes MaybeAlign") {
+  CallInst *CreateMemMove(Value *Dst, unsigned DstAlign, Value *Src, unsigned SrcAlign,
+                          uint64_t Size, bool isVolatile = false,
+                          MDNode *TBAATag = nullptr, MDNode *ScopeTag = nullptr,
+                          MDNode *NoAliasTag = nullptr) {
     return CreateMemMove(Dst, DstAlign, Src, SrcAlign, getInt64(Size), isVolatile,
                          TBAATag, ScopeTag, NoAliasTag);
   }
@@ -592,12 +586,11 @@ public:
   }
   /// FIXME: Remove this function once transition to Align is over.
   /// Use the version that takes MaybeAlign instead of this one.
-  LLVM_ATTRIBUTE_DEPRECATED(
-      CallInst *CreateMemMove(
-          Value *Dst, unsigned DstAlign, Value *Src, unsigned SrcAlign,
-          Value *Size, bool isVolatile = false, MDNode *TBAATag = nullptr,
-          MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr),
-      "Use the version that takes MaybeAlign") {
+  CallInst *CreateMemMove(Value *Dst, unsigned DstAlign, Value *Src,
+                          unsigned SrcAlign, Value *Size,
+                          bool isVolatile = false, MDNode *TBAATag = nullptr,
+                          MDNode *ScopeTag = nullptr,
+                          MDNode *NoAliasTag = nullptr) {
     return CreateMemMove(Dst, MaybeAlign(DstAlign), Src, MaybeAlign(SrcAlign),
                          Size, isVolatile, TBAATag, ScopeTag, NoAliasTag);
   }
