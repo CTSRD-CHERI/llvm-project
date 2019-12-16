@@ -1338,15 +1338,6 @@ namespace {
   };
   typedef ScopeRAII<false> BlockScopeRAII;
   typedef ScopeRAII<true> FullExpressionRAII;
-  void GetIntCapLValue(APValue &Value, QualType QT, ASTContext &Ctx){
-    if (Value.isInt() && QT->isCHERICapabilityType(Ctx)) {
-      APValue::LValueBase Base;
-      APSInt Val = Value.getInt();
-      CharUnits Size = CharUnits::fromQuantity(Val.isNegative() ?
-          Val.getSExtValue() : Val.getZExtValue());
-      Value = APValue(Base, Size, APValue::NoLValuePath(), 0);
-    }
-  }
 }
 
 bool SubobjectDesignator::checkSubobject(EvalInfo &Info, const Expr *E,
@@ -7096,15 +7087,6 @@ public:
                                           LVal, RVal))
         return false;
 
-      // CHERI: If the LValue is a capability with an integer initializer, then
-      //        extract the int value.
-      if (SubExpr->getType()->isIntCapType()) {
-        Expr::EvalResult ExprResult;
-        if (!SubExpr->EvaluateAsInt(ExprResult, Info.Ctx))
-          return false;
-        ExprResult.Val.getInt().setIsUnsigned(SubExpr->getType()->isUnsignedIntegerOrEnumerationType());
-        RVal = ExprResult.Val;
-      }
       return DerivedSuccess(RVal, E);
     }
     case CK_LValueToRValueBitCast: {
@@ -12276,6 +12258,16 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
     if (!Visit(SubExpr))
       return false;
 
+    // CHERI: If we are doing an integer cast from a capability, then extract
+    // the int value
+    if (SrcType->isIntCapType()) {
+      APSInt IntValue;
+      if (!EvaluateInteger(SubExpr, IntValue, Info))
+        return false;
+      IntValue.setIsUnsigned(SrcType->isUnsignedIntegerOrEnumerationType());
+      Result = APValue(IntValue);
+    }
+
     if (!Result.isInt()) {
       // Allow casts of address-of-label differences if they are no-ops
       // or narrowing.  (The narrowing case isn't actually guaranteed to
@@ -12283,18 +12275,10 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
       // to detect here.  We let it through on the assumption the user knows
       // what they are doing.)
       if (Result.isAddrLabelDiff())
-        return Info.Ctx.getTypeSize(DestType) <= Info.Ctx.getTypeSize(SrcType);
-      // CHERI: If we are doing an integer cast from a capability, then extract
-      // the int value
-      if (SrcType->isIntCapType()) {
-        Expr::EvalResult ExprResult;
-        if (!SubExpr->EvaluateAsInt(ExprResult, Info.Ctx))
-          return false;
-        ExprResult.Val.getInt().setIsUnsigned(SrcType->isUnsignedIntegerOrEnumerationType());
-        Result = ExprResult.Val;
-      } else
-        // Only allow casts of lvalues if they are lossless.
-        return Info.Ctx.getTypeSize(DestType) == Info.Ctx.getTypeSize(SrcType);
+        return Info.Ctx.getIntRange(DestType) <= Info.Ctx.getIntRange(SrcType);
+
+      // Only allow casts of lvalues if they are lossless.
+      return Info.Ctx.getIntRange(DestType) == Info.Ctx.getIntRange(SrcType);
     }
 
     return Success(HandleIntToIntCast(Info, E, DestType, SrcType,
@@ -12308,7 +12292,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
     // __cheri_offset cannot be constant evaluated (yet).
     // This would be possible for values known to be derived from integer
     // constants but that can be done in the future.
-    return false;
+    return Error(E);
   case CK_CHERICapabilityToAddress:
     // Do the same checks as CK_PointerToIntegral since this is effectively
     // what __cheri_addr does.
@@ -13827,8 +13811,6 @@ bool Expr::EvaluateAsInitializer(APValue &Value, const ASTContext &Ctx,
     llvm_unreachable("Unhandled cleanup; missing full expression marker?");
 
   bool Result = CheckConstantExpression(Info, DeclLoc, DeclTy, Value);
-  if (Result)
-    GetIntCapLValue(Value, VD->getType(), const_cast<ASTContext&>(Ctx));
   return Result && CheckMemoryLeaks(Info);
 }
 
