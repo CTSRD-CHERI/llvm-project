@@ -620,7 +620,7 @@ AttributeSet AttributeSet::addAttributes(LLVMContext &C,
     return *this;
 
   AttrBuilder B(AS);
-  for (const auto I : *this)
+  for (const auto &I : *this)
     B.addAttribute(I);
 
  return get(C, B);
@@ -727,7 +727,7 @@ AttributeSetNode::AttributeSetNode(ArrayRef<Attribute> Attrs)
                     sizeof(AvailableAttrs) * CHAR_BIT,
                 "Too many attributes");
 
-  for (const auto I : *this) {
+  for (const auto &I : *this) {
     if (!I.isStringAttribute()) {
       Attribute::AttrKind Kind = I.getKindAsEnum();
       AvailableAttrs[Kind / 8] |= 1ULL << (Kind % 8);
@@ -747,7 +747,7 @@ AttributeSetNode *AttributeSetNode::get(LLVMContext &C,
   SmallVector<Attribute, 8> SortedAttrs(Attrs.begin(), Attrs.end());
   llvm::sort(SortedAttrs);
 
-  for (const auto Attr : SortedAttrs)
+  for (const auto &Attr : SortedAttrs)
     Attr.Profile(ID);
 
   void *InsertPoint;
@@ -815,7 +815,7 @@ AttributeSetNode *AttributeSetNode::get(LLVMContext &C, const AttrBuilder &B) {
 }
 
 bool AttributeSetNode::hasAttribute(StringRef Kind) const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Kind))
       return true;
   return false;
@@ -823,7 +823,7 @@ bool AttributeSetNode::hasAttribute(StringRef Kind) const {
 
 Attribute AttributeSetNode::getAttribute(Attribute::AttrKind Kind) const {
   if (hasAttribute(Kind)) {
-    for (const auto I : *this)
+    for (const auto &I : *this)
       if (I.hasAttribute(Kind))
         return I;
   }
@@ -831,42 +831,42 @@ Attribute AttributeSetNode::getAttribute(Attribute::AttrKind Kind) const {
 }
 
 Attribute AttributeSetNode::getAttribute(StringRef Kind) const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Kind))
       return I;
   return {};
 }
 
 MaybeAlign AttributeSetNode::getAlignment() const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Attribute::Alignment))
       return I.getAlignment();
   return None;
 }
 
 MaybeAlign AttributeSetNode::getStackAlignment() const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Attribute::StackAlignment))
       return I.getStackAlignment();
   return None;
 }
 
 Type *AttributeSetNode::getByValType() const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Attribute::ByVal))
       return I.getValueAsType();
   return 0;
 }
 
 uint64_t AttributeSetNode::getDereferenceableBytes() const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Attribute::Dereferenceable))
       return I.getDereferenceableBytes();
   return 0;
 }
 
 uint64_t AttributeSetNode::getDereferenceableOrNullBytes() const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Attribute::DereferenceableOrNull))
       return I.getDereferenceableOrNullBytes();
   return 0;
@@ -874,7 +874,7 @@ uint64_t AttributeSetNode::getDereferenceableOrNullBytes() const {
 
 std::pair<unsigned, Optional<unsigned>>
 AttributeSetNode::getAllocSizeArgs() const {
-  for (const auto I : *this)
+  for (const auto &I : *this)
     if (I.hasAttribute(Attribute::AllocSize))
       return I.getAllocSizeArgs();
   return std::make_pair(0, 0);
@@ -916,7 +916,7 @@ AttributeListImpl::AttributeListImpl(LLVMContext &C,
                 "Too many attributes");
   static_assert(attrIdxToArrayIdx(AttributeList::FunctionIndex) == 0U,
                 "function should be stored in slot 0");
-  for (const auto I : Sets[0]) {
+  for (const auto &I : Sets[0]) {
     if (!I.isStringAttribute()) {
       Attribute::AttrKind Kind = I.getKindAsEnum();
       AvailableFunctionAttrs[Kind / 8] |= 1ULL << (Kind % 8);
@@ -1032,7 +1032,7 @@ AttributeList::get(LLVMContext &C,
     MaxIndex = Attrs[Attrs.size() - 2].first;
 
   SmallVector<AttributeSet, 4> AttrVec(attrIdxToArrayIdx(MaxIndex) + 1);
-  for (const auto Pair : Attrs)
+  for (const auto &Pair : Attrs)
     AttrVec[attrIdxToArrayIdx(Pair.first)] = Pair.second;
 
   return getImpl(C, AttrVec);
@@ -1100,7 +1100,7 @@ AttributeList AttributeList::get(LLVMContext &C, unsigned Index,
 AttributeList AttributeList::get(LLVMContext &C, unsigned Index,
                                  ArrayRef<StringRef> Kinds) {
   SmallVector<std::pair<unsigned, Attribute>, 8> Attrs;
-  for (const auto K : Kinds)
+  for (const auto &K : Kinds)
     Attrs.emplace_back(Index, Attribute::get(C, K));
   return get(C, Attrs);
 }
@@ -1113,7 +1113,7 @@ AttributeList AttributeList::get(LLVMContext &C,
     return Attrs[0];
 
   unsigned MaxSize = 0;
-  for (const auto List : Attrs)
+  for (const auto &List : Attrs)
     MaxSize = std::max(MaxSize, List.getNumAttrSets());
 
   // If every list was empty, there is no point in merging the lists.
@@ -1123,7 +1123,7 @@ AttributeList AttributeList::get(LLVMContext &C,
   SmallVector<AttributeSet, 8> NewAttrSets(MaxSize);
   for (unsigned I = 0; I < MaxSize; ++I) {
     AttrBuilder CurBuilder;
-    for (const auto List : Attrs)
+    for (const auto &List : Attrs)
       CurBuilder.merge(List.getAttributes(I - 1));
     NewAttrSets[I] = AttributeSet::get(C, CurBuilder);
   }
@@ -1661,7 +1661,7 @@ bool AttrBuilder::hasAttributes() const {
 bool AttrBuilder::hasAttributes(AttributeList AL, uint64_t Index) const {
   AttributeSet AS = AL.getAttributes(Index);
 
-  for (const auto Attr : AS) {
+  for (const auto &Attr : AS) {
     if (Attr.isEnumAttribute() || Attr.isIntAttribute()) {
       if (contains(Attr.getKindAsEnum()))
         return true;
