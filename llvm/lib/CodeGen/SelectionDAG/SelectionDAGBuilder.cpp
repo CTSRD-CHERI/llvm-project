@@ -4425,8 +4425,8 @@ static bool getUniformBase(const Value *&Ptr, SDValue &Base, SDValue &Index,
     }
     auto *CI = cast<ConstantInt>(C);
     Scale = DAG.getTargetConstant(1, SDB->getCurSDLoc(), TLI.getPointerRangeTy(DL));
-    Index = DAG.getTargetConstant(SL->getElementOffset(CI->getZExtValue()),
-                                  SDB->getCurSDLoc(), TLI.getPointerRangeTy(DL));
+    Index = DAG.getConstant(SL->getElementOffset(CI->getZExtValue()),
+                            SDB->getCurSDLoc(), TLI.getPointerRangeTy(DL));
   } else {
     Scale = DAG.getTargetConstant(
                 DL.getTypeAllocSize(GEP->getResultElementType()),
