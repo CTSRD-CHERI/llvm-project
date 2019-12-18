@@ -1751,7 +1751,7 @@ struct ConstantLValue {
 
   /*implicit*/ ConstantLValue(llvm::Constant *value,
                               bool hasOffsetApplied = false)
-    : Value(value), HasOffsetApplied(false) {}
+    : Value(value), HasOffsetApplied(hasOffsetApplied) {}
 
   /*implicit*/ ConstantLValue(ConstantAddress address)
     : ConstantLValue(address.getPointer()) {}
