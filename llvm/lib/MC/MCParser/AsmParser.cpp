@@ -5926,7 +5926,10 @@ bool AsmParser::parseMSInlineAsm(
         InputDecls.push_back(OpDecl);
         InputDeclsAddressOf.push_back(Operand.needAddressOf());
         InputConstraints.push_back(Operand.getConstraint().str());
-        AsmStrRewrites.emplace_back(AOK_Input, Start, SymName.size());
+        if (Operand.isCallOperand())
+          AsmStrRewrites.emplace_back(AOK_CallInput, Start, SymName.size());
+        else
+          AsmStrRewrites.emplace_back(AOK_Input, Start, SymName.size());
       }
     }
 
@@ -6015,6 +6018,9 @@ bool AsmParser::parseMSInlineAsm(
       break;
     case AOK_Input:
       OS << '$' << InputIdx++;
+      break;
+    case AOK_CallInput:
+      OS << "${" << InputIdx++ << ":P}";
       break;
     case AOK_Output:
       OS << '$' << OutputIdx++;
