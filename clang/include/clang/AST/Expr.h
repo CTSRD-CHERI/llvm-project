@@ -3289,6 +3289,13 @@ public:
            T->getStmtClass() <= lastCastExprConstant;
   }
 
+  // Check if @p Dst can carry provenance (i.e. CHERI tag bits) and if not
+  // change it to the non-provenance carrying annotated type.
+  // This only applies to (u)intcap_t.
+  // This function must be called in all ::Create functions since we can't
+  // pass ASTContext& to all constructors
+  static void checkProvenance(const ASTContext &C, QualType *Dst, Expr *Src);
+
   // Iterators
   child_range children() { return child_range(&Op, &Op+1); }
   const_child_range children() const { return const_child_range(&Op, &Op + 1); }

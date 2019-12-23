@@ -9382,6 +9382,32 @@ static void DiagnoseDivisionSizeofPointerOrArray(Sema &S, Expr *LHS, Expr *RHS,
   }
 }
 
+static void diagnoseAmbiguousProvenance(Sema &S, ExprResult &LHS,
+                                        ExprResult &RHS, SourceLocation Loc) {
+  const QualType LHSType = LHS.get()->getType();
+  const QualType RHSType = RHS.get()->getType();
+  bool isLHSCap = LHSType->isCHERICapabilityType(S.Context);
+  bool isRHSCap = RHSType->isCHERICapabilityType(S.Context);
+  // If both sides can carry provenance (i.e. not marked as non-provenance
+  // carrying) we should emit a warning
+  bool LHSProvenance = isLHSCap && !LHSType->hasAttr(attr::CHERINoProvenance);
+  bool RHSProvenance = isRHSCap && !RHSType->hasAttr(attr::CHERINoProvenance);
+
+  if (LHSProvenance && RHSProvenance) {
+    S.DiagRuntimeBehavior(
+        Loc, RHS.get(),
+        S.PDiag(diag::warn_ambigous_provenance_capability_binop)
+            << LHSType << RHSType << LHS.get()->getSourceRange()
+            << RHS.get()->getSourceRange());
+    // In the case of ambiguous provenance we currently default to LHS-derived
+    // values. To achieve this behaviour, flag the RHS as non-provenance
+    // carrying for code-generation.
+    // FIXME: in the future make this an error and require manual annotation.
+    RHS.get()->setType(
+        S.Context.getAttributedType(attr::CHERINoProvenance, RHSType, RHSType));
+  }
+}
+
 static void DiagnoseBadDivideOrRemainderValues(Sema& S, ExprResult &LHS,
                                                ExprResult &RHS,
                                                SourceLocation Loc, bool IsDiv) {
@@ -9416,6 +9442,8 @@ QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
   if (IsDiv) {
     DiagnoseBadDivideOrRemainderValues(*this, LHS, RHS, Loc, IsDiv);
     DiagnoseDivisionSizeofPointerOrArray(*this, LHS.get(), RHS.get(), Loc);
+  } else {
+    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc);
   }
   return compType;
 }
@@ -9756,6 +9784,7 @@ QualType Sema::CheckAdditionOperands(ExprResult &LHS, ExprResult &RHS,
   // handle the common case first (both operands are arithmetic).
   if (!compType.isNull() && compType->isArithmeticType()) {
     if (CompLHSTy) *CompLHSTy = compType;
+    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc);
     return compType;
   }
 
@@ -11479,9 +11508,6 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
                                            BinaryOperatorKind Opc) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*IsCompare=*/false);
 
-  // For the CHERI checks below we want to look at the unpromoted type
-  QualType OriginalLHSType = LHS.get()->getType();
-
   bool IsCompAssign =
       Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign;
 
@@ -11510,15 +11536,19 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
     diagnoseXorMisusedAsPow(*this, LHS, RHS, Loc);
 
   if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType()) {
-    bool isLHSCap = OriginalLHSType->isCHERICapabilityType(Context);
-    bool isRHSCap = RHS.get()->getType()->isCHERICapabilityType(Context);
-    bool UsingUIntCapOffset = getLangOpts().cheriUIntCapUsesOffset();
+    const bool UsingUIntCapOffset = getLangOpts().cheriUIntCapUsesOffset();
+    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc);
+    const bool isLHSCap = LHS.get()->getType()->isCHERICapabilityType(Context);
     if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign)) {
       // Bitwise and can cause checking low pointer bits to be compiled to
       // and always false condition (see CTSRD-CHERI/clang#189) unless we
       // have CheriDataDependentProvenance enabled. It also gives surprising
       // behaviour if we are compiling in uintcap=offset mode so warn if either
-      // of these conditions are met:
+      // of these conditions are met.
+      // This is purely an efficiency problem in address mode, since we have
+      // changed the definition of capability to no longer include the tag bit
+      // TODO: the clang frontend should know about -mllvm -cheri-exact-equals
+      // and keep the same warning unless CheriDataDependentProvenance is on.
       if (UsingUIntCapOffset || !getLangOpts().CheriDataDependentProvenance)
         DiagRuntimeBehavior(Loc, RHS.get(),
                             PDiag(diag::warn_uintcap_bitwise_and)
@@ -11534,13 +11564,6 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
       DiagRuntimeBehavior(Loc, RHS.get(),
                           PDiag(diag::warn_uintcap_bad_bitwise_op)
                               << 0 /*=xor*/ << 0 /* usecase is hashing */
-                              << LHS.get()->getSourceRange()
-                              << RHS.get()->getSourceRange());
-    } else if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap)) {
-      // FIXME: this warning is not always useful
-      DiagRuntimeBehavior(Loc, RHS.get(),
-                          PDiag(diag::warn_mixed_capability_binop)
-                              << OriginalLHSType << RHS.get()->getType()
                               << LHS.get()->getSourceRange()
                               << RHS.get()->getSourceRange());
     }

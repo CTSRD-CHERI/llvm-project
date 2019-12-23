@@ -7210,6 +7210,14 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_CHERISubobjectBoundsUseRemainingSize:
     handleCHERISubobjectBoundsUseRemainingSizeAttr(S, D, AL);
     break;
+  case ParsedAttr::AT_CHERINoProvenance:
+    handleSimpleAttributeWithExclusions<CHERINoProvenanceAttr,
+                                        CHERICarriesProvenanceAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_CHERICarriesProvenance:
+    handleSimpleAttributeWithExclusions<CHERICarriesProvenanceAttr,
+                                        CHERINoProvenanceAttr>(S, D, AL);
+    break;
   case ParsedAttr::AT_StdCall:
   case ParsedAttr::AT_CDecl:
   case ParsedAttr::AT_CHERICCall:

@@ -790,11 +790,61 @@ public:
   Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
     return GetBinOpVal(Op, V, Op.E->getType());
   }
-  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V, QualType T) {
+  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *RHS, Value *V,
+                        QualType T) {
     bool IsCapabilityResult = T->isCHERICapabilityType(CGF.getContext());
     // TODO: or just check LHS LLVM type?
     if (!IsCapabilityResult)
       return V;
+    assert(CGF.CGM.getDataLayout().isFatPointer(LHS->getType()));
+    assert(CGF.CGM.getDataLayout().isFatPointer(RHS->getType()));
+
+    if (const auto *BO = dyn_cast<BinaryOperator>(Op.E)) {
+      // For assignment (|=, &=, +=, etc) operators the provenance source is
+      // always the LHS (even if the RHS carries provenance and the LHS doesn't!
+      if (BO->isAssignmentOp())
+        return CGF.setCapabilityIntegerValue(LHS, V);
+      // Otherwise, we look at the CheriNoProvenance attribute to determine
+      // whether to derive from the RHS or LHS.
+      bool LHSNoProvenance =
+          BO->getLHS()->getType()->hasAttr(attr::CHERINoProvenance);
+      bool RHSNoProvenance =
+          BO->getRHS()->getType()->hasAttr(attr::CHERINoProvenance);
+      if (LHSNoProvenance && RHSNoProvenance) {
+        // If both have a no-provenance attribute, we derive from NULL
+        auto NullCap = llvm::ConstantPointerNull::get(
+            cast<llvm::PointerType>(LHS->getType()));
+        return CGF.setCapabilityIntegerValue(NullCap, V);
+      } else if (RHSNoProvenance) {
+        // If the RHS doens't carry provenance we can use the LHS
+        return CGF.setCapabilityIntegerValue(LHS, V);
+      } else if (LHSNoProvenance) {
+        // And the other way around
+        return CGF.setCapabilityIntegerValue(RHS, V);
+      } else {
+#ifndef NDEBUG
+        llvm::errs() << "Found ambiguous provenance in code-generation: ";
+        BO->dumpColor();
+        // Fall through to the data-dependent provenance case and if that fails
+        // use LHS-derived values
+        // FIXME: should really make this an error
+#endif
+      }
+    } else if (const auto *UO = dyn_cast<UnaryOperator>(Op.E)) {
+      assert(Op.Opcode == BO_Sub && "Unexpected opcode");
+      assert(isa<llvm::ConstantPointerNull>(LHS));
+      // For consistency with unary (logical) not, we derive from the original
+      // capability instead of using a null-derived one:
+      assert(CGF.CGM.getDataLayout().isFatPointer(RHS->getType()));
+      return CGF.setCapabilityIntegerValue(RHS, V);
+    } else {
+      llvm_unreachable("Should not get here!");
+    }
+#ifndef NDEBUG
+    llvm::errs() << "GETBINOP AMBIGUOUS:";
+    Op.E->dumpColor();
+#endif
+
     // Bitwise-and require special handling (due to checking vs clearing low
     // pointer bits: see https://github.com/CTSRD-CHERI/clang/issues/189
     // Note: without data-dependent provenance patterns such as
@@ -822,8 +872,8 @@ public:
     }
     return CGF.setCapabilityIntegerValue(LHS, V);
   }
-  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V) {
-    return GetBinOpResult(Op, LHS, V, Op.E->getType());
+  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *RHS, Value *V) {
+    return GetBinOpResult(Op, LHS, RHS, V, Op.E->getType());
   }
   // Common helper for getting how wide LHS of shift is.
   static Value *GetWidthMinusOneValue(Value* LHS,Value* RHS);
@@ -855,17 +905,18 @@ public:
                             Value *(ScalarExprEmitter::*F)(const BinOpInfo &));
 
   // Binary operators and binary compound assignment operators.
-#define HANDLEBINOP(OP) \
-  Value *VisitBin ## OP(const BinaryOperator *E) {                         \
-    BinOpInfo BOP = EmitBinOps(E);                                         \
-    Value *Base = BOP.LHS;                                                 \
-    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);                                   \
-    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);                                   \
-    Value *V = Emit ## OP(BOP);                                            \
-    return GetBinOpResult(BOP, Base, V);                                   \
-  }                                                                        \
-  Value *VisitBin ## OP ## Assign(const CompoundAssignOperator *E) {       \
-    return EmitCompoundAssign(E, &ScalarExprEmitter::Emit ## OP);          \
+#define HANDLEBINOP(OP)                                                        \
+  Value *VisitBin##OP(const BinaryOperator *E) {                               \
+    BinOpInfo BOP = EmitBinOps(E);                                             \
+    Value *LHS = BOP.LHS;                                                      \
+    Value *RHS = BOP.RHS;                                                      \
+    BOP.LHS = GetBinOpVal(BOP, LHS);                                           \
+    BOP.RHS = GetBinOpVal(BOP, RHS);                                           \
+    Value *V = Emit##OP(BOP);                                                  \
+    return GetBinOpResult(BOP, LHS, RHS, V);                                   \
+  }                                                                            \
+  Value *VisitBin##OP##Assign(const CompoundAssignOperator *E) {               \
+    return EmitCompoundAssign(E, &ScalarExprEmitter::Emit##OP);                \
   }
   HANDLEBINOP(Mul)
   HANDLEBINOP(Div)
@@ -880,11 +931,12 @@ public:
           !E->getType()->isPointerType()))
       return EmitAdd(BOP);
     // FIXME: should not need this!
-    Value *Base = BOP.LHS;
-    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
-    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);
+    Value *LHS = BOP.LHS;
+    Value *RHS = BOP.RHS;
+    BOP.LHS = GetBinOpVal(BOP, LHS);
+    BOP.RHS = GetBinOpVal(BOP, RHS);
     Value *V = EmitAdd(BOP);
-    return GetBinOpResult(BOP, Base, V);
+    return GetBinOpResult(BOP, LHS, RHS, V);
   }
   Value *VisitBinAddAssign(const CompoundAssignOperator *E) {
     return EmitCompoundAssign(E, &ScalarExprEmitter::EmitAdd);
@@ -897,11 +949,12 @@ public:
     if (!(E->getType()->isCHERICapabilityType(CGF.getContext()) &&
           !E->getType()->isPointerType()))
       return EmitSub(BOP);
-    Value *Base = BOP.LHS;
-    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
-    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);
+    Value *LHS = BOP.LHS;
+    Value *RHS = BOP.RHS;
+    BOP.LHS = GetBinOpVal(BOP, LHS);
+    BOP.RHS = GetBinOpVal(BOP, RHS);
     Value *V = EmitSub(BOP);
-    return GetBinOpResult(BOP, Base, V);
+    return GetBinOpResult(BOP, LHS, RHS, V);
   }
   Value *VisitBinSubAssign(const CompoundAssignOperator *E) {
     return EmitCompoundAssign(E, &ScalarExprEmitter::EmitSub);
@@ -2987,11 +3040,12 @@ Value *ScalarExprEmitter::VisitUnaryMinus(const UnaryOperator *E) {
   BinOp.Opcode = BO_Sub;
   // FIXME: once UnaryOperator carries FPFeatures, copy it here.
   BinOp.E = E;
-  Value *base = BinOp.LHS;
-  BinOp.LHS = GetBinOpVal(BinOp, BinOp.LHS);
-  BinOp.RHS = GetBinOpVal(BinOp, BinOp.RHS);
+  Value *LHS = BinOp.LHS;
+  Value *RHS = BinOp.RHS;
+  BinOp.LHS = GetBinOpVal(BinOp, LHS);
+  BinOp.RHS = GetBinOpVal(BinOp, RHS);
   Value *result = EmitSub(BinOp);
-  return GetBinOpResult(BinOp, base, result);
+  return GetBinOpResult(BinOp, LHS, RHS, result);
 }
 
 Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
@@ -3347,11 +3401,13 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
       E->getType()->isPointerType())
     Result = (this->*Func)(OpInfo);
   else {
-    Value *Base = OpInfo.LHS;
+    Value *LHS = OpInfo.LHS;
+    Value *RHS = OpInfo.RHS;
     OpInfo.LHS = GetBinOpVal(OpInfo, OpInfo.LHS, E->getComputationLHSType());
     OpInfo.RHS = GetBinOpVal(OpInfo, OpInfo.RHS, E->getComputationLHSType());
     Result = (this->*Func)(OpInfo);
-    Result = GetBinOpResult(OpInfo, Base, Result, E->getComputationResultType());
+    Result =
+        GetBinOpResult(OpInfo, LHS, RHS, Result, E->getComputationResultType());
   }
 
   // Convert the result back to the LHS type,

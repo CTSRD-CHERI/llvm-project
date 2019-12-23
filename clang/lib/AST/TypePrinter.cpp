@@ -1551,6 +1551,12 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::CHERINoSubobjectBounds:
      OS << "cheri_no_subobject_bounds";
      break;
+  case attr::CHERINoProvenance:
+    OS << "cheri_no_provenance";
+    break;
+  case attr::CHERICarriesProvenance:
+    OS << "cheri_carries_provenance";
+    break;
   case attr::PointerInterpretationCaps:
      OS << "pointer_interpretation_capabilities";
      break;

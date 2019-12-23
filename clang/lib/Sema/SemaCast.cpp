@@ -111,6 +111,39 @@ namespace {
           // return ExprError();
         }
       }
+      const QualType CastTy = castExpr->getType();
+#ifndef NDEBUG
+      if (CastTy->isIntCapType()) {
+        QualType ProvenanceCheckedTy = castExpr->getType();
+        CastExpr::checkProvenance(Self.Context, &ProvenanceCheckedTy,
+                                  castExpr->getSubExpr());
+        assert(CastTy == ProvenanceCheckedTy && "checkProvenance not called?");
+      }
+#endif
+      // For C-style casts from uintptr_t -> void* flag the void* argument
+      // as not carrying provenance if the source type does not carry provenance
+      // exclude intcap_t in this check here since those cases are handled
+      // implicitly by *CastExpr::Create.
+      // We have to special-case the pointer type instead of being able to
+      // include it in the ::Create checks since we need a non-const ASTContext&
+      if (CastTy->isCHERICapabilityType(Self.Context,
+                                        /*IncludeIntCap=*/false)) {
+        const QualType ExprTy = castExpr->getSubExpr()->getType();
+        // Casts from integer pointer->capability pointer can result in a tagged
+        // value in in hybrid mode.
+        bool ExprCanCarryProvenance =
+            ExprTy->isCHERICapabilityType(Self.Context) ||
+            ExprTy->isPointerType();
+        // If the source type does not carry provenance, the result can't
+        // either.
+        if (ExprTy->hasAttr(attr::CHERINoProvenance))
+          ExprCanCarryProvenance = false;
+        if (!CastTy->hasAttr(attr::CHERINoProvenance) &&
+            !ExprCanCarryProvenance) {
+          castExpr->setType(Self.Context.getAttributedType(
+              attr::CHERINoProvenance, CastTy, CastTy));
+        }
+      }
 
       // If this is an unbridged cast, wrap the result in an implicit
       // cast that yields the unbridged-cast placeholder type.
