@@ -8173,7 +8173,8 @@ bool LLParser::ParseVariableSummary(std::string Name, GlobalValue::GUID GUID,
       /*Live=*/false, /*IsLocal=*/false, /*CanAutoHide=*/false);
   GlobalVarSummary::GVarFlags GVarFlags(/*ReadOnly*/ false,
                                         /* WriteOnly */ false,
-                                        /* Constant */ false);
+                                        /* Constant */ false,
+                                        GlobalObject::VCallVisibilityPublic);
   std::vector<ValueInfo> Refs;
   VTableFuncList VTableFuncs;
   if (ParseToken(lltok::colon, "expected ':' here") ||
@@ -8879,6 +8880,11 @@ bool LLParser::ParseGVarFlags(GlobalVarSummary::GVarFlags &GVarFlags) {
       if (ParseRest(Flag))
         return true;
       GVarFlags.Constant = Flag;
+      break;
+    case lltok::kw_vcall_visibility:
+      if (ParseRest(Flag))
+        return true;
+      GVarFlags.VCallVisibility = Flag;
       break;
     default:
       return Error(Lex.getLoc(), "expected gvar flag type");

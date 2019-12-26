@@ -791,6 +791,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(sizeM1);
   KEYWORD(bitMask);
   KEYWORD(inlineBits);
+  KEYWORD(vcall_visibility);
   KEYWORD(wpdResolutions);
   KEYWORD(wpdRes);
   KEYWORD(indir);
