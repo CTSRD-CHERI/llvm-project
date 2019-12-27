@@ -799,6 +799,31 @@ public:
     assert(CGF.CGM.getDataLayout().isFatPointer(LHS->getType()));
     assert(CGF.CGM.getDataLayout().isFatPointer(RHS->getType()));
 
+    // Bitwise-and require special handling (due to checking vs clearing low
+    // pointer bits: see https://github.com/CTSRD-CHERI/clang/issues/189
+    // Note: without data-dependent provenance patterns such as
+    // `if (uintptr_t(x) & 1 == 1)` break. This is commonly used is used to
+    // test for data stored in low pointer bits (for mutexes, etc...)
+    if (CGF.getLangOpts().CheriDataDependentProvenance &&
+        (Op.Opcode == BinaryOperator::Opcode::BO_And ||
+         Op.Opcode == BinaryOperator::Opcode::BO_AndAssign)) {
+      // If we are using data-dependent provenance we may need to return either
+      // a NULL-derived or LHS derived capability for bitwise-and
+      // TODO: is this also a problem for xor (should be less common so can
+      // probably ignore?)
+      // For now we derive from NULL if the value we are anding with is less
+      // than one page since such values should *almost* never be valid anyway
+      uint64_t NullDeriveLimit = 4096;
+      auto *ShouldDeriveFromNull = CGF.Builder.CreateICmpULE(
+          Op.RHS, llvm::ConstantInt::get(Op.RHS->getType(), NullDeriveLimit),
+          "bitand.should-nullderive");
+      auto CapNull = llvm::ConstantPointerNull::get(
+          cast<llvm::PointerType>(LHS->getType()));
+      auto DataDepResult = Builder.CreateSelect(ShouldDeriveFromNull, CapNull,
+                                                LHS, "bitand.provenance");
+      return CGF.setCapabilityIntegerValue(DataDepResult, V);
+    }
+
     if (const auto *BO = dyn_cast<BinaryOperator>(Op.E)) {
       // For assignment (|=, &=, +=, etc) operators the provenance source is
       // always the LHS (even if the RHS carries provenance and the LHS doesn't!
@@ -845,31 +870,6 @@ public:
     Op.E->dumpColor();
 #endif
 
-    // Bitwise-and require special handling (due to checking vs clearing low
-    // pointer bits: see https://github.com/CTSRD-CHERI/clang/issues/189
-    // Note: without data-dependent provenance patterns such as
-    // `if (uintptr_t(x) & 1 == 1)` break. This is commonly used is used to
-    // test for data stored in low pointer bits (for mutexes, etc...)
-    if (Op.Opcode == BinaryOperator::Opcode::BO_And ||
-        Op.Opcode == BinaryOperator::Opcode::BO_AndAssign) {
-      // If we are using data-dependent provenance we may need to return either
-      // a NULL-derived or LHS derived capability for bitwise-and
-      // TODO: is this also a problem for xor (should be less common so can
-      // probably ignore?)
-      if (IsCapabilityResult &&
-          CGF.getLangOpts().CheriDataDependentProvenance) {
-        // For now we derive from NULL if the value we are anding with is less
-        // than one page since such values should *almost* never be valid anyway
-        uint64_t NullDeriveLimit = 4096;
-        auto *ShouldDeriveFromNull = CGF.Builder.CreateICmpULE(
-            Op.RHS, llvm::ConstantInt::get(Op.RHS->getType(), NullDeriveLimit),
-            "bitand.should-nullderive");
-        auto CapNull = llvm::ConstantPointerNull::get(
-            cast<llvm::PointerType>(LHS->getType()));
-        LHS = Builder.CreateSelect(ShouldDeriveFromNull, CapNull, LHS,
-                                 "bitand.provenance");
-      }
-    }
     return CGF.setCapabilityIntegerValue(LHS, V);
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *RHS, Value *V) {
