@@ -2015,11 +2015,16 @@ const FieldDecl *CastExpr::getTargetFieldForToUnionCast(const RecordDecl *RD,
 }
 
 static bool canCarryProvenance(const ASTContext &C, QualType Ty) {
-  // In certain cases in hybrid mode, pointer types can be implicitly
-  // converted to capabilities so even though they don't carry provenance,
-  // the resulting type might do.
-  if (!Ty->isCHERICapabilityType(C) && !Ty->isPointerType())
-    return false;
+  if (!Ty->isCHERICapabilityType(C)) {
+    // In pure-capability mode we know that only capabilities carry provenance
+    if (C.getTargetInfo().areAllPointersCapabilities())
+      return false;
+    // In certain cases in hybrid mode, pointer types can be implicitly
+    // converted to capabilities so even though they don't carry provenance,
+    // the resulting type might do.
+    if (!Ty->isPointerType())
+      return false;
+  }
   if (Ty->hasAttr(attr::CHERINoProvenance))
     return false; // avoid doubly-annotating a type
   if (const EnumType *ET = Ty->getAs<EnumType>()) {
