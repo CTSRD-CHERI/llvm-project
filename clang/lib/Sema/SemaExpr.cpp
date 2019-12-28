@@ -11553,15 +11553,18 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
       // have CheriDataDependentProvenance enabled. It also gives surprising
       // behaviour if we are compiling in uintcap=offset mode so warn if either
       // of these conditions are met.
+      //
       // This is purely an efficiency problem in address mode, since we have
-      // changed the definition of capability to no longer include the tag bit
-      // TODO: the clang frontend should know about -mllvm -cheri-exact-equals
-      // and keep the same warning unless CheriDataDependentProvenance is on.
-      if (UsingUIntCapOffset || !getLangOpts().CheriDataDependentProvenance)
+      // changed the definition of capability to no longer include the tag bit.
+      // However, it is a problem even in address mode when using exact equals
+      // and are not using data-dependent provenance.
+      if (UsingUIntCapOffset || (getLangOpts().CheriCompareExact &&
+                                 !getLangOpts().CheriDataDependentProvenance)) {
         DiagRuntimeBehavior(Loc, RHS.get(),
                             PDiag(diag::warn_uintcap_bitwise_and)
                                 << LHS.get()->getSourceRange()
                                 << RHS.get()->getSourceRange());
+      }
     } else if (UsingUIntCapOffset && isLHSCap &&
                (Opc == BO_Xor || Opc == BO_XorAssign)) {
       // XOR is highly dubious when in offset mode (except when using on plain
