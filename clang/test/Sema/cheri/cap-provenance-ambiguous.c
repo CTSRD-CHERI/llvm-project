@@ -39,6 +39,14 @@ typedef unsigned long ulong;
 enum E {
   ENUM_CONSTANT = 15
 };
+#ifdef __cplusplus
+enum class EClass : uintptr_t {
+  Value = 1
+};
+enum class EClassNoProv : no_provenance_uintptr_t {
+  Value = 1
+};
+#endif
 
 #ifndef ARITH_OP
 #error ARITH_OP MISSING
@@ -61,6 +69,18 @@ void test_op_flag_constant(void *arg) {
   check(FLAG_INTPTR ARITH_OP(uintptr_t) arg);
   check(FLAG_NOPROV_INTPTR ARITH_OP(uintptr_t) arg);
   check(ENUM_CONSTANT ARITH_OP(uintptr_t) arg);
+#ifdef __cplusplus
+  // C++11 enum class previously caused false positives.
+  // Check that none of these cases warn:
+  check((uintptr_t)arg ARITH_OP (uintptr_t)EClass::Value);
+  check((uintptr_t)arg ARITH_OP (uintptr_t)EClassNoProv::Value);
+  check((uintptr_t)arg ARITH_OP (uintptr_t)(EClass)FLAG_INTPTR);
+  check((uintptr_t)arg ARITH_OP (uintptr_t)(EClassNoProv)FLAG_INTPTR);
+  check((uintptr_t)EClass::Value ARITH_OP(uintptr_t) arg);
+  check((uintptr_t)(EClass)FLAG_INTPTR ARITH_OP(uintptr_t) arg);
+  check((uintptr_t)EClassNoProv::Value ARITH_OP(uintptr_t) arg);
+  check((uintptr_t)(EClassNoProv)FLAG_INTPTR ARITH_OP(uintptr_t) arg);
+#endif
   // But not if there is an intermediate assignment
   // TODO: could adjust the type here when doing the assignment operation to track provenance
   no_provenance_uintptr_t flag_noprov = FLAG_INT;
@@ -131,3 +151,22 @@ void assign_op(long l, long l2,
   l ARITH_EQ_OP prov2;
   l ARITH_EQ_OP noprov2;
 }
+
+#ifdef __cplusplus
+/// While enum class values should not hold values not in the enumeration, let's
+/// be conservative here and assume enum classes with underlying type uintptr_t
+/// can hold valid pointers
+void enum_class(EClass EC, EClassNoProv ECNP, EClass EC2, EClassNoProv ECNP2, uintptr_t U, uintptr_t U2) {
+  check((uintptr_t)EC ARITH_OP (uintptr_t)EC2); // expected-warning{{it is not clear which should be used as the source of provenance}}
+  check((uintptr_t)EC ARITH_OP (uintptr_t)ECNP2);
+  check((uintptr_t)EC ARITH_OP U2); // expected-warning{{it is not clear which should be used as the source of provenance}}
+
+  check((uintptr_t)ECNP ARITH_OP (uintptr_t)EC2);
+  check((uintptr_t)ECNP ARITH_OP (uintptr_t)ECNP2);
+  check((uintptr_t)ECNP ARITH_OP U2);
+
+  check(U ARITH_OP (uintptr_t)EC2); // expected-warning{{it is not clear which should be used as the source of provenance}}
+  check(U ARITH_OP (uintptr_t)ECNP2);
+  check(U ARITH_OP U2); // expected-warning{{it is not clear which should be used as the source of provenance}}
+}
+#endif
