@@ -9383,7 +9383,14 @@ static void DiagnoseDivisionSizeofPointerOrArray(Sema &S, Expr *LHS, Expr *RHS,
 }
 
 static void diagnoseAmbiguousProvenance(Sema &S, ExprResult &LHS,
-                                        ExprResult &RHS, SourceLocation Loc) {
+                                        ExprResult &RHS, SourceLocation Loc,
+                                        bool IsCompAssign) {
+  // For compound assignment the provenance source is obvious
+  // TODO: for compound assignment, we should implement a warning that a
+  //  capability RHS with a non-cap LHS is potentially inefficient.
+  if (IsCompAssign)
+    return;
+
   const QualType LHSType = LHS.get()->getType();
   const QualType RHSType = RHS.get()->getType();
   bool isLHSCap = LHSType->isCHERICapabilityType(S.Context);
@@ -9443,7 +9450,7 @@ QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
     DiagnoseBadDivideOrRemainderValues(*this, LHS, RHS, Loc, IsDiv);
     DiagnoseDivisionSizeofPointerOrArray(*this, LHS.get(), RHS.get(), Loc);
   } else {
-    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc);
+    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc, IsCompAssign);
   }
   return compType;
 }
@@ -9784,7 +9791,8 @@ QualType Sema::CheckAdditionOperands(ExprResult &LHS, ExprResult &RHS,
   // handle the common case first (both operands are arithmetic).
   if (!compType.isNull() && compType->isArithmeticType()) {
     if (CompLHSTy) *CompLHSTy = compType;
-    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc);
+    assert(Opc == BO_AddAssign || Opc == BO_Add);
+    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc, Opc == BO_AddAssign);
     return compType;
   }
 
@@ -11537,7 +11545,7 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
 
   if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType()) {
     const bool UsingUIntCapOffset = getLangOpts().cheriUIntCapUsesOffset();
-    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc);
+    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc, IsCompAssign);
     const bool isLHSCap = LHS.get()->getType()->isCHERICapabilityType(Context);
     if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign)) {
       // Bitwise and can cause checking low pointer bits to be compiled to

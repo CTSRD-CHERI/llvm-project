@@ -1,4 +1,4 @@
-// Check that we can infer the correct provenance source (-Wcheri-provenance)
+/// Check that we can infer the correct provenance source (-Wcheri-provenance)
 /// Warn for all bitwise operators, as well as addition and multiplication
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=|' '-DARITH_EQ_OP=|='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=&' '-DARITH_EQ_OP=&='
@@ -95,4 +95,24 @@ void cast_noprov_via_ptr(uintptr_t arg, no_provenance_uintptr_t noprov, uintptr_
   check((uintptr_t)(void *)1 ARITH_OP arg);
   check(arg ARITH_OP(uintptr_t)(void *) noprov);
   check(arg ARITH_OP(uintptr_t)(void *) 1);
+}
+
+/// Check warnings for compound assignment operators.
+/// Here the provenance is clear, but it may be inefficient to use uintptr_t
+/// TODO: Implement the inefficient warning
+void assign_op(long l, long l2,
+               no_provenance_uintptr_t noprov, no_provenance_uintptr_t noprov2,
+               uintptr_t prov, uintptr_t prov2) {
+  // No diagnostics expected here (yet)
+  prov ARITH_EQ_OP noprov2;
+  prov ARITH_EQ_OP prov2;
+  prov ARITH_EQ_OP l2;
+
+  noprov ARITH_EQ_OP noprov2;
+  noprov ARITH_EQ_OP prov2;
+  noprov ARITH_EQ_OP l2;
+
+  l ARITH_EQ_OP l2;
+  l ARITH_EQ_OP prov2;
+  l ARITH_EQ_OP noprov2;
 }

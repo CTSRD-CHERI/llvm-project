@@ -89,6 +89,7 @@ void test_cg_prov_ambiguous(uintptr_t lhs, uintptr_t rhs) {
   check(lhs ARITH_OP rhs); // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
 }
 
+/// Compound assignment should always use LHS provenance:
 // CHECK-LABEL: define {{[^@]+}}@test_cg_eq_op_ambiguous
 // CHECK-SAME: (i8 addrspace(200)*{{( readnone)?}} [[LHS:%.*]], i8 addrspace(200)*{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
@@ -101,10 +102,11 @@ void test_cg_prov_ambiguous(uintptr_t lhs, uintptr_t rhs) {
 //
 uintptr_t test_cg_eq_op_ambiguous(uintptr_t lhs, uintptr_t rhs) {
   // +=/|=, etc uses LHS (but should warn)
-  lhs ARITH_EQ_OP rhs; // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
+  lhs ARITH_EQ_OP rhs;
   return lhs;
 }
 
+/// Compound assignment should always use LHS provenance:
 // CHECK-LABEL: define {{[^@]+}}@test_cg_eq_op_lhs_noprov
 // CHECK-SAME: (i8 addrspace(200)*{{( readnone)?}} [[LHS:%.*]], i8 addrspace(200)*{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
@@ -120,6 +122,7 @@ uintptr_t test_cg_eq_op_lhs_noprov(no_provenance_uintptr_t lhs, uintptr_t rhs) {
   return lhs;
 }
 
+/// Compound assignment should always use LHS provenance:
 // CHECK-LABEL: define {{[^@]+}}@test_cg_eq_op_rhs_noprov
 // CHECK-SAME: (i8 addrspace(200)*{{( readnone)?}} [[LHS:%.*]], i8 addrspace(200)*{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
