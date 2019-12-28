@@ -18,10 +18,6 @@ typedef __no_provenance uintcap_t no_provenance_uintptr_t;
 typedef unsigned int uint;
 typedef unsigned long ulong;
 
-#define FLAG_INT 1u
-#define FLAG_INTPTR ((uintptr_t)3u)
-#define FLAG_NOPROV_INTPTR ((no_provenance_uintptr_t)7u)
-
 #ifdef ADD
 #define ARITH_OP +
 #define ARITH_EQ_OP +=

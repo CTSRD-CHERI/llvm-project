@@ -563,6 +563,9 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
 
   if (ImplicitCastExpr *ImpCast = dyn_cast<ImplicitCastExpr>(E)) {
     if (ImpCast->getCastKind() == Kind && (!BasePath || BasePath->empty())) {
+      // We need to update the no-provenance check here since we are changing
+      // the type without calling ImplicitCastExpr::Create()
+      CastExpr::checkProvenance(Context, &Ty, ImpCast->getSubExpr());
       ImpCast->setType(Ty);
       ImpCast->setValueKind(VK);
       return E;

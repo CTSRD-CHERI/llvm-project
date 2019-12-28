@@ -1,18 +1,28 @@
 /// Check that we can infer the correct provenance source (-Wcheri-provenance)
 /// Warn for all bitwise operators, as well as addition and multiplication
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=|' '-DARITH_EQ_OP=|='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=|' '-DARITH_EQ_OP=|='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=&' '-DARITH_EQ_OP=&='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=&' '-DARITH_EQ_OP=&='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=^' '-DARITH_EQ_OP=^='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=^' '-DARITH_EQ_OP=^='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=+' '-DARITH_EQ_OP=+='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=+' '-DARITH_EQ_OP=+='
 /// XXX: multiplication does not make very much sense with two capabilities, maybe don't warn and move it into the inefficient/causing unrepresentable results category?
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=*' '-DARITH_EQ_OP=*='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify -fsyntax-only '-DARITH_OP=*' '-DARITH_EQ_OP=*='
 /// We should not warn about ambigous provenance for (non-commutative) operations where it is inherited from the LHS
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative -fsyntax-only '-DARITH_OP=-' '-DARITH_EQ_OP=-='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative -fsyntax-only '-DARITH_OP=-' '-DARITH_EQ_OP=-='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=%' '-DARITH_EQ_OP=%='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=%' '-DARITH_EQ_OP=%='
 /// XXX: for shifts we should probably warn that they cause unrepresentable intermediate value?
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=<<' '-DARITH_EQ_OP=<<='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=<<' '-DARITH_EQ_OP=<<='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=>>' '-DARITH_EQ_OP=>>='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=>>' '-DARITH_EQ_OP=>>='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=/' '-DARITH_EQ_OP=/='
+// RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=/' '-DARITH_EQ_OP=/='
 // TODO: check the AST dump for the provenance attributes?
 
 // non-commutative-no-diagnostics
@@ -26,6 +36,9 @@ typedef unsigned long ulong;
 #define FLAG_INT 1u
 #define FLAG_INTPTR ((uintptr_t)3u)
 #define FLAG_NOPROV_INTPTR ((no_provenance_uintptr_t)7u)
+enum E {
+  ENUM_CONSTANT = 15
+};
 
 #ifndef ARITH_OP
 #error ARITH_OP MISSING
@@ -43,9 +56,11 @@ void test_op_flag_constant(void *arg) {
   check((uintptr_t)arg ARITH_OP FLAG_INT);
   check((uintptr_t)arg ARITH_OP FLAG_INTPTR);
   check((uintptr_t)arg ARITH_OP FLAG_NOPROV_INTPTR);
+  check((uintptr_t)arg ARITH_OP ENUM_CONSTANT);
   check(FLAG_INT ARITH_OP(uintptr_t) arg);
   check(FLAG_INTPTR ARITH_OP(uintptr_t) arg);
   check(FLAG_NOPROV_INTPTR ARITH_OP(uintptr_t) arg);
+  check(ENUM_CONSTANT ARITH_OP(uintptr_t) arg);
   // But not if there is an intermediate assignment
   // TODO: could adjust the type here when doing the assignment operation to track provenance
   no_provenance_uintptr_t flag_noprov = FLAG_INT;
