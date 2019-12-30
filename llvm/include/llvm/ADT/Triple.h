@@ -133,6 +133,8 @@ public:
     MipsSubArch_cheri64,
     MipsSubArch_cheri128,
     MipsSubArch_cheri256,
+
+    PPCSubArch_spe
   };
   enum VendorType {
     UnknownVendor,
