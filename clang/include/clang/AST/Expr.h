@@ -3640,6 +3640,20 @@ public:
       return Opcode(unsigned(Opc) - BO_MulAssign + BO_Mul);
   }
 
+  bool isCommutative() const { return isCommutative(getOpcode()); }
+  static bool isCommutative(Opcode Opc) {
+    switch (Opc) {
+    case BO_Add:
+    case BO_Mul:
+    case BO_And:
+    case BO_Or:
+    case BO_Xor:
+      return true;
+    default:
+      return false;
+    }
+  }
+
   static bool isShiftAssignOp(Opcode Opc) {
     return Opc == BO_ShlAssign || Opc == BO_ShrAssign;
   }

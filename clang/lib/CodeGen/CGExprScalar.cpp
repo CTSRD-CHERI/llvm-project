@@ -826,9 +826,13 @@ public:
 
     if (const auto *BO = dyn_cast<BinaryOperator>(Op.E)) {
       // For assignment (|=, &=, +=, etc) operators the provenance source is
-      // always the LHS (even if the RHS carries provenance and the LHS doesn't!
+      // always the LHS (even if the RHS carries provenance and the LHS doesn't)
       if (BO->isAssignmentOp())
         return CGF.setCapabilityIntegerValue(LHS, V);
+      // The same also applies for non-commutative operators:
+      if (!BO->isCommutative())
+        return CGF.setCapabilityIntegerValue(LHS, V);
+
       // Otherwise, we look at the CheriNoProvenance attribute to determine
       // whether to derive from the RHS or LHS.
       bool LHSNoProvenance =
@@ -869,7 +873,6 @@ public:
     llvm::errs() << "GETBINOP AMBIGUOUS:";
     Op.E->dumpColor();
 #endif
-
     return CGF.setCapabilityIntegerValue(LHS, V);
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *RHS, Value *V) {
