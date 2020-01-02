@@ -9403,7 +9403,7 @@ static void diagnoseAmbiguousProvenance(Sema &S, ExprResult &LHS,
   if (LHSProvenance && RHSProvenance) {
     S.DiagRuntimeBehavior(
         Loc, RHS.get(),
-        S.PDiag(diag::warn_ambigous_provenance_capability_binop)
+        S.PDiag(diag::warn_ambiguous_provenance_capability_binop)
             << LHSType << RHSType << LHS.get()->getSourceRange()
             << RHS.get()->getSourceRange());
     // In the case of ambiguous provenance we currently default to LHS-derived
