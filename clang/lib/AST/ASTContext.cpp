@@ -4171,6 +4171,13 @@ QualType ASTContext::getAttributedType(attr::Kind attrKind,
   type = new (*this, TypeAlignment)
       AttributedType(canon, attrKind, modifiedType, equivalentType);
 
+  if (attrKind == attr::CHERINoProvenance) {
+    assert(modifiedType->isCHERICapabilityType(*this));
+    assert(equivalentType->isCHERICapabilityType(*this));
+    assert(canon->isCHERICapabilityType(*this));
+    assert(type->isCHERICapabilityType(*this));
+  }
+
   Types.push_back(type);
   AttributedTypes.InsertNode(type, insertPos);
 
