@@ -2037,6 +2037,12 @@ void CastExpr::checkProvenance(const ASTContext &C, QualType *Dst,
         ExprCanCarryProvenance = false;
     }
   }
+  // NULL pointers are untagged values
+  // FIXME: change isNullPointerConstant to take a const astctx.
+  if (ExprCanCarryProvenance &&
+      Src->isNullPointerConstant(const_cast<ASTContext &>(C), NPC_NeverValueDependent))
+    ExprCanCarryProvenance = false;
+
   if (!ExprCanCarryProvenance) {
     // FIXME: allowing __uintcap_t as the underlying type for enums is not
     // ideal, as this means we need a const_cast here.
