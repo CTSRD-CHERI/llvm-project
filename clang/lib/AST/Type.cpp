@@ -560,6 +560,27 @@ bool Type::isIntCapType() const {
   return false;
 }
 
+bool Type::canCarryProvenance(const ASTContext &C) const {
+  if (!isCHERICapabilityType(C)) {
+    // In pure-capability mode we know that only capabilities carry provenance
+    if (C.getTargetInfo().areAllPointersCapabilities())
+      return false;
+    // In certain cases in hybrid mode, pointer types can be implicitly
+    // converted to capabilities so even though they don't carry provenance,
+    // the resulting type might do.
+    // However, null pointers never carry provenance.
+    if (!isPointerType() || isNullPtrType())
+      return false;
+  }
+  if (hasAttr(attr::CHERINoProvenance))
+    return false; // avoid doubly-annotating a type
+  if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType)) {
+    return ET->getDecl()->getIntegerType()->canCarryProvenance(C);
+  }
+  // Some other kind of capability type -> assume it can carry provenance
+  return true;
+}
+
 bool Type::isVoidPointerType() const {
   if (const auto *PT = getAs<PointerType>())
     return PT->getPointeeType()->isVoidType();
