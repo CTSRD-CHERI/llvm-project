@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // RUN: %cheri_cc1 %s -O0 -o - -emit-llvm -cheri-uintcap=offset -verify=expected,offset | FileCheck %s -check-prefixes CHECK,OFFSET
 // RUN: %cheri_cc1 %s -O0 -o - -emit-llvm -cheri-uintcap=addr -verify | FileCheck %s  -check-prefixes CHECK,ADDR
 // Check that we can actually compile this file...
@@ -69,7 +70,7 @@ int ca2(void* __capability x, void* __capability y)
   // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: add
-  return a + b;
+  return a + b; // expected-warning{{it is not clear which should be used as the source of provenance}}
 }
 
 // CHECK-LABEL: i32 @ca3(
@@ -82,7 +83,7 @@ int ca3(void* __capability x, void* __capability y)
   // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: mul
-  return a * b;
+  return a * b; // expected-warning{{it is not clear which should be used as the source of provenance}}
 }
 
 // CHECK-LABEL: i32 @ca4(

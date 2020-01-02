@@ -70,7 +70,7 @@ struct pointer_and_bool {
 struct pointer_and_bool pb_array[3] = {
     { "foo", false },
     { "bar", true },
-    { NULL, NULL },  // expected-error {{type 'void * __capability' cannot be narrowed to 'bool' (aka '_Bool') in initializer list}}
+    { NULL, NULL },  // expected-error {{type 'void * __capability __attribute__((cheri_no_provenance))' cannot be narrowed to 'bool' (aka '_Bool') in initializer list}}
 };
 
 #endif
