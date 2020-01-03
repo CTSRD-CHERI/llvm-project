@@ -2402,9 +2402,26 @@ public:
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
   ExprResult RebuildCStyleCastExpr(SourceLocation LParenLoc,
-                                         TypeSourceInfo *TInfo,
-                                         SourceLocation RParenLoc,
-                                         Expr *SubExpr) {
+                                   TypeSourceInfo *TInfo,
+                                   SourceLocation RParenLoc, Expr *SubExpr,
+                                   CastKind CK) {
+    /*
+     * For __cheri_* casts we look at the DependentCastKind field of
+     * CStyleCastExpr to allow rebuilding as the correct kind of cast.
+     */
+    if (CK == CK_CHERICapabilityToAddress) {
+      return getSema().BuildCheriOffsetOrAddress(
+          LParenLoc, /*IsOffsetCast=*/false, TInfo, RParenLoc, SubExpr);
+    } else if (CK == CK_CHERICapabilityToOffset) {
+      return getSema().BuildCheriOffsetOrAddress(
+          LParenLoc, /*IsOffsetCast=*/true, TInfo, RParenLoc, SubExpr);
+    } else if (CK == CK_CHERICapabilityToPointer) {
+      return getSema().BuildCheriToOrFromCap(LParenLoc, /*IsToCap=*/false,
+                                             TInfo, RParenLoc, SubExpr);
+    } else if (CK == CK_PointerToCHERICapability) {
+      return getSema().BuildCheriToOrFromCap(LParenLoc, /*IsToCap=*/true,
+                                             TInfo, RParenLoc, SubExpr);
+    }
     return getSema().BuildCStyleCastExpr(LParenLoc, TInfo, RParenLoc,
                                          SubExpr);
   }
@@ -9967,7 +9984,8 @@ TreeTransform<Derived>::TransformCStyleCastExpr(CStyleCastExpr *E) {
   return getDerived().RebuildCStyleCastExpr(E->getLParenLoc(),
                                             Type,
                                             E->getRParenLoc(),
-                                            SubExpr.get());
+                                            SubExpr.get(),
+                                            E->getDependentCastKind());
 }
 
 template<typename Derived>
