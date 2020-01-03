@@ -23,7 +23,9 @@
 // RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=>>' '-DARITH_EQ_OP=>>='
 // RUN: %cheri_purecap_cc1 %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=/' '-DARITH_EQ_OP=/='
 // RUN: %cheri_purecap_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=non-commutative  -fsyntax-only '-DARITH_OP=/' '-DARITH_EQ_OP=/='
-// TODO: check the AST dump for the provenance attributes?
+
+// Check that it also works in hybrid mode
+// RUN: %cheri_cc1 -xc++ %s -Wall -Wno-cheri-bitwise-operations -verify=expected,hybrid -fsyntax-only '-DARITH_OP=|' '-DARITH_EQ_OP=|='
 
 // non-commutative-no-diagnostics
 
@@ -126,10 +128,11 @@ void cast_noprov_via_ptr(uintptr_t arg, no_provenance_uintptr_t noprov, uintptr_
   check(arg ARITH_OP(no_provenance_uintptr_t)(void *) prov);
 
   // casting via pointer types should retain the no-provenance attribute
-  check((uintptr_t)(void *)noprov ARITH_OP arg);
-  check((uintptr_t)(void *)1 ARITH_OP arg);
-  check(arg ARITH_OP(uintptr_t)(void *) noprov);
-  check(arg ARITH_OP(uintptr_t)(void *) 1);
+  // In hybrid mode these cases warn since we generate CFromPtr instructions
+  check((uintptr_t)(void *)noprov ARITH_OP arg); // hybrid-warning{{it is not clear which should be used as the source of provenance}}
+  check((uintptr_t)(void *)1 ARITH_OP arg);  // hybrid-warning{{it is not clear which should be used as the source of provenance}}
+  check(arg ARITH_OP(uintptr_t)(void *) noprov);  // hybrid-warning{{it is not clear which should be used as the source of provenance}}
+  check(arg ARITH_OP(uintptr_t)(void *) 1);  // hybrid-warning{{it is not clear which should be used as the source of provenance}}
 }
 
 /// Check warnings for compound assignment operators.
