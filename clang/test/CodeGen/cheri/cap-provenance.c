@@ -14,7 +14,7 @@
 typedef __UINTPTR_TYPE__ uintcap_t;
 typedef uintcap_t uintptr_t;
 #define __no_provenance __attribute__((cheri_no_provenance))
-typedef __no_provenance uintcap_t no_provenance_uintptr_t;
+typedef __no_provenance uintcap_t no_provenance_uintptr_t; // hybrid-warning{{warn_attribute_wrong_decl_type_str}}
 typedef unsigned int uint;
 typedef unsigned long ulong;
 
@@ -274,4 +274,9 @@ void test_cg_postdec(uintptr_t arg, char *arg_ptr) {
   check((uintptr_t)arg_ptr--);
   check(arg);
   check((uintptr_t)arg_ptr);
+}
+
+// This caused an assertion failure after the initial infer-provenance changes: check that it works
+uintptr_t regression(uintptr_t b) {
+   return b >> 1;
 }

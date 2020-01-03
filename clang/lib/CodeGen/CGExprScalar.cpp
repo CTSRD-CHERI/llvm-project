@@ -797,7 +797,6 @@ public:
     if (!IsCapabilityResult)
       return V;
     assert(CGF.CGM.getDataLayout().isFatPointer(LHS->getType()));
-    assert(CGF.CGM.getDataLayout().isFatPointer(RHS->getType()));
 
     // Bitwise-and require special handling (due to checking vs clearing low
     // pointer bits: see https://github.com/CTSRD-CHERI/clang/issues/189
