@@ -3253,9 +3253,6 @@ PushProtocolProperties(llvm::SmallPtrSet<const IdentifierInfo*,16> &PropertySet,
                        SmallVectorImpl<const ObjCPropertyDecl *> &Properties,
                        const ObjCProtocolDecl *Proto,
                        bool IsClassProperty) {
-  for (const auto *P : Proto->protocols())
-    PushProtocolProperties(PropertySet, Properties, P, IsClassProperty);
-
   for (const auto *PD : Proto->properties()) {
     if (IsClassProperty != PD->isClassProperty())
       continue;
@@ -3263,6 +3260,9 @@ PushProtocolProperties(llvm::SmallPtrSet<const IdentifierInfo*,16> &PropertySet,
       continue;
     Properties.push_back(PD);
   }
+
+  for (const auto *P : Proto->protocols())
+    PushProtocolProperties(PropertySet, Properties, P, IsClassProperty);
 }
 
 /*
