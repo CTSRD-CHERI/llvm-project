@@ -78,6 +78,7 @@ namespace {
     CXXCastPath BasePath;
     bool IsARCUnbridgedCast;
     bool IsCheriFromCap = false;
+    bool IsCheriAddrOffset = false;
 
     SourceRange OpRange;
     SourceRange DestRange;
@@ -1982,8 +1983,7 @@ CastKind CastOperation::checkCapabilityToIntCast() {
   }
   // Also check whether we are casting to a memory_address type and if not warn
   // unless we are already using a __cheri_addr/__cheri_offset cast.
-  if (Kind != CK_CHERICapabilityToOffset &&
-      Kind != CK_CHERICapabilityToAddress) {
+  if (!IsCheriAddrOffset) {
     assert(DestType->isIntegerType());
     bool IsMemAddressType = DestType->hasAttr(attr::MemoryAddress);
     if (!IsMemAddressType)
@@ -3276,6 +3276,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
   const QualType DestTy = Op.DestType;
   Op.Kind =
       IsOffsetCast ? CK_CHERICapabilityToOffset : CK_CHERICapabilityToAddress;
+  Op.IsCheriAddrOffset = true;
   // Check the source type:
   // Use getRealReferenceType() because getType() only returns T for T&
   const QualType SrcTy = SubExpr->getRealReferenceType(Context, false);
