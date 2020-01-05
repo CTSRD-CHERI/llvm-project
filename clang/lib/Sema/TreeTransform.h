@@ -9981,11 +9981,10 @@ TreeTransform<Derived>::TransformCStyleCastExpr(CStyleCastExpr *E) {
       SubExpr.get() == E->getSubExpr())
     return E;
 
-  return getDerived().RebuildCStyleCastExpr(E->getLParenLoc(),
-                                            Type,
-                                            E->getRParenLoc(),
-                                            SubExpr.get(),
-                                            E->getDependentCastKind());
+  return getDerived().RebuildCStyleCastExpr(
+      E->getLParenLoc(), Type, E->getRParenLoc(), SubExpr.get(),
+      E->getCastKind() == CK_Dependent ? E->getDependentCastKind()
+                                       : CK_Dependent);
 }
 
 template<typename Derived>
