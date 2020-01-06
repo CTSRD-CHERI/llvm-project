@@ -569,9 +569,12 @@ bool Type::canCarryProvenance(const ASTContext &C) const {
     // converted to capabilities so even though they don't carry provenance,
     // the resulting type might do.
     // However, null pointers never carry provenance.
-    if (!isPointerType() || isNullPtrType())
+    if (!isPointerType())
       return false;
+    return !isNullPtrType();
   }
+  if (isNullPtrType())
+    return false;
   if (hasAttr(attr::CHERINoProvenance))
     return false; // avoid doubly-annotating a type
   if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType)) {
