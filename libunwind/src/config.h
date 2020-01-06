@@ -270,19 +270,4 @@ static inline uintptr_t pcc_address(uintptr_t a)
 #endif
 }
 
-__attribute__((always_inline))
-static inline uintptr_t ddc_address(uintptr_t a)
-{
-#ifdef __CHERI_PURE_CAPABILITY__
-  if (__builtin_cheri_tag_get((void*)a))
-    return a;
-  //fprintf(stderr, "Converting 0x%llx to ddc-relative pointer\n", (unsigned long long)a);
-  void *ddc = __builtin_cheri_global_data_get();
-  ddc = __builtin_cheri_offset_set(ddc, __builtin_cheri_address_get((void*)a));
-  return (uintptr_t)ddc;
-#else
-  return a;
-#endif
-}
-
 #endif // LIBUNWIND_CONFIG_H
