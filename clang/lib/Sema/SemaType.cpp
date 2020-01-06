@@ -7538,30 +7538,15 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
   S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
 }
 
-static void handleCheriProvenanceAttr(QualType &T, TypeProcessingState &State,
-                                      TypeAttrLocation TAL, ParsedAttr &Attr,
-                                      bool CarriesProvenance) {
+static void handleCheriNoProvenanceAttr(QualType &T, TypeProcessingState &State,
+                                        TypeAttrLocation TAL,
+                                        ParsedAttr &Attr) {
   Sema &S = State.getSema();
-  attr::Kind ThisKind = CarriesProvenance ? attr::CHERICarriesProvenance
-                                          : attr::CHERINoProvenance;
-  attr::Kind InverseKind = CarriesProvenance ? attr::CHERINoProvenance
-                                             : attr::CHERICarriesProvenance;
-  if (T->hasAttr(InverseKind)) {
-    S.Diag(Attr.getLoc(), diag::err_attributes_are_not_compatible)
-        << "no_provenance"
-        << "carries_provenance";
-    return;
-  }
-  if (T->hasAttr(ThisKind))
+  if (T->hasAttr(attr::CHERINoProvenance))
     S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact)
         << Attr.getAttrName();
   Attr.setUsedAsTypeAttr();
-  if (CarriesProvenance)
-    T = State.getAttributedType(
-        createSimpleAttr<CHERICarriesProvenanceAttr>(S.Context, Attr), T, T);
-  else
-    T = State.getAttributedType(
-        createSimpleAttr<CHERINoProvenanceAttr>(S.Context, Attr), T, T);
+  T = State.getAttributedType(createSimpleAttr<CHERINoProvenanceAttr>(S.Context, Attr), T, T);
 }
 
 static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
@@ -7949,12 +7934,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                                   type, type);
       break;
     case ParsedAttr::AT_CHERINoProvenance:
-      handleCheriProvenanceAttr(type, state, TAL, attr,
-                                /*CarriesProvenance=*/false);
-      break;
-    case ParsedAttr::AT_CHERICarriesProvenance:
-      handleCheriProvenanceAttr(type, state, TAL, attr,
-                                /*CarriesProvenance=*/true);
+      handleCheriNoProvenanceAttr(type, state, TAL, attr);
       break;
     case ParsedAttr::AT_MemoryAddress:
       if (!HandleMemoryAddressAttr(type, state, TAL, attr)) {

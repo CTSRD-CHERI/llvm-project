@@ -2003,14 +2003,6 @@ def CHERINoProvenance : DeclOrTypeAttr {
                    C2x<"cheri", "no_provenance">];
   let Documentation = [Undocumented]; // FIXME
 }
-// The opposite of the previous attribute
-// XXX: not sure this is particularly useful
-def CHERICarriesProvenance : DeclOrTypeAttr {
-  let Spellings = [GNU<"cheri_carries_provenance">,
-                   CXX11<"cheri","carries_provenance">,
-                   C2x<"cheri", "carries_provenance">];
-  let Documentation = [Undocumented]; // FIXME
-}
 
 
 def IntelOclBicc : DeclOrTypeAttr {
