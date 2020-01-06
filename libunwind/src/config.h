@@ -263,7 +263,7 @@ static inline uintptr_t pcc_address(uintptr_t a)
   if (__builtin_cheri_tag_get((void*)a))
     return a;
   void *pcc = __builtin_cheri_program_counter_get();
-  pcc = __builtin_cheri_offset_set(pcc, __builtin_cheri_address_get((void*)a));
+  pcc = __builtin_cheri_offset_set(pcc, (long)__builtin_cheri_address_get((void*)a));
   return (uintptr_t)pcc;
 #else
   return a;
