@@ -10379,6 +10379,16 @@ static void DiagnoseBadDeduction(Sema &S, NamedDecl *Found, Decl *Templated,
       which = 2;
     }
 
+    // Tweak the diagnostic if the problem is that we deduced packs of
+    // different arities. We'll print the actual packs anyway in case that
+    // includes additional useful information.
+    if (DeductionFailure.getFirstArg()->getKind() == TemplateArgument::Pack &&
+        DeductionFailure.getSecondArg()->getKind() == TemplateArgument::Pack &&
+        DeductionFailure.getFirstArg()->pack_size() !=
+            DeductionFailure.getSecondArg()->pack_size()) {
+      which = 3;
+    }
+
     S.Diag(Templated->getLocation(),
            diag::note_ovl_candidate_inconsistent_deduction)
         << which << ParamD->getDeclName() << *DeductionFailure.getFirstArg()
@@ -10416,6 +10426,8 @@ static void DiagnoseBadDeduction(Sema &S, NamedDecl *Found, Decl *Templated,
     TemplateArgString = " ";
     TemplateArgString += S.getTemplateArgumentBindingsText(
         getDescribedTemplate(Templated)->getTemplateParameters(), *Args);
+    if (TemplateArgString.size() == 1)
+      TemplateArgString.clear();
     S.Diag(Templated->getLocation(),
            diag::note_ovl_candidate_unsatisfied_constraints)
         << TemplateArgString;
@@ -10443,6 +10455,8 @@ static void DiagnoseBadDeduction(Sema &S, NamedDecl *Found, Decl *Templated,
       TemplateArgString = " ";
       TemplateArgString += S.getTemplateArgumentBindingsText(
           getDescribedTemplate(Templated)->getTemplateParameters(), *Args);
+      if (TemplateArgString.size() == 1)
+        TemplateArgString.clear();
     }
 
     // If this candidate was disabled by enable_if, say so.
@@ -10492,6 +10506,8 @@ static void DiagnoseBadDeduction(Sema &S, NamedDecl *Found, Decl *Templated,
       TemplateArgString = " ";
       TemplateArgString += S.getTemplateArgumentBindingsText(
           getDescribedTemplate(Templated)->getTemplateParameters(), *Args);
+      if (TemplateArgString.size() == 1)
+        TemplateArgString.clear();
     }
 
     S.Diag(Templated->getLocation(), diag::note_ovl_candidate_deduced_mismatch)
