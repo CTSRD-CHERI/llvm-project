@@ -37307,8 +37307,9 @@ static SDValue combineExtractVectorElt(SDNode *N, SelectionDAG &DAG,
   EVT VT = N->getValueType(0);
   SDLoc dl(InputVector);
   bool IsPextr = N->getOpcode() != ISD::EXTRACT_VECTOR_ELT;
+  unsigned NumSrcElts = SrcVT.getVectorNumElements();
 
-  if (CIdx && CIdx->getAPIntValue().uge(SrcVT.getVectorNumElements()))
+  if (CIdx && CIdx->getAPIntValue().uge(NumSrcElts))
     return IsPextr ? DAG.getConstant(0, dl, VT) : DAG.getUNDEF(VT);
 
   // Integer Constant Folding.
@@ -37404,7 +37405,6 @@ static SDValue combineExtractVectorElt(SDNode *N, SelectionDAG &DAG,
     };
     if (all_of(InputVector->uses(), IsBoolExtract) &&
         BoolExtracts.size() > 1) {
-      unsigned NumSrcElts = SrcVT.getVectorNumElements();
       EVT BCVT = EVT::getIntegerVT(*DAG.getContext(), NumSrcElts);
       if (SDValue BC =
               combineBitcastvxi1(DAG, BCVT, InputVector, dl, Subtarget)) {
