@@ -4499,8 +4499,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   RenderFloatingPointOptions(TC, D, OFastEnabled, Args, CmdArgs);
 
   if (Arg *A = Args.getLastArg(options::OPT_LongDouble_Group)) {
-    if (TC.getArch() == llvm::Triple::x86 ||
-        TC.getArch() == llvm::Triple::x86_64)
+    if (TC.getTriple().isX86())
       A->render(Args, CmdArgs);
     else if ((TC.getArch() == llvm::Triple::ppc || TC.getTriple().isPPC64()) &&
              (A->getOption().getID() != options::OPT_mlong_double_80))
@@ -5076,8 +5075,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
     llvm::Triple::ArchType Arch = TC.getArch();
     if (Arg *A = Args.getLastArg(options::OPT_mfentry)) {
-      if (Arch == llvm::Triple::systemz || Arch == llvm::Triple::x86 ||
-          Arch == llvm::Triple::x86_64)
+      if (Arch == llvm::Triple::systemz || TC.getTriple().isX86())
         A->render(Args, CmdArgs);
       else
         D.Diag(diag::err_drv_unsupported_opt_for_target)
@@ -6362,8 +6360,7 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
   }
 
   unsigned VolatileOptionID;
-  if (getToolChain().getArch() == llvm::Triple::x86_64 ||
-      getToolChain().getArch() == llvm::Triple::x86)
+  if (getToolChain().getTriple().isX86())
     VolatileOptionID = options::OPT__SLASH_volatile_ms;
   else
     VolatileOptionID = options::OPT__SLASH_volatile_iso;
