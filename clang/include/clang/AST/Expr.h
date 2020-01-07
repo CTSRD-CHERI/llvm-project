@@ -3416,6 +3416,8 @@ class CStyleCastExpr final
       private llvm::TrailingObjects<CStyleCastExpr, CXXBaseSpecifier *> {
   SourceLocation LPLoc; // the location of the left paren
   SourceLocation RPLoc; // the location of the right paren
+  // To indicate __cheri_foo casts in dependent contexts
+  CastKind DependentCastKind = CK_Dependent;
 
   CStyleCastExpr(QualType exprTy, ExprValueKind vk, CastKind kind, Expr *op,
                  unsigned PathSize, TypeSourceInfo *writtenTy,
@@ -3442,6 +3444,18 @@ public:
 
   SourceLocation getRParenLoc() const { return RPLoc; }
   void setRParenLoc(SourceLocation L) { RPLoc = L; }
+
+
+  // These two functions are needed to correctly reassemble __cheri_* casts
+  // in template instantiations without adding a new CastExpr to the hierarchy
+  CastKind getDependentCastKind() const {
+    assert(getCastKind() == CK_Dependent);
+    return DependentCastKind;
+  }
+  void setDependentCastKind(CastKind NewCK) {
+    assert(getCastKind() == CK_Dependent);
+    DependentCastKind = NewCK;
+  }
 
   SourceLocation getBeginLoc() const LLVM_READONLY { return LPLoc; }
   SourceLocation getEndLoc() const LLVM_READONLY {

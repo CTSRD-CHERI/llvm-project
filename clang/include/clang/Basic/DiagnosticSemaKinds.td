@@ -6343,10 +6343,6 @@ def err_cheri_offset_addr_invalid_target_type: Error<
 def err_cheri_addr_ptr_type: Error<
   "%select{integral pointer|capability}1 type %0 is not a valid target type for __cheri_addr: "
   "target must be an integer type">;
-def err_cheri_addr_offset_not_supported_in_templates : Error<
-  "__cheri_%select{addr|offset}0 with dependent type %1 is not yet supported">;
-def err_cheri_to_from_cap_not_supported_in_templates : Error<
-  "__cheri_%select{from|to}0cap with dependent type %1 is not yet supported">;
 def warn_cheri_offset_addr_smaller_target_type: Warning<
   "target type %0 is smaller than the type '%1' of the "
   "%select{address|capability offset field}2; truncation may occur">,

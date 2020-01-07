@@ -8867,13 +8867,11 @@ public:
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
 
-  ExprResult BuildCheriToOrFromCap(SourceLocation LParenLoc,
-                                   SourceLocation KeywordLoc, bool IsToCap,
+  ExprResult BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
                                    TypeSourceInfo *TSInfo,
                                    SourceLocation RParenLoc, Expr *SubExpr);
 
   ExprResult BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
-                                       SourceLocation KeywordLoc,
                                        bool IsOffsetCast,
                                        TypeSourceInfo *TSInfo,
                                        SourceLocation RParenLoc, Expr *SubExpr);
