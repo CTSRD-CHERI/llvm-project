@@ -7210,13 +7210,6 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_CHERISubobjectBoundsUseRemainingSize:
     handleCHERISubobjectBoundsUseRemainingSizeAttr(S, D, AL);
     break;
-  case ParsedAttr::AT_CHERINoProvenance: {
-    handleSimpleAttributeOrDiagnose<CHERINoProvenanceAttr>(
-        S, D, AL, cast<ValueDecl>(D)->getType()->isIntCapType(),
-        diag::err_attribute_wrong_decl_type_str,
-        /*ExtraArgs=*/AL, "capability types");
-    break;
-  }
   case ParsedAttr::AT_StdCall:
   case ParsedAttr::AT_CDecl:
   case ParsedAttr::AT_CHERICCall:

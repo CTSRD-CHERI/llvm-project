@@ -7542,10 +7542,15 @@ static void handleCheriNoProvenanceAttr(QualType &T, TypeProcessingState &State,
                                         TypeAttrLocation TAL,
                                         ParsedAttr &Attr) {
   Sema &S = State.getSema();
+  Attr.setUsedAsTypeAttr();
+  if (!T->isIntCapType()) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type_str)
+        << Attr.getAttrName() << "capability types";
+    return;
+  }
   if (T->hasAttr(attr::CHERINoProvenance))
     S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact)
         << Attr.getAttrName();
-  Attr.setUsedAsTypeAttr();
   T = State.getAttributedType(createSimpleAttr<CHERINoProvenanceAttr>(S.Context, Attr), T, T);
 }
 

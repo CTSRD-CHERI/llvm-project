@@ -1993,17 +1993,15 @@ def CHERISubobjectBoundsUseRemainingSize : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
-
 // Attributes for __uintcap_t/__intcap_t to indicate whether
 // they carry provenance or not (to avoid the LHS carries
 // provenance rule that we were using before).
-def CHERINoProvenance : DeclOrTypeAttr {
+def CHERINoProvenance : TypeAttr {
   let Spellings = [GNU<"cheri_no_provenance">,
                    CXX11<"cheri","no_provenance">,
                    C2x<"cheri", "no_provenance">];
   let Documentation = [Undocumented]; // FIXME
 }
-
 
 def IntelOclBicc : DeclOrTypeAttr {
   let Spellings = [Clang<"intel_ocl_bicc", 0>];
