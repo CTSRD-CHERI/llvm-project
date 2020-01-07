@@ -1983,8 +1983,7 @@ CastKind CastOperation::checkCapabilityToIntCast() {
   }
   // Also check whether we are casting to a memory_address type and if not warn
   // unless we are already using a __cheri_addr/__cheri_offset cast.
-  if (!IsCheriAddrOffset) {
-    assert(DestType->isIntegerType());
+  if (!IsCheriAddrOffset && DestType->isIntegerType()) {
     bool IsMemAddressType = DestType->hasAttr(attr::MemoryAddress);
     if (!IsMemAddressType)
       Self.Diag(OpRange.getBegin(), diag::warn_capability_integer_cast)
