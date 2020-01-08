@@ -163,6 +163,8 @@ struct CodeGenIntrinsic {
   /// Note that this requires that \p IS.ParamVTs is available.
   bool isParamAPointer(unsigned ParamIdx) const;
 
+  bool isParamImmArg(unsigned ParamIdx) const;
+
   CodeGenIntrinsic(Record *R);
 };
 
