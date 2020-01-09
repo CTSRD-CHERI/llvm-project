@@ -1236,6 +1236,11 @@ void ARMTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
   unsigned Cost = 0;
   for (auto *BB : L->getBlocks()) {
     for (auto &I : *BB) {
+      // Don't unroll vectorised loop. MVE does not benefit from it as much as
+      // scalar code.
+      if (I.getType()->isVectorTy())
+        return;
+
       if (isa<CallInst>(I) || isa<InvokeInst>(I)) {
         ImmutableCallSite CS(&I);
         if (const Function *F = CS.getCalledFunction()) {
@@ -1244,10 +1249,6 @@ void ARMTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
         }
         return;
       }
-      // Don't unroll vectorised loop. MVE does not benefit from it as much as
-      // scalar code.
-      if (I.getType()->isVectorTy())
-        return;
 
       SmallVector<const Value*, 4> Operands(I.value_op_begin(),
                                             I.value_op_end());
