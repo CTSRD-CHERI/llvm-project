@@ -14588,86 +14588,100 @@ CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID, const CallExpr *E) {
 
 struct BuiltinAlignArgs {
   llvm::Value *Src = nullptr;
-  llvm::Value *SrcAddr = nullptr;
-  llvm::Value *SrcAsI8Cap = nullptr;
+  llvm::Type *SrcType = nullptr;
   llvm::Value *Alignment = nullptr;
   llvm::Value *Mask = nullptr;
-  bool IsCheri = false;
+  llvm::IntegerType *IntType = nullptr;
 
   BuiltinAlignArgs(const CallExpr *E, CodeGenFunction &CGF) {
     QualType AstType = E->getArg(0)->getType();
-    if (AstType->isArrayType()) {
-      AstType = CGF.getContext().getDecayedType(AstType);
+    if (AstType->isArrayType())
       Src = CGF.EmitArrayToPointerDecay(E->getArg(0)).getPointer();
-    } else {
+    else
       Src = CGF.EmitScalarExpr(E->getArg(0));
-    }
-    IsCheri = AstType->isCHERICapabilityType(CGF.CGM.getContext());
-    llvm::IntegerType *IntType = IntegerType::get(
-        CGF.getLLVMContext(), CGF.getContext().getIntRange(AstType));
-
-    // We need to convert source to an integer in order to perform the masking
-    // For CHERI we need to get the virtual address and perform add the
-    // difference instead of masking since that only works on the offset.
-    if (IsCheri) {
-      Value *Callee =
-          CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get, CGF.IntPtrTy);
-      SrcAsI8Cap = CGF.Builder.CreateBitCast(Src, CGF.CGM.Int8CheriCapTy);
-      SrcAddr = CGF.Builder.CreateCall(Callee, {SrcAsI8Cap});
+    SrcType = Src->getType();
+    if (SrcType->isPointerTy()) {
+      IntType = IntegerType::get(
+          CGF.getLLVMContext(),
+          CGF.CGM.getDataLayout().getIndexTypeSizeInBits(SrcType));
     } else {
-      SrcAddr = CGF.Builder.CreateBitOrPointerCast(Src, IntType);
+      assert(SrcType->isIntegerTy());
+      IntType = cast<llvm::IntegerType>(SrcType);
     }
-    auto *One = llvm::ConstantInt::get(IntType, 1);
     Alignment = CGF.EmitScalarExpr(E->getArg(1));
-    // Ensure that we also handle __uintcap_t values as the alignment param
-    if (E->getArg(1)->getType()->isIntCapType()) {
-      Value *Callee =
-          CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get, CGF.IntPtrTy);
-      Alignment = CGF.Builder.CreateCall(Callee, {Alignment});
-    }
-
     Alignment = CGF.Builder.CreateZExtOrTrunc(Alignment, IntType, "alignment");
+    auto *One = llvm::ConstantInt::get(IntType, 1);
     Mask = CGF.Builder.CreateSub(Alignment, One, "mask");
   }
 };
 
-/// Generate (x & (y-1)) == 0
+/// Generate (x & (y-1)) == 0.
 RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E) {
   BuiltinAlignArgs Args(E, *this);
+  llvm::Value *SrcAddress = Args.Src;
+  if (Args.SrcType->isPointerTy())
+    SrcAddress =
+        Builder.CreateBitOrPointerCast(Args.Src, Args.IntType, "src_addr");
   return RValue::get(Builder.CreateICmpEQ(
-      Builder.CreateAnd(Args.SrcAddr, Args.Mask, "set_bits"),
-      llvm::Constant::getNullValue(Args.SrcAddr->getType()), "is_aligned"));
+      Builder.CreateAnd(SrcAddress, Args.Mask, "set_bits"),
+      llvm::Constant::getNullValue(Args.IntType), "is_aligned"));
 }
 
-/// Generate (x & ~(y-1)) to align down or ((x + (y - 1)) & ~(y - 1)) to align
-/// up. Note: for capability types we can't do the bitwise operations but
-/// instead need to add/subtract the difference to/from the pointer. For
-/// capabilities we do x - (x & y) for down and x + (y - (x & y))
+/// Generate (x & ~(y-1)) to align down or ((x+(y-1)) & ~(y-1)) to align up.
+/// Note: For pointer types we can avoid ptrtoint/inttoptr pairs by using the
+/// llvm.ptrmask instrinsic (with a GEP before in the align_up case).
+/// TODO: actually use ptrmask once most optimization passes know about it.
 RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
-  // FIXME this needs to use minus/plus for CHERI and not masking!!!!
   BuiltinAlignArgs Args(E, *this);
+  llvm::Value *SrcAddr = Args.Src;
+  if (Args.Src->getType()->isPointerTy())
+    SrcAddr = Builder.CreatePtrToInt(Args.Src, Args.IntType, "intptr");
+  llvm::Value *SrcForMask = SrcAddr;
   if (AlignUp) {
     // When aligning up we have to first add the mask to ensure we go over the
-    // next alignment value and then align down to the next valid multiple
-    // By adding the mask first, we ensure that align_up on an already aligned
-    // value will not be changed.
-    Args.SrcAddr = Builder.CreateAdd(Args.SrcAddr, Args.Mask, "over_boundary");
+    // next alignment value and then align down to the next valid multiple.
+    // By adding the mask, we ensure that align_up on an already aligned
+    // value will not change the value.
+    SrcForMask = Builder.CreateAdd(SrcForMask, Args.Mask, "over_boundary");
   }
-  // When not targeting CHERI we can just use bitwise masking and cast the
-  // result back to a pointer
-  auto *Ret = Builder.CreateAnd(Args.SrcAddr,
-                                Builder.CreateNot(Args.Mask, "negated_mask"));
-  if (Args.IsCheri) {
-    // For CHERI capabilities we need to call CSetAddr to update the target
-    // address If the backend supports an AND instruction on capabilities it
-    // should use a pattern to convert this to AND instead of setaddr.
-    Value *Callee =
-        CGM.getIntrinsic(Intrinsic::cheri_cap_address_set, CGM.PtrDiffTy);
-    Ret = Builder.CreateCall(
-        Callee, {Args.SrcAsI8Cap, Builder.CreateBitCast(Ret, CGM.Int64Ty)});
+  // Invert the mask to only clear the lower bits.
+  llvm::Value *InvertedMask = Builder.CreateNot(Args.Mask, "inverted_mask");
+  llvm::Value *Result =
+      Builder.CreateAnd(SrcForMask, InvertedMask, "aligned_result");
+  if (Args.Src->getType()->isPointerTy()) {
+    /// TODO: Use ptrmask instead of ptrtoint+gep once it is optimized well.
+    // Result = Builder.CreateIntrinsic(
+    //  Intrinsic::ptrmask, {Args.SrcType, SrcForMask->getType(), Args.IntType},
+    //  {SrcForMask, NegatedMask}, nullptr, "aligned_result");
+    Result->setName("aligned_intptr");
+    llvm::Value *Difference = Builder.CreateSub(Result, SrcAddr, "diff");
+    if (E->getType()->isPointerType()) {
+      // The result must point to the same underlying allocation. This means we
+      // can use an inbounds GEP to enable better optimization.
+      Value *Base = EmitCastToVoidPtr(Args.Src);
+      if (getLangOpts().isSignedOverflowDefined())
+        Result = Builder.CreateGEP(Base, Difference, "aligned_result");
+      else
+        Result = EmitCheckedInBoundsGEP(Base, Difference,
+                                        /*SignedIndices=*/true,
+                                        /*isSubtraction=*/!AlignUp,
+                                        E->getExprLoc(), "aligned_result");
+    } else {
+      // However, for when performing operations on __intcap_t (which is also
+      // a pointer type in LLVM IR), we cannot set the inbounds flag as the
+      // result could be either an arbitrary integer value or a valid pointer.
+      // Setting the inbounds flag for the arbitrary integer case is not safe.
+      assert(E->getType()->isIntCapType());
+      Result = Builder.CreateGEP(EmitCastToVoidPtr(Args.Src), Difference,
+                                 "aligned_result");
+    }
+    Result = Builder.CreatePointerCast(Result, Args.SrcType);
+    // Emit an alignment assumption to ensure that the new alignment is
+    // propagated to loads/stores, etc.
+    EmitAlignmentAssumption(Result, E, E->getExprLoc(), Args.Alignment);
   }
-  return RValue::get(Builder.CreateBitOrPointerCast(Ret, Args.Src->getType(),
-                                                    "aligned_result"));
+  assert(Result->getType() == Args.SrcType);
+  return RValue::get(Result);
 }
 
 Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,

@@ -3768,9 +3768,9 @@ public:
   /// Emit IR for __builtin_os_log_format.
   RValue emitBuiltinOSLogFormat(const CallExpr &E);
 
-  /// Emit IR for __builtin_is_aligned
+  /// Emit IR for __builtin_is_aligned.
   RValue EmitBuiltinIsAligned(const CallExpr *E);
-  /// Emit IR for __builtin_align_up/__builtin_align_down
+  /// Emit IR for __builtin_align_up/__builtin_align_down.
   RValue EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp);
 
   llvm::Function *generateBuiltinOSLogHelperFunction(

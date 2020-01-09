@@ -226,40 +226,42 @@ static bool SemaBuiltinPreserveAI(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
+/// Check that the value argument for __builtin_is_aligned(value, alignment) and
+/// __builtin_aligned_{up,down}(value, alignment) is an integer or a pointer
+/// type (but not a function pointer) and that the alignment is a power-of-two.
 static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID) {
   if (checkArgCount(S, TheCall, 2))
     return true;
 
   clang::Expr *Source = TheCall->getArg(0);
-  clang::Expr *AlignOp = TheCall->getArg(1);
   bool IsBooleanAlignBuiltin = ID == Builtin::BI__builtin_is_aligned;
 
   auto IsValidIntegerType = [](QualType Ty) {
     return Ty->isIntegerType() && !Ty->isEnumeralType() && !Ty->isBooleanType();
   };
+  QualType SrcTy = Source->getType();
+  // We should also be able to use it with arrays (but not functions!).
+  if (SrcTy->canDecayToPointerType() && SrcTy->isArrayType()) {
+    SrcTy = S.Context.getDecayedType(SrcTy);
+  }
+  if ((!SrcTy->isPointerType() && !IsValidIntegerType(SrcTy)) ||
+      SrcTy->isFunctionPointerType()) {
+    // FIXME: this is not quite the right error message since we don't allow
+    // floating point types, or member pointers.
+    S.Diag(Source->getExprLoc(), diag::err_typecheck_expect_scalar_operand)
+        << SrcTy;
+    return true;
+  }
+
+  clang::Expr *AlignOp = TheCall->getArg(1);
   if (!IsValidIntegerType(AlignOp->getType())) {
     S.Diag(AlignOp->getExprLoc(), diag::err_typecheck_expect_int)
         << AlignOp->getType();
     return true;
   }
-
-  QualType SrcTy = Source->getType();
-  // Should also be able to use it with arrays (but not functions!)
-  bool IsArrayToPointerDecay =
-      SrcTy->canDecayToPointerType() && SrcTy->isArrayType();
-  if (!SrcTy->isPointerType() && !IsArrayToPointerDecay &&
-      !IsValidIntegerType(SrcTy)) {
-    // TODO: this is not quite the right error message since we don't allow
-    // floating point types, or member pointers
-    S.Diag(AlignOp->getExprLoc(), diag::err_typecheck_expect_scalar_operand)
-        << SrcTy;
-    return true;
-  }
-  // err_argument_invalid_range
-  // TODO: allow zero as an always true result?
   Expr::EvalResult AlignResult;
-  unsigned MaxAlignmentBits = S.Context.getIntRange(SrcTy) - 1;
-  // Can't check validity of alignment if it is type dependent
+  unsigned MaxAlignmentBits = S.Context.getIntWidth(SrcTy) - 1;
+  // We can't check validity of alignment if it is type dependent.
   if (!AlignOp->isInstantiationDependent() &&
       AlignOp->EvaluateAsInt(AlignResult, S.Context,
                              Expr::SE_AllowSideEffects)) {
@@ -269,26 +271,39 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID) {
     if (AlignValue < 1) {
       S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_small) << 1;
       return true;
-    } else if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
+    }
+    if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
       S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_big)
           << MaxValue.toString(10);
       return true;
-    } else if (AlignValue == 1) {
-      S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
-          << IsBooleanAlignBuiltin;
-    } else if (!AlignValue.isPowerOf2()) {
+    }
+    if (!AlignValue.isPowerOf2()) {
       S.Diag(AlignOp->getExprLoc(), diag::err_alignment_not_power_of_two);
       return true;
     }
+    if (AlignValue == 1) {
+      S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
+          << IsBooleanAlignBuiltin;
+    }
   }
 
-  TheCall->setArg(0, Source);
-  TheCall->setArg(1, AlignOp);
-  QualType RetTy = Source->getType();
-  if (IsArrayToPointerDecay)
-    RetTy = S.Context.getDecayedType(RetTy);
-  // __builtin_is_aligned() returns bool instead of the same type as Arg1
-  TheCall->setType(IsBooleanAlignBuiltin ? S.Context.BoolTy : RetTy);
+  ExprResult SrcArg = S.PerformCopyInitialization(
+      InitializedEntity::InitializeParameter(S.Context, SrcTy, false),
+      SourceLocation(), Source);
+  if (SrcArg.isInvalid())
+    return true;
+  TheCall->setArg(0, SrcArg.get());
+  ExprResult AlignArg =
+      S.PerformCopyInitialization(InitializedEntity::InitializeParameter(
+                                      S.Context, AlignOp->getType(), false),
+                                  SourceLocation(), AlignOp);
+  if (AlignArg.isInvalid())
+    return true;
+  TheCall->setArg(1, AlignArg.get());
+  // For align_up/align_down, the return type is the same as the (potentially
+  // decayed) argument type including qualifiers. For is_aligned(), the result
+  // is always bool.
+  TheCall->setType(IsBooleanAlignBuiltin ? S.Context.BoolTy : SrcTy);
   return false;
 }
 

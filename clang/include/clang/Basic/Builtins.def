@@ -59,7 +59,7 @@
 //  I   -> Required to constant fold to an integer constant expression.
 //
 // Types may be postfixed with the following modifiers:
-// * -> pointer (optionally followed by an address space number, or 'm' for 
+// * -> pointer (optionally followed by an address space number, or 'm' for
 //      memory capabilities. If no address space is specified than
 //      any address space will be accepted)
 // & -> reference (optionally followed by an address space number)
@@ -1480,9 +1480,7 @@ BUILTIN(__builtin_char_memchr, "c*cC*iz", "n")
 BUILTIN(__builtin_dump_struct, "ivC*v*", "tn")
 BUILTIN(__builtin_preserve_access_index, "v.", "t")
 
-
-// Alignment builtins (uses custom parsing to support pointers and capabilities)
-// Builtins to align a value to a specific number of bytes (undefined behaviour/error if the value is not a power of two)
+// Alignment builtins (uses custom parsing to support pointers and integers)
 BUILTIN(__builtin_is_aligned, "bvC*z", "nct")
 BUILTIN(__builtin_align_up, "v*vC*z", "nct")
 BUILTIN(__builtin_align_down, "v*vC*z", "nct")
