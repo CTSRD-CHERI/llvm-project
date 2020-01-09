@@ -1833,6 +1833,10 @@ private:
   /// The asm label, if specified.
   Expr *AsmLabel;
 
+  /// \brief The constraint-expression specified by the trailing
+  /// requires-clause, or null if no such clause was specified.
+  Expr *TrailingRequiresClause;
+
 #ifndef _MSC_VER
   union {
 #endif
@@ -1862,7 +1866,8 @@ public:
         GroupingParens(false), FunctionDefinition(FDK_Declaration),
         Redeclaration(false), Extension(false), ObjCIvar(false),
         ObjCWeakProperty(false), InlineStorageUsed(false),
-        Attrs(ds.getAttributePool().getFactory()), AsmLabel(nullptr) {}
+        Attrs(ds.getAttributePool().getFactory()), AsmLabel(nullptr),
+        TrailingRequiresClause(nullptr) {}
 
   ~Declarator() {
     clear();
@@ -2406,6 +2411,22 @@ public:
           Chunk.Fun.hasTrailingReturnType())
         return true;
     return false;
+  }
+
+  /// \brief Sets a trailing requires clause for this declarator.
+  void setTrailingRequiresClause(Expr *TRC) {
+    TrailingRequiresClause = TRC;
+  }
+
+  /// \brief Sets a trailing requires clause for this declarator.
+  Expr *getTrailingRequiresClause() {
+    return TrailingRequiresClause;
+  }
+
+  /// \brief Determine whether a trailing requires clause was written in this
+  /// declarator.
+  bool hasTrailingRequiresClause() const {
+    return TrailingRequiresClause != nullptr;
   }
 
   /// takeAttributes - Takes attributes from the given parsed-attributes
