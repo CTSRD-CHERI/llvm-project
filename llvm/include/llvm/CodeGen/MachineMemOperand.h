@@ -26,6 +26,7 @@ namespace llvm {
 
 class FoldingSetNodeID;
 class MDNode;
+class MIRFormatter;
 class raw_ostream;
 class MachineFunction;
 class ModuleSlotTracker;
@@ -298,7 +299,8 @@ public:
   /// @{
   void print(raw_ostream &OS, ModuleSlotTracker &MST,
              SmallVectorImpl<StringRef> &SSNs, const LLVMContext &Context,
-             const MachineFrameInfo *MFI, const TargetInstrInfo *TII) const;
+             const MachineFrameInfo *MFI, const TargetInstrInfo *TII,
+             const MIRFormatter *MIRF) const;
   /// @}
 
   friend bool operator==(const MachineMemOperand &LHS,
