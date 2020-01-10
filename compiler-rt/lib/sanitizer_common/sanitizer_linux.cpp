@@ -166,7 +166,7 @@ namespace __sanitizer {
 #if !SANITIZER_SOLARIS && !SANITIZER_NETBSD
 #if !SANITIZER_S390 && !SANITIZER_OPENBSD
 uptr internal_mmap(void *addr, usize length, int prot, int flags, int fd,
-                   OFF_T offset) {
+                   u64 offset) {
 #ifdef __CHERI_PURE_CAPABILITY__
   return (uptr)mmap(addr, length, prot, flags, fd, offset);
 #elif SANITIZER_FREEBSD || SANITIZER_LINUX_USES_64BIT_SYSCALLS
