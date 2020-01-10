@@ -48,7 +48,7 @@ pythonize_bool(LIBCXX_SLOW_TEST_HOST)
 # directory.
 if (NOT LIBCXX_CXX_ABI_LIBRARY_PATH)
   set(LIBCXX_CXX_ABI_LIBRARY_PATH "${LIBCXX_LIBRARY_DIR}" CACHE PATH
-      "The path to libc++abi library.")
+      "The path to libc++abi library." FORCE)
 endif()
 
 set(LIBCXX_TARGET_INFO "libcxx.test.target_info.LocalTI" CACHE STRING
