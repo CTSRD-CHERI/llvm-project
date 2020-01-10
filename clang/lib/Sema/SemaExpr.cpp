@@ -10372,8 +10372,6 @@ static bool convertPointersToCompositeType(Sema &S, SourceLocation Loc,
     return true;
   }
 
-  LHS = S.ImpCastExprToType(LHS.get(), T, CK_BitCast);
-  RHS = S.ImpCastExprToType(RHS.get(), T, CK_BitCast);
   return false;
 }
 
