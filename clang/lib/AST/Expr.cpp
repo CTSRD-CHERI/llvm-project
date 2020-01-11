@@ -2980,6 +2980,13 @@ static Expr *IgnoreImplicitAsWrittenSingleStep(Expr *E) {
   return IgnoreImplicitSingleStep(E);
 }
 
+static Expr *IgnoreParensOnlySingleStep(Expr *E) {
+  if (auto *PE = dyn_cast<ParenExpr>(E))
+    if (!isa<NoChangeBoundsExpr>(E))
+      return PE->getSubExpr();
+  return E;
+}
+
 static Expr *IgnoreParensSingleStepImpl(Expr *E, bool IgnoreNoBounds) {
   if (auto *PE = dyn_cast<ParenExpr>(E)) {
     // XXXAR: also look through __builtin_no_change_bounds() if IgnoreNoBounds
@@ -3123,7 +3130,8 @@ Expr *Expr::IgnoreUnlessSpelledInSource() {
   Expr *LastE = nullptr;
   while (E != LastE) {
     LastE = E;
-    E = E->IgnoreParenImpCasts();
+    E = IgnoreExprNodes(E, IgnoreImplicitSingleStep, IgnoreImpCastsSingleStep,
+                        IgnoreParensOnlySingleStep);
 
     auto SR = E->getSourceRange();
 
