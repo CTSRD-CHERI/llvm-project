@@ -1957,9 +1957,8 @@ bool IRTranslator::translateAtomicCmpXchg(const User &U,
   if (I.isWeak())
     return false;
 
-  auto Flags = I.isVolatile() ? MachineMemOperand::MOVolatile
-                              : MachineMemOperand::MONone;
-  Flags |= MachineMemOperand::MOLoad | MachineMemOperand::MOStore;
+  auto &TLI = *MF->getSubtarget().getTargetLowering();
+  auto Flags = TLI.getAtomicMemOperandFlags(I, *DL);
 
   Type *ResType = I.getType();
   Type *ValType = ResType->Type::getStructElementType(0);
@@ -1987,10 +1986,8 @@ bool IRTranslator::translateAtomicCmpXchg(const User &U,
 bool IRTranslator::translateAtomicRMW(const User &U,
                                       MachineIRBuilder &MIRBuilder) {
   const AtomicRMWInst &I = cast<AtomicRMWInst>(U);
-
-  auto Flags = I.isVolatile() ? MachineMemOperand::MOVolatile
-                              : MachineMemOperand::MONone;
-  Flags |= MachineMemOperand::MOLoad | MachineMemOperand::MOStore;
+  auto &TLI = *MF->getSubtarget().getTargetLowering();
+  auto Flags = TLI.getAtomicMemOperandFlags(I, *DL);
 
   Type *ResType = I.getType();
 
