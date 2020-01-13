@@ -1,0 +1,10 @@
+SECTIONS
+{
+  . = 0x10000;
+  /* In the aether */
+  data_begin = .;
+  .data : { *(.data) }
+  . = 0x20000;
+  /* In .data but out of bounds */
+  data_end = .;
+}

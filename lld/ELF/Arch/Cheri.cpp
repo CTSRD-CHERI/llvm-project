@@ -451,22 +451,27 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
       else
         nonFatalWarning(msg);
     }
+    bool UnknownSectionSize = true;
     if (OutputSection *os = targetSym->getOutputSection()) {
       // For negative offsets use 0 instead (we wan the range of the full symbol in that case)
       int64_t offset = std::max((int64_t)0, reloc.target.offset);
       uint64_t targetVA = targetSym->getVA(offset);
       assert(targetVA >= os->addr);
       uint64_t offsetInOS = targetVA - os->addr;
+      // Check this isn't a symbol defined outside a section in a linker script.
       // Use less-or-equal here to account for __end_foo symbols which point 1 past the section
-      assert(offsetInOS <= os->size);
-      targetSize = os->size - offsetInOS;
+      if (offsetInOS <= os->size) {
+        targetSize = os->size - offsetInOS;
 #ifdef DEBUG_CAP_RELOCS
-      if (Config->verboseCapRelocs)
-          errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
-                 << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
-                 << " -> target size 0x" << utohexstr(TargetSize) << "\n";
+        if (Config->verboseCapRelocs)
+            errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
+                   << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
+                   << " -> target size 0x" << utohexstr(TargetSize) << "\n";
 #endif
-    } else {
+        UnknownSectionSize = false;
+      }
+    }
+    if (UnknownSectionSize) {
       warn("Could not find size for symbol " + reloc.target.verboseToString() +
            " and could not determine section size. Using 0.");
       // TargetSize = std::numeric_limits<uint64_t>::max();
