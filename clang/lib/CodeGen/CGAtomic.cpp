@@ -846,13 +846,8 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
   bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
   if (IsCheriCap) {
-    if (getTarget().areAllPointersCapabilities())
-      UseLibcall = CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
-          E->getOp());
-    else
-      // XXXAR: currently always use libcalls in hybrid since we generate
-      // invalid code and assert otherwise.
-      UseLibcall = true;
+    UseLibcall = CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
+        E->getOp());
   }
 
   if (UseLibcall) {
