@@ -1124,8 +1124,6 @@ DIE *DwarfUnit::getOrCreateModule(const DIModule *M) {
               M->getConfigurationMacros());
   if (!M->getIncludePath().empty())
     addString(MDie, dwarf::DW_AT_LLVM_include_path, M->getIncludePath());
-  if (!M->getSysRoot().empty())
-    addString(MDie, dwarf::DW_AT_LLVM_sysroot, M->getSysRoot());
 
   return &MDie;
 }
