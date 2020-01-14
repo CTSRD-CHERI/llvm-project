@@ -14586,6 +14586,7 @@ CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID, const CallExpr *E) {
   }
 }
 
+namespace {
 struct BuiltinAlignArgs {
   llvm::Value *Src = nullptr;
   llvm::Type *SrcType = nullptr;
@@ -14614,6 +14615,7 @@ struct BuiltinAlignArgs {
     Mask = CGF.Builder.CreateSub(Alignment, One, "mask");
   }
 };
+} // namespace
 
 /// Generate (x & (y-1)) == 0.
 RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E) {
