@@ -2379,14 +2379,7 @@ public:
   // Note that this differs from CreateFCmpS only if IsFPConstrained is true.
   Value *CreateFCmp(CmpInst::Predicate P, Value *LHS, Value *RHS,
                     const Twine &Name = "", MDNode *FPMathTag = nullptr) {
-    if (IsFPConstrained)
-      return CreateConstrainedFPCmp(Intrinsic::experimental_constrained_fcmp,
-                                    P, LHS, RHS, Name);
-
-    if (auto *LC = dyn_cast<Constant>(LHS))
-      if (auto *RC = dyn_cast<Constant>(RHS))
-        return Insert(Folder.CreateFCmp(P, LC, RC), Name);
-    return Insert(setFPAttrs(new FCmpInst(P, LHS, RHS), FPMathTag, FMF), Name);
+    return CreateFCmpHelper(P, LHS, RHS, Name, FPMathTag, false);
   }
 
   // Create a signaling floating-point comparison (i.e. one that raises an FP
@@ -2394,9 +2387,19 @@ public:
   // Note that this differs from CreateFCmp only if IsFPConstrained is true.
   Value *CreateFCmpS(CmpInst::Predicate P, Value *LHS, Value *RHS,
                      const Twine &Name = "", MDNode *FPMathTag = nullptr) {
-    if (IsFPConstrained)
-      return CreateConstrainedFPCmp(Intrinsic::experimental_constrained_fcmps,
-                                    P, LHS, RHS, Name);
+    return CreateFCmpHelper(P, LHS, RHS, Name, FPMathTag, true);
+  }
+
+private:
+  // Helper routine to create either a signaling or a quiet FP comparison.
+  Value *CreateFCmpHelper(CmpInst::Predicate P, Value *LHS, Value *RHS,
+                          const Twine &Name, MDNode *FPMathTag,
+                          bool IsSignaling) {
+    if (IsFPConstrained) {
+      auto ID = IsSignaling ? Intrinsic::experimental_constrained_fcmps
+                            : Intrinsic::experimental_constrained_fcmp;
+      return CreateConstrainedFPCmp(ID, P, LHS, RHS, Name);
+    }
 
     if (auto *LC = dyn_cast<Constant>(LHS))
       if (auto *RC = dyn_cast<Constant>(RHS))
@@ -2404,6 +2407,7 @@ public:
     return Insert(setFPAttrs(new FCmpInst(P, LHS, RHS), FPMathTag, FMF), Name);
   }
 
+public:
   CallInst *CreateConstrainedFPCmp(
       Intrinsic::ID ID, CmpInst::Predicate P, Value *L, Value *R,
       const Twine &Name = "",
