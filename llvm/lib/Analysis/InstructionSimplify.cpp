@@ -5401,8 +5401,11 @@ Value *llvm::SimplifyCall(CallBase *Call, const SimplifyQuery &Q) {
   ConstantArgs.reserve(NumArgs);
   for (auto &Arg : Call->args()) {
     Constant *C = dyn_cast<Constant>(&Arg);
-    if (!C)
+    if (!C) {
+      if (isa<MetadataAsValue>(Arg.get()))
+        continue;
       return nullptr;
+    }
     ConstantArgs.push_back(C);
   }
 
