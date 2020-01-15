@@ -31,7 +31,7 @@ Target &llvm::getTheMipsCheriTarget() {
   return TheMipsCheriTarget;
 }
 
-extern "C" void LLVMInitializeMipsTargetInfo() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTargetInfo() {
   RegisterTarget<Triple::mips,
                  /*HasJIT=*/true>
       X(getTheMipsTarget(), "mips", "MIPS (32-bit big endian)", "Mips");
