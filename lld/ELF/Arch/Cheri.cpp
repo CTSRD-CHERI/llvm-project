@@ -1083,6 +1083,42 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                              bool isCallExpr,
                              llvm::function_ref<std::string()> referencedBy,
                              RelocationBaseSection *dynRelSec) {
+
+  // Special case for exception handling tables in the purecap ABI:
+  // Always create a non-preemptible local relocation for these relocation
+  // since they should not be preempted. It also means that RTLD only needs to
+  // create function sentries with non-zero offsets for these kinds of symbols
+  // using the local relocation mechanism rather than performing symbol lookups.
+  if (sec->name == ".gcc_except_table" && sym->isPreemptible) {
+    if (!sym->isDefined()) {
+      warn("got relocation against undefined symbol " + toString(*sym) +
+          " in exception handling table");
+    } else {
+      // Create a new "fake" symbol with hidden visibility for the relocation
+      // to ensure that it can't be preempted and uses a local capability
+      // relocation in RTLD.
+      assert(sym->visibility == llvm::ELF::STV_DEFAULT);
+      std::string uniqueName = ("__cheri_eh_" + sym->getName()).str();
+      for (int i = 2; symtab->find(uniqueName); i++) {
+        uniqueName = ("__cheri_eh_" + Twine(i) + "_" + sym->getName()).str();
+      }
+      StringRef newName = saver.save(uniqueName);
+      Symbol *newSym = symtab->insert(newName);
+      // Copy over all properties from the old symbol to the new one
+      memcpy(newSym, sym, sizeof(SymbolUnion));
+      // But change name, set visibility to hidden and mark as non-preemptible:
+      newSym->setName(newName);
+      newSym->visibility = llvm::ELF::STV_HIDDEN;
+      newSym->isPreemptible = false;
+
+      sym = newSym; // Make the relocation point to the newly added symbol
+      assert(sym->isDefined());
+      assert(sym->isFunc() && "This should only be used for functions");
+      assert(sym->binding == llvm::ELF::STB_GLOBAL);
+      assert(!sym->isPreemptible);
+    }
+  }
+
   // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
@@ -1110,6 +1146,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
         needTrampoline = true;
     }
   }
+
   if (needTrampoline) {
     capRelocMode = CapRelocsMode::ElfReloc;
     assert(capRelocMode == config->preemptibleCapRelocsMode);
@@ -1161,13 +1198,6 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       // Hack: Add a new global symbol with a unique name so that we can use
       // a dynamic relocation against it.
       // TODO: should it be possible to add STB_LOCAL symbols to .dynsymtab?
-
-
-
-      std::string uniqueName = ("__cheri_fnptr_" + sym->getName()).str();
-      for (int i = 2; symtab->find(uniqueName); i++) {
-        uniqueName = ("__cheri_fnptr" + Twine(i) + "_" + sym->getName()).str();
-      }
       Defined* newSym = symtab->ensureSymbolWillBeInDynsym(sym);
       assert(newSym->isFunc() && "This should only be used for functions");
       assert(newSym->includeInDynsym());
