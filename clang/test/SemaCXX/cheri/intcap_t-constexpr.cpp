@@ -27,6 +27,9 @@ static_assert(x2 == 13, "");
 static_assert(add_mixed(3, 11) == 14, "");
 
 constexpr INTTYPE add_intcap(INTTYPE a, INTTYPE b) { return a + b; }
+// signed-intcap-warning@-1{{it is not clear which should be used as the source of provenance}}
+// unsigned-intcap-warning@-2{{it is not clear which should be used as the source of provenance}}
+
 constexpr INTTYPE x3 = add_intcap(7, 8);
 static_assert(x3 == 15, "");
 

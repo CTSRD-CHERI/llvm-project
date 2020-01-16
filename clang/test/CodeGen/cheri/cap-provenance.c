@@ -7,14 +7,13 @@
 // RUN: %cheri_purecap_cc1 %s -emit-llvm -o - -DMULT -Wcheri -verify -O1 | FileCheck %s -check-prefixes=CHECK,NOTADD '-D$ARITH_OP=mul'
 // RUN: %cheri_purecap_cc1 %s -emit-llvm -o - -DADD -Wcheri -verify -O1 | FileCheck %s -check-prefixes=CHECK,ADD
 // RUN: %cheri_cc1 %s -emit-llvm -o - -DBITOR -Wcheri -verify=hybrid -O1
-// hybrid-no-diagnostics
 
 #pragma clang diagnostic ignored "-Wcheri-bitwise-operations"
 
 typedef __UINTPTR_TYPE__ uintcap_t;
 typedef uintcap_t uintptr_t;
 #define __no_provenance __attribute__((cheri_no_provenance))
-typedef __no_provenance uintcap_t no_provenance_uintptr_t; // hybrid-warning{{warn_attribute_wrong_decl_type_str}}
+typedef __no_provenance uintcap_t no_provenance_uintptr_t; // hybrid-error{{'cheri_no_provenance' attribute only applies to capability types}}
 typedef unsigned int uint;
 typedef unsigned long ulong;
 
@@ -52,6 +51,7 @@ void check(uintptr_t arg);
 //
 void test_cg_prov_lhs(uintptr_t lhs, uintptr_t rhs) {
   check(lhs ARITH_OP(__no_provenance uintptr_t) rhs); // no warning, LHS provenance
+  // hybrid-error@-1{{'cheri_no_provenance' attribute only applies to capability types}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_prov_rhs
@@ -67,6 +67,7 @@ void test_cg_prov_lhs(uintptr_t lhs, uintptr_t rhs) {
 //
 void test_cg_prov_rhs(uintptr_t lhs, uintptr_t rhs) {
   check((__no_provenance uintptr_t)lhs ARITH_OP rhs); // no warning, RHS provenance
+  // hybrid-error@-1{{'cheri_no_provenance' attribute only applies to capability types}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_prov_ambiguous
