@@ -34,8 +34,8 @@ void test(void) {
   typedef void *ptrdiff_t;
 
   // The warning still fires, because it checks the underlying type.
-  printf("%jd", (intmax_t)42); // expected-warning {{format specifies type 'intmax_t' (aka 'long') but the argument has type 'intmax_t' (aka 'void * __capability')}}
-  printf("%ju", (uintmax_t)42); // expected-warning {{format specifies type 'uintmax_t' (aka 'unsigned long') but the argument has type 'uintmax_t' (aka 'void * __capability')}}
-  printf("%zu", (size_t)42); // expected-warning {{format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'size_t' (aka 'void * __capability')}}
-  printf("%td", (ptrdiff_t)42); // expected-warning {{format specifies type 'ptrdiff_t' (aka 'long') but the argument has type 'ptrdiff_t' (aka 'void * __capability')}}
+  printf("%jd", (intmax_t)42); // expected-warning {{format specifies type 'intmax_t' (aka 'long') but the argument has type 'intmax_t __attribute__((cheri_no_provenance))' (aka 'void * __capability')}}
+  printf("%ju", (uintmax_t)42); // expected-warning {{format specifies type 'uintmax_t' (aka 'unsigned long') but the argument has type 'uintmax_t __attribute__((cheri_no_provenance))' (aka 'void * __capability')}}
+  printf("%zu", (size_t)42); // expected-warning {{format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'size_t __attribute__((cheri_no_provenance))' (aka 'void * __capability')}}
+  printf("%td", (ptrdiff_t)42); // expected-warning {{format specifies type 'ptrdiff_t' (aka 'long') but the argument has type 'ptrdiff_t __attribute__((cheri_no_provenance))' (aka 'void * __capability')}}
 }

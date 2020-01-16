@@ -1260,6 +1260,12 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
 
   InitBuiltinType(IntCapTy,            BuiltinType::IntCap);
   InitBuiltinType(UnsignedIntCapTy,    BuiltinType::UIntCap);
+  if (Target.SupportsCapabilities()) {
+    NoProvenanceIntCapTy =
+        getAttributedType(attr::CHERINoProvenance, IntCapTy, IntCapTy);
+    NoProvenanceUnsignedIntCapTy = getAttributedType(
+        attr::CHERINoProvenance, UnsignedIntCapTy, UnsignedIntCapTy);
+  }
 
   // GNU extension, __float128 for IEEE quadruple precision
   InitBuiltinType(Float128Ty,          BuiltinType::Float128);
@@ -4164,6 +4170,13 @@ QualType ASTContext::getAttributedType(attr::Kind attrKind,
   QualType canon = getCanonicalType(equivalentType);
   type = new (*this, TypeAlignment)
       AttributedType(canon, attrKind, modifiedType, equivalentType);
+
+  if (attrKind == attr::CHERINoProvenance) {
+    assert(modifiedType->isCHERICapabilityType(*this));
+    assert(equivalentType->isCHERICapabilityType(*this));
+    assert(canon->isCHERICapabilityType(*this));
+    assert(type->isCHERICapabilityType(*this));
+  }
 
   Types.push_back(type);
   AttributedTypes.InsertNode(type, insertPos);
@@ -9501,6 +9514,21 @@ unsigned ASTContext::getIntRange(QualType T) const {
     assert(!T->isReferenceType() && "Should probably not be handled here");
   }
   return getIntWidth(T);
+}
+
+QualType ASTContext::getNonProvenanceCarryingType(QualType T) const {
+  // if (!Target->SupportsCapabilities())
+  //  return T; // XXX: should probably assert instead?
+  assert(Target->SupportsCapabilities());
+  // Must be called with either intcap_t or uintcap_t
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(T.getCanonicalType())) {
+    if (BT->getKind() == BuiltinType::IntCap)
+      return NoProvenanceIntCapTy;
+    if (BT->getKind() == BuiltinType::UIntCap)
+      return NoProvenanceUnsignedIntCapTy;
+  }
+  llvm_unreachable("Invalid type passed to getNonProvenanceCarryingType");
+  return T;
 }
 
 QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {

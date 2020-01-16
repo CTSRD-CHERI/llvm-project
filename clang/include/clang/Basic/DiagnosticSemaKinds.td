@@ -6285,10 +6285,11 @@ def warn_uintcap_bad_bitwise_op : Warning<
   "or explicitly get the offset with __builtin_cheri_offset_get().">,
   InGroup<CHERIBitwiseOps>;
 
-def warn_mixed_capability_binop : Warning<
-  "binary expression on capability and non-capability types: %0 and %1.  "
-  "Provenance will be inherited from left-hand side">,
-  InGroup<CHERICaps>;
+def warn_ambiguous_provenance_capability_binop : Warning<
+  "binary expression on capability types %0 and %1; it is not clear which "
+  "should be used as the source of provenance; currently provenance is "
+  "inherited from the left-hand side">,
+  InGroup<CHERIProvenance>;
 def warn_packed_capability : Warning<
   "Under aligned capability field at offset %0 in packed structure will "
   "trap if accessed">,
@@ -6305,7 +6306,7 @@ def note_insert_attribute_aligned : Note<
   "Add __attribute__((aligned(%0))) to ensure sufficient alignment">;
 def warn_capability_no_provenance : Warning<
   "cast from provenance-free integer type to pointer type will give pointer"
-  " that can not be dereferenced.  ">,
+  " that can not be dereferenced">,
   InGroup<CHERICaps>;
 def warn_capability_integer_cast : Warning<
   "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,

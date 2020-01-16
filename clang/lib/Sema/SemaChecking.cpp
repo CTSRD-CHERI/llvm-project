@@ -10916,6 +10916,7 @@ static void AnalyzeImpConvsInComparison(Sema &S, BinaryOperator *E) {
 ///
 /// \param E the binary operator to check for warnings
 static void AnalyzeComparison(Sema &S, BinaryOperator *E) {
+  // FIXME: handle CHERI low-bit checks here
   // The type the comparison is being performed in.
   QualType T = E->getLHS()->getType();
 
@@ -12169,6 +12170,7 @@ static void CheckBoolLikeConversion(Sema &S, Expr *E, SourceLocation CC) {
 /// AnalyzeImplicitConversions - Find and report any interesting
 /// implicit conversions in the given expression.  There are a couple
 /// of competing diagnostics here, -Wconversion and -Wsign-compare.
+/// Also handles CHERI multi-provenance analysis
 static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
                                        bool IsListInit/*= false*/) {
   QualType T = OrigE->getType();

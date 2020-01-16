@@ -186,6 +186,11 @@ def FeatureMipsCheri128 : SubtargetFeature<"cheri128", "IsCheri128", "true",
 def FeatureMipsCheri256 : SubtargetFeature<"cheri256", "IsCheri256", "true",
                                 "Capabilities are 256 bits",
                                 [FeatureMipsCheri]>;
+def FeatureCheriExactEquals :
+  SubtargetFeature<"cheri-exact-equals", "UseCheriExactEquals", "true",
+                   "CHERI capability comparison are exact (comparing all bits"
+                   " instead of just the address).", [FeatureMipsCheri]>;
+
 def FeatureSym32       : SubtargetFeature<"sym32", "HasSym32", "true",
                                           "Symbols are 32 bit on Mips64">;
 

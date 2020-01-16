@@ -7538,6 +7538,21 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
   S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
 }
 
+static void handleCheriNoProvenanceAttr(QualType &T, TypeProcessingState &State,
+                                        TypeAttrLocation TAL,
+                                        ParsedAttr &Attr) {
+  Sema &S = State.getSema();
+  Attr.setUsedAsTypeAttr();
+  if (!T->isIntCapType()) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type_str)
+        << Attr.getAttrName() << "capability types";
+    return;
+  }
+  if (T->hasAttr(attr::CHERINoProvenance))
+    S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact)
+        << Attr.getAttrName();
+  T = State.getAttributedType(createSimpleAttr<CHERINoProvenanceAttr>(S.Context, Attr), T, T);
+}
 
 static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
                                     TypeAttrLocation TAL, ParsedAttr& Attr) {
@@ -7923,10 +7938,12 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                                       state.getSema().Context, attr),
                                   type, type);
       break;
+    case ParsedAttr::AT_CHERINoProvenance:
+      handleCheriNoProvenanceAttr(type, state, TAL, attr);
+      break;
     case ParsedAttr::AT_MemoryAddress:
-      // llvm::errs() << "applying memory_address to "; type.dump();
       if (!HandleMemoryAddressAttr(type, state, TAL, attr)) {
-          attr.setUsedAsTypeAttr();
+        attr.setUsedAsTypeAttr();
       }
       break;
     }

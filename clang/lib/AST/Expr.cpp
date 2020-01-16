@@ -2014,6 +2014,47 @@ const FieldDecl *CastExpr::getTargetFieldForToUnionCast(const RecordDecl *RD,
   return nullptr;
 }
 
+void CastExpr::checkProvenance(const ASTContext &C, QualType *Dst,
+                               class Expr *Src) {
+  if (!(*Dst)->isIntCapType())
+    return;
+
+  if (!(*Dst)->canCarryProvenance(C))
+    return;  // avoid doubly-annotating a type
+
+  // If we are casting an definitely not-provenance carrying value to a
+  // (u)intcap_t, mark the result as not carrying provenance.
+  const QualType ExprTy = Src->getType();
+  // If the source type does not carry provenance, the result can't either.
+  bool ExprCanCarryProvenance = ExprTy->canCarryProvenance(C);
+  if (ExprCanCarryProvenance && ExprTy->isEnumeralType()) {
+    // References to enum constants can never carry provenance (even if the
+    // underlying type of the enumeration is __uintcap_t)
+    // TODO: Should uintcap_t enumerations be an error? Or do we warn and
+    //  implicitly convert them to the matching address type?
+    if (auto *DRE = dyn_cast<DeclRefExpr>(Src->IgnoreCasts())) {
+      if (isa<EnumConstantDecl>(DRE->getFoundDecl()))
+        ExprCanCarryProvenance = false;
+    }
+  }
+  // NULL pointers are untagged values
+  // FIXME: change isNullPointerConstant to take a const astctx.
+  if (ExprCanCarryProvenance &&
+      Src->isNullPointerConstant(const_cast<ASTContext &>(C), NPC_NeverValueDependent))
+    ExprCanCarryProvenance = false;
+
+  if (!ExprCanCarryProvenance) {
+    // FIXME: allowing __uintcap_t as the underlying type for enums is not
+    // ideal, as this means we need a const_cast here.
+    if ((*Dst)->isEnumeralType()) {
+      *Dst = const_cast<ASTContext &>(C).getAttributedType(
+          attr::CHERINoProvenance, *Dst, *Dst);
+    } else {
+      *Dst = C.getNonProvenanceCarryingType(*Dst);
+    }
+  }
+}
+
 ImplicitCastExpr *ImplicitCastExpr::Create(const ASTContext &C, QualType T,
                                            CastKind Kind, Expr *Operand,
                                            const CXXCastPath *BasePath,
@@ -2025,6 +2066,7 @@ ImplicitCastExpr *ImplicitCastExpr::Create(const ASTContext &C, QualType T,
   assert((Kind != CK_LValueToRValue ||
           !(T->isNullPtrType() || T->getAsCXXRecordDecl())) &&
          "invalid type for lvalue-to-rvalue conversion");
+  checkProvenance(C, &T, Operand);
   ImplicitCastExpr *E =
     new (Buffer) ImplicitCastExpr(T, Kind, Operand, PathSize, VK);
   if (PathSize)
@@ -2047,6 +2089,7 @@ CStyleCastExpr *CStyleCastExpr::Create(const ASTContext &C, QualType T,
                                        SourceLocation L, SourceLocation R) {
   unsigned PathSize = (BasePath ? BasePath->size() : 0);
   void *Buffer = C.Allocate(totalSizeToAlloc<CXXBaseSpecifier *>(PathSize));
+  checkProvenance(C, &T, Op);
   CStyleCastExpr *E =
     new (Buffer) CStyleCastExpr(T, VK, K, Op, PathSize, WrittenTy, L, R);
   if (PathSize)

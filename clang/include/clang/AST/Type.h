@@ -2004,6 +2004,14 @@ public:
   bool isCHERICapabilityType(const ASTContext &Context,
                              bool IncludeIntCap = true) const;
   bool isIntCapType() const;       // __uintcap_t or __intcap_t
+
+  /// Whether this type can hold tagged capability values.
+  /// This is true for capability types that have not been annotated with
+  /// attr::CHERINoProvenance.
+  /// In hybrid mode this also returns true for pointer types since they can
+  /// be converted to capabilities.
+  bool canCarryProvenance(const ASTContext &C) const;
+
   bool isAnyPointerType() const;   // Any C pointer or ObjC object pointer
   bool isBlockPointerType() const;
   bool isVoidPointerType() const;

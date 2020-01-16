@@ -3289,6 +3289,13 @@ public:
            T->getStmtClass() <= lastCastExprConstant;
   }
 
+  // Check if @p Dst can carry provenance (i.e. CHERI tag bits) and if not
+  // change it to the non-provenance carrying annotated type.
+  // This only applies to (u)intcap_t.
+  // This function must be called in all ::Create functions since we can't
+  // pass ASTContext& to all constructors
+  static void checkProvenance(const ASTContext &C, QualType *Dst, Expr *Src);
+
   // Iterators
   child_range children() { return child_range(&Op, &Op+1); }
   const_child_range children() const { return const_child_range(&Op, &Op + 1); }
@@ -3631,6 +3638,20 @@ public:
       return Opcode(unsigned(Opc) - BO_AndAssign + BO_And);
     else
       return Opcode(unsigned(Opc) - BO_MulAssign + BO_Mul);
+  }
+
+  bool isCommutative() const { return isCommutative(getOpcode()); }
+  static bool isCommutative(Opcode Opc) {
+    switch (Opc) {
+    case BO_Add:
+    case BO_Mul:
+    case BO_And:
+    case BO_Or:
+    case BO_Xor:
+      return true;
+    default:
+      return false;
+    }
   }
 
   static bool isShiftAssignOp(Opcode Opc) {

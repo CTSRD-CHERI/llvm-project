@@ -299,6 +299,11 @@ def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option, NoDriver
            "This is highly unsafe and will almost certainly not work at runtime)">,
   Values<"conservative,references-only,subobject-safe,aggressive,very-aggressive,everywhere-unsafe">;
 
+def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<"Equality comparisons between capabilities only compare the address (default)">;
+def cheri_comparison_exact : Flag<["-"], "cheri-comparison=exact">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<"Equality comparisons between capabilities compare all capability fields (default)">;
+
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
   Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
 def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,

@@ -2736,6 +2736,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     } else
       Opts.setCheriCapConversion(ConvErrMode);
   }
+  Opts.CheriCompareExact =
+      Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
+                   Opts.CheriCompareExact);
 
   // Parse the -cheri-bounds= option to determine whether we should set more
   // bounds on capabilities (e.g. when passing subobject references to
@@ -3571,6 +3574,11 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     Opts.FeaturesAsWritten.push_back(CheriCPUName);
     A->claim();
   }
+  if (Args.hasFlag(options::OPT_cheri_comparison_exact,
+                   options::OPT_cheri_comparison_address, false)) {
+    Opts.FeaturesAsWritten.push_back("+cheri-exact-equals");
+  }
+
   Opts.ForceEnableInt128 = Args.hasArg(OPT_fforce_enable_int128);
   Opts.NVPTXUseShortPointers = Args.hasFlag(
       options::OPT_fcuda_short_ptr, options::OPT_fno_cuda_short_ptr, false);

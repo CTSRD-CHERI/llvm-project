@@ -13,7 +13,7 @@ void* __capability foo(void *__capability x){
   // CHECK-PURECAP: [[CONV:%.+]] = sext i32 {{%.+}} to i64
   // CHECK-PURECAP-NEXT: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[CONV]])
   return (void* __capability)pi;
-  // expected-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced.}}
+  // expected-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // expected-warning@-2{{cast to 'void * __capability' from smaller integer type 'int'}}
   // expected-note@-3{{insert cast to intptr_t to silence this warning}}
 }
