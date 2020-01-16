@@ -6285,10 +6285,6 @@ def warn_uintcap_bad_bitwise_op : Warning<
   "or explicitly get the offset with __builtin_cheri_offset_get().">,
   InGroup<CHERIBitwiseOps>;
 
-def warn_mixed_capability_binop : Warning<
-  "binary expression on capability and non-capability types: %0 and %1.  "
-  "Provenance will be inherited from left-hand side">,
-  InGroup<CHERICaps>;
 def warn_ambiguous_provenance_capability_binop : Warning<
   "binary expression on capability types %0 and %1; it is not clear which "
   "should be used as the source of provenance; currently provenance is "
