@@ -252,7 +252,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // the operation.
         if (IncOffset->getOpcode() == Mips::CIncOffsetImm) {
           uint64_t offsetImm = IncOffset->getOperand(2).getImm();
-          bool ImmediateWasFolded = false;
           LLVM_DEBUG(dbgs() << "Trying to fold input CIncOffsetImm: "; IncOffset->dump(););
           if (IsValidOffset(Op, offset + offsetImm)) {
             if (IncOffset->getOperand(1).isReg()) {
@@ -287,7 +286,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             MI.getOperand(2).setImm(offset + offsetImm);
             IncOffsets.insert(IncOffset);
             LLVM_DEBUG(dbgs() << "Was able to fold CIncOffsetImm. New Instr: "; MI.dump(););
-            ImmediateWasFolded = true;
             modified = true;
           } else if (IncOffset->getOperand(1).isReg()) {
             LLVM_DEBUG(dbgs() << "Could not fold input CIncOffsetImm due to immediate range: " << Twine(offset + offsetImm) << "\n";);

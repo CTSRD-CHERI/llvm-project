@@ -2235,7 +2235,6 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
                                       MachineBasicBlock *BB) const {
 
   unsigned AtomicOp = -1;
-  bool IsCheriOp = false;
   MVT ScratchTy;
   switch (MI.getOpcode()) {
   case Mips::ATOMIC_CMP_SWAP_I32:
@@ -2247,27 +2246,22 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
     ScratchTy = MVT::i64;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I8:
-    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA;
     ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I16:
-    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA;
     ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I32:
-    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA;
     ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I64:
-    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA;
     ScratchTy = MVT::i64;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
-    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA;
     ScratchTy = MVT::i64;
     break;

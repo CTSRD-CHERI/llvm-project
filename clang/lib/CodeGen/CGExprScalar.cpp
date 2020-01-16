@@ -858,7 +858,7 @@ public:
         // FIXME: should really make this an error
 #endif
       }
-    } else if (const auto *UO = dyn_cast<UnaryOperator>(Op.E)) {
+    } else if (isa<UnaryOperator>(Op.E)) {
       assert(Op.Opcode == BO_Sub && "Unexpected opcode");
       assert(isa<llvm::ConstantPointerNull>(LHS));
       // For consistency with unary (logical) not, we derive from the original

@@ -1291,6 +1291,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     }
 
     case Stmt::ParenExprClass:
+    case Stmt::NoChangeBoundsExprClass:
       llvm_unreachable("ParenExprs already handled.");
     case Stmt::GenericSelectionExprClass:
       llvm_unreachable("GenericSelectionExprs already handled.");
