@@ -491,6 +491,12 @@ int64_t MIPS<ELFT>::getImplicitAddend(const uint8_t *buf, RelType type) const {
     return SignExtend64<25>(readShuffle<e>(buf) << 2);
   case R_MICROMIPS_PC26_S1:
     return SignExtend64<27>(readShuffle<e>(buf) << 1);
+  case R_MIPS_CHERI_ABSPTR:
+  case R_MIPS_64:
+  case R_MIPS_CHERI_SIZE:
+  case R_MIPS_CHERI_CAPABILITY:
+  case R_MIPS_CHERI_CAPABILITY_CALL:
+    return read64(buf);
   default:
     return 0;
   }
