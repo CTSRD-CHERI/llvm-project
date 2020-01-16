@@ -6293,7 +6293,7 @@ def warn_ambiguous_provenance_capability_binop : Warning<
   "binary expression on capability types %0 and %1; it is not clear which "
   "should be used as the source of provenance; currently provenance is "
   "inherited from the left-hand side">,
-  InGroup<CHERICaps>;
+  InGroup<CHERIProvenance>;
 def warn_packed_capability : Warning<
   "Under aligned capability field at offset %0 in packed structure will "
   "trap if accessed">,
