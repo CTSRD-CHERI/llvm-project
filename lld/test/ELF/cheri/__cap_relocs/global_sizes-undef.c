@@ -10,7 +10,6 @@
 // Now try with a defined errno variable:
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-obj %s -o %t.o -DDEFINED_ERRNO=1
 // RUN: ld.lld -shared -o %t.so %t.o -verbose-cap-relocs
-// RUN: llvm-readelf -r -program-headers %t.so
 // RUN: llvm-readelf -r -program-headers %t.so | FileCheck %s -check-prefix DEFINED-MAPPING
 // RUN: llvm-objdump -s --section=.global_sizes %t.so | FileCheck %s -check-prefix DEFINED-DUMP
 
