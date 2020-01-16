@@ -99,61 +99,10 @@ defm uimm11s0 : ShiftUImmPattern<11, 0>;
 
 // Pattern for atomic loads on capabilities
 // TODO: these should end up in TargetSelectionDAG.td
-def SDTAtomicCapLoad : SDTypeProfile<1, 1, [
-  SDTCisPtrTy<0>, SDTCisPtrTy<1>
-]>;
-def SDTAtomicCapStore : SDTypeProfile<0, 2, [
-  SDTCisPtrTy<0>, SDTCisPtrTy<1>
-]>;
-
-def atomic_load_cap_node      : SDNode<"ISD::ATOMIC_LOAD", SDTAtomicCapLoad,
-                    [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_cap :
-  PatFrag<(ops node:$ptr),
-          (atomic_load_cap_node node:$ptr), [{
-  return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
-}]>;
-
-def atomic_store_cap_node     : SDNode<"ISD::ATOMIC_STORE", SDTAtomicCapStore,
-                    [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
-
-def atomic_store_cap : PatFrag<(ops node:$ptr, node:$val),
-                   (atomic_store_cap_node node:$ptr, node:$val), [{
-    return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
-}]>;
-
-
-def SDTAtomicCap3 : SDTypeProfile<1, 3, [
-  SDTCisSameAs<0,2>,  SDTCisSameAs<0,3>, SDTCisPtrTy<0>, SDTCisPtrTy<1>
-]>;
-def SDTAtomicCap2 : SDTypeProfile<1, 2, [
-  SDTCisSameAs<0,2>, SDTCisPtrTy<0>, SDTCisPtrTy<1>
-]>;
-def atomic_cmp_swap_cap_node : SDNode<"ISD::ATOMIC_CMP_SWAP" , SDTAtomicCap3,
-                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
 def atomic_load_add_cap_node : SDNode<"ISD::ATOMIC_LOAD_ADD" , SDTAtomicCap2,
-                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_swap_cap_node     : SDNode<"ISD::ATOMIC_SWAP", SDTAtomicCap2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
 def atomic_load_sub_cap_node : SDNode<"ISD::ATOMIC_LOAD_SUB" , SDTAtomicCap2,
                     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-
-
-def atomic_swap_cap : PatFrag<(ops node:$ptr, node:$val),
-                   (atomic_swap_cap_node node:$ptr, node:$val), [{
-    return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
-}]> {
-    // We can't use let MemoryVT = iFATPTRAny here since by the time it runs
-    // we have turned it into an IFATPTR128, etc -> use the C++ predicate above
-}
-
-def atomic_cmp_swap_cap : PatFrag<(ops node:$ptr, node:$cmp, node:$val),
-                   (atomic_cmp_swap_cap_node node:$ptr, node:$cmp, node:$val), [{
-    return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
-}]> {
-    // We can't use let MemoryVT = iFATPTRAny here since by the time it runs
-    // we have turned it into an IFATPTR128, etc -> use the C++ predicate above
-}
 
 // ClearRegs values
 // TODO: Add some nice parsing so that we can get handle register lists for

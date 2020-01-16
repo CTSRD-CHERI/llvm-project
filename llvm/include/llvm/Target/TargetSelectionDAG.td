@@ -284,6 +284,19 @@ def SDTAtomicLoad : SDTypeProfile<1, 1, [
   SDTCisInt<0>, SDTCisPtrTy<1>
 ]>;
 
+def SDTAtomicCapLoad : SDTypeProfile<1, 1, [
+  SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+def SDTAtomicCapStore : SDTypeProfile<0, 2, [
+  SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+def SDTAtomicCap3 : SDTypeProfile<1, 3, [
+  SDTCisSameAs<0,2>,  SDTCisSameAs<0,3>, SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+def SDTAtomicCap2 : SDTypeProfile<1, 2, [
+  SDTCisSameAs<0,2>, SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+
 def SDTConvertOp : SDTypeProfile<1, 5, [ //cvtss, su, us, uu, ff, fs, fu, sf, su
   SDTCisVT<2, OtherVT>, SDTCisVT<3, OtherVT>, SDTCisPtrTy<4>, SDTCisPtrTy<5>
 ]>;
@@ -621,6 +634,15 @@ def atomic_load      : SDNode<"ISD::ATOMIC_LOAD", SDTAtomicLoad,
                     [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
 def atomic_store     : SDNode<"ISD::ATOMIC_STORE", SDTAtomicStore,
                     [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
+
+def atomic_load_cap_node     : SDNode<"ISD::ATOMIC_LOAD", SDTAtomicCapLoad,
+                    [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
+def atomic_store_cap_node    : SDNode<"ISD::ATOMIC_STORE", SDTAtomicCapStore,
+                    [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
+def atomic_cmp_swap_cap_node : SDNode<"ISD::ATOMIC_CMP_SWAP" , SDTAtomicCap3,
+                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
+def atomic_swap_cap_node     : SDNode<"ISD::ATOMIC_SWAP", SDTAtomicCap2,
+                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
 
 def masked_st    : SDNode<"ISD::MSTORE",  SDTMaskedStore,
                        [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
@@ -1566,6 +1588,31 @@ def atomic_load_64 :
   let IsAtomic = 1;
   let MemoryVT = i64;
 }
+
+// We can't use let MemoryVT = iFATPTRAny here since by the time it runs we
+// have turned it into an iFATPTR128, etc -> use the C++ predicate below. We
+// also can't set IsAtomic, since that requires MemoryVT, but that only
+// influences the auto-generated code predicate, and ours should suffice.
+def atomic_load_cap :
+  PatFrag<(ops node:$ptr),
+          (atomic_load_cap_node node:$ptr), [{
+  return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
+}]>;
+def atomic_store_cap :
+  PatFrag<(ops node:$ptr, node:$val),
+          (atomic_store_cap_node node:$ptr, node:$val), [{
+  return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
+}]>;
+def atomic_swap_cap :
+  PatFrag<(ops node:$ptr, node:$val),
+          (atomic_swap_cap_node node:$ptr, node:$val), [{
+  return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
+}]>;
+def atomic_cmp_swap_cap :
+  PatFrag<(ops node:$ptr, node:$cmp, node:$val),
+          (atomic_cmp_swap_cap_node node:$ptr, node:$cmp, node:$val), [{
+  return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
+}]>;
 
 //===----------------------------------------------------------------------===//
 // Selection DAG Pattern Support.
