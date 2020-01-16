@@ -1109,6 +1109,11 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       // But change name, set visibility to hidden and mark as non-preemptible:
       newSym->setName(newName);
       newSym->visibility = llvm::ELF::STV_HIDDEN;
+      if (newSym->binding != llvm::ELF::STB_GLOBAL) {
+        assert(newSym->binding == llvm::ELF::STB_WEAK &&
+               "Not STB_GLOBAL and not STB_WEAK?");
+        newSym->binding = llvm::ELF::STB_GLOBAL;
+      }
       newSym->isPreemptible = false;
 
       sym = newSym; // Make the relocation point to the newly added symbol
