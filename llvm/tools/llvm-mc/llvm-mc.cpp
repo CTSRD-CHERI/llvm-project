@@ -329,6 +329,11 @@ int main(int argc, char **argv) {
   // Now that GetTarget() has (potentially) replaced TripleName, it's safe to
   // construct the Triple object.
   Triple TheTriple(TripleName);
+  // XXX: Ugly hack here, there should be some common code to avoid duplicating
+  // stuff that is already in clang
+  if (MCOptions.ABIName == "purecap") {
+    TheTriple.setEnvironment(Triple::CheriPurecap);
+  }
 
   ErrorOr<std::unique_ptr<MemoryBuffer>> BufferPtr =
       MemoryBuffer::getFileOrSTDIN(InputFilename);
