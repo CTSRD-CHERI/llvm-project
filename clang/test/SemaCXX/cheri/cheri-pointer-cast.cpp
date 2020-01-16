@@ -76,7 +76,7 @@ template<typename T>
 T offset_set(T x, long off) {
   return reinterpret_cast<T>(__builtin_cheri_offset_set(reinterpret_cast<void* CAP>(x), off));
   // expected-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long'}}
-  // expected-warning@-2 {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced.}} expected-note@-2 {{insert cast to intptr_t to silence this warning}}
+  // expected-warning@-2 {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}} expected-note@-2 {{insert cast to intptr_t to silence this warning}}
 #ifndef __CHERI_PURE_CAPABILITY__
   // expected-error@-4 {{cast from capability type 'void * __capability' to non-capability type 'x *'}}
 #endif

@@ -2,7 +2,7 @@
 // RUN: %cheri_cc1 -fsyntax-only %s -target-abi n64 -verify
 void *__capability a(long b)
 {
-	return (void *__capability)b; // expected-warning {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced.}} expected-note {{insert cast to intptr_t to silence this warning}}
+	return (void *__capability)b; // expected-warning {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}} expected-note {{insert cast to intptr_t to silence this warning}}
 }
 void *__capability a_fixed(long b)
 {
