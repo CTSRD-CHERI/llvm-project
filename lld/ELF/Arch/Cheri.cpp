@@ -348,8 +348,8 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
     // full Elf_Rel/Elf_Rela
     // The addend is zero here since it will be written in writeTo()
     assert(!config->isRela);
-    mainPart->relaDyn->addReloc({elf::target->relativeRel, this, currentEntryOffset,
-                            true, nullptr, 0});
+    mainPart->relaDyn->addReloc(elf::target->relativeRel, this,
+                                currentEntryOffset, nullptr);
     containsDynamicRelocations = true;
   }
   if (targetNeedsDynReloc) {
@@ -377,8 +377,10 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
     int64_t addend = target.offset;
     // Capability target is the second field
     assert((currentEntryOffset + fieldSize) < getSize());
-    mainPart->relaDyn->addReloc({relocKind, this, currentEntryOffset + fieldSize,
-                            relativeToLoadAddress, target.sym(), addend});
+    mainPart->relaDyn->addReloc(relocKind, this, currentEntryOffset + fieldSize,
+                                target.sym(), addend,
+                                target.sym()->isPreemptible ? R_ADDEND : R_ABS,
+                                lld::elf::target->symbolicRel);
     containsDynamicRelocations = true;
     if (!relativeToLoadAddress) {
       // We also add a size relocation for the size field here
@@ -1175,7 +1177,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
     }
     dynRelSec->addReloc(
         type, sec, offset, sym, addend, expr,
-        /* Relocation type for the addend = */ *target->absPointerRel);
+        /* Relocation type for the addend = */ target->symbolicRel);
   } else if (capRelocMode == CapRelocsMode::Legacy) {
     bool needsDynReloc = config->isPic;
     if (config->relativeCapRelocsOnly) {
