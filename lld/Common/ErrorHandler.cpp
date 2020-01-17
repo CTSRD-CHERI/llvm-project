@@ -168,7 +168,6 @@ void ErrorHandler::warn(const Twine &msg) {
   }
   static uint64_t warningCount = 0;
   std::lock_guard<std::mutex> lock(mu);
-  sep = getSeparator(msg);
   if (warningLimit == 0 || warningCount < warningLimit) {
     lld::errs() << sep << getLocation(msg) << ": " << Colors::MAGENTA
                 << "warning: " << Colors::RESET << msg << "\n";
