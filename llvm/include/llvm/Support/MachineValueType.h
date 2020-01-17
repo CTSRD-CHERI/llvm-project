@@ -701,10 +701,10 @@ namespace llvm {
         llvm_unreachable("Value type is non-standard value, Other.");
       case iPTR:
         llvm_unreachable("Value type size is target-dependent. Ask TLI.");
-      case iFATPTR64: return 64;
-      case iFATPTR128: return 128;
-      case iFATPTR256: return 256;
-      case iFATPTR512: return 512;
+      case iFATPTR64: return TypeSize::Fixed(64);
+      case iFATPTR128: return TypeSize::Fixed(128);
+      case iFATPTR256: return TypeSize::Fixed(256);
+      case iFATPTR512: return TypeSize::Fixed(512);
       case iFATPTRAny:
       case iPTRAny:
       case iAny:
