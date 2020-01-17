@@ -2292,7 +2292,7 @@ public:
     switch (ID) {
     default:
       break;
-#define INSTRUCTION(NAME, NARG, ROUND_MODE, INTRINSIC, DAGN)  \
+#define INSTRUCTION(NAME, NARG, ROUND_MODE, INTRINSIC)        \
     case Intrinsic::INTRINSIC:                                \
       HasRoundingMD = ROUND_MODE;                             \
       break;
@@ -2563,7 +2563,7 @@ public:
     switch (Callee->getIntrinsicID()) {
     default:
       break;
-#define INSTRUCTION(NAME, NARG, ROUND_MODE, INTRINSIC, DAGN)  \
+#define INSTRUCTION(NAME, NARG, ROUND_MODE, INTRINSIC)        \
     case Intrinsic::INTRINSIC:                                \
       HasRoundingMD = ROUND_MODE;                             \
       break;
