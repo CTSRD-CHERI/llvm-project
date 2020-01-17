@@ -588,7 +588,7 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case Mips::CheriBoundedStackPseudo: {
     auto Op = MI.getOperand(3).isImm() ? Mips::CSetBoundsImm : Mips::CSetBounds;
     if (Op == Mips::CSetBoundsImm)
-      assert(isInt<11>(MI.getOperand(3).getImm()));
+      assert(isUInt<11>(MI.getOperand(3).getImm()));
     else
       assert(MI.getOperand(3).isReg());
     assert(MI.getOperand(2).getImm() == 0 && "This operand is a dummy and must be zero!");
