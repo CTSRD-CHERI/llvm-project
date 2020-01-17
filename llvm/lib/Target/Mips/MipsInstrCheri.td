@@ -1023,7 +1023,7 @@ defm : FrameIndexPatterns<iFATPTR256, AddrFI256>;
 
 
 // Add a pseudo instruction to pretend this is only one instruction to avoid register spills
-def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi, GPR64Opnd:$frameoffs, GPR64Opnd:$size),
+def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi, simm11s0:$frameoffs, uimm11s0:$size),
                                       "#CapGlobalAddrPseudo $cd, $fi, $frameoffs, $size", []> {
   let hasSideEffects = 0; // could actually trap if we are out of stack space but I don't think that matters
   let isReMaterializable = 1;
@@ -1036,10 +1036,10 @@ def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:
 
 // TODO: for some reason all these need to be duplicated for the AddrFI patterns again
 multiclass StackCapPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
-  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, simm11s0Pattern:$off)),
-            (CheriBoundedStackPseudo (Addr:$fi), (i64 0), imm:$off)>;
-  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, GPR64Opnd:$off)),
-            (CheriBoundedStackPseudo (Addr:$fi), (i64 0), $off)>;
+  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, uimm11s0Pattern:$size)),
+            (CheriBoundedStackPseudo (Addr:$fi), (i64 0), imm:$size)>;
+  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, GPR64Opnd:$size)),
+            (iFatptrTy (CSetBounds CheriOpnd:$fi, GPR64Opnd:$size))>;
 
   // These  should not be needed since they would mask bugs in CheriBoundAllocas.cpp.
   // (but keep them here just in case):
