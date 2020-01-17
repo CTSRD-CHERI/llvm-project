@@ -195,7 +195,7 @@ class RemoteExecutor(Executor):
 
     def delete_remote(self, remote):
         try:
-            self._execute_command_remote(['rm', '-rf', remote])
+            self.execute_command_remote(['rm', '-rf', remote])
         except OSError:
             # TODO: Log failure to delete?
             pass
@@ -282,7 +282,7 @@ class SSHExecutor(RemoteExecutor):
         # Not sure how to do suffix on osx yet
         dir_arg = '-d' if is_dir else ''
         cmd = 'mktemp -q {} /tmp/libcxx.XXXXXXXXXX'.format(dir_arg)
-        _, temp_path, err, exitCode = self._execute_command_remote([cmd])
+        _, temp_path, err, exitCode = self.execute_command_remote([cmd])
         temp_path = temp_path.strip()
         if exitCode != 0:
             if not is_retry and "write: Broken pipe" in err:
