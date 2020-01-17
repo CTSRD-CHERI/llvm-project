@@ -21,24 +21,24 @@ char DummyData64[64];
 // HYBRID-LABEL: @_Z4testv(
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = load i32, i32* bitcast ([4 x i8]* @DummyData4 to i32*), align 1
-// HYBRID-NEXT:    tail call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8]* nonnull @DummyData4, i32 [[TMP0]]) #1, !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8]* nonnull @DummyData4, i32 [[TMP0]]) #1, !srcloc !2
 // HYBRID-NEXT:    [[TMP1:%.*]] = load i64, i64* bitcast ([8 x i8]* @DummyData8 to i64*), align 1
-// HYBRID-NEXT:    tail call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8]* nonnull @DummyData8, i64 [[TMP1]]) #1, !srcloc !2
-// HYBRID-NEXT:    tail call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8]* nonnull @DummyData16, [16 x i8]* nonnull @DummyData16) #1, !srcloc !2
-// HYBRID-NEXT:    tail call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8]* nonnull @DummyData32, [32 x i8]* nonnull @DummyData32) #1, !srcloc !2
-// HYBRID-NEXT:    tail call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8]* nonnull @DummyData64, [64 x i8]* nonnull @DummyData64) #1, !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8]* nonnull @DummyData8, i64 [[TMP1]]) #1, !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8]* nonnull @DummyData16, [16 x i8]* nonnull @DummyData16) #1, !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8]* nonnull @DummyData32, [32 x i8]* nonnull @DummyData32) #1, !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8]* nonnull @DummyData64, [64 x i8]* nonnull @DummyData64) #1, !srcloc !2
 // HYBRID-NEXT:    [[TMP2:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @DummyData4, i64 0, i64 0), align 1, !tbaa !3
 // HYBRID-NEXT:    ret i8 [[TMP2]]
 //
 // PURECAP-LABEL: @_Z4testv(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* bitcast ([4 x i8] addrspace(200)* @DummyData4 to i32 addrspace(200)*), align 1
-// PURECAP-NEXT:    tail call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8] addrspace(200)* nonnull @DummyData4, i32 [[TMP0]]) #1, !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8] addrspace(200)* nonnull @DummyData4, i32 [[TMP0]]) #1, !srcloc !2
 // PURECAP-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* bitcast ([8 x i8] addrspace(200)* @DummyData8 to i64 addrspace(200)*), align 1
-// PURECAP-NEXT:    tail call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8] addrspace(200)* nonnull @DummyData8, i64 [[TMP1]]) #1, !srcloc !2
-// PURECAP-NEXT:    tail call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8] addrspace(200)* nonnull @DummyData16, [16 x i8] addrspace(200)* nonnull @DummyData16) #1, !srcloc !2
-// PURECAP-NEXT:    tail call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8] addrspace(200)* nonnull @DummyData32, [32 x i8] addrspace(200)* nonnull @DummyData32) #1, !srcloc !2
-// PURECAP-NEXT:    tail call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8] addrspace(200)* nonnull @DummyData64, [64 x i8] addrspace(200)* nonnull @DummyData64) #1, !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8] addrspace(200)* nonnull @DummyData8, i64 [[TMP1]]) #1, !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8] addrspace(200)* nonnull @DummyData16, [16 x i8] addrspace(200)* nonnull @DummyData16) #1, !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8] addrspace(200)* nonnull @DummyData32, [32 x i8] addrspace(200)* nonnull @DummyData32) #1, !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8] addrspace(200)* nonnull @DummyData64, [64 x i8] addrspace(200)* nonnull @DummyData64) #1, !srcloc !2
 // PURECAP-NEXT:    [[TMP2:%.*]] = load i8, i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @DummyData4, i64 0, i64 0), align 1, !tbaa !3
 // PURECAP-NEXT:    ret i8 [[TMP2]]
 //
