@@ -1,5 +1,5 @@
-// RUN: %cheri_cc1 -emit-llvm -o - %s | %cheri_FileCheck %s -check-prefixes CHECK,HYBRID
-// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s | %cheri_FileCheck -check-prefixes CHECK,PURECAP %s
+// RUN: %cheri_cc1 -emit-llvm -o - %s -verify | %cheri_FileCheck %s -check-prefixes CHECK,HYBRID
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s -verify | %cheri_FileCheck -check-prefixes CHECK,PURECAP %s
 
 int i;
 
@@ -16,7 +16,7 @@ const void* foo4 = (void*)(long)&i;
 // Check that constant initialization works even for binary operations
 const __uintcap_t thinFlag = 1;
 const __uintcap_t reservedFlag = 2;
-const __uintcap_t flags = thinFlag | reservedFlag;
+const __uintcap_t flags = thinFlag | reservedFlag; // expected-warning{{binary expression on capability types}}
 
 // HYBRID: @i = common global i32 0, align 4
 // HYBRID-NEXT: @foo = global i8* bitcast (i32* @i to i8*), align 8
@@ -27,7 +27,6 @@ const __uintcap_t flags = thinFlag | reservedFlag;
 // HYBRID-NEXT: @thinFlag = constant i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // HYBRID-NEXT: @reservedFlag = constant i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // HYBRID-NEXT: @flags = constant i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*), align [[#CAP_SIZE]]
-// HYBRID-EMPTY:
 
 // PURECAP: @i = common addrspace(200) global i32 0, align 4
 // PURECAP-NEXT: @foo  = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
@@ -37,7 +36,6 @@ const __uintcap_t flags = thinFlag | reservedFlag;
 // PURECAP-NEXT: @thinFlag = addrspace(200) constant i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // PURECAP-NEXT: @reservedFlag = addrspace(200) constant i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // PURECAP-NEXT: @flags = addrspace(200) constant i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*), align [[#CAP_SIZE]]
-// PURECAP-EMPTY:
 
 // CHECK-NEXT: Function Attrs: noinline nounwind optnone
 // CHECK-NEXT: define void @set_one(
