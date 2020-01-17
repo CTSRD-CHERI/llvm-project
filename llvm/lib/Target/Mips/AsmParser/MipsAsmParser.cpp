@@ -566,7 +566,8 @@ public:
     IsCpRestoreSet = false;
     AreCheriSysRegsAccessible = false;
     CpRestoreOffset = -1;
-    GPReg = ABI.UsesCapabilityTable() ? Mips::NoRegister : ABI.GetGlobalPtr();
+    GPReg = ABI.UsesCapabilityTable() ? (unsigned)Mips::NoRegister
+                                      : ABI.GetGlobalPtr();
 
     const Triple &TheTriple = sti.getTargetTriple();
     IsLittleEndian = TheTriple.isLittleEndian();
