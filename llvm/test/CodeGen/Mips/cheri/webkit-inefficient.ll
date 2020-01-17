@@ -4,7 +4,7 @@
 ; RUNNOT: %cheri128_purecap_llc %s -O2 -o - -filetype=obj | llvm-objdump -d - -no-show-raw-insn | FileCheck %s -check-prefix DUMP
 ; RUN: %cheri128_purecap_llc %s -O2 -o - -filetype=obj | llvm-objdump -t - | FileCheck %s -check-prefix SYMBOLS
 ; Check the size of the generated function:
-; SYMBOLS: 0000000000000000 g     F .text		 000002c0 .hidden _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE
+; SYMBOLS: 0000000000000000 g     F .text		 000002b0 .hidden _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE
 
 source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 
@@ -671,22 +671,17 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    candaddr $c2, $c1, $1
 ; CHECK-NEXT:    cincoffset $c2, $c2, 200
 ; CHECK-NEXT:    clbu $1, $zero, 0($c2)
-; CHECK-NEXT:    beqz $1, .LBB0_7
+; CHECK-NEXT:    beqz $1, .LBB0_6
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.4: # %land.lhs.true.i.i.i
 ; CHECK-NEXT:    clbu $1, $zero, 6($c1)
 ; CHECK-NEXT:    andi $1, $1, 32
-; CHECK-NEXT:    bnez $1, .LBB0_7
+; CHECK-NEXT:    bnez $1, .LBB0_6
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.5: # %if.then.i.i.i
+; CHECK-NEXT:    b .LBB0_7
 ; CHECK-NEXT:    cincoffset $c2, $c1, 32
-; CHECK-NEXT:    clc $c2, $zero, 0($c2)
-; CHECK-NEXT:    cbnz $c2, .LBB0_8
-; CHECK-NEXT:    nop
-; CHECK-NEXT:  # %bb.6: # %if.then.i.i.i
-; CHECK-NEXT:    b .LBB0_1
-; CHECK-NEXT:    nop
-; CHECK-NEXT:  .LBB0_7: # %if.end.i.i.i
+; CHECK-NEXT:  .LBB0_6: # %if.end.i.i.i
 ; CHECK-NEXT:    daddiu $1, $zero, 16383
 ; CHECK-NEXT:    cgetandaddr $1, $c1, $1
 ; CHECK-NEXT:    dnegu $1, $1
@@ -696,10 +691,11 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    dsll $1, $1, 4
 ; CHECK-NEXT:    clc $c2, $1, 0($c2)
 ; CHECK-NEXT:    cincoffset $c2, $c2, 112
+; CHECK-NEXT:  .LBB0_7: # %_ZNK3JSC6JSCell9classInfoEv.exit.i.i
 ; CHECK-NEXT:    clc $c2, $zero, 0($c2)
 ; CHECK-NEXT:    cbez $c2, .LBB0_1
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  .LBB0_8: # %for.body.i.i.i.preheader
+; CHECK-NEXT:  # %bb.8: # %for.body.i.i.i.preheader
 ; CHECK-NEXT:    clcbi $c3, %captab20(_ZN7WebCore27JSInternalSettingsGenerated6s_infoE)($c20)
 ; CHECK-NEXT:  .LBB0_9: # %for.body.i.i.i
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
