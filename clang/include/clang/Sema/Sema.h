@@ -8762,6 +8762,8 @@ public:
   bool CheckARCMethodDecl(ObjCMethodDecl *method);
   bool inferObjCARCLifetime(ValueDecl *decl);
 
+  void deduceOpenCLAddressSpace(ValueDecl *decl);
+
   ExprResult
   HandleExprPropertyRefExpr(const ObjCObjectPointerType *OPT,
                             Expr *BaseExpr,
