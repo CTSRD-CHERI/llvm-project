@@ -4126,13 +4126,10 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     }
     if (getLangOpts().allowsNonTrivialObjCLifetimeQualifiers())
       CheckObjCConversion(SourceRange(), NewToType, From, CCK);
-    ExprResult E =
-        ImpCastExprToType(From, NewToType, Kind, VK_RValue, &BasePath, CCK)
-            .get();
-    if (E.isInvalid())
+    From = ImpCastExprToType(From, NewToType, Kind, VK_RValue, &BasePath, CCK)
+               .get();
+    if (!From)
       return ExprError();
-    else
-      From = E.get();
     break;
   }
 
