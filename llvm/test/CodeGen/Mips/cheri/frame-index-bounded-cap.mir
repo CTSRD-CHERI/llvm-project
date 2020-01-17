@@ -108,36 +108,36 @@ body:             |
     ; CHECK: $c11 = CIncOffset $c11, killed $at_64
     ; CHECK-NEXT: CFI_INSTRUCTION def_cfa_offset 80432
 
-    $c3 = CheriBoundedStackPseudo %stack.0.over_16_bit_imm , 0, 22
+    $c3 = CheriBoundedStackPseudoImm %stack.0.over_16_bit_imm , 0, 22
     ; CHECK-NEXT: $at_64 = LUi64 1
     ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
     ; CHECK-NEXT: $c3 = CIncOffset $c11, killed $at_64
-    ; CHECK-NEXT: $c3 = CheriBoundedStackPseudo killed $c3, 0, 22
-    $c4 = CheriBoundedStackPseudo %stack.2.huge_imm, 0, 8
+    ; CHECK-NEXT: $c3 = CheriBoundedStackPseudoImm killed $c3, 0, 22
+    $c4 = CheriBoundedStackPseudoImm %stack.2.huge_imm, 0, 8
     ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
     ; CHECK-NEXT: $c4 = CIncOffset $c11, killed $at_64
-    ; CHECK-NEXT: $c4 = CheriBoundedStackPseudo killed $c4, 0, 8
-    $c5 = CheriBoundedStackPseudo %stack.4.medium_imm, 0, 9
+    ; CHECK-NEXT: $c4 = CheriBoundedStackPseudoImm killed $c4, 0, 8
+    $c5 = CheriBoundedStackPseudoImm %stack.4.medium_imm, 0, 9
     ; CHECK-NEXT: $c5 = CIncOffsetImm $c11, 396
-    ; CHECK-NEXT: $c5 = CheriBoundedStackPseudo killed $c5, 0, 9
-    $c6 = CheriBoundedStackPseudo %stack.6.tiny_imm, 0, 12
+    ; CHECK-NEXT: $c5 = CheriBoundedStackPseudoImm killed $c5, 0, 9
+    $c6 = CheriBoundedStackPseudoImm %stack.6.tiny_imm, 0, 12
     ; CHECK-NEXT: $c6 = CIncOffsetImm $c11, 12
-    ; CHECK-NEXT: $c6 = CheriBoundedStackPseudo killed $c6, 0, 12
-    $c7 = CheriBoundedStackPseudo %stack.7.first, 0, 33
+    ; CHECK-NEXT: $c6 = CheriBoundedStackPseudoImm killed $c6, 0, 12
+    $c7 = CheriBoundedStackPseudoImm %stack.7.first, 0, 33
     ; CHECK-NEXT: $c7 = CIncOffsetImm $c11, 8
-    ; CHECK-NEXT: $c7 = CheriBoundedStackPseudo killed $c7, 0, 33
+    ; CHECK-NEXT: $c7 = CheriBoundedStackPseudoImm killed $c7, 0, 33
 
     ; Now with register sizes
-    $c8 = CheriBoundedStackPseudo %stack.7.first, 0, $zero_64
+    $c8 = CheriBoundedStackPseudoReg %stack.7.first, 0, $zero_64
     ; CHECK-NEXT: $c8 = CIncOffsetImm $c11, 8
-    ; CHECK-NEXT: $c8 = CheriBoundedStackPseudo killed $c8, 0, $zero_64
+    ; CHECK-NEXT: $c8 = CheriBoundedStackPseudoReg killed $c8, 0, $zero_64
 
     $at_64 = DADDiu killed $zero_64, 12345
-    $c9 = CheriBoundedStackPseudo %stack.0.over_16_bit_imm, 0, $at_64
+    $c9 = CheriBoundedStackPseudoReg %stack.0.over_16_bit_imm, 0, $at_64
     ; CHECK-NEXT: $at_64 = DADDiu killed $zero_64, 12345
     ; CHECK-NEXT: $v0_64 = LUi64 1
     ; CHECK-NEXT: $v0_64 = DADDiu killed $v0_64, 14888
     ; CHECK-NEXT: $c9 = CIncOffset $c11, killed $v0_64
-    ; CHECK-NEXT: $c9 = CheriBoundedStackPseudo killed $c9, 0, $at_64
+    ; CHECK-NEXT: $c9 = CheriBoundedStackPseudoReg killed $c9, 0, $at_64
 
 ...

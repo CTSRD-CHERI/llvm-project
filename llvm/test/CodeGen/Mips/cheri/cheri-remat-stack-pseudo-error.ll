@@ -57,12 +57,12 @@ entry:
 
 ; CHECK-LABEL: name: fn1
 ; CHECK: [[OFFSET:%.+]]:gpr64 = DADDiu $zero_64, 4096
-; CHECK: [[STACK_CAP:%.+]]:cherigpr = CheriBoundedStackPseudo %stack.0.byval-temp, 0, [[OFFSET]]
+; CHECK: [[STACK_CAP:%.+]]:cherigpr = CheriBoundedStackPseudoReg %stack.0.byval-temp, 0, [[OFFSET]]
 ; CHECK: [[A_CAP:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a
 ; CHECK: $c3 = COPY [[STACK_CAP]]
 ; CHECK: $c4 = COPY [[A_CAP]]
 ; CHECK: $a0_64 = DADDiu $zero_64, 4096
-; This previously got turned into a duplicate of the CheriBoundedStackPseudo but that used the killed %1 register!
+; This previously got turned into a duplicate of the CheriBoundedStackPseudoReg but that used the killed %1 register!
 ; CHECK: [[JUMP_TARGET:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
 ; CHECK-NEXT: $c3 = COPY [[STACK_CAP]]
 ; CHECK-NEXT: $c13 = CMove $cnull
@@ -108,11 +108,11 @@ entry:
 ; CHECK-NOT: CheriBoundedStackPseudo
 ; Remat 1:
 ; CHECK: LOADCAP_BigImm target-flags(mips-captable20-call) &memcpy
-; CHECK-NEXT: $c3 = CheriBoundedStackPseudo %stack.0.byval-temp, 0, 512
+; CHECK-NEXT: $c3 = CheriBoundedStackPseudoImm %stack.0.byval-temp, 0, 512
 ; CHECK-NOT: CheriBoundedStackPseudo
 ; Remat 2:
 ; CHECK: [[JUMP_TARGET:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
-; CHECK-NEXT: $c3 = CheriBoundedStackPseudo %stack.0.byval-temp, 0, 512
+; CHECK-NEXT: $c3 = CheriBoundedStackPseudoImm %stack.0.byval-temp, 0, 512
 ; CHECK-NEXT: $c13 = CMove $cnull
 ; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
 ; CHECK-NEXT: CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11

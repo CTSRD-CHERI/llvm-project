@@ -585,7 +585,8 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     BuildMI(MBB, MI, MI.getDebugLoc(), get(Mips::PseudoReturnCap))
       .addReg(Mips::C17);
     break;
-  case Mips::CheriBoundedStackPseudo: {
+  case Mips::CheriBoundedStackPseudoImm:
+  case Mips::CheriBoundedStackPseudoReg: {
     auto Op = MI.getOperand(3).isImm() ? Mips::CSetBoundsImm : Mips::CSetBounds;
     if (Op == Mips::CSetBoundsImm)
       assert(isUInt<11>(MI.getOperand(3).getImm()));
@@ -1062,11 +1063,12 @@ bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
                                                         AAResults *AA) const {
   switch(MI.getOpcode()) {
     // To allow moving CSetBounds on the stack as late as possible.
-    case Mips::CheriBoundedStackPseudo:
+    case Mips::CheriBoundedStackPseudoImm:
       // LLVM_DEBUG(dbgs() << "isReallyTriviallyReMaterializable: CHECKING "; MI.dump();)
       // We cannot trivially rematerialize if the size operand is a GPR since
-      // That might be dead by the time we use it. Only remat
-      return MI.getOperand(3).isImm();
+      // that might be dead by the time we use it -> ignore CheriBoundedStackPseudoReg
+      assert(MI.getOperand(3).isImm());
+      return true;
     case Mips::CIncOffsetImm:
     case Mips::CMove:
       return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Mips::CNULL;

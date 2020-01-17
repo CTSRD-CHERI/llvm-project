@@ -98,7 +98,8 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
     return 16 + 4 /* scale factor */;
   case Mips::CIncOffsetImm:
     return 11;
-  case Mips::CheriBoundedStackPseudo:
+  case Mips::CheriBoundedStackPseudoImm:
+  case Mips::CheriBoundedStackPseudoReg:
     return 1;  // only 0 is valid, otherwise we need a CIncOffset
   case Mips::LD_B:
   case Mips::ST_B:
@@ -163,8 +164,9 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
 /// Get the scale factor applied to the immediate in the given load/store.
 static inline unsigned getLoadStoreOffsetAlign(const unsigned Opcode) {
   switch (Opcode) {
-  case Mips::CheriBoundedStackPseudo:
-    return 64; // Ensure that only 0 is valid (since max witdth is 1)
+  case Mips::CheriBoundedStackPseudoImm:
+  case Mips::CheriBoundedStackPseudoReg:
+    return 64; // Ensure that only 0 is valid (since max width is 1)
   case Mips::CAPSTORE16:
   case Mips::CAPLOAD16:
   case Mips::CAPLOAD1632:
@@ -288,7 +290,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       ImmOpNo = 2;
       RegOpNo = 1;
       break;
-    case Mips::CheriBoundedStackPseudo:
+    case Mips::CheriBoundedStackPseudoImm:
+    case Mips::CheriBoundedStackPseudoReg:
       ImmOpNo = 2;
       RegOpNo = 1;
       break;
@@ -297,6 +300,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     case Mips::INLINEASM:
       break;
     default:
+      MI.dump();
       llvm_unreachable("Unsupported instruction in eliminateFI!");
     }
   }
@@ -377,7 +381,9 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
           }
 #endif
         unsigned TmpCap = -1;
-        if (isFrameRegLoad || MI.getOpcode() == Mips::CheriBoundedStackPseudo) {
+        if (isFrameRegLoad ||
+            MI.getOpcode() == Mips::CheriBoundedStackPseudoReg ||
+            MI.getOpcode() == Mips::CheriBoundedStackPseudoImm) {
           assert(MI.getOpcode() == Mips::LOADCAP || MI.isPseudo());
           TmpCap = MI.getOperand(0).getReg();
         } else {
