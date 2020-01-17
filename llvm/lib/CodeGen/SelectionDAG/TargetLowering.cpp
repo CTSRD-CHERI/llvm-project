@@ -187,7 +187,7 @@ TargetLowering::ExpandChainLibCall(SelectionDAG &DAG, RTLIB::Libcall LC,
     Entry.IsZExt = !isSigned;
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
+  SDValue Callee = DAG.getExternalFunctionSymbol(getLibcallName(LC));
 
   Type *RetTy = Node->getValueType(0).getTypeForEVT(*DAG.getContext());
 
