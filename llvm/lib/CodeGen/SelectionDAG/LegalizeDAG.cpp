@@ -139,8 +139,6 @@ private:
 
   SDValue ExpandLibCall(RTLIB::Libcall LC, SDNode *Node, bool isSigned);
 
-  std::pair<SDValue, SDValue> ExpandChainLibCall(RTLIB::Libcall LC,
-                                                 SDNode *Node, bool isSigned);
   void ExpandFPLibCall(SDNode *Node, RTLIB::Libcall Call_F32,
                        RTLIB::Libcall Call_F64, RTLIB::Libcall Call_F80,
                        RTLIB::Libcall Call_F128,
@@ -1811,7 +1809,7 @@ SDValue SelectionDAGLegalize::EmitStackConvert(SDValue SrcOp, EVT SlotVT,
   // later than DestVT.
   SDValue Store;
 
-  if (SrcSize > SlotSize) 
+  if (SrcSize > SlotSize)
     Store = DAG.getTruncStore(Chain, dl, SrcOp, FIPtr, PtrInfo,
                               SlotVT, SrcAlign);
   else {
@@ -1823,7 +1821,7 @@ SDValue SelectionDAGLegalize::EmitStackConvert(SDValue SrcOp, EVT SlotVT,
   // Result is a load from the stack slot.
   if (SlotSize == DestSize)
     return DAG.getLoad(DestVT, dl, Store, FIPtr, PtrInfo, DestAlign);
-    
+
   assert(SlotSize < DestSize && "Unknown extension!");
   return DAG.getExtLoad(ISD::EXTLOAD, dl, DestVT, Store, FIPtr, PtrInfo, SlotVT,
                         DestAlign);
@@ -2125,42 +2123,6 @@ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, SDNode *Node,
   return CallInfo.first;
 }
 
-// Expand a node into a call to a libcall. Similar to
-// ExpandLibCall except that the first operand is the in-chain.
-std::pair<SDValue, SDValue>
-SelectionDAGLegalize::ExpandChainLibCall(RTLIB::Libcall LC,
-                                         SDNode *Node,
-                                         bool isSigned) {
-  SDValue InChain = Node->getOperand(0);
-
-  TargetLowering::ArgListTy Args;
-  TargetLowering::ArgListEntry Entry;
-  for (unsigned i = 1, e = Node->getNumOperands(); i != e; ++i) {
-    EVT ArgVT = Node->getOperand(i).getValueType();
-    Type *ArgTy = ArgVT.getTypeForEVT(*DAG.getContext());
-    Entry.Node = Node->getOperand(i);
-    Entry.Ty = ArgTy;
-    Entry.IsSExt = isSigned;
-    Entry.IsZExt = !isSigned;
-    Args.push_back(Entry);
-  }
-  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
-
-  Type *RetTy = Node->getValueType(0).getTypeForEVT(*DAG.getContext());
-
-  TargetLowering::CallLoweringInfo CLI(DAG);
-  CLI.setDebugLoc(SDLoc(Node))
-      .setChain(InChain)
-      .setLibCallee(TLI.getLibcallCallingConv(LC), RetTy, Callee,
-                    std::move(Args))
-      .setSExtResult(isSigned)
-      .setZExtResult(!isSigned);
-
-  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
-
-  return CallInfo;
-}
-
 void SelectionDAGLegalize::ExpandFPLibCall(SDNode* Node,
                                            RTLIB::Libcall Call_F32,
                                            RTLIB::Libcall Call_F64,
@@ -2180,7 +2142,8 @@ void SelectionDAGLegalize::ExpandFPLibCall(SDNode* Node,
 
   if (Node->isStrictFPOpcode()) {
     // FIXME: This doesn't support tail calls.
-    std::pair<SDValue, SDValue> Tmp = ExpandChainLibCall(LC, Node, false);
+    std::pair<SDValue, SDValue> Tmp = TLI.ExpandChainLibCall(DAG, LC, Node,
+                                                             false);
     Results.push_back(Tmp.first);
     Results.push_back(Tmp.second);
   } else {
@@ -2230,7 +2193,8 @@ void SelectionDAGLegalize::ExpandArgFPLibCall(SDNode* Node,
 
   if (Node->isStrictFPOpcode()) {
     // FIXME: This doesn't support tail calls.
-    std::pair<SDValue, SDValue> Tmp = ExpandChainLibCall(LC, Node, false);
+    std::pair<SDValue, SDValue> Tmp = TLI.ExpandChainLibCall(DAG, LC, Node,
+                                                             false);
     Results.push_back(Tmp.first);
     Results.push_back(Tmp.second);
   } else {
@@ -2886,7 +2850,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
                                        Node->getValueType(0))
         == TargetLowering::Legal)
       break;
-    Tmp1 = EmitStackConvert(Node->getOperand(1), 
+    Tmp1 = EmitStackConvert(Node->getOperand(1),
                             Node->getValueType(0),
                             Node->getValueType(0), dl, Node->getOperand(0));
     ReplaceNode(Node, Tmp1.getNode());
@@ -2894,7 +2858,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     return true;
   case ISD::FP_ROUND:
   case ISD::BITCAST:
-    Tmp1 = EmitStackConvert(Node->getOperand(0), 
+    Tmp1 = EmitStackConvert(Node->getOperand(0),
                             Node->getValueType(0),
                             Node->getValueType(0), dl);
     Results.push_back(Tmp1);
@@ -3860,7 +3824,8 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
     RTLIB::Libcall LC = RTLIB::getSYNC(Opc, VT);
     assert(LC != RTLIB::UNKNOWN_LIBCALL && "Unexpected atomic op or value type!");
 
-    std::pair<SDValue, SDValue> Tmp = ExpandChainLibCall(LC, Node, false);
+    std::pair<SDValue, SDValue> Tmp = TLI.ExpandChainLibCall(DAG, LC, Node,
+                                                             false);
     Results.push_back(Tmp.first);
     Results.push_back(Tmp.second);
     break;
