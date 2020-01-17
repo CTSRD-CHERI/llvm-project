@@ -13,11 +13,9 @@
 // RUN: ld.lld -shared %t.o -o %t.so -z text
 // RUN: llvm-readelf -r --section-mapping --sections --program-headers --cap-relocs  %t.so | FileCheck %s
 
-// CHECK:      Relocation section '.rel.dyn' at offset {{.+}} contains 4 entries:
+// CHECK:      Relocation section '.rel.dyn' at offset {{.+}} contains 2 entries:
 // CHECK-NEXT: Offset             Info             Type                            Symbol's Value  Symbol's Name
 // CHECK-NEXT:                     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE
-// CHECK-NEXT:                     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE 000000000001{{.+}} _Z4testll
-// CHECK-NEXT:                     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE 000000000001{{.+}} _Z4testll
 // CHECK-NEXT:                     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __gxx_personality_v0
 // CHECK-EMPTY:
 // CHECK-NEXT: Relocation section '.rel.plt' at offset {{.+}} contains 3 entries:
@@ -54,7 +52,11 @@
 // CHECK-NEXT: 08     .MIPS.options
 // CHECK-NEXT: 09     .MIPS.abiflags
 // CHECK-NEXT: None   .bss .pdr .comment .symtab .shstrtab .strtab
-// CHECK: There is no __cap_relocs section in the file.
+/// Local relocations for exception handling:
+// CHECK: CHERI __cap_relocs [
+// CHECK-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (__cheri_eh__Z4testll+132) Length: 164 Perms: Function
+// CHECK-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (__cheri_eh__Z4testll+100) Length: 164 Perms: Function
+// CHECK-NEXT: ]
 
 long external_fn(long arg);
 
