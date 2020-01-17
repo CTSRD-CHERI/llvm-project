@@ -175,6 +175,12 @@ namespace MipsII {
     HasFCCRegOperand = 1 << 6
 
   };
+
+  enum OperandType : unsigned {
+    OPERAND_FIRST_MIPS_MEM_IMM = MCOI::OPERAND_FIRST_TARGET,
+    OPERAND_MEM_SIMM9 = OPERAND_FIRST_MIPS_MEM_IMM,
+    OPERAND_LAST_MIPS_MEM_IMM = OPERAND_MEM_SIMM9
+  };
 }
 }
 
