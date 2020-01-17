@@ -2025,7 +2025,7 @@ static bool needsExpandMemInst(MCInst &Inst) {
   if (Op.isImm()) {
     if (Inst.getOpcode() == Mips::STORECAP_BigImm ||
         Inst.getOpcode() == Mips::LOADCAP_BigImm) {
-      return !isShiftedInt<16, 4>(Op.getImm())
+      return !isShiftedInt<16, 4>(Op.getImm());
     }
     // Offset can't exceed 16bit value.
     return !isInt<16>(Op.getImm());
