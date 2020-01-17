@@ -165,7 +165,7 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
     const LValue &getAtomicLValue() const { return LVal; }
     llvm::Value *getAtomicPointer() const {
       if (LVal.isSimple())
-        return LVal.getPointer();
+        return LVal.getPointer(CGF);
       else if (LVal.isBitField())
         return LVal.getBitFieldPointer();
       else if (LVal.isVectorElt())
@@ -369,7 +369,7 @@ bool AtomicInfo::requiresMemSetZero(llvm::Type *type) const {
 
 bool AtomicInfo::emitMemSetZeroIfNecessary() const {
   assert(LVal.isSimple());
-  llvm::Value *addr = LVal.getPointer();
+  llvm::Value *addr = LVal.getPointer(CGF);
   if (!requiresMemSetZero(addr->getType()->getPointerElementType()))
     return false;
 
@@ -1707,7 +1707,7 @@ Address AtomicInfo::materializeRValue(RValue rvalue) const {
   LValue TempLV = CGF.MakeAddrLValue(CreateTempAlloca(), getAtomicType());
   AtomicInfo Atomics(CGF, TempLV, AtomicExpr::AO__c11_atomic_store);
   Atomics.emitCopyIntoMemory(rvalue);
-  return TempLV.getAddress();
+  return TempLV.getAddress(CGF);
 }
 
 llvm::Value *AtomicInfo::convertRValueToInt(RValue RVal) const {
@@ -1720,7 +1720,8 @@ llvm::Value *AtomicInfo::convertRValueToInt(RValue RVal) const {
     else {
       if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
         // Cast to the atomic ptr element type for CHERI capabilities
-        return CGF.Builder.CreateBitCast(Value, LVal.getAddress().getElementType());
+        return CGF.Builder.CreateBitCast(Value,
+                                         LVal.getAddress(CGF).getElementType());
       }
       llvm::IntegerType *InputIntTy = llvm::IntegerType::get(
           CGF.getLLVMContext(),
@@ -2058,8 +2059,8 @@ void CodeGenFunction::EmitAtomicStore(RValue rvalue, LValue dest,
   // If this is an aggregate r-value, it should agree in type except
   // maybe for address-space qualification.
   assert(!rvalue.isAggregate() ||
-         rvalue.getAggregateAddress().getElementType()
-           == dest.getAddress().getElementType());
+         rvalue.getAggregateAddress().getElementType() ==
+             dest.getAddress(*this).getElementType());
 
   AtomicInfo atomics(*this, dest, AtomicExpr::AO__c11_atomic_store);
   LValue LVal = atomics.getAtomicLValue();
@@ -2126,10 +2127,10 @@ std::pair<RValue, llvm::Value *> CodeGenFunction::EmitAtomicCompareExchange(
   // maybe for address-space qualification.
   assert(!Expected.isAggregate() ||
          Expected.getAggregateAddress().getElementType() ==
-             Obj.getAddress().getElementType());
+             Obj.getAddress(*this).getElementType());
   assert(!Desired.isAggregate() ||
          Desired.getAggregateAddress().getElementType() ==
-             Obj.getAddress().getElementType());
+             Obj.getAddress(*this).getElementType());
   AtomicInfo Atomics(*this, Obj, AtomicExpr::AO__atomic_compare_exchange);
 
   return Atomics.EmitAtomicCompareExchange(Expected, Desired, Success, Failure,
@@ -2169,13 +2170,11 @@ void CodeGenFunction::EmitAtomicInit(Expr *init, LValue dest) {
     }
 
     // Evaluate the expression directly into the destination.
-    AggValueSlot slot = AggValueSlot::forLValue(dest,
-                                        AggValueSlot::IsNotDestructed,
-                                        AggValueSlot::DoesNotNeedGCBarriers,
-                                        AggValueSlot::IsNotAliased,
-                                        AggValueSlot::DoesNotOverlap,
-                                        Zeroed ? AggValueSlot::IsZeroed :
-                                                 AggValueSlot::IsNotZeroed);
+    AggValueSlot slot = AggValueSlot::forLValue(
+        dest, *this, AggValueSlot::IsNotDestructed,
+        AggValueSlot::DoesNotNeedGCBarriers, AggValueSlot::IsNotAliased,
+        AggValueSlot::DoesNotOverlap,
+        Zeroed ? AggValueSlot::IsZeroed : AggValueSlot::IsNotZeroed);
 
     EmitAggExpr(init, slot);
     return;

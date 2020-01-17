@@ -1882,15 +1882,15 @@ CodeGenFunction::EmitAsmInputLValue(const TargetInfo::ConstraintInfo &Info,
         Ty = llvm::IntegerType::get(getLLVMContext(), Size);
         Ty = CGM.getPointerInDefaultAS(Ty);
 
-        Arg = Builder.CreateLoad(Builder.CreateBitCast(InputValue.getAddress(),
-                                                       Ty));
+        Arg = Builder.CreateLoad(
+            Builder.CreateBitCast(InputValue.getAddress(*this), Ty));
       } else {
-        Arg = InputValue.getPointer();
+        Arg = InputValue.getPointer(*this);
         ConstraintStr += '*';
       }
     }
   } else {
-    Arg = InputValue.getPointer();
+    Arg = InputValue.getPointer(*this);
     ConstraintStr += '*';
   }
 
@@ -2139,8 +2139,8 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
         LargestVectorWidth = std::max((uint64_t)LargestVectorWidth,
                                    VT->getPrimitiveSizeInBits().getFixedSize());
     } else {
-      ArgTypes.push_back(Dest.getAddress().getType());
-      Args.push_back(Dest.getPointer());
+      ArgTypes.push_back(Dest.getAddress(*this).getType());
+      Args.push_back(Dest.getPointer(*this));
       Constraints += "=*";
       Constraints += OutputConstraint;
       ReadOnly = ReadNone = false;
@@ -2384,8 +2384,8 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
     if ((i < ResultTypeRequiresCast.size()) && ResultTypeRequiresCast[i]) {
       unsigned Size = getContext().getTypeSize(ResultRegQualTys[i]);
       Address A = Builder.CreateBitCast(
-          Dest.getAddress(),
-          ResultRegTypes[i]->getPointerTo(Dest.getAddress().getAddressSpace()));
+          Dest.getAddress(*this),
+          ResultRegTypes[i]->getPointerTo(Dest.getAddress(*this).getAddressSpace()));
       QualType Ty = getContext().getIntTypeForBitwidth(Size, /*Signed*/ false);
       if (Ty.isNull()) {
         const Expr *OutExpr = S.getOutputExpr(i);
@@ -2437,14 +2437,14 @@ CodeGenFunction::EmitCapturedStmt(const CapturedStmt &S, CapturedRegionKind K) {
   delete CGF.CapturedStmtInfo;
 
   // Emit call to the helper function.
-  EmitCallOrInvoke(F, CapStruct.getPointer());
+  EmitCallOrInvoke(F, CapStruct.getPointer(*this));
 
   return F;
 }
 
 Address CodeGenFunction::GenerateCapturedStmtArgument(const CapturedStmt &S) {
   LValue CapStruct = InitCapturedStruct(S);
-  return CapStruct.getAddress();
+  return CapStruct.getAddress(*this);
 }
 
 /// Creates the outlined function for a CapturedStmt.
