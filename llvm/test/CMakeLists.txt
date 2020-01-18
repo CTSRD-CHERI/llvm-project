@@ -78,7 +78,6 @@ set(LLVM_TEST_DEPENDS
           llvm-locstats
           llvm-lto2
           llvm-mc
-          llvm-ml
           llvm-modextract
           llvm-mt
           llvm-nm
