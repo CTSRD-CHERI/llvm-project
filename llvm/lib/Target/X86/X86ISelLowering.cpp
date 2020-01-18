@@ -11815,7 +11815,7 @@ static SDValue lowerShuffleAsByteRotate(const SDLoc &DL, MVT VT, SDValue V1,
 /// elements, and takes the low elements as the result. Note that while this is
 /// specified as a *right shift* because x86 is little-endian, it is a *left
 /// rotate* of the vector lanes.
-static SDValue lowerShuffleAsRotate(const SDLoc &DL, MVT VT, SDValue V1,
+static SDValue lowerShuffleAsVALIGN(const SDLoc &DL, MVT VT, SDValue V1,
                                     SDValue V2, ArrayRef<int> Mask,
                                     const X86Subtarget &Subtarget,
                                     SelectionDAG &DAG) {
@@ -13286,7 +13286,7 @@ static SDValue lowerV2I64Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
   // Its more profitable for pre-SSSE3 to use shuffles/unpacks.
   if (Subtarget.hasSSSE3()) {
     if (Subtarget.hasVLX())
-      if (SDValue Rotate = lowerShuffleAsRotate(DL, MVT::v2i64, V1, V2, Mask,
+      if (SDValue Rotate = lowerShuffleAsVALIGN(DL, MVT::v2i64, V1, V2, Mask,
                                                 Subtarget, DAG))
         return Rotate;
 
@@ -13575,7 +13575,7 @@ static SDValue lowerV4I32Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
   // Its more profitable for pre-SSSE3 to use shuffles/unpacks.
   if (Subtarget.hasSSSE3()) {
     if (Subtarget.hasVLX())
-      if (SDValue Rotate = lowerShuffleAsRotate(DL, MVT::v4i32, V1, V2, Mask,
+      if (SDValue Rotate = lowerShuffleAsVALIGN(DL, MVT::v4i32, V1, V2, Mask,
                                                 Subtarget, DAG))
         return Rotate;
 
@@ -16011,7 +16011,7 @@ static SDValue lowerV4I64Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
 
   // If we have VLX support, we can use VALIGN or VEXPAND.
   if (Subtarget.hasVLX()) {
-    if (SDValue Rotate = lowerShuffleAsRotate(DL, MVT::v4i64, V1, V2, Mask,
+    if (SDValue Rotate = lowerShuffleAsVALIGN(DL, MVT::v4i64, V1, V2, Mask,
                                               Subtarget, DAG))
       return Rotate;
 
@@ -16217,7 +16217,7 @@ static SDValue lowerV8I32Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
 
   // If we have VLX support, we can use VALIGN or EXPAND.
   if (Subtarget.hasVLX()) {
-    if (SDValue Rotate = lowerShuffleAsRotate(DL, MVT::v8i32, V1, V2, Mask,
+    if (SDValue Rotate = lowerShuffleAsVALIGN(DL, MVT::v8i32, V1, V2, Mask,
                                               Subtarget, DAG))
       return Rotate;
 
@@ -16794,7 +16794,7 @@ static SDValue lowerV8I64Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
     return Shift;
 
   // Try to use VALIGN.
-  if (SDValue Rotate = lowerShuffleAsRotate(DL, MVT::v8i64, V1, V2, Mask,
+  if (SDValue Rotate = lowerShuffleAsVALIGN(DL, MVT::v8i64, V1, V2, Mask,
                                             Subtarget, DAG))
     return Rotate;
 
@@ -16856,7 +16856,7 @@ static SDValue lowerV16I32Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
     return Shift;
 
   // Try to use VALIGN.
-  if (SDValue Rotate = lowerShuffleAsRotate(DL, MVT::v16i32, V1, V2, Mask,
+  if (SDValue Rotate = lowerShuffleAsVALIGN(DL, MVT::v16i32, V1, V2, Mask,
                                             Subtarget, DAG))
     return Rotate;
 
