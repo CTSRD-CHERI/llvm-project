@@ -2674,6 +2674,9 @@ public:
   virtual Align getAlignmentForPreciseBounds(uint64_t Size) const {
     return Align::None();
   }
+  bool supportsAtomicCapabilityOperations() const {
+    return SupportsAtomicCapabilityOperations;
+  }
 
   //===--------------------------------------------------------------------===//
   // Runtime Library hooks
@@ -3002,6 +3005,9 @@ protected:
   /// This makes it possible to do a tag-preserving copy even if the alignment
   /// is not statically known to be at least capability aligned.
   bool SupportsUnalignedCapabilityMemOps = false;
+
+  /// Whether atomic operations with CHERI capability values are supported.
+  bool SupportsAtomicCapabilityOperations = false;
 
   /// Return true if the value types that can be represented by the specified
   /// register class are all legal.

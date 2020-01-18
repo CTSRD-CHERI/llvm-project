@@ -109,7 +109,8 @@ namespace {
                                  Value *PointerOperand, Value *ValueOperand,
                                  Value *CASExpected, AtomicOrdering Ordering,
                                  AtomicOrdering Ordering2,
-                                 ArrayRef<RTLIB::Libcall> Libcalls);
+                                 ArrayRef<RTLIB::Libcall> Libcalls,
+                                 bool IsCap);
     void expandAtomicLoadToLibcall(LoadInst *LI);
     void expandAtomicStoreToLibcall(StoreInst *LI);
     void expandAtomicRMWToLibcall(AtomicRMWInst *I);
@@ -185,11 +186,36 @@ static unsigned getAtomicOpAlign(AtomicCmpXchgInst *CASI) {
   return DL.getTypeStoreSize(CASI->getCompareOperand()->getType());
 }
 
+// Helper functions to retrieve whether an atomic instruction is operating on a
+// capability value.
+static unsigned getAtomicOpIsCap(LoadInst *LI) {
+  const DataLayout &DL = LI->getModule()->getDataLayout();
+  return DL.isFatPointer(LI->getType());
+}
+
+static unsigned getAtomicOpIsCap(StoreInst *SI) {
+  const DataLayout &DL = SI->getModule()->getDataLayout();
+  return DL.isFatPointer(SI->getValueOperand()->getType());
+}
+
+static unsigned getAtomicOpIsCap(AtomicRMWInst *RMWI) {
+  const DataLayout &DL = RMWI->getModule()->getDataLayout();
+  return DL.isFatPointer(RMWI->getValOperand()->getType());
+}
+
+static unsigned getAtomicOpIsCap(AtomicCmpXchgInst *CASI) {
+  const DataLayout &DL = CASI->getModule()->getDataLayout();
+  return DL.isFatPointer(CASI->getCompareOperand()->getType());
+}
+
 // Determine if a particular atomic operation has a supported size,
 // and is of appropriate alignment, to be passed through for target
 // lowering. (Versus turning into a __atomic libcall)
 template <typename Inst>
 static bool atomicSizeSupported(const TargetLowering *TLI, Inst *I) {
+  if (getAtomicOpIsCap(I))
+    return TLI->supportsAtomicCapabilityOperations();
+
   unsigned Size = getAtomicOpSize(I);
   unsigned Align = getAtomicOpAlign(I);
   return Align >= Size && Size <= TLI->getMaxAtomicSizeInBitsSupported() / 8;
@@ -1470,10 +1496,11 @@ void AtomicExpand::expandAtomicLoadToLibcall(LoadInst *I) {
       RTLIB::ATOMIC_LOAD_4, RTLIB::ATOMIC_LOAD_8, RTLIB::ATOMIC_LOAD_16};
   unsigned Size = getAtomicOpSize(I);
   unsigned Align = getAtomicOpAlign(I);
+  bool IsCap = getAtomicOpIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
       I, Size, Align, I->getPointerOperand(), nullptr, nullptr,
-      I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls);
+      I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
   (void)expanded;
   assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor Load");
 }
@@ -1484,10 +1511,11 @@ void AtomicExpand::expandAtomicStoreToLibcall(StoreInst *I) {
       RTLIB::ATOMIC_STORE_4, RTLIB::ATOMIC_STORE_8, RTLIB::ATOMIC_STORE_16};
   unsigned Size = getAtomicOpSize(I);
   unsigned Align = getAtomicOpAlign(I);
+  bool IsCap = getAtomicOpIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
       I, Size, Align, I->getPointerOperand(), I->getValueOperand(), nullptr,
-      I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls);
+      I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
   (void)expanded;
   assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor Store");
 }
@@ -1499,11 +1527,12 @@ void AtomicExpand::expandAtomicCASToLibcall(AtomicCmpXchgInst *I) {
       RTLIB::ATOMIC_COMPARE_EXCHANGE_8, RTLIB::ATOMIC_COMPARE_EXCHANGE_16};
   unsigned Size = getAtomicOpSize(I);
   unsigned Align = getAtomicOpAlign(I);
+  bool IsCap = getAtomicOpIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
       I, Size, Align, I->getPointerOperand(), I->getNewValOperand(),
       I->getCompareOperand(), I->getSuccessOrdering(), I->getFailureOrdering(),
-      Libcalls);
+      Libcalls, IsCap);
   (void)expanded;
   assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor CAS");
 }
@@ -1572,12 +1601,13 @@ void AtomicExpand::expandAtomicRMWToLibcall(AtomicRMWInst *I) {
 
   unsigned Size = getAtomicOpSize(I);
   unsigned Align = getAtomicOpAlign(I);
+  bool IsCap = getAtomicOpIsCap(I);
 
   bool Success = false;
   if (!Libcalls.empty())
     Success = expandAtomicOpToLibcall(
         I, Size, Align, I->getPointerOperand(), I->getValOperand(), nullptr,
-        I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls);
+        I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
 
   // The expansion failed: either there were no libcalls at all for
   // the operation (min/max), or there were only size-specialized
@@ -1610,7 +1640,7 @@ void AtomicExpand::expandAtomicRMWToLibcall(AtomicRMWInst *I) {
 bool AtomicExpand::expandAtomicOpToLibcall(
     Instruction *I, unsigned Size, unsigned Align, Value *PointerOperand,
     Value *ValueOperand, Value *CASExpected, AtomicOrdering Ordering,
-    AtomicOrdering Ordering2, ArrayRef<RTLIB::Libcall> Libcalls) {
+    AtomicOrdering Ordering2, ArrayRef<RTLIB::Libcall> Libcalls, bool IsCap) {
   assert(Libcalls.size() == 6);
 
   LLVMContext &Ctx = I->getContext();
@@ -1619,7 +1649,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   IRBuilder<> Builder(I);
   IRBuilder<> AllocaBuilder(&I->getFunction()->getEntryBlock().front());
 
-  bool UseSizedLibcall = canUseSizedAtomicCall(Size, Align, DL);
+  bool UseSizedLibcall = !IsCap && canUseSizedAtomicCall(Size, Align, DL);
   Type *SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
 
   unsigned AllocaAlignment = DL.getPrefTypeAlignment(SizedIntTy);
