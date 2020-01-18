@@ -1736,7 +1736,9 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   auto PtrTypeAS = PointerOperand->getType()->getPointerAddressSpace();
   Value *PtrVal = Builder.CreateBitCast(PointerOperand,
                                         Type::getInt8PtrTy(Ctx, PtrTypeAS));
-  PtrVal = Builder.CreateAddrSpaceCast(PtrVal, Type::getInt8PtrTy(Ctx));
+  unsigned PtrValAS = DL.getAllocaAddrSpace();
+  PtrVal = Builder.CreateAddrSpaceCast(PtrVal,
+                                       Type::getInt8PtrTy(Ctx, PtrValAS));
   Args.push_back(PtrVal);
 
   // 'expected' argument, if present.
@@ -1762,8 +1764,9 @@ bool AtomicExpand::expandAtomicOpToLibcall(
     } else {
       AllocaValue = AllocaBuilder.CreateAlloca(ValueOperand->getType());
       AllocaValue->setAlignment(MaybeAlign(AllocaAlignment));
+      unsigned AllocaAS =  AllocaValue->getType()->getPointerAddressSpace();
       AllocaValue_i8 =
-          Builder.CreateBitCast(AllocaValue, Type::getInt8PtrTy(Ctx));
+          Builder.CreateBitCast(AllocaValue, Type::getInt8PtrTy(Ctx, AllocaAS));
       Builder.CreateLifetimeStart(AllocaValue_i8, SizeVal64);
       Builder.CreateAlignedStore(ValueOperand, AllocaValue, AllocaAlignment);
       Args.push_back(AllocaValue_i8);
