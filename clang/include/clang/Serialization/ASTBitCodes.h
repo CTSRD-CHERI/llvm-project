@@ -1409,9 +1409,6 @@ namespace serialization {
       /// An LifetimeExtendedTemporaryDecl record.
       DECL_LIFETIME_EXTENDED_TEMPORARY,
 
-      /// A RequiresExprBodyDecl record.
-      DECL_REQUIRES_EXPR_BODY,
-
       /// An ObjCTypeParamDecl record.
       DECL_OBJC_TYPE_PARAM,
 
@@ -1797,7 +1794,6 @@ namespace serialization {
       EXPR_MATERIALIZE_TEMPORARY, // MaterializeTemporaryExpr
       EXPR_CXX_FOLD,              // CXXFoldExpr
       EXPR_CONCEPT_SPECIALIZATION,// ConceptSpecializationExpr
-      EXPR_REQUIRES,              // RequiresExpr
 
       // CUDA
       EXPR_CUDA_KERNEL_CALL,       // CUDAKernelCallExpr

@@ -715,10 +715,6 @@ public:
     return Builder.getInt1(E->isSatisfied());
   }
 
-  Value *VisitRequiresExpr(const RequiresExpr *E) {
-    return Builder.getInt1(E->isSatisfied());
-  }
-
   Value *VisitArrayTypeTraitExpr(const ArrayTypeTraitExpr *E) {
     return llvm::ConstantInt::get(Builder.getInt32Ty(), E->getValue());
   }
