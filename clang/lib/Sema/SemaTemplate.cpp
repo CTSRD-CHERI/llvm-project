@@ -10013,24 +10013,12 @@ Sema::ActOnTypenameType(Scope *S, SourceLocation TypenameLoc,
       << FixItHint::CreateRemoval(TypenameLoc);
 
   NestedNameSpecifierLoc QualifierLoc = SS.getWithLocInContext(Context);
+  TypeSourceInfo *TSI = nullptr;
   QualType T = CheckTypenameType(TypenameLoc.isValid()? ETK_Typename : ETK_None,
-                                 TypenameLoc, QualifierLoc, II, IdLoc);
+                                 TypenameLoc, QualifierLoc, II, IdLoc, &TSI,
+                                 /*DeducedTSTContext=*/true);
   if (T.isNull())
     return true;
-
-  TypeSourceInfo *TSI = Context.CreateTypeSourceInfo(T);
-  if (isa<DependentNameType>(T)) {
-    DependentNameTypeLoc TL = TSI->getTypeLoc().castAs<DependentNameTypeLoc>();
-    TL.setElaboratedKeywordLoc(TypenameLoc);
-    TL.setQualifierLoc(QualifierLoc);
-    TL.setNameLoc(IdLoc);
-  } else {
-    ElaboratedTypeLoc TL = TSI->getTypeLoc().castAs<ElaboratedTypeLoc>();
-    TL.setElaboratedKeywordLoc(TypenameLoc);
-    TL.setQualifierLoc(QualifierLoc);
-    TL.getNamedTypeLoc().castAs<TypeSpecTypeLoc>().setNameLoc(IdLoc);
-  }
-
   return CreateParsedType(T, TSI);
 }
 
@@ -10167,6 +10155,35 @@ static bool isEnableIf(NestedNameSpecifierLoc NNS, const IdentifierInfo &II,
   return true;
 }
 
+QualType
+Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
+                        SourceLocation KeywordLoc,
+                        NestedNameSpecifierLoc QualifierLoc,
+                        const IdentifierInfo &II,
+                        SourceLocation IILoc,
+                        TypeSourceInfo **TSI,
+                        bool DeducedTSTContext) {
+  QualType T = CheckTypenameType(Keyword, KeywordLoc, QualifierLoc, II, IILoc,
+                                 DeducedTSTContext);
+  if (T.isNull())
+    return QualType();
+
+  *TSI = Context.CreateTypeSourceInfo(T);
+  if (isa<DependentNameType>(T)) {
+    DependentNameTypeLoc TL =
+        (*TSI)->getTypeLoc().castAs<DependentNameTypeLoc>();
+    TL.setElaboratedKeywordLoc(KeywordLoc);
+    TL.setQualifierLoc(QualifierLoc);
+    TL.setNameLoc(IILoc);
+  } else {
+    ElaboratedTypeLoc TL = (*TSI)->getTypeLoc().castAs<ElaboratedTypeLoc>();
+    TL.setElaboratedKeywordLoc(KeywordLoc);
+    TL.setQualifierLoc(QualifierLoc);
+    TL.getNamedTypeLoc().castAs<TypeSpecTypeLoc>().setNameLoc(IILoc);
+  }
+  return T;
+}
+
 /// Build the type that describes a C++ typename specifier,
 /// e.g., "typename T::type".
 QualType
@@ -10174,32 +10191,38 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
                         SourceLocation KeywordLoc,
                         NestedNameSpecifierLoc QualifierLoc,
                         const IdentifierInfo &II,
-                        SourceLocation IILoc) {
+                        SourceLocation IILoc, bool DeducedTSTContext) {
   CXXScopeSpec SS;
   SS.Adopt(QualifierLoc);
 
-  DeclContext *Ctx = computeDeclContext(SS);
-  if (!Ctx) {
-    // If the nested-name-specifier is dependent and couldn't be
-    // resolved to a type, build a typename type.
-    assert(QualifierLoc.getNestedNameSpecifier()->isDependent());
-    return Context.getDependentNameType(Keyword,
-                                        QualifierLoc.getNestedNameSpecifier(),
-                                        &II);
+  DeclContext *Ctx = nullptr;
+  if (QualifierLoc) {
+    Ctx = computeDeclContext(SS);
+    if (!Ctx) {
+      // If the nested-name-specifier is dependent and couldn't be
+      // resolved to a type, build a typename type.
+      assert(QualifierLoc.getNestedNameSpecifier()->isDependent());
+      return Context.getDependentNameType(Keyword,
+                                          QualifierLoc.getNestedNameSpecifier(),
+                                          &II);
+    }
+
+    // If the nested-name-specifier refers to the current instantiation,
+    // the "typename" keyword itself is superfluous. In C++03, the
+    // program is actually ill-formed. However, DR 382 (in C++0x CD1)
+    // allows such extraneous "typename" keywords, and we retroactively
+    // apply this DR to C++03 code with only a warning. In any case we continue.
+
+    if (RequireCompleteDeclContext(SS, Ctx))
+      return QualType();
   }
-
-  // If the nested-name-specifier refers to the current instantiation,
-  // the "typename" keyword itself is superfluous. In C++03, the
-  // program is actually ill-formed. However, DR 382 (in C++0x CD1)
-  // allows such extraneous "typename" keywords, and we retroactively
-  // apply this DR to C++03 code with only a warning. In any case we continue.
-
-  if (RequireCompleteDeclContext(SS, Ctx))
-    return QualType();
 
   DeclarationName Name(&II);
   LookupResult Result(*this, Name, IILoc, LookupOrdinaryName);
-  LookupQualifiedName(Result, Ctx, SS);
+  if (Ctx)
+    LookupQualifiedName(Result, Ctx, SS);
+  else
+    LookupName(Result, CurScope);
   unsigned DiagID = 0;
   Decl *Referenced = nullptr;
   switch (Result.getResultKind()) {
@@ -10208,7 +10231,7 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
     // a more specific diagnostic.
     SourceRange CondRange;
     Expr *Cond = nullptr;
-    if (isEnableIf(QualifierLoc, II, CondRange, Cond)) {
+    if (Ctx && isEnableIf(QualifierLoc, II, CondRange, Cond)) {
       // If we have a condition, narrow it down to the specific failed
       // condition.
       if (Cond) {
@@ -10224,12 +10247,14 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
         return QualType();
       }
 
-      Diag(CondRange.getBegin(), diag::err_typename_nested_not_found_enable_if)
+      Diag(CondRange.getBegin(),
+           diag::err_typename_nested_not_found_enable_if)
           << Ctx << CondRange;
       return QualType();
     }
 
-    DiagID = diag::err_typename_nested_not_found;
+    DiagID = Ctx ? diag::err_typename_nested_not_found
+                 : diag::err_unknown_typename;
     break;
   }
 
@@ -10295,6 +10320,19 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
     //   is a placeholder for a deduced class type [...].
     if (getLangOpts().CPlusPlus17) {
       if (auto *TD = getAsTypeTemplateDecl(Result.getFoundDecl())) {
+        if (!DeducedTSTContext) {
+          QualType T(QualifierLoc
+                         ? QualifierLoc.getNestedNameSpecifier()->getAsType()
+                         : nullptr, 0);
+          if (!T.isNull())
+            Diag(IILoc, diag::err_dependent_deduced_tst)
+              << (int)getTemplateNameKindForDiagnostics(TemplateName(TD)) << T;
+          else
+            Diag(IILoc, diag::err_deduced_tst)
+              << (int)getTemplateNameKindForDiagnostics(TemplateName(TD));
+          Diag(TD->getLocation(), diag::note_template_decl_here);
+          return QualType();
+        }
         return Context.getElaboratedType(
             Keyword, QualifierLoc.getNestedNameSpecifier(),
             Context.getDeducedTemplateSpecializationType(TemplateName(TD),
@@ -10302,12 +10340,14 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
       }
     }
 
-    DiagID = diag::err_typename_nested_not_type;
+    DiagID = Ctx ? diag::err_typename_nested_not_type
+                 : diag::err_typename_not_type;
     Referenced = Result.getFoundDecl();
     break;
 
   case LookupResult::FoundOverloaded:
-    DiagID = diag::err_typename_nested_not_type;
+    DiagID = Ctx ? diag::err_typename_nested_not_type
+                 : diag::err_typename_not_type;
     Referenced = *Result.begin();
     break;
 
@@ -10319,9 +10359,14 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
   // type. Emit an appropriate diagnostic and return an error.
   SourceRange FullRange(KeywordLoc.isValid() ? KeywordLoc : SS.getBeginLoc(),
                         IILoc);
-  Diag(IILoc, DiagID) << FullRange << Name << Ctx;
+  if (Ctx)
+    Diag(IILoc, DiagID) << FullRange << Name << Ctx;
+  else
+    Diag(IILoc, DiagID) << FullRange << Name;
   if (Referenced)
-    Diag(Referenced->getLocation(), diag::note_typename_refers_here)
+    Diag(Referenced->getLocation(),
+         Ctx ? diag::note_typename_member_refers_here
+             : diag::note_typename_refers_here)
       << Name;
   return QualType();
 }
