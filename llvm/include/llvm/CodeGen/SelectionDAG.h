@@ -865,12 +865,16 @@ public:
   }
 
   // Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default
-  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset,
-                        const SDNodeFlags Flags = SDNodeFlags());
+  SDValue getPointerAdd(const SDLoc &DL, SDValue Ptr, int64_t Offset,
+                        const SDNodeFlags Flags = SDNodeFlags()) {
+    return getMemBasePlusOffset(Ptr, Offset, DL, Flags);
+  }
 
   // Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default
-  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, SDValue Offset,
-                        const SDNodeFlags Flags = SDNodeFlags());
+  SDValue getPointerAdd(const SDLoc &DL, SDValue Ptr, SDValue Offset,
+                        const SDNodeFlags Flags = SDNodeFlags()) {
+    return getMemBasePlusOffset(Ptr, Offset, DL, Flags);
+  }
 
   /// Returns sum of the base pointer and offset.
   /// Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default.
