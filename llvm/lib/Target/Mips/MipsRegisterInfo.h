@@ -61,8 +61,6 @@ public:
 
   bool requiresRegisterScavenging(const MachineFunction &MF) const override;
 
-  bool trackLivenessAfterRegAlloc(const MachineFunction &MF) const override;
-
   /// Stack Frame Processing Methods
   void eliminateFrameIndex(MachineBasicBlock::iterator II,
                            int SPAdj, unsigned FIOperandNum,
