@@ -38,7 +38,6 @@
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/MipsABIFlags.h"
 #include "llvm/Support/MD5.h"
-#include "llvm/Support/TimeProfiler.h"
 #include <cstdlib>
 #include <thread>
 
@@ -3260,7 +3259,6 @@ MergeSyntheticSection *createMergeSynthetic(StringRef name, uint32_t type,
 }
 
 template <class ELFT> void splitSections() {
-  llvm::TimeTraceScope timeScope("Split sections");
   // splitIntoPieces needs to be called on each MergeInputSection
   // before calling finalizeContents().
   parallelForEach(inputSections, [](InputSectionBase *sec) {
