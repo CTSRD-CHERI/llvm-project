@@ -408,7 +408,7 @@ def err_drv_unsupported_indirect_jump_opt : Error<
 def err_drv_unknown_indirect_jump_opt : Error<
   "unknown '-mindirect-jump=' option '%0'">;
 def err_drv_unsupported_fpatchable_function_entry_argument : Error<
-  "the second argument of '-fpatchable-function-entry' must be 0 or omitted">;
+  "the second argument of '-fpatchable-function-entry' must be smaller than the first argument">;
 
 def warn_drv_ignored_ssp_purecap : Warning<
   "ignoring '%0' option since stack protector is unnecessary when using "
