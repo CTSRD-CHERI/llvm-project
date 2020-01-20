@@ -561,8 +561,10 @@ SanitizerMask FreeBSD::getSupportedSanitizers() const {
 void FreeBSD::addClangTargetOptions(const ArgList &DriverArgs,
                                     ArgStringList &CC1Args,
                                     Action::OffloadKind) const {
+
   if (!DriverArgs.hasFlag(options::OPT_fuse_init_array,
                           options::OPT_fno_use_init_array,
-                          getTriple().getOSMajorVersion() >= 12))
+                          getTriple().getOSMajorVersion() >= 12 ||
+                              getTriple().isMIPS() || IsCheriPurecap))
     CC1Args.push_back("-fno-use-init-array");
 }
