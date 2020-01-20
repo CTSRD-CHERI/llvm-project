@@ -1462,7 +1462,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
 
     // First, convert to the correct width so that we control the kind of
     // extension.
-    llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DstPT);
+    llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIndexType(DstPT);
     bool InputSigned = SrcType->isSignedIntegerOrEnumerationType();
     if (SrcType->isBooleanType() && Opts.TreatBooleanAsSigned) {
       InputSigned = true;
