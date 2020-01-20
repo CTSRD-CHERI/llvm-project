@@ -141,7 +141,7 @@ static bool needsInterpSection() {
 }
 
 bool hasDynamicLinker() {
-  return config->shared || !sharedFiles.empty();
+  return config->shared || config->pie || !sharedFiles.empty();
 }
 
 template <class ELFT> void writeResult() { Writer<ELFT>().run(); }

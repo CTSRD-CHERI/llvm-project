@@ -9,13 +9,12 @@
 /// This should work with both -z text and -z notext
 /// Check that .gcc_except_table ends up in the relro section and the relocations are correct
 // RUN: ld.lld -shared %t.o -o %t.so -z notext
-// RUN: llvm-readelf -r --section-mapping --sections --program-headers --cap-relocs  %t.so | FileCheck %s
+// RUN: llvm-readelf -r --syms --section-mapping --sections --program-headers --cap-relocs  %t.so | FileCheck %s
 // RUN: ld.lld -shared %t.o -o %t.so -z text
-// RUN: llvm-readelf -r --section-mapping --sections --program-headers --cap-relocs  %t.so | FileCheck %s
+// RUN: llvm-readelf -r --syms --section-mapping --sections --program-headers --cap-relocs  %t.so | FileCheck %s
 
-// CHECK:      Relocation section '.rel.dyn' at offset {{.+}} contains 2 entries:
+// CHECK:      Relocation section '.rel.dyn' at offset {{.+}} contains 1 entries:
 // CHECK-NEXT: Offset             Info             Type                            Symbol's Value  Symbol's Name
-// CHECK-NEXT:                     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE
 // CHECK-NEXT:                     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __gxx_personality_v0
 // CHECK-EMPTY:
 // CHECK-NEXT: Relocation section '.rel.plt' at offset {{.+}} contains 3 entries:
@@ -42,12 +41,12 @@
 // CHECK-NEXT: Section to Segment mapping:
 // CHECK-NEXT: Segment Sections...
 // CHECK-NEXT: 00
-// CHECK-NEXT: 01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rel.dyn .rel.plt
+// CHECK-NEXT: 01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rel.dyn .rel.plt .eh_frame __cap_relocs {{$}}
 // CHECK-NEXT: 02     .text
-// CHECK-NEXT: 03     .gcc_except_table .eh_frame
+// CHECK-NEXT: 03     .gcc_except_table
 // CHECK-NEXT: 04     .data .captable .got
 // CHECK-NEXT: 05     .dynamic
-// CHECK-NEXT: 06     .gcc_except_table .eh_frame
+// CHECK-NEXT: 06     .gcc_except_table
 // CHECK-NEXT: 07
 // CHECK-NEXT: 08     .MIPS.options
 // CHECK-NEXT: 09     .MIPS.abiflags

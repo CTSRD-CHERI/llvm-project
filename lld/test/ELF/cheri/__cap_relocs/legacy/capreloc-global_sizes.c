@@ -70,9 +70,9 @@ void __start(void) {
 #endif
 
 // DUMP-EXE-LABEL: Sections:
-// DUMP-EXE: .global_sizes 00000030 0000000120000278 DATA
+// DUMP-EXE: .global_sizes 00000030 0000000120000208 DATA
 // DUMP-SHLIB-LABEL: Sections:
-// DUMP-SHLIB: .global_sizes 00000030 0000000000000698 DATA
+// DUMP-SHLIB: .global_sizes 00000030 00000000000005b8 DATA
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
 // DUMP-EXE: 0000000120000{{.+}} gw    O .global_sizes           00000008 .size.bar
@@ -95,7 +95,7 @@ void __start(void) {
 // GLOBAL_SIZES-NEXT: 00000000 00000baa 00000000 00000004
 // .size.bar from bar.o (not used because .size.bar points to the first one) and then .size.other_var
 // GLOBAL_SIZES-NEXT: 00000000 00000000 00000000 000000ff
-// GLOBAL_SIZES-NEXT: Contents of section .text:
+// GLOBAL_SIZES-NEXT: Contents of section .eh_frame:
 
 
 // DUMP-RELOCATABLE-LABEL: SYMBOL TABLE:
