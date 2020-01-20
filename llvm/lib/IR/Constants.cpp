@@ -1878,6 +1878,9 @@ Constant *ConstantExpr::getPtrToInt(Constant *C, Type *DstTy,
   if (isa<VectorType>(C->getType()))
     assert(C->getType()->getVectorNumElements()==DstTy->getVectorNumElements()&&
            "Invalid cast between a different number of vector elements");
+  if (C->getType()->getPointerAddressSpace() == 200) {  // FIXME: hardcoded AS200
+    assert(DstTy->getIntegerBitWidth() <= 64);
+  }
   return getFoldedCast(Instruction::PtrToInt, C, DstTy, OnlyIfReduced);
 }
 
@@ -1891,6 +1894,9 @@ Constant *ConstantExpr::getIntToPtr(Constant *C, Type *DstTy,
   if (isa<VectorType>(C->getType()))
     assert(C->getType()->getVectorNumElements()==DstTy->getVectorNumElements()&&
            "Invalid cast between a different number of vector elements");
+  if (DstTy->getPointerAddressSpace() == 200) {  // FIXME: hardcoded AS200
+    assert(C->getType()->getIntegerBitWidth() <= 64);
+  }
   return getFoldedCast(Instruction::IntToPtr, C, DstTy, OnlyIfReduced);
 }
 
