@@ -7070,6 +7070,8 @@ public:
     llvm::Type *DstTy = Ptr->getType();
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    assert(Offset->getType()->getIntegerBitWidth() ==
+        CGF.CGM.getDataLayout().getIndexTypeSizeInBits(DstTy));
     return B.CreateBitCast(B.CreateCall(SetOffset, {Ptr, Offset}), DstTy);
   }
 
@@ -7082,6 +7084,8 @@ public:
     llvm::Type *DstTy = Ptr->getType();
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    assert(Offset->getType()->getIntegerBitWidth() ==
+           CGF.CGM.getDataLayout().getIndexTypeSizeInBits(DstTy));
     return B.CreateBitCast(B.CreateCall(SetAddr, {Ptr, Offset}), DstTy);
   }
 
@@ -7094,6 +7098,8 @@ public:
     llvm::Type *DstTy = Ptr->getType();
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    assert(Offset->getType()->getIntegerBitWidth() ==
+        CGF.CGM.getDataLayout().getIndexTypeSizeInBits(DstTy));
     return B.CreateBitCast(B.CreateCall(SetBounds, {Ptr, Size}), DstTy, Name);
   }
 
