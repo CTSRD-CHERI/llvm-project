@@ -564,7 +564,7 @@ define i8 addrspace(200)* @fold_inc_gep_sequence_arg(i8 addrspace(200)* %arg) lo
 
 define i8 addrspace(200)* @fold_gep_incoffset(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
   ; CHECK-LABEL: @fold_gep_incoffset(i8 addrspace(200)* %arg)
-  ; CHECK: %gep = getelementptr inbounds i8, i8 addrspace(200)* %arg, i64 96
+  ; CHECK: %gep = getelementptr i8, i8 addrspace(200)* %arg, i64 96
   ; CHECK: ret i8 addrspace(200)* %gep
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 100)
   %gep = getelementptr inbounds i8, i8 addrspace(200)* %inc, i64 -4
