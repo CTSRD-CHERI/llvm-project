@@ -4936,17 +4936,17 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
   if (!BitWidth)
     return nullptr;
 
-  KnownBits Op0Known(BitWidth);
-  KnownBits Op1Known(BitWidth);
-
-  // Note: we can't do this for CHERI capabilities since the comparisons also
+  // Note: we can't do this for CHERI capabilities if the comparisons also
   // take the tag bit into account.
+  //
+  // TODO: handle the exact equals flag here. If not we can always convert to
+  //  a i64 compare...
   //
   // For now just skip this optimization if one of the icmp operands is a CHERI
   // capability that might have the tag bit set.
   if (isCheriPointer(Ty, &DL)) {
     if (!(cheri::isKnownUntaggedCapability(I.getOperand(0), &DL) &&
-          cheri::isKnownUntaggedCapability(I.getOperand(1), &DL))) {
+        cheri::isKnownUntaggedCapability(I.getOperand(1), &DL))) {
       // At least one operand might be tagged -> we can't simplify this yet!
       return nullptr;
     } else {
@@ -4954,13 +4954,18 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
       // Intrinsics will be removed if they refer to a constant value
       Builder.SetInsertPoint(&I);
       auto Addr1 = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get,
-                   DL.getIntPtrType(I.getOperand(0)->getType()), I.getOperand(0), nullptr, "op0_addr");
+                                           DL.getIntPtrType(I.getOperand(0)->getType()), I.getOperand(0), nullptr, "op0_addr");
       auto Addr2 = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get,
-                   DL.getIntPtrType(I.getOperand(0)->getType()), I.getOperand(1), nullptr, "op1_addr");
+                                           DL.getIntPtrType(I.getOperand(0)->getType()), I.getOperand(1), nullptr, "op1_addr");
       I.setOperand(0, Addr1);
       I.setOperand(1, Addr2);
     }
+    BitWidth = DL.getPointerBaseSizeInBits(Ty);
   }
+
+  KnownBits Op0Known(BitWidth);
+  KnownBits Op1Known(BitWidth);
+
   if (SimplifyDemandedBits(&I, 0,
                            getDemandedBitsLHSMask(I, BitWidth),
                            Op0Known, 0))

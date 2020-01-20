@@ -75,7 +75,7 @@ public:
       // which doesn't contain values outside the range of a pointer.
       unsigned OpSize = OpTy->getScalarSizeInBits();
       if (DL.isLegalInteger(OpSize) &&
-          OpSize <= DL.getPointerTypeSizeInBits(Ty))
+          OpSize <= DL.getPointerBaseSizeInBits(Ty))
         return TTI::TCC_Free;
 
       // Otherwise it's not a no-op.

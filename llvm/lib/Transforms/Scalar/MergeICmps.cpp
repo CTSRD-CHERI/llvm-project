@@ -169,7 +169,7 @@ BCEAtom visitICmpLoadOperand(Value *const Val, BaseIdentifier &BaseId) {
     // require memory to be unconditionnally dereferencable.
     return {};
   }
-  APInt Offset = APInt(DL.getPointerTypeSizeInBits(GEP->getType()), 0);
+  APInt Offset = APInt(DL.getIndexTypeSizeInBits(GEP->getType()), 0);
   if (!GEP->accumulateConstantOffset(DL, Offset))
     return {};
   return BCEAtom(GEP, LoadI, BaseId.getBaseId(GEP->getPointerOperand()),
