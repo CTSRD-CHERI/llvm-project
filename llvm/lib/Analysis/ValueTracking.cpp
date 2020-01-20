@@ -88,6 +88,10 @@ static cl::opt<unsigned> DomConditionsMaxUses("dom-conditions-max-uses",
 /// Returns the bitwidth of the given scalar or pointer type. For vector types,
 /// returns the element type's bitwidth.
 static unsigned getBitWidth(Type *Ty, const DataLayout &DL) {
+  // For CHERI capabilities the usable range here is the address range
+  if (DL.isFatPointer(Ty))
+    return DL.getIndexTypeSizeInBits(Ty);
+
   if (unsigned BitWidth = Ty->getScalarSizeInBits())
     return BitWidth;
 
@@ -1230,6 +1234,8 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
     SrcBitWidth = ScalarTy->isPointerTy() ?
       Q.DL.getPointerTypeSizeInBits(ScalarTy) :
       Q.DL.getTypeSizeInBits(ScalarTy);
+    if (Q.DL.isFatPointer(ScalarTy))
+      SrcBitWidth = Q.DL.getIndexTypeSizeInBits(ScalarTy);
 
     assert(SrcBitWidth && "SrcBitWidth can't be zero");
     Known = Known.zextOrTrunc(SrcBitWidth, false);
@@ -1798,6 +1804,8 @@ void computeKnownBits(const Value *V, KnownBits &Known, unsigned Depth,
   Type *ScalarTy = V->getType()->getScalarType();
   unsigned ExpectedWidth = ScalarTy->isPointerTy() ?
     Q.DL.getPointerTypeSizeInBits(ScalarTy) : Q.DL.getTypeSizeInBits(ScalarTy);
+  if (Q.DL.isFatPointer(ScalarTy))
+    ExpectedWidth = Q.DL.getIndexTypeSizeInBits(ScalarTy);
   assert(ExpectedWidth == BitWidth && "V and Known should have same BitWidth");
   (void)BitWidth;
   (void)ExpectedWidth;
@@ -2550,6 +2558,8 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
   unsigned TyBits = ScalarTy->isPointerTy() ?
     Q.DL.getPointerTypeSizeInBits(ScalarTy) :
     Q.DL.getTypeSizeInBits(ScalarTy);
+  if (Q.DL.isFatPointer(ScalarTy))
+    TyBits = Q.DL.getIndexTypeSizeInBits(ScalarTy);
 
   unsigned Tmp, Tmp2;
   unsigned FirstAnswer = 1;
