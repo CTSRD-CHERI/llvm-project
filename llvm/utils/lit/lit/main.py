@@ -43,8 +43,8 @@ def main(builtin_params={}):
         config_prefix=opts.configPrefix,
         echo_all_commands=opts.echoAllCommands)
 
-    litConfig.cheri_test_mode = opts.cheri_tests_filter
-    litConfig.run_with_debugger = opts.run_with_debugger
+    lit_config.cheri_test_mode = opts.cheri_tests_filter
+    lit_config.run_with_debugger = opts.run_with_debugger
 
     discovered_tests = lit.discovery.find_tests_for_inputs(lit_config, opts.test_paths)
     if not discovered_tests:
