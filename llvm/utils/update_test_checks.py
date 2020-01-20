@@ -211,7 +211,7 @@ def main():
     common.debug('Writing %d lines to %s...' % (len(output_lines), test))
 
     with open(test, 'wb') as f:
-      sys.stderr.writelines(['{}\n'.format(l).encode('utf-8') for l in output_lines])
+      sys.stderr.writelines(['{}\n'.format(l) for l in output_lines])
       f.writelines(['{}\n'.format(l).encode('utf-8') for l in output_lines])
 
 
