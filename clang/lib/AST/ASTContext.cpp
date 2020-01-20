@@ -9522,25 +9522,19 @@ unsigned ASTContext::getIntWidth(QualType T) const {
     T = ET->getDecl()->getIntegerType();
   if (T->isBooleanType())
     return 1;
+  // FIXME: do we ever want the actual bit width for capabilities?
+  if (Target->SupportsCapabilities()) {
+    if (T->isPointerType() && T->getAs<PointerType>()->isCHERICapability())
+      return Target->getPointerRangeForCHERICapability();
+    if (T->isIntCapType())
+      return Target->getPointerRangeForCHERICapability();
+    assert(!T->isReferenceType() && "Should probably not be handled here");
+  }
   // For builtin types, just use the standard type sizing method
   return (unsigned)getTypeSize(T);
 }
+
 unsigned ASTContext::getIntRange(QualType T) const {
-  if (Target->SupportsCapabilities()) {
-    if (T->isPointerType())
-     if (T->getAs<PointerType>()->isCHERICapability())
-      return Target->getPointerRangeForCHERICapability();
-    if (T->isBuiltinType()) {
-      int K = T->getAs<BuiltinType>()->getKind();
-      if ((K == BuiltinType::IntCap || K == BuiltinType::UIntCap))
-        return Target->getPointerRangeForCHERICapability();
-    }
-    if (T->isEnumeralType()) {
-      if (T->getAs<EnumType>()->getDecl()->getIntegerType()->isIntCapType())
-        return Target->getPointerRangeForCHERICapability();
-    }
-    assert(!T->isReferenceType() && "Should probably not be handled here");
-  }
   return getIntWidth(T);
 }
 
