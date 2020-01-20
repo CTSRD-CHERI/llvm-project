@@ -14622,13 +14622,22 @@ struct BuiltinAlignArgs {
 };
 } // namespace
 
+static llvm::Value *getPtrAddr(const BuiltinAlignArgs &Args,
+                               CodeGenFunction &CGF) {
+  if (CGF.CGM.getDataLayout().isFatPointer(Args.Src->getType())) {
+    auto Addr =
+        CGF.getTargetHooks().getPointerAddress(CGF, Args.Src, "ptraddr");
+    return CGF.Builder.CreateZExtOrTrunc(Addr, Args.IntType);
+  }
+  return CGF.Builder.CreatePtrToInt(Args.Src, Args.IntType, "intptr");
+}
+
 /// Generate (x & (y-1)) == 0.
 RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E) {
   BuiltinAlignArgs Args(E, *this);
   llvm::Value *SrcAddress = Args.Src;
   if (Args.SrcType->isPointerTy())
-    SrcAddress =
-        Builder.CreateBitOrPointerCast(Args.Src, Args.IntType, "src_addr");
+    SrcAddress = getPtrAddr(Args, *this);
   return RValue::get(Builder.CreateICmpEQ(
       Builder.CreateAnd(SrcAddress, Args.Mask, "set_bits"),
       llvm::Constant::getNullValue(Args.IntType), "is_aligned"));
@@ -14642,7 +14651,7 @@ RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
   BuiltinAlignArgs Args(E, *this);
   llvm::Value *SrcAddr = Args.Src;
   if (Args.Src->getType()->isPointerTy())
-    SrcAddr = Builder.CreatePtrToInt(Args.Src, Args.IntType, "intptr");
+    SrcAddr = getPtrAddr(Args, *this);
   llvm::Value *SrcForMask = SrcAddr;
   if (AlignUp) {
     // When aligning up we have to first add the mask to ensure we go over the

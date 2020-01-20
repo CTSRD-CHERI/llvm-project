@@ -4,25 +4,35 @@
 // RUN: %cheri_cc1 -o - -O0 -emit-llvm %s | FileCheck %s -check-prefix N64
 
 extern int test_ptr(char *c);
-// PURECAP-LABEL: @test_array(
+// PURECAP-LABEL: define {{[^@]+}}@test_array() addrspace(200) #0
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[BUF:%.*]] = alloca [1024 x i8], align 1, addrspace(200)
 // PURECAP-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1024 x i8], [1024 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
-// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARRAYDECAY]])
-// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[TMP0]], 15
-// PURECAP-NEXT:    [[TMP1:%.*]] = and i64 [[OVER_BOUNDARY]], -16
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARRAYDECAY]], i64 [[TMP1]])
-// PURECAP-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(i8 addrspace(200)* [[TMP2]])
+// PURECAP-NEXT:    [[PTRADDR:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARRAYDECAY]])
+// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[PTRADDR]], 15
+// PURECAP-NEXT:    [[ALIGNED_INTPTR:%.*]] = and i64 [[OVER_BOUNDARY]], -16
+// PURECAP-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[PTRADDR]]
+// PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 [[DIFF]]
+// PURECAP-NEXT:    [[PTRINT:%.*]] = ptrtoint i8 addrspace(200)* [[ALIGNED_RESULT]] to i64
+// PURECAP-NEXT:    [[MASKEDPTR:%.*]] = and i64 [[PTRINT]], 15
+// PURECAP-NEXT:    [[MASKCOND:%.*]] = icmp eq i64 [[MASKEDPTR]], 0
+// PURECAP-NEXT:    call void @llvm.assume(i1 [[MASKCOND]])
+// PURECAP-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(i8 addrspace(200)* [[ALIGNED_RESULT]])
 // PURECAP-NEXT:    ret i32 [[CALL]]
 //
-// N64-LABEL: @test_array(
+// N64-LABEL: define {{[^@]+}}@test_array() #0
 // N64-NEXT:  entry:
 // N64-NEXT:    [[BUF:%.*]] = alloca [1024 x i8], align 1
 // N64-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1024 x i8], [1024 x i8]* [[BUF]], i64 0, i64 0
-// N64-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[ARRAYDECAY]] to i64
-// N64-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[TMP0]], 15
-// N64-NEXT:    [[TMP1:%.*]] = and i64 [[OVER_BOUNDARY]], -16
-// N64-NEXT:    [[ALIGNED_RESULT:%.*]] = inttoptr i64 [[TMP1]] to i8*
+// N64-NEXT:    [[INTPTR:%.*]] = ptrtoint i8* [[ARRAYDECAY]] to i64
+// N64-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[INTPTR]], 15
+// N64-NEXT:    [[ALIGNED_INTPTR:%.*]] = and i64 [[OVER_BOUNDARY]], -16
+// N64-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[INTPTR]]
+// N64-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, i8* [[ARRAYDECAY]], i64 [[DIFF]]
+// N64-NEXT:    [[PTRINT:%.*]] = ptrtoint i8* [[ALIGNED_RESULT]] to i64
+// N64-NEXT:    [[MASKEDPTR:%.*]] = and i64 [[PTRINT]], 15
+// N64-NEXT:    [[MASKCOND:%.*]] = icmp eq i64 [[MASKEDPTR]], 0
+// N64-NEXT:    call void @llvm.assume(i1 [[MASKCOND]])
 // N64-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(i8* [[ALIGNED_RESULT]])
 // N64-NEXT:    ret i32 [[CALL]]
 //
