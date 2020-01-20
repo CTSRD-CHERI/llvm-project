@@ -21,8 +21,11 @@ let Class = PointerType in {
   def : Property<"pointeeType", QualType> {
     let Read = [{ node->getPointeeType() }];
   }
+  def : Property<"isCheriCap", Bool> {
+    let Read = [{ node->isCHERICapability() }];
+  }
 
-  def : Creator<[{ return ctx.getPointerType(pointeeType); }]>;
+  def : Creator<[{ return ctx.getPointerType(pointeeType, isCheriCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer); }]>;
 }
 
 let Class = AdjustedType in {
@@ -58,6 +61,9 @@ let Class = ReferenceType in {
   def : Property<"pointeeTypeAsWritten", QualType> {
     let Read = [{ node->getPointeeTypeAsWritten() }];
   }
+  def : Property<"isCheriCap", Bool> {
+    let Read = [{ node->isCHERICapability() }];
+  }
 }
 
 let Class = LValueReferenceType in {
@@ -67,13 +73,13 @@ let Class = LValueReferenceType in {
 
   def : Creator<[{
     return ctx.getLValueReferenceType(pointeeTypeAsWritten,
-                                      isSpelledAsLValue);
+                                      isSpelledAsLValue, isCheriCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
   }]>;
 }
 
 let Class = RValueReferenceType in {
   def : Creator<[{
-    return ctx.getRValueReferenceType(pointeeTypeAsWritten);
+    return ctx.getRValueReferenceType(pointeeTypeAsWritten, isCheriCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
   }]>;
 }
 
