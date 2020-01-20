@@ -55,7 +55,6 @@ UnsafeUsage(
 llvm::cl::init(false));
 
 
-extern "C" void LLVMInitializeMipsTarget() {
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTarget() {
   // Register the target.
   RegisterTargetMachine<MipsebTargetMachine> X(getTheMipsTarget());

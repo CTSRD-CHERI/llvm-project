@@ -82,7 +82,6 @@ public:
   /// getInstruction - See MCDisassembler.
   DecodeStatus getInstruction(MCInst &Instr, uint64_t &Size,
                               ArrayRef<uint8_t> Bytes, uint64_t Address,
-                              raw_ostream &VStream,
                               raw_ostream &CStream) const override;
 };
 
@@ -1427,7 +1426,6 @@ DecodeStatus MipsDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
 DecodeStatus CheriDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
                                                ArrayRef<uint8_t> Bytes,
                                                uint64_t Address,
-                                               raw_ostream &VStream,
                                                raw_ostream &CStream) const {
   uint32_t Insn;
   // If we try deconding an unknown isntruction advance by 4 bytes
