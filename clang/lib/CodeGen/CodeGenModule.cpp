@@ -4270,7 +4270,7 @@ void CodeGenModule::EmitExternalVarDeclaration(const VarDecl *D) {
       QualType ASTTy = D->getType();
       llvm::Type *Ty = getTypes().ConvertTypeForMem(D->getType());
       llvm::PointerType *PTy =
-          llvm::PointerType::get(Ty, getContext().getTargetAddressSpace(ASTTy));
+          llvm::PointerType::get(Ty, getAddressSpaceForType(ASTTy));
       llvm::Constant *GV = GetOrCreateLLVMGlobal(D->getName(), PTy, D);
       DI->EmitExternalVariable(
           cast<llvm::GlobalVariable>(GV->stripPointerCasts()), D);
