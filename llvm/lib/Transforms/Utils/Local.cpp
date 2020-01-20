@@ -1185,7 +1185,7 @@ unsigned llvm::getOrEnforceKnownAlignment(Value *V, unsigned PrefAlign,
                                           const DominatorTree *DT) {
   assert(V->getType()->isPointerTy() &&
          "getOrEnforceKnownAlignment expects a pointer!");
-  unsigned BitWidth = DL.getPointerBaseSizeInBits(V->getType());
+  unsigned BitWidth = DL.getPointerAddrSizeInBits(V->getType());
 
   KnownBits Known(BitWidth);
   computeKnownBits(V, Known, DL, 0, AC, CxtI, DT);

@@ -869,7 +869,7 @@ static bool canExtractBitsFromCapability(Type *Src, Type *Dst, int Offset,
     return true;
   if (!DL.isFatPointer(Src))
     return true;
-  if (DL.getPointerBaseSizeInBits(Src) < Offset + DL.getTypeSizeInBits(Dst)) {
+  if (DL.getPointerAddrSizeInBits(Src) < Offset + DL.getTypeSizeInBits(Dst)) {
     return false;
   }
   return true;

@@ -7,7 +7,7 @@
 // These two reduced tests were previously crashing with the following
 // assertion failure in LLVM's SROA transform when compiling qtbase:
 //
-// Assertion `Offset.getBitWidth() == DL.getPointerBaseSizeInBits(getPointerAddressSpace()) && "The offset must have exactly as many bits as our pointer."' failed.
+// Assertion `Offset.getBitWidth() == DL.getPointerAddrSizeInBits(getPointerAddressSpace()) && "The offset must have exactly as many bits as our pointer."' failed.
 //
 // The two QtBase files from which the reduced test cases were produced are named before each test
 

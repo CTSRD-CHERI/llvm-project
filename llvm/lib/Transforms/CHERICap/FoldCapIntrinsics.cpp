@@ -418,7 +418,7 @@ public:
     DL = &M.getDataLayout();
     LLVMContext &C = M.getContext();
     I8CapTy = Type::getInt8PtrTy(C, 200);
-    CapAddrTy = Type::getIntNTy(C, DL->getPointerBaseSizeInBits(200));
+    CapAddrTy = Type::getIntNTy(C, DL->getPointerAddrSizeInBits(200));
     CapSizeTy = Type::getIntNTy(C, DL->getIndexSizeInBits(200));
     // Don't add these intrinsics to the module if none of them are used:
     SetOffset =

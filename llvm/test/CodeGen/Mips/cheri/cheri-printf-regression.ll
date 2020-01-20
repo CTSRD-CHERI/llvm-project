@@ -2,7 +2,7 @@
 ; RUN: %cheri_purecap_llc -o - -O2 -mips-ssection-threshold=0 -mattr=+xgot -mxmxgot %s | %cheri_FileCheck %s
 ; ModuleID = '/home/alr48/obj/build/llvm-build/cheri_printf-3fff4a-bugpoint-reduce.ll-reduced-simplified.bc'
 ; This was crahsing after merging to Jan 8th 2018 (cheri_prinf.c from cheribsd)
-; Assertion failed: (Offset.getBitWidth() == DL.getPointerBaseSizeInBits(cast<PointerType>( getType())->getAddressSpace()) && "The offset must have exactly as many bits as our pointer.")
+; Assertion failed: (Offset.getBitWidth() == DL.getPointerAddrSizeInBits(cast<PointerType>( getType())->getAddressSpace()) && "The offset must have exactly as many bits as our pointer.")
 source_filename = "cheri_printf-3fff4a-bugpoint-reduce.ll-output-4742795.bc"
 target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"

@@ -377,11 +377,16 @@ public:
     return Ty->isPointerTy() && isFatPointer(Ty->getPointerAddressSpace());
   }
 
-  unsigned getPointerBaseSizeInBits(unsigned AS) const {
-    return getIndexSizeInBits(AS);
+  unsigned getPointerAddrSizeInBits(unsigned AS) const {
+    // For CHERI the address range is the same as the IndexSize.
+    // For other targets (other than those using non-integral pointers), we
+    // assume that the pointer bit width is the same as the address range.
+    if (isFatPointer(AS) || isNonIntegralAddressSpace(AS))
+      return getIndexSizeInBits(AS);
+    return getPointerSizeInBits(AS);
   }
-  unsigned getPointerBaseSizeInBits(Type *Ty) const {
-    return getIndexTypeSizeInBits(Ty);
+  unsigned getPointerAddrSizeInBits(Type *Ty) const {
+    return getPointerAddrSizeInBits(Ty->getPointerAddressSpace());
   }
 
   /// Layout pointer size
@@ -449,7 +454,7 @@ public:
 
   unsigned getTypeIntegerRangeInBits(Type *Ty) const {
     if (isa<PointerType>(Ty))
-      return getPointerBaseSizeInBits(Ty->getPointerAddressSpace());
+      return getPointerAddrSizeInBits(Ty->getPointerAddressSpace());
     return getTypeSizeInBits(Ty);
   }
 

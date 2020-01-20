@@ -4960,7 +4960,7 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
       I.setOperand(0, Addr1);
       I.setOperand(1, Addr2);
     }
-    BitWidth = DL.getPointerBaseSizeInBits(Ty);
+    BitWidth = DL.getPointerAddrSizeInBits(Ty);
   }
 
   KnownBits Op0Known(BitWidth);

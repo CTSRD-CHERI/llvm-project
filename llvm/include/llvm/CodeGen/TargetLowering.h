@@ -281,7 +281,7 @@ public:
   /// Return the integer type with the same size as the address range for
   /// the given address space.
   virtual MVT getPointerRangeTy(const DataLayout &DL, uint32_t AS = 0) const {
-    return MVT::getIntegerVT(DL.getPointerBaseSizeInBits(AS));
+    return MVT::getIntegerVT(DL.getPointerAddrSizeInBits(AS));
   }
 
   /// Return the type for frame index, which is determined by
