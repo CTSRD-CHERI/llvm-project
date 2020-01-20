@@ -1783,8 +1783,11 @@ Instruction *InstCombiner::visitIntToPtr(IntToPtrInst &CI) {
   // trunc or zext to the intptr_t type, then inttoptr of it.  This allows the
   // cast to be exposed to other transforms.
   unsigned AS = CI.getAddressSpace();
-  // FIXME: Proper fat pointer check
-  if (DL.getPointerSizeInBits(AS) > 64) return 0;
+  if (DL.isFatPointer(AS)) {
+    if (Instruction *I = commonCastTransforms(CI))
+      return I;
+    return nullptr;
+  }
 
   if (CI.getOperand(0)->getType()->getScalarSizeInBits() !=
       DL.getPointerSizeInBits(AS)) {
@@ -1837,14 +1840,13 @@ Instruction *InstCombiner::visitPtrToInt(PtrToIntInst &CI) {
 
   if (Ty->getScalarSizeInBits() == DL.getPointerSizeInBits(AS))
     return commonPointerCastTransforms(CI);
+  if (DL.isFatPointer(AS))
+    return commonPointerCastTransforms(CI);
 
   Type *PtrTy = DL.getIntPtrType(CI.getContext(), AS);
   if (Ty->isVectorTy()) // Handle vectors of pointers.
     PtrTy = VectorType::get(PtrTy, Ty->getVectorNumElements());
 
-  // FIXME: Proper fat pointer check
-  if (DL.getPointerSizeInBits(AS) > 64)
-    return commonPointerCastTransforms(CI);
   Value *P = Builder.CreatePtrToInt(CI.getOperand(0), PtrTy);
   return CastInst::CreateIntegerCast(P, Ty, /*isSigned=*/false);
 }
