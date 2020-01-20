@@ -2721,8 +2721,7 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     T.consumeClose();
     ColonProtection.restore();
     RParenLoc = T.getCloseLocation();
-    ExprResult SubExpr = ParseCastExpression(/*isUnaryExpression=*/false);
-
+    ExprResult SubExpr = ParseCastExpression(AnyCastExpr);
     if (Ty.isInvalid() || SubExpr.isInvalid())
       return ExprError();
 

@@ -9235,7 +9235,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     // construct the function decl and its associated parameter decls
     FunctionDecl *WrappedFD = FunctionDecl::Create(Context,
         NewFD->getDeclContext(), NewFD->getTypeSpecStartLoc(), DNI,
-        WrappedType, TInfo, SC_Extern, false, true, CSK_unspecified);
+        WrappedType, TInfo, SC_Extern, false, true, CSK_unspecified, nullptr);
     SmallVector<ParmVarDecl*, 16> Parms;
     for (QualType Ty : NewParams) {
       Parms.push_back(ParmVarDecl::Create(Context, NewFD, SourceLocation(),
