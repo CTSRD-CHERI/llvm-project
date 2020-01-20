@@ -14615,6 +14615,10 @@ struct BuiltinAlignArgs {
       IntType = cast<llvm::IntegerType>(SrcType);
     }
     Alignment = CGF.EmitScalarExpr(E->getArg(1));
+    if (Alignment->getType()->isPointerTy()) {
+      assert(E->getArg(1)->getType()->isIntCapType());
+      Alignment = CGF.getCapabilityIntegerValue(Alignment);
+    }
     Alignment = CGF.Builder.CreateZExtOrTrunc(Alignment, IntType, "alignment");
     auto *One = llvm::ConstantInt::get(IntType, 1);
     Mask = CGF.Builder.CreateSub(Alignment, One, "mask");
