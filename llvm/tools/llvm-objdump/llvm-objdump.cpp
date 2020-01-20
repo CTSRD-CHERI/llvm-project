@@ -1502,8 +1502,9 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
         // Add a comment which symbol is being loaded for cap-table loads
         int64_t CapTableOffset = std::numeric_limits<int64_t>::min();
         // In .o files we can just use -r to get useful results
-        if (!Obj->isRelocatableObject() && MIA && CheriCapTableAddress &&
-            MIA->isCapTableLoad(Inst, CapTableOffset)) {
+        if (MIA && CheriCapTableAddress &&
+            MIA->isCapTableLoad(Inst, CapTableOffset) &&
+            !Obj->isRelocatableObject()) {
 
           uint64_t Target = *CheriCapTableAddress + CapTableOffset;
           // TODO: share this code:
