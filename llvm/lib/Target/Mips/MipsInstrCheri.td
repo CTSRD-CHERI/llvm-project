@@ -509,6 +509,8 @@ def : Pat<(inttoptr GPR64Opnd:$rt),
           (CIncOffset CNULL, $rt)>;
 def : Pat<(ptrtoint CheriOpnd:$rt),
           (CGetAddr $rt)>;
+def : Pat<(and (ptrtoint CheriOpnd: $r1), GPR64Opnd: $r2),
+          (CGetAndAddr $r1, $r2)>;
 def : Pat<(i32 (ptrtoint CheriOpnd:$rt)),
           (SLL (EXTRACT_SUBREG (CGetAddr $rt), sub_32), 0)>;
 }
