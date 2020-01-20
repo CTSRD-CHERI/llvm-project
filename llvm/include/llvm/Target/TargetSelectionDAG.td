@@ -1608,11 +1608,13 @@ def atomic_swap_cap :
           (atomic_swap_cap_node node:$ptr, node:$val), [{
   return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
 }]>;
+defm atomic_swap_cap : binary_atomic_op_ord<atomic_swap_cap_node>;
 def atomic_cmp_swap_cap :
   PatFrag<(ops node:$ptr, node:$cmp, node:$val),
           (atomic_cmp_swap_cap_node node:$ptr, node:$cmp, node:$val), [{
   return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
 }]>;
+defm atomic_cmp_swap_cap : ternary_atomic_op_ord<atomic_cmp_swap_cap_node>;
 
 //===----------------------------------------------------------------------===//
 // Selection DAG Pattern Support.
