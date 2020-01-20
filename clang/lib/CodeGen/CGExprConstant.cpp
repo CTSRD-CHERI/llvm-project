@@ -1362,15 +1362,16 @@ ConstantEmitter::tryEmitAbstract(const Expr *E, QualType destType) {
   // However, in the exceptions-seh.cpp test bool is promoted to
   // CGM.getContext().IntTy so skip that check
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-  if (LLVM_UNLIKELY(E->getType() != destType &&
-                    E->getType() != CGM.getContext().BoolTy)) {
+  auto ExprTy = E->getType().getCanonicalType();
+  if (LLVM_UNLIKELY(ExprTy != destType.getCanonicalType() &&
+                    ExprTy != CGM.getContext().BoolTy)) {
     llvm::errs() << __func__ << ": E->getType(): ";
     E->getType().dump();
     llvm::errs() << __func__ << ": destType: ";
     destType.dump();
     llvm::errs() << __func__ << ": E: ";
     E->dump();
-    assert(E->getType() == destType);
+    assert(ExprTy == destType.getCanonicalType());
   }
 #endif
   return validateAndPopAbstract(C, state);
