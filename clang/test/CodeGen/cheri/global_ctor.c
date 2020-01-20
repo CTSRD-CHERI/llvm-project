@@ -5,8 +5,8 @@
 
 // RUN: %cheri_purecap_clang -fuse-init-array -o - -O0 -S %s -### 2>&1 | FileCheck %s -check-prefix INIT_ARRAY_CMD
 // RUN: %cheri_purecap_clang -fno-use-init-array -o - -O0 -S %s -### 2>&1 | FileCheck %s -check-prefix CTORS_CMD
-// INIT_ARRAY_CMD: -fuse-init-array
-// CTORS_CMD-NOT: -fuse-init-array
+// INIT_ARRAY_CMD-NOT: -fno-use-init-array
+// CTORS_CMD: -fno-use-init-array
 // We should default to using .init_array:
 // RUN: %cheri_purecap_clang -o - -O0 -S %s -### 2>&1 | FileCheck %s -check-prefix INIT_ARRAY_CMD
 
