@@ -653,8 +653,8 @@ void ASTStmtReader::VisitParenExpr(ParenExpr *E) {
 
 void ASTStmtReader::VisitNoChangeBoundsExpr(NoChangeBoundsExpr *E) {
   VisitExpr(E);
-  E->setBuiltinLoc(ReadSourceLocation());
-  E->setRParen(ReadSourceLocation());
+  E->setBuiltinLoc(readSourceLocation());
+  E->setRParen(readSourceLocation());
   E->setSubExpr(Record.readSubExpr());
 }
 
