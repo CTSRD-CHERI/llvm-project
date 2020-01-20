@@ -4134,7 +4134,6 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
 
   SmallVector<SDValue, 4> Values(NumValues);
   SmallVector<SDValue, 4> Chains(std::min(MaxParallelChains, NumValues));
-  EVT PtrVT = Ptr.getValueType();
 
   MachineMemOperand::Flags MMOFlags
     = TLI.getLoadMemOperandFlags(I, DAG.getDataLayout());

@@ -11101,6 +11101,7 @@ bool checkContext<OMP_CTX_SET_device, OMP_CTX_kind, CodeGenModule &>(
     case llvm::Triple::mipsel:
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
+    case llvm::Triple::cheri:
     case llvm::Triple::msp430:
     case llvm::Triple::r600:
     case llvm::Triple::riscv32:
