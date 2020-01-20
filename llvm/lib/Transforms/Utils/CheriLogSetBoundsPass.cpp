@@ -38,6 +38,7 @@ public:
     DominatorTree *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     AssumptionCache *AC =
         &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
+    assert(AC && DT && "Cannot be non-null");
     // For MIPS we can guess the size here by multiplying by 4:
     const DataLayout &DL = F.getParent()->getDataLayout();
     for (auto &BB : F) {
