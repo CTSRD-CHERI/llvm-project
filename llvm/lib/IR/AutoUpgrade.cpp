@@ -1313,7 +1313,7 @@ static Value *UpgradeMaskedStore(IRBuilder<> &Builder,
                               llvm::PointerType::getUnqual(Data->getType()));
   const Align Alignment =
       Aligned ? Align(cast<VectorType>(Data->getType())->getBitWidth() / 8)
-              : Align::None();
+              : Align(1);
 
   // If the mask is all ones just emit a regular store.
   if (const auto *C = dyn_cast<Constant>(Mask))
@@ -1334,7 +1334,7 @@ static Value *UpgradeMaskedLoad(IRBuilder<> &Builder,
   Ptr = Builder.CreateBitCast(Ptr, llvm::PointerType::getUnqual(ValTy));
   const Align Alignment =
       Aligned ? Align(cast<VectorType>(Passthru->getType())->getBitWidth() / 8)
-              : Align::None();
+              : Align(1);
 
   // If the mask is all ones just emit a regular store.
   if (const auto *C = dyn_cast<Constant>(Mask))
