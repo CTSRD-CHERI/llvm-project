@@ -300,7 +300,9 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     case Mips::INLINEASM:
       break;
     default:
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
       MI.dump();
+#endif
       llvm_unreachable("Unsupported instruction in eliminateFI!");
     }
   }
