@@ -2503,9 +2503,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
               EmitScalarExpr(AVAttr->getAlignment());
             llvm::ConstantInt *AlignmentCI =
               cast<llvm::ConstantInt>(AlignmentValue);
-            unsigned Alignment = std::min((unsigned)AlignmentCI->getZExtValue(),
-                                          +llvm::Value::MaximumAlignment);
-            AI->addAttrs(llvm::AttrBuilder().addAlignmentAttr(Alignment));
+            AI->addAttrs(llvm::AttrBuilder().addAlignmentAttr(llvm::MaybeAlign(
+                AlignmentCI->getLimitedValue(llvm::Value::MaximumAlignment))));
           }
         }
 
