@@ -8,6 +8,7 @@
 
 #include "SnippetFile.h"
 #include "Error.h"
+#include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCObjectFileInfo.h"
@@ -141,12 +142,16 @@ Expected<std::vector<BenchmarkCode>> readSnippets(const LLVMState &State,
   std::string Error;
   raw_string_ostream ErrorStream(Error);
   formatted_raw_ostream InstPrinterOStream(ErrorStream);
+  std::unique_ptr<MCAsmBackend> MAB(
+      TM.getTarget().createMCAsmBackend(*TM.getMCSubtargetInfo(), *TM.getMCRegisterInfo(),
+                                        TM.Options.MCOptions));
   const std::unique_ptr<MCInstPrinter> InstPrinter(
       TM.getTarget().createMCInstPrinter(
           TM.getTargetTriple(), TM.getMCAsmInfo()->getAssemblerDialect(),
           *TM.getMCAsmInfo(), *TM.getMCInstrInfo(), *TM.getMCRegisterInfo()));
   // The following call will take care of calling Streamer.setTargetStreamer.
   TM.getTarget().createAsmTargetStreamer(Streamer, InstPrinterOStream,
+                                         *MAB.get(),
                                          InstPrinter.get(),
                                          TM.Options.MCOptions.AsmVerbose);
   if (!Streamer.getTargetStreamer())
