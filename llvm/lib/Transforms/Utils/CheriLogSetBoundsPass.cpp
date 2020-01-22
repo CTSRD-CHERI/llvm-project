@@ -60,8 +60,13 @@ public:
               if (!DL.isFatPointer(I.getType()))
                 return;
               // Without the assumption cache we don't get any benefit from
-              // assume_aligned attributes and getKnownAlignment will return 1
-              uint64_t Alignment = getKnownAlignment(&I, DL, &I, AC, DT);
+              // assume_aligned attributes and getKnownAlignment will return 1.
+              // In order to get a context instruction that can be used by the
+              // llvm.assume, we simply use the last instruction in the same
+              // basic block since the asssume will always dominated it.
+              // See llvm::isValidAssumeForContext()
+              Instruction* Ctx = &BB.back();
+              uint64_t Alignment = getKnownAlignment(&I, DL, Ctx, AC, DT);
               Optional<uint64_t> KnownSize;
               Optional<uint64_t> SizeMultipleOf;
 
