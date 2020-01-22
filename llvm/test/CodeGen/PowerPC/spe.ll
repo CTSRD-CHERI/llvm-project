@@ -1232,7 +1232,7 @@ define double @test_spill(double %a, i32 %a1, i64 %a2, i8 * %a3, i32 *%a4, i32* 
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mflr 0
 ; CHECK-NEXT:    stw 0, 4(1)
-; CHECK-NEXT:    stwu 1, -352(1)
+; CHECK-NEXT:    stwu 1, -272(1)
 ; CHECK-NEXT:    li 5, 256
 ; CHECK-NEXT:    evstddx 30, 1, 5 # 8-byte Folded Spill
 ; CHECK-NEXT:    li 5, 264
@@ -1240,24 +1240,6 @@ define double @test_spill(double %a, i32 %a1, i64 %a2, i8 * %a3, i32 *%a4, i32* 
 ; CHECK-NEXT:    li 5, .LCPI56_0@l
 ; CHECK-NEXT:    lis 6, .LCPI56_0@ha
 ; CHECK-NEXT:    evlddx 5, 6, 5
-; CHECK-NEXT:    stw 14, 280(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 15, 284(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 16, 288(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 17, 292(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 18, 296(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 19, 300(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 20, 304(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 21, 308(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 22, 312(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 23, 316(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 24, 320(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 25, 324(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 26, 328(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 27, 332(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 28, 336(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 29, 340(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 30, 344(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 31, 348(1) # 4-byte Folded Spill
 ; CHECK-NEXT:    evstdd 14, 128(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    evstdd 15, 136(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    evstdd 16, 144(1) # 8-byte Folded Spill
@@ -1275,7 +1257,7 @@ define double @test_spill(double %a, i32 %a1, i64 %a2, i8 * %a3, i32 *%a4, i32* 
 ; CHECK-NEXT:    evstdd 28, 240(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    evstdd 29, 248(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    evmergelo 3, 3, 4
-; CHECK-NEXT:    lwz 4, 360(1)
+; CHECK-NEXT:    lwz 4, 280(1)
 ; CHECK-NEXT:    efdadd 3, 3, 3
 ; CHECK-NEXT:    efdadd 3, 3, 5
 ; CHECK-NEXT:    evstdd 3, 24(1) # 8-byte Folded Spill
@@ -1301,6 +1283,8 @@ define double @test_spill(double %a, i32 %a1, i64 %a2, i8 * %a3, i32 *%a4, i32* 
 ; CHECK-NEXT:    evmergehi 3, 4, 4
 ; CHECK-NEXT:    evlddx 31, 1, 5 # 8-byte Folded Reload
 ; CHECK-NEXT:    li 5, 256
+; CHECK-NEXT:    # kill: def $r3 killed $r3 killed $s3
+; CHECK-NEXT:    # kill: def $r4 killed $r4 killed $s4
 ; CHECK-NEXT:    evlddx 30, 1, 5 # 8-byte Folded Reload
 ; CHECK-NEXT:    evldd 29, 248(1) # 8-byte Folded Reload
 ; CHECK-NEXT:    evldd 28, 240(1) # 8-byte Folded Reload
@@ -1318,28 +1302,8 @@ define double @test_spill(double %a, i32 %a1, i64 %a2, i8 * %a3, i32 *%a4, i32* 
 ; CHECK-NEXT:    evldd 16, 144(1) # 8-byte Folded Reload
 ; CHECK-NEXT:    evldd 15, 136(1) # 8-byte Folded Reload
 ; CHECK-NEXT:    evldd 14, 128(1) # 8-byte Folded Reload
-; CHECK-NEXT:    # kill: def $r3 killed $r3 killed $s3
-; CHECK-NEXT:    # kill: def $r4 killed $r4 killed $s4
-; CHECK-NEXT:    lwz 31, 348(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 30, 344(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 29, 340(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 28, 336(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 27, 332(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 26, 328(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 25, 324(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 24, 320(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 23, 316(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 22, 312(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 21, 308(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 20, 304(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 19, 300(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 18, 296(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 17, 292(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 16, 288(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 15, 284(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 14, 280(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 0, 356(1)
-; CHECK-NEXT:    addi 1, 1, 352
+; CHECK-NEXT:    lwz 0, 276(1)
+; CHECK-NEXT:    addi 1, 1, 272
 ; CHECK-NEXT:    mtlr 0
 ; CHECK-NEXT:    blr
 entry:
