@@ -3018,7 +3018,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     if (Name.empty())
       continue;
     SymbolNames.insert({Start, Name});
-    // errs() << "start: " << Start << " = " << Name << "\n";
+    errs() << "start: " << Start << " = " << Name << "\n";
   }
   // errs() << "Found " << CapRelocsDynRels.size()
   //        << " dynamic relocations pointing to __cap_relocs section\n";
@@ -3066,10 +3066,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
         Elf_Rel R = it->second;
         const Elf_Sym *Sym = unwrapOrError(
             ObjF->getFileName(), Obj->getRelocationSymbol(&R, SymTab));
-        BaseSymbol = unwrapOrError(
-            ObjF->getFileName(), Sym->getName(StrTable));
-        // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "
-        // Name=" << SymbolName << "\n";
+        // Since we are looking up dynamic relocations, we have to look for the
+        // symbol name in the .dynstrtab section.
+        BaseSymbol = getFullSymbolName(Sym, DynamicStringTable, true);
+        // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "Name=" << BaseSymbol << "\n";
       }
     } else {
       auto it = SymbolNames.find(Base);
