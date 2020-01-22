@@ -62,8 +62,11 @@ void lld::exitLld(int val) {
   // avoid intermittent crashes on Windows when exiting.
   llvm_shutdown();
 
-  lld::outs().flush();
-  lld::errs().flush();
+  {
+    std::lock_guard<std::mutex> lock(mu);
+    lld::outs().flush();
+    lld::errs().flush();
+  }
   _exit(val);
 }
 
@@ -201,23 +204,29 @@ void ErrorHandler::error(const Twine &msg) {
     }
   }
 
-  std::lock_guard<std::mutex> lock(mu);
+  bool exit = false;
+  {
+    std::lock_guard<std::mutex> lock(mu);
 
-  if (errorLimit == 0 || errorCount < errorLimit) {
-    lld::errs() << sep << getLocation(msg) << ": " << Colors::RED
-                << "error: " << Colors::RESET << msg << "\n";
-    sep = getSeparator(msg);
-  } else if (errorCount == errorLimit) {
-    lld::errs() << sep << getLocation(msg) << ": " << Colors::RED
-                << "error: " << Colors::RESET << errorLimitExceededMsg << "\n";
-    if (exitEarly)
-      exitLld(1);
-    // Set separator based on limit exceeded flag and not the message that
-    // wasn't printed:
-    sep = getSeparator(errorLimitExceededMsg);
+    if (errorLimit == 0 || errorCount < errorLimit) {
+      lld::errs() << sep << getLocation(msg) << ": " << Colors::RED
+                  << "error: " << Colors::RESET << msg << "\n";
+      sep = getSeparator(msg);
+    } else if (errorCount == errorLimit) {
+      lld::errs() << sep << getLocation(msg) << ": " << Colors::RED
+                  << "error: " << Colors::RESET << errorLimitExceededMsg
+                  << "\n";
+      exit = exitEarly;
+      // Set separator based on limit exceeded flag and not the message that
+      // wasn't printed:
+      sep = getSeparator(errorLimitExceededMsg);
+    }
+
+    ++errorCount;
   }
 
-  ++errorCount;
+  if (exit)
+    exitLld(1);
 }
 
 void ErrorHandler::fatal(const Twine &msg) {
