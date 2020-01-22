@@ -5251,7 +5251,6 @@ SDValue AArch64TargetLowering::LowerSELECT_CC(ISD::CondCode CC, SDValue LHS,
            (LHS.getValueType() == MVT::i32 || LHS.getValueType() == MVT::i64));
 
     unsigned Opcode = AArch64ISD::CSEL;
-    EVT LHSVT = LHS.getValueType();
 
     // If both the TVal and the FVal are constants, see if we can swap them in
     // order to for a CSINV or CSINC out of them.
