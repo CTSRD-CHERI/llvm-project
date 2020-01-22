@@ -3015,7 +3015,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     if (!Start)
       continue;
     std::string Name = getFullSymbolName(&Sym, StrTable, UsingDynsym);
+    if (Name.empty())
+      continue;
     SymbolNames.insert({Start, Name});
+    // errs() << "start: " << Start << " = " << Name << "\n";
   }
   // errs() << "Found " << CapRelocsDynRels.size()
   //        << " dynamic relocations pointing to __cap_relocs section\n";
@@ -3054,7 +3057,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     const char *PermStr =
         isFunction ? "Function" : (isReadOnly ? "Constant" : "Object");
     // Perms &= 0xffffffff;
-    StringRef BaseSymbol = "<unknown symbol>";
+    std::string BaseSymbol;
     if (Base == 0) {
       // Base is 0 -> either it is really NULL or (more likely) there is a
       // dynamic relocation that will set the real address
@@ -3064,14 +3067,19 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
         const Elf_Sym *Sym = unwrapOrError(
             ObjF->getFileName(), Obj->getRelocationSymbol(&R, SymTab));
         BaseSymbol = unwrapOrError(
-            ObjF->getFileName(), Sym->getName(getDynamicStringTable()));
+            ObjF->getFileName(), Sym->getName(StrTable));
         // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "
         // Name=" << SymbolName << "\n";
       }
     } else {
-      if (SymbolNames.find(Base) != SymbolNames.end())
-        BaseSymbol = SymbolNames[Base];
+      auto it = SymbolNames.find(Base);
+      if (it != SymbolNames.end()) {
+        BaseSymbol = it->second;
+        // errs() << "BaseSymbol = SymbolNames[" << Base << "] = " << it->second << "\n";
+      }
     }
+    if (BaseSymbol.empty())
+      BaseSymbol = "<unknown symbol>";
     StringRef LocationSym;
     if (SymbolNames.find(Target) != SymbolNames.end())
       LocationSym = SymbolNames[Target];
