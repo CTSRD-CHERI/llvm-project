@@ -3299,6 +3299,8 @@ llvm::Constant *CGObjCCommonMac::EmitPropertyList(Twine Name,
       for (auto *PD : ClassExt->properties()) {
         if (IsClassProperty != PD->isClassProperty())
           continue;
+        if (PD->isDirectProperty())
+          continue;
         PropertySet.insert(PD->getIdentifier());
         Properties.push_back(PD);
       }
@@ -3309,6 +3311,8 @@ llvm::Constant *CGObjCCommonMac::EmitPropertyList(Twine Name,
     // Don't emit duplicate metadata for properties that were already in a
     // class extension.
     if (!PropertySet.insert(PD->getIdentifier()).second)
+      continue;
+    if (PD->isDirectProperty())
       continue;
     Properties.push_back(PD);
   }
@@ -3335,8 +3339,6 @@ llvm::Constant *CGObjCCommonMac::EmitPropertyList(Twine Name,
   values.addInt(ObjCTypes.IntTy, Properties.size());
   auto propertiesArray = values.beginArray(ObjCTypes.PropertyTy);
   for (auto PD : Properties) {
-    if (PD->isDirectProperty())
-      continue;
     auto property = propertiesArray.beginStruct(ObjCTypes.PropertyTy);
     property.add(GetPropertyName(PD->getIdentifier()));
     property.add(GetPropertyTypeString(PD, Container));
