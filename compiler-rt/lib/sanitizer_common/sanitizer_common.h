@@ -919,7 +919,7 @@ INLINE usize GetPthreadDestructorIterations() {
 #endif
 }
 
-void *internal_start_thread(void(*func)(void*), void *arg);
+void *internal_start_thread(void *(*func)(void*), void *arg);
 void internal_join_thread(void *th);
 void MaybeStartBackgroudThread();
 

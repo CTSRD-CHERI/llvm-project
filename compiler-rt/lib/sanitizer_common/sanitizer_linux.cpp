@@ -1707,7 +1707,7 @@ HandleSignalMode GetHandleSignalMode(int signum) {
 }
 
 #if !SANITIZER_GO
-void *internal_start_thread(void(*func)(void *arg), void *arg) {
+void *internal_start_thread(void *(*func)(void *arg), void *arg) {
   // Start the thread with signals blocked, otherwise it can steal user signals.
   __sanitizer_sigset_t set, old;
   internal_sigfillset(&set);
@@ -1718,7 +1718,7 @@ void *internal_start_thread(void(*func)(void *arg), void *arg) {
 #endif
   internal_sigprocmask(SIG_SETMASK, &set, &old);
   void *th;
-  real_pthread_create(&th, nullptr, (void*(*)(void *arg))func, arg);
+  real_pthread_create(&th, nullptr, func, arg);
   internal_sigprocmask(SIG_SETMASK, &old, nullptr);
   return th;
 }
@@ -1727,7 +1727,7 @@ void internal_join_thread(void *th) {
   real_pthread_join(th, nullptr);
 }
 #else
-void *internal_start_thread(void (*func)(void *), void *arg) { return 0; }
+void *internal_start_thread(void *(*func)(void *), void *arg) { return 0; }
 
 void internal_join_thread(void *th) {}
 #endif
