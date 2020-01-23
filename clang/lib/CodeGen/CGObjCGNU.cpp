@@ -1649,8 +1649,10 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
       for (const auto &lateInit : EarlyInitList) {
         auto *global = TheModule.getGlobalVariable(lateInit.first);
         if (global) {
-          b.CreateAlignedStore(global,
-              b.CreateStructGEP(lateInit.second.first, lateInit.second.second), CGM.getPointerAlign().getQuantity());
+          b.CreateAlignedStore(
+              global,
+              b.CreateStructGEP(lateInit.second.first, lateInit.second.second),
+              CGM.getPointerAlign().getAsAlign());
         }
       }
       b.CreateRetVoid();
