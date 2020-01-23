@@ -387,9 +387,6 @@ static void InitializeStandardPredefinedMacros(const TargetInfo &TI,
     else
       Builder.defineMacro("__cplusplus", "199711L");
 
-    if (LangOpts.ConceptsTS)
-      Builder.defineMacro("__cpp_concepts", "201707L");
-
     // C++1z [cpp.predefined]p1:
     //   An integer literal of type std::size_t whose value is the alignment
     //   guaranteed by a call to operator new(std::size_t)
@@ -553,7 +550,7 @@ static void InitializeCPlusPlusFeatureTestMacros(const LangOptions &LangOpts,
   // C++20 features.
   if (LangOpts.CPlusPlus2a) {
     //Builder.defineMacro("__cpp_aggregate_paren_init", "201902L");
-    //Builder.defineMacro("__cpp_concepts", "201907L");
+    Builder.defineMacro("__cpp_concepts", "201907L");
     Builder.defineMacro("__cpp_conditional_explicit", "201806L");
     //Builder.defineMacro("__cpp_consteval", "201811L");
     Builder.defineMacro("__cpp_constexpr_dynamic_alloc", "201907L");
@@ -569,8 +566,6 @@ static void InitializeCPlusPlusFeatureTestMacros(const LangOptions &LangOpts,
   Builder.defineMacro("__cpp_impl_destroying_delete", "201806L");
 
   // TS features.
-  if (LangOpts.ConceptsTS)
-    Builder.defineMacro("__cpp_experimental_concepts", "1L");
   if (LangOpts.Coroutines)
     Builder.defineMacro("__cpp_coroutines", "201703L");
 }
