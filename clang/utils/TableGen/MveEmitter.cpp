@@ -1604,6 +1604,10 @@ void MveEmitter::EmitHeader(raw_ostream &OS) {
         "#endif\n"
         "\n"
         "#include <stdint.h>\n"
+        "\n"
+        "#ifdef __cplusplus\n"
+        "extern \"C\" {\n"
+        "#endif\n"
         "\n";
 
   for (size_t i = 0; i < NumParts; ++i) {
@@ -1622,7 +1626,11 @@ void MveEmitter::EmitHeader(raw_ostream &OS) {
       OS << "#endif /* " << condition << " */\n\n";
   }
 
-  OS << "#endif /* __ARM_MVE_H */\n";
+  OS << "#ifdef __cplusplus\n"
+        "} /* extern \"C\" */\n"
+        "#endif\n"
+        "\n"
+        "#endif /* __ARM_MVE_H */\n";
 }
 
 void MveEmitter::EmitBuiltinDef(raw_ostream &OS) {
