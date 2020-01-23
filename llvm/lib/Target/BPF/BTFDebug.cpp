@@ -1184,7 +1184,7 @@ void BTFDebug::processFuncPrototypes(const Function *F) {
   ProtoFunctions.insert(F);
 
   uint32_t ProtoTypeId;
-  const std::unordered_map<uint32_t, StringRef> FuncArgNames;
+  std::unordered_map<uint32_t, StringRef> FuncArgNames;
   visitSubroutineType(SP->getType(), false, FuncArgNames, ProtoTypeId);
 
   uint8_t Scope = BTF::FUNC_EXTERN;
