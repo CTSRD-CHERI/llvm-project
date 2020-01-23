@@ -939,15 +939,16 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
       // address 0. For bug-compatibilty, we accept them with warnings. We
       // know Steel Bank Common Lisp as of 2018 have this bug.
       warn(msg);
-      target->relocateOne(bufLoc, type,
-                          SignExtend64<bits>(sym.getVA(addend - offset)));
+      target->relocateNoSym(bufLoc, type,
+                            SignExtend64<bits>(sym.getVA(addend - offset)));
       continue;
     }
 
     if (sym.isTls() && !Out::tlsPhdr)
-      target->relocateOne(bufLoc, type, 0);
+      target->relocateNoSym(bufLoc, type, 0);
     else
-      target->relocateOne(bufLoc, type, SignExtend64<bits>(sym.getVA(addend)));
+      target->relocateNoSym(bufLoc, type,
+                            SignExtend64<bits>(sym.getVA(addend)));
   }
 }
 
@@ -964,7 +965,7 @@ static void relocateNonAllocForRelocatable(InputSection *sec, uint8_t *buf) {
     assert(rel.expr == R_ABS);
     uint8_t *bufLoc = buf + rel.offset + sec->outSecOff;
     uint64_t targetVA = SignExtend64(rel.sym->getVA(rel.addend), bits);
-    target->relocateOne(bufLoc, rel.type, targetVA);
+    target->relocate(bufLoc, rel, targetVA);
   }
 }
 
@@ -1017,7 +1018,7 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
       break;
     case R_PPC64_RELAX_TOC:
       if (!tryRelaxPPC64TocIndirection(rel, bufLoc))
-        target->relocateOne(bufLoc, type, targetVA);
+        target->relocate(bufLoc, rel, targetVA);
       break;
     case R_RELAX_TLS_IE_TO_LE:
       target->relaxTlsIeToLe(bufLoc, rel, targetVA);
@@ -1060,10 +1061,10 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
         }
         write32(bufLoc + 4, 0xe8410018); // ld %r2, 24(%r1)
       }
-      target->relocateOne(bufLoc, type, targetVA);
+      target->relocate(bufLoc, rel, targetVA);
       break;
     default:
-      target->relocateOne(bufLoc, type, targetVA);
+      target->relocate(bufLoc, rel, targetVA);
       break;
     }
   }
