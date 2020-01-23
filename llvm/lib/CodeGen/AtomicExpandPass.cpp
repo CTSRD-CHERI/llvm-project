@@ -1652,7 +1652,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   bool UseSizedLibcall = !IsCap && canUseSizedAtomicCall(Size, Align, DL);
   Type *SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
 
-  unsigned AllocaAlignment = DL.getPrefTypeAlignment(SizedIntTy);
+  const llvm::Align AllocaAlignment(DL.getPrefTypeAlignment(SizedIntTy));
 
   // TODO: the "order" argument type is "int", not int32. So
   // getInt32Ty may be wrong if the arch uses e.g. 16-bit ints.
@@ -1744,7 +1744,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   // 'expected' argument, if present.
   if (CASExpected) {
     AllocaCASExpected = AllocaBuilder.CreateAlloca(CASExpected->getType());
-    AllocaCASExpected->setAlignment(MaybeAlign(AllocaAlignment));
+    AllocaCASExpected->setAlignment(AllocaAlignment);
     unsigned AllocaAS =  AllocaCASExpected->getType()->getPointerAddressSpace();
 
     AllocaCASExpected_i8 =
@@ -1763,7 +1763,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
       Args.push_back(IntValue);
     } else {
       AllocaValue = AllocaBuilder.CreateAlloca(ValueOperand->getType());
-      AllocaValue->setAlignment(MaybeAlign(AllocaAlignment));
+      AllocaValue->setAlignment(AllocaAlignment);
       unsigned AllocaAS =  AllocaValue->getType()->getPointerAddressSpace();
       AllocaValue_i8 =
           Builder.CreateBitCast(AllocaValue, Type::getInt8PtrTy(Ctx, AllocaAS));
@@ -1776,7 +1776,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   // 'ret' argument.
   if (!CASExpected && HasResult && !UseSizedLibcall) {
     AllocaResult = AllocaBuilder.CreateAlloca(I->getType());
-    AllocaResult->setAlignment(MaybeAlign(AllocaAlignment));
+    AllocaResult->setAlignment(AllocaAlignment);
     unsigned AllocaAS =  AllocaResult->getType()->getPointerAddressSpace();
     AllocaResult_i8 =
       Builder.CreateBitCast(AllocaResult, Type::getInt8PtrTy(Ctx, AllocaAS));
