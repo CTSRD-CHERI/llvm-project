@@ -3898,10 +3898,10 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       isInvalid = DS.SetTypeQual(DeclSpec::TQ_restrict, Loc, PrevSpec, DiagID,
                                  getLangOpts());
       break;
-    case tok::kw___input:
+    case tok::kw___cheri_input:
       isInvalid = DS.SetInput(PrevSpec, DiagID);
       break;
-    case tok::kw___output:
+    case tok::kw___cheri_output:
       isInvalid = DS.SetOutput(PrevSpec, DiagID);
       break;
 
@@ -4927,7 +4927,7 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw_const:
   case tok::kw_volatile:
   case tok::kw_restrict:
-  case tok::kw___output:
+  case tok::kw___cheri_output:
   case tok::kw__Sat:
 
     // Debugger support.
@@ -5090,7 +5090,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw_const:
   case tok::kw_volatile:
   case tok::kw_restrict:
-  case tok::kw___output:
+  case tok::kw___cheri_output:
   case tok::kw__Sat:
 
     // function-specifier
@@ -5379,10 +5379,10 @@ void Parser::ParseTypeQualifierListOpt(
       isInvalid = DS.SetTypeQual(DeclSpec::TQ_atomic, Loc, PrevSpec, DiagID,
                                  getLangOpts());
       break;
-    case tok::kw___input:
+    case tok::kw___cheri_input:
       isInvalid = DS.SetInput(PrevSpec, DiagID);
       break;
-    case tok::kw___output:
+    case tok::kw___cheri_output:
       isInvalid = DS.SetOutput(PrevSpec, DiagID);
       break;
 

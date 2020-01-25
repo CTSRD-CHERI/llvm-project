@@ -1,6 +1,6 @@
 // RUN: %cheri_cc1 -o - %s -fsyntax-only -verify
 
-int readFail(__output int * __capability x)
+int readFail(__cheri_output int * __capability x)
 {
 	*x = 12;
 	(*x)++; // expected-error {{write-only variable is not readable}}

@@ -40,8 +40,8 @@ typedef __intcap_t intcap_t;
 typedef __uintcap_t uintcap_t;
 #ifdef WANT_CHERI_QUALIFIER_MACROS
 #define capability __capability
-#define output __output
-#define input __input
+#define output __cheri_output
+#define input __cheri_input
 #endif
 #else
 #define __IF_CAPS(x, y) y

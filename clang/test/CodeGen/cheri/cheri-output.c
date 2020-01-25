@@ -1,7 +1,7 @@
 // RUN: %cheri_cc1 -o - %s -emit-llvm | FileCheck %s
 
-int write_only(__capability __output int *x);
-int read_only(__capability __input int *x);
+int write_only(__capability __cheri_output int *x);
+int read_only(__capability __cheri_input int *x);
 
 int caller(__capability int *x)
 {
