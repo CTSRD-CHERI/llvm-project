@@ -337,8 +337,8 @@ private:
   /*SCS*/unsigned StorageClassSpec : 3;
   /*TSCS*/unsigned ThreadStorageClassSpec : 2;
   unsigned SCS_extern_in_linkage_spec : 1;
-  unsigned TQ_output : 1;
-  unsigned TQ_input : 1;
+  unsigned TQ_cheri_output : 1;
+  unsigned TQ_cheri_input : 1;
 
   // type-specifier
   /*TSW*/unsigned TypeSpecWidth : 2;
@@ -428,8 +428,8 @@ public:
   DeclSpec(AttributeFactory &attrFactory)
       : StorageClassSpec(SCS_unspecified),
         ThreadStorageClassSpec(TSCS_unspecified),
-        SCS_extern_in_linkage_spec(false), TQ_output(false),
-        TQ_input(false), TypeSpecWidth(TSW_unspecified),
+        SCS_extern_in_linkage_spec(false), TQ_cheri_output(false),
+        TQ_cheri_input(false), TypeSpecWidth(TSW_unspecified),
         TypeSpecComplex(TSC_unspecified), TypeSpecSign(TSS_unspecified),
         TypeSpecType(TST_unspecified), TypeAltiVecVector(false),
         TypeAltiVecPixel(false), TypeAltiVecBool(false), TypeSpecOwned(false),
@@ -462,9 +462,9 @@ public:
     StorageClassSpecLoc        = SourceLocation();
     ThreadStorageClassSpecLoc  = SourceLocation();
   }
-  bool HasOutput() const { return TQ_output; }
+  bool HasOutput() const { return TQ_cheri_output; }
   bool SetOutput(const char *&PrevSpec, unsigned &DiagID);
-  bool HasInput() const { return TQ_input; }
+  bool HasInput() const { return TQ_cheri_input; }
   bool SetInput(const char *&PrevSpec, unsigned &DiagID);
 
   void ClearTypeSpecType() {

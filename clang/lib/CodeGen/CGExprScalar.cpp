@@ -2342,7 +2342,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
           CGF.getDebugInfo()->
               addHeapAllocSiteMetadata(CI, CE->getType(), CE->getExprLoc());
 
-    // Handle CHERI pointers casts (e.g. __input+__output qualifiers, etc)
+    // Handle CHERI pointers casts (e.g. __cheri_{input,output} qualifiers, etc)
     if (E->getType()->isPointerType() && DestTy->isPointerType())
       return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 

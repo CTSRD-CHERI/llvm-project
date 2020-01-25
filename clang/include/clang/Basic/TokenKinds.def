@@ -314,8 +314,8 @@ KEYWORD(_Thread_local               , KEYALL)
 KEYWORD(__func__                    , KEYALL)
 KEYWORD(__objc_yes                  , KEYALL)
 KEYWORD(__objc_no                   , KEYALL)
-KEYWORD(__output                    , KEYALL)
-KEYWORD(__input                     , KEYALL)
+KEYWORD(__cheri_output              , KEYALL)
+KEYWORD(__cheri_input               , KEYALL)
 
 
 // C++ 2.11p1: Keywords.

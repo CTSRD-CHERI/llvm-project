@@ -895,21 +895,21 @@ bool DeclSpec::SetTypeSpecError() {
   return false;
 }
 bool DeclSpec::SetOutput(const char *&PrevSpec, unsigned &DiagID) {
-  if (TQ_input) {
+  if (TQ_cheri_input) {
     DiagID = diag::err_invalid_decl_spec_combination;
-    PrevSpec = "__input";
+    PrevSpec = "__cheri_input";
     return true;
   }
-  TQ_output = true;
+  TQ_cheri_output = true;
   return false;
 }
 bool DeclSpec::SetInput(const char *&PrevSpec, unsigned &DiagID) {
-  if (TQ_output) {
+  if (TQ_cheri_output) {
     DiagID = diag::err_invalid_decl_spec_combination;
-    PrevSpec = "__output";
+    PrevSpec = "__cheri_output";
     return true;
   }
-  TQ_input = true;
+  TQ_cheri_input = true;
   return false;
 }
 
