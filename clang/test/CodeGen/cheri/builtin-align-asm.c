@@ -75,8 +75,7 @@ void* align_up(void *ptr, long align) {
 //
 void* align_down(void *ptr, long align) {
   // ASM-LABEL: align_down:
-  // PURECAP-ASM:      daddiu $1, $zero, 1
-  // PURECAP-ASM-NEXT: dsubu $1, $1, $4
+  // PURECAP-ASM:      dnegu	$1, $4
   // PURECAP-ASM-NEXT: cjr	$c17
   // PURECAP-ASM-NEXT: candaddr	$c3, $c3, $1
   // MIPS-ASM:      dnegu	$1, $5
