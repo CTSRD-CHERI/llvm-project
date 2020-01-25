@@ -42,11 +42,10 @@ define signext i32 @cap_covers_pages_regression(i8 addrspace(200)* %cap, i64 zer
 ; OPT:       # %bb.0: # %entry
 ; OPT-NEXT:    daddiu $1, $zero, 4095
 ; OPT-NEXT:    cgetandaddr $1, $c3, $1
-; OPT-NEXT:    daddiu $2, $zero, -4095
+; OPT-NEXT:    daddiu $2, $zero, -4096
 ; OPT-NEXT:    candaddr $c1, $c3, $2
 ; OPT-NEXT:    daddu $1, $4, $1
 ; OPT-NEXT:    daddiu $1, $1, 4095
-; OPT-NEXT:    daddiu $2, $zero, -4096
 ; OPT-NEXT:    and $1, $1, $2
 ; OPT-NEXT:    cgetlen $2, $c1
 ; OPT-NEXT:    cgetoffset $3, $c1
@@ -63,27 +62,27 @@ define signext i32 @cap_covers_pages_regression(i8 addrspace(200)* %cap, i64 zer
 ; OPTNONE-LABEL: cap_covers_pages_regression:
 ; OPTNONE:       # %bb.0: # %entry
 ; OPTNONE-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; OPTNONE-NEXT:    daddiu  $1, $zero, 4095
-; OPTNONE-NEXT:    cgetandaddr     $1, $c3, $1
-; OPTNONE-NEXT:    daddiu  $2, $zero, 0
-; OPTNONE-NEXT:    dnegu   $3, $1
-; OPTNONE-NEXT:    cincoffset      $c1, $c3, $3
-; OPTNONE-NEXT:    daddu   $1, $4, $1
-; OPTNONE-NEXT:    daddiu  $1, $1, 4095
-; OPTNONE-NEXT:    daddiu  $3, $zero, -4096
-; OPTNONE-NEXT:    and     $1, $1, $3
+; OPTNONE-NEXT:    daddiu $1, $zero, 4095
+; OPTNONE-NEXT:    cgetandaddr $1, $c3, $1
+; OPTNONE-NEXT:    daddiu $2, $zero, 0
+; OPTNONE-NEXT:    dnegu $3, $1
+; OPTNONE-NEXT:    cincoffset $c1, $c3, $3
+; OPTNONE-NEXT:    daddu $1, $4, $1
+; OPTNONE-NEXT:    daddiu $1, $1, 4095
+; OPTNONE-NEXT:    daddiu $3, $zero, -4096
+; OPTNONE-NEXT:    and $1, $1, $3
 ; OPTNONE-NEXT:    cgetlen $3, $c1
-; OPTNONE-NEXT:    cgetoffset      $4, $c1
-; OPTNONE-NEXT:    sltu    $5, $3, $4
-; OPTNONE-NEXT:    xori    $5, $5, 1
-; OPTNONE-NEXT:    dsubu   $3, $3, $4
-; OPTNONE-NEXT:    sltu    $6, $3, $1
-; OPTNONE-NEXT:    xori    $6, $6, 1
-; OPTNONE-NEXT:    and     $5, $5, $6
-; OPTNONE-NEXT:    dsll    $1, $5, 32
-; OPTNONE-NEXT:    dsrl    $1, $1, 32
-; OPTNONE-NEXT:    csd     $2, $zero, 8($c11)      # 8-byte Folded Spill
-; OPTNONE-NEXT:    move    $2, $1
+; OPTNONE-NEXT:    cgetoffset $4, $c1
+; OPTNONE-NEXT:    sltu $5, $3, $4
+; OPTNONE-NEXT:    xori $5, $5, 1
+; OPTNONE-NEXT:    dsubu $3, $3, $4
+; OPTNONE-NEXT:    sltu $6, $3, $1
+; OPTNONE-NEXT:    xori $6, $6, 1
+; OPTNONE-NEXT:    and $5, $5, $6
+; OPTNONE-NEXT:    dsll $1, $5, 32
+; OPTNONE-NEXT:    dsrl $1, $1, 32
+; OPTNONE-NEXT:    csd $2, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
+; OPTNONE-NEXT:    move $2, $1
 ; OPTNONE-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; OPTNONE-NEXT:    cjr $c17
 ; OPTNONE-NEXT:    nop
@@ -108,13 +107,13 @@ entry:
 define i8 addrspace(200)* @test_basic_andaddr_combine_ptradd(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
 ; OPT-LABEL: test_basic_andaddr_combine_ptradd:
 ; OPT:       # %bb.0: # %entry
-; OPT-NEXT:    daddiu $1, $zero, -4095
+; OPT-NEXT:    daddiu $1, $zero, -4096
 ; OPT-NEXT:    cjr $c17
 ; OPT-NEXT:    candaddr $c3, $c3, $1
 ;
 ; OPTNONE-LABEL: test_basic_andaddr_combine_ptradd:
 ; OPTNONE:       # %bb.0: # %entry
-; OPTNONE-NEXT:    daddiu  $1, $zero, 4095
+; OPTNONE-NEXT:    daddiu $1, $zero, 4095
 ; OPTNONE-NEXT:    cgetandaddr $1, $c3, $1
 ; OPTNONE-NEXT:    daddiu $2, $zero, 0
 ; OPTNONE-NEXT:    dnegu $1, $1
@@ -132,7 +131,7 @@ entry:
 define i8 addrspace(200)* @test_basic_andaddr_combine_incoffset(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
 ; OPT-LABEL: test_basic_andaddr_combine_incoffset:
 ; OPT:       # %bb.0: # %entry
-; OPT-NEXT:    daddiu $1, $zero, -4095
+; OPT-NEXT:    daddiu $1, $zero, -4096
 ; OPT-NEXT:    cjr $c17
 ; OPT-NEXT:    candaddr $c3, $c3, $1
 ;

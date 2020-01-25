@@ -667,7 +667,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 ; CHECK-NEXT:  .LBB0_3: # %land.rhs.i
-; CHECK-NEXT:    daddiu $1, $zero, -16383
+; CHECK-NEXT:    daddiu $1, $zero, -16384
 ; CHECK-NEXT:    candaddr $c2, $c1, $1
 ; CHECK-NEXT:    cincoffset $c2, $c2, 200
 ; CHECK-NEXT:    clbu $1, $zero, 0($c2)
@@ -772,7 +772,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    ceq $2, $c2, $c1
 ; CHECK-NEXT:  .LBB0_22: # %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
 ; CHECK-NEXT:    clc $c1, $zero, 48($c18)
-; CHECK-NEXT:    daddiu $1, $zero, -16383
+; CHECK-NEXT:    daddiu $1, $zero, -16384
 ; CHECK-NEXT:    candaddr $c1, $c1, $1
 ; CHECK-NEXT:    clc $c1, $zero, 304($c1)
 ; CHECK-NEXT:    ori $1, $zero, 47200
@@ -790,7 +790,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    b .LBB0_2
 ; CHECK-NEXT:    clc $c3, $zero, 16($c24)
 ; CHECK-NEXT:  .LBB0_24: # %if.end.i.i
-; CHECK-NEXT:    daddiu $3, $zero, -16383
+; CHECK-NEXT:    daddiu $3, $zero, -16384
 ; CHECK-NEXT:    candaddr $c1, $c2, $3
 ; CHECK-NEXT:    clc $c1, $zero, 304($c1)
 ; CHECK-NEXT:    clwu $1, $zero, 0($c2)
@@ -818,7 +818,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:    clc $c1, $zero, 48($c18)
-; CHECK-NEXT:    daddiu $1, $zero, -16383
+; CHECK-NEXT:    daddiu $1, $zero, -16384
 ; CHECK-NEXT:    candaddr $c1, $c1, $1
 ; CHECK-NEXT:    clc $c1, $zero, 304($c1)
 ; CHECK-NEXT:    csc $c3, $zero, 16($c24)

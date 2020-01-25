@@ -1256,12 +1256,12 @@ performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
   if (isOptNone(DAG.getMachineFunction()))
     return SDValue();
 
-  //  We could do this in tablegen too, but doing it here might enable
-  // reuse of constants instead of always emitting the DNEGU. It also means
+  // We could do this in tablegen too, but doing it here might enable
+  // reuse of constants instead of always emitting the NOR64. It also means
   // we don't have to duplicate the pattern for ptraddr and the incoffset intrinsic
   // Tablegen pattern:
   // def : Pat<(ptradd CheriOpnd: $r1, (sub (i64 0), (and (int_cheri_cap_address_get CheriOpnd: $r1), GPR64Opnd: $mask))),
-  //           (CAndAddr $r1, (DSUBu ZERO_64, GPR64Opnd:$mask))>;
+  //           (CAndAddr $r1, (XORi64 (i64 -1), GPR64Opnd:$mask))>;
 
   // Could be ptraddr or incoffset
   SDValue FirstOperand;
@@ -1281,7 +1281,7 @@ performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
   //        t8: i64 = and t6, Constant:i64<16383>
   //      t10: i64 = sub nsw Constant:i64<0>, t8
   //    t11: iFATPTR128 = PTRADD t4, t10
-  // This can be folded to a CAndAddr with the negated mask (i.e. DSUBu ZERO,
+  // This can be folded to a CAndAddr with the inverted mask (i.e. XOR -1,
   // mask).
 
   if (SecondOperand->getOpcode() != ISD::SUB)
@@ -1319,11 +1319,11 @@ performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
       //   (int_cheri_cap_address_set
       //       CheriOpnd:$rs1
       //       (and (int_cheri_cap_address_get CheriOpnd:$rs1),
-      //            (sub (i64 0), GPR64Opnd:$mask)))
+      //            (xor (i64 -1), GPR64Opnd:$mask)))
       SDLoc DL(N);
       EVT IndexVT = Mask->getValueType(0);
-      auto NegatedMask = DAG.getNode(ISD::SUB, DL, IndexVT, DAG.getConstant(0, DL, IndexVT), Mask);
-      auto NewAddr = DAG.getNode(ISD::AND, DL, IndexVT, AndSrc, NegatedMask);
+      auto InvertedMask = DAG.getNode(ISD::XOR, DL, IndexVT, DAG.getAllOnesConstant(DL, IndexVT), Mask);
+      auto NewAddr = DAG.getNode(ISD::AND, DL, IndexVT, AndSrc, InvertedMask);
       return DAG.getNode(
           ISD::INTRINSIC_WO_CHAIN, DL, N->getValueType(0),
           DAG.getConstant(Intrinsic::cheri_cap_address_set, DL, MVT::i64),
