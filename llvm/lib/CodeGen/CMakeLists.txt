@@ -100,6 +100,7 @@ add_llvm_component_library(LLVMCodeGen
   MachineVerifier.cpp
   ModuloSchedule.cpp
   PatchableFunction.cpp
+  MBFIWrapper.cpp
   MIRPrinter.cpp
   MIRPrintingPass.cpp
   MacroFusion.cpp
