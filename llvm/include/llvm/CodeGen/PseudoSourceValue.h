@@ -95,7 +95,7 @@ public:
 /// A specialized PseudoSourceValue for holding FixedStack values, which must
 /// include a frame index.
 class FixedStackPseudoSourceValue : public PseudoSourceValue {
-  int FI;
+  const int FI;
 
 public:
   explicit FixedStackPseudoSourceValue(int FI, const TargetInstrInfo &TII)
@@ -114,7 +114,6 @@ public:
   void printCustom(raw_ostream &OS) const override;
 
   int getFrameIndex() const { return FI; }
-  void setFrameIndex(int FI) { this->FI = FI; }
 };
 
 class CallEntryPseudoSourceValue : public PseudoSourceValue {
