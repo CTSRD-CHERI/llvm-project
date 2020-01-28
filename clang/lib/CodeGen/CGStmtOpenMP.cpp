@@ -3986,6 +3986,7 @@ static void emitOMPAtomicReadExpr(CodeGenFunction &CGF, bool IsSeqCst,
   if (IsSeqCst)
     CGF.CGM.getOpenMPRuntime().emitFlush(CGF, llvm::None, Loc);
   CGF.emitOMPSimpleStore(VLValue, Res, X->getType().getNonReferenceType(), Loc);
+  CGF.CGM.getOpenMPRuntime().checkAndEmitLastprivateConditional(CGF, V);
 }
 
 static void emitOMPAtomicWriteExpr(CodeGenFunction &CGF, bool IsSeqCst,
@@ -3994,6 +3995,7 @@ static void emitOMPAtomicWriteExpr(CodeGenFunction &CGF, bool IsSeqCst,
   // x = expr;
   assert(X->isLValue() && "X of 'omp atomic write' is not lvalue");
   emitSimpleAtomicStore(CGF, IsSeqCst, CGF.EmitLValue(X), CGF.EmitAnyExpr(E));
+  CGF.CGM.getOpenMPRuntime().checkAndEmitLastprivateConditional(CGF, X);
   // OpenMP, 2.12.6, atomic Construct
   // Any atomic construct with a seq_cst clause forces the atomically
   // performed operation to include an implicit flush operation without a
@@ -4150,6 +4152,7 @@ static void emitOMPAtomicUpdateExpr(CodeGenFunction &CGF, bool IsSeqCst,
   };
   (void)CGF.EmitOMPAtomicSimpleUpdateExpr(
       XLValue, ExprRValue, BOUE->getOpcode(), IsXLHSInRHSPart, AO, Loc, Gen);
+  CGF.CGM.getOpenMPRuntime().checkAndEmitLastprivateConditional(CGF, X);
   // OpenMP, 2.12.6, atomic Construct
   // Any atomic construct with a seq_cst clause forces the atomically
   // performed operation to include an implicit flush operation without a
@@ -4216,6 +4219,7 @@ static void emitOMPAtomicCaptureExpr(CodeGenFunction &CGF, bool IsSeqCst,
     };
     auto Res = CGF.EmitOMPAtomicSimpleUpdateExpr(
         XLValue, ExprRValue, BOUE->getOpcode(), IsXLHSInRHSPart, AO, Loc, Gen);
+    CGF.CGM.getOpenMPRuntime().checkAndEmitLastprivateConditional(CGF, X);
     if (Res.first) {
       // 'atomicrmw' instruction was generated.
       if (IsPostfixUpdate) {
@@ -4242,6 +4246,7 @@ static void emitOMPAtomicCaptureExpr(CodeGenFunction &CGF, bool IsSeqCst,
     auto Res = CGF.EmitOMPAtomicSimpleUpdateExpr(
         XLValue, ExprRValue, /*BO=*/BO_Assign, /*IsXLHSInRHSPart=*/false, AO,
         Loc, Gen);
+    CGF.CGM.getOpenMPRuntime().checkAndEmitLastprivateConditional(CGF, X);
     if (Res.first) {
       // 'atomicrmw' instruction was generated.
       NewVVal = IsPostfixUpdate ? Res.second : ExprRValue;
@@ -4249,6 +4254,7 @@ static void emitOMPAtomicCaptureExpr(CodeGenFunction &CGF, bool IsSeqCst,
   }
   // Emit post-update store to 'v' of old/new 'x' value.
   CGF.emitOMPSimpleStore(VLValue, NewVVal, NewVValType, Loc);
+  CGF.CGM.getOpenMPRuntime().checkAndEmitLastprivateConditional(CGF, V);
   // OpenMP, 2.12.6, atomic Construct
   // Any atomic construct with a seq_cst clause forces the atomically
   // performed operation to include an implicit flush operation without a
