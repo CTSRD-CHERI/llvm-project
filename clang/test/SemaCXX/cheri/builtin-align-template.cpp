@@ -1,7 +1,7 @@
 // RUN: %cheri_cc1 -std=c++11 -o - %s -fsyntax-only -verify
 // RUN: %cheri_purecap_cc1 -std=c++11 -o - %s -fsyntax-only -verify
 // Check that we don't crash in codegen:
-// RUN: %cheri_purecap_cc1 -std=c++11 -o - %s -emit-llvm -DCODEGEN | llvm-cxxfilt | FileCheck %s
+// RUN: %cheri_purecap_cc1 -std=c++11 -o - %s -emit-llvm -DCODEGEN | llvm-cxxfilt --no-strip-underscore | FileCheck %s
 
 
 // Check that we don't crash when using dependent types:
