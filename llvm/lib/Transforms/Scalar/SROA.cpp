@@ -167,16 +167,23 @@ class Slice {
   /// The minimum alignment requirement of this slice.
   uint64_t MinAlignment = 1;
 
+  /// Indicates if this slice reads or writes Cheri tags.
+  /// This should cover the cases of loads or stores of Cheri capabilities
+  /// or memory transfers which can copy tags.
+  bool ReadsTags = false;
+  bool WritesTags = false;
+
   /// Storage for both the use of this slice and whether it can be
   /// split.
   PointerIntPair<Use *, 1, bool> UseAndIsSplittable;
-
 public:
   Slice() = default;
 
   Slice(uint64_t BeginOffset, uint64_t EndOffset, uint64_t MinAlignment,
-        Use *U, bool IsSplittable)
+        bool ReadsTags, bool WritesTags, Use *U, bool IsSplittable)
       : BeginOffset(BeginOffset), EndOffset(EndOffset),
+        MinAlignment(MinAlignment), ReadsTags(ReadsTags),
+        WritesTags(WritesTags),
         UseAndIsSplittable(U, IsSplittable) {}
 
   uint64_t beginOffset() const { return BeginOffset; }
@@ -186,7 +193,7 @@ public:
     assert(!(isSplittable() && minAlignment() > 1));
     return (Offset & (minAlignment() - 1)) == 0;
   }
-
+  void makeAligned(uint64_t Alignment) { MinAlignment = Alignment; }
   bool isSplittable() const { return UseAndIsSplittable.getInt(); }
   void makeUnsplittable() { UseAndIsSplittable.setInt(false); }
 
@@ -194,6 +201,9 @@ public:
 
   bool isDead() const { return getUse() == nullptr; }
   void kill() { UseAndIsSplittable.setPointer(nullptr); }
+
+  bool readsTags() const { return ReadsTags; }
+  bool writesTags() const { return WritesTags; }
 
   /// Support for ordering ranges.
   ///
@@ -208,9 +218,15 @@ public:
       return false;
     if (isSplittable() != RHS.isSplittable())
       return !isSplittable();
-    if (minAlignment() > RHS.minAlignment())
-      return true;
     if (endOffset() > RHS.endOffset())
+      return true;
+    if (endOffset() < RHS.endOffset())
+      return false;
+    if (readsTags() != RHS.readsTags())
+      return !readsTags();
+    if (writesTags() != RHS.writesTags())
+      return !writesTags();
+    if (minAlignment() > RHS.minAlignment())
       return true;
     return false;
   }
@@ -228,12 +244,34 @@ public:
   bool operator==(const Slice &RHS) const {
     return isSplittable() == RHS.isSplittable() &&
            minAlignment() == RHS.minAlignment() &&
-           beginOffset() == RHS.beginOffset() && endOffset() == RHS.endOffset();
+           beginOffset() == RHS.beginOffset() && endOffset() == RHS.endOffset() &&
+           readsTags() == RHS.readsTags() && writesTags() == RHS.writesTags();
   }
   bool operator!=(const Slice &RHS) const { return !operator==(RHS); }
 };
 
 } // end anonymous namespace
+
+static uint64_t getCapabilitySize(const DataLayout &DL) {
+  // FIXME: don't use a hard-coded address space.
+  if (!DL.isFatPointer(200))
+      return 0;
+  return  DL.getPointerSize(200);
+}
+
+static bool canRangeContainCapabilities(uint64_t CapSize, uint64_t Start,
+                                        uint64_t End) {
+  if (CapSize == 0)
+    return false;
+
+  Start = alignTo(Start, CapSize);
+  End = alignDown(End, CapSize);
+
+  if (Start >= End)
+    return false;
+
+  return true;
+}
 
 /// Representation of the alloca slices.
 ///
@@ -356,6 +394,8 @@ private:
   /// want to swap this particular input for undef to simplify the use lists of
   /// the alloca.
   SmallVector<Use *, 8> DeadOperands;
+
+  void processTaggedSlices();
 };
 
 /// A partition of the slices.
@@ -687,7 +727,8 @@ private:
   }
 
   void insertUse(Instruction &I, const APInt &Offset, uint64_t Size,
-                 bool IsSplittable = false, uint64_t MinAlign = 1) {
+                 bool ReadsTags, bool WritesTags,
+                 bool IsSplittable/* = false*/) {
     // Completely skip uses which have a zero size or start either before or
     // past the end of the allocation.
     if (Size == 0 || Offset.uge(AllocSize)) {
@@ -719,8 +760,13 @@ private:
       EndOffset = AllocSize;
     }
 
-    AS.Slices.push_back(
-        Slice(BeginOffset, EndOffset, MinAlign, U, IsSplittable));
+    unsigned MinAlign = 1;
+    const DataLayout &DL = AS.AI.getModule()->getDataLayout();
+    if ((ReadsTags || WritesTags) && !IsSplittable)
+      MinAlign = getCapabilitySize(DL);
+
+    AS.Slices.push_back(Slice(BeginOffset, EndOffset, MinAlign, ReadsTags,
+                              WritesTags, U, IsSplittable));
   }
 
   void visitBitCastInst(BitCastInst &BC) {
@@ -789,11 +835,11 @@ private:
     // integer type. These may be used to implement 'memcpy' or other "transfer
     // of bits" patterns.
     bool IsSplittable = Ty->isIntegerTy() && !IsVolatile;
-    const DataLayout &DL = I.getModule()->getDataLayout();
-    uint64_t MinAlign =
-        DL.isFatPointer(Ty) ? DL.getABITypeAlignment(Ty) : 1;
 
-    insertUse(I, Offset, Size, IsSplittable, MinAlign);
+    const DataLayout &DL = I.getModule()->getDataLayout();
+    bool IsTagRead = isa<LoadInst>(I) && DL.isFatPointer(Ty);
+    bool IsTagWrite = isa<StoreInst>(I) && DL.isFatPointer(Ty);
+    insertUse(I, Offset, Size, IsTagRead, IsTagWrite, IsSplittable);
   }
 
   void visitLoadInst(LoadInst &LI) {
@@ -863,19 +909,46 @@ private:
 
     insertUse(II, Offset, Length ? Length->getLimitedValue()
                                  : AllocSize - Offset.getLimitedValue(),
-              (bool)Length);
+              false, false, (bool)Length);
+  }
+
+  bool transfersTags(MemTransferInst &II, uint64_t Size, uint64_t Offset) {
+    uint64_t CapSize = getCapabilitySize(II.getModule()->getDataLayout());
+    if (CapSize == 0)
+      return false;
+
+    if (AS.AI.getAlignment() < CapSize)
+      return false;
+
+    if (!canRangeContainCapabilities(CapSize, Offset, Offset + Size))
+      return false;
+
+    if (II.hasFnAttr("must-preserve-cheri-tags"))
+      return true;
+
+    if (Offset % CapSize != 0)
+      return false;
+
+    unsigned SrcAlign = II.getSourceAlignment();
+    unsigned DstAlign = II.getDestAlignment();
+    if (SrcAlign && SrcAlign < CapSize)
+      return false;
+    if (DstAlign && DstAlign < CapSize)
+      return false;
+
+    return true;
   }
 
   void insertStrictAlignmentSlicesForRange(Instruction &I,
                                            unsigned OffsetWidth,
                                            uint64_t BeginOffset,
-                                           uint64_t EndOffset) {
+                                           uint64_t EndOffset,
+                                           bool IsDest) {
     const DataLayout &DL = I.getModule()->getDataLayout();
-    // TODO: Better way to get capability type
-    if (!DL.isFatPointer(200))
+    uint64_t CapSize = getCapabilitySize(DL);
+    unsigned CapAlign = CapSize;
+    if (CapSize == 0)
       return;
-    unsigned CapAlign = DL.getPointerABIAlignment(200).value();
-    unsigned CapSize = DL.getPointerSize(200);
 
     unsigned AIAlign = AS.AI.getAlignment();
     if (!AIAlign)
@@ -884,79 +957,11 @@ private:
     if (AIAlign < CapAlign)
       return;
 
-    std::function<void(Type *, uint64_t)> RecurseType;
-    RecurseType = [&](Type *Ty, uint64_t Offset) {
-      uint64_t Size = DL.getTypeAllocSize(Ty);
-
-      // BeginOffset and EndOffset, relative to the current type, and clamped.
-      uint64_t InnerBeginOffset =
-          std::min(std::max(BeginOffset, Offset) - Offset, Size);
-      uint64_t InnerEndOffset =
-          std::min(std::max(EndOffset, Offset) - Offset, Size);
-
-      if (InnerBeginOffset == InnerEndOffset)
-        return;
-
-      if (DL.isFatPointer(Ty)) {
-        if (InnerBeginOffset == 0 && CapSize == InnerEndOffset)
-          insertUse(I, APInt(OffsetWidth, Offset), CapSize, false, CapAlign);
-        return;
-      }
-
-      if (SequentialType *SeqTy = dyn_cast<SequentialType>(Ty)) {
-        Type *ElementTy = SeqTy->getElementType();
-
-        if (ElementTy->isIntegerTy(8)) {
-          uint64_t AbsStartRange = std::max(BeginOffset, Offset);
-          uint64_t AbsEndRange = std::min(EndOffset, Offset + Size);
-          // Aligned byte buffers are a special case and may contain
-          // capabilities.
-          for (uint64_t CapOffset = alignTo(AbsStartRange, CapAlign);
-               CapOffset + CapSize <= AbsEndRange; CapOffset += CapSize)
-            insertUse(I, APInt(OffsetWidth, CapOffset), CapSize, false,
-                      CapAlign);
-          return;
-        }
-
-        uint64_t ElementSize = DL.getTypeAllocSize(ElementTy);
-        if (ElementSize < CapSize)
-          return;
-
-        uint64_t StartRange = (InnerBeginOffset / ElementSize) * ElementSize;
-        uint64_t EndRange =
-            ((InnerEndOffset + ElementSize - 1) / ElementSize) * ElementSize;
-        for (uint64_t ElementOffset = StartRange; ElementOffset < EndRange;
-             ElementOffset += ElementSize)
-          RecurseType(ElementTy, Offset + ElementOffset);
-      }
-
-      StructType *STy = dyn_cast<StructType>(Ty);
-      if (!STy)
-        return;
-
-      const StructLayout *SL = DL.getStructLayout(STy);
-      unsigned BeginIndex =
-        SL->getElementContainingOffset(InnerBeginOffset);
-      Type *ElementTy = STy->getElementType(BeginIndex);
-      if (InnerBeginOffset >= DL.getTypeAllocSize(ElementTy))
-        ++BeginIndex; // The offset points into alignment padding.
-
-      StructType::element_iterator EB = STy->element_begin(),
-                                   EE = STy->element_end();
-      if (InnerEndOffset < Size) {
-        unsigned EndIndex = SL->getElementContainingOffset(InnerEndOffset);
-        if (SL->getElementOffset(EndIndex) != InnerEndOffset)
-          ++EndIndex; // Part of the next field must be examined.
-        EE = EB + EndIndex;
-      }
-
-      for (StructType::element_iterator EI = EB + BeginIndex; EI != EE; ++EI) {
-        unsigned ElementBeginOffset = SL->getElementOffset(EI - EB);
-        RecurseType(*EI, Offset + ElementBeginOffset);
-      }
-    };
-
-    RecurseType(AS.AI.getAllocatedType(), 0);
+    // Insert slices as splittable for now.
+    for (uint64_t CapOffset = alignTo(BeginOffset, CapAlign);
+         CapOffset + CapSize <= EndOffset; CapOffset += CapSize)
+      insertUse(I, APInt(OffsetWidth, CapOffset), CapSize, !IsDest, IsDest,
+                true);
   }
 
   void visitMemTransferInst(MemTransferInst &II) {
@@ -1002,6 +1007,9 @@ private:
     uint64_t RawOffset = Offset.getLimitedValue();
     uint64_t Size = Length ? Length->getLimitedValue() : AllocSize - RawOffset;
 
+    // Figure out if this memory tranfer can read/write tags.
+    bool HandlesTags = transfersTags(II, Size, RawOffset);
+
     // Check for the special case where the same exact value is used for both
     // source and dest.
     if (*U == II.getRawDest() && *U == II.getRawSource()) {
@@ -1009,10 +1017,8 @@ private:
       if (!II.isVolatile())
         return markAsDead(II);
 
-      insertStrictAlignmentSlicesForRange(II, Offset.getBitWidth(), RawOffset,
-                                          RawOffset + Size);
-
-      return insertUse(II, Offset, Size, /*IsSplittable=*/false);
+      return insertUse(II, Offset, Size, HandlesTags, HandlesTags,
+                       /*IsSplittable=*/false);
     }
 
     // If we have seen both source and destination for a mem transfer, then
@@ -1043,11 +1049,17 @@ private:
       PrevP.makeUnsplittable();
     }
 
-    insertStrictAlignmentSlicesForRange(II, Offset.getBitWidth(), RawOffset,
-                                        RawOffset + Size);
+    if (HandlesTags) {
+      bool IsDest = (*U == II.getRawDest());
+      assert(((*U == II.getRawDest()) || (*U == II.getRawSource())) &&
+             "Unexpected source and destination for meminst");
+      insertStrictAlignmentSlicesForRange(II, Offset.getBitWidth(), RawOffset,
+                                          RawOffset + Size, IsDest);
+    }
 
     // Insert the use now that we've fixed up the splittable nature.
-    insertUse(II, Offset, Size, /*IsSplittable=*/Inserted && Length);
+    insertUse(II, Offset, Size, false, false,
+              /*IsSplittable=*/Inserted && Length);
 
     // Check that we ended up with a valid index in the map.
     assert(AS.Slices[PrevIdx].getUse()->getUser() == &II &&
@@ -1065,7 +1077,7 @@ private:
       ConstantInt *Length = cast<ConstantInt>(II.getArgOperand(0));
       uint64_t Size = std::min(AllocSize - Offset.getLimitedValue(),
                                Length->getLimitedValue());
-      insertUse(II, Offset, Size, true);
+      insertUse(II, Offset, Size, false, false, true);
       return;
     }
 
@@ -1167,7 +1179,7 @@ private:
       return;
     }
 
-    insertUse(I, Offset, Size);
+    insertUse(I, Offset, Size, false, false, false);
   }
 
   void visitPHINode(PHINode &PN) { visitPHINodeOrSelectInst(PN); }
@@ -1177,6 +1189,56 @@ private:
   /// Disable SROA entirely if there are unhandled users of the alloca.
   void visitInstruction(Instruction &I) { PI.setAborted(&I); }
 };
+
+void AllocaSlices::processTaggedSlices() {
+  // Find the indices of slices that can access capabilities. Locations
+  // which have both capability reads and writes need to be non-splittable
+  // and aligned. If we have locations with only reads or writes need to
+  // be removed, otherwise they will confuse the transformation step.
+  SmallVector<unsigned, 4> Unsplittable;
+  SmallVector<unsigned, 4> ToRemove;
+  // Determine which slices we need to remove or make unsplittable.
+  // This makes use of the fact that the slices vector is sorted.
+  for (unsigned Idx = 0, EIdx = Slices.size(); Idx < EIdx; ++Idx) {
+    Slice &S = Slices[Idx];
+    if ((S.readsTags() || S.writesTags()) && S.isSplittable()) {
+      LLVM_DEBUG(dbgs() << "Finding pair of tagged slice ["
+                        << S.beginOffset() << ", " << S.endOffset() << "] "
+                        << (S.writesTags() ? "(writes tags)" : "")
+                        << (S.readsTags() ? "(reads tags)" : "") << "\n");
+      Slice ToFind(S.beginOffset(), S.endOffset(), 1, !S.readsTags(),
+                   !S.writesTags(), S.getUse(), true);
+      auto I = partition_point(Slices, [&](Slice &I) {
+        return !(ToFind < I || ToFind == I);
+      });
+
+      if (I != Slices.end() && *I == ToFind) {
+        Unsplittable.push_back(Idx);
+        LLVM_DEBUG(dbgs() << "Found ["
+                        << I->beginOffset() << ", " << I->endOffset() << "] "
+                        << (I->writesTags() ? "(writes tags)" : "")
+                        << (I->readsTags() ? "(reads tags)" : "") << "\n");
+      } else
+        ToRemove.push_back(Idx);
+    }
+  }
+
+  const DataLayout &DL = AI.getModule()->getDataLayout();
+  for (unsigned Idx : Unsplittable) {
+    Slices[Idx].makeAligned(getCapabilitySize(DL));
+    Slices[Idx].makeUnsplittable();
+  }
+
+  // Remove slices which don't to maintain tags. This works because the
+  // ToRemove vector is increasing.
+  for (auto II = ToRemove.rbegin(), E = ToRemove.rend(); II != E; ++II) {
+    std::swap(Slices[*II], Slices[Slices.size() - 1]);
+    Slices.pop_back();
+  }
+
+  // Finally, resort all the slices.
+  llvm::sort(Slices);
+}
 
 AllocaSlices::AllocaSlices(const DataLayout &DL, AllocaInst &AI)
     :
@@ -1210,6 +1272,8 @@ AllocaSlices::AllocaSlices(const DataLayout &DL, AllocaInst &AI)
   // Sort the uses. This arranges for the offsets to be in ascending order,
   // and the sizes to be in descending order.
   llvm::sort(Slices);
+
+  processTaggedSlices();
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
@@ -1225,7 +1289,11 @@ void AllocaSlices::printSlice(raw_ostream &OS, const_iterator I,
                               StringRef Indent) const {
   OS << Indent << "[" << I->beginOffset() << "," << I->endOffset() << ")"
      << " slice #" << (I - begin())
-     << (I->isSplittable() ? " (splittable)" : "");
+     << (I->isSplittable() ? " (splittable)" : "")
+     << (I->readsTags() ? " (reads tags)" : "")
+     << (I->writesTags() ? " (writes tags)" : "");
+  if (I->minAlignment() != 1)
+    OS << " (aligned " << I->minAlignment() << ")";
 }
 
 void AllocaSlices::printUse(raw_ostream &OS, const_iterator I,
@@ -4033,7 +4101,8 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
 
       // Now build a new slice for the alloca.
       NewSlices.push_back(
-          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize, 1,
+          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize,
+                1, false, false,
                 &PLoad->getOperandUse(PLoad->getPointerOperandIndex()),
                 /*IsSplittable*/ false));
       LLVM_DEBUG(dbgs() << "    new slice [" << NewSlices.back().beginOffset()
@@ -4182,7 +4251,8 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
 
       // Now build a new slice for the alloca.
       NewSlices.push_back(
-          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize, 1,
+          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize,
+                1, false, false,
                 &PStore->getOperandUse(PStore->getPointerOperandIndex()),
                 /*IsSplittable*/ false));
       LLVM_DEBUG(dbgs() << "    new slice [" << NewSlices.back().beginOffset()

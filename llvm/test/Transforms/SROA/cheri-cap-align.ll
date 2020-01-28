@@ -7,33 +7,30 @@ target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-
 %struct = type { i32, i32, i32, i32, i8 addrspace(200)* }
 
 ; Reduced test case based on FreeBSD newsyslog's parseDWM.
+; The i32 store means that the the first 16 bytes of the alloca are not tagged for the
+; final memcpy, so we could replace everything with scalars.
 define void @foo_struct(%struct* %px) {
 ; CHECK-LABEL: @foo_struct(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[PY_SROA_4:%.*]] = alloca { i32, i32 }, align 8
-; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT:%.*]], %struct* [[PX:%.*]], i64 0, i32 0
-; CHECK-NEXT:    [[PY_SROA_0_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_0_0_PX_CAST_SROA_IDX]], align 16
-; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_IDX3:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
-; CHECK-NEXT:    [[PY_SROA_2_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_2_0_PX_CAST_SROA_IDX3]], align 4
-; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 2
-; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_CAST:%.*]] = bitcast i32* [[PY_SROA_4_0_PX_CAST_SROA_IDX]] to i8*
-; CHECK-NEXT:    [[PY_SROA_4_0_PY_CAST_SROA_CAST:%.*]] = bitcast { i32, i32 }* [[PY_SROA_4]] to i8*
-; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 8 [[PY_SROA_4_0_PY_CAST_SROA_CAST]], i8* align 8 [[PY_SROA_4_0_PX_CAST_SROA_CAST]], i64 8, i1 false)
-; CHECK-NEXT:    [[PY_SROA_49_0_PX_CAST_SROA_IDX10:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 4
-; CHECK-NEXT:    [[PY_SROA_49_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[PY_SROA_49_0_PX_CAST_SROA_IDX10]], align 16
-; CHECK-NEXT:    [[Y_1_NEW:%.*]] = call i32 @bar(i32 [[PY_SROA_2_0_COPYLOAD]])
-; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_IDX1:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 0
-; CHECK-NEXT:    store i32 [[PY_SROA_0_0_COPYLOAD]], i32* [[PY_SROA_0_0_PX_CAST_SROA_IDX1]], align 16
-; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_IDX4:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
-; CHECK-NEXT:    store i32 [[Y_1_NEW]], i32* [[PY_SROA_2_0_PX_CAST_SROA_IDX4]], align 4
-; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_IDX6:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 2
-; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_CAST7:%.*]] = bitcast i32* [[PY_SROA_4_0_PX_CAST_SROA_IDX6]] to i8*
-; CHECK-NEXT:    [[PY_SROA_4_0_PY_CAST_SROA_CAST8:%.*]] = bitcast { i32, i32 }* [[PY_SROA_4]] to i8*
-; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 8 [[PY_SROA_4_0_PX_CAST_SROA_CAST7]], i8* align 8 [[PY_SROA_4_0_PY_CAST_SROA_CAST8]], i64 8, i1 false)
-; CHECK-NEXT:    [[PY_SROA_49_0_PX_CAST_SROA_IDX11:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 4
-; CHECK-NEXT:    store i8 addrspace(200)* [[PY_SROA_49_0_COPYLOAD]], i8 addrspace(200)** [[PY_SROA_49_0_PX_CAST_SROA_IDX11]], align 16
+; CHECK-NEXT:    [[PY_SROA_0:%.*]] = alloca { i32, i32, i32, i32 }, align 16
+; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_CAST:%.*]] = bitcast %struct* [[PX:%.*]] to i8*
+; CHECK-NEXT:    [[PY_SROA_0_0_PY_CAST_SROA_CAST:%.*]] = bitcast { i32, i32, i32, i32 }* [[PY_SROA_0]] to i8*
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_0_0_PY_CAST_SROA_CAST]], i8* align 16 [[PY_SROA_0_0_PX_CAST_SROA_CAST]], i64 16, i1 false)
+; CHECK-NEXT:    [[PY_SROA_6_0_PX_CAST_SROA_IDX6:%.*]] = getelementptr inbounds [[STRUCT:%.*]], %struct* [[PX]], i64 0, i32 4
+; CHECK-NEXT:    [[PY_SROA_6_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[PY_SROA_6_0_PX_CAST_SROA_IDX6]], align 16
+; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_SROA_IDX11:%.*]] = getelementptr inbounds { i32, i32, i32, i32 }, { i32, i32, i32, i32 }* [[PY_SROA_0]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_0_4_PY_SROA_0_4_Y_1:%.*]] = load i32, i32* [[PY_SROA_0_4_PY_1_SROA_IDX11]]
+; CHECK-NEXT:    [[Y_1_NEW:%.*]] = call i32 @bar(i32 [[PY_SROA_0_4_PY_SROA_0_4_Y_1]])
+; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_SROA_IDX12:%.*]] = getelementptr inbounds { i32, i32, i32, i32 }, { i32, i32, i32, i32 }* [[PY_SROA_0]], i64 0, i32 1
+; CHECK-NEXT:    store i32 [[Y_1_NEW]], i32* [[PY_SROA_0_4_PY_1_SROA_IDX12]]
+; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_CAST3:%.*]] = bitcast %struct* [[PX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_0_0_PY_CAST_SROA_CAST10:%.*]] = bitcast { i32, i32, i32, i32 }* [[PY_SROA_0]] to i8*
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_0_0_PX_CAST_SROA_CAST3]], i8* align 16 [[PY_SROA_0_0_PY_CAST_SROA_CAST10]], i64 16, i1 false)
+; CHECK-NEXT:    [[PY_SROA_6_0_PX_CAST_SROA_IDX7:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 4
+; CHECK-NEXT:    store i8 addrspace(200)* [[PY_SROA_6_0_COPYLOAD]], i8 addrspace(200)** [[PY_SROA_6_0_PX_CAST_SROA_IDX7]], align 16
 ; CHECK-NEXT:    ret void
 ;
+
 entry:
   %py = alloca %struct, align 16
   %px.cast = bitcast %struct* %px to i8*
@@ -79,6 +76,7 @@ define void @foo_buf(%struct* %px) {
 ; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_6_0_PX_CAST_SROA_CAST8]], i8* align 16 [[PY_SROA_6_0_PY_CAST_SROA_IDX12]], i64 16, i1 false)
 ; CHECK-NEXT:    ret void
 ;
+
 entry:
   %py = alloca [32 x i8], align 16
   %px.cast = bitcast %struct* %px to i8*
@@ -90,6 +88,82 @@ entry:
   %y.1.new = call i32 @bar(i32 %y.1)
   store i32 %y.1.new, i32* %py.1.cast, align 4
   call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %px.cast, i8* align 16 %py.cast, i64 32, i1 false)
+  ret void
+}
+
+
+define void @baz(%struct* %px) {
+; CHECK-LABEL: @baz(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[PY_SROA_33:%.*]] = alloca [16 x i8], align 16
+; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT:%.*]], %struct* [[PX:%.*]], i64 0, i32 0
+; CHECK-NEXT:    [[PY_SROA_0_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_0_0_PX_CAST_SROA_IDX]], align 16
+; CHECK-NEXT:    [[PY_SROA_1_0_PX_CAST_SROA_IDX1:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_1_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_1_0_PX_CAST_SROA_IDX1]], align 4
+; CHECK-NEXT:    [[PY_SROA_3_0_PX_CAST_SROA_IDX2:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 2
+; CHECK-NEXT:    [[PY_SROA_3_0_PX_CAST_SROA_CAST:%.*]] = bitcast i32* [[PY_SROA_3_0_PX_CAST_SROA_IDX2]] to i64*
+; CHECK-NEXT:    [[PY_SROA_3_0_COPYLOAD:%.*]] = load i64, i64* [[PY_SROA_3_0_PX_CAST_SROA_CAST]], align 8
+; CHECK-NEXT:    [[PY_SROA_33_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 4
+; CHECK-NEXT:    [[PY_SROA_33_0_PX_CAST_SROA_CAST:%.*]] = bitcast i8 addrspace(200)** [[PY_SROA_33_0_PX_CAST_SROA_IDX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_33_0_PY_CAST_SROA_IDX5:%.*]] = getelementptr inbounds [16 x i8], [16 x i8]* [[PY_SROA_33]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_33_0_PY_CAST_SROA_IDX5]], i8* align 16 [[PY_SROA_33_0_PX_CAST_SROA_CAST]], i64 16, i1 false)
+; CHECK-NEXT:    [[Y_1_NEW:%.*]] = call i32 @bar(i32 [[PY_SROA_1_0_COPYLOAD]])
+; CHECK-NEXT:    [[PY_SROA_33_16_PX_OUT_1_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 4
+; CHECK-NEXT:    [[PY_SROA_33_16_PX_OUT_1_SROA_CAST:%.*]] = bitcast i8 addrspace(200)** [[PY_SROA_33_16_PX_OUT_1_SROA_IDX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_33_0_PY_OUT_1_SROA_IDX:%.*]] = getelementptr inbounds [16 x i8], [16 x i8]* [[PY_SROA_33]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_33_16_PX_OUT_1_SROA_CAST]], i8* align 16 [[PY_SROA_33_0_PY_OUT_1_SROA_IDX]], i64 16, i1 false)
+; CHECK-NEXT:    ret void
+;
+entry:
+  %py = alloca [32 x i8], align 16
+  %px.cast = bitcast %struct* %px to i8*
+  %py.cast = bitcast [32 x i8]* %py to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %py.cast, i8* align 16 %px.cast, i64 32, i1 false)
+  %py.1 = getelementptr inbounds [32 x i8], [32 x i8]* %py, i64 0, i32 4
+  %py.1.cast = bitcast i8* %py.1 to i32*
+  %y.1 = load i32, i32* %py.1.cast, align 4
+  %y.1.new = call i32 @bar(i32 %y.1)
+  store i32 %y.1.new, i32* %py.1.cast, align 4
+  %py.out.1 = getelementptr inbounds i8, i8* %py.cast, i64 16
+  %px.out.1 = getelementptr inbounds i8, i8* %px.cast, i64 16
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %px.out.1, i8* align 16 %py.out.1, i64 16, i1 false)
+  ret void
+}
+
+define void @bat(%struct* %px) {
+; CHECK-LABEL: @bat(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[PY_SROA_4:%.*]] = alloca [24 x i8], align 8
+; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT:%.*]], %struct* [[PX:%.*]], i64 0, i32 0
+; CHECK-NEXT:    [[PY_SROA_0_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_0_0_PX_CAST_SROA_IDX]], align 16
+; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_IDX3:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_2_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_2_0_PX_CAST_SROA_IDX3]], align 4
+; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 2
+; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_CAST:%.*]] = bitcast i32* [[PY_SROA_4_0_PX_CAST_SROA_IDX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_4_0_PY_CAST_SROA_IDX:%.*]] = getelementptr inbounds [24 x i8], [24 x i8]* [[PY_SROA_4]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 8 [[PY_SROA_4_0_PY_CAST_SROA_IDX]], i8* align 8 [[PY_SROA_4_0_PX_CAST_SROA_CAST]], i64 24, i1 false)
+; CHECK-NEXT:    [[Y_1_NEW:%.*]] = call i32 @bar(i32 [[PY_SROA_2_0_COPYLOAD]])
+; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_IDX1:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 0
+; CHECK-NEXT:    [[PY_SROA_0_0_COPYLOAD2:%.*]] = load i32, i32* [[PY_SROA_0_0_PX_CAST_SROA_IDX1]], align 16
+; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_IDX4:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_2_0_COPYLOAD5:%.*]] = load i32, i32* [[PY_SROA_2_0_PX_CAST_SROA_IDX4]], align 4
+; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_IDX6:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 2
+; CHECK-NEXT:    [[PY_SROA_4_0_PX_CAST_SROA_CAST7:%.*]] = bitcast i32* [[PY_SROA_4_0_PX_CAST_SROA_IDX6]] to i8*
+; CHECK-NEXT:    [[PY_SROA_4_0_PY_CAST_SROA_IDX8:%.*]] = getelementptr inbounds [24 x i8], [24 x i8]* [[PY_SROA_4]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 8 [[PY_SROA_4_0_PY_CAST_SROA_IDX8]], i8* align 8 [[PY_SROA_4_0_PX_CAST_SROA_CAST7]], i64 24, i1 false)
+; CHECK-NEXT:    ret void
+;
+entry:
+  %py = alloca [32 x i8], align 16
+  %px.cast = bitcast %struct* %px to i8*
+  %py.cast = bitcast [32 x i8]* %py to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %py.cast, i8* align 16 %px.cast, i64 32, i1 false)
+  %py.1 = getelementptr inbounds [32 x i8], [32 x i8]* %py, i64 0, i32 4
+  %py.1.cast = bitcast i8* %py.1 to i32*
+  %y.1 = load i32, i32* %py.1.cast, align 4
+  %y.1.new = call i32 @bar(i32 %y.1)
+  store i32 %y.1.new, i32* %py.1.cast, align 4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %py.cast, i8* align 16 %px.cast, i64 32, i1 false)
   ret void
 }
 
