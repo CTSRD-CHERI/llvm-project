@@ -335,11 +335,6 @@ Instruction *MemCpyOptPass::tryMergingIntoMemset(Instruction *StartInst,
       if (ByteVal != StoredByte)
         break;
 
-      // Check that the pointer is in address space 0
-      // FIXME: Allow targets to advertise supporting memset in other address spaces.
-      if (NextStore->getPointerAddressSpace() != 0)
-        break;
-
       // Check to see if this store is to a constant offset from the start ptr.
       Optional<int64_t> Offset =
           isPointerOffset(StartPtr, NextStore->getPointerOperand(), DL);
