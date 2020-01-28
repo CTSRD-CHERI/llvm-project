@@ -134,6 +134,9 @@ class RISCVAsmParser : public MCTargetAsmParser {
                           const MCExpr *Symbol, RISCVMCExpr::VariantKind VKHi,
                           unsigned SecondOpcode, SMLoc IDLoc, MCStreamer &Out);
 
+  // Helper to emit pseudo instruction "cllc" used in PCC-relative addressing.
+  void emitCapLoadLocalCap(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+
   // Helper to emit pseudo instruction "clgc" used in captable addressing with
   // the PC-relative ABI.
   void emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
@@ -2026,6 +2029,21 @@ void RISCVAsmParser::emitAuipccInstPair(MCOperand DestReg, MCOperand TmpReg,
                           .addExpr(RefToLinkTmpLabel));
 }
 
+void RISCVAsmParser::emitCapLoadLocalCap(MCInst &Inst, SMLoc IDLoc,
+                                         MCStreamer &Out) {
+  // The capability load local capability pseudo-instruction "cllc" is used in
+  // PC-relative addressing of local symbols:
+  //   cllc rdest, symbol
+  // expands to
+  //   TmpLabel: AUIPCC cdest, %pcrel_hi(symbol)
+  //             CINCOFFSET cdest, cdest, %pcrel_lo(TmpLabel)
+  MCOperand DestReg = Inst.getOperand(0);
+  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  emitAuipccInstPair(DestReg, DestReg, Symbol,
+                     RISCVMCExpr::VK_RISCV_PCREL_HI,
+                     RISCV::CIncOffsetImm, IDLoc, Out);
+}
+
 void RISCVAsmParser::emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc,
                                           MCStreamer &Out) {
   // The capability load global capability pseudo-instruction "clgc" is used in
@@ -2178,6 +2196,9 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     if (checkPseudoAddTPRel(Inst, Operands))
       return true;
     break;
+  case RISCV::PseudoCLLC:
+    emitCapLoadLocalCap(Inst, IDLoc, Out);
+    return false;
   case RISCV::PseudoCLGC:
     emitCapLoadGlobalCap(Inst, IDLoc, Out);
     return false;

@@ -764,6 +764,11 @@ def : InstAlias<"cfsd $rs2, (${rs1})", (CFSD FPR64:$rs2, GPCR:$rs1, 0), 0>;
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasCheri, IsCapMode] in {
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1 in
+def PseudoCLLC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
+                        "cllc", "$dst, $src">;
+
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
 def PseudoCLGC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
