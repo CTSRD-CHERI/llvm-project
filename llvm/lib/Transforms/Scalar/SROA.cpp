@@ -960,8 +960,9 @@ private:
     // Insert slices as splittable for now.
     for (uint64_t CapOffset = alignTo(BeginOffset, CapAlign);
          CapOffset + CapSize <= EndOffset; CapOffset += CapSize)
-      insertUse(I, APInt(OffsetWidth, CapOffset), CapSize, !IsDest, IsDest,
-                true);
+      if (CapOffset < AllocSize)
+        insertUse(I, APInt(OffsetWidth, CapOffset), CapSize, !IsDest, IsDest,
+                  true);
   }
 
   void visitMemTransferInst(MemTransferInst &II) {
