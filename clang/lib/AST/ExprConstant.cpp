@@ -10678,7 +10678,7 @@ static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
 
 bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
                                             unsigned BuiltinOp) {
-  switch (unsigned BuiltinOp = E->getBuiltinCallee()) {
+  switch (BuiltinOp) {
   default:
     return ExprEvaluatorBaseTy::VisitCallExpr(E);
 
