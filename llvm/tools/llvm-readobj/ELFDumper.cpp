@@ -3020,7 +3020,6 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     if (Name.empty())
       continue;
     SymbolNames.insert({Start, Name});
-    errs() << "start: " << Start << " = " << Name << "\n";
   }
   // errs() << "Found " << CapRelocsDynRels.size()
   //        << " dynamic relocations pointing to __cap_relocs section\n";
