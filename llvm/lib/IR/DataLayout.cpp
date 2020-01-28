@@ -230,7 +230,7 @@ static unsigned getAddrSpace(StringRef R) {
 }
 
 void DataLayout::parseSpecifier(StringRef Desc) {
-  StringRepresentation = Desc;
+  StringRepresentation = std::string(Desc);
   while (!Desc.empty()) {
     // Split at '-'.
     std::pair<StringRef, StringRef> Split = split(Desc, '-');

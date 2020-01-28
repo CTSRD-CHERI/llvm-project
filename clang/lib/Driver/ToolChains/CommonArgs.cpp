@@ -279,7 +279,7 @@ std::string tools::getCPUName(const ArgList &Args, const llvm::Triple &T,
     StringRef CPUName;
     StringRef ABIName;
     mips::getMipsCPUAndABI(Args, T, CPUName, ABIName);
-    return CPUName;
+    return std::string(CPUName);
   }
 
   case llvm::Triple::nvptx:
@@ -335,7 +335,7 @@ std::string tools::getCPUName(const ArgList &Args, const llvm::Triple &T,
 
   case llvm::Triple::wasm32:
   case llvm::Triple::wasm64:
-    return getWebAssemblyTargetCPU(Args);
+    return std::string(getWebAssemblyTargetCPU(Args));
   }
 }
 
@@ -1309,7 +1309,8 @@ void tools::AddHIPLinkerScript(const ToolChain &TC, Compilation &C,
 
   // Create temporary linker script. Keep it if save-temps is enabled.
   const char *LKS;
-  std::string Name = llvm::sys::path::filename(Output.getFilename());
+  std::string Name =
+      std::string(llvm::sys::path::filename(Output.getFilename()));
   if (C.getDriver().isSaveTempsEnabled()) {
     LKS = C.getArgs().MakeArgString(Name + ".lk");
   } else {

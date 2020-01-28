@@ -201,7 +201,7 @@ public:
   ArrayRef<Symbol *> getGlobalSymbols();
 
   ObjFile(MemoryBufferRef m, StringRef archiveName) : ELFFileBase(ObjKind, m) {
-    this->archiveName = archiveName;
+    this->archiveName = std::string(archiveName);
   }
 
   void parse(bool ignoreComdats = false);
@@ -299,7 +299,7 @@ public:
   LazyObjFile(MemoryBufferRef m, StringRef archiveName,
               uint64_t offsetInArchive)
       : InputFile(LazyObjKind, m), offsetInArchive(offsetInArchive) {
-    this->archiveName = archiveName;
+    this->archiveName = std::string(archiveName);
   }
 
   static bool classof(const InputFile *f) { return f->kind() == LazyObjKind; }
@@ -342,7 +342,7 @@ public:
 class SharedFile : public ELFFileBase {
 public:
   SharedFile(MemoryBufferRef m, StringRef defaultSoName)
-      : ELFFileBase(SharedKind, m), soName(defaultSoName),
+      : ELFFileBase(SharedKind, m), soName(std::string(defaultSoName)),
         isNeeded(!config->asNeeded) {}
   uint64_t cheriFlags = 0;
 

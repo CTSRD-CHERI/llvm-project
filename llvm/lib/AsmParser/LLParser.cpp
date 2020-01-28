@@ -3709,7 +3709,7 @@ bool LLParser::parseOptionalComdat(StringRef GlobalName, Comdat *&C) {
   } else {
     if (GlobalName.empty())
       return TokError("comdat cannot be unnamed");
-    C = getComdat(GlobalName, KwLoc);
+    C = getComdat(std::string(GlobalName), KwLoc);
   }
 
   return false;
@@ -5562,7 +5562,7 @@ bool LLParser::PerFunctionState::resolveForwardRefBlockAddresses() {
   ValID ID;
   if (FunctionNumber == -1) {
     ID.Kind = ValID::t_GlobalName;
-    ID.StrVal = F.getName();
+    ID.StrVal = std::string(F.getName());
   } else {
     ID.Kind = ValID::t_GlobalID;
     ID.UIntVal = FunctionNumber;

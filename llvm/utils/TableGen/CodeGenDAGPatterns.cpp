@@ -1097,7 +1097,8 @@ std::string TreePredicateFn::getPredCode() const {
                   .str();
   }
 
-  std::string PredicateCode = PatFragRec->getRecord()->getValueAsString("PredicateCode");
+  std::string PredicateCode =
+      std::string(PatFragRec->getRecord()->getValueAsString("PredicateCode"));
 
   Code += PredicateCode;
 
@@ -1112,7 +1113,8 @@ bool TreePredicateFn::hasImmCode() const {
 }
 
 std::string TreePredicateFn::getImmCode() const {
-  return PatFragRec->getRecord()->getValueAsString("ImmediateCode");
+  return std::string(
+      PatFragRec->getRecord()->getValueAsString("ImmediateCode"));
 }
 
 bool TreePredicateFn::immCodeUsesAPInt() const {
@@ -1229,7 +1231,8 @@ bool TreePredicateFn::hasGISelPredicateCode() const {
               .empty();
 }
 std::string TreePredicateFn::getGISelPredicateCode() const {
-  return PatFragRec->getRecord()->getValueAsString("GISelPredicateCode");
+  return std::string(
+      PatFragRec->getRecord()->getValueAsString("GISelPredicateCode"));
 }
 
 StringRef TreePredicateFn::getImmType() const {
@@ -2758,7 +2761,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
     if (R->getName() == "node" && !OpName.empty()) {
       if (OpName.empty())
         error("'node' argument requires a name to match with operand list");
-      Args.push_back(OpName);
+      Args.push_back(std::string(OpName));
     }
 
     Res->setName(OpName);
@@ -2770,7 +2773,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
     if (OpName.empty())
       error("'?' argument requires a name to match with operand list");
     TreePatternNodePtr Res = std::make_shared<TreePatternNode>(TheInit, 1);
-    Args.push_back(OpName);
+    Args.push_back(std::string(OpName));
     Res->setName(OpName);
     return Res;
   }
@@ -3194,7 +3197,7 @@ void CodeGenDAGPatterns::ParsePatternFragments(bool OutFrags) {
         P->error("'" + ArgNameStr +
                  "' does not occur in pattern or was multiply specified!");
       OperandsSet.erase(ArgNameStr);
-      Args.push_back(ArgNameStr);
+      Args.push_back(std::string(ArgNameStr));
     }
 
     if (!OperandsSet.empty())

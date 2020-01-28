@@ -53,7 +53,7 @@ std::string toString(elf::RelType type) {
   StringRef s = getELFRelocationTypeName(machine, type);
   if (s == "Unknown")
     return ("Unknown (" + Twine(type) + ")").str();
-  return s;
+  return std::string(s);
 }
 
 namespace elf {
