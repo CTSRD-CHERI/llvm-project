@@ -7538,10 +7538,8 @@ SDValue DAGCombiner::visitSHL(SDNode *N) {
   ConstantSDNode *N1C = isConstOrConstSplat(N1);
 
   // fold (shl c1, c2) -> c1<<c2
-  // TODO - support non-uniform vector shift amounts.
-  ConstantSDNode *N0C = getAsNonOpaqueConstant(N0);
-  if (N0C && N1C && !N1C->isOpaque())
-    return DAG.FoldConstantArithmetic(ISD::SHL, SDLoc(N), VT, N0C, N1C);
+  if (SDValue C = DAG.FoldConstantArithmetic(ISD::SHL, SDLoc(N), VT, {N0, N1}))
+    return C;
 
   if (SDValue NewSel = foldBinOpIntoSelect(N))
     return NewSel;
@@ -7773,10 +7771,8 @@ SDValue DAGCombiner::visitSRA(SDNode *N) {
   ConstantSDNode *N1C = isConstOrConstSplat(N1);
 
   // fold (sra c1, c2) -> (sra c1, c2)
-  // TODO - support non-uniform vector shift amounts.
-  ConstantSDNode *N0C = getAsNonOpaqueConstant(N0);
-  if (N0C && N1C && !N1C->isOpaque())
-    return DAG.FoldConstantArithmetic(ISD::SRA, SDLoc(N), VT, N0C, N1C);
+  if (SDValue C = DAG.FoldConstantArithmetic(ISD::SRA, SDLoc(N), VT, {N0, N1}))
+    return C;
 
   if (SDValue NewSel = foldBinOpIntoSelect(N))
     return NewSel;
@@ -7959,10 +7955,8 @@ SDValue DAGCombiner::visitSRL(SDNode *N) {
   ConstantSDNode *N1C = isConstOrConstSplat(N1);
 
   // fold (srl c1, c2) -> c1 >>u c2
-  // TODO - support non-uniform vector shift amounts.
-  ConstantSDNode *N0C = getAsNonOpaqueConstant(N0);
-  if (N0C && N1C && !N1C->isOpaque())
-    return DAG.FoldConstantArithmetic(ISD::SRL, SDLoc(N), VT, N0C, N1C);
+  if (SDValue C = DAG.FoldConstantArithmetic(ISD::SRL, SDLoc(N), VT, {N0, N1}))
+    return C;
 
   if (SDValue NewSel = foldBinOpIntoSelect(N))
     return NewSel;
