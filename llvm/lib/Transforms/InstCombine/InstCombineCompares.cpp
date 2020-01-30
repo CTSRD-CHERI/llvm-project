@@ -4681,9 +4681,7 @@ static Instruction *processUMulZExtIdiom(ICmpInst &I, Value *MulVal,
         ConstantInt *CI = cast<ConstantInt>(BO->getOperand(1));
         APInt ShortMask = CI->getValue().trunc(MulWidth);
         Value *ShortAnd = Builder.CreateAnd(Mul, ShortMask);
-        Instruction *Zext =
-            cast<Instruction>(Builder.CreateZExt(ShortAnd, BO->getType()));
-        IC.Worklist.Add(Zext);
+        Value *Zext = Builder.CreateZExt(ShortAnd, BO->getType());
         IC.replaceInstUsesWith(*BO, Zext);
       } else {
         llvm_unreachable("Unexpected Binary operation");
