@@ -5995,12 +5995,14 @@ static SDValue getMemcpyLoadsAndStores(
   bool CopyFromConstant = isMemSrcFromConstant(Src, Slice);
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
+  const MemOp Op =
+      isZeroConstant
+          ? MemOp::Set(Size, DstAlignCanChange, Alignment,
+                       /*IsZeroMemset*/ true, isVol)
+          : MemOp::Copy(Size, DstAlignCanChange, Alignment, SrcAlign, isVol,
+                        MustPreserveCheriCapabilities, CopyFromConstant);
   const bool FoundLowering = TLI.findOptimalMemOpLowering(
-      MemOps, Limit,
-      MemOp::Copy(Size, DstAlignCanChange, Alignment,
-                  isZeroConstant ? 0 : SrcAlign, isVol,
-                  MustPreserveCheriCapabilities, CopyFromConstant),
-      DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
+      MemOps, Limit, Op, DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
       MF.getFunction().getAttributes());
   // Don't warn about inefficient memcpy if we reached the inline memcpy limit
   // Also don't warn about copies of less than CapSize

@@ -129,6 +129,8 @@ struct MemOp {
   static MemOp Copy(uint64_t Size, bool DstAlignCanChange, unsigned DstAlign,
                     unsigned SrcAlign, bool IsVolatile, bool MustPreserveCheriCaps,
                     bool MemcpyStrSrc = false) {
+    assert(DstAlign && "Destination alignment should be set");
+    assert(SrcAlign && "Source alignment should be set");
     return {
         /*.Size =*/Size,
         /*.DstAlign =*/DstAlignCanChange ? 0 : DstAlign,
@@ -142,6 +144,7 @@ struct MemOp {
   }
   static MemOp Set(uint64_t Size, bool DstAlignCanChange, unsigned DstAlign,
                    bool IsZeroMemset, bool IsVolatile) {
+    assert(DstAlign && "Destination alignment should be set");
     return {
         /*.Size =*/Size,
         /*.DstAlign =*/DstAlignCanChange ? 0 : DstAlign,
