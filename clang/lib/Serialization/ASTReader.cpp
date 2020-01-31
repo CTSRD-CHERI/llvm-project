@@ -11816,6 +11816,9 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_nontemporal:
     C = OMPNontemporalClause::CreateEmpty(Context, Record.readInt());
     break;
+  case OMPC_order:
+    C = new (Context) OMPOrderClause();
+    break;
   }
   assert(C && "Unknown OMPClause type");
 
@@ -12588,4 +12591,10 @@ void OMPClauseReader::VisitOMPNontemporalClause(OMPNontemporalClause *C) {
   for (unsigned i = 0; i != NumVars; ++i)
     Vars.push_back(Record.readSubExpr());
   C->setPrivateRefs(Vars);
+}
+
+void OMPClauseReader::VisitOMPOrderClause(OMPOrderClause *C) {
+  C->setKind(Record.readEnum<OpenMPOrderClauseKind>());
+  C->setLParenLoc(Record.readSourceLocation());
+  C->setKindKwLoc(Record.readSourceLocation());
 }
