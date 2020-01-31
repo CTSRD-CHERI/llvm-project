@@ -836,10 +836,7 @@ extern bool LargeCapTable;
 
     bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
-    EVT getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
-                            unsigned SrcAlign,
-                            bool IsMemset, bool ZeroMemset,
-                            bool MemcpyStrSrc,
+    EVT getOptimalMemOpType(const MemOp &Op,
                             const AttributeList &FuncAttributes) const override;
 
     /// isFPImmLegal - Returns true if the target can instruction select the

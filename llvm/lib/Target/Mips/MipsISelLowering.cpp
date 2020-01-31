@@ -5649,9 +5649,7 @@ MipsTargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const {
 }
 
 EVT MipsTargetLowering::getOptimalMemOpType(
-    uint64_t Size, unsigned DstAlign, unsigned SrcAlign, bool IsMemset,
-    bool ZeroMemset, bool MemcpyStrSrc,
-    const AttributeList &FuncAttributes) const {
+    const MemOp &Op, const AttributeList &FuncAttributes) const {
   // If the source alignment is 32 then we are copying something that may
   // contain capabilities.  If the destination alignment is 32, then we are
   // copying to something that may contain capabilities.  If both of these is
@@ -5660,21 +5658,21 @@ EVT MipsTargetLowering::getOptimalMemOpType(
   // the source align will be 0.  We don't want to use capabilities in this
   // case, because the capability tag will always be 0.  For very long memsets,
   // we can use the capability registers in the library implementation.
-  if (Subtarget.isCheri() && (!IsMemset || ZeroMemset)) {
-    unsigned MinSrcAlign = SrcAlign == 0 ? DstAlign : SrcAlign;
-    unsigned MinDstAlign = DstAlign == 0 ? SrcAlign : DstAlign;
-    unsigned Align = IsMemset ? DstAlign : std::min(MinSrcAlign, MinDstAlign);
+  if (Subtarget.isCheri() && (!Op.IsMemset || Op.ZeroMemset)) {
+    unsigned MinSrcAlign = Op.SrcAlign == 0 ? Op.DstAlign : Op.SrcAlign;
+    unsigned MinDstAlign = Op.DstAlign == 0 ? Op.SrcAlign : Op.DstAlign;
+    unsigned Align = Op.IsMemset ? Op.DstAlign : std::min(MinSrcAlign, MinDstAlign);
     unsigned CapSize = Subtarget.getCapSizeInBytes();
-    LLVM_DEBUG(dbgs() << __func__ << " Size=" << Size << " DstAlign=" << DstAlign << " SrcAlign=" << SrcAlign << "\n");
+    LLVM_DEBUG(dbgs() << __func__ << " Size=" << Op.Size << " DstAlign=" << Op.DstAlign << " SrcAlign=" << Op.SrcAlign << "\n");
     LLVM_DEBUG(dbgs() << __func__ << " CapSize=" << CapSize << " Align=" << Align << "\n");
-    if (ZeroMemset && (Align >= CapSize) && (Size >= CapSize)) {
+    if (Op.ZeroMemset && (Align >= CapSize) && (Op.Size >= CapSize)) {
       // for bzero() always use capability stores of $cnull.
       return CapType;
     }
     // If this is going to include a capability, then pretend that we have to
     // copy it using single bytes, which will cause SelectionDAG to decide to
     // do the memcpy call.
-    if (!IsMemset && (Size >= CapSize) && (Align < CapSize) && Align != 0) {
+    if (!Op.IsMemset && (Op.Size >= CapSize) && (Align < CapSize) && Align != 0) {
       // llvm_unreachable("This function should not be called for underaligned "
       //                  "memcpy greater than CAP_SIZE");
       // return MVT::i8; // INVALID_SIMPLE_VALUE_TYPE
@@ -5685,15 +5683,15 @@ EVT MipsTargetLowering::getOptimalMemOpType(
         assert(isPowerOf2_32(Align));
         LLVM_FALLTHROUGH;
       case 0: // Zero means any alignment is fine
-        if (Size >= CapSize)
+        if (Op.Size >= CapSize)
           return CapType;
         LLVM_FALLTHROUGH;
       case 16:
-        if (Size >= CapSize && Subtarget.isCheri128())
+        if (Op.Size >= CapSize && Subtarget.isCheri128())
           return CapType;
         LLVM_FALLTHROUGH;
       case 8:
-        if (Size >= CapSize && Subtarget.isCheri64())
+        if (Op.Size >= CapSize && Subtarget.isCheri64())
           return CapType;
         return MVT::i64;
       case 4: return MVT::i32;
