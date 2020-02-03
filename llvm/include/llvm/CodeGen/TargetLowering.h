@@ -111,7 +111,7 @@ namespace Sched {
 struct MemOp {
   // Shared
   uint64_t Size;
-  unsigned DstAlign; // Specified alignment of the memory operation or zero if
+  uint64_t DstAlign; // Specified alignment of the memory operation or zero if
                      // destination alignment can satisfy any constraint.
   bool AllowOverlap;
   // memset only
@@ -123,31 +123,28 @@ struct MemOp {
   bool MustPreserveCheriCaps; // memcpy must preserve CHERI tags even if
                               // SrcAlign < CapSize (since it could be aligned
                               // at run time)
-  unsigned SrcAlign; // Inferred alignment of the source or zero if the memory
+  uint64_t SrcAlign; // Inferred alignment of the source or zero if the memory
                      // operation does not need to load the value.
 
-  static MemOp Copy(uint64_t Size, bool DstAlignCanChange, unsigned DstAlign,
-                    unsigned SrcAlign, bool IsVolatile, bool MustPreserveCheriCaps,
+  static MemOp Copy(uint64_t Size, bool DstAlignCanChange, Align DstAlign,
+                    Align SrcAlign, bool IsVolatile, bool MustPreserveCheriCaps,
                     bool MemcpyStrSrc = false) {
-    assert(DstAlign && "Destination alignment should be set");
-    assert(SrcAlign && "Source alignment should be set");
     return {
         /*.Size =*/Size,
-        /*.DstAlign =*/DstAlignCanChange ? 0 : DstAlign,
+        /*.DstAlign =*/DstAlignCanChange ? 0 : DstAlign.value(),
         /*.AllowOverlap =*/!IsVolatile,
         /*.IsMemset =*/false,
         /*.ZeroMemset =*/false,
         /*.MemcpyStrSrc =*/MemcpyStrSrc,
         /*.MustPreserveCheriCaps =*/MustPreserveCheriCaps,
-        /*.SrcAlign =*/SrcAlign,
+        /*.SrcAlign =*/SrcAlign.value(),
     };
   }
-  static MemOp Set(uint64_t Size, bool DstAlignCanChange, unsigned DstAlign,
+  static MemOp Set(uint64_t Size, bool DstAlignCanChange, Align DstAlign,
                    bool IsZeroMemset, bool IsVolatile) {
-    assert(DstAlign && "Destination alignment should be set");
     return {
         /*.Size =*/Size,
-        /*.DstAlign =*/DstAlignCanChange ? 0 : DstAlign,
+        /*.DstAlign =*/DstAlignCanChange ? 0 : DstAlign.value(),
         /*.AllowOverlap =*/!IsVolatile,
         /*.IsMemset =*/true,
         /*.ZeroMemset =*/IsZeroMemset,
