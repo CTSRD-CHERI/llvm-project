@@ -139,7 +139,7 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
 void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                          MachineBasicBlock::iterator I,
-                                         unsigned SrcReg, bool IsKill, int FI,
+                                         Register SrcReg, bool IsKill, int FI,
                                          const TargetRegisterClass *RC,
                                          const TargetRegisterInfo *TRI) const {
   const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
@@ -185,7 +185,7 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
 void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                           MachineBasicBlock::iterator I,
-                                          unsigned DstReg, int FI,
+                                          Register DstReg, int FI,
                                           const TargetRegisterClass *RC,
                                           const TargetRegisterInfo *TRI) const {
   const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();

@@ -106,7 +106,7 @@ Mips16InstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
 
 void Mips16InstrInfo::storeRegToStack(MachineBasicBlock &MBB,
                                       MachineBasicBlock::iterator I,
-                                      unsigned SrcReg, bool isKill, int FI,
+                                      Register SrcReg, bool isKill, int FI,
                                       const TargetRegisterClass *RC,
                                       const TargetRegisterInfo *TRI,
                                       int64_t Offset) const {
@@ -124,7 +124,7 @@ void Mips16InstrInfo::storeRegToStack(MachineBasicBlock &MBB,
 
 void Mips16InstrInfo::loadRegFromStack(MachineBasicBlock &MBB,
                                        MachineBasicBlock::iterator I,
-                                       unsigned DestReg, int FI,
+                                       Register DestReg, int FI,
                                        const TargetRegisterClass *RC,
                                        const TargetRegisterInfo *TRI,
                                        int64_t Offset) const {
