@@ -3356,7 +3356,7 @@ SDValue SystemZTargetLowering::lowerVACOPY(SDValue Op,
 
   return DAG.getMemcpy(
       Chain, DL, DstPtr, SrcPtr, DAG.getIntPtrConstant(32, DL),
-      /*Align*/ 8, /*isVolatile*/ false, /*AlwaysInline*/ false,
+      Align(8), /*isVolatile*/ false, /*AlwaysInline*/ false,
       /*isTailCall*/ false, /*MustPreserveCheriCapabilities=*/false,
       MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
 }

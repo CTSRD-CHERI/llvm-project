@@ -2835,7 +2835,7 @@ SDValue SITargetLowering::LowerCall(CallLoweringInfo &CLI,
         // FIXME: We can have better than the minimum byval required alignment.
         Alignment =
             Flags.isByVal()
-                ? MaybeAlign(Flags.getByValAlign())
+                ? Flags.getNonZeroByValAlign()
                 : commonAlignment(Subtarget->getStackAlignment(), Offset);
 
         Offset = Offset + FPDiff;
@@ -2863,7 +2863,7 @@ SDValue SITargetLowering::LowerCall(CallLoweringInfo &CLI,
         SDValue SizeNode =
             DAG.getConstant(Outs[i].Flags.getByValSize(), DL, MVT::i32);
         SDValue Cpy = DAG.getMemcpy(
-            Chain, DL, DstAddr, Arg, SizeNode, Outs[i].Flags.getByValAlign(),
+            Chain, DL, DstAddr, Arg, SizeNode, Outs[i].Flags.getNonZeroByValAlign(),
             /*isVol = */ false, /*AlwaysInline = */ true,
             /*isTailCall = */ false, /*MustPreserveCheriCapabilities = */ false,
             DstInfo, MachinePointerInfo(AMDGPUAS::PRIVATE_ADDRESS));

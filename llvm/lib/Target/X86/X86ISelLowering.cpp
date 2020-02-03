@@ -3131,7 +3131,7 @@ static SDValue CreateCopyOfByValArgument(SDValue Src, SDValue Dst,
                                          SelectionDAG &DAG, const SDLoc &dl) {
   SDValue SizeNode = DAG.getConstant(Flags.getByValSize(), dl, MVT::i32);
 
-  return DAG.getMemcpy(Chain, dl, Dst, Src, SizeNode, Flags.getByValAlign(),
+  return DAG.getMemcpy(Chain, dl, Dst, Src, SizeNode, Flags.getNonZeroByValAlign(),
                        /*isVolatile*/ false, /*AlwaysInline=*/true,
                        /*isTailCall*/ false,
                        /*MustPreserveCheriCapabilities=*/false,
@@ -3967,8 +3967,8 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         // the caller from seeing any modifications the callee may make
         // as guaranteed by the `byval` attribute.
         int FrameIdx = MF.getFrameInfo().CreateStackObject(
-            Flags.getByValSize(), std::max(16, (int)Flags.getByValAlign()),
-            false);
+            Flags.getByValSize(),
+            std::max(Align(16), Flags.getNonZeroByValAlign()), false);
         SDValue StackSlot =
             DAG.getFrameIndex(FrameIdx, getPointerTy(DAG.getDataLayout()));
         Chain =
@@ -23312,7 +23312,7 @@ static SDValue LowerVACOPY(SDValue Op, const X86Subtarget &Subtarget,
   SDLoc DL(Op);
 
   return DAG.getMemcpy(Chain, DL, DstPtr, SrcPtr, DAG.getIntPtrConstant(24, DL),
-                       8, /*isVolatile*/ false, false, false,
+                       Align(8), /*isVolatile*/ false, false, false,
                        /*MustPreserveCheriCapabilities=*/false,
                        MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
 }

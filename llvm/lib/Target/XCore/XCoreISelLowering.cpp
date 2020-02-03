@@ -1389,14 +1389,15 @@ SDValue XCoreTargetLowering::LowerCCCArguments(
        ArgDI != ArgDE; ++ArgDI) {
     if (ArgDI->Flags.isByVal() && ArgDI->Flags.getByValSize()) {
       unsigned Size = ArgDI->Flags.getByValSize();
-      unsigned Align = std::max(StackSlotSize, ArgDI->Flags.getByValAlign());
+      Align Alignment =
+          std::max(Align(StackSlotSize), ArgDI->Flags.getNonZeroByValAlign());
       // Create a new object on the stack and copy the pointee into it.
-      int FI = MFI.CreateStackObject(Size, Align, false);
+      int FI = MFI.CreateStackObject(Size, Alignment, false);
       SDValue FIN = DAG.getFrameIndex(FI, MVT::i32);
       InVals.push_back(FIN);
       MemOps.push_back(DAG.getMemcpy(Chain, dl, FIN, ArgDI->SDV,
                                      DAG.getConstant(Size, dl, MVT::i32),
-                                     Align, false, false, false, false,
+                                     Alignment, false, false, false, false,
                                      MachinePointerInfo(),
                                      MachinePointerInfo()));
     } else {
@@ -1801,7 +1802,7 @@ SDValue XCoreTargetLowering::PerformDAGCombine(SDNode *N,
         return DAG.getMemmove(Chain, dl, ST->getBasePtr(),
                               LD->getBasePtr(),
                               DAG.getConstant(StoreBits/8, dl, MVT::i32),
-                              Alignment, false, isTail, false,
+                              Align(Alignment), false, isTail, false,
                               ST->getPointerInfo(), LD->getPointerInfo());
       }
     }
