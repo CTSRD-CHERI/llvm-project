@@ -126,7 +126,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind16Registers_x86_646jumptoEv)
   movq  56(%rdi), %rsp  # cut back rsp to new location
   pop    %rdi      # rdi was saved here earlier
   ret            # rip was saved here
-#elif defined(__CHERI_PURE_CAPABILITY__)
+#elif defined(__mips64) && defined(__CHERI_PURE_CAPABILITY__)
 .set noreorder
 
 DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
