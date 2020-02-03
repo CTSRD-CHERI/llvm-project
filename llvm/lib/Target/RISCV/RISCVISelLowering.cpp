@@ -1557,12 +1557,13 @@ static const MCPhysReg ArgGPCRs[] = {
 
 // Pass a 2*XLEN argument that has been split into two XLEN values through
 // registers or the stack as necessary.
-static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
+static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State,
+                                bool IsPureCapVarArgs, CCValAssign VA1,
                                 ISD::ArgFlagsTy ArgFlags1, unsigned ValNo2,
                                 MVT ValVT2, MVT LocVT2,
                                 ISD::ArgFlagsTy ArgFlags2) {
   unsigned XLenInBytes = XLen / 8;
-  if (Register Reg = State.AllocateReg(ArgGPRs)) {
+  if (Register Reg = IsPureCapVarArgs ? 0 : State.AllocateReg(ArgGPRs)) {
     // At least one half can be passed via register.
     State.addLoc(CCValAssign::getReg(VA1.getValNo(), VA1.getValVT(), Reg,
                                      VA1.getLocVT(), CCValAssign::Full));
@@ -1605,6 +1606,7 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
   MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities()
                                     : MVT();
   MVT PtrVT = DL.isFatPointer(DL.getAllocaAddrSpace()) ? CLenVT : XLenVT;
+  bool IsPureCapVarArgs = !IsFixed && RISCVABI::isCheriPureCapABI(ABI);
 
   // Any return value split in to more than two values can't be returned
   // directly.
@@ -1684,8 +1686,7 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
 
   // Handle passing f64 on RV32D with a soft float ABI or when floating point
   // registers are exhausted.
-  if (UseGPRForF64 && XLen == 32 && ValVT == MVT::f64 &&
-      (IsFixed || !RISCVABI::isCheriPureCapABI(ABI))) {
+  if (UseGPRForF64 && XLen == 32 && ValVT == MVT::f64 && !IsPureCapVarArgs) {
     assert(!ArgFlags.isSplit() && PendingLocs.empty() &&
            "Can't lower f64 if it is split");
     // Depending on available argument GPRS, f64 may be passed in a pair of
@@ -1729,8 +1730,8 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
     ISD::ArgFlagsTy AF = PendingArgFlags[0];
     PendingLocs.clear();
     PendingArgFlags.clear();
-    return CC_RISCVAssign2XLen(XLen, State, VA, AF, ValNo, ValVT, LocVT,
-                               ArgFlags);
+    return CC_RISCVAssign2XLen(XLen, State, IsPureCapVarArgs, VA, AF,
+                               ValNo, ValVT, LocVT, ArgFlags);
   }
 
   // Will be passed indirectly; make sure we allocate the right type of
@@ -1742,7 +1743,7 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
   Register Reg;
   unsigned ArgBytes = ValVT == CLenVT ? DL.getPointerSize(200) : XLen / 8;
   // Always pass pure capability varargs on the stack
-  if (!IsFixed && RISCVABI::isCheriPureCapABI(ABI))
+  if (IsPureCapVarArgs)
     Reg = 0;
   else if (ValVT == MVT::f32 && !UseGPRForF32)
     Reg = State.AllocateReg(ArgFPR32s, ArgFPR64s);
