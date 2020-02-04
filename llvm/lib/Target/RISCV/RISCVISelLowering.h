@@ -195,7 +195,7 @@ private:
   }
 
   template <class NodeTy>
-  SDValue getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG, bool IsLocal = true) const;
+  SDValue getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG, bool IsLocal) const;
 
   SDValue getStaticTLSAddr(GlobalAddressSDNode *N, EVT Ty, SelectionDAG &DAG,
                            bool NotLocal) const;

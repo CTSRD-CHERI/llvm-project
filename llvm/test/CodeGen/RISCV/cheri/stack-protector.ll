@@ -2,10 +2,10 @@
 ; Check that we can generate code for stack-protector in purecap mode but only
 ; do it --enable-purecap-stack-protector is passed
 ; For debugging: --pass-remarks-filter=stack-protector --pass-remarks-output=/dev/stderr
-; RUN: %riscv32_cheri_purecap_llc < %s | FileCheck --check-prefix=IL32PC64-DEFAULT %s
-; RUN: %riscv64_cheri_purecap_llc < %s | FileCheck --check-prefix=L64PC128-DEFAULT %s
-; RUN: %riscv32_cheri_purecap_llc --enable-purecap-stack-protector < %s | FileCheck --check-prefix=IL32PC64 %s
-; RUN: %riscv64_cheri_purecap_llc --enable-purecap-stack-protector < %s | FileCheck --check-prefix=L64PC128 %s
+; RUN: %riscv32_cheri_purecap_llc -relocation-model=pic < %s | FileCheck --check-prefix=IL32PC64-DEFAULT %s
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic < %s | FileCheck --check-prefix=L64PC128-DEFAULT %s
+; RUN: %riscv32_cheri_purecap_llc -relocation-model=pic --enable-purecap-stack-protector < %s | FileCheck --check-prefix=IL32PC64 %s
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic --enable-purecap-stack-protector < %s | FileCheck --check-prefix=L64PC128 %s
 
 declare void @callee(i8 addrspace(200)*) addrspace(200)
 

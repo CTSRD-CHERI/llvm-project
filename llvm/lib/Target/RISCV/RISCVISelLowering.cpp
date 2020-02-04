@@ -490,10 +490,16 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
   SDLoc DL(N);
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+    SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
+    if (IsLocal) {
+      // Use PC-relative addressing to access the symbol. This generates the
+      // pattern (PseudoCLLC sym), which expands to
+      // (cincoffsetimm (auipcc %pcrel_hi(sym)) %pcrel_lo(auipc)).
+      return SDValue(DAG.getMachineNode(RISCV::PseudoCLLC, DL, Ty, Addr), 0);
+    }
     // Generate a sequence to load a capability from the captable. This
     // generates the pattern (PseudoCLGC sym), which expands to
     // (clc (auipcc %captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
-    SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
     return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC, DL, Ty, Addr), 0);
   }
 
@@ -557,7 +563,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
   BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true);
 }
 
 SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
@@ -565,7 +571,7 @@ SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true);
 }
 
 SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
@@ -2480,6 +2486,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     bool DSOLocal =
         getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
+      DSOLocal = false;
       Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal);
     } else {
       unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
@@ -2489,6 +2497,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     bool DSOLocal = getTargetMachine().shouldAssumeDSOLocal(
         *MF.getFunction().getParent(), nullptr);
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
+      DSOLocal = false;
       Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal);
     } else {
       unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
