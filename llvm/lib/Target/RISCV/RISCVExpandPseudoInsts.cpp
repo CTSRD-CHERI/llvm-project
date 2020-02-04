@@ -80,6 +80,9 @@ private:
                             MachineBasicBlock::iterator MBBI,
                             MachineBasicBlock::iterator &NextMBBI,
                             unsigned FlagsHi, unsigned SecondOpcode);
+  bool expandCapLoadLocalCap(MachineBasicBlock &MBB,
+                             MachineBasicBlock::iterator MBBI,
+                             MachineBasicBlock::iterator &NextMBBI);
   bool expandCapLoadGlobalCap(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MBBI,
                               MachineBasicBlock::iterator &NextMBBI);
@@ -162,6 +165,8 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandLoadTLSIEAddress(MBB, MBBI, NextMBBI);
   case RISCV::PseudoLA_TLS_GD:
     return expandLoadTLSGDAddress(MBB, MBBI, NextMBBI);
+  case RISCV::PseudoCLLC:
+    return expandCapLoadLocalCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLGC:
     return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLA_TLS_IE:
@@ -1153,6 +1158,13 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
   NextMBBI = MBB.end();
   MI.eraseFromParent();
   return true;
+}
+
+bool RISCVExpandPseudo::expandCapLoadLocalCap(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    MachineBasicBlock::iterator &NextMBBI) {
+  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_PCREL_HI,
+                              RISCV::CIncOffsetImm);
 }
 
 bool RISCVExpandPseudo::expandCapLoadGlobalCap(
