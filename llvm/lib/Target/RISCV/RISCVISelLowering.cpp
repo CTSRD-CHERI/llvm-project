@@ -486,14 +486,24 @@ static SDValue getTargetNode(ConstantPoolSDNode *N, SDLoc DL, EVT Ty,
 
 template <class NodeTy>
 SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
-                                     bool IsLocal) const {
+                                     bool IsLocal, bool CanDeriveFromPcc) const {
   SDLoc DL(N);
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+    SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
+    if (IsLocal && CanDeriveFromPcc) {
+      // Use PC-relative addressing to access the symbol. This generates the
+      // pattern (PseudoCLLC sym), which expands to
+      // (cincoffsetimm (auipcc %pcrel_hi(sym)) %pcrel_lo(auipc)).
+      //
+      // In general, we can only do this for local functions+block addresses.
+      // However, $pcc also allows for read access so we can avoid a GOT access
+      // for read-only constants (e.g. floating-point constant-pools).
+      return SDValue(DAG.getMachineNode(RISCV::PseudoCLLC, DL, Ty, Addr), 0);
+    }
     // Generate a sequence to load a capability from the captable. This
     // generates the pattern (PseudoCLGC sym), which expands to
     // (clc (auipcc %captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
-    SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
     return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC, DL, Ty, Addr), 0);
   }
 
@@ -541,7 +551,15 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
 
   const GlobalValue *GV = N->getGlobal();
   bool IsLocal = getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
-  SDValue Addr = getAddr(N, Ty, DAG, IsLocal);
+  // External variables always have to be loaded from the captable to get bounds
+  // and to allow for them to be provided by another DSO without requiring copy
+  // relocations.
+  // Read-only accesses in the same DSO *could* theoretically use pc-relative
+  // addressing, but that would mean we get a capability bounded to the $pcc
+  // bounds and therefore would not be checked when we pass the reference to
+  // another function. Therefore, we always load from the captable for all
+  // global variables.
+  SDValue Addr = getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false);
 
   // In order to maximise the opportunity for common subexpression elimination,
   // emit a separate ADD/PTRADD node for the global address offset instead of
@@ -557,7 +575,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
   BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
 }
 
 SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
@@ -565,7 +583,7 @@ SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
 }
 
 SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
@@ -2480,7 +2498,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     bool DSOLocal =
         getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
-      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal);
+      // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
+      DSOLocal = false;
+      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal,
+                       /*CanDeriveFromPcc=*/true);
     } else {
       unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
@@ -2489,7 +2510,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     bool DSOLocal = getTargetMachine().shouldAssumeDSOLocal(
         *MF.getFunction().getParent(), nullptr);
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
-      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal);
+      // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
+      DSOLocal = false;
+      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal,
+                       /*CanDeriveFromPcc=*/true);
     } else {
       unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
