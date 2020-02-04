@@ -243,7 +243,7 @@ public:
       NumUsesWithoutBounds += TotalUses - UsesThatNeedBounds.size();
       // Get the size of the alloca
       unsigned ElementSize = DL.getTypeAllocSize(AllocationTy);
-      Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
+      Value *Size = ConstantInt::get(SizeTy, ElementSize);
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
 
@@ -278,7 +278,7 @@ public:
           AI->eraseFromParent();
           AI = NewAI;
           Size =
-            ConstantInt::get(Type::getInt64Ty(C),
+            ConstantInt::get(SizeTy,
                              AllocaSize + static_cast<uint64_t>(TailPadding));
         }
       }
