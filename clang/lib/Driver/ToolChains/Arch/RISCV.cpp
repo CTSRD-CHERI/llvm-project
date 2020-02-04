@@ -355,6 +355,24 @@ static bool getArchFeatures(const Driver &D, StringRef MArch,
   return true;
 }
 
+static bool isCheriPurecapABIName(StringRef ABI) {
+  return llvm::StringSwitch<bool>(ABI)
+      .Case("il32pc64", true)
+      .Case("il32pc64f", true)
+      .Case("il32pc64d", true)
+      .Case("il32pc64e", true)
+      .Case("l64pc128", true)
+      .Case("l64pc128f", true)
+      .Case("l64pc128d", true)
+      .Default(false);
+}
+
+bool riscv::isCheriPurecap(const llvm::opt::ArgList &Args,
+                           const llvm::Triple &Triple) {
+  return isCheriPurecapABIName(getRISCVABI(Args, Triple));
+}
+
+
 void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
                                    const ArgList &Args,
                                    std::vector<StringRef> &Features) {
@@ -434,15 +452,7 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     Features.push_back("-relax");
 
   if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
-    bool IsPureCapability = llvm::StringSwitch<bool>(A->getValue())
-        .Case("il32pc64", true)
-        .Case("il32pc64f", true)
-        .Case("il32pc64d", true)
-        .Case("il32pc64e", true)
-        .Case("l64pc128", true)
-        .Case("l64pc128f", true)
-        .Case("l64pc128d", true)
-        .Default(false);
+    bool IsPureCapability = isCheriPurecapABIName(A->getValue());
     if (IsPureCapability) {
       if (llvm::find(Features, "+xcheri") == Features.end()) {
         D.Diag(diag::err_riscv_invalid_abi) << A->getValue()

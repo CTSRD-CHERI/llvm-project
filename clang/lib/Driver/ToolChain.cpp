@@ -10,6 +10,7 @@
 #include "InputInfo.h"
 #include "ToolChains/Arch/ARM.h"
 #include "ToolChains/Arch/Mips.h"
+#include "ToolChains/Arch/RISCV.h"
 #include "ToolChains/Clang.h"
 #include "ToolChains/InterfaceStubs.h"
 #include "ToolChains/Flang.h"
@@ -90,6 +91,8 @@ ToolChain::ToolChain(const Driver &D, const llvm::Triple &T,
 
   IsCheriPurecap = Triple.getEnvironment() == llvm::Triple::CheriPurecap;
   if (Triple.isMIPS() && tools::mips::hasMipsAbiArg(Args, "purecap"))
+    IsCheriPurecap = true;
+  if (Triple.isRISCV() && tools::riscv::isCheriPurecap(Args, Triple))
     IsCheriPurecap = true;
 
   // FIXME: Should we update triple enviroment to purecap? Or will that break RISCV?
