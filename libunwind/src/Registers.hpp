@@ -3915,6 +3915,7 @@ class _LIBUNWIND_HIDDEN Registers_riscv {
 public:
   Registers_riscv();
   Registers_riscv(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint64_t    getRegister(int num) const;
