@@ -843,6 +843,9 @@ def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
 def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;
 def : PatGpcrGpcr<int_cheri_cap_conditional_seal, CCSeal>;
 
+// TODO: Make this rematerialisable like MIPS
+def : PatGpcrGpr<int_cheri_bounded_stack_cap, CSetBounds>;
+
 /// Pointer-Arithmetic Instructions
 
 def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),

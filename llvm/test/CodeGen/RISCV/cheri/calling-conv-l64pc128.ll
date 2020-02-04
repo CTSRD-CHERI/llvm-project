@@ -5,8 +5,12 @@ define i32 @get_ith_word(i32 signext %i, ...) nounwind {
 ; CHECK-LABEL: get_ith_word:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    cincoffset ca1, csp, 16
-; CHECK-NEXT:    csc ca1, 0(csp)
+; CHECK-NEXT:    addi a1, zero, 16
+; CHECK-NEXT:    cincoffset ca2, csp, 0
+; CHECK-NEXT:    csetbounds ca1, ca2, a1
+; CHECK-NEXT:    cincoffset ca2, csp, 16
+; CHECK-NEXT:    csc ca2, 0(ca1)
+; CHECK-NEXT:    clc ca1, 0(csp)
 ; CHECK-NEXT:  .LBB0_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    cmove ca2, ca1
@@ -48,8 +52,12 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) nounwind {
 ; CHECK-LABEL: get_ith_cap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    cincoffset ca1, csp, 16
-; CHECK-NEXT:    csc ca1, 0(csp)
+; CHECK-NEXT:    addi a1, zero, 16
+; CHECK-NEXT:    cincoffset ca2, csp, 0
+; CHECK-NEXT:    csetbounds ca1, ca2, a1
+; CHECK-NEXT:    cincoffset ca2, csp, 16
+; CHECK-NEXT:    csc ca2, 0(ca1)
+; CHECK-NEXT:    clc ca1, 0(csp)
 ; CHECK-NEXT:  .LBB1_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    sext.w a3, a0
