@@ -429,10 +429,6 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
                  const ArgList &Args)
     : Generic_ELF(D, Triple, Args) {
 
-  IsCheriPurecap =
-      Triple.getEnvironment() == llvm::Triple::CheriPurecap ||
-      (Triple.isMIPS() && tools::mips::hasMipsAbiArg(Args, "purecap"));
-
   // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
   // back to '/usr/lib' if it doesn't exist.
   if ((Triple.getArch() == llvm::Triple::x86 || Triple.isMIPS32() ||

@@ -87,6 +87,12 @@ ToolChain::ToolChain(const Driver &D, const llvm::Triple &T,
   std::string CandidateLibPath = getArchSpecificLibPath();
   if (getVFS().exists(CandidateLibPath))
     getFilePaths().push_back(CandidateLibPath);
+
+  IsCheriPurecap = Triple.getEnvironment() == llvm::Triple::CheriPurecap;
+  if (Triple.isMIPS() && tools::mips::hasMipsAbiArg(Args, "purecap"))
+    IsCheriPurecap = true;
+
+  // FIXME: Should we update triple enviroment to purecap? Or will that break RISCV?
 }
 
 void ToolChain::setTripleEnvironment(llvm::Triple::EnvironmentType Env) {
@@ -116,7 +122,8 @@ bool ToolChain::isNoExecStackDefault() const {
 }
 
 bool ToolChain::isCheriPurecap() const {
-  return getEffectiveTriple().getEnvironment() == llvm::Triple::CheriPurecap;
+  return IsCheriPurecap ||
+         getEffectiveTriple().getEnvironment() == llvm::Triple::CheriPurecap;
 }
 
 const SanitizerArgs& ToolChain::getSanitizerArgs() const {

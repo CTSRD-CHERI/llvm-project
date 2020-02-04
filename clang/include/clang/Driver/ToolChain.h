@@ -166,6 +166,7 @@ private:
 protected:
   MultilibSet Multilibs;
   Multilib SelectedMultilib;
+  bool IsCheriPurecap = false;
 
   ToolChain(const Driver &D, const llvm::Triple &T,
             const llvm::opt::ArgList &Args);
