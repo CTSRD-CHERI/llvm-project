@@ -2476,27 +2476,22 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // split it and then direct call can be matched by PseudoCALL.
   // TODO: Support purecap PLT
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
-      Callee = getAddr(S, Callee.getValueType(), DAG);
-    else {
-      const GlobalValue *GV = S->getGlobal();
-
-      unsigned OpFlags = RISCVII::MO_CALL;
-      if (!getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV))
-        OpFlags = RISCVII::MO_PLT;
-
+    const GlobalValue *GV = S->getGlobal();
+    bool DSOLocal =
+        getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal);
+    } else {
+      unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
     }
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
-      Callee = getAddr(S, Callee.getValueType(), DAG);
-    else {
-      unsigned OpFlags = RISCVII::MO_CALL;
-
-      if (!getTargetMachine().shouldAssumeDSOLocal(*MF.getFunction().getParent(),
-                                                   nullptr))
-        OpFlags = RISCVII::MO_PLT;
-
+    bool DSOLocal = getTargetMachine().shouldAssumeDSOLocal(
+        *MF.getFunction().getParent(), nullptr);
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal);
+    } else {
+      unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
     }
   }
