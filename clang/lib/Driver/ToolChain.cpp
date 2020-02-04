@@ -115,6 +115,10 @@ bool ToolChain::isNoExecStackDefault() const {
     return false;
 }
 
+bool ToolChain::isCheriPurecap() const {
+  return getEffectiveTriple().getEnvironment() == llvm::Triple::CheriPurecap;
+}
+
 const SanitizerArgs& ToolChain::getSanitizerArgs() const {
   if (!SanitizerArguments.get())
     SanitizerArguments.reset(new SanitizerArgs(*this, Args));
@@ -361,7 +365,7 @@ static StringRef getArchNameForCompilerRTLib(const ToolChain &TC,
   if (TC.getArch() == llvm::Triple::x86 && Triple.isAndroid())
     return "i686";
 
-  if (Triple.getEnvironment() == llvm::Triple::CheriPurecap) {
+  if (Triple.isMIPS() && Triple.getEnvironment() == llvm::Triple::CheriPurecap) {
     assert(Triple.getSubArch() != llvm::Triple::NoSubArch && "purecap triple should have subarch");
     return Triple.getArchName();
   }

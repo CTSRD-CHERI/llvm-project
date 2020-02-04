@@ -449,7 +449,7 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
 ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
   // Always use libc++ for CHERI purecap
   // TODO: always use libc++ for MIPS64?
-  if (getTriple().getOSMajorVersion() >= 10 || IsCheriPurecap)
+  if (getTriple().getOSMajorVersion() >= 10 || isCheriPurecap())
     return ToolChain::CST_Libcxx;
   // Always use libc++ for CHERI triples and CHERI subarch:
   if (getTriple().getArch() == llvm::Triple::cheri)
@@ -565,6 +565,6 @@ void FreeBSD::addClangTargetOptions(const ArgList &DriverArgs,
   if (!DriverArgs.hasFlag(options::OPT_fuse_init_array,
                           options::OPT_fno_use_init_array,
                           getTriple().getOSMajorVersion() >= 12 ||
-                              getTriple().isMIPS() || IsCheriPurecap))
+                              getTriple().isMIPS() || isCheriPurecap()))
     CC1Args.push_back("-fno-use-init-array");
 }

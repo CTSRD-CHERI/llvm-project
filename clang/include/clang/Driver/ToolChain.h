@@ -365,6 +365,9 @@ public:
     return 0;
   }
 
+  /// Test whether this toolchain uses CHERI pure-capability compilation.
+  virtual bool isCheriPurecap() const;
+
   /// Get the default trivial automatic variable initialization.
   virtual LangOptions::TrivialAutoVarInitKind
   GetDefaultTrivialAutoVarInit() const {
