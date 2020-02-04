@@ -224,6 +224,7 @@ def llvm_ptr_ty        : LLVMPointerType<llvm_i8_ty>;             // i8*
 def llvm_ptrptr_ty     : LLVMPointerType<llvm_ptr_ty>;            // i8**
 def llvm_anyptr_ty     : LLVMAnyPointerType<llvm_i8_ty>;          // (space)i8*
 def llvm_fatptr_ty     : LLVMFatPointerType<llvm_i8_ty>;          // (space)i8*
+def llvm_anyptrptr_ty  : LLVMAnyPointerType<llvm_ptr_ty>;         // i8*(space)*
 def llvm_empty_ty      : LLVMType<OtherVT>;                       // { }
 def llvm_descriptor_ty : LLVMPointerType<llvm_empty_ty>;          // { }*
 def llvm_metadata_ty   : LLVMType<MetadataVT>;                    // !{...}
@@ -491,7 +492,7 @@ def int_assume        : Intrinsic<[], [llvm_i1_ty], [IntrWillReturn]>;
 
 // Stack Protector Intrinsic - The stackprotector intrinsic writes the stack
 // guard to the correct place on the stack frame.
-def int_stackprotector : Intrinsic<[], [llvm_ptr_ty, llvm_ptrptr_ty], []>;
+def int_stackprotector : Intrinsic<[], [llvm_ptr_ty, llvm_anyptrptr_ty], []>;
 def int_stackguard : Intrinsic<[llvm_ptr_ty], [], []>;
 
 // A counter increment for instrumentation based profiling.

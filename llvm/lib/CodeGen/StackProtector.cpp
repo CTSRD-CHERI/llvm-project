@@ -226,11 +226,15 @@ bool StackProtector::HasAddressTaken(const Instruction *AI) {
 /// Search for the first call to the llvm.stackprotector intrinsic and return it
 /// if present.
 static const CallInst *findStackProtectorIntrinsic(Function &F) {
+  unsigned AllocaAS = F.getParent()->getDataLayout().getAllocaAddrSpace();
+  PointerType *SlotPtrTy =
+    Type::getInt8PtrTy(F.getContext())->getPointerTo(AllocaAS);
   for (const BasicBlock &BB : F)
     for (const Instruction &I : BB)
       if (const CallInst *CI = dyn_cast<CallInst>(&I))
         if (CI->getCalledFunction() ==
-            Intrinsic::getDeclaration(F.getParent(), Intrinsic::stackprotector))
+            Intrinsic::getDeclaration(F.getParent(), Intrinsic::stackprotector,
+                                      SlotPtrTy))
           return CI;
   return nullptr;
 }
@@ -392,7 +396,8 @@ static bool CreatePrologue(Function *F, Module *M, ReturnInst *RI,
   AI = B.CreateAlloca(PtrTy, nullptr, "StackGuardSlot");
 
   Value *GuardSlot = getStackGuard(TLI, M, B, &SupportsSelectionDAGSP);
-  B.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::stackprotector),
+  B.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::stackprotector,
+                                         AI->getType()),
                {GuardSlot, AI});
   return SupportsSelectionDAGSP;
 }

@@ -6,7 +6,7 @@ define void @store_captures() #0 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[STACKGUARDSLOT:%.*]] = alloca i8*
 ; CHECK-NEXT:    [[STACKGUARD:%.*]] = load volatile i8*, i8* addrspace(257)* inttoptr (i32 40 to i8* addrspace(257)*)
-; CHECK-NEXT:    call void @llvm.stackprotector(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
+; CHECK-NEXT:    call void @llvm.stackprotector.p0p0i8(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
 ; CHECK-NEXT:    [[RETVAL:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    [[A:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    [[J:%.*]] = alloca i32*, align 8
@@ -58,7 +58,7 @@ define void @store_addrspacecast_captures() #0 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[STACKGUARDSLOT:%.*]] = alloca i8*
 ; CHECK-NEXT:    [[STACKGUARD:%.*]] = load volatile i8*, i8* addrspace(257)* inttoptr (i32 40 to i8* addrspace(257)*)
-; CHECK-NEXT:    call void @llvm.stackprotector(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
+; CHECK-NEXT:    call void @llvm.stackprotector.p0p0i8(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
 ; CHECK-NEXT:    [[RETVAL:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    [[A:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    [[J:%.*]] = alloca i32 addrspace(1)*, align 8
@@ -96,7 +96,7 @@ define void @cmpxchg_captures() #0 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[STACKGUARDSLOT:%.*]] = alloca i8*
 ; CHECK-NEXT:    [[STACKGUARD:%.*]] = load volatile i8*, i8* addrspace(257)* inttoptr (i32 40 to i8* addrspace(257)*)
-; CHECK-NEXT:    call void @llvm.stackprotector(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
+; CHECK-NEXT:    call void @llvm.stackprotector.p0p0i8(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
 ; CHECK-NEXT:    [[RETVAL:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    [[A:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    [[J:%.*]] = alloca i32*, align 8
@@ -133,7 +133,7 @@ define void @memset_captures(i64 %c) #0 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[STACKGUARDSLOT:%.*]] = alloca i8*
 ; CHECK-NEXT:    [[STACKGUARD:%.*]] = load volatile i8*, i8* addrspace(257)* inttoptr (i32 40 to i8* addrspace(257)*)
-; CHECK-NEXT:    call void @llvm.stackprotector(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
+; CHECK-NEXT:    call void @llvm.stackprotector.p0p0i8(i8* [[STACKGUARD]], i8** [[STACKGUARDSLOT]])
 ; CHECK-NEXT:    [[CADDR:%.*]] = alloca i64, align 8
 ; CHECK-NEXT:    store i64 %c, i64* [[CADDR]], align 8
 ; CHECK-NEXT:    [[I:%.*]] = alloca i32, align 4

@@ -11,7 +11,7 @@ define void @foo() ssp {
 ; CHECK-LABEL: entry:
 ; CHECK-NEXT:   %StackGuardSlot = alloca i8*
 ; CHECK-NEXT:   %0 = call i8* @llvm.stackguard()
-; CHECK-NEXT:   call void @llvm.stackprotector(i8* %0, i8** %StackGuardSlot)
+; CHECK-NEXT:   call void @llvm.stackprotector.p0p0i8(i8* %0, i8** %StackGuardSlot)
 ; CHECK-NEXT:   %buf = alloca [8 x i8], align 1
 ; CHECK-NEXT:   %1 = call i8* @llvm.stackguard()
 ; CHECK-NEXT:   %2 = load volatile i8*, i8** %StackGuardSlot

@@ -2510,10 +2510,9 @@ void SelectionDAGBuilder::visitJumpTableHeader(SwitchCG::JumpTable &JT,
 static SDValue getLoadStackGuard(SelectionDAG &DAG, const SDLoc &DL,
                                  SDValue &Chain) {
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  EVT PtrTy = TLI.getPointerTy(DAG.getDataLayout(),
-                               DAG.getDataLayout().getAllocaAddrSpace());
-  EVT PtrMemTy = TLI.getPointerMemTy(DAG.getDataLayout(),
-                                     DAG.getDataLayout().getAllocaAddrSpace());
+  // TODO: Change ABI to have __stack_chk_guard be a capability?
+  EVT PtrTy = TLI.getPointerTy(DAG.getDataLayout(), 0);
+  EVT PtrMemTy = TLI.getPointerMemTy(DAG.getDataLayout(), 0);
   MachineFunction &MF = DAG.getMachineFunction();
   Value *Global = TLI.getSDagStackGuard(*MF.getFunction().getParent());
   MachineSDNode *Node =
@@ -2542,17 +2541,17 @@ void SelectionDAGBuilder::visitSPDescriptorParent(StackProtectorDescriptor &SPD,
 
   // First create the loads to the guard/stack slot for the comparison.
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  EVT PtrTy = TLI.getPointerTy(DAG.getDataLayout(),
-                               DAG.getDataLayout().getAllocaAddrSpace());
-  EVT PtrMemTy = TLI.getPointerMemTy(DAG.getDataLayout(),
-                                     DAG.getDataLayout().getAllocaAddrSpace());
+  // TODO: Change ABI to have __stack_chk_guard be a capability?
+  EVT PtrMemTy = TLI.getPointerMemTy(DAG.getDataLayout(), 0);
+  EVT StackPtrTy = TLI.getPointerTy(DAG.getDataLayout(),
+                                    DAG.getDataLayout().getAllocaAddrSpace());
 
   MachineFrameInfo &MFI = ParentBB->getParent()->getFrameInfo();
   int FI = MFI.getStackProtectorIndex();
 
   SDValue Guard;
   SDLoc dl = getCurSDLoc();
-  SDValue StackSlotPtr = DAG.getFrameIndex(FI, PtrTy);
+  SDValue StackSlotPtr = DAG.getFrameIndex(FI, StackPtrTy);
   const Module &M = *ParentBB->getParent()->getFunction().getParent();
   unsigned Align = DL->getPrefTypeAlignment(Type::getInt8PtrTy(M.getContext()));
 
