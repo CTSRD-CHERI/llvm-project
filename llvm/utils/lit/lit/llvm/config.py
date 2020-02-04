@@ -493,8 +493,8 @@ class LLVMConfig(object):
 
         cheri_clang_args = ['-target', 'cheri-unknown-freebsd', '-nostdinc',
                             '-mcpu=' + default_cheri_cpu, '-msoft-float']
-        riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc']
-        riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc']
+        riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
+        riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
 
         tool_substitutions = [
             # CHERI substitutions (order is important due to repeated substitutions!)
@@ -509,8 +509,8 @@ class LLVMConfig(object):
                       extra_args=cheri_clang_args + ['-mabi=purecap']+additional_flags),
             ToolSubst('%riscv32_cheri_purecap_cc1', command='%riscv32_cheri_cc1', extra_args=['-target-abi', 'il32pc64', '-target-feature', '+cap-mode']+additional_flags),
             ToolSubst('%riscv64_cheri_purecap_cc1', command='%riscv64_cheri_cc1', extra_args=['-target-abi', 'l64pc128', '-target-feature', '+cap-mode']+additional_flags),
-            ToolSubst('%riscv32_cheri_purecap_clang', command='%riscv32_cheri_clang', extra_args=['-target-abi', 'il32pc64']+additional_flags),
-            ToolSubst('%riscv64_cheri_purecap_clang', command='%riscv64_cheri_clang', extra_args=['-target-abi', 'l64pc128']+additional_flags),
+            ToolSubst('%riscv32_cheri_purecap_clang', command='%riscv32_cheri_clang', extra_args=['-mabi=il32pc64']+additional_flags),
+            ToolSubst('%riscv64_cheri_purecap_clang', command='%riscv64_cheri_clang', extra_args=['-mabi=l64pc128']+additional_flags),
             ToolSubst('%riscv32_cheri_cc1', command=self.config.clang, extra_args=riscv32_cheri_cc1_args+additional_flags),
             ToolSubst('%riscv64_cheri_cc1', command=self.config.clang, extra_args=riscv64_cheri_cc1_args+additional_flags),
             ToolSubst('%riscv32_cheri_clang', command=self.config.clang, extra_args=riscv32_cheri_clang_args+additional_flags),
