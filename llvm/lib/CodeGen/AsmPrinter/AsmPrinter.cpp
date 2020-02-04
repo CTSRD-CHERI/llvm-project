@@ -680,6 +680,8 @@ void AsmPrinter::EmitDebugValue(const MCExpr *Value, unsigned Size) const {
 void AsmPrinter::EmitFunctionHeader() {
   const Function &F = MF->getFunction();
 
+  // FIXME: comment should probably be emitted after constant pool?
+  //  or at least before .section .sdata
   if (isVerbose())
     OutStreamer->GetCommentOS()
         << "-- Begin function "
@@ -1813,13 +1815,16 @@ void AsmPrinter::EmitConstantPool() {
       OutStreamer->EmitZeros(NewOffset - Offset);
 
       Type *Ty = CPE.getType();
-      Offset = NewOffset + getDataLayout().getTypeAllocSize(Ty);
+      const auto Size = getDataLayout().getTypeAllocSize(Ty);
+      Offset = NewOffset + Size;
 
       OutStreamer->EmitLabel(Sym);
       if (CPE.isMachineConstantPoolEntry())
         EmitMachineConstantPoolValue(CPE.Val.MachineCPVal);
       else
         EmitGlobalConstant(getDataLayout(), CPE.Val.ConstVal, 0);
+
+      OutStreamer->emitELFSize(Sym, MCConstantExpr::create(Size, OutContext));
     }
   }
 }
