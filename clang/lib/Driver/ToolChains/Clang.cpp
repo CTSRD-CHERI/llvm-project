@@ -3032,11 +3032,17 @@ static void RenderSSPOptions(const ToolChain &TC, const ArgList &Args,
       StackProtectorLevel = LangOptions::SSPStrong;
     else if (A->getOption().matches(options::OPT_fstack_protector_all))
       StackProtectorLevel = LangOptions::SSPReq;
+    if (StackProtectorLevel && TC.isCheriPurecap()) {
+      TC.getDriver().Diag(diag::warn_drv_ignored_ssp_purecap)
+          << A->getOption().getName();
+      StackProtectorLevel = 0;
+    }
   } else {
     StackProtectorLevel = DefaultStackProtectorLevel;
   }
 
   if (StackProtectorLevel) {
+    assert(!TC.isCheriPurecap() && "Should not enable SSP for purecap");
     CmdArgs.push_back("-stack-protector");
     CmdArgs.push_back(Args.MakeArgString(Twine(StackProtectorLevel)));
   }

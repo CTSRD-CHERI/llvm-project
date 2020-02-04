@@ -410,6 +410,11 @@ def err_drv_unknown_indirect_jump_opt : Error<
 def err_drv_unsupported_fpatchable_function_entry_argument : Error<
   "the second argument of '-fpatchable-function-entry' must be 0 or omitted">;
 
+def warn_drv_ignored_ssp_purecap : Warning<
+  "ignoring '%0' option since stack protector is unnecessary when using "
+  "pure-capability CHERI compilation">,
+  InGroup<OptionIgnored>;
+
 def warn_drv_unable_to_find_directory_expected : Warning<
   "unable to find %0 directory, expected to be in '%1'">,
   InGroup<InvalidOrNonExistentDirectory>, DefaultIgnore;
