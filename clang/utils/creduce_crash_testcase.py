@@ -1126,6 +1126,10 @@ class Reducer(object):
             print("Crash found with llc -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
             return llc_args, irfile
+        if self._check_crash(llc_args + ["-filetype=obj"], irfile, llc_info):
+            print("Crash found with llc -filetype=obj -> using bugpoint which is faster than creduce.")
+            self.reduce_tool = RunBugpoint(self.options)
+            return llc_args + ["-filetype=obj"], irfile
         print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info.stderr.decode("utf-8"))
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
         opt_args = llc_args.copy()
@@ -1133,7 +1137,7 @@ class Reducer(object):
         opt_args.append("-S")
         opt_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(opt_args, irfile, opt_info):
-            print("Crash found with LLC -> using bugpoint which is faster than creduce.")
+            print("Crash found with opt -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
             return opt_args, irfile
         print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info.stderr.decode("utf-8"))
