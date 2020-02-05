@@ -1824,7 +1824,8 @@ void AsmPrinter::EmitConstantPool() {
       else
         EmitGlobalConstant(getDataLayout(), CPE.Val.ConstVal, 0);
 
-      OutStreamer->emitELFSize(Sym, MCConstantExpr::create(Size, OutContext));
+      if (MAI->hasDotTypeDotSizeDirective())
+        OutStreamer->emitELFSize(Sym, MCConstantExpr::create(Size, OutContext));
     }
   }
 }
