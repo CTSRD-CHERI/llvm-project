@@ -573,6 +573,7 @@ declare i8 addrspace(200) *@llvm.cheri.cap.from.ddc(iXLEN)
 declare iXLEN @llvm.cheri.cap.diff(i8 addrspace(200) *, i8 addrspace(200) *)
 declare i8 addrspace(200) *@llvm.cheri.ddc.get()
 declare i8 addrspace(200) *@llvm.cheri.pcc.get()
+declare i8 addrspace(200) *@llvm.cheri.stack.cap.get()
 
 define iXLEN @to_pointer(i8 addrspace(200) *%cap1, i8 addrspace(200) *%cap2) nounwind {
 ; CHECK-ILP32-LABEL: to_pointer:
@@ -716,6 +717,30 @@ define i8 addrspace(200) *@pcc_get() nounwind {
 ; CHECK-L64PC128-NEXT:    cret
   %cap = call i8 addrspace(200) *@llvm.cheri.pcc.get()
   ret i8 addrspace(200) *%cap
+}
+
+define i8 addrspace(200)* @stack_get() nounwind {
+; CHECK-ILP32-LABEL: stack_get:
+; CHECK-ILP32:       # %bb.0:
+; CHECK-ILP32-NEXT:    cmove ca0, csp
+; CHECK-ILP32-NEXT:    ret
+;
+; CHECK-LP64-LABEL: stack_get:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    cmove ca0, csp
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-IL32PC64-LABEL: stack_get:
+; CHECK-IL32PC64:       # %bb.0:
+; CHECK-IL32PC64-NEXT:    cmove ca0, csp
+; CHECK-IL32PC64-NEXT:    cret
+;
+; CHECK-L64PC128-LABEL: stack_get:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    cmove ca0, csp
+; CHECK-L64PC128-NEXT:    cret
+  %cap = call i8 addrspace(200) *@llvm.cheri.stack.cap.get()
+  ret i8 addrspace(200)* %cap
 }
 
 ; Assertion Instructions

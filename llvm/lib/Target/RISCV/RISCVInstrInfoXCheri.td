@@ -975,6 +975,8 @@ def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
 /// Special Capability Register Access Instructions
 
 def : Pat<(int_cheri_ddc_get), (CSpecialRW SCR_DDC.Encoding, C0)>;
+let Predicates = [HasCheri] in
+def : Pat<(int_cheri_stack_cap_get), (CLenVT (COPY C2))>;
 
 let Predicates = [HasCheri, IsCapMode] in
 def : Pat<(int_cheri_pcc_get), (AUIPCC 0)>;
