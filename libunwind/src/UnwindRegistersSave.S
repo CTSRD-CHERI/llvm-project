@@ -1190,6 +1190,8 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
   li     a0, 0  // return UNW_ESUCCESS
   ret           // jump to ra
+END_LIBUNWIND_FUNCTION(__unw_getcontext)
+
 #endif
 
   WEAK_ALIAS(__unw_getcontext, unw_getcontext)

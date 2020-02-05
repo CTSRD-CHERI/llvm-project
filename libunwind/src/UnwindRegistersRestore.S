@@ -1225,6 +1225,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
   restore_gpr 10   // restore a0
 
   ret              // jump to ra
+END_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 
 #endif
 
