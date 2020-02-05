@@ -1395,11 +1395,9 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
              "Expected inlined-at fields to agree");
       // A dbg.declare describes the address of a source variable, so lower it
       // into an indirect DBG_VALUE.
-      auto *Expr = DI->getExpression();
-      Expr = DIExpression::append(Expr, {dwarf::DW_OP_deref});
       BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
-              TII.get(TargetOpcode::DBG_VALUE), /*IsIndirect*/ false,
-              *Op, DI->getVariable(), Expr);
+              TII.get(TargetOpcode::DBG_VALUE), /*IsIndirect*/ true,
+              *Op, DI->getVariable(), DI->getExpression());
     } else {
       // We can't yet handle anything else here because it would require
       // generating code, thus altering codegen because of debug info.
@@ -1423,19 +1421,19 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
       if (CI->getBitWidth() > 64)
         BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II)
             .addCImm(CI)
-            .addReg(0U)
+            .addImm(0U)
             .addMetadata(DI->getVariable())
             .addMetadata(DI->getExpression());
       else
         BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II)
             .addImm(CI->getZExtValue())
-            .addReg(0U)
+            .addImm(0U)
             .addMetadata(DI->getVariable())
             .addMetadata(DI->getExpression());
     } else if (const auto *CF = dyn_cast<ConstantFP>(V)) {
       BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II)
           .addFPImm(CF)
-          .addReg(0U)
+          .addImm(0U)
           .addMetadata(DI->getVariable())
           .addMetadata(DI->getExpression());
     } else if (unsigned Reg = lookUpRegForValue(V)) {
