@@ -4,6 +4,15 @@ set(LLVM_LINK_COMPONENTS
   Support
   )
 
+# In a standard Clang+LLVM build, we need to generate intrinsics before
+# building basic. In a standalone build, LLVM is already built and we don't
+# need this dependency. Furthermore, LLVM doesn't export it so we can't have
+# this dependency.
+set(basic_deps intrinsics_gen)
+if (CLANG_BUILT_STANDALONE)
+  set(basic_deps)
+endif()
+
 find_first_existing_vc_file("${LLVM_MAIN_SRC_DIR}" llvm_vc)
 find_first_existing_vc_file("${CLANG_SOURCE_DIR}" clang_vc)
 
@@ -92,5 +101,8 @@ add_clang_library(clangBasic
   XRayInstr.cpp
   XRayLists.cpp
   ${version_inc}
+
+  DEPENDS
+  ${basic_deps}
   )
 
