@@ -78,6 +78,7 @@ RISCV::RISCV() {
   noneRel = R_RISCV_NONE;
   pltRel = R_RISCV_JUMP_SLOT;
   relativeRel = R_RISCV_RELATIVE;
+  iRelativeRel = R_RISCV_IRELATIVE;
   sizeRel = R_RISCV_CHERI_SIZE;
   cheriCapRel = R_RISCV_CHERI_CAPABILITY;
   // TODO: PLT stubs with a separate relocation
