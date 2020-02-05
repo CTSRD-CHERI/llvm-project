@@ -1198,6 +1198,10 @@ void StmtProfiler::VisitOMPArraySectionExpr(const OMPArraySectionExpr *S) {
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitOMPArrayShapingExpr(const OMPArrayShapingExpr *S) {
+  VisitExpr(S);
+}
+
 void StmtProfiler::VisitCallExpr(const CallExpr *S) {
   VisitExpr(S);
 }

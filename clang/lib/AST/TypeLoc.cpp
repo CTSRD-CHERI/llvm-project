@@ -406,6 +406,7 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
 #include "clang/Basic/AArch64SVEACLETypes.def"
   case BuiltinType::BuiltinFn:
   case BuiltinType::OMPArraySection:
+  case BuiltinType::OMPArrayShaping:
     return TST_unspecified;
   }
 
