@@ -28,7 +28,7 @@ inline void runDeltaPasses(TestRunner &Tester) {
   reduceBasicBlocksDeltaPass(Tester);
   reduceGlobalsDeltaPass(Tester);
   reduceMetadataDeltaPass(Tester);
-  reduceArgumentsDeltaPass(Tester);
+  // reduceArgumentsDeltaPass(Tester); // This one seems to crash
   reduceInstructionsDeltaPass(Tester);
   // TODO: Implement the remaining Delta Passes
 }
