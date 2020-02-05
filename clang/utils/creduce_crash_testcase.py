@@ -360,6 +360,53 @@ class RunBugpoint(ReduceTool):
         return proc.returncode == self.interesting_exit_code
 
 
+class RunLLVMReduce(ReduceTool):
+    def __init__(self, args: "Options") -> None:
+        super().__init__(args, "llvm-reduce", tool=args.llvm_reduce_cmd)
+        # bugpoint wants a non-zero exit code on interesting exit code
+        self.interesting_exit_code = 0  # type: int
+        self.not_interesting_exit_code = 1  # type: int
+
+    def reduce(self, input_file, extra_args, tempdir, run_cmds: typing.List[typing.List[str]], run_lines: typing.List[str]):
+        expected_output_file = Path.cwd() / (input_file.name + "-reduced.ll")
+        if expected_output_file.exists():
+            print("bugpoint output file already exists: ", bold(expected_output_file))
+            if input("Delete it and continue? [Y/n]").lower().startswith("n"):
+                die("Can't continue")
+            else:
+                expected_output_file.unlink()
+        # This is also needed when reducing infinite loops since otherwise bugpoint will just freeze
+        reduce_script = self._create_reduce_script(tempdir, input_file.absolute(), run_cmds)
+        llvm_reduce = [self.tool, "--test=" + str(reduce_script.absolute()),
+                       "--output=" + str(expected_output_file), input_file]
+        llvm_reduce += extra_args
+        print("About to run", llvm_reduce)
+        print("Working directory:", os.getcwd())
+        try:
+            env = os.environ.copy()
+            env["PATH"] = str(self.args.bindir) + ":" + env["PATH"]
+            try:
+                run(llvm_reduce, env=env)
+            except KeyboardInterrupt:
+                print(red("\nCTRL+C detected, stopping llvm-reduce.", style="bold"))
+        finally:
+            print("Output files are in:", os.getcwd())
+            # TODO: generate a test case from the output files?
+        if expected_output_file.exists():
+            # print("Renaming functions in test...")
+            # renamed = subprocess.run([str(self.args.opt_cmd), "-S", "-o", "-", "--instnamer", "--metarenamer",
+            #                           "--name-anon-globals", str(expected_output_file)], stdout=subprocess.PIPE)
+            # self.create_test_case(renamed.stdout.decode("utf-8"), input_file.with_suffix(".test" + input_file.suffix), run_lines)
+            self.create_test_case(expected_output_file.read_text("utf-8"), input_file.with_suffix(".test" + input_file.suffix), run_lines)
+
+    def input_file_arg(self, input_file: Path):
+        # llvm-reduce expects a script that takes the input files as arguments:
+        return "''' + ' '.join(sys.argv[1:]) + '''"
+
+    def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
+        proc = subprocess.run([str(reduce_script), str(input_file)])
+        return proc.returncode == self.interesting_exit_code
+
 class RunCreduce(ReduceTool):
     def __init__(self, args: "Options") -> None:
         super().__init__(args, "creduce", tool=args.creduce_cmd)
@@ -464,6 +511,10 @@ class Options(object):
     @property
     def bugpoint_cmd(self):
         return self._get_command("bugpoint")
+
+    @property
+    def llvm_reduce_cmd(self):
+        return self._get_command("llvm-reduce")
 
     @property
     def creduce_cmd(self):
@@ -813,7 +864,7 @@ class Reducer(object):
                 print("but reducing with creduce requested. Will not try to convert to a bugpoint test case")
                 return self._simplify_frontend_crash_cmd(new_command, infile)
             else:
-                print("will try to use bugpoint.")
+                print("will try to use bugpoint/llvm-reduce.")
                 return self._simplify_backend_crash_cmd(new_command, infile, full_cmd)
 
     def _shrink_preprocessed_source(self, input_path, out_file):
@@ -1123,12 +1174,12 @@ class Reducer(object):
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
         llc_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(llc_args, irfile, llc_info):
-            print("Crash found with llc -> using bugpoint which is faster than creduce.")
-            self.reduce_tool = RunBugpoint(self.options)
+            print("Crash found with llc -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return llc_args, irfile
         if self._check_crash(llc_args + ["-filetype=obj"], irfile, llc_info):
-            print("Crash found with llc -filetype=obj -> using bugpoint which is faster than creduce.")
-            self.reduce_tool = RunBugpoint(self.options)
+            print("Crash found with llc -filetype=obj -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return llc_args + ["-filetype=obj"], irfile
         print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info.stderr.decode("utf-8"))
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
@@ -1137,8 +1188,8 @@ class Reducer(object):
         opt_args.append("-S")
         opt_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(opt_args, irfile, opt_info):
-            print("Crash found with opt -> using bugpoint which is faster than creduce.")
-            self.reduce_tool = RunBugpoint(self.options)
+            print("Crash found with opt -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return opt_args, irfile
         print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info.stderr.decode("utf-8"))
 
@@ -1148,8 +1199,8 @@ class Reducer(object):
                                                one_arg_opts_to_remove=["-D", "-x", "-main-file-name"])
         bugpoint_clang_cmd.extend(["-x", "ir"])
         if self._check_crash(bugpoint_clang_cmd, irfile, clang_info):
-            print("Crash found compiling IR with clang -> using bugpoint which is faster than creduce.")
-            self.reduce_tool = RunBugpoint(self.options)
+            print("Crash found compiling IR with clang -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return bugpoint_clang_cmd, irfile
         print("Compiling IR file with clang did not reproduce crash. Stderr was:", clang_info.stderr.decode("utf-8"))
         print(red("No crash found compiling the IR! Possibly crash only happens when invoking clang -> using creduce."))
@@ -1182,16 +1233,8 @@ class Reducer(object):
         infile = self.parse_RUN_lines(self.testcase)
 
         if self.reduce_tool is None:
-            if self.args.reduce_tool is None:
-                self.args.reduce_tool = "bugpoint" if infile.suffix in (".ll", ".bc") else "creduce"
-            if self.args.reduce_tool == "bugpoint":
-                self.reduce_tool = RunBugpoint(self.options)
-            elif self.args.reduce_tool == "noop":  # for debugging purposes
-                self.reduce_tool = SkipReducing(self.options)
-            else:
-                assert self.args.reduce_tool == "creduce"
-                self.reduce_tool = RunCreduce(self.options)
-
+            default_tool = RunBugpoint if infile.suffix in (".ll", ".bc") else RunCreduce
+            self.reduce_tool = self.get_llvm_ir_reduce_tool(default_tool)
         if self.args.output_file:
             reduce_input = Path(self.args.output_file).absolute()
         else:
@@ -1201,6 +1244,22 @@ class Reducer(object):
             # run("ulimit -S -c 0".split())
             self.reduce_tool.reduce(input_file=reduce_input, extra_args=self.reduce_args, tempdir=tmpdir,
                                     run_cmds=self.run_cmds, run_lines=self.run_lines)
+
+    def get_llvm_ir_reduce_tool(self, default_tool=RunBugpoint):
+        if self.args.reduce_tool is None:
+            return default_tool(self.options)
+        # if self.args.reduce_tool == "llvm-reduce-and-bugpoint":
+        #     return RunLLVMReduceAndBugpoint(self.options)
+        if self.args.reduce_tool == "bugpoint":
+            return RunBugpoint(self.options)
+        if self.args.reduce_tool == "llvm-reduce":
+            return RunLLVMReduce(self.options)
+        elif self.args.reduce_tool == "noop":  # for debugging purposes
+            return SkipReducing(self.options)
+        else:
+            assert self.args.reduce_tool == "creduce"
+            return RunCreduce(self.options)
+
 
 def main():
     default_bindir = "@CMAKE_BINARY_DIR@/bin"
@@ -1213,6 +1272,7 @@ def main():
     parser.add_argument("--opt-cmd", help="Path to `opt` tool. Default is $BINDIR/opt")
     parser.add_argument("--llvm-dis-cmd", help="Path to `llvm-dis` tool. Default is $BINDIR/llvm-dis")
     parser.add_argument("--bugpoint-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/bugpoint")
+    parser.add_argument("--llvm-reduce-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/llvm-reduce")
     parser.add_argument("--creduce-cmd", help="Path to `creduce` tool. Default is `creduce`")
     parser.add_argument("--output-file", help="The name of the output file")
     parser.add_argument("--verbose", action="store_true", help="Print more debug output")
@@ -1225,8 +1285,8 @@ def main():
     parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
                                                 " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
     parser.add_argument("--reduce-tool", help="The tool to use for test case reduction. "
-                                              "Defaults to `bugpoint` if input file is a .ll or .bc file and `creduce` otherwise.",
-                        choices=["bugpoint", "creduce", "noop"])
+                                              "Defaults to `llvm-reduce-and-bugpoint` if input file is a .ll or .bc file and `creduce` otherwise.",
+                        choices=["llvm-reduce-and-bugpoint", "bugpoint", "creduce", "llvm-reduce", "noop"])
     parser.add_argument("--no-initial-reduce", help="Pass the original input file to creduce without "
                         "removing #if 0 regions. Generally this will speed up but in very rare corner "
                         "cases it might cause the test case to no longer crash.", action="store_true")
