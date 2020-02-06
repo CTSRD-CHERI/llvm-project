@@ -781,8 +781,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.23: # %if.end36
 ; CHECK-NEXT:    dsll $1, $2, 32
-; CHECK-NEXT:    dsrl $4, $1, 32
 ; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN7WebCore25InternalSettingsGenerated23setCaretBrowsingEnabledEb)($c20)
+; CHECK-NEXT:    dsrl $4, $1, 32
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c19
 ; CHECK-NEXT:    daddiu $1, $zero, 10
@@ -1087,7 +1087,7 @@ cleanup44:                                        ; preds = %if.end36, %if.then3
   ret i8 addrspace(200)* %retval.2
 }
 
-attributes #0 = { nounwind "use-soft-float"="true" "frame-pointer"="all" "unsafe-fp-math"="false" "target-cpu"="mips4" "target-features"="+soft-float"}
+attributes #0 = { nounwind "use-soft-float"="true" "frame-pointer"="all" "unsafe-fp-math"="false" "target-features"="+soft-float"}
 attributes #1 = { argmemonly nounwind }
 attributes #2 = { "disable-tail-calls"="false" }
 attributes #3 = { nounwind readnone }
