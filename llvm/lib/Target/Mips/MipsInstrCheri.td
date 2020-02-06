@@ -450,7 +450,7 @@ def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
           (CIncOffset $r2, $r3)>;
 // Int to pointer in address space 0
 def : Pat<(inttoptr (i64 0)),
-          (CapRegType (COPY CNULL))>;
+          (CapRegType (CMove CNULL))>;
 let Predicates=[IsCHERI,IsCHERIABI] in {
 def : Pat<(inttoptr simm11s0Pattern:$imm),
           (CIncOffsetImm CNULL, simm11s0Pattern: $imm)>;
