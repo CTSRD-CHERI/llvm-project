@@ -260,7 +260,6 @@ static const CallInst *findStackProtectorIntrinsic(Function &F) {
 bool StackProtector::RequiresStackProtector() {
   bool Strong = false;
   bool NeedsProtector = false;
-  HasPrologue = findStackProtectorIntrinsic(*F);
 
   // Skip stack-protector for pure-capability CHERI
   const DataLayout& DL = F->getParent()->getDataLayout();
@@ -269,6 +268,8 @@ bool StackProtector::RequiresStackProtector() {
     // Skip the SSP analysis since SSP is useless when compiling in purecap mode.
     return false;
   }
+
+  HasPrologue = findStackProtectorIntrinsic(*F);
 
   if (F->hasFnAttribute(Attribute::SafeStack))
     return false;
