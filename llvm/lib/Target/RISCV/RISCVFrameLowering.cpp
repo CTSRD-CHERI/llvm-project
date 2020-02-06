@@ -264,7 +264,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
       }
 
       if (RISCVABI::isCheriPureCapABI(STI.getTargetABI()))
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::CGetAddr), SPReg)
+        BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSetAddr), SPReg)
             .addReg(SPReg)
             .addReg(SPAddrReg);
 
