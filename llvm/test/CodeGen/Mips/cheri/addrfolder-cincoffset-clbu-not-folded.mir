@@ -48,8 +48,8 @@
   ; Function Attrs: nounwind readnone
   declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*, i64) addrspace(200) #2
 
-  attributes #0 = { nounwind readnone "target-cpu"="cheri128" "target-features"="+cheri128" }
-  attributes #1 = { "target-cpu"="cheri128" "target-features"="+cheri128" }
+  attributes #0 = { nounwind readnone }
+  attributes #1 ={ nounwind }
   attributes #2 = { nounwind readnone }
 
 ...

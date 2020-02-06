@@ -15,7 +15,7 @@
     unreachable
   }
 
-  attributes #0 = { noinline nounwind optnone "target-cpu"="cheri128" "target-features"="+cheri128" }
+  attributes #0 = { noinline nounwind optnone }
 
 ...
 ---

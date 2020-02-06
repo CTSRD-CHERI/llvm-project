@@ -4,7 +4,7 @@
 ; RUN: %cheri128_purecap_llc %s -o - | FileCheck %s '-D#CAP_SIZE=16'
 
 ; Function Attrs: norecurse nounwind readnone uwtable
-define i32 addrspace(200)* @test(i32 addrspace(200)* readnone %inCap, i32 signext %test, i32 signext %inInt) local_unnamed_addr #0 {
+define i32 addrspace(200)* @test(i32 addrspace(200)* readnone %inCap, i32 signext %test, i32 signext %inInt) local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
@@ -34,4 +34,4 @@ entry:
   ret i32 addrspace(200)* %ret.0
 }
 
-attributes #0 = { norecurse nounwind readnone uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="cheri128" "target-features"="+cheri128,+chericap,+soft-float,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="true" }
+attributes #0 = { norecurse readnone uwtable "frame-pointer"="all" }

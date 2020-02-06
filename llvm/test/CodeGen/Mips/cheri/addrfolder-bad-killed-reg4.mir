@@ -31,7 +31,7 @@
     ret i32 %sum.0.lcssa
   }
 
-  attributes #0 = { nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf"="true" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "target-cpu"="cheri128" "target-features"="+cheri128" "unsafe-fp-math"="false" "use-soft-float"="false" }
+  attributes #0 = { nounwind  }
 
 ...
 ---

@@ -76,10 +76,9 @@ declare i32 @fn2(...) #2
 ; Function Attrs: nounwind readnone
 declare i8 addrspace(200)* @llvm.cheri.pcc.get() #1
 
-attributes #0 = { noinline nounwind optnone "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="true" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="cheri" "target-features"="+cheri,+soft-float" "unsafe-fp-math"="false" "use-soft-float"="true" }
+attributes #0 = { noinline nounwind optnone }
 attributes #1 = { nounwind readnone }
-attributes #2 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="true" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="cheri" "target-features"="+cheri,+soft-float" "unsafe-fp-math"="false" "use-soft-float"="true" }
-
+attributes #2 = { nounwind }
 !llvm.module.flags = !{!0, !1}
 !llvm.ident = !{!2}
 

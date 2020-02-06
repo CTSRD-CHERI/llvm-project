@@ -33,7 +33,7 @@
   ; Function Attrs: nounwind
   declare void @llvm.stackprotector(i8*, i8**) addrspace(200) #2
 
-  attributes #0 = { "target-cpu"="cheri128" "target-features"="+cheri128" }
+  attributes #0 ={ nounwind }
   attributes #1 = { nounwind readnone }
   attributes #2 = { nounwind }
 

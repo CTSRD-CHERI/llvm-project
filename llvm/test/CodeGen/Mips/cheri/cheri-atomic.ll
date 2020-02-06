@@ -330,8 +330,7 @@ define i64 @atomic_fetch_swap64(i64 %x) nounwind {
 }
 
 
-attributes #0 = { nounwind "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri" "unsafe-fp-math"="false" "use-soft-float"="false" }
-
+attributes #0 = { nounwind }
 !llvm.ident = !{!0}
 
 !0 = !{!"clang version 3.7.0 (ssh://dc552@vica.cl.cam.ac.uk:/home/dc552/CHERISDK/llvm/tools/clang 3da05ea3ad6db2e2d768f7fc72bcf5e6fa35ee14) (ssh://dc552@vica.cl.cam.ac.uk:/home/dc552/CHERISDK/llvm 922cf8569084e404af3b94a89d8ad4786d6d8c74)"}

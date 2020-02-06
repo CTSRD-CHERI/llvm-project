@@ -24,7 +24,7 @@
     br label %for.cond
   }
 
-  attributes #0 = { nounwind "target-cpu"="cheri128" "target-features"="+cheri128" }
+  attributes #0 = { nounwind }
 
 ...
 ---
