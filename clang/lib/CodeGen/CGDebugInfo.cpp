@@ -3677,7 +3677,7 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
   } else {
     Name = Fn->getName();
 
-    if (const auto *BD = dyn_cast<BlockDecl>(D))
+    if (isa<BlockDecl>(D))
       LinkageName = Name;
 
     Flags |= llvm::DINode::FlagPrototyped;
