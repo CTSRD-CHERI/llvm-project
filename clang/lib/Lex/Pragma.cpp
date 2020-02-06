@@ -1110,7 +1110,8 @@ struct PragmaDebugHandler : public PragmaHandler {
       }
       M->dump();
     } else if (II->isStr("overflow_stack")) {
-      DebugOverflowStack();
+      if (!PP.getPreprocessorOpts().DisablePragmaDebugCrash)
+        DebugOverflowStack();
     } else if (II->isStr("captured")) {
       HandleCaptured(PP);
     } else {
