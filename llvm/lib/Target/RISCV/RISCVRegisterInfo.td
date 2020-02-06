@@ -64,7 +64,7 @@ def ABIRegAltName : RegAltNameIndex;
 // instruction isn't targeted, we see no major negative codegen impact.
 
 let RegAltNameIndices = [ABIRegAltName] in {
-  def X0  : RISCVReg<0, "x0", ["zero"]>, DwarfRegNum<[0]>;
+  def X0  : RISCVReg<0, "x0", ["zero"]>, DwarfRegNum<[0]>  { let isConstant = 1; }
   let CostPerUse = 1 in {
   def X1  : RISCVReg<1, "x1", ["ra"]>, DwarfRegNum<[1]>;
   def X2  : RISCVReg<2, "x2", ["sp"]>, DwarfRegNum<[2]>;
@@ -102,7 +102,7 @@ let RegAltNameIndices = [ABIRegAltName] in {
   }
 
   // TODO: Review costs
-  def C0  : RISCVCapReg<X0, "c0", ["cnull"]>, DwarfRegNum<[0]>;
+  def C0  : RISCVCapReg<X0, "c0", ["cnull"]>, DwarfRegNum<[0]> { let isConstant = 1; }
   let CostPerUse = 1 in {
   def C1  : RISCVCapReg<X1, "c1", ["cra"]>, DwarfRegNum<[1]>;
   def C2  : RISCVCapReg<X2, "c2", ["csp"]>, DwarfRegNum<[2]>;

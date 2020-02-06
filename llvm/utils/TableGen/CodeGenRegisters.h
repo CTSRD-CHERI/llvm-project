@@ -155,6 +155,7 @@ namespace llvm {
     bool CoveredBySubRegs;
     bool HasDisjunctSubRegs;
     bool Artificial;
+    bool Constant;
 
     // Map SubRegIndex -> Register.
     typedef std::map<CodeGenSubRegIndex *, CodeGenRegister *,

@@ -110,7 +110,7 @@ class AliasCAP<bits<16> Enc, string n, list<Register> aliases = []>
 
 let Namespace = "Mips" in {
   // General Purpose Registers
-  def ZERO : MipsGPRReg< 0, "zero">, DwarfRegNum<[0]>;
+  def ZERO : MipsGPRReg< 0, "zero">, DwarfRegNum<[0]> { let isConstant = 1; }
   def AT   : MipsGPRReg< 1, "1">,    DwarfRegNum<[1]>;
   def V0   : MipsGPRReg< 2, "2">,    DwarfRegNum<[2]>;
   def V1   : MipsGPRReg< 3, "3">,    DwarfRegNum<[3]>;
@@ -144,7 +144,7 @@ let Namespace = "Mips" in {
   def RA   : MipsGPRReg< 31, "ra">,  DwarfRegNum<[31]>;
 
   // General Purpose 64-bit Registers
-  def ZERO_64 : Mips64GPRReg< 0, "zero", [ZERO]>, DwarfRegNum<[0]>;
+  def ZERO_64 : Mips64GPRReg< 0, "zero", [ZERO]>, DwarfRegNum<[0]> { let isConstant = 1; }
   def AT_64   : Mips64GPRReg< 1, "1",    [AT]>, DwarfRegNum<[1]>;
   def V0_64   : Mips64GPRReg< 2, "2",    [V0]>, DwarfRegNum<[2]>;
   def V1_64   : Mips64GPRReg< 3, "3",    [V1]>, DwarfRegNum<[3]>;
@@ -300,7 +300,7 @@ let Namespace = "Mips" in {
   // For compatibility with GDB keep the DwarfRegNum for DDC as 72 and assign
   // the next one to cnull (not very useful in GDB anyway since it will always
   // be null).
-  def CNULL : CAP<0, "cnull", []>, DwarfRegNum<[104]>;
+  def CNULL : CAP<0, "cnull", []>, DwarfRegNum<[104]> { let isConstant = 1; }
   def C1  : CAP<1, "c1", []>, DwarfRegNum<[73]>;
   def C2  : CAP<2, "c2", []>, DwarfRegNum<[74]>;
   def C3  : CAP<3, "c3", []>, DwarfRegNum<[75]>;

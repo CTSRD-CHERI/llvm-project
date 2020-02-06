@@ -180,6 +180,10 @@ class Register<string n, list<string> altNames = []> {
   bits<16> HWEncoding = 0;
 
   bit isArtificial = 0;
+
+  // isConstant - This register always holds a constant value (e.g. the zero
+  // register in architectures such as MIPS)
+  bit isConstant = 0;
 }
 
 // RegisterWithSubRegs - This can be used to define instances of Register which

@@ -1557,6 +1557,14 @@ RegisterInfoEmitter::runTargetDesc(raw_ostream &OS, CodeGenTarget &Target,
       Covered |= RegBank.computeCoveredRegisters(
         ArrayRef<Record*>(OPSet.begin(), OPSet.end()));
     }
+    // Add all constant physical registers to the preserved mask:
+    SetTheory::RecSet ConstantSet;
+    for (auto& Reg : RegBank.getRegisters()) {
+      if (Reg.Constant)
+        ConstantSet.insert(Reg.TheDef);
+    }
+    Covered |= RegBank.computeCoveredRegisters(
+        ArrayRef<Record*>(ConstantSet.begin(), ConstantSet.end()));
 
     OS << "static const uint32_t " << CSRSet->getName()
        << "_RegMask[] = { ";

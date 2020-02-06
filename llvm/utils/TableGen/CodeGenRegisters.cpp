@@ -159,10 +159,11 @@ CodeGenRegister::CodeGenRegister(Record *R, unsigned Enum)
     CostPerUse(R->getValueAsInt("CostPerUse")),
     CoveredBySubRegs(R->getValueAsBit("CoveredBySubRegs")),
     HasDisjunctSubRegs(false),
+    Artificial(R->getValueAsBit("isArtificial")),
+    Constant(R->getValueAsBit("isConstant")),
     SubRegsComplete(false),
     SuperRegsComplete(false),
     TopoSig(~0u) {
-  Artificial = R->getValueAsBit("isArtificial");
 }
 
 void CodeGenRegister::buildObjectGraph(CodeGenRegBank &RegBank) {
@@ -1408,7 +1409,7 @@ void CodeGenRegBank::computeComposites() {
                          " and " + Idx2->getQualifiedName() +
                          " compose ambiguously as " + Prev->getQualifiedName() +
                          " or " + Idx3->getQualifiedName());
-        }          
+        }
       }
     }
   }
