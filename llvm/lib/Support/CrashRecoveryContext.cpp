@@ -435,21 +435,6 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
 
 #endif // !_MSC_VER
 
-LLVM_ATTRIBUTE_NORETURN
-void CrashRecoveryContext::HandleExit(int RetCode) {
-#if defined(_WIN32)
-  // SEH and VEH
-  ::RaiseException(0xE0000000 | RetCode, 0, 0, NULL);
-#else
-  // On Unix we don't need to raise an exception, we go directly to
-  // HandleCrash(), then longjmp will unwind the stack for us.
-  CrashRecoveryContextImpl *CRCI = (CrashRecoveryContextImpl *)Impl;
-  assert(CRCI && "Crash recovery context never initialized!");
-  CRCI->HandleCrash(RetCode, 0 /*no sig num*/);
-#endif
-  llvm_unreachable("Most likely setjmp wasn't called!");
-}
-
 // FIXME: Portability.
 static void setThreadBackgroundPriority() {
 #ifdef __APPLE__
