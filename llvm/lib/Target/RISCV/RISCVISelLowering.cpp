@@ -2495,27 +2495,27 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // TODO: Support purecap PLT
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = S->getGlobal();
-    bool DSOLocal =
+    bool IsLocal =
         getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
       // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
-      DSOLocal = false;
-      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal,
+      IsLocal = false;
+      Callee = getAddr(S, Callee.getValueType(), DAG, IsLocal,
                        /*CanDeriveFromPcc=*/true);
     } else {
-      unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
+      unsigned OpFlags = IsLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
     }
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    bool DSOLocal = getTargetMachine().shouldAssumeDSOLocal(
+    bool IsLocal = getTargetMachine().shouldAssumeDSOLocal(
         *MF.getFunction().getParent(), nullptr);
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
       // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
-      DSOLocal = false;
-      Callee = getAddr(S, Callee.getValueType(), DAG, DSOLocal,
+      IsLocal = false;
+      Callee = getAddr(S, Callee.getValueType(), DAG, IsLocal,
                        /*CanDeriveFromPcc=*/true);
     } else {
-      unsigned OpFlags = DSOLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
+      unsigned OpFlags = IsLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
     }
   }
