@@ -208,6 +208,10 @@ pid_t internal_getpid() {
   return getpid();
 }
 
+int internal_dlinfo(void *handle, int request, void *p) {
+  UNIMPLEMENTED();
+}
+
 int internal_sigaction(int signum, const void *act, void *oldact) {
   return sigaction(signum,
                    (const struct sigaction *)act, (struct sigaction *)oldact);
