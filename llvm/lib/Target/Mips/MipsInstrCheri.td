@@ -606,7 +606,7 @@ def : Pat<(int_mips_kdc_get),  (CReadHwr CAPHWR30)>;
 def : Pat<(int_mips_epcc_get), (CReadHwr CAPHWR31)>;
 let Predicates=[IsCHERI,IsCHERIABI] in {
   // C11 is only defined in the purecap ABI
-  def : Pat<(int_cheri_stack_cap_get), (CMove C11)>;
+  def : Pat<(int_cheri_stack_cap_get), (CapRegType (COPY C11))>;
 }
 
 

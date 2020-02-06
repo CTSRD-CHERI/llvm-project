@@ -1,6 +1,4 @@
 ; REQUIRES: asserts
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy -o - -thread-model=posix -mattr=-noabicalls -O2 -verify-machineinstrs %s | FileCheck %s
-
 ; llvm.cheri.stack.cap.get should only be defined in the purecap ABI (since c11 is not used as the stack pointer in hybrid mode)
 ; RUN: not %cheri_llc -o - -relocation-model=pic -thread-model=posix -mattr=-noabicalls \
 ; RUN:     -target-abi n64 -O2 -verify-machineinstrs %s 2>&1 | FileCheck %s -check-prefix BAD_INTRIN
@@ -17,18 +15,11 @@
 
 define i8 addrspace(200)* @getstack() nounwind {
 entry:
-  ; CHECK-LABEL: getstack:
-  ; CHECK:       cmove $c1, $c11
-  ; CHECK:       cmove $c3, $c11
-  ; CHECK:	cjr	$c17
-  ; CHECK:	csc	$c1, $1, 0($ddc)
-
   ; PCREL-LABEL: getstack:
   ; PCREL:      clcbi	$c1, %captab20(reserved_reg_target)($c1)
-  ; PCREL-NEXT: cmove	$c2, $c11
-  ; PCREL-NEXT: cmove	$c3, $c11
+  ; PCREL-NEXT: csc	$c11, $zero, 0($c1)
   ; PCREL-NEXT: cjr	$c17
-  ; PCREL-NEXT: csc	$c2, $zero, 0($c1)
+  ; PCREL-NEXT: cmove	$c3, $c11
   %0 = call i8 addrspace(200)* @llvm.cheri.stack.cap.get()
   store i8 addrspace(200)* %0, i8 addrspace(200)** @reserved_reg_target, align 32
   ret i8 addrspace(200)* %0
@@ -40,9 +31,6 @@ define void @test_fault_read_epcc() {
 entry:
   %0 = call i8 addrspace(200)* @llvm.mips.epcc.get()
   store i8 addrspace(200)* %0, i8 addrspace(200)** @reserved_reg_target, align 32
-  ; CHECK: creadhwr	[[EPCC:\$c[0-9]+]], $chwr_epcc
-  ; CHECK: cjr	$c17
-  ; CHECK: csc	[[EPCC]], $1, 0($ddc)
   ; PCREL-LABEL: test_fault_read_epcc:
   ; PCREL:      clcbi   $c1, %captab20(reserved_reg_target)($c1)
   ; PCREL-NEXT: creadhwr        $c2, $chwr_epcc
