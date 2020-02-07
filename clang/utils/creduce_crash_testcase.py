@@ -14,6 +14,12 @@ from abc import ABCMeta, abstractmethod
 from enum import Enum
 from pathlib import Path
 
+lit_path = Path(__file__).parent.parent.parent / "llvm/utils/lit"
+if not lit_path.exists():
+    sys.exit("Cannot find lit in expected path " + str(lit_path))
+sys.path.insert(1, str(lit_path))
+from lit.llvm.config import LLVMConfig, FindTool, ToolSubst
+import lit.TestRunner
 
 try:
     from colors import blue, red, green, bold
@@ -61,45 +67,61 @@ class ErrorKind(Enum):
     AddressSanitizer_ERROR = (b"ERROR: AddressSanitizer:", )
 
 
-# TODO: it should be possible to just use a table here to apply and remove the substitutions
-def expand_lit_substitutions(args: "Options", cmd) -> str:
-    compiler_cmd = cmd.replace("%clang_cc1 ", str(args.clang_cmd) + " -cc1 ")
-    compiler_cmd = compiler_cmd.replace("%clang ", str(args.clang_cmd) + " ")
-    cheri_cc1_triple = " -cc1 -triple cheri-unknown-freebsd "
-    compiler_cmd = compiler_cmd.replace("%cheri_cc1 ", str(args.clang_cmd) + cheri_cc1_triple)
-    compiler_cmd = compiler_cmd.replace("%cheri128_cc1 ", str(args.clang_cmd) + cheri_cc1_triple +
-                                        "-target-cpu cheri128 ")
-    compiler_cmd = compiler_cmd.replace("%cheri256_cc1 ", str(args.clang_cmd) + cheri_cc1_triple +
-                                        "-target-cpu cheri256 ")
-    compiler_cmd = compiler_cmd.replace("%cheri_purecap_cc1 ", str(args.clang_cmd) + cheri_cc1_triple +
-                                        "-target-abi purecap ")
-    # llc substitutions:
-    if "llc" in compiler_cmd:
-        print("COMPILER_CMD: '" + compiler_cmd + "'")
-        compiler_cmd = re.sub(r"^\s*llc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
-    compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(args.llc_cmd) +
-                                        " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
-    compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(args.llc_cmd) +
-                                        " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
-    compiler_cmd = compiler_cmd.replace("%cheri_purecap_llc ",
-                                        "%cheri_llc -target-abi purecap -relocation-model pic ")
-    # For test case reduction pureposes assume %cheri_llc uses -mcpu=cheri128 since otherwise we get the following:
-    # Assertion `RC && "This value type is not natively supported!"'
-    compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(args.llc_cmd) +
-                                        " -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128 ")
+class LitSubstitutionHandler(object):
+    class _FakeLitConfig(object):
+        def __init__(self, args: "Options"):
+            self.params = dict(CHERI_CAP_SIZE="16")
+            self.quiet = True
 
-    # opt substitutions
-    if "opt" in compiler_cmd:
-        compiler_cmd = re.sub(r"^\s*opt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
-    compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(args.opt_cmd) +
-                                        " -mtriple=cheri-unknown-freebsd ")
-    compiler_cmd = compiler_cmd.replace("%cheri_purecap_opt ", str(args.opt_cmd) +
-                                        " -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic ")
+        def note(self, msg):
+            print(blue(msg))
 
-    # ignore all the piping to FileCheck parts of the command
-    if "|" in compiler_cmd:
-        compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
-    return compiler_cmd
+        def fatal(self, msg):
+            sys.exit(msg)
+
+    class _FakeLitParams(object):
+        def __init__(self, args: "Options"):
+            self.available_features = set()
+            self.substitutions = []
+            self.llvm_tools_dir = str(args.bindir)
+            self.environment = os.environ.copy()
+            self.name = "reduce-crash"
+            # Don't matter but are needed for clang substitutions
+            self.target_triple = "x86_64-unknown-linux-gnu"
+            self.host_triple = "x86_64-unknown-linux-gnu"
+
+    def __init__(self, args: "Options"):
+        llvm_config = LLVMConfig(LitSubstitutionHandler._FakeLitConfig(args), LitSubstitutionHandler._FakeLitParams(args))
+        llvm_config.use_default_substitutions()
+        # Not really required but makes debugging tests easier
+        llvm_config.use_clang()
+        llvm_config.add_cheri_tool_substitutions(["llc", "opt", "llvm-mc"])
+        llvm_tools = [
+            'dsymutil', 'lli', 'lli-child-target', 'llvm-ar', 'llvm-as',
+            'llvm-bcanalyzer', 'llvm-config', 'llvm-cov', 'llvm-cxxdump', 'llvm-cvtres',
+            'llvm-diff', 'llvm-dis', 'llvm-dwarfdump', 'llvm-exegesis', 'llvm-extract',
+            'llvm-isel-fuzzer', 'llvm-ifs', 'llvm-install-name-tool',
+            'llvm-jitlink', 'llvm-opt-fuzzer', 'llvm-lib',
+            'llvm-link', 'llvm-lto', 'llvm-lto2', 'llvm-mc', 'llvm-mca',
+            'llvm-modextract', 'llvm-nm', 'llvm-objcopy', 'llvm-objdump',
+            'llvm-pdbutil', 'llvm-profdata', 'llvm-ranlib', 'llvm-rc', 'llvm-readelf',
+            'llvm-readobj', 'llvm-rtdyld', 'llvm-size', 'llvm-split', 'llvm-strings',
+            'llvm-strip', 'llvm-tblgen', 'llvm-undname', 'llvm-c-test', 'llvm-cxxfilt',
+            'llvm-xray', 'yaml2obj', 'obj2yaml', 'yaml-bench', 'verify-uselistorder',
+            'bugpoint', 'llc', 'llvm-symbolizer', 'opt', 'sancov', 'sanstats'
+        ]
+        llvm_config.add_tool_substitutions(llvm_tools)
+        self.substitutions = llvm_config.config.substitutions
+        import pprint
+        pprint.pprint(self.substitutions)
+
+    def expand_lit_subtitutions(self, cmd: str) -> str:
+        result = lit.TestRunner.applySubstitutions([cmd], self.substitutions)
+        assert len(result) == 1
+        print(blue(cmd), "->", red(result))
+        return result[0]
+
+    # TODO: reverse apply:
 
 
 def add_lit_substitutions(args: "Options", run_line: str) -> str:
@@ -539,6 +561,7 @@ class Reducer(object):
         global options
         options = Options(self.args)
         self.options = options
+        self.subst_handler = LitSubstitutionHandler(options)
         self.testcase = Path(self.args.testcase)
         # RUN: lines to add to the test case
         self.run_lines = []  # type: typing.List[str]
@@ -1220,7 +1243,7 @@ class Reducer(object):
                 if "2>&1" in line:
                     die("Cannot handle 2>&1 in RUN lines yet")
                 verbose_print("Found RUN: ", command)
-                command = expand_lit_substitutions(self.options, command)
+                command = self.subst_handler.expand_lit_subtitutions(command)
                 verbose_print("After expansion:", command)
                 # We can only simplify the command line for clang right now
                 command, _ = self.simplify_crash_command(shlex.split(command), infile.absolute())
