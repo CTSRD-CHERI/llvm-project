@@ -94,7 +94,7 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
                GetNullMI.dump());
     SrcReg = GetNullMI.getOperand(0).getReg();
   }
-  if ((GetNullMI.getOpcode() == Mips::CMove &&
+  if (((GetNullMI.getOpcode() == Mips::CMove || GetNullMI.isCopy()) &&
        GetNullMI.getOperand(1).getReg() == Mips::CNULL)) {
     LLVM_DEBUG(dbgs() << "Trying to replace uses of CMove $cnull: ";
                GetNullMI.dump());
@@ -147,8 +147,8 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
       // Check that the physreg is a valid CHERI general-purpose register
       assert(Mips::CheriGPROrCNullRegClass.contains(TargetReg));
     }
-    // Remove from parent and replace with the CMove $cnull
-    BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CMove),
+    // Remove from parent and replace with the COPY $cnull
+    BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::COPY),
             UseMI->getOperand(0).getReg())
         .addReg(Mips::CNULL);
     UseMI->removeFromParent();

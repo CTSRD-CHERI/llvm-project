@@ -57,6 +57,7 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; ASM-NEXT:    beqz $1, .LBB0_2
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %block1
+; ASM-NEXT:    cgetnull $c3
 ; ASM-NEXT:    addiu $1, $zero, 1
 ; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 4]]($c11)
 ; ASM-NEXT:    addiu $1, $zero, 2
@@ -64,9 +65,8 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; ASM-NEXT:    addiu $1, $zero, 3
 ; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 12]]($c11)
 ; ASM-NEXT:    cincoffset $c18, $c11, [[# CAP_SIZE - 8]]
-; ASM-NEXT:    csetbounds $c18, $c18, 4
 ; ASM-NEXT:    b .LBB0_3
-; ASM-NEXT:    cgetnull $c3
+; ASM-NEXT:    csetbounds $c18, $c18, 4
 ; ASM-NEXT:  .LBB0_2: # %block2
 ; ASM-NEXT:    addiu $1, $zero, 4
 ; ASM-NEXT:    csw $1, $zero, [[# CAP_SIZE - 4]]($c11)

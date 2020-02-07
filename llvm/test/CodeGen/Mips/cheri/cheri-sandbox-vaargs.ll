@@ -14,11 +14,10 @@ entry:
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   ; Load the address of va_cpy
-  ; CHECK: cmove [[VA_LIST:\$c[0-9]+]],  $c13
-  ; CHECK: clcbi   $c[[CPYADDR:[0-9]+]], %captab20(va_cpy)($c2)
+  ; CHECK: clcbi   $c[[CPYADDR:[0-9]+]], %captab20(va_cpy)($c{{[0-9]+}})
   ; Store the va_list (passed in $c13) in the global
+  ; CHECK: csc	$c13, $zero, 0($c[[CPYADDR]])
   ; CHECK: cgetnull $c13
-  ; CHECK: csc	[[VA_LIST]], $zero, 0($c[[CPYADDR]])
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1
   call void @llvm.va_start.p200i8(i8 addrspace(200)* %0)

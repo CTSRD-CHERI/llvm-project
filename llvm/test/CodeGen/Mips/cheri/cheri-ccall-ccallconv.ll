@@ -21,14 +21,7 @@ define void @a(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %ba
 ; CHECK-NEXT:    daddu $2, $2, $25
 ; CHECK-NEXT:    daddiu $gp, $2, %lo(%neg(%gp_rel(a)))
 ; CHECK-NEXT:    ld $25, %call16(b)($gp)
-; CHECK-NEXT:    cgetnull $c3
-; CHECK-NEXT:    cgetnull $c4
-; CHECK-NEXT:    cgetnull $c5
-; CHECK-NEXT:    cgetnull $c6
-; CHECK-NEXT:    cgetnull $c7
-; CHECK-NEXT:    cgetnull $c8
-; CHECK-NEXT:    cgetnull $c9
-; CHECK-NEXT:    cgetnull $c10
+; Clear integer registers
 ; CHECK-NEXT:    daddiu $5, $zero, 0
 ; CHECK-NEXT:    daddiu $6, $zero, 0
 ; CHECK-NEXT:    daddiu $7, $zero, 0
@@ -36,13 +29,22 @@ define void @a(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %ba
 ; CHECK-NEXT:    daddiu $9, $zero, 0
 ; CHECK-NEXT:    daddiu $10, $zero, 0
 ; CHECK-NEXT:    daddiu $11, $zero, 0
-  ; Move argument 0 from a0 to v0, arg 1 from a1 to a0.
-  ; Then do the function call
+; Move argument 0 from a0 to v0, arg 1 from a1 to a0.
+; Then do the function call
 ; CHECK-NEXT:    move $2, $4
+; CHECK-NEXT:    move $4, $1
+; Clear cap registers
+; CHECK-NEXT:    cgetnull $c3
+; CHECK-NEXT:    cgetnull $c4
+; CHECK-NEXT:    cgetnull $c5
+; CHECK-NEXT:    cgetnull $c6
+; CHECK-NEXT:    cgetnull $c7
+; CHECK-NEXT:    cgetnull $c8
+; CHECK-NEXT:    cgetnull $c9
 ; CHECK-NEXT:    .reloc .Ltmp0, R_MIPS_JALR, b
 ; CHECK-NEXT:  .Ltmp0:
 ; CHECK-NEXT:    jalr $25
-; CHECK-NEXT:    move $4, $1
+; CHECK-NEXT:    cgetnull $c10
 ; CHECK-NEXT:    move $sp, $fp
 ; CHECK-NEXT:    ld $gp, 8($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld $fp, 16($sp) # 8-byte Folded Reload

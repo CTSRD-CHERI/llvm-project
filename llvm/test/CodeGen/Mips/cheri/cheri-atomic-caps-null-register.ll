@@ -12,8 +12,8 @@ define i32 @cmpxchg_null_ptr(i32 addrspace(200)* nocapture %exp, i32 addrspace(2
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    sync
 ; CHECK-NEXT:    cgetnull $c2
+; CHECK-NEXT:    sync
 ; CHECK-NEXT:  .LBB0_1: # %entry
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    cllc $c1, $c2
@@ -144,8 +144,8 @@ define void @store_atomic_null_ptr(i32 addrspace(200)* %value) nounwind {
 ; Cannot use NULL register as the operand here since zero encodes $ddc
 ; CHECK-LABEL: store_atomic_null_ptr:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    sync
 ; CHECK-NEXT:    cgetnull $c1
+; CHECK-NEXT:    sync
 ; CHECK-NEXT:    csc $c3, $zero, 0($c1)
 ; CHECK-NEXT:    sync
 ; CHECK-NEXT:    cjr $c17

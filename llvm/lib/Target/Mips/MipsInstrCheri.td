@@ -428,6 +428,7 @@ def CAndAddr : CheriFmt3Op<0x24, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64
 
 // Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason
 multiclass UseCNullPatterns<PatFrag NullPat> {
+  def : Pat<(ptradd NullPat, (i64 0)), (COPY CNULL)>;
   def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_offset_set NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   // The immediate versions should be used first!
@@ -439,6 +440,8 @@ multiclass UseCNullPatterns<PatFrag NullPat> {
 defm : UseCNullPatterns<(iFATPTR64 (inttoptr (i64 0)))>;
 defm : UseCNullPatterns<(iFATPTR128 (inttoptr (i64 0)))>;
 defm : UseCNullPatterns<(iFATPTR256 (inttoptr (i64 0)))>;
+defm : UseCNullPatterns<(CapRegType (inttoptr (i64 0)))>;
+defm : UseCNullPatterns<CNULL>;
 
 
 // Cursors
@@ -449,8 +452,8 @@ let AddedComplexity = 10 in {
 def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
           (CIncOffset $r2, $r3)>;
 // Int to pointer in address space 0
-def : Pat<(inttoptr (i64 0)),
-          (CapRegType (CMove CNULL))>;
+def : Pat<(CapRegType (inttoptr (i64 0))),
+          (CapRegType (COPY CNULL))>;
 let Predicates=[IsCHERI,IsCHERIABI] in {
 def : Pat<(inttoptr simm11s0Pattern:$imm),
           (CIncOffsetImm CNULL, simm11s0Pattern: $imm)>;

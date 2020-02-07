@@ -65,7 +65,7 @@ entry:
 ; This previously got turned into a duplicate of the CheriBoundedStackPseudoReg but that used the killed %1 register!
 ; CHECK: [[JUMP_TARGET:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
 ; CHECK-NEXT: $c3 = COPY [[STACK_CAP]]
-; CHECK-NEXT: $c13 = CMove $cnull
+; CHECK-NEXT: $c13 = COPY $cnull
 ; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
 ; CHECK-NEXT: CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 
@@ -113,7 +113,7 @@ entry:
 ; Remat 2:
 ; CHECK: [[JUMP_TARGET:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) @fn2
 ; CHECK-NEXT: $c3 = CheriBoundedStackPseudoImm %stack.0.byval-temp, 0, 512
-; CHECK-NEXT: $c13 = CMove $cnull
+; CHECK-NEXT: $c13 = COPY $cnull
 ; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
 ; CHECK-NEXT: CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit killed $c13, implicit-def $c11
 ; CHECK-NOT: CheriBoundedStackPseudo

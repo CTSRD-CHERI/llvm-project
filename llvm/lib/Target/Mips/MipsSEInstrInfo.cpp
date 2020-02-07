@@ -1071,6 +1071,7 @@ bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
       return true;
     case Mips::CIncOffsetImm:
     case Mips::CMove:
+    case Mips::COPY:
       return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Mips::CNULL;
     case Mips::LUi64: {
       auto Flags = MI.getOperand(1).getTargetFlags();
