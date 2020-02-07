@@ -736,13 +736,13 @@ let usesCustomInserter = 1 in {
 }
 
 class CapAtomic2OpsPostRA<RegisterOperand ValOpnd> :
-  PseudoSE<(outs ValOpnd:$dst), (ins CheriGPROrCNull:$ptr, ValOpnd:$incr), []> {
+  PseudoSE<(outs ValOpnd:$dst), (ins CheriGPROrDDC:$ptr, ValOpnd:$incr), []> {
   let mayLoad = 1;
   let mayStore = 1;
 }
 
 class CapAtomicCmpSwapPostRA<RegisterOperand ValOpnd> :
-  PseudoSE<(outs ValOpnd:$dst), (ins CheriGPROrCNull:$ptr, ValOpnd:$cmp, ValOpnd:$swap), []> {
+  PseudoSE<(outs ValOpnd:$dst), (ins CheriGPROrDDC:$ptr, ValOpnd:$cmp, ValOpnd:$swap), []> {
   let mayLoad = 1;
   let mayStore = 1;
 }
