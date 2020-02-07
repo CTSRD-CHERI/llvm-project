@@ -96,8 +96,10 @@ entry:
 ; CHECKFP-NEXT: .p2align 2
 ; CHECKFP-NEXT: .LCPI[[CNST0:[0-9_]+]]:
 ; CHECKFP-NEXT: .long 200002
+; CHECKFP-NEXT: .size .LCPI[[CNST0]], 4
 ; CHECKFP-NEXT: .LCPI[[CNST1:[0-9_]+]]:
 ; CHECKFP-NEXT: .long 200001
+; CHECKFP-NEXT: .size .LCPI[[CNST1]], 4
 ; CHECKFP-NEXT: .text
 ; CHECKFP-LABEL: f6:
 ; CHECKFP: entsp 65535
@@ -141,8 +143,10 @@ entry:
 ; CHECK-NEXT: .p2align 2
 ; CHECK-NEXT: .LCPI[[CNST0:[0-9_]+]]:
 ; CHECK-NEXT: .long 200003
+; CHECK-NEXT: .size .LCPI[[CNST0]], 4
 ; CHECK-NEXT: .LCPI[[CNST1:[0-9_]+]]:
 ; CHECK-NEXT: .long 200002
+; CHECK-NEXT: .size .LCPI[[CNST1]], 4
 ; CHECK-NEXT: .text
 ; CHECK-LABEL: f6:
 ; CHECK: entsp 65535

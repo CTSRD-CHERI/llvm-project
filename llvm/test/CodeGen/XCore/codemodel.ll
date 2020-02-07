@@ -125,6 +125,7 @@ entry:
 ; LARGE: .section .cp.rodata,"ac",@progbits
 ; LARGE: .LCPI{{[0-9_]*}}
 ; LARGE-NEXT: .long NoSize
+; LARGE-NEXT: .size .LCPI{{[0-9_]*}}, 4
 ; LARGE-NEXT: .text
 ; LARGE-LABEL: UnknownSize:
 ; LARGE: ldw r0, cp[.LCPI{{[0-9_]*}}]
@@ -145,6 +146,7 @@ entry:
 ; LARGE: .section .cp.rodata,"ac",@progbits
 ; LARGE: .LCPI{{[0-9_]*}}
 ; LARGE-NEXT: .long Unknown
+; LARGE-NEXT: .size .LCPI{{[0-9_]*}}, 4
 ; LARGE-NEXT: .text
 ; LARGE-LABEL: UnknownStruct:
 ; LARGE: ldw r0, cp[.LCPI{{[0-9_]*}}]

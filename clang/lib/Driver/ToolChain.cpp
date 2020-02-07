@@ -126,7 +126,7 @@ bool ToolChain::isNoExecStackDefault() const {
 
 bool ToolChain::isCheriPurecap() const {
   return IsCheriPurecap ||
-         getEffectiveTriple().getEnvironment() == llvm::Triple::CheriPurecap;
+         EffectiveTriple.getEnvironment() == llvm::Triple::CheriPurecap;
 }
 
 const SanitizerArgs& ToolChain::getSanitizerArgs() const {

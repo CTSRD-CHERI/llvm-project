@@ -3,6 +3,7 @@
 ; RUN: llc < %s -mtriple=x86_64-linux -regalloc=greedy | FileCheck %s
 ; RUN: llc < %s -mtriple=i386-linux -mattr=+sse2 | FileCheck %s
 ; CHECK:     LCPI
+; CHECK:     .size .LCPI
 ; CHECK:     LCPI
 ; CHECK:     LCPI
 ; CHECK-NOT: LCPI
