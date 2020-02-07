@@ -85,6 +85,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   if (Subtarget.hasCheri()) {
     CapType = Subtarget.typeForCapabilities();
+    NullCapabilityRegister = RISCV::C0;
     // TODO: This is a lie to avoid CRRL/CRAM generation; disable once it is
     // implemented in hardware on RV32 and we have cc64 helpers.
     CapTypeHasPreciseBounds = !Subtarget.is64Bit();

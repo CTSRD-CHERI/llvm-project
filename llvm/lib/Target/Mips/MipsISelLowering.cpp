@@ -609,8 +609,10 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   if (Subtarget.isCheri())
     MaxStoresPerMemcpy = MaxStoresPerMemmove = 15;
 
-  if (Subtarget.isCheri())
+  if (Subtarget.isCheri()) {
     SupportsAtomicCapabilityOperations = true;
+    NullCapabilityRegister = Mips::CNULL;
+  }
 
   isMicroMips = Subtarget.inMicroMipsMode();
 }

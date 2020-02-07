@@ -2677,6 +2677,9 @@ public:
   bool supportsAtomicCapabilityOperations() const {
     return SupportsAtomicCapabilityOperations;
   }
+  Register getNullCapabilityRegister() const {
+    return NullCapabilityRegister;
+  }
 
   //===--------------------------------------------------------------------===//
   // Runtime Library hooks
@@ -3008,6 +3011,9 @@ protected:
 
   /// Whether atomic operations with CHERI capability values are supported.
   bool SupportsAtomicCapabilityOperations = false;
+
+  /// Set the target has a NULL capability register (e.g. Mips::CNULL)
+  Register NullCapabilityRegister = {};
 
   /// Return true if the value types that can be represented by the specified
   /// register class are all legal.

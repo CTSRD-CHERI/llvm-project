@@ -371,6 +371,7 @@ namespace {
     //   otherwise              - N should be replaced by the returned Operand.
     //
     SDValue visitTokenFactor(SDNode *N);
+    SDValue visitCopyToReg(SDNode *N);
     SDValue visitMERGE_VALUES(SDNode *N);
     SDValue visitPTRADD(SDNode *N);
     SDValue visitADD(SDNode *N);
@@ -1495,6 +1496,25 @@ void DAGCombiner::Run(CombineLevel AtLevel) {
   DAG.RemoveDeadNodes();
 }
 
+SDValue DAGCombiner::visitCopyToReg(SDNode *N) {
+  // For CHERI: if the target has a NULL register, we combine copies of
+  // (inttoptr (i64 0)) to (COPY CNULL) rather than waiting for the
+  // MachineCopyPropagation pass to eliminate the value. This helps MIPS
+  // at -O0 since it elimites the copies to clear $c13
+  SDValue Src = N->getOperand(2);
+  if (Src.getOpcode() == ISD::INTTOPTR && Src.getValueType().isFatPointer()) {
+    if (auto ConstVal = dyn_cast<ConstantSDNode>(Src.getOperand(0))) {
+      if (ConstVal->isNullValue() && TLI.getNullCapabilityRegister()) {
+        auto NullValue = DAG.getRegister(TLI.getNullCapabilityRegister(),
+                                         Src.getValueType());
+        CombineTo(Src.getNode(), NullValue);
+        return SDValue(N, 0);   // Return N so it doesn't get rechecked!
+      }
+    }
+  }
+  return SDValue();
+}
+
 SDValue DAGCombiner::visit(SDNode *N) {
   switch (N->getOpcode()) {
   default: break;
@@ -1626,6 +1646,7 @@ SDValue DAGCombiner::visit(SDNode *N) {
   case ISD::VECREDUCE_UMIN:
   case ISD::VECREDUCE_FMAX:
   case ISD::VECREDUCE_FMIN:     return visitVECREDUCE(N);
+  case ISD::CopyToReg:          return visitCopyToReg(N);
   }
   return SDValue();
 }
