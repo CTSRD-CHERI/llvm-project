@@ -1507,8 +1507,12 @@ SDValue DAGCombiner::visitCopyToReg(SDNode *N) {
       if (ConstVal->isNullValue() && TLI.getNullCapabilityRegister()) {
         auto NullValue = DAG.getRegister(TLI.getNullCapabilityRegister(),
                                          Src.getValueType());
-        CombineTo(Src.getNode(), NullValue);
-        return SDValue(N, 0);   // Return N so it doesn't get rechecked!
+        // Glue argument is optional
+        SDValue Glue = N->getNumOperands() > 3 ? N->getOperand(3) : SDValue();
+        SDValue Ops[] = {N->getOperand(0), N->getOperand(1), NullValue, Glue};
+        SDNode *NewCopy = DAG.UpdateNodeOperands(
+            N, makeArrayRef(Ops, Glue.getNode() ? 4 : 3));
+        return SDValue(NewCopy, 0);
       }
     }
   }

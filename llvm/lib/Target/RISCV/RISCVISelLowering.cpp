@@ -1617,6 +1617,9 @@ static MachineBasicBlock *emitSelectPseudo(MachineInstr &MI,
 
   // Create PHIs for all of the select pseudo-instructions.
   auto SelectMBBI = MI.getIterator();
+  // Result must be virtual registers:
+  assert(SelectMBBI->getOperand(4).getReg().isVirtual());
+  assert(SelectMBBI->getOperand(5).getReg().isVirtual());
   auto SelectEnd = std::next(LastSelectPseudo->getIterator());
   auto InsertionPoint = TailMBB->begin();
   while (SelectMBBI != SelectEnd) {
