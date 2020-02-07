@@ -35,6 +35,10 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
+namespace {
+#include "cheri-compressed-cap/cheri_compressed_cap.h"
+}
+
 using namespace llvm;
 
 #define DEBUG_TYPE "riscv-lower"
@@ -82,8 +86,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   if (Subtarget.hasCheri()) {
     CapType = Subtarget.typeForCapabilities();
     // TODO: This is a lie to avoid CRRL/CRAM generation; disable once it is
-    // implemented in hardware.
-    CapTypeHasPreciseBounds = true;
+    // implemented in hardware on RV32 and we have cc64 helpers.
+    CapTypeHasPreciseBounds = !Subtarget.is64Bit();
     addRegisterClass(CapType, &RISCV::GPCRRegClass);
   }
 
@@ -1057,9 +1061,9 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
     unsigned IID = cast<ConstantSDNode>(N->getOperand(0))->getZExtValue();
     EVT XLenVT = Subtarget.getXLenVT();
 
+    switch (IID) {
     // Lower to our custom node, but with a truncate back to i1 so we can
     // replace its uses.
-    switch (IID) {
     case Intrinsic::cheri_cap_tag_get: {
       SDValue IntRes = DAG.getNode(RISCVISD::CAP_TAG_GET, DL, XLenVT,
                                    N->getOperand(1));
@@ -1083,6 +1087,25 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
                            DAG.getValueType(MVT::i1));
       return DAG.getSetCC(DL, MVT::i1, IntRes,
                           DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
+    // Constant fold CRRL/CRAM when possible
+    case Intrinsic::cheri_round_representable_length: {
+      if (CapTypeHasPreciseBounds)
+        return N->getOperand(1);
+
+      KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
+      if (Known.isConstant())
+        return DAG.getConstant(Known.One, DL, N->getValueType(0));
+      break;
+    }
+    case Intrinsic::cheri_representable_alignment_mask: {
+      if (CapTypeHasPreciseBounds)
+        return DAG.getAllOnesConstant(DL, N->getValueType(0));
+
+      KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
+      if (Known.isConstant())
+        return DAG.getConstant(Known.One, DL, N->getValueType(0));
+      break;
     }
     }
 
@@ -1245,6 +1268,114 @@ unsigned RISCVTargetLowering::ComputeNumSignBitsForTargetNode(
   }
 
   return 1;
+}
+
+void RISCVTargetLowering::computeKnownBitsForTargetNode(
+    const SDValue Op, KnownBits &Known, const APInt &DemandedElts,
+    const SelectionDAG &DAG, unsigned Depth) const {
+  Known.resetAll();
+  switch (Op.getOpcode()) {
+  default: break;
+  case ISD::INTRINSIC_WO_CHAIN: {
+    switch (cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue()) {
+    default: break;
+    case Intrinsic::cheri_round_representable_length:
+      if (CapTypeHasPreciseBounds) {
+        Known = DAG.computeKnownBits(Op.getOperand(1));
+      } else if (Subtarget.is64Bit()) {
+        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
+        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
+        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
+        uint64_t MinRoundedLength = cc128_get_representable_length(MinLength);
+        uint64_t MaxRoundedLength = cc128_get_representable_length(MaxLength);
+        bool MinRoundedOverflow = MinRoundedLength < MinLength;
+        bool MaxRoundedOverflow = MaxRoundedLength < MaxLength;
+
+        // A bit is known if the two different output bits are the same and:
+        //
+        //  (1) All more-significant bits are known. This is regardless of
+        //      whether the corresponding input bits were known, since rounding
+        //      is monotonic.
+        //
+        //  OR
+        //
+        //  (2) All less-significant bits are known and the corresponding input
+        //      bit is known.
+        //
+        // If the two rounded values are the same, repeated application of (1)
+        // yields the expected result that all bits are known.
+        //
+        // Note that the properties as described above are in terms of the
+        // (N+1)-bit outputs, not their truncated forms, with the (N+1)th bit
+        // being the overflow bit, and so we must take that into account.
+        //
+        // This can be improved upon to consider inner and trailing bits that
+        // are still known regardless of the input bits (such as because they
+        // are 1 in the input and the bounds are not rounded up too much to
+        // lose them), but this is a good first start.
+
+        uint64_t MinMaxRoundedAgreeMask = MinRoundedLength ^ ~MaxRoundedLength;
+        uint64_t InputKnownMask =
+          (KnownLengthBits.Zero | KnownLengthBits.One).getZExtValue();
+
+        // Calculate bits for property (1)
+        uint64_t LeadingKnownBits = countLeadingOnes(MinMaxRoundedAgreeMask);
+        uint64_t LeadingKnownMask =
+          MinRoundedOverflow == MaxRoundedOverflow
+            ? maskLeadingOnes<uint64_t>(LeadingKnownBits) : 0;
+
+        // Calculate bits for property (2)
+        uint64_t TrailingKnownBits = countTrailingOnes(MinMaxRoundedAgreeMask);
+        uint64_t TrailingKnownMask =
+            maskTrailingOnes<uint64_t>(TrailingKnownBits) & InputKnownMask;
+
+        // Combine properties
+        uint64_t KnownMask = LeadingKnownMask | TrailingKnownMask;
+
+        Known.Zero |= ~MinRoundedLength & KnownMask;
+        Known.One |= MinRoundedLength & KnownMask;
+      }
+      break;
+    case Intrinsic::cheri_representable_alignment_mask:
+      if (CapTypeHasPreciseBounds) {
+        Known.setAllOnes();
+      } else if (Subtarget.is64Bit()) {
+        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
+        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
+        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
+
+        Known.Zero |= ~cc128_get_alignment_mask(MinLength);
+        Known.One |= cc128_get_alignment_mask(MaxLength);
+      }
+      break;
+    }
+  }
+  }
+}
+
+TailPaddingAmount
+RISCVTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
+  if (!Subtarget.hasCheri())
+    return TailPaddingAmount::None;
+  if (Subtarget.is64Bit()) {
+    return static_cast<TailPaddingAmount>(
+        llvm::alignTo(Size, cc128_get_required_alignment(Size)) - Size);
+  } else {
+    // TODO: cc64 helpers
+    return TailPaddingAmount::None;
+  }
+}
+
+Align
+RISCVTargetLowering::getAlignmentForPreciseBounds(uint64_t Size) const {
+  if (!Subtarget.hasCheri())
+    return Align::None();
+  if (Subtarget.is64Bit()) {
+    return Align(cc128_get_required_alignment(Size));
+  } else {
+    // TODO: cc64 helpers
+    return Align::None();
+  }
 }
 
 static MachineBasicBlock *emitReadCycleWidePseudo(MachineInstr &MI,

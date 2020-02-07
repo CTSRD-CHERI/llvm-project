@@ -79,9 +79,12 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV64IXCHERI-NEXT:    slli a0, a0, 2
 ; RV64IXCHERI-NEXT:    addi a2, a0, 15
 ; RV64IXCHERI-NEXT:    andi a2, a2, -16
-; RV64IXCHERI-NEXT:    sub a1, a1, a2
+; RV64IXCHERI-NEXT:    crrl a3, a2
+; RV64IXCHERI-NEXT:    sub a1, a1, a3
+; RV64IXCHERI-NEXT:    cram a2, a2
+; RV64IXCHERI-NEXT:    and a1, a1, a2
 ; RV64IXCHERI-NEXT:    csetaddr ca1, csp, a1
-; RV64IXCHERI-NEXT:    csetbounds ca2, ca1, a2
+; RV64IXCHERI-NEXT:    csetbounds ca2, ca1, a3
 ; RV64IXCHERI-NEXT:    cmove csp, ca1
 ; RV64IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV64IXCHERI-NEXT:  .LBB1_1: # Label of block must be emitted
