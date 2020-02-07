@@ -1604,7 +1604,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
         DAG.getMachineFunction().getFunction(),
         "the current ABI does not use a captable", DL.getDebugLoc()));
-    return DAG.getNullCapability(DL, CapType);
+    return DAG.getNullCapability(DL);
   case Intrinsic::mips_shilo:
     return lowerDSPIntr(Op, DAG, MipsISD::SHILO);
   case Intrinsic::mips_dpau_h_qbl:

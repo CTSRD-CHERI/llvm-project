@@ -4484,7 +4484,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       if (getTargetMachine().getOptLevel() < CodeGenOpt::Default)
         ShouldClearC13 = true;
       if (ShouldClearC13)
-        RegsToPass.push_back(std::make_pair(Mips::C13, DAG.getNullCapability(DL, CapType)));
+        RegsToPass.push_back(std::make_pair(Mips::C13, DAG.getNullCapability(DL)));
     }
   }
   // If we're doing a CCall then any unused arg registers should be zero.
@@ -4495,7 +4495,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     static const unsigned RegList[] = { Mips::C3, Mips::C4, Mips::C5, Mips::C6,
       Mips::C7, Mips::C8, Mips::C9, Mips::C10 };
     for (unsigned i=CapArgs ; i<8 ; i++) {
-      SDValue Zero = DAG.getNullCapability(DL, CapType);
+      SDValue Zero = DAG.getNullCapability(DL);
       RegsToPass.push_back(std::make_pair(RegList[i], Zero));
     }
     static const unsigned IntRegList[] = { Mips::A0_64, Mips::A1_64,
@@ -5167,7 +5167,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     }
     if (zeroC3) {
       Chain = DAG.getCopyToReg(Chain, DL, Mips::C3,
-          DAG.getConstant(0, DL, CapType), Flag);
+                               DAG.getNullCapability(DL), Flag);
       Flag = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::C3, CapType));
     }
@@ -5205,7 +5205,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                         << MF.getName() << "(is varargs: "
                         << MF.getFunction().isVarArg() << ")\n");
       Chain = DAG.getCopyToReg(Chain, DL, Mips::C13,
-                                       DAG.getConstant(0, DL, CapType), Flag);
+                               DAG.getNullCapability(DL), Flag);
       Flag = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::C13, CapType));
     }

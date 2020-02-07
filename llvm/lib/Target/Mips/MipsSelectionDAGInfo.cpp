@@ -134,9 +134,8 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
       // then let's emit some stores instead.
       if ((SizeVal < (CapSize * 8)))
         if (isa<ConstantSDNode>(Src) && cast<ConstantSDNode>(Src)->isNullValue()) {
-          MVT CapType = STI.typeForCapabilities();
           SmallVector<SDValue, 8> OutChains;
-          SDValue ZeroCap = DAG.getConstant(0, dl, CapType);
+          SDValue ZeroCap = DAG.getNullCapability(dl);
           for (uint64_t i=0 ; i<(SizeVal / CapSize) ; i++) {
             uint64_t DstOff = i*CapSize;
             SDValue Store = DAG.getStore(Chain, dl, ZeroCap,
