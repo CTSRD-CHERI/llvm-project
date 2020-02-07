@@ -3880,7 +3880,7 @@ void CGOpenMPRuntime::emitProcBindClause(CodeGenFunction &CGF,
 }
 
 void CGOpenMPRuntime::emitFlush(CodeGenFunction &CGF, ArrayRef<const Expr *>,
-                                SourceLocation Loc) {
+                                SourceLocation Loc, llvm::AtomicOrdering AO) {
   llvm::OpenMPIRBuilder *OMPBuilder = CGF.CGM.getOpenMPIRBuilder();
   if (OMPBuilder) {
     OMPBuilder->CreateFlush(CGF.Builder);
@@ -11952,7 +11952,8 @@ Address CGOpenMPSIMDRuntime::getAddrOfArtificialThreadPrivate(
 
 void CGOpenMPSIMDRuntime::emitFlush(CodeGenFunction &CGF,
                                     ArrayRef<const Expr *> Vars,
-                                    SourceLocation Loc) {
+                                    SourceLocation Loc,
+                                    llvm::AtomicOrdering AO) {
   llvm_unreachable("Not supported in SIMD-only mode");
 }
 
