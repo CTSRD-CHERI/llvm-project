@@ -35,9 +35,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
-namespace {
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
-}
 
 using namespace llvm;
 
