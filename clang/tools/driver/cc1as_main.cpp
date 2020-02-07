@@ -568,7 +568,9 @@ static void LLVMErrorHandler(void *UserData, const std::string &Message,
   Diags.Report(diag::err_fe_error_backend) << Message;
 
   // We cannot recover from llvm errors.
-  exit(1);
+  // -fintegrated-cc1 doesn't create a reproducer unless we crash
+  // See https://reviews.llvm.org/D73742
+  abort(); // exit(1);
 }
 
 int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
