@@ -420,6 +420,7 @@ void initializeUnifyFunctionExitNodesPass(PassRegistry&);
 void initializeUnpackMachineBundlesPass(PassRegistry&);
 void initializeUnreachableBlockElimLegacyPassPass(PassRegistry&);
 void initializeUnreachableMachineBlockElimPass(PassRegistry&);
+void initializeVectorCombineLegacyPassPass(PassRegistry&);
 void initializeVerifierLegacyPassPass(PassRegistry&);
 void initializeVirtRegMapPass(PassRegistry&);
 void initializeVirtRegRewriterPass(PassRegistry&);
