@@ -86,7 +86,7 @@ Expected<uint64_t> BinaryOperation::eval() const {
       Err = joinErrors(std::move(Err), LeftOp.takeError());
     if (!RightOp)
       Err = joinErrors(std::move(Err), RightOp.takeError());
-    return Err;
+    return std::move(Err);
   }
 
   return EvalBinop(*LeftOp, *RightOp);
@@ -292,7 +292,7 @@ Pattern::parseBinop(StringRef &Expr, std::unique_ptr<ExpressionAST> LeftOp,
                     FileCheckPatternContext *Context, const SourceMgr &SM) {
   Expr = Expr.ltrim(SpaceChars);
   if (Expr.empty())
-    return LeftOp;
+    return std::move(LeftOp);
 
   // Check if this is a supported operation and select a function to perform
   // it.
@@ -484,7 +484,7 @@ Expected<std::unique_ptr<Expression>> Pattern::parseNumericSubstitutionBlock(
     DefinedNumericVariable = *ParseResult;
   }
 
-  return ExpressionPointer;
+  return std::move(ExpressionPointer);
 }
 
 bool Pattern::parsePattern(StringRef PatternStr, StringRef Prefix,
