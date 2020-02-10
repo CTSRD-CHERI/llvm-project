@@ -6887,8 +6887,6 @@ SystemZTargetLowering::emitSelect(MachineInstr &MI,
   for (MachineBasicBlock::iterator NextMIIt =
          std::next(MachineBasicBlock::iterator(MI));
        NextMIIt != MBB->end(); ++NextMIIt) {
-    if (NextMIIt->definesRegister(SystemZ::CC))
-      break;
     if (isSelectPseudo(*NextMIIt)) {
       assert(NextMIIt->getOperand(3).getImm() == CCValid &&
              "Bad CCValid operands since CC was not redefined.");
@@ -6899,6 +6897,9 @@ SystemZTargetLowering::emitSelect(MachineInstr &MI,
       }
       break;
     }
+    if (NextMIIt->definesRegister(SystemZ::CC) ||
+        NextMIIt->usesCustomInsertionHook())
+      break;
     bool User = false;
     for (auto SelMI : Selects)
       if (NextMIIt->readsVirtualRegister(SelMI->getOperand(0).getReg())) {
