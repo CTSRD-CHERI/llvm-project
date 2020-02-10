@@ -72,6 +72,8 @@ unsigned int internal_sleep(unsigned int seconds);
 pid_t internal_getpid();
 pid_t internal_getppid();
 
+int internal_dlinfo(void *handle, int request, void *p);
+
 // Threading
 usize internal_sched_yield();
 

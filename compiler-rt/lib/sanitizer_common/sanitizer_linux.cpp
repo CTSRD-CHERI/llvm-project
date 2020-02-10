@@ -737,6 +737,15 @@ pid_t internal_getppid() {
   return internal_syscall(SYSCALL(getppid));
 }
 
+int internal_dlinfo(void *handle, int request, void *p) {
+#if SANITIZER_FREEBSD || (SANITIZER_LINUX && !SANITIZER_ANDROID) || \
+    SANITIZER_SOLARIS
+  return dlinfo(handle, request, p);
+#else
+  UNIMPLEMENTED();
+#endif
+}
+
 usize internal_getdents(fd_t fd, struct linux_dirent *dirp, unsigned int count) {
 #if SANITIZER_FREEBSD
   return internal_syscall(SYSCALL(getdirentries), fd, (uptr)dirp, count, NULL);
