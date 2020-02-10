@@ -441,7 +441,6 @@ defm : UseCNullPatterns<(iFATPTR64 (inttoptr (i64 0)))>;
 defm : UseCNullPatterns<(iFATPTR128 (inttoptr (i64 0)))>;
 defm : UseCNullPatterns<(iFATPTR256 (inttoptr (i64 0)))>;
 defm : UseCNullPatterns<(CapRegType (inttoptr (i64 0)))>;
-defm : UseCNullPatterns<CNULL>;
 
 
 // Cursors
