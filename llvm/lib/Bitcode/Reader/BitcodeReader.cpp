@@ -141,9 +141,9 @@ static Expected<BitstreamCursor> initStream(MemoryBufferRef Buffer) {
 
   BitstreamCursor Stream(ArrayRef<uint8_t>(BufPtr, BufEnd));
   if (Error Err = hasInvalidBitcodeHeader(Stream))
-    return std::move(Err);
+    return Err;
 
-  return std::move(Stream);
+  return Stream;
 }
 
 /// Convert a string from a record into an std::string, return true on failure.
@@ -172,7 +172,7 @@ static void stripTBAA(Module *M) {
 /// "epoch" encoded in the bitcode, and return the producer name if any.
 static Expected<std::string> readIdentificationBlock(BitstreamCursor &Stream) {
   if (Error Err = Stream.EnterSubBlock(bitc::IDENTIFICATION_BLOCK_ID))
-    return std::move(Err);
+    return Err;
 
   // Read all the records.
   SmallVector<uint64_t, 64> Record;
@@ -244,7 +244,7 @@ static Expected<std::string> readIdentificationCode(BitstreamCursor &Stream) {
 
       // Ignore other sub-blocks.
       if (Error Err = Stream.SkipBlock())
-        return std::move(Err);
+        return Err;
       continue;
     case BitstreamEntry::Record:
       if (Expected<unsigned> Skipped = Stream.skipRecord(Entry.ID))
@@ -257,7 +257,7 @@ static Expected<std::string> readIdentificationCode(BitstreamCursor &Stream) {
 
 static Expected<bool> hasObjCCategoryInModule(BitstreamCursor &Stream) {
   if (Error Err = Stream.EnterSubBlock(bitc::MODULE_BLOCK_ID))
-    return std::move(Err);
+    return Err;
 
   SmallVector<uint64_t, 64> Record;
   // Read all the records for this module.
@@ -324,7 +324,7 @@ static Expected<bool> hasObjCCategory(BitstreamCursor &Stream) {
 
       // Ignore other sub-blocks.
       if (Error Err = Stream.SkipBlock())
-        return std::move(Err);
+        return Err;
       continue;
 
     case BitstreamEntry::Record:
@@ -338,7 +338,7 @@ static Expected<bool> hasObjCCategory(BitstreamCursor &Stream) {
 
 static Expected<std::string> readModuleTriple(BitstreamCursor &Stream) {
   if (Error Err = Stream.EnterSubBlock(bitc::MODULE_BLOCK_ID))
-    return std::move(Err);
+    return Err;
 
   SmallVector<uint64_t, 64> Record;
 
@@ -402,7 +402,7 @@ static Expected<std::string> readTriple(BitstreamCursor &Stream) {
 
       // Ignore other sub-blocks.
       if (Error Err = Stream.SkipBlock())
-        return std::move(Err);
+        return Err;
       continue;
 
     case BitstreamEntry::Record:
@@ -2050,7 +2050,7 @@ static Expected<uint64_t> jumpToValueSymbolTable(uint64_t Offset,
   // of the VST read.
   uint64_t CurrentBit = Stream.GetCurrentBitNo();
   if (Error JumpFailed = Stream.JumpToBit(Offset * 32))
-    return std::move(JumpFailed);
+    return JumpFailed;
   Expected<BitstreamEntry> MaybeEntry = Stream.advance();
   if (!MaybeEntry)
     return MaybeEntry.takeError();
@@ -6299,7 +6299,7 @@ const std::error_category &llvm::BitcodeErrorCategory() {
 static Expected<StringRef> readBlobInRecord(BitstreamCursor &Stream,
                                             unsigned Block, unsigned RecordID) {
   if (Error Err = Stream.EnterSubBlock(Block))
-    return std::move(Err);
+    return Err;
 
   StringRef Strtab;
   while (true) {
@@ -6317,7 +6317,7 @@ static Expected<StringRef> readBlobInRecord(BitstreamCursor &Stream,
 
     case BitstreamEntry::SubBlock:
       if (Error Err = Stream.SkipBlock())
-        return std::move(Err);
+        return Err;
       break;
 
     case BitstreamEntry::Record:
@@ -6378,7 +6378,7 @@ llvm::getBitcodeFileContents(MemoryBufferRef Buffer) {
       if (Entry.ID == bitc::IDENTIFICATION_BLOCK_ID) {
         IdentificationBit = Stream.GetCurrentBitNo() - BCBegin * 8;
         if (Error Err = Stream.SkipBlock())
-          return std::move(Err);
+          return Err;
 
         {
           Expected<llvm::BitstreamEntry> MaybeEntry = Stream.advance();
@@ -6395,7 +6395,7 @@ llvm::getBitcodeFileContents(MemoryBufferRef Buffer) {
       if (Entry.ID == bitc::MODULE_BLOCK_ID) {
         uint64_t ModuleBit = Stream.GetCurrentBitNo() - BCBegin * 8;
         if (Error Err = Stream.SkipBlock())
-          return std::move(Err);
+          return Err;
 
         F.Mods.push_back({Stream.getBitcodeBytes().slice(
                               BCBegin, Stream.getCurrentByteNo() - BCBegin),
@@ -6444,7 +6444,7 @@ llvm::getBitcodeFileContents(MemoryBufferRef Buffer) {
       }
 
       if (Error Err = Stream.SkipBlock())
-        return std::move(Err);
+        return Err;
       continue;
     }
     case BitstreamEntry::Record:
@@ -6472,7 +6472,7 @@ BitcodeModule::getModuleImpl(LLVMContext &Context, bool MaterializeAll,
   std::string ProducerIdentification;
   if (IdentificationBit != -1ull) {
     if (Error JumpFailed = Stream.JumpToBit(IdentificationBit))
-      return std::move(JumpFailed);
+      return JumpFailed;
     Expected<std::string> ProducerIdentificationOrErr =
         readIdentificationBlock(Stream);
     if (!ProducerIdentificationOrErr)
@@ -6482,7 +6482,7 @@ BitcodeModule::getModuleImpl(LLVMContext &Context, bool MaterializeAll,
   }
 
   if (Error JumpFailed = Stream.JumpToBit(ModuleBit))
-    return std::move(JumpFailed);
+    return JumpFailed;
   auto *R = new BitcodeReader(std::move(Stream), Strtab, ProducerIdentification,
                               Context);
 
@@ -6493,18 +6493,18 @@ BitcodeModule::getModuleImpl(LLVMContext &Context, bool MaterializeAll,
   // Delay parsing Metadata if ShouldLazyLoadMetadata is true.
   if (Error Err =
           R->parseBitcodeInto(M.get(), ShouldLazyLoadMetadata, IsImporting))
-    return std::move(Err);
+    return Err;
 
   if (MaterializeAll) {
     // Read in the entire module, and destroy the BitcodeReader.
     if (Error Err = M->materializeAll())
-      return std::move(Err);
+      return Err;
   } else {
     // Resolve forward references from blockaddresses.
     if (Error Err = R->materializeForwardReferencedFunctions())
-      return std::move(Err);
+      return Err;
   }
-  return std::move(M);
+  return M;
 }
 
 Expected<std::unique_ptr<Module>>
@@ -6532,22 +6532,22 @@ Error BitcodeModule::readSummary(ModuleSummaryIndex &CombinedIndex,
 Expected<std::unique_ptr<ModuleSummaryIndex>> BitcodeModule::getSummary() {
   BitstreamCursor Stream(Buffer);
   if (Error JumpFailed = Stream.JumpToBit(ModuleBit))
-    return std::move(JumpFailed);
+    return JumpFailed;
 
   auto Index = std::make_unique<ModuleSummaryIndex>(/*HaveGVs=*/false);
   ModuleSummaryIndexBitcodeReader R(std::move(Stream), Strtab, *Index,
                                     ModuleIdentifier, 0);
 
   if (Error Err = R.parseModule())
-    return std::move(Err);
+    return Err;
 
-  return std::move(Index);
+  return Index;
 }
 
 static Expected<bool> getEnableSplitLTOUnitFlag(BitstreamCursor &Stream,
                                                 unsigned ID) {
   if (Error Err = Stream.EnterSubBlock(ID))
-    return std::move(Err);
+    return Err;
   SmallVector<uint64_t, 64> Record;
 
   while (true) {
@@ -6593,10 +6593,10 @@ static Expected<bool> getEnableSplitLTOUnitFlag(BitstreamCursor &Stream,
 Expected<BitcodeLTOInfo> BitcodeModule::getLTOInfo() {
   BitstreamCursor Stream(Buffer);
   if (Error JumpFailed = Stream.JumpToBit(ModuleBit))
-    return std::move(JumpFailed);
+    return JumpFailed;
 
   if (Error Err = Stream.EnterSubBlock(bitc::MODULE_BLOCK_ID))
-    return std::move(Err);
+    return Err;
 
   while (true) {
     Expected<llvm::BitstreamEntry> MaybeEntry = Stream.advance();
@@ -6632,7 +6632,7 @@ Expected<BitcodeLTOInfo> BitcodeModule::getLTOInfo() {
 
       // Ignore other sub-blocks.
       if (Error Err = Stream.SkipBlock())
-        return std::move(Err);
+        return Err;
       continue;
 
     case BitstreamEntry::Record:
