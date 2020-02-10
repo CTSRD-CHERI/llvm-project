@@ -431,6 +431,7 @@ multiclass UseCNullPatterns<PatFrag NullPat> {
   def : Pat<(ptradd NullPat, (i64 0)), (COPY CNULL)>;
   def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_offset_set NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
+  def : Pat<(int_cheri_cap_address_set NullPat, GPR64Opnd:$addr), (CSetAddr CNULL, $addr)>;
   // The immediate versions should be used first!
   let AddedComplexity = 10 in {
     def : Pat<(int_cheri_cap_offset_set NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
