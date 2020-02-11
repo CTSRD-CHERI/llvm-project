@@ -294,7 +294,8 @@ def CCall : RVInstCheriTwoSrc<0x7e, 0x1, 0, OPC_CHERI, (outs),
                               (ins GPCR:$rs1, GPCR:$rs2),
                               "ccall", "$rs1, $rs2">;
 
-def : InstAlias<"cjr $cs1", (CJALR C0, GPCR:$cs1)>;
+def : InstAlias<"cjalr $cs1", (CJALR C1, GPCR:$cs1), 1>;
+def : InstAlias<"cjr $cs1", (CJALR C0, GPCR:$cs1), 1>;
 def : InstAlias<"cret", (CJALR C0, C1), 2>;
 }
 

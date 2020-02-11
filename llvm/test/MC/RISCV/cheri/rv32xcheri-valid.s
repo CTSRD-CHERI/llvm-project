@@ -105,6 +105,9 @@ cmove c1, c2
 # CHECK-INST: cjalr cra, csp
 # CHECK: encoding: [0xdb,0x00,0xc1,0xfe]
 cjalr c1, c2
+# CHECK-INST: cjalr cra, csp
+# CHECK: encoding: [0xdb,0x00,0xc1,0xfe]
+cjalr c2
 # CHECK-INST: cjalr cnull, cra
 # CHECK: encoding: [0x5b,0x80,0xc0,0xfe]
 cjr c1
