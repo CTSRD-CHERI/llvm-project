@@ -1015,6 +1015,7 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
       const SDValue &Constant = Node->getOperand(3);
 
       assert(Chain.getValueType() == MVT::Other);
+      (void)Intrinsic;
       assert(Intrinsic.getOpcode() == ISD::TargetConstant &&
              Constant.getOpcode() == ISD::Constant &&
              "Invalid instruction operand.");
@@ -1086,6 +1087,7 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
       const SDValue &Constant = Node->getOperand(4);
 
       assert(Chain.getValueType() == MVT::Other);
+      (void)Intrinsic;
       assert(Intrinsic.getOpcode() == ISD::TargetConstant &&
              Constant.getOpcode() == ISD::Constant &&
              "Invalid instruction operand.");
