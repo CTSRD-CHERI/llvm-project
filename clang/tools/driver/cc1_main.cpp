@@ -70,9 +70,7 @@ static void LLVMErrorHandler(void *UserData, const std::string &Message,
   // We cannot recover from llvm errors.  When reporting a fatal error, exit
   // with status 70 to generate crash diagnostics.  For BSD systems this is
   // defined as an internal software error.  Otherwise, exit with status 1.
-  // -fintegrated-cc1 doesn't create a reproducer unless we crash
-  // See https://reviews.llvm.org/D73742
-  abort(); // exit(GenCrashDiag ? 70 : 1);
+  exit(GenCrashDiag ? 70 : 1);
 }
 
 #ifdef CLANG_HAVE_RLIMITS
