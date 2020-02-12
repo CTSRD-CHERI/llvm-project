@@ -12209,14 +12209,16 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
 
   // fold (fadd A, (fneg B)) -> (fsub A, B)
   if ((!LegalOperations || TLI.isOperationLegalOrCustom(ISD::FSUB, VT)) &&
-      TLI.isNegatibleForFree(N1, DAG, LegalOperations, ForCodeSize) == 2)
+      TLI.getNegatibleCost(N1, DAG, LegalOperations, ForCodeSize) ==
+          TargetLowering::NegatibleCost::Cheaper)
     return DAG.getNode(
         ISD::FSUB, DL, VT, N0,
         TLI.getNegatedExpression(N1, DAG, LegalOperations, ForCodeSize), Flags);
 
   // fold (fadd (fneg A), B) -> (fsub B, A)
   if ((!LegalOperations || TLI.isOperationLegalOrCustom(ISD::FSUB, VT)) &&
-      TLI.isNegatibleForFree(N0, DAG, LegalOperations, ForCodeSize) == 2)
+      TLI.getNegatibleCost(N0, DAG, LegalOperations, ForCodeSize) ==
+          TargetLowering::NegatibleCost::Cheaper)
     return DAG.getNode(
         ISD::FSUB, DL, VT, N1,
         TLI.getNegatedExpression(N0, DAG, LegalOperations, ForCodeSize), Flags);
@@ -12398,7 +12400,8 @@ SDValue DAGCombiner::visitFSUB(SDNode *N) {
   if (N0CFP && N0CFP->isZero()) {
     if (N0CFP->isNegative() ||
         (Options.NoSignedZerosFPMath || Flags.hasNoSignedZeros())) {
-      if (TLI.isNegatibleForFree(N1, DAG, LegalOperations, ForCodeSize))
+      if (TLI.getNegatibleCost(N1, DAG, LegalOperations, ForCodeSize) !=
+          TargetLowering::NegatibleCost::Expensive)
         return TLI.getNegatedExpression(N1, DAG, LegalOperations, ForCodeSize);
       if (!LegalOperations || TLI.isOperationLegal(ISD::FNEG, VT))
         return DAG.getNode(ISD::FNEG, DL, VT, N1, Flags);
@@ -12417,7 +12420,8 @@ SDValue DAGCombiner::visitFSUB(SDNode *N) {
   }
 
   // fold (fsub A, (fneg B)) -> (fadd A, B)
-  if (TLI.isNegatibleForFree(N1, DAG, LegalOperations, ForCodeSize))
+  if (TLI.getNegatibleCost(N1, DAG, LegalOperations, ForCodeSize) !=
+      TargetLowering::NegatibleCost::Expensive)
     return DAG.getNode(
         ISD::FADD, DL, VT, N0,
         TLI.getNegatedExpression(N1, DAG, LegalOperations, ForCodeSize), Flags);
@@ -12434,16 +12438,20 @@ SDValue DAGCombiner::visitFSUB(SDNode *N) {
 /// Return true if both inputs are at least as cheap in negated form and at
 /// least one input is strictly cheaper in negated form.
 bool DAGCombiner::isCheaperToUseNegatedFPOps(SDValue X, SDValue Y) {
-  if (char LHSNeg =
-          TLI.isNegatibleForFree(X, DAG, LegalOperations, ForCodeSize))
-    if (char RHSNeg =
-            TLI.isNegatibleForFree(Y, DAG, LegalOperations, ForCodeSize))
-      // Both negated operands are at least as cheap as their counterparts.
-      // Check to see if at least one is cheaper negated.
-      if (LHSNeg == 2 || RHSNeg == 2)
-        return true;
+  TargetLowering::NegatibleCost LHSNeg =
+      TLI.getNegatibleCost(X, DAG, LegalOperations, ForCodeSize);
+  if (TargetLowering::NegatibleCost::Expensive == LHSNeg)
+    return false;
 
-  return false;
+  TargetLowering::NegatibleCost RHSNeg =
+      TLI.getNegatibleCost(Y, DAG, LegalOperations, ForCodeSize);
+  if (TargetLowering::NegatibleCost::Expensive == RHSNeg)
+    return false;
+
+  // Both negated operands are at least as cheap as their counterparts.
+  // Check to see if at least one is cheaper negated.
+  return (TargetLowering::NegatibleCost::Cheaper == LHSNeg ||
+          TargetLowering::NegatibleCost::Cheaper == RHSNeg);
 }
 
 SDValue DAGCombiner::visitFMUL(SDNode *N) {
@@ -12695,8 +12703,8 @@ SDValue DAGCombiner::visitFMA(SDNode *N) {
   // fold ((fma (fneg X), Y, (fneg Z)) -> fneg (fma X, Y, Z))
   // fold ((fma X, (fneg Y), (fneg Z)) -> fneg (fma X, Y, Z))
   if (!TLI.isFNegFree(VT) &&
-      TLI.isNegatibleForFree(SDValue(N, 0), DAG, LegalOperations,
-                             ForCodeSize) == 2)
+      TLI.getNegatibleCost(SDValue(N, 0), DAG, LegalOperations, ForCodeSize) ==
+          TargetLowering::NegatibleCost::Cheaper)
     return DAG.getNode(ISD::FNEG, DL, VT,
                        TLI.getNegatedExpression(SDValue(N, 0), DAG,
                                                 LegalOperations, ForCodeSize),
@@ -13431,11 +13439,12 @@ SDValue DAGCombiner::visitFNEG(SDNode *N) {
   if (isConstantFPBuildVectorOrConstantFP(N0))
     return DAG.getNode(ISD::FNEG, SDLoc(N), VT, N0);
 
-  if (TLI.isNegatibleForFree(N0, DAG, LegalOperations, ForCodeSize))
+  if (TLI.getNegatibleCost(N0, DAG, LegalOperations, ForCodeSize) !=
+      TargetLowering::NegatibleCost::Expensive)
     return TLI.getNegatedExpression(N0, DAG, LegalOperations, ForCodeSize);
 
   // -(X-Y) -> (Y-X) is unsafe because when X==Y, -0.0 != +0.0 FIXME: This is
-  // duplicated in isNegatibleForFree, but isNegatibleForFree doesn't know it
+  // duplicated in getNegatibleCost, but getNegatibleCost doesn't know it
   // was called from a context with a nsz flag if the input fsub does not.
   if (N0.getOpcode() == ISD::FSUB &&
       (DAG.getTarget().Options.NoSignedZerosFPMath ||
