@@ -289,6 +289,7 @@ int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
       // FIXME(ibiryukov): make profilerOutput flush in destructor instead.
       profilerOutput->flush();
       llvm::timeTraceProfilerCleanup();
+      Clang->clearOutputFiles(false);
     }
   }
 
