@@ -20,7 +20,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-DEFAULT-NEXT:  .LBB0_1: # Label of block must be emitted
 ; IL32PC64-DEFAULT-NEXT:    auipcc ca1, %captab_pcrel_hi(callee)
 ; IL32PC64-DEFAULT-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
-; IL32PC64-DEFAULT-NEXT:    cjalr cra, ca1
+; IL32PC64-DEFAULT-NEXT:    cjalr ca1
 ; IL32PC64-DEFAULT-NEXT:    clc cra, 8(csp)
 ; IL32PC64-DEFAULT-NEXT:    cincoffset csp, csp, 16
 ; IL32PC64-DEFAULT-NEXT:    cret
@@ -35,7 +35,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; L64PC128-DEFAULT-NEXT:  .LBB0_1: # Label of block must be emitted
 ; L64PC128-DEFAULT-NEXT:    auipcc ca1, %captab_pcrel_hi(callee)
 ; L64PC128-DEFAULT-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
-; L64PC128-DEFAULT-NEXT:    cjalr cra, ca1
+; L64PC128-DEFAULT-NEXT:    cjalr ca1
 ; L64PC128-DEFAULT-NEXT:    clc cra, 16(csp)
 ; L64PC128-DEFAULT-NEXT:    cincoffset csp, csp, 32
 ; L64PC128-DEFAULT-NEXT:    cret
@@ -55,7 +55,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-NEXT:  .LBB0_4: # Label of block must be emitted
 ; IL32PC64-NEXT:    auipcc ca1, %captab_pcrel_hi(callee)
 ; IL32PC64-NEXT:    clc ca1, %pcrel_lo(.LBB0_4)(ca1)
-; IL32PC64-NEXT:    cjalr cra, ca1
+; IL32PC64-NEXT:    cjalr ca1
 ; IL32PC64-NEXT:  .LBB0_5: # Label of block must be emitted
 ; IL32PC64-NEXT:    auipcc ca0, %captab_pcrel_hi(__stack_chk_guard)
 ; IL32PC64-NEXT:    clc ca0, %pcrel_lo(.LBB0_5)(ca0)
@@ -70,7 +70,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-NEXT:  .LBB0_6: # Label of block must be emitted
 ; IL32PC64-NEXT:    auipcc ca0, %captab_pcrel_hi(__stack_chk_fail)
 ; IL32PC64-NEXT:    clc ca0, %pcrel_lo(.LBB0_6)(ca0)
-; IL32PC64-NEXT:    cjalr cra, ca0
+; IL32PC64-NEXT:    cjalr ca0
 ;
 ; L64PC128-LABEL: caller:
 ; L64PC128:       # %bb.0:
@@ -87,7 +87,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; L64PC128-NEXT:  .LBB0_4: # Label of block must be emitted
 ; L64PC128-NEXT:    auipcc ca1, %captab_pcrel_hi(callee)
 ; L64PC128-NEXT:    clc ca1, %pcrel_lo(.LBB0_4)(ca1)
-; L64PC128-NEXT:    cjalr cra, ca1
+; L64PC128-NEXT:    cjalr ca1
 ; L64PC128-NEXT:  .LBB0_5: # Label of block must be emitted
 ; L64PC128-NEXT:    auipcc ca0, %captab_pcrel_hi(__stack_chk_guard)
 ; L64PC128-NEXT:    clc ca0, %pcrel_lo(.LBB0_5)(ca0)
@@ -102,7 +102,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; L64PC128-NEXT:  .LBB0_6: # Label of block must be emitted
 ; L64PC128-NEXT:    auipcc ca0, %captab_pcrel_hi(__stack_chk_fail)
 ; L64PC128-NEXT:    clc ca0, %pcrel_lo(.LBB0_6)(ca0)
-; L64PC128-NEXT:    cjalr cra, ca0
+; L64PC128-NEXT:    cjalr ca0
   %ptr = alloca i8, addrspace(200)
   call void @callee(i8 addrspace(200)* %ptr)
   ret void

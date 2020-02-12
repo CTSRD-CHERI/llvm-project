@@ -19,7 +19,7 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV32IXCHERI-IL32PC64-NEXT:    # Label of block must be emitted
 ; RV32IXCHERI-IL32PC64-NEXT:    auipcc ca1, %captab_pcrel_hi(foo)
 ; RV32IXCHERI-IL32PC64-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
-; RV32IXCHERI-IL32PC64-NEXT:    cjalr cra, ca1
+; RV32IXCHERI-IL32PC64-NEXT:    cjalr ca1
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1
 ; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, -2016
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, a0
@@ -41,7 +41,7 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV64IXCHERI-L64PC128-NEXT:    # Label of block must be emitted
 ; RV64IXCHERI-L64PC128-NEXT:    auipcc ca1, %captab_pcrel_hi(foo)
 ; RV64IXCHERI-L64PC128-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
-; RV64IXCHERI-L64PC128-NEXT:    cjalr cra, ca1
+; RV64IXCHERI-L64PC128-NEXT:    cjalr ca1
 ; RV64IXCHERI-L64PC128-NEXT:    lui a0, 1
 ; RV64IXCHERI-L64PC128-NEXT:    addiw a0, a0, -2000
 ; RV64IXCHERI-L64PC128-NEXT:    cincoffset csp, csp, a0

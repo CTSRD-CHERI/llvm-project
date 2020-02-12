@@ -17,7 +17,7 @@ define i8 @atomicrmw_xchg_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB0_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -41,7 +41,7 @@ define i8 @atomicrmw_xchg_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB0_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -69,7 +69,7 @@ define i8 @atomicrmw_xchg_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB1_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -93,7 +93,7 @@ define i8 @atomicrmw_xchg_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB1_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -121,7 +121,7 @@ define i8 @atomicrmw_xchg_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB2_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -145,7 +145,7 @@ define i8 @atomicrmw_xchg_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB2_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -173,7 +173,7 @@ define i8 @atomicrmw_xchg_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB3_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -197,7 +197,7 @@ define i8 @atomicrmw_xchg_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB3_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -225,7 +225,7 @@ define i8 @atomicrmw_xchg_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB4_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -249,7 +249,7 @@ define i8 @atomicrmw_xchg_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB4_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -277,7 +277,7 @@ define i8 @atomicrmw_add_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB5_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -301,7 +301,7 @@ define i8 @atomicrmw_add_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB5_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -329,7 +329,7 @@ define i8 @atomicrmw_add_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB6_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -353,7 +353,7 @@ define i8 @atomicrmw_add_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB6_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -381,7 +381,7 @@ define i8 @atomicrmw_add_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB7_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -405,7 +405,7 @@ define i8 @atomicrmw_add_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB7_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -433,7 +433,7 @@ define i8 @atomicrmw_add_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB8_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -457,7 +457,7 @@ define i8 @atomicrmw_add_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB8_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -485,7 +485,7 @@ define i8 @atomicrmw_add_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB9_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -509,7 +509,7 @@ define i8 @atomicrmw_add_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB9_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -537,7 +537,7 @@ define i8 @atomicrmw_sub_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB10_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -561,7 +561,7 @@ define i8 @atomicrmw_sub_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB10_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -589,7 +589,7 @@ define i8 @atomicrmw_sub_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB11_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -613,7 +613,7 @@ define i8 @atomicrmw_sub_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB11_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -641,7 +641,7 @@ define i8 @atomicrmw_sub_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB12_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -665,7 +665,7 @@ define i8 @atomicrmw_sub_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB12_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -693,7 +693,7 @@ define i8 @atomicrmw_sub_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB13_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -717,7 +717,7 @@ define i8 @atomicrmw_sub_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB13_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -745,7 +745,7 @@ define i8 @atomicrmw_sub_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB14_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -769,7 +769,7 @@ define i8 @atomicrmw_sub_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB14_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -797,7 +797,7 @@ define i8 @atomicrmw_and_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB15_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -821,7 +821,7 @@ define i8 @atomicrmw_and_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB15_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -849,7 +849,7 @@ define i8 @atomicrmw_and_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB16_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -873,7 +873,7 @@ define i8 @atomicrmw_and_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB16_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -901,7 +901,7 @@ define i8 @atomicrmw_and_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB17_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -925,7 +925,7 @@ define i8 @atomicrmw_and_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB17_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -953,7 +953,7 @@ define i8 @atomicrmw_and_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB18_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -977,7 +977,7 @@ define i8 @atomicrmw_and_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB18_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1005,7 +1005,7 @@ define i8 @atomicrmw_and_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB19_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1029,7 +1029,7 @@ define i8 @atomicrmw_and_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB19_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1057,7 +1057,7 @@ define i8 @atomicrmw_nand_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB20_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1082,7 +1082,7 @@ define i8 @atomicrmw_nand_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB20_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1111,7 +1111,7 @@ define i8 @atomicrmw_nand_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB21_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1136,7 +1136,7 @@ define i8 @atomicrmw_nand_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB21_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1165,7 +1165,7 @@ define i8 @atomicrmw_nand_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB22_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1190,7 +1190,7 @@ define i8 @atomicrmw_nand_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB22_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1219,7 +1219,7 @@ define i8 @atomicrmw_nand_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB23_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1244,7 +1244,7 @@ define i8 @atomicrmw_nand_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB23_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1273,7 +1273,7 @@ define i8 @atomicrmw_nand_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB24_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1298,7 +1298,7 @@ define i8 @atomicrmw_nand_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB24_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1327,7 +1327,7 @@ define i8 @atomicrmw_or_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB25_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1351,7 +1351,7 @@ define i8 @atomicrmw_or_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB25_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1379,7 +1379,7 @@ define i8 @atomicrmw_or_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB26_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1403,7 +1403,7 @@ define i8 @atomicrmw_or_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB26_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1431,7 +1431,7 @@ define i8 @atomicrmw_or_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB27_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1455,7 +1455,7 @@ define i8 @atomicrmw_or_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB27_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1483,7 +1483,7 @@ define i8 @atomicrmw_or_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB28_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1507,7 +1507,7 @@ define i8 @atomicrmw_or_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB28_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1535,7 +1535,7 @@ define i8 @atomicrmw_or_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB29_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1559,7 +1559,7 @@ define i8 @atomicrmw_or_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB29_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1587,7 +1587,7 @@ define i8 @atomicrmw_xor_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB30_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1611,7 +1611,7 @@ define i8 @atomicrmw_xor_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB30_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1639,7 +1639,7 @@ define i8 @atomicrmw_xor_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB31_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1663,7 +1663,7 @@ define i8 @atomicrmw_xor_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB31_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1691,7 +1691,7 @@ define i8 @atomicrmw_xor_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB32_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1715,7 +1715,7 @@ define i8 @atomicrmw_xor_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB32_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1743,7 +1743,7 @@ define i8 @atomicrmw_xor_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB33_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1767,7 +1767,7 @@ define i8 @atomicrmw_xor_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB33_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1795,7 +1795,7 @@ define i8 @atomicrmw_xor_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB34_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -1819,7 +1819,7 @@ define i8 @atomicrmw_xor_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_1)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB34_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -1868,7 +1868,7 @@ define i8 @atomicrmw_max_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB35_4
 ; RV32IXCHERI-NEXT:  .LBB35_2: # %atomicrmw.start
@@ -1935,7 +1935,7 @@ define i8 @atomicrmw_max_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB35_4
 ; RV64IXCHERI-NEXT:  .LBB35_2: # %atomicrmw.start
@@ -2006,7 +2006,7 @@ define i8 @atomicrmw_max_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB36_4
 ; RV32IXCHERI-NEXT:  .LBB36_2: # %atomicrmw.start
@@ -2073,7 +2073,7 @@ define i8 @atomicrmw_max_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB36_4
 ; RV64IXCHERI-NEXT:  .LBB36_2: # %atomicrmw.start
@@ -2144,7 +2144,7 @@ define i8 @atomicrmw_max_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB37_4
 ; RV32IXCHERI-NEXT:  .LBB37_2: # %atomicrmw.start
@@ -2211,7 +2211,7 @@ define i8 @atomicrmw_max_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB37_4
 ; RV64IXCHERI-NEXT:  .LBB37_2: # %atomicrmw.start
@@ -2282,7 +2282,7 @@ define i8 @atomicrmw_max_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB38_4
 ; RV32IXCHERI-NEXT:  .LBB38_2: # %atomicrmw.start
@@ -2349,7 +2349,7 @@ define i8 @atomicrmw_max_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB38_4
 ; RV64IXCHERI-NEXT:  .LBB38_2: # %atomicrmw.start
@@ -2420,7 +2420,7 @@ define i8 @atomicrmw_max_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB39_4
 ; RV32IXCHERI-NEXT:  .LBB39_2: # %atomicrmw.start
@@ -2487,7 +2487,7 @@ define i8 @atomicrmw_max_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB39_4
 ; RV64IXCHERI-NEXT:  .LBB39_2: # %atomicrmw.start
@@ -2558,7 +2558,7 @@ define i8 @atomicrmw_min_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB40_4
 ; RV32IXCHERI-NEXT:  .LBB40_2: # %atomicrmw.start
@@ -2625,7 +2625,7 @@ define i8 @atomicrmw_min_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB40_4
 ; RV64IXCHERI-NEXT:  .LBB40_2: # %atomicrmw.start
@@ -2696,7 +2696,7 @@ define i8 @atomicrmw_min_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB41_4
 ; RV32IXCHERI-NEXT:  .LBB41_2: # %atomicrmw.start
@@ -2763,7 +2763,7 @@ define i8 @atomicrmw_min_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB41_4
 ; RV64IXCHERI-NEXT:  .LBB41_2: # %atomicrmw.start
@@ -2834,7 +2834,7 @@ define i8 @atomicrmw_min_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB42_4
 ; RV32IXCHERI-NEXT:  .LBB42_2: # %atomicrmw.start
@@ -2901,7 +2901,7 @@ define i8 @atomicrmw_min_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB42_4
 ; RV64IXCHERI-NEXT:  .LBB42_2: # %atomicrmw.start
@@ -2972,7 +2972,7 @@ define i8 @atomicrmw_min_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB43_4
 ; RV32IXCHERI-NEXT:  .LBB43_2: # %atomicrmw.start
@@ -3039,7 +3039,7 @@ define i8 @atomicrmw_min_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB43_4
 ; RV64IXCHERI-NEXT:  .LBB43_2: # %atomicrmw.start
@@ -3110,7 +3110,7 @@ define i8 @atomicrmw_min_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB44_4
 ; RV32IXCHERI-NEXT:  .LBB44_2: # %atomicrmw.start
@@ -3177,7 +3177,7 @@ define i8 @atomicrmw_min_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB44_4
 ; RV64IXCHERI-NEXT:  .LBB44_2: # %atomicrmw.start
@@ -3247,7 +3247,7 @@ define i8 @atomicrmw_umax_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB45_4
 ; RV32IXCHERI-NEXT:  .LBB45_2: # %atomicrmw.start
@@ -3312,7 +3312,7 @@ define i8 @atomicrmw_umax_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB45_4
 ; RV64IXCHERI-NEXT:  .LBB45_2: # %atomicrmw.start
@@ -3381,7 +3381,7 @@ define i8 @atomicrmw_umax_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB46_4
 ; RV32IXCHERI-NEXT:  .LBB46_2: # %atomicrmw.start
@@ -3446,7 +3446,7 @@ define i8 @atomicrmw_umax_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB46_4
 ; RV64IXCHERI-NEXT:  .LBB46_2: # %atomicrmw.start
@@ -3515,7 +3515,7 @@ define i8 @atomicrmw_umax_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB47_4
 ; RV32IXCHERI-NEXT:  .LBB47_2: # %atomicrmw.start
@@ -3580,7 +3580,7 @@ define i8 @atomicrmw_umax_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB47_4
 ; RV64IXCHERI-NEXT:  .LBB47_2: # %atomicrmw.start
@@ -3649,7 +3649,7 @@ define i8 @atomicrmw_umax_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB48_4
 ; RV32IXCHERI-NEXT:  .LBB48_2: # %atomicrmw.start
@@ -3714,7 +3714,7 @@ define i8 @atomicrmw_umax_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB48_4
 ; RV64IXCHERI-NEXT:  .LBB48_2: # %atomicrmw.start
@@ -3783,7 +3783,7 @@ define i8 @atomicrmw_umax_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB49_4
 ; RV32IXCHERI-NEXT:  .LBB49_2: # %atomicrmw.start
@@ -3848,7 +3848,7 @@ define i8 @atomicrmw_umax_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB49_4
 ; RV64IXCHERI-NEXT:  .LBB49_2: # %atomicrmw.start
@@ -3917,7 +3917,7 @@ define i8 @atomicrmw_umin_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB50_4
 ; RV32IXCHERI-NEXT:  .LBB50_2: # %atomicrmw.start
@@ -3982,7 +3982,7 @@ define i8 @atomicrmw_umin_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB50_4
 ; RV64IXCHERI-NEXT:  .LBB50_2: # %atomicrmw.start
@@ -4051,7 +4051,7 @@ define i8 @atomicrmw_umin_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB51_4
 ; RV32IXCHERI-NEXT:  .LBB51_2: # %atomicrmw.start
@@ -4116,7 +4116,7 @@ define i8 @atomicrmw_umin_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB51_4
 ; RV64IXCHERI-NEXT:  .LBB51_2: # %atomicrmw.start
@@ -4185,7 +4185,7 @@ define i8 @atomicrmw_umin_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB52_4
 ; RV32IXCHERI-NEXT:  .LBB52_2: # %atomicrmw.start
@@ -4250,7 +4250,7 @@ define i8 @atomicrmw_umin_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB52_4
 ; RV64IXCHERI-NEXT:  .LBB52_2: # %atomicrmw.start
@@ -4319,7 +4319,7 @@ define i8 @atomicrmw_umin_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB53_4
 ; RV32IXCHERI-NEXT:  .LBB53_2: # %atomicrmw.start
@@ -4384,7 +4384,7 @@ define i8 @atomicrmw_umin_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB53_4
 ; RV64IXCHERI-NEXT:  .LBB53_2: # %atomicrmw.start
@@ -4453,7 +4453,7 @@ define i8 @atomicrmw_umin_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clb a1, 7(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB54_4
 ; RV32IXCHERI-NEXT:  .LBB54_2: # %atomicrmw.start
@@ -4518,7 +4518,7 @@ define i8 @atomicrmw_umin_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clb a1, 15(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB54_4
 ; RV64IXCHERI-NEXT:  .LBB54_2: # %atomicrmw.start
@@ -4567,7 +4567,7 @@ define i16 @atomicrmw_xchg_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB55_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4591,7 +4591,7 @@ define i16 @atomicrmw_xchg_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB55_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4619,7 +4619,7 @@ define i16 @atomicrmw_xchg_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB56_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4643,7 +4643,7 @@ define i16 @atomicrmw_xchg_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB56_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4671,7 +4671,7 @@ define i16 @atomicrmw_xchg_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB57_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4695,7 +4695,7 @@ define i16 @atomicrmw_xchg_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB57_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4723,7 +4723,7 @@ define i16 @atomicrmw_xchg_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB58_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4747,7 +4747,7 @@ define i16 @atomicrmw_xchg_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB58_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4775,7 +4775,7 @@ define i16 @atomicrmw_xchg_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB59_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4799,7 +4799,7 @@ define i16 @atomicrmw_xchg_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB59_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4827,7 +4827,7 @@ define i16 @atomicrmw_add_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB60_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4851,7 +4851,7 @@ define i16 @atomicrmw_add_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB60_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4879,7 +4879,7 @@ define i16 @atomicrmw_add_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB61_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4903,7 +4903,7 @@ define i16 @atomicrmw_add_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB61_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4931,7 +4931,7 @@ define i16 @atomicrmw_add_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB62_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -4955,7 +4955,7 @@ define i16 @atomicrmw_add_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB62_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -4983,7 +4983,7 @@ define i16 @atomicrmw_add_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB63_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5007,7 +5007,7 @@ define i16 @atomicrmw_add_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB63_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5035,7 +5035,7 @@ define i16 @atomicrmw_add_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB64_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5059,7 +5059,7 @@ define i16 @atomicrmw_add_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB64_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5087,7 +5087,7 @@ define i16 @atomicrmw_sub_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB65_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5111,7 +5111,7 @@ define i16 @atomicrmw_sub_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB65_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5139,7 +5139,7 @@ define i16 @atomicrmw_sub_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB66_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5163,7 +5163,7 @@ define i16 @atomicrmw_sub_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB66_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5191,7 +5191,7 @@ define i16 @atomicrmw_sub_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB67_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5215,7 +5215,7 @@ define i16 @atomicrmw_sub_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB67_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5243,7 +5243,7 @@ define i16 @atomicrmw_sub_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB68_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5267,7 +5267,7 @@ define i16 @atomicrmw_sub_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB68_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5295,7 +5295,7 @@ define i16 @atomicrmw_sub_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB69_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5319,7 +5319,7 @@ define i16 @atomicrmw_sub_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB69_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5347,7 +5347,7 @@ define i16 @atomicrmw_and_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB70_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5371,7 +5371,7 @@ define i16 @atomicrmw_and_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB70_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5399,7 +5399,7 @@ define i16 @atomicrmw_and_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB71_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5423,7 +5423,7 @@ define i16 @atomicrmw_and_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB71_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5451,7 +5451,7 @@ define i16 @atomicrmw_and_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB72_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5475,7 +5475,7 @@ define i16 @atomicrmw_and_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB72_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5503,7 +5503,7 @@ define i16 @atomicrmw_and_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB73_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5527,7 +5527,7 @@ define i16 @atomicrmw_and_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB73_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5555,7 +5555,7 @@ define i16 @atomicrmw_and_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB74_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5579,7 +5579,7 @@ define i16 @atomicrmw_and_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB74_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5607,7 +5607,7 @@ define i16 @atomicrmw_nand_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB75_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5632,7 +5632,7 @@ define i16 @atomicrmw_nand_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB75_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5661,7 +5661,7 @@ define i16 @atomicrmw_nand_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB76_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5686,7 +5686,7 @@ define i16 @atomicrmw_nand_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB76_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5715,7 +5715,7 @@ define i16 @atomicrmw_nand_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB77_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5740,7 +5740,7 @@ define i16 @atomicrmw_nand_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB77_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5769,7 +5769,7 @@ define i16 @atomicrmw_nand_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB78_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5794,7 +5794,7 @@ define i16 @atomicrmw_nand_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB78_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5823,7 +5823,7 @@ define i16 @atomicrmw_nand_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB79_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5848,7 +5848,7 @@ define i16 @atomicrmw_nand_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB79_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5877,7 +5877,7 @@ define i16 @atomicrmw_or_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB80_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5901,7 +5901,7 @@ define i16 @atomicrmw_or_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB80_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5929,7 +5929,7 @@ define i16 @atomicrmw_or_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB81_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -5953,7 +5953,7 @@ define i16 @atomicrmw_or_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB81_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -5981,7 +5981,7 @@ define i16 @atomicrmw_or_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB82_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6005,7 +6005,7 @@ define i16 @atomicrmw_or_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB82_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6033,7 +6033,7 @@ define i16 @atomicrmw_or_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB83_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6057,7 +6057,7 @@ define i16 @atomicrmw_or_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB83_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6085,7 +6085,7 @@ define i16 @atomicrmw_or_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB84_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6109,7 +6109,7 @@ define i16 @atomicrmw_or_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB84_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6137,7 +6137,7 @@ define i16 @atomicrmw_xor_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB85_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6161,7 +6161,7 @@ define i16 @atomicrmw_xor_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB85_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6189,7 +6189,7 @@ define i16 @atomicrmw_xor_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB86_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6213,7 +6213,7 @@ define i16 @atomicrmw_xor_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB86_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6241,7 +6241,7 @@ define i16 @atomicrmw_xor_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB87_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6265,7 +6265,7 @@ define i16 @atomicrmw_xor_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB87_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6293,7 +6293,7 @@ define i16 @atomicrmw_xor_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB88_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6317,7 +6317,7 @@ define i16 @atomicrmw_xor_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB88_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6345,7 +6345,7 @@ define i16 @atomicrmw_xor_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB89_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -6369,7 +6369,7 @@ define i16 @atomicrmw_xor_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_2)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB89_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -6418,7 +6418,7 @@ define i16 @atomicrmw_max_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB90_4
 ; RV32IXCHERI-NEXT:  .LBB90_2: # %atomicrmw.start
@@ -6485,7 +6485,7 @@ define i16 @atomicrmw_max_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB90_4
 ; RV64IXCHERI-NEXT:  .LBB90_2: # %atomicrmw.start
@@ -6556,7 +6556,7 @@ define i16 @atomicrmw_max_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB91_4
 ; RV32IXCHERI-NEXT:  .LBB91_2: # %atomicrmw.start
@@ -6623,7 +6623,7 @@ define i16 @atomicrmw_max_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB91_4
 ; RV64IXCHERI-NEXT:  .LBB91_2: # %atomicrmw.start
@@ -6694,7 +6694,7 @@ define i16 @atomicrmw_max_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB92_4
 ; RV32IXCHERI-NEXT:  .LBB92_2: # %atomicrmw.start
@@ -6761,7 +6761,7 @@ define i16 @atomicrmw_max_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB92_4
 ; RV64IXCHERI-NEXT:  .LBB92_2: # %atomicrmw.start
@@ -6832,7 +6832,7 @@ define i16 @atomicrmw_max_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB93_4
 ; RV32IXCHERI-NEXT:  .LBB93_2: # %atomicrmw.start
@@ -6899,7 +6899,7 @@ define i16 @atomicrmw_max_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB93_4
 ; RV64IXCHERI-NEXT:  .LBB93_2: # %atomicrmw.start
@@ -6970,7 +6970,7 @@ define i16 @atomicrmw_max_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB94_4
 ; RV32IXCHERI-NEXT:  .LBB94_2: # %atomicrmw.start
@@ -7037,7 +7037,7 @@ define i16 @atomicrmw_max_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB94_4
 ; RV64IXCHERI-NEXT:  .LBB94_2: # %atomicrmw.start
@@ -7108,7 +7108,7 @@ define i16 @atomicrmw_min_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB95_4
 ; RV32IXCHERI-NEXT:  .LBB95_2: # %atomicrmw.start
@@ -7175,7 +7175,7 @@ define i16 @atomicrmw_min_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB95_4
 ; RV64IXCHERI-NEXT:  .LBB95_2: # %atomicrmw.start
@@ -7246,7 +7246,7 @@ define i16 @atomicrmw_min_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB96_4
 ; RV32IXCHERI-NEXT:  .LBB96_2: # %atomicrmw.start
@@ -7313,7 +7313,7 @@ define i16 @atomicrmw_min_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB96_4
 ; RV64IXCHERI-NEXT:  .LBB96_2: # %atomicrmw.start
@@ -7384,7 +7384,7 @@ define i16 @atomicrmw_min_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB97_4
 ; RV32IXCHERI-NEXT:  .LBB97_2: # %atomicrmw.start
@@ -7451,7 +7451,7 @@ define i16 @atomicrmw_min_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB97_4
 ; RV64IXCHERI-NEXT:  .LBB97_2: # %atomicrmw.start
@@ -7522,7 +7522,7 @@ define i16 @atomicrmw_min_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB98_4
 ; RV32IXCHERI-NEXT:  .LBB98_2: # %atomicrmw.start
@@ -7589,7 +7589,7 @@ define i16 @atomicrmw_min_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB98_4
 ; RV64IXCHERI-NEXT:  .LBB98_2: # %atomicrmw.start
@@ -7660,7 +7660,7 @@ define i16 @atomicrmw_min_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 6(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB99_4
 ; RV32IXCHERI-NEXT:  .LBB99_2: # %atomicrmw.start
@@ -7727,7 +7727,7 @@ define i16 @atomicrmw_min_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB99_4
 ; RV64IXCHERI-NEXT:  .LBB99_2: # %atomicrmw.start
@@ -7800,7 +7800,7 @@ define i16 @atomicrmw_umax_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB100_4
 ; RV32IXCHERI-NEXT:  .LBB100_2: # %atomicrmw.start
@@ -7869,7 +7869,7 @@ define i16 @atomicrmw_umax_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB100_4
 ; RV64IXCHERI-NEXT:  .LBB100_2: # %atomicrmw.start
@@ -7942,7 +7942,7 @@ define i16 @atomicrmw_umax_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB101_4
 ; RV32IXCHERI-NEXT:  .LBB101_2: # %atomicrmw.start
@@ -8011,7 +8011,7 @@ define i16 @atomicrmw_umax_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB101_4
 ; RV64IXCHERI-NEXT:  .LBB101_2: # %atomicrmw.start
@@ -8084,7 +8084,7 @@ define i16 @atomicrmw_umax_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB102_4
 ; RV32IXCHERI-NEXT:  .LBB102_2: # %atomicrmw.start
@@ -8153,7 +8153,7 @@ define i16 @atomicrmw_umax_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB102_4
 ; RV64IXCHERI-NEXT:  .LBB102_2: # %atomicrmw.start
@@ -8226,7 +8226,7 @@ define i16 @atomicrmw_umax_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB103_4
 ; RV32IXCHERI-NEXT:  .LBB103_2: # %atomicrmw.start
@@ -8295,7 +8295,7 @@ define i16 @atomicrmw_umax_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB103_4
 ; RV64IXCHERI-NEXT:  .LBB103_2: # %atomicrmw.start
@@ -8368,7 +8368,7 @@ define i16 @atomicrmw_umax_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB104_4
 ; RV32IXCHERI-NEXT:  .LBB104_2: # %atomicrmw.start
@@ -8437,7 +8437,7 @@ define i16 @atomicrmw_umax_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB104_4
 ; RV64IXCHERI-NEXT:  .LBB104_2: # %atomicrmw.start
@@ -8510,7 +8510,7 @@ define i16 @atomicrmw_umin_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB105_4
 ; RV32IXCHERI-NEXT:  .LBB105_2: # %atomicrmw.start
@@ -8579,7 +8579,7 @@ define i16 @atomicrmw_umin_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwin
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB105_4
 ; RV64IXCHERI-NEXT:  .LBB105_2: # %atomicrmw.start
@@ -8652,7 +8652,7 @@ define i16 @atomicrmw_umin_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB106_4
 ; RV32IXCHERI-NEXT:  .LBB106_2: # %atomicrmw.start
@@ -8721,7 +8721,7 @@ define i16 @atomicrmw_umin_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB106_4
 ; RV64IXCHERI-NEXT:  .LBB106_2: # %atomicrmw.start
@@ -8794,7 +8794,7 @@ define i16 @atomicrmw_umin_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB107_4
 ; RV32IXCHERI-NEXT:  .LBB107_2: # %atomicrmw.start
@@ -8863,7 +8863,7 @@ define i16 @atomicrmw_umin_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB107_4
 ; RV64IXCHERI-NEXT:  .LBB107_2: # %atomicrmw.start
@@ -8936,7 +8936,7 @@ define i16 @atomicrmw_umin_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB108_4
 ; RV32IXCHERI-NEXT:  .LBB108_2: # %atomicrmw.start
@@ -9005,7 +9005,7 @@ define i16 @atomicrmw_umin_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB108_4
 ; RV64IXCHERI-NEXT:  .LBB108_2: # %atomicrmw.start
@@ -9078,7 +9078,7 @@ define i16 @atomicrmw_umin_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs0
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB109_4
 ; RV32IXCHERI-NEXT:  .LBB109_2: # %atomicrmw.start
@@ -9147,7 +9147,7 @@ define i16 @atomicrmw_umin_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clh a1, 14(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB109_4
 ; RV64IXCHERI-NEXT:  .LBB109_2: # %atomicrmw.start
@@ -9197,7 +9197,7 @@ define i32 @atomicrmw_xchg_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB110_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9215,7 +9215,7 @@ define i32 @atomicrmw_xchg_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB110_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9237,7 +9237,7 @@ define i32 @atomicrmw_xchg_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB111_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9255,7 +9255,7 @@ define i32 @atomicrmw_xchg_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB111_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9277,7 +9277,7 @@ define i32 @atomicrmw_xchg_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB112_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9295,7 +9295,7 @@ define i32 @atomicrmw_xchg_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB112_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9317,7 +9317,7 @@ define i32 @atomicrmw_xchg_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB113_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9335,7 +9335,7 @@ define i32 @atomicrmw_xchg_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB113_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9357,7 +9357,7 @@ define i32 @atomicrmw_xchg_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB114_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9375,7 +9375,7 @@ define i32 @atomicrmw_xchg_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB114_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9397,7 +9397,7 @@ define i32 @atomicrmw_add_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB115_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9415,7 +9415,7 @@ define i32 @atomicrmw_add_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB115_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9437,7 +9437,7 @@ define i32 @atomicrmw_add_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB116_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9455,7 +9455,7 @@ define i32 @atomicrmw_add_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB116_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9477,7 +9477,7 @@ define i32 @atomicrmw_add_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB117_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9495,7 +9495,7 @@ define i32 @atomicrmw_add_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB117_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9517,7 +9517,7 @@ define i32 @atomicrmw_add_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB118_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9535,7 +9535,7 @@ define i32 @atomicrmw_add_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB118_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9557,7 +9557,7 @@ define i32 @atomicrmw_add_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB119_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9575,7 +9575,7 @@ define i32 @atomicrmw_add_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB119_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9597,7 +9597,7 @@ define i32 @atomicrmw_sub_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB120_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9616,7 +9616,7 @@ define i32 @atomicrmw_sub_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB120_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9639,7 +9639,7 @@ define i32 @atomicrmw_sub_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB121_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9658,7 +9658,7 @@ define i32 @atomicrmw_sub_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB121_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9681,7 +9681,7 @@ define i32 @atomicrmw_sub_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB122_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9700,7 +9700,7 @@ define i32 @atomicrmw_sub_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB122_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9723,7 +9723,7 @@ define i32 @atomicrmw_sub_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB123_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9742,7 +9742,7 @@ define i32 @atomicrmw_sub_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB123_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9765,7 +9765,7 @@ define i32 @atomicrmw_sub_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB124_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9784,7 +9784,7 @@ define i32 @atomicrmw_sub_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB124_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9807,7 +9807,7 @@ define i32 @atomicrmw_and_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB125_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9825,7 +9825,7 @@ define i32 @atomicrmw_and_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB125_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9847,7 +9847,7 @@ define i32 @atomicrmw_and_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB126_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9865,7 +9865,7 @@ define i32 @atomicrmw_and_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB126_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9887,7 +9887,7 @@ define i32 @atomicrmw_and_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB127_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9905,7 +9905,7 @@ define i32 @atomicrmw_and_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB127_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9927,7 +9927,7 @@ define i32 @atomicrmw_and_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB128_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9945,7 +9945,7 @@ define i32 @atomicrmw_and_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB128_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -9967,7 +9967,7 @@ define i32 @atomicrmw_and_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB129_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -9985,7 +9985,7 @@ define i32 @atomicrmw_and_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB129_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10007,7 +10007,7 @@ define i32 @atomicrmw_nand_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB130_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10032,7 +10032,7 @@ define i32 @atomicrmw_nand_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB130_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10061,7 +10061,7 @@ define i32 @atomicrmw_nand_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB131_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10086,7 +10086,7 @@ define i32 @atomicrmw_nand_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB131_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10115,7 +10115,7 @@ define i32 @atomicrmw_nand_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB132_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10140,7 +10140,7 @@ define i32 @atomicrmw_nand_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB132_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10169,7 +10169,7 @@ define i32 @atomicrmw_nand_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB133_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10194,7 +10194,7 @@ define i32 @atomicrmw_nand_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB133_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10223,7 +10223,7 @@ define i32 @atomicrmw_nand_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB134_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10248,7 +10248,7 @@ define i32 @atomicrmw_nand_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB134_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10277,7 +10277,7 @@ define i32 @atomicrmw_or_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB135_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10295,7 +10295,7 @@ define i32 @atomicrmw_or_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB135_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10317,7 +10317,7 @@ define i32 @atomicrmw_or_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB136_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10335,7 +10335,7 @@ define i32 @atomicrmw_or_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB136_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10357,7 +10357,7 @@ define i32 @atomicrmw_or_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB137_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10375,7 +10375,7 @@ define i32 @atomicrmw_or_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB137_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10397,7 +10397,7 @@ define i32 @atomicrmw_or_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB138_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10415,7 +10415,7 @@ define i32 @atomicrmw_or_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB138_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10437,7 +10437,7 @@ define i32 @atomicrmw_or_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB139_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10455,7 +10455,7 @@ define i32 @atomicrmw_or_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB139_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10477,7 +10477,7 @@ define i32 @atomicrmw_xor_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB140_1)(ca3)
 ; RV32IXCHERI-NEXT:    mv a2, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10495,7 +10495,7 @@ define i32 @atomicrmw_xor_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB140_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10517,7 +10517,7 @@ define i32 @atomicrmw_xor_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB141_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10535,7 +10535,7 @@ define i32 @atomicrmw_xor_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB141_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10557,7 +10557,7 @@ define i32 @atomicrmw_xor_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB142_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10575,7 +10575,7 @@ define i32 @atomicrmw_xor_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB142_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10597,7 +10597,7 @@ define i32 @atomicrmw_xor_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB143_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10615,7 +10615,7 @@ define i32 @atomicrmw_xor_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB143_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10637,7 +10637,7 @@ define i32 @atomicrmw_xor_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB144_1)(ca3)
 ; RV32IXCHERI-NEXT:    addi a2, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca3
+; RV32IXCHERI-NEXT:    cjalr ca3
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -10655,7 +10655,7 @@ define i32 @atomicrmw_xor_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_4)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB144_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -10695,7 +10695,7 @@ define i32 @atomicrmw_max_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB145_4
 ; RV32IXCHERI-NEXT:  .LBB145_2: # %atomicrmw.start
@@ -10748,7 +10748,7 @@ define i32 @atomicrmw_max_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB145_4
 ; RV64IXCHERI-NEXT:  .LBB145_2: # %atomicrmw.start
@@ -10805,7 +10805,7 @@ define i32 @atomicrmw_max_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB146_4
 ; RV32IXCHERI-NEXT:  .LBB146_2: # %atomicrmw.start
@@ -10858,7 +10858,7 @@ define i32 @atomicrmw_max_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB146_4
 ; RV64IXCHERI-NEXT:  .LBB146_2: # %atomicrmw.start
@@ -10915,7 +10915,7 @@ define i32 @atomicrmw_max_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB147_4
 ; RV32IXCHERI-NEXT:  .LBB147_2: # %atomicrmw.start
@@ -10968,7 +10968,7 @@ define i32 @atomicrmw_max_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB147_4
 ; RV64IXCHERI-NEXT:  .LBB147_2: # %atomicrmw.start
@@ -11025,7 +11025,7 @@ define i32 @atomicrmw_max_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB148_4
 ; RV32IXCHERI-NEXT:  .LBB148_2: # %atomicrmw.start
@@ -11078,7 +11078,7 @@ define i32 @atomicrmw_max_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB148_4
 ; RV64IXCHERI-NEXT:  .LBB148_2: # %atomicrmw.start
@@ -11135,7 +11135,7 @@ define i32 @atomicrmw_max_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB149_4
 ; RV32IXCHERI-NEXT:  .LBB149_2: # %atomicrmw.start
@@ -11188,7 +11188,7 @@ define i32 @atomicrmw_max_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB149_4
 ; RV64IXCHERI-NEXT:  .LBB149_2: # %atomicrmw.start
@@ -11245,7 +11245,7 @@ define i32 @atomicrmw_min_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB150_4
 ; RV32IXCHERI-NEXT:  .LBB150_2: # %atomicrmw.start
@@ -11298,7 +11298,7 @@ define i32 @atomicrmw_min_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwind
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB150_4
 ; RV64IXCHERI-NEXT:  .LBB150_2: # %atomicrmw.start
@@ -11355,7 +11355,7 @@ define i32 @atomicrmw_min_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB151_4
 ; RV32IXCHERI-NEXT:  .LBB151_2: # %atomicrmw.start
@@ -11408,7 +11408,7 @@ define i32 @atomicrmw_min_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB151_4
 ; RV64IXCHERI-NEXT:  .LBB151_2: # %atomicrmw.start
@@ -11465,7 +11465,7 @@ define i32 @atomicrmw_min_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB152_4
 ; RV32IXCHERI-NEXT:  .LBB152_2: # %atomicrmw.start
@@ -11518,7 +11518,7 @@ define i32 @atomicrmw_min_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB152_4
 ; RV64IXCHERI-NEXT:  .LBB152_2: # %atomicrmw.start
@@ -11575,7 +11575,7 @@ define i32 @atomicrmw_min_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB153_4
 ; RV32IXCHERI-NEXT:  .LBB153_2: # %atomicrmw.start
@@ -11628,7 +11628,7 @@ define i32 @atomicrmw_min_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB153_4
 ; RV64IXCHERI-NEXT:  .LBB153_2: # %atomicrmw.start
@@ -11685,7 +11685,7 @@ define i32 @atomicrmw_min_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB154_4
 ; RV32IXCHERI-NEXT:  .LBB154_2: # %atomicrmw.start
@@ -11738,7 +11738,7 @@ define i32 @atomicrmw_min_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB154_4
 ; RV64IXCHERI-NEXT:  .LBB154_2: # %atomicrmw.start
@@ -11795,7 +11795,7 @@ define i32 @atomicrmw_umax_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB155_4
 ; RV32IXCHERI-NEXT:  .LBB155_2: # %atomicrmw.start
@@ -11848,7 +11848,7 @@ define i32 @atomicrmw_umax_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB155_4
 ; RV64IXCHERI-NEXT:  .LBB155_2: # %atomicrmw.start
@@ -11905,7 +11905,7 @@ define i32 @atomicrmw_umax_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB156_4
 ; RV32IXCHERI-NEXT:  .LBB156_2: # %atomicrmw.start
@@ -11958,7 +11958,7 @@ define i32 @atomicrmw_umax_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB156_4
 ; RV64IXCHERI-NEXT:  .LBB156_2: # %atomicrmw.start
@@ -12015,7 +12015,7 @@ define i32 @atomicrmw_umax_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB157_4
 ; RV32IXCHERI-NEXT:  .LBB157_2: # %atomicrmw.start
@@ -12068,7 +12068,7 @@ define i32 @atomicrmw_umax_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB157_4
 ; RV64IXCHERI-NEXT:  .LBB157_2: # %atomicrmw.start
@@ -12125,7 +12125,7 @@ define i32 @atomicrmw_umax_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB158_4
 ; RV32IXCHERI-NEXT:  .LBB158_2: # %atomicrmw.start
@@ -12178,7 +12178,7 @@ define i32 @atomicrmw_umax_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB158_4
 ; RV64IXCHERI-NEXT:  .LBB158_2: # %atomicrmw.start
@@ -12235,7 +12235,7 @@ define i32 @atomicrmw_umax_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB159_4
 ; RV32IXCHERI-NEXT:  .LBB159_2: # %atomicrmw.start
@@ -12288,7 +12288,7 @@ define i32 @atomicrmw_umax_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB159_4
 ; RV64IXCHERI-NEXT:  .LBB159_2: # %atomicrmw.start
@@ -12345,7 +12345,7 @@ define i32 @atomicrmw_umin_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB160_4
 ; RV32IXCHERI-NEXT:  .LBB160_2: # %atomicrmw.start
@@ -12398,7 +12398,7 @@ define i32 @atomicrmw_umin_i32_monotonic(i32 addrspace(200)* %a, i32 %b) nounwin
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB160_4
 ; RV64IXCHERI-NEXT:  .LBB160_2: # %atomicrmw.start
@@ -12455,7 +12455,7 @@ define i32 @atomicrmw_umin_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB161_4
 ; RV32IXCHERI-NEXT:  .LBB161_2: # %atomicrmw.start
@@ -12508,7 +12508,7 @@ define i32 @atomicrmw_umin_i32_acquire(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB161_4
 ; RV64IXCHERI-NEXT:  .LBB161_2: # %atomicrmw.start
@@ -12565,7 +12565,7 @@ define i32 @atomicrmw_umin_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB162_4
 ; RV32IXCHERI-NEXT:  .LBB162_2: # %atomicrmw.start
@@ -12618,7 +12618,7 @@ define i32 @atomicrmw_umin_i32_release(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB162_4
 ; RV64IXCHERI-NEXT:  .LBB162_2: # %atomicrmw.start
@@ -12675,7 +12675,7 @@ define i32 @atomicrmw_umin_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB163_4
 ; RV32IXCHERI-NEXT:  .LBB163_2: # %atomicrmw.start
@@ -12728,7 +12728,7 @@ define i32 @atomicrmw_umin_i32_acq_rel(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB163_4
 ; RV64IXCHERI-NEXT:  .LBB163_2: # %atomicrmw.start
@@ -12785,7 +12785,7 @@ define i32 @atomicrmw_umin_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs2
 ; RV32IXCHERI-NEXT:    cmove ca1, cs1
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB164_4
 ; RV32IXCHERI-NEXT:  .LBB164_2: # %atomicrmw.start
@@ -12838,7 +12838,7 @@ define i32 @atomicrmw_umin_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs3
 ; RV64IXCHERI-NEXT:    cmove ca1, cs0
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB164_4
 ; RV64IXCHERI-NEXT:  .LBB164_2: # %atomicrmw.start
@@ -12877,7 +12877,7 @@ define i64 @atomicrmw_xchg_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB165_1)(ca4)
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -12890,7 +12890,7 @@ define i64 @atomicrmw_xchg_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB165_1)(ca4)
 ; RV32IAXCHERI-NEXT:    mv a3, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -12903,7 +12903,7 @@ define i64 @atomicrmw_xchg_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB165_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -12925,7 +12925,7 @@ define i64 @atomicrmw_xchg_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB166_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -12938,7 +12938,7 @@ define i64 @atomicrmw_xchg_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB166_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 2
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -12951,7 +12951,7 @@ define i64 @atomicrmw_xchg_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB166_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -12973,7 +12973,7 @@ define i64 @atomicrmw_xchg_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB167_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -12986,7 +12986,7 @@ define i64 @atomicrmw_xchg_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB167_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 3
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -12999,7 +12999,7 @@ define i64 @atomicrmw_xchg_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB167_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13021,7 +13021,7 @@ define i64 @atomicrmw_xchg_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB168_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13034,7 +13034,7 @@ define i64 @atomicrmw_xchg_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB168_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 4
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13047,7 +13047,7 @@ define i64 @atomicrmw_xchg_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB168_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13069,7 +13069,7 @@ define i64 @atomicrmw_xchg_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB169_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13082,7 +13082,7 @@ define i64 @atomicrmw_xchg_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB169_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 5
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13095,7 +13095,7 @@ define i64 @atomicrmw_xchg_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB169_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13117,7 +13117,7 @@ define i64 @atomicrmw_add_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB170_1)(ca4)
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13130,7 +13130,7 @@ define i64 @atomicrmw_add_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB170_1)(ca4)
 ; RV32IAXCHERI-NEXT:    mv a3, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13143,7 +13143,7 @@ define i64 @atomicrmw_add_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB170_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13165,7 +13165,7 @@ define i64 @atomicrmw_add_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB171_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13178,7 +13178,7 @@ define i64 @atomicrmw_add_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB171_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 2
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13191,7 +13191,7 @@ define i64 @atomicrmw_add_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB171_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13213,7 +13213,7 @@ define i64 @atomicrmw_add_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB172_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13226,7 +13226,7 @@ define i64 @atomicrmw_add_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB172_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 3
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13239,7 +13239,7 @@ define i64 @atomicrmw_add_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB172_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13261,7 +13261,7 @@ define i64 @atomicrmw_add_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB173_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13274,7 +13274,7 @@ define i64 @atomicrmw_add_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB173_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 4
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13287,7 +13287,7 @@ define i64 @atomicrmw_add_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB173_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13309,7 +13309,7 @@ define i64 @atomicrmw_add_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB174_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13322,7 +13322,7 @@ define i64 @atomicrmw_add_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB174_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 5
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13335,7 +13335,7 @@ define i64 @atomicrmw_add_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB174_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13357,7 +13357,7 @@ define i64 @atomicrmw_sub_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB175_1)(ca4)
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13370,7 +13370,7 @@ define i64 @atomicrmw_sub_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB175_1)(ca4)
 ; RV32IAXCHERI-NEXT:    mv a3, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13383,7 +13383,7 @@ define i64 @atomicrmw_sub_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB175_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13406,7 +13406,7 @@ define i64 @atomicrmw_sub_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB176_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13419,7 +13419,7 @@ define i64 @atomicrmw_sub_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB176_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 2
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13432,7 +13432,7 @@ define i64 @atomicrmw_sub_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB176_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13455,7 +13455,7 @@ define i64 @atomicrmw_sub_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB177_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13468,7 +13468,7 @@ define i64 @atomicrmw_sub_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB177_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 3
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13481,7 +13481,7 @@ define i64 @atomicrmw_sub_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB177_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13504,7 +13504,7 @@ define i64 @atomicrmw_sub_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB178_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13517,7 +13517,7 @@ define i64 @atomicrmw_sub_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB178_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 4
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13530,7 +13530,7 @@ define i64 @atomicrmw_sub_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB178_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13553,7 +13553,7 @@ define i64 @atomicrmw_sub_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB179_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13566,7 +13566,7 @@ define i64 @atomicrmw_sub_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB179_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 5
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13579,7 +13579,7 @@ define i64 @atomicrmw_sub_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB179_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13602,7 +13602,7 @@ define i64 @atomicrmw_and_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB180_1)(ca4)
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13615,7 +13615,7 @@ define i64 @atomicrmw_and_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB180_1)(ca4)
 ; RV32IAXCHERI-NEXT:    mv a3, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13628,7 +13628,7 @@ define i64 @atomicrmw_and_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB180_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13650,7 +13650,7 @@ define i64 @atomicrmw_and_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB181_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13663,7 +13663,7 @@ define i64 @atomicrmw_and_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB181_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 2
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13676,7 +13676,7 @@ define i64 @atomicrmw_and_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB181_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13698,7 +13698,7 @@ define i64 @atomicrmw_and_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB182_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13711,7 +13711,7 @@ define i64 @atomicrmw_and_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB182_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 3
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13724,7 +13724,7 @@ define i64 @atomicrmw_and_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB182_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13746,7 +13746,7 @@ define i64 @atomicrmw_and_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB183_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13759,7 +13759,7 @@ define i64 @atomicrmw_and_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB183_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 4
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13772,7 +13772,7 @@ define i64 @atomicrmw_and_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB183_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13794,7 +13794,7 @@ define i64 @atomicrmw_and_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB184_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13807,7 +13807,7 @@ define i64 @atomicrmw_and_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB184_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 5
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13820,7 +13820,7 @@ define i64 @atomicrmw_and_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB184_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13842,7 +13842,7 @@ define i64 @atomicrmw_nand_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB185_1)(ca4)
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13855,7 +13855,7 @@ define i64 @atomicrmw_nand_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB185_1)(ca4)
 ; RV32IAXCHERI-NEXT:    mv a3, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13868,7 +13868,7 @@ define i64 @atomicrmw_nand_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB185_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13897,7 +13897,7 @@ define i64 @atomicrmw_nand_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB186_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13910,7 +13910,7 @@ define i64 @atomicrmw_nand_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB186_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 2
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13923,7 +13923,7 @@ define i64 @atomicrmw_nand_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB186_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -13952,7 +13952,7 @@ define i64 @atomicrmw_nand_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB187_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -13965,7 +13965,7 @@ define i64 @atomicrmw_nand_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB187_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 3
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -13978,7 +13978,7 @@ define i64 @atomicrmw_nand_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB187_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14007,7 +14007,7 @@ define i64 @atomicrmw_nand_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB188_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14020,7 +14020,7 @@ define i64 @atomicrmw_nand_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB188_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 4
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14033,7 +14033,7 @@ define i64 @atomicrmw_nand_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB188_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14062,7 +14062,7 @@ define i64 @atomicrmw_nand_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB189_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14075,7 +14075,7 @@ define i64 @atomicrmw_nand_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB189_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 5
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14088,7 +14088,7 @@ define i64 @atomicrmw_nand_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB189_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14117,7 +14117,7 @@ define i64 @atomicrmw_or_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB190_1)(ca4)
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14130,7 +14130,7 @@ define i64 @atomicrmw_or_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB190_1)(ca4)
 ; RV32IAXCHERI-NEXT:    mv a3, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14143,7 +14143,7 @@ define i64 @atomicrmw_or_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB190_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14165,7 +14165,7 @@ define i64 @atomicrmw_or_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB191_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14178,7 +14178,7 @@ define i64 @atomicrmw_or_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB191_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 2
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14191,7 +14191,7 @@ define i64 @atomicrmw_or_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB191_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14213,7 +14213,7 @@ define i64 @atomicrmw_or_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB192_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14226,7 +14226,7 @@ define i64 @atomicrmw_or_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB192_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 3
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14239,7 +14239,7 @@ define i64 @atomicrmw_or_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB192_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14261,7 +14261,7 @@ define i64 @atomicrmw_or_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB193_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14274,7 +14274,7 @@ define i64 @atomicrmw_or_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB193_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 4
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14287,7 +14287,7 @@ define i64 @atomicrmw_or_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB193_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14309,7 +14309,7 @@ define i64 @atomicrmw_or_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB194_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14322,7 +14322,7 @@ define i64 @atomicrmw_or_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB194_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 5
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14335,7 +14335,7 @@ define i64 @atomicrmw_or_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB194_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14357,7 +14357,7 @@ define i64 @atomicrmw_xor_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB195_1)(ca4)
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14370,7 +14370,7 @@ define i64 @atomicrmw_xor_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB195_1)(ca4)
 ; RV32IAXCHERI-NEXT:    mv a3, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14383,7 +14383,7 @@ define i64 @atomicrmw_xor_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB195_1)(ca3)
 ; RV64IXCHERI-NEXT:    mv a2, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14405,7 +14405,7 @@ define i64 @atomicrmw_xor_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB196_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14418,7 +14418,7 @@ define i64 @atomicrmw_xor_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB196_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 2
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14431,7 +14431,7 @@ define i64 @atomicrmw_xor_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB196_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 2
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14453,7 +14453,7 @@ define i64 @atomicrmw_xor_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB197_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14466,7 +14466,7 @@ define i64 @atomicrmw_xor_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB197_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 3
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14479,7 +14479,7 @@ define i64 @atomicrmw_xor_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB197_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 3
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14501,7 +14501,7 @@ define i64 @atomicrmw_xor_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB198_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14514,7 +14514,7 @@ define i64 @atomicrmw_xor_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB198_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 4
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14527,7 +14527,7 @@ define i64 @atomicrmw_xor_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB198_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 4
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14549,7 +14549,7 @@ define i64 @atomicrmw_xor_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB199_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -14562,7 +14562,7 @@ define i64 @atomicrmw_xor_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    auipcc ca4, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV32IAXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB199_1)(ca4)
 ; RV32IAXCHERI-NEXT:    addi a3, zero, 5
-; RV32IAXCHERI-NEXT:    cjalr cra, ca4
+; RV32IAXCHERI-NEXT:    cjalr ca4
 ; RV32IAXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IAXCHERI-NEXT:    cret
@@ -14575,7 +14575,7 @@ define i64 @atomicrmw_xor_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB199_1)(ca3)
 ; RV64IXCHERI-NEXT:    addi a2, zero, 5
-; RV64IXCHERI-NEXT:    cjalr cra, ca3
+; RV64IXCHERI-NEXT:    cjalr ca3
 ; RV64IXCHERI-NEXT:    clc cra, 0(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
@@ -14620,7 +14620,7 @@ define i64 @atomicrmw_max_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a4, zero
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB200_7
@@ -14685,7 +14685,7 @@ define i64 @atomicrmw_max_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a4, zero
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB200_7
@@ -14745,7 +14745,7 @@ define i64 @atomicrmw_max_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB200_4
 ; RV64IXCHERI-NEXT:  .LBB200_2: # %atomicrmw.start
@@ -14805,7 +14805,7 @@ define i64 @atomicrmw_max_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB201_7
@@ -14870,7 +14870,7 @@ define i64 @atomicrmw_max_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB201_7
@@ -14930,7 +14930,7 @@ define i64 @atomicrmw_max_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB201_4
 ; RV64IXCHERI-NEXT:  .LBB201_2: # %atomicrmw.start
@@ -14990,7 +14990,7 @@ define i64 @atomicrmw_max_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB202_7
@@ -15055,7 +15055,7 @@ define i64 @atomicrmw_max_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB202_7
@@ -15115,7 +15115,7 @@ define i64 @atomicrmw_max_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB202_4
 ; RV64IXCHERI-NEXT:  .LBB202_2: # %atomicrmw.start
@@ -15175,7 +15175,7 @@ define i64 @atomicrmw_max_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB203_7
@@ -15240,7 +15240,7 @@ define i64 @atomicrmw_max_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB203_7
@@ -15300,7 +15300,7 @@ define i64 @atomicrmw_max_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB203_4
 ; RV64IXCHERI-NEXT:  .LBB203_2: # %atomicrmw.start
@@ -15360,7 +15360,7 @@ define i64 @atomicrmw_max_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB204_7
@@ -15425,7 +15425,7 @@ define i64 @atomicrmw_max_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB204_7
@@ -15485,7 +15485,7 @@ define i64 @atomicrmw_max_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB204_4
 ; RV64IXCHERI-NEXT:  .LBB204_2: # %atomicrmw.start
@@ -15545,7 +15545,7 @@ define i64 @atomicrmw_min_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a4, zero
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB205_7
@@ -15611,7 +15611,7 @@ define i64 @atomicrmw_min_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a4, zero
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB205_7
@@ -15672,7 +15672,7 @@ define i64 @atomicrmw_min_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB205_4
 ; RV64IXCHERI-NEXT:  .LBB205_2: # %atomicrmw.start
@@ -15732,7 +15732,7 @@ define i64 @atomicrmw_min_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB206_7
@@ -15798,7 +15798,7 @@ define i64 @atomicrmw_min_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB206_7
@@ -15859,7 +15859,7 @@ define i64 @atomicrmw_min_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB206_4
 ; RV64IXCHERI-NEXT:  .LBB206_2: # %atomicrmw.start
@@ -15919,7 +15919,7 @@ define i64 @atomicrmw_min_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB207_7
@@ -15985,7 +15985,7 @@ define i64 @atomicrmw_min_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB207_7
@@ -16046,7 +16046,7 @@ define i64 @atomicrmw_min_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB207_4
 ; RV64IXCHERI-NEXT:  .LBB207_2: # %atomicrmw.start
@@ -16106,7 +16106,7 @@ define i64 @atomicrmw_min_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB208_7
@@ -16172,7 +16172,7 @@ define i64 @atomicrmw_min_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB208_7
@@ -16233,7 +16233,7 @@ define i64 @atomicrmw_min_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB208_4
 ; RV64IXCHERI-NEXT:  .LBB208_2: # %atomicrmw.start
@@ -16293,7 +16293,7 @@ define i64 @atomicrmw_min_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB209_7
@@ -16359,7 +16359,7 @@ define i64 @atomicrmw_min_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB209_7
@@ -16420,7 +16420,7 @@ define i64 @atomicrmw_min_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB209_4
 ; RV64IXCHERI-NEXT:  .LBB209_2: # %atomicrmw.start
@@ -16480,7 +16480,7 @@ define i64 @atomicrmw_umax_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a4, zero
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB210_7
@@ -16545,7 +16545,7 @@ define i64 @atomicrmw_umax_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a4, zero
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB210_7
@@ -16605,7 +16605,7 @@ define i64 @atomicrmw_umax_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB210_4
 ; RV64IXCHERI-NEXT:  .LBB210_2: # %atomicrmw.start
@@ -16665,7 +16665,7 @@ define i64 @atomicrmw_umax_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB211_7
@@ -16730,7 +16730,7 @@ define i64 @atomicrmw_umax_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB211_7
@@ -16790,7 +16790,7 @@ define i64 @atomicrmw_umax_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB211_4
 ; RV64IXCHERI-NEXT:  .LBB211_2: # %atomicrmw.start
@@ -16850,7 +16850,7 @@ define i64 @atomicrmw_umax_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB212_7
@@ -16915,7 +16915,7 @@ define i64 @atomicrmw_umax_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB212_7
@@ -16975,7 +16975,7 @@ define i64 @atomicrmw_umax_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB212_4
 ; RV64IXCHERI-NEXT:  .LBB212_2: # %atomicrmw.start
@@ -17035,7 +17035,7 @@ define i64 @atomicrmw_umax_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB213_7
@@ -17100,7 +17100,7 @@ define i64 @atomicrmw_umax_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB213_7
@@ -17160,7 +17160,7 @@ define i64 @atomicrmw_umax_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB213_4
 ; RV64IXCHERI-NEXT:  .LBB213_2: # %atomicrmw.start
@@ -17220,7 +17220,7 @@ define i64 @atomicrmw_umax_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB214_7
@@ -17285,7 +17285,7 @@ define i64 @atomicrmw_umax_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB214_7
@@ -17345,7 +17345,7 @@ define i64 @atomicrmw_umax_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB214_4
 ; RV64IXCHERI-NEXT:  .LBB214_2: # %atomicrmw.start
@@ -17405,7 +17405,7 @@ define i64 @atomicrmw_umin_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a4, zero
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB215_7
@@ -17471,7 +17471,7 @@ define i64 @atomicrmw_umin_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a4, zero
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB215_7
@@ -17532,7 +17532,7 @@ define i64 @atomicrmw_umin_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB215_4
 ; RV64IXCHERI-NEXT:  .LBB215_2: # %atomicrmw.start
@@ -17592,7 +17592,7 @@ define i64 @atomicrmw_umin_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB216_7
@@ -17658,7 +17658,7 @@ define i64 @atomicrmw_umin_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB216_7
@@ -17719,7 +17719,7 @@ define i64 @atomicrmw_umin_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB216_4
 ; RV64IXCHERI-NEXT:  .LBB216_2: # %atomicrmw.start
@@ -17779,7 +17779,7 @@ define i64 @atomicrmw_umin_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IXCHERI-NEXT:    mv a5, zero
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB217_7
@@ -17845,7 +17845,7 @@ define i64 @atomicrmw_umin_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
 ; RV32IAXCHERI-NEXT:    mv a5, zero
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB217_7
@@ -17906,7 +17906,7 @@ define i64 @atomicrmw_umin_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB217_4
 ; RV64IXCHERI-NEXT:  .LBB217_2: # %atomicrmw.start
@@ -17966,7 +17966,7 @@ define i64 @atomicrmw_umin_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB218_7
@@ -18032,7 +18032,7 @@ define i64 @atomicrmw_umin_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB218_7
@@ -18093,7 +18093,7 @@ define i64 @atomicrmw_umin_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB218_4
 ; RV64IXCHERI-NEXT:  .LBB218_2: # %atomicrmw.start
@@ -18153,7 +18153,7 @@ define i64 @atomicrmw_umin_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IXCHERI-NEXT:    cmove ca1, cs4
-; RV32IXCHERI-NEXT:    cjalr cra, cs1
+; RV32IXCHERI-NEXT:    cjalr cs1
 ; RV32IXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IXCHERI-NEXT:    bnez a0, .LBB219_7
@@ -18219,7 +18219,7 @@ define i64 @atomicrmw_umin_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IAXCHERI-NEXT:    cmove ca0, cs3
 ; RV32IAXCHERI-NEXT:    cmove ca1, cs4
-; RV32IAXCHERI-NEXT:    cjalr cra, cs1
+; RV32IAXCHERI-NEXT:    cjalr cs1
 ; RV32IAXCHERI-NEXT:    clw a1, 12(csp)
 ; RV32IAXCHERI-NEXT:    clw a4, 8(csp)
 ; RV32IAXCHERI-NEXT:    bnez a0, .LBB219_7
@@ -18280,7 +18280,7 @@ define i64 @atomicrmw_umin_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca0, cs2
 ; RV64IXCHERI-NEXT:    cmove ca1, cs1
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    cld a1, 8(csp)
 ; RV64IXCHERI-NEXT:    bnez a0, .LBB219_4
 ; RV64IXCHERI-NEXT:  .LBB219_2: # %atomicrmw.start
@@ -18326,7 +18326,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)* addrs
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    cmove ca1, ca4
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 24(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
@@ -18354,7 +18354,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)* addrs
 ; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    cmove ca1, ca4
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV64IXCHERI-NEXT:    clc cra, 32(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
@@ -18386,7 +18386,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)* addrspa
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 24(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
@@ -18414,7 +18414,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)* addrspa
 ; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV64IXCHERI-NEXT:    clc cra, 32(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
@@ -18446,7 +18446,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)* addrspa
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 3
 ; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 24(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
@@ -18474,7 +18474,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)* addrspa
 ; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 3
 ; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV64IXCHERI-NEXT:    clc cra, 32(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
@@ -18506,7 +18506,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)* addrspa
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 4
 ; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 24(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
@@ -18534,7 +18534,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)* addrspa
 ; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 4
 ; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV64IXCHERI-NEXT:    clc cra, 32(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
@@ -18566,7 +18566,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)* addrspa
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 24(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
@@ -18594,7 +18594,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)* addrspa
 ; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr cra, ca5
+; RV64IXCHERI-NEXT:    cjalr ca5
 ; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV64IXCHERI-NEXT:    clc cra, 32(csp)
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48

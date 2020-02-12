@@ -18,7 +18,7 @@ define i8 addrspace(200)* @atomic_load_cap_unordered(i8 addrspace(200)* addrspac
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB0_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
@@ -46,7 +46,7 @@ define i8 addrspace(200)* @atomic_load_cap_monotonic(i8 addrspace(200)* addrspac
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB1_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
@@ -74,7 +74,7 @@ define i8 addrspace(200)* @atomic_load_cap_acquire(i8 addrspace(200)* addrspace(
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB2_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
@@ -103,7 +103,7 @@ define i8 addrspace(200)* @atomic_load_cap_seq_cst(i8 addrspace(200)* addrspace(
 ; RV32IXCHERI-NEXT:    clc ca4, %pcrel_lo(.LBB3_1)(ca4)
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc ca0, 0(csp)
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
@@ -135,7 +135,7 @@ define void @atomic_store_cap_unordered(i8 addrspace(200)* addrspace(200)* %a, i
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    cmove ca1, ca3
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -164,7 +164,7 @@ define void @atomic_store_cap_monotonic(i8 addrspace(200)* addrspace(200)* %a, i
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    cmove ca1, ca3
 ; RV32IXCHERI-NEXT:    mv a3, zero
-; RV32IXCHERI-NEXT:    cjalr cra, ca4
+; RV32IXCHERI-NEXT:    cjalr ca4
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -193,7 +193,7 @@ define void @atomic_store_cap_release(i8 addrspace(200)* addrspace(200)* %a, i8 
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
 ; RV32IXCHERI-NEXT:    cmove ca1, ca4
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
@@ -223,7 +223,7 @@ define void @atomic_store_cap_seq_cst(i8 addrspace(200)* addrspace(200)* %a, i8 
 ; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
 ; RV32IXCHERI-NEXT:    cmove ca1, ca4
-; RV32IXCHERI-NEXT:    cjalr cra, ca5
+; RV32IXCHERI-NEXT:    cjalr ca5
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp)
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret

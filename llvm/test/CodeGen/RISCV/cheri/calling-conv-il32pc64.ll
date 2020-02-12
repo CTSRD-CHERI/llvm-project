@@ -118,7 +118,7 @@ define void @test_varargs_odd_cap_reg() nounwind {
 ; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(varargs)
 ; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB2_1)(ca1)
 ; CHECK-NEXT:    addi a0, zero, 1
-; CHECK-NEXT:    cjalr cra, ca1
+; CHECK-NEXT:    cjalr ca1
 ; CHECK-NEXT:    clc cra, 8(csp)
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    cret
