@@ -537,7 +537,6 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
       permissions |= CaptablePermissions<ELFT>::function;
     } else if (auto os = reloc.target.sym()->getOutputSection()) {
       assert(!reloc.target.sym()->isTls());
-      assert((os->flags & SHF_TLS) == 0);
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
       if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
         permissions |= CaptablePermissions<ELFT>::readOnly;
