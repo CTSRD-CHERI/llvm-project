@@ -29,6 +29,8 @@ define void @cmpxchg_i8_monotonic_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_monotonic_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB0_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB0_3
@@ -58,6 +60,8 @@ define void @cmpxchg_i8_monotonic_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_monotonic_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB0_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB0_3
@@ -91,6 +95,8 @@ define void @cmpxchg_i8_acquire_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_acquire_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB1_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB1_3
@@ -120,6 +126,8 @@ define void @cmpxchg_i8_acquire_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_acquire_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB1_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB1_3
@@ -153,6 +161,8 @@ define void @cmpxchg_i8_acquire_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_acquire_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB2_3
@@ -182,6 +192,8 @@ define void @cmpxchg_i8_acquire_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_acquire_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB2_3
@@ -215,6 +227,8 @@ define void @cmpxchg_i8_release_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_release_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB3_3
@@ -244,6 +258,8 @@ define void @cmpxchg_i8_release_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_release_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB3_3
@@ -277,6 +293,8 @@ define void @cmpxchg_i8_release_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_release_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB4_3
@@ -306,6 +324,8 @@ define void @cmpxchg_i8_release_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_release_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB4_3
@@ -339,6 +359,8 @@ define void @cmpxchg_i8_acq_rel_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_acq_rel_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB5_3
@@ -368,6 +390,8 @@ define void @cmpxchg_i8_acq_rel_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_acq_rel_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB5_3
@@ -401,6 +425,8 @@ define void @cmpxchg_i8_acq_rel_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_acq_rel_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB6_3
@@ -430,6 +456,8 @@ define void @cmpxchg_i8_acq_rel_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_acq_rel_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB6_3
@@ -463,6 +491,8 @@ define void @cmpxchg_i8_seq_cst_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_seq_cst_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB7_3
@@ -492,6 +522,8 @@ define void @cmpxchg_i8_seq_cst_monotonic(i8 addrspace(200)* %ptr, i8 %cmp, i8 %
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_seq_cst_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB7_3
@@ -525,6 +557,8 @@ define void @cmpxchg_i8_seq_cst_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_seq_cst_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB8_3
@@ -554,6 +588,8 @@ define void @cmpxchg_i8_seq_cst_acquire(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_seq_cst_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB8_3
@@ -587,6 +623,8 @@ define void @cmpxchg_i8_seq_cst_seq_cst(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i8_seq_cst_seq_cst:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 24
+; RV32IAXCHERI-NEXT:    srai a1, a1, 24
 ; RV32IAXCHERI-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.b.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB9_3
@@ -616,6 +654,8 @@ define void @cmpxchg_i8_seq_cst_seq_cst(i8 addrspace(200)* %ptr, i8 %cmp, i8 %va
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i8_seq_cst_seq_cst:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 56
+; RV64IAXCHERI-NEXT:    srai a1, a1, 56
 ; RV64IAXCHERI-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.b.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB9_3
@@ -650,6 +690,8 @@ define void @cmpxchg_i16_monotonic_monotonic(i16 addrspace(200)* %ptr, i16 %cmp,
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_monotonic_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB10_3
@@ -680,6 +722,8 @@ define void @cmpxchg_i16_monotonic_monotonic(i16 addrspace(200)* %ptr, i16 %cmp,
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_monotonic_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB10_3
@@ -714,6 +758,8 @@ define void @cmpxchg_i16_acquire_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_acquire_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB11_3
@@ -744,6 +790,8 @@ define void @cmpxchg_i16_acquire_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_acquire_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB11_3
@@ -778,6 +826,8 @@ define void @cmpxchg_i16_acquire_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_acquire_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB12_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB12_3
@@ -808,6 +858,8 @@ define void @cmpxchg_i16_acquire_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_acquire_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB12_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB12_3
@@ -842,6 +894,8 @@ define void @cmpxchg_i16_release_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_release_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB13_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB13_3
@@ -872,6 +926,8 @@ define void @cmpxchg_i16_release_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_release_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB13_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB13_3
@@ -906,6 +962,8 @@ define void @cmpxchg_i16_release_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_release_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB14_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB14_3
@@ -936,6 +994,8 @@ define void @cmpxchg_i16_release_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_release_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB14_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB14_3
@@ -970,6 +1030,8 @@ define void @cmpxchg_i16_acq_rel_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_acq_rel_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB15_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB15_3
@@ -1000,6 +1062,8 @@ define void @cmpxchg_i16_acq_rel_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_acq_rel_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB15_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB15_3
@@ -1034,6 +1098,8 @@ define void @cmpxchg_i16_acq_rel_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_acq_rel_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB16_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB16_3
@@ -1064,6 +1130,8 @@ define void @cmpxchg_i16_acq_rel_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_acq_rel_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB16_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB16_3
@@ -1098,6 +1166,8 @@ define void @cmpxchg_i16_seq_cst_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_seq_cst_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB17_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB17_3
@@ -1128,6 +1198,8 @@ define void @cmpxchg_i16_seq_cst_monotonic(i16 addrspace(200)* %ptr, i16 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_seq_cst_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB17_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB17_3
@@ -1162,6 +1234,8 @@ define void @cmpxchg_i16_seq_cst_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_seq_cst_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB18_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB18_3
@@ -1192,6 +1266,8 @@ define void @cmpxchg_i16_seq_cst_acquire(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_seq_cst_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB18_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB18_3
@@ -1226,6 +1302,8 @@ define void @cmpxchg_i16_seq_cst_seq_cst(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i16_seq_cst_seq_cst:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    slli a1, a1, 16
+; RV32IAXCHERI-NEXT:    srai a1, a1, 16
 ; RV32IAXCHERI-NEXT:  .LBB19_1: # =>This Inner Loop Header: Depth=1
 ; RV32IAXCHERI-NEXT:    clr.h.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB19_3
@@ -1256,6 +1334,8 @@ define void @cmpxchg_i16_seq_cst_seq_cst(i16 addrspace(200)* %ptr, i16 %cmp, i16
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i16_seq_cst_seq_cst:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    slli a1, a1, 48
+; RV64IAXCHERI-NEXT:    srai a1, a1, 48
 ; RV64IAXCHERI-NEXT:  .LBB19_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.h.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB19_3
@@ -1320,6 +1400,7 @@ define void @cmpxchg_i32_monotonic_monotonic(i32 addrspace(200)* %ptr, i32 %cmp,
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_monotonic_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB20_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB20_3
@@ -1384,6 +1465,7 @@ define void @cmpxchg_i32_acquire_monotonic(i32 addrspace(200)* %ptr, i32 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_acquire_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB21_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB21_3
@@ -1448,6 +1530,7 @@ define void @cmpxchg_i32_acquire_acquire(i32 addrspace(200)* %ptr, i32 %cmp, i32
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_acquire_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB22_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB22_3
@@ -1512,6 +1595,7 @@ define void @cmpxchg_i32_release_monotonic(i32 addrspace(200)* %ptr, i32 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_release_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB23_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB23_3
@@ -1576,6 +1660,7 @@ define void @cmpxchg_i32_release_acquire(i32 addrspace(200)* %ptr, i32 %cmp, i32
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_release_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB24_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB24_3
@@ -1640,6 +1725,7 @@ define void @cmpxchg_i32_acq_rel_monotonic(i32 addrspace(200)* %ptr, i32 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_acq_rel_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB25_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB25_3
@@ -1704,6 +1790,7 @@ define void @cmpxchg_i32_acq_rel_acquire(i32 addrspace(200)* %ptr, i32 %cmp, i32
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_acq_rel_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB26_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w.aq a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB26_3
@@ -1768,6 +1855,7 @@ define void @cmpxchg_i32_seq_cst_monotonic(i32 addrspace(200)* %ptr, i32 %cmp, i
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_seq_cst_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB27_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB27_3
@@ -1832,6 +1920,7 @@ define void @cmpxchg_i32_seq_cst_acquire(i32 addrspace(200)* %ptr, i32 %cmp, i32
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_seq_cst_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB28_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB28_3
@@ -1896,6 +1985,7 @@ define void @cmpxchg_i32_seq_cst_seq_cst(i32 addrspace(200)* %ptr, i32 %cmp, i32
 ;
 ; RV64IAXCHERI-LABEL: cmpxchg_i32_seq_cst_seq_cst:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    sext.w a1, a1
 ; RV64IAXCHERI-NEXT:  .LBB29_1: # =>This Inner Loop Header: Depth=1
 ; RV64IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB29_3
