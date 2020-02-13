@@ -1352,13 +1352,15 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
     const DbgDeclareInst *DI = cast<DbgDeclareInst>(II);
     assert(DI->getVariable() && "Missing variable");
     if (!FuncInfo.MF->getMMI().hasDebugInfo()) {
-      LLVM_DEBUG(dbgs() << "Dropping debug info for " << *DI << "\n");
+      LLVM_DEBUG(dbgs() << "Dropping debug info for " << *DI
+                        << " (!hasDebugInfo)\n");
       return true;
     }
 
     const Value *Address = DI->getAddress();
     if (!Address || isa<UndefValue>(Address)) {
-      LLVM_DEBUG(dbgs() << "Dropping debug info for " << *DI << "\n");
+      LLVM_DEBUG(dbgs() << "Dropping debug info for " << *DI
+                        << " (bad/undef address)\n");
       return true;
     }
 
@@ -1401,7 +1403,8 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
     } else {
       // We can't yet handle anything else here because it would require
       // generating code, thus altering codegen because of debug info.
-      LLVM_DEBUG(dbgs() << "Dropping debug info for " << *DI << "\n");
+      LLVM_DEBUG(dbgs() << "Dropping debug info for " << *DI
+                        << " (no materialized reg for address)\n");
     }
     return true;
   }
