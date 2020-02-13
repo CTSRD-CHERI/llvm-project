@@ -154,7 +154,7 @@ void MCStreamer::EmitIntValue(uint64_t Value, unsigned Size) {
 
 /// EmitULEB128IntValue - Special case of EmitULEB128Value that avoids the
 /// client having to pass in a MCExpr for constant integers.
-void MCStreamer::EmitULEB128IntValue(uint64_t Value, unsigned PadTo) {
+void MCStreamer::emitULEB128IntValue(uint64_t Value, unsigned PadTo) {
   SmallString<128> Tmp;
   raw_svector_ostream OSE(Tmp);
   encodeULEB128(Value, OSE, PadTo);
@@ -163,7 +163,7 @@ void MCStreamer::EmitULEB128IntValue(uint64_t Value, unsigned PadTo) {
 
 /// EmitSLEB128IntValue - Special case of EmitSLEB128Value that avoids the
 /// client having to pass in a MCExpr for constant integers.
-void MCStreamer::EmitSLEB128IntValue(int64_t Value) {
+void MCStreamer::emitSLEB128IntValue(int64_t Value) {
   SmallString<128> Tmp;
   raw_svector_ostream OSE(Tmp);
   encodeSLEB128(Value, OSE);
@@ -311,10 +311,9 @@ void MCStreamer::EmitCFIBKeyFrame() {
   CurFrame->IsBKeyFrame = true;
 }
 
-void MCStreamer::EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
+void MCStreamer::emitDwarfLocDirective(unsigned FileNo, unsigned Line,
                                        unsigned Column, unsigned Flags,
-                                       unsigned Isa,
-                                       unsigned Discriminator,
+                                       unsigned Isa, unsigned Discriminator,
                                        StringRef FileName) {
   getContext().setCurrentDwarfLoc(FileNo, Line, Column, Flags, Isa,
                                   Discriminator);
@@ -1157,7 +1156,7 @@ void MCStreamer::emitAbsoluteSymbolDiffAsULEB128(const MCSymbol *Hi,
       MCBinaryExpr::createSub(MCSymbolRefExpr::create(Hi, Context),
                               MCSymbolRefExpr::create(Lo, Context), Context);
 
-  EmitULEB128Value(Diff);
+  emitULEB128Value(Diff);
 }
 
 void MCStreamer::EmitAssemblerFlag(MCAssemblerFlag Flag) {}
@@ -1197,8 +1196,8 @@ void MCStreamer::EmitBinaryData(StringRef Data) { EmitBytes(Data); }
 void MCStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size, SMLoc Loc) {
   visitUsedExpr(*Value);
 }
-void MCStreamer::EmitULEB128Value(const MCExpr *Value) {}
-void MCStreamer::EmitSLEB128Value(const MCExpr *Value) {}
+void MCStreamer::emitULEB128Value(const MCExpr *Value) {}
+void MCStreamer::emitSLEB128Value(const MCExpr *Value) {}
 void MCStreamer::emitFill(const MCExpr &NumBytes, uint64_t Value, SMLoc Loc) {}
 void MCStreamer::emitFill(const MCExpr &NumValues, int64_t Size, int64_t Expr,
                           SMLoc Loc) {}

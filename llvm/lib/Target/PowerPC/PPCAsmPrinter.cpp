@@ -1632,7 +1632,7 @@ void PPCAIXAsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   }
 
   MCSymbol *EmittedInitSym = GVSym;
-  EmitLinkage(GV, EmittedInitSym);
+  emitLinkage(GV, EmittedInitSym);
   EmitAlignment(getGVAlignment(GV, DL), GV);
   OutStreamer->EmitLabel(EmittedInitSym);
   EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(), 0);

@@ -1274,7 +1274,7 @@ void MipsAsmPrinter::PrintDebugValueComment(const MachineInstr *MI,
 
 // Emit .dtprelword or .dtpreldword directive
 // and value for debug thread local expression.
-void MipsAsmPrinter::EmitDebugValue(const MCExpr *Value, unsigned Size) const {
+void MipsAsmPrinter::emitDebugValue(const MCExpr *Value, unsigned Size) const {
   if (auto *MipsExpr = dyn_cast<MipsMCExpr>(Value)) {
     if (MipsExpr && MipsExpr->getKind() == MipsMCExpr::MEK_DTPREL) {
       switch (Size) {
@@ -1290,7 +1290,7 @@ void MipsAsmPrinter::EmitDebugValue(const MCExpr *Value, unsigned Size) const {
       return;
     }
   }
-  AsmPrinter::EmitDebugValue(Value, Size);
+  AsmPrinter::emitDebugValue(Value, Size);
 }
 
 // Align all targets of indirect branches on bundle size.  Used only if target
