@@ -196,7 +196,6 @@ void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
   SmallString<32> LibName("-lclang_rt.builtins-");
   if (Target == BaremetalTarget::ARM) {
     LibName += getTriple().getArchName();
-    LibName += ".a";
   } else {
     assert(Target == BaremetalTarget::MIPS);
     if (getTriple().getArch() == llvm::Triple::cheri && !IsCheriPurecap) {
