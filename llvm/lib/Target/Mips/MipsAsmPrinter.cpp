@@ -232,10 +232,10 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
     const MachineConstantPoolEntry &MCPE = MCP->getConstants()[CPIdx];
     if (MCPE.isMachineConstantPoolEntry())
-      EmitMachineConstantPoolValue(MCPE.Val.MachineCPVal);
+      emitMachineConstantPoolValue(MCPE.Val.MachineCPVal);
     else {
       // XXXAR: should not need tail padding here since all entries are small
-      EmitGlobalConstant(MF->getDataLayout(), MCPE.Val.ConstVal, 0);
+      emitGlobalConstant(MF->getDataLayout(), MCPE.Val.ConstVal, 0);
     }
     return;
   }
@@ -414,7 +414,7 @@ void MipsAsmPrinter::emitFunctionEntryLabel() {
   // NaCl sandboxing requires that indirect call instructions are masked.
   // This means that function entry points should be bundle-aligned.
   if (Subtarget->isTargetNaCl())
-    EmitAlignment(std::max(MF->getAlignment(), MIPS_NACL_BUNDLE_ALIGN));
+    emitAlignment(std::max(MF->getAlignment(), MIPS_NACL_BUNDLE_ALIGN));
 
   if (Subtarget->inMicroMipsMode()) {
     TS.emitDirectiveSetMicroMips();

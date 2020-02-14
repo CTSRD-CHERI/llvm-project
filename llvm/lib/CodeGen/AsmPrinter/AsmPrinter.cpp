@@ -305,7 +305,7 @@ bool AsmPrinter::doInitialization(Module &M) {
         TM.getTargetFeatureString()));
     OutStreamer->AddComment("Start of file scope inline assembly");
     OutStreamer->AddBlankLine();
-    EmitInlineAsm(M.getModuleInlineAsm()+"\n",
+    emitInlineAsm(M.getModuleInlineAsm() + "\n",
                   OutContext.getSubtargetCopy(*STI), TM.Options.MCOptions);
     OutStreamer->AddComment("End of file scope inline assembly");
     OutStreamer->AddBlankLine();
@@ -466,7 +466,7 @@ MCSymbol *AsmPrinter::getSymbolPreferLocal(const GlobalValue &GV) const {
 }
 
 /// EmitGlobalVariable - Emit the specified global variable to the .s file.
-void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
+void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   bool IsEmuTLSVar = TM.useEmulatedTLS() && GV->isThreadLocal();
   assert(!(IsEmuTLSVar && GV->hasCommonLinkage()) &&
          "No emulated TLS variables in the common section");
@@ -478,7 +478,7 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
 
   if (GV->hasInitializer()) {
     // Check to see if this is a special global used by LLVM, if so, emit it.
-    if (EmitSpecialLLVMGlobal(GV))
+    if (emitSpecialLLVMGlobal(GV))
       return;
 
     // Skip the emission of global equivalents. The symbol can be emitted later
@@ -631,10 +631,10 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
     } else if (GVKind.isThreadData()) {
       OutStreamer->SwitchSection(TheSection);
 
-      EmitAlignment(Alignment, GV);
+      emitAlignment(Alignment, GV);
       OutStreamer->EmitLabel(MangSym);
 
-      EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
+      emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
                          static_cast<uint64_t>(TailPadding));
     }
 
@@ -667,14 +667,14 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   OutStreamer->SwitchSection(TheSection);
 
   emitLinkage(GV, EmittedInitSym);
-  EmitAlignment(Alignment, GV);
+  emitAlignment(Alignment, GV);
 
   OutStreamer->EmitLabel(EmittedInitSym);
   MCSymbol *LocalAlias = getSymbolPreferLocal(*GV);
   if (LocalAlias != EmittedInitSym)
     OutStreamer->EmitLabel(LocalAlias);
 
-  EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
+  emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
                      static_cast<uint64_t>(TailPadding));
 
   if (MAI->hasDotTypeDotSizeDirective())
@@ -706,7 +706,7 @@ void AsmPrinter::emitFunctionHeader() {
         << GlobalValue::dropLLVMManglingEscape(F.getName()) << '\n';
 
   // Print out constants referenced by the function
-  EmitConstantPool();
+  emitConstantPool();
 
   // Print the 'header' of function.
   OutStreamer->SwitchSection(getObjFileLowering().SectionForGlobal(&F, TM));
@@ -718,7 +718,7 @@ void AsmPrinter::emitFunctionHeader() {
 
   emitLinkage(&F, CurrentFnSym);
   if (MAI->hasFunctionAlignment())
-    EmitAlignment(MF->getAlignment(), &F);
+    emitAlignment(MF->getAlignment(), &F);
 
   if (MAI->hasDotTypeDotSizeDirective())
     OutStreamer->EmitSymbolAttribute(CurrentFnSym, MCSA_ELF_TypeFunction);
@@ -742,12 +742,12 @@ void AsmPrinter::emitFunctionHeader() {
       MCSymbol *PrefixSym = OutContext.createLinkerPrivateTempSymbol();
       OutStreamer->EmitLabel(PrefixSym);
 
-      EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData(), 0);
+      emitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData(), 0);
 
       // Emit an .alt_entry directive for the actual function symbol.
       OutStreamer->EmitSymbolAttribute(CurrentFnSym, MCSA_AltEntry);
     } else {
-      EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData(), 0);
+      emitGlobalConstant(F.getParent()->getDataLayout(), F.getPrefixData(), 0);
     }
   }
 
@@ -803,7 +803,7 @@ void AsmPrinter::emitFunctionHeader() {
 
   // Emit the prologue data.
   if (F.hasPrologueData())
-    EmitGlobalConstant(F.getParent()->getDataLayout(), F.getPrologueData(), 0);
+    emitGlobalConstant(F.getParent()->getDataLayout(), F.getPrologueData(), 0);
 }
 
 /// EmitFunctionEntryLabel - Emit the label that is the entrypoint for the
@@ -1163,7 +1163,7 @@ void AsmPrinter::emitFunctionBody() {
         break;
       case TargetOpcode::INLINEASM:
       case TargetOpcode::INLINEASM_BR:
-        EmitInlineAsm(&MI);
+        emitInlineAsm(&MI);
         break;
       case TargetOpcode::DBG_VALUE:
         if (isVerbose()) {
@@ -1274,7 +1274,7 @@ void AsmPrinter::emitFunctionBody() {
   }
 
   // Print out jump tables referenced by the function.
-  EmitJumpTableInfo();
+  emitJumpTableInfo();
 
   // Emit post-function debug and/or EH information.
   for (const HandlerInfo &HI : Handlers) {
@@ -1370,7 +1370,7 @@ void AsmPrinter::emitGlobalGOTEquivs() {
   GlobalGOTEquivs.clear();
 
   for (auto *GV : FailedCandidates)
-    EmitGlobalVariable(GV);
+    emitGlobalVariable(GV);
 }
 
 void AsmPrinter::emitGlobalIndirectSymbol(Module &M,
@@ -1472,7 +1472,7 @@ bool AsmPrinter::doFinalization(Module &M) {
 
   // Emit global variables.
   for (const auto &G : M.globals())
-    EmitGlobalVariable(&G);
+    emitGlobalVariable(&G);
 
   // Emit remaining GOT equivalent globals.
   emitGlobalGOTEquivs();
@@ -1510,7 +1510,7 @@ bool AsmPrinter::doFinalization(Module &M) {
       unsigned AS = DL.getProgramAddressSpace();
       unsigned Size = DL.getPointerSize(AS);
 
-      EmitAlignment(Align(Size));
+      emitAlignment(Align(Size));
       for (const auto &Stub : Stubs) {
         OutStreamer->EmitLabel(Stub.first);
         if (DL.isFatPointer(AS))
@@ -1540,7 +1540,7 @@ bool AsmPrinter::doFinalization(Module &M) {
                 COFF::IMAGE_SCN_LNK_COMDAT,
             SectionKind::getReadOnly(), Stub.first->getName(),
             COFF::IMAGE_COMDAT_SELECT_ANY));
-        EmitAlignment(Align(DL.getPointerSize()));
+        emitAlignment(Align(DL.getPointerSize()));
         OutStreamer->EmitSymbolAttribute(Stub.first, MCSA_Global);
         OutStreamer->EmitLabel(Stub.first);
         OutStreamer->EmitSymbolValue(Stub.second.getPointer(),
@@ -1600,10 +1600,10 @@ bool AsmPrinter::doFinalization(Module &M) {
       MP->finishAssembly(M, *MI, *this);
 
   // Emit llvm.ident metadata in an '.ident' directive.
-  EmitModuleIdents(M);
+  emitModuleIdents(M);
 
   // Emit bytes for llvm.commandline metadata.
-  EmitModuleCommandLines(M);
+  emitModuleCommandLines(M);
 
   // Emit __morestack address if needed for indirect calls.
   if (MMI->usesMorestackAddr()) {
@@ -1796,7 +1796,7 @@ namespace {
 /// representations of the constants in the constant pool MCP. This is
 /// used to print out constants which have been "spilled to memory" by
 /// the code generator.
-void AsmPrinter::EmitConstantPool() {
+void AsmPrinter::emitConstantPool() {
   const MachineConstantPool *MCP = MF->getConstantPool();
   const std::vector<MachineConstantPoolEntry> &CP = MCP->getConstants();
   if (CP.empty()) return;
@@ -1854,7 +1854,7 @@ void AsmPrinter::EmitConstantPool() {
 
       if (CurSection != CPSections[i].S) {
         OutStreamer->SwitchSection(CPSections[i].S);
-        EmitAlignment(Align(CPSections[i].Alignment));
+        emitAlignment(Align(CPSections[i].Alignment));
         CurSection = CPSections[i].S;
         Offset = 0;
       }
@@ -1872,9 +1872,9 @@ void AsmPrinter::EmitConstantPool() {
 
       OutStreamer->EmitLabel(Sym);
       if (CPE.isMachineConstantPoolEntry())
-        EmitMachineConstantPoolValue(CPE.Val.MachineCPVal);
+        emitMachineConstantPoolValue(CPE.Val.MachineCPVal);
       else
-        EmitGlobalConstant(getDataLayout(), CPE.Val.ConstVal, 0);
+        emitGlobalConstant(getDataLayout(), CPE.Val.ConstVal, 0);
 
       if (MAI->hasDotTypeDotSizeDirective())
         OutStreamer->emitELFSize(Sym, MCConstantExpr::create(Size, OutContext));
@@ -1882,9 +1882,9 @@ void AsmPrinter::EmitConstantPool() {
   }
 }
 
-/// EmitJumpTableInfo - Print assembly representations of the jump tables used
-/// by the current function to the current output stream.
-void AsmPrinter::EmitJumpTableInfo() {
+// Print assembly representations of the jump tables used by the current
+// function.
+void AsmPrinter::emitJumpTableInfo() {
   const DataLayout &DL = MF->getDataLayout();
   const MachineJumpTableInfo *MJTI = MF->getJumpTableInfo();
   if (!MJTI) return;
@@ -1905,7 +1905,7 @@ void AsmPrinter::EmitJumpTableInfo() {
     OutStreamer->SwitchSection(ReadOnlySection);
   }
 
-  EmitAlignment(Align(MJTI->getEntryAlignment(DL)));
+  emitAlignment(Align(MJTI->getEntryAlignment(DL)));
 
   // Jump tables in code sections are marked with a data_region directive
   // where that's supported.
@@ -1957,7 +1957,7 @@ void AsmPrinter::EmitJumpTableInfo() {
     OutStreamer->EmitLabel(JTISymbol);
 
     for (unsigned ii = 0, ee = JTBBs.size(); ii != ee; ++ii)
-      EmitJumpTableEntry(MJTI, JTBBs[ii], JTI);
+      emitJumpTableEntry(MJTI, JTBBs[ii], JTI);
 
     if (MAI->hasDotTypeDotSizeDirective()) {
       auto JTEnd = createTempSymbol(JTISymbol->getName() + "_end");
@@ -1974,7 +1974,7 @@ void AsmPrinter::EmitJumpTableInfo() {
 
 /// EmitJumpTableEntry - Emit a jump table entry for the specified MBB to the
 /// current stream.
-void AsmPrinter::EmitJumpTableEntry(const MachineJumpTableInfo *MJTI,
+void AsmPrinter::emitJumpTableEntry(const MachineJumpTableInfo *MJTI,
                                     const MachineBasicBlock *MBB,
                                     unsigned UID) const {
   assert(MBB && MBB->getNumber() >= 0 && "Invalid basic block");
@@ -2039,10 +2039,10 @@ void AsmPrinter::EmitJumpTableEntry(const MachineJumpTableInfo *MJTI,
 /// EmitSpecialLLVMGlobal - Check to see if the specified global is a
 /// special global used by LLVM.  If so, emit it and return true, otherwise
 /// do nothing and return false.
-bool AsmPrinter::EmitSpecialLLVMGlobal(const GlobalVariable *GV) {
+bool AsmPrinter::emitSpecialLLVMGlobal(const GlobalVariable *GV) {
   if (GV->getName() == "llvm.used") {
     if (MAI->hasNoDeadStrip())    // No need to emit this at all.
-      EmitLLVMUsedList(cast<ConstantArray>(GV->getInitializer()));
+      emitLLVMUsedList(cast<ConstantArray>(GV->getInitializer()));
     return true;
   }
 
@@ -2056,14 +2056,14 @@ bool AsmPrinter::EmitSpecialLLVMGlobal(const GlobalVariable *GV) {
   assert(GV->hasInitializer() && "Not a special LLVM global!");
 
   if (GV->getName() == "llvm.global_ctors") {
-    EmitXXStructorList(GV->getParent()->getDataLayout(), GV->getInitializer(),
+    emitXXStructorList(GV->getParent()->getDataLayout(), GV->getInitializer(),
                        /* isCtor */ true);
 
     return true;
   }
 
   if (GV->getName() == "llvm.global_dtors") {
-    EmitXXStructorList(GV->getParent()->getDataLayout(), GV->getInitializer(),
+    emitXXStructorList(GV->getParent()->getDataLayout(), GV->getInitializer(),
                        /* isCtor */ false);
 
     return true;
@@ -2074,7 +2074,7 @@ bool AsmPrinter::EmitSpecialLLVMGlobal(const GlobalVariable *GV) {
 
 /// EmitLLVMUsedList - For targets that define a MAI::UsedDirective, mark each
 /// global in the specified llvm.used list.
-void AsmPrinter::EmitLLVMUsedList(const ConstantArray *InitList) {
+void AsmPrinter::emitLLVMUsedList(const ConstantArray *InitList) {
   // Should be an array of 'i8*'.
   for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
     const GlobalValue *GV =
@@ -2098,7 +2098,7 @@ struct Structor {
 
 /// EmitXXStructorList - Emit the ctor or dtor list taking into account the init
 /// priority.
-void AsmPrinter::EmitXXStructorList(const DataLayout &DL, const Constant *List,
+void AsmPrinter::emitXXStructorList(const DataLayout &DL, const Constant *List,
                                     bool isCtor) {
   // Should be an array of '{ i32, void ()*, i8* }' structs.  The first value is the
   // init priority.
@@ -2156,12 +2156,12 @@ void AsmPrinter::EmitXXStructorList(const DataLayout &DL, const Constant *List,
                 : Obj.getStaticDtorSection(S.Priority, KeySym));
     OutStreamer->SwitchSection(OutputSection);
     if (OutStreamer->getCurrentSection() != OutStreamer->getPreviousSection())
-      EmitAlignment(Align);
-    EmitXXStructor(DL, S.Func);
+      emitAlignment(Align);
+    emitXXStructor(DL, S.Func);
   }
 }
 
-void AsmPrinter::EmitModuleIdents(Module &M) {
+void AsmPrinter::emitModuleIdents(Module &M) {
   if (!MAI->hasIdentDirective())
     return;
 
@@ -2176,7 +2176,7 @@ void AsmPrinter::EmitModuleIdents(Module &M) {
   }
 }
 
-void AsmPrinter::EmitModuleCommandLines(Module &M) {
+void AsmPrinter::emitModuleCommandLines(Module &M) {
   MCSection *CommandLine = getObjFileLowering().getSectionForCommandLines();
   if (!CommandLine)
     return;
@@ -2260,7 +2260,7 @@ void AsmPrinter::emitLabelPlusOffset(const MCSymbol *Label, uint64_t Offset,
 // two boundary.  If a global value is specified, and if that global has
 // an explicit alignment requested, it will override the alignment request
 // if required for correctness.
-void AsmPrinter::EmitAlignment(Align Alignment, const GlobalObject *GV) const {
+void AsmPrinter::emitAlignment(Align Alignment, const GlobalObject *GV) const {
   if (GV)
     Alignment = getGVAlignment(GV, GV->getParent()->getDataLayout(), Alignment);
 
@@ -2916,7 +2916,7 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 }
 
 /// EmitGlobalConstant - Print a general LLVM constant to the .s file.
-void AsmPrinter::EmitGlobalConstant(const DataLayout &DL, const Constant *CV,
+void AsmPrinter::emitGlobalConstant(const DataLayout &DL, const Constant *CV,
                                     uint64_t TailPadding) {
   uint64_t Size = DL.getTypeAllocSize(CV->getType());
   if (Size)
@@ -2932,7 +2932,7 @@ void AsmPrinter::EmitGlobalConstant(const DataLayout &DL, const Constant *CV,
   }
 }
 
-void AsmPrinter::EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
+void AsmPrinter::emitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
   // Target doesn't support this yet!
   llvm_unreachable("Target does not support EmitMachineConstantPoolValue");
 }
@@ -3098,7 +3098,7 @@ void AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   // Emit an alignment directive for this block, if needed.
   const Align Alignment = MBB.getAlignment();
   if (Alignment != Align(1))
-    EmitAlignment(Alignment);
+    emitAlignment(Alignment);
 
   // If the block has its address taken, emit any labels that were used to
   // reference the block.  It is possible that there is more than one label
@@ -3388,7 +3388,7 @@ void AsmPrinter::emitPatchableFunctionEntries() {
       OutStreamer->SwitchSection(OutContext.getELFSection(
           "__patchable_function_entries", ELF::SHT_PROGBITS, Flags));
     }
-    EmitAlignment(Align(PointerSize));
+    emitAlignment(Align(PointerSize));
     OutStreamer->EmitSymbolValue(CurrentPatchableFunctionEntrySym, PointerSize);
   }
 }

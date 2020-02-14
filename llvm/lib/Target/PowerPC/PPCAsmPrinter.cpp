@@ -163,7 +163,7 @@ public:
 
   const MCExpr *lowerConstant(const Constant *CV) override;
 
-  void EmitGlobalVariable(const GlobalVariable *GV) override;
+  void emitGlobalVariable(const GlobalVariable *GV) override;
 
   void emitFunctionDescriptor() override;
 
@@ -323,7 +323,7 @@ void PPCAsmPrinter::emitEndOfAsmFile(Module &M) {
 
 void PPCAsmPrinter::LowerSTACKMAP(StackMaps &SM, const MachineInstr &MI) {
   unsigned NumNOPBytes = MI.getOperand(1).getImm();
-  
+
   auto &Ctx = OutStreamer->getContext();
   MCSymbol *MILabel = Ctx.createTempSymbol();
   OutStreamer->EmitLabel(MILabel);
@@ -1583,7 +1583,7 @@ const MCExpr *PPCAIXAsmPrinter::lowerConstant(const Constant *CV) {
   return PPCAsmPrinter::lowerConstant(CV);
 }
 
-void PPCAIXAsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
+void PPCAIXAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   ValidateGV(GV);
 
   // Create the symbol, set its storage class.
@@ -1633,9 +1633,9 @@ void PPCAIXAsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
 
   MCSymbol *EmittedInitSym = GVSym;
   emitLinkage(GV, EmittedInitSym);
-  EmitAlignment(getGVAlignment(GV, DL), GV);
+  emitAlignment(getGVAlignment(GV, DL), GV);
   OutStreamer->EmitLabel(EmittedInitSym);
-  EmitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(), 0);
+  emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(), 0);
 }
 
 void PPCAIXAsmPrinter::emitFunctionDescriptor() {
