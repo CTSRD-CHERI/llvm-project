@@ -190,7 +190,7 @@ void MipsTargetStreamer::emitR(unsigned Opcode, unsigned Reg0, SMLoc IDLoc,
   TmpInst.setOpcode(Opcode);
   TmpInst.addOperand(MCOperand::createReg(Reg0));
   TmpInst.setLoc(IDLoc);
-  getStreamer().EmitInstruction(TmpInst, *STI);
+  getStreamer().emitInstruction(TmpInst, *STI);
 }
 
 void MipsTargetStreamer::emitRX(unsigned Opcode, unsigned Reg0, MCOperand Op1,
@@ -200,7 +200,7 @@ void MipsTargetStreamer::emitRX(unsigned Opcode, unsigned Reg0, MCOperand Op1,
   TmpInst.addOperand(MCOperand::createReg(Reg0));
   TmpInst.addOperand(Op1);
   TmpInst.setLoc(IDLoc);
-  getStreamer().EmitInstruction(TmpInst, *STI);
+  getStreamer().emitInstruction(TmpInst, *STI);
 }
 
 void MipsTargetStreamer::emitRI(unsigned Opcode, unsigned Reg0, int32_t Imm,
@@ -220,7 +220,7 @@ void MipsTargetStreamer::emitII(unsigned Opcode, int16_t Imm1, int16_t Imm2,
   TmpInst.addOperand(MCOperand::createImm(Imm1));
   TmpInst.addOperand(MCOperand::createImm(Imm2));
   TmpInst.setLoc(IDLoc);
-  getStreamer().EmitInstruction(TmpInst, *STI);
+  getStreamer().emitInstruction(TmpInst, *STI);
 }
 
 void MipsTargetStreamer::emitRRX(unsigned Opcode, unsigned Reg0, unsigned Reg1,
@@ -232,7 +232,7 @@ void MipsTargetStreamer::emitRRX(unsigned Opcode, unsigned Reg0, unsigned Reg1,
   TmpInst.addOperand(MCOperand::createReg(Reg1));
   TmpInst.addOperand(Op2);
   TmpInst.setLoc(IDLoc);
-  getStreamer().EmitInstruction(TmpInst, *STI);
+  getStreamer().emitInstruction(TmpInst, *STI);
 }
 
 void MipsTargetStreamer::emitRRR(unsigned Opcode, unsigned Reg0, unsigned Reg1,
@@ -251,7 +251,7 @@ void MipsTargetStreamer::emitRRRX(unsigned Opcode, unsigned Reg0, unsigned Reg1,
   TmpInst.addOperand(MCOperand::createReg(Reg2));
   TmpInst.addOperand(Op3);
   TmpInst.setLoc(IDLoc);
-  getStreamer().EmitInstruction(TmpInst, *STI);
+  getStreamer().emitInstruction(TmpInst, *STI);
 }
 
 void MipsTargetStreamer::emitRRI(unsigned Opcode, unsigned Reg0, unsigned Reg1,
@@ -272,7 +272,7 @@ void MipsTargetStreamer::emitRRIII(unsigned Opcode, unsigned Reg0,
   TmpInst.addOperand(MCOperand::createImm(Imm1));
   TmpInst.addOperand(MCOperand::createImm(Imm2));
   TmpInst.setLoc(IDLoc);
-  getStreamer().EmitInstruction(TmpInst, *STI);
+  getStreamer().emitInstruction(TmpInst, *STI);
 }
 
 void MipsTargetStreamer::emitAddu(unsigned DstReg, unsigned SrcReg,
@@ -1171,7 +1171,7 @@ void MipsTargetELFStreamer::emitDirectiveCpLoad(unsigned RegNo) {
                               MCA.getContext()),
       MCA.getContext());
   TmpInst.addOperand(MCOperand::createExpr(HiSym));
-  getStreamer().EmitInstruction(TmpInst, STI);
+  getStreamer().emitInstruction(TmpInst, STI);
 
   TmpInst.clear();
 
@@ -1184,7 +1184,7 @@ void MipsTargetELFStreamer::emitDirectiveCpLoad(unsigned RegNo) {
                               MCA.getContext()),
       MCA.getContext());
   TmpInst.addOperand(MCOperand::createExpr(LoSym));
-  getStreamer().EmitInstruction(TmpInst, STI);
+  getStreamer().emitInstruction(TmpInst, STI);
 
   TmpInst.clear();
 
@@ -1192,7 +1192,7 @@ void MipsTargetELFStreamer::emitDirectiveCpLoad(unsigned RegNo) {
   TmpInst.addOperand(MCOperand::createReg(GPReg));
   TmpInst.addOperand(MCOperand::createReg(GPReg));
   TmpInst.addOperand(MCOperand::createReg(RegNo));
-  getStreamer().EmitInstruction(TmpInst, STI);
+  getStreamer().emitInstruction(TmpInst, STI);
 
   forbidModuleDirective();
 }
@@ -1301,7 +1301,7 @@ void MipsTargetELFStreamer::emitDirectiveCpreturn(unsigned SaveLocation,
     Inst.addOperand(MCOperand::createReg(Mips::SP));
     Inst.addOperand(MCOperand::createImm(SaveLocation));
   }
-  getStreamer().EmitInstruction(Inst, STI);
+  getStreamer().emitInstruction(Inst, STI);
 
   forbidModuleDirective();
 }

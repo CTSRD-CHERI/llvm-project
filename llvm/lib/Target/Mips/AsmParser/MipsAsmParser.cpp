@@ -2587,7 +2587,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
       tryExpandInstruction(Inst, IDLoc, Out, STI);
   switch (ExpandResult) {
   case MER_NotAMacro:
-    Out.EmitInstruction(Inst, *STI);
+    Out.emitInstruction(Inst, *STI);
     break;
   case MER_Success:
     break;
@@ -2972,7 +2972,7 @@ bool MipsAsmParser::expandJalWithRegs(MCInst &Inst, SMLoc IDLoc,
     const MCOperand SecondRegOp = Inst.getOperand(1);
     JalrInst.addOperand(SecondRegOp);
   }
-  Out.EmitInstruction(JalrInst, *STI);
+  Out.emitInstruction(JalrInst, *STI);
 
   // If .set reorder is active and branch instruction has a delay slot,
   // emit a NOP after it.
@@ -3916,7 +3916,7 @@ bool MipsAsmParser::expandUncondBranchMMPseudo(MCInst &Inst, SMLoc IDLoc,
       Inst.addOperand(MCOperand::createImm(Offset.getImm()));
     }
   }
-  Out.EmitInstruction(Inst, *STI);
+  Out.emitInstruction(Inst, *STI);
 
   // If .set reorder is active and branch instruction has a delay slot,
   // emit a NOP after it.
@@ -4233,7 +4233,7 @@ bool MipsAsmParser::expandLoadStoreMultiple(MCInst &Inst, SMLoc IDLoc,
   }
 
   Inst.setOpcode(NewOpcode);
-  Out.EmitInstruction(Inst, *STI);
+  Out.emitInstruction(Inst, *STI);
   return false;
 }
 
