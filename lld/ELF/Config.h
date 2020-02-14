@@ -161,7 +161,6 @@ struct Configuration {
   bool exportDynamic;
   bool fixCortexA53Errata843419;
   bool fixCortexA8;
-  bool forceBTI;
   bool formatBinary = false;
   bool gcSections;
   bool gdbIndex;
@@ -185,7 +184,6 @@ struct Configuration {
   bool oFormatBinary;
   bool omagic;
   bool optRemarksWithHotness;
-  bool pacPlt;
   bool picThunk;
   bool pie;
   bool printGcSections;
@@ -219,6 +217,7 @@ struct Configuration {
   bool zCapTableDebug;
   bool zCombreloc;
   bool zCopyreloc;
+  bool zForceBti;
   bool zForceIbt;
   bool zGlobal;
   bool zHazardplt;
@@ -231,6 +230,7 @@ struct Configuration {
   bool zNodlopen;
   bool zNow;
   bool zOrigin;
+  bool zPacPlt;
   bool zRelro;
   bool zRodynamic;
   bool zShstk;
