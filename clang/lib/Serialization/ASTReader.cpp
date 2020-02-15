@@ -11893,8 +11893,7 @@ void OMPClauseReader::VisitOMPCollapseClause(OMPCollapseClause *C) {
 }
 
 void OMPClauseReader::VisitOMPDefaultClause(OMPDefaultClause *C) {
-  C->setDefaultKind(
-       static_cast<OpenMPDefaultClauseKind>(Record.readInt()));
+  C->setDefaultKind(static_cast<llvm::omp::DefaultKind>(Record.readInt()));
   C->setLParenLoc(Record.readSourceLocation());
   C->setDefaultKindKwLoc(Record.readSourceLocation());
 }

@@ -10306,7 +10306,7 @@ public:
                                      SourceLocation LParenLoc,
                                      SourceLocation EndLoc);
   /// Called on well-formed 'default' clause.
-  OMPClause *ActOnOpenMPDefaultClause(OpenMPDefaultClauseKind Kind,
+  OMPClause *ActOnOpenMPDefaultClause(llvm::omp::DefaultKind Kind,
                                       SourceLocation KindLoc,
                                       SourceLocation StartLoc,
                                       SourceLocation LParenLoc,
