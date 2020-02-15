@@ -870,7 +870,7 @@ bool DarwinAsmParser::parseDirectiveTBSS(StringRef, SMLoc) {
   if (!Sym->isUndefined())
     return Error(IDLoc, "invalid symbol redefinition of " + Sym->getName());
 
-  getStreamer().EmitTBSSSymbol(
+  getStreamer().emitTBSSSymbol(
       getContext().getMachOSection("__DATA", "__thread_bss",
                                    MachO::S_THREAD_LOCAL_ZEROFILL, 0,
                                    SectionKind::getThreadBSS()),

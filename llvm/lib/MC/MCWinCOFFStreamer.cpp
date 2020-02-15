@@ -307,7 +307,7 @@ void MCWinCOFFStreamer::emitLocalCommonSymbol(MCSymbol *S, uint64_t Size,
   emitValueToAlignment(ByteAlignment, 0, 1, 0);
   emitLabel(Symbol);
   Symbol->setExternal(false);
-  EmitZeros(Size);
+  emitZeros(Size);
   PopSection();
 }
 
@@ -317,14 +317,14 @@ void MCWinCOFFStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
   llvm_unreachable("not implemented");
 }
 
-void MCWinCOFFStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
+void MCWinCOFFStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
                                        uint64_t Size, unsigned ByteAlignment,
                                        TailPaddingAmount TailPadding) {
   llvm_unreachable("not implemented");
 }
 
 // TODO: Implement this if you want to emit .comment section in COFF obj files.
-void MCWinCOFFStreamer::EmitIdent(StringRef IdentString) {
+void MCWinCOFFStreamer::emitIdent(StringRef IdentString) {
   llvm_unreachable("not implemented");
 }
 

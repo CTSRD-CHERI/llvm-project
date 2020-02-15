@@ -95,7 +95,7 @@ public:
     EmitCommentsAndEOL();
   }
 
-  void EmitSyntaxDirective() override;
+  void emitSyntaxDirective() override;
 
   void EmitCommentsAndEOL();
 
@@ -166,7 +166,7 @@ public:
   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
   void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) override;
-  void EmitXCOFFLocalCommonSymbol(MCSymbol *LabelSym, uint64_t Size,
+  void emitXCOFFLocalCommonSymbol(MCSymbol *LabelSym, uint64_t Size,
                                   MCSymbol *CsectSym,
                                   unsigned ByteAlign) override;
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
@@ -186,7 +186,7 @@ public:
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override;
 
-  void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
+  void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                       unsigned ByteAlignment,
                       TailPaddingAmount TailPadding) override;
 
@@ -230,7 +230,7 @@ public:
                          unsigned char Value,
                          SMLoc Loc) override;
 
-  void EmitFileDirective(StringRef Filename) override;
+  void emitFileDirective(StringRef Filename) override;
   Expected<unsigned> tryEmitDwarfFileDirective(unsigned FileNo,
                                                StringRef Directory,
                                                StringRef Filename,
@@ -289,7 +289,7 @@ public:
   void EmitCVFileChecksumOffsetDirective(unsigned FileNo) override;
   void EmitCVFPOData(const MCSymbol *ProcSym, SMLoc L) override;
 
-  void EmitIdent(StringRef IdentString) override;
+  void emitIdent(StringRef IdentString) override;
   void emitCFIBKeyFrame() override;
   void emitCFISections(bool EH, bool Debug) override;
   void emitCFIDefCfa(int64_t Register, int64_t Offset) override;
@@ -338,26 +338,26 @@ public:
 
   void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;
 
-  void EmitBundleAlignMode(unsigned AlignPow2) override;
-  void EmitBundleLock(bool AlignToEnd) override;
-  void EmitBundleUnlock() override;
+  void emitBundleAlignMode(unsigned AlignPow2) override;
+  void emitBundleLock(bool AlignToEnd) override;
+  void emitBundleUnlock() override;
 
   void EmitCheriCapabilityImpl(const MCSymbol *Symbol, const MCExpr *Addend,
                                unsigned CapSize, SMLoc Loc = SMLoc()) override;
   void EmitCheriIntcap(int64_t Value, unsigned CapSize,
                        SMLoc Loc = SMLoc()) override;
 
-  bool EmitRelocDirective(const MCExpr &Offset, StringRef Name,
+  bool emitRelocDirective(const MCExpr &Offset, StringRef Name,
                           const MCExpr *Expr, SMLoc Loc,
                           const MCSubtargetInfo &STI) override;
 
-  void EmitAddrsig() override;
-  void EmitAddrsigSym(const MCSymbol *Sym) override;
+  void emitAddrsig() override;
+  void emitAddrsigSym(const MCSymbol *Sym) override;
 
   /// If this file is backed by an assembly streamer, this dumps the specified
   /// string in the output .s file. This capability is indicated by the
   /// hasRawTextSupport() predicate.
-  void EmitRawTextImpl(StringRef String) override;
+  void emitRawTextImpl(StringRef String) override;
 
   void FinishImpl() override;
 };
@@ -705,7 +705,7 @@ void MCAsmStreamer::emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitSyntaxDirective() {
+void MCAsmStreamer::emitSyntaxDirective() {
   if (MAI->getAssemblerDialect() == 1) {
     OS << "\t.intel_syntax noprefix";
     EmitEOL();
@@ -776,7 +776,7 @@ void MCAsmStreamer::EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) {
 // We need an XCOFF-specific version of this directive as the AIX syntax
 // requires a QualName argument identifying the csect name and storage mapping
 // class to appear before the alignment if we are specifying it.
-void MCAsmStreamer::EmitXCOFFLocalCommonSymbol(MCSymbol *LabelSym,
+void MCAsmStreamer::emitXCOFFLocalCommonSymbol(MCSymbol *LabelSym,
                                                uint64_t Size,
                                                MCSymbol *CsectSym,
                                                unsigned ByteAlignment) {
@@ -903,7 +903,7 @@ void MCAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 // .tbss sym, size, align
 // This depends that the symbol has already been mangled from the original,
 // e.g. _a.
-void MCAsmStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
+void MCAsmStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
                                    uint64_t Size, unsigned ByteAlignment,
                                    TailPaddingAmount TailPadding) {
   AssignFragment(Symbol, &Section->getDummyFragment());
@@ -1273,7 +1273,7 @@ void MCAsmStreamer::emitValueToOffset(const MCExpr *Offset,
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitFileDirective(StringRef Filename) {
+void MCAsmStreamer::emitFileDirective(StringRef Filename) {
   assert(MAI->hasSingleParameterDotFile());
   OS << "\t.file\t";
   PrintQuotedString(Filename, OS);
@@ -1337,7 +1337,7 @@ Expected<unsigned> MCAsmStreamer::tryEmitDwarfFileDirective(
   if (MCTargetStreamer *TS = getTargetStreamer())
     TS->emitDwarfFileDirective(OS1.str());
   else
-    EmitRawText(OS1.str());
+    emitRawText(OS1.str());
 
   return FileNo;
 }
@@ -1363,7 +1363,7 @@ void MCAsmStreamer::emitDwarfFile0Directive(StringRef Directory,
   if (MCTargetStreamer *TS = getTargetStreamer())
     TS->emitDwarfFileDirective(OS1.str());
   else
-    EmitRawText(OS1.str());
+    emitRawText(OS1.str());
 }
 
 void MCAsmStreamer::emitDwarfLocDirective(unsigned FileNo, unsigned Line,
@@ -1569,7 +1569,7 @@ void MCAsmStreamer::EmitCVFPOData(const MCSymbol *ProcSym, SMLoc L) {
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitIdent(StringRef IdentString) {
+void MCAsmStreamer::emitIdent(StringRef IdentString) {
   assert(MAI->hasIdentDirective() && ".ident directive not supported");
   OS << "\t.ident\t";
   PrintQuotedString(IdentString, OS);
@@ -2026,19 +2026,19 @@ void MCAsmStreamer::emitInstruction(const MCInst &Inst,
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitBundleAlignMode(unsigned AlignPow2) {
+void MCAsmStreamer::emitBundleAlignMode(unsigned AlignPow2) {
   OS << "\t.bundle_align_mode " << AlignPow2;
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitBundleLock(bool AlignToEnd) {
+void MCAsmStreamer::emitBundleLock(bool AlignToEnd) {
   OS << "\t.bundle_lock";
   if (AlignToEnd)
     OS << " align_to_end";
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitBundleUnlock() {
+void MCAsmStreamer::emitBundleUnlock() {
   OS << "\t.bundle_unlock";
   EmitEOL();
 }
@@ -2070,7 +2070,7 @@ void MCAsmStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize,
   EmitEOL();
 }
 
-bool MCAsmStreamer::EmitRelocDirective(const MCExpr &Offset, StringRef Name,
+bool MCAsmStreamer::emitRelocDirective(const MCExpr &Offset, StringRef Name,
                                        const MCExpr *Expr, SMLoc,
                                        const MCSubtargetInfo &STI) {
   OS << "\t.reloc ";
@@ -2084,12 +2084,12 @@ bool MCAsmStreamer::EmitRelocDirective(const MCExpr &Offset, StringRef Name,
   return false;
 }
 
-void MCAsmStreamer::EmitAddrsig() {
+void MCAsmStreamer::emitAddrsig() {
   OS << "\t.addrsig";
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitAddrsigSym(const MCSymbol *Sym) {
+void MCAsmStreamer::emitAddrsigSym(const MCSymbol *Sym) {
   OS << "\t.addrsig_sym ";
   Sym->print(OS, MAI);
   EmitEOL();
@@ -2098,7 +2098,7 @@ void MCAsmStreamer::EmitAddrsigSym(const MCSymbol *Sym) {
 /// EmitRawText - If this file is backed by an assembly streamer, this dumps
 /// the specified string in the output .s file.  This capability is
 /// indicated by the hasRawTextSupport() predicate.
-void MCAsmStreamer::EmitRawTextImpl(StringRef String) {
+void MCAsmStreamer::emitRawTextImpl(StringRef String) {
   if (!String.empty() && String.back() == '\n')
     String = String.substr(0, String.size()-1);
   OS << String;

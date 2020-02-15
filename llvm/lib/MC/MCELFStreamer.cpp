@@ -307,7 +307,7 @@ void MCELFStreamer::emitCommonSymbol(MCSymbol *S, uint64_t Size,
 
     emitValueToAlignment(ByteAlignment, 0, 1, 0);
     emitLabel(Symbol);
-    EmitZeros(Size + static_cast<uint64_t>(TailPadding));
+    emitZeros(Size + static_cast<uint64_t>(TailPadding));
 
     SwitchSection(P.first, P.second);
   } else {
@@ -365,7 +365,7 @@ void MCELFStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
   getAssembler().CGProfile.push_back({From, To, Count});
 }
 
-void MCELFStreamer::EmitIdent(StringRef IdentString) {
+void MCELFStreamer::emitIdent(StringRef IdentString) {
   MCSection *Comment = getAssembler().getContext().getELFSection(
       ".comment", ELF::SHT_PROGBITS, ELF::SHF_MERGE | ELF::SHF_STRINGS, 1, "");
   PushSection();
@@ -603,7 +603,7 @@ void MCELFStreamer::EmitInstToData(const MCInst &Inst,
   }
 }
 
-void MCELFStreamer::EmitBundleAlignMode(unsigned AlignPow2) {
+void MCELFStreamer::emitBundleAlignMode(unsigned AlignPow2) {
   assert(AlignPow2 <= 30 && "Invalid bundle alignment");
   MCAssembler &Assembler = getAssembler();
   if (AlignPow2 > 0 && (Assembler.getBundleAlignSize() == 0 ||
@@ -613,7 +613,7 @@ void MCELFStreamer::EmitBundleAlignMode(unsigned AlignPow2) {
     report_fatal_error(".bundle_align_mode cannot be changed once set");
 }
 
-void MCELFStreamer::EmitBundleLock(bool AlignToEnd) {
+void MCELFStreamer::emitBundleLock(bool AlignToEnd) {
   MCSection &Sec = *getCurrentSectionOnly();
 
   // Sanity checks
@@ -634,7 +634,7 @@ void MCELFStreamer::EmitBundleLock(bool AlignToEnd) {
                                     : MCSection::BundleLocked);
 }
 
-void MCELFStreamer::EmitBundleUnlock() {
+void MCELFStreamer::emitBundleUnlock() {
   MCSection &Sec = *getCurrentSectionOnly();
 
   // Sanity checks
@@ -693,7 +693,7 @@ void MCELFStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
   llvm_unreachable("ELF doesn't support this directive");
 }
 
-void MCELFStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
+void MCELFStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
                                    uint64_t Size, unsigned ByteAlignment,
                                    TailPaddingAmount TailPadding) {
   llvm_unreachable("ELF doesn't support this directive");
