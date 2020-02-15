@@ -145,8 +145,8 @@ void MipsELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
   }
 }
 
-void MipsELFStreamer::EmitIntValue(uint64_t Value, unsigned Size) {
-  MCELFStreamer::EmitIntValue(Value, Size);
+void MipsELFStreamer::emitIntValue(uint64_t Value, unsigned Size) {
+  MCELFStreamer::emitIntValue(Value, Size);
   Labels.clear();
 }
 
