@@ -61,7 +61,7 @@ public:
   void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override {}
-  void EmitGPRel32Value(const MCExpr *Value) override {}
+  void emitGPRel32Value(const MCExpr *Value) override {}
   void BeginCOFFSymbolDef(const MCSymbol *Symbol) override {}
   void EmitCOFFSymbolStorageClass(int StorageClass) override {}
   void EmitCOFFSymbolType(int Type) override {}
