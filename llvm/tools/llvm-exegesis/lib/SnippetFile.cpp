@@ -88,15 +88,15 @@ public:
 
 private:
   // We only care about instructions, we don't implement this part of the API.
-  void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
                         TailPaddingAmount TailPadding) override {}
-  bool EmitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override {
+  bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override {
     return false;
   }
   void EmitValueToAlignment(unsigned ByteAlignment, int64_t Value,
                             unsigned ValueSize,
                             unsigned MaxBytesToEmit) override {}
-  void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc) override {}
 

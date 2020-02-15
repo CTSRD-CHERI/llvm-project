@@ -52,13 +52,13 @@ public:
     Regions.addInstruction(Inst);
   }
 
-  bool EmitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override {
+  bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override {
     return true;
   }
 
-  void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
                         TailPaddingAmount TailPadding) override {}
-  void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override {}
   void EmitGPRel32Value(const MCExpr *Value) override {}

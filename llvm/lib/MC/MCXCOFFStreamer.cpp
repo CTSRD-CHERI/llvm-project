@@ -27,7 +27,7 @@ MCXCOFFStreamer::MCXCOFFStreamer(MCContext &Context,
     : MCObjectStreamer(Context, std::move(MAB), std::move(OW),
                        std::move(Emitter)) {}
 
-bool MCXCOFFStreamer::EmitSymbolAttribute(MCSymbol *Sym,
+bool MCXCOFFStreamer::emitSymbolAttribute(MCSymbol *Sym,
                                           MCSymbolAttr Attribute) {
   auto *Symbol = cast<MCSymbolXCOFF>(Sym);
   getAssembler().registerSymbol(*Symbol);
@@ -43,7 +43,7 @@ bool MCXCOFFStreamer::EmitSymbolAttribute(MCSymbol *Sym,
   return true;
 }
 
-void MCXCOFFStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+void MCXCOFFStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                        unsigned ByteAlignment,
                                        TailPaddingAmount TailPadding) {
   assert(TailPadding == TailPaddingAmount::None && "Not supported yet");
@@ -57,7 +57,7 @@ void MCXCOFFStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
   EmitZeros(Size);
 }
 
-void MCXCOFFStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
+void MCXCOFFStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
                                    uint64_t Size, unsigned ByteAlignment,
                                    TailPaddingAmount TailPadding, SMLoc Loc) {
   report_fatal_error("Zero fill not implemented for XCOFF.");
@@ -100,5 +100,5 @@ void MCXCOFFStreamer::EmitXCOFFLocalCommonSymbol(MCSymbol *LabelSym,
                                                  uint64_t Size,
                                                  MCSymbol *CsectSym,
                                                  unsigned ByteAlignment) {
-  EmitCommonSymbol(CsectSym, Size, ByteAlignment, TailPaddingAmount::None);
+  emitCommonSymbol(CsectSym, Size, ByteAlignment, TailPaddingAmount::None);
 }

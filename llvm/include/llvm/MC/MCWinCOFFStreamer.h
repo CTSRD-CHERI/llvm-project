@@ -41,10 +41,10 @@ public:
 
   void InitSections(bool NoExecStack) override;
   void EmitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
-  void EmitAssemblerFlag(MCAssemblerFlag Flag) override;
-  void EmitThumbFunc(MCSymbol *Func) override;
-  bool EmitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
-  void EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
+  void emitAssemblerFlag(MCAssemblerFlag Flag) override;
+  void emitThumbFunc(MCSymbol *Func) override;
+  bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
+  void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
   void BeginCOFFSymbolDef(MCSymbol const *Symbol) override;
   void EmitCOFFSymbolStorageClass(int StorageClass) override;
   void EmitCOFFSymbolType(int Type) override;
@@ -54,12 +54,12 @@ public:
   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
   void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) override;
-  void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
                         TailPaddingAmount TailPadding) override;
-  void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+  void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                              unsigned ByteAlignment,
                              TailPaddingAmount TailPadding) override;
-  void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override;
   void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,

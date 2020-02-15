@@ -43,23 +43,24 @@ public:
   void EmitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
   void emitLabelAtPos(MCSymbol *Symbol, SMLoc Loc, MCFragment *F,
                       uint64_t Offset) override;
-  void EmitAssemblerFlag(MCAssemblerFlag Flag) override;
-  void EmitThumbFunc(MCSymbol *Func) override;
-  void EmitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override;
-  bool EmitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
-  void EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
-  void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+  void emitAssemblerFlag(MCAssemblerFlag Flag) override;
+  void emitThumbFunc(MCSymbol *Func) override;
+  void emitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override;
+  bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
+  void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
                         TailPaddingAmount TailPadding) override;
+
 
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
   void emitELFSymverDirective(StringRef AliasName,
                               const MCSymbol *Aliasee) override;
 
-  void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+  void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                              unsigned ByteAlignment,
                              TailPaddingAmount TailPadding) override;
 
-  void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc L = SMLoc()) override;
   void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,

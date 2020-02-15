@@ -278,7 +278,7 @@ void TargetLoweringObjectFileELF::emitModuleMetadata(MCStreamer &Streamer,
       if (cast<MDNode>(Operand)->getNumOperands() != 2)
         report_fatal_error("invalid llvm.linker.options");
       for (const auto &Option : cast<MDNode>(Operand)->operands()) {
-        Streamer.EmitBytes(cast<MDString>(Option)->getString());
+        Streamer.emitBytes(cast<MDString>(Option)->getString());
         Streamer.EmitIntValue(0, 1);
       }
     }
@@ -291,7 +291,7 @@ void TargetLoweringObjectFileELF::emitModuleMetadata(MCStreamer &Streamer,
     Streamer.SwitchSection(S);
 
     for (const auto *Operand : DependentLibraries->operands()) {
-      Streamer.EmitBytes(
+      Streamer.emitBytes(
           cast<MDString>(cast<MDNode>(Operand)->getOperand(0))->getString());
       Streamer.EmitIntValue(0, 1);
     }
@@ -371,8 +371,8 @@ void TargetLoweringObjectFileELF::emitPersonalityValue(
   NameData += Sym->getName();
   MCSymbolELF *Label =
       cast<MCSymbolELF>(getContext().getOrCreateSymbol(NameData));
-  Streamer.EmitSymbolAttribute(Label, MCSA_Hidden);
-  Streamer.EmitSymbolAttribute(Label, MCSA_Weak);
+  Streamer.emitSymbolAttribute(Label, MCSA_Hidden);
+  Streamer.emitSymbolAttribute(Label, MCSA_Weak);
   unsigned Flags = ELF::SHF_ALLOC | ELF::SHF_WRITE | ELF::SHF_GROUP;
   MCSection *Sec = getContext().getELFNamedSection(".data", Label->getName(),
                                                    ELF::SHT_PROGBITS, Flags, 0);
@@ -380,7 +380,7 @@ void TargetLoweringObjectFileELF::emitPersonalityValue(
   unsigned Size = DL.getPointerSize(AS);
   Streamer.SwitchSection(Sec);
   Streamer.EmitValueToAlignment(DL.getPointerABIAlignment(AS).value());
-  Streamer.EmitSymbolAttribute(Label, MCSA_ELF_TypeObject);
+  Streamer.emitSymbolAttribute(Label, MCSA_ELF_TypeObject);
   const MCExpr *E = MCConstantExpr::create(Size, getContext());
   Streamer.emitELFSize(Label, E);
   Streamer.EmitLabel(Label);
@@ -895,7 +895,7 @@ void TargetLoweringObjectFileMachO::emitModuleMetadata(MCStreamer &Streamer,
       SmallVector<std::string, 4> StrOptions;
       for (const auto &Piece : cast<MDNode>(Option)->operands())
         StrOptions.push_back(std::string(cast<MDString>(Piece)->getString()));
-      Streamer.EmitLinkerOptions(StrOptions);
+      Streamer.emitLinkerOptions(StrOptions);
     }
   }
 
@@ -1460,7 +1460,7 @@ void TargetLoweringObjectFileCOFF::emitModuleMetadata(MCStreamer &Streamer,
         // Lead with a space for consistency with our dllexport implementation.
         std::string Directive(" ");
         Directive.append(std::string(cast<MDString>(Piece)->getString()));
-        Streamer.EmitBytes(Directive);
+        Streamer.emitBytes(Directive);
       }
     }
   }

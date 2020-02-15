@@ -510,7 +510,7 @@ bool DarwinAsmParser::parseDirectiveAltEntry(StringRef, SMLoc) {
   if (Sym->isDefined())
     return TokError(".alt_entry must preceed symbol definition");
 
-  if (!getStreamer().EmitSymbolAttribute(Sym, MCSA_AltEntry))
+  if (!getStreamer().emitSymbolAttribute(Sym, MCSA_AltEntry))
     return TokError("unable to emit symbol attribute");
 
   Lex();
@@ -541,7 +541,7 @@ bool DarwinAsmParser::parseDirectiveDesc(StringRef, SMLoc) {
   Lex();
 
   // Set the n_desc field of this Symbol to this DescValue
-  getStreamer().EmitSymbolDesc(Sym, DescValue);
+  getStreamer().emitSymbolDesc(Sym, DescValue);
 
   return false;
 }
@@ -569,7 +569,7 @@ bool DarwinAsmParser::parseDirectiveIndirectSymbol(StringRef, SMLoc Loc) {
   if (Sym->isTemporary())
     return TokError("non-local symbol required in directive");
 
-  if (!getStreamer().EmitSymbolAttribute(Sym, MCSA_IndirectSymbol))
+  if (!getStreamer().emitSymbolAttribute(Sym, MCSA_IndirectSymbol))
     return TokError("unable to emit indirect symbol attribute for: " + Name);
 
   if (getLexer().isNot(AsmToken::EndOfStatement))
@@ -625,7 +625,7 @@ bool DarwinAsmParser::parseDirectiveLinkerOption(StringRef IDVal, SMLoc) {
     Lex();
   }
 
-  getStreamer().EmitLinkerOptions(Args);
+  getStreamer().emitLinkerOptions(Args);
   return false;
 }
 
@@ -819,7 +819,7 @@ bool DarwinAsmParser::parseDirectiveSubsectionsViaSymbols(StringRef, SMLoc) {
 
   Lex();
 
-  getStreamer().EmitAssemblerFlag(MCAF_SubsectionsViaSymbols);
+  getStreamer().emitAssemblerFlag(MCAF_SubsectionsViaSymbols);
 
   return false;
 }
@@ -901,7 +901,7 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
   // the section but with no symbol.
   if (getLexer().is(AsmToken::EndOfStatement)) {
     // Create the zerofill section but no symbol
-    getStreamer().EmitZerofill(
+    getStreamer().emitZerofill(
         getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
                                      SectionKind::getBSS()),
         /*Symbol=*/nullptr, /*Size=*/0, /*ByteAlignment=*/0,
@@ -961,7 +961,7 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
   // Create the zerofill Symbol with Size and Pow2Alignment
   //
   // FIXME: Arch specific.
-  getStreamer().EmitZerofill(
+  getStreamer().emitZerofill(
       getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
                                    SectionKind::getBSS()),
       Sym, Size, 1 << Pow2Alignment, TailPaddingAmount::None, SectionLoc);
@@ -974,7 +974,7 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
 bool DarwinAsmParser::parseDirectiveDataRegion(StringRef, SMLoc) {
   if (getLexer().is(AsmToken::EndOfStatement)) {
     Lex();
-    getStreamer().EmitDataRegion(MCDR_DataRegion);
+    getStreamer().emitDataRegion(MCDR_DataRegion);
     return false;
   }
   StringRef RegionType;
@@ -990,7 +990,7 @@ bool DarwinAsmParser::parseDirectiveDataRegion(StringRef, SMLoc) {
     return Error(Loc, "unknown region type in '.data_region' directive");
   Lex();
 
-  getStreamer().EmitDataRegion((MCDataRegionType)Kind);
+  getStreamer().emitDataRegion((MCDataRegionType)Kind);
   return false;
 }
 
@@ -1001,7 +1001,7 @@ bool DarwinAsmParser::parseDirectiveDataRegionEnd(StringRef, SMLoc) {
     return TokError("unexpected token in '.end_data_region' directive");
 
   Lex();
-  getStreamer().EmitDataRegion(MCDR_DataRegionEnd);
+  getStreamer().emitDataRegion(MCDR_DataRegionEnd);
   return false;
 }
 
@@ -1138,7 +1138,7 @@ bool DarwinAsmParser::parseVersionMin(StringRef Directive, SMLoc Loc,
 
   Triple::OSType ExpectedOS = getOSTypeFromMCVM(Type);
   checkVersion(Directive, StringRef(), Loc, ExpectedOS);
-  getStreamer().EmitVersionMin(Type, Major, Minor, Update, SDKVersion);
+  getStreamer().emitVersionMin(Type, Major, Minor, Update, SDKVersion);
   return false;
 }
 
@@ -1195,7 +1195,7 @@ bool DarwinAsmParser::parseBuildVersion(StringRef Directive, SMLoc Loc) {
   Triple::OSType ExpectedOS
     = getOSTypeFromPlatform((MachO::PlatformType)Platform);
   checkVersion(Directive, PlatformName, Loc, ExpectedOS);
-  getStreamer().EmitBuildVersion(Platform, Major, Minor, Update, SDKVersion);
+  getStreamer().emitBuildVersion(Platform, Major, Minor, Update, SDKVersion);
   return false;
 }
 
