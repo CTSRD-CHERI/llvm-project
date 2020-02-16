@@ -75,6 +75,7 @@ public:
   int DwarfVersion = 0;
 
   std::string ABIName;
+  std::string AssemblyLanguage;
   std::string SplitDwarfFile;
 
   /// Additional paths to search for `.include` directives when using the
@@ -95,6 +96,11 @@ public:
   // Ditto for cheri cap tls setting
   static bool cheriUsesCapabilityTls();
   static CheriCapabilityTlsABI cheriCapabilityTlsABI();
+
+  /// getAssemblyLanguage - If this returns a non-empty string this represents
+  /// the textual name of the assembly language that we will use for this
+  /// target, e.g. masm.
+  StringRef getAssemblyLanguage() const;
 };
 
 } // end namespace llvm
