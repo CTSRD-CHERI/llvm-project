@@ -842,7 +842,10 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
     expandMemoryRegion(ctx->memRegion, dot - ctx->memRegion->curPos,
                        ctx->memRegion->name, sec->name);
 
+  uint64_t oldDot = dot;
   switchTo(sec);
+  if (sec->addrExpr && oldDot != dot)
+    changedSectionAddresses.push_back({sec, oldDot});
 
   ctx->lmaOffset = 0;
 
@@ -1114,6 +1117,7 @@ const Defined *LinkerScript::assignAddresses() {
   auto deleter = std::make_unique<AddressState>();
   ctx = deleter.get();
   errorOnMissingSection = true;
+  changedSectionAddresses.clear();
   switchTo(aether);
 
   SymbolAssignmentMap oldValues = getSymbolAssignmentValues(sectionCommands);
