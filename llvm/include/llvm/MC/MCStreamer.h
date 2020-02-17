@@ -832,12 +832,6 @@ public:
   virtual void emitValueToOffset(const MCExpr *Offset, unsigned char Value,
                                  SMLoc Loc);
 
-  virtual void
-  EmitCodePaddingBasicBlockStart(const MCCodePaddingContext &Context) {}
-
-  virtual void
-  EmitCodePaddingBasicBlockEnd(const MCCodePaddingContext &Context) {}
-
   /// @}
 
   /// Switch to a new logical file.  This is used to implement the '.file
