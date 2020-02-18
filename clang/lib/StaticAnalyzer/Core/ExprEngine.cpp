@@ -1415,6 +1415,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::CXXNullPtrLiteralExprClass:
     case Stmt::OMPArraySectionExprClass:
     case Stmt::OMPArrayShapingExprClass:
+    case Stmt::OMPIteratorExprClass:
     case Stmt::TypeTraitExprClass: {
       Bldr.takeNodes(Pred);
       ExplodedNodeSet preVisit;
