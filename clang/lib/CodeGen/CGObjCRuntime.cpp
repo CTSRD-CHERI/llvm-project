@@ -224,7 +224,7 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
         CGF.pushSEHCleanup(NormalAndEHCleanup, FinallyFunc);
     }
 
-  
+
   // Emit the try body.
   CGF.EmitStmt(S.getTryBody());
 
@@ -284,7 +284,7 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
     cleanups.ForceCleanup();
 
     CGF.EmitBranchThroughCleanup(Cont);
-  }  
+  }
 
   // Go back to the try-statement fallthrough.
   CGF.Builder.restoreIP(SavedIP);
