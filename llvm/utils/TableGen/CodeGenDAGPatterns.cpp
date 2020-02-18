@@ -2537,6 +2537,9 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
       }
     }
 
+    unsigned NumResults = Inst.getNumResults();
+    unsigned NumFixedOperands = InstInfo.Operands.size();
+
     // If one or more operands with a default value appear at the end of the
     // formal operand list for an instruction, we allow them to be overridden
     // by optional operands provided in the pattern.
@@ -2545,14 +2548,15 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
     // operand A with a default, then we don't allow A to be overridden,
     // because there would be no way to specify whether the next operand in
     // the pattern was intended to override A or skip it.
-    unsigned NonOverridableOperands = Inst.getNumOperands();
-    while (NonOverridableOperands > 0 &&
-           CDP.operandHasDefault(Inst.getOperand(NonOverridableOperands-1)))
+    unsigned NonOverridableOperands = NumFixedOperands;
+    while (NonOverridableOperands > NumResults &&
+           CDP.operandHasDefault(InstInfo.Operands[NonOverridableOperands-1].Rec))
       --NonOverridableOperands;
 
     unsigned ChildNo = 0;
-    for (unsigned i = 0, e = Inst.getNumOperands(); i != e; ++i) {
-      Record *OperandNode = Inst.getOperand(i);
+    assert(NumResults <= NumFixedOperands);
+    for (unsigned i = NumResults, e = NumFixedOperands; i != e; ++i) {
+      Record *OperandNode = InstInfo.Operands[i].Rec;
 
       // If the operand has a default value, do we use it? We must use the
       // default if we've run out of children of the pattern DAG to consume,
