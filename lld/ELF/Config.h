@@ -192,6 +192,7 @@ struct Configuration {
   bool relocatable;
   bool relrPackDynRelocs;
   bool saveTemps;
+  llvm::Optional<uint32_t> shuffleSectionSeed;
   bool sortCapRelocs;
   bool singleRoRx;
   bool shared;
