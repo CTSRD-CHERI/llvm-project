@@ -129,6 +129,36 @@ template<> struct DenseMapInfo<unsigned long long> {
   }
 };
 
+#ifdef __CHERI_PURE_CAPABILITY__
+// Provide DenseMapInfo for capabilities
+template<> struct DenseMapInfo<__uintcap_t> {
+  static inline __uintcap_t getEmptyKey() { return ~0ULL; }
+  static inline __uintcap_t getTombstoneKey() { return ~0ULL - 1ULL; }
+
+  static unsigned getHashValue(const __uintcap_t& Val) {
+    return (unsigned)((size_t)Val * 37UL);
+  }
+
+  static bool isEqual(const __uintcap_t& LHS,
+                      const __uintcap_t& RHS) {
+    return LHS == RHS;
+  }
+};
+template<> struct DenseMapInfo<__intcap_t> {
+  static inline __intcap_t getEmptyKey() { return 0x7fffffffffffffffLL; }
+  static inline __intcap_t getTombstoneKey() { return -0x7fffffffffffffffLL-1; }
+
+  static unsigned getHashValue(const __intcap_t& Val) {
+    return (unsigned)((ptrdiff_t)Val * 37ULL);
+  }
+
+  static bool isEqual(const __intcap_t& LHS,
+                      const __intcap_t& RHS) {
+    return LHS == RHS;
+  }
+};
+#endif
+
 // Provide DenseMapInfo for shorts.
 template <> struct DenseMapInfo<short> {
   static inline short getEmptyKey() { return 0x7FFF; }

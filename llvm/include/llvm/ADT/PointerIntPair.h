@@ -65,7 +65,7 @@ public:
   }
 
   void setInt(IntType IntVal) LLVM_LVALUE_FUNCTION {
-    Value = Info::updateInt(Value, static_cast<intptr_t>(IntVal));
+    Value = Info::updateInt(Value, static_cast<ptrdiff_t>(IntVal));
   }
 
   void initWithPointer(PointerTy PtrVal) LLVM_LVALUE_FUNCTION {
@@ -74,7 +74,7 @@ public:
 
   void setPointerAndInt(PointerTy PtrVal, IntType IntVal) LLVM_LVALUE_FUNCTION {
     Value = Info::updateInt(Info::updatePointer(0, PtrVal),
-                            static_cast<intptr_t>(IntVal));
+                            static_cast<ptrdiff_t>(IntVal));
   }
 
   PointerTy const *getAddrOfPointer() const {
@@ -147,20 +147,20 @@ struct PointerIntPairInfo {
                 "cannot use a pointer type that has all bits free");
   static_assert(IntBits <= PtrTraits::NumLowBitsAvailable,
                 "PointerIntPair with integer size too large for pointer");
-  enum : uintptr_t {
+  enum : size_t {
     /// PointerBitMask - The bits that come from the pointer.
     PointerBitMask =
-        ~(uintptr_t)(((intptr_t)1 << PtrTraits::NumLowBitsAvailable) - 1),
+        ~(size_t)(((ptrdiff_t)1 << PtrTraits::NumLowBitsAvailable) - 1),
 
     /// IntShift - The number of low bits that we reserve for other uses, and
     /// keep zero.
-    IntShift = (uintptr_t)PtrTraits::NumLowBitsAvailable - IntBits,
+    IntShift = (size_t)PtrTraits::NumLowBitsAvailable - IntBits,
 
     /// IntMask - This is the unshifted mask for valid bits of the int type.
-    IntMask = (uintptr_t)(((intptr_t)1 << IntBits) - 1),
+    IntMask = (size_t)(((ptrdiff_t)1 << IntBits) - 1),
 
     // ShiftedIntMask - This is the bits for the integer shifted in place.
-    ShiftedIntMask = (uintptr_t)(IntMask << IntShift)
+    ShiftedIntMask = (size_t)(IntMask << IntShift)
   };
 
   static PointerT getPointer(intptr_t Value) {
@@ -168,8 +168,8 @@ struct PointerIntPairInfo {
         reinterpret_cast<void *>(Value & PointerBitMask));
   }
 
-  static intptr_t getInt(intptr_t Value) {
-    return (Value >> IntShift) & IntMask;
+  static ptrdiff_t getInt(intptr_t Value) {
+    return ptrdiff_t(Value >> IntShift) & IntMask;
   }
 
   static intptr_t updatePointer(intptr_t OrigValue, PointerT Ptr) {
@@ -178,11 +178,11 @@ struct PointerIntPairInfo {
     assert((PtrWord & ~PointerBitMask) == 0 &&
            "Pointer is not sufficiently aligned");
     // Preserve all low bits, just update the pointer.
-    return PtrWord | (OrigValue & ~PointerBitMask);
+    return PtrWord | (size_t)(OrigValue & ~PointerBitMask);
   }
 
-  static intptr_t updateInt(intptr_t OrigValue, intptr_t Int) {
-    intptr_t IntWord = static_cast<intptr_t>(Int);
+  static intptr_t updateInt(intptr_t OrigValue, ptrdiff_t Int) {
+    ptrdiff_t IntWord = static_cast<ptrdiff_t>(Int);
     assert((IntWord & ~IntMask) == 0 && "Integer too large for field");
 
     // Preserve all bits other than the ones we are updating.

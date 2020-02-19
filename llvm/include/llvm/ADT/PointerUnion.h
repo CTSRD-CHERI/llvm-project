@@ -285,8 +285,8 @@ template <typename ...PTs> struct DenseMapInfo<PointerUnion<PTs...>> {
   }
 
   static unsigned getHashValue(const Union &UnionVal) {
-    intptr_t key = (intptr_t)UnionVal.getOpaqueValue();
-    return DenseMapInfo<intptr_t>::getHashValue(key);
+    ptrdiff_t key = (ptrdiff_t)UnionVal.getOpaqueValue();
+    return DenseMapInfo<ptrdiff_t>::getHashValue(key);
   }
 
   static bool isEqual(const Union &LHS, const Union &RHS) {

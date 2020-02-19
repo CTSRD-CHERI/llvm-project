@@ -37,7 +37,8 @@ namespace llvm {
 /// This is all the non-templated stuff common to all SmallVectors.
 class SmallVectorBase {
 protected:
-  void *BeginX;
+  typedef void *__attribute__((align_value(sizeof(void*)))) aligned_voidp;
+  aligned_voidp BeginX;
   unsigned Size = 0, Capacity;
 
   SmallVectorBase() = delete;

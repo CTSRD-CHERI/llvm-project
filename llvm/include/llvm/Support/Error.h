@@ -279,7 +279,7 @@ private:
     Payload = reinterpret_cast<ErrorInfoBase*>(
                 (reinterpret_cast<uintptr_t>(EI) &
                  ~static_cast<uintptr_t>(0x1)) |
-                (reinterpret_cast<uintptr_t>(Payload) & 0x1));
+                static_cast<size_t>(reinterpret_cast<uintptr_t>(Payload) & 0x1));
 #else
     Payload = EI;
 #endif

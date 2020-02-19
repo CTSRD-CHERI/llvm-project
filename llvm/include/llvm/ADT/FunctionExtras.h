@@ -78,13 +78,13 @@ class unique_function<ReturnT(ParamTs...)> {
 
   /// A struct to hold a single trivial callback with sufficient alignment for
   /// our bitpacking.
-  struct alignas(8) TrivialCallback {
+  struct alignas(std::max((size_t)8, sizeof(void*))) TrivialCallback {
     CallPtrT CallPtr;
   };
 
   /// A struct we use to aggregate three callbacks when we need full set of
   /// operations.
-  struct alignas(8) NonTrivialCallbacks {
+  struct alignas(std::max((size_t)8, sizeof(void*))) NonTrivialCallbacks {
     CallPtrT CallPtr;
     MovePtrT MovePtr;
     DestroyPtrT DestroyPtr;
