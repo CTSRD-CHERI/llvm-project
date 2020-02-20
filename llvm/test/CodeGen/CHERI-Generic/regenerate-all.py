@@ -8,9 +8,12 @@ from pathlib import Path
 
 LLVM_SRC_PATH = Path(__file__).parent.parent.parent.parent
 
+
 class ArchSpecificValues(object):
     def __init__(self, architecture: str, *, cap_range, cap_width,
-                 purecap_lit_command_prefix, hybrid_lit_command_prefix):
+                 purecap_lit_command_prefix: bytes,
+                 hybrid_lit_command_prefix: bytes, datalayout: bytes):
+        self.datalayout = datalayout
         self.hybrid_lit_command_prefix = hybrid_lit_command_prefix
         self.purecap_lit_command_prefix = purecap_lit_command_prefix
         self.cap_width = cap_width
@@ -22,13 +25,16 @@ class ArchSpecificValues(object):
 
 MIPSConfig = ArchSpecificValues("MIPS", cap_range=64, cap_width=128,
                                 purecap_lit_command_prefix=b"%cheri128_purecap_",
-                                hybrid_lit_command_prefix=b"%cheri128_")
+                                hybrid_lit_command_prefix=b"%cheri128_",
+                                datalayout=b"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200")
 RISCV32Config = ArchSpecificValues("RISCV32", cap_range=32, cap_width=64,
                                    purecap_lit_command_prefix=b"%riscv32_cheri_purecap_",
-                                   hybrid_lit_command_prefix=b"%riscv32_cheri_")
+                                   hybrid_lit_command_prefix=b"%riscv32_cheri_",
+                                   datalayout=b"e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200")
 RISCV64Config = ArchSpecificValues("RISCV64", cap_range=64, cap_width=128,
                                    purecap_lit_command_prefix=b"%riscv64_cheri_purecap_",
-                                   hybrid_lit_command_prefix=b"%riscv64_cheri_")
+                                   hybrid_lit_command_prefix=b"%riscv64_cheri_",
+                                   datalayout=b"e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200")
 
 
 class CmdArgs(object):
@@ -67,6 +73,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                 arch_def.cap_width / 8).encode("utf-8"))
             converted_line = converted_line.replace(b"@CAP_BYTES@", str(
                 arch_def.cap_width).encode("utf-8"))
+            # Opt tests require a datalayout since the lit substitutions don't
+            # include it in their commandline
+            converted_line = converted_line.replace(b"@PURECAP_DATALAYOUT@", arch_def.datalayout)
             if args.verbose and converted_line != line:
                 print("Adjusted line:")
                 print("  Before:", line)
