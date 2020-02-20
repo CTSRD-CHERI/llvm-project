@@ -1415,6 +1415,19 @@ static void sortSection(OutputSection *sec,
                         const DenseMap<const InputSectionBase *, int> &order) {
   StringRef name = sec->name;
 
+  // Never sort these.
+  if (name == ".init" || name == ".fini")
+    return;
+
+  // Sort input sections by priority using the list provided by
+  // --symbol-ordering-file or --shuffle-sections=. This is a least significant
+  // digit radix sort. The sections may be sorted stably again by a more
+  // significant key.
+  if (!order.empty())
+    for (BaseCommand *b : sec->sectionCommands)
+      if (auto *isd = dyn_cast<InputSectionDescription>(b))
+        sortISDBySectionOrder(isd, order);
+
   // Sort input sections by section name suffixes for
   // __attribute__((init_priority(N))).
   if (name == ".init_array" || name == ".fini_array") {
@@ -1429,10 +1442,6 @@ static void sortSection(OutputSection *sec,
       sec->sortCtorsDtors();
     return;
   }
-
-  // Never sort these.
-  if (name == ".init" || name == ".fini")
-    return;
 
   // .toc is allocated just after .got and is accessed using GOT-relative
   // relocations. Object files compiled with small code model have an
@@ -1451,13 +1460,6 @@ static void sortSection(OutputSection *sec,
                       });
     return;
   }
-
-  // Sort input sections by priority using the list provided
-  // by --symbol-ordering-file.
-  if (!order.empty())
-    for (BaseCommand *b : sec->sectionCommands)
-      if (auto *isd = dyn_cast<InputSectionDescription>(b))
-        sortISDBySectionOrder(isd, order);
 }
 
 // If no layout was provided by linker script, we want to apply default
