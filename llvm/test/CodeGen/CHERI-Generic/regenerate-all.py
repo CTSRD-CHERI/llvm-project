@@ -86,10 +86,14 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     # Generate the check lines using update_*_test_checks.py
     update_scripts_dir = LLVM_SRC_PATH / "utils"
     llc_checks_cmd = [sys.executable, str(update_scripts_dir / "update_llc_test_checks.py"),
-                      "--llc-binary", str(args.llc_cmd), str(output_path)]
+                      "--force-update",
+                      "--llc-binary", str(args.llc_cmd),
+                      "--opt-binary", str(args.opt_cmd),
+                      str(output_path)]
     opt_checks_cmd = [sys.executable, str(update_scripts_dir / "update_test_checks.py"),
-                      "--function-signature", "--scrub-attributes",
-                      "--opt-binary", str(args.opt_cmd), str(output_path)]
+                      "--function-signature", "--scrub-attributes", "--force-update",
+                      "--opt-binary", str(args.opt_cmd),
+                      str(output_path)]
     for update_cmd in (llc_checks_cmd, opt_checks_cmd):
         # if args.verbose:
         print("Running", " ".join(update_cmd))
