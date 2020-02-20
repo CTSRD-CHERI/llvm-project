@@ -22,6 +22,8 @@ def parse_commandline_args(parser):
                       help='Show verbose output')
   parser.add_argument('-u', '--update-only', action='store_true',
                       help='Only update test if it was already autogened')
+  parser.add_argument('--force-update', action='store_true',
+                      help='Update test even if it was autogened by a different script')
   args = parser.parse_args()
   global _verbose
   _verbose = args.verbose
