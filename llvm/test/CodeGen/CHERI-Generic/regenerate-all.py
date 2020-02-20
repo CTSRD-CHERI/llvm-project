@@ -60,6 +60,8 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     print("Updating", test_name, "for", arch_def.name)
     output_path = Path(arch_def.tests_path, test_name)
     with output_path.open("wb") as output_file:
+        output_file.write(b"; DO NOT EDIT -- This file was generated from " + str(
+            Path(input_file.name).relative_to(LLVM_SRC_PATH)).encode("utf-8") + b"\n")
         for line in input_file.readlines():
             converted_line = line.replace(b"%generic_cheri_purecap_",
                                           arch_def.purecap_lit_command_prefix)
