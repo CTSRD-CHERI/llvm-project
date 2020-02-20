@@ -501,7 +501,7 @@ static T *getStoreValueForLoadHelper(T *SrcVal, unsigned Offset, Type *LoadTy,
     SrcVal = Helper.CreateBitCast(SrcVal, IntegerType::get(Ctx, StoreSize * 8));
 
   // Check that this did not change the size of the value:
-  assert(DL.getTypeSizeInBits(SrcVal->getType()) == StoreSize &&
+  assert(((DL.getTypeSizeInBits(SrcVal->getType()) + 7) / 8) == StoreSize &&
          "Size of stored value should not change");
 
   // Shift the bits to the least significant depending on endianness.
