@@ -26,6 +26,8 @@ def main():
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument('--llc-binary', default='llc',
                       help='The "llc" binary to use to generate the test case')
+  parser.add_argument('--opt-binary', default='opt',
+                      help='The "opt" binary to use to generate the test case (if used for pre-processing)')
   parser.add_argument(
       '--function', help='The function in the test file to update')
   parser.add_argument(
@@ -75,12 +77,33 @@ def main():
       # Allow pre-preocessing test inputs with sed, etc.
       if len(commands) == 3:
         # TODO: allow other tools
-        if commands[0].startswith("sed"):
-          preprocess_cmd = commands[0]
-          commands = commands[1:]
-        else:
+        first_command = commands[0]
+        if first_command.startswith("%"):
+          first_command = first_command.replace("%cheri_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+          first_command = first_command.replace("%cheri128_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+          first_command = first_command.replace("%cheri256_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
+          first_command = first_command.replace("%cheri_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+          first_command = first_command.replace("%cheri128_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+          first_command = first_command.replace("%cheri256_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
+          first_command = first_command.replace("%riscv32_cheri_purecap_opt", "opt -mtriple=riscv32-unknown-freebsd -target-abi il32pc64 -mattr=+xcheri,+cap-mode")
+          first_command = first_command.replace("%riscv64_cheri_purecap_opt", "opt -mtriple=riscv64-unknown-freebsd -target-abi l64pc128 -mattr=+xcheri,+cap-mode")
+          first_command = first_command.replace("%riscv32_cheri_opt", "opt -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
+          first_command = first_command.replace("%riscv64_cheri_opt", "opt -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
+        first_command_list = first_command.split()
+        known_command = False
+        if first_command_list[0] == "sed":
+          known_command = True
+        elif first_command_list[0] == "opt":
+          known_command = True
+          first_command_list[0] = args.opt_binary
+          first_command = " ".join(first_command_list)
+        if not known_command:
           common.warn('WARNING: Skipping RUN line with more than two commands and unknown first tool: ' + l)
           continue
+        # Handle known pre-processing command
+        preprocess_cmd = first_command
+        commands = commands[1:]
+
       llc_cmd = commands[0]
       if llc_cmd.startswith("%"):
         llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
