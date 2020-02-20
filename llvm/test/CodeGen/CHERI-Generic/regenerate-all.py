@@ -70,9 +70,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
             converted_line = converted_line.replace(b"iCAPWIDTH", b'i' + str(
                 arch_def.cap_width).encode("utf-8"))
             converted_line = converted_line.replace(b"@CAP_BITS@", str(
-                arch_def.cap_width / 8).encode("utf-8"))
-            converted_line = converted_line.replace(b"@CAP_BYTES@", str(
                 arch_def.cap_width).encode("utf-8"))
+            converted_line = converted_line.replace(b"@CAP_BYTES@", str(
+                int(arch_def.cap_width // 8)).encode("utf-8"))
             # Opt tests require a datalayout since the lit substitutions don't
             # include it in their commandline
             converted_line = converted_line.replace(b"@PURECAP_DATALAYOUT@", arch_def.datalayout)
