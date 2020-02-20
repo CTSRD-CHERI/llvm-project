@@ -91,8 +91,7 @@ Constant *getConstantStoreValueForLoad(Constant *SrcVal, unsigned Offset,
 /// any necessary load widening.  It inserts instructions to do so at InsertPt,
 /// and returns the extracted value.
 Value *getLoadValueForLoad(LoadInst *SrcVal, unsigned Offset, Type *LoadTy,
-                           Instruction *InsertPt,  const DataLayout &DL,
-                           GVN &gvn);
+                           Instruction *InsertPt,  const DataLayout &DL);
 // This is the same as getLoadValueForLoad, except it is given the load value as
 // a constant. It returns nullptr if it would require widening the load.
 Constant *getConstantLoadValueForLoad(Constant *SrcVal, unsigned Offset,

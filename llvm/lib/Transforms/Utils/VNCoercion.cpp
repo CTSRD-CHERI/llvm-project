@@ -539,8 +539,7 @@ Constant *getConstantStoreValueForLoad(Constant *SrcVal, unsigned Offset,
 /// Check this case to see if there is anything more we can do before we give
 /// up.
 Value *getLoadValueForLoad(LoadInst *SrcVal, unsigned Offset, Type *LoadTy,
-                           Instruction *InsertPt, const DataLayout &DL,
-                           GVN &gvn) {
+                           Instruction *InsertPt, const DataLayout &DL) {
   // If Offset+LoadTy exceeds the size of SrcVal, then we must be wanting to
   // widen SrcVal out to a larger load.
   unsigned SrcValStoreSize = DL.getTypeStoreSize(SrcVal->getType());
@@ -579,12 +578,6 @@ Value *getLoadValueForLoad(LoadInst *SrcVal, unsigned Offset, Type *LoadTy,
     RV = Builder.CreateTrunc(RV, SrcVal->getType());
     SrcVal->replaceAllUsesWith(RV);
 
-    // We would like to use gvn.markInstructionForDeletion here, but we can't
-    // because the load is already memoized into the leader map table that GVN
-    // tracks.  It is potentially possible to remove the load from the table,
-    // but then there all of the operations based on it would need to be
-    // rehashed.  Just leave the dead load around.
-    gvn.getMemDep().removeInstruction(SrcVal);
     SrcVal = NewLoad;
   }
 
