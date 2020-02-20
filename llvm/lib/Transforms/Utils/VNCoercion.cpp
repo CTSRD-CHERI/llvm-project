@@ -121,6 +121,10 @@ static T *coerceAvailableValueToLoadTypeHelper(T *StoredVal, Type *LoadedTy,
     StoredVal = Helper.CreateBitCast(StoredVal, StoredValTy);
   }
 
+  // Check that this did not change the size of the value:
+  assert(DL.getTypeSizeInBits(StoredVal->getType()) == StoredValSize &&
+      "Size of stored value should not change");
+
   // If this is a big-endian system, we need to shift the value down to the low
   // bits so that a truncate will work.
   if (DL.isBigEndian()) {
@@ -489,6 +493,10 @@ static T *getStoreValueForLoadHelper(T *SrcVal, unsigned Offset, Type *LoadTy,
     SrcVal = Helper.CreatePtrToInt(SrcVal, DL.getIntPtrType(SrcVal->getType()));
   if (!SrcVal->getType()->isIntegerTy())
     SrcVal = Helper.CreateBitCast(SrcVal, IntegerType::get(Ctx, StoreSize * 8));
+
+  // Check that this did not change the size of the value:
+  assert(DL.getTypeSizeInBits(SrcVal->getType()) == StoreSize &&
+         "Size of stored value should not change");
 
   // Shift the bits to the least significant depending on endianness.
   unsigned ShiftAmt;
