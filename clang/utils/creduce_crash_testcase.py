@@ -112,8 +112,9 @@ class LitSubstitutionHandler(object):
         ]
         llvm_config.add_tool_substitutions(llvm_tools)
         self.substitutions = llvm_config.config.substitutions
-        import pprint
-        pprint.pprint(self.substitutions)
+        if args.extremely_verbose:
+            import pprint
+            pprint.pprint(self.substitutions)
 
     def expand_lit_subtitutions(self, cmd: str) -> str:
         result = lit.TestRunner.applySubstitutions([cmd], self.substitutions)
