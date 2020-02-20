@@ -870,6 +870,16 @@ static void reportMayClobberedLoad(LoadInst *LI, MemDepResult DepInfo,
 
 static bool canExtractBitsFromCapability(Type *Src, Type *Dst, int Offset,
                                          const DataLayout &DL) {
+  if (!DL.isFatPointer(Src))
+    return true;
+
+  LLVM_DEBUG(dbgs() << "canExtractBitsFromCapability(Offset=" << Offset << ")\n"
+                    << " Src " << *Src << '\n'
+                    << " Dst " << *Dst << '\n'
+                    << "\n\n\n");
+
+  // FIXME: THIS IS WRONG! But we can indeed extract some bits
+#if 0
   // At worst capability to capability
   if (Src == Dst && Offset == 0)
     return true;
@@ -878,12 +888,13 @@ static bool canExtractBitsFromCapability(Type *Src, Type *Dst, int Offset,
   // If we're not extracting bits from a capability then we're ok.
   if (!isa<PointerType>(Src))
     return true;
-  if (!DL.isFatPointer(Src))
-    return true;
+
   if (DL.getPointerAddrSizeInBits(Src) < Offset + DL.getTypeSizeInBits(Dst)) {
     return false;
   }
   return true;
+#endif
+  return false;
 }
 
 bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
@@ -982,6 +993,9 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
                                          DL))
       return false;
 
+    if (!canExtractBitsFromCapability(S->getType(), LI->getType(), /*Offset=*/0, DL))
+      return false;
+
     // Can't forward from non-atomic to atomic without violating memory model.
     if (S->isAtomic() < LI->isAtomic())
       return false;
@@ -995,6 +1009,9 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
     // If the stored value is larger or equal to the loaded value, we can reuse
     // it.
     if (!canCoerceMustAliasedValueToLoad(LD, LI->getType(), DL))
+      return false;
+
+    if (!canExtractBitsFromCapability(LD->getType(), LI->getType(), /*Offset=*/0, DL))
       return false;
 
     // Can't forward from non-atomic to atomic without violating memory model.

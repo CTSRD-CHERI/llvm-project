@@ -15,8 +15,6 @@
 ; RUN: %riscv64_cheri_purecap_opt -S -memdep -basicaa -gvn -o - %s | %riscv64_cheri_purecap_llc -O0 -o - | FileCheck %s --check-prefix=ASM
 
 ; Check in the baseline (broken test now) to show the diff in the fixed commit
-; REQUIRES: bug_385_fixed
-
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
 
@@ -56,8 +54,7 @@ define i32 @second_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_
 ; ASM:       # %bb.0: # %bb
 ; ASM-NEXT:    cincoffset csp, csp, -80
 ; ASM-NEXT:    csc ca0, 0(csp)
-; ASM-NEXT:    ctoptr a1, ca0, ddc
-; ASM-NEXT:    srli a0, a1, 32
+; ASM-NEXT:    clw a0, 4(csp)
 ; ASM-NEXT:    cincoffset csp, csp, 80
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@second_i32_store_to_load_fwd
@@ -67,10 +64,8 @@ define i32 @second_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_
 ; CHECK-NEXT:    [[FIELD:%.*]] = getelementptr inbounds [[STRUCT_ADDRINFO]], [[STRUCT_ADDRINFO]] addrspace(200)* [[STACKVAL]], i64 0, i32 1
 ; CHECK-NEXT:    [[AS_CAP:%.*]] = bitcast [[STRUCT_ADDRINFO]] addrspace(200)* [[STACKVAL]] to i8 addrspace(200)* addrspace(200)*
 ; CHECK-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[AS_CAP]], align 16
-; CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8 addrspace(200)* [[ARG]] to i64
-; CHECK-NEXT:    [[TMP1:%.*]] = lshr i64 [[TMP0]], 32
-; CHECK-NEXT:    [[TMP2:%.*]] = trunc i64 [[TMP1]] to i32
-; CHECK-NEXT:    ret i32 [[TMP2]]
+; CHECK-NEXT:    [[RESULT:%.*]] = load i32, i32 addrspace(200)* [[FIELD]], align 4
+; CHECK-NEXT:    ret i32 [[RESULT]]
 ;
 bb:
   %stackval = alloca %struct.addrinfo, align 16, addrspace(200)

@@ -15,8 +15,6 @@
 ; RUN: %riscv32_cheri_purecap_opt -S -memdep -basicaa -gvn -o - %s | %riscv32_cheri_purecap_llc -O0 -o - | FileCheck %s --check-prefix=ASM
 
 ; Check in the baseline (broken test now) to show the diff in the fixed commit
-; REQUIRES: bug_385_fixed
-
 
 target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200"
 

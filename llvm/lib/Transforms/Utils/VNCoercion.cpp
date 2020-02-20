@@ -51,6 +51,7 @@ bool canCoerceMustAliasedValueToLoad(Value *StoredVal, Type *LoadTy,
   // anything that is a fat pointer.
   if (DL.isFatPointer(StoredVal->getType()) != DL.isFatPointer(LoadTy))
     return false;
+  // FIXME: we can transform fat pointers
 
   return true;
 }
@@ -110,10 +111,13 @@ static T *coerceAvailableValueToLoadTypeHelper(T *StoredVal, Type *LoadedTy,
   // Convert source pointers to integers, which can be manipulated.
   if (StoredValTy->isPtrOrPtrVectorTy()) {
     if (DL.isFatPointer(StoredValTy->getScalarType()->getPointerAddressSpace()))
-      return nullptr;
+      return nullptr; // TODO: we can do stuff here
     StoredValTy = DL.getIntPtrType(StoredValTy);
     StoredVal = Helper.CreatePtrToInt(StoredVal, StoredValTy);
   }
+
+  // FIXME: Extracting bits works differently for CHERI capabilities
+  assert(!DL.isFatPointer(StoredValTy));
 
   // Convert vectors and fp to integer, which can be manipulated.
   if (!StoredValTy->isIntegerTy()) {
@@ -489,6 +493,8 @@ static T *getStoreValueForLoadHelper(T *SrcVal, unsigned Offset, Type *LoadTy,
 
   // Compute which bits of the stored value are being used by the load.  Convert
   // to an integer type to start with.
+  // FIXME: Extracting bits works differently for CHERI capabilities
+  assert(!DL.isFatPointer(SrcVal->getType()));
   if (SrcVal->getType()->isPtrOrPtrVectorTy())
     SrcVal = Helper.CreatePtrToInt(SrcVal, DL.getIntPtrType(SrcVal->getType()));
   if (!SrcVal->getType()->isIntegerTy())

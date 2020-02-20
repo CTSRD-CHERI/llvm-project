@@ -13,8 +13,6 @@
 ; RUN: %generic_cheri_purecap_opt -S -memdep -basicaa -gvn -o - %s | %generic_cheri_purecap_llc -O0 -o - | FileCheck %s --check-prefix=ASM
 
 ; Check in the baseline (broken test now) to show the diff in the fixed commit
-; REQUIRES: bug_385_fixed
-
 
 target datalayout = "@PURECAP_DATALAYOUT@"
 
