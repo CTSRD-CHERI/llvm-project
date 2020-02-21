@@ -1391,11 +1391,8 @@ bool TargetLowering::SimplifyDemandedBits(
     SDValue Op0 = Op.getOperand(0);
     SDValue Op1 = Op.getOperand(1);
 
-    if (ConstantSDNode *SA = isConstOrConstSplat(Op1, DemandedElts)) {
-      // If the shift count is an invalid immediate, don't do anything.
-      if (SA->getAPIntValue().uge(BitWidth))
-        break;
-
+    if (const APInt *SA =
+            TLO.DAG.getValidShiftAmountConstant(Op, DemandedElts)) {
       unsigned ShAmt = SA->getZExtValue();
       if (ShAmt == 0)
         return TLO.CombineTo(Op, Op0);
@@ -1406,9 +1403,9 @@ bool TargetLowering::SimplifyDemandedBits(
       // TODO - support non-uniform vector amounts.
       if (Op0.getOpcode() == ISD::SRL) {
         if (!DemandedBits.intersects(APInt::getLowBitsSet(BitWidth, ShAmt))) {
-          if (ConstantSDNode *SA2 =
-                  isConstOrConstSplat(Op0.getOperand(1), DemandedElts)) {
-            if (SA2->getAPIntValue().ult(BitWidth)) {
+          if (const APInt *SA2 =
+                  TLO.DAG.getValidShiftAmountConstant(Op0, DemandedElts)) {
+            if (SA2->ult(BitWidth)) {
               unsigned C1 = SA2->getZExtValue();
               unsigned Opc = ISD::SHL;
               int Diff = ShAmt - C1;
@@ -1460,8 +1457,8 @@ bool TargetLowering::SimplifyDemandedBits(
         // x aren't demanded.
         if (Op0.hasOneUse() && InnerOp.getOpcode() == ISD::SRL &&
             InnerOp.hasOneUse()) {
-          if (ConstantSDNode *SA2 =
-                  isConstOrConstSplat(InnerOp.getOperand(1))) {
+          if (const APInt *SA2 =
+                  TLO.DAG.getValidShiftAmountConstant(InnerOp, DemandedElts)) {
             unsigned InnerShAmt = SA2->getLimitedValue(InnerBits);
             if (InnerShAmt < ShAmt && InnerShAmt < InnerBits &&
                 DemandedBits.getActiveBits() <=
@@ -1489,11 +1486,8 @@ bool TargetLowering::SimplifyDemandedBits(
     SDValue Op0 = Op.getOperand(0);
     SDValue Op1 = Op.getOperand(1);
 
-    if (ConstantSDNode *SA = isConstOrConstSplat(Op1, DemandedElts)) {
-      // If the shift count is an invalid immediate, don't do anything.
-      if (SA->getAPIntValue().uge(BitWidth))
-        break;
-
+    if (const APInt *SA =
+            TLO.DAG.getValidShiftAmountConstant(Op, DemandedElts)) {
       unsigned ShAmt = SA->getZExtValue();
       if (ShAmt == 0)
         return TLO.CombineTo(Op, Op0);
@@ -1511,11 +1505,11 @@ bool TargetLowering::SimplifyDemandedBits(
       // are never demanded.
       // TODO - support non-uniform vector amounts.
       if (Op0.getOpcode() == ISD::SHL) {
-        if (ConstantSDNode *SA2 =
-                isConstOrConstSplat(Op0.getOperand(1), DemandedElts)) {
+        if (const APInt *SA2 =
+                TLO.DAG.getValidShiftAmountConstant(Op0, DemandedElts)) {
           if (!DemandedBits.intersects(
                   APInt::getHighBitsSet(BitWidth, ShAmt))) {
-            if (SA2->getAPIntValue().ult(BitWidth)) {
+            if (SA2->ult(BitWidth)) {
               unsigned C1 = SA2->getZExtValue();
               unsigned Opc = ISD::SRL;
               int Diff = ShAmt - C1;
@@ -1539,8 +1533,8 @@ bool TargetLowering::SimplifyDemandedBits(
       assert(!Known.hasConflict() && "Bits known to be one AND zero?");
       Known.Zero.lshrInPlace(ShAmt);
       Known.One.lshrInPlace(ShAmt);
-
-      Known.Zero.setHighBits(ShAmt); // High bits known zero.
+      // High bits known zero.
+      Known.Zero.setHighBits(ShAmt);
     }
     break;
   }
@@ -1562,11 +1556,8 @@ bool TargetLowering::SimplifyDemandedBits(
     if (DemandedBits.isOneValue())
       return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SRL, dl, VT, Op0, Op1));
 
-    if (ConstantSDNode *SA = isConstOrConstSplat(Op1, DemandedElts)) {
-      // If the shift count is an invalid immediate, don't do anything.
-      if (SA->getAPIntValue().uge(BitWidth))
-        break;
-
+    if (const APInt *SA =
+            TLO.DAG.getValidShiftAmountConstant(Op, DemandedElts)) {
       unsigned ShAmt = SA->getZExtValue();
       if (ShAmt == 0)
         return TLO.CombineTo(Op, Op0);
