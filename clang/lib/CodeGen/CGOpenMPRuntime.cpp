@@ -7015,6 +7015,8 @@ emitNumTeamsForTargetDirective(CodeGenFunction &CGF,
   case OMPD_target_update:
   case OMPD_declare_simd:
   case OMPD_declare_variant:
+  case OMPD_begin_declare_variant:
+  case OMPD_end_declare_variant:
   case OMPD_declare_target:
   case OMPD_end_declare_target:
   case OMPD_declare_reduction:
@@ -7328,6 +7330,8 @@ emitNumThreadsForTargetDirective(CodeGenFunction &CGF,
   case OMPD_target_update:
   case OMPD_declare_simd:
   case OMPD_declare_variant:
+  case OMPD_begin_declare_variant:
+  case OMPD_end_declare_variant:
   case OMPD_declare_target:
   case OMPD_end_declare_target:
   case OMPD_declare_reduction:
@@ -9115,6 +9119,8 @@ getNestedDistributeDirective(ASTContext &Ctx, const OMPExecutableDirective &D) {
     case OMPD_target_update:
     case OMPD_declare_simd:
     case OMPD_declare_variant:
+    case OMPD_begin_declare_variant:
+    case OMPD_end_declare_variant:
     case OMPD_declare_target:
     case OMPD_end_declare_target:
     case OMPD_declare_reduction:
@@ -9894,6 +9900,8 @@ void CGOpenMPRuntime::scanForTargetRegionsFunctions(const Stmt *S,
     case OMPD_target_update:
     case OMPD_declare_simd:
     case OMPD_declare_variant:
+    case OMPD_begin_declare_variant:
+    case OMPD_end_declare_variant:
     case OMPD_declare_target:
     case OMPD_end_declare_target:
     case OMPD_declare_reduction:
@@ -10533,6 +10541,8 @@ void CGOpenMPRuntime::emitTargetDataStandAloneCall(
     case OMPD_teams_distribute_parallel_for_simd:
     case OMPD_declare_simd:
     case OMPD_declare_variant:
+    case OMPD_begin_declare_variant:
+    case OMPD_end_declare_variant:
     case OMPD_declare_target:
     case OMPD_end_declare_target:
     case OMPD_declare_reduction:
@@ -11403,7 +11413,8 @@ static const FunctionDecl *getDeclareVariantFunction(CodeGenModule &CGM,
   for (const auto *A : FD->specific_attrs<OMPDeclareVariantAttr>()) {
     const OMPTraitInfo &TI = *A->getTraitInfos();
     VMIs.push_back(VariantMatchInfo());
-    TI.getAsVariantMatchInfo(CGM.getContext(), VMIs.back());
+    TI.getAsVariantMatchInfo(CGM.getContext(), VMIs.back(),
+                             /* DeviceSetOnly */ false);
     VariantExprs.push_back(A->getVariantFuncRef());
   }
 
