@@ -2727,7 +2727,7 @@ template <> void ELFDumper<ELF32LE>::printAttributes() {
     if (Contents.size() == 1)
       continue;
 
-    ARMAttributeParser(&W).Parse(Contents, true);
+    ARMAttributeParser(&W).parse(Contents, support::little);
   }
 }
 
