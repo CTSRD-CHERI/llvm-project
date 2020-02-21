@@ -168,8 +168,10 @@ SubtargetFeatures ELFObjectFileBase::getMIPSFeatures() const {
 SubtargetFeatures ELFObjectFileBase::getARMFeatures() const {
   SubtargetFeatures Features;
   ARMAttributeParser Attributes;
-  if (Error E = getBuildAttributes(Attributes))
+  if (Error E = getBuildAttributes(Attributes)) {
+    consumeError(std::move(E));
     return SubtargetFeatures();
+  }
 
   // both ARMv7-M and R have to support thumb hardware div
   bool isV7 = false;
@@ -321,8 +323,11 @@ void ELFObjectFileBase::setARMSubArch(Triple &TheTriple) const {
     return;
 
   ARMAttributeParser Attributes;
-  if (Error E = getBuildAttributes(Attributes))
+  if (Error E = getBuildAttributes(Attributes)) {
+    // TODO Propagate Error.
+    consumeError(std::move(E));
     return;
+  }
 
   std::string Triple;
   // Default to ARM, but use the triple if it's been set.
