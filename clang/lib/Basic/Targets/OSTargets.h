@@ -711,6 +711,8 @@ protected:
 public:
   AIXTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : OSTargetInfo<Target>(Triple, Opts) {
+    this->TheCXXABI.set(TargetCXXABI::XL);
+
     if (this->PointerWidth == 64) {
       this->WCharType = this->UnsignedInt;
     } else {
