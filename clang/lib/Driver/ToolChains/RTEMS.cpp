@@ -84,14 +84,12 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_q_rtems)) {
 
-      // RTEMS must provide a --sysroot path to its installed C library
+      // RTEMS can provide a --sysroot path to its installed C library
       const char* arg = nullptr;
-      if (D.SysRoot.empty()) {
-        ToolChain.getDriver().Diag(diag::err_drv_argument_not_allowed_with)
-          << "missing --sysroot= option" << "rtems driver";
-        arg = Args.MakeArgString(ToolChain.GetFilePath("crt0.o"));
-      } else {
+      if (!D.SysRoot.empty()) {
         arg = Args.MakeArgString(D.SysRoot + "/lib/crt0.o");
+      } else {
+        arg = Args.MakeArgString("crt0.o");
       }
       CmdArgs.push_back(arg);
     }
