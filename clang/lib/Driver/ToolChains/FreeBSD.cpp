@@ -429,19 +429,27 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
                  const ArgList &Args)
     : Generic_ELF(D, Triple, Args) {
 
-  // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
-  // back to '/usr/lib' if it doesn't exist.
-  if (Triple.isArch32Bit() &&
-      D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
-  else if (IsCheriPurecap &&
-           D.getVFS().exists(getDriver().SysRoot + "/usr/libcheri/crt1.o"))
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
-  else if (Triple.isArch64Bit() &&
-           D.getVFS().exists(getDriver().SysRoot + "/usr/lib64/crt1.o"))
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/lib64");
-  else
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
+
+  if (IsCheriPurecap) {
+    // If /usr/libcheri exists, prefer that, otherwise assume that CHERI
+    // purecap is the default ABI and look in /usr/lib
+    if (D.getVFS().exists(getDriver().SysRoot + "/usr/libcheri/crt1.o"))
+      getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
+    else
+      getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
+  } else {
+    // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
+    // back to '/usr/lib' if it doesn't exist.
+    // We also do the same for 64-bit (non-purecap) targets with lib64
+    if (Triple.isArch32Bit() &&
+        D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
+      getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
+    else if (Triple.isArch64Bit() &&
+             D.getVFS().exists(getDriver().SysRoot + "/usr/lib64/crt1.o"))
+      getFilePaths().push_back(getDriver().SysRoot + "/usr/lib64");
+    else
+      getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
+  }
 }
 
 ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
