@@ -144,14 +144,14 @@ RTEMS::RTEMS(const Driver &D, const llvm::Triple &Triple,
   getProgramPaths().push_back(getDriver().getInstalledDir());
   if (getDriver().getInstalledDir() != D.Dir)
     getProgramPaths().push_back(D.Dir);
-#if 0
-  SmallString<128> P(getTargetDir(D, getTriple()));
-  llvm::sys::path::append(P, "lib");
-  getFilePaths().push_back(P.str());
-#endif
 
   if (!D.SysRoot.empty()) {
     SmallString<128> P(D.SysRoot);
+    llvm::sys::path::append(P, "lib");
+    getFilePaths().push_back(P.str());
+  } else {
+    // Add a default RTEMS lib directory to the lib path
+    SmallString<128> P(D.InstalledDir + "/../" + getTripleString());
     llvm::sys::path::append(P, "lib");
     getFilePaths().push_back(P.str());
   }
@@ -223,6 +223,11 @@ void RTEMS::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     SmallString<128> P(D.SysRoot);
     llvm::sys::path::append(P, "include");
     addExternCSystemInclude(DriverArgs, CC1Args, P.str());
+  } else {
+    // Add a default RTEMS target directory to the include path
+    SmallString<128> P(D.InstalledDir + "/../" + getTripleString());
+    llvm::sys::path::append(P, "include");
+    addSystemInclude(DriverArgs, CC1Args, P);
   }
 }
 
