@@ -63,6 +63,7 @@ set(LLVM_TEST_DEPENDS
           llvm-dwp
           llvm-elfabi
           llvm-extract
+          llvm-gsymutil
           llvm-isel-fuzzer
           llvm-ifs
           llvm-install-name-tool
