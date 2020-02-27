@@ -2733,6 +2733,8 @@ private:
         NewLI->setAAMetadata(AATags);
       if (LI.isVolatile())
         NewLI->setAtomic(LI.getOrdering(), LI.getSyncScopeID());
+      if (NewLI->isAtomic())
+        NewLI->setAlignment(LI.getAlign());
 
       // Any !nonnull metadata or !range metadata on the old load is also valid
       // on the new load. This is even true in some cases even when the loads
@@ -2923,6 +2925,8 @@ private:
       NewSI->setAAMetadata(AATags);
     if (SI.isVolatile())
       NewSI->setAtomic(SI.getOrdering(), SI.getSyncScopeID());
+    if (NewSI->isAtomic())
+      NewSI->setAlignment(SI.getAlign());
     Pass.DeadInsts.insert(&SI);
     deleteIfTriviallyDead(OldOp);
 
