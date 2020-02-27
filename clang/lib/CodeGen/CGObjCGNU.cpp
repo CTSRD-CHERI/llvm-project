@@ -1189,8 +1189,11 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
   }
   llvm::Constant *GenerateCategoryProtocolList(const ObjCCategoryDecl *OCD)
     override {
-    SmallVector<llvm::Constant*, 16> Protocols;
-    for (const auto *PI : OCD->getReferencedProtocols())
+    const auto &ReferencedProtocols = OCD->getReferencedProtocols();
+    auto RuntimeProtocols = GetRuntimeProtocolList(ReferencedProtocols.begin(),
+                                                   ReferencedProtocols.end());
+    SmallVector<llvm::Constant *, 16> Protocols;
+    for (const auto *PI : RuntimeProtocols)
       Protocols.push_back(
           llvm::ConstantExpr::getBitCast(GenerateProtocolRef(PI),
             ProtocolPtrTy));
@@ -1373,7 +1376,9 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
     }
 
     SmallVector<llvm::Constant*, 16> Protocols;
-    for (const auto *PI : PD->protocols())
+    auto RuntimeProtocols =
+        GetRuntimeProtocolList(PD->protocol_begin(), PD->protocol_end());
+    for (const auto *PI : RuntimeProtocols)
       Protocols.push_back(
           llvm::ConstantExpr::getBitCast(GenerateProtocolRef(PI),
             ProtocolPtrTy));
@@ -1912,8 +1917,10 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
     // struct objc_class *sibling_class
     classFields.addNullPointer(PtrTy);
     // struct objc_protocol_list *protocols;
-    SmallVector<llvm::Constant*, 16> Protocols;
-    for (const auto *I : classDecl->protocols())
+    auto RuntimeProtocols = GetRuntimeProtocolList(classDecl->protocol_begin(),
+                                                   classDecl->protocol_end());
+    SmallVector<llvm::Constant *, 16> Protocols;
+    for (const auto *I : RuntimeProtocols)
       Protocols.push_back(
           llvm::ConstantExpr::getBitCast(GenerateProtocolRef(I),
             ProtocolPtrTy));
@@ -3108,6 +3115,9 @@ CGObjCGNU::GenerateEmptyProtocol(StringRef ProtocolName) {
 }
 
 void CGObjCGNU::GenerateProtocol(const ObjCProtocolDecl *PD) {
+  if (PD->isNonRuntimeProtocol())
+    return;
+
   std::string ProtocolName = PD->getNameAsString();
 
   // Use the protocol definition, if there is one.
@@ -3261,8 +3271,11 @@ llvm::Constant *CGObjCGNU::MakeBitField(ArrayRef<bool> bits) {
 
 llvm::Constant *CGObjCGNU::GenerateCategoryProtocolList(const
     ObjCCategoryDecl *OCD) {
+  const auto &RefPro = OCD->getReferencedProtocols();
+  const auto RuntimeProtos =
+      GetRuntimeProtocolList(RefPro.begin(), RefPro.end());
   SmallVector<std::string, 16> Protocols;
-  for (const auto *PD : OCD->getReferencedProtocols())
+  for (const auto *PD : RuntimeProtos)
     Protocols.push_back(PD->getNameAsString());
   return GenerateProtocolList(Protocols);
 }
@@ -3550,8 +3563,11 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
   llvm::Constant *Properties = GeneratePropertyList(OID, ClassDecl);
 
   // Collect the names of referenced protocols
+  auto RefProtocols = ClassDecl->protocols();
+  auto RuntimeProtocols =
+      GetRuntimeProtocolList(RefProtocols.begin(), RefProtocols.end());
   SmallVector<std::string, 16> Protocols;
-  for (const auto *I : ClassDecl->protocols())
+  for (const auto *I : RuntimeProtocols)
     Protocols.push_back(I->getNameAsString());
 
   // Get the superclass pointer.
