@@ -42,6 +42,15 @@
 # define __has_builtin(x) 0
 #endif
 
+/// \macro LLVM_ALIGN_VALUE
+/// Specify that a pointer will always point to (or reference will always bind
+/// to) objects with at least the provided power-of-two alignment.
+#if __has_attribute(align_value)
+#define LLVM_ALIGN_VALUE(align) __attribute__((align_value(align)))
+#else
+#define LLVM_ALIGN_VALUE(align)
+#endif
+
 // Only use __has_cpp_attribute in C++ mode. GCC defines __has_cpp_attribute in
 // C mode, but the :: in __has_cpp_attribute(scoped::attribute) is invalid.
 #ifndef LLVM_HAS_CPP_ATTRIBUTE
