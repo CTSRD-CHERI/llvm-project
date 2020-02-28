@@ -44,6 +44,8 @@ template <typename FunctionT> class unique_function;
 template <typename ReturnT, typename... ParamTs>
 class unique_function<ReturnT(ParamTs...)> {
   static constexpr size_t InlineStorageSize = sizeof(void *) * 3;
+  static constexpr size_t CallbackAlign =
+    alignof(void (*)(void)) > 8 ? alignof(void (*)(void)) : 8;
 
   // MSVC has a bug and ICEs if we give it a particular dependent value
   // expression as part of the `std::conditional` below. To work around this,
@@ -78,13 +80,13 @@ class unique_function<ReturnT(ParamTs...)> {
 
   /// A struct to hold a single trivial callback with sufficient alignment for
   /// our bitpacking.
-  struct alignas(std::max((size_t)8, sizeof(void*))) TrivialCallback {
+  struct alignas(CallbackAlign) TrivialCallback {
     CallPtrT CallPtr;
   };
 
   /// A struct we use to aggregate three callbacks when we need full set of
   /// operations.
-  struct alignas(std::max((size_t)8, sizeof(void*))) NonTrivialCallbacks {
+  struct alignas(CallbackAlign) NonTrivialCallbacks {
     CallPtrT CallPtr;
     MovePtrT MovePtr;
     DestroyPtrT DestroyPtr;
