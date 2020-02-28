@@ -216,10 +216,10 @@ template <class ELFT> void combineCapRelocsSections() {
   v.erase(std::remove(v.begin(), v.end(), nullptr), v.end());
 }
 
-static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
-                                   uint64_t val, uint8_t stOther = STV_HIDDEN,
-                                   uint8_t binding = STB_GLOBAL,
-                                   bool canBeSectionStart = true) {
+static Defined *addOptionalRegular(bool canBeSectionStart, StringRef name,
+                                   SectionBase *sec, uint64_t val,
+                                   uint8_t stOther = STV_HIDDEN,
+                                   uint8_t binding = STB_GLOBAL) {
   Symbol *s = symtab->find(name);
   if (!s || s->isDefined())
     return nullptr;
@@ -232,7 +232,7 @@ static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
   // for foo and most likely crash the program.
   // TODO: I would like to do this for all targets but that might cause
   // compatibility issues
-  if (val == 0 && canBeSectionStart) {
+  if (canBeSectionStart && config->isCheriABI()) {
     log("Treating " + name + " as a section start symbol");
     s->isSectionStartSymbol = true;
   }
@@ -271,7 +271,7 @@ void addReservedSymbols() {
   } else if (config->emachine == EM_PPC) {
     // glibc *crt1.o has a undefined reference to _SDA_BASE_. Since we don't
     // support Small Data Area, define it arbitrarily as 0.
-    addOptionalRegular("_SDA_BASE_", nullptr, 0, STV_HIDDEN);
+    addOptionalRegular(true, "_SDA_BASE_", nullptr, 0, STV_HIDDEN);
   }
 
   // The Power Architecture 64-bit v2 ABI defines a TableOfContents (TOC) which
@@ -305,23 +305,24 @@ void addReservedSymbols() {
   // this symbol unconditionally even when using a linker script, which
   // differs from the behavior implemented by GNU linker which only define
   // this symbol if ELF headers are in the memory mapped segment.
-  addOptionalRegular("__ehdr_start", Out::elfHeader, 0, STV_HIDDEN);
+  addOptionalRegular(true, "__ehdr_start", Out::elfHeader, 0, STV_HIDDEN);
 
   // __executable_start is not documented, but the expectation of at
   // least the Android libc is that it points to the ELF header.
-  addOptionalRegular("__executable_start", Out::elfHeader, 0, STV_HIDDEN);
+  addOptionalRegular(true, "__executable_start", Out::elfHeader, 0, STV_HIDDEN);
 
   // __dso_handle symbol is passed to cxa_finalize as a marker to identify
   // each DSO. The address of the symbol doesn't matter as long as they are
   // different in different DSOs, so we chose the start address of the DSO.
-  addOptionalRegular("__dso_handle", Out::elfHeader, 0, STV_HIDDEN);
+  addOptionalRegular(false, "__dso_handle", Out::elfHeader, 0, STV_HIDDEN);
 
   // If linker script do layout we do not need to create any standard symbols.
   if (script->hasSectionsCommand)
     return;
 
   auto add = [](StringRef s, int64_t pos) {
-    return addOptionalRegular(s, Out::elfHeader, pos, STV_DEFAULT);
+    return addOptionalRegular(/*canBeSectionStart=*/pos == 0, s, Out::elfHeader,
+                              pos, STV_DEFAULT);
   };
 
   ElfSym::bss = add("__bss_start", 0);
@@ -505,8 +506,8 @@ template <class ELFT> void createSyntheticSections() {
     add(in.partEnd);
 
     in.partIndex = make<PartitionIndexSection>();
-    addOptionalRegular("__part_index_begin", in.partIndex, 0);
-    addOptionalRegular("__part_index_end", in.partIndex,
+    addOptionalRegular(true, "__part_index_begin", in.partIndex, 0);
+    addOptionalRegular(false, "__part_index_end", in.partIndex,
                        in.partIndex->getSize());
     add(in.partIndex);
   }
@@ -1067,12 +1068,13 @@ template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
   // We'll override Out::elfHeader with In.relaIplt later when we are
   // sure that .rela.plt exists in output.
   ElfSym::relaIpltStart = addOptionalRegular(
-      config->isRela ? "__rela_iplt_start" : "__rel_iplt_start",
-      Out::elfHeader, 0, STV_HIDDEN, STB_WEAK);
-
-  ElfSym::relaIpltEnd = addOptionalRegular(
-      config->isRela ? "__rela_iplt_end" : "__rel_iplt_end",
-      Out::elfHeader, 0, STV_HIDDEN, STB_WEAK);
+      /*canBeSectionStart=*/true,
+      config->isRela ? "__rela_iplt_start" : "__rel_iplt_start", Out::elfHeader,
+      0, STV_HIDDEN, STB_WEAK);
+  ElfSym::relaIpltEnd =
+      addOptionalRegular(/*canBeSectionStart=*/false,
+                         config->isRela ? "__rela_iplt_end" : "__rel_iplt_end",
+                         Out::elfHeader, 0, STV_HIDDEN, STB_WEAK);
 }
 
 template <class ELFT>
@@ -1757,7 +1759,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   if (config->emachine == EM_RISCV && !config->shared) {
     OutputSection *sec = findSection(".sdata");
     ElfSym::riscvGlobalPointer =
-        addOptionalRegular("__global_pointer$", sec ? sec : Out::elfHeader,
+        addOptionalRegular(false, "__global_pointer$", sec ? sec : Out::elfHeader,
                            0x800, STV_DEFAULT, STB_GLOBAL);
   }
 
@@ -1789,7 +1791,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // symbol errors when linking that into a final executable
     if (!config->relocatable)
       ElfSym::cheriCapabilityTable =
-          addOptionalRegular(captableSym, in.cheriCapTable, 0);
+          addOptionalRegular(true, captableSym, in.cheriCapTable, 0);
   }
 
   // This responsible for splitting up .eh_frame section into
@@ -2122,17 +2124,15 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
 
   auto define = [=](StringRef start, StringRef end, OutputSection *os) {
     if (os) {
-      addOptionalRegular(start, os, 0);
-      addOptionalRegular(end, os, -1);
+      addOptionalRegular(/*canBeSectionStart=*/true, start, os, 0);
+      addOptionalRegular(/*canBeSectionStart=*/false, end, os, -1);
     } else {
-      // Since this is an empty section we don't want to set canBeSectionStart
+      // Since this is an empty section we don't want to set canBeSectionStart.
       // Iterating over this should terminate immediately so setting the size
       // to zero is fine
-      addOptionalRegular(start, Default, 0, STV_HIDDEN, STB_GLOBAL,
-                         /*canBeSectionStart=*/false);
+      addOptionalRegular(/*canBeSectionStart=*/false, start, Default, 0);
       // End is not a section start symbol even though it has value 0:
-      addOptionalRegular(end, Default, 0, STV_HIDDEN, STB_GLOBAL,
-                         /*canBeSectionStart=*/false);
+      addOptionalRegular(/*canBeSectionStart=*/false, end, Default, 0);
     }
   };
 
@@ -2159,8 +2159,10 @@ void Writer<ELFT>::addStartStopSymbols(OutputSection *sec) {
   StringRef s = sec->name;
   if (!isValidCIdentifier(s))
     return;
-  addOptionalRegular(saver.save("__start_" + s), sec, 0, STV_PROTECTED);
-  addOptionalRegular(saver.save("__stop_" + s), sec, -1, STV_PROTECTED);
+  addOptionalRegular(/*canBeSectionStart=*/true, saver.save("__start_" + s),
+                     sec, 0, STV_PROTECTED);
+  addOptionalRegular(/*canBeSectionStart=*/false, saver.save("__stop_" + s),
+                     sec, -1, STV_PROTECTED);
 }
 
 static bool needsPtLoad(OutputSection *sec) {
