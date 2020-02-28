@@ -128,14 +128,14 @@ bool link(ArrayRef<const char *> args, bool canExitEarly, raw_ostream &stdoutOS,
 static std::tuple<ELFKind, uint16_t, uint8_t, bool> parseEmulation(
     StringRef emul) {
   uint8_t osabi = 0;
-  bool isCheriABI = false;
+  bool forceCheriABI = false;
   StringRef s = emul;
   if (s.endswith("_fbsd")) {
     s = s.drop_back(5);
     osabi = ELFOSABI_FREEBSD;
     if (s.endswith("_cheri")) {
       s = s.drop_back(6);
-      isCheriABI = true;
+      forceCheriABI = true;
     }
   }
 
@@ -161,7 +161,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t, bool> parseEmulation(
 
   if (ret.first == ELFNoneKind)
     error("unknown emulation: " + emul);
-  return std::make_tuple(ret.first, ret.second, osabi, isCheriABI);
+  return std::make_tuple(ret.first, ret.second, osabi, forceCheriABI);
 }
 
 // Returns slices of MB by parsing MB as an archive file.
@@ -1100,10 +1100,11 @@ static void readConfigs(opt::InputArgList &args) {
   // Parse ELF{32,64}{LE,BE} and CPU type.
   if (auto *arg = args.getLastArg(OPT_m)) {
     StringRef s = arg->getValue();
-    bool isCheriABI;
-    std::tie(config->ekind, config->emachine, config->osabi, isCheriABI) =
+    bool forceCheriABI;
+    std::tie(config->ekind, config->emachine, config->osabi, forceCheriABI) =
         parseEmulation(s);
-    config->setIsCheriABI(isCheriABI);
+    if (forceCheriABI)
+      config->setIsCheriABI(true);
     config->mipsN32Abi =
         (s.startswith("elf32btsmipn32") || s.startswith("elf32ltsmipn32"));
     config->emulation = s;
