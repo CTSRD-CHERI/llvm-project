@@ -3802,6 +3802,8 @@ void CodeGenFunction::EmitOMPFlushDirective(const OMPFlushDirective &S) {
       S.getBeginLoc(), AO);
 }
 
+void CodeGenFunction::EmitOMPDepobjDirective(const OMPDepobjDirective &S) {}
+
 void CodeGenFunction::EmitOMPDistributeLoop(const OMPLoopDirective &S,
                                             const CodeGenLoopTy &CodeGenLoop,
                                             Expr *IncExpr) {
@@ -4545,6 +4547,7 @@ static void emitOMPAtomicExpr(CodeGenFunction &CGF, OpenMPClauseKind Kind,
   case OMPC_copyin:
   case OMPC_copyprivate:
   case OMPC_flush:
+  case OMPC_depobj:
   case OMPC_proc_bind:
   case OMPC_schedule:
   case OMPC_ordered:
