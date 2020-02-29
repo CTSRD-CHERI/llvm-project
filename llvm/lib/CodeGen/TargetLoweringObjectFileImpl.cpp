@@ -279,7 +279,7 @@ void TargetLoweringObjectFileELF::emitModuleMetadata(MCStreamer &Streamer,
         report_fatal_error("invalid llvm.linker.options");
       for (const auto &Option : cast<MDNode>(Operand)->operands()) {
         Streamer.emitBytes(cast<MDString>(Option)->getString());
-        Streamer.emitIntValue(0, 1);
+        Streamer.emitInt8(0);
       }
     }
   }
@@ -293,7 +293,7 @@ void TargetLoweringObjectFileELF::emitModuleMetadata(MCStreamer &Streamer,
     for (const auto *Operand : DependentLibraries->operands()) {
       Streamer.emitBytes(
           cast<MDString>(cast<MDNode>(Operand)->getOperand(0))->getString());
-      Streamer.emitIntValue(0, 1);
+      Streamer.emitInt8(0);
     }
   }
 
@@ -306,8 +306,8 @@ void TargetLoweringObjectFileELF::emitModuleMetadata(MCStreamer &Streamer,
     auto *S = C.getELFSection(Section, ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
     Streamer.SwitchSection(S);
     Streamer.emitLabel(C.getOrCreateSymbol(StringRef("OBJC_IMAGE_INFO")));
-    Streamer.emitIntValue(Version, 4);
-    Streamer.emitIntValue(Flags, 4);
+    Streamer.emitInt32(Version);
+    Streamer.emitInt32(Flags);
     Streamer.AddBlankLine();
   }
 
@@ -928,8 +928,8 @@ void TargetLoweringObjectFileMachO::emitModuleMetadata(MCStreamer &Streamer,
   Streamer.SwitchSection(S);
   Streamer.emitLabel(getContext().
                      getOrCreateSymbol(StringRef("L_OBJC_IMAGE_INFO")));
-  Streamer.emitIntValue(VersionVal, 4);
-  Streamer.emitIntValue(ImageInfoFlags, 4);
+  Streamer.emitInt32(VersionVal);
+  Streamer.emitInt32(ImageInfoFlags);
   Streamer.AddBlankLine();
 }
 
@@ -1481,8 +1481,8 @@ void TargetLoweringObjectFileCOFF::emitModuleMetadata(MCStreamer &Streamer,
       SectionKind::getReadOnly());
   Streamer.SwitchSection(S);
   Streamer.emitLabel(C.getOrCreateSymbol(StringRef("OBJC_IMAGE_INFO")));
-  Streamer.emitIntValue(Version, 4);
-  Streamer.emitIntValue(Flags, 4);
+  Streamer.emitInt32(Version);
+  Streamer.emitInt32(Flags);
   Streamer.AddBlankLine();
 }
 
