@@ -3483,7 +3483,8 @@ static Value *SimplifyICmpInst(unsigned Predicate, Value *LHS, Value *RHS,
         SmallVector<Value *, 4> IndicesRHS(GRHS->idx_begin(), GRHS->idx_end());
         Constant *NewRHS = ConstantExpr::getGetElementPtr(
             GLHS->getSourceElementType(), Null, IndicesRHS);
-        return ConstantExpr::getICmp(Pred, NewLHS, NewRHS);
+        Constant *NewICmp = ConstantExpr::getICmp(Pred, NewLHS, NewRHS);
+        return ConstantFoldConstant(NewICmp, Q.DL);
       }
     }
   }
