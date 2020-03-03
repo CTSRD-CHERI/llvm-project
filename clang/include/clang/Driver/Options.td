@@ -302,7 +302,7 @@ def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option, NoDriver
 def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Equality comparisons between capabilities only compare the address (default)">;
 def cheri_comparison_exact : Flag<["-"], "cheri-comparison=exact">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
-  HelpText<"Equality comparisons between capabilities compare all capability fields (default)">;
+  HelpText<"Equality comparisons between capabilities compare all capability fields">;
 
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
   Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
