@@ -63,8 +63,7 @@ static T *coerceAvailableValueToLoadTypeHelper(T *StoredVal, Type *LoadedTy,
   assert(canCoerceMustAliasedValueToLoad(StoredVal, LoadedTy, DL) &&
          "precondition violation - materialization can't fail");
   if (auto *C = dyn_cast<Constant>(StoredVal))
-    if (auto *FoldedStoredVal = ConstantFoldConstant(C, DL))
-      StoredVal = FoldedStoredVal;
+    StoredVal = ConstantFoldConstant(C, DL);
 
   // If this is already the right type, just return it.
   Type *StoredValTy = StoredVal->getType();
@@ -97,8 +96,7 @@ static T *coerceAvailableValueToLoadTypeHelper(T *StoredVal, Type *LoadedTy,
     }
 
     if (auto *C = dyn_cast<ConstantExpr>(StoredVal))
-      if (auto *FoldedStoredVal = ConstantFoldConstant(C, DL))
-        StoredVal = FoldedStoredVal;
+      StoredVal = ConstantFoldConstant(C, DL);
 
     return StoredVal;
   }
@@ -152,8 +150,7 @@ static T *coerceAvailableValueToLoadTypeHelper(T *StoredVal, Type *LoadedTy,
   }
 
   if (auto *C = dyn_cast<Constant>(StoredVal))
-    if (auto *FoldedStoredVal = ConstantFoldConstant(C, DL))
-      StoredVal = FoldedStoredVal;
+    StoredVal = ConstantFoldConstant(C, DL);
 
   return StoredVal;
 }

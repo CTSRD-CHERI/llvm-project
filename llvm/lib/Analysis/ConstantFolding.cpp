@@ -804,10 +804,7 @@ Constant *CastGEPIndices(Type *SrcElemTy, ArrayRef<Constant *> Ops,
 
   Constant *C = ConstantExpr::getGetElementPtr(
       SrcElemTy, Ops[0], NewIdxs, /*InBounds=*/false, InRangeIndex);
-  if (Constant *Folded = ConstantFoldConstant(C, DL, TLI))
-    C = Folded;
-
-  return C;
+  return ConstantFoldConstant(C, DL, TLI);
 }
 
 /// Strip the pointer casts, but preserve the address space information.
@@ -868,9 +865,7 @@ Constant *SymbolicallyEvaluateGEP(const GEPOperator *GEP,
             Constant *Res = ConstantExpr::getPtrToInt(Ptr, CE->getType());
             Res = ConstantExpr::getSub(Res, CE->getOperand(1));
             Res = ConstantExpr::getIntToPtr(Res, ResTy);
-            if (auto *FoldedRes = ConstantFoldConstant(Res, DL, TLI))
-              Res = FoldedRes;
-            return Res;
+            return ConstantFoldConstant(Res, DL, TLI);
           }
         }
         return nullptr;
@@ -1090,23 +1085,19 @@ ConstantFoldConstantImpl(const Constant *C, const DataLayout &DL,
                          const TargetLibraryInfo *TLI,
                          SmallDenseMap<Constant *, Constant *> &FoldedOps) {
   if (!isa<ConstantVector>(C) && !isa<ConstantExpr>(C))
-    return nullptr;
+    return const_cast<Constant *>(C);
 
   SmallVector<Constant *, 8> Ops;
-  for (const Use &NewU : C->operands()) {
-    auto *NewC = cast<Constant>(&NewU);
+  for (const Use &OldU : C->operands()) {
+    Constant *OldC = cast<Constant>(&OldU);
+    Constant *NewC = OldC;
     // Recursively fold the ConstantExpr's operands. If we have already folded
     // a ConstantExpr, we don't have to process it again.
-    if (isa<ConstantVector>(NewC) || isa<ConstantExpr>(NewC)) {
-      auto It = FoldedOps.find(NewC);
+    if (isa<ConstantVector>(OldC) || isa<ConstantExpr>(OldC)) {
+      auto It = FoldedOps.find(OldC);
       if (It == FoldedOps.end()) {
-        if (auto *FoldedC =
-                ConstantFoldConstantImpl(NewC, DL, TLI, FoldedOps)) {
-          FoldedOps.insert({NewC, FoldedC});
-          NewC = FoldedC;
-        } else {
-          FoldedOps.insert({NewC, NewC});
-        }
+        NewC = ConstantFoldConstantImpl(OldC, DL, TLI, FoldedOps);
+        FoldedOps.insert({OldC, NewC});
       } else {
         NewC = It->second;
       }
@@ -1147,8 +1138,7 @@ Constant *llvm::ConstantFoldInstruction(Instruction *I, const DataLayout &DL,
       if (!C)
         return nullptr;
       // Fold the PHI's operands.
-      if (auto *FoldedC = ConstantFoldConstantImpl(C, DL, TLI, FoldedOps))
-        C = FoldedC;
+      C = ConstantFoldConstantImpl(C, DL, TLI, FoldedOps);
       // If the incoming value is a different constant to
       // the one we saw previously, then give up.
       if (CommonValue && C != CommonValue)
@@ -1170,9 +1160,7 @@ Constant *llvm::ConstantFoldInstruction(Instruction *I, const DataLayout &DL,
   for (const Use &OpU : I->operands()) {
     auto *Op = cast<Constant>(&OpU);
     // Fold the Instruction's operands.
-    if (auto *FoldedOp = ConstantFoldConstantImpl(Op, DL, TLI, FoldedOps))
-      Op = FoldedOp;
-
+    Op = ConstantFoldConstantImpl(Op, DL, TLI, FoldedOps);
     Ops.push_back(Op);
   }
 

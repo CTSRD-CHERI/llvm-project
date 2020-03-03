@@ -3635,8 +3635,6 @@ static bool AddReachableCodeToWorklist(BasicBlock *BB, const DataLayout &DL,
         Constant *&FoldRes = FoldedConstants[C];
         if (!FoldRes)
           FoldRes = ConstantFoldConstant(C, DL, TLI);
-        if (!FoldRes)
-          FoldRes = C;
 
         if (FoldRes != C) {
           LLVM_DEBUG(dbgs() << "IC: ConstFold operand of: " << *Inst
