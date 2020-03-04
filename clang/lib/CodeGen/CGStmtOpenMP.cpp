@@ -3813,6 +3813,11 @@ void CodeGenFunction::EmitOMPDepobjDirective(const OMPDepobjDirective &S) {
     Address DepAddr = CGM.getOpenMPRuntime().emitDependClause(
         *this, Dependencies, /*ForDepobj=*/true, DC->getBeginLoc());
     EmitStoreOfScalar(DepAddr.getPointer(), DOLVal);
+    return;
+  }
+  if (const auto *DC = S.getSingleClause<OMPDestroyClause>()) {
+    CGM.getOpenMPRuntime().emitDestroyClause(*this, DOLVal, DC->getBeginLoc());
+    return;
   }
 }
 
