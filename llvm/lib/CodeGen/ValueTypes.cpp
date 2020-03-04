@@ -23,7 +23,8 @@ EVT EVT::changeExtendedTypeToInteger() const {
 EVT EVT::changeExtendedVectorElementTypeToInteger() const {
   LLVMContext &Context = LLVMTy->getContext();
   EVT IntTy = getIntegerVT(Context, getScalarSizeInBits());
-  return getVectorVT(Context, IntTy, getVectorNumElements());
+  return getVectorVT(Context, IntTy, getVectorNumElements(),
+                     isScalableVector());
 }
 
 EVT EVT::getExtendedIntegerVT(LLVMContext &Context, unsigned BitWidth) {
@@ -33,10 +34,19 @@ EVT EVT::getExtendedIntegerVT(LLVMContext &Context, unsigned BitWidth) {
   return VT;
 }
 
-EVT EVT::getExtendedVectorVT(LLVMContext &Context, EVT VT,
-                             unsigned NumElements) {
+EVT EVT::getExtendedVectorVT(LLVMContext &Context, EVT VT, unsigned NumElements,
+                             bool IsScalable) {
   EVT ResultVT;
-  ResultVT.LLVMTy = VectorType::get(VT.getTypeForEVT(Context), NumElements);
+  ResultVT.LLVMTy =
+      VectorType::get(VT.getTypeForEVT(Context), NumElements, IsScalable);
+  assert(ResultVT.isExtended() && "Type is not extended!");
+  return ResultVT;
+}
+
+EVT EVT::getExtendedVectorVT(LLVMContext &Context, EVT VT, ElementCount EC) {
+  EVT ResultVT;
+  ResultVT.LLVMTy =
+      VectorType::get(VT.getTypeForEVT(Context), {EC.Min, EC.Scalable});
   assert(ResultVT.isExtended() && "Type is not extended!");
   return ResultVT;
 }
@@ -97,6 +107,10 @@ bool EVT::isExtendedFixedLengthVector() const {
   return isExtendedVector() && !cast<VectorType>(LLVMTy)->isScalable();
 }
 
+bool EVT::isExtendedScalableVector() const {
+  return isExtendedVector() && cast<VectorType>(LLVMTy)->isScalable();
+}
+
 EVT EVT::getExtendedVectorElementType() const {
   assert(isExtended() && "Type is not extended!");
   return EVT::getEVT(cast<VectorType>(LLVMTy)->getElementType());
@@ -105,6 +119,11 @@ EVT EVT::getExtendedVectorElementType() const {
 unsigned EVT::getExtendedVectorNumElements() const {
   assert(isExtended() && "Type is not extended!");
   return cast<VectorType>(LLVMTy)->getNumElements();
+}
+
+ElementCount EVT::getExtendedVectorElementCount() const {
+  assert(isExtended() && "Type is not extended!");
+  return cast<VectorType>(LLVMTy)->getElementCount();
 }
 
 TypeSize EVT::getExtendedSizeInBits() const {
