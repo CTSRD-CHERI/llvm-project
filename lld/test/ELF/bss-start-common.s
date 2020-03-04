@@ -9,7 +9,7 @@
 # CHECK: Idx Name          Size     VMA                 Type
 # CHECK:   2 .bss          00000004 [[ADDR:[0-za-f]+]]  BSS
 # CHECK: SYMBOL TABLE:
-# CHECK: [[ADDR]]          .bss 00000000 __bss_start
+# CHECK: [[ADDR]]          .bss 0000000000000000 __bss_start
 
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi=purecap -mcpu=cheri128 %s -o %t
 # RUN: ld.lld %t -o %t-cheri --verbose
