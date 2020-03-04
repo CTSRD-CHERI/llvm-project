@@ -2142,8 +2142,7 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
 
   SmallVector<Expr *, 8> AllPlaceArgs;
   if (OperatorNew) {
-    const FunctionProtoType *Proto =
-        OperatorNew->getType()->getAs<FunctionProtoType>();
+    auto *Proto = OperatorNew->getType()->castAs<FunctionProtoType>();
     VariadicCallType CallType = Proto->isVariadic() ? VariadicFunction
                                                     : VariadicDoesNotApply;
 
@@ -2658,8 +2657,7 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
     // for template argument deduction and for comparison purposes.
     QualType ExpectedFunctionType;
     {
-      const FunctionProtoType *Proto
-        = OperatorNew->getType()->getAs<FunctionProtoType>();
+      auto *Proto = OperatorNew->getType()->castAs<FunctionProtoType>();
 
       SmallVector<QualType, 4> ArgTypes;
       ArgTypes.push_back(Context.VoidPtrTy);
@@ -4361,9 +4359,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
 
     // Case 2.  _Complex x -> y
     } else {
-      const ComplexType *FromComplex = From->getType()->getAs<ComplexType>();
-      assert(FromComplex);
-
+      auto *FromComplex = From->getType()->castAs<ComplexType>();
       QualType ElType = FromComplex->getElementType();
       bool isFloatingComplex = ElType->isRealFloatingType();
 
@@ -4682,8 +4678,7 @@ static bool HasNoThrowOperator(const RecordType *RT, OverloadedOperatorKind Op,
       CXXMethodDecl *Operator = cast<CXXMethodDecl>(*Op);
       if((Operator->*IsDesiredOp)()) {
         FoundOperator = true;
-        const FunctionProtoType *CPT =
-          Operator->getType()->getAs<FunctionProtoType>();
+        auto *CPT = Operator->getType()->castAs<FunctionProtoType>();
         CPT = Self.ResolveExceptionSpec(KeyLoc, CPT);
         if (!CPT || !CPT->isNothrow())
           return false;
@@ -4941,8 +4936,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
       if (C.getLangOpts().AccessControl && Destructor->getAccess() != AS_public)
         return false;
       if (UTT == UTT_IsNothrowDestructible) {
-        const FunctionProtoType *CPT =
-            Destructor->getType()->getAs<FunctionProtoType>();
+        auto *CPT = Destructor->getType()->castAs<FunctionProtoType>();
         CPT = Self.ResolveExceptionSpec(KeyLoc, CPT);
         if (!CPT || !CPT->isNothrow())
           return false;
@@ -5030,8 +5024,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
         auto *Constructor = cast<CXXConstructorDecl>(ND->getUnderlyingDecl());
         if (Constructor->isCopyConstructor(FoundTQs)) {
           FoundConstructor = true;
-          const FunctionProtoType *CPT
-              = Constructor->getType()->getAs<FunctionProtoType>();
+          auto *CPT = Constructor->getType()->castAs<FunctionProtoType>();
           CPT = Self.ResolveExceptionSpec(KeyLoc, CPT);
           if (!CPT)
             return false;
@@ -5069,8 +5062,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
         auto *Constructor = cast<CXXConstructorDecl>(ND->getUnderlyingDecl());
         if (Constructor->isDefaultConstructor()) {
           FoundConstructor = true;
-          const FunctionProtoType *CPT
-              = Constructor->getType()->getAs<FunctionProtoType>();
+          auto *CPT = Constructor->getType()->castAs<FunctionProtoType>();
           CPT = Self.ResolveExceptionSpec(KeyLoc, CPT);
           if (!CPT)
             return false;
@@ -5955,7 +5947,7 @@ QualType Sema::CheckGNUVectorConditionalTypes(ExprResult &Cond, ExprResult &LHS,
   RHS = DefaultFunctionArrayLvalueConversion(RHS.get());
 
   QualType CondType = Cond.get()->getType();
-  const auto *CondVT = CondType->getAs<VectorType>();
+  const auto *CondVT = CondType->castAs<VectorType>();
   QualType CondElementTy = CondVT->getElementType();
   unsigned CondElementCount = CondVT->getNumElements();
   QualType LHSType = LHS.get()->getType();
@@ -6011,7 +6003,7 @@ QualType Sema::CheckGNUVectorConditionalTypes(ExprResult &Cond, ExprResult &LHS,
       return {};
     }
     ResultType = Context.getVectorType(
-        ResultElementTy, CondType->getAs<VectorType>()->getNumElements(),
+        ResultElementTy, CondType->castAs<VectorType>()->getNumElements(),
         VectorType::GenericVector);
 
     LHS = ImpCastExprToType(LHS.get(), ResultType, CK_VectorSplat);
@@ -6020,9 +6012,9 @@ QualType Sema::CheckGNUVectorConditionalTypes(ExprResult &Cond, ExprResult &LHS,
 
   assert(!ResultType.isNull() && ResultType->isVectorType() &&
          "Result should have been a vector type");
-  QualType ResultElementTy = ResultType->getAs<VectorType>()->getElementType();
-  unsigned ResultElementCount =
-      ResultType->getAs<VectorType>()->getNumElements();
+  auto *ResultVectorTy = ResultType->castAs<VectorType>();
+  QualType ResultElementTy = ResultVectorTy->getElementType();
+  unsigned ResultElementCount = ResultVectorTy->getNumElements();
 
   if (ResultElementCount != CondElementCount) {
     Diag(QuestionLoc, diag::err_conditional_vector_size) << CondType
@@ -6819,8 +6811,7 @@ ExprResult Sema::MaybeBindToTemporary(Expr *E) {
       else if (const MemberPointerType *MemPtr = T->getAs<MemberPointerType>())
         T = MemPtr->getPointeeType();
 
-      const FunctionType *FTy = T->getAs<FunctionType>();
-      assert(FTy && "call to value not of function type?");
+      auto *FTy = T->castAs<FunctionType>();
       ReturnsRetained = FTy->getExtInfo().getProducesResult();
 
     // ActOnStmtExpr arranges things so that StmtExprs of retainable
