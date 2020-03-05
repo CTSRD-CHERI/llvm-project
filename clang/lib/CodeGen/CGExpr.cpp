@@ -3349,16 +3349,17 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
   return CGF.Builder.CreateBitCast(CGF.setPointerOffset(PCC, V), CapTy);
 }
 
-static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
-                                            const FunctionDecl *FD,
+static llvm::Value *EmitFunctionDeclPointer(CodeGenModule &CGM,
+                                            GlobalDecl GD,
                                             bool IsDirectCall) {
   CodeGenModule &CGM = CGF.CGM;
+  const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
   if (FD->hasAttr<WeakRefAttr>()) {
     ConstantAddress aliasee = CGM.GetWeakRefReference(FD);
     return aliasee.getPointer();
   }
 
-  llvm::Value *V = CGM.GetAddrOfFunction(FD);
+  llvm::Value *V = CGM.GetAddrOfFunction(GD);
   auto &TI = CGF.getContext().getTargetInfo();
   if (TI.areAllPointersCapabilities())
     V = CodeGenFunction::FunctionAddressToCapability(CGF, V, nullptr,
@@ -3380,9 +3381,10 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
   return V;
 }
 
-static LValue EmitFunctionDeclLValue(CodeGenFunction &CGF,
-                                     const Expr *E, const FunctionDecl *FD) {
-  llvm::Value *V = EmitFunctionDeclPointer(CGF, FD, /*IsDirectCall=*/false);
+static LValue EmitFunctionDeclLValue(CodeGenFunction &CGF, const Expr *E,
+                                     GlobalDecl GD) {
+  const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
+  llvm::Value *V = EmitFunctionDeclPointer(CGF, GD, /*IsDirectCall=*/false);
   CharUnits Alignment = CGF.getContext().getDeclAlign(FD);
   return CGF.MakeAddrLValue(V, E->getType(), Alignment,
                             AlignmentSource::Decl);
@@ -5648,7 +5650,8 @@ RValue CodeGenFunction::EmitSimpleCallExpr(const CallExpr *E,
   return EmitCall(E->getCallee()->getType(), Callee, E, ReturnValue);
 }
 
-static CGCallee EmitDirectCallee(CodeGenFunction &CGF, const FunctionDecl *FD) {
+static CGCallee EmitDirectCallee(CodeGenFunction &CGF, GlobalDecl GD) {
+  const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
 
   if (auto builtinID = FD->getBuiltinID()) {
     // Replaceable builtin provide their own implementation of a builtin. Unless
@@ -5660,8 +5663,9 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, const FunctionDecl *FD) {
       return CGCallee::forBuiltin(builtinID, FD);
   }
 
-  llvm::Value *calleePtr = EmitFunctionDeclPointer(CGF, FD, /*IsDirectCall=*/true);
-  return CGCallee(GlobalDecl(FD), calleePtr);
+  llvm::Value *calleePtr =
+      EmitFunctionDeclPointer(CGF, GD, /*IsDirectCall=*/true);
+  return CGCallee::forDirect(calleePtr, GD);
 }
 
 CGCallee CodeGenFunction::EmitCallee(const Expr *E) {
