@@ -1952,13 +1952,13 @@ static void DiagnoseCHERIPtr(Sema &Self, Expr *SrcExpr, QualType DestType,
                               CastKind &Kind, SourceRange &Range) {
   if (Kind != CK_BitCast)
     return;
-  
+
   const PointerType *SrcPtr = SrcExpr->getType()->getAs<PointerType>();
   const PointerType *DestPtr = DestType->getAs<PointerType>();
   if (SrcPtr && DestPtr && !SrcPtr->isCHERICapability() && !DestPtr->isCHERICapability()) {
     QualType SrcPointee = SrcPtr->getPointeeType();
     QualType DestPointee = DestPtr->getPointeeType();
-    
+
     // casts from char * and void * are implicitly allowed
     if (SrcPointee->isCharType() || SrcPointee->isVoidType())
       return;
@@ -2395,17 +2395,22 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     // C++ 5.2.10p4: A pointer can be explicitly converted to any integral
     //   type large enough to hold it; except in Microsoft mode, where the
     //   integral type size doesn't matter (except we don't allow bool).
-    bool MicrosoftException = Self.getLangOpts().MicrosoftExt &&
-                              !DestType->isBooleanType();
     bool SrcIsCap = SrcType->isCHERICapabilityType(Self.Context);
-    // In purecap ABI casting to uint64_t is fine as we want the pointer range
-    uint64_t Size = SrcIsCap
-        ? Self.Context.getTargetInfo().getPointerRangeForCHERICapability()
-        : Self.Context.getTypeSize(SrcType);
-    if ((Size > Self.Context.getTypeSize(DestType)) && !MicrosoftException) {
-      msg = SrcIsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
-                       diag::err_bad_reinterpret_cast_small_int;
-      return TC_Failed;
+    // Note: In purecap ABI casting to uint64_t is fine -> use getIntRange().
+    if ((Self.Context.getIntRange(SrcType) >
+         Self.Context.getTypeSize(DestType))) {
+      bool MicrosoftException =
+          Self.getLangOpts().MicrosoftExt && !DestType->isBooleanType();
+      if (MicrosoftException) {
+        unsigned Diag = SrcType->isVoidPointerType()
+                            ? diag::warn_void_pointer_to_int_cast
+                            : diag::warn_pointer_to_int_cast;
+        Self.Diag(OpRange.getBegin(), Diag) << SrcType << DestType << OpRange;
+      } else {
+        msg = SrcIsCap ? diag::err_bad_cap_reinterpret_cast_small_int
+                       : diag::err_bad_reinterpret_cast_small_int;
+        return TC_Failed;
+      }
     }
     Kind = SrcIsCap && !DestType->isIntCapType() ? CK_CHERICapabilityToAddress
                                                  : CK_PointerToIntegral;
