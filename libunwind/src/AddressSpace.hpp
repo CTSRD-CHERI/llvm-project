@@ -624,14 +624,48 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
 // that don't help at all.
 #elif defined(_LIBUNWIND_ARM_EHABI) || defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 
+#if !defined(Elf_Half)
+typedef ElfW(Half) Elf_Half;
+#endif
+#if !defined(Elf_Phdr)
+typedef ElfW(Phdr) Elf_Phdr;
+#endif
+
+static uintptr_t calculateImageBase(struct dl_phdr_info *pinfo) {
+  uintptr_t image_base = static_cast<uintptr_t>(pinfo->dlpi_addr);
+#if defined(__ANDROID__) && __ANDROID_API__ < 18
+  if (image_base == 0) {
+    // Normally, an image base of 0 indicates a non-PIE executable. On
+    // versions of Android prior to API 18, the dynamic linker reported a
+    // dlpi_addr of 0 for PIE executables. Compute the true image base
+    // using the PT_PHDR segment.
+    // See https://github.com/android/ndk/issues/505.
+    for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
+      const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
+      if (phdr->p_type == PT_PHDR) {
+        image_base = static_cast<uintptr_t>(pinfo->dlpi_phdr) - phdr->p_vaddr;
+        break;
+      }
+    }
+  }
+#endif
+  return image_base;
+}
+
 struct _LIBUNWIND_HIDDEN dl_iterate_cb_data {
   LocalAddressSpace *addressSpace;
   UnwindInfoSections *sects;
   LocalAddressSpace::pc_t targetAddr;
 };
 
+#if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
+#if !defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
+#error                                                                         \
+    "_LIBUNWIND_SUPPORT_DWARF_UNWIND requires _LIBUNWIND_SUPPORT_DWARF_INDEX on this platform."
+#endif
+
 int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
-  auto cbdata = static_cast<dl_iterate_cb_data *>(data);
+  auto *cbdata = static_cast<dl_iterate_cb_data *>(data);
   bool found_obj = false;
   bool found_hdr = false;
 
@@ -654,7 +688,7 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
     CHERI_DBG("0x%jx out of bounds of %#p (%s)\n",
               (uintmax_t)cbdata->targetAddr.address(), (void *)pinfo->dlpi_addr,
               pinfo->dlpi_name);
-    return false;
+    return 0;
   }
 
 #ifdef __CHERI_PURE_CAPABILITY__
@@ -676,37 +710,7 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
   }
 #endif
 
-#if !defined(Elf_Half)
-  typedef ElfW(Half) Elf_Half;
-#endif
-#if !defined(Elf_Phdr)
-  typedef ElfW(Phdr) Elf_Phdr;
-#endif
-
-  uintptr_t image_base = static_cast<uintptr_t>(pinfo->dlpi_addr);
-
-#if defined(__ANDROID__) && __ANDROID_API__ < 18
-  if (image_base == 0) {
-    // Normally, an image base of 0 indicates a non-PIE executable. On
-    // versions of Android prior to API 18, the dynamic linker reported a
-    // dlpi_addr of 0 for PIE executables. Compute the true image base
-    // using the PT_PHDR segment.
-    // See https://github.com/android/ndk/issues/505.
-    for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
-      const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
-      if (phdr->p_type == PT_PHDR) {
-        image_base = static_cast<uintptr_t>(pinfo->dlpi_phdr) - phdr->p_vaddr;
-        break;
-      }
-    }
-  }
-#endif
-
-#if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
-#if !defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
-#error                                                                         \
-    "_LIBUNWIND_SUPPORT_DWARF_UNWIND requires _LIBUNWIND_SUPPORT_DWARF_INDEX on this platform."
-#endif
+  uintptr_t image_base = calculateImageBase(pinfo);
   size_t object_length;
 
   auto getPhdrCapability =
@@ -790,7 +794,25 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
     CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
     return false;
   }
-#else // defined(_LIBUNWIND_ARM_EHABI)
+}
+
+#else   // defined(LIBUNWIND_SUPPORT_DWARF_UNWIND)
+// Given all the #ifdef's above, the code here is for
+// defined(LIBUNWIND_ARM_EHABI)
+
+int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
+  auto *cbdata = static_cast<dl_iterate_cb_data *>(data);
+  bool found_obj = false;
+  bool found_hdr = false;
+
+  assert(cbdata);
+  assert(cbdata->sects);
+
+  if (cbdata->targetAddr < pinfo->dlpi_addr)
+    return 0;
+
+  Elf_Addr image_base = calculateImageBase(pinfo);
+
   for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
     const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
     if (phdr->p_type == PT_LOAD) {
@@ -806,8 +828,8 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
     }
   }
   return found_obj && found_hdr;
-#endif
 }
+#endif  // defined(LIBUNWIND_SUPPORT_DWARF_UNWIND)
 #endif  // defined(_LIBUNWIND_ARM_EHABI) || defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 
 
