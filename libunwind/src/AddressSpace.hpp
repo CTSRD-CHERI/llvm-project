@@ -630,6 +630,9 @@ typedef ElfW(Half) Elf_Half;
 #if !defined(Elf_Phdr)
 typedef ElfW(Phdr) Elf_Phdr;
 #endif
+#if !defined(Elf_Addr)
+typedef ElfW(Addr) Elf_Addr;
+#endif
 
 static uintptr_t calculateImageBase(struct dl_phdr_info *pinfo) {
   uintptr_t image_base = static_cast<uintptr_t>(pinfo->dlpi_addr);
@@ -658,32 +661,76 @@ struct _LIBUNWIND_HIDDEN dl_iterate_cb_data {
   LocalAddressSpace::pc_t targetAddr;
 };
 
+static LocalAddressSpace::pint_t getPhdrCapability(uintptr_t image_base,
+                                                   const Elf_Phdr *phdr) {
+#ifdef __CHERI_PURE_CAPABILITY__
+  // We have to work around the position dependent linking case where
+  // dlpi_addr will contain just the binary range (and can't a be massively
+  // out of bounds cap with a zero vaddr due to Cheri128 constaints). In that
+  // case phdr->p_vaddr will be within the bounds of pinfo->dlpi_addr so we
+  // just set the address to match the vaddr
+  if (&_DYNAMIC == NULL) {
+    // static linking / position dependent workaround:
+    vaddr_t base = __builtin_cheri_base_get((void *)image_base);
+    vaddr_t end = base + __builtin_cheri_length_get((void *)image_base);
+    if (phdr->p_vaddr >= base && phdr->p_vaddr < end) {
+      return image_base + (phdr->p_vaddr - base);
+    }
+  }
+  // Otherwise just fall back to the default behaviour
+  if (!__builtin_cheri_tag_get((void *)(image_base + phdr->p_vaddr)))
+    _LIBUNWIND_ABORT("phdr cap became unpresentable?");
+#endif
+  return image_base + phdr->p_vaddr;
+}
+
 #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 #if !defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
 #error                                                                         \
     "_LIBUNWIND_SUPPORT_DWARF_UNWIND requires _LIBUNWIND_SUPPORT_DWARF_INDEX on this platform."
 #endif
 
-int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
-  auto *cbdata = static_cast<dl_iterate_cb_data *>(data);
-  bool found_obj = false;
-  bool found_hdr = false;
-
-  assert(cbdata);
-  assert(cbdata->sects);
-  CHERI_DBG("Checking %s for target 0x%jx (%#p). Base=%p->%p(%#p)\n",
-            pinfo->dlpi_name, (uintmax_t)cbdata->targetAddr.address(),
-            (void *)cbdata->targetAddr.get(), (void *)pinfo->dlpi_addr,
-            (void *)((char *)pinfo->dlpi_addr +
-                     __builtin_cheri_length_get((void *)pinfo->dlpi_addr)),
-            (void *)pinfo->dlpi_addr);
-#ifdef __CHERI_PURE_CAPABILITY__
-  assert(cbdata->targetAddr.isValid());
-  if (!__builtin_cheri_tag_get((void *)pinfo->dlpi_addr)) {
-    _LIBUNWIND_ABORT("dlpi_addr was untagged. CheriBSD needs to be updated!");
+static bool checkAddrInSegment(const Elf_Phdr *phdr, uintptr_t image_base,
+                               dl_iterate_cb_data *cbdata) {
+  if (phdr->p_type == PT_LOAD) {
+    uintptr_t begin = getPhdrCapability(image_base, phdr);
+    uintptr_t end = begin + phdr->p_memsz;
+    if (cbdata->targetAddr >= begin && cbdata->targetAddr < end) {
+      cbdata->sects->dso_base = begin;
+      cbdata->sects->dwarf_section_length = phdr->p_memsz;
+      return true;
+    }
   }
-#endif
+  return false;
+}
 
+static bool boundEhFrameFromPhdr(struct dl_phdr_info *pinfo,
+                                 uintptr_t image_base,
+                                 dl_iterate_cb_data *cbdata) {
+  for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
+    const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
+    if (phdr->p_type == PT_LOAD) {
+      uintptr_t begin = getPhdrCapability(image_base, phdr);
+      uintptr_t end = begin + phdr->p_memsz;
+      if (cbdata->sects->dwarf_section() >= begin &&
+          cbdata->sects->dwarf_section() < end) {
+        // This still overestimates the length of .eh_frame, but it
+        // should respect the bounds of the containing PT_LOAD.
+        cbdata->sects->dwarf_section_length =
+            phdr->p_memsz -
+            (size_t)((char *)cbdata->sects->dwarf_section() - (char *)begin);
+        return true;
+      }
+    }
+  }
+  CHERI_DBG("Could not find PT_LOAD of .eh_frame in %s\n", pinfo->dlpi_name);
+  return false;
+}
+
+int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
+  auto cbdata = static_cast<dl_iterate_cb_data *>(data);
+  if (pinfo->dlpi_phnum == 0)
+    return 0;
   if (cbdata->targetAddr < pinfo->dlpi_addr) {
     CHERI_DBG("0x%jx out of bounds of %#p (%s)\n",
               (uintmax_t)cbdata->targetAddr.address(), (void *)pinfo->dlpi_addr,
@@ -711,43 +758,30 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
 #endif
 
   uintptr_t image_base = calculateImageBase(pinfo);
-  size_t object_length;
-
-  auto getPhdrCapability =
-      [](uintptr_t image_base,
-         const Elf_Phdr *phdr) -> LocalAddressSpace::pint_t {
+  bool found_obj = false;
+  bool found_hdr = false;
+  CHERI_DBG("Checking %s for target 0x%jx (%#p). Base=%p->%p(%#p)\n",
+            pinfo->dlpi_name, (uintmax_t)cbdata->targetAddr.address(),
+            (void *)cbdata->targetAddr.get(), (void *)pinfo->dlpi_addr,
+            (void *)((char *)pinfo->dlpi_addr +
+                     __builtin_cheri_length_get((void *)pinfo->dlpi_addr)),
+            (void *)pinfo->dlpi_addr);
 #ifdef __CHERI_PURE_CAPABILITY__
-    // We have to work around the position dependent linking case where
-    // dlpi_addr will contain just the binary range (and can't a be massively
-    // out of bounds cap with a zero vaddr due to Cheri128 constaints). In that
-    // case phdr->p_vaddr will be within the bounds of pinfo->dlpi_addr so we
-    // just set the address to match the vaddr
-    if (&_DYNAMIC == NULL) {
-      // static linking / position dependent workaround:
-      vaddr_t base = __builtin_cheri_base_get((void *)image_base);
-      vaddr_t end = base + __builtin_cheri_length_get((void *)image_base);
-      if (phdr->p_vaddr >= base && phdr->p_vaddr < end) {
-        return image_base + (phdr->p_vaddr - base);
-      }
-    }
-    // Otherwise just fall back to the default behaviour
-    if (!__builtin_cheri_tag_get((void *)(image_base + phdr->p_vaddr)))
-      _LIBUNWIND_ABORT("phdr cap became unpresentable?");
+  assert(cbdata->targetAddr.isValid());
+  if (!__builtin_cheri_tag_get((void *)pinfo->dlpi_addr)) {
+    _LIBUNWIND_ABORT("dlpi_addr was untagged. CheriBSD needs to be updated!");
+  }
 #endif
-    return image_base + phdr->p_vaddr;
-  };
 
-  for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
-    const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
-    if (phdr->p_type == PT_LOAD) {
-      uintptr_t begin = getPhdrCapability(image_base, phdr);
-      uintptr_t end = begin + phdr->p_memsz;
-      if (cbdata->targetAddr >= begin && cbdata->targetAddr < end) {
-        cbdata->sects->dso_base = begin;
-        object_length = phdr->p_memsz;
-        found_obj = true;
-      }
-    } else if (phdr->p_type == PT_GNU_EH_FRAME) {
+  // Third phdr is usually the executable phdr.
+  if (pinfo->dlpi_phnum > 2)
+    found_obj = checkAddrInSegment(&pinfo->dlpi_phdr[2], image_base, cbdata);
+
+  // PT_GNU_EH_FRAME is usually near the end. Iterate backward. We already know
+  // that there is one or more phdrs.
+  for (Elf_Half i = pinfo->dlpi_phnum; i > 0; i--) {
+    const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i - 1];
+    if (!found_hdr && phdr->p_type == PT_GNU_EH_FRAME) {
       EHHeaderParser<LocalAddressSpace>::EHHeaderInfo hdrInfo;
       uintptr_t eh_frame_hdr_start = getPhdrCapability(image_base, phdr);
 #ifdef __CHERI_PURE_CAPABILITY__
@@ -760,40 +794,22 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
           *cbdata->addressSpace, eh_frame_hdr_start, phdr->p_memsz, hdrInfo);
       if (found_hdr)
         cbdata->sects->set_dwarf_section(hdrInfo.eh_frame_ptr);
+    } else if (!found_obj) {
+      found_obj = checkAddrInSegment(phdr, image_base, cbdata);
     }
-  }
-
-  if (found_obj && found_hdr) {
-    CHERI_DBG("found_obj && found_hdr in %s\n", pinfo->dlpi_name);
-
-    // Find the PT_LOAD containing .eh_frame.
-    for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
-      const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
-      if (phdr->p_type == PT_LOAD) {
-        uintptr_t begin = getPhdrCapability(image_base, phdr);
-        uintptr_t end = begin + phdr->p_memsz;
-#if defined(__ANDROID__)
-        if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
-          begin = begin + image_base;
-#endif
-        if (cbdata->sects->dwarf_section() >= begin &&
-            cbdata->sects->dwarf_section() < end) {
-
-          // This still overestimates the length of .eh_frame, but it
-          // should respect the bounds of the containing PT_LOAD.
-          cbdata->sects->dwarf_section_length =
-              phdr->p_memsz -
-              (size_t)((char *)cbdata->sects->dwarf_section() - (char *)begin);
-          return true;
-        }
+    if (found_obj && found_hdr) {
+      CHERI_DBG("found_obj && found_hdr in %s\n", pinfo->dlpi_name);
+      // Find the PT_LOAD containing .eh_frame.
+      if (!boundEhFrameFromPhdr(pinfo, image_base, cbdata)) {
+        return 0;
       }
+      return 1;
+    } else {
+      CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
     }
-    CHERI_DBG("Could not find PT_LOAD of .eh_frame in %s\n", pinfo->dlpi_name);
-    return false;
-  } else {
-    CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
-    return false;
   }
+  cbdata->sects->dwarf_section_length = 0;
+  return 0;
 }
 
 #else   // defined(LIBUNWIND_SUPPORT_DWARF_UNWIND)
