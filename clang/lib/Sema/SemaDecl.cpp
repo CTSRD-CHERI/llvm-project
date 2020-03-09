@@ -10051,6 +10051,18 @@ static bool CheckMultiVersionValue(Sema &S, const FunctionDecl *FD) {
   return false;
 }
 
+// Provide a white-list of attributes that are allowed to be combined with
+// multiversion functions.
+static bool AttrCompatibleWithMultiVersion(attr::Kind Kind,
+                                           MultiVersionKind MVType) {
+  switch (Kind) {
+  default:
+    return false;
+  case attr::Used:
+    return MVType == MultiVersionKind::Target;
+  }
+}
+
 static bool HasNonMultiVersionAttributes(const FunctionDecl *FD,
                                          MultiVersionKind MVType) {
   for (const Attr *A : FD->attrs()) {
@@ -10066,7 +10078,9 @@ static bool HasNonMultiVersionAttributes(const FunctionDecl *FD,
         return true;
       break;
     default:
-      return true;
+      if (!AttrCompatibleWithMultiVersion(A->getKind(), MVType))
+        return true;
+      break;
     }
   }
   return false;
