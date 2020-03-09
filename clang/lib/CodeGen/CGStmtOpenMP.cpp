@@ -3407,6 +3407,7 @@ void CodeGenFunction::EmitOMPTaskBasedDirective(
                                     PrePostActionTy &Action) {
     // Set proper addresses for generated private copies.
     OMPPrivateScope Scope(CGF);
+    llvm::SmallVector<std::pair<const VarDecl *, Address>, 16> FirstprivatePtrs;
     if (!Data.PrivateVars.empty() || !Data.FirstprivateVars.empty() ||
         !Data.LastprivateVars.empty()) {
       unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
@@ -3434,6 +3435,7 @@ void CodeGenFunction::EmitOMPTaskBasedDirective(
             CGF.CreateMemTemp(CGF.getContext().getPointerType(E->getType()),
                               ".firstpriv.ptr.addr");
         PrivatePtrs.emplace_back(VD, PrivatePtr);
+        FirstprivatePtrs.emplace_back(VD, PrivatePtr);
         CallArgs.push_back(PrivatePtr.getPointer());
       }
       for (const Expr *E : Data.LastprivateVars) {
@@ -3464,6 +3466,14 @@ void CodeGenFunction::EmitOMPTaskBasedDirective(
       }
     }
     if (Data.Reductions) {
+      OMPPrivateScope FirstprivateScope(CGF);
+      for (const auto &Pair : FirstprivatePtrs) {
+        Address Replacement(CGF.Builder.CreateLoad(Pair.second),
+                            CGF.getContext().getDeclAlign(Pair.first));
+        FirstprivateScope.addPrivate(Pair.first,
+                                     [Replacement]() { return Replacement; });
+      }
+      (void)FirstprivateScope.Privatize();
       OMPLexicalScope LexScope(CGF, S, CapturedRegion);
       ReductionCodeGen RedCG(Data.ReductionVars, Data.ReductionCopies,
                              Data.ReductionOps);
@@ -5812,16 +5822,35 @@ void CodeGenFunction::EmitSimpleOMPExecutableDirective(
   if (!D.hasAssociatedStmt() || !D.getAssociatedStmt())
     return;
   auto &&CodeGen = [&D](CodeGenFunction &CGF, PrePostActionTy &Action) {
+    OMPPrivateScope GlobalsScope(CGF);
+    if (isOpenMPTaskingDirective(D.getDirectiveKind())) {
+      // Capture global firstprivates to avoid crash.
+      for (const auto *C : D.getClausesOfKind<OMPFirstprivateClause>()) {
+        for (const Expr *Ref : C->varlists()) {
+          const auto *DRE = cast<DeclRefExpr>(Ref->IgnoreParenImpCasts());
+          if (!DRE)
+            continue;
+          const auto *VD = dyn_cast<VarDecl>(DRE->getDecl());
+          if (!VD || VD->hasLocalStorage())
+            continue;
+          if (!CGF.LocalDeclMap.count(VD)) {
+            LValue GlobLVal = CGF.EmitLValue(Ref);
+            GlobalsScope.addPrivate(
+                VD, [&GlobLVal, &CGF]() { return GlobLVal.getAddress(CGF); });
+          }
+        }
+      }
+    }
     if (isOpenMPSimdDirective(D.getDirectiveKind())) {
+      (void)GlobalsScope.Privatize();
       emitOMPSimdRegion(CGF, cast<OMPLoopDirective>(D), Action);
     } else {
-      OMPPrivateScope LoopGlobals(CGF);
       if (const auto *LD = dyn_cast<OMPLoopDirective>(&D)) {
         for (const Expr *E : LD->counters()) {
           const auto *VD = cast<VarDecl>(cast<DeclRefExpr>(E)->getDecl());
           if (!VD->hasLocalStorage() && !CGF.LocalDeclMap.count(VD)) {
             LValue GlobLVal = CGF.EmitLValue(E);
-            LoopGlobals.addPrivate(
+            GlobalsScope.addPrivate(
                 VD, [&GlobLVal, &CGF]() { return GlobLVal.getAddress(CGF); });
           }
           if (isa<OMPCapturedExprDecl>(VD)) {
@@ -5845,7 +5874,7 @@ void CodeGenFunction::EmitSimpleOMPExecutableDirective(
           }
         }
       }
-      LoopGlobals.Privatize();
+      (void)GlobalsScope.Privatize();
       CGF.EmitStmt(D.getInnermostCapturedStmt()->getCapturedStmt());
     }
   };
