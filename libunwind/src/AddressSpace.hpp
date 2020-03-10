@@ -61,9 +61,9 @@ namespace libunwind {
   {
     const struct mach_header*   mh;
     const void*                 dwarf_section;
-    uintptr_t                   dwarf_section_length;
     const void*                 compact_unwind_section;
-    uintptr_t                   compact_unwind_section_length;
+    size_t                      dwarf_section_length;
+    size_t                      compact_unwind_section_length;
   };
   #if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) \
                                  && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1070)) \
@@ -178,7 +178,7 @@ public:
       __dwarf_section = assert_pointer_in_bounds(value);
   }
   uintptr_t dwarf_section() const { return __dwarf_section; }
-  uintptr_t       dwarf_section_length;
+  size_t    dwarf_section_length;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
 private:
@@ -188,15 +188,15 @@ public:
       __dwarf_index_section = assert_pointer_in_bounds(value);
   }
   uintptr_t dwarf_index_section() const { return __dwarf_index_section; }
-  uintptr_t       dwarf_index_section_length;
+  size_t    dwarf_index_section_length;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
-  uintptr_t       compact_unwind_section;
-  uintptr_t       compact_unwind_section_length;
+  uintptr_t    compact_unwind_section;
+  size_t       compact_unwind_section_length;
 #endif
 #if defined(_LIBUNWIND_ARM_EHABI)
-  uintptr_t       arm_section;
-  uintptr_t       arm_section_length;
+  uintptr_t    arm_section;
+  size_t       arm_section_length;
 #endif
 };
 
@@ -690,6 +690,11 @@ static LocalAddressSpace::pint_t getPhdrCapability(uintptr_t image_base,
     "_LIBUNWIND_SUPPORT_DWARF_UNWIND requires _LIBUNWIND_SUPPORT_DWARF_INDEX on this platform."
 #endif
 
+#include "FrameHeaderCache.hpp"
+
+// There should be just one of these per process.
+static FrameHeaderCache ProcessFrameHeaderCache;
+
 static bool checkAddrInSegment(const Elf_Phdr *phdr, uintptr_t image_base,
                                dl_iterate_cb_data *cbdata) {
   if (phdr->p_type == PT_LOAD) {
@@ -727,7 +732,8 @@ static bool boundEhFrameFromPhdr(struct dl_phdr_info *pinfo,
   return false;
 }
 
-int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
+int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t pinfo_size,
+                             void *data) {
   auto cbdata = static_cast<dl_iterate_cb_data *>(data);
   if (pinfo->dlpi_phnum == 0)
     return 0;
@@ -737,6 +743,9 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
               pinfo->dlpi_name);
     return 0;
   }
+
+  if (ProcessFrameHeaderCache.find(pinfo, pinfo_size, data))
+    return 1;
 
 #ifdef __CHERI_PURE_CAPABILITY__
   check_same_type<__uintcap_t, decltype(pinfo->dlpi_addr)>();
@@ -803,6 +812,7 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
       if (!boundEhFrameFromPhdr(pinfo, image_base, cbdata)) {
         return 0;
       }
+      ProcessFrameHeaderCache.add(cbdata->sects);
       return 1;
     } else {
       CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
