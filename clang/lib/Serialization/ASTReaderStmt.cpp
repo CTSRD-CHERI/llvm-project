@@ -1212,6 +1212,7 @@ void ASTStmtReader::VisitStmtExpr(StmtExpr *E) {
   E->setLParenLoc(readSourceLocation());
   E->setRParenLoc(readSourceLocation());
   E->setSubStmt(cast_or_null<CompoundStmt>(Record.readSubStmt()));
+  E->StmtExprBits.TemplateDepth = Record.readInt();
 }
 
 void ASTStmtReader::VisitChooseExpr(ChooseExpr *E) {

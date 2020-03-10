@@ -1077,6 +1077,7 @@ void ASTStmtWriter::VisitStmtExpr(StmtExpr *E) {
   Record.AddStmt(E->getSubStmt());
   Record.AddSourceLocation(E->getLParenLoc());
   Record.AddSourceLocation(E->getRParenLoc());
+  Record.push_back(E->getTemplateDepth());
   Code = serialization::EXPR_STMT;
 }
 
