@@ -16195,7 +16195,7 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode *St) {
           unsigned Elts = (i + 1) * NumMemElts;
           EVT Ty =
               EVT::getVectorVT(*DAG.getContext(), MemVT.getScalarType(), Elts);
-          bool IsFast;
+          bool IsFast = false;
 
           // Break early when size is too large to be legal.
           if (Ty.getSizeInBits() > MaximumLegalStoreInBits)
@@ -16331,7 +16331,8 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode *St) {
         if (StoreTy.getSizeInBits() > MaximumLegalStoreInBits)
           break;
 
-        bool IsFastSt, IsFastLd;
+        bool IsFastSt = false;
+        bool IsFastLd = false;
         if (TLI.isTypeLegal(StoreTy) &&
             TLI.canMergeStoresTo(FirstStoreAS, StoreTy, DAG) &&
             TLI.allowsMemoryAccess(Context, DL, StoreTy,
