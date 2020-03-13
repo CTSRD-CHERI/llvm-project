@@ -31,12 +31,9 @@ void test_message_for_bad_value() {
     errno = E2BIG; // something that message will never generate
     const std::error_category& e_cat1 = std::generic_category();
     const std::string msg = e_cat1.message(-1);
-#if defined(_LIBCPP_HAS_NO_THREADS) && defined(__FreeBSD__)
-    LIBCPP_ASSERT(msg == "Unknown error: -1");
-#else
-    LIBCPP_ASSERT(msg == "Unknown error -1" || msg == "Unknown error");
+    // Exact message format varies by platform.
+    LIBCPP_ASSERT(msg.starts_with("Unknown error"));
     assert(errno == E2BIG);
-#endif
 }
 
 int main(int, char**)
