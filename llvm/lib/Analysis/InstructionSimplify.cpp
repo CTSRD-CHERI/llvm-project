@@ -5394,9 +5394,6 @@ Value *llvm::SimplifyCall(CallBase *Call, const SimplifyQuery &Q) {
     if (Value *Ret = simplifyIntrinsic(Call, Q))
       return Ret;
 
-  if (Value *ReturnedArg = Call->getReturnedArgOperand())
-    return ReturnedArg;
-
   if (!canConstantFoldCallTo(Call, F))
     return nullptr;
 
