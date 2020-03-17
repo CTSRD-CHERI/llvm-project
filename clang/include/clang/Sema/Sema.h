@@ -10401,6 +10401,10 @@ public:
   OMPClause *ActOnOpenMPHintClause(Expr *Hint, SourceLocation StartLoc,
                                    SourceLocation LParenLoc,
                                    SourceLocation EndLoc);
+  /// Called on well-formed 'detach' clause.
+  OMPClause *ActOnOpenMPDetachClause(Expr *Evt, SourceLocation StartLoc,
+                                     SourceLocation LParenLoc,
+                                     SourceLocation EndLoc);
 
   OMPClause *ActOnOpenMPSimpleClause(OpenMPClauseKind Kind,
                                      unsigned Argument,
