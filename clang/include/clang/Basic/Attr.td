@@ -3390,6 +3390,12 @@ def Uninitialized : InheritableAttr {
   let Documentation = [UninitializedDocs];
 }
 
+def LoaderUninitialized : Attr {
+  let Spellings = [Clang<"loader_uninitialized">];
+  let Subjects = SubjectList<[GlobalVar]>;
+  let Documentation = [LoaderUninitializedDocs];
+}
+
 def ObjCExternallyRetained : InheritableAttr {
   let LangOpts = [ObjCAutoRefCount];
   let Spellings = [Clang<"objc_externally_retained">];
