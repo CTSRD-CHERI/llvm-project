@@ -12300,7 +12300,9 @@ void OMPClauseReader::VisitOMPDependClause(OMPDependClause *C) {
 
 void OMPClauseReader::VisitOMPDeviceClause(OMPDeviceClause *C) {
   VisitOMPClauseWithPreInit(C);
+  C->setModifier(Record.readEnum<OpenMPDeviceClauseModifier>());
   C->setDevice(Record.readSubExpr());
+  C->setModifierLoc(Record.readSourceLocation());
   C->setLParenLoc(Record.readSourceLocation());
 }
 
