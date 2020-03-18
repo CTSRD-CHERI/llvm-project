@@ -553,9 +553,9 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       // addiu $Reg, $zero, -MaxAlignment
       // andi $sp, $sp, $Reg
       Register VR = MF.getRegInfo().createVirtualRegister(RC);
-      assert(isInt<16>(MFI.getMaxAlignment()) &&
+      assert((Log2(MFI.getMaxAlign()) < 16) &&
              "Function's alignment size requirement is not supported.");
-      int MaxAlign = -(int)MFI.getMaxAlignment();
+      int64_t MaxAlign = -(int64_t)MFI.getMaxAlign().value();
       unsigned IntSP = SP;
       if (ABI.IsCheriPureCap()) {
         IntSP = MF.getRegInfo().createVirtualRegister(RC);
@@ -563,7 +563,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       }
 
 
-      BuildMI(MBB, MBBI, dl, TII.get(ADDiu), VR).addReg(ZERO) .addImm(MaxAlign);
+      BuildMI(MBB, MBBI, dl, TII.get(ADDiu), VR).addReg(ZERO).addImm(MaxAlign);
       BuildMI(MBB, MBBI, dl, TII.get(AND), IntSP).addReg(IntSP).addReg(VR);
 
       if (ABI.IsCheriPureCap())
