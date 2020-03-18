@@ -720,7 +720,7 @@ namespace llvm {
     }
 
     // Find a register class from its def.
-    CodeGenRegisterClass *getRegClass(Record*);
+    CodeGenRegisterClass *getRegClass(const Record *) const;
 
     /// getRegisterClassForRegister - Find the register class that contains the
     /// specified physical register.  If the register is not in a register
