@@ -464,7 +464,9 @@ let Class = TagType in {
 let Class = EnumType in {
   def : Creator<[{
     QualType result = ctx.getEnumType(cast<EnumDecl>(declaration));
-    const_cast<Type*>(result.getTypePtr())->setDependent(dependent);
+    if (dependent)
+      const_cast<Type *>(result.getTypePtr())
+          ->addDependence(TypeDependence::DependentInstantiation);
     return result;
   }]>;
 }
@@ -473,7 +475,9 @@ let Class = RecordType in {
   def : Creator<[{
     auto record = cast<RecordDecl>(declaration);
     QualType result = ctx.getRecordType(record);
-    const_cast<Type*>(result.getTypePtr())->setDependent(dependent);
+    if (dependent)
+      const_cast<Type *>(result.getTypePtr())
+          ->addDependence(TypeDependence::DependentInstantiation);
     return result;
   }]>;
 }
@@ -616,7 +620,9 @@ let Class = TemplateSpecializationType in {
                                                  templateArguments,
                                                  *underlyingType);
     }
-    const_cast<Type*>(result.getTypePtr())->setDependent(dependent);
+    if (dependent)
+      const_cast<Type *>(result.getTypePtr())
+          ->addDependence(TypeDependence::DependentInstantiation);
     return result;
   }]>;
 }

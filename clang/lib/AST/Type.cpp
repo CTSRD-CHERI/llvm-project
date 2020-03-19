@@ -21,6 +21,7 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclTemplate.h"
+#include "clang/AST/DependenceFlags.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/NestedNameSpecifier.h"
 #include "clang/AST/NonTrivialTypeVisitor.h"
@@ -124,14 +125,15 @@ ArrayType::ArrayType(TypeClass tc, QualType et, QualType can,
     //
     //   template<int ...N> int arr[] = {N...};
     : Type(tc, can,
-           et->isDependentType() || (sz && sz->isValueDependent()) ||
-               tc == DependentSizedArray,
-           et->isInstantiationDependentType() ||
-               (sz && sz->isInstantiationDependent()) ||
-               tc == DependentSizedArray,
-           (tc == VariableArray || et->isVariablyModifiedType()),
-           et->containsUnexpandedParameterPack() ||
-               (sz && sz->containsUnexpandedParameterPack())),
+           et->getDependence() |
+               (sz ? toTypeDependence(
+                         turnValueToTypeDependence(sz->getDependence()))
+                   : TypeDependence::None) |
+               (tc == VariableArray ? TypeDependence::VariablyModified
+                                    : TypeDependence::None) |
+               (tc == DependentSizedArray
+                    ? TypeDependence::DependentInstantiation
+                    : TypeDependence::None)),
       ElementType(et) {
   ArrayTypeBits.IndexTypeQuals = tq;
   ArrayTypeBits.SizeModifier = sm;
@@ -218,14 +220,16 @@ void DependentSizedArrayType::Profile(llvm::FoldingSetNodeID &ID,
   E->Profile(ID, Context, true);
 }
 
-DependentVectorType::DependentVectorType(
-    const ASTContext &Context, QualType ElementType, QualType CanonType,
-    Expr *SizeExpr, SourceLocation Loc, VectorType::VectorKind VecKind)
-    : Type(DependentVector, CanonType, /*Dependent=*/true,
-           /*InstantiationDependent=*/true,
-           ElementType->isVariablyModifiedType(),
-           ElementType->containsUnexpandedParameterPack() ||
-               (SizeExpr && SizeExpr->containsUnexpandedParameterPack())),
+DependentVectorType::DependentVectorType(const ASTContext &Context,
+                                         QualType ElementType,
+                                         QualType CanonType, Expr *SizeExpr,
+                                         SourceLocation Loc,
+                                         VectorType::VectorKind VecKind)
+    : Type(DependentVector, CanonType,
+           TypeDependence::DependentInstantiation |
+               ElementType->getDependence() |
+               (SizeExpr ? toTypeDependence(SizeExpr->getDependence())
+                         : TypeDependence::None)),
       Context(Context), ElementType(ElementType), SizeExpr(SizeExpr), Loc(Loc) {
   VectorTypeBits.VecKind = VecKind;
 }
@@ -239,19 +243,16 @@ void DependentVectorType::Profile(llvm::FoldingSetNodeID &ID,
   SizeExpr->Profile(ID, Context, true);
 }
 
-DependentSizedExtVectorType::DependentSizedExtVectorType(const
-                                                         ASTContext &Context,
-                                                         QualType ElementType,
-                                                         QualType can,
-                                                         Expr *SizeExpr,
-                                                         SourceLocation loc)
-    : Type(DependentSizedExtVector, can, /*Dependent=*/true,
-           /*InstantiationDependent=*/true,
-           ElementType->isVariablyModifiedType(),
-           (ElementType->containsUnexpandedParameterPack() ||
-            (SizeExpr && SizeExpr->containsUnexpandedParameterPack()))),
-      Context(Context), SizeExpr(SizeExpr), ElementType(ElementType),
-      loc(loc) {}
+DependentSizedExtVectorType::DependentSizedExtVectorType(
+    const ASTContext &Context, QualType ElementType, QualType can,
+    Expr *SizeExpr, SourceLocation loc)
+    : Type(DependentSizedExtVector, can,
+           TypeDependence::DependentInstantiation |
+               ElementType->getDependence() |
+               (SizeExpr ? toTypeDependence(SizeExpr->getDependence())
+                         : TypeDependence::None)),
+      Context(Context), SizeExpr(SizeExpr), ElementType(ElementType), loc(loc) {
+}
 
 void
 DependentSizedExtVectorType::Profile(llvm::FoldingSetNodeID &ID,
@@ -261,15 +262,16 @@ DependentSizedExtVectorType::Profile(llvm::FoldingSetNodeID &ID,
   SizeExpr->Profile(ID, Context, true);
 }
 
-DependentAddressSpaceType::DependentAddressSpaceType(
-    const ASTContext &Context, QualType PointeeType, QualType can,
-    Expr *AddrSpaceExpr, SourceLocation loc)
-    : Type(DependentAddressSpace, can, /*Dependent=*/true,
-           /*InstantiationDependent=*/true,
-           PointeeType->isVariablyModifiedType(),
-           (PointeeType->containsUnexpandedParameterPack() ||
-            (AddrSpaceExpr &&
-             AddrSpaceExpr->containsUnexpandedParameterPack()))),
+DependentAddressSpaceType::DependentAddressSpaceType(const ASTContext &Context,
+                                                     QualType PointeeType,
+                                                     QualType can,
+                                                     Expr *AddrSpaceExpr,
+                                                     SourceLocation loc)
+    : Type(DependentAddressSpace, can,
+           TypeDependence::DependentInstantiation |
+               PointeeType->getDependence() |
+               (AddrSpaceExpr ? toTypeDependence(AddrSpaceExpr->getDependence())
+                              : TypeDependence::None)),
       Context(Context), AddrSpaceExpr(AddrSpaceExpr), PointeeType(PointeeType),
       loc(loc) {}
 
@@ -287,11 +289,7 @@ VectorType::VectorType(QualType vecType, unsigned nElements, QualType canonType,
 
 VectorType::VectorType(TypeClass tc, QualType vecType, unsigned nElements,
                        QualType canonType, VectorKind vecKind)
-    : Type(tc, canonType, vecType->isDependentType(),
-           vecType->isInstantiationDependentType(),
-           vecType->isVariablyModifiedType(),
-           vecType->containsUnexpandedParameterPack()),
-      ElementType(vecType) {
+    : Type(tc, canonType, vecType->getDependence()), ElementType(vecType) {
   VectorTypeBits.VecKind = vecKind;
   VectorTypeBits.NumElements = nElements;
 }
@@ -718,14 +716,11 @@ bool Type::isObjCClassOrClassKindOfType() const {
   return OPT->isObjCClassType() || OPT->isObjCQualifiedClassType();
 }
 
-ObjCTypeParamType::ObjCTypeParamType(const ObjCTypeParamDecl *D,
-                                     QualType can,
+ObjCTypeParamType::ObjCTypeParamType(const ObjCTypeParamDecl *D, QualType can,
                                      ArrayRef<ObjCProtocolDecl *> protocols)
-    : Type(ObjCTypeParam, can, can->isDependentType(),
-           can->isInstantiationDependentType(),
-           can->isVariablyModifiedType(),
-           /*ContainsUnexpandedParameterPack=*/false),
-      OTPDecl(const_cast<ObjCTypeParamDecl*>(D)) {
+    : Type(ObjCTypeParam, can,
+           can->getDependence() & ~TypeDependence::UnexpandedPack),
+      OTPDecl(const_cast<ObjCTypeParamDecl *>(D)) {
   initialize(protocols);
 }
 
@@ -733,11 +728,7 @@ ObjCObjectType::ObjCObjectType(QualType Canonical, QualType Base,
                                ArrayRef<QualType> typeArgs,
                                ArrayRef<ObjCProtocolDecl *> protocols,
                                bool isKindOf)
-    : Type(ObjCObject, Canonical, Base->isDependentType(),
-           Base->isInstantiationDependentType(),
-           Base->isVariablyModifiedType(),
-           Base->containsUnexpandedParameterPack()),
-      BaseType(Base) {
+    : Type(ObjCObject, Canonical, Base->getDependence()), BaseType(Base) {
   ObjCObjectTypeBits.IsKindOf = isKindOf;
 
   ObjCObjectTypeBits.NumTypeArgs = typeArgs.size();
@@ -748,13 +739,7 @@ ObjCObjectType::ObjCObjectType(QualType Canonical, QualType Base,
            typeArgs.size() * sizeof(QualType));
 
   for (auto typeArg : typeArgs) {
-    if (typeArg->isDependentType())
-      setDependent();
-    else if (typeArg->isInstantiationDependentType())
-      setInstantiationDependent();
-
-    if (typeArg->containsUnexpandedParameterPack())
-      setContainsUnexpandedParameterPack();
+    addDependence(typeArg->getDependence() & ~TypeDependence::VariablyModified);
   }
   // Initialize the protocol qualifiers. The protocol storage is known
   // after we set number of type arguments.
@@ -2793,21 +2778,20 @@ StringRef TypeWithKeyword::getKeywordName(ElaboratedTypeKeyword Keyword) {
 }
 
 DependentTemplateSpecializationType::DependentTemplateSpecializationType(
-                         ElaboratedTypeKeyword Keyword,
-                         NestedNameSpecifier *NNS, const IdentifierInfo *Name,
-                         ArrayRef<TemplateArgument> Args,
-                         QualType Canon)
-  : TypeWithKeyword(Keyword, DependentTemplateSpecialization, Canon, true, true,
-                    /*VariablyModified=*/false,
-                    NNS && NNS->containsUnexpandedParameterPack()),
-    NNS(NNS), Name(Name) {
+    ElaboratedTypeKeyword Keyword, NestedNameSpecifier *NNS,
+    const IdentifierInfo *Name, ArrayRef<TemplateArgument> Args, QualType Canon)
+    : TypeWithKeyword(Keyword, DependentTemplateSpecialization, Canon,
+                      TypeDependence::DependentInstantiation |
+                          (NNS ? toTypeDependence(NNS->getDependence())
+                               : TypeDependence::None)),
+      NNS(NNS), Name(Name) {
   DependentTemplateSpecializationTypeBits.NumArgs = Args.size();
   assert((!NNS || NNS->isDependent()) &&
          "DependentTemplateSpecializatonType requires dependent qualifier");
   TemplateArgument *ArgBuffer = getArgBuffer();
   for (const TemplateArgument &Arg : Args) {
-    if (Arg.containsUnexpandedParameterPack())
-      setContainsUnexpandedParameterPack();
+    addDependence(toTypeDependence(Arg.getDependence() &
+                                   TemplateArgumentDependence::UnexpandedPack));
 
     new (ArgBuffer++) TemplateArgument(Arg);
   }
@@ -3057,10 +3041,8 @@ StringRef FunctionType::getNameForCallConv(CallingConv CC) {
 FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
                                      QualType canonical,
                                      const ExtProtoInfo &epi)
-    : FunctionType(FunctionProto, result, canonical, result->isDependentType(),
-                   result->isInstantiationDependentType(),
-                   result->isVariablyModifiedType(),
-                   result->containsUnexpandedParameterPack(), epi.ExtInfo) {
+    : FunctionType(FunctionProto, result, canonical, result->getDependence(),
+                   epi.ExtInfo) {
   FunctionTypeBits.FastTypeQuals = epi.TypeQuals.getFastQualifiers();
   FunctionTypeBits.RefQualifier = epi.RefQualifier;
   FunctionTypeBits.NumParams = params.size();
@@ -3079,14 +3061,8 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
   // Fill in the trailing argument array.
   auto *argSlot = getTrailingObjects<QualType>();
   for (unsigned i = 0; i != getNumParams(); ++i) {
-    if (params[i]->isDependentType())
-      setDependent();
-    else if (params[i]->isInstantiationDependentType())
-      setInstantiationDependent();
-
-    if (params[i]->containsUnexpandedParameterPack())
-      setContainsUnexpandedParameterPack();
-
+    addDependence(params[i]->getDependence() &
+                  ~TypeDependence::VariablyModified);
     argSlot[i] = params[i];
   }
 
@@ -3100,11 +3076,9 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
       // Note that, before C++17, a dependent exception specification does
       // *not* make a type dependent; it's not even part of the C++ type
       // system.
-      if (ExceptionType->isInstantiationDependentType())
-        setInstantiationDependent();
-
-      if (ExceptionType->containsUnexpandedParameterPack())
-        setContainsUnexpandedParameterPack();
+      addDependence(
+          ExceptionType->getDependence() &
+          (TypeDependence::Instantiation | TypeDependence::UnexpandedPack));
 
       exnSlot[I++] = ExceptionType;
     }
@@ -3118,12 +3092,9 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
     // Store the noexcept expression and context.
     *getTrailingObjects<Expr *>() = epi.ExceptionSpec.NoexceptExpr;
 
-    if (epi.ExceptionSpec.NoexceptExpr->isValueDependent() ||
-        epi.ExceptionSpec.NoexceptExpr->isInstantiationDependent())
-      setInstantiationDependent();
-
-    if (epi.ExceptionSpec.NoexceptExpr->containsUnexpandedParameterPack())
-      setContainsUnexpandedParameterPack();
+    addDependence(
+        toTypeDependence(epi.ExceptionSpec.NoexceptExpr->getDependence()) &
+        (TypeDependence::Instantiation | TypeDependence::UnexpandedPack));
   }
   // Fill in the FunctionDecl * in the exception specification if present.
   else if (getExceptionSpecType() == EST_Uninstantiated) {
@@ -3147,11 +3118,11 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
     if (getExceptionSpecType() == EST_Dynamic ||
         getExceptionSpecType() == EST_DependentNoexcept) {
       assert(hasDependentExceptionSpec() && "type should not be canonical");
-      setDependent();
+      addDependence(TypeDependence::DependentInstantiation);
     }
   } else if (getCanonicalTypeInternal()->isDependentType()) {
     // Ask our canonical type whether our exception specification was dependent.
-    setDependent();
+    addDependence(TypeDependence::DependentInstantiation);
   }
 
   // Fill in the extra parameter info if present.
@@ -3314,10 +3285,10 @@ QualType MacroQualifiedType::getModifiedType() const {
 }
 
 TypeOfExprType::TypeOfExprType(Expr *E, QualType can)
-    : Type(TypeOfExpr, can, E->isTypeDependent(),
-           E->isInstantiationDependent(),
-           E->getType()->isVariablyModifiedType(),
-           E->containsUnexpandedParameterPack()),
+    : Type(TypeOfExpr, can,
+           toTypeDependence(E->getDependence()) |
+               (E->getType()->getDependence() &
+                TypeDependence::VariablyModified)),
       TOExpr(E) {}
 
 bool TypeOfExprType::isSugared() const {
@@ -3337,13 +3308,15 @@ void DependentTypeOfExprType::Profile(llvm::FoldingSetNodeID &ID,
 }
 
 DecltypeType::DecltypeType(Expr *E, QualType underlyingType, QualType can)
-  // C++11 [temp.type]p2: "If an expression e involves a template parameter,
-  // decltype(e) denotes a unique dependent type." Hence a decltype type is
-  // type-dependent even if its expression is only instantiation-dependent.
-    : Type(Decltype, can, E->isInstantiationDependent(),
-           E->isInstantiationDependent(),
-           E->getType()->isVariablyModifiedType(),
-           E->containsUnexpandedParameterPack()),
+    // C++11 [temp.type]p2: "If an expression e involves a template parameter,
+    // decltype(e) denotes a unique dependent type." Hence a decltype type is
+    // type-dependent even if its expression is only instantiation-dependent.
+    : Type(Decltype, can,
+           toTypeDependence(E->getDependence()) |
+               (E->isInstantiationDependent() ? TypeDependence::Dependent
+                                              : TypeDependence::None) |
+               (E->getType()->getDependence() &
+                TypeDependence::VariablyModified)),
       E(E), UnderlyingType(underlyingType) {}
 
 bool DecltypeType::isSugared() const { return !E->isInstantiationDependent(); }
@@ -3364,13 +3337,9 @@ void DependentDecltypeType::Profile(llvm::FoldingSetNodeID &ID,
 }
 
 UnaryTransformType::UnaryTransformType(QualType BaseType,
-                                       QualType UnderlyingType,
-                                       UTTKind UKind,
+                                       QualType UnderlyingType, UTTKind UKind,
                                        QualType CanonicalType)
-    : Type(UnaryTransform, CanonicalType, BaseType->isDependentType(),
-           BaseType->isInstantiationDependentType(),
-           BaseType->isVariablyModifiedType(),
-           BaseType->containsUnexpandedParameterPack()),
+    : Type(UnaryTransform, CanonicalType, BaseType->getDependence()),
       BaseType(BaseType), UnderlyingType(UnderlyingType), UKind(UKind) {}
 
 DependentUnaryTransformType::DependentUnaryTransformType(const ASTContext &C,
@@ -3379,11 +3348,10 @@ DependentUnaryTransformType::DependentUnaryTransformType(const ASTContext &C,
      : UnaryTransformType(BaseType, C.DependentTy, UKind, QualType()) {}
 
 TagType::TagType(TypeClass TC, const TagDecl *D, QualType can)
-    : Type(TC, can, D->isDependentType(),
-           /*InstantiationDependent=*/D->isDependentType(),
-           /*VariablyModified=*/false,
-           /*ContainsUnexpandedParameterPack=*/false),
-      decl(const_cast<TagDecl*>(D)) {}
+    : Type(TC, can,
+           D->isDependentType() ? TypeDependence::DependentInstantiation
+                                : TypeDependence::None),
+      decl(const_cast<TagDecl *>(D)) {}
 
 static TagDecl *getInterestingTagDecl(TagDecl *decl) {
   for (auto I : decl->redecls()) {
@@ -3497,11 +3465,12 @@ IdentifierInfo *TemplateTypeParmType::getIdentifier() const {
   return isCanonicalUnqualified() ? nullptr : getDecl()->getIdentifier();
 }
 
-SubstTemplateTypeParmPackType::
-SubstTemplateTypeParmPackType(const TemplateTypeParmType *Param,
-                              QualType Canon,
-                              const TemplateArgument &ArgPack)
-    : Type(SubstTemplateTypeParmPack, Canon, true, true, false, true),
+SubstTemplateTypeParmPackType::SubstTemplateTypeParmPackType(
+    const TemplateTypeParmType *Param, QualType Canon,
+    const TemplateArgument &ArgPack)
+    : Type(SubstTemplateTypeParmPack, Canon,
+           TypeDependence::DependentInstantiation |
+               TypeDependence::UnexpandedPack),
       Replaced(Param), Arguments(ArgPack.pack_begin()) {
   SubstTemplateTypeParmPackTypeBits.NumArgs = ArgPack.pack_size();
 }
@@ -3545,16 +3514,17 @@ anyDependentTemplateArguments(ArrayRef<TemplateArgumentLoc> Args,
   return false;
 }
 
-TemplateSpecializationType::
-TemplateSpecializationType(TemplateName T,
-                           ArrayRef<TemplateArgument> Args,
-                           QualType Canon, QualType AliasedType)
-  : Type(TemplateSpecialization,
-         Canon.isNull()? QualType(this, 0) : Canon,
-         Canon.isNull()? true : Canon->isDependentType(),
-         Canon.isNull()? true : Canon->isInstantiationDependentType(),
-         false,
-         T.containsUnexpandedParameterPack()), Template(T) {
+TemplateSpecializationType::TemplateSpecializationType(
+    TemplateName T, ArrayRef<TemplateArgument> Args, QualType Canon,
+    QualType AliasedType)
+    : Type(TemplateSpecialization, Canon.isNull() ? QualType(this, 0) : Canon,
+           (Canon.isNull()
+                ? TypeDependence::DependentInstantiation
+                : Canon->getDependence() & ~(TypeDependence::VariablyModified |
+                                             TypeDependence::UnexpandedPack)) |
+               (toTypeDependence(T.getDependence()) &
+                TypeDependence::UnexpandedPack)),
+      Template(T) {
   TemplateSpecializationTypeBits.NumArgs = Args.size();
   TemplateSpecializationTypeBits.TypeAlias = !AliasedType.isNull();
 
@@ -3575,13 +3545,11 @@ TemplateSpecializationType(TemplateName T,
     // U<T> is always non-dependent, irrespective of the type T.
     // However, U<Ts> contains an unexpanded parameter pack, even though
     // its expansion (and thus its desugared type) doesn't.
-    if (Arg.isInstantiationDependent())
-      setInstantiationDependent();
-    if (Arg.getKind() == TemplateArgument::Type &&
-        Arg.getAsType()->isVariablyModifiedType())
-      setVariablyModified();
-    if (Arg.containsUnexpandedParameterPack())
-      setContainsUnexpandedParameterPack();
+    addDependence(toTypeDependence(Arg.getDependence()) &
+                  ~TypeDependence::Dependent);
+    if (Arg.getKind() == TemplateArgument::Type)
+      addDependence(Arg.getAsType()->getDependence() &
+                    TypeDependence::VariablyModified);
     new (TemplateArgs++) TemplateArgument(Arg);
   }
 
@@ -4268,19 +4236,18 @@ void clang::FixedPointValueToString(SmallVectorImpl<char> &Str,
 }
 
 AutoType::AutoType(QualType DeducedAsType, AutoTypeKeyword Keyword,
-                   bool IsDeducedAsDependent, bool IsDeducedAsPack,
+                   TypeDependence ExtraDependence,
                    ConceptDecl *TypeConstraintConcept,
                    ArrayRef<TemplateArgument> TypeConstraintArgs)
-    : DeducedType(Auto, DeducedAsType, IsDeducedAsDependent,
-                  IsDeducedAsDependent, IsDeducedAsPack) {
+    : DeducedType(Auto, DeducedAsType, ExtraDependence) {
   AutoTypeBits.Keyword = (unsigned)Keyword;
   AutoTypeBits.NumArgs = TypeConstraintArgs.size();
   this->TypeConstraintConcept = TypeConstraintConcept;
   if (TypeConstraintConcept) {
     TemplateArgument *ArgBuffer = getArgBuffer();
     for (const TemplateArgument &Arg : TypeConstraintArgs) {
-      if (Arg.containsUnexpandedParameterPack())
-        setContainsUnexpandedParameterPack();
+      addDependence(toTypeDependence(
+          Arg.getDependence() & TemplateArgumentDependence::UnexpandedPack));
 
       new (ArgBuffer++) TemplateArgument(Arg);
     }

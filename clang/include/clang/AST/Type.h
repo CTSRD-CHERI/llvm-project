@@ -1828,23 +1828,11 @@ private:
 protected:
   friend class ASTContext;
 
-  Type(TypeClass tc, QualType canon, bool Dependent,
-       bool InstantiationDependent, bool VariablyModified,
-       bool ContainsUnexpandedParameterPack)
+  Type(TypeClass tc, QualType canon, TypeDependence Dependence)
       : ExtQualsTypeCommonBase(this,
                                canon.isNull() ? QualType(this_(), 0) : canon) {
-    auto Deps = TypeDependence::None;
-    if (Dependent)
-      Deps |= TypeDependence::Dependent | TypeDependence::Instantiation;
-    if (InstantiationDependent)
-      Deps |= TypeDependence::Instantiation;
-    if (ContainsUnexpandedParameterPack)
-      Deps |= TypeDependence::UnexpandedPack;
-    if (VariablyModified)
-      Deps |= TypeDependence::VariablyModified;
-
     TypeBits.TC = tc;
-    TypeBits.Dependence = static_cast<unsigned>(Deps);
+    TypeBits.Dependence = static_cast<unsigned>(Dependence);
     TypeBits.CacheValid = false;
     TypeBits.CachedLocalOrUnnamed = false;
     TypeBits.CachedLinkage = NoLinkage;
@@ -1854,41 +1842,11 @@ protected:
   // silence VC++ warning C4355: 'this' : used in base member initializer list
   Type *this_() { return this; }
 
-  void setDependent(bool D = true) {
-    if (!D) {
-      TypeBits.Dependence &= ~static_cast<unsigned>(TypeDependence::Dependent);
-      return;
-    }
-    TypeBits.Dependence |= static_cast<unsigned>(TypeDependence::Dependent |
-                                                 TypeDependence::Instantiation);
+  void setDependence(TypeDependence D) {
+    TypeBits.Dependence = static_cast<unsigned>(D);
   }
 
-  void setInstantiationDependent(bool D = true) {
-    if (D)
-      TypeBits.Dependence |=
-          static_cast<unsigned>(TypeDependence::Instantiation);
-    else
-      TypeBits.Dependence &=
-          ~static_cast<unsigned>(TypeDependence::Instantiation);
-  }
-
-  void setVariablyModified(bool VM = true) {
-    if (VM)
-      TypeBits.Dependence |=
-          static_cast<unsigned>(TypeDependence::VariablyModified);
-    else
-      TypeBits.Dependence &=
-          ~static_cast<unsigned>(TypeDependence::VariablyModified);
-  }
-
-  void setContainsUnexpandedParameterPack(bool PP = true) {
-    if (PP)
-      TypeBits.Dependence |=
-          static_cast<unsigned>(TypeDependence::UnexpandedPack);
-    else
-      TypeBits.Dependence &=
-          ~static_cast<unsigned>(TypeDependence::UnexpandedPack);
-  }
+  void addDependence(TypeDependence D) { setDependence(getDependence() | D); }
 
 public:
   friend class ASTReader;
@@ -2546,10 +2504,9 @@ private:
   friend class ASTContext; // ASTContext creates these.
 
   BuiltinType(Kind K)
-      : Type(Builtin, QualType(), /*Dependent=*/(K == Dependent),
-             /*InstantiationDependent=*/(K == Dependent),
-             /*VariablyModified=*/false,
-             /*Unexpanded parameter pack=*/false) {
+      : Type(Builtin, QualType(),
+             K == Dependent ? TypeDependence::DependentInstantiation
+                            : TypeDependence::None) {
     BuiltinTypeBits.Kind = K;
   }
 
@@ -2619,10 +2576,7 @@ class ComplexType : public Type, public llvm::FoldingSetNode {
   QualType ElementType;
 
   ComplexType(QualType Element, QualType CanonicalPtr)
-      : Type(Complex, CanonicalPtr, Element->isDependentType(),
-             Element->isInstantiationDependentType(),
-             Element->isVariablyModifiedType(),
-             Element->containsUnexpandedParameterPack()),
+      : Type(Complex, CanonicalPtr, Element->getDependence()),
         ElementType(Element) {}
 
 public:
@@ -2649,11 +2603,7 @@ class ParenType : public Type, public llvm::FoldingSetNode {
   QualType Inner;
 
   ParenType(QualType InnerType, QualType CanonType)
-      : Type(Paren, CanonType, InnerType->isDependentType(),
-             InnerType->isInstantiationDependentType(),
-             InnerType->isVariablyModifiedType(),
-             InnerType->containsUnexpandedParameterPack()),
-        Inner(InnerType) {}
+      : Type(Paren, CanonType, InnerType->getDependence()), Inner(InnerType) {}
 
 public:
   QualType getInnerType() const { return Inner; }
@@ -2680,12 +2630,8 @@ class PointerType : public Type, public llvm::FoldingSetNode {
   bool IsCHERICapability : 1;
 
   PointerType(QualType Pointee, QualType CanonicalPtr, bool IsCHERICap = false)
-      : Type(Pointer, CanonicalPtr, Pointee->isDependentType(),
-             Pointee->isInstantiationDependentType(),
-             Pointee->isVariablyModifiedType(),
-             Pointee->containsUnexpandedParameterPack()),
-        PointeeType(Pointee), IsCHERICapability(IsCHERICap) {
-  }
+      : Type(Pointer, CanonicalPtr, Pointee->getDependence()),
+        PointeeType(Pointee), IsCHERICapability(IsCHERICap) {}
 
 public:
   QualType getPointeeType() const { return PointeeType; }
@@ -2735,10 +2681,7 @@ protected:
 
   AdjustedType(TypeClass TC, QualType OriginalTy, QualType AdjustedTy,
                QualType CanonicalPtr)
-      : Type(TC, CanonicalPtr, OriginalTy->isDependentType(),
-             OriginalTy->isInstantiationDependentType(),
-             OriginalTy->isVariablyModifiedType(),
-             OriginalTy->containsUnexpandedParameterPack()),
+      : Type(TC, CanonicalPtr, OriginalTy->getDependence()),
         OriginalTy(OriginalTy), AdjustedTy(AdjustedTy) {}
 
 public:
@@ -2787,10 +2730,7 @@ class BlockPointerType : public Type, public llvm::FoldingSetNode {
   QualType PointeeType;
 
   BlockPointerType(QualType Pointee, QualType CanonicalCls)
-      : Type(BlockPointer, CanonicalCls, Pointee->isDependentType(),
-             Pointee->isInstantiationDependentType(),
-             Pointee->isVariablyModifiedType(),
-             Pointee->containsUnexpandedParameterPack()),
+      : Type(BlockPointer, CanonicalCls, Pointee->getDependence()),
         PointeeType(Pointee) {}
 
 public:
@@ -2821,10 +2761,7 @@ class ReferenceType : public Type, public llvm::FoldingSetNode {
 protected:
   ReferenceType(TypeClass tc, QualType Referencee, QualType CanonicalRef,
                 bool SpelledAsLValue, bool IsCHERICap = false)
-      : Type(tc, CanonicalRef, Referencee->isDependentType(),
-             Referencee->isInstantiationDependentType(),
-             Referencee->isVariablyModifiedType(),
-             Referencee->containsUnexpandedParameterPack()),
+      : Type(tc, CanonicalRef, Referencee->getDependence()),
         PointeeType(Referencee), IsCHERICapability(IsCHERICap) {
     ReferenceTypeBits.SpelledAsLValue = SpelledAsLValue;
     ReferenceTypeBits.InnerRef = Referencee->isReferenceType();
@@ -2913,13 +2850,9 @@ class MemberPointerType : public Type, public llvm::FoldingSetNode {
 
   MemberPointerType(QualType Pointee, const Type *Cls, QualType CanonicalPtr)
       : Type(MemberPointer, CanonicalPtr,
-             Cls->isDependentType() || Pointee->isDependentType(),
-             (Cls->isInstantiationDependentType() ||
-              Pointee->isInstantiationDependentType()),
-             Pointee->isVariablyModifiedType(),
-             (Cls->containsUnexpandedParameterPack() ||
-              Pointee->containsUnexpandedParameterPack())),
-             PointeeType(Pointee), Class(Cls) {}
+             (Cls->getDependence() & ~TypeDependence::VariablyModified) |
+                 Pointee->getDependence()),
+        PointeeType(Pointee), Class(Cls) {}
 
 public:
   QualType getPointeeType() const { return PointeeType; }
@@ -3744,14 +3677,9 @@ public:
   };
 
 protected:
-  FunctionType(TypeClass tc, QualType res,
-               QualType Canonical, bool Dependent,
-               bool InstantiationDependent,
-               bool VariablyModified, bool ContainsUnexpandedParameterPack,
-               ExtInfo Info)
-      : Type(tc, Canonical, Dependent, InstantiationDependent, VariablyModified,
-             ContainsUnexpandedParameterPack),
-        ResultType(res) {
+  FunctionType(TypeClass tc, QualType res, QualType Canonical,
+               TypeDependence Dependence, ExtInfo Info)
+      : Type(tc, Canonical, Dependence), ResultType(res) {
     FunctionTypeBits.ExtInfo = Info.Bits;
   }
 
@@ -3803,9 +3731,10 @@ class FunctionNoProtoType : public FunctionType, public llvm::FoldingSetNode {
 
   FunctionNoProtoType(QualType Result, QualType Canonical, ExtInfo Info)
       : FunctionType(FunctionNoProto, Result, Canonical,
-                     /*Dependent=*/false, /*InstantiationDependent=*/false,
-                     Result->isVariablyModifiedType(),
-                     /*ContainsUnexpandedParameterPack=*/false, Info) {}
+                     Result->getDependence() &
+                         ~(TypeDependence::DependentInstantiation |
+                           TypeDependence::UnexpandedPack),
+                     Info) {}
 
 public:
   // No additional state past what FunctionType provides.
@@ -4297,9 +4226,9 @@ class UnresolvedUsingType : public Type {
   UnresolvedUsingTypenameDecl *Decl;
 
   UnresolvedUsingType(const UnresolvedUsingTypenameDecl *D)
-      : Type(UnresolvedUsing, QualType(), true, true, false,
-             /*ContainsUnexpandedParameterPack=*/false),
-        Decl(const_cast<UnresolvedUsingTypenameDecl*>(D)) {}
+      : Type(UnresolvedUsing, QualType(),
+             TypeDependence::DependentInstantiation),
+        Decl(const_cast<UnresolvedUsingTypenameDecl *>(D)) {}
 
 public:
   UnresolvedUsingTypenameDecl *getDecl() const { return Decl; }
@@ -4328,11 +4257,8 @@ protected:
   friend class ASTContext; // ASTContext creates these.
 
   TypedefType(TypeClass tc, const TypedefNameDecl *D, QualType can)
-      : Type(tc, can, can->isDependentType(),
-             can->isInstantiationDependentType(),
-             can->isVariablyModifiedType(),
-             /*ContainsUnexpandedParameterPack=*/false),
-        Decl(const_cast<TypedefNameDecl*>(D)) {
+      : Type(tc, can, can->getDependence() & ~TypeDependence::UnexpandedPack),
+        Decl(const_cast<TypedefNameDecl *>(D)) {
     assert(!isa<TypedefType>(can) && "Invalid canonical type");
   }
 
@@ -4355,10 +4281,7 @@ class MacroQualifiedType : public Type {
 
   MacroQualifiedType(QualType UnderlyingTy, QualType CanonTy,
                      const IdentifierInfo *MacroII)
-      : Type(MacroQualified, CanonTy, UnderlyingTy->isDependentType(),
-             UnderlyingTy->isInstantiationDependentType(),
-             UnderlyingTy->isVariablyModifiedType(),
-             UnderlyingTy->containsUnexpandedParameterPack()),
+      : Type(MacroQualified, CanonTy, UnderlyingTy->getDependence()),
         UnderlyingTy(UnderlyingTy), MacroII(MacroII) {
     assert(isa<AttributedType>(UnderlyingTy) &&
            "Expected a macro qualified type to only wrap attributed types.");
@@ -4430,11 +4353,7 @@ class TypeOfType : public Type {
   QualType TOType;
 
   TypeOfType(QualType T, QualType can)
-      : Type(TypeOf, can, T->isDependentType(),
-             T->isInstantiationDependentType(),
-             T->isVariablyModifiedType(),
-             T->containsUnexpandedParameterPack()),
-        TOType(T) {
+      : Type(TypeOf, can, T->getDependence()), TOType(T) {
     assert(!isa<TypedefType>(can) && "Invalid canonical type");
   }
 
@@ -4643,10 +4562,7 @@ private:
 
   AttributedType(QualType canon, attr::Kind attrKind, QualType modified,
                  QualType equivalent)
-      : Type(Attributed, canon, equivalent->isDependentType(),
-             equivalent->isInstantiationDependentType(),
-             equivalent->isVariablyModifiedType(),
-             equivalent->containsUnexpandedParameterPack()),
+      : Type(Attributed, canon, equivalent->getDependence()),
         ModifiedType(modified), EquivalentType(equivalent) {
     AttributedTypeBits.AttrKind = attrKind;
   }
@@ -4748,18 +4664,16 @@ class TemplateTypeParmType : public Type, public llvm::FoldingSetNode {
 
   /// Build a non-canonical type.
   TemplateTypeParmType(TemplateTypeParmDecl *TTPDecl, QualType Canon)
-      : Type(TemplateTypeParm, Canon, /*Dependent=*/true,
-             /*InstantiationDependent=*/true,
-             /*VariablyModified=*/false,
-             Canon->containsUnexpandedParameterPack()),
+      : Type(TemplateTypeParm, Canon,
+             TypeDependence::DependentInstantiation |
+                 (Canon->getDependence() & TypeDependence::UnexpandedPack)),
         TTPDecl(TTPDecl) {}
 
   /// Build the canonical type.
   TemplateTypeParmType(unsigned D, unsigned I, bool PP)
       : Type(TemplateTypeParm, QualType(this, 0),
-             /*Dependent=*/true,
-             /*InstantiationDependent=*/true,
-             /*VariablyModified=*/false, PP) {
+             TypeDependence::DependentInstantiation |
+                 (PP ? TypeDependence::UnexpandedPack : TypeDependence::None)) {
     CanTTPTInfo.Depth = D;
     CanTTPTInfo.Index = I;
     CanTTPTInfo.ParameterPack = PP;
@@ -4816,10 +4730,7 @@ class SubstTemplateTypeParmType : public Type, public llvm::FoldingSetNode {
   const TemplateTypeParmType *Replaced;
 
   SubstTemplateTypeParmType(const TemplateTypeParmType *Param, QualType Canon)
-      : Type(SubstTemplateTypeParm, Canon, Canon->isDependentType(),
-             Canon->isInstantiationDependentType(),
-             Canon->isVariablyModifiedType(),
-             Canon->containsUnexpandedParameterPack()),
+      : Type(SubstTemplateTypeParm, Canon, Canon->getDependence()),
         Replaced(Param) {}
 
 public:
@@ -4916,23 +4827,16 @@ public:
 /// the latter case, it is also a dependent type.
 class DeducedType : public Type {
 protected:
-  DeducedType(TypeClass TC, QualType DeducedAsType, bool IsDependent,
-              bool IsInstantiationDependent, bool ContainsParameterPack)
+  DeducedType(TypeClass TC, QualType DeducedAsType,
+              TypeDependence ExtraDependence)
       : Type(TC,
              // FIXME: Retain the sugared deduced type?
              DeducedAsType.isNull() ? QualType(this, 0)
                                     : DeducedAsType.getCanonicalType(),
-             IsDependent, IsInstantiationDependent,
-             /*VariablyModified=*/false, ContainsParameterPack) {
-    if (!DeducedAsType.isNull()) {
-      if (DeducedAsType->isDependentType())
-        setDependent();
-      if (DeducedAsType->isInstantiationDependentType())
-        setInstantiationDependent();
-      if (DeducedAsType->containsUnexpandedParameterPack())
-        setContainsUnexpandedParameterPack();
-    }
-  }
+             ExtraDependence | (DeducedAsType.isNull()
+                                    ? TypeDependence::None
+                                    : DeducedAsType->getDependence() &
+                                          ~TypeDependence::VariablyModified)) {}
 
 public:
   bool isSugared() const { return !isCanonicalUnqualified(); }
@@ -4961,7 +4865,7 @@ class alignas(8) AutoType : public DeducedType, public llvm::FoldingSetNode {
   ConceptDecl *TypeConstraintConcept;
 
   AutoType(QualType DeducedAsType, AutoTypeKeyword Keyword,
-           bool IsDeducedAsDependent, bool IsDeducedAsPack, ConceptDecl *CD,
+           TypeDependence ExtraDependence, ConceptDecl *CD,
            ArrayRef<TemplateArgument> TypeConstraintArgs);
 
   const TemplateArgument *getArgBuffer() const {
@@ -5032,9 +4936,10 @@ class DeducedTemplateSpecializationType : public DeducedType,
                                     QualType DeducedAsType,
                                     bool IsDeducedAsDependent)
       : DeducedType(DeducedTemplateSpecialization, DeducedAsType,
-                    IsDeducedAsDependent || Template.isDependent(),
-                    IsDeducedAsDependent || Template.isInstantiationDependent(),
-                    Template.containsUnexpandedParameterPack()),
+                    toTypeDependence(Template.getDependence()) |
+                        (IsDeducedAsDependent
+                             ? TypeDependence::DependentInstantiation
+                             : TypeDependence::None)),
         Template(Template) {}
 
 public:
@@ -5236,10 +5141,8 @@ class InjectedClassNameType : public Type {
   QualType InjectedType;
 
   InjectedClassNameType(CXXRecordDecl *D, QualType TST)
-      : Type(InjectedClassName, QualType(), /*Dependent=*/true,
-             /*InstantiationDependent=*/true,
-             /*VariablyModified=*/false,
-             /*ContainsUnexpandedParameterPack=*/false),
+      : Type(InjectedClassName, QualType(),
+             TypeDependence::DependentInstantiation),
         Decl(D), InjectedType(TST) {
     assert(isa<TemplateSpecializationType>(TST));
     assert(!TST.hasQualifiers());
@@ -5318,11 +5221,8 @@ enum ElaboratedTypeKeyword {
 class TypeWithKeyword : public Type {
 protected:
   TypeWithKeyword(ElaboratedTypeKeyword Keyword, TypeClass tc,
-                  QualType Canonical, bool Dependent,
-                  bool InstantiationDependent, bool VariablyModified,
-                  bool ContainsUnexpandedParameterPack)
-      : Type(tc, Canonical, Dependent, InstantiationDependent, VariablyModified,
-             ContainsUnexpandedParameterPack) {
+                  QualType Canonical, TypeDependence Dependence)
+      : Type(tc, Canonical, Dependence) {
     TypeWithKeywordBits.Keyword = Keyword;
   }
 
@@ -5386,10 +5286,7 @@ class ElaboratedType final
   ElaboratedType(ElaboratedTypeKeyword Keyword, NestedNameSpecifier *NNS,
                  QualType NamedType, QualType CanonType, TagDecl *OwnedTagDecl)
       : TypeWithKeyword(Keyword, Elaborated, CanonType,
-                        NamedType->isDependentType(),
-                        NamedType->isInstantiationDependentType(),
-                        NamedType->isVariablyModifiedType(),
-                        NamedType->containsUnexpandedParameterPack()),
+                        NamedType->getDependence()),
         NNS(NNS), NamedType(NamedType) {
     ElaboratedTypeBits.HasOwnedTagDecl = false;
     if (OwnedTagDecl) {
@@ -5460,10 +5357,9 @@ class DependentNameType : public TypeWithKeyword, public llvm::FoldingSetNode {
 
   DependentNameType(ElaboratedTypeKeyword Keyword, NestedNameSpecifier *NNS,
                     const IdentifierInfo *Name, QualType CanonType)
-      : TypeWithKeyword(Keyword, DependentName, CanonType, /*Dependent=*/true,
-                        /*InstantiationDependent=*/true,
-                        /*VariablyModified=*/false,
-                        NNS->containsUnexpandedParameterPack()),
+      : TypeWithKeyword(Keyword, DependentName, CanonType,
+                        TypeDependence::DependentInstantiation |
+                            toTypeDependence(NNS->getDependence())),
         NNS(NNS), Name(Name) {}
 
 public:
@@ -5600,10 +5496,9 @@ class PackExpansionType : public Type, public llvm::FoldingSetNode {
 
   PackExpansionType(QualType Pattern, QualType Canon,
                     Optional<unsigned> NumExpansions)
-      : Type(PackExpansion, Canon, /*Dependent=*/Pattern->isDependentType(),
-             /*InstantiationDependent=*/true,
-             /*VariablyModified=*/Pattern->isVariablyModifiedType(),
-             /*ContainsUnexpandedParameterPack=*/false),
+      : Type(PackExpansion, Canon,
+             (Pattern->getDependence() | TypeDependence::Instantiation) &
+                 ~TypeDependence::UnexpandedPack),
         Pattern(Pattern) {
     PackExpansionTypeBits.NumExpansions =
         NumExpansions ? *NumExpansions + 1 : 0;
@@ -5822,8 +5717,8 @@ protected:
                  bool isKindOf);
 
   ObjCObjectType(enum Nonce_ObjCInterface)
-        : Type(ObjCInterface, QualType(), false, false, false, false),
-          BaseType(QualType(this_(), 0)) {
+      : Type(ObjCInterface, QualType(), TypeDependence::None),
+        BaseType(QualType(this_(), 0)) {
     ObjCObjectTypeBits.NumProtocols = 0;
     ObjCObjectTypeBits.NumTypeArgs = 0;
     ObjCObjectTypeBits.IsKindOf = 0;
@@ -6038,11 +5933,7 @@ class ObjCObjectPointerType : public Type, public llvm::FoldingSetNode {
   QualType PointeeType;
 
   ObjCObjectPointerType(QualType Canonical, QualType Pointee)
-      : Type(ObjCObjectPointer, Canonical,
-             Pointee->isDependentType(),
-             Pointee->isInstantiationDependentType(),
-             Pointee->isVariablyModifiedType(),
-             Pointee->containsUnexpandedParameterPack()),
+      : Type(ObjCObjectPointer, Canonical, Pointee->getDependence()),
         PointeeType(Pointee) {}
 
 public:
@@ -6212,11 +6103,7 @@ class AtomicType : public Type, public llvm::FoldingSetNode {
   QualType ValueType;
 
   AtomicType(QualType ValTy, QualType Canonical)
-      : Type(Atomic, Canonical, ValTy->isDependentType(),
-             ValTy->isInstantiationDependentType(),
-             ValTy->isVariablyModifiedType(),
-             ValTy->containsUnexpandedParameterPack()),
-        ValueType(ValTy) {}
+      : Type(Atomic, Canonical, ValTy->getDependence()), ValueType(ValTy) {}
 
 public:
   /// Gets the type contained by this atomic type, i.e.
@@ -6247,10 +6134,7 @@ class PipeType : public Type, public llvm::FoldingSetNode {
   bool isRead;
 
   PipeType(QualType elemType, QualType CanonicalPtr, bool isRead)
-      : Type(Pipe, CanonicalPtr, elemType->isDependentType(),
-             elemType->isInstantiationDependentType(),
-             elemType->isVariablyModifiedType(),
-             elemType->containsUnexpandedParameterPack()),
+      : Type(Pipe, CanonicalPtr, elemType->getDependence()),
         ElementType(elemType), isRead(isRead) {}
 
 public:
