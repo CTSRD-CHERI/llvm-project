@@ -2669,6 +2669,7 @@ DEF_TRAVERSE_STMT(CXXRewrittenBinaryOperator, {
 })
 DEF_TRAVERSE_STMT(OpaqueValueExpr, {})
 DEF_TRAVERSE_STMT(TypoExpr, {})
+DEF_TRAVERSE_STMT(RecoveryExpr, {})
 DEF_TRAVERSE_STMT(CUDAKernelCallExpr, {})
 
 // These operators (all of them) do not need any action except
