@@ -1793,6 +1793,7 @@ static void disassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     reportError(Obj->getFileName(),
                 "no instruction printer for target " + TripleName);
   IP->setPrintImmHex(PrintImmHex);
+  IP->setPrintBranchImmAsAddress(true);
 
   PrettyPrinter &PIP = selectPrettyPrinter(Triple(TripleName));
   SourcePrinter SP(Obj, TheTarget->getName());
