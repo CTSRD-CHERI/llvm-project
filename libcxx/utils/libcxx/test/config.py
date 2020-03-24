@@ -770,15 +770,6 @@ class Configuration(object):
             self.cxx.compile_flags += ['-DLIBCXX_SKIP_DYNAMIC_FILESYSTEM_TESTS=1']
             self.cxx.compile_flags += ['-ULIBCXX_FILESYSTEM_DYNAMIC_TEST_ROOT']
             return
-
-        dynamic_env = os.path.join(self.config.test_exec_root,
-                                   'filesystem', 'Output', 'dynamic_env')
-        dynamic_env = os.path.realpath(dynamic_env)
-        if not os.path.isdir(dynamic_env):
-            os.makedirs(dynamic_env)
-        self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_DYNAMIC_TEST_ROOT="%s"' % dynamic_env]
-        self.exec_env['LIBCXX_FILESYSTEM_DYNAMIC_TEST_ROOT'] = ("%s" % dynamic_env)
-
         dynamic_helper = os.path.join(self.libcxx_src_root, 'test', 'support',
                                       'filesystem_dynamic_test_helper.py')
         assert os.path.isfile(dynamic_helper)
