@@ -935,6 +935,8 @@ void TypePrinter::printFunctionAfter(const FunctionType::ExtInfo &Info,
 
   if (Info.getNoReturn())
     OS << " __attribute__((noreturn))";
+  if (Info.getCmseNSCall())
+    OS << " __attribute__((cmse_nonsecure_call))";
   if (Info.getProducesResult())
     OS << " __attribute__((ns_returns_retained))";
   if (Info.getRegParm())
@@ -1547,6 +1549,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::UPtr:
   case attr::CHERICapability:
   case attr::AddressSpace:
+  case attr::CmseNSCall:
     llvm_unreachable("This attribute should have been handled already");
   case attr::CHERIMethodClass:
     OS << "cheri_method_class(" << "???" << ")"; break;
