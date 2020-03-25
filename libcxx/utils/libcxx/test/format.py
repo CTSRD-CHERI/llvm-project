@@ -43,8 +43,6 @@ class LibcxxTestFormat(object):
     @staticmethod
     def _make_custom_parsers(test):
         return [
-            IntegratedTestKeywordParser('FLAKY_TEST.', ParserKind.TAG,
-                                        initial_value=False),
             IntegratedTestKeywordParser('LINK_CXX_ABI_LIBRARY.',
                                         ParserKind.TAG, initial_value=False),
             IntegratedTestKeywordParser('LINK_PTHREADS_LIBRARY.',
@@ -223,8 +221,8 @@ class LibcxxTestFormat(object):
             env = None
             if self.exec_env:
                 env = self.exec_env
-            is_flaky = self._get_parser('FLAKY_TEST.', parsers).getValue()
-            max_retry = 3 if is_flaky else 1
+
+            max_retry = test.allowed_retries + 1
             for retry_count in range(max_retry):
                 try:
                     cmd, out, err, rc = self.executor.run(exec_path, [exec_path], local_cwd, data_files, env)
