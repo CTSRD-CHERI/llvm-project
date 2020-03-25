@@ -848,7 +848,7 @@ u64 MonotonicNanoTime() {
 }
 #endif  // SANITIZER_LINUX && !SANITIZER_GO
 
-#if !SANITIZER_OPENBSD
+#if !SANITIZER_OPENBSD && !SANITIZER_GO
 void ReExec() {
   const char *pathname = "/proc/self/exe";
 
