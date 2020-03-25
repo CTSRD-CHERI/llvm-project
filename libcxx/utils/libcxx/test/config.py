@@ -155,7 +155,6 @@ class Configuration(object):
         self.configure_execute_external()
         self.configure_ccache()
         self.configure_compile_flags()
-        self.configure_filesystem_compile_flags()
         self.configure_link_flags()
         self.configure_env()
         self.configure_color_diagnostics()
@@ -757,26 +756,6 @@ class Configuration(object):
         if abi_unstable:
           self.config.available_features.add('libcpp-abi-unstable')
           self.cxx.compile_flags += ['-D_LIBCPP_ABI_UNSTABLE']
-
-    def configure_filesystem_compile_flags(self):
-        static_env = os.path.join(self.libcxx_src_root, 'test', 'std',
-                                  'input.output', 'filesystems', 'Inputs', 'static_test_env')
-        static_env = os.path.realpath(static_env)
-        assert os.path.isdir(static_env)
-        self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_STATIC_TEST_ROOT="%s"' % static_env]
-
-        if 'libcpp-no-dynamic-test-helper' in self.config.available_features:
-            self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_DYNAMIC_TEST_HELPER=this_should_not_compile']
-            self.cxx.compile_flags += ['-DLIBCXX_SKIP_DYNAMIC_FILESYSTEM_TESTS=1']
-            self.cxx.compile_flags += ['-ULIBCXX_FILESYSTEM_DYNAMIC_TEST_ROOT']
-            return
-        dynamic_helper = os.path.join(self.libcxx_src_root, 'test', 'support',
-                                      'filesystem_dynamic_test_helper.py')
-        assert os.path.isfile(dynamic_helper)
-
-        self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_DYNAMIC_TEST_HELPER="%s %s"'
-                                   % (sys.executable, dynamic_helper)]
-
 
     def configure_link_flags(self):
         # Configure library path
