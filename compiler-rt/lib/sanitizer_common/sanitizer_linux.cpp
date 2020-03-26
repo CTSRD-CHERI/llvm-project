@@ -1017,9 +1017,8 @@ static usize GetKernelAreaSize() {
   // is modified (e.g. under schroot) so check this as well.
   struct utsname uname_info;
   int pers = personality(0xffffffffUL);
-  if (!(pers & PER_MASK)
-      && uname(&uname_info) == 0
-      && internal_strstr(uname_info.machine, "64"))
+  if (!(pers & PER_MASK) && internal_uname(&uname_info) == 0 &&
+      internal_strstr(uname_info.machine, "64"))
     return 0;
 #endif  // SANITIZER_ANDROID
 
@@ -1630,6 +1629,12 @@ usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
   return res;
 }
 #endif  // defined(__x86_64__) && SANITIZER_LINUX
+
+#if SANITIZER_LINUX
+int internal_uname(struct utsname *buf) {
+  return internal_syscall(SYSCALL(uname), buf);
+}
+#endif
 
 #if SANITIZER_ANDROID
 #if __ANDROID_API__ < 21
