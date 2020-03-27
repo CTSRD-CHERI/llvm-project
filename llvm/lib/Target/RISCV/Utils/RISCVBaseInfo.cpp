@@ -90,6 +90,9 @@ Register getBPReg(ABI TargetABI) {
   return isCheriPureCapABI(TargetABI) ? RISCV::C9 : RISCV::X9;
 }
 
+// Returns the register holding shadow call stack pointer.
+Register getSCSPReg() { return RISCV::X18; }
+
 } // namespace RISCVABI
 
 namespace RISCVFeatures {

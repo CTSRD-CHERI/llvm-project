@@ -251,6 +251,9 @@ inline static bool isCheriPureCapABI(ABI TargetABI) {
     llvm_unreachable("Improperly initialised target ABI");
   }
 }
+// Returns the register holding shadow call stack pointer.
+Register getSCSPReg();
+
 } // namespace RISCVABI
 
 namespace RISCVFeatures {
