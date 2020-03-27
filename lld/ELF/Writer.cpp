@@ -878,8 +878,9 @@ bool isRelroSection(const OutputSection *sec) {
   StringRef s = sec->name;
   return s == ".data.rel.ro" || s == ".bss.rel.ro" || s == ".ctors" ||
          s == ".dtors" || s == ".jcr" || s == ".eh_frame" ||
-         s == ".openbsd.randomdata" || s == "__cap_relocs" ||
-         s == ".gcc_except_table";
+         s == ".fini_array" || s == ".init_array" ||
+         s == ".openbsd.randomdata" || s == ".preinit_array" ||
+         s == "__cap_relocs" || s == ".gcc_except_table";
 }
 
 // We compute a rank for each section. The rank indicates where the
