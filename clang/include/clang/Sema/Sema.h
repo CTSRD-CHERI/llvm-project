@@ -7228,7 +7228,7 @@ public:
                                const DeclarationNameInfo &NameInfo,
                                const TemplateArgumentListInfo *TemplateArgs);
 
-  TemplateNameKind ActOnDependentTemplateName(
+  TemplateNameKind ActOnTemplateName(
       Scope *S, CXXScopeSpec &SS, SourceLocation TemplateKWLoc,
       const UnqualifiedId &Name, ParsedType ObjectType, bool EnteringContext,
       TemplateTy &Template, bool AllowInjectedClassName = false);
