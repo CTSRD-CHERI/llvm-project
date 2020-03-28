@@ -246,6 +246,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::TRAP, MVT::Other, Legal);
   setOperationAction(ISD::DEBUGTRAP, MVT::Other, Legal);
+  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
 
   // Some CHERI intrinsics return i1, which isn't legal, so we have to custom
   // lower them in the DAG combine phase before the first type legalization
@@ -487,6 +488,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     unsigned NewOp = ToCap ? ISD::INTTOPTR : ISD::PTRTOINT;
     return DAG.getNode(NewOp, DL, Op.getValueType(), Op0);
   }
+  case ISD::INTRINSIC_WO_CHAIN:
+    return LowerINTRINSIC_WO_CHAIN(Op, DAG);
   }
 }
 
@@ -960,6 +963,20 @@ SDValue RISCVTargetLowering::lowerShiftRightParts(SDValue Op, SelectionDAG &DAG,
 
   SDValue Parts[2] = {Lo, Hi};
   return DAG.getMergeValues(Parts, DL);
+}
+
+SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
+                                                     SelectionDAG &DAG) const {
+  unsigned IntNo = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  SDLoc DL(Op);
+  switch (IntNo) {
+  default:
+    return SDValue();    // Don't custom lower most intrinsics.
+  case Intrinsic::thread_pointer: {
+    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+    return DAG.getRegister(RISCV::X4, PtrVT);
+  }
+  }
 }
 
 // Returns the opcode of the target-specific SDNode that implements the 32-bit
