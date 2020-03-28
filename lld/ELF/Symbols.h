@@ -21,6 +21,7 @@
 #include "llvm/Object/ELF.h"
 
 namespace lld {
+// Returns a string representation for a symbol for diagnostics.
 std::string toString(const elf::Symbol &);
 std::string verboseToString(const elf::Symbol *b, uint64_t symOffset = 0);
 
