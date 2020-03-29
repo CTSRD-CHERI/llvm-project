@@ -832,6 +832,7 @@ Value *LibCallSimplifier::optimizeStrStr(CallInst *CI, IRBuilderBase &B) {
           B.CreateICmp(Old->getPredicate(), StrNCmp,
                        ConstantInt::getNullValue(StrNCmp->getType()), "cmp");
       replaceAllUsesWith(Old, Cmp);
+      eraseFromParent(Old);
     }
     return CI;
   }
@@ -2176,8 +2177,10 @@ Value *LibCallSimplifier::optimizeSinCosPi(CallInst *CI, IRBuilderBase &B) {
 
   auto replaceTrigInsts = [this](SmallVectorImpl<CallInst *> &Calls,
                                  Value *Res) {
-    for (CallInst *C : Calls)
+    for (CallInst *C : Calls) {
       replaceAllUsesWith(C, Res);
+      eraseFromParent(C);
+    }
   };
 
   replaceTrigInsts(SinCalls, Sin);
