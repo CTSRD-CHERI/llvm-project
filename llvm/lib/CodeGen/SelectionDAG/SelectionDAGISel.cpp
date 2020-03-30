@@ -2270,14 +2270,14 @@ bool SelectionDAGISel::IsLegalToFold(SDValue N, SDNode *U, SDNode *Root,
   return !findNonImmUse(Root, N.getNode(), U, IgnoreChains);
 }
 
-void SelectionDAGISel::Select_INLINEASM(SDNode *N, bool Branch) {
+void SelectionDAGISel::Select_INLINEASM(SDNode *N) {
   SDLoc DL(N);
 
   std::vector<SDValue> Ops(N->op_begin(), N->op_end());
   SelectInlineAsmMemoryOperands(Ops, DL);
 
   const EVT VTs[] = {MVT::Other, MVT::Glue};
-  SDValue New = CurDAG->getNode(Branch ? ISD::INLINEASM_BR : ISD::INLINEASM, DL, VTs, Ops);
+  SDValue New = CurDAG->getNode(N->getOpcode(), DL, VTs, Ops);
   New->setNodeId(-1);
   ReplaceUses(N, New.getNode());
   CurDAG->RemoveDeadNode(N);
@@ -2854,8 +2854,7 @@ void SelectionDAGISel::SelectCodeCommon(SDNode *NodeToMatch,
     return;
   case ISD::INLINEASM:
   case ISD::INLINEASM_BR:
-    Select_INLINEASM(NodeToMatch,
-                     NodeToMatch->getOpcode() == ISD::INLINEASM_BR);
+    Select_INLINEASM(NodeToMatch);
     return;
   case ISD::READ_REGISTER:
     Select_READ_REGISTER(NodeToMatch);
