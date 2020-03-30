@@ -618,6 +618,13 @@ public:
   llvm::Value *GenerateProtocolRef(CodeGenFunction &CGF,
                                    const ObjCProtocolDecl *PD) override;
   void GenerateProtocol(const ObjCProtocolDecl *PD) override;
+
+  virtual llvm::Constant *GenerateProtocolRef(const ObjCProtocolDecl *PD);
+
+  llvm::Constant *GetOrEmitProtocol(const ObjCProtocolDecl *PD) override {
+    return GenerateProtocolRef(PD);
+  }
+
   llvm::Function *ModuleInitFunction() override;
   llvm::FunctionCallee GetPropertyGetFunction() override;
   llvm::FunctionCallee GetPropertySetFunction() override;
@@ -1350,7 +1357,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
   void GenerateProtocol(const ObjCProtocolDecl *PD) override {
     // Do nothing - we only emit referenced protocols.
   }
-  llvm::Constant *GenerateProtocolRef(const ObjCProtocolDecl *PD) {
+  llvm::Constant *GenerateProtocolRef(const ObjCProtocolDecl *PD) override {
     std::string ProtocolName = PD->getNameAsString();
     auto *&Protocol = ExistingProtocols[ProtocolName];
     if (Protocol)
@@ -3070,14 +3077,19 @@ CGObjCGNU::GenerateProtocolList(ArrayRef<std::string> Protocols) {
 
 llvm::Value *CGObjCGNU::GenerateProtocolRef(CodeGenFunction &CGF,
                                             const ObjCProtocolDecl *PD) {
+  auto protocol = GenerateProtocolRef(PD);
+  llvm::Type *T =
+      CGM.getTypes().ConvertType(CGM.getContext().getObjCProtoType());
+  unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+  return CGF.Builder.CreateBitCast(protocol, llvm::PointerType::get(T, AS));
+}
+
+llvm::Constant *CGObjCGNU::GenerateProtocolRef(const ObjCProtocolDecl *PD) {
   llvm::Constant *&protocol = ExistingProtocols[PD->getNameAsString()];
   if (!protocol)
     GenerateProtocol(PD);
   assert(protocol && "Unknown protocol");
-  llvm::Type *T =
-    CGM.getTypes().ConvertType(CGM.getContext().getObjCProtoType());
-  unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
-  return CGF.Builder.CreateBitCast(protocol, llvm::PointerType::get(T, AS));
+  return protocol;
 }
 
 llvm::Constant *
