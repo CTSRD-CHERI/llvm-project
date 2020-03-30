@@ -1879,12 +1879,12 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   pc &= (pint_t)~0x1;
 #endif
 
+  // Exit early if at the top of the stack.
   if (pc.isNull()) {
-    CHERI_DBG("%s(%d): return pc was NULL, stopping unwinding\n", __func__, isReturnAddress);
+    CHERI_DBG("%s(%d): return pc was NULL, stopping unwinding\n", __func__,
+              isReturnAddress);
     // If the return address is zero that usually means that we have reached
     // the end of the thread's stack and can't continue unwinding
-    // TODO: are there any systems where a return PC of 0 is valid?
-    // no unwind info, flag that we can't reliably unwind
     _unwindInfoMissing = true;
     return;
   }
