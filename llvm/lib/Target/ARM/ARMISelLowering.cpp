@@ -9765,7 +9765,7 @@ void ARMTargetLowering::EmitSjLjDispatchBlock(MachineInstr &MI,
 
   MachineMemOperand *FIMMOLd = MF->getMachineMemOperand(
       MachinePointerInfo::getFixedStack(*MF, FI),
-      MachineMemOperand::MOLoad | MachineMemOperand::MOVolatile, 4, 4);
+      MachineMemOperand::MOLoad | MachineMemOperand::MOVolatile, 4, Align(4));
 
   MachineInstrBuilder MIB;
   MIB = BuildMI(DispatchBB, dl, TII->get(ARM::Int_eh_sjlj_dispatchsetup));
@@ -9896,8 +9896,9 @@ void ARMTargetLowering::EmitSjLjDispatchBlock(MachineInstr &MI,
         .addReg(NewVReg3)
         .add(predOps(ARMCC::AL));
 
-    MachineMemOperand *JTMMOLd = MF->getMachineMemOperand(
-        MachinePointerInfo::getJumpTable(*MF), MachineMemOperand::MOLoad, 4, 4);
+    MachineMemOperand *JTMMOLd =
+        MF->getMachineMemOperand(MachinePointerInfo::getJumpTable(*MF),
+                                 MachineMemOperand::MOLoad, 4, Align(4));
 
     Register NewVReg5 = MRI->createVirtualRegister(TRC);
     BuildMI(DispContBB, dl, TII->get(ARM::tLDRi), NewVReg5)
@@ -9990,8 +9991,9 @@ void ARMTargetLowering::EmitSjLjDispatchBlock(MachineInstr &MI,
         .addJumpTableIndex(MJTI)
         .add(predOps(ARMCC::AL));
 
-    MachineMemOperand *JTMMOLd = MF->getMachineMemOperand(
-        MachinePointerInfo::getJumpTable(*MF), MachineMemOperand::MOLoad, 4, 4);
+    MachineMemOperand *JTMMOLd =
+        MF->getMachineMemOperand(MachinePointerInfo::getJumpTable(*MF),
+                                 MachineMemOperand::MOLoad, 4, Align(4));
     Register NewVReg5 = MRI->createVirtualRegister(TRC);
     BuildMI(DispContBB, dl, TII->get(ARM::LDRrs), NewVReg5)
         .addReg(NewVReg3, RegState::Kill)
