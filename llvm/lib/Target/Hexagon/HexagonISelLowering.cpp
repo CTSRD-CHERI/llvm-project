@@ -995,7 +995,7 @@ HexagonTargetLowering::LowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
   // we need to memcopy 12 bytes from va_list to another similar list.
   return DAG.getMemcpy(Chain, DL, DestPtr, SrcPtr,
                        DAG.getIntPtrConstant(12, DL), 4, /*isVolatile*/false,
-                       false, false,
+                       false, false, /*MustPreserveCheriCapabilities=*/true,
                        MachinePointerInfo(DestSV), MachinePointerInfo(SrcSV));
 
 }

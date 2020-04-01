@@ -63,7 +63,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
       return;
     // Calling eraseFromParent() inside the following loop causes iterators
     // to be invalidated and crashes -> collect and erase instead
-    SmallVector<Instruction *, 8> ToErase;
+    SmallVector<WeakTrackingVH, 8> ToErase;
     for (Value *Use : Func->users()) {
       CallInst *CI = cast<CallInst>(Use);
       if (Value *Replacement = infer(CI->getOperand(0), CI, NullValue)) {
