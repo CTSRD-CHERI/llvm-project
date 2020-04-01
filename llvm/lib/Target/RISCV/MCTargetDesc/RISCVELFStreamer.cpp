@@ -96,16 +96,16 @@ void RISCVELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
   assert(CapSize == 2 * XLenInBytes);
 
   // Pad to ensure that the (u)intcap_t is aligned
-  EmitValueToAlignment(CapSize, 0, 1, 0);
+  emitValueToAlignment(CapSize, 0, 1, 0);
 
   if (Value == 0) {
-    EmitZeros(CapSize);
+    emitZeros(CapSize);
   } else {
     // TODO: we should probably move the CHERI capability encoding somewhere else.
     // Maybe to BinaryFormat or Object?
     // NB: Opposite order to MIPS due to endianness.
-    EmitIntValue(Value, XLenInBytes);
-    EmitIntValue(0, XLenInBytes);
+    emitIntValue(Value, XLenInBytes);
+    emitIntValue(0, XLenInBytes);
   }
 }
 
@@ -121,7 +121,7 @@ void RISCVELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
   const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(SRE, Addend, Context);
 
   // Pad to ensure that the capability is aligned
-  EmitValueToAlignment(CapSize, 0, 1, 0);
+  emitValueToAlignment(CapSize, 0, 1, 0);
 
   MCDataFragment *DF = new MCDataFragment();
   MCFixup CapFixup =

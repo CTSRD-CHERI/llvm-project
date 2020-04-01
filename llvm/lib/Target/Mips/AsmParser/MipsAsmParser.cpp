@@ -2903,7 +2903,7 @@ MipsAsmParser::expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
   tmpInst.addOperand(MCOperand::createReg(AtRegNum));
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(0).getReg()));
   tmpInst.setLoc(IDLoc);
-  Out.EmitInstruction(tmpInst, *STI);
+  Out.emitInstruction(tmpInst, *STI);
   tmpInst.clear();
   tmpInst.setOpcode(is64Bit ? Mips::CAPSTORE64 : Mips::CAPSTORE32);
   tmpInst.addOperand(MCOperand::createReg(AtRegNum));
@@ -2911,7 +2911,7 @@ MipsAsmParser::expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
   tmpInst.addOperand(MCOperand::createImm(Inst.getOperand(2).getImm()));
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(3).getReg()));
   tmpInst.setLoc(IDLoc);
-  Out.EmitInstruction(tmpInst, *STI);
+  Out.emitInstruction(tmpInst, *STI);
   return MER_Success;
 }
 
@@ -2928,13 +2928,13 @@ MipsAsmParser::expandCapLoadC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
   tmpInst.addOperand(MCOperand::createImm(Inst.getOperand(2).getImm()));
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(3).getReg()));
   tmpInst.setLoc(IDLoc);
-  Out.EmitInstruction(tmpInst, *STI);
+  Out.emitInstruction(tmpInst, *STI);
   tmpInst.clear();
   tmpInst.setOpcode(is64Bit ? Mips::DMTC1 : Mips::MTC1);
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(0).getReg()));
   tmpInst.addOperand(MCOperand::createReg(AtRegNum));
   tmpInst.setLoc(IDLoc);
-  Out.EmitInstruction(tmpInst, *STI);
+  Out.emitInstruction(tmpInst, *STI);
   return MER_Success;
 }
 

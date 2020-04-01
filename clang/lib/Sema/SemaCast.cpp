@@ -2143,8 +2143,9 @@ static void checkIntToPointerCast(bool CStyle, const SourceRange &OpRange,
       !SrcType->isCHERICapabilityType(Ctx, true) &&
       !SrcExpr->isValueDependent() && !SrcExpr->isTypeDependent() &&
       !SrcExpr->isIntegerConstantExpr(Ctx)) {
-    Self.Diag(Loc, diag::warn_capability_no_provenance) << DestType;
-    Self.Diag(Loc, diag::note_insert_intptr_fixit);
+    Self.Diag(OpRange.getBegin(), diag::warn_capability_no_provenance)
+        << DestType;
+    Self.Diag(OpRange.getBegin(), diag::note_insert_intptr_fixit);
   }
 
   // Not warning on reinterpret_cast, boolean, constant expressions, etc

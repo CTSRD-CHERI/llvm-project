@@ -566,8 +566,8 @@ MCSymbol *EHStreamer::emitExceptionTable() {
           Asm->OutStreamer->EmitCheriCapability(Asm->CurrentFnSym, DiffToStart,
                                                 TLOF.getCheriCapabilitySize());
         } else {
-          Asm->emitCallSiteValue(S.LPad->LandingPadLabel, EHFuncBeginSym,
-                                 CallSiteEncoding);
+          Asm->emitCallSiteOffset(S.LPad->LandingPadLabel, EHFuncBeginSym,
+                                  CallSiteEncoding);
         }
       }
 

@@ -707,7 +707,7 @@ class Sema;
                                                        QualType DestType,
                                                        bool NeedLValToRVal) {
       ImplicitConversionSequence ICS;
-      ICS.setStandard();
+      ICS.setStandard(MemsetToZero);
       ICS.Standard.setAsIdentityConversion();
       ICS.Standard.setFromType(SourceType);
       if (NeedLValToRVal)

@@ -117,7 +117,7 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
       Context);
 
   // Pad to ensure that the capability is aligned
-  EmitValueToAlignment(CapSize, 0, 1, 0);
+  emitValueToAlignment(CapSize, 0, 1, 0);
 
   MCDataFragment *DF = new MCDataFragment();
   MCFixup cheriFixup = MCFixup::create(
@@ -130,17 +130,17 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
 void MipsELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
   assert(CapSize == 32 || CapSize == 16);
   // Pad to ensure that the (u)intcap_t is aligned
-  EmitValueToAlignment(CapSize, 0, 1, 0);
+  emitValueToAlignment(CapSize, 0, 1, 0);
   if (Value == 0) {
-    EmitZeros(CapSize);
+    emitZeros(CapSize);
   } else {
     // TODO: we should probably move the CHERI capability encoding somewhere else.
     // Maybe to BinaryFormat or Object?
-    EmitIntValue(0, 8);
-    EmitIntValue(Value, 8);
+    emitIntValue(0, 8);
+    emitIntValue(Value, 8);
     if (CapSize == 32) {
-      EmitIntValue(0, 8);
-      EmitIntValue(0, 8);
+      emitIntValue(0, 8);
+      emitIntValue(0, 8);
     }
   }
 }

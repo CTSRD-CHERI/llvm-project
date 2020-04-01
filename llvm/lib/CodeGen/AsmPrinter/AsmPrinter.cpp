@@ -1963,7 +1963,7 @@ void AsmPrinter::emitJumpTableInfo() {
 
     if (MAI->hasDotTypeDotSizeDirective()) {
       auto JTEnd = createTempSymbol(JTISymbol->getName() + "_end");
-      OutStreamer->EmitLabel(JTEnd);
+      OutStreamer->emitLabel(JTEnd);
       const MCExpr *SizeExp = MCBinaryExpr::createSub(
         MCSymbolRefExpr::create(JTEnd, OutContext),
         MCSymbolRefExpr::create(JTISymbol, OutContext), OutContext);
@@ -2930,7 +2930,7 @@ void AsmPrinter::emitGlobalConstant(const DataLayout &DL, const Constant *CV,
   }
   if (TailPadding != 0) {
     OutStreamer->AddComment("Tail padding to ensure precise bounds");
-    OutStreamer->EmitZeros(TailPadding);
+    OutStreamer->emitZeros(TailPadding);
   }
 }
 

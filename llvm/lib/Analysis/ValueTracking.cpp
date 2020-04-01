@@ -1531,7 +1531,7 @@ static void computeKnownBitsFromOperator(const Operator *I,
         Known2.Zero = ~GEPOffset;
         Known = KnownBits::computeForAddSub(
             /*Add=*/true, /*NSW=*/false, LocalKnown,
-            Known2.zextOrTrunc(LocalKnown.getBitWidth(), false));
+            Known2.zextOrTrunc(LocalKnown.getBitWidth()));
         break;
       }
     }

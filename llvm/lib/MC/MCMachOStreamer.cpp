@@ -435,7 +435,7 @@ void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
     getContext().reportError(
         Loc, "The usage of .zerofill is restricted to sections of "
              "ZEROFILL type. Use .zero or .space instead.");
-    return; // Early returning here shouldn't harm. EmitZeros should work on any
+    return; // Early returning here shouldn't harm. emitZeros should work on any
             // section.
   }
 

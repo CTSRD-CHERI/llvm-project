@@ -240,7 +240,7 @@ void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
   // MCStreamers with proper capability support will emit real relocations
   // instead of using the __cap_relocs hack
   MCSymbol *Here = Context.createTempSymbol();
-  EmitLabel(Here);
+  emitLabel(Here);
   const MCSectionELF *Section =
       dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
   const MCSymbolELF *Group = nullptr;
@@ -256,7 +256,7 @@ void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
     FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
   }
   // We do this here to ensure that the section exists.
-  EmitZeros(CapSize);
+  emitZeros(CapSize);
 }
 
 void MCStreamer::EmitCheriCapabilityImpl(const MCSymbol *Value,
@@ -1050,17 +1050,17 @@ void MCStreamer::Finish() {
 
       SwitchSection(RelocSection);
 
-      EmitValue(MCSymbolRefExpr::create(Sym, Context), 8);
+      emitValue(MCSymbolRefExpr::create(Sym, Context), 8);
       if (const MCSymbolRefExpr *Sym = dyn_cast<MCSymbolRefExpr>(Value)) {
-        EmitValue(Sym, 8);
-        EmitZeros(8);
+        emitValue(Sym, 8);
+        emitZeros(8);
       } else {
         const MCBinaryExpr *Bin = cast<MCBinaryExpr>(Value);
-        EmitValue(cast<MCSymbolRefExpr>(Bin->getLHS()), 8);
-        EmitValue(Bin->getRHS(), 8);
+        emitValue(cast<MCSymbolRefExpr>(Bin->getLHS()), 8);
+        emitValue(Bin->getRHS(), 8);
       }
       // TODO: Emit size / perms here.
-      EmitZeros(16);
+      emitZeros(16);
     }
   }
 
