@@ -175,6 +175,7 @@ struct Configuration {
   bool ignoreFunctionAddressEquality;
   bool ltoCSProfileGenerate;
   bool ltoDebugPassManager;
+  bool ltoEmitAsm;
   bool ltoNewPassManager;
   bool ltoUniqueBBSectionNames;
   bool ltoWholeProgramVisibility;
