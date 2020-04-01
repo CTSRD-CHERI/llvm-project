@@ -407,7 +407,6 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
   case BuiltinType::BuiltinFn:
   case BuiltinType::OMPArraySection:
   case BuiltinType::OMPArrayShaping:
-  case BuiltinType::OMPIterator:
     return TST_unspecified;
   }
 
