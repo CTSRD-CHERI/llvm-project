@@ -596,8 +596,8 @@ TEST_F(FileCheckTest, ParseNumericSubstitutionBlock) {
   EXPECT_THAT_EXPECTED(Tester.parseSubst("FOO+0xC"), Succeeded());
   EXPECT_THAT_EXPECTED(Tester.parseSubst("FOO-3+FOO"), Succeeded());
 
-  expectDiagnosticError("unsupported operation '/'",
-                        Tester.parseSubst("@LINE/2").takeError());
+  expectDiagnosticError("unsupported operation '^'",
+                        Tester.parseSubst("@LINE^2").takeError());
 
   expectDiagnosticError("missing operand in expression",
                         Tester.parseSubst("@LINE+").takeError());
