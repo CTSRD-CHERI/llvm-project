@@ -9,6 +9,8 @@
 import copy
 import errno
 import os
+import shutil
+import tempfile
 import time
 import random
 
@@ -232,20 +234,26 @@ class LibcxxTestFormat(object):
                 report += "Compilation failed unexpectedly!"
                 return lit.Test.Result(lit.Test.FAIL, report)
             # Run the test
-            local_cwd = os.path.dirname(source_path)
             env = None
             if self.exec_env:
                 env = self.exec_env
 
             max_retry = test.allowed_retries + 1
             for retry_count in range(max_retry):
+                # Create a temporary directory just for that test and run the
+                # test in that directory
                 try:
-                    cmd, out, err, rc = self.executor.run(exec_path, [exec_path], local_cwd, data_files, env)
+                    execDirTmp = tempfile.mkdtemp(dir=execDir)
+                    cmd, out, err, rc = self.executor.run(exec_path, [exec_path],
+                                                          execDirTmp, data_files,
+                                                          env)
                 except libcxx.util.ExecuteCommandTimeoutException as e:
                     report = e.msg + "\n" + libcxx.util.makeReport(e.command, e.out, e.err, e.exitCode)
                     report = "Compiled With: %s\n%s" % (compile_cmd, report)
                     report += "Compiled test failed unexpectedly!"
                     return lit.Test.Result(lit.Test.TIMEOUT, report)
+                finally:
+                    shutil.rmtree(execDirTmp)
                 report = "Compiled With: '%s'\n" % ' '.join(compile_cmd)
                 report += libcxx.util.makeReport(cmd, out, err, rc)
                 if rc == 0:
