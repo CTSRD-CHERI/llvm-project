@@ -16,6 +16,9 @@ def Rocket64Model : SchedMachineModel {
   let IssueWidth = 1;        // 1 micro-ops are dispatched per cycle.
   let LoadLatency = 3;
   let MispredictPenalty = 3;
+  // FIXME: remove this. Currently we get lots of errors like:
+  // No schedule information for instruction 'SC_W_DDC' in SchedMachineModel 'Rocket64Model'
+  let CompleteModel = 0;
 }
 
 //===----------------------------------------------------------------------===//
