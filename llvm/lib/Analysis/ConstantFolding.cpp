@@ -296,9 +296,22 @@ Constant *FoldBitCast(Constant *C, Type *DestTy, const DataLayout &DL) {
 /// the constant. Because of constantexprs, this function is recursive.
 bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
                                       APInt &Offset, const DataLayout &DL,
-                                      bool LookThroughAddrSpaces) {
+                                      bool LookThroughAddrSpaces,
+                                      DSOLocalEquivalent **DSOEquiv) {
+  if (DSOEquiv)
+    *DSOEquiv = nullptr;
+
   // Trivial case, constant is the global.
   if ((GV = dyn_cast<GlobalValue>(C))) {
+    unsigned BitWidth = DL.getIndexTypeSizeInBits(GV->getType());
+    Offset = APInt(BitWidth, 0);
+    return true;
+  }
+
+  if (auto *FoundDSOEquiv = dyn_cast<DSOLocalEquivalent>(C)) {
+    if (DSOEquiv)
+      *DSOEquiv = FoundDSOEquiv;
+    GV = FoundDSOEquiv->getGlobalValue();
     unsigned BitWidth = DL.getIndexTypeSizeInBits(GV->getType());
     Offset = APInt(BitWidth, 0);
     return true;
@@ -313,7 +326,8 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
   if (CE->getOpcode() == Instruction::PtrToInt ||
       CE->getOpcode() == Instruction::BitCast ||
       (LookThroughAddrSpaces && CE->getOpcode() == Instruction::AddrSpaceCast))
-    return IsConstantOffsetFromGlobal(CE->getOperand(0), GV, Offset, DL, LookThroughAddrSpaces);
+    return IsConstantOffsetFromGlobal(CE->getOperand(0), GV, Offset, DL,
+                                      LookThroughAddrSpaces, DSOEquiv);
 
   // i32* getelementptr ([5 x i32]* @a, i32 0, i32 5)
   auto *GEP = dyn_cast<GEPOperator>(CE);
@@ -324,7 +338,8 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
   APInt TmpOffset(BitWidth, 0);
 
   // If the base isn't a global+constant, we aren't either.
-  if (!IsConstantOffsetFromGlobal(CE->getOperand(0), GV, TmpOffset, DL, LookThroughAddrSpaces))
+  if (!IsConstantOffsetFromGlobal(CE->getOperand(0), GV, TmpOffset, DL,
+                                  LookThroughAddrSpaces, DSOEquiv))
     return false;
 
   // Otherwise, add any offset that our operands provide.
