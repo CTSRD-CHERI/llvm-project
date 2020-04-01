@@ -1183,7 +1183,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
         continue;
     }
 
-    // Don't ask a Mach-O STAB symbol for its section unless you know that 
+    // Don't ask a Mach-O STAB symbol for its section unless you know that
     // STAB symbol's section field refers to a valid section index. Otherwise
     // the symbol may error trying to load a section that does not exist.
     if (MachO) {
@@ -1572,17 +1572,13 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
           if (TargetSectionSymbols) {
             auto TargetSym = std::upper_bound(
                 TargetSectionSymbols->begin(), TargetSectionSymbols->end(),
-                Target,
-                [](uint64_t LHS,
-                   const std::tuple<uint64_t, StringRef, uint8_t> &RHS) {
-                  return LHS < std::get<0>(RHS);
+                Target, [](uint64_t LHS, const SymbolInfoTy &RHS) {
+                  return LHS < RHS.Addr;
                 });
             if (TargetSym != TargetSectionSymbols->begin()) {
               --TargetSym;
-              uint64_t TargetAddress = std::get<0>(*TargetSym);
-              StringRef TargetName = std::get<1>(*TargetSym);
-              outs() << "\t# probably " << TargetName;
-              uint64_t Disp = Target - TargetAddress;
+              outs() << "\t# probably " << TargetSym->Name;
+              uint64_t Disp = Target - TargetSym->Addr;
               if (Disp)
                 outs() << "+0x" << utohexstr(Disp);
             }
@@ -2025,7 +2021,7 @@ void printSymbolTable(const ObjectFile *O, StringRef ArchiveName,
                                          ArchiveName, ArchitectureName);
     uint32_t Flags = Symbol.getFlags();
 
-    // Don't ask a Mach-O STAB symbol for its section unless you know that 
+    // Don't ask a Mach-O STAB symbol for its section unless you know that
     // STAB symbol's section field refers to a valid section index. Otherwise
     // the symbol may error trying to load a section that does not exist.
     bool isSTAB = false;

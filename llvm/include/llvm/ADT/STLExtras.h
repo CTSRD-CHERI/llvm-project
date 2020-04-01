@@ -1003,29 +1003,6 @@ struct are_base_of<T, U, Ts...> {
       std::is_base_of<T, U>::value && are_base_of<T, Ts...>::value;
 };
 
-// Copied from libc++ so that we can use EXPENSIVE_CHECKS even with libstdc++
-// which otherwise causes std::vector asserts on self-assign in std::shuffle().
-// See https://bugs.llvm.org/show_bug.cgi?id=37652
-// and https://stackoverflow.com/questions/22915325/avoiding-self-assignment-in-stdshuffle/23691322
-template <class _RandomAccessIterator, class _UniformRandomNumberGenerator>
-void shuffle(_RandomAccessIterator __first, _RandomAccessIterator __last,
-             _UniformRandomNumberGenerator &&__g) {
-  using namespace std;
-  typedef typename iterator_traits<_RandomAccessIterator>::difference_type
-      difference_type;
-  typedef uniform_int_distribution<ptrdiff_t> _Dp;
-  typedef typename _Dp::param_type _Pp;
-  difference_type __d = __last - __first;
-  if (__d > 1) {
-    _Dp __uid;
-    for (--__last, --__d; __first < __last; ++__first, --__d) {
-      difference_type __i = __uid(__g, _Pp(0, __d));
-      if (__i != difference_type(0))
-        swap(*__first, *(__first + __i));
-    }
-  }
-}
-
 //===----------------------------------------------------------------------===//
 //     Extra additions for arrays
 //===----------------------------------------------------------------------===//
