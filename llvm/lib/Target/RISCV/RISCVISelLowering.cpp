@@ -3188,12 +3188,15 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
   // CHERI memcpy/memmove must be tag-preserving, either through explicit
   // capability loads/stores or by making a runtime library call. We can't use
   // capability stores as an optimisation for memset unless zeroing.
-  if (Subtarget.hasCheri() && (!Op.IsMemset || Op.ZeroMemset)) {
+  if (Subtarget.hasCheri() && (!Op.isMemset() || Op.isZeroMemset())) {
     unsigned CapSize = Subtarget.typeForCapabilities().getSizeInBits() / 8;
-    if (Op.Size >= CapSize) {
-      unsigned MinSrcAlign = Op.SrcAlign == 0 ? Op.DstAlign : Op.SrcAlign;
-      unsigned MinDstAlign = Op.DstAlign == 0 ? Op.SrcAlign : Op.DstAlign;
-      unsigned Align = Op.IsMemset ? Op.DstAlign : std::min(MinSrcAlign, MinDstAlign);
+    if (Op.size() >= CapSize) {
+      unsigned MinSrcAlign =
+          Op.getSrcAlign() == 0 ? Op.getDstAlign() : Op.getSrcAlign();
+      unsigned MinDstAlign =
+          Op.getDstAlign() == 0 ? Op.getSrcAlign() : Op.getDstAlign();
+      unsigned Align =
+          Op.isMemset() ? Op.getDstAlign() : std::min(MinSrcAlign, MinDstAlign);
       // If sufficiently aligned, we must use capability loads/stores if
       // copying, and can use cnull for a zeroing memset.
       if (Align >= CapSize || Align == 0)
@@ -3202,7 +3205,7 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
       // memcpy/memmove call, since it could still contain a capability if
       // sufficiently aligned at runtime. Zeroing memsets can fall back on
       // non-capability loads/stores.
-      if (!Op.IsMemset)
+      if (!Op.isMemset())
         return MVT::isVoid;
     }
   }

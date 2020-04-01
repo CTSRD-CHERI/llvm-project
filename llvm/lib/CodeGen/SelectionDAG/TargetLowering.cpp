@@ -6757,7 +6757,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
                                        DAG);
     SDValue Ch = DAG.getMemcpy(Chain, dl, BoundedTmpPtr, BoundedPtr,
                                DAG.getConstant(CapAlign, dl, MVT::i64),
-                               LD->getAlignment(),
+                               Align(LD->getAlignment()),
                                /*isVolatile=*/false,
                                /*AlwaysInline=*/false,
                                /*isTailCall=*/false,
@@ -6945,7 +6945,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                        CapAlign, DAG);
     auto Result = DAG.getMemcpy(Ch, dl, Ptr, TmpPtr,
                                 DAG.getConstant(CapAlign, dl, MVT::i64),
-                                ST->getAlignment(),
+                                Align(ST->getAlignment()),
                                 /*isVolatile=*/false,
                                 /*AlwaysInline=*/false,
                                 /*isTailCall=*/false,

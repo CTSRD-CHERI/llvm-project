@@ -123,11 +123,12 @@ private:
   // memcpy only
   bool MemcpyStrSrc; // Indicates whether the memcpy source is an in-register
                      // constant so it does not need to be loaded.
-  bool MustPreserveCheriCaps; // memcpy must preserve CHERI tags even if
-                              // SrcAlign < CapSize (since it could be aligned
-                              // at run time)
   Align SrcAlign; // Inferred alignment of the source or default value if the
                   // memory operation does not need to load the value.
+public:
+  bool MustPreserveCheriCaps; // memcpy must preserve CHERI tags even if
+  // SrcAlign < CapSize (since it could be aligned
+  // at run time)
 public:
   static MemOp Copy(uint64_t Size, bool DstAlignCanChange, Align DstAlign,
                     Align SrcAlign, bool IsVolatile, bool MustPreserveCheriCaps,
