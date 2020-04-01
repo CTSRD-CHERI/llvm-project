@@ -371,6 +371,7 @@ Pattern::parseBinop(StringRef &Expr, std::unique_ptr<ExpressionAST> LeftOp,
         parseNumericOperand(Expr, AO, LineNumber, Context, SM);
     if (!RightOpResult)
       return RightOpResult;
+    RightOp = std::move(*RightOpResult);
   }
 
   Expr = Expr.ltrim(SpaceChars);
