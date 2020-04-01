@@ -46,7 +46,6 @@
 #include "llvm/Support/Host.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/Process.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -265,7 +264,6 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
       }
     }
   }
-
   Opts.LLVMArgs = Args.getAllArgValues(OPT_mllvm);
   Opts.OutputPath = std::string(Args.getLastArgValue(OPT_o));
   Opts.SplitDwarfOutput =
@@ -577,7 +575,7 @@ static void LLVMErrorHandler(void *UserData, const std::string &Message,
   Diags.Report(diag::err_fe_error_backend) << Message;
 
   // We cannot recover from llvm errors.
-  sys::Process::Exit(1);
+  exit(1);
 }
 
 int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {

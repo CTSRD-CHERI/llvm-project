@@ -5659,28 +5659,32 @@ EVT MipsTargetLowering::getOptimalMemOpType(
   // case, because the capability tag will always be 0.  For very long memsets,
   // we can use the capability registers in the library implementation.
   if (Subtarget.isCheri() && (!Op.isMemset() || Op.isZeroMemset())) {
-    unsigned MinSrcAlign = Op.getSrcAlign() == 0 ? Op.getDstAlign() : Op.getSrcAlign();
-    unsigned MinDstAlign = Op.getDstAlign() == 0 ? Op.getSrcAlign() : Op.getDstAlign();
-    unsigned Align = Op.isMemset() ? Op.getDstAlign() : std::min(MinSrcAlign, MinDstAlign);
+    auto Alignment = Op.isMemset()
+                         ? Op.getDstAlign()
+                         : std::min(Op.getSrcAlign(), Op.getDstAlign());
     unsigned CapSize = Subtarget.getCapSizeInBytes();
-    LLVM_DEBUG(dbgs() << __func__ << " Size=" << Op.size() << " DstAlign=" << Op.getDstAlign() << " SrcAlign=" << Op.getSrcAlign() << "\n");
-    LLVM_DEBUG(dbgs() << __func__ << " CapSize=" << CapSize << " Align=" << Align << "\n");
-    if (Op.isZeroMemset() && (Align >= CapSize) && (Op.size() >= CapSize)) {
+    LLVM_DEBUG(dbgs() << __func__ << " Size=" << Op.size() << " DstAlign="
+                      << Op.getDstAlign().value() << " SrcAlign="
+                      << (Op.isMemset() ? 0 : Op.getSrcAlign().value())
+                      << "\n");
+    LLVM_DEBUG(dbgs() << __func__ << " CapSize=" << CapSize
+                      << " Align=" << Alignment.value() << "\n");
+    if (Op.isZeroMemset() && (Alignment.value() >= CapSize) &&
+        (Op.size() >= CapSize)) {
       // for bzero() always use capability stores of $cnull.
       return CapType;
     }
     // If this is going to include a capability, then pretend that we have to
     // copy it using single bytes, which will cause SelectionDAG to decide to
     // do the memcpy call.
-    if (!Op.isMemset() && (Op.size() >= CapSize) && (Align < CapSize) && Align != 0) {
+    if (!Op.isMemset() && (Op.size() >= CapSize) && (Alignment < CapSize)) {
       // llvm_unreachable("This function should not be called for underaligned "
       //                  "memcpy greater than CAP_SIZE");
       // return MVT::i8; // INVALID_SIMPLE_VALUE_TYPE
       return MVT::isVoid; // This will tell selectiondag that a call must be made
     }
-    switch (Align) {
+    switch (Alignment.value()) {
       default:
-        assert(isPowerOf2_32(Align));
         LLVM_FALLTHROUGH;
       case 0: // Zero means any alignment is fine
         if (Op.size() >= CapSize)

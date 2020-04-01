@@ -3191,15 +3191,12 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
   if (Subtarget.hasCheri() && (!Op.isMemset() || Op.isZeroMemset())) {
     unsigned CapSize = Subtarget.typeForCapabilities().getSizeInBits() / 8;
     if (Op.size() >= CapSize) {
-      unsigned MinSrcAlign =
-          Op.getSrcAlign() == 0 ? Op.getDstAlign() : Op.getSrcAlign();
-      unsigned MinDstAlign =
-          Op.getDstAlign() == 0 ? Op.getSrcAlign() : Op.getDstAlign();
-      unsigned Align =
-          Op.isMemset() ? Op.getDstAlign() : std::min(MinSrcAlign, MinDstAlign);
+      auto Alignment = Op.isMemset()
+                       ? Op.getDstAlign()
+                       : std::min(Op.getSrcAlign(), Op.getDstAlign());
       // If sufficiently aligned, we must use capability loads/stores if
       // copying, and can use cnull for a zeroing memset.
-      if (Align >= CapSize || Align == 0)
+      if (Alignment >= CapSize || Alignment.value() == 0)
         return CapType;
       // Otherwise if this is a copy then tell SelectionDAG to do a real
       // memcpy/memmove call, since it could still contain a capability if

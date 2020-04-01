@@ -6585,16 +6585,15 @@ ExpectedStmt ASTNodeImporter::VisitParenExpr(ParenExpr *E) {
 }
 
 ExpectedStmt ASTNodeImporter::VisitNoChangeBoundsExpr(NoChangeBoundsExpr *E) {
-  auto Imp = importSeq(E->getBuiltinLoc(), E->getRParen(), E->getSubExpr());
-  if (!Imp)
-    return Imp.takeError();
-
-  SourceLocation ToBuiltinLoc, ToRParenLoc;
-  Expr *ToSubExpr;
-  std::tie(ToBuiltinLoc, ToRParenLoc, ToSubExpr) = *Imp;
+  Error Err = Error::success();
+  auto ToBuiltinLoc = importChecked(Err, E->getBuiltinLoc());
+  auto ToRParen = importChecked(Err, E->getRParen());
+  auto ToSubExpr = importChecked(Err, E->getSubExpr());
+  if (Err)
+    return std::move(Err);
 
   return NoChangeBoundsExpr::Create(Importer.getToContext(), ToBuiltinLoc,
-                                    ToRParenLoc, ToSubExpr);
+                                    ToRParen, ToSubExpr);
 }
 
 ExpectedStmt ASTNodeImporter::VisitParenListExpr(ParenListExpr *E) {
