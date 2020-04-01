@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -mconstructor-aliases -fuse-init-array -mllvm -cheri-cap-table-abi=pcrel -nostdinc++ -O2 -std=c++11 -o - -emit-llvm %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -mconstructor-aliases -mllvm -cheri-cap-table-abi=pcrel -nostdinc++ -O2 -std=c++11 -o - -emit-llvm %s | FileCheck %s
 namespace a {
 class b {
 public:

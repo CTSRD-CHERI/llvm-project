@@ -1,6 +1,6 @@
-// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm -fuse-init-array -o - -O0 | FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm -o - -O0 | FileCheck %s
 // Previously, using a mips64- triple would crash the compiler:
-// RUN: %clang_cc1 -triple mips64c128-unknown-freebsd13.0-purecap -fuse-init-array -target-abi purecap -o - -emit-llvm -O0 %s | FileCheck %s
+// RUN: %clang_cc1 -triple mips64c128-unknown-freebsd13.0-purecap -target-abi purecap -o - -emit-llvm -O0 %s | FileCheck %s
 
 __attribute__((__constructor__)) void a() {}
 

@@ -18,7 +18,6 @@
 // WARN: warning: The CHERI RTLD does not support .ctors. Passing -fno-use-init-array will probably create broken binaries.
 // Check that we don't produce the warning when invoking cheri_purecap_cc1 without the -fuse-init-array option:
 // RUN: %cheri_purecap_cc1 -o - -O0 -S %s 2>&1 | FileCheck %s -check-prefix NOWARN -implicit-check-not warning
-// RUN: %cheri_purecap_cc1 -fuse-init-array -o - -O0 -S %s 2>&1 | FileCheck %s -check-prefix NOWARN -implicit-check-not warning
 // NOWARN: .text
 
 // Check that llc defaults to .init_array:

@@ -197,9 +197,9 @@ RTEMS::GetCXXStdlibType(const ArgList &Args) const {
 void RTEMS::addClangTargetOptions(const ArgList &DriverArgs,
                                     ArgStringList &CC1Args,
                                     Action::OffloadKind) const {
-  if (DriverArgs.hasFlag(options::OPT_fuse_init_array,
+  if (!DriverArgs.hasFlag(options::OPT_fuse_init_array,
                          options::OPT_fno_use_init_array, true))
-    CC1Args.push_back("-fuse-init-array");
+    CC1Args.push_back("-fno-use-init-array");
 }
 
 void RTEMS::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
