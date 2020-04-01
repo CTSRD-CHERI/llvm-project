@@ -620,11 +620,13 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     if (PointeeType->isVoidTy())
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
-    // XXXAR: If Pty is capability, use AS200 otherwise the same as LangAS as
-    // the underlying type
-    unsigned AS = PTy->isCHERICapability()
-                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+
+    unsigned AS = PointeeType->isFunctionTy()
+                      ? getDataLayout().getProgramAddressSpace()
                       : CGM.getTargetAddressSpace(ETy.getQualifiers());
+    // XXXAR: If Pty is a capability, we have to use AS200
+    if (PTy->isCHERICapability())
+      AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS())
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
