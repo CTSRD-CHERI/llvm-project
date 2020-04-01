@@ -6003,7 +6003,7 @@ static SDValue getMemcpyLoadsAndStores(
   FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(Dst);
   if (FI && !MFI.isFixedObjectIndex(FI->getIndex()))
     DstAlignCanChange = true;
-  MaybeAlign SrcAlign(DAG.InferPtrAlignment(Src));
+  MaybeAlign SrcAlign = DAG.InferPtrAlign(Src);
   if (!SrcAlign || Alignment > *SrcAlign)
     SrcAlign = Alignment;
   assert(SrcAlign && "SrcAlign must be set");
@@ -6224,7 +6224,7 @@ static SDValue getMemmoveLoadsAndStores(
   FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(Dst);
   if (FI && !MFI.isFixedObjectIndex(FI->getIndex()))
     DstAlignCanChange = true;
-  MaybeAlign SrcAlign(DAG.InferPtrAlignment(Src));
+  MaybeAlign SrcAlign = DAG.InferPtrAlign(Src);
   if (!SrcAlign || Alignment > *SrcAlign)
     SrcAlign = Alignment;
   assert(SrcAlign && "SrcAlign must be set");
@@ -9614,9 +9614,9 @@ bool SelectionDAG::areNonVolatileConsecutiveLoads(LoadSDNode *LD,
   return false;
 }
 
-/// InferPtrAlignment - Infer alignment of a load / store address. Return 0 if
-/// it cannot be inferred.
-unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
+/// InferPtrAlignment - Infer alignment of a load / store address. Return None
+/// if it cannot be inferred.
+MaybeAlign SelectionDAG::InferPtrAlign(SDValue Ptr) const {
   // If this is a GlobalAddress + cst, return the alignment.
   const GlobalValue *GV = nullptr;
   int64_t GVOffset = 0;
@@ -9625,9 +9625,8 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
     KnownBits Known(PtrWidth);
     llvm::computeKnownBits(GV, Known, getDataLayout());
     unsigned AlignBits = Known.countMinTrailingZeros();
-    unsigned Align = AlignBits ? 1 << std::min(31U, AlignBits) : 0;
-    if (Align)
-      return MinAlign(Align, GVOffset);
+    if (AlignBits)
+      return commonAlignment(Align(1 << std::min(31U, AlignBits)), GVOffset);
   }
 
   // If this is a direct reference to a stack slot, use information about the
@@ -9645,12 +9644,10 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
 
   if (FrameIdx != INT_MIN) {
     const MachineFrameInfo &MFI = getMachineFunction().getFrameInfo();
-    unsigned FIInfoAlign = MinAlign(MFI.getObjectAlignment(FrameIdx),
-                                    FrameOffset);
-    return FIInfoAlign;
+    return commonAlignment(MFI.getObjectAlign(FrameIdx), FrameOffset);
   }
 
-  return 0;
+  return None;
 }
 
 /// GetSplitDestVTs - Compute the VTs needed for the low/hi parts of a type
