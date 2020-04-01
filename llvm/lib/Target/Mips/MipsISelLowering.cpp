@@ -1655,13 +1655,13 @@ MipsTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
 Align
 MipsTargetLowering::getAlignmentForPreciseBounds(uint64_t Size) const {
   if (!Subtarget.isCheri())
-    return Align::None();
+    return Align();
   if (Subtarget.isCheri128()) {
     return Align(cc128_get_required_alignment(Size));
   }
   assert(Subtarget.isCheri256());
   // No alignment required for CHERI256
-  return Align::None();
+  return Align();
 }
 
 //===----------------------------------------------------------------------===//

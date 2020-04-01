@@ -1103,7 +1103,7 @@ bool CombinerHelper::optimizeMemcpy(MachineInstr &MI, Register Dst,
   if (!findGISelOptimalMemOpLowering(
           MemOps, Limit,
           MemOp::Copy(KnownLen, DstAlignCanChange, Alignment, SrcAlign,
-                      IsVolatile),
+                      IsVolatile, false),
           DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
           MF.getFunction().getAttributes(), TLI))
     return false;
@@ -1150,7 +1150,7 @@ bool CombinerHelper::optimizeMemcpy(MachineInstr &MI, Register Dst,
     // Construct MMOs for the accesses.
     auto *LoadMMO =
         MF.getMachineMemOperand(&SrcMMO, CurrOffset, CopyTy.getSizeInBytes());
-    auto *StoreMMO = 
+    auto *StoreMMO =
         MF.getMachineMemOperand(&DstMMO, CurrOffset, CopyTy.getSizeInBytes());
 
     // Create the load.
@@ -1209,7 +1209,7 @@ bool CombinerHelper::optimizeMemmove(MachineInstr &MI, Register Dst,
   if (!findGISelOptimalMemOpLowering(
           MemOps, Limit,
           MemOp::Copy(KnownLen, DstAlignCanChange, Alignment, SrcAlign,
-                      /*IsVolatile*/ true),
+                      /*IsVolatile*/ true, false),
           DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
           MF.getFunction().getAttributes(), TLI))
     return false;

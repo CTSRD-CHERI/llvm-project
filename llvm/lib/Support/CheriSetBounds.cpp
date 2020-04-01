@@ -47,7 +47,7 @@ void CSetBoundsStatistics::add(unsigned KnownAlignment,
                                const Twine &Details, std::string SourceLoc,
                                Optional<uint64_t> SizeMultipleOf) {
   Entries.push_back({KnownAlignment, KnownSize, SizeMultipleOf, Kind,
-                     std::move(SourceLoc), Pass, Details.str()});
+                     std::move(SourceLoc), Pass.str(), Details.str()});
 }
 
 StringRef CSetBoundsStatistics::outputFile() { return SetBoundsOutput; }

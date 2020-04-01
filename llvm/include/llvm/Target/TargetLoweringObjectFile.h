@@ -223,7 +223,7 @@ public:
     return TailPaddingAmount::None;
   }
   virtual Align getAlignmentForPreciseBounds(uint64_t Size) const {
-    return Align::None();
+    return Align();
   }
   virtual int getCheriCapabilitySize() const {
     llvm_unreachable("getCheriCapabilitySize should only be called for targets"

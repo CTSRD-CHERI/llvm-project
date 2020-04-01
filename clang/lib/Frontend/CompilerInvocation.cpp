@@ -791,7 +791,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     Opts.EmitLLVMUseLists = A->getOption().getID() == OPT_emit_llvm_uselists;
 
   Opts.CHERILinker = Args.hasFlag(OPT_cheri_linker, OPT_no_cheri_linker, true);
-  Opts.CHERIStatsFile = Args.getLastArgValue(OPT_cheri_stats_file);
+  Opts.CHERIStatsFile = Args.getLastArgValue(OPT_cheri_stats_file).str();
   Opts.DisableLLVMPasses = Args.hasArg(OPT_disable_llvm_passes);
   Opts.DisableLifetimeMarkers = Args.hasArg(OPT_disable_lifetimemarkers);
 
@@ -3620,7 +3620,7 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
       .Default("");
     if (CheriCPUName.empty())
       Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << A->getValue();
-    Opts.FeaturesAsWritten.push_back(CheriCPUName);
+    Opts.FeaturesAsWritten.push_back(CheriCPUName.str());
     A->claim();
   }
   if (Args.hasFlag(options::OPT_cheri_comparison_exact,

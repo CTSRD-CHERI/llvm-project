@@ -5996,11 +5996,12 @@ static SDValue getMemcpyLoadsAndStores(
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
   const bool FoundLowering = TLI.findOptimalMemOpLowering(
-          MemOps, Limit,
-          MemOp::Copy(Size, DstAlignCanChange, Alignment,
-                      isZeroConstant ? 0 : SrcAlign, isVol, MustPreserveCheriCapabilities, CopyFromConstant),
-          DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
-          MF.getFunction().getAttributes()))
+      MemOps, Limit,
+      MemOp::Copy(Size, DstAlignCanChange, Alignment,
+                  isZeroConstant ? 0 : SrcAlign, isVol,
+                  MustPreserveCheriCapabilities, CopyFromConstant),
+      DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
+      MF.getFunction().getAttributes());
   // Don't warn about inefficient memcpy if we reached the inline memcpy limit
   // Also don't warn about copies of less than CapSize
   // TODO: the frontend probably shouldn't emit must-preserve-tags for such

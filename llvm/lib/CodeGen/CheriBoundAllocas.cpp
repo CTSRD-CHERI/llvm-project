@@ -247,7 +247,7 @@ public:
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
 
-      if (AI->isStaticAlloca() && ForcedAlignment != Align::None()) {
+      if (AI->isStaticAlloca() && ForcedAlignment != Align()) {
         // Pad to ensure bounds don't overlap adjacent objects
         uint64_t AllocaSize =
             cast<ConstantInt>(Size)->getValue().getLimitedValue();

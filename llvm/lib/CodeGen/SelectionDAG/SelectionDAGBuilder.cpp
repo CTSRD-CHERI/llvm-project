@@ -5901,10 +5901,13 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     bool isTC = I.isTailCall() && isInTailCallPosition(&I, DAG.getTarget());
     // FIXME: Support passing different dest/src alignments to the memcpy DAG
     // node.
+    Attribute MoveType = I.getAttribute(AttributeList::FunctionIndex,
+                                        "frontend-memtransfer-type");
     SDValue MC = DAG.getMemcpy(
         getRoot(), sdl, Dst, Src, Size, Alignment.value(), isVol,
-        /* AlwaysInline */ true, isTC, MachinePointerInfo(I.getArgOperand(0)),
-        MachinePointerInfo(I.getArgOperand(1)));
+        /* AlwaysInline */ true, isTC, I.hasFnAttr("must-preserve-cheri-tags"),
+        MachinePointerInfo(I.getArgOperand(0)),
+        MachinePointerInfo(I.getArgOperand(1)), MoveType.getValueAsString());
     updateDAGForMaybeTailCall(MC);
     return;
   }

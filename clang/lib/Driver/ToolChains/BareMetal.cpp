@@ -99,7 +99,7 @@ std::string BareMetal::getRuntimesDir() const {
       llvm::sys::path::append(Dir, "libcheri");
     else
       llvm::sys::path::append(Dir, "lib");
-    return Dir.str();
+    return Dir.str().str();
   }
   assert(Target == BaremetalTarget::ARM);
   SmallString<128> Dir(getDriver().ResourceDir);

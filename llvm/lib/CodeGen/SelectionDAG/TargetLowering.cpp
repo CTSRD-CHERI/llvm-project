@@ -202,6 +202,7 @@ bool TargetLowering::findOptimalMemOpLowering(
   // perform an overlapping store if the previous store was a capability store
   // since the 8-byte store will clear the the tag bit if it overlaps with the
   // prior capability store!
+  bool AllowOverlap = Op.AllowOverlap;
   if (VT.isFatPointer()) {
     AllowOverlap = false;
   }
@@ -268,7 +269,7 @@ bool TargetLowering::findOptimalMemOpLowering(
       // If the new VT cannot cover all of the remaining bits, then consider
       // issuing a (or a pair of) unaligned and overlapping load / store.
       bool Fast;
-      if (NumMemOps && Op.AllowOverlap && NewVTSize < Size &&
+      if (NumMemOps && AllowOverlap && NewVTSize < Size &&
           allowsMisalignedMemoryAccesses(VT, DstAS, Op.DstAlign,
                                          MachineMemOperand::MONone, &Fast) &&
           Fast)
@@ -283,7 +284,7 @@ bool TargetLowering::findOptimalMemOpLowering(
       return false;
 
     // If we are preserving capabilities, the first VT must be a capability
-    if (MustPreserveCheriCapabilities && MemOps.empty() && !VT.isFatPointer()) {
+    if (Op.MustPreserveCheriCaps && MemOps.empty() && !VT.isFatPointer()) {
       return false;
     }
 

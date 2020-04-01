@@ -352,7 +352,7 @@ std::string InputSectionBase::getSrcMsg(const Symbol &sym, uint64_t offset) cons
 // or
 //
 //   path/to/foo.o:(function bar) in archive path/to/bar.a
-std::string InputSectionBase::getObjMsg(uint64_t off) {
+std::string InputSectionBase::getObjMsg(uint64_t off) const {
   // Synthetic sections don't have input files.
   if (!file)
     return ("<internal>:(" + name + "+0x" + utohexstr(off) + ")").str();
@@ -1086,7 +1086,9 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
     }
     uint8_t *bufLoc = buf + offset;
     auto oldAddend = target->getImplicitAddend(bufLoc, reloc.type);
-    target->relocateOne(bufLoc, reloc.type, /*targetVA=*/addend);
+    target->relocate(bufLoc,
+                     {R_ADDEND, reloc.type, reloc.getOffset(), 0, reloc.sym},
+                     /*targetVA=*/addend);
     auto newAddend = target->getImplicitAddend(bufLoc, reloc.type);
     assert(oldAddend == newAddend && "freeBSDMipsRelocationsHack still required?");
   }

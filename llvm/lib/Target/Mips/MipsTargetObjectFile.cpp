@@ -217,13 +217,13 @@ MipsTargetObjectFile::getAlignmentForPreciseBounds(uint64_t Size) const {
   const MipsSubtarget &Subtarget =
       *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
   if (!Subtarget.isCheri())
-    return Align::None();
+    return Align();
   if (Subtarget.isCheri128()) {
     return Align(cc128_get_required_alignment(Size));
   }
   assert(Subtarget.isCheri256());
   // No alignment required for CHERI256
-  return Align::None();
+  return Align();
 }
 
 bool MipsTargetObjectFile::isCheriPurecapABI() const {

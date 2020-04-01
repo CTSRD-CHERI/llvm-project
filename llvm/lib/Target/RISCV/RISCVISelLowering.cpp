@@ -1382,12 +1382,12 @@ RISCVTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
 Align
 RISCVTargetLowering::getAlignmentForPreciseBounds(uint64_t Size) const {
   if (!Subtarget.hasCheri())
-    return Align::None();
+    return Align();
   if (Subtarget.is64Bit()) {
     return Align(cc128_get_required_alignment(Size));
   } else {
     // TODO: cc64 helpers
-    return Align::None();
+    return Align();
   }
 }
 
@@ -3183,18 +3183,16 @@ Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilder<> &Builder,
 }
 
 EVT RISCVTargetLowering::getOptimalMemOpType(
-    uint64_t Size, unsigned DstAlign, unsigned SrcAlign, bool IsMemset,
-    bool ZeroMemset, bool MemcpyStrSrc,
-    const AttributeList &FuncAttributes) const {
+    const MemOp &Op, const AttributeList &FuncAttributes) const {
   // CHERI memcpy/memmove must be tag-preserving, either through explicit
   // capability loads/stores or by making a runtime library call. We can't use
   // capability stores as an optimisation for memset unless zeroing.
-  if (Subtarget.hasCheri() && (!IsMemset || ZeroMemset)) {
+  if (Subtarget.hasCheri() && (!Op.IsMemset || Op.ZeroMemset)) {
     unsigned CapSize = Subtarget.typeForCapabilities().getSizeInBits() / 8;
-    if (Size >= CapSize) {
-      unsigned MinSrcAlign = SrcAlign == 0 ? DstAlign : SrcAlign;
-      unsigned MinDstAlign = DstAlign == 0 ? SrcAlign : DstAlign;
-      unsigned Align = IsMemset ? DstAlign : std::min(MinSrcAlign, MinDstAlign);
+    if (Op.Size >= CapSize) {
+      unsigned MinSrcAlign = Op.SrcAlign == 0 ? Op.DstAlign : Op.SrcAlign;
+      unsigned MinDstAlign = Op.DstAlign == 0 ? Op.SrcAlign : Op.DstAlign;
+      unsigned Align = Op.IsMemset ? Op.DstAlign : std::min(MinSrcAlign, MinDstAlign);
       // If sufficiently aligned, we must use capability loads/stores if
       // copying, and can use cnull for a zeroing memset.
       if (Align >= CapSize || Align == 0)
@@ -3203,14 +3201,12 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
       // memcpy/memmove call, since it could still contain a capability if
       // sufficiently aligned at runtime. Zeroing memsets can fall back on
       // non-capability loads/stores.
-      if (!IsMemset)
+      if (!Op.IsMemset)
         return MVT::isVoid;
     }
   }
 
-  return TargetLowering::getOptimalMemOpType(
-      Size, DstAlign, SrcAlign, IsMemset, ZeroMemset, MemcpyStrSrc,
-      FuncAttributes);
+  return TargetLowering::getOptimalMemOpType(Op, FuncAttributes);
 }
 
 TargetLowering::AtomicExpansionKind

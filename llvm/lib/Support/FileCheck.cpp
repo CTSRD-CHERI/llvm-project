@@ -337,11 +337,18 @@ Pattern::parseBinop(StringRef &Expr, std::unique_ptr<ExpressionAST> LeftOp,
     SMLoc SubExprLoc = SMLoc::getFromPointer(SubExpr.data());
     Optional<NumericVariable *> DefinedNumericVariable;
     Expected<std::unique_ptr<ExpressionAST>> SubExprResult =
-        parseNumericSubstitutionBlock(SubExpr, DefinedNumericVariable, false,
-                                      LineNumber, Context, SM);
+        parseNumericOperand(Expr, AllowedOperand::Any, LineNumber, Context, SM);
+    while (SubExprResult && !Expr.empty()) {
+      SubExprResult = parseBinop(Expr, std::move(*SubExprResult), IsLegacyLineExpr,
+                               LineNumber, Context, SM);
+      // Legacy @LINE expressions only allow 2 operands.
+      if (SubExprResult && IsLegacyLineExpr && !Expr.empty())
+        return ErrorDiagnostic::get(
+            SM, Expr,
+            "unexpected characters at end of expression '" + Expr + "'");
+    }
     if (!SubExprResult)
       return SubExprResult;
-
     if (DefinedNumericVariable) {
       StringRef Name = (*DefinedNumericVariable)->getName();
       return ErrorDiagnostic::get(SM, SubExprLoc,

@@ -148,12 +148,12 @@ RTEMS::RTEMS(const Driver &D, const llvm::Triple &Triple,
   if (!D.SysRoot.empty()) {
     SmallString<128> P(D.SysRoot);
     llvm::sys::path::append(P, "lib");
-    getFilePaths().push_back(P.str());
+    getFilePaths().push_back(P.str().str());
   } else {
     // Add a default RTEMS lib directory to the lib path
     SmallString<128> P(D.InstalledDir + "/../" + getTripleString());
     llvm::sys::path::append(P, "lib");
-    getFilePaths().push_back(P.str());
+    getFilePaths().push_back(P.str().str());
   }
 }
 
@@ -178,7 +178,7 @@ std::string RTEMS::getCompilerRTPath() const {
   if (!D.SysRoot.empty()) {
     llvm::SmallString<128> Path(D.SysRoot);
     llvm::sys::path::append(Path, "lib");
-    return Path.str();
+    return Path.str().str();
   }
   return ToolChain::getCompilerRTPath();
 }

@@ -251,7 +251,7 @@ MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
     if (FS.empty())
       FS = "+chericap,+cheri128";
     else {
-      CheriFeatures = FS;
+      CheriFeatures = FS.str();
       CheriFeatures += ",+chericap";
       if (!FS.contains("+cheri128") && !FS.contains("+cheri64"))
         CheriFeatures += ",+cheri256";

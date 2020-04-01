@@ -2714,7 +2714,7 @@ public:
     return TailPaddingAmount::None;
   }
   virtual Align getAlignmentForPreciseBounds(uint64_t Size) const {
-    return Align::None();
+    return Align();
   }
   bool supportsAtomicCapabilityOperations() const {
     return SupportsAtomicCapabilityOperations;
