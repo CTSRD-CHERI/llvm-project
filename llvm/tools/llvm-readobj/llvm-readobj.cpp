@@ -416,19 +416,6 @@ void reportWarning(Error Err, StringRef Input) {
 
 } // namespace llvm
 
-static bool isMipsArch(unsigned Arch) {
-  switch (Arch) {
-  case llvm::Triple::mips:
-  case llvm::Triple::mipsel:
-  case llvm::Triple::mips64:
-  case llvm::Triple::mips64el:
-  case llvm::Triple::cheri:
-    return true;
-  default:
-    return false;
-  }
-}
-
 namespace {
 struct ReadObjTypeTableBuilder {
   ReadObjTypeTableBuilder()

@@ -1375,7 +1375,6 @@ void CoverageMappingModuleGen::emitFunctionMappingRecord(
 void CoverageMappingModuleGen::addFunctionMappingRecord(
     llvm::GlobalVariable *NamePtr, StringRef NameValue, uint64_t FuncHash,
     const std::string &CoverageMapping, bool IsUsed) {
-  llvm::LLVMContext &Ctx = CGM.getLLVMContext();
   const uint64_t NameHash = llvm::IndexedInstrProf::ComputeHash(NameValue);
   FunctionRecords.push_back({NameHash, FuncHash, CoverageMapping, IsUsed});
 
