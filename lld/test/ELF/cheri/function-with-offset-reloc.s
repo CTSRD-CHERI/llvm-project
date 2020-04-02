@@ -70,7 +70,7 @@ bad_relocs:
 # WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.data+0x60)
 # WARNING-MSG-EMPTY:
 
-.section .gcc_except_table,"awx",@progbits
+.section .gcc_except_table,"aw",@progbits
 except_table:
 .8byte hidden_local_func -0x2
 .chericap hidden_local_func + 0x10
