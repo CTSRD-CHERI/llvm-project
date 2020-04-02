@@ -77,17 +77,17 @@ def FeatureCheri
     : SubtargetFeature<"xcheri", "HasCheri", "true",
                        "Implements CHERI extension">;
 def HasCheri : Predicate<"Subtarget->hasCheri()">,
-                         AssemblerPredicate<"FeatureCheri",
+                         AssemblerPredicate<(all_of FeatureCheri),
                          "CHERI Extension">;
 
 def FeatureCapMode
     : SubtargetFeature<"cap-mode", "IsCapMode", "true",
                        "Capability mode">;
 def IsCapMode  : Predicate<"Subtarget->isCapMode()">,
-                           AssemblerPredicate<"FeatureCapMode",
+                           AssemblerPredicate<(all_of FeatureCapMode),
                            "Capability Mode">;
 def NotCapMode : Predicate<"!Subtarget->isCapMode()">,
-                           AssemblerPredicate<"!FeatureCapMode",
+                           AssemblerPredicate<(all_of (not FeatureCapMode)),
                            "Not Capability Mode">;
 
 def IsPureCapABI

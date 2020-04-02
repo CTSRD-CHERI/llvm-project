@@ -1,3 +1,4 @@
+#include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Object/ELFObjectFile.h"

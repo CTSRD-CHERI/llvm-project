@@ -233,7 +233,6 @@ def InMicroMips    :  Predicate<"Subtarget->inMicroMipsMode()">,
                       AssemblerPredicate<(all_of FeatureMicroMips)>;
 def NotInMicroMips :  Predicate<"!Subtarget->inMicroMipsMode()">,
                       AssemblerPredicate<(all_of (not FeatureMicroMips))>;
-                      AssemblerPredicate<"!FeatureMicroMips">;
 def IsCHERI        :  Predicate<"Subtarget->isCheri()">;
 def NotCHERI        :  Predicate<"!Subtarget->isCheri()">;
 def IsCHERIABI     :  Predicate<"Subtarget->isABI_CheriPureCap()">;
