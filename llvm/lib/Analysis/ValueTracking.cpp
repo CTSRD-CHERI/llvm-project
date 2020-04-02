@@ -1777,7 +1777,7 @@ static void computeKnownBitsFromOperator(const Operator *I,
       case Intrinsic::cheri_cap_diff: {
         bool NSW = false;
         computeKnownBitsAddSub(false, I->getOperand(0), I->getOperand(1), NSW,
-                               Known, Known2, Depth, Q);
+                               DemandedElts, Known, Known2, Depth, Q);
         break;
       }
       case Intrinsic::ctlz: {
