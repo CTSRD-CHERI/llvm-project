@@ -3349,7 +3349,7 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
   return CGF.Builder.CreateBitCast(CGF.setPointerOffset(PCC, V), CapTy);
 }
 
-static llvm::Value *EmitFunctionDeclPointer(CodeGenModule &CGM,
+static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
                                             GlobalDecl GD,
                                             bool IsDirectCall) {
   CodeGenModule &CGM = CGF.CGM;
@@ -5665,7 +5665,7 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, GlobalDecl GD) {
 
   llvm::Value *calleePtr =
       EmitFunctionDeclPointer(CGF, GD, /*IsDirectCall=*/true);
-  return CGCallee::forDirect(calleePtr, GD);
+  return CGCallee::forDirect(cast<llvm::Constant>(calleePtr), GD);
 }
 
 CGCallee CodeGenFunction::EmitCallee(const Expr *E) {
