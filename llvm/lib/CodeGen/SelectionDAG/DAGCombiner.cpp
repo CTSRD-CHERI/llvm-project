@@ -18781,6 +18781,13 @@ static SDValue narrowExtractedVectorLoad(SDNode *Extract, SelectionDAG &DAG) {
 
   // Allow targets to opt-out.
   EVT VT = Extract->getValueType(0);
+
+  // Only handle byte sized scalars otherwise the offset is incorrect.
+  // FIXME: We might be able to do better if the VT is byte sized and the index
+  // is aligned.
+  if (!VT.getScalarType().isByteSized())
+    return SDValue();
+
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   if (!TLI.shouldReduceLoadWidth(Ld, Ld->getExtensionType(), VT))
     return SDValue();
@@ -19401,8 +19408,9 @@ static SDValue formSplatFromShuffles(ShuffleVectorSDNode *OuterShuf,
 
     CombinedMask[i] = InnerMaskElt;
   }
-  assert(all_of(CombinedMask, [](int M) { return M == -1; }) ||
-         getSplatIndex(CombinedMask) != -1 && "Expected a splat mask");
+  assert((all_of(CombinedMask, [](int M) { return M == -1; }) ||
+          getSplatIndex(CombinedMask) != -1) &&
+         "Expected a splat mask");
 
   // TODO: The transform may be a win even if the mask is not legal.
   EVT VT = OuterShuf->getValueType(0);
