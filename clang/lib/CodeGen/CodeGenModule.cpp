@@ -3283,7 +3283,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     }
 
     if ((isa<llvm::Function>(Entry) || isa<llvm::GlobalAlias>(Entry)) &&
-        (Entry->getType()->getElementType() == Ty)) {
+        (Entry->getValueType() == Ty)) {
       return Entry;
     }
 
@@ -3334,9 +3334,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     }
 
     llvm::Constant *BC = llvm::ConstantExpr::getBitCast(
-        F, Entry->getType()->getElementType()->getPointerTo(
-               getFunctionAddrSpace()));
-
+        F, Entry->getValueType()->getPointerTo(getFunctionAddrSpace()));
     addGlobalValReplacement(Entry, BC);
   }
 
@@ -3395,7 +3393,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
 
   // Make sure the result is of the requested type.
   if (!IsIncompleteFunction) {
-    assert(F->getType()->getElementType() == Ty);
+    assert(F->getFunctionType() == Ty);
     return F;
   }
   llvm::Type *PTy = llvm::PointerType::get(Ty, getFunctionAddrSpace());
@@ -3685,7 +3683,7 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
           llvm::Constant *Init = emitter.tryEmitForInitializer(*InitDecl);
           if (Init) {
             auto *InitType = Init->getType();
-            if (GV->getType()->getElementType() != InitType) {
+            if (GV->getValueType() != InitType) {
               // The type of the initializer does not match the definition.
               // This happens when an initializer has a different type from
               // the type of the global (because of padding at the end of a
@@ -3760,7 +3758,7 @@ llvm::GlobalVariable *CodeGenModule::CreateOrReplaceCXXRuntimeVariable(
 
   if (GV) {
     // Check if the variable has the right type.
-    if (GV->getType()->getElementType() == Ty)
+    if (GV->getValueType() == Ty)
       return GV;
 
     // Because C++ name mangling, the only way we can end up with an already
@@ -4141,7 +4139,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   // "extern int x[];") and then a definition of a different type (e.g.
   // "int x[10];"). This also happens when an initializer has a different type
   // from the type of the global (this happens with unions).
-  if (!GV || GV->getType()->getElementType() != InitType ||
+  if (!GV || GV->getValueType() != InitType ||
       GV->getType()->getAddressSpace() !=
           getTargetAddressSpace(GetGlobalVarAddressSpace(D))) {
 
@@ -4621,7 +4619,7 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
   llvm::FunctionType *Ty = getTypes().GetFunctionType(FI);
 
   // Get or create the prototype for the function.
-  if (!GV || (GV->getType()->getElementType() != Ty))
+  if (!GV || (GV->getValueType() != Ty))
     GV = cast<llvm::GlobalValue>(GetAddrOfFunction(GD, Ty, /*ForVTable=*/false,
                                                    /*DontDefer=*/true,
                                                    ForDefinition));

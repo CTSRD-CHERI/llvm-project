@@ -1274,7 +1274,7 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
       }
     }
     Src = EnterStructPointerForCoercedAccess(Src, SrcSTy, DstSize, CGF);
-    SrcTy = Src.getType()->getElementType();
+    SrcTy = Src.getElementType();
   }
 
   uint64_t SrcSize = CGF.CGM.getDataLayout().getTypeAllocSize(SrcTy);
@@ -1341,7 +1341,7 @@ static void CreateCoercedStore(llvm::Value *Src,
                                bool DstIsVolatile,
                                CodeGenFunction &CGF) {
   llvm::Type *SrcTy = Src->getType();
-  llvm::Type *DstTy = Dst.getType()->getElementType();
+  llvm::Type *DstTy = Dst.getElementType();
   if (SrcTy == DstTy) {
     CGF.Builder.CreateStore(Src, Dst, DstIsVolatile);
     return;
@@ -1369,7 +1369,7 @@ static void CreateCoercedStore(llvm::Value *Src,
       }
     }
     Dst = EnterStructPointerForCoercedAccess(Dst, DstSTy, SrcSize, CGF);
-    DstTy = Dst.getType()->getElementType();
+    DstTy = Dst.getElementType();
   }
 
   llvm::PointerType *SrcPtrTy = llvm::dyn_cast<llvm::PointerType>(SrcTy);
@@ -4369,7 +4369,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
       llvm::StructType *STy =
             dyn_cast<llvm::StructType>(ArgInfo.getCoerceToType());
       if (STy && ArgInfo.isDirect() && ArgInfo.getCanBeFlattened()) {
-        llvm::Type *SrcTy = Src.getType()->getElementType();
+        llvm::Type *SrcTy = Src.getElementType();
         uint64_t SrcSize = CGM.getDataLayout().getTypeAllocSize(SrcTy);
         uint64_t DstSize = CGM.getDataLayout().getTypeAllocSize(STy);
 

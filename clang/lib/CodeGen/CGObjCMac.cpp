@@ -3642,7 +3642,7 @@ void CGObjCMac::GenerateClass(const ObjCImplementationDecl *ID) {
   // Check for a forward reference.
   llvm::GlobalVariable *GV = CGM.getModule().getGlobalVariable(Name, true);
   if (GV) {
-    assert(GV->getType()->getElementType() == ObjCTypes.ClassTy &&
+    assert(GV->getValueType() == ObjCTypes.ClassTy &&
            "Forward metaclass reference has incorrect type.");
     values.finishAndSetAsInitializer(GV);
     GV->setSection(Section);
@@ -3705,7 +3705,7 @@ llvm::Constant *CGObjCMac::EmitMetaClass(const ObjCImplementationDecl *ID,
   // Check for a forward reference.
   llvm::GlobalVariable *GV = CGM.getModule().getGlobalVariable(Name, true);
   if (GV) {
-    assert(GV->getType()->getElementType() == ObjCTypes.ClassTy &&
+    assert(GV->getValueType() == ObjCTypes.ClassTy &&
            "Forward metaclass reference has incorrect type.");
     values.finishAndSetAsInitializer(GV);
   } else {
@@ -3736,7 +3736,7 @@ llvm::Constant *CGObjCMac::EmitMetaClassRef(const ObjCInterfaceDecl *ID) {
                                   llvm::GlobalValue::PrivateLinkage, nullptr,
                                   Name);
 
-  assert(GV->getType()->getElementType() == ObjCTypes.ClassTy &&
+  assert(GV->getValueType() == ObjCTypes.ClassTy &&
          "Forward metaclass reference has incorrect type.");
   return GV;
 }
@@ -3750,7 +3750,7 @@ llvm::Value *CGObjCMac::EmitSuperClassRef(const ObjCInterfaceDecl *ID) {
                                   llvm::GlobalValue::PrivateLinkage, nullptr,
                                   Name);
 
-  assert(GV->getType()->getElementType() == ObjCTypes.ClassTy &&
+  assert(GV->getValueType() == ObjCTypes.ClassTy &&
          "Forward class metadata reference has incorrect type.");
   return GV;
 }
