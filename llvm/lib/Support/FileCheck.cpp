@@ -246,6 +246,14 @@ Expected<std::unique_ptr<NumericVariableUse>> Pattern::parseNumericVariableUse(
 Expected<std::unique_ptr<ExpressionAST>> Pattern::parseNumericOperand(
     StringRef &Expr, AllowedOperand AO, Optional<size_t> LineNumber,
     FileCheckPatternContext *Context, const SourceMgr &SM) {
+
+  if (Expr.startswith("(")) {
+    if (AO != AllowedOperand::Any)
+      return ErrorDiagnostic::get(
+          SM, Expr, "parenthesized expression not permitted here");
+    return parseParenExpr(Expr, LineNumber, Context, SM);
+  }
+
   if (AO == AllowedOperand::LineVar || AO == AllowedOperand::Any) {
     // Try to parse as a numeric variable use.
     Expected<Pattern::VariableProperties> ParseVarResult =
@@ -268,6 +276,37 @@ Expected<std::unique_ptr<ExpressionAST>> Pattern::parseNumericOperand(
 
   return ErrorDiagnostic::get(SM, Expr,
                               "invalid operand format '" + Expr + "'");
+}
+
+Expected<std::unique_ptr<ExpressionAST>>
+Pattern::parseParenExpr(StringRef &Expr, Optional<size_t> LineNumber,
+                        FileCheckPatternContext *Context, const SourceMgr &SM) {
+  Expr = Expr.ltrim(SpaceChars);
+  assert(Expr.startswith("("));
+
+  // Parse right operand.
+  Expr.consume_front("(");
+  Expr = Expr.ltrim(SpaceChars);
+  if (Expr.empty())
+    return ErrorDiagnostic::get(SM, Expr, "missing operand in expression");
+
+  // Note: parseNumericOperand handles nested opening parentheses.
+  Expected<std::unique_ptr<ExpressionAST>> SubExprResult =
+      parseNumericOperand(Expr, AllowedOperand::Any, LineNumber, Context, SM);
+  Expr = Expr.ltrim(SpaceChars);
+  while (SubExprResult && !Expr.empty() && !Expr.startswith(")")) {
+    SubExprResult = parseBinop(Expr, std::move(*SubExprResult), false,
+                               LineNumber, Context, SM);
+    Expr = Expr.ltrim(SpaceChars);
+  }
+  if (!SubExprResult)
+    return SubExprResult;
+
+  if (!Expr.consume_front(")")) {
+    return ErrorDiagnostic::get(SM, Expr,
+                                "missing ')' at end of nested expression");
+  }
+  return SubExprResult;
 }
 
 static uint64_t add(uint64_t LeftOp, uint64_t RightOp) {
@@ -321,62 +360,17 @@ Pattern::parseBinop(StringRef &Expr, std::unique_ptr<ExpressionAST> LeftOp,
   Expr = Expr.ltrim(SpaceChars);
   if (Expr.empty())
     return ErrorDiagnostic::get(SM, Expr, "missing operand in expression");
-
-  std::unique_ptr<ExpressionAST> RightOp = nullptr;
-  if (!IsLegacyLineExpr && Expr.consume_front("(")) {
-    unsigned I = 0;
-    unsigned E = Expr.size();
-    for (unsigned Depth = 1; I != E; ++I) {
-      if (Expr[I] == '(')
-        ++Depth;
-      else if (Expr[I] == ')')
-        if (--Depth == 0)
-          break;
-    }
-    StringRef SubExpr = Expr.take_front(I).ltrim(SpaceChars);
-    SMLoc SubExprLoc = SMLoc::getFromPointer(SubExpr.data());
-    Optional<NumericVariable *> DefinedNumericVariable;
-    Expected<std::unique_ptr<ExpressionAST>> SubExprResult =
-        parseNumericOperand(Expr, AllowedOperand::Any, LineNumber, Context, SM);
-    while (SubExprResult && !Expr.empty()) {
-      SubExprResult = parseBinop(Expr, std::move(*SubExprResult), IsLegacyLineExpr,
-                               LineNumber, Context, SM);
-      // Legacy @LINE expressions only allow 2 operands.
-      if (SubExprResult && IsLegacyLineExpr && !Expr.empty())
-        return ErrorDiagnostic::get(
-            SM, Expr,
-            "unexpected characters at end of expression '" + Expr + "'");
-    }
-    if (!SubExprResult)
-      return SubExprResult;
-    if (DefinedNumericVariable) {
-      StringRef Name = (*DefinedNumericVariable)->getName();
-      return ErrorDiagnostic::get(SM, SubExprLoc,
-                                  "invalid definition of numeric variable '" +
-                                      Name + "' in nested expression");
-    }
-
-    Expr = Expr.substr(I);
-    if (I == E)
-      return ErrorDiagnostic::get(SM, Expr,
-                                  "missing ')' at end of nested expression");
-
-    Expr = Expr.substr(1);
-    RightOp = std::move(*SubExprResult);
-  } else {
-    // The second operand in a legacy @LINE expression is always a literal.
-    AllowedOperand AO =
-        IsLegacyLineExpr ? AllowedOperand::LegacyLiteral : AllowedOperand::Any;
-    Expected<std::unique_ptr<ExpressionAST>> RightOpResult =
-        parseNumericOperand(Expr, AO, LineNumber, Context, SM);
-    if (!RightOpResult)
-      return RightOpResult;
-    RightOp = std::move(*RightOpResult);
-  }
+  // The second operand in a legacy @LINE expression is always a literal.
+  AllowedOperand AO =
+      IsLegacyLineExpr ? AllowedOperand::LegacyLiteral : AllowedOperand::Any;
+  Expected<std::unique_ptr<ExpressionAST>> RightOpResult =
+      parseNumericOperand(Expr, AO, LineNumber, Context, SM);
+  if (!RightOpResult)
+    return RightOpResult;
 
   Expr = Expr.ltrim(SpaceChars);
   return std::make_unique<BinaryOperation>(EvalBinop, std::move(LeftOp),
-                                           std::move(RightOp));
+                                           std::move(*RightOpResult));
 }
 
 Expected<std::unique_ptr<Expression>> Pattern::parseNumericSubstitutionBlock(
