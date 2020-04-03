@@ -882,7 +882,7 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
     break;
 
   case 'v': {
-    auto *ArgTy = F->arg_begin()->getType();
+    auto *ArgTy = F->arg_empty() ? nullptr : F->arg_begin()->getType();
     if (Name == "va_start") {
       NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::vastart,
                                         ArgTy);
