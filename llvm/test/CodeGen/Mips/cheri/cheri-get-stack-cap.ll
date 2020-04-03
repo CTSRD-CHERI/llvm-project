@@ -1,6 +1,6 @@
 ; REQUIRES: asserts
 ; llvm.cheri.stack.cap.get should only be defined in the purecap ABI (since c11 is not used as the stack pointer in hybrid mode)
-; RUN: not %cheri_llc -o - -relocation-model=pic -thread-model=posix -mattr=-noabicalls \
+; RUN: not --crash %cheri_llc -o - -relocation-model=pic -thread-model=posix -mattr=-noabicalls \
 ; RUN:     -target-abi n64 -O2 -verify-machineinstrs %s 2>&1 | FileCheck %s -check-prefix BAD_INTRIN
 ; BAD_INTRIN: LLVM ERROR: Cannot select: intrinsic %llvm.cheri.stack.cap.get
 

@@ -1,9 +1,10 @@
 // REQUIRES: clang, cheri_is_128
 // TODO: convert to IR test (but that requires filling in the full @llvm.used array which is annoying
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o - -emit-llvm | FileCheck %s -check-prefix IR
-// RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o %t.s
+// FIXME: update test for -fno-common
+// RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o %t.s -fcommon
 // RUN: FileCheck %s -check-prefix ASM -input-file=%t.s
-// RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -c -o - | llvm-readelf --sections --symbols - | FileCheck %s -check-prefix SECTIONS
+// RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -c -o - -fcommon | llvm-readelf --sections --symbols - | FileCheck %s -check-prefix SECTIONS
 // Check that we can compile the generated assembly and it matches the direct emission
 // RUN: %cheri_purecap_clang %t.s -c -o - | llvm-readelf --sections --symbols - | FileCheck %s -check-prefix SECTIONS
 
@@ -109,11 +110,11 @@ char common65535[65535];
 __attribute__((visibility("hidden"))) char common65537[65537];
 __attribute__((visibility("protected"))) char common139267[139267];
 
-// IR: @common128 = common addrspace(200) global [128 x i8] zeroinitializer, align 1
-// IR: @common4096 = common addrspace(200) global [4096 x i8] zeroinitializer, align 1
-// IR: @common65535 = common addrspace(200) global [65535 x i8] zeroinitializer, align 1
-// IR: @common65537 = common hidden addrspace(200) global [65537 x i8] zeroinitializer, align 1
-// IR: @common139267 = common protected addrspace(200) global [139267 x i8] zeroinitializer, align 1
+// IR: @common128 = addrspace(200) global [128 x i8] zeroinitializer, align 1
+// IR: @common4096 = addrspace(200) global [4096 x i8] zeroinitializer, align 1
+// IR: @common65535 = addrspace(200) global [65535 x i8] zeroinitializer, align 1
+// IR: @common65537 = hidden addrspace(200) global [65537 x i8] zeroinitializer, align 1
+// IR: @common139267 = protected addrspace(200) global [139267 x i8] zeroinitializer, align 1
 
 // zero-init TLS
 __attribute__((used)) __thread char thread_zero128[128];
@@ -155,6 +156,7 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	char65537
 // ASM-NEXT: 	.p2align	7
 // ASM-NEXT: char65537:
+// ASM-NEXT: .Lchar65537$local:
 // ASM-NEXT: 	.byte	4                       # 0x4
 // ASM-NEXT: 	.space	65536
 // ASM-NEXT: 	.space	127                     # Tail padding to ensure precise bounds
@@ -164,6 +166,7 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	char139267
 // ASM-NEXT: 	.p2align	8
 // ASM-NEXT: char139267:
+// ASM-NEXT: .Lchar139267$local:
 // ASM-NEXT: 	.byte	5                       # 0x5
 // ASM-NEXT: 	.space	139266
 // ASM-NEXT: 	.space	253                     # Tail padding to ensure precise bounds
@@ -200,6 +203,7 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_char65537
 // ASM-NEXT: 	.p2align	7
 // ASM-NEXT: thread_char65537:
+// ASM-NEXT: .Lthread_char65537$local:
 // ASM-NEXT: 	.byte	4                       # 0x4
 // ASM-NEXT: 	.space	65536
 // ASM-NEXT: 	.space	127                     # Tail padding to ensure precise bounds
@@ -211,6 +215,7 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_char139267
 // ASM-NEXT: 	.p2align	8
 // ASM-NEXT: thread_char139267:
+// ASM-NEXT: .Lthread_char139267$local:
 // ASM-NEXT: 	.byte	5                       # 0x5
 // ASM-NEXT: 	.space	139266
 // ASM-NEXT: 	.space	253                     # Tail padding to ensure precise bounds
@@ -298,6 +303,7 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_zero65537
 // ASM-NEXT: 	.p2align	7
 // ASM-NEXT: thread_zero65537:
+// ASM-NEXT: .Lthread_zero65537$local:
 // ASM-NEXT: 	.space	65537
 // ASM-NEXT: 	.space	127                     # Tail padding to ensure precise bounds
 // ASM-NEXT: 	.size	thread_zero65537, 65537
@@ -308,6 +314,7 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_zero139267
 // ASM-NEXT: 	.p2align	8
 // ASM-NEXT: thread_zero139267:
+// ASM-NEXT: .Lthread_zero139267$local:
 // ASM-NEXT: 	.space	139267
 // ASM-NEXT: 	.space	253                     # Tail padding to ensure precise bounds
 // ASM-NEXT: 	.size	thread_zero139267, 139267

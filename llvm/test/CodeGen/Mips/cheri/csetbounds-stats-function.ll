@@ -22,11 +22,11 @@ entry:
 declare i32 @external_fn()
 
 ; SYMTAB-LABEL: SYMBOL TABLE:
-; SYMTAB-NEXT: 0000000000000000 l    df *ABS*		 00000000 csetbounds-stats-function.ll
-; SYMTAB:      0000000000000000 l     F .text		 00000010 maybe_inline
-; SYMTAB-NEXT: 0000000000000000 l    d  .text		 00000000 .text
-; SYMTAB-NEXT: 0000000000000000         *UND*		 00000000 external_fn
-; SYMTAB-NEXT: 0000000000000010 g     F .text		 00000060 test_func
+; SYMTAB-NEXT: 0000000000000000 l    df *ABS*		 0000000000000000 csetbounds-stats-function.ll
+; SYMTAB:      0000000000000000 l     F .text		 0000000000000010 maybe_inline
+; SYMTAB-NEXT: 0000000000000000 l    d  .text		 0000000000000000 .text
+; SYMTAB-NEXT: 0000000000000000         *UND*		 0000000000000000 external_fn
+; SYMTAB-NEXT: 0000000000000010 g     F .text		 0000000000000060 test_func
 ; SYMTAB-EMPTY:
 
 ; CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
