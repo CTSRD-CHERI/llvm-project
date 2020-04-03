@@ -2948,6 +2948,7 @@ void CodeGenFunction::EmitStoreThroughBitfieldLValue(RValue Src, LValue Dst,
 
   // Get the source value, truncated to the width of the bit-field.
   llvm::Value *SrcVal = Src.getScalarVal();
+  assert(SrcVal->getType()->isIntegerTy());
 
   // Cast the source to the storage type and shift it into place.
   SrcVal = Builder.CreateIntCast(SrcVal, Ptr.getElementType(),
@@ -5681,7 +5682,9 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, GlobalDecl GD) {
 
   llvm::Value *calleePtr =
       EmitFunctionDeclPointer(CGF, GD, /*IsDirectCall=*/true);
-  return CGCallee::forDirect(cast<llvm::Constant>(calleePtr), GD);
+  auto *calleeType =
+      cast<llvm::FunctionType>(calleePtr->getType()->getPointerElementType());
+  return CGCallee::forDirect(llvm::FunctionCallee(calleeType, calleePtr), GD);
 }
 
 CGCallee CodeGenFunction::EmitCallee(const Expr *E) {
