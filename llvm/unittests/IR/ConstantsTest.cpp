@@ -572,7 +572,8 @@ TEST(ConstantsTest, FoldGlobalVariablePtr) {
   IntegerType *IntType(Type::getInt32Ty(Context));
 
   std::unique_ptr<GlobalVariable> Global(
-      new GlobalVariable(IntType, true, GlobalValue::ExternalLinkage));
+      new GlobalVariable(IntType, true, GlobalValue::ExternalLinkage, nullptr,
+                         "", GlobalValue::NotThreadLocal, /*AS*/ 0));
 
   Global->setAlignment(Align(4));
 
