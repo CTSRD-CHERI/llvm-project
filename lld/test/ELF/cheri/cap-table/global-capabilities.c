@@ -3,12 +3,12 @@
 
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t-128.o
 // RUN: %cheri256_purecap_cc1 -mllvm -mxcaptable -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t-256.o
-// RUN: llvm-readobj -r %t-128.o | FileCheck %s -check-prefix RELOCS
-// RUN: llvm-readobj -r %t-256.o | FileCheck %s -check-prefix RELOCS
+// RUN: llvm-readobj -r %t-128.o | FileCheck %s --check-prefix RELOCS
+// RUN: llvm-readobj -r %t-256.o | FileCheck %s --check-prefix RELOCS
 // RUN: ld.lld -o %t-128.exe %t-128.o
 // RUNNOT: ld.lld -o %t-256.exe %t-256.o
-// RUN: llvm-objdump -d -r -cap-relocs -t %t-128.exe | FileCheck %s -check-prefixes EXE,EXE128
-// RUNNOT: llvm-objdump -d -r -cap-relocs -t %t-256.exe | FileCheck %s -check-prefixes EXE,EXE256
+// RUN: llvm-objdump -d -r --cap-relocs -t %t-128.exe | FileCheck %s --check-prefixes EXE,EXE128
+// RUNNOT: llvm-objdump -d -r --cap-relocs -t %t-256.exe | FileCheck %s --check-prefixes EXE,EXE256
 
 
 

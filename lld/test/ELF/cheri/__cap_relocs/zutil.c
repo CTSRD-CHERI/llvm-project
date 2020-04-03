@@ -3,7 +3,7 @@
 // Check that when we use R_CHERI_CAPABILITY instead of legacy cap_relocs the zutil.c test works as expected (i.e. bounds on the strings)
 
 // RUN: %cheri_purecap_cc1 -emit-obj %s -o %t.o
-// RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-RELOCS %s
+// RUN: llvm-readobj -r %t.o | FileCheck --check-prefix OBJ-RELOCS %s
 // RUN: ld.lld -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o
 // RUN: llvm-objdump --cap-relocs -s -t --section=.rodata %t.so | FileCheck %s
 

@@ -5,13 +5,13 @@
 // LINKER-MSG-NEXT: Writing size 0x0 for <undefined> (in GOT) errno
 
 // RUN: llvm-readelf -r -program-headers %t.so | FileCheck %s -check-prefix UNDEFINED
-// RUN: llvm-objdump -s --section=.global_sizes %t.so | FileCheck %s -check-prefix DUMP
+// RUN: llvm-objdump -s --section=.global_sizes %t.so | FileCheck %s --check-prefix DUMP
 
 // Now try with a defined errno variable:
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-obj %s -o %t.o -DDEFINED_ERRNO=1
 // RUN: ld.lld -shared -o %t.so %t.o -verbose-cap-relocs
 // RUN: llvm-readelf -r -program-headers %t.so | FileCheck %s -check-prefix DEFINED-MAPPING
-// RUN: llvm-objdump -s --section=.global_sizes %t.so | FileCheck %s -check-prefix DEFINED-DUMP
+// RUN: llvm-objdump -s --section=.global_sizes %t.so | FileCheck %s --check-prefix DEFINED-DUMP
 
 #ifndef DEFINED_ERRNO
 extern int errno;

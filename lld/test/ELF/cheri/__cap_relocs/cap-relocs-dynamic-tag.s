@@ -10,7 +10,7 @@
 # SEGMENTS-NEXT:   02     .data .got
 # SEGMENTS-NEXT:   03     .dynamic
 
-# RUN: llvm-readobj -sections -dynamic-table %t.so | FileCheck %s
+# RUN: llvm-readobj --sections --dynamic-table %t.so | FileCheck %s
 
 .rodata
 .protected foo

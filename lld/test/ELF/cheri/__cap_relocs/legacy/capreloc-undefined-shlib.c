@@ -1,12 +1,12 @@
 // REQUIRES: clang
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t.o
-// RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
+// RUN: llvm-readobj -r %t.o | FileCheck --check-prefix READOBJ %s
 
 // By default building a shared library should not warn about unresolved symbols (but still report them)
 // RUN: ld.lld --no-relative-cap-relocs -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o | FileCheck %s -check-prefix NOTE
 // NOTE: warning: cap_reloc against undefined symbol: foo
-// RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix SHLIB-RELOCS
+// RUN: llvm-readobj -r %t.so | FileCheck %s --check-prefix SHLIB-RELOCS
 // First reloc the is __cap_reloc target which has a load address relocation
 // Second is the target, which is foo
 // SHLIB-RELOCS:      Relocations [
@@ -23,17 +23,17 @@
 //                           ^--- Size for foo_ptr
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
-// RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type
+// RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s --check-prefixes CHECK,%cheri_type
 // CHECK-LABEL: Sections:
 // CHECK:  __cap_relocs  00000050 00000000000204d0 DATA
 // CHERI128:  .data         00000030 0000000000030520 DATA
 // CHERI256:  .data         00000060 0000000000030520 DATA
 // 204d0 is the address in rel.dyn -> correct
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK: 00000000000305{{3|4}}0 l     O .data  00000004 bar
-// CHECK: 00000000000305{{4|6}}0 g     O .data  000000{{1|2}}0 bar_ptr
-// CHECK: 0000000000000000               *UND*  00000000 foo
-// CHECK: 0000000000030520       g     O .data  000000{{1|2}}0 foo_ptr
+// CHECK: 00000000000305{{3|4}}0 l     O .data  0000000000000004 bar
+// CHECK: 00000000000305{{4|6}}0 g     O .data  00000000000000{{1|2}}0 bar_ptr
+// CHECK: 0000000000000000               *UND*  0000000000000000 foo
+// CHECK: 0000000000030520       g     O .data  00000000000000{{1|2}}0 foo_ptr
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 // 30520 is the address of foo_ptr
 // CHECK-NEXT: 0x0000000000030520 Base: <Unnamed symbol> (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000

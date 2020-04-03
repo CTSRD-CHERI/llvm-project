@@ -4,19 +4,19 @@
 // RUN: %cheri256_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-obj %S/Inputs/external_lib.c -o %t-externs.o
 
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o %t-externs.o -static -o %t-static.exe -e entry
-// RUN: llvm-objdump -h -r -t --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %s
+// RUN: llvm-objdump -h -r -t --cap-relocs %t-static.exe | FileCheck --check-prefixes DUMP-EXE,STATIC %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-externs.o -shared -o %t-externs.so
-// RUN: llvm-objdump --cap-relocs -t  %t-externs.so | FileCheck -check-prefixes DUMP-EXTERNALLIB %s
+// RUN: llvm-objdump --cap-relocs -t  %t-externs.so | FileCheck --check-prefixes DUMP-EXTERNALLIB %s
 
 // RUN: ld.lld --dynamic-linker /libexec/ld-elf.so -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-externs.so %t.o -o %t-dynamic.exe -e entry
-// RUN: llvm-objdump -h -r -t --cap-relocs %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %s
-// RUN: llvm-readobj -r %t-dynamic.exe | FileCheck -check-prefix DYNAMIC-EXE-RELOCS %s
+// RUN: llvm-objdump -h -r -t --cap-relocs %t-dynamic.exe | FileCheck --check-prefixes DUMP-EXE,DYNAMIC %s
+// RUN: llvm-readobj -r %t-dynamic.exe | FileCheck --check-prefix DYNAMIC-EXE-RELOCS %s
 
 // See what it looks like as a shared library
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-externs.so %t.o -shared -o %t.so
-// RUN: llvm-readobj -r -dyn-relocations -s %t.so | FileCheck -check-prefixes SHLIB %s
-// RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck -check-prefixes DUMP-SHLIB %s
+// RUN: llvm-readobj -r --dyn-relocations -s %t.so | FileCheck --check-prefixes SHLIB %s
+// RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck --check-prefixes DUMP-SHLIB %s
 
 // check that we get an undefined symbol error:
 // RUN: not ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o --dynamic-linker /libexec/ld-elf.so -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
@@ -45,9 +45,9 @@
 
 
 // DUMP-EXTERNALLIB: SYMBOL TABLE:
-// DUMP-EXTERNALLIB:  0000000000020420 g     O .bss		 000010e1 external_buffer
-// DUMP-EXTERNALLIB:  0000000000021520 g     O .bss		 00000020 external_cap
-// DUMP-EXTERNALLIB:  00000000000103e0 g     F .text		 00000028 external_func
+// DUMP-EXTERNALLIB:  0000000000020420 g     O .bss		 00000000000010e1 external_buffer
+// DUMP-EXTERNALLIB:  0000000000021520 g     O .bss		 0000000000000020 external_cap
+// DUMP-EXTERNALLIB:  00000000000103e0 g     F .text		 0000000000000028 external_func
 
 
 // SHLIB:      Section ({{.+}}) .rel.dyn {

@@ -1,12 +1,12 @@
 // REQUIRES: clang
 
 // RUN: %cheri_purecap_cc1 -mllvm -mxcaptable -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
-// RUN: llvm-objdump -d -r -t %t.o | FileCheck %s -check-prefix OBJECT
+// RUN: llvm-objdump -d -r -t %t.o | FileCheck %s --check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
-// RUN: llvm-objdump -d -r -cap-relocs -t %t.exe | %cheri_FileCheck %s -check-prefixes EXE
+// RUN: llvm-objdump -d -r --cap-relocs -t %t.exe | %cheri_FileCheck %s --check-prefixes EXE
 
 // OBJECT-LABEL: SYMBOL TABLE:
-// OBJECT: 0000000000000000         .rodata		 00000024 .LJTI0_0
+// OBJECT: 0000000000000000 l       .rodata		 0000000000000024 .LJTI0_0
 
 // OBJECT:      14:	3c 01 00 00 	lui	$1, 0
 // OBJECT-NEXT: 0000000000000014:  R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE	.LJTI0_0
@@ -16,8 +16,8 @@
 
 
 // EXE: SYMBOL TABLE:
-// EXE-DAG: 0000000120000278 .rodata		 00000024 .LJTI0_0
-// EXE-DAG: 0000000120020340 l     O .captable		 000000{{1|2}}0 .LJTI0_0@CAPTABLE
+// EXE-DAG: 0000000120000278 l        .rodata		 0000000000000024 .LJTI0_0
+// EXE-DAG: 0000000120020340 l     O .captable		 00000000000000{{1|2}}0 .LJTI0_0@CAPTABLE
 
 // __cap_relocs should contain length:
 // EXE:      CAPABILITY RELOCATION RECORDS:

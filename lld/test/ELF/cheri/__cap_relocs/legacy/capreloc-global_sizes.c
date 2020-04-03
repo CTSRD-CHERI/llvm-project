@@ -7,29 +7,29 @@
 
 
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o %t_external.o %t_bar.o -static -o %t-static.exe -verbose-cap-relocs
-// RUN: llvm-objdump -t -s -h %t-static.exe | FileCheck -check-prefixes DUMP-EXE,GLOBAL_SIZES %s
+// RUN: llvm-objdump -t -s -h %t-static.exe | FileCheck --check-prefixes DUMP-EXE,GLOBAL_SIZES %s
 
 // Look at shared libraries .global_sizes:
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t.so -verbose-cap-relocs
-// RUN: llvm-objdump -t -s -h %t.so | FileCheck -check-prefixes DUMP-SHLIB,GLOBAL_SIZES %s
+// RUN: llvm-objdump -t -s -h %t.so | FileCheck --check-prefixes DUMP-SHLIB,GLOBAL_SIZES %s
 
 // Check that -r output doesn't fill in .global_size but it does when that .o file is turned into an exe
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs -r %t.o %t_external.o %t_bar.o -o %t-relocatable.o -verbose-cap-relocs
-// RUN: llvm-objdump -t -s -h %t-relocatable.o | FileCheck -check-prefixes DUMP-RELOCATABLE %s
+// RUN: llvm-objdump -t -s -h %t-relocatable.o | FileCheck --check-prefixes DUMP-RELOCATABLE %s
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t-relocatable.o -static -o %t-relocatable.exe -verbose-cap-relocs
-// RUN: llvm-objdump -t -s -h %t-relocatable.exe | FileCheck -check-prefixes DUMP-EXE,GLOBAL_SIZES %s
+// RUN: llvm-objdump -t -s -h %t-relocatable.exe | FileCheck --check-prefixes DUMP-EXE,GLOBAL_SIZES %s
 
 
 
 // check external capsizefix (results in different addresses so only test the .global_sizes section contents)
 // RUN: ld.lld --no-relative-cap-relocs -no-process-cap-relocs %t.o %t_external.o %t_bar.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
-// RUN: llvm-objdump -s -t -h %t-static-external-capsizefix.exe | FileCheck -check-prefixes GLOBAL_SIZES %s
+// RUN: llvm-objdump -s -t -h %t-static-external-capsizefix.exe | FileCheck --check-prefixes GLOBAL_SIZES %s
 
 
 // RUN: ld.lld --no-relative-cap-relocs -no-process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t-external-capsizefix.so
 // RUN: %capsizefix %t-external-capsizefix.so
-// RUN: llvm-objdump -s -t -h %t-external-capsizefix.so | FileCheck -check-prefixes GLOBAL_SIZES %s
+// RUN: llvm-objdump -s -t -h %t-external-capsizefix.so | FileCheck --check-prefixes GLOBAL_SIZES %s
 
 
 // .size.bar is defined in both object files
@@ -75,18 +75,18 @@ void __start(void) {
 // DUMP-SHLIB: .global_sizes 00000030 00000000000005b8 DATA
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
-// DUMP-EXE: 0000000120000{{.+}} gw    O .global_sizes           00000008 .size.bar
-// DUMP-EXE: 0000000120000{{.+}} gw    O .global_sizes           00000008 .size.external_buffer
-// DUMP-EXE: 0000000120000{{.+}} gw    O .global_sizes           00000008 .size.external_cap
-// DUMP-EXE: 0000000120000{{.+}} gw    O .global_sizes           00000008 .size.foo
-// DUMP-EXE: 0000000120000{{.+}} gw    O .global_sizes           00000008 .size.other_var
+// DUMP-EXE: 0000000120000{{.+}} w    O .global_sizes           0000000000000008 .size.bar
+// DUMP-EXE: 0000000120000{{.+}} w    O .global_sizes           0000000000000008 .size.external_buffer
+// DUMP-EXE: 0000000120000{{.+}} w    O .global_sizes           0000000000000008 .size.external_cap
+// DUMP-EXE: 0000000120000{{.+}} w    O .global_sizes           0000000000000008 .size.foo
+// DUMP-EXE: 0000000120000{{.+}} w    O .global_sizes           0000000000000008 .size.other_var
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
-// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.bar
-// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.external_buffer
-// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.external_cap
-// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.foo
-// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.other_var
+// DUMP-SHLIB: 0000000000000{{.+}} w    O .global_sizes           0000000000000008 .size.bar
+// DUMP-SHLIB: 0000000000000{{.+}} w    O .global_sizes           0000000000000008 .size.external_buffer
+// DUMP-SHLIB: 0000000000000{{.+}} w    O .global_sizes           0000000000000008 .size.external_cap
+// DUMP-SHLIB: 0000000000000{{.+}} w    O .global_sizes           0000000000000008 .size.foo
+// DUMP-SHLIB: 0000000000000{{.+}} w    O .global_sizes           0000000000000008 .size.other_var
 
 // GLOBAL_SIZES-LABEL: Contents of section .global_sizes:
 // .size.external_cap then .size.external_buffer (0x10 or 0x20)
@@ -99,11 +99,11 @@ void __start(void) {
 
 
 // DUMP-RELOCATABLE-LABEL: SYMBOL TABLE:
-// DUMP-RELOCATABLE: 0000000000000010 gw    O .global_sizes           00000008 .size.bar
-// DUMP-RELOCATABLE: 0000000000000008 gw    O .global_sizes           00000008 .size.external_buffer
-// DUMP-RELOCATABLE: 0000000000000000 gw    O .global_sizes           00000008 .size.external_cap
-// DUMP-RELOCATABLE: 0000000000000018 gw    O .global_sizes           00000008 .size.foo
-// DUMP-RELOCATABLE: 0000000000000028 gw    O .global_sizes           00000008 .size.other_var
+// DUMP-RELOCATABLE: 0000000000000010 w    O .global_sizes           0000000000000008 .size.bar
+// DUMP-RELOCATABLE: 0000000000000008 w    O .global_sizes           0000000000000008 .size.external_buffer
+// DUMP-RELOCATABLE: 0000000000000000 w    O .global_sizes           0000000000000008 .size.external_cap
+// DUMP-RELOCATABLE: 0000000000000018 w    O .global_sizes           0000000000000008 .size.foo
+// DUMP-RELOCATABLE: 0000000000000028 w    O .global_sizes           0000000000000008 .size.other_var
 
 // DUMP-RELOCATABLE-LABEL: Contents of section .global_sizes:
 // DUMP-RELOCATABLE-NEXT: 0000 00000000 00000000 00000000 00000000  ................

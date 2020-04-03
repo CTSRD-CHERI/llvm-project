@@ -1,6 +1,6 @@
 // RUN: %cheri256_cc1 -emit-obj -O2 -target-feature +soft-float -msoft-float -target-abi purecap -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: ld.lld %t.o %S/Inputs/interposing_table.o  -o %t.exe
-// RUN: llvm-objdump -t -cap-relocs %t.exe | FileCheck %s
+// RUN: llvm-objdump -t --cap-relocs %t.exe | FileCheck %s
 
 #define SLOT_SYS(name) int __sys_##name(void) { return 0; }
 #define SLOT_LIBC(name) int __libc_##name(void) { return 0; }
@@ -58,6 +58,6 @@ int __start(void) {
 }
 
 // CHECK: SYMBOL TABLE:
-// CHECK: 0000000[[libc_interposing_addr:[0-9a-f]+]] l     O .data		 00000540 .hidden __libc_interposing
+// CHECK: 0000000[[libc_interposing_addr:[0-9a-f]+]] l     O .data		 0000000000000540 .hidden __libc_interposing
 // CHECK: CAPABILITY RELOCATION RECORDS:
 // CHECK: 0x0000000[[libc_interposing_addr]]	Base: __wrap_accept (0x0000000120011020)	Offset: 0x0000000000000000	Length: 0x0000000000000038	Permissions: 0x8000000000000000 (Function)

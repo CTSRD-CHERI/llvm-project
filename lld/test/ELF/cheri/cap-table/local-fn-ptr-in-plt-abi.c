@@ -1,5 +1,5 @@
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t.o %s
-// RUN: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix DISAS
+// RUN: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix DISAS
 // Should have a R_MIPS_CHERI_CAPTAB20 relocation against the function pointer and a R_MIPS_CHERI_CAPCALL20 against use_callback
 // DISAS:          clcbi	$c3, 0($c1)
 // DISAS-NEXT: 000000000000001c:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE	return1
@@ -13,18 +13,18 @@
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t-shlib.o -DSHLIB %s
 // Build a shared library that uses the function pointer:
 // RUN: ld.lld -shared %t-shlib.o -o %t-shlib.so
-// RUN: llvm-objdump --syms %t-shlib.so | FileCheck %s -check-prefix SHLIB-DUMP
+// RUN: llvm-objdump --syms %t-shlib.so | FileCheck %s --check-prefix SHLIB-DUMP
 // SHLIB-DUMP: 0000000000010380 g     F .text		 000000{{[0-9a-f]+}} use_callback
 
 
 // Should not build with the --building-freebsd-rtld flag
 // Check that we emit a R_CHERI_CAPABILITY relocation instead of __cap_relocs for shlib/pie/dynamically linked exe
 // RUN: ld.lld -shared %t.o %t-shlib.so -o %t.so  --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefixes VERBOSE-MSG,SHLIB-MSG
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.so | FileCheck %s -check-prefixes CHECK,CHECK-SHLIB
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.so | FileCheck %s --check-prefixes CHECK,CHECK-SHLIB
 // RUN: ld.lld -pie %t.o %t-shlib.so -o %t-pie.exe --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefixes VERBOSE-MSG,EXE-MSG
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-pie.exe | FileCheck %s -check-prefixes CHECK,CHECK-NODYN
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-pie.exe | FileCheck %s --check-prefixes CHECK,CHECK-NODYN
 // RUN: ld.lld %t.o %t-shlib.so -o %t.exe --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefixes VERBOSE-MSG,EXE-MSG
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.exe | FileCheck %s -check-prefixes CHECK,CHECK-NODYN
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.exe | FileCheck %s --check-prefixes CHECK,CHECK-NODYN
 // VERBOSE-MSG:      Using trampoline for function pointer against local function return1
 // VERBOSE-MSG-NEXT: >>> defined in local-fn-ptr-in-plt-abi.c ({{.+}}local-fn-ptr-in-plt-abi.c.tmp.o:(return1))
 // VERBOSE-MSG-NEXT: Adding new symbol __cheri_fnptr_return1 to allow relocation against local function return1
@@ -113,7 +113,7 @@
 // RUN: ld.lld %t.o %t-shlib.o -o %t-static.exe --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefix STATIC-MESSAGE
 // STATIC-MESSAGE: Do not need function pointer trampoline for return1 in static binary
 
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-static.exe | FileCheck %s -check-prefix STATIC
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-static.exe | FileCheck %s --check-prefix STATIC
 // STATIC-LABEL: Dynamic Relocations {
 // STATIC-NEXT:  }
 // STATIC-NEXT:  DynamicSymbols [
@@ -152,7 +152,7 @@
 // Check that we don't crash when a version script marks a symbol as non-preemptible:
 // RUN: echo "VERSION_1.0 { local: *; };" > %t.script
 // RUN: ld.lld -shared %t.o %t-shlib.so --verbose-cap-relocs -o %t-version-script.so --version-script %t.script
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-version-script.so | FileCheck %s -check-prefixes CHECK,CHECK-NODYN
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-version-script.so | FileCheck %s --check-prefixes CHECK,CHECK-NODYN
 
 typedef int (*func_ptr)(void);
 int use_callback(func_ptr ptr);

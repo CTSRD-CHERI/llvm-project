@@ -1,10 +1,10 @@
 // RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag_cc1 %s -emit-obj -o %t.o
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -static -o %t.exe --fatal-warnings
-// RUN: llvm-objdump -h -r -t  --cap-relocs %t.exe | FileCheck -check-prefix WITH-CTORS %s
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t.exe | FileCheck --check-prefix WITH-CTORS %s
 
 // RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag_cc1 %s -DEMPTY_CTORS=1 -emit-obj -o %t-with-ctors.o
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t-with-ctors.o -static -o %t-with-ctors.exe --fatal-warnings
-// RUN: llvm-objdump -h -r -t  --cap-relocs %t-with-ctors.exe | FileCheck -check-prefix EMPTY-CTORS %s
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t-with-ctors.exe | FileCheck --check-prefix EMPTY-CTORS %s
 
 typedef unsigned long long mips_function_ptr;
 typedef void (*cheri_function_ptr)(void);
@@ -43,13 +43,13 @@ void __start(void) {
 // WITH-CTORS-LABEL: Sections:
 // WITH-CTORS:       .ctors        00000008 0000000120020400 DATA
 // WITH-CTORS-LABEL: SYMBOL TABLE:
-// WITH-CTORS-NEXT:  0000000000000000 l df    *ABS* 00000000 load-linker-created-symbol.c
-// WITH-CTORS-NEXT:  0000000120020408         .ctors		 00000000 .hidden __ctors_end
-// WITH-CTORS-NEXT:  0000000120020400         .ctors		 00000008 .hidden __ctors_start
+// WITH-CTORS-NEXT:  0000000000000000 l df    *ABS* 0000000000000000 ctors-dtors-start.c
+// WITH-CTORS-NEXT:  0000000120020408 l      .ctors 0000000000000000 .hidden __ctors_end
+// WITH-CTORS-NEXT:  0000000120020400 l      .ctors 0000000000000008 .hidden __ctors_start
 
 // EMPTY-CTORS-LABEL: Section
 // EMPTY-CTORS-NOT: .ctors
 // EMPTY-CTORS-LABEL: SYMBOL TABLE:
-// EMPTY-CTORS-NEXT:  0000000000000000 l df    *ABS* 00000000 load-linker-created-symbol.c
-// EMPTY-CTORS-NEXT:  0000000120010220         .text 00000000 .hidden __ctors_end
-// EMPTY-CTORS-NEXT:  0000000120010220         .text 00000000 .hidden __ctors_start
+// EMPTY-CTORS-NEXT:  0000000000000000 l df    *ABS* 0000000000000000 ctors-dtors-start.c
+// EMPTY-CTORS-NEXT:  0000000120010220 l       .text 0000000000000000 .hidden __ctors_end
+// EMPTY-CTORS-NEXT:  0000000120010220 l       .text 0000000000000000 .hidden __ctors_start

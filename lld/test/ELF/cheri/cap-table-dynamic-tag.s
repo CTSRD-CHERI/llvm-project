@@ -1,12 +1,12 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -z lazy -pie %t.o -o %t.exe
 # RUN: llvm-readelf --program-headers --section-mapping %t.exe | FileCheck %s -check-prefix LAZY-SEGMENTS
-# RUN: llvm-readobj --cap-relocs -dynamic-table %t.exe | FileCheck %s -check-prefix WITH-TABLE-LAZY
+# RUN: llvm-readobj --cap-relocs --dynamic-table %t.exe | FileCheck %s --check-prefix WITH-TABLE-LAZY
 # RUN: ld.lld -z now -pie %t.o -o %t.exe
-# RUN: llvm-readobj --cap-relocs -dynamic-table %t.exe | FileCheck %s -check-prefix WITH-TABLE-NOW
+# RUN: llvm-readobj --cap-relocs --dynamic-table %t.exe | FileCheck %s --check-prefix WITH-TABLE-NOW
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=EMPTY_CAP_TABLE=1 %s -o %t2.o
 # RUN: ld.lld -pie %t2.o -o %t.exe
-# RUN: llvm-readobj --cap-relocs -dynamic-table %t.exe | FileCheck %s -check-prefix EMPTY-TABLE
+# RUN: llvm-readobj --cap-relocs --dynamic-table %t.exe | FileCheck %s --check-prefix EMPTY-TABLE
 
 .text
 

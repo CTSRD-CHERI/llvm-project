@@ -6,7 +6,7 @@
 // LINKER-MSG-NEXT: Writing size 0x{{1|2}}0 for <undefined> (in GOT) environ
 
 // RUN: llvm-readelf -r -program-headers %t.so | FileCheck %s -check-prefix PHDRS
-// RUN: llvm-objdump -s --section=.global_sizes %t.so | FileCheck %s -check-prefix DUMP
+// RUN: llvm-objdump -s --section=.global_sizes %t.so | FileCheck %s --check-prefix DUMP
 
 extern char* __progname;
 extern char** environ;

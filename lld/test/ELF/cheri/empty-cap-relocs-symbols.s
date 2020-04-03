@@ -16,7 +16,7 @@ __start:
 # CHECK-LABEL: Sections:
 # CHECK-NOT: __cap_relocs
 # CHECK-LABEL: SYMBOL TABLE:
-# CHECK-NEXT: 0000000000038210         .got		 00000000 .hidden _gp
-# CHECK-NEXT: 0000000000020210         .text		 00000000 __start
-# CHECK-NEXT: 0000000000000000         *ABS*		 00000000 .protected __start___cap_relocs
-# CHECK-NEXT: 0000000000000000         *ABS*		 00000000 .protected __stop___cap_relocs
+# CHECK-NEXT: 0000000000038210 l       .got		0000000000000000 .hidden _gp
+# CHECK-NEXT: 0000000000020210 g       .text	0000000000000000 __start
+# CHECK-NEXT: 0000000000000000 g       *ABS*	0000000000000000 .protected __start___cap_relocs
+# CHECK-NEXT: 0000000000000000 g       *ABS*	0000000000000000 .protected __stop___cap_relocs

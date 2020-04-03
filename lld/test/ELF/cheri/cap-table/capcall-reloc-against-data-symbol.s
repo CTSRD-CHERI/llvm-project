@@ -11,7 +11,7 @@
 
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -defsym=BUILD_LIBCHERI=1 -o %t-libcheri.o
-# RUN: llvm-readobj -r %t.o | FileCheck %s -check-prefix RELOCS
+# RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix RELOCS
 # RELOCS-LABEL: Relocations [
 # RELOCS-NEXT:   Section (3) .rela.text {
 # RELOCS-NEXT:     0x0 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE libcheri_invoke 0x0

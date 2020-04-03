@@ -41,8 +41,8 @@
 // READOBJ-NEXT:    0x58 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE __start 0x0
 // READOBJ-NEXT:  }
 
-// DYNAMIC: -dynamic.exe:       file format ELF64-
-// STATIC:  -static.exe:       file format ELF64-
+// DYNAMIC: -dynamic.exe:       file format elf64-
+// STATIC:  -static.exe:       file format elf64-
 
 // Check that static & dynamic binaries and shared libraries have a valid __cap_relocs section:
 // DUMP-EXE-LABEL: CAPABILITY RELOCATION RECORDS:
@@ -61,9 +61,9 @@
 
 // DUMP-EXE-DAG: [[__START_ADDR]]  g    F  .text           [[__START_LEN]] __start{{$}}
 // DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g     O .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
-// DUMP-EXE-DAG: [[X_ADDR]]        g     O .data           00000004 x{{$}}
+// DUMP-EXE-DAG: [[X_ADDR]]        g     O .data           0000000000000004 x{{$}}
 // DUMP-EXE-DAG: [[XPTR_ADDR]]     g     O .data           [[CAP_SYMBOL_SIZE]] xptr{{$}}
-// DUMP-EXE-DAG: [[BUFFER_ADDR]]   g     O .bss            0000002a buffer{{$}}
+// DUMP-EXE-DAG: [[BUFFER_ADDR]]   g     O .bss            000000000000002a buffer{{$}}
 // DUMP-EXE-DAG: [[BUFPTR_ADDR]]   g     O {{\.rodata|\.data\.rel\.ro}}    [[CAP_SYMBOL_SIZE]] bufptr{{$}}
 
 

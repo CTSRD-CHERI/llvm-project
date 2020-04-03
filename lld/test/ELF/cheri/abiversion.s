@@ -10,7 +10,7 @@ nop
 .end __start
 
 
-# CHECK:      Format: ELF64-mips
+# CHECK:      Format: elf64-mips
 # CHECK-NEXT: Arch: cheri
 # CHECK-NEXT: AddressSize: 64bit
 # CHECK-NEXT: LoadName:

@@ -8,10 +8,10 @@
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
 # RUN: %cheri256_llvm-mc -filetype=obj -target-abi n64 %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
 # RUN: %cheri128_llvm-mc -filetype=obj -target-abi n64 %S/../Inputs/mips-dynamic.s -o %t-cheri128-hybrid-lib.o
-# RUN: llvm-readobj -h %t-cheri128-main.o | FileCheck -check-prefix=CHERI128-FLAGS %s
-# RUN: llvm-readobj -h %t-cheri256-main.o | FileCheck -check-prefix=CHERI256-FLAGS %s
-# RUN: llvm-readobj -h %t-cheri128-hybrid-main.o | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
-# RUN: llvm-readobj -h %t-cheri256-hybrid-main.o | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
+# RUN: llvm-readobj -h %t-cheri128-main.o | FileCheck --check-prefix=CHERI128-FLAGS %s
+# RUN: llvm-readobj -h %t-cheri256-main.o | FileCheck --check-prefix=CHERI256-FLAGS %s
+# RUN: llvm-readobj -h %t-cheri128-hybrid-main.o | FileCheck --check-prefix=CHERI128-HYBRID-FLAGS %s
+# RUN: llvm-readobj -h %t-cheri256-hybrid-main.o | FileCheck --check-prefix=CHERI256-HYBRID-FLAGS %s
 
 
 # Check that setting an explicit emulation doesn't infer the target ABI from the first .o:
@@ -48,19 +48,19 @@
 
 # linking plain mips with hybrid results in a hybrid binary:
 # RUN: ld.lld %t-cheri256-hybrid-main.o %t-mips4.o -o %t.exe
-# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
+# RUN: llvm-readobj -h %t.exe | FileCheck --check-prefix=CHERI256-HYBRID-FLAGS %s
 # RUN: ld.lld %t-cheri128-hybrid-main.o %t-mips4.o -o %t.exe
-# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
+# RUN: llvm-readobj -h %t.exe | FileCheck --check-prefix=CHERI128-HYBRID-FLAGS %s
 # Same for -mcpu=beri
 # RUN: ld.lld %t-cheri128-hybrid-main.o %t-beri.o -o %t.exe
-# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
+# RUN: llvm-readobj -h %t.exe | FileCheck --check-prefix=CHERI128-HYBRID-FLAGS %s
 # RUN: ld.lld %t-cheri256-hybrid-main.o %t-beri.o -o %t.exe
-# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
+# RUN: llvm-readobj -h %t.exe | FileCheck --check-prefix=CHERI256-HYBRID-FLAGS %s
 
 
 # Should be able to link beri with MIPS4
 # RUN: ld.lld %t-beri-main.o %t-mips4.o -o %t.exe
-# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=BERI-FLAGS %s
+# RUN: llvm-readobj -h %t.exe | FileCheck --check-prefix=BERI-FLAGS %s
 # But not against mips64
 # RUN: not ld.lld %t-beri-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -DCHERI_TYPE=cheri128 -check-prefix BERI-vs-MIPS64 %s
 # BERI-vs-MIPS64: incompatible target ISA:

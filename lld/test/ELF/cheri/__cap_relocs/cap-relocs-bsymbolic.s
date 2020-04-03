@@ -3,9 +3,9 @@
 # This was a problem with __cap_relocs and was found building RTLD
 
 // RUN: %cheri128_purecap_llvm-mc -filetype=obj -defsym=CHERI=1 %s -o %t-cheri.o
-// RUN: llvm-readobj -r -t %t-cheri.o | FileCheck %s -check-prefixes OBJ-RELOCS,CHERI-OBJ-RELOCS
+// RUN: llvm-readobj -r -t %t-cheri.o | FileCheck %s --check-prefixes OBJ-RELOCS,CHERI-OBJ-RELOCS
 // RUN: llvm-mc -triple=mips64-unknown-freebsd -position-independent -filetype=obj %s -o %t-mips.o
-// RUN: llvm-readobj -r -t %t-mips.o | FileCheck %s -check-prefixes OBJ-RELOCS,MIPS-OBJ-RELOCS
+// RUN: llvm-readobj -r -t %t-mips.o | FileCheck %s --check-prefixes OBJ-RELOCS,MIPS-OBJ-RELOCS
 
 
 # OBJ-RELOCS-LABEL: Relocations [
@@ -24,7 +24,7 @@
 
 
 # RUN: ld.lld %t-mips.o -shared -o %t-mips.so
-# RUN: llvm-readobj -r %t-mips.so | FileCheck %s -check-prefix MIPS-PREEMPTIBLE
+# RUN: llvm-readobj -r %t-mips.so | FileCheck %s --check-prefix MIPS-PREEMPTIBLE
 # MIPS-PREEMPTIBLE-LABEL: Relocations [
 # MIPS-PREEMPTIBLE-NEXT:    Section (7) .rel.dyn {
 # MIPS-PREEMPTIBLE-NEXT:      0x204C0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
@@ -32,7 +32,7 @@
 # MIPS-PREEMPTIBLE-NEXT:      0x204E0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE baz 0x0 (real addend unknown)
 # MIPS-PREEMPTIBLE-NEXT:    }
 # MIPS-PREEMPTIBLE-NEXT:  ]
-# RUN: llvm-objdump -section=.data -s %t-mips.so | FileCheck %s -check-prefix MIPS-PREEMPTIBLE-ADDEND
+# RUN: llvm-objdump --section=.data -s %t-mips.so | FileCheck %s --check-prefix MIPS-PREEMPTIBLE-ADDEND
 # Check that we have written the added 0x7 to the right location:
 # MIPS-PREEMPTIBLE-ADDEND-LABEL: Contents of section .data:
 # MIPS-PREEMPTIBLE-ADDEND-NEXT:  204c0 00000000 00000000 00000000 00000000  ................
@@ -43,7 +43,7 @@
 # Now check for CHERI:
 # RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-cheri.o -shared -o %t-cheri.so
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
-# RUN: llvm-readobj -r --cap-relocs %t-cheri.so | FileCheck %s -check-prefix CHERI-PREEMPTIBLE
+# RUN: llvm-readobj -r --cap-relocs %t-cheri.so | FileCheck %s --check-prefix CHERI-PREEMPTIBLE
 # CHERI-PREEMPTIBLE-LABEL:  Relocations [
 # CHERI-PREEMPTIBLE-NEXT:    Section (7) .rel.dyn {
 # CHERI-PREEMPTIBLE-NEXT:      0x20590 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
@@ -65,7 +65,7 @@
 # CHERI-PREEMPTIBLE-NEXT:    0x030650 (intptr)        Base: 0x0 (bar+0) Length: 0 Perms: Object
 # CHERI-PREEMPTIBLE-NEXT:    0x030660 (shortptr)      Base: 0x0 (baz+7) Length: 0 Perms: Object
 # CHERI-PREEMPTIBLE-NEXT: ]
-# RUN: llvm-objdump -section=.data -s %t-cheri.so | FileCheck %s -check-prefix CHERI-PREEMPTIBLE-ADDEND
+# RUN: llvm-objdump --section=.data -s %t-cheri.so | FileCheck %s --check-prefix CHERI-PREEMPTIBLE-ADDEND
 # CHERI-PREEMPTIBLE-ADDEND-LABEL: Contents of section .data:
 # CHERI-PREEMPTIBLE-ADDEND-NEXT:  30640 cacacaca cacacaca cacacaca cacacaca  ................
 # CHERI-PREEMPTIBLE-ADDEND-NEXT:  30650 cacacaca cacacaca cacacaca cacacaca  ................
@@ -73,7 +73,7 @@
 
 
 # RUN: ld.lld %t-mips.o -shared -Bsymbolic -o %t-mips-symbolic.so
-# RUN: llvm-readobj -r %t-mips-symbolic.so | FileCheck %s -check-prefix MIPS-BSYMBOLIC
+# RUN: llvm-readobj -r %t-mips-symbolic.so | FileCheck %s --check-prefix MIPS-BSYMBOLIC
 # Should only have three relocations against the load address here:
 # MIPS-BSYMBOLIC-LABEL: Relocations [
 # MIPS-BSYMBOLIC-NEXT:    Section (7) .rel.dyn {
@@ -82,7 +82,7 @@
 # MIPS-BSYMBOLIC-NEXT:      0x204E0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 # MIPS-BSYMBOLIC-NEXT:    }
 # MIPS-BSYMBOLIC-NEXT:  ]
-# RUN: llvm-objdump -section=.data -s %t-mips-symbolic.so | FileCheck %s -check-prefix MIPS-BSYMBOLIC-ADDEND
+# RUN: llvm-objdump --section=.data -s %t-mips-symbolic.so | FileCheck %s --check-prefix MIPS-BSYMBOLIC-ADDEND
 # Check that we have written the added 0x7 to the right location:
 # MIPS-BSYMBOLIC-ADDEND-LABEL: Contents of section .data:
 # MIPS-BSYMBOLIC-ADDEND-NEXT:  204c0 00000000 00010490 00000000 00000000  ................
@@ -95,7 +95,7 @@
 # RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-cheri.o -shared -Bsymbolic -o %t-cheri-symbolic.so
 # With -BSymbolic all 6 relocations should be against the load address:
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
-# RUN: llvm-readobj -r --cap-relocs %t-cheri-symbolic.so | FileCheck %s -check-prefix CHERI-BSYMBOLIC
+# RUN: llvm-readobj -r --cap-relocs %t-cheri-symbolic.so | FileCheck %s --check-prefix CHERI-BSYMBOLIC
 # CHERI-BSYMBOLIC-LABEL:  Relocations [
 # CHERI-BSYMBOLIC-NEXT:    Section (7) .rel.dyn {
 # CHERI-BSYMBOLIC-NEXT:      0x20570 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
@@ -107,7 +107,7 @@
 # CHERI-BSYMBOLIC-NEXT:    }
 # CHERI-BSYMBOLIC-NEXT:  ]
 
-# RUN: llvm-objdump -section=.data -s %t-cheri-symbolic.so | FileCheck %s -check-prefix CHERI-BSYMBOLIC-ADDEND
+# RUN: llvm-objdump --section=.data -s %t-cheri-symbolic.so | FileCheck %s --check-prefix CHERI-BSYMBOLIC-ADDEND
 
 # In the case of CHERI we have the addend in the offset field of the cap reloc:
 # CHERI-BSYMBOLIC-LABEL: CHERI __cap_relocs [

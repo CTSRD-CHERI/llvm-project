@@ -4,7 +4,7 @@
 
 // create a n64 output that doesn't have any cap-table entries
 // RUN: %cheri_cc1 %s -emit-obj -x c -O3 -o %t.o
-// RUN: llvm-objdump -t %t.o | FileCheck -check-prefix OBJ %s
+// RUN: llvm-objdump -t %t.o | FileCheck --check-prefix OBJ %s
 // RUN: ld.lld %t.o -o %t.exe
 // RUN: llvm-objdump -t %t.exe | FileCheck %s
 
@@ -16,12 +16,12 @@ static int __start(void) {
 }
 
 // OBJ-LABEL: SYMBOL TABLE:
-// OBJ-NEXT: 0000000000000000 l    df *ABS*		 00000000 cap-table-broken-mips-output.c
-// OBJ-NEXT: 0000000000000000 g     O .data		 00000004 global
-// OBJ-NEXT: 0000000000000008 g     O .data		 00000008 global2
+// OBJ-NEXT: 0000000000000000 l    df *ABS* 0000000000000000 cap-table-broken-mips-output.c
+// OBJ-NEXT: 0000000000000000 g     O .data 0000000000000004 global
+// OBJ-NEXT: 0000000000000008 g     O .data 0000000000000008 global2
 
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK-NEXT: 0000000000000000 l    df *ABS*    00000000 cap-table-broken-mips-output.c
-// CHECK-NEXT: 0000000000038210         .got		 00000000 .hidden _gp
-// CHECK-NEXT: 0000000000030210 g     O .data		 00000004 global
-// CHECK-NEXT: 0000000000030218 g     O .data		 00000008 global2
+// CHECK-NEXT: 0000000000000000 l    df *ABS* 0000000000000000 cap-table-broken-mips-output.c
+// CHECK-NEXT: 0000000000038210 l       .got  0000000000000000 .hidden _gp
+// CHECK-NEXT: 0000000000030210 g     O .data 0000000000000004 global
+// CHECK-NEXT: 0000000000030218 g     O .data 0000000000000008 global2

@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -O2 -masm-verbose -mframe-pointer=none -fcxx-exceptions -fexceptions %s -emit-obj -o %t.o
+// RUN: %cheri_purecap_cc1 -O2 -mframe-pointer=none -fcxx-exceptions -fexceptions %s -emit-obj -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=OBJ-RELOCS
 /// Should have two relocations against _Z4testll
 // OBJ-RELOCS:      Section ({{.+}}) .rela.gcc_except_table {
@@ -13,16 +13,6 @@
 // RUN: ld.lld -shared %t.o -o %t.so -z text
 // RUN: llvm-readelf -r --syms --section-mapping --sections --program-headers --cap-relocs  %t.so | FileCheck %s
 
-// CHECK:      Relocation section '.rel.dyn' at offset {{.+}} contains 1 entries:
-// CHECK-NEXT: Offset             Info             Type                            Symbol's Value  Symbol's Name
-// CHECK-NEXT:                     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __gxx_personality_v0
-// CHECK-EMPTY:
-// CHECK-NEXT: Relocation section '.rel.plt' at offset {{.+}} contains 3 entries:
-// CHECK-NEXT: Offset             Info             Type                            Symbol's Value   Symbol's Name
-// CHECK-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 _Z11external_fnl
-// CHECK-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __cxa_begin_catch
-// CHECK-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __cxa_end_catch
-// CHECK-EMPTY:
 // CHECK-LABEL: There are 10 program headers, starting at
 // CHECK-EMPTY:
 // CHECK-NEXT: Program Headers:
@@ -51,6 +41,18 @@
 // CHECK-NEXT: 08     .MIPS.options
 // CHECK-NEXT: 09     .MIPS.abiflags
 // CHECK-NEXT: None   .bss .pdr .comment .symtab .shstrtab .strtab
+
+// CHECK-LABEL:      Relocation section '.rel.dyn' {{.+}} contains 1 entries:
+// CHECK-NEXT: Offset             Info             Type                            Symbol's Value  Symbol's Name
+// CHECK-NEXT:                     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __gxx_personality_v0
+// CHECK-EMPTY:
+// CHECK-NEXT: Relocation section '.rel.plt' at offset {{.+}} contains 3 entries:
+// CHECK-NEXT: Offset             Info             Type                            Symbol's Value   Symbol's Name
+// CHECK-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 _Z11external_fnl
+// CHECK-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __cxa_begin_catch
+// CHECK-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __cxa_end_catch
+// CHECK-EMPTY:
+
 /// Local relocations for exception handling:
 // CHECK: CHERI __cap_relocs [
 // CHECK-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (__cheri_eh__Z4testll+132) Length: 164 Perms: Function

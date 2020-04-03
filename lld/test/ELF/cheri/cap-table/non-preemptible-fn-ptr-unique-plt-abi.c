@@ -1,5 +1,5 @@
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t.o %s
-// RUN: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix DISAS -implicit-check-not R_MIPS_CHERI
+// RUN: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix DISAS --implicit-check-not R_MIPS_CHERI
 // Should have a R_MIPS_CHERI_CAPTAB20 relocation against the function pointer and a R_MIPS_CHERI_CAPCALL20 against use_callback
 // DISAS: 000000000000001c: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE default_callback
 // DISAS: 0000000000000020: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
@@ -15,25 +15,25 @@
 // DISAS: 00000000000001e0: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t2.o -DOTHER_FILE %s
-// RUN: llvm-objdump --syms %t2.o | FileCheck %s -check-prefix OTHER_FILE-SYMS
-// OTHER_FILE-SYMS: 0000000000000000 g F .text 00000028 .protected check_if_default
+// RUN: llvm-objdump --syms %t2.o | FileCheck %s --check-prefix OTHER_FILE-SYMS
+// OTHER_FILE-SYMS: 0000000000000000 g F .text 0000000000000028 .protected check_if_default
 
 // Check that we emit a R_CHERI_CAPABILITY relocation instead of __cap_relocs for shlib/pie/dynamically linked exe
 // Also check that we only emit exactly one fake symbol for each function pointer!
 
 // RUN: ld.lld -shared %t.o %t2.o -o %t.so --verbose-cap-relocs
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.so | FileCheck %s -check-prefixes CHECK,CHECK-SHLIB,CHECK-NO-VERSION-SCRIPT
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.so | FileCheck %s --check-prefixes CHECK,CHECK-SHLIB,CHECK-NO-VERSION-SCRIPT
 // Should be the same for -Bsymbolic
 // RUN: ld.lld -Bsymbolic -shared %t.o %t2.o -o %t.so --verbose-cap-relocs
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.so | FileCheck %s -check-prefixes CHECK,CHECK-SHLIB,CHECK-NO-VERSION-SCRIPT
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.so | FileCheck %s --check-prefixes CHECK,CHECK-SHLIB,CHECK-NO-VERSION-SCRIPT
 
 // Create an empty .so file just to force non-static linking:
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t-empty.o -xc /dev/null
 // RUN: ld.lld -shared %t-empty.o -o %t-empty-shlib.so
 // RUN: ld.lld -pie %t.o %t2.o %t-empty-shlib.so -o %t-pie.exe  --verbose-cap-relocs
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-pie.exe | FileCheck %s -check-prefixes CHECK,CHECK-NONPREEMPTIBLE
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-pie.exe | FileCheck %s --check-prefixes CHECK,CHECK-NONPREEMPTIBLE
 // RUN: ld.lld %t.o %t2.o %t-empty-shlib.so -o %t.exe  --verbose-cap-relocs
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.exe | FileCheck %s -check-prefixes CHECK,CHECK-NONPREEMPTIBLE
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.exe | FileCheck %s --check-prefixes CHECK,CHECK-NONPREEMPTIBLE
 
 // CHECK-LABEL: Dynamic Relocations {
 // With the version script default_callback comes first
@@ -135,7 +135,7 @@
 // STATIC-MESSAGE-NEXT: Do not need function pointer trampoline for static_callback in static binary
 // STATIC-MESSAGE-EMPTY:
 
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-static.exe | FileCheck %s -check-prefix STATIC
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-static.exe | FileCheck %s --check-prefix STATIC
 // STATIC-LABEL: Dynamic Relocations {
 // STATIC-NEXT:  }
 // STATIC-NEXT:  DynamicSymbols [
@@ -160,7 +160,7 @@
 // Check that we don't crash when a version script marks a symbol as non-preemptible:
 // RUN: echo "VERSION_1.0 { local: *; };" > %t.script
 // RUN: ld.lld -shared %t.o %t2.o %t-empty-shlib.so --verbose-cap-relocs -o %t-version-script.so --version-script %t.script
-// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-version-script.so | FileCheck %s -check-prefixes CHECK,CHECK-NONPREEMPTIBLE
+// RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-version-script.so | FileCheck %s --check-prefixes CHECK,CHECK-NONPREEMPTIBLE
 
 // FIXME: this should also be a runtime test in rtld
 

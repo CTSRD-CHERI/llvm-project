@@ -2,11 +2,11 @@
 # NOT: llvm-readobj -r %t.o
 # RUN: ld.lld -preemptible-caprelocs=elf -shared %t.o -o %t-new.so -verbose -verbose-cap-relocs --relative-cap-relocs
 # RUN: ld.lld -preemptible-caprelocs=elf -shared %t.o -o %t-old.so -verbose -verbose-cap-relocs --no-relative-cap-relocs
-# RUN: llvm-readobj --dynamic -dyn-relocations -dyn-symbols --cap-relocs %t-new.so | FileCheck %s -check-prefixes DYN-RELOCS,DYN-RELOCS-NEW
-# RUN: llvm-readobj --dynamic -dyn-relocations -dyn-symbols --cap-relocs %t-old.so | FileCheck %s -check-prefixes DYN-RELOCS,DYN-RELOCS-OLD
+# RUN: llvm-readobj --dynamic --dyn-relocations --dyn-symbols --cap-relocs %t-new.so | FileCheck %s --check-prefixes DYN-RELOCS,DYN-RELOCS-NEW
+# RUN: llvm-readobj --dynamic --dyn-relocations --dyn-symbols --cap-relocs %t-old.so | FileCheck %s --check-prefixes DYN-RELOCS,DYN-RELOCS-OLD
 # Should have the same in-memory representation (just without the ELF relocations)
-# RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs %t-new.so | FileCheck %s -check-prefixes DUMP,DUMP-NEW
-# RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs %t-old.so | FileCheck %s -check-prefixes DUMP,DUMP-OLD
+# RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs %t-new.so | FileCheck %s --check-prefixes DUMP,DUMP-NEW
+# RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs %t-old.so | FileCheck %s --check-prefixes DUMP,DUMP-OLD
 
 .text
 .global foo
@@ -44,6 +44,13 @@ local_ref_with_addend:
 
 # We should have one R_MIPS_CHERI_CAPABILITY relocation and one entry in __cap_relocs:
 
+# DYN-RELOCS-LABEL: DynamicSection [
+# DYN-RELOCS-OLD: 0x000000007000C002 MIPS_CHERI_FLAGS ABI_PCREL{{$}}
+# DYN-RELOCS-NEW: 0x000000007000C002 MIPS_CHERI_FLAGS ABI_PCREL RELATIVE_CAPRELOCS {{$}}
+# DYN-RELOCS-NEW: 0x000000007000C000 MIPS_CHERI___CAPRELOCS 0x3E0
+# DYN-RELOCS-OLD: 0x000000007000C000 MIPS_CHERI___CAPRELOCS 0x20508
+# DYN-RELOCS: 0x000000007000C001 MIPS_CHERI___CAPRELOCSSZ 0x50
+
 # DYN-RELOCS-LABEL:  Dynamic Relocations {
 # the first four are for the __cap_relocs section (legacy mode)
 # DYN-RELOCS-OLD-NEXT:  0x20508 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
@@ -55,13 +62,6 @@ local_ref_with_addend:
 # DYN-RELOCS-NEW-NEXT:  0x204D0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE foo 0x0
 # DYN-RELOCS-OLD-NEXT:  0x305A0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE foo 0x0
 # DYN-RELOCS-NEXT:   }
-
-# DYN-RELOCS-LABEL: DynamicSection [
-# DYN-RELOCS-OLD: 0x000000007000C002 MIPS_CHERI_FLAGS ABI_PCREL{{$}}
-# DYN-RELOCS-NEW: 0x000000007000C002 MIPS_CHERI_FLAGS ABI_PCREL RELATIVE_CAPRELOCS {{$}}
-# DYN-RELOCS-NEW: 0x000000007000C000 MIPS_CHERI___CAPRELOCS 0x3E0
-# DYN-RELOCS-OLD: 0x000000007000C000 MIPS_CHERI___CAPRELOCS 0x20508
-# DYN-RELOCS: 0x000000007000C001 MIPS_CHERI___CAPRELOCSSZ 0x50
 
 # DYN-RELOCS-LABEL: CHERI __cap_relocs [
 # DYN-RELOCS-NEW-NEXT:   0x0204b0 (local_ref) Base: 0x10480 (bar+0) Length: 8 Perms: Function

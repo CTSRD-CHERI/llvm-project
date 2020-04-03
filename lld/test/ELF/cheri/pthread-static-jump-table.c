@@ -6,32 +6,31 @@
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/libthr-table.o -DLIBTHR_TABLE
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/libthr-impls.o -DLIBTHR_IMPLS -O2
 // RUN: llvm-ar cq %t/libthr.a %t/libthr-table.o %t/libthr-impls.o
-// RUN: llvm-objdump -d -t %t/libthr.a
 
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/main.o -DEXE
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/main.o -DEXE
 // RUN: ld.lld --verbose -pie %t/main.o -o %t/thr-first.exe %t/libthr.a %t/libc.a
 // RUN: ld.lld --verbose -pie %t/main.o -o %t/libc-first.exe %t/libc.a %t/libthr.a
 
-// RUN: llvm-objdump -t %t/thr-first.exe | FileCheck %s -check-prefix USES-LIBTHR-SYMBOLS
-// RUN: llvm-objdump -t %t/libc-first.exe | FileCheck %s -check-prefix USES-LIBC-SYMBOLS
+// RUN: llvm-objdump -t %t/thr-first.exe | FileCheck %s --check-prefix USES-LIBTHR-SYMBOLS
+// RUN: llvm-objdump -t %t/libc-first.exe | FileCheck %s --check-prefix USES-LIBC-SYMBOLS
 
 // PTHREAD symbols are a single instruction in the libthr version:
 
 // USES-LIBTHR-SYMBOLS: SYMBOL TABLE:
-// USES-LIBTHR-SYMBOLS-DAG: gw    F .text		 00000004 pthread_exit
-// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 00000004 _pthread_exit
-// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 00000004 _pthread_join
-// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 00000004 _pthread_kill
-// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 00000004 _pthread_once
-// USES-LIBTHR-SYMBOLS-DAG: gw    F .text		 00000004 pthread_join
-// USES-LIBTHR-SYMBOLS-DAG: gw    F .text		 00000004 pthread_kill
-// USES-LIBTHR-SYMBOLS-DAG: gw    F .text		 00000004 pthread_once
+// USES-LIBTHR-SYMBOLS-DAG: w     F .text		 0000000000000004 pthread_exit
+// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 0000000000000004 _pthread_exit
+// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 0000000000000004 _pthread_join
+// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 0000000000000004 _pthread_kill
+// USES-LIBTHR-SYMBOLS-DAG: g     F .text		 0000000000000004 _pthread_once
+// USES-LIBTHR-SYMBOLS-DAG: w     F .text		 0000000000000004 pthread_join
+// USES-LIBTHR-SYMBOLS-DAG: w     F .text		 0000000000000004 pthread_kill
+// USES-LIBTHR-SYMBOLS-DAG: w     F .text		 0000000000000004 pthread_once
 
 // Static linking of libc and libthr must be done in the right order otherwise we get infinite loops
 // FIXME: can we warn about this?
 // USES-LIBC-SYMBOLS: SYMBOL TABLE:
-// USES-LIBC-SYMBOLS: gw    F .text		 000000{{54|58}} pthread_exit
+// USES-LIBC-SYMBOLS: l    F .text		 00000000000000{{54|58}} pthread_exit
 
 
 #ifndef EXE

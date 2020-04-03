@@ -2,7 +2,7 @@
 # RUN: %cheri_purecap_llvm-mc -filetype=obj -defsym=MAIN_FILE=1 %s -o %t.o
 
 # RUN: ld.lld --fatal-warnings -o %t.exe %t.o
-# RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,UNDEFINED
+# RUN: llvm-readobj --dyn-relocations -t %t.exe | FileCheck %s --check-prefixes STATIC-COMMON,UNDEFINED
 # STATIC-COMMON:       Dynamic Relocations {
 # STATIC-COMMON-NEXT:  }
 # STATIC-COMMON:       Symbol {
@@ -28,7 +28,7 @@
 # An absolute symbol defined in the linker script is fine
 # RUN: echo "weak_symbol = 64;" > %t.script
 # RUN: ld.lld --fatal-warnings -o %t.exe %t.o -T %t.script
-# RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,ABSOLUTE '-D$ABS_VALUE=0x40'
+# RUN: llvm-readobj --dyn-relocations -t %t.exe | FileCheck %s --check-prefixes STATIC-COMMON,ABSOLUTE '-D$ABS_VALUE=0x40'
 # ABSOLUTE:       Symbol {
 # ABSOLUTE:         Name: weak_symbol (
 # ABSOLUTE-NEXT:    Value: [[$ABS_VALUE]]
@@ -41,26 +41,26 @@
 
 # And an absolute symbol set in the .o file is also fine
 # RUN: %cheri_purecap_llvm-mc -filetype=obj -defsym=ABS_SYM_IN_FILE=1 %s -o %t2.o
-# RUN: llvm-objdump -t %t2.o | FileCheck %s -check-prefix ABS_IN_FILE
-# ABS_IN_FILE: 0000000000000050         *ABS*		 00000000 weak_symbol
+# RUN: llvm-objdump -t %t2.o | FileCheck %s --check-prefix ABS_IN_FILE
+# ABS_IN_FILE: 0000000000000050 g        *ABS*		 0000000000000000 weak_symbol
 # RUN: ld.lld --fatal-warnings -o %t.exe %t.o %t2.o
-# RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,ABSOLUTE '-D$ABS_VALUE=0x50'
+# RUN: llvm-readobj --dyn-relocations -t %t.exe | FileCheck %s --check-prefixes STATIC-COMMON,ABSOLUTE '-D$ABS_VALUE=0x50'
 
 
 # Similarly an absolute -defsym= should also work:
 # RUN: %cheri_purecap_llvm-mc -filetype=obj -defsym=ABS_SYM_IN_DEFSYM=1 -defsym=weak_symbol=0x60 %s -o %t2.o
-# RUN: llvm-objdump -t %t2.o | FileCheck %s -check-prefix ABS_IN_DEFSYM
-# ABS_IN_DEFSYM: 0000000000000060         *ABS*		 00000000 weak_symbol
+# RUN: llvm-objdump -t %t2.o | FileCheck %s --check-prefix ABS_IN_DEFSYM
+# ABS_IN_DEFSYM: 0000000000000060 g        *ABS*		 0000000000000000 weak_symbol
 # RUN: ld.lld --fatal-warnings -o %t.exe %t.o %t2.o
-# RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,ABSOLUTE '-D$ABS_VALUE=0x60'
+# RUN: llvm-readobj --dyn-relocations -t %t.exe | FileCheck %s --check-prefixes STATIC-COMMON,ABSOLUTE '-D$ABS_VALUE=0x60'
 
 
 # A real symbol without a linker script
 # RUN: %cheri_purecap_llvm-mc -filetype=obj -defsym=RESOLVE_FILE=1 -defsym=RESOLVE_FILE_SET_SIZE=1 %s -o %t2.o
-# RUN: llvm-objdump -t %t2.o | FileCheck %s -check-prefix DEFINED_WITH_SIZE
-# DEFINED_WITH_SIZE: 0000000000000000 .data 00000008 weak_symbol
+# RUN: llvm-objdump -t %t2.o | FileCheck %s --check-prefix DEFINED_WITH_SIZE
+# DEFINED_WITH_SIZE: 0000000000000000 g .data 0000000000000008 weak_symbol
 # RUN: ld.lld --fatal-warnings -o %t.exe %t.o %t2.o
-# RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,RESOLVED '-D$RESOLVED_SIZE=8'
+# RUN: llvm-readobj --dyn-relocations -t %t.exe | FileCheck %s --check-prefixes STATIC-COMMON,RESOLVED '-D$RESOLVED_SIZE=8'
 # RESOLVED:       Symbol {
 # RESOLVED:         Name: weak_symbol (
 # RESOLVED-NEXT:    Value: 0x120030{{.+}}
@@ -73,8 +73,8 @@
 
 # A real symbol without a size should give a warning:
 # RUN: %cheri_purecap_llvm-mc -filetype=obj -defsym=RESOLVE_FILE=1 -defsym=RESOLVE_FILE_SET_SIZE=0 %s -o %t2.o
-# RUN: llvm-objdump -t %t2.o | FileCheck %s -check-prefix DEFINED_NO_SIZE
-# DEFINED_NO_SIZE: 0000000000000000 .data 00000000 weak_symbol
+# RUN: llvm-objdump -t %t2.o | FileCheck %s --check-prefix DEFINED_NO_SIZE
+# DEFINED_NO_SIZE: 0000000000000000 g   .data 0000000000000000 weak_symbol
 # --fatal-warnings should give an error:
 # RUN: not ld.lld --fatal-warnings -o %t.exe %t.o %t2.o 2>&1 | FileCheck %s -check-prefix ERROR
 # ERROR: ld.lld: error: could not determine size of cap reloc against <unknown kind> weak_symbol
@@ -85,7 +85,7 @@
 # WARNING: ld.lld: warning: could not determine size of cap reloc against <unknown kind> weak_symbol
 # WARNING-NEXT: >>> defined in  ({{.+}}weak-symbols-2.s.tmp2.o:(.data+0x0))
 # WARNING-NEXT: >>> referenced by <internal>:(.captable+0x0)
-# RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,RESOLVED '-D$RESOLVED_SIZE=0'
+# RUN: llvm-readobj --dyn-relocations -t %t.exe | FileCheck %s --check-prefixes STATIC-COMMON,RESOLVED '-D$RESOLVED_SIZE=0'
 
 .ifdef MAIN_FILE
 .text

@@ -2,14 +2,14 @@
 
 // Check x86_64 since MIPS n64 doesn't seem to use .rel.plt:
 // RUN: %clang_cc1 -triple=x86_64-unknown-freebsd -emit-obj -O2 %s -o %t-amd64.o
-// RUN: llvm-readobj -r %t-amd64.o | FileCheck -check-prefix AMD64-OBJ %s
+// RUN: llvm-readobj -r %t-amd64.o | FileCheck --check-prefix AMD64-OBJ %s
 // AMD64-OBJ: Relocations [
 // AMD64-OBJ-NEXT: Section ({{.+}}) .rela.text {
 // AMD64-OBJ-NEXT:     0x3 R_X86_64_GOTPCREL call 0xFFFFFFFFFFFFFFFC
 // AMD64-OBJ-NEXT:     0x8 R_X86_64_PLT32 extern_function 0xFFFFFFFFFFFFFFFC
 // AMD64-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t-amd64.so %t-amd64.o
-// RUN: llvm-readobj -dynamic-table -r -sections -file-headers %t-amd64.so | FileCheck -check-prefix AMD64-SHLIB %s
+// RUN: llvm-readobj --dynamic-table -r -sections --file-headers %t-amd64.so | FileCheck --check-prefix AMD64-SHLIB %s
 
 // AMD64-SHLIB:      SectionHeaderCount: 16
 // AMD64-SHLIB:  Section {
@@ -53,13 +53,6 @@
 // AMD64-SHLIB:      Index: [[GOTPLT_INDEX]]
 // AMD64-SHLIB-NEXT: Name: .got.plt
 
-// AMD64-SHLIB-LABEL: Relocations [
-// AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.dyn {
-// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_GLOB_DAT call 0x0
-// AMD64-SHLIB-NEXT: }
-// AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.plt {
-// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_JUMP_SLOT extern_function 0x0
-// AMD64-SHLIB-NEXT: }
 // AMD64-SHLIB-LABEL: DynamicSection [
 // AMD64-SHLIB-NEXT: Tag                Type                 Name/Value
 // AMD64-SHLIB-NEXT: 0x0000000000000007 RELA                 [[PLT_DYN_ADDR]]
@@ -70,21 +63,29 @@
 // AMD64-SHLIB-NEXT: 0x0000000000000003 PLTGOT               0x{{.+}}
 // AMD64-SHLIB-NEXT: 0x0000000000000014 PLTREL               RELA
 
-// RUN: llvm-strip -o /dev/stdout %t-amd64.so | llvm-readobj -file-headers - | FileCheck %s -check-prefix AMD64-STRIPPED
+// AMD64-SHLIB-LABEL: Relocations [
+// AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.dyn {
+// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_GLOB_DAT call 0x0
+// AMD64-SHLIB-NEXT: }
+// AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.plt {
+// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_JUMP_SLOT extern_function 0x0
+// AMD64-SHLIB-NEXT: }
+
+// RUN: llvm-strip -o /dev/stdout %t-amd64.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix AMD64-STRIPPED
 // AMD64-STRIPPED: SectionHeaderCount: 13
 
 
 // Check that purecap also has the same link value and can be stripped
 
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
-// RUN: llvm-readobj -r %t.o | FileCheck -check-prefix PURECAP-OBJ %s
+// RUN: llvm-readobj -r %t.o | FileCheck --check-prefix PURECAP-OBJ %s
 // PURECAP-OBJ: Relocations [
 // PURECAP-OBJ-NEXT: Section ({{.+}}) .rela.text {
 // PURECAP-OBJ-NEXT:    0x10 R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE call 0x0
 // PURECAP-OBJ-NEXT:    0x14 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0
 // PURECAP-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t.so %t.o
-// RUN: llvm-readobj -dynamic-table -file-headers -r -sections %t.so | FileCheck -check-prefix PURECAP-SHLIB %s
+// RUN: llvm-readobj --dynamic-table -file-headers -r --sections %t.so | FileCheck --check-prefix PURECAP-SHLIB %s
 // PURECAP-SHLIB:      SectionHeaderCount: 19
 // PURECAP-SHLIB:  Section {
 // PURECAP-SHLIB:      Index: [[DYNSYM_INDEX:3]]
@@ -126,13 +127,6 @@
 // PURECAP-SHLIB:      Index: [[CAPTABLE_INDEX]]
 // PURECAP-SHLIB-NEXT: Name: .captable
 
-// PURECAP-SHLIB: Relocations [
-// PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.dyn {
-// PURECAP-SHLIB-NEXT:    0x204{{9|A}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE call 0x0 (real addend unknown)
-// PURECAP-SHLIB-NEXT:  }
-// PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.plt {
-// PURECAP-SHLIB-NEXT:    0x204{{A|C}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0 (real addend unknown)
-// PURECAP-SHLIB-NEXT:  }
 // PURECAP-SHLIB-LABEL: DynamicSection [
 // PURECAP-SHLIB-NEXT: Tag                Type                 Name/Value
 // PURECAP-SHLIB-NEXT: 0x0000000000000011 REL                  [[PLT_DYN_ADDR]]
@@ -143,7 +137,15 @@
 // PURECAP-SHLIB-NEXT: 0x0000000070000032 MIPS_PLTGOT          0x0
 // PURECAP-SHLIB-NEXT: 0x0000000000000014 PLTREL               REL
 
-// RUN: llvm-strip -o /dev/stdout %t.so | llvm-readobj -file-headers - | FileCheck %s -check-prefix PURECAP-STRIPPED
+// PURECAP-SHLIB: Relocations [
+// PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.dyn {
+// PURECAP-SHLIB-NEXT:    0x204{{9|A}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE call 0x0 (real addend unknown)
+// PURECAP-SHLIB-NEXT:  }
+// PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.plt {
+// PURECAP-SHLIB-NEXT:    0x204{{A|C}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0 (real addend unknown)
+// PURECAP-SHLIB-NEXT:  }
+
+// RUN: llvm-strip -o /dev/stdout %t.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix PURECAP-STRIPPED
 // PURECAP-STRIPPED: SectionHeaderCount: 15
 
 

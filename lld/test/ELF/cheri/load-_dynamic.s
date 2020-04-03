@@ -1,19 +1,19 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld %t.o -o %t.exe
-# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t.exe | FileCheck %s -check-prefix STATIC
+# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t.exe | FileCheck %s --check-prefix STATIC
 # RUN: ld.lld -pie %t.o -o %t-pie.exe
-# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t-pie.exe | FileCheck %s -check-prefixes DYNAMIC,DYNAMIC-PIE
+# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t-pie.exe | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-PIE
 # RUN: ld.lld -shared %t.o -o %t.so
-# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t.so | FileCheck %s -check-prefixes DYNAMIC,DYNAMIC-SHLIB
+# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t.so | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-SHLIB
 # Also check that --export-dynamic doesn't cause _HAS__DYNAMIC to be true
 # RUN: ld.lld -export-dynamic %t.o -o %t-export.exe
-# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t-export.exe | FileCheck %s -check-prefix STATIC
+# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t-export.exe | FileCheck %s --check-prefix STATIC
 
 # Check that a static executable that is linked against a shared library has a valid _DYNAMIC symbol
 # RUN: %cheri128_llvm-mc -filetype=obj %S/../Inputs/shared.s -o %t2.o
 # RUN: ld.lld -shared %t2.o -o %t-shlib.so
 # RUN: ld.lld %t.o %t-shlib.so -o %t-with-shlib.exe
-# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t-with-shlib.exe | FileCheck %s -check-prefixes DYNAMIC,DYNAMIC-NONPIC
+# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t-with-shlib.exe | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-NONPIC
 
 # This is a hack since we can't easily load the value of _DYNAMIC prior to globals
 # being initialized:
@@ -28,14 +28,14 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 .end __start
 
 # DYNAMIC-LABEL: SYMBOL TABLE:
-# DYNAMIC-PIE-NEXT:    00000000[[DYNAMIC_ADDR:[0-9a-f]+]]        .dynamic  00000000 .hidden _DYNAMIC
-# DYNAMIC-SHLIB-NEXT:  00000000[[DYNAMIC_ADDR:[0-9a-f]+]]        .dynamic  00000000 .hidden _DYNAMIC
+# DYNAMIC-PIE-NEXT:    00000000[[DYNAMIC_ADDR:[0-9a-f]+]] l       .dynamic  0000000000000000 .hidden _DYNAMIC
+# DYNAMIC-SHLIB-NEXT:  00000000[[DYNAMIC_ADDR:[0-9a-f]+]] l       .dynamic  0000000000000000 .hidden _DYNAMIC
 #                       ^----- _DYNAMIC == relocbase + 0x1f8/258
-# DYNAMIC-NONPIC-NEXT: 00000000[[DYNAMIC_ADDR:[0-9a-f]+]]         .dynamic  00000000 .hidden _DYNAMIC
+# DYNAMIC-NONPIC-NEXT: 00000000[[DYNAMIC_ADDR:[0-9a-f]+]] l       .dynamic  0000000000000000 .hidden _DYNAMIC
 #                      ^----- absolute value for _DYNAMIC in non-pie executable with shlibs
-# DYNAMIC-NEXT: 0000000000000001         *ABS*		 00000000 .hidden _HAS__DYNAMIC
+# DYNAMIC-NEXT: 0000000000000001 l       *ABS*		 0000000000000000 .hidden _HAS__DYNAMIC
 #                       ^----- _HAS__DYNAMIC == 1
-# DYNAMIC-NEXT: {{.+}}         .got		   00000000 .hidden _gp
+# DYNAMIC-NEXT: {{.+}}         .got		   0000000000000000 .hidden _gp
 
 # DYNAMIC-LABEL: Contents of section .data:
 # DYNAMIC-PIE-NEXT:    00000000 [[DYNAMIC_ADDR]] 12345678 90abcdef
@@ -47,9 +47,9 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 #                        ^----- _HAS__DYNAMIC == 1
 
 # STATIC-LABEL: SYMBOL TABLE:
-# STATIC-NEXT: 0000000000000000         *ABS*		 00000000 .hidden _HAS__DYNAMIC
-# STATIC-NEXT: {{.+}}         .got		 00000000 .hidden _gp
-# STATIC-NEXT: 0000000000000000  w      *UND*		 00000000 _DYNAMIC
+# STATIC-NEXT: 0000000000000000 l       *ABS*		 0000000000000000 .hidden _HAS__DYNAMIC
+# STATIC-NEXT: {{.+}}         .got		 0000000000000000 .hidden _gp
+# STATIC-NEXT: 0000000000000000  w      *UND*		 0000000000000000 _DYNAMIC
 # STATIC-LABEL: Contents of section .data:
 # STATIC-NEXT: 00000000 00000000 12345678 90abcdef
 #                        ^----- _DYNAMIC == 0
@@ -58,12 +58,12 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 
 # STATIC-LABEL: Disassembly of section .text:
 # STATIC-EMPTY:
-# STATIC-NEXT: __start:
+# STATIC-NEXT: <__start>:
 # STATIC-NEXT:   ori	$2, $zero, 0
 
 # DYNAMIC-LABEL: Disassembly of section .text:
 # DYNAMIC-EMPTY:
-# DYNAMIC-NEXT: __start:
+# DYNAMIC-NEXT: <__start>:
 # DYNAMIC-PIE-NEXT:      ori	$2, $zero, 1
 # DYNAMIC-SHLIB-NEXT:    ori	$2, $zero, 1
 # DYNAMIC-NONPIC-NEXT:   ori	$2, $zero, 1

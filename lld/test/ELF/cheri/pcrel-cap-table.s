@@ -3,7 +3,7 @@
 # RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=EMPTY_CAP_TABLE=1 %s -o %t2.o
 # RUN: ld.lld -z now %t2.o -o %t.exe
-# RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s -check-prefix EMPTY-TABLE
+# RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s --check-prefix EMPTY-TABLE
 
 .text
 
@@ -13,13 +13,13 @@
 # CHECK: .data         00000030 00000000000402f0 DATA
 
 # CHECK-LABEL: SYMBOL TABLE:
-# CHECK-NEXT:  0000000000040318         .data           00000008 bar
-# CHECK-NEXT:  00000000000202cc l     F .text           00000014 fn_2
-# CHECK-NEXT:  0000000000040310         .data           00000008 foo
-# CHECK-NEXT:  00000000000302e0 l     O .captable       00000010 bar@CAPTABLE
-# CHECK-NEXT:  00000000000302e0         .captable       00000000 .hidden _CHERI_CAPABILITY_TABLE_
-# CHECK-NEXT:  0000000000048310         .got            00000000 .hidden _gp
-# CHECK-NEXT:  00000000000202a0 g     F .text           0000002c __start
+# CHECK-NEXT:  0000000000040318 l       .data           0000000000000008 bar
+# CHECK-NEXT:  00000000000202cc l     F .text           0000000000000014 fn_2
+# CHECK-NEXT:  0000000000040310 l       .data           0000000000000008 foo
+# CHECK-NEXT:  00000000000302e0 l     O .captable       0000000000000010 bar@CAPTABLE
+# CHECK-NEXT:  00000000000302e0 l       .captable       0000000000000000 .hidden _CHERI_CAPABILITY_TABLE_
+# CHECK-NEXT:  0000000000048310 l       .got            0000000000000000 .hidden _gp
+# CHECK-NEXT:  00000000000202a0 g     F .text           000000000000002c __start
 
 # CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 # CHECK: 0x00000000000302e0      Base: bar (0x0000000000040318)  Offset: 0x0000000000000000      Length: 0x0000000000000008     Permissions: 0x00000000
@@ -29,7 +29,7 @@
 .global __start
 .ent __start
 __start:
-# CHECK-LABEL: __start:
+# CHECK-LABEL: <__start>:
 .set noat
 .set noreorder
 # TODO: check for overflow?

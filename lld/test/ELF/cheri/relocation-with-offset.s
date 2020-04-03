@@ -1,35 +1,35 @@
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-linux %s -o %t-linux.o
-# RUN: llvm-objdump --section=.data -s %t-linux.o | FileCheck -check-prefix DATA-RELA %s
+# RUN: llvm-objdump --section=.data -s %t-linux.o | FileCheck --check-prefix DATA-RELA %s
 
 # RUN: ld.lld -r -o %t-linux-r.o %t-linux.o
-# RUN: llvm-readobj -r %t-linux-r.o | FileCheck -check-prefix RELOCATABLE %s
+# RUN: llvm-readobj -r %t-linux-r.o | FileCheck --check-prefix RELOCATABLE %s
 
 # RUN: ld.lld -shared -o %t-linux.so %t-linux.o
-# RUN: llvm-readobj -r %t-linux.so | FileCheck -check-prefixes SHARED,SHARED-LINUX %s
-# RUN: llvm-objdump --section=.data -s %t-linux.so | FileCheck -check-prefix DATA-REL %s
+# RUN: llvm-readobj -r %t-linux.so | FileCheck --check-prefixes SHARED,SHARED-LINUX %s
+# RUN: llvm-objdump --section=.data -s %t-linux.so | FileCheck --check-prefix DATA-REL %s
 
 # 32 bits
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-freebsd %s -o %t-freebsd32.o -defsym=MIPS32=1
-# RUN: llvm-objdump --section=.data -s %t-freebsd32.o | FileCheck -check-prefix DATA-REL %s
+# RUN: llvm-objdump --section=.data -s %t-freebsd32.o | FileCheck --check-prefix DATA-REL %s
 
 # RUN: ld.lld -r -o %t-freebsd32-r.o %t-freebsd32.o
-# RUN: llvm-objdump --section=.data -s %t-freebsd32-r.o | FileCheck -check-prefix DATA-REL %s
-# RUN: llvm-readobj -r %t-freebsd32-r.o | FileCheck -check-prefix RELOCATABLE-MIPS32 %s
+# RUN: llvm-objdump --section=.data -s %t-freebsd32-r.o | FileCheck --check-prefix DATA-REL %s
+# RUN: llvm-readobj -r %t-freebsd32-r.o | FileCheck --check-prefix RELOCATABLE-MIPS32 %s
 
 # RUN: ld.lld -shared -o %t-freebsd32.so %t-freebsd32.o
-# RUN: llvm-readobj -r %t-freebsd32.so | FileCheck -check-prefixes SHARED,SHARED-FREEBSD32 %s
-# RUN: llvm-objdump --section=.data -s %t-freebsd32.so | FileCheck -check-prefix DATA-REL %s
+# RUN: llvm-readobj -r %t-freebsd32.so | FileCheck --check-prefixes SHARED,SHARED-FREEBSD32 %s
+# RUN: llvm-objdump --section=.data -s %t-freebsd32.so | FileCheck --check-prefix DATA-REL %s
 
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd %s -o %t-freebsd.o
-# RUN: llvm-objdump --section=.data -s %t-freebsd.o | FileCheck -check-prefix DATA-RELA %s
+# RUN: llvm-objdump --section=.data -s %t-freebsd.o | FileCheck --check-prefix DATA-RELA %s
 
 # RUN: ld.lld -r -o %t-freebsd-r.o %t-freebsd.o
-# RUN: llvm-readobj -r %t-freebsd-r.o | FileCheck -check-prefix RELOCATABLE %s
-# RUN: llvm-objdump --section=.data -s %t-freebsd-r.o | FileCheck -check-prefix DATA-RELA %s
+# RUN: llvm-readobj -r %t-freebsd-r.o | FileCheck --check-prefix RELOCATABLE %s
+# RUN: llvm-objdump --section=.data -s %t-freebsd-r.o | FileCheck --check-prefix DATA-RELA %s
 
 # RUN: ld.lld -shared -o %t-freebsd.so %t-freebsd.o
-# RUN: llvm-readobj -r %t-freebsd.so | FileCheck -check-prefixes SHARED,SHARED-FREEBSD %s
-# RUN: llvm-objdump --section=.data -s %t-freebsd.so | FileCheck -check-prefix DATA-REL %s
+# RUN: llvm-readobj -r %t-freebsd.so | FileCheck --check-prefixes SHARED,SHARED-FREEBSD %s
+# RUN: llvm-objdump --section=.data -s %t-freebsd.so | FileCheck --check-prefix DATA-REL %s
 
 
 .extern foo

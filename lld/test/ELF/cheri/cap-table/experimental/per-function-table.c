@@ -3,14 +3,23 @@
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
 // RUN: ld.lld -z now -shared -o %t.so %t.o -captable-scope=function -z captabledebug
-// RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t.so | FileCheck %s -check-prefixes CHECK,PER-FUNCTION
-// RUN: llvm-objdump --syms -d %t.so | FileCheck %s -check-prefixes SYMBOLS,DISAS
+// RUN: llvm-readobj --cap-relocs --cap-table --dynamic-table -r %t.so | FileCheck %s --check-prefixes CHECK,PER-FUNCTION
+// RUN: llvm-objdump --syms -d %t.so | FileCheck %s --check-prefixes SYMBOLS,DISAS
 // RUN: ld.lld -z now -shared -o %t-file.so %t.o -captable-scope=file
-// RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t-file.so | FileCheck %s -check-prefixes CHECK,PER-FILE
+// RUN: llvm-readobj --cap-relocs --cap-table --dynamic-table -r %t-file.so | FileCheck %s --check-prefixes CHECK,PER-FILE
 // RUN: ld.lld -z now -shared -o %t-all.so %t.o -captable-scope=all
-// RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t-all.so | FileCheck %s -check-prefixes CHECK,GLOBAL
+// RUN: llvm-readobj --cap-relocs --cap-table --dynamic-table -r %t-all.so | FileCheck %s --check-prefixes CHECK,GLOBAL
 
-// CHECK-DYNAMIC:   0x000000007000C002 MIPS_CHERI_FLAGS ABI_PLT CAPTABLE_PER_FUNC
+// CHECK-LABEL: DynamicSection [
+// CHECK-NEXT:    Tag                Type                 Name/Value
+// PER-FUNCTION:  0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FUNC RELATIVE_CAPRELOCS {{$}}
+// PER-FUNCTION:  0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING 0x6E8
+// PER-FUNCTION:  0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ 0xA8
+// PER-FILE:      0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE RELATIVE_CAPRELOCS {{$}}
+// PER-FILE:      0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING 0x6A8
+// PER-FILE:      0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ 0xA8
+// GLOBAL:        0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT RELATIVE_CAPRELOCS {{$}}
+// CHECK:      ]
 
 // CHECK:       Relocations [
 // CHECK-NEXT:   Section ({{.+}}) .rel.dyn {
@@ -37,16 +46,6 @@
 
 // CHECK-NEXT:   }
 // CHECK-NEXT: ]
-// CHECK-LABEL: DynamicSection [
-// CHECK-NEXT:    Tag                Type                 Name/Value
-// PER-FUNCTION:  0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FUNC RELATIVE_CAPRELOCS {{$}}
-// PER-FUNCTION:  0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING 0x6E8
-// PER-FUNCTION:  0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ 0xA8
-// PER-FILE:      0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE RELATIVE_CAPRELOCS {{$}}
-// PER-FILE:      0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING 0x6A8
-// PER-FILE:      0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ 0xA8
-// GLOBAL:        0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT RELATIVE_CAPRELOCS {{$}}
-// CHECK:      ]
 // CHECK-NEXT: CHERI __cap_relocs [
 // PER-FUNCTION-NEXT:    0x020980 (function3@CAPTABLE@x.6) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
 // PER-FILE-NEXT:        0x020920 (function3@CAPTABLE@per-function-table.c.tmp.o.4) Base: 0x10{{.+}} (function3+0) Length: {{[0-9]+}} Perms: Function
@@ -85,23 +84,23 @@ extern int global_int;
 // Check that the indices for the per-function table are correct (should be 0 or 16)
 
 // SYMBOLS-LABEL: SYMBOL TABLE:
-// SYMBOLS: 0000000000020920 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function1
-// SYMBOLS: 0000000000020930 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function2
-// SYMBOLS: 0000000000020940 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function4
-// SYMBOLS: 0000000000020950 l     O .captable		 00000010 extern_int@CAPTABLE@function4
-// SYMBOLS: 0000000000020960 l     O .captable		 00000010 global_int@CAPTABLE@function5
-// SYMBOLS: 0000000000020970 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@same_globals_as_function1
-// SYMBOLS: 0000000000020980 l     O .captable		 00000010 function3@CAPTABLE@x.6
-// SYMBOLS: 0000000000020990 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
-// SYMBOLS: 00000000000209a0 l     O .captable		 00000010 extern_int@CAPTABLE@function3
-// SYMBOLS: 0000000000020920         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
+// SYMBOLS: 0000000000020920 l     O .captable		 0000000000000010 extern_void_ptr@CAPTABLE@function1
+// SYMBOLS: 0000000000020930 l     O .captable		 0000000000000010 extern_char_ptr@CAPTABLE@function2
+// SYMBOLS: 0000000000020940 l     O .captable		 0000000000000010 extern_void_ptr@CAPTABLE@function4
+// SYMBOLS: 0000000000020950 l     O .captable		 0000000000000010 extern_int@CAPTABLE@function4
+// SYMBOLS: 0000000000020960 l     O .captable		 0000000000000010 global_int@CAPTABLE@function5
+// SYMBOLS: 0000000000020970 l     O .captable		 0000000000000010 extern_void_ptr@CAPTABLE@same_globals_as_function1
+// SYMBOLS: 0000000000020980 l     O .captable		 0000000000000010 function3@CAPTABLE@x.6
+// SYMBOLS: 0000000000020990 l     O .captable		 0000000000000010 extern_char_ptr@CAPTABLE@function3
+// SYMBOLS: 00000000000209a0 l     O .captable		 0000000000000010 extern_int@CAPTABLE@function3
+// SYMBOLS: 0000000000020920 l       .captable		 0000000000000090 _CHERI_CAPABILITY_TABLE_
 
 
 
 // DISAS-LABEL: Disassembly of section .text:
 void *function1(void) { return extern_void_ptr(); }
-// DISAS: function1:
-// DISAS: $captable_load_extern_void_ptr:
+// DISAS: <function1>:
+// DISAS: <$captable_load_extern_void_ptr>:
 // DISAS-NEXT: clcbi	$c12, 0($c18)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
@@ -109,8 +108,8 @@ void *function1(void) { return extern_void_ptr(); }
 __attribute__((visibility("protected"))) void *function2(void) {
   return extern_char_ptr();
 }
-// DISAS: function2:
-// DISAS: $captable_load_extern_char_ptr:
+// DISAS: <function2>:
+// DISAS: <$captable_load_extern_char_ptr>:
 // DISAS-NEXT: clcbi	$c12, 0($c18)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
@@ -118,34 +117,34 @@ __attribute__((visibility("protected"))) void *function2(void) {
 __attribute__((visibility("protected"))) void *function4(void) {
   return (char *)extern_void_ptr() + extern_int();
 }
-// DISAS: function4:
+// DISAS: <function4>:
 // DISAS:      cmove	$c19, $c26
-// DISAS: $captable_load_extern_void_ptr:
+// DISAS: <$captable_load_extern_void_ptr>:
 // DISAS-NEXT: clcbi	$c12, 0($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
-// DISAS: $captable_load_extern_int:
+// DISAS: <$captable_load_extern_int>:
 // DISAS-NEXT: clcbi	$c12, 16($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 int function5(void) { return global_int; }
-// DISAS: function5:
+// DISAS: <function5>:
 // DISAS-NEXT: clcbi	$c1, 0($c26)
 // DISAS-NEXT: cjr	$c17
 // DISAS-NEXT: clw	$2, $zero, 0($c1)
 
 // TODO: this could share a table with function1 but that's not implemented yet
 void *same_globals_as_function1(void) { return (char *)extern_void_ptr(); }
-// DISAS: same_globals_as_function1:
-// DISAS: $captable_load_extern_void_ptr:
+// DISAS: <same_globals_as_function1>:
+// DISAS: <$captable_load_extern_void_ptr>:
 // DISAS-NEXT: clcbi	$c12, 0($c18)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 static void *function3(void);
 void *x(void) { return function3(); }
-// DISAS: x:
-// DISAS: $captable_load_function3:
+// DISAS: <x>:
+// DISAS: <$captable_load_function3>:
 // DISAS-NEXT: clcbi $c12, 0($c26)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
@@ -153,17 +152,17 @@ void *x(void) { return function3(); }
 __attribute__((noinline)) static void *function3(void) {
   return extern_char_ptr() + extern_int();
 }
-// DISAS: function3:
+// DISAS: <function3>:
 // DISAS:      cmove	$c19, $c26
-// DISAS: $captable_load_extern_char_ptr:
+// DISAS: <$captable_load_extern_char_ptr>:
 // DISAS-NEXT: clcbi	$c12, 0($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
-// DISAS: $captable_load_extern_int:
+// DISAS: <$captable_load_extern_int>:
 // DISAS-NEXT: clcbi	$c12, 16($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
-// RUN: llvm-readobj --cap-table-mapping %t.so | FileCheck %s -check-prefix READOBJ-MAPPING
+// RUN: llvm-readobj --cap-table-mapping %t.so | FileCheck %s --check-prefix READOBJ-MAPPING
 // Check that the mapping between functions + captable subsets is sensible:
 
 // READOBJ-MAPPING: CHERI .captable per-file/per-function mapping information [
@@ -178,20 +177,20 @@ __attribute__((noinline)) static void *function3(void) {
 
 
 // Also check that the raw bytes are correct in addition to the llvm-readobj output
-// RUN: llvm-objdump --full-contents --section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
+// RUN: llvm-objdump --full-contents --section-headers --syms --section=.captable_mapping %t.so | FileCheck %s --check-prefix MAPPING
 // MAPPING: Sections:
 // MAPPING-NEXT: Idx Name          Size      VMA          Type
 // MAPPING-NEXT:   9 .captable_mapping 000000a8 00000000000006e8 DATA
 // MAPPING-EMPTY:
 // MAPPING-NEXT: SYMBOL TABLE:
-// MAPPING: 00000000[[FUNCTION3_ADDR:000108d0]] l     F .text		 00000050 function3
-// MAPPING: 00000000[[FUNCTION1_ADDR:000107c0]] g     F .text		 00000030 function1
-// MAPPING: 00000000[[FUNCTION2_ADDR:000107f0]] g     F .text		 00000030 .protected function2
-// MAPPING: 00000000[[FUNCTION4_ADDR:00010820]] g     F .text		 00000050 .protected function4
-// MAPPING: 00000000[[FUNCTION5_ADDR:00010870]] g     F .text		 0000000c function5
-// MAPPING: 0000000000000000         *UND*		 00000000 global_int
-// MAPPING: 00000000[[SAME_GLOBALS_ADDR:00010880]] g     F .text		 00000030 same_globals_as_function1
-// MAPPING: 00000000[[X_ADDR:000108b0]] g     F .text		 00000020 x
+// MAPPING: 00000000[[FUNCTION3_ADDR:000108d0]] l     F .text		 0000000000000050 function3
+// MAPPING: 00000000[[FUNCTION1_ADDR:000107c0]] g     F .text		 0000000000000030 function1
+// MAPPING: 00000000[[FUNCTION2_ADDR:000107f0]] g     F .text		 0000000000000030 .protected function2
+// MAPPING: 00000000[[FUNCTION4_ADDR:00010820]] g     F .text		 0000000000000050 .protected function4
+// MAPPING: 00000000[[FUNCTION5_ADDR:00010870]] g     F .text		 000000000000000c function5
+// MAPPING: 0000000000000000         *UND*		 0000000000000000 global_int
+// MAPPING: 00000000[[SAME_GLOBALS_ADDR:00010880]] g     F .text		 0000000000000030 same_globals_as_function1
+// MAPPING: 00000000[[X_ADDR:000108b0]] g     F .text		 0000000000000020 x
 // MAPPING: Contents of section .captable_mapping:
 // MAPPING-NEXT:  06e8 00000000 [[FUNCTION1_ADDR]]
 // MAPPING-SAME:       00000000 000107f0

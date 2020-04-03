@@ -2,21 +2,21 @@
 // REQUIRES: filecheck_new_syntax, D60389
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/simple-cap-reloc.c -c -o %t.o
-// RUN: llvm-readobj -s -r %t.o | FileCheck -check-prefix READOBJ %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
+// RUN: llvm-readobj -s -r %t.o | FileCheck --check-prefix READOBJ %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck --check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
 
 // We need the symbol table before the capabiilty relocation record -> dump it to a temporary file first
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -static -o %t-static.exe
-// RUN: llvm-objdump -h -r -t  --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t-static.exe | FileCheck --check-prefixes DUMP-EXE,STATIC %S/simple-cap-reloc-common.check
 
 // same again for statically dynamically linked exe:
 // Create a dummy shared library otherwise we won't get a dynamic executable
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs  %T/integrated_dummy_shlib.o -shared -o %T/libintegrated_dummy_shlib.so
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs -L%T -lintegrated_dummy_shlib %t.o -o %t-dynamic.exe
-// RUN: llvm-objdump -h -r -t  --cap-relocs %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t-dynamic.exe | FileCheck --check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // Look at shared libraries:
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -shared -o %t.so
-// RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes SHLIB,SHLIB-INTEGRATED %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-INTERNAL %S/simple-cap-reloc-common.check
+// RUN: llvm-readobj -r -s %t.so | FileCheck --check-prefixes SHLIB,SHLIB-INTEGRATED %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck --check-prefixes DUMP-SHLIB,DUMP-SHLIB-INTERNAL %S/simple-cap-reloc-common.check

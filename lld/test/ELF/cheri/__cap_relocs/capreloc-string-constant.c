@@ -2,19 +2,19 @@
 // REQUIRES: filecheck_new_syntax, D60389
 
 // RUN: %cheri256_purecap_cc1 %s -emit-obj -o %t.o
-// RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
+// RUN: llvm-readobj -r %t.o | FileCheck --check-prefix READOBJ %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
-// RUN: llvm-readobj --cap-relocs -s %t-static.exe | FileCheck -check-prefixes STATIC %s
+// RUN: llvm-readobj --cap-relocs -s %t-static.exe | FileCheck --check-prefixes STATIC %s
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -preemptible-caprelocs=legacy -pie -Bdynamic %t.o -o %t-dynamic.exe
-// RUN: llvm-readobj -r -s --cap-relocs  %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC %s
+// RUN: llvm-readobj -r -s --cap-relocs  %t-dynamic.exe | FileCheck --check-prefixes DYNAMIC %s
 
 // Look at shared libraries:
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -shared -o %t.so
-// RUN: llvm-readobj -r -s --cap-relocs %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
+// RUN: llvm-readobj -r -s --cap-relocs %t.so | FileCheck --check-prefixes DYNAMIC-RELOCS %s
 
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1

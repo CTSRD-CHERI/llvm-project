@@ -2,27 +2,27 @@
 // REQUIRES: filecheck_new_syntax, D60389
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t.o
-// RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
-// RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
+// RUN: llvm-readobj -r %t.o | FileCheck --check-prefix READOBJ %s
+// RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck --check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH_VERBOSE %s
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
-// RUN: llvm-readobj -s --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s '-D$CONSTANT_FLAG=Constant'
+// RUN: llvm-readobj -s --cap-relocs %t-static.exe | FileCheck --check-prefixes DUMP-CAPRELOCS,STATIC %s '-D$CONSTANT_FLAG=Constant'
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe
-// RUN: llvm-readobj --cap-relocs -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s '-D$CONSTANT_FLAG=Constant'
-// RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
+// RUN: llvm-readobj --cap-relocs -s %t-dynamic.exe | FileCheck --check-prefixes DUMP-CAPRELOCS,DYNAMIC %s '-D$CONSTANT_FLAG=Constant'
+// RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck --check-prefixes DYNAMIC-RELOCS %s
 
 // Look at shared libraries:
 // RUN: ld.lld --no-relative-cap-relocs -process-cap-relocs %t.o -shared -o %t.so
-// RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
-// RUN: llvm-readobj --cap-relocs -s %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s '-D$CONSTANT_FLAG=Constant'
+// RUN: llvm-readobj -r -s %t.so | FileCheck --check-prefixes DYNAMIC-RELOCS %s
+// RUN: llvm-readobj --cap-relocs -s %t.so | FileCheck --check-prefixes DUMP-CAPRELOCS,DYNAMIC %s '-D$CONSTANT_FLAG=Constant'
 
 // RUN: ld.lld --no-relative-cap-relocs -no-process-cap-relocs %t.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
-// RUN: llvm-readobj --cap-relocs -s %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s '-D$CONSTANT_FLAG=Object'
+// RUN: llvm-readobj --cap-relocs -s %t-static-external-capsizefix.exe | FileCheck --check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s '-D$CONSTANT_FLAG=Object'
 
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
