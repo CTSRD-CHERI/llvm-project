@@ -8,6 +8,6 @@ _start:
   ret
 
 # CHECK: File: <stdin>
-# CHECK: Format: ELF64-x86-64
+# CHECK: Format: elf64-x86-64
 # CHECK: Type: Executable (0x2)
 # CHECK: Machine: EM_X86_64 (0x3E)

@@ -59,4 +59,16 @@ void *test_foo_aligned_nonalloc_array(void* buffer) { return new (buffer) FooAli
 void *test_foo_aligned_nonalloc_array_nonconst(void* buffer, int n) { return new (buffer) FooAligned[n]; }
 // CSV-NEXT: 0,<unknown>,?,"{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:78","non-allocating placement new","for type struct FooAligned"
 
+// TODO: not sure these are particularly useful:
+// CSV-NEXT: 0,<unknown>,h,"<somewhere in _ZnwmU3capRKSt9nothrow_t>","function with alloc_size","call to _Znwm"
+// CSV-NEXT: 0,<unknown>,h,"<somewhere in _ZnamU3capRKSt9nothrow_t>","function with alloc_size","call to _Znam"
+// CSV-NEXT: 0,4,h,"<somewhere in _Z20test_foo_not_alignedv>","function with alloc_size","call to _Znwm"
+// CSV-NEXT: 0,4,h,"<somewhere in _Z28test_foo_not_aligned_nothrowv>","function with alloc_size","call to _ZnwmU3capRKSt9nothrow_t"
+// CSV-NEXT: 0,8,h,"<somewhere in _Z26test_foo_not_aligned_arrayv>","function with alloc_size","call to _Znam"
+// CSV-NEXT: 0,<unknown>,h,"<somewhere in _Z35test_foo_not_aligned_array_nonconsti>","function with alloc_size","call to _Znam"
+// CSV-NEXT: 8,256,h,"<somewhere in _Z16test_foo_alignedv>","function with alloc_size","call to _ZnwmSt11align_val_t"
+// CSV-NEXT: 0,256,h,"<somewhere in _Z24test_foo_aligned_nothrowv>","function with alloc_size","call to _ZnwmU3capRKSt9nothrow_t"
+// CSV-NEXT: 8,768,h,"<somewhere in _Z22test_foo_aligned_arrayv>","function with alloc_size","call to _ZnamSt11align_val_t"
+// CSV-NEXT: 8,<unknown>,h,"<somewhere in _Z31test_foo_aligned_array_nonconsti>","function with alloc_size","call to _ZnamSt11align_val_t"
+
 // CSV-EMPTY:

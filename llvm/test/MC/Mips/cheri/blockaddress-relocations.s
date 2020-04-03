@@ -35,7 +35,7 @@ addrof_label_in_local:                  # @addrof_label_in_local
 	.size	addrof_label_in_local, .Lfunc_end0-addrof_label_in_local
 
 
-# CHECK-LABEL: addrof_label_in_local:
+# CHECK-LABEL: <addrof_label_in_local>:
 # CHECK-NEXT: 0:	3c 01 00 00 	lui	$1, 0
 # CHECK-NEXT: 4:	64 21 00 24 	daddiu	$1, $1, 36
 # CHECK-NEXT: 8:	48 01 60 51 	cincoffset	$c1, $c12, $1

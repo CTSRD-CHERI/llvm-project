@@ -1,9 +1,9 @@
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -DCHECK_ENABLED -fsyntax-only %s -verify=default
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wall -DCHECK_ENABLED -fsyntax-only %s -verify=default
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wextra -DCHECK_ENABLED -fsyntax-only %s -verify=wextra,default
-// RUN: %cheri_purecap_cc1 -Weverything -Wno-incompatible-pointer-types -Wno-strict-prototypes -Wmips-cheri-prototypes -fsyntax-only %s -verify -fdiagnostics-show-option
-// RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wcheri -fsyntax-only %s -verify -fdiagnostics-show-option
-// RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wno-cheri -fsyntax-only %s -verify=cheri-off -fdiagnostics-show-option
+// RUN: %cheri_purecap_cc1 -Weverything -Wno-incompatible-pointer-types -Wno-strict-prototypes -Wmips-cheri-prototypes -fsyntax-only %s -verify
+// RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wcheri -fsyntax-only %s -verify
+// RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wno-cheri -fsyntax-only %s -verify=cheri-off
 // cheri-off-no-diagnostics
 
 #ifdef CHECK_ENABLED

@@ -22,11 +22,6 @@
 # CHECK:      [ 8] .eh_frame         PROGBITS        00000000000203b8 0003b8 00003c 00  WA  0   0  8
 
 
-# CHECK-LABEL: Relocation section '.rel.dyn'
-# CHECK-SAME:  at offset 0x{{.+}} contains 1 entries:
-# CHECK-NEXT:    Offset             Info             Type               Symbol's Value  Symbol's Name
-# CHECK-NEXT: 00000000000203d8  0000000000001203 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE
-
 # CHECK-LABEL: There are 9 program headers, starting at offset 64
 # CHECK:       Program Headers:
 # CHECK-NEXT:   Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
@@ -52,6 +47,11 @@
 # CHECK-NEXT:   06     .eh_frame
 # CHECK-NEXT:   07     .eh_frame_hdr
 # CHECK-NEXT:   08
+
+# CHECK-LABEL: Relocation section '.rel.dyn'
+# CHECK-SAME:  at offset 0x{{.+}} contains 1 entries:
+# CHECK-NEXT:    Offset             Info             Type               Symbol's Value  Symbol's Name
+# CHECK-NEXT: 00000000000203d8  0000000000001203 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE
 
 
 --- !ELF

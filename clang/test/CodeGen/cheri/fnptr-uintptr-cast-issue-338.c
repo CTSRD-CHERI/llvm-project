@@ -16,7 +16,6 @@ struct a {
 long test1(struct a arg) {
   return (long)arg.cap_fnptr; // expected-warning{{the following conversion will result in a CToPtr operation; the behaviour of CToPtr can  be confusing since using CToPtr on an untagged capability will give 0 instead of the  integer value and should therefore be explicitly annotated}}
   //expected-note@-1{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_addr cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
-  // expected-warning@-2{{cast to smaller integer type 'long' from 'void (* __capability)()'}}
 }
 
 // CHECK-LABEL: @test2(

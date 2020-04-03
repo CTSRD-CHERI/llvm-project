@@ -1,4 +1,4 @@
-## Check how llvm-readobj and llvm-readelf tools dump addends of relocations. 
+## Check how llvm-readobj and llvm-readelf tools dump addends of relocations.
 
 # RUN: yaml2obj --docnum=1 -DENCODE=LSB -DTYPE=SHT_RELA %s -o %t.le64.rela
 # RUN: llvm-readobj -r %t.le64.rela | FileCheck %s --check-prefix=LLVM-RELA64
@@ -34,7 +34,7 @@
 ## FIXME: We either should not dump an addend or should read it from a
 ##        destination location for a SHT_REL case.
 ##        See https://bugs.llvm.org/show_bug.cgi?id=44257.
-# LLVM-REL64-COUNT-7:  R_X86_64_NONE - 0x0{{$}}
+# LLVM-REL64-COUNT-7:  R_X86_64_NONE - 0x0 (real addend unknown){{$}}
 # LLVM-REL64-NOT:      R_
 
 # GNU-REL64:         Type               Symbol's Value  Symbol's Name{{$}}
@@ -111,7 +111,7 @@ Sections:
 ## FIXME: We either should not dump an addend or should read it from a
 ##        destination location for a SHT_REL case.
 ##        See https://bugs.llvm.org/show_bug.cgi?id=44257.
-# LLVM-REL32-COUNT-7: R_386_NONE - 0x0{{$}}
+# LLVM-REL32-COUNT-7: R_386_NONE - 0x0 (real addend unknown){{$}}
 # LLVM-REL32-NOT:     R_
 
 # GNU-REL32:         Type

@@ -5,7 +5,7 @@
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd \
 # RUN:         %S/Inputs/mips-dynamic.s -o %t2.o
 # RUN: ld.lld %t1.o %t2.o -image-base=0x10000 -o %t.exe
-# RUN: llvm-objdump -triple=mips64-unknown-freebsd -d -t -s %t.exe | FileCheck %s
+# RUN: llvm-objdump -d %t.exe | FileCheck %s
 
 # REQUIRES: mips
 
@@ -24,7 +24,7 @@ __start:
 
 # CHECK:      Disassembly of section .text:
 # CHECK-EMPTY:
-# CHECK-NEXT: __start:
+# CHECK-NEXT: <__start>:
 # CHECK-NEXT:    20210:       3c 02 00 00     lui     $2, 0
 #                                      ^-- (0x20230-0x4-0x20210)>>2
 # CHECK-NEXT:    20214:       64 42 00 1c     daddiu  $2, $2, 28

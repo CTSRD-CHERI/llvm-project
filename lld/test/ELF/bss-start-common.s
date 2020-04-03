@@ -13,13 +13,13 @@
 
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi=purecap -mcpu=cheri128 %s -o %t
 # RUN: ld.lld %t -o %t-cheri --verbose
-# RUN: llvm-objdump -t -section-headers %t-cheri | FileCheck %s -check-prefix CHERI
+# RUN: llvm-objdump -t --section-headers %t-cheri | FileCheck %s -check-prefix CHERI
 
 # CHERI: Sections:
 # CHERI: Idx Name          Size      VMA          Type
-# CHERI:   6 .bss          00000004  0000000120020220 BSS
+# CHERI:   6 .bss          00000004  [[ADDR:[0-9a-f]+]] BSS
 # CHERI: SYMBOL TABLE:
-# CHERI: 0000000120020220  .bss 00000004 __bss_start
+# CHERI: [[ADDR]] g        .bss 0000000000000004 __bss_start
 
 .global __bss_start
 .text
