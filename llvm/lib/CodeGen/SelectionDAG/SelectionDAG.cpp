@@ -401,11 +401,8 @@ static int isSignedOp(ISD::CondCode Opcode) {
 
 ISD::CondCode ISD::getSetCCOrOperation(ISD::CondCode Op1, ISD::CondCode Op2,
                                        EVT Type) {
-  // XXXAR: I don't think we can fold setcc or operations with fat pointers
-  if (Type.isFatPointer())
-    return ISD::SETCC_INVALID;
-  bool IsInteger = Type.isInteger();
-  if (IsInteger && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
+  bool IsIntegerLike = Type.isInteger() || Type.isFatPointer();
+  if (IsIntegerLike && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
     // Cannot fold a signed integer setcc with an unsigned integer setcc.
     return ISD::SETCC_INVALID;
 
@@ -417,7 +414,7 @@ ISD::CondCode ISD::getSetCCOrOperation(ISD::CondCode Op1, ISD::CondCode Op2,
     Op &= ~16;     // Clear the U bit if the N bit is set.
 
   // Canonicalize illegal integer setcc's.
-  if (IsInteger && Op == ISD::SETUNE)  // e.g. SETUGT | SETULT
+  if (IsIntegerLike && Op == ISD::SETUNE)  // e.g. SETUGT | SETULT
     Op = ISD::SETNE;
 
   return ISD::CondCode(Op);
@@ -425,11 +422,8 @@ ISD::CondCode ISD::getSetCCOrOperation(ISD::CondCode Op1, ISD::CondCode Op2,
 
 ISD::CondCode ISD::getSetCCAndOperation(ISD::CondCode Op1, ISD::CondCode Op2,
                                         EVT Type) {
-  // XXXAR: I don't think we can fold setcc and operations with fat pointers
-  if (Type.isFatPointer())
-    return ISD::SETCC_INVALID;
-  bool IsInteger = Type.isInteger();
-  if (IsInteger && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
+  bool IsIntegerLike = Type.isInteger() || Type.isFatPointer();
+  if (IsIntegerLike && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
     // Cannot fold a signed setcc with an unsigned setcc.
     return ISD::SETCC_INVALID;
 
@@ -437,7 +431,7 @@ ISD::CondCode ISD::getSetCCAndOperation(ISD::CondCode Op1, ISD::CondCode Op2,
   ISD::CondCode Result = ISD::CondCode(Op1 & Op2);
 
   // Canonicalize illegal integer setcc's.
-  if (IsInteger) {
+  if (IsIntegerLike) {
     switch (Result) {
     default: break;
     case ISD::SETUO : Result = ISD::SETFALSE; break;  // SETUGT & SETULT
