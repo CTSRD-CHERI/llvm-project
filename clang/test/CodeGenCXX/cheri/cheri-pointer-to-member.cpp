@@ -331,7 +331,8 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
 
 // Check using Member pointers as return values an parameters
 AMemberFuncPtr return_func_ptr() {
-  // CHECK-LABEL: define void @_Z15return_func_ptrv({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret %agg.result)
+  // CHECK-LABEL: define void @_Z15return_func_ptrv(
+  // CHECK-SAME: { i8 addrspace(200)*, i64 } addrspace(200)* noalias sret align [[#CAP_SIZE]] %agg.result)
   // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[#CAP_SIZE]]
   // CHECK-NEXT: [[VAR0:%.+]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[#CAP_SIZE]]
   // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[VAR0]], { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[#CAP_SIZE]]
@@ -345,7 +346,8 @@ void take_func_ptr(AMemberFuncPtr ptr) {
 }
 
 AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
-  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret %agg.result, {{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
+  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE(
+  // CHECK-SAME: { i8 addrspace(200)*, i64 } addrspace(200)* noalias sret align [[#CAP_SIZE]] %agg.result, {{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
   // CHECK: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[#CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[#CAP_SIZE]]
   // CHECK-NEXT: [[VAR1:%.+]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[PTR]], i32 0, i32 0
