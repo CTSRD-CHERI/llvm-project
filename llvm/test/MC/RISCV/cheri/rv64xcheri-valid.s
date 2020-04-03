@@ -1,7 +1,7 @@
 # RUN: llvm-mc %s -triple=riscv64 -mattr=+xcheri -show-encoding \
 # RUN:     | FileCheck -check-prefixes=CHECK,CHECK-INST %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+xcheri < %s \
-# RUN:     | llvm-objdump -mattr=+xcheri -riscv-no-aliases -d - \
+# RUN:     | llvm-objdump --mattr=+xcheri --riscv-no-aliases -d - \
 # RUN:     | FileCheck -check-prefix=CHECK-INST %s
 
 # CHECK-INST: lc cra, 3(sp)

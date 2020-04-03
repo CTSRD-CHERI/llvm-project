@@ -3,10 +3,10 @@
 # RUN: llvm-mc %s -triple=riscv64 -mattr=+a,+xcheri -riscv-no-aliases -show-encoding \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv32 -mattr=+a,+xcheri < %s \
-# RUN:     | llvm-objdump -riscv-no-aliases -mattr=+a,+xcheri -d - \
+# RUN:     | llvm-objdump --riscv-no-aliases --mattr=+a,+xcheri -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-OBJ,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+a,+xcheri < %s \
-# RUN:     | llvm-objdump -riscv-no-aliases -mattr=+a,+xcheri -d - \
+# RUN:     | llvm-objdump --riscv-no-aliases --mattr=+a,+xcheri -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-OBJ,CHECK-ASM-AND-OBJ %s
 
 # CHECK-ASM-AND-OBJ: lr.b.ddc ra, (sp)
