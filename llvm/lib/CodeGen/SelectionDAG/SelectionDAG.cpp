@@ -6025,23 +6025,26 @@ static SDValue getMemcpyLoadsAndStores(
   // TODO: the frontend probably shouldn't emit must-preserve-tags for such
   // small memcpys
   auto CapTy = TLI.cheriCapabilityType();
-  const uint64_t CapSize = CapTy.isValid() ? CapTy.getStoreSize() : 0;
-  bool ReachedLimit = (CapSize * Limit) < Size;
-  if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
-      (!FoundLowering || !MemOps[0].isFatPointer())) {
-    LLVM_DEBUG(
-        dbgs() << " memcpy must preserve tags but value is not statically "
-                  "known to be sufficiently aligned -> using memcpy() call\n");
-    if (AlwaysInline) {
-      report_fatal_error("MustPreserveCheriCapabilities and AlwaysInline set "
-                         "but operation cannot be lowered to loads+stores!");
+  if (CapTy.isValid()) {
+    const uint64_t CapSize = CapTy.getStoreSize();
+    bool ReachedLimit = (CapSize * Limit) < Size;
+    if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
+        (!FoundLowering || !MemOps[0].isFatPointer())) {
+      LLVM_DEBUG(
+          dbgs()
+          << " memcpy must preserve tags but value is not statically "
+             "known to be sufficiently aligned -> using memcpy() call\n");
+      if (AlwaysInline) {
+        report_fatal_error("MustPreserveCheriCapabilities and AlwaysInline set "
+                           "but operation cannot be lowered to loads+stores!");
+      }
+      diagnoseInefficientCheriMemOp(
+          DAG, dl.getDebugLoc(), "memcpy", OptLevel,
+          CopyTy.empty() ? "<unknown type>" : CopyTy,
+          std::max((uint64_t)1, std::min(Alignment, *SrcAlign).value()), Size,
+          CapSize);
+      return SDValue();
     }
-    diagnoseInefficientCheriMemOp(
-        DAG, dl.getDebugLoc(), "memcpy", OptLevel,
-        CopyTy.empty() ? "<unknown type>" : CopyTy,
-        std::max((uint64_t)1, std::min(Alignment, *SrcAlign).value()), Size,
-        CapSize);
-    return SDValue();
   }
   if (!FoundLowering)
     return SDValue();
@@ -6229,14 +6232,10 @@ static SDValue getMemmoveLoadsAndStores(
     SrcAlign = Alignment;
   assert(SrcAlign && "SrcAlign must be set");
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemmove(OptSize);
-  // FIXME: `AllowOverlap` should really be `!isVol` but there is a bug in
-  // findOptimalMemOpLowering. Meanwhile, setting it to `false` produces the
-  // correct code.
-  bool AllowOverlap = false;
   const bool FoundLowering = TLI.findOptimalMemOpLowering(
       MemOps, Limit,
       MemOp::Copy(Size, DstAlignCanChange, Alignment, *SrcAlign,
-                  /*IsVolatile*/ AllowOverlap, MustPreserveCheriCapabilities),
+                  /*IsVolatile*/ true, MustPreserveCheriCapabilities),
       DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(),
       MF.getFunction().getAttributes());
 
@@ -6245,24 +6244,27 @@ static SDValue getMemmoveLoadsAndStores(
   // TODO: the frontend probably shouldn't emit must-preserve-tags for such
   // small memcpys
   auto CapTy = TLI.cheriCapabilityType();
-  const uint64_t CapSize = CapTy.isValid() ? CapTy.getStoreSize() : 0;
-  bool ReachedLimit = (CapSize * Limit) < Size;
-  if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
-      (!FoundLowering || !MemOps[0].isFatPointer())) {
-    LLVM_DEBUG(
-        dbgs() << __func__
-               << " memmove must preserve tags but value is not statically "
-                  "known to be sufficiently aligned -> using memmove() call\n");
-    if (AlwaysInline) {
-      report_fatal_error("MustPreserveCheriCapabilities and AlwaysInline set "
-                         "but operation cannot be lowered to loads+stores!");
+  if (CapTy.isValid()) {
+    const uint64_t CapSize = CapTy.getStoreSize();
+    bool ReachedLimit = (CapSize * Limit) < Size;
+    if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
+        (!FoundLowering || !MemOps[0].isFatPointer())) {
+      LLVM_DEBUG(
+          dbgs()
+          << __func__
+          << " memmove must preserve tags but value is not statically "
+             "known to be sufficiently aligned -> using memmove() call\n");
+      if (AlwaysInline) {
+        report_fatal_error("MustPreserveCheriCapabilities and AlwaysInline set "
+                           "but operation cannot be lowered to loads+stores!");
+      }
+      diagnoseInefficientCheriMemOp(
+          DAG, dl.getDebugLoc(), "memmove", OptLevel,
+          MoveTy.empty() ? "<unknown type>" : MoveTy,
+          std::max(Align(1), std::min(Alignment, *SrcAlign)).value(), Size,
+          CapSize);
+      return SDValue();
     }
-    diagnoseInefficientCheriMemOp(
-        DAG, dl.getDebugLoc(), "memmove", OptLevel,
-        MoveTy.empty() ? "<unknown type>" : MoveTy,
-        std::max(Align(1), std::min(Alignment, *SrcAlign)).value(), Size,
-        CapSize);
-    return SDValue();
   }
   if (!FoundLowering)
     return SDValue();
