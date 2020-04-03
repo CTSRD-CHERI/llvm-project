@@ -9,7 +9,7 @@
 ; CHECK-LABEL: .section .sdata,"aw",@progbits
 ; CHECK-NEXT:  .p2align 3
 ; CHECK-NEXT: .LCPI0_0:
-; CHECK-NEXT:  .quad 4607182418800017408 # double 1
+; CHECK-NEXT:  .quad 0x3ff0000000000000 # double 1
 ; CHECK-NEXT:  .size .LCPI0_0, 8
 ; CHECK-NEXT:  .text
 
@@ -31,7 +31,7 @@ define double @double_add_const(double %a) nounwind {
 ; CHECK-LABEL: .section .sdata,"aw",@progbits
 ; CHECK-NEXT:  .p2align 2
 ; CHECK-NEXT: .LCPI1_0:
-; CHECK-NEXT:  .word 1065353216 # float 1
+; CHECK-NEXT:  .word 0x3f800000 # float 1
 ; CHECK-NEXT:  .size .LCPI1_0, 4
 ; CHECK-NEXT:  .text
 
