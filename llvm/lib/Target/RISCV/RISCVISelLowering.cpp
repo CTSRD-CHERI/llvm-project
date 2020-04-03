@@ -973,7 +973,8 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   default:
     return SDValue();    // Don't custom lower most intrinsics.
   case Intrinsic::thread_pointer: {
-    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+    EVT PtrVT = getPointerTy(DAG.getDataLayout(),
+                             DAG.getDataLayout().getGlobalsAddressSpace());
     return DAG.getRegister(RISCV::X4, PtrVT);
   }
   }

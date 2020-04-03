@@ -626,7 +626,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
                       : CGM.getTargetAddressSpace(ETy.getQualifiers());
     // XXXAR: If Pty is a capability, we have to use AS200
     if (PTy->isCHERICapability())
-      AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS())
+      AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
