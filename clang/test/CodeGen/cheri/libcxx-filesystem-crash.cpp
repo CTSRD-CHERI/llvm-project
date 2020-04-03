@@ -110,6 +110,7 @@ extern "C" __int128 test2(duration<__int128_t> &e) {
   return duration<__int128_t>(e).f();
   // ASM-LABEL: test2:
   // ASM:       .set noat
+  // ASM:       # %bb.0: # %entry
   // Currently we spill to the stack and reload for CHERI128
   // PURECAP-ASM-NEXT:       cld $2, $zero, 0($c3)
   // PURECAP-ASM-NEXT:  cld $3, $zero, 8($c3)

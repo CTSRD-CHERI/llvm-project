@@ -1,7 +1,7 @@
 // REQUIRES: mips-registered-target
 
 // RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - | %cheri_FileCheck %s
-// RUN: %cheri_purecap_cc1 -S %s -O2 -o - | %cheri_FileCheck %s -check-prefix ASM
+// RUN: %cheri_purecap_cc1 -fcommon -S %s -O2 -o - | %cheri_FileCheck %s -check-prefix ASM
 
 // Check that we emit sensible values for __intcap_t arrays (this broke Qt qhooks.cpp)
 
@@ -9,7 +9,7 @@ int x;
 long longvalue = (long)&x;
 __uintcap_t uintcapvalue = (__uintcap_t)&x;
 
-// CHECK: @x = common addrspace(200) global i32 0, align 4
+// CHECK: @x = addrspace(200) global i32 0, align 4
 // CHECK: @longvalue = local_unnamed_addr addrspace(200) global i64 ptrtoint (i32 addrspace(200)* @x to i64), align 8
 // CHECK: @uintcapvalue = local_unnamed_addr addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @x to i8 addrspace(200)*), align [[#CAP_SIZE]]
 
@@ -102,9 +102,9 @@ void func(void) {
 __uintcap_t uintptr_bss;
 __uintcap_t uintptr_array_bss[5];
 struct uintptr_struct uintptr_struct_bss;
-// CHECK: @uintptr_bss = common local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align [[#CAP_SIZE]]
-// CHECK: @uintptr_array_bss = common local_unnamed_addr addrspace(200) global [5 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
-// CHECK: @uintptr_struct_bss = common local_unnamed_addr addrspace(200) global %struct.uintptr_struct zeroinitializer, align [[#CAP_SIZE]]
+// CHECK: @uintptr_bss = local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align [[#CAP_SIZE]]
+// CHECK: @uintptr_array_bss = local_unnamed_addr addrspace(200) global [5 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
+// CHECK: @uintptr_struct_bss = local_unnamed_addr addrspace(200) global %struct.uintptr_struct zeroinitializer, align [[#CAP_SIZE]]
 
 
 

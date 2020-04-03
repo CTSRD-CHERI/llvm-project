@@ -6,7 +6,7 @@
 // RUN:     --sysroot=%S/platform 2>&1 | FileCheck %s -check-prefixes CHECK,QRTEMS
 // CHECK: {{.*}}clang{{.*}}" "-cc1"
 // CHECK: "-triple" "mips64-unknown-rtems5"
-// CHECK: "-fuse-init-array"
+// CHECK-NOT: "-fno-use-init-array"
 // CHECK: "-isysroot" "[[SYSROOT:[^"]+]]"
 // CHECK: "-internal-isystem" "[[SYSROOT]]{{/|\\\\}}include{{/|\\\\}}c++{{/|\\\\}}v1"
 // CHECK: "-internal-externc-isystem" "[[SYSROOT]]{{/|\\\\}}include"

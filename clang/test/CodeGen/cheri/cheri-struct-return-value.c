@@ -59,7 +59,7 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   t.ptr = in.ptr;
   return t;
   // argument is split up into two cap regs, but return value is indirect
-  // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret %agg.result, {{.*}}, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
+  // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret align {{16|32}} %agg.result, {{.*}}, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
   // CHECK: [[VAR1:%.+]] = getelementptr i8, i8 addrspace(200)* %in.coerce0, i64 1
   // CHECK: [[INTPTR_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 0
   // CHECK: store i8 addrspace(200)* [[VAR1]], i8 addrspace(200)* addrspace(200)* [[INTPTR_MEMBER]], align [[#CAP_SIZE]]
@@ -103,7 +103,7 @@ GreaterThanIntCapSizeUnion greater_than_intcap_size_union() {
   GreaterThanIntCapSizeUnion g;
   g.ptr = &global;
   return g;
-  // CHECK-LABEL: define void @greater_than_intcap_size_union(%union.GreaterThanIntCapSizeUnion addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
+  // CHECK-LABEL: define void @greater_than_intcap_size_union(%union.GreaterThanIntCapSizeUnion addrspace(200)* noalias nocapture sret align {{16|32}} %agg.result) local_unnamed_addr
   // CHECK: [[CAP_MEMBER:%.+]] = getelementptr inbounds %union.GreaterThanIntCapSizeUnion, %union.GreaterThanIntCapSizeUnion addrspace(200)* %agg.result, i64 0, i32 0
   // CHECK: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[#CAP_SIZE]]
   // CHECK: ret void
@@ -152,7 +152,7 @@ typedef struct {
 ThreeLongs three_longs() {
   ThreeLongs t = { 1, 2, 3 };
   return t;
-  // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
+  // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret align 8 %agg.result) local_unnamed_addr
   // ASM-LABEL: three_longs
   // Clang now uses a memcpy from a global for cheri128
   // CHERI128-ASM: clcbi $c4, %captab20(.L__const.three_longs.t)($c{{.+}})

@@ -41,7 +41,7 @@ int test_struct_with_array1(struct_with_array *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_struct_with_array2
-// CHECK-SAME: (%struct.struct_with_array addrspace(200)* noalias nocapture sret [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_ARRAY:%.*]] addrspace(200)* nocapture readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #2
+// CHECK-SAME: (%struct.struct_with_array addrspace(200)* noalias nocapture sret align 8 [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_ARRAY:%.*]] addrspace(200)* nocapture readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #2
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_ARRAY]], [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[S]], i64 [[INDEX]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
@@ -74,7 +74,7 @@ int test_struct_with_ptr1(struct_with_ptr *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_struct_with_ptr2
-// CHECK-SAME: (%struct.struct_with_ptr addrspace(200)* noalias nocapture sret [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_PTR:%.*]] addrspace(200)* nocapture readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #2
+// CHECK-SAME: (%struct.struct_with_ptr addrspace(200)* noalias nocapture sret align [[#CAP_SIZE]] [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_PTR:%.*]] addrspace(200)* nocapture readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #2
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_PTR]], [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[S]], i64 [[INDEX]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
@@ -471,7 +471,7 @@ int test25a(my_union25 *u, long index) {
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test25b
-// CHECK-SAME: (%union.my_union25 addrspace(200)* noalias sret [[AGG_RESULT:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #5
+// CHECK-SAME: (%union.my_union25 addrspace(200)* noalias sret align 8 [[AGG_RESULT:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #5
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_MY_UNION25:%.*]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)

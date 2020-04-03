@@ -9,7 +9,7 @@ return __builtin_return_address(x); // expected-error{{argument to '__builtin_re
 }
 
 void* c(unsigned x) {
-// expected-error@+1 {{argument value 4294967295 is outside the valid range [0, 65535]}}
+// expected-error@+1 {{argument value -1 is outside the valid range [0, 65535]}}
 return __builtin_return_address(-1);
 }
 

@@ -6,7 +6,7 @@
 struct {
   _Alignas(8) long a;
 } a;
-// CHECK: @a = common addrspace(200) global %struct.anon zeroinitializer, align 8
+// CHECK: @a = addrspace(200) global %struct.anon zeroinitializer, align 8
 struct {
   long a __attribute__((__aligned__(2)));
 } b1;
@@ -25,7 +25,7 @@ struct {
 } c2;
 
 // without packed it can only increase alignment, but with packed it also decreases it:
-// CHECK: @b1 = common addrspace(200) global %struct.anon.0 zeroinitializer, align 8
-// CHECK: @b2 = common addrspace(200) global %struct.anon.1 zeroinitializer, align 2
-// CHECK: @c1 = common addrspace(200) global %struct.anon.2 zeroinitializer, align 2
-// CHECK: @c2 = common addrspace(200) global %struct.anon.3 zeroinitializer, align [[#CAP_SIZE]]
+// CHECK: @b1 = addrspace(200) global %struct.anon.0 zeroinitializer, align 8
+// CHECK: @b2 = addrspace(200) global %struct.anon.1 zeroinitializer, align 2
+// CHECK: @c1 = addrspace(200) global %struct.anon.2 zeroinitializer, align 2
+// CHECK: @c2 = addrspace(200) global %struct.anon.3 zeroinitializer, align [[#CAP_SIZE]]

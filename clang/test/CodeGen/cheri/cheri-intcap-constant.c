@@ -18,7 +18,7 @@ const __uintcap_t thinFlag = 1;
 const __uintcap_t reservedFlag = 2;
 const __uintcap_t flags = thinFlag | reservedFlag; // expected-warning{{binary expression on capability types}}
 
-// HYBRID: @i = common global i32 0, align 4
+// HYBRID: @i = global i32 0, align 4
 // HYBRID-NEXT: @foo = global i8* bitcast (i32* @i to i8*), align 8
 // HYBRID-NEXT: @foo1 = global i8* bitcast (i32* @i to i8*), align 8
 // HYBRID-NEXT: @foo2 = global i8* bitcast (i32* @i to i8*), align 8
@@ -28,7 +28,7 @@ const __uintcap_t flags = thinFlag | reservedFlag; // expected-warning{{binary e
 // HYBRID-NEXT: @reservedFlag = constant i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // HYBRID-NEXT: @flags = constant i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 
-// PURECAP: @i = common addrspace(200) global i32 0, align 4
+// PURECAP: @i = addrspace(200) global i32 0, align 4
 // PURECAP-NEXT: @foo  = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // PURECAP-NEXT: @foo1 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // PURECAP-NEXT: @foo2 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[#CAP_SIZE]]
@@ -37,6 +37,7 @@ const __uintcap_t flags = thinFlag | reservedFlag; // expected-warning{{binary e
 // PURECAP-NEXT: @reservedFlag = addrspace(200) constant i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 // PURECAP-NEXT: @flags = addrspace(200) constant i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*), align [[#CAP_SIZE]]
 
+// CHECK-EMPTY:
 // CHECK-NEXT: Function Attrs: noinline nounwind optnone
 // CHECK-NEXT: define void @set_one(
 void set_one(__intcap_t *arg) {

@@ -84,6 +84,7 @@ void foo(void) {
   // AST: CStyleCastExpr {{.+}} 'long' <PointerToIntegral>
 
   int x3 = (int)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'int' is most likely an error}}
+  // expected-warning@-1{{cast to smaller integer type 'int' from 'void * __capability'}}
   // AST: CStyleCastExpr {{.+}} 'int' <PointerToIntegral>
 
   ptrdiff_t x4 = (ptrdiff_t)a;  // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}}

@@ -40,7 +40,7 @@ extern int foo(std::initializer_list<int>& l);
 // CHECK-NEXT:    store i32 addrspace(200)* [[ARRAYSTART]], i32 addrspace(200)* addrspace(200)* [[__BEGIN_]], align {{16|32}}
 // CHECK-NEXT:    [[__SIZE_:%.*]] = getelementptr inbounds %"class.std::initializer_list", %"class.std::initializer_list" addrspace(200)* [[L1]], i32 0, i32 1
 // CHECK-NEXT:    store i64 3, i64 addrspace(200)* [[__SIZE_]], align {{16|32}}
-// CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @_Z3fooU3capRSt16initializer_listIiE(%"class.std::initializer_list" addrspace(200)* dereferenceable({{24|64}}) [[L1]])
+// CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @_Z3fooU3capRSt16initializer_listIiE(%"class.std::initializer_list" addrspace(200)* dereferenceable({{24|40}}) [[L1]])
 // CHECK-NEXT:    ret i32 0
 
 
@@ -49,7 +49,7 @@ extern int foo(std::initializer_list<int>& l);
 
 // STATIC-LABEL: @main(
 // STATIC-NEXT:  entry:
-// STATIC-NEXT:    [[CALL:%.*]] = call signext i32 @_Z3fooU3capRSt16initializer_listIiE(%"class.std::initializer_list" addrspace(200)* dereferenceable({{32|64}}) bitcast ({ i32 addrspace(200)*, i64 } addrspace(200)* @_ZZ4mainE2l1 to %"class.std::initializer_list" addrspace(200)*))
+// STATIC-NEXT:    [[CALL:%.*]] = call signext i32 @_Z3fooU3capRSt16initializer_listIiE(%"class.std::initializer_list" addrspace(200)* dereferenceable({{24|40}}) bitcast ({ i32 addrspace(200)*, i64 } addrspace(200)* @_ZZ4mainE2l1 to %"class.std::initializer_list" addrspace(200)*))
 // STATIC-NEXT:    ret i32 0
 //
 int main() {

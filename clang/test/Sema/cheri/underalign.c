@@ -4,7 +4,7 @@
 // On a variable declaration __attribute__((aligned(4))) sets the alignment to 4
 __attribute__((aligned(4))) void *data; // expected-warning-re{{alignment (4) of 'void * __capability' is less than the required capability alignment ({{8|16|32}})}}
 // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
-// IR: @data = common addrspace(200) global i8 addrspace(200)* null, align 4
+// IR: @data = addrspace(200) global i8 addrspace(200)* null, align 4
 
 // If __attribute__((aligned(2))) is applied to typedefs it sets the alignment to 4
 __attribute__((aligned(2)))
@@ -15,7 +15,7 @@ typedef struct {
 // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 
 DBT dbt;
-// IR: @dbt = common addrspace(200) global %struct.DBT zeroinitializer, align 2
+// IR: @dbt = addrspace(200) global %struct.DBT zeroinitializer, align 2
 
 // However, when used on a record declaration it actually just sets the minimum alignment. If the type
 // has a larger natural alignment this will generate
@@ -25,7 +25,7 @@ struct DBT2 {
 } __attribute__((aligned(2)));  // this should not warn!
 
 struct DBT2 dbt2;
-// IR: @dbt2 = common addrspace(200) global %struct.DBT2 zeroinitializer, align [[#CAP_SIZE]]
+// IR: @dbt2 = addrspace(200) global %struct.DBT2 zeroinitializer, align [[#CAP_SIZE]]
 
 // We should also be warning if it has the packed attribute:
 struct DBT3 {  // expected-warning-re{{alignment (4) of 'struct DBT3' is less than the required capability alignment ({{8|16|32}})}}
@@ -34,7 +34,7 @@ struct DBT3 {  // expected-warning-re{{alignment (4) of 'struct DBT3' is less th
  } __attribute__((packed, aligned(4)));
 
 struct DBT3 dbt3;
-// IR: @dbt3 = common addrspace(200) global %struct.DBT3 zeroinitializer, align 4
+// IR: @dbt3 = addrspace(200) global %struct.DBT3 zeroinitializer, align 4
 
 // Furthermore we should also be able to silence the warning:
 // Currently this is done  using the annotate("underaligned_capability") attribute
@@ -43,13 +43,13 @@ struct DBT4 {
 } __attribute__((packed, aligned(4), annotate("underaligned_capability")));
 struct DBT4 dbt4;
 // Check that only the specified string value is valid:
-// IR: @dbt4 = common addrspace(200) global %struct.DBT4 zeroinitializer, align 4
+// IR: @dbt4 = addrspace(200) global %struct.DBT4 zeroinitializer, align 4
 struct DBT5 { // expected-warning-re{{alignment (4) of 'struct DBT5' is less than the required capability alignment ({{8|16|32}})}}
 // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
         void    *data;
 } __attribute__((packed, aligned(4), annotate("underaligned_capability_typo")));
 struct DBT5 dbt5;
-// IR: @dbt5 = common addrspace(200) global %struct.DBT5 zeroinitializer, align 4
+// IR: @dbt5 = addrspace(200) global %struct.DBT5 zeroinitializer, align 4
 
 
 // __BIGGEST_ALIGNMENT__ should be fine even for CHERI256
@@ -58,7 +58,7 @@ struct DBT6 {
 } __attribute__((packed, aligned(__BIGGEST_ALIGNMENT__)));
 _Static_assert(__BIGGEST_ALIGNMENT__ == sizeof(void* __capability), "__BIGGEST_ALIGNMENT__ wrong?");
 struct DBT6 dbt6;
-// IR: @dbt6 = common addrspace(200) global %struct.DBT6 zeroinitializer, align [[#CAP_SIZE]]
+// IR: @dbt6 = addrspace(200) global %struct.DBT6 zeroinitializer, align [[#CAP_SIZE]]
 
 // packed implies alignment 1:
 struct DBT7 { // expected-warning-re{{alignment (1) of 'struct DBT7' is less than the required capability alignment ({{8|16|32}})}}
@@ -66,13 +66,13 @@ struct DBT7 { // expected-warning-re{{alignment (1) of 'struct DBT7' is less tha
   void *data;
 } __attribute__((packed));
 struct DBT7 dbt7;
-// IR: @dbt7 = common addrspace(200) global %struct.DBT7 zeroinitializer, align 1
+// IR: @dbt7 = addrspace(200) global %struct.DBT7 zeroinitializer, align 1
 struct DBT8 {
   __attribute__((packed)) void *data; // expected-warning-re{{alignment (1) of 'void * __capability' is less than the required capability alignment ({{8|16|32}})}}
                                       // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 };
 struct DBT8 dbt8;
-// IR: @dbt8 = common addrspace(200) global %struct.DBT8 zeroinitializer, align 1
+// IR: @dbt8 = addrspace(200) global %struct.DBT8 zeroinitializer, align 1
 
 #ifndef SKIP_ERRORS
 // _Alignas gives sensible errors:
