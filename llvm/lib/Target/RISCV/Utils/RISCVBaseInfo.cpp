@@ -35,10 +35,6 @@ ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
     errs() << "64-bit ABIs are not supported for 32-bit targets (ignoring "
               "target-abi)\n";
     TargetABI = ABI_Unknown;
-  } else if (IsRV32E && TargetABI != ABI_ILP32E && TargetABI != ABI_Unknown) {
-    // TODO: move this checking to RISCVTargetLowering and RISCVAsmParser
-    errs()
-        << "Only the ilp32e ABI is supported for RV32E (ignoring target-abi)\n";
   } else if ((ABIName.startswith("il32pc") || ABIName.startswith("l64pc")) &&
              !FeatureBits[RISCV::FeatureCheri]) {
     errs() << "Pure-capability ABI can't be used for a target that "
@@ -47,6 +43,7 @@ ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
     TargetABI = ABI_Unknown;
   } else if (IsRV32E && TargetABI != ABI_ILP32E &&
              TargetABI != ABI_IL32PC64E && TargetABI != ABI_Unknown) {
+    // TODO: move this checking to RISCVTargetLowering and RISCVAsmParser
     errs() << "Only the ilp32e and il32pc64e ABIs are supported for RV32E "
               "(ignoring target-abi)\n";
     TargetABI = ABI_Unknown;
