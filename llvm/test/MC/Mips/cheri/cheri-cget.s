@@ -5,7 +5,7 @@
 #
 
 # DUMP-LABEL: Disassembly of section .text:
-# DUMP: .text:
+# DUMP: <.text>:
 
 # CHECK: cgetperm	$12, $c1
 # CHECK-SAME: encoding: [0x48,0x0c,0x08,0x3f]
