@@ -10,6 +10,7 @@
 #include "../lib/Support/FileCheckImpl.h"
 #include "llvm/Support/Regex.h"
 #include "llvm/Testing/Support/Error.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <tuple>
 #include <unordered_set>
@@ -33,9 +34,9 @@ static void expectError(StringRef ExpectedMsg, Error Err) {
   bool ErrorHandled = false;
   EXPECT_THAT_ERROR(handleErrors(std::move(Err),
                                  [&](const ErrorT &E) {
-                                   EXPECT_NE(
-                                       E.message().find(ExpectedMsg.str()),
-                                       std::string::npos);
+                                   EXPECT_THAT(
+                                       E.message(),
+                                       testing::HasSubstr(ExpectedMsg.str()));
                                    ErrorHandled = true;
                                  }),
                     Succeeded());
