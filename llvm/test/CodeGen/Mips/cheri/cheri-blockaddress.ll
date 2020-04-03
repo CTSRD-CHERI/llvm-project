@@ -68,7 +68,7 @@ indirectgoto:                                     ; preds = %entry
 ; OBJ-NEXT:  }
 
 
-; DUMP-LABEL: addrof_label_in_local:
+; DUMP-LABEL: <addrof_label_in_local>:
 ; DUMP-NEXT:        4a 6b 5f {{f|e}}0 	cincoffset	$c11, $c11, -[[#CAP_SIZE]]
 ; DUMP-NEXT:        3c 01 00 00 	lui	$1, 0
 ; 3 instructions -> value should be 12:

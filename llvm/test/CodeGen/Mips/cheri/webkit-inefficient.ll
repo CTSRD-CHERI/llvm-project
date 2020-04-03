@@ -4,7 +4,7 @@
 ; RUNNOT: %cheri128_purecap_llc %s -O2 -o - -filetype=obj | llvm-objdump -d - -no-show-raw-insn | FileCheck %s -check-prefix DUMP
 ; RUN: %cheri128_purecap_llc -frame-pointer=all %s -O2 -o - -filetype=obj | llvm-objdump -t - | FileCheck %s -check-prefix SYMBOLS
 ; Check the size of the generated function:
-; SYMBOLS: 0000000000000000 g     F .text		 000002b0 .hidden _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE
+; SYMBOLS: 0000000000000000 g     F .text		 00000000000002b0 .hidden _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE
 
 source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 
