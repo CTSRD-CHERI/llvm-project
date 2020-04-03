@@ -40,11 +40,13 @@ handler set_handler_atomic(handler func) noexcept {
   // ASM-LABEL: _Z18set_handler_atomicU3capPFvvE:
   // ASM:      clcbi   $c2, %captab20(_ZL9__handler)($c{{.+}})
   // ASM-NEXT: sync
-  // ASM-NEXT: .LBB0_1:
+  // ASM-NEXT: .LBB0_1: # %entry
+  // ASM-NEXT: # =>This Inner Loop Header: Depth=1
   // ASM-NEXT: cllc    $c1, $c2
   // ASM-NEXT: cscc    $1, $c3, $c2
   // ASM-NEXT: beqz    $1, .LBB0_1
   // ASM-NEXT: nop
+  // ASM-NEXT: # %bb.2: # %entry
   // ASM-NEXT: sync
   // ASM: .end _Z18set_handler_atomicU3capPFvvE
 }
@@ -80,11 +82,13 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // ASM-LABEL: _Z22set_handler_c11_atomicU3capPFvvE:
   // ASM:      clcbi   $c2, %captab20(_ZL16__atomic_handler)($c{{.+}})
   // ASM-NEXT: sync
-  // ASM-NEXT: .LBB2_1:
+  // ASM-NEXT: .LBB2_1: # %entry
+  // ASM-NEXT: # =>This Inner Loop Header:
   // ASM-NEXT: cllc    $c1, $c2
   // ASM-NEXT: cscc    $1, $c3, $c2
   // ASM-NEXT: beqz    $1, .LBB2_1
   // ASM-NEXT: nop
+  // ASM-NEXT: # %bb.2: # %entry
   // ASM-NEXT: sync
   // ASM: .end _Z22set_handler_c11_atomicU3capPFvvE
 
