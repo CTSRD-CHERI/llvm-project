@@ -5665,50 +5665,36 @@ EVT MipsTargetLowering::getOptimalMemOpType(
   // the source align will be 0.  We don't want to use capabilities in this
   // case, because the capability tag will always be 0.  For very long memsets,
   // we can use the capability registers in the library implementation.
-  if (Subtarget.isCheri() && (!Op.isMemset() || Op.isZeroMemset())) {
-    auto Alignment = Op.isMemset()
-                         ? Op.getDstAlign()
-                         : std::min(Op.getSrcAlign(), Op.getDstAlign());
-    unsigned CapSize = Subtarget.getCapSizeInBytes();
+
+  // We can't use capability stores as an optimisation for memset unless zeroing.
+  // For bzero() we can (and want to) always use capability stores of $cnull.
+  bool IsNonZeroMemset = Op.isMemset() && !Op.isZeroMemset();
+  unsigned CapSize = Subtarget.isCheri() ? Subtarget.getCapSizeInBytes() : 0;
+  if (CapSize && Op.size() >= CapSize && !IsNonZeroMemset) {
+    Align CapAlign(CapSize);
     LLVM_DEBUG(dbgs() << __func__ << " Size=" << Op.size() << " DstAlign="
-                      << Op.getDstAlign().value() << " SrcAlign="
+                      << (Op.isFixedDstAlign() ? Op.getDstAlign().value() : 0)
+                      << " SrcAlign="
                       << (Op.isMemset() ? 0 : Op.getSrcAlign().value())
-                      << "\n");
-    LLVM_DEBUG(dbgs() << __func__ << " CapSize=" << CapSize
-                      << " Align=" << Alignment.value() << "\n");
-    if (Op.isZeroMemset() && (Alignment.value() >= CapSize) &&
-        (Op.size() >= CapSize)) {
-      // for bzero() always use capability stores of $cnull.
+                      << " CapSize=" << CapSize << "\n");
+    // If sufficiently aligned, we must use capability loads/stores if
+    // copying, and can use cnull for a zeroing memset.
+    if (Op.isAligned(CapAlign)) {
       return CapType;
+    } else if (!Op.isMemset()) {
+      // Otherwise if this is a copy then tell SelectionDAG to do a real
+      // memcpy/memmove call (by returning MVT::isVoid), since it could still
+      // contain a capability if sufficiently aligned at runtime. Zeroing
+      // memsets can fall back on non-capability loads/stores.
+      return MVT::isVoid;
     }
-    // If this is going to include a capability, then pretend that we have to
-    // copy it using single bytes, which will cause SelectionDAG to decide to
-    // do the memcpy call.
-    if (!Op.isMemset() && (Op.size() >= CapSize) && (Alignment < CapSize)) {
-      // llvm_unreachable("This function should not be called for underaligned "
-      //                  "memcpy greater than CAP_SIZE");
-      // return MVT::i8; // INVALID_SIMPLE_VALUE_TYPE
-      return MVT::isVoid; // This will tell selectiondag that a call must be made
-    }
-    switch (Alignment.value()) {
-      default:
-        LLVM_FALLTHROUGH;
-      case 0: // Zero means any alignment is fine
-        if (Op.size() >= CapSize)
-          return CapType;
-        LLVM_FALLTHROUGH;
-      case 16:
-        if (Op.size() >= CapSize && Subtarget.isCheri128())
-          return CapType;
-        LLVM_FALLTHROUGH;
-      case 8:
-        if (Op.size() >= CapSize && Subtarget.isCheri64())
-          return CapType;
-        return MVT::i64;
-      case 4: return MVT::i32;
-      case 2: return MVT::i16;
-      case 1: return MVT::i8;
-    }
+    if (Subtarget.isGP64bit() && Op.isAligned(Align(8)))
+      return MVT::i64;
+    if (Op.isAligned(Align(4)))
+      return MVT::i32;
+    if (Op.isAligned(Align(2)))
+      return MVT::i16;
+    return MVT::i8;
   }
 
   if (Subtarget.isGP64bit())

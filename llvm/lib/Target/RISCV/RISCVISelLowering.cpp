@@ -3218,25 +3218,31 @@ Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilder<> &Builder,
 
 EVT RISCVTargetLowering::getOptimalMemOpType(
     const MemOp &Op, const AttributeList &FuncAttributes) const {
+  // FIXME: Share MIPS and RISCV code.
   // CHERI memcpy/memmove must be tag-preserving, either through explicit
-  // capability loads/stores or by making a runtime library call. We can't use
-  // capability stores as an optimisation for memset unless zeroing.
-  if (Subtarget.hasCheri() && (!Op.isMemset() || Op.isZeroMemset())) {
+  // capability loads/stores or by making a runtime library call.
+  // We can't use capability stores as an optimisation for memset unless zeroing.
+  bool IsNonZeroMemset = Op.isMemset() && !Op.isZeroMemset();
+  if (Subtarget.hasCheri() && !IsNonZeroMemset) {
     unsigned CapSize = Subtarget.typeForCapabilities().getSizeInBits() / 8;
     if (Op.size() >= CapSize) {
-      auto Alignment = Op.isMemset()
-                       ? Op.getDstAlign()
-                       : std::min(Op.getSrcAlign(), Op.getDstAlign());
+      Align CapAlign(CapSize);
+      LLVM_DEBUG(dbgs() << __func__ << " Size=" << Op.size() << " DstAlign="
+                        << (Op.isFixedDstAlign() ? Op.getDstAlign().value() : 0)
+                        << " SrcAlign="
+                        << (Op.isMemset() ? 0 : Op.getSrcAlign().value())
+                        << " CapSize=" << CapSize << "\n");
       // If sufficiently aligned, we must use capability loads/stores if
       // copying, and can use cnull for a zeroing memset.
-      if (Alignment >= CapSize || Alignment.value() == 0)
+      if (Op.isAligned(CapAlign)) {
         return CapType;
-      // Otherwise if this is a copy then tell SelectionDAG to do a real
-      // memcpy/memmove call, since it could still contain a capability if
-      // sufficiently aligned at runtime. Zeroing memsets can fall back on
-      // non-capability loads/stores.
-      if (!Op.isMemset())
+      } else if (!Op.isMemset()) {
+        // Otherwise if this is a copy then tell SelectionDAG to do a real
+        // memcpy/memmove call (by returning MVT::isVoid), since it could still
+        // contain a capability if sufficiently aligned at runtime. Zeroing
+        // memsets can fall back on non-capability loads/stores.
         return MVT::isVoid;
+      }
     }
   }
 
