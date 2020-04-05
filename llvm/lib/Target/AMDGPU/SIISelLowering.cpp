@@ -4562,7 +4562,6 @@ SDValue SITargetLowering::LowerBRCOND(SDValue BRCOND,
     };
     SDValue NewBR = DAG.getNode(ISD::BR, DL, BR->getVTList(), Ops);
     DAG.ReplaceAllUsesWith(BR, NewBR.getNode());
-    BR = NewBR.getNode();
   }
 
   SDValue Chain = SDValue(Result, Result->getNumValues() - 1);
