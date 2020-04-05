@@ -19,17 +19,13 @@ if(NOT DEFINED LLVM_VERSION_MAJOR)
   set(LLVM_VERSION_MAJOR 11)
 endif()
 if(NOT DEFINED LLVM_VERSION_MINOR)
-  # Note: Since we are always using a git snapshot we set this to be a non-zero
-  # value so that CheriBSD's Makefiles can selectively disable new warnings.
-  # We start at 50 since it's unlikely there will be a real upstream release
-  # with that version
-  set(LLVM_VERSION_MINOR 50)
+  set(LLVM_VERSION_MINOR 0)
 endif()
 if(NOT DEFINED LLVM_VERSION_PATCH)
   set(LLVM_VERSION_PATCH 0)
 endif()
 if(NOT DEFINED LLVM_VERSION_SUFFIX)
-  set(LLVM_VERSION_SUFFIX git-cheri)
+  set(LLVM_VERSION_SUFFIX git)
 endif()
 
 if (NOT PACKAGE_VERSION)
