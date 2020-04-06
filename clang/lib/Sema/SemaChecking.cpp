@@ -11711,20 +11711,31 @@ static void CheckBoolLikeConversion(Sema &S, Expr *E, SourceLocation CC) {
   CheckImplicitConversion(S, E->IgnoreParenImpCasts(), S.Context.BoolTy, CC);
 }
 
-/// AnalyzeImplicitConversions - Find and report any interesting
-/// implicit conversions in the given expression.  There are a couple
-/// of competing diagnostics here, -Wconversion and -Wsign-compare.
-/// Also handles CHERI multi-provenance analysis
-static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
-                                       bool IsListInit/*= false*/) {
+namespace {
+struct AnalyzeImplicitConversionsWorkItem {
+  Expr *E;
+  SourceLocation CC;
+  bool IsListInit;
+};
+}
+
+/// Data recursive variant of AnalyzeImplicitConversions. Subexpressions
+/// that should be visited are added to WorkList.
+/// Note: Also handles CHERI multi-provenance analysis
+static void AnalyzeImplicitConversions(
+    Sema &S, AnalyzeImplicitConversionsWorkItem Item,
+    llvm::SmallVectorImpl<AnalyzeImplicitConversionsWorkItem> &WorkList) {
+  Expr *OrigE = Item.E;
+  SourceLocation CC = Item.CC;
+
   QualType T = OrigE->getType();
   Expr *E = OrigE->IgnoreParenImpCasts();
 
   // Propagate whether we are in a C++ list initialization expression.
   // If so, we do not issue warnings for implicit int-float conversion
   // precision loss, because C++11 narrowing already handles it.
-  IsListInit =
-      IsListInit || (isa<InitListExpr>(OrigE) && S.getLangOpts().CPlusPlus);
+  bool IsListInit = Item.IsListInit ||
+                    (isa<InitListExpr>(OrigE) && S.getLangOpts().CPlusPlus);
 
   if (E->isTypeDependent() || E->isValueDependent())
     return;
@@ -11770,7 +11781,7 @@ static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
     // FIXME: Use a more uniform representation for this.
     for (auto *SE : POE->semantics())
       if (auto *OVE = dyn_cast<OpaqueValueExpr>(SE))
-        AnalyzeImplicitConversions(S, OVE->getSourceExpr(), CC, IsListInit);
+        WorkList.push_back({OVE->getSourceExpr(), CC, IsListInit});
   }
 
   // Skip past explicit casts.
@@ -11778,7 +11789,8 @@ static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
     E = CE->getSubExpr()->IgnoreParenImpCasts();
     if (!CE->getType()->isVoidType() && E->getType()->isAtomicType())
       S.Diag(E->getBeginLoc(), diag::warn_atomic_implicit_seq_cst);
-    return AnalyzeImplicitConversions(S, E, CC, IsListInit);
+    WorkList.push_back({E, CC, IsListInit});
+    return;
   }
 
   if (BinaryOperator *BO = dyn_cast<BinaryOperator>(E)) {
@@ -11817,7 +11829,7 @@ static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
       // Ignore checking string literals that are in logical and operators.
       // This is a common pattern for asserts.
       continue;
-    AnalyzeImplicitConversions(S, ChildExpr, CC, IsListInit);
+    WorkList.push_back({ChildExpr, CC, IsListInit});
   }
 
   if (BO && BO->isLogicalOp()) {
@@ -11839,6 +11851,17 @@ static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
                diag::warn_atomic_implicit_seq_cst);
     }
   }
+}
+
+/// AnalyzeImplicitConversions - Find and report any interesting
+/// implicit conversions in the given expression.  There are a couple
+/// of competing diagnostics here, -Wconversion and -Wsign-compare.
+static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE, SourceLocation CC,
+                                       bool IsListInit/*= false*/) {
+  llvm::SmallVector<AnalyzeImplicitConversionsWorkItem, 16> WorkList;
+  WorkList.push_back({OrigE, CC, IsListInit});
+  while (!WorkList.empty())
+    AnalyzeImplicitConversions(S, WorkList.pop_back_val(), WorkList);
 }
 
 /// Diagnose integer type and any valid implicit conversion to it.
