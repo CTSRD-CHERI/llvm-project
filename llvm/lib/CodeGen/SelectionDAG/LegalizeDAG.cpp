@@ -438,7 +438,6 @@ SDValue SelectionDAGLegalize::OptimizeFloatStore(StoreSDNode* ST) {
   // We generally can't do this one for long doubles.
   SDValue Chain = ST->getChain();
   SDValue Ptr = ST->getBasePtr();
-  unsigned Alignment = ST->getAlignment();
   MachineMemOperand::Flags MMOFlags = ST->getMemOperand()->getFlags();
   AAMDNodes AAInfo = ST->getAAInfo();
   SDLoc dl(ST);
@@ -448,8 +447,8 @@ SDValue SelectionDAGLegalize::OptimizeFloatStore(StoreSDNode* ST) {
       SDValue Con = DAG.getConstant(CFP->getValueAPF().
                                       bitcastToAPInt().zextOrTrunc(32),
                                     SDLoc(CFP), MVT::i32);
-      return DAG.getStore(Chain, dl, Con, Ptr, ST->getPointerInfo(), Alignment,
-                          MMOFlags, AAInfo);
+      return DAG.getStore(Chain, dl, Con, Ptr, ST->getPointerInfo(),
+                          ST->getOriginalAlign(), MMOFlags, AAInfo);
     }
 
     if (CFP->getValueType(0) == MVT::f64) {
@@ -458,7 +457,7 @@ SDValue SelectionDAGLegalize::OptimizeFloatStore(StoreSDNode* ST) {
         SDValue Con = DAG.getConstant(CFP->getValueAPF().bitcastToAPInt().
                                       zextOrTrunc(64), SDLoc(CFP), MVT::i64);
         return DAG.getStore(Chain, dl, Con, Ptr, ST->getPointerInfo(),
-                            Alignment, MMOFlags, AAInfo);
+                            ST->getOriginalAlign(), MMOFlags, AAInfo);
       }
 
       if (TLI.isTypeLegal(MVT::i32) && !ST->isVolatile()) {
@@ -471,12 +470,12 @@ SDValue SelectionDAGLegalize::OptimizeFloatStore(StoreSDNode* ST) {
         if (DAG.getDataLayout().isBigEndian())
           std::swap(Lo, Hi);
 
-        Lo = DAG.getStore(Chain, dl, Lo, Ptr, ST->getPointerInfo(), Alignment,
-                          MMOFlags, AAInfo);
+        Lo = DAG.getStore(Chain, dl, Lo, Ptr, ST->getPointerInfo(),
+                          ST->getOriginalAlign(), MMOFlags, AAInfo);
         Ptr = DAG.getMemBasePlusOffset(Ptr, 4, dl);
         Hi = DAG.getStore(Chain, dl, Hi, Ptr,
                           ST->getPointerInfo().getWithOffset(4),
-                          MinAlign(Alignment, 4U), MMOFlags, AAInfo);
+                          ST->getOriginalAlign(), MMOFlags, AAInfo);
 
         return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, Lo, Hi);
       }
@@ -491,7 +490,6 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
   SDValue Ptr = ST->getBasePtr();
   SDLoc dl(Node);
 
-  unsigned Alignment = ST->getAlignment();
   MachineMemOperand::Flags MMOFlags = ST->getMemOperand()->getFlags();
   AAMDNodes AAInfo = ST->getAAInfo();
 
@@ -532,9 +530,8 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
       assert(NVT.getSizeInBits() == VT.getSizeInBits() &&
              "Can only promote stores to same size type");
       Value = DAG.getNode(ISD::BITCAST, dl, NVT, Value);
-      SDValue Result =
-          DAG.getStore(Chain, dl, Value, Ptr, ST->getPointerInfo(),
-                       Alignment, MMOFlags, AAInfo);
+      SDValue Result = DAG.getStore(Chain, dl, Value, Ptr, ST->getPointerInfo(),
+                                    ST->getOriginalAlign(), MMOFlags, AAInfo);
       ReplaceNode(SDValue(Node, 0), Result);
       break;
     }
@@ -557,7 +554,7 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
     Value = DAG.getZeroExtendInReg(Value, dl, StVT);
     SDValue Result =
         DAG.getTruncStore(Chain, dl, Value, Ptr, ST->getPointerInfo(), NVT,
-                          Alignment, MMOFlags, AAInfo);
+                          ST->getOriginalAlign(), MMOFlags, AAInfo);
     ReplaceNode(SDValue(Node, 0), Result);
   } else if (StWidth & (StWidth - 1)) {
     // If not storing a power-of-2 number of bits, expand as two stores.
@@ -579,7 +576,7 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
       // TRUNCSTORE:i24 X -> TRUNCSTORE:i16 X, TRUNCSTORE@+2:i8 (srl X, 16)
       // Store the bottom RoundWidth bits.
       Lo = DAG.getTruncStore(Chain, dl, Value, Ptr, ST->getPointerInfo(),
-                             RoundVT, Alignment, MMOFlags, AAInfo);
+                             RoundVT, ST->getOriginalAlign(), MMOFlags, AAInfo);
 
       // Store the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
@@ -588,10 +585,9 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
           ISD::SRL, dl, Value.getValueType(), Value,
           DAG.getConstant(RoundWidth, dl,
                           TLI.getShiftAmountTy(Value.getValueType(), DL)));
-      Hi = DAG.getTruncStore(
-          Chain, dl, Hi, Ptr,
-          ST->getPointerInfo().getWithOffset(IncrementSize), ExtraVT,
-          MinAlign(Alignment, IncrementSize), MMOFlags, AAInfo);
+      Hi = DAG.getTruncStore(Chain, dl, Hi, Ptr,
+                             ST->getPointerInfo().getWithOffset(IncrementSize),
+                             ExtraVT, ST->getOriginalAlign(), MMOFlags, AAInfo);
     } else {
       // Big endian - avoid unaligned stores.
       // TRUNCSTORE:i24 X -> TRUNCSTORE:i16 (srl X, 8), TRUNCSTORE@+2:i8 X
@@ -600,16 +596,16 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
           ISD::SRL, dl, Value.getValueType(), Value,
           DAG.getConstant(ExtraWidth, dl,
                           TLI.getShiftAmountTy(Value.getValueType(), DL)));
-      Hi = DAG.getTruncStore(Chain, dl, Hi, Ptr, ST->getPointerInfo(),
-                             RoundVT, Alignment, MMOFlags, AAInfo);
+      Hi = DAG.getTruncStore(Chain, dl, Hi, Ptr, ST->getPointerInfo(), RoundVT,
+                             ST->getOriginalAlign(), MMOFlags, AAInfo);
 
       // Store the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
       Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
-      Lo = DAG.getTruncStore(
-          Chain, dl, Value, Ptr,
-          ST->getPointerInfo().getWithOffset(IncrementSize), ExtraVT,
-          MinAlign(Alignment, IncrementSize), MMOFlags, AAInfo);
+      Lo = DAG.getTruncStore(Chain, dl, Value, Ptr,
+                             ST->getPointerInfo().getWithOffset(IncrementSize),
+                             ExtraVT, ST->getOriginalAlign(), MMOFlags, AAInfo);
+
     }
 
     // The order of the stores doesn't matter.
@@ -645,15 +641,16 @@ void SelectionDAGLegalize::LegalizeStoreOps(SDNode *Node) {
       if (TLI.isTypeLegal(StVT)) {
         Value = DAG.getNode(ISD::TRUNCATE, dl, StVT, Value);
         Result = DAG.getStore(Chain, dl, Value, Ptr, ST->getPointerInfo(),
-                              Alignment, MMOFlags, AAInfo);
+                              ST->getOriginalAlign(), MMOFlags, AAInfo);
       } else {
         // The in-memory type isn't legal. Truncate to the type it would promote
         // to, and then do a truncstore.
         Value = DAG.getNode(ISD::TRUNCATE, dl,
                             TLI.getTypeToTransformTo(*DAG.getContext(), StVT),
                             Value);
-        Result = DAG.getTruncStore(Chain, dl, Value, Ptr, ST->getPointerInfo(),
-                                   StVT, Alignment, MMOFlags, AAInfo);
+        Result =
+            DAG.getTruncStore(Chain, dl, Value, Ptr, ST->getPointerInfo(), StVT,
+                              ST->getOriginalAlign(), MMOFlags, AAInfo);
       }
 
       ReplaceNode(SDValue(Node, 0), Result);
@@ -723,7 +720,6 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
   LLVM_DEBUG(dbgs() << "Legalizing extending load operation\n");
   EVT SrcVT = LD->getMemoryVT();
   unsigned SrcWidth = SrcVT.getSizeInBits();
-  unsigned Alignment = LD->getAlignment();
   MachineMemOperand::Flags MMOFlags = LD->getMemOperand()->getFlags();
   AAMDNodes AAInfo = LD->getAAInfo();
 
@@ -750,9 +746,9 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
     ISD::LoadExtType NewExtType =
       ExtType == ISD::ZEXTLOAD ? ISD::ZEXTLOAD : ISD::EXTLOAD;
 
-    SDValue Result =
-        DAG.getExtLoad(NewExtType, dl, Node->getValueType(0), Chain, Ptr,
-                       LD->getPointerInfo(), NVT, Alignment, MMOFlags, AAInfo);
+    SDValue Result = DAG.getExtLoad(NewExtType, dl, Node->getValueType(0),
+                                    Chain, Ptr, LD->getPointerInfo(), NVT,
+                                    LD->getOriginalAlign(), MMOFlags, AAInfo);
 
     Ch = Result.getValue(1); // The chain.
 
@@ -790,16 +786,15 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
       // EXTLOAD:i24 -> ZEXTLOAD:i16 | (shl EXTLOAD@+2:i8, 16)
       // Load the bottom RoundWidth bits.
       Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, Node->getValueType(0), Chain, Ptr,
-                          LD->getPointerInfo(), RoundVT, Alignment, MMOFlags,
-                          AAInfo);
+                          LD->getPointerInfo(), RoundVT, LD->getOriginalAlign(),
+                          MMOFlags, AAInfo);
 
       // Load the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
       Ptr = DAG.getMemBasePlusOffset(Ptr, IncrementSize, dl);
       Hi = DAG.getExtLoad(ExtType, dl, Node->getValueType(0), Chain, Ptr,
                           LD->getPointerInfo().getWithOffset(IncrementSize),
-                          ExtraVT, MinAlign(Alignment, IncrementSize), MMOFlags,
-                          AAInfo);
+                          ExtraVT, LD->getOriginalAlign(), MMOFlags, AAInfo);
 
       // Build a factor node to remember that this load is independent of
       // the other one.
@@ -819,16 +814,15 @@ void SelectionDAGLegalize::LegalizeLoadOps(SDNode *Node) {
       // EXTLOAD:i24 -> (shl EXTLOAD:i16, 8) | ZEXTLOAD@+2:i8
       // Load the top RoundWidth bits.
       Hi = DAG.getExtLoad(ExtType, dl, Node->getValueType(0), Chain, Ptr,
-                          LD->getPointerInfo(), RoundVT, Alignment, MMOFlags,
-                          AAInfo);
+                          LD->getPointerInfo(), RoundVT, LD->getOriginalAlign(),
+                          MMOFlags, AAInfo);
 
       // Load the remaining ExtraWidth bits.
       IncrementSize = RoundWidth / 8;
       Ptr = DAG.getMemBasePlusOffset(Ptr, IncrementSize, dl);
       Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, Node->getValueType(0), Chain, Ptr,
                           LD->getPointerInfo().getWithOffset(IncrementSize),
-                          ExtraVT, MinAlign(Alignment, IncrementSize), MMOFlags,
-                          AAInfo);
+                          ExtraVT, LD->getOriginalAlign(), MMOFlags, AAInfo);
 
       // Build a factor node to remember that this load is independent of
       // the other one.
