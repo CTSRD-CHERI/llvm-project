@@ -1896,6 +1896,9 @@ namespace serialization {
       EXPR_COAWAIT,
       EXPR_COYIELD,
       EXPR_DEPENDENT_COAWAIT,
+
+      // FixedPointLiteral
+      EXPR_FIXEDPOINT_LITERAL,
     };
 
     /// The kinds of designators that can occur in a
