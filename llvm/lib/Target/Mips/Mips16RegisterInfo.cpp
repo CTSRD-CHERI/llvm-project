@@ -54,12 +54,10 @@ bool Mips16RegisterInfo::useFPForScavengingIndex
   return false;
 }
 
-bool Mips16RegisterInfo::saveScavengerRegister
-  (MachineBasicBlock &MBB,
-   MachineBasicBlock::iterator I,
-   MachineBasicBlock::iterator &UseMI,
-   const TargetRegisterClass *RC,
-   unsigned Reg) const {
+bool Mips16RegisterInfo::saveScavengerRegister(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
+    MachineBasicBlock::iterator &UseMI, const TargetRegisterClass *RC,
+    Register Reg) const {
   DebugLoc DL;
   const TargetInstrInfo &TII = *MBB.getParent()->getSubtarget().getInstrInfo();
   TII.copyPhysReg(MBB, I, DL, Mips::T0, Reg, true);
@@ -98,7 +96,7 @@ void Mips16RegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   //  3. Locations for callee-saved registers.
   // Everything else is referenced relative to whatever register
   // getFrameRegister() returns.
-  unsigned FrameReg;
+  Register FrameReg;
 
   if (FrameIndex >= MinCSFI && FrameIndex <= MaxCSFI)
     FrameReg = Mips::SP;
