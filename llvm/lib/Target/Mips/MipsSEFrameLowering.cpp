@@ -831,7 +831,7 @@ void MipsSEFrameLowering::emitInterruptEpilogueStub(
 
 int MipsSEFrameLowering::getFrameIndexReference(const MachineFunction &MF,
                                                 int FI,
-                                                unsigned &FrameReg) const {
+                                                Register &FrameReg) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   MipsABIInfo ABI = STI.getABI();
 
