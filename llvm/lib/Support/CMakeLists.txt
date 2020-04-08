@@ -142,6 +142,7 @@ add_llvm_component_library(LLVMSupport
   StringMap.cpp
   StringSaver.cpp
   StringRef.cpp
+  SuffixTree.cpp
   SymbolRemappingReader.cpp
   SystemUtils.cpp
   TarWriter.cpp
