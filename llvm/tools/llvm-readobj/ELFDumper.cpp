@@ -2521,7 +2521,7 @@ std::string ELFDumper<ELFT>::getDynamicEntry(uint64_t Type,
       Value &= ~DF_MIPS_CHERI_ABI_MASK;
       if (Value) {
         Result += ' ';
-        Result += FormatFlags(Value, makeArrayRef(ElfDynamicDTMipsCheriAbiFlags), OS);
+        Result += FormatFlags(Value, makeArrayRef(ElfDynamicDTMipsCheriAbiFlags));
       }
       return Result;
     }

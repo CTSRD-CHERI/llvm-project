@@ -374,7 +374,7 @@ getFrameRegister(const MachineFunction &MF) const {
     return TFI->hasFP(MF) ? ABI.GetFramePtr() : ABI.GetStackPtr();
 }
 
-bool MipsRegisterInfo::isConstantPhysReg(unsigned PhysReg) const {
+bool MipsRegisterInfo::isConstantPhysReg(MCRegister PhysReg) const {
   return PhysReg == Mips::ZERO || PhysReg == Mips::ZERO_64 || PhysReg == Mips::CNULL;
 }
 
