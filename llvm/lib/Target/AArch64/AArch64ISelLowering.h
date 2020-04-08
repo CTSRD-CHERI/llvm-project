@@ -547,7 +547,7 @@ public:
 
   /// If a physical register, this returns the register that receives the
   /// exception address on entry to an EH pad.
-  unsigned
+  Register
   getExceptionPointerRegister(const Constant *PersonalityFn) const override {
     // FIXME: This is a guess. Has this been defined yet?
     return AArch64::X0;
@@ -555,7 +555,7 @@ public:
 
   /// If a physical register, this returns the register that receives the
   /// exception typeid on entry to a landing pad.
-  unsigned
+  Register
   getExceptionSelectorRegister(const Constant *PersonalityFn) const override {
     // FIXME: This is a guess. Has this been defined yet?
     return AArch64::X1;
