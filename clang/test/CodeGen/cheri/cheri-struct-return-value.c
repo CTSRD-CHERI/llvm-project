@@ -66,11 +66,45 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   // CHECK: [[CAP_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 1
   // CHECK: store i8 addrspace(200)* %in.coerce1, i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[#CAP_SIZE]]
   // CHECK: ret void
-  // ASM-LABEL: two_caps_struct
+  // ASM-LABEL: two_caps_struct:
   // ASM:       cincoffset      $c1, $c4, 1
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csc     $c5, $zero, [[#CAP_SIZE]]($c3)
+}
+
+typedef struct {
+  __uintcap_t cap1;
+  __uintcap_t cap2;
+  __uintcap_t cap3;
+} ThreeCapsStruct;
+
+ThreeCapsStruct three_caps_struct(ThreeCapsStruct in) {
+  ThreeCapsStruct t;
+  t.cap1 = in.cap1 + 1;
+  t.cap2 = in.cap2 + 2;
+  t.cap3 = in.cap3 + 3;
+  return t;
+  // argument is split up into two cap regs, but return value is indirect
+  // CHECK-LABEL: define void @three_caps_struct(%struct.ThreeCapsStruct addrspace(200)* noalias nocapture sret align {{16|32}} %agg.result, {{.*}}, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1, i8 addrspace(200)* inreg %in.coerce2) local_unnamed_addr
+  // CHECK: [[SRC_PLUS1:%.+]] = getelementptr i8, i8 addrspace(200)* %in.coerce0, i64 1
+  // CHECK: [[DST1:%.+]] = getelementptr inbounds %struct.ThreeCapsStruct, %struct.ThreeCapsStruct addrspace(200)* %agg.result, i64 0, i32 0
+  // CHECK: store i8 addrspace(200)* [[SRC_PLUS1]], i8 addrspace(200)* addrspace(200)* [[DST1]], align [[#CAP_SIZE]]
+  // CHECK: [[SRC_PLUS2:%.+]] = getelementptr i8, i8 addrspace(200)* %in.coerce1, i64 2
+  // CHECK: [[DST2:%.+]] = getelementptr inbounds %struct.ThreeCapsStruct, %struct.ThreeCapsStruct addrspace(200)* %agg.result, i64 0, i32 1
+  // CHECK: store i8 addrspace(200)* [[SRC_PLUS2]], i8 addrspace(200)* addrspace(200)* [[DST2]], align [[#CAP_SIZE]]
+  // CHECK: [[SRC_PLUS3:%.+]] = getelementptr i8, i8 addrspace(200)* %in.coerce2, i64 3
+  // CHECK: [[DST3:%.+]] = getelementptr inbounds %struct.ThreeCapsStruct, %struct.ThreeCapsStruct addrspace(200)* %agg.result, i64 0, i32 2
+  // CHECK: store i8 addrspace(200)* [[SRC_PLUS3]], i8 addrspace(200)* addrspace(200)* [[DST3]], align [[#CAP_SIZE]]
+  // CHECK: ret void
+  // ASM-LABEL: three_caps_struct:
+  // ASM:       cincoffset $c1, $c4, 1
+  // ASM-NEXT:  csc $c1, $zero, 0($c3)
+  // ASM-NEXT:  cincoffset $c1, $c5, 2
+  // ASM-NEXT:  csc $c1, $zero, [[#CAP_SIZE]]($c3)
+  // ASM-NEXT:  cincoffset $c1, $c6, 3
+  // ASM-NEXT:  cjr     $c17
+  // ASM-NEXT:  csc     $c1, $zero, [[#CAP_SIZE * 2]]($c3)
 }
 
 typedef union {
