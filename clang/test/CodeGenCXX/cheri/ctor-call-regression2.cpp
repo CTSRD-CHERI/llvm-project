@@ -18,5 +18,5 @@ int d;
 void e() { C(&d, a::b); }
 
 // C::C(int* cap, a):
-// CHECK: declare void @_ZN1CC1EU3capPi1a(%class.C addrspace(200)*, i32 addrspace(200)*, i8 inreg) unnamed_addr
+// CHECK: declare void @_ZN1CC1EPi1a(%class.C addrspace(200)*, i32 addrspace(200)*, i8 inreg) unnamed_addr
 

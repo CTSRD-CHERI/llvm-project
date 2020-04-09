@@ -10,7 +10,7 @@ void g() {
   // LEGACY: [[TMP1:%[0-9]]] = call {{.*}} @llvm.cheri.pcc.get()
   // LEGACY-NEXT: [[TMP2:%[0-9]]] = call {{.*}} @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP1]]
   // LEGACY-NEXT: [[TMP3:%[0-9]]] = bitcast i8 addrspace(200)* [[TMP2]]
-  // LEGACY-NEXT: call void @_Z6invokeIU3capRFU3capRivEEvU3capOT_({{.*}} [[TMP3]])
-  // NEWABI: call void @_Z6invokeIU3capRFU3capRivEEvU3capOT_(i32 addrspace(200)* () addrspace(200)* @_Z1fv)
+  // LEGACY-NEXT: call void @_Z6invokeIRFRivEEvOT_({{.*}} [[TMP3]])
+  // NEWABI: call void @_Z6invokeIRFRivEEvOT_(i32 addrspace(200)* () addrspace(200)* @_Z1fv)
   invoke(fn);
 }

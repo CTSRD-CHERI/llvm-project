@@ -14,7 +14,6 @@ typedef void (QTextStream::*g)();
 class QTextStreamManipulator {
   g i;
 };
-//
 QTextStream& operator<<(QTextStream&, QTextStreamManipulator);
 QTextStreamManipulator qSetPadChar();
 
@@ -59,7 +58,7 @@ QTextStreamManipulator qSetPadChar();
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast [[CLASS_QTEXTSTREAMMANIPULATOR]] addrspace(200)* [[AGG_TMP]] to { { i8 addrspace(200)*, i64 } } addrspace(200)*
 // PURECAP-NEXT:    [[TMP4:%.*]] = getelementptr inbounds { { i8 addrspace(200)*, i64 } }, { { i8 addrspace(200)*, i64 } } addrspace(200)* [[TMP3]], i32 0, i32 0
 // PURECAP-NEXT:    [[TMP5:%.*]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[TMP4]], align 16
-// PURECAP-NEXT:    [[CALL2:%.*]] = call dereferenceable(1) [[CLASS_QTEXTSTREAM:%.*]] addrspace(200)* @_ZlsU3capR11QTextStream22QTextStreamManipulator(%class.QTextStream addrspace(200)* dereferenceable(1) [[TS]], { i8 addrspace(200)*, i64 } inreg [[TMP5]])
+// PURECAP-NEXT:    [[CALL2:%.*]] = call dereferenceable(1) [[CLASS_QTEXTSTREAM:%.*]] addrspace(200)* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream addrspace(200)* dereferenceable(1) [[TS]], { i8 addrspace(200)*, i64 } inreg [[TMP5]])
 // PURECAP-NEXT:    ret void
 //
 void QDebug::putUcs4() {
@@ -67,4 +66,3 @@ void QDebug::putUcs4() {
   ts << qSetPadChar();
 }
 
-// TODO: we should probably return an inreg struct for CHERI too

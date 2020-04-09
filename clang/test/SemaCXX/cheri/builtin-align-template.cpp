@@ -1,7 +1,7 @@
 // RUN: %cheri_cc1 -std=c++11 -o - %s -fsyntax-only -verify
 // RUN: %cheri_purecap_cc1 -std=c++11 -o - %s -fsyntax-only -verify
 // Check that we don't crash in codegen:
-// RUN: %cheri_purecap_cc1 -std=c++11 -o - %s -emit-llvm -DCODEGEN | llvm-cxxfilt --no-strip-underscore | FileCheck %s
+// RUN: %cheri_purecap_cc1 -std=c++11 -o - %s -emit-llvm -DCODEGEN | FileCheck %s
 
 
 // Check that we don't crash when using dependent types:
@@ -15,7 +15,7 @@ x foo;
 // instantiate it:
 void test(void* value) {
   c<int, 16>(value);
-  // CHECK: call i8 addrspace(200)* @void* cap c<int, 16>(void*)(i8 addrspace(200)*
+  // CHECK: call i8 addrspace(200)* @_Z1cIiLi16EEPvS0_(i8 addrspace(200)*
 #ifndef CODEGEN
   c<struct x, foo>(value); // expected-error{{no matching function for call to 'c'}}
 #endif

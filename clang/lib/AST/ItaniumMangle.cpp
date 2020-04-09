@@ -124,20 +124,26 @@ class ItaniumMangleContextImpl : public ItaniumMangleContext {
   typedef std::pair<const DeclContext*, IdentifierInfo*> DiscriminatorKeyTy;
   llvm::DenseMap<DiscriminatorKeyTy, unsigned> Discriminator;
   llvm::DenseMap<const NamedDecl*, unsigned> Uniquifier;
+  bool AllPointersAreCapabilities;
 
 public:
   explicit ItaniumMangleContextImpl(ASTContext &Context,
                                     DiagnosticsEngine &Diags,
                                     bool IsUniqueNameMangler)
-      : ItaniumMangleContext(Context, Diags, IsUniqueNameMangler) {}
+      : ItaniumMangleContext(Context, Diags, IsUniqueNameMangler) {
+    AllPointersAreCapabilities =
+        Context.getTargetInfo().areAllPointersCapabilities();
+  }
 
   /// @name Mangler Entry Points
   /// @{
-
   bool shouldMangleCXXName(const NamedDecl *D) override;
   bool shouldMangleStringLiteral(const StringLiteral *) override {
     return false;
   }
+  // We only want to mangle the __capability qualifier if this is not the
+  // default representation of pointers, i.e. only in the hybrid ABI.
+  bool shouldMangleCapabilityQualifier() { return !AllPointersAreCapabilities; };
   void mangleCXXName(GlobalDecl GD, raw_ostream &) override;
   void mangleThunk(const CXXMethodDecl *MD, const ThunkInfo &Thunk,
                    raw_ostream &) override;
@@ -3110,8 +3116,8 @@ void CXXNameMangler::mangleType(const SubstTemplateTypeParmPackType *T) {
 
 // <type> ::= P <type>   # pointer-to
 void CXXNameMangler::mangleType(const PointerType *T) {
-  if (T->isCHERICapability())
-    Out << "U3cap";
+  if (Context.shouldMangleCapabilityQualifier() && T->isCHERICapability())
+    Out << "U12__capability";
   Out << 'P';
   mangleType(T->getPointeeType());
 }
@@ -3122,16 +3128,16 @@ void CXXNameMangler::mangleType(const ObjCObjectPointerType *T) {
 
 // <type> ::= R <type>   # reference-to
 void CXXNameMangler::mangleType(const LValueReferenceType *T) {
-  if (T->isCHERICapability())
-    Out << "U3cap";
+  if (Context.shouldMangleCapabilityQualifier() && T->isCHERICapability())
+    Out << "U12__capability";
   Out << 'R';
   mangleType(T->getPointeeType());
 }
 
 // <type> ::= O <type>   # rvalue reference-to (C++0x)
 void CXXNameMangler::mangleType(const RValueReferenceType *T) {
-  if (T->isCHERICapability())
-    Out << "U3cap";
+  if (Context.shouldMangleCapabilityQualifier() && T->isCHERICapability())
+    Out << "U12__capability";
   Out << 'O';
   mangleType(T->getPointeeType());
 }

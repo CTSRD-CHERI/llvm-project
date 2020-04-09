@@ -4,7 +4,7 @@
 ; RUNNOT: %cheri128_purecap_llc %s -O2 -o - -filetype=obj | llvm-objdump -d - -no-show-raw-insn | FileCheck %s -check-prefix DUMP
 ; RUN: %cheri128_purecap_llc -frame-pointer=all %s -O2 -o - -filetype=obj | llvm-objdump -t - | FileCheck %s -check-prefix SYMBOLS
 ; Check the size of the generated function:
-; SYMBOLS: 0000000000000000 g     F .text		 00000000000002b0 .hidden _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE
+; SYMBOLS: 0000000000000000 g     F .text		 00000000000002b0 .hidden _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEPN3JSC9ExecStateE
 
 source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 
@@ -615,9 +615,9 @@ declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture) addr
 ; Function Attrs: argmemonly nounwind
 declare void @llvm.lifetime.end.p200i8(i64, i8 addrspace(200)* nocapture) addrspace(200) #1
 
-declare i8 addrspace(200)* @_ZN7WebCore18throwThisTypeErrorEU3capRN3JSC9ExecStateEU3capPKcS4_(%"class.JSC::ExecState" addrspace(200)* dereferenceable(16), i8 addrspace(200)*, i8 addrspace(200)*) local_unnamed_addr addrspace(200) #2
+declare i8 addrspace(200)* @_ZN7WebCore18throwThisTypeErrorERN3JSC9ExecStateEPKcS4_(%"class.JSC::ExecState" addrspace(200)* dereferenceable(16), i8 addrspace(200)*, i8 addrspace(200)*) local_unnamed_addr addrspace(200) #2
 
-declare %"class.JSC::JSObject" addrspace(200)* @_ZN3JSC29createNotEnoughArgumentsErrorEU3capPNS_9ExecStateE(%"class.JSC::ExecState" addrspace(200)*) local_unnamed_addr addrspace(200) #2
+declare %"class.JSC::JSObject" addrspace(200)* @_ZN3JSC29createNotEnoughArgumentsErrorEPNS_9ExecStateE(%"class.JSC::ExecState" addrspace(200)*) local_unnamed_addr addrspace(200) #2
 
 declare void @_ZN7WebCore25InternalSettingsGenerated23setCaretBrowsingEnabledEb(%"class.WebCore::InternalSettingsGenerated" addrspace(200)*, i1 zeroext) local_unnamed_addr addrspace(200) #2
 
@@ -627,12 +627,12 @@ declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) addrspace(200) #
 ; Function Attrs: nounwind readnone
 declare i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) addrspace(200) #3
 
-declare inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEU3capPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)*, %"class.JSC::ExecState" addrspace(200)*, %"class.JSC::JSValue" addrspace(200)* byval align 16) local_unnamed_addr addrspace(200) #2
+declare inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)*, %"class.JSC::ExecState" addrspace(200)*, %"class.JSC::JSValue" addrspace(200)* byval align 16) local_unnamed_addr addrspace(200) #2
 
 
 ; Function Attrs: nounwind
-define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE(%"class.JSC::ExecState" addrspace(200)* %state) addrspace(200) #0 {
-; CHECK-LABEL: _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE:
+define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEPN3JSC9ExecStateE(%"class.JSC::ExecState" addrspace(200)* %state) addrspace(200) #0 {
+; CHECK-LABEL: _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEPN3JSC9ExecStateE:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
 ; CHECK-NEXT:    csd $17, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
@@ -652,7 +652,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:  .LBB0_1: # %if.then
 ; CHECK-NEXT:    clcbi $c4, %captab20(.str.163)($c20)
 ; CHECK-NEXT:    clcbi $c5, %captab20(.str.31)($c20)
-; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN7WebCore18throwThisTypeErrorEU3capRN3JSC9ExecStateEU3capPKcS4_)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN7WebCore18throwThisTypeErrorERN3JSC9ExecStateEPKcS4_)($c20)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:  .LBB0_2: # %cleanup44
@@ -710,7 +710,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:  # %bb.11: # %for.inc.i.i.i
 ; CHECK-NEXT:    b .LBB0_1
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  .LBB0_12: # %_ZN3JSC13jsDynamicCastIU3capPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit
+; CHECK-NEXT:  .LBB0_12: # %_ZN3JSC13jsDynamicCastIPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit
 ; CHECK-NEXT:    cbez $c1, .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.13: # %do.body
@@ -770,7 +770,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    csd $1, $zero, 24($c24)
 ; CHECK-NEXT:    clc $c1, $zero, 16($c24)
 ; CHECK-NEXT:    ceq $2, $c2, $c1
-; CHECK-NEXT:  .LBB0_22: # %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+; CHECK-NEXT:  .LBB0_22: # %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
 ; CHECK-NEXT:    clc $c1, $zero, 48($c18)
 ; CHECK-NEXT:    daddiu $1, $zero, -16384
 ; CHECK-NEXT:    candaddr $c1, $c1, $1
@@ -814,7 +814,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    b .LBB0_22
 ; CHECK-NEXT:    cne $2, $c1, $c2
 ; CHECK-NEXT:  .LBB0_26: # %if.then15
-; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC29createNotEnoughArgumentsErrorEU3capPNS_9ExecStateE)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC29createNotEnoughArgumentsErrorEPNS_9ExecStateE)($c20)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:    clc $c1, $zero, 48($c18)
@@ -822,7 +822,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    candaddr $c1, $c1, $1
 ; CHECK-NEXT:    clc $c1, $zero, 304($c1)
 ; CHECK-NEXT:    csc $c3, $zero, 16($c24)
-; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC2VM14throwExceptionEU3capPNS_9ExecStateENS_7JSValueE)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE)($c20)
 ; CHECK-NEXT:    cincoffset $c5, $c24, 16
 ; CHECK-NEXT:    csetbounds $c5, $c5, 16
 ; CHECK-NEXT:    cmove $c3, $c1
@@ -891,7 +891,7 @@ _ZNK3JSC6JSCell9classInfoEv.exit.i.i:             ; preds = %if.end.i.i.i, %if.t
 for.body.i.i.i:                                   ; preds = %for.inc.i.i.i, %_ZNK3JSC6JSCell9classInfoEv.exit.i.i
   %ci.06.i.i.i = phi %"struct.JSC::ClassInfo" addrspace(200)* [ %14, %for.inc.i.i.i ], [ %retval.0.i.i.i, %_ZNK3JSC6JSCell9classInfoEv.exit.i.i ]
   %cmp.i.i.i84 = icmp eq %"struct.JSC::ClassInfo" addrspace(200)* %ci.06.i.i.i, bitcast ({ i8 addrspace(200)*, %"struct.JSC::ClassInfo" addrspace(200)*, %"struct.JSC::HashTable" addrspace(200)*, %"struct.JSC::MethodTable", i32 } addrspace(200)* @_ZN7WebCore27JSInternalSettingsGenerated6s_infoE to %"struct.JSC::ClassInfo" addrspace(200)*)
-  br i1 %cmp.i.i.i84, label %_ZN3JSC13jsDynamicCastIU3capPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit, label %for.inc.i.i.i
+  br i1 %cmp.i.i.i84, label %_ZN3JSC13jsDynamicCastIPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit, label %for.inc.i.i.i
 
 for.inc.i.i.i:                                    ; preds = %for.body.i.i.i
   %parentClass.i.i.i = getelementptr inbounds %"struct.JSC::ClassInfo", %"struct.JSC::ClassInfo" addrspace(200)* %ci.06.i.i.i, i64 0, i32 1
@@ -899,15 +899,15 @@ for.inc.i.i.i:                                    ; preds = %for.body.i.i.i
   %tobool.i3.i.i = icmp eq %"struct.JSC::ClassInfo" addrspace(200)* %14, null
   br i1 %tobool.i3.i.i, label %if.then, label %for.body.i.i.i, !prof !5
 
-_ZN3JSC13jsDynamicCastIU3capPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit: ; preds = %for.body.i.i.i
+_ZN3JSC13jsDynamicCastIPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit: ; preds = %for.body.i.i.i
   %tobool = icmp eq i8 addrspace(200)* %0, null
   br i1 %tobool, label %if.then, label %do.body, !prof !3
 
-if.then:                                          ; preds = %_ZN3JSC13jsDynamicCastIU3capPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit, %for.inc.i.i.i, %_ZNK3JSC6JSCell9classInfoEv.exit.i.i, %entry
-  %call6 = tail call i8 addrspace(200)* @_ZN7WebCore18throwThisTypeErrorEU3capRN3JSC9ExecStateEU3capPKcS4_(%"class.JSC::ExecState" addrspace(200)* dereferenceable(16) %state, i8 addrspace(200)* getelementptr inbounds ([26 x i8], [26 x i8] addrspace(200)* @.str.163, i64 0, i64 0), i8 addrspace(200)* getelementptr inbounds ([24 x i8], [24 x i8] addrspace(200)* @.str.31, i64 0, i64 0)) #4
+if.then:                                          ; preds = %_ZN3JSC13jsDynamicCastIPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit, %for.inc.i.i.i, %_ZNK3JSC6JSCell9classInfoEv.exit.i.i, %entry
+  %call6 = tail call i8 addrspace(200)* @_ZN7WebCore18throwThisTypeErrorERN3JSC9ExecStateEPKcS4_(%"class.JSC::ExecState" addrspace(200)* dereferenceable(16) %state, i8 addrspace(200)* getelementptr inbounds ([26 x i8], [26 x i8] addrspace(200)* @.str.163, i64 0, i64 0), i8 addrspace(200)* getelementptr inbounds ([24 x i8], [24 x i8] addrspace(200)* @.str.31, i64 0, i64 0)) #4
   br label %cleanup44
 
-do.body:                                          ; preds = %_ZN3JSC13jsDynamicCastIU3capPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit
+do.body:                                          ; preds = %_ZN3JSC13jsDynamicCastIPN7WebCore27JSInternalSettingsGeneratedEEET_NS_7JSValueE.exit
   %m_ptr.i.i = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 48
   %15 = bitcast i8 addrspace(200)* %m_ptr.i.i to %"class.WebCore::InternalSettingsGenerated" addrspace(200)* addrspace(200)*
   %16 = load %"class.WebCore::InternalSettingsGenerated" addrspace(200)*, %"class.WebCore::InternalSettingsGenerated" addrspace(200)* addrspace(200)* %15, align 16
@@ -919,7 +919,7 @@ do.body:                                          ; preds = %_ZN3JSC13jsDynamicC
   br i1 %cmp, label %if.then15, label %if.end19, !prof !3
 
 if.then15:                                        ; preds = %do.body
-  %call17 = tail call %"class.JSC::JSObject" addrspace(200)* @_ZN3JSC29createNotEnoughArgumentsErrorEU3capPNS_9ExecStateE(%"class.JSC::ExecState" addrspace(200)* %state) #4
+  %call17 = tail call %"class.JSC::JSObject" addrspace(200)* @_ZN3JSC29createNotEnoughArgumentsErrorEPNS_9ExecStateE(%"class.JSC::ExecState" addrspace(200)* %state) #4
   %19 = bitcast %"class.JSC::JSValue" addrspace(200)* %agg.tmp1.i to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull %19)
   %value.i.i.i.i72 = getelementptr inbounds %"class.JSC::ExecState", %"class.JSC::ExecState" addrspace(200)* %state, i64 3, i32 0, i32 0, i32 0
@@ -933,7 +933,7 @@ if.then15:                                        ; preds = %do.body
   %23 = load %"class.JSC::VM" addrspace(200)*, %"class.JSC::VM" addrspace(200)* addrspace(200)* %22, align 16
   %24 = bitcast %"class.JSC::JSValue" addrspace(200)* %agg.tmp1.i to %"class.JSC::JSObject" addrspace(200)* addrspace(200)*
   store %"class.JSC::JSObject" addrspace(200)* %call17, %"class.JSC::JSObject" addrspace(200)* addrspace(200)* %24, align 16
-  %call2.i = tail call inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEU3capPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)* nonnull %23, %"class.JSC::ExecState" addrspace(200)* %state, %"class.JSC::JSValue" addrspace(200)* byval nonnull align 16 %agg.tmp1.i) #4
+  %call2.i = tail call inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)* nonnull %23, %"class.JSC::ExecState" addrspace(200)* %state, %"class.JSC::JSValue" addrspace(200)* byval nonnull align 16 %agg.tmp1.i) #4
   %25 = extractvalue { i8 addrspace(200)* } %call2.i, 0
   call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull %19)
   br label %cleanup44
@@ -954,7 +954,7 @@ if.end19:                                         ; preds = %do.body
 if.then.i:                                        ; preds = %if.end19
   %conv.i.i = trunc i64 %ref.tmp.sroa.0.8.ref.tmp.sroa.0.8. to i32
   %tobool.i67 = icmp ne i32 %conv.i.i, 0
-  br label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+  br label %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
 
 if.end.i:                                         ; preds = %if.end19
   %.off.i.i = add i64 %ref.tmp.sroa.0.8.ref.tmp.sroa.0.8., -281474976710656
@@ -964,7 +964,7 @@ if.end.i:                                         ; preds = %if.end19
 if.then4.i:                                       ; preds = %if.end.i
   %29 = bitcast i64 %.off.i.i to double
   %30 = fcmp one double %29, 0.000000e+00
-  br label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+  br label %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
 
 if.end8.i:                                        ; preds = %if.end.i
   %31 = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %26) #4
@@ -981,7 +981,7 @@ if.then.i.i:                                      ; preds = %if.then10.i
   %35 = bitcast i8 addrspace(200)* %34 to i32 addrspace(200)*
   %36 = load i32, i32 addrspace(200)* %35, align 4
   %tobool.i.i.i = icmp ne i32 %36, 0
-  br label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+  br label %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
 
 if.end.i.i:                                       ; preds = %if.then10.i
   %37 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %26) #4
@@ -1007,7 +1007,7 @@ if.end.i.i:                                       ; preds = %if.then10.i
   %47 = load i8, i8 addrspace(200)* %inlineTypeFlags.i.i.i.i.i.i, align 2
   %48 = and i8 %47, 1
   %tobool.i.i.i.i.i = icmp eq i8 %48, 0
-  br i1 %tobool.i.i.i.i.i, label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit, label %land.rhs.i.i.i
+  br i1 %tobool.i.i.i.i.i, label %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit, label %land.rhs.i.i.i
 
 land.rhs.i.i.i:                                   ; preds = %if.end.i.i
   %49 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %46) #4
@@ -1031,7 +1031,7 @@ land.rhs.i.i.i:                                   ; preds = %if.end.i.i
   %59 = bitcast %"class.JSC::WriteBarrierBase.36" addrspace(200)* %58 to %"class.JSC::JSGlobalObject" addrspace(200)* addrspace(200)*
   %60 = load %"class.JSC::JSGlobalObject" addrspace(200)*, %"class.JSC::JSGlobalObject" addrspace(200)* addrspace(200)* %59, align 16
   %cmp.i6.i.i = icmp ne %"class.JSC::JSGlobalObject" addrspace(200)* %60, %57
-  br label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+  br label %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
 
 if.end13.i:                                       ; preds = %if.end8.i
   %ref.tmp3.sroa.0.i.i.0.i.0..sroa_cast = bitcast i8 addrspace(200)* addrspace(200)* %ref.tmp3.sroa.0.i.i to i8 addrspace(200)*
@@ -1042,9 +1042,9 @@ if.end13.i:                                       ; preds = %if.end8.i
   %ref.tmp3.sroa.0.i.i.0.ref.tmp3.sroa.0.i.0.ref.tmp3.sroa.0.0.ref.tmp3.sroa.0.0..i.i = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ref.tmp3.sroa.0.i.i, align 16
   %cmp.i.i.i = icmp eq i8 addrspace(200)* %26, %ref.tmp3.sroa.0.i.i.0.ref.tmp3.sroa.0.i.0.ref.tmp3.sroa.0.0.ref.tmp3.sroa.0.0..i.i
   call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull %ref.tmp3.sroa.0.i.i.0.i.0..sroa_cast)
-  br label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+  br label %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
 
-_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit: ; preds = %if.end13.i, %land.rhs.i.i.i, %if.end.i.i, %if.then.i.i, %if.then4.i, %if.then.i
+_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit: ; preds = %if.end13.i, %land.rhs.i.i.i, %if.end.i.i, %if.then.i.i, %if.then4.i, %if.then.i
   %retval.0.i = phi i1 [ %tobool.i67, %if.then.i ], [ %cmp.i.i.i, %if.end13.i ], [ %30, %if.then4.i ], [ %tobool.i.i.i, %if.then.i.i ], [ true, %if.end.i.i ], [ %cmp.i6.i.i, %land.rhs.i.i.i ]
   call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull %ref.tmp.sroa.0.0..sroa_cast89)
   %value.i.i.i.i = getelementptr inbounds %"class.JSC::ExecState", %"class.JSC::ExecState" addrspace(200)* %state, i64 3, i32 0, i32 0, i32 0
@@ -1061,7 +1061,7 @@ _ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit: ; preds = %if.end13.i, %la
   %tobool.i = icmp eq %"class.JSC::Exception" addrspace(200)* %65, null
   br i1 %tobool.i, label %if.end36, label %if.then30, !prof !6
 
-if.then30:                                        ; preds = %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+if.then30:                                        ; preds = %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
   %retval.sroa.0.i61.0..sroa_cast = bitcast i8 addrspace(200)* addrspace(200)* %retval.sroa.0.i61 to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull %retval.sroa.0.i61.0..sroa_cast)
   %retval.sroa.0.i61.8._asInt64.i.sroa_raw_idx = getelementptr inbounds i8, i8 addrspace(200)* %retval.sroa.0.i61.0..sroa_cast, i64 8
@@ -1071,7 +1071,7 @@ if.then30:                                        ; preds = %_ZNK3JSC7JSValue9to
   call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull %retval.sroa.0.i61.0..sroa_cast)
   br label %cleanup44
 
-if.end36:                                         ; preds = %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
+if.end36:                                         ; preds = %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
   tail call void @_ZN7WebCore25InternalSettingsGenerated23setCaretBrowsingEnabledEb(%"class.WebCore::InternalSettingsGenerated" addrspace(200)* nonnull %16, i1 zeroext %retval.0.i) #4
   %retval.sroa.0.i.0..sroa_cast = bitcast i8 addrspace(200)* addrspace(200)* %retval.sroa.0.i to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull %retval.sroa.0.i.0..sroa_cast)

@@ -26,7 +26,7 @@ handler get_handler_sync() noexcept {
 #endif
 
 handler set_handler_atomic(handler func) noexcept {
-  // CHECK-LABEL: @_Z18set_handler_atomicU3capPFvvE(
+  // CHECK-LABEL: @_Z18set_handler_atomicPFvvE(
   // CHECK: %func.addr = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
   // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
   // CHECK: %atomic-temp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
@@ -37,7 +37,7 @@ handler set_handler_atomic(handler func) noexcept {
   // CHECK: atomicrmw xchg void () addrspace(200)* addrspace(200)* @_ZL9__handler, void () addrspace(200)* [[VAR_1]] seq_cst
   return __atomic_exchange_n(&__handler, func, __ATOMIC_SEQ_CST);
 
-  // ASM-LABEL: _Z18set_handler_atomicU3capPFvvE:
+  // ASM-LABEL: _Z18set_handler_atomicPFvvE:
   // ASM:      clcbi   $c2, %captab20(_ZL9__handler)($c{{.+}})
   // ASM-NEXT: sync
   // ASM-NEXT: .LBB0_1: # %entry
@@ -48,7 +48,7 @@ handler set_handler_atomic(handler func) noexcept {
   // ASM-NEXT: nop
   // ASM-NEXT: # %bb.2: # %entry
   // ASM-NEXT: sync
-  // ASM: .end _Z18set_handler_atomicU3capPFvvE
+  // ASM: .end _Z18set_handler_atomicPFvvE
 }
 
 handler get_handler_atomic() noexcept {
@@ -68,7 +68,7 @@ handler get_handler_atomic() noexcept {
 __attribute__((__require_constant_initialization__)) static _Atomic(handler) __atomic_handler;
 
 handler set_handler_c11_atomic(handler func) noexcept {
-  // CHECK-LABEL: @_Z22set_handler_c11_atomicU3capPFvvE(
+  // CHECK-LABEL: @_Z22set_handler_c11_atomicPFvvE(
   // CHECK: %func.addr = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
   // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
   // CHECK: %atomic-temp = alloca void () addrspace(200)*, align [[#CAP_SIZE]]
@@ -79,7 +79,7 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // CHECK: atomicrmw xchg void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler, void () addrspace(200)* [[VAR_1]] seq_cst
   return __c11_atomic_exchange(&__atomic_handler, func, __ATOMIC_SEQ_CST);
 
-  // ASM-LABEL: _Z22set_handler_c11_atomicU3capPFvvE:
+  // ASM-LABEL: _Z22set_handler_c11_atomicPFvvE:
   // ASM:      clcbi   $c2, %captab20(_ZL16__atomic_handler)($c{{.+}})
   // ASM-NEXT: sync
   // ASM-NEXT: .LBB2_1: # %entry
@@ -90,7 +90,7 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // ASM-NEXT: nop
   // ASM-NEXT: # %bb.2: # %entry
   // ASM-NEXT: sync
-  // ASM: .end _Z22set_handler_c11_atomicU3capPFvvE
+  // ASM: .end _Z22set_handler_c11_atomicPFvvE
 
 }
 

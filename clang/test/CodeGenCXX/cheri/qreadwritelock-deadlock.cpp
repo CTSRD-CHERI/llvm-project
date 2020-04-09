@@ -51,7 +51,7 @@ void lock() {
   // TODO: these bitcasts are stupid, can we stop emitting them so the optimizer doesn't have to remove them?
   // CHECK: [[CASTED1:%.+]] = bitcast i8 addrspace(200)* [[WRITE_DUMMY]] to %class.QReadWriteLockPrivate addrspace(200)*
   // CHECK: [[CASTED2:%.+]] = bitcast %class.QReadWriteLockPrivate addrspace(200)* [[CASTED1]] to i8 addrspace(200)*
-  // CHECK: call zeroext i1 @_Z17testAndSetAcquireU3capPvS_(i8 addrspace(200)* null, i8 addrspace(200)* [[CASTED2]])
+  // CHECK: call zeroext i1 @_Z17testAndSetAcquirePvS_(i8 addrspace(200)* null, i8 addrspace(200)* [[CASTED2]])
   if (testAndSetAcquire(nullptr, dummyLockedForWrite))
     return;
 
