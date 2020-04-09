@@ -26,6 +26,7 @@ namespace __sanitizer {
 const char *ExtractToken(const char *str, const char *delims, char **result);
 const char *ExtractInt(const char *str, const char *delims, int *result);
 const char *ExtractUSize(const char *str, const char *delims, usize *result);
+const char *ExtractSSize(const char *str, const char *delims, ssize *result);
 const char *ExtractTokenUpToDelimiter(const char *str, const char *delimiter,
                                       char **result);
 

@@ -48,7 +48,7 @@ const char *ExtractInt(const char *str, const char *delims, int *result) {
   return ret;
 }
 
-const char *ExtractUptr(const char *str, const char *delims, usize *result) {
+const char *ExtractUSize(const char *str, const char *delims, usize *result) {
   char *buff = nullptr;
   const char *ret = ExtractToken(str, delims, &buff);
   if (buff) {
@@ -58,7 +58,7 @@ const char *ExtractUptr(const char *str, const char *delims, usize *result) {
   return ret;
 }
 
-const char *ExtractSptr(const char *str, const char *delims, ssize *result) {
+const char *ExtractSSize(const char *str, const char *delims, ssize *result) {
   char *buff = nullptr;
   const char *ret = ExtractToken(str, delims, &buff);
   if (buff) {
