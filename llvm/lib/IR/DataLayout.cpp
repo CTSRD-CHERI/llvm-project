@@ -280,8 +280,10 @@ void DataLayout::parseSpecifier(StringRef Desc) {
       unsigned AddrSpace = Tok.empty() ? 0 : getInt(Tok);
       if (!isUInt<24>(AddrSpace))
         report_fatal_error("Invalid address space, must be a 24bit integer");
-      assert(isFat == isCheriPointer(AddrSpace, nullptr));
-
+      if (isFat) {
+        assert(AddrSpace == 200 && "CHERI caps must use AS 200 since there are "
+                                   "still some hardcoded checks");
+      }
       // Size.
       if (Rest.empty())
         report_fatal_error(
