@@ -1193,6 +1193,7 @@ include "RISCVInstrInfoA.td"
 include "RISCVInstrInfoF.td"
 include "RISCVInstrInfoD.td"
 include "RISCVInstrInfoC.td"
+include "RISCVInstrInfoB.td"
 
 //===----------------------------------------------------------------------===//
 // Non-standard Extensions
