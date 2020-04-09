@@ -35,19 +35,19 @@ void local_struct_constant_init() {
 }
 
 int call_nonvirt(A* a) {
-  // CHECK-LABEL: @_Z12call_nonvirtU3capP1A(
+  // CHECK-LABEL: @_Z12call_nonvirtP1A(
   // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_nonvirt_ptr, align [[#CAP_SIZE]]
   return (a->*global_nonvirt_ptr)();
 }
 
 int call_virt(A* a) {
-  // CHECK-LABEL: @_Z9call_virtU3capP1A(
+  // CHECK-LABEL: @_Z9call_virtP1A(
   // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_virt_ptr, align [[#CAP_SIZE]]
   return (a->*global_virt_ptr)();
 }
 
 int call_local_nonvirt(A* a) {
-  // CHECK-LABEL: @_Z18call_local_nonvirtU3capP1A(
+  // CHECK-LABEL: @_Z18call_local_nonvirtP1A(
   MemberPtr local_nonvirt = &A::nonvirt2;
   // FIXME: should we rather memcopy from a global that has been initialized?
   // LEGACY: call i8 addrspace(200)* @llvm.cheri.pcc.get()
@@ -59,13 +59,13 @@ int call_local_nonvirt(A* a) {
 
 int call_local_virt(A* a) {
   MemberPtr local_virt = &A::virt2;
-  // CHECK-LABEL: @_Z15call_local_virtU3capP1A(
+  // CHECK-LABEL: @_Z15call_local_virtP1A(
   // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)*
   return (a->*local_virt)();
 }
 
 int call_local_fn_ptr(A* a) {
-  // CHECK-LABEL: @_Z17call_local_fn_ptrU3capP1A(
+  // CHECK-LABEL: @_Z17call_local_fn_ptrP1A(
   int (*local_fn_ptr)() = &global_fn;
   // LEGACY: call i8 addrspace(200)* @llvm.cheri.pcc.get()
   // LEGACY: call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 ()* @_Z9global_fnv to i64))

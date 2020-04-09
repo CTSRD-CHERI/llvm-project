@@ -31,7 +31,7 @@ long call_good_uintcap(__uintcap_t cap) {
   return cheri_addr_dep(cap) +
     cheri_offset_dep(cap);
 }
-// CHECK-LABEL: define {{[^@]+}}@_Z13call_good_ptrU3capPv
+// CHECK-LABEL: define {{[^@]+}}@_Z13call_good_ptrU12__capabilityPv
 // CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) local_unnamed_addr #0
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]]) #3
@@ -69,7 +69,7 @@ template <typename srcty> int* __capability cheri_tocap_dep(srcty arg) {
   // expected-warning@-3{{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
 }
 
-// CHECK-LABEL: define {{[^@]+}}@_Z12fromcap_goodU3capPi
+// CHECK-LABEL: define {{[^@]+}}@_Z12fromcap_goodU12__capabilityPi
 // CHECK-SAME: (i32 addrspace(200)* readnone [[CAP_PTR:%.*]]) local_unnamed_addr #1
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i32 addrspace(200)* [[CAP_PTR]] to i32*

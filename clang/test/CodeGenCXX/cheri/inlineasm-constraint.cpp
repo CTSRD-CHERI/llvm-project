@@ -60,7 +60,7 @@ char test() {
 // HYBRID-NEXT:    ret i8* [[TMP0]]
 //
 //
-// PURECAP-LABEL: @_Z8test_ptrU3capPv(
+// PURECAP-LABEL: @_Z8test_ptrPv(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[P_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // PURECAP-NEXT:    store i8 addrspace(200)* [[P:%.*]], i8 addrspace(200)* addrspace(200)* [[P_ADDR]], align [[#CAP_SIZE]], !tbaa !6

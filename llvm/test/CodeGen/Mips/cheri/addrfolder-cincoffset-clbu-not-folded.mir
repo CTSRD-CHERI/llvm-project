@@ -18,7 +18,7 @@
   ; Function Attrs: nounwind readnone
   declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) addrspace(200) #0
 
-  define i8 @_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE(%"class.JSC::ExecState" addrspace(200)* %state, i64 %addr) addrspace(0) #1 {
+  define i8 @_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEPN3JSC9ExecStateE(%"class.JSC::ExecState" addrspace(200)* %state, i64 %addr) addrspace(0) #1 {
   entry:
     %value.i.i = getelementptr inbounds %"class.JSC::ExecState", %"class.JSC::ExecState" addrspace(200)* %state, i64 5, i32 0, i32 0, i32 0
     %load = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %value.i.i, align 16
@@ -54,7 +54,7 @@
 
 ...
 ---
-name:            _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE
+name:            _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEPN3JSC9ExecStateE
 alignment:       8
 exposesReturnsTwice: false
 legalized:       false

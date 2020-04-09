@@ -24,20 +24,20 @@ void do_stuff_with_ref(float&);
 void do_stuff_with_ref(Nested& nref);
 void do_stuff_with_ptr(Nested* nptr);
 
-// CHECK-LABEL: @_Z18test_subobject_refU3capR10WithNested(
+// CHECK-LABEL: @_Z18test_subobject_refR10WithNested(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[N:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTED:%.*]], [[STRUCT_WITHNESTED]] addrspace(200)* [[S:%.*]], i64 0, i32 1
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_NESTED:%.*]] addrspace(200)* [[N]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 8)
 // CHECK-NEXT:    [[REF_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [[STRUCT_NESTED]] addrspace(200)*
-// CHECK-NEXT:    tail call void @_Z17do_stuff_with_refU3capR6Nested(%struct.Nested addrspace(200)* dereferenceable(8) [[REF_WITH_BOUNDS]]) #3
+// CHECK-NEXT:    tail call void @_Z17do_stuff_with_refR6Nested(%struct.Nested addrspace(200)* dereferenceable(8) [[REF_WITH_BOUNDS]]) #3
 // CHECK-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 4)
 // CHECK-NEXT:    [[REF_WITH_BOUNDS2:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @_Z17do_stuff_with_refU3capRi(i32 addrspace(200)* dereferenceable(4) [[REF_WITH_BOUNDS2]]) #3
+// CHECK-NEXT:    tail call void @_Z17do_stuff_with_refRi(i32 addrspace(200)* dereferenceable(4) [[REF_WITH_BOUNDS2]]) #3
 // CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_WITHNESTED]] addrspace(200)* [[S]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP4:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP3]], i64 4)
 // CHECK-NEXT:    [[REF_WITH_BOUNDS3:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to float addrspace(200)*
-// CHECK-NEXT:    tail call void @_Z17do_stuff_with_refU3capRf(float addrspace(200)* dereferenceable(4) [[REF_WITH_BOUNDS3]]) #3
+// CHECK-NEXT:    tail call void @_Z17do_stuff_with_refRf(float addrspace(200)* dereferenceable(4) [[REF_WITH_BOUNDS3]]) #3
 // CHECK-NEXT:    ret void
 //
 void test_subobject_ref(WithNested& s) {
@@ -48,10 +48,10 @@ void test_subobject_ref(WithNested& s) {
 
 void test_subobject_ptr(WithNested& s) {
 // No bounds on the pointer here:
-// CHECK-LABEL: @_Z18test_subobject_ptrU3capR10WithNested(
+// CHECK-LABEL: @_Z18test_subobject_ptrR10WithNested(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[N:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTED:%.*]], [[STRUCT_WITHNESTED]] addrspace(200)* [[S:%.*]], i64 0, i32 1
-// CHECK-NEXT:    tail call void @_Z17do_stuff_with_ptrU3capP6Nested(%struct.Nested addrspace(200)* nonnull [[N]])
+// CHECK-NEXT:    tail call void @_Z17do_stuff_with_ptrP6Nested(%struct.Nested addrspace(200)* nonnull [[N]])
 // CHECK-NEXT:    ret void
   do_stuff_with_ptr(&s.n);
 }
