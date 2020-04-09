@@ -147,6 +147,9 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
   if (HasC)
     Builder.defineMacro("__riscv_compressed");
 
+  if (HasB)
+    Builder.defineMacro("__riscv_bitmanip");
+
   if (HasCheri) {
     // XXX-JC: Do we really want the same ABI constants as CHERI-MIPS?
     if (CapabilityABI) {
@@ -189,6 +192,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
       .Case("f", HasF)
       .Case("d", HasD)
       .Case("c", HasC)
+      .Case("experimental-b", HasB)
       .Case("xcheri", HasCheri)
       .Default(false);
 }
@@ -207,6 +211,8 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       HasD = true;
     else if (Feature == "+c")
       HasC = true;
+    else if (Feature == "+experimental-b")
+      HasB = true;
     else if (Feature == "+xcheri") {
       HasCheri = true;
       CapSize = PointerWidth * 2;
