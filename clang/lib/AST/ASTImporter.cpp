@@ -6716,9 +6716,10 @@ ExpectedStmt ASTNodeImporter::VisitBinaryOperator(BinaryOperator *E) {
   if (Err)
     return std::move(Err);
 
-  return new (Importer.getToContext()) BinaryOperator(
-      ToLHS, ToRHS, E->getOpcode(), ToType, E->getValueKind(),
-      E->getObjectKind(), ToOperatorLoc, E->getFPFeatures());
+  return BinaryOperator::Create(Importer.getToContext(), ToLHS, ToRHS,
+                                E->getOpcode(), ToType, E->getValueKind(),
+                                E->getObjectKind(), ToOperatorLoc,
+                                E->getFPFeatures(Importer.getFromContext()));
 }
 
 ExpectedStmt ASTNodeImporter::VisitConditionalOperator(ConditionalOperator *E) {
@@ -6826,10 +6827,12 @@ ASTNodeImporter::VisitCompoundAssignOperator(CompoundAssignOperator *E) {
   if (Err)
     return std::move(Err);
 
-  return new (Importer.getToContext()) CompoundAssignOperator(
-      ToLHS, ToRHS, E->getOpcode(), ToType, E->getValueKind(),
-      E->getObjectKind(), ToComputationLHSType, ToComputationResultType,
-      ToOperatorLoc, E->getFPFeatures());
+  return CompoundAssignOperator::Create(
+      Importer.getToContext(), ToLHS, ToRHS, E->getOpcode(), ToType,
+      E->getValueKind(), E->getObjectKind(), ToOperatorLoc,
+      E->getFPFeatures(Importer.getFromContext()),
+      importChecked(Err, ToComputationLHSType),
+      importChecked(Err, ToComputationResultType));
 }
 
 Expected<CXXCastPath>
