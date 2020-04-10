@@ -1632,7 +1632,7 @@ public:
     }
   }
   DWARFObjInMemory(const object::ObjectFile &Obj, const LoadedObjectInfo *L,
-                   function_ref<void(Error)> HandleError)
+                   function_ref<void(Error)> HandleError, function_ref<void(Error)> HandleWarning )
       : IsLittleEndian(Obj.isLittleEndian()),
         AddressSize(Obj.getBytesInAddress()), FileName(Obj.getFileName()),
         Obj(&Obj) {
@@ -1809,10 +1809,11 @@ public:
         } else {
           SmallString<32> Type;
           Reloc.getTypeName(Type);
-          HandleError(createError(
-              "failed to compute relocation: " + Type + " in " + Name +
-                  " against " + getSymbolName(Obj, Reloc) + ", ",
-              errorCodeToError(object_error::parse_failed)));
+          // FIXME: Support more relocations & change this to an error
+          HandleWarning(
+              createError("failed to compute relocation: " + Type + " in " + Name +
+                              " against " + getSymbolName(Obj, Reloc) + ", ",
+                          errorCodeToError(object_error::parse_failed)));
         }
       }
     }
@@ -1945,7 +1946,7 @@ DWARFContext::create(const object::ObjectFile &Obj, const LoadedObjectInfo *L,
                      std::function<void(Error)> RecoverableErrorHandler,
                      std::function<void(Error)> WarningHandler) {
   auto DObj =
-      std::make_unique<DWARFObjInMemory>(Obj, L, RecoverableErrorHandler);
+      std::make_unique<DWARFObjInMemory>(Obj, L, RecoverableErrorHandler, WarningHandler);
   return std::make_unique<DWARFContext>(std::move(DObj), std::move(DWPName),
                                         RecoverableErrorHandler,
                                         WarningHandler);
