@@ -241,8 +241,8 @@ def RetCC_MipsN : CallingConv<[
 
   // f64 are returned in registers D0, D2
   CCIfType<[f64], CCAssignToReg<[D0_64, D2_64]>>,
-  // Capabilities are returned in C3
-  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCAssignToReg<[C3]>>
+  // Capabilities are returned in C3, C4
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCAssignToReg<[C3, C4]>>
 ]>;
 
 //===----------------------------------------------------------------------===//
