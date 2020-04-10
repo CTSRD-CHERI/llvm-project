@@ -48,9 +48,9 @@ git log -3
     return result
 }
 
-def runTests(String targetSuffix) {
-    stage("Run tests (${targetSuffix})") {
-        updateGithubStatus("Running check-${targetSuffix} tests...")
+def runTests(String ninjaTarget) {
+    stage("Run tests (${ninjaTarget})") {
+        updateGithubStatus("Running ${ninjaTarget} tests...")
         sh """#!/usr/bin/env bash
 set -xe
 
@@ -63,11 +63,11 @@ fi
 rm -fv "\${WORKSPACE}/llvm-test-output.xml"
 # Verbose filecheck failure output:
 export FILECHECK_DUMP_INPUT_ON_FAILURE=1
-ninja check-${targetSuffix} \${JFLAG} || echo "Some check-${targetSuffix} tests failed!"
-mv -fv "\${WORKSPACE}/llvm-test-output.xml" "\${WORKSPACE}/llvm-test-output-${targetSuffix}.xml"
-echo "Done running check-${targetSuffix} tests"
+ninja ${ninjaTarget} \${JFLAG} || echo "Some ${ninjaTarget} tests failed!"
+mv -fv "\${WORKSPACE}/llvm-test-output.xml" "\${WORKSPACE}/llvm-test-output-${ninjaTarget}.xml"
+echo "Done running ${ninjaTarget} tests"
 """
-        junit healthScaleFactor: 2.0, testResults: "llvm-test-output-${targetSuffix}.xml"
+        junit healthScaleFactor: 2.0, testResults: "llvm-test-output-${ninjaTarget}.xml"
     }
 }
 
@@ -165,9 +165,7 @@ rm -fv ${WORKSPACE}/llvm-test-*.xml
 '''
         sh buildScript
     }
-    runTests('all')
-    // No need to rerun the full test suite, only run CHERI-specific  tests for 256
-    runTests('all-cheri256-only')
+    runTests('check-all')
 
     if (TEST_RELEASE_BUILD)
       return;
