@@ -170,6 +170,9 @@ def parse_args():
     debug_group.add_argument("--show-tests",
             help="Show all discovered tests and exit",
             action="store_true")
+    debug_group.add_argument("--show-used-features",
+            help="Show all features used in the test suite (in XFAIL, UNSUPPORTED and REQUIRES) and exit",
+            action="store_true")
     # TODO: should rename this to --run-with-debugger to allow lldb/gdb
     debug_group.add_argument("--gdb",
              dest="run_with_debugger",
