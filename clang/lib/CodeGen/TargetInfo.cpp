@@ -7656,6 +7656,52 @@ MipsABIInfo::returnAggregateInRegs(QualType RetTy, uint64_t Size) const {
   return HandleAggregates(RetTy, Size);
 }
 
+static bool mipsCanReturnDirect(const ASTContext& Ctx, const RecordDecl *RD, unsigned& NumCaps, unsigned& NumInts);
+static bool mipsCanReturnDirect(const ASTContext& Ctx, QualType Ty, unsigned& NumCaps, unsigned& NumInts) {
+  // Treat an enum type as its underlying type.
+  if (const EnumType *EnumTy = Ty->getAs<EnumType>())
+    Ty = EnumTy->getDecl()->getIntegerType();
+  if (Ty->isCHERICapabilityType(Ctx)) {
+    NumCaps++;
+  } else if (Ty->isIntegerType()) {
+    NumInts++;
+  } else if (const RecordType *RT = Ty->getAs<RecordType>()) {
+    if (!mipsCanReturnDirect(Ctx, RT->getDecl(), NumCaps, NumInts))
+      return false;
+  } else if (Ty->isConstantArrayType()) {
+    auto CAT = cast<ConstantArrayType>(Ty->getAsArrayTypeUnsafe());
+    if (CAT->getSize().ugt(2))
+      return false;
+    unsigned ArrayCaps = 0;
+    unsigned ArrayInts = 0;
+    if (!mipsCanReturnDirect(Ctx, CAT->getElementType(), ArrayCaps, ArrayInts))
+      return false;
+  } else {
+    // Unknown type -> Can't return direct
+    return false;
+  }
+  return NumCaps + NumInts <= 2;
+}
+
+static bool mipsCanReturnDirect(const ASTContext& Ctx, const RecordDecl *RD, unsigned& NumCaps, unsigned& NumInts) {
+  // We can return up to two capabilities or or one capability and one int
+  // in registers.
+  for (auto i = RD->field_begin(), e = RD->field_end(); i != e; ++i) {
+    if (!mipsCanReturnDirect(Ctx, i->getType(), NumCaps, NumInts))
+      return false;
+  }
+  // In the case of C++ classes, also check base classes
+  if (const CXXRecordDecl *CRD = dyn_cast<CXXRecordDecl>(RD)) {
+    for (auto i = CRD->bases_begin(), e = CRD->bases_end(); i != e; ++i) {
+      const QualType Ty = i->getType();
+      if (const RecordType *RT = Ty->getAs<RecordType>())
+        if (!mipsCanReturnDirect(Ctx, RT->getDecl(), NumCaps, NumInts))
+          return false;
+    }
+  }
+  return NumCaps + NumInts <= 2;
+}
+
 ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
   uint64_t Size = getContext().getTypeSize(RetTy);
 
@@ -7668,6 +7714,24 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
     return ABIArgInfo::getIgnore();
 
   if (isAggregateTypeForABI(RetTy) || RetTy->isVectorType()) {
+    if (getTarget().SupportsCapabilities() &&
+        Size <= 2 * getTarget().getCHERICapabilityWidth()) {
+      // On CHERI, we can return unions  structs containing at most two
+      // capabilities directly. We also allow return one integer and one
+      // capability directly, but no more than that to minimize differences
+      // with the N64 ABI (which only returns pairs of integers).
+      if (const auto *RT = RetTy->getAs<RecordType>()) {
+        unsigned NumCaps = 0;
+        unsigned NumInts = 0;
+        if (mipsCanReturnDirect(getContext(), RT->getDecl(), NumCaps,
+                                NumInts)) {
+          ABIArgInfo ArgInfo =
+              ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
+          ArgInfo.setInReg(true);
+          return ArgInfo;
+        }
+      }
+    }
     if (Size <= 128) {
       if (RetTy->isAnyComplexType())
         return ABIArgInfo::getDirect();
@@ -7676,17 +7740,6 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
       // aggregates in registers.
       if (!IsO32 ||
           (RetTy->isVectorType() && !RetTy->hasFloatingRepresentation())) {
-        ABIArgInfo ArgInfo =
-            ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
-        ArgInfo.setInReg(true);
-        return ArgInfo;
-      }
-    } else if (getTarget().SupportsCapabilities() &&
-               Size <= getTarget().getCHERICapabilityWidth()) {
-      // On CHERI, we can return unions containing capabilities or
-      // structs containing only one capability directly
-      const RecordType *RT = RetTy->getAs<RecordType>();
-      if (RT && getContext().containsCapabilities(RT->getDecl())) {
         ABIArgInfo ArgInfo =
             ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
         ArgInfo.setInReg(true);

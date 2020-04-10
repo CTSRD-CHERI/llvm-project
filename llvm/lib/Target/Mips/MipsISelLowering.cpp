@@ -5097,6 +5097,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   bool zeroV0 = true;
   bool zeroV1 = true;
   bool zeroC3 = true;
+  bool zeroC4 = true;
 
   // Copy the result values into the output registers.
   for (unsigned i = 0; i != RVLocs.size(); ++i) {
@@ -5154,6 +5155,9 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
       case Mips::C3:
         zeroC3 = false;
         break;
+      case Mips::C4:
+        zeroC4 = false;
+        break;
     }
 
     // Guarantee that all emitted copies are stuck together with flags.
@@ -5179,6 +5183,12 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                DAG.getNullCapability(DL), Flag);
       Flag = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::C3, CapType));
+    }
+    if (zeroC4) {
+      Chain = DAG.getCopyToReg(Chain, DL, Mips::C4,
+                               DAG.getNullCapability(DL), Flag);
+      Flag = Chain.getValue(1);
+      RetOps.push_back(DAG.getRegister(Mips::C4, CapType));
     }
   }
 
