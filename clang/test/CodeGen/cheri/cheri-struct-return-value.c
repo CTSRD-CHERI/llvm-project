@@ -538,3 +538,73 @@ TwoIntArrayAndCap two_int_array_and_cap(TwoIntArrayAndCap in) {
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csc $c1, $zero, [[#CAP_SIZE]]($c3)
 }
+
+
+typedef struct {
+  __int128 i128;
+} Int128;
+
+// CHECK-LABEL: define {{[^@]+}}@int128
+// CHECK-SAME: (i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]]) local_unnamed_addr addrspace(200) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[IN_SROA_2_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE1]] to i128
+// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE0]] to i128
+// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_SHIFT:%.*]] = shl nuw i128 [[IN_SROA_0_0_INSERT_EXT]], 64
+// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_INSERT:%.*]] = or i128 [[IN_SROA_0_0_INSERT_SHIFT]], [[IN_SROA_2_0_INSERT_EXT]]
+// CHECK-NEXT:    [[ADD:%.*]] = add nsw i128 [[IN_SROA_0_0_INSERT_INSERT]], 1
+// CHECK-NEXT:    [[RETVAL_SROA_0_0_EXTRACT_SHIFT:%.*]] = lshr i128 [[ADD]], 64
+// CHECK-NEXT:    [[RETVAL_SROA_0_0_EXTRACT_TRUNC:%.*]] = trunc i128 [[RETVAL_SROA_0_0_EXTRACT_SHIFT]] to i64
+// CHECK-NEXT:    [[RETVAL_SROA_2_0_EXTRACT_TRUNC:%.*]] = trunc i128 [[ADD]] to i64
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } undef, i64 [[RETVAL_SROA_0_0_EXTRACT_TRUNC]], 0
+// CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64 } [[DOTFCA_0_INSERT]], i64 [[RETVAL_SROA_2_0_EXTRACT_TRUNC]], 1
+// CHECK-NEXT:    ret { i64, i64 } [[DOTFCA_1_INSERT]]
+//
+Int128 int128(Int128 in) {
+  return (Int128){.i128 = in.i128 + 1};
+  // Argument is split up into registers and result should be inreg too
+  // ASM-LABEL: int128:
+  // ASM: # %bb.0: # %entry
+  // ASM-NEXT:  daddiu $3, $5, 1
+  // ASM-NEXT:  sltu $1, $3, $5
+  // ASM-NEXT:  dsll $1, $1, 32
+  // ASM-NEXT:  dsrl $1, $1, 32
+  // ASM-NEXT:  cjr     $c17
+  // ASM-NEXT:  daddu $2, $4, $1
+}
+
+typedef struct {
+  __int128 i128;
+  __uintcap_t c;
+} Int128AndCap;
+
+// CHECK-LABEL: define {{[^@]+}}@int128_and_cap
+// CHECK-SAME: (%struct.Int128AndCap addrspace(200)* noalias nocapture sret align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #2
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[I128:%.*]] = getelementptr inbounds [[STRUCT_INT128ANDCAP:%.*]], [[STRUCT_INT128ANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0
+// CHECK-NEXT:    [[IN_SROA_2_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE1]] to i128
+// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE0]] to i128
+// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_SHIFT:%.*]] = shl nuw i128 [[IN_SROA_0_0_INSERT_EXT]], 64
+// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_INSERT:%.*]] = or i128 [[IN_SROA_0_0_INSERT_SHIFT]], [[IN_SROA_2_0_INSERT_EXT]]
+// CHECK-NEXT:    [[ADD:%.*]] = add nsw i128 [[IN_SROA_0_0_INSERT_INSERT]], 1
+// CHECK-NEXT:    store i128 [[ADD]], i128 addrspace(200)* [[I128]], align 16, !tbaa !25
+// CHECK-NEXT:    [[C:%.*]] = getelementptr inbounds [[STRUCT_INT128ANDCAP]], [[STRUCT_INT128ANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 1
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE2]], i64 2
+// CHECK-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* addrspace(200)* [[C]], align 16, !tbaa !28
+// CHECK-NEXT:    ret void
+//
+Int128AndCap int128_and_cap(Int128AndCap in) {
+  return (Int128AndCap){.i128 = in.i128 + 1, .c = in.c + 2};
+  // Argument is split up into registers but result should be indirect since we don't return more than one __int128 in registers
+  // ASM-LABEL: int128_and_cap:
+  // ASM: # %bb.0: # %entry
+  // ASM-NEXT:  daddiu $1, $6, 1
+  // ASM-NEXT:  sltu   $2, $1, $6
+  // ASM-NEXT:  dsll   $2, $2, 32
+  // ASM-NEXT:  dsrl   $2, $2, 32
+  // ASM-NEXT:  daddu  $2, $5, $2
+  // ASM-NEXT:  csd    $1, $zero, 8($c3)
+  // ASM-NEXT:  csd    $2, $zero, 0($c3)
+  // ASM-NEXT:  cincoffset $c1, $c4, 2
+  // ASM-NEXT:  cjr    $c17
+  // ASM-NEXT:  csc    $c1, $zero, 16($c3)
+}
