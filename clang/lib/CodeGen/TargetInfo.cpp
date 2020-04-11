@@ -7659,6 +7659,12 @@ static bool mipsCanReturnDirect(const ASTContext& Ctx, QualType Ty, unsigned& Nu
   if (Ty->isCHERICapabilityType(Ctx)) {
     NumCaps++;
   } else if (Ty->isIntegerType()) {
+    // Can't return integer types that would need more than the address range
+    // directly. Note: a single __int128 struct is still returned directly since
+    // that case is handled after the CHERI-specific check.
+    uint64_t CapRange = Ctx.getTargetInfo().getPointerRangeForCHERICapability();
+    if (Ctx.getTypeSize(Ty) > CapRange)
+      return false;
     NumInts++;
   } else if (const RecordType *RT = Ty->getAs<RecordType>()) {
     if (!mipsCanReturnDirect(Ctx, RT->getDecl(), NumCaps, NumInts))
@@ -7674,6 +7680,7 @@ static bool mipsCanReturnDirect(const ASTContext& Ctx, QualType Ty, unsigned& Nu
     NumCaps += ArrayCaps * CAT->getSize().getZExtValue();
     NumInts += ArrayInts * CAT->getSize().getZExtValue();
   } else {
+    // FIXME: floating-point types, for now just return cap+float indirectly
     // Unknown type -> Can't return direct
     return false;
   }
