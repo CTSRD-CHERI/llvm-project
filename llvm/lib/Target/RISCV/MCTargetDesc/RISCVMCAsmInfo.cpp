@@ -30,6 +30,7 @@ RISCVMCAsmInfo::RISCVMCAsmInfo(const Triple &TT, RISCVABI::ABI ABI) {
   ExceptionsType = ExceptionHandling::DwarfCFI;
   Data16bitsDirective = "\t.half\t";
   Data32bitsDirective = "\t.word\t";
+  UseIntegratedAssembler = false;
 }
 
 const MCExpr *RISCVMCAsmInfo::getExprForFDESymbol(const MCSymbol *Sym,
