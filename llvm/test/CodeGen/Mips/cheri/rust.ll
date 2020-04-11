@@ -8,17 +8,16 @@ define void @a() nounwind {
 ; CHECK-LABEL: a:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN13libcore_cheri5slice29_$LT$impl$u20$$u5b$T$u5d$$GT$4iter17h36a7eda044ca512cE)($c1)
-; CHECK-NEXT:    cincoffset $c3, $c11, {{0|32}}
 ; CHECK-NEXT:    daddiu $4, $zero, 0
 ; CHECK-NEXT:    daddiu $5, $zero, 6
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cgetnull $c4
-; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE)]]($c11)
+; CHECK-NEXT:    cgetnull $c3
+; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
   call { i32 addrspace(200)*, i32 addrspace(200)* } @"_ZN13libcore_cheri5slice29_$LT$impl$u20$$u5b$T$u5d$$GT$4iter17h36a7eda044ca512cE"(i32 addrspace(200)* null, i128 6)
