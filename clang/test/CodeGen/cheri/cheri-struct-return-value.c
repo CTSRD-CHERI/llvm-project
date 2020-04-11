@@ -472,3 +472,69 @@ TwoCapArray two_cap_array(TwoCapArray in) {
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  cincoffset $c4, $c4, 2
 }
+
+typedef struct {
+  __uintcap_t c[2];
+  long i;
+} TwoCapArrayAndInt;
+
+// CHECK-LABEL: define {{[^@]+}}@two_cap_array_and_int
+// CHECK-SAME: (%struct.TwoCapArrayAndInt addrspace(200)* noalias nocapture sret align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #2
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYINIT_BEGIN:%.*]] = getelementptr inbounds [[STRUCT_TWOCAPARRAYANDINT:%.*]], [[STRUCT_TWOCAPARRAYANDINT]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0, i64 0
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE0]], i64 1
+// CHECK-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* addrspace(200)* [[ARRAYINIT_BEGIN]], align 16, !tbaa !19
+// CHECK-NEXT:    [[ARRAYINIT_ELEMENT:%.*]] = getelementptr inbounds [[STRUCT_TWOCAPARRAYANDINT]], [[STRUCT_TWOCAPARRAYANDINT]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0, i64 1
+// CHECK-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE1]], i64 2
+// CHECK-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* addrspace(200)* [[ARRAYINIT_ELEMENT]], align 16, !tbaa !19
+// CHECK-NEXT:    [[I:%.*]] = getelementptr inbounds [[STRUCT_TWOCAPARRAYANDINT]], [[STRUCT_TWOCAPARRAYANDINT]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 1
+// CHECK-NEXT:    [[ADD6:%.*]] = add nsw i64 [[IN_COERCE2]], 3
+// CHECK-NEXT:    store i64 [[ADD6]], i64 addrspace(200)* [[I]], align 16, !tbaa !20
+// CHECK-NEXT:    ret void
+//
+TwoCapArrayAndInt two_cap_array_and_int(TwoCapArrayAndInt in) {
+  return (TwoCapArrayAndInt){ .c[0] = in.c[0] + 1, .c[1] = in.c[1] + 2, .i = in.i + 3 };
+  // Argument is split up into registers but result should be indirect
+  // ASM-LABEL: two_cap_array_and_int:
+  // ASM: # %bb.0: # %entry
+  // ASM-NEXT:  cincoffset $c1, $c4, 1
+  // ASM-NEXT:  csc $c1, $zero, 0($c3)
+  // ASM-NEXT:  cincoffset $c1, $c5, 2
+  // ASM-NEXT:  csc $c1, $zero, [[#CAP_SIZE]]($c3)
+  // ASM-NEXT:  daddiu $1, $5, 3
+  // ASM-NEXT:  cjr     $c17
+  // ASM-NEXT:  csd $1, $zero, [[#CAP_SIZE * 2]]($c3)
+}
+
+typedef struct {
+  long i[2];
+  __uintcap_t c;
+} TwoIntArrayAndCap;
+
+// CHECK-LABEL: define {{[^@]+}}@two_int_array_and_cap
+// CHECK-SAME: (%struct.TwoIntArrayAndCap addrspace(200)* noalias nocapture sret align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #2
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYINIT_BEGIN:%.*]] = getelementptr inbounds [[STRUCT_TWOINTARRAYANDCAP:%.*]], [[STRUCT_TWOINTARRAYANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0, i64 0
+// CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
+// CHECK-NEXT:    store i64 [[ADD]], i64 addrspace(200)* [[ARRAYINIT_BEGIN]], align 16, !tbaa !22
+// CHECK-NEXT:    [[ARRAYINIT_ELEMENT:%.*]] = getelementptr inbounds [[STRUCT_TWOINTARRAYANDCAP]], [[STRUCT_TWOINTARRAYANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0, i64 1
+// CHECK-NEXT:    [[ADD4:%.*]] = add nsw i64 [[IN_COERCE1]], 2
+// CHECK-NEXT:    store i64 [[ADD4]], i64 addrspace(200)* [[ARRAYINIT_ELEMENT]], align 8, !tbaa !22
+// CHECK-NEXT:    [[C:%.*]] = getelementptr inbounds [[STRUCT_TWOINTARRAYANDCAP]], [[STRUCT_TWOINTARRAYANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 1
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE2]], i64 3
+// CHECK-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* addrspace(200)* [[C]], align 16, !tbaa !23
+// CHECK-NEXT:    ret void
+//
+TwoIntArrayAndCap two_int_array_and_cap(TwoIntArrayAndCap in) {
+  return (TwoIntArrayAndCap){.i[0] = in.i[0] + 1, .i[1] = in.i[1] + 2, .c = in.c + 3};
+  // Argument is split up into registers but result should be indirect
+  // ASM-LABEL: two_int_array_and_cap:
+  // ASM: # %bb.0: # %entry
+  // ASM-NEXT:  daddiu $1, $5, 1
+  // ASM-NEXT:  csd $1, $zero, 0($c3)
+  // ASM-NEXT:  daddiu $1, $6, 2
+  // ASM-NEXT:  csd $1, $zero, 8($c3)
+  // ASM-NEXT:  cincoffset $c1, $c4, 3
+  // ASM-NEXT:  cjr     $c17
+  // ASM-NEXT:  csc $c1, $zero, [[#CAP_SIZE]]($c3)
+}

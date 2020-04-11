@@ -7671,6 +7671,8 @@ static bool mipsCanReturnDirect(const ASTContext& Ctx, QualType Ty, unsigned& Nu
     unsigned ArrayInts = 0;
     if (!mipsCanReturnDirect(Ctx, CAT->getElementType(), ArrayCaps, ArrayInts))
       return false;
+    NumCaps += ArrayCaps * CAT->getSize().getZExtValue();
+    NumInts += ArrayInts * CAT->getSize().getZExtValue();
   } else {
     // Unknown type -> Can't return direct
     return false;
