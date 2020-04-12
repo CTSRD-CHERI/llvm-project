@@ -158,8 +158,10 @@ void Value::deleteValue() {
 
 void Value::destroyValueName() {
   ValueName *Name = getValueName();
-  if (Name)
-    Name->Destroy();
+  if (Name) {
+    MallocAllocator Allocator;
+    Name->Destroy(Allocator);
+  }
   setValueName(nullptr);
 }
 
@@ -342,7 +344,8 @@ void Value::setNameImpl(const Twine &NewName) {
     destroyValueName();
 
     // Create the new name.
-    setValueName(ValueName::Create(NameRef));
+    MallocAllocator Allocator;
+    setValueName(ValueName::Create(NameRef, Allocator));
     getValueName()->setValue(this);
     return;
   }
