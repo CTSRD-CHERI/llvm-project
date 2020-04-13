@@ -39,7 +39,6 @@ class DefaultTargetInfo(object):
     def add_cxx_link_flags(self, flags): pass
     def configure_env(self, env): pass
     def allow_cxxabi_link(self): return True
-    def add_sanitizer_features(self, sanitizer_type, features): pass
     def use_lit_shell_default(self): return False
     def default_cxx_abi_library(self): raise NotImplementedError(self.__class__.__name__)
 
