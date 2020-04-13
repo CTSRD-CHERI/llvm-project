@@ -1524,7 +1524,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
            "Splatted expr doesn't match with vector element type?");
 
     // Splat the element across to all elements
-    unsigned NumElements = DstTy->getVectorNumElements();
+    unsigned NumElements = cast<llvm::VectorType>(DstTy)->getNumElements();
     return Builder.CreateVectorSplat(NumElements, Src, "splat");
   }
 
@@ -1542,8 +1542,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     // short or half vector.
 
     // Source and destination are both expected to be vectors.
-    llvm::Type *SrcElementTy = SrcTy->getVectorElementType();
-    llvm::Type *DstElementTy = DstTy->getVectorElementType();
+    llvm::Type *SrcElementTy = cast<llvm::VectorType>(SrcTy)->getElementType();
+    llvm::Type *DstElementTy = cast<llvm::VectorType>(DstTy)->getElementType();
     (void)DstElementTy;
 
     assert(((SrcElementTy->isIntegerTy() &&
@@ -1909,8 +1909,8 @@ Value *ScalarExprEmitter::VisitConvertVectorExpr(ConvertVectorExpr *E) {
   assert(DstTy->isVectorTy() &&
          "ConvertVector destination IR type must be a vector");
 
-  llvm::Type *SrcEltTy = SrcTy->getVectorElementType(),
-             *DstEltTy = DstTy->getVectorElementType();
+  llvm::Type *SrcEltTy = cast<llvm::VectorType>(SrcTy)->getElementType(),
+             *DstEltTy = cast<llvm::VectorType>(DstTy)->getElementType();
 
   if (DstEltType->isBooleanType()) {
     assert((SrcEltTy->isFloatingPointTy() ||
@@ -2667,7 +2667,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Type *DstTy = ConvertType(DestTy);
     Value *Elt = Visit(const_cast<Expr*>(E));
     // Splat the element across to all elements
-    unsigned NumElements = DstTy->getVectorNumElements();
+    unsigned NumElements = cast<llvm::VectorType>(DstTy)->getNumElements();
     return Builder.CreateVectorSplat(NumElements, Elt, "splat");
   }
 
@@ -5173,7 +5173,8 @@ Value *ScalarExprEmitter::VisitAsTypeExpr(AsTypeExpr *E) {
   // get a vec3.
   if (NumElementsSrc != 3 && NumElementsDst == 3) {
     if (!CGF.CGM.getCodeGenOpts().PreserveVec3Type) {
-      auto Vec4Ty = llvm::VectorType::get(DstTy->getVectorElementType(), 4);
+      auto Vec4Ty = llvm::VectorType::get(
+          cast<llvm::VectorType>(DstTy)->getElementType(), 4);
       Src = createCastsForTypeOfSameSize(Builder, CGF.CGM.getDataLayout(), Src,
                                          Vec4Ty);
     }
