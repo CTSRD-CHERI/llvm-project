@@ -1359,6 +1359,7 @@ bool FileCheck::readCheckFile(SourceMgr &SM, StringRef Buffer,
   // found.
   unsigned LineNumber = 1;
 
+  bool FoundUsedPrefix = false;
   while (1) {
     Check::FileCheckType CheckTy;
 
@@ -1369,6 +1370,8 @@ bool FileCheck::readCheckFile(SourceMgr &SM, StringRef Buffer,
         FindFirstMatchingPrefix(PrefixRE, Buffer, LineNumber, CheckTy);
     if (UsedPrefix.empty())
       break;
+    FoundUsedPrefix = true;
+
     assert(UsedPrefix.data() == Buffer.data() &&
            "Failed to move Buffer's start forward, or pointed prefix outside "
            "of the buffer!");
@@ -1452,16 +1455,10 @@ bool FileCheck::readCheckFile(SourceMgr &SM, StringRef Buffer,
     DagNotMatches = ImplicitNegativeChecks;
   }
 
-  // Add an EOF pattern for any trailing --implicit-check-not/CHECK-DAG/-NOTs,
-  // and use the first prefix as a filler for the error message.
-  if (!DagNotMatches.empty()) {
-    CheckStrings->emplace_back(
-        Pattern(Check::CheckEOF, PatternContext.get(), LineNumber + 1),
-        *Req.CheckPrefixes.begin(), SMLoc::getFromPointer(Buffer.data()));
-    std::swap(DagNotMatches, CheckStrings->back().DagNotStrings);
-  }
-
-  if (CheckStrings->empty()) {
+  // When there are no used prefixes we report an error except in the case that
+  // no prefix is specified explicitly but -implicit-check-not is specified.
+  if (!FoundUsedPrefix &&
+      (ImplicitNegativeChecks.empty() || !Req.IsDefaultCheckPrefix)) {
     errs() << "error: no check strings found with prefix"
            << (Req.CheckPrefixes.size() > 1 ? "es " : " ");
     auto I = Req.CheckPrefixes.begin();
@@ -1475,6 +1472,15 @@ bool FileCheck::readCheckFile(SourceMgr &SM, StringRef Buffer,
 
     errs() << '\n';
     return true;
+  }
+
+  // Add an EOF pattern for any trailing --implicit-check-not/CHECK-DAG/-NOTs,
+  // and use the first prefix as a filler for the error message.
+  if (!DagNotMatches.empty()) {
+    CheckStrings->emplace_back(
+        Pattern(Check::CheckEOF, PatternContext.get(), LineNumber + 1),
+        *Req.CheckPrefixes.begin(), SMLoc::getFromPointer(Buffer.data()));
+    std::swap(DagNotMatches, CheckStrings->back().DagNotStrings);
   }
 
   return false;
@@ -1942,8 +1948,10 @@ bool FileCheck::ValidateCheckPrefixes() {
 Regex FileCheck::buildCheckPrefixRegex() {
   // I don't think there's a way to specify an initial value for cl::list,
   // so if nothing was specified, add the default
-  if (Req.CheckPrefixes.empty())
+  if (Req.CheckPrefixes.empty()) {
     Req.CheckPrefixes.push_back("CHECK");
+    Req.IsDefaultCheckPrefix = true;
+  }
 
   // We already validated the contents of CheckPrefixes so just concatenate
   // them as alternatives.
