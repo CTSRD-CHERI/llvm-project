@@ -92,7 +92,6 @@ add_llvm_component_library(LLVMSupport
   ELFAttributes.cpp
   Error.cpp
   ErrorHandling.cpp
-  ExtensibleRTTI.cpp
   FileCheck.cpp
   FileCollector.cpp
   FileUtilities.cpp
