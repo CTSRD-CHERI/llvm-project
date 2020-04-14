@@ -78,6 +78,9 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
     // All the FreeBSD MIPS linker scripts use 0x120000000 (18*256M)
     // XXXAR: TODO: actually it is 0x120000000 + SIZEOF_HEADERS (0x120000ae0)
     DefaultImageBase = 0x0000000120000000;
+    // Although this is called "PageSize", its only use is to pad to the granularity for which permissions can be controlled.
+    // When using an MMU, this is indeed a page. On CHERI platforms, this depends only on representabilty. Assume the best here.
+    PageSize = 1;
   }
 }
 
