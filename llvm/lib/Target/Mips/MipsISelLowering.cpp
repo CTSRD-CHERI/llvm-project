@@ -5669,14 +5669,13 @@ EVT MipsTargetLowering::getOptimalMemOpType(
   // We can't use capability stores as an optimisation for memset unless zeroing.
   // For bzero() we can (and want to) always use capability stores of $cnull.
   bool IsNonZeroMemset = Op.isMemset() && !Op.isZeroMemset();
-  unsigned CapSize = Subtarget.isCheri() ? Subtarget.getCapSizeInBytes() : 0;
-  if (CapSize && Op.size() >= CapSize && !IsNonZeroMemset) {
-    Align CapAlign(CapSize);
+  Align CapAlign = Subtarget.isCheri() ? Subtarget.getCapAlignment() : Align();
+  if (CapAlign > 1 && Op.size() >= CapAlign.value() && !IsNonZeroMemset) {
     LLVM_DEBUG(dbgs() << __func__ << " Size=" << Op.size() << " DstAlign="
                       << (Op.isFixedDstAlign() ? Op.getDstAlign().value() : 0)
                       << " SrcAlign="
                       << (Op.isMemset() ? 0 : Op.getSrcAlign().value())
-                      << " CapSize=" << CapSize << "\n");
+                      << " CapAlign=" << CapAlign.value() << "\n");
     // If sufficiently aligned, we must use capability loads/stores if
     // copying, and can use cnull for a zeroing memset.
     if (Op.isAligned(CapAlign)) {

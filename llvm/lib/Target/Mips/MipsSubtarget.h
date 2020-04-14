@@ -318,7 +318,12 @@ public:
   bool isGP32bit() const { return !IsGP64bit; }
   unsigned getGPRSizeInBytes() const { return isGP64bit() ? 8 : 4; }
   unsigned getCapSizeInBytes() const {
+    assert(isCheri() && "Should only be called for CHERI");
     return IsCheri64 ? 8 : (IsCheri128 ? 16 : 32);
+  }
+  Align getCapAlignment() const {
+    assert(isCheri() && "Should only be called for CHERI");
+    return IsCheri64 ? Align(8) : (IsCheri128 ? Align(16) : Align(32));
   }
   bool isPTR64bit() const { return IsPTR64bit; }
   bool isPTR32bit() const { return !IsPTR64bit; }

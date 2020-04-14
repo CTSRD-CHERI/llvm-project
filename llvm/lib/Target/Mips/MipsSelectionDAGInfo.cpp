@@ -124,10 +124,11 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
     return SDValue();
 
   auto &STI = getMipsSubtarget(DAG);
-  unsigned CapSize = STI.getCapSizeInBytes();
+  llvm::Align CapAlign = STI.getCapAlignment();
   // If this is capability aligned, but not a multiple of capability size, we
   // might have given up too early trying to emit capability instructions.
-  if (Align >= CapSize) {
+  if (Align >= CapAlign.value()) {
+    unsigned CapSize = STI.getCapSizeInBytes();
     if (auto ConstantSize = dyn_cast<ConstantSDNode>(Size)) {
       uint64_t SizeVal = ConstantSize->getZExtValue();
       // If this size is a small constant, and the value we're writing is zero,

@@ -9386,7 +9386,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     Flags.setNoUnsignedWrap(true);
 
     MachineFunction &MF = CLI.DAG.getMachineFunction();
-    unsigned HiddenSRetAlign = MF.getFrameInfo().getObjectAlignment(DemoteStackIdx);
+    Align HiddenSRetAlign = MF.getFrameInfo().getObjectAlign(DemoteStackIdx);
     for (unsigned i = 0; i < NumValues; ++i) {
       assert(DemoteStackSlot.getValueType() == PVTs[0]);
       SDValue Add = CLI.DAG.getPointerAdd(CLI.DL, DemoteStackSlot, Offsets[i], Flags);
@@ -9394,7 +9394,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
           RetTys[i], CLI.DL, CLI.Chain, Add,
           MachinePointerInfo::getFixedStack(CLI.DAG.getMachineFunction(),
                                             DemoteStackIdx, Offsets[i]),
-          /* Alignment = */ MinAlign(HiddenSRetAlign, Offsets[i]));
+          /* Alignment = */ MinAlign(HiddenSRetAlign.value(), Offsets[i]));
       ReturnValues[i] = L;
       Chains[i] = L.getValue(1);
     }

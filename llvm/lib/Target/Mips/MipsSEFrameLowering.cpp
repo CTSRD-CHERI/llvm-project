@@ -877,7 +877,7 @@ bool MipsSEFrameLowering::spillCalleeSavedRegisters(
       BuildMI(MBB, &*MI, MI->getDebugLoc(), TII.get(Mips::CSetOffset), Mips::C16)
           .addReg(Mips::C16).addReg(Mips::RA_64, RegState::Kill);
       MachineFrameInfo &MFI = MBB.getParent()->getFrameInfo();
-      MFI.setObjectAlignment(CSI[i].getFrameIdx(), 32);
+      MFI.setObjectAlignment(CSI[i].getFrameIdx(), STI.getCapAlignment());
     }
 
     // ISRs require HI/LO to be spilled into kernel registers to be then
