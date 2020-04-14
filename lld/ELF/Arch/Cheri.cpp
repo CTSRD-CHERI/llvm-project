@@ -442,18 +442,22 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
     }
     // TODO: are there any other cases that can be ignored?
 
-    if (warnAboutUnknownSize || errorHandler().verbose) {
-      std::string msg = "could not determine size of cap reloc against " +
-                        reloc.target.verboseToString() +
-                        "\n>>> referenced by " + location.toString();
-      if (strict)
-        warn(msg);
-      else
-        nonFatalWarning(msg);
-    }
     bool UnknownSectionSize = true;
     if (OutputSection *os = targetSym->getOutputSection()) {
-      // For negative offsets use 0 instead (we wan the range of the full symbol in that case)
+      // Cast must succeed since getOutputSection() returned non-NULL
+      Defined* def = cast<Defined>(targetSym);
+      // warn("Could not find size for symbol " + reloc.target.verboseToString() +
+      //    " and could not determine section size. Using 0.");
+      if ((int64_t)def->value < 0 || def->value > os->size) {
+        // Note: we allow def->value == os->size for pointers to the end
+        warn("Symbol " + reloc.target.verboseToString() +
+             " is defined as being in section " + os->name +
+             " but the value (0x" + utohexstr(targetSym->getVA()) +
+             ") is outside this section. Will create a zero-size capability."
+             "\n>>> referenced by " + location.toString());
+        return 0;
+      }
+      // For negative offsets use 0 instead (we want the range of the full symbol in that case)
       int64_t offset = std::max((int64_t)0, reloc.target.offset);
       uint64_t targetVA = targetSym->getVA(offset);
       assert(targetVA >= os->addr);
@@ -470,6 +474,15 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
 #endif
         UnknownSectionSize = false;
       }
+    }
+    if (warnAboutUnknownSize || errorHandler().verbose) {
+      std::string msg = "could not determine size of cap reloc against " +
+          reloc.target.verboseToString() +
+          "\n>>> referenced by " + location.toString();
+      if (strict)
+        warn(msg);
+      else
+        nonFatalWarning(msg);
     }
     if (UnknownSectionSize) {
       warn("Could not find size for symbol " + reloc.target.verboseToString() +
