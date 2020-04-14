@@ -345,7 +345,10 @@ int main(int argc_, const char **argv_) {
   llvm::InitLLVM X(argc_, argv_);
   llvm::setBugReportMsg("PLEASE submit a bug report to " BUG_REPORT_URL
                         " and include the crash backtrace, preprocessed "
-                        "source, and associated run script.\n");
+                        "source, and associated run script.\n"
+                        "If you built clang from source, please provide a "
+                        "reduced test case by running:\n"
+                        "\t$LLVM_BUILD_DIR/bin/creduce_crash_testcase.py <reproducer>.sh\n");
   SmallVector<const char *, 256> argv(argv_, argv_ + argc_);
 
   if (llvm::sys::Process::FixupStandardFileDescriptors())
