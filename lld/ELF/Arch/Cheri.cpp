@@ -211,8 +211,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
 
     bool TargetNeedsDynReloc = false;
     if (TargetSym.IsPreemptible) {
-      // Do we need this?
-      // TargetNeedsDynReloc = true;
+      TargetNeedsDynReloc = true;
     }
     switch (TargetSym.kind()) {
     case Symbol::DefinedKind:
