@@ -74,7 +74,7 @@ class ELFObjectWriter;
 struct ELFWriter;
 
 bool isDwoSection(const MCSectionELF &Sec) {
-  return Sec.getSectionName().endswith(".dwo");
+  return Sec.getName().endswith(".dwo");
 }
 
 class SymbolTableWriter {
@@ -344,7 +344,7 @@ void ELFWriter::align(unsigned Alignment) {
 
 unsigned ELFWriter::addToSectionTable(const MCSectionELF *Sec) {
   SectionTable.push_back(Sec);
-  StrTabBuilder.add(Sec->getSectionName());
+  StrTabBuilder.add(Sec->getName());
   return SectionTable.size();
 }
 
@@ -800,7 +800,7 @@ MCSectionELF *ELFWriter::createRelocationSection(MCContext &Ctx,
   if (OWriter.Relocations[&Sec].empty())
     return nullptr;
 
-  const StringRef SectionName = Sec.getSectionName();
+  const StringRef SectionName = Sec.getName();
   std::string RelaSectionName = hasRelocationAddend() ? ".rela" : ".rel";
   RelaSectionName += SectionName;
 
@@ -859,7 +859,7 @@ bool ELFWriter::maybeWriteCompression(
 void ELFWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                                  const MCAsmLayout &Layout) {
   MCSectionELF &Section = static_cast<MCSectionELF &>(Sec);
-  StringRef SectionName = Section.getSectionName();
+  StringRef SectionName = Section.getName();
 
   auto &MC = Asm.getContext();
   const auto &MAI = MC.getAsmInfo();
@@ -1045,7 +1045,7 @@ void ELFWriter::writeSection(const SectionIndexMapTy &SectionIndexMap,
     sh_link = SectionIndexMap.lookup(Sec);
   }
 
-  WriteSecHdrEntry(StrTabBuilder.getOffset(Section.getSectionName()),
+  WriteSecHdrEntry(StrTabBuilder.getOffset(Section.getName()),
                    Section.getType(), Section.getFlags(), 0, Offset, Size,
                    sh_link, sh_info, Section.getAlignment(),
                    Section.getEntrySize());

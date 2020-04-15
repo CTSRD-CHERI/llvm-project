@@ -883,7 +883,7 @@ void MCAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
   // This is a mach-o specific directive.
 
   const MCSectionMachO *MOSection = ((const MCSectionMachO*)Section);
-  OS << MOSection->getSegmentName() << "," << MOSection->getSectionName();
+  OS << MOSection->getSegmentName() << "," << MOSection->getName();
 
   if (Symbol) {
     OS << ',';
