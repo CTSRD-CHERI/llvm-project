@@ -780,6 +780,8 @@ public:
 ///
 /// This represents code like \c typeid(int) or \c typeid(*objPtr)
 class CXXTypeidExpr : public Expr {
+  friend class ASTStmtReader;
+
 private:
   llvm::PointerUnion<Stmt *, TypeSourceInfo *> Operand;
   SourceRange Range;
@@ -820,20 +822,9 @@ public:
     assert(isTypeOperand() && "Cannot call getTypeOperand for typeid(expr)");
     return Operand.get<TypeSourceInfo *>();
   }
-
-  void setTypeOperandSourceInfo(TypeSourceInfo *TSI) {
-    assert(isTypeOperand() && "Cannot call getTypeOperand for typeid(expr)");
-    Operand = TSI;
-  }
-
   Expr *getExprOperand() const {
     assert(!isTypeOperand() && "Cannot call getExprOperand for typeid(type)");
     return static_cast<Expr*>(Operand.get<Stmt *>());
-  }
-
-  void setExprOperand(Expr *E) {
-    assert(!isTypeOperand() && "Cannot call getExprOperand for typeid(type)");
-    Operand = E;
   }
 
   SourceLocation getBeginLoc() const LLVM_READONLY { return Range.getBegin(); }
@@ -1002,6 +993,8 @@ public:
 ///
 /// This represents code like @c __uuidof(COMTYPE) or @c __uuidof(*comPtr)
 class CXXUuidofExpr : public Expr {
+  friend class ASTStmtReader;
+
 private:
   llvm::PointerUnion<Stmt *, TypeSourceInfo *> Operand;
   StringRef UuidStr;
@@ -1040,20 +1033,9 @@ public:
     assert(isTypeOperand() && "Cannot call getTypeOperand for __uuidof(expr)");
     return Operand.get<TypeSourceInfo *>();
   }
-
-  void setTypeOperandSourceInfo(TypeSourceInfo *TSI) {
-    assert(isTypeOperand() && "Cannot call getTypeOperand for __uuidof(expr)");
-    Operand = TSI;
-  }
-
   Expr *getExprOperand() const {
     assert(!isTypeOperand() && "Cannot call getExprOperand for __uuidof(type)");
     return static_cast<Expr*>(Operand.get<Stmt *>());
-  }
-
-  void setExprOperand(Expr *E) {
-    assert(!isTypeOperand() && "Cannot call getExprOperand for __uuidof(type)");
-    Operand = E;
   }
 
   void setUuidStr(StringRef US) { UuidStr = US; }
