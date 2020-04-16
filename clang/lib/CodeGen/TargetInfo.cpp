@@ -7418,12 +7418,14 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   if (const CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(RD)) {
     for (const auto &I : CXXRD->bases()) {
       unsigned idx = 0;
-      RecordDecl *BRD = I.getType()->getAs<RecordType>()->getDecl();
+      const CXXRecordDecl *BRD =
+          cast<CXXRecordDecl>(I.getType()->castAs<RecordType>()->getDecl());
+      uint64_t BaseOffset = getContext().toBits(Layout.getBaseClassOffset(BRD));
       const ASTRecordLayout &BaseLayout = getContext().getASTRecordLayout(BRD);
       for (RecordDecl::field_iterator i = BRD->field_begin(), e = BRD->field_end();
            i != e; ++i, ++idx) {
         const QualType Ty = i->getType();
-        uint64_t Offset = BaseLayout.getFieldOffset(idx);
+        uint64_t Offset = BaseOffset + BaseLayout.getFieldOffset(idx);
         if (const RecordType *FRT = Ty->getAs<RecordType>()) {
           if (getContext().containsCapabilities(FRT->getDecl())) {
             uint64_t FieldSize = getContext().getTypeSize(Ty);
@@ -7557,13 +7559,6 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset,
     }
     bool PassIndirect = false;
     if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
-      PassIndirect = true;
-    // For CHERI, also pass C++ classes and structs that contain capabilities
-    // indirectly (for now).
-    // XXXKG: We should revisit passing fields in registers.
-    else if (Ty->isCXXStructureOrClassType() &&
-             Target.SupportsCapabilities() &&
-             getContext().containsCapabilities(Ty))
       PassIndirect = true;
     if (PassIndirect)
       return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
