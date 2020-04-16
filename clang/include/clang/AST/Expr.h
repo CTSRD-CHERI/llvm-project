@@ -6199,7 +6199,8 @@ public:
 private:
   RecoveryExpr(ASTContext &Ctx, SourceLocation BeginLoc, SourceLocation EndLoc,
                ArrayRef<Expr *> SubExprs);
-  RecoveryExpr(EmptyShell Empty) : Expr(RecoveryExprClass, Empty) {}
+  RecoveryExpr(EmptyShell Empty, unsigned NumSubExprs)
+      : Expr(RecoveryExprClass, Empty), NumExprs(NumSubExprs) {}
 
   size_t numTrailingObjects(OverloadToken<Stmt *>) const { return NumExprs; }
 
