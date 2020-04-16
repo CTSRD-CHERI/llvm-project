@@ -456,6 +456,16 @@ void MipsAsmPrinter::EmitAuxFunctionBodyEnd(MCSymbol* symbol) {
   MipsTargetStreamer &TS = getTargetStreamer();
   TS.emitDirectiveEnd(symbol->getName());
   OutStreamer->EmitSymbolAttribute(symbol, MCSA_Global);
+  switch(MF->getFunction().getVisibility()) {
+    case GlobalValue::HiddenVisibility:
+      OutStreamer->EmitSymbolAttribute(symbol, MCSA_Hidden);
+      break;
+    case GlobalValue::ProtectedVisibility:
+      OutStreamer->EmitSymbolAttribute(symbol, MCSA_Protected);
+      break;
+    default:
+      {}
+  }
 }
 
 void MipsAsmPrinter::EmitBasicBlockEnd(const MachineBasicBlock &MBB) {
