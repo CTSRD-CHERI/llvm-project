@@ -10,8 +10,9 @@ define chericcallcce void @fish() {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    daddiu $2, $zero, 0
 ; CHECK-NEXT:    daddiu $3, $zero, 0
-; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    cgetnull $c3
+; CHECK-NEXT:    jr $ra
+; CHECK-NEXT:    cgetnull $c4
 entry:
   ret void
 }

@@ -9,20 +9,21 @@ target triple = "cheri-unknown-freebsd"
 define chericcallcc i8 addrspace(200)* @cgetdata(i8 addrspace(200)* inreg readnone %c.coerce0, i8 addrspace(200)* inreg nocapture readnone %c.coerce1) #0 {
 ; CHECK-LABEL: cgetdata:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    daddiu $sp, $sp, -[[#CAP_SIZE]]
-; CHECK-NEXT:    sd $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    sd $fp, 0($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    move $fp, $sp
 ; CHECK-NEXT:    daddiu $2, $zero, 0
 ; CHECK-NEXT:    daddiu $3, $zero, 0
 ; CHECK-NEXT:    cmove $c3, $c1
+; CHECK-NEXT:    cgetnull $c4
 ; CHECK-NEXT:    move $sp, $fp
-; CHECK-NEXT:    ld $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $fp, 0($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    daddiu $sp, $sp, [[#CAP_SIZE]]
+; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
 entry:
-; The real return value goes in $c3, check that $v0 and $v1 are zeroed:
+; The real return value goes in $c3, check that $v0, $v1 and $c3 are zeroed:
   ret i8 addrspace(200)* %c.coerce0
 }
 
@@ -30,25 +31,22 @@ entry:
 define chericcallcc i32 @cgetnumber(i8 addrspace(200)* inreg nocapture readnone %c.coerce0, i8 addrspace(200)* inreg nocapture readnone %c.coerce1) #0 {
 ; CHECK-LABEL: cgetnumber:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    daddiu $sp, $sp, -[[#CAP_SIZE]]
-; CHECK-NEXT:    sd $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; CHECK-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    sd $fp, 0($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    move $fp, $sp
-; The real return value goes in $v0, check that $c3 and $v1 are zeroed:
 ; CHECK-NEXT:    addiu $2, $zero, 42
 ; CHECK-NEXT:    daddiu $3, $zero, 0
 ; CHECK-NEXT:    cgetnull $c3
+; CHECK-NEXT:    cgetnull $c4
 ; CHECK-NEXT:    move $sp, $fp
-; CHECK-NEXT:    ld $fp, [[#CAP_SIZE - 16]]($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld $ra, [[#CAP_SIZE - 8]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $fp, 0($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    daddiu $sp, $sp, [[#CAP_SIZE]]
+; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; The real return value goes in $v0, check that $c3, $c4 and $v1 are zeroed:
 entry:
   ret i32 42
 }
 
-attributes #0 = { nounwind readnone "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="true" }
-
-!llvm.ident = !{!0}
-
-!0 = !{!"clang version 3.6.0 "}
+attributes #0 = { nounwind readnone }
