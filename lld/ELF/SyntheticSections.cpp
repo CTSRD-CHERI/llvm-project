@@ -3725,7 +3725,7 @@ static uint8_t getAbiVersion() {
     // crashes (happened e.g. when using a binary with the old TLS offset
     // on a new kernel).
     if (config->isCheriABI())
-      return 2; // Bump for every incompatible change
+      return 3; // Bump for every incompatible change
     if (!config->isPic && !config->relocatable &&
         (config->eflags & (EF_MIPS_PIC | EF_MIPS_CPIC)) == EF_MIPS_CPIC)
       return 1;

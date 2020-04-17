@@ -21,7 +21,7 @@ nop
 # CHECK-NEXT:     DataEncoding: BigEndian (0x2)
 # CHECK-NEXT:     FileVersion: 1
 # CHECK-NEXT:     OS/ABI: FreeBSD (0x9)
-# CHECK-NEXT:     ABIVersion: 2
+# CHECK-NEXT:     ABIVersion: 3
 # CHECK-NEXT:     Unused: (00 00 00 00 00 00 00)
 # CHECK-NEXT:   }
 # CHECK-NEXT:   Type: SharedObject (0x3)
