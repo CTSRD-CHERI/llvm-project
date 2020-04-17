@@ -42,6 +42,9 @@ class DefaultTargetInfo(object):
     def use_lit_shell_default(self): return False
     def default_cxx_abi_library(self): raise NotImplementedError(self.__class__.__name__)
 
+    def add_platform_features(self, features):
+        features.add(self.platform())
+
     def add_path(self, dest_env, new_path):
         if not new_path:
             return
@@ -278,6 +281,10 @@ class LinuxLocalTI(DefaultTargetInfo):
 
     def add_locale_features(self, features):
         self.add_common_locales(features)
+
+    def add_platform_features(self, features):
+        super(LinuxLocalTI, self).add_platform_features(features)
+
         # Some linux distributions have different locale data than others.
         # Insert the distributions name and name-version into the available
         # features to allow tests to XFAIL on them.
