@@ -1801,7 +1801,7 @@ static void mangleUniqueNameLambda(CXXNameMangler &Mangler, SourceManager &SM,
 
   PresumedLoc PLoc = SM.getPresumedLoc(Loc);
   Mangler.mangleNumber(PLoc.getLine());
-  Out << "->";
+  Out << "_";
   Mangler.mangleNumber(PLoc.getColumn());
 
   while(Loc.isMacroID()) {
@@ -1810,9 +1810,9 @@ static void mangleUniqueNameLambda(CXXNameMangler &Mangler, SourceManager &SM,
       SLToPrint = SM.getImmediateExpansionRange(Loc).getBegin();
 
     PLoc = SM.getPresumedLoc(SM.getSpellingLoc(SLToPrint));
-    Out << "~";
+    Out << "m";
     Mangler.mangleNumber(PLoc.getLine());
-    Out << "->";
+    Out << "_";
     Mangler.mangleNumber(PLoc.getColumn());
 
     Loc = SM.getImmediateMacroCallerLoc(Loc);
