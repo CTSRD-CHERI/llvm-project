@@ -1,6 +1,5 @@
 // RUN: %cheri_cc1 -emit-llvm %s -o - | FileCheck %s -check-prefix CHECK-HYBRID
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-llvm %s -o - | %cheri_FileCheck %s -check-prefixes CHECK-PURECAP,PURECAP-LEGACY
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -emit-llvm %s -o - | %cheri_FileCheck %s -check-prefixes CHECK-PURECAP,PURECAP-NEWABI
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -emit-llvm %s -o - | %cheri_FileCheck %s -check-prefixes CHECK-PURECAP
 // RUN: %cheri_cc1 -S %s -o - | FileCheck %s -check-prefix HYBRID-ASM
 // RUN: %cheri_purecap_cc1 -S %s -o - | %cheri_FileCheck %s -check-prefix PURECAP-ASM
 // RUN: %cheri_purecap_cc1 -S %s -o - | %cheri_FileCheck %s -check-prefix PURECAP-ASM
@@ -120,9 +119,8 @@ quintptr array3[4] = {
 // HYBRID-ASM-NEXT:	.size	array3, 32
 
 // CHECK-PURECAP: @array3 = addrspace(200) global [4 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
-// CHECK-PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void ()*, i8 addrspace(200)* }] [{ i32, void ()*, i8 addrspace(200)* }
-// PURECAP-LEGACY-SAME: { i32 65535, void ()* @_GLOBAL__sub_I_qhooks_array.cpp, i8 addrspace(200)* null }]
-// PURECAP-NEWABI-SAME: { i32 65535,  void ()* addrspacecast (void () addrspace(200)* @_GLOBAL__sub_I_qhooks_array.cpp to void ()*), i8 addrspace(200)* null }]
+// CHECK-PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void () addrspace(200)*, i8 addrspace(200)* }] [{ i32, void () addrspace(200)*, i8 addrspace(200)* }
+// CHECK-PURECAP-SAME: { i32 65535, void () addrspace(200)* @_GLOBAL__sub_I_qhooks_array.cpp, i8 addrspace(200)* null }]
 // PURECAP-ASM-LABEL: array3:
 // PURECAP-ASM-NEXT:	.space	[[#CAP_SIZE * 4]]
 // PURECAP-ASM-NEXT: 	.size	array3, [[#CAP_SIZE * 4]]

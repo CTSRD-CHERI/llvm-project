@@ -1326,13 +1326,6 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy = llvm::FunctionType::get(VoidTy, false);
   unsigned CtorPtrAS = TheModule.getDataLayout().getProgramAddressSpace();
-  // And the pointers to the ctors are always AS0 for CHERI. We could
-  // theoretically make them AS200 but right now RTLD/csu expects that
-  // .init_array contains virtual addresses and not capabilities
-  if (getTriple().isMIPS() ||
-      getTriple().getArch() == llvm::Triple::riscv32 ||
-      getTriple().getArch() == llvm::Triple::riscv64)
-    CtorPtrAS = 0;
   llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
 
   // Get the type of a ctor entry, { i32, void ()*, i8* }.

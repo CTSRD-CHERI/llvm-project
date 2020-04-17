@@ -29,11 +29,6 @@ static void appendToGlobalArray(const char *Array, Module &M, Function *F,
   FunctionType *FnTy = FunctionType::get(IRB.getVoidTy(), false);
 
   unsigned CtorPtrAS = M.getDataLayout().getProgramAddressSpace();
-  // And the pointers to the ctors are always AS0 for CHERI. We could
-  // theoretically make them AS200 but right now RTLD/csu expects that
-  // .init_array contains virtual addresses and not capabilities
-  if (llvm::Triple(M.getTargetTriple()).isMIPS())
-    CtorPtrAS = 0;
   llvm::Type *CtorPFTy = llvm::PointerType::get(FnTy, CtorPtrAS);
   llvm::Type *ArgTy =
       IRB.getInt8PtrTy(M.getDataLayout().getGlobalsAddressSpace());

@@ -23,14 +23,13 @@ extern int fail2(void);
 // MIPS: @llvm.global_ctors = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 2, void ()* @sancov.module_ctor_trace_pc_guard, i8* bitcast (void ()* @sancov.module_ctor_trace_pc_guard to i8*) }]
 // MIPS: @llvm.compiler.used = appending global [2 x i8*] [i8* bitcast ([1 x i32]* @__sancov_gen_ to i8*), i8* bitcast ([4 x i32]* @__sancov_gen_.1 to i8*)], section "llvm.metadata"
 
-
 // These should all be in AS200:
 // PURECAP: @__sancov_lowest_stack = external thread_local(initialexec) addrspace(200) global i64
 // PURECAP: @__sancov_gen_ = private addrspace(200) global [1 x i32] zeroinitializer, section "__sancov_guards", comdat($main), align 4, !associated !0
 // PURECAP: @__sancov_gen_.1 = private addrspace(200) global [4 x i32] zeroinitializer, section "__sancov_guards", comdat($func2), align 4, !associated !1
 // PURECAP: @__start___sancov_guards = external hidden addrspace(200) global i32 addrspace(200)*
 // PURECAP: @__stop___sancov_guards = external hidden addrspace(200) global i32 addrspace(200)*
-// PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void ()*, i8 addrspace(200)* }] [{ i32, void ()*, i8 addrspace(200)* } { i32 2, void ()* addrspacecast (void () addrspace(200)* @sancov.module_ctor_trace_pc_guard to void ()*), i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor_trace_pc_guard to i8 addrspace(200)*) }]
+// PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void () addrspace(200)*, i8 addrspace(200)* }] [{ i32, void () addrspace(200)*, i8 addrspace(200)* } { i32 2, void () addrspace(200)* @sancov.module_ctor_trace_pc_guard, i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor_trace_pc_guard to i8 addrspace(200)*) }]
 // PURECAP: @llvm.compiler.used = appending addrspace(200) global [2 x i8*] [i8* addrspacecast (i8 addrspace(200)* bitcast ([1 x i32] addrspace(200)* @__sancov_gen_ to i8 addrspace(200)*) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([4 x i32] addrspace(200)* @__sancov_gen_.1 to i8 addrspace(200)*) to i8*)], section "llvm.metadata"
 
 // PURECAP

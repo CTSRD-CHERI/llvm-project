@@ -25,11 +25,11 @@
 // RUN: %cheri_purecap_llc -o - -O0 %t.ll | FileCheck %s -implicit-check-not .ctors -implicit-check-not .dtors
 
 // CHECK:      .section	.init_array,"aw",@init_array
-// CHECK-NEXT: .p2align	3
-// CHECK-NEXT: .8byte	ctor_fn
+// CHECK-NEXT: .p2align	4
+// CHECK-NEXT: .chericap	ctor_fn
 // CHECK-NEXT: .section	.fini_array,"aw",@fini_array
-// CHECK-NEXT: .p2align	3
-// CHECK-NEXT: .8byte	dtor_fn
+// CHECK-NEXT: .p2align	4
+// CHECK-NEXT: .chericap	dtor_fn
 
 __attribute((constructor))
 int ctor_fn(void) {

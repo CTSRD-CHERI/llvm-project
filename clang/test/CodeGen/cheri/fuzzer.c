@@ -40,11 +40,10 @@ extern int fail2(void);
 // PURECAP-SAME: section "__sancov_pcs", comdat($func2), align 8, !associated !1
 // PURECAP: @__start___sancov_cntrs = external hidden addrspace(200) global i8 addrspace(200)*
 // PURECAP: @__stop___sancov_cntrs = external hidden addrspace(200) global i8 addrspace(200)*
-// PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void ()*, i8 addrspace(200)* }] [{ i32, void ()*, i8 addrspace(200)* } { i32 2, void ()* addrspacecast (void () addrspace(200)* @sancov.module_ctor_8bit_counters to void ()*), i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor_8bit_counters to i8 addrspace(200)*) }]
+// PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void () addrspace(200)*, i8 addrspace(200)* }] [{ i32, void () addrspace(200)*, i8 addrspace(200)* } { i32 2, void () addrspace(200)* @sancov.module_ctor_8bit_counters, i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor_8bit_counters to i8 addrspace(200)*) }]
 // PURECAP: @__start___sancov_pcs = external hidden addrspace(200) global i64 addrspace(200)*
 // PURECAP: @__stop___sancov_pcs = external hidden addrspace(200) global i64 addrspace(200)*
 // PURECAP: @llvm.compiler.used = appending addrspace(200) global [4 x i8*] [i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([1 x i8], [1 x i8] addrspace(200)* @__sancov_gen_, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([2 x i64] addrspace(200)* @__sancov_gen_.1 to i8 addrspace(200)*) to i8*), i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @__sancov_gen_.2, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([8 x i64] addrspace(200)* @__sancov_gen_.3 to i8 addrspace(200)*) to i8*)], section "llvm.metadata"
-
 
 // MIPS-LABEL: @main(
 // MIPS-NEXT:  entry:
