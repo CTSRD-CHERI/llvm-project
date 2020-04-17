@@ -917,9 +917,6 @@ class Configuration(object):
                 '-fmodules is enabled but not supported by the compiler')
         if not supports_modules:
             return
-        self.config.available_features.add('modules-support')
-        exec_str = self.get_lit_conf('modules', "None")
-
         modules_cache_dirname = 'modules.cache'
         # Avoid reusing the same directory when running parallel jobs
         if self.lit_config.shardNumber is not None:
