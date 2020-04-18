@@ -1566,7 +1566,10 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
             if (TargetSym != TargetSectionSymbols->begin()) {
               --TargetSym;
               uint64_t TargetAddress = TargetSym->Addr;
-              StringRef TargetName = TargetSym->Name;
+              std::string TargetName = TargetSym->Name.str();
+              if (Demangle)
+                TargetName = demangle(TargetName);
+
               outs() << " <" << TargetName;
               uint64_t Disp = Target - TargetAddress;
               if (Disp)
