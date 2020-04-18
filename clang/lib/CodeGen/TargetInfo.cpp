@@ -7656,7 +7656,16 @@ static bool mipsCanReturnDirect(const ASTContext& Ctx, QualType Ty, unsigned& Nu
   // Treat an enum type as its underlying type.
   if (const EnumType *EnumTy = Ty->getAs<EnumType>())
     Ty = EnumTy->getDecl()->getIntegerType();
-  if (Ty->isCHERICapabilityType(Ctx)) {
+  if (Ty->isMemberPointerType()) {
+    if (Ty->isMemberFunctionPointerType()) {
+      // Returned as { i8 addrspace(200)*, i64 }
+      NumCaps++;
+      NumInts++;
+    } else {
+      NumInts++;       // Single offset  value
+    }
+  }
+  else if (Ty->isCHERICapabilityType(Ctx)) {
     NumCaps++;
   } else if (Ty->isIntegerType()) {
     // Can't return integer types that would need more than the address range
@@ -7720,20 +7729,17 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
   if (isAggregateTypeForABI(RetTy) || RetTy->isVectorType()) {
     if (getTarget().SupportsCapabilities() &&
         Size <= 2 * getTarget().getCHERICapabilityWidth()) {
-      // On CHERI, we can return unions  structs containing at most two
+      // On CHERI, we can return unions/structs containing at most two
       // capabilities directly. We also allow return one integer and one
       // capability directly, but no more than that to minimize differences
       // with the N64 ABI (which only returns pairs of integers).
-      if (const auto *RT = RetTy->getAs<RecordType>()) {
-        unsigned NumCaps = 0;
-        unsigned NumInts = 0;
-        if (mipsCanReturnDirect(getContext(), RT->getDecl(), NumCaps,
-                                NumInts)) {
-          ABIArgInfo ArgInfo =
-              ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
-          ArgInfo.setInReg(true);
-          return ArgInfo;
-        }
+      unsigned NumCaps = 0;
+      unsigned NumInts = 0;
+      if (mipsCanReturnDirect(getContext(), RetTy, NumCaps, NumInts)) {
+        ABIArgInfo ArgInfo =
+            ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
+        ArgInfo.setInReg(true);
+        return ArgInfo;
       }
     }
     if (Size <= 128) {
