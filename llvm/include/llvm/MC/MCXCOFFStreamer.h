@@ -25,7 +25,7 @@ public:
   void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override;
-  void EmitInstToData(const MCInst &Inst, const MCSubtargetInfo &) override;
+  void emitInstToData(const MCInst &Inst, const MCSubtargetInfo &) override;
   void emitXCOFFLocalCommonSymbol(MCSymbol *LabelSym, uint64_t Size,
                                   MCSymbol *CsectSym,
                                   unsigned ByteAlign) override;
