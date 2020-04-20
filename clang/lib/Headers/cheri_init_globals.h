@@ -30,7 +30,7 @@
 #endif
 
 /* Bump this on every incompatible change */
-#define CHERI_INIT_GLOBALS_VERSION 3
+#define CHERI_INIT_GLOBALS_VERSION 4
 #define CHERI_INIT_GLOBALS_NUM_ARGS 7
 #define CHERI_INIT_GLOBALS_SUPPORTS_CONSTANT_FLAG 1
 
@@ -97,8 +97,8 @@ __cap_table_end;
 
 #if defined(__mips__)
 
-#if !defined(__CHERI_CAPABILITY_TABLE__) || __CHERI_CAPABILITY_TABLE__ == 3
-/* No need to setup $cgp for pc-relative or legacy ABI: */
+#if __CHERI_CAPABILITY_TABLE__ == 3
+/* No need to setup $cgp for pc-relative ABI: */
 #define INIT_CGP_REGISTER_ASM
 #else
 #define INIT_CGP_REGISTER_ASM                                                  \
@@ -206,13 +206,6 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
                      const void *rodata_cap) {
   struct capreloc *start_relocs;
   struct capreloc *stop_relocs;
-#ifndef __CHERI_CAPABILITY_TABLE__
-
-  /* If we are not using the CHERI capability table we can just synthesize
-   * the capabilities for these using the GOT and $ddc */
-  start_relocs = &__start___cap_relocs;
-  stop_relocs = &__stop___cap_relocs;
-#else
   __SIZE_TYPE__ start_addr, end_addr;
 #if defined(__mips__)
   __asm__ (".option pic0\n\t"
@@ -248,11 +241,8 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    */
   stop_relocs =
       (struct capreloc *)((__UINTPTR_TYPE__)start_relocs + relocs_size);
-#endif
 
-#if !defined(__CHERI_CAPABILITY_TABLE__)
-  _Bool can_set_code_bounds = 0; /* legacy ABI -> need large bounds on $pcc */
-#elif __CHERI_CAPABILITY_TABLE__ == 3
+#if __CHERI_CAPABILITY_TABLE__ == 3
   _Bool can_set_code_bounds = 0; /* pc-relative ABI -> need large bounds on $pcc */
 #else
   _Bool can_set_code_bounds = 1; /* fn-desc/plt ABI -> tight bounds okay */
