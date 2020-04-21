@@ -3343,7 +3343,7 @@ void AsmPrinter::emitXRayTable() {
                                        Flags, 0, GroupName,
                                        MCSection::NonUniqueID, LinkedToSym);
     FnSledIndex = OutContext.getELFSection("xray_fn_idx", ELF::SHT_PROGBITS,
-                                           Flags, 0, GroupName,
+                                           Flags | ELF::SHF_WRITE, 0, GroupName,
                                            MCSection::NonUniqueID, LinkedToSym);
   } else if (MF->getSubtarget().getTargetTriple().isOSBinFormatMachO()) {
     InstMap = OutContext.getMachOSection("__DATA", "xray_instr_map", 0,
