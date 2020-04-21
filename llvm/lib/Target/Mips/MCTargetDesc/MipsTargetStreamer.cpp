@@ -57,10 +57,8 @@ static bool isMicroMips(const MCSubtargetInfo *STI) {
   return STI->getFeatureBits()[Mips::FeatureMicroMips];
 }
 
-MipsTargetStreamer::MipsTargetStreamer(MCStreamer &S,
-                                       llvm::Optional<unsigned> CheriCapSize)
-    : MCTargetStreamer(S), CheriCapSize(CheriCapSize), GPReg(Mips::GP),
-      ModuleDirectiveAllowed(true) {
+MipsTargetStreamer::MipsTargetStreamer(MCStreamer &S)
+    : MCTargetStreamer(S), GPReg(Mips::GP), ModuleDirectiveAllowed(true) {
   GPRInfoSet = FPRInfoSet = FrameInfoSet = false;
 }
 void MipsTargetStreamer::emitDirectiveSetMicroMips() {}
@@ -387,10 +385,9 @@ void MipsTargetStreamer::emitLoadWithImmOffset(unsigned Opcode, unsigned DstReg,
   emitRRI(Opcode, DstReg, TmpReg, LoOffset, IDLoc, STI);
 }
 
-MipsTargetAsmStreamer::MipsTargetAsmStreamer(
-    MCStreamer &S, llvm::Optional<unsigned> CheriCapSize,
-    formatted_raw_ostream &OS)
-    : MipsTargetStreamer(S, CheriCapSize), OS(OS) {}
+MipsTargetAsmStreamer::MipsTargetAsmStreamer(MCStreamer &S,
+                                             formatted_raw_ostream &OS)
+    : MipsTargetStreamer(S), OS(OS) {}
 
 void MipsTargetAsmStreamer::emitDirectiveSetMicroMips() {
   OS << "\t.set\tmicromips\n";
@@ -807,7 +804,7 @@ void MipsTargetAsmStreamer::emitDirectiveModuleNoGINV() {
 // This part is for ELF object output.
 MipsTargetELFStreamer::MipsTargetELFStreamer(MCStreamer &S,
                                              const MCSubtargetInfo &STI)
-    : MipsTargetStreamer(S, getCheriCapabilitySize(STI.getFeatureBits())),
+    : MipsTargetStreamer(S),
       MicroMipsEnabled(false), STI(STI) {
   MCAssembler &MCA = getStreamer().getAssembler();
 

@@ -186,8 +186,7 @@ public:
   using NullTargetStreamerCtorTy = MCTargetStreamer *(*)(MCStreamer &S);
   using AsmTargetStreamerCtorTy =
       MCTargetStreamer *(*)(MCStreamer &S, formatted_raw_ostream &OS,
-                            const MCAsmBackend &MAB, MCInstPrinter *InstPrint,
-                            bool IsVerboseAsm);
+                            MCInstPrinter *InstPrint, bool IsVerboseAsm);
   using ObjectTargetStreamerCtorTy = MCTargetStreamer *(*)(
       MCStreamer &S, const MCSubtargetInfo &STI);
   using MCRelocationInfoCtorTy = MCRelocationInfo *(*)(const Triple &TT,
@@ -529,21 +528,19 @@ public:
                                 std::unique_ptr<MCAsmBackend> &&TAB,
                                 bool ShowInst) const {
     formatted_raw_ostream &OSRef = *OS;
-    const MCAsmBackend &MABRef = *TAB;
     MCStreamer *S = llvm::createAsmStreamer(
         Ctx, std::move(OS), IsVerboseAsm, UseDwarfDirectory, InstPrint,
         std::move(CE), std::move(TAB), ShowInst);
-    createAsmTargetStreamer(*S, OSRef, MABRef, InstPrint, IsVerboseAsm);
+    createAsmTargetStreamer(*S, OSRef, InstPrint, IsVerboseAsm);
     return S;
   }
 
   MCTargetStreamer *createAsmTargetStreamer(MCStreamer &S,
                                             formatted_raw_ostream &OS,
-                                            const MCAsmBackend& MAB,
                                             MCInstPrinter *InstPrint,
                                             bool IsVerboseAsm) const {
     if (AsmTargetStreamerCtorFn)
-      return AsmTargetStreamerCtorFn(S, OS, MAB, InstPrint, IsVerboseAsm);
+      return AsmTargetStreamerCtorFn(S, OS, InstPrint, IsVerboseAsm);
     return nullptr;
   }
 

@@ -197,9 +197,6 @@ public:
     return 0;
   }
 
-  /// \returns the size of a CHERI capability or None if not supported
-  virtual llvm::Optional<unsigned> getCheriCapSize() const { return None; }
-
   /// Check whether a given symbol has been flagged with MICROMIPS flag.
   virtual bool isMicroMips(const MCSymbol *Sym) const {
     return false;

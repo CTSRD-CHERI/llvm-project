@@ -84,7 +84,6 @@ MCAsmBackend *createX86_64AsmBackend(const Target &T,
 /// Implements X86-only directives for assembly emission.
 MCTargetStreamer *createX86AsmTargetStreamer(MCStreamer &S,
                                              formatted_raw_ostream &OS,
-                                             const MCAsmBackend &MAB,
                                              MCInstPrinter *InstPrint,
                                              bool isVerboseAsm);
 

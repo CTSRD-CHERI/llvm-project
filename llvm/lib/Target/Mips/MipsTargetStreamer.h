@@ -27,7 +27,7 @@ llvm::Optional<unsigned> getCheriCapabilitySize(FeatureBitset Features);
 
 class MipsTargetStreamer : public MCTargetStreamer {
 public:
-  MipsTargetStreamer(MCStreamer &S, llvm::Optional<unsigned> CheriCapSize);
+  MipsTargetStreamer(MCStreamer &S);
 
   virtual void setPic(bool Value) {}
 
@@ -189,7 +189,6 @@ public:
 protected:
   llvm::Optional<MipsABIInfo> ABI;
   MipsABIFlagsSection ABIFlagsSection;
-  llvm::Optional<unsigned> CheriCapSize = 0;
 
   bool GPRInfoSet;
   unsigned GPRBitMask;
@@ -214,8 +213,7 @@ class MipsTargetAsmStreamer : public MipsTargetStreamer {
   formatted_raw_ostream &OS;
 
 public:
-  MipsTargetAsmStreamer(MCStreamer &S, llvm::Optional<unsigned> CheriCapSize,
-                        formatted_raw_ostream &OS);
+  MipsTargetAsmStreamer(MCStreamer &S, formatted_raw_ostream &OS);
   void emitDirectiveSetMicroMips() override;
   void emitDirectiveSetNoMicroMips() override;
   void emitDirectiveSetMips16() override;

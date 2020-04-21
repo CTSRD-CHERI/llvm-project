@@ -105,7 +105,6 @@ createRISCVMCStreamer(const Triple &TT, MCContext &Context,
 
 static MCTargetStreamer *createRISCVAsmTargetStreamer(MCStreamer &S,
                                                       formatted_raw_ostream &OS,
-                                                      const MCAsmBackend &MAB,
                                                       MCInstPrinter *InstPrint,
                                                       bool isVerboseAsm) {
   return new RISCVTargetAsmStreamer(S, OS);

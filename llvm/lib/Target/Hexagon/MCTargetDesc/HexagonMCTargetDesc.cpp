@@ -312,8 +312,6 @@ static MCInstPrinter *createHexagonMCInstPrinter(const Triple &T,
 
 static MCTargetStreamer *createMCAsmTargetStreamer(MCStreamer &S,
                                                    formatted_raw_ostream &OS,
-                                                   const MCAsmBackend &MAB,
-
                                                    MCInstPrinter *IP,
                                                    bool IsVerboseAsm) {
   return new HexagonTargetAsmStreamer(S, OS, IsVerboseAsm, *IP);

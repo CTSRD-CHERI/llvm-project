@@ -30,13 +30,12 @@ class Target;
 class MipsAsmBackend : public MCAsmBackend {
   Triple TheTriple;
   bool IsN32;
-  llvm::Optional<unsigned> CheriCapSize;
 
 public:
   MipsAsmBackend(const Target &T, const MCRegisterInfo &MRI, const Triple &TT,
-                 StringRef CPU, bool N32, llvm::Optional<unsigned> CapSize)
+                 StringRef CPU, bool N32)
       : MCAsmBackend(TT.isLittleEndian() ? support::little : support::big),
-        TheTriple(TT), IsN32(N32), CheriCapSize(CapSize) {}
+        TheTriple(TT), IsN32(N32) {}
 
   std::unique_ptr<MCObjectTargetWriter>
   createObjectTargetWriter() const override;
@@ -92,10 +91,6 @@ public:
                              const MCValue &Target) override;
 
   bool isMicroMips(const MCSymbol *Sym) const override;
-
-  llvm::Optional<unsigned> getCheriCapSize() const override {
-    return CheriCapSize;
-  }
 
 }; // class MipsAsmBackend
 
