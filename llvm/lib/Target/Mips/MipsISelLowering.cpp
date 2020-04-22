@@ -401,7 +401,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
 
   // Mips Custom Operations
   setOperationAction(ISD::GlobalAddress,      CapType,    Custom);
-  if (ABI.UsesCapabilityTls())
+  if (ABI.IsCheriPureCap())
     setOperationAction(ISD::GlobalTLSAddress, CapType,    Custom);
   if (ABI.UsesCapabilityTable())
     setOperationAction(ISD::BR_JT,            MVT::Other, Custom);
@@ -2916,7 +2916,7 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   const GlobalValue *GV = GA->getGlobal();
   TLSModel::Model model = getTargetMachine().getTLSModel(GV);
 
-  if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTls()) {
+  if (Subtarget.getABI().IsCheriPureCap()) {
     const Type *GVTy = GV->getType();
     if (DAG.getDataLayout().isFatPointer(GVTy)) {
       EVT OffsetVT = getPointerRangeTy(DAG.getDataLayout(),
@@ -3006,7 +3006,7 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   }
 
   // NOTE: AS0 is okay since we are using the legacy ABI
-  assert(!ABI.UsesCapabilityTls());
+  assert(!ABI.IsCheriPureCap());
   EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
 
   if (model == TLSModel::GeneralDynamic || model == TLSModel::LocalDynamic) {
@@ -3022,17 +3022,6 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 
     SDValue TlsGetAddr = DAG.getExternalFunctionSymbol("__tls_get_addr");
 
-    if (ABI.IsCheriPureCap()) {
-      Argument = cFromDDC(DAG, DL, Argument);
-      // Set bounds to sizeof(tls_index)
-      if (cheri::ShouldCollectCSetBoundsStats)
-        addGlobalsCSetBoundsStats(GV, DAG, "set bounds on tls_index",
-                                    DL.getDebugLoc());
-      Argument = setBounds(DAG, Argument, 16, /*CSetBoundsStatsLogged=*/true);
-      // In the pure-capability ABI __tls_get_addr takes and returns capabilities
-      TlsGetAddrArgAndRetTy = Type::getInt8PtrTy(*DAG.getContext(), 200);
-    }
-
     ArgListTy Args;
     ArgListEntry Entry;
     Entry.Node = Argument;
@@ -3046,11 +3035,6 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
     std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
 
     SDValue Ret = CallResult.first;
-    // Convert back to an integer value for the legacy ABI:
-    if (ABI.IsCheriPureCap()) {
-      auto GetAddr = DAG.getConstant(Intrinsic::cheri_cap_address_get, DL, PtrVT);
-      Ret = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::i64, GetAddr, Ret);
-    }
 
     if (model != TLSModel::LocalDynamic)
       return Ret;

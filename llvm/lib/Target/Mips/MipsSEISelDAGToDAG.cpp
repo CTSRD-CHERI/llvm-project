@@ -1170,7 +1170,7 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
   }
 
   case MipsISD::ThreadPointer: {
-    assert(!Subtarget->getABI().UsesCapabilityTls());
+    assert(!Subtarget->getABI().IsCheriPureCap());
     EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout(), 0);
     unsigned RdhwrOpc, DestReg;
 
