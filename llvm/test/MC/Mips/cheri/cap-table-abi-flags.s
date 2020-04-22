@@ -1,6 +1,3 @@
-# RUN: %cheri_purecap_llvm-mc -cheri-cap-table-abi=legacy -filetype=obj %s -o - | llvm-readobj --arch-specific - | FileCheck %s -check-prefix LEGACY
-# LEGACY: ISA Extension: CHERI purecap (legacy) (0xC1)
-
 # RUN: %cheri_purecap_llvm-mc -cheri-cap-table-abi=plt -filetype=obj %s -o - | llvm-readobj --arch-specific - | FileCheck %s -check-prefix PLT
 # PLT: ISA Extension: CHERI purecap (PLT based) (0xC2)
 

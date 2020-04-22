@@ -268,18 +268,12 @@ def cheri_EQ : Joined<["-"], "cheri=">, Flags<[DriverOption]>, Group<cheri_Group
 def cheri : Flag<["-"], "cheri">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Enable CHERI support with the default capability size (128 bits)">;
 
-def cheri_cap_table : Flag<["-"], "cheri-cap-table">, Flags<[DriverOption]>, Group<cheri_Group>,
-  HelpText<"Enable support for loading globals via a capability table">;
-def no_cheri_cap_table : Flag<["-"], "no-cheri-cap-table">, Flags<[DriverOption]>, Group<cheri_Group>,
-  HelpText<"Disable support for the cheri cap table and emit legacy global loads">;
 def cheri_cap_table_abi : Joined<["-"], "cheri-cap-table-abi=">, Group<cheri_Group>,
   HelpText<"CHERI cap table ABI to use">;
 def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Use large immediates to index the cap table">;
 def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Do not use large immediates to index the cap table">;
-def cheri_cap_tls_abi : Joined<["-"], "cheri-cap-tls-abi=">, Group<cheri_Group>,
-  HelpText<"CHERI cap TLS ABI to use">;
 
 def cheri_uintcap_offset : Flag<["-"], "cheri-uintcap=offset">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the capability offset when performing computations on uintcap_t (more GC-friendly but needs more changes to source code)">;

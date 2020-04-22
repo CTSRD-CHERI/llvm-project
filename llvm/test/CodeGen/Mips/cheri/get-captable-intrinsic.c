@@ -7,8 +7,7 @@
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -O1 -o - -S %s | FileCheck %s -check-prefix PCREL
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -O1 -o - -S %s | FileCheck %s -check-prefix PLT
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=fn-desc -O1 -o - -S %s | FileCheck %s -check-prefix FNDESC
-// Legacy and hybrid don't have a captable -> this should be an error
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -O1 -o - -S %s -verify=not-captable | FileCheck %s -check-prefix LEGACY
+// Hybrid doesn't have a captable -> this should be an error
 // RUN: %cheri_cc1 -O1 -o - -S %s -verify=not-captable | FileCheck %s -check-prefix HYBRID
 
 void* __capability get_captable() {
@@ -27,9 +26,6 @@ void* __capability get_captable() {
 
   // FNDESC: cjr	$c17
   // FNDESC-NEXT: cmove $c3, $c26
-
-  // LEGACY: cjr $c17
-  // LEGACY-NEXT: cgetnull $c3
 
   // HYBRID: jr $ra
   // HYBRID-NEXT: cgetnull $c3

@@ -1,6 +1,5 @@
 ; RUN: sed 's/addrspace(200)//' %s | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mattr=+xgot -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=MIPS,MIPS-MXGOT,COMMON
 ; RUN: sed 's/addrspace(200)//' %s | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mattr=-xgot -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=MIPS,MIPS-SMALLGOT,COMMON
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=legacy  %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=LEGACY,COMMON
 ; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON
 ; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON
 ; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON
@@ -35,26 +34,6 @@ entry:
 ; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2:gpr64, target-flags(mips-got-lo16) @global, implicit $ddc :: (load 8 from got)
 ; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global, implicit $ddc :: (load 8 from got)
 ; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]]:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global)
-
-
-; Legacy loads the vaddr of global from the got then loads .size.global and
-; does a cfromptr + csetbounds with those two values:
-; LEGACY-NEXT:   liveins: $c12
-; LEGACY-NEXT:   %13:cherigpr = COPY $c12
-; LEGACY-NEXT:   $t9_64 = CGetOffset %13:cherigpr
-; LEGACY-NEXT:   %11:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
-; LEGACY-NEXT:   %12:gpr64 = DADDu %11:gpr64, $t9_64
-; LEGACY-NEXT:   %0:gpr64 = DADDiu %12:gpr64, target-flags(mips-gpoff-lo) @test
-; LEGACY-NEXT:   %1:gpr64 = DADDiu %0:gpr64, target-flags(mips-got-disp) @.size.global
-; LEGACY-NEXT:   %2:cherigpr = CFromPtr $ddc, killed %1
-; LEGACY-NEXT:   %3:gpr64 = CAPLOAD64 $zero_64, 0, killed %2:cherigpr :: (load 8 from got)
-; LEGACY-NEXT:   %4:gpr64 = LD killed %3:gpr64, 0, implicit $ddc :: (load 8 from @.size.global)
-; LEGACY-NEXT:   %5:gpr64 = DADDiu %0:gpr64, target-flags(mips-got-disp) @global
-; LEGACY-NEXT:   %6:cherigpr = CFromPtr $ddc, killed %5
-; LEGACY-NEXT:   %7:gpr64 = CAPLOAD64 $zero_64, 0, killed %6:cherigpr :: (load 8 from got)
-; LEGACY-NEXT:   %8:cherigpr = CFromPtr $ddc, killed %7
-; LEGACY-NEXT:   %9:cherigpr = CSetBounds killed %8:cherigpr, killed %4:gpr64
-; LEGACY-NEXT:   [[RESULT:%10]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %9:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 
 ; Due to the $cgp live-in the PLT and FNDESC functions are much shorter:
@@ -100,22 +79,6 @@ entry:
 ; MIPS-NEXT: jr	$ra
 ; MIPS-NEXT: ld	$2, 0($1)
 
-
-; LEGACY-NEXT: cgetoffset	$25, $c12
-; LEGACY-NEXT: lui	$1, %hi(%neg(%gp_rel(test))) # encoding: [0x3c,0x01,A,A]
-; LEGACY-NEXT:          #   fixup A - offset: 0, value: %hi(%neg(%gp_rel(test))), kind: fixup_Mips_GPOFF_HI
-; LEGACY-NEXT: daddu	$1, $1, $25
-; LEGACY-NEXT: daddiu	$1, $1, %lo(%neg(%gp_rel(test))) # encoding: [0x64,0x21,A,A]
-; LEGACY-NEXT:                #   fixup A - offset: 0, value: %lo(%neg(%gp_rel(test))), kind: fixup_Mips_GPOFF_LO
-; LEGACY-NEXT: ld	$2, %got_disp(.size.global)($1)
-; LEGACY-NEXT:         #   fixup A - offset: 0, value: %got_disp(.size.global), kind: fixup_Mips_GOT_DISP
-; LEGACY-NEXT: ld	$1, %got_disp(global)($1)
-; LEGACY-NEXT:        #   fixup A - offset: 0, value: %got_disp(global), kind: fixup_Mips_GOT_DISP
-; LEGACY-NEXT: ld	$2, 0($2)
-; LEGACY-NEXT: cfromddc	$c1, $1
-; LEGACY-NEXT: csetbounds	$c1, $c1, $2
-; LEGACY-NEXT: cjr	$c17
-; LEGACY-NEXT: cld	$2, $zero, 0($c1)
 
 ; PLT-NEXT:	clcbi	$c1, %captab20(global)($c26) # encoding: [0x74,0x3a,A,A]
 ; PLT-NEXT:                #   fixup A - offset: 0, value: %captab20(global), kind: fixup_CHERI_CAPTABLE20
