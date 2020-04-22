@@ -39,7 +39,6 @@
 # RUN: ld.lld -pie --no-as-needed -o - %t-lib-fn-desc.so %t-fn-desc.o | llvm-readobj --dynamic -h - | FileCheck --check-prefix FNDESC %s
 
 ## MIPS against cheriabi
-# RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-legacy.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
 # RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-pcrel.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
 # RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-plt.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI
 # RUN: not ld.lld -pie --no-as-needed -o /dev/null %t-mips.o %t-lib-fn-desc.so 2>&1 | FileCheck %s -check-prefix ERR-MIPS-LINKING-CHERIABI

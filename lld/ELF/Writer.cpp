@@ -394,9 +394,7 @@ template <class ELFT> void createSyntheticSections() {
   add(in.bssRelRo);
 
   if (config->capabilitySize > 0) {
-    if (config->processCapRelocs) {
-      InX<ELFT>::capRelocs = make<CheriCapRelocsSection<ELFT>>();
-    }
+    InX<ELFT>::capRelocs = make<CheriCapRelocsSection<ELFT>>();
     in.cheriCapTable = make<CheriCapTableSection>();
     add(in.cheriCapTable);
     if (config->capTableScope != CapTableScopePolicy::All) {
@@ -1992,7 +1990,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
-  if (config->processCapRelocs) {
+  if (true) {
     finalizeSynthetic(InX<ELFT>::capRelocs);
 
     if (OutputSection *gs = findSection(".global_sizes"))

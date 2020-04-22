@@ -192,7 +192,6 @@ struct Configuration {
   bool pie;
   bool printGcSections;
   bool printIcfSections;
-  bool processCapRelocs = false;
   bool relocatable;
   bool relrPackDynRelocs;
   bool saveTemps;

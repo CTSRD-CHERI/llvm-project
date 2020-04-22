@@ -1199,14 +1199,6 @@ static void processRelocAux(InputSectionBase &sec, RelExpr expr, RelType type,
   }
 
   bool canWrite = (sec.flags & SHF_WRITE) || !config->zText;
-  // HACK: clang emits a read-only __cap_relocs, but for PIC code we need to
-  //       emit dynamic relocations for its contents (REL32/64/NONE).
-  if (config->emachine == EM_MIPS && config->isPic && sec.name == "__cap_relocs") {
-    if (!config->processCapRelocs)
-      error("capsizefix will not work with dynamic libraries, please remove "
-              "-no-process-cap-relocs from the linker invocation!");
-    return;
-  }
 
   if (expr == R_CHERI_CAPABILITY) {
     static auto getRelocTargetLocation = [&]() -> std::string {
@@ -1226,14 +1218,6 @@ static void processRelocAux(InputSectionBase &sec, RelExpr expr, RelType type,
 
   if (canWrite) {
     bool isPreemptibleValue = sym.isPreemptible;
-
-    // XXXAR: HACK: the locations of the cap_relocs should not be preemptible
-    // This is only needed for compatibility with capsizefix and RTLD without RELA support
-    if (sec.name == "__cap_relocs" && (offset % 40) == 0) {
-      // The location field should never be marked as preemptible, we want to relocate the local symbol
-      // XXXAR: this is probably wrong in some cases but this is only needed for external capsizefix
-      isPreemptibleValue = false;
-    }
 
     RelType rel = target->getDynRel(type);
     if (expr == R_GOT || (rel == target->symbolicRel && !isPreemptibleValue)) {
@@ -1473,7 +1457,6 @@ static void scanReloc(InputSectionBase &sec, OffsetGetter &getOffset, RelTy *&i,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_ENTRY_PC>(expr)) {
-    assert(config->processCapRelocs);
     in.cheriCapTable->addEntry(sym, expr, &sec, offset);
     // Write out the index into the instruction
     sec.relocations.push_back({expr, type, offset, addend, &sym});

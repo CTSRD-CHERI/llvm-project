@@ -1,12 +1,12 @@
 # REQUIRES: mips
 # We should not be adding this symbol for MIPS output
 # RUN: llvm-mc -position-independent -filetype=obj -triple=mips64-none-freebsd %s -o %t-mips.o
-# RUN: not ld.lld --process-cap-relocs %t-mips.o -o %t.exe 2>&1 | FileCheck -check-prefix ERR-MIPS %s
+# RUN: not ld.lld %t-mips.o -o %t.exe 2>&1 | FileCheck -check-prefix ERR-MIPS %s
 # ERR-MIPS: error: undefined symbol: _CHERI_CAPABILITY_TABLE_
 
 # But for CHERI purecap output it should exist even if the table is empty
 # RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o %t.o
-# RUN: ld.lld --process-cap-relocs %t.o -o %t.exe
+# RUN: ld.lld %t.o -o %t.exe
 # RUN: llvm-objdump -h -t %t.exe | FileCheck %s
 #
 # This used to cause LLD to create a symbol table with invalid entries

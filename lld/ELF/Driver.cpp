@@ -1029,8 +1029,7 @@ static void readConfigs(opt::InputArgList &args) {
       args.hasFlag(OPT_print_gc_sections, OPT_no_print_gc_sections, false);
   config->printSymbolOrder =
       args.getLastArgValue(OPT_print_symbol_order);
-  config->processCapRelocs = args.hasFlag(OPT_process_cap_relocs,
-                                          OPT_no_process_cap_relocs, true);
+
   config->rpath = getRpath(args);
   config->relocatable = args.hasArg(OPT_relocatable);
   config->saveTemps = args.hasArg(OPT_save_temps);
@@ -2154,7 +2153,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
   // output sections in the usual way.
   if (!config->relocatable) {
     combineEhSections();
-    if (config->processCapRelocs && InX<ELFT>::capRelocs) {
+    if (InX<ELFT>::capRelocs) {
       combineCapRelocsSections<ELFT>();
       inputSections.push_back(InX<ELFT>::capRelocs);
     }
