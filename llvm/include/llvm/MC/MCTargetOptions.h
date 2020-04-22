@@ -41,13 +41,6 @@ enum class CheriCapabilityTableABI {
                      /// possible here)
 };
 
-enum class CheriCapabilityTlsABI {
-  Legacy, /// Use legacy ABI instead (thread pointer is normal integer register
-          /// and capability is derived from DDC)
-  CapEquiv /// Use an equivalent setup to MIPS, but with pointers replaced by
-           /// capabilities and using a capability thread pointer register
-};
-
 class StringRef;
 
 class MCTargetOptions {
@@ -92,10 +85,6 @@ public:
   // HACK to make the cheri cap table setting visible to clang:
   static bool cheriUsesCapabilityTable();
   static CheriCapabilityTableABI cheriCapabilityTableABI();
-
-  // Ditto for cheri cap tls setting
-  static bool cheriUsesCapabilityTls();
-  static CheriCapabilityTlsABI cheriCapabilityTlsABI();
 
   /// getAssemblyLanguage - If this returns a non-empty string this represents
   /// the textual name of the assembly language that we will use for this

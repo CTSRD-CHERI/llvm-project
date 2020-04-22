@@ -1,9 +1,8 @@
 ; FreeBSD sed is different from GNU sed -> use the lowest common denominator
 ; RUN: sed 's/addrspace(200)//' %s | sed  's/addrspace(TLS)//' | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mattr=-xgot -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=MIPS,COMMON
-; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=legacy  -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=LEGACY,COMMON
-; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE,CAP-EQUIV
-; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE,CAP-EQUIV
-; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE,CAP-EQUIV
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE
 
 @external_gd = external thread_local addrspace(TLS) global i64
 @internal_gd = internal thread_local addrspace(TLS) global i64 42
@@ -60,45 +59,6 @@ entry:
 ; MIPS-NEXT:  %9:gpr64 = DADDu killed %8:gpr64, %7:gpr64
 ; MIPS-NEXT:  %10:gpr64 = LD killed %9:gpr64, target-flags(mips-dtprel-lo) @internal_gd, implicit $ddc :: (dereferenceable load 8 from @internal_gd)
 ; MIPS-NEXT:  [[RESULT:%.+]] = DADDu killed %4:gpr64, killed %10:gpr64
-
-; LEGACY-NEXT:  liveins: $c12
-; LEGACY-NEXT:  %24:cherigpr = COPY $c12
-; LEGACY-NEXT:  $t9_64 = CGetOffset %24:cherigpr
-; LEGACY-NEXT:  %22:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test_gd
-; LEGACY-NEXT:  %23:gpr64 = DADDu %22:gpr64, $t9_64
-; LEGACY-NEXT:  %0:gpr64 = DADDiu %23:gpr64, target-flags(mips-gpoff-lo) @test_gd
-; LEGACY-NEXT:  ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
-; LEGACY-NEXT:  %1:gpr64 = DADDiu %0:gpr64, target-flags(mips-tlsgd) @external_gd
-; LEGACY-NEXT:  %2:cherigpr = CFromPtr $ddc, killed %1:gpr64
-; LEGACY-NEXT:  %3:cherigpr = CSetBoundsImm killed %2:cherigpr, 16
-; LEGACY-NEXT:  %4:gpr64 = DADDiu %0:gpr64, target-flags(mips-got-call) &__tls_get_addr
-; LEGACY-NEXT:  %5:cherigpr = CFromPtr $ddc, killed %4:gpr64
-; LEGACY-NEXT:  %6:gpr64 = CAPLOAD64 $zero_64, 0, %5:cherigpr :: (load 8 from call-entry &__tls_get_addr)
-; LEGACY-NEXT:  %7:cherigpr = CSetPCCOffset killed %6:gpr64
-; LEGACY-NEXT:  $c3 = COPY %3:cherigpr
-; LEGACY-NEXT:  $gp_64 = COPY %0:gpr64
-; LEGACY-NEXT:  CapJumpLinkPseudo killed %7:cherigpr, <regmask {{.+}}>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit $gp_64, implicit-def $c11, implicit-def $c3
-; LEGACY-NEXT:  ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
-; LEGACY-NEXT:  %8:cherigpr = COPY $c3
-; LEGACY-NEXT:  %9:gpr64 = CGetAddr %8:cherigpr
-; LEGACY-NEXT:  %10:gpr64 = LD killed %9:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @external_gd)
-; LEGACY-NEXT:  ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
-; LEGACY-NEXT:  %11:gpr64 = DADDiu %0:gpr64, target-flags(mips-tlsldm) @internal_gd
-; LEGACY-NEXT:  %12:cherigpr = CFromPtr $ddc, killed %11:gpr64
-; LEGACY-NEXT:  %13:cherigpr = CSetBoundsImm killed %12:cherigpr, 16
-; LEGACY-NEXT:  %14:gpr64 = CAPLOAD64 $zero_64, 0, %5:cherigpr :: (load 8 from call-entry &__tls_get_addr)
-; LEGACY-NEXT:  %15:cherigpr = CSetPCCOffset killed %14:gpr64
-; LEGACY-NEXT:  $c3 = COPY %13:cherigpr
-; LEGACY-NEXT:  $gp_64 = COPY %0:gpr64
-; LEGACY-NEXT:  CapJumpLinkPseudo killed %15:cherigpr, <regmask {{.+}}>, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit $gp_64, implicit-def $c11, implicit-def $c3
-; LEGACY-NEXT:  ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
-; LEGACY-NEXT:  %16:cherigpr = COPY $c3
-; LEGACY-NEXT:  %17:gpr64 = CGetAddr %16:cherigpr
-; LEGACY-NEXT:  %18:gpr64 = LUi64 target-flags(mips-dtprel-hi) @internal_gd
-; LEGACY-NEXT:  %19:gpr64 = DADDu killed %18:gpr64, killed %17:gpr64
-; LEGACY-NEXT:  %20:gpr64 = LD killed %19:gpr64, target-flags(mips-dtprel-lo) @internal_gd, implicit $ddc :: (dereferenceable load 8 from @internal_gd)
-; LEGACY-NEXT:  [[RESULT:%.+]] = DADDu killed %10:gpr64, killed %20:gpr64
-
 
 ; PCREL, PLT and FNDESC only differ in the prologue since they all use the same TLS mechanism:
 ; PLT-NEXT: liveins: $c26
