@@ -2,7 +2,6 @@
 // https://github.com/CTSRD-CHERI/clang/issues/163
 
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -o - -O0 -emit-llvm %s | FileCheck --check-prefixes=COMMON,IR %s
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -o - -O0 -emit-llvm %s | FileCheck --check-prefixes=COMMON,LEGACY-IR %s
 
 int addrof_label_in_static(void) {
   static void *b = &&label1;

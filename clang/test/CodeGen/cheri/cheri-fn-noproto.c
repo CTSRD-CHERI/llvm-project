@@ -1,6 +1,4 @@
-// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy  -emit-llvm -o - %s | FileCheck %s -check-prefix CHECK
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel  -emit-llvm -o - %s | FileCheck %s -check-prefix CHECK
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s -Wall -verify
 
 void asctime_r(buf)
 char * buf;

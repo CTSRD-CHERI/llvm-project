@@ -208,9 +208,9 @@ public:
 private:
   Mips::AFL_EXT CheriPurecapISA_EXT(const MipsABIInfo& ABI) const {
     CheriCapabilityTableABI CTA = ABI.CapabilityTableABI();
-    switch (CTA) {
-    case CheriCapabilityTableABI::Legacy:
+    if ((int)CTA == 0)
       return Mips::AFL_EXT_CHERI_ABI_LEGACY;
+    switch (CTA) {
     case CheriCapabilityTableABI::PLT:
       return Mips::AFL_EXT_CHERI_ABI_PLT;
     case CheriCapabilityTableABI::Pcrel:

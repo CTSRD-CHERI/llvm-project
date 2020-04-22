@@ -1598,7 +1598,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
   default:
     return SDValue();
   case Intrinsic::mips_captable_get:
-    if (ABI.UsesCapabilityTable())
+    if (ABI.IsCheriPureCap())
       return getCapGlobalReg(DAG, CapType);
     DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
         DAG.getMachineFunction().getFunction(),

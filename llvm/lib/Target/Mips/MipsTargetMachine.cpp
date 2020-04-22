@@ -70,7 +70,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTarget() {
   initializeMicroMipsSizeReducePass(*PR);
   initializeMipsPreLegalizerCombinerPass(*PR);
   initializeMipsOptimizePICCallPass(*PR);
-  initializeCHERICapDirectCallsPass(*PR);
   initializeCHERICapFoldIntrinsicsPass(*PR);
   initializeCheriAddressingModeFolderPass(*PR);
   initializeCheriRangeCheckerPass(*PR);

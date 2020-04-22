@@ -30,15 +30,13 @@ enum class DebugCompressionType {
 };
 
 enum class CheriCapabilityTableABI {
-  Legacy, /// Use legacy ABI instead (load from got and use .size.foo to get the
-          /// size)
-  PLT, /// Use PLT stubs to set reserved register $cgp (functions assume $cgp is
-       /// set correctly)
-  Pcrel, /// Derive register $cgp from $pcc (does not need to be set on function
-         /// entry)
-  FunctionDescriptor /// Use function descriptors to get $cgp (functions assume
-                     /// $cgp is set correctly) (TODO: different approaches
-                     /// possible here)
+  PLT = 1,   /// Use PLT stubs to set reserved register $cgp (functions assume
+             /// $cgp is set correctly)
+  Pcrel = 2, /// Derive register $cgp from $pcc (does not need to be set on
+             /// function entry)
+  FunctionDescriptor = 3, /// Use function descriptors to get $cgp (functions
+                          /// assume $cgp is set correctly) (TODO: different
+                          /// approaches possible here)
 };
 
 class StringRef;
@@ -82,8 +80,6 @@ public:
   /// aapcs-linux.
   StringRef getABIName() const;
 
-  // HACK to make the cheri cap table setting visible to clang:
-  static bool cheriUsesCapabilityTable();
   static CheriCapabilityTableABI cheriCapabilityTableABI();
 
   /// getAssemblyLanguage - If this returns a non-empty string this represents

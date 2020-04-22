@@ -286,7 +286,6 @@ void initializeMachineSchedulerPass(PassRegistry&);
 void initializeMachineSinkingPass(PassRegistry&);
 void initializeMachineTraceMetricsPass(PassRegistry&);
 void initializeMachineVerifierPassPass(PassRegistry&);
-void initializeCHERICapDirectCallsPass(PassRegistry&);
 void initializeCHERICapFoldIntrinsicsPass(PassRegistry&);
 void initializeMemCpyOptLegacyPassPass(PassRegistry&);
 void initializeMemDepPrinterPass(PassRegistry&);

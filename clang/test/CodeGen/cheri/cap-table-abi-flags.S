@@ -11,9 +11,6 @@
 # CMDLINE-SAME: "-target-abi" "purecap"
 # CMDLINE-SAME: "-mllvm" "-cheri-cap-table-abi=plt" "-mllvm" "-mxcaptable=false"
 
-# RUN: %cheri_purecap_clang -cheri-cap-table-abi=legacy -c %s -o - | llvm-readobj --arch-specific - | FileCheck %s -check-prefix LEGACY
-# LEGACY: ISA Extension: CHERI purecap (legacy) (0xC1)
-
 # RUN: %cheri_purecap_clang -cheri-cap-table-abi=plt -c %s -o - | llvm-readobj --arch-specific - | FileCheck %s -check-prefix PLT
 # PLT: ISA Extension: CHERI purecap (PLT based) (0xC2)
 

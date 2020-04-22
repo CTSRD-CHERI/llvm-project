@@ -3,17 +3,13 @@
 
 // CHeck that -O0 inlines only the always_inline function
 // RUN: %cheri_cc1 -emit-llvm %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,N64,N64-NOOPT
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-CAPTABLE-NOOPT,PURECAP-CAPTABLE
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-LEGACY-NOOPT,PURECAP-LEGACY
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-CAPTABLE-NOOPT,PURECAP-CAPTABLE
 
 // at -O1/O2 the maybe_inline function should be inlined
 // RUN: %cheri_cc1 -emit-llvm %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,N64
 // RUN: %cheri_cc1 -emit-llvm %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,N64
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-LEGACY
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
-// At -O1 the CHERI legacy calls are not inlined:
-// RUsN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-LEGACY
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
 
 static __attribute__((always_inline)) int always_inlined(void) {
   return 5;
@@ -25,9 +21,7 @@ int call_always_inline(void) {
 
 // PURECAP: target datalayout =
 // all globals+functions+allocas should be in AS200
-// PURECAP-SAME: A200-P200
-// PURECAP-LEGACY-NOT: -G200
-// PURECAP-CAPTABLE-SAME: -G200
+// PURECAP-SAME: A200-P200-G200
 
 // CHECK-NOT: always_inlined
 // This function must be inlined even at -O0
@@ -50,7 +44,6 @@ int call_not_inlined(void) {
 // CHECK-NEXT: entry:
 // OPT-NEXT:                    [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
 // N64-NOOPT-NEXT:              [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
-// PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
 // PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
 // CHECK-NEXT:    ret i32 [[CALL]]
 // CHECK-NEXT: }
@@ -69,7 +62,6 @@ int call_maybe_inlined(void) {
 // CHECK-NEXT: entry:
 // OPT-NEXT:     ret i32 7
 // N64-NOOPT-NEXT:              [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
-// PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
 // PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
 // NOOPT-NEXT:   ret i32 [[CALL]]
 // CHECK-NEXT: }

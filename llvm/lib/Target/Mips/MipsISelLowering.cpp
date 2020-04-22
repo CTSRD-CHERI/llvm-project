@@ -176,7 +176,7 @@ SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty,
 
 SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
   assert(Ty.isFatPointer());
-  assert(ABI.UsesCapabilityTable());
+  assert(ABI.IsCheriPureCap());
   MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
   return DAG.getRegister(FI->getCapGlobalBaseRegForGlobalISel(), Ty);
 }
@@ -403,7 +403,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setOperationAction(ISD::GlobalAddress,      CapType,    Custom);
   if (ABI.IsCheriPureCap())
     setOperationAction(ISD::GlobalTLSAddress, CapType,    Custom);
-  if (ABI.UsesCapabilityTable())
+  if (ABI.IsCheriPureCap())
     setOperationAction(ISD::BR_JT,            MVT::Other, Custom);
   else
     setOperationAction(ISD::BR_JT,            MVT::Other, Expand);
@@ -2621,7 +2621,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   // can not yet be in AS200
   if (Src.getValueType() == Op.getValueType())
     return Src;
-  if (ABI.UsesCapabilityTable()) {
+  if (ABI.IsCheriPureCap()) {
     // XXXAR: HACK for the capability table (we turn this into an iFATPTR later
     // so we can just return the value
     if (isa<GlobalAddressSDNode>(Src)) {
@@ -2655,7 +2655,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   }
   assert(Src.getValueType() == CapType);
   assert(Op.getValueType() == MVT::i64);
-  assert(!ABI.UsesCapabilityTable() && "Should not generate ptrtoint in captable");
+  assert(!ABI.IsCheriPureCap() && "Should not generate ptrtoint in captable");
   return DAG.getNode(ISD::PTRTOINT, DL, DstTy, Src);
 }
 
@@ -2822,7 +2822,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
           GV->isThreadLocal());
   }
   if (isCheriPointer(GV->getType(), &DAG.getDataLayout())) {
-    assert(!ABI.UsesCapabilityTable());
+    assert(!ABI.IsCheriPureCap());
     // Allow compiling some LLVM IR generated for cap-table:
     if (isa<Function>(GV) || GV->getType()->getElementType()->isFunctionTy()) {
       // Derive function pointers from PCC instead of $ddc
@@ -2875,7 +2875,7 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
     return Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
                                 : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
 
-  if (ABI.UsesCapabilityTable()) {
+  if (ABI.IsCheriPureCap()) {
     if (N->getBlockAddress()->getFunction() != &MF.getFunction())
       report_fatal_error(
           "Should only get a blockaddress for the current function");
@@ -2902,7 +2902,7 @@ SDValue MipsTargetLowering::
 lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 {
   // FIXME: this needs to be revisited for cap-table
-  // assert(!ABI.UsesCapabilityTable());
+  // assert(!ABI.IsCheriPureCap());
 
   // If the relocation model is PIC, use the General Dynamic TLS Model or
   // Local Dynamic TLS model, otherwise use the Initial Exec or
@@ -3080,7 +3080,7 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  if (ABI.UsesCapabilityTable()) {
+  if (ABI.IsCheriPureCap()) {
     auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
     return getDataFromCapTable(N, SDLoc(N), CapType, DAG, DAG.getEntryNode(),
                                PtrInfo);
@@ -3104,7 +3104,7 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  if (ABI.UsesCapabilityTable()) {
+  if (ABI.IsCheriPureCap()) {
     auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
     assert(Ty.isFatPointer());
     auto Result = getDataFromCapTable(N, SDLoc(N), Ty, DAG, DAG.getEntryNode(), PtrInfo);
@@ -3459,7 +3459,7 @@ SDValue MipsTargetLowering::lowerEH_RETURN(SDValue Op, SelectionDAG &DAG)
   MachineFunction &MF = DAG.getMachineFunction();
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
-  if (ABI.UsesCapabilityTable())
+  if (ABI.IsCheriPureCap())
     report_fatal_error("MipsTargetLowering::lowerEH_RETURN needs fixing!");
   unsigned AS = getExceptionPointerAS();
 
@@ -3835,7 +3835,7 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
   // FIXME: this is almost the same as the code in LegalizeDAG.cpp, can
   // I just adjust that to work for capabilities too?
 
-  assert(ABI.UsesCapabilityTable());
+  assert(ABI.IsCheriPureCap());
 
   SDLoc dl(Op);
   SDValue Chain = Op->getOperand(0);
@@ -4101,7 +4101,7 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
   //
   // When using the capability table we don't need $GP, but use $cgp instead.
   //
-  if (IsPICCall && !InternalLinkage && IsCallReloc && !ABI.UsesCapabilityTable()) {
+  if (IsPICCall && !InternalLinkage && IsCallReloc && !ABI.IsCheriPureCap()) {
     unsigned GPReg = ABI.IsN64() ? Mips::GP_64 : Mips::GP;
     EVT Ty = ABI.IsN64() ? MVT::i64 : MVT::i32;
     RegsToPass.push_back(
@@ -4571,7 +4571,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         IsCallReloc = true;
       }
     } else {
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       Callee = DAG.getTargetGlobalAddress(
           GV, DL, getPointerTy(DAG.getDataLayout(), 0), 0, MipsII::MO_NO_FLAG);
     }
@@ -4585,7 +4585,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                          FuncInfo->callPtrInfo(Sym));
       IsCallReloc = true;
     } else if (!IsPIC) { // static
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       // NOTE: address space zero is correct here since we are in the legacy ABI
       Callee = DAG.getTargetExternalSymbol(
           Sym, getPointerTy(DAG.getDataLayout(), 0), MipsII::MO_NO_FLAG);
@@ -4721,7 +4721,7 @@ SDValue MipsTargetLowering::LowerCallResult(
   // return, but I think this will only remove very few instructions
   // E.g. we can omit the restore in the case where we call a function pointer
   // next since that will not use $cgp
-  if (ABI.UsesCapabilityTable() && MCTargetOptions::cheriCapabilityTableABI() !=
+  if (ABI.IsCheriPureCap() && MCTargetOptions::cheriCapabilityTableABI() !=
                                        CheriCapabilityTableABI::Pcrel) {
     bool LocalCallOptimization = false;
     bool IsPerFileOrPerFunctionCapTable = false; // TODO: add option
@@ -5707,7 +5707,7 @@ bool MipsTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT,
 
 unsigned MipsTargetLowering::getJumpTableEncoding() const {
   // XXXAR: should we emit capabilities instead?
-  if (ABI.UsesCapabilityTable())
+  if (ABI.IsCheriPureCap())
     return MachineJumpTableInfo::EK_LabelDifference32;
   // TODO: use EK_Custom32 with function entry point - label address?
 

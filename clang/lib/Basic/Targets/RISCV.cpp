@@ -151,10 +151,8 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     // XXX-JC: Do we really want the same ABI constants as CHERI-MIPS?
     if (CapabilityABI) {
       auto CapTableABI = llvm::MCTargetOptions::cheriCapabilityTableABI();
-      if (CapTableABI != llvm::CheriCapabilityTableABI::Legacy) {
-        Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
-                            Twine(((int)CapTableABI) + 1));
-      }
+      Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
+                          Twine(((int)CapTableABI) + 1));
     }
 
     // Macros for use with the set and get permissions builtins.

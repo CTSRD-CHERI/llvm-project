@@ -47,7 +47,6 @@ public:
   bool IsN32() const { return ThisABI == ABI::N32; }
   bool IsN64() const { return ThisABI == ABI::N64; }
   bool IsCheriPureCap() const { return isCheriPureCap; }
-  bool UsesCapabilityTable() const;
   CheriCapabilityTableABI CapabilityTableABI() const {
     assert(IsCheriPureCap());
     return MCTargetOptions::cheriCapabilityTableABI();
