@@ -157,10 +157,6 @@ void MipsABIInfo::updateCheriInitialFrameStateHack(const MCAsmInfo &MAI,
   }
 }
 
-bool MipsABIInfo::UsesCapabilityTable() const {
-  return IsCheriPureCap() && MCTargetOptions::cheriUsesCapabilityTable();
-}
-
 unsigned MipsABIInfo::GetReturnAddress() const {
   return IsCheriPureCap() ?
     Mips::C17 :
@@ -168,7 +164,7 @@ unsigned MipsABIInfo::GetReturnAddress() const {
 }
 
 unsigned MipsABIInfo::GetGlobalPtr() const {
-  assert(!UsesCapabilityTable());
+  assert(!IsCheriPureCap());
   return ArePtrs64bit() ? Mips::GP_64 : Mips::GP;
 }
 

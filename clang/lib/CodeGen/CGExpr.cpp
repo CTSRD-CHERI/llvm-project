@@ -3330,14 +3330,11 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
   if (!CapTy)
     CapTy = VTy->getElementType()->getPointerTo(CapAS);
   const bool IsFunction = isa<llvm::FunctionType>(VTy->getPointerElementType());
-  if (llvm::MCTargetOptions::cheriUsesCapabilityTable()) {
-    if (IsDirectCall) {
-      assert(IsFunction);
-      return Addr; // Don't add a cast for direct calls
-    }
-    return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
+  if (IsDirectCall) {
+    assert(IsFunction);
+    return Addr; // Don't add a cast for direct calls
   }
-  llvm_unreachable("Legacy purecap ABI is no longer supported");
+  return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
 }
 
 static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,

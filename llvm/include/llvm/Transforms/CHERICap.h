@@ -21,12 +21,6 @@ class Pass;
 
 //===----------------------------------------------------------------------===//
 //
-// CHERICapDirectCalls - Transform PCC-relative calls into direct calls to allow
-// inlining.
-//
-Pass *createCHERICapDirectCallsPass();
-//===----------------------------------------------------------------------===//
-//
 // createCHERICapFoldCapIntrinsics - Fold redundant capability operations.
 //
 Pass *createCHERICapFoldIntrinsicsPass();

@@ -157,7 +157,7 @@ void MipsFunctionInfo::initGlobalBaseReg() {
 
   if (ABI.IsN64()) {
     if (ABI.IsCheriPureCap()) {
-      if (ABI.UsesCapabilityTable()) {
+      if (ABI.IsCheriPureCap()) {
         assert(usesTlsViaGlobalReg() && "$gp should only be used for TLS");
         assert((CapGlobalBaseReg || !MF.getRegInfo().isLiveIn(Mips::C12)) &&
                     "C12 should not be used yet");
@@ -247,7 +247,6 @@ void MipsFunctionInfo::initCapGlobalBaseReg() {
     return;
 
   auto &TM = static_cast<const MipsTargetMachine &>(MF.getTarget());
-  assert(TM.getABI().UsesCapabilityTable());
   // assert(MF.getTarget().isPositionIndependent() && "CHERI CODEGEN REQUIRES -fPIC");
 
   MachineBasicBlock &MBB = MF.front();

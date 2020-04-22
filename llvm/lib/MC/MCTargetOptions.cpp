@@ -15,19 +15,13 @@ using namespace llvm;
 static cl::opt<CheriCapabilityTableABI> CapTableABI(
     "cheri-cap-table-abi", cl::desc("ABI to use for :"),
     cl::init(CheriCapabilityTableABI::Pcrel),
-    cl::values(clEnumValN(CheriCapabilityTableABI::Legacy, "legacy",
-                          "Disable capability table and use the legacy ABI"),
-               clEnumValN(CheriCapabilityTableABI::PLT, "plt",
+    cl::values(clEnumValN(CheriCapabilityTableABI::PLT, "plt",
                           "Use PLT stubs to setup $cgp correctly"),
                clEnumValN(CheriCapabilityTableABI::Pcrel, "pcrel",
                           "Derive $cgp from $pcc in every function"),
                clEnumValN(CheriCapabilityTableABI::FunctionDescriptor,
                           "fn-desc",
                           "Use function descriptors to setup $cgp correctly")));
-
-bool MCTargetOptions::cheriUsesCapabilityTable() {
-  return CapTableABI != CheriCapabilityTableABI::Legacy;
-}
 
 CheriCapabilityTableABI MCTargetOptions::cheriCapabilityTableABI() {
   return CapTableABI;

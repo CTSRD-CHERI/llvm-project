@@ -191,10 +191,8 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
     if (CapabilityABI) {
       Builder.defineMacro("__CHERI_SANDBOX__", Twine(4)); // TODO: remove this?
       auto CapTableABI = llvm::MCTargetOptions::cheriCapabilityTableABI();
-      if (CapTableABI != llvm::CheriCapabilityTableABI::Legacy) {
-        Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
-                            Twine(((int)CapTableABI) + 1));
-      }
+      Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
+                          Twine(((int)CapTableABI) + 1));
       Builder.defineMacro("__CHERI_CAPABILITY_TLS__", Twine(1));
     }
 

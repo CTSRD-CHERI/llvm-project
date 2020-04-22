@@ -584,8 +584,8 @@ public:
     IsCpRestoreSet = false;
     AreCheriSysRegsAccessible = false;
     CpRestoreOffset = -1;
-    GPReg = ABI.UsesCapabilityTable() ? (unsigned)Mips::NoRegister
-                                      : ABI.GetGlobalPtr();
+    GPReg =
+        ABI.IsCheriPureCap() ? (unsigned)Mips::NoRegister : ABI.GetGlobalPtr();
 
     const Triple &TheTriple = sti.getTargetTriple();
     IsLittleEndian = TheTriple.isLittleEndian();
@@ -3403,7 +3403,7 @@ bool MipsAsmParser::loadAndAddSymbolAddress(const MCExpr *SymExpr,
       }
     }
 
-    if (ABI.UsesCapabilityTable())
+    if (ABI.IsCheriPureCap())
       return Error(IDLoc, "Can't expand $gp-relative in cap-table mode");
 
     TOut.emitRRX(IsPtr64 ? Mips::LD : Mips::LW, TmpReg, GPReg,

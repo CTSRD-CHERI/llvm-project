@@ -439,7 +439,7 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getAddrLocal(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
                          bool IsN32OrN64, bool IsForTls) const {
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       assert(!Ty.isFatPointer());
       unsigned GOTFlag = IsN32OrN64 ? MipsII::MO_GOT_PAGE : MipsII::MO_GOT;
       SDValue GOT = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty, IsForTls),
@@ -462,13 +462,11 @@ extern bool LargeCapTable;
                           unsigned Flag, SDValue Chain,
                           const MachinePointerInfo &PtrInfo,
                           bool IsForTls) const {
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       assert(!Ty.isFatPointer());
       SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty, IsForTls),
                                 getTargetNode(N, Ty, DAG, Flag));
-      if (ABI.IsCheriPureCap())
-        Tgt = cFromDDC(DAG, DL, Tgt);
-      return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
+       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }
 
     // This method creates the following nodes, which are necessary for
@@ -481,7 +479,7 @@ extern bool LargeCapTable;
                                   unsigned LoFlag, SDValue Chain,
                                   const MachinePointerInfo &PtrInfo,
                                   bool IsForTls) const {
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       assert(!Ty.isFatPointer());
       SDValue Hi = DAG.getNode(MipsISD::GotHi, DL, Ty,
                                getTargetNode(N, Ty, DAG, HiFlag));
@@ -500,7 +498,7 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getAddrNonPIC(NodeTy *N, const SDLoc &DL, EVT Ty,
                           SelectionDAG &DAG) const {
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       assert(!Ty.isFatPointer());
       SDValue Hi = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_HI);
       SDValue Lo = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_LO);
@@ -519,7 +517,7 @@ extern bool LargeCapTable;
    template <class NodeTy>
    SDValue getAddrNonPICSym64(NodeTy *N, const SDLoc &DL, EVT Ty,
                           SelectionDAG &DAG) const {
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       assert(!Ty.isFatPointer());
       SDValue Hi = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_HI);
       SDValue Lo = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_LO);
@@ -548,7 +546,7 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getAddrGPRel(NodeTy *N, const SDLoc &DL, EVT Ty,
                          SelectionDAG &DAG, bool IsN64) const {
-      assert(!ABI.UsesCapabilityTable());
+      assert(!ABI.IsCheriPureCap());
       assert(!Ty.isFatPointer());
       SDValue GPRel = getTargetNode(N, Ty, DAG, MipsII::MO_GPREL);
       return DAG.getNode(
