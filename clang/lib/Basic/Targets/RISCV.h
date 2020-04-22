@@ -46,9 +46,7 @@ class RISCVTargetInfo : public TargetInfo {
     StringRef PurecapOptions = "";
     // Only set globals address space to 200 for cap-table mode
     if (CapabilityABI)
-      PurecapOptions = llvm::MCTargetOptions::cheriUsesCapabilityTable()
-                           ? "-A200-P200-G200"
-                           : "-A200-P200";
+      PurecapOptions = "-A200-P200-G200";
 
     resetDataLayout((Layout + PurecapOptions).str());
   }

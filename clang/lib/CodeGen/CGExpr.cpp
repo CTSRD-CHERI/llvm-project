@@ -3337,25 +3337,7 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
     }
     return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
   }
-
-  // Without a cap table we need to get the function address using $pcc
-  if (!IsFunction && VTy->getPointerAddressSpace() == CapAS)
-    // For data we don't need any special handling:
-    return CGF.Builder.CreateBitCast(Addr, CapTy);
-
-  llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-  llvm::Value *PCC = CGF.Builder.CreateCall(
-          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});
-  if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts())) {
-    if (F->hasWeakLinkage() || F->hasExternalWeakLinkage()) {
-      V = CGF.Builder.CreateCall(
-          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer,
-                               CGF.IntPtrTy),
-          {PCC, V});
-      return CGF.Builder.CreateBitCast(V, CapTy);
-    }
-  }
-  return CGF.Builder.CreateBitCast(CGF.setPointerOffset(PCC, V), CapTy);
+  llvm_unreachable("Legacy purecap ABI is no longer supported");
 }
 
 static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
