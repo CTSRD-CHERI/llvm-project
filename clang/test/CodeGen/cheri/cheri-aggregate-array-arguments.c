@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 %s -cheri-linker -o - -emit-llvm | FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm | FileCheck %s
 struct foo
 {
 	void *a;

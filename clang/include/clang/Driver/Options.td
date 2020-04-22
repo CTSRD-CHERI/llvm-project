@@ -259,10 +259,6 @@ def cheri_Group : OptionGroup<"<CHERI specific options>">, HelpText<"CHERI OPTIO
 def q_rtems : Flag<["-"], "qrtems">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Hack for RTEMS to use start.o instead of crt0.o">;
 
-def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>, Group<cheri_Group>,
-  HelpText<"Assume the existence of a CHERI-aware linker">;
-def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[CC1Option, HelpHidden]>,
-  HelpText<"Do not assume the existence of a CHERI-aware linker">, Group<cheri_Group>;
 def cheri_EQ : Joined<["-"], "cheri=">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Enable CHERI support, specifying the size (in bits) of CHERI capabilities">;
 def cheri : Flag<["-"], "cheri">, Flags<[DriverOption]>, Group<cheri_Group>,

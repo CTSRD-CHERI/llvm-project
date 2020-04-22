@@ -1,6 +1,6 @@
 // REQUIRES: mips-registered-target
-// RUN: %cheri_purecap_cc1 -fno-rtti -emit-llvm -cheri-linker -mllvm -cheri-cap-table-abi=plt -o - %s | %cheri_FileCheck %s -check-prefixes CHECK,CAPTABLE -implicit-check-not=cheri.pcc.get
-// RUN: %cheri_purecap_cc1 -fno-rtti -emit-obj -cheri-linker -mllvm -cheri-cap-table-abi=plt -o - %s | llvm-readobj -r - | %cheri_FileCheck -check-prefix=RELOCS %s
+// RUN: %cheri_purecap_cc1 -fno-rtti -emit-llvm -mllvm -cheri-cap-table-abi=plt -o - %s | %cheri_FileCheck %s -check-prefixes CHECK,CAPTABLE -implicit-check-not=cheri.pcc.get
+// RUN: %cheri_purecap_cc1 -fno-rtti -emit-obj -mllvm -cheri-cap-table-abi=plt -o - %s | llvm-readobj -r - | %cheri_FileCheck -check-prefix=RELOCS %s
 
 class A {
 public:
