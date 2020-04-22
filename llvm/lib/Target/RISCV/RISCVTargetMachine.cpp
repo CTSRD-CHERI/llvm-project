@@ -61,9 +61,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
 
     StringRef ABI = Options.MCOptions.getABIName();
     if (ABI.startswith("il32pc64") || ABI.startswith("l64pc128"))
-      PurecapOptions = MCTargetOptions::cheriUsesCapabilityTable()
-                           ? "-A200-P200-G200"
-                           : "-A200-P200";
+      PurecapOptions = "-A200-P200-G200";
   }
 
   return ("e-m:e" + CapTypes + IntegerTypes + "-S128" + PurecapOptions).str();

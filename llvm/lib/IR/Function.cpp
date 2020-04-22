@@ -234,13 +234,7 @@ unsigned Function::getInstructionCount() const {
   return NumInstrs;
 }
 
-cl::opt<bool> IgnoreProgramASForFunctions(
-    "ignore-program-as-for-functions", cl::Hidden, cl::init(false),
-    cl::desc("This is a hack to keep the legacy CHERI ABI working"));
-
 static inline unsigned DefaultAddrSpaceForFunctions(Module& M) {
-  if (IgnoreProgramASForFunctions)
-    return 0;
   return M.getDataLayout().getProgramAddressSpace();
 }
 
@@ -278,8 +272,6 @@ static unsigned computeAddrSpace(unsigned AddrSpace, Module *M) {
     assert(M && "Need either Module* or an explicit address space");
     return M ? DefaultAddrSpaceForFunctions(*M) : 0;
   }
-  if (IgnoreProgramASForFunctions)
-    return 0;
   return AddrSpace;
 }
 
