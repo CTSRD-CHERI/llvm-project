@@ -408,9 +408,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(std::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
   if (Args.hasFlag(options::OPT_external_capsizefix, options::OPT_no_capsizefix,
-                   false) &&
-      Args.hasFlag(options::OPT_cheri_linker, options::OPT_no_cheri_linker,
-                   true)) {
+                   false)) {
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
     ArgStringList SizeFixArgs;
     if (Args.hasArg(options::OPT_verbose_capsizefix))

@@ -321,17 +321,6 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                                llvm::GlobalVariable *GV) {
   ConstantEmitter emitter(*this);
   llvm::Constant *Init = emitter.tryEmitForInitializer(D);
-  if (!CGM.getCodeGenOpts().CHERILinker && Init &&
-      Target.SupportsCapabilities()) {
-    const VarDecl *InitDecl;
-    const Expr *InitExpr = D.getAnyInitializer(InitDecl);
-    QualType T = InitExpr->getType();
-    if (getContext().containsCapabilities(T)) {
-      GV->setConstant(false);
-      CGM.EmitCXXGlobalVarDeclInitFunc(&D, GV, true);
-      return GV;
-    }
-  }
 
   // If constant emission failed, then this should be a C++ static
   // initializer.
@@ -1474,10 +1463,6 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
       // Otherwise, tell the initialization code that we're in this case.
       emission.IsConstantAggregate = true;
-      if (!CGM.getCodeGenOpts().CHERILinker && Target.SupportsCapabilities() &&
-          Target.areAllPointersCapabilities() &&
-          (Ty->isCHERICapabilityType(getContext()) || Ty->isCompoundType()))
-        emission.IsConstantAggregate = false;
     }
 
     // A normal fixed sized variable becomes an alloca in the entry block,

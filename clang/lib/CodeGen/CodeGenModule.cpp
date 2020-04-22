@@ -4100,16 +4100,6 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
     }
   }
 
-  if (!getCodeGenOpts().CHERILinker &&
-      InitExpr && Target.SupportsCapabilities()) {
-    QualType T = InitExpr->getType();
-    if (getContext().containsCapabilities(T)) {
-      NeedsGlobalCtor = true;
-      Init = EmitNullConstant(D->getType());
-    }
-  }
-
-
   llvm::Type* InitType = Init->getType();
   llvm::Constant *Entry =
       GetAddrOfGlobalVar(D, InitType, ForDefinition_t(!IsTentative));
