@@ -379,7 +379,8 @@ MVT MVT::getVT(Type *Ty, bool HandleUnknown){
       return MVT(MVT::iFATPTRAny);
     return MVT(MVT::iPTR);
   }
-  case Type::VectorTyID: {
+  case Type::FixedVectorTyID:
+  case Type::ScalableVectorTyID: {
     VectorType *VTy = cast<VectorType>(Ty);
     return getVectorVT(
       getVT(VTy->getElementType(), /*HandleUnknown=*/ false),
@@ -397,7 +398,8 @@ EVT EVT::getEVT(Type *Ty, bool HandleUnknown){
     return MVT::getVT(Ty, HandleUnknown);
   case Type::IntegerTyID:
     return getIntegerVT(Ty->getContext(), cast<IntegerType>(Ty)->getBitWidth());
-  case Type::VectorTyID: {
+  case Type::FixedVectorTyID:
+  case Type::ScalableVectorTyID: {
     VectorType *VTy = cast<VectorType>(Ty);
     return getVectorVT(Ty->getContext(),
                        getEVT(VTy->getElementType(), /*HandleUnknown=*/ false),

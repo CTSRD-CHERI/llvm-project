@@ -653,7 +653,8 @@ void TypePrinting::print(Type *Ty, raw_ostream &OS) {
     OS << ']';
     return;
   }
-  case Type::VectorTyID: {
+  case Type::FixedVectorTyID:
+  case Type::ScalableVectorTyID: {
     VectorType *PTy = cast<VectorType>(Ty);
     OS << "<";
     if (PTy->isScalable())
