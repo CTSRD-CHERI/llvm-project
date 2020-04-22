@@ -1,5 +1,4 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - | FileCheck %s
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy %s -o - | FileCheck %s
+; RUN: %cheri_purecap_llc %s -o - | FileCheck %s
 
 declare noalias nonnull i8 addrspace(200)* @_Znwm(i64 zeroext) local_unnamed_addr
 

@@ -172,11 +172,8 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.ClaimAllArgs(options::OPT_cheri_uintcap_addr);
   // Also pretend that all the captable flags were used
   Args.ClaimAllArgs(options::OPT_cheri_cap_table_abi);
-  Args.ClaimAllArgs(options::OPT_cheri_cap_table);
-  Args.ClaimAllArgs(options::OPT_no_cheri_cap_table);
   Args.ClaimAllArgs(options::OPT_cheri_large_cap_table);
   Args.ClaimAllArgs(options::OPT_no_cheri_large_cap_table);
-  Args.ClaimAllArgs(options::OPT_cheri_cap_tls_abi);
   // Various other CHERI flags can also be passed to the linker without warning:
   Args.ClaimAllArgs(options::OPT_cheri_data_dependent_provenance);
   Args.ClaimAllArgs(options::OPT_cheri_bounds_EQ);

@@ -1,4 +1,3 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy -mattr=+xgot -o - %s | FileCheck %s -check-prefix LEGACY
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel -mxcaptable -o - %s | FileCheck %s -check-prefix PCREL
 ; ModuleID = 'cheri-got-jumptable.c'
 source_filename = "cheri-got-jumptable.c"
@@ -18,8 +17,6 @@ entry:
   %2 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %f, align 32
   %3 = load i8, i8 addrspace(200)* %2, align 1
   %conv = sext i8 %3 to i32
-  ; LEGACY: %got_hi(.LJTI0_0)
-  ; LEGACY: %got_lo(.LJTI0_0)
   ; PCREL: %captab_hi(.LJTI0_0)
   ; PCREL: %captab_lo(.LJTI0_0)
   switch i32 %conv, label %sw.epilog [
@@ -55,9 +52,3 @@ do.end:                                           ; preds = %sw.bb, %do.body
 }
 
 attributes #0 = { noinline nounwind  }
-
-!llvm.module.flags = !{!0}
-!llvm.ident = !{!1}
-
-!0 = !{i32 1, !"PIC Level", i32 2}
-!1 = !{!"clang version 5.0.0 (http://llvm.org/git/clang.git c3aa15f4357315da8260ac267b867257d9a49f2e) (git@github.com:RichardsonAlex/llvm-cheri.git 9503c06be3da8644e2f1d2d30adbd17bc2c18572)"}

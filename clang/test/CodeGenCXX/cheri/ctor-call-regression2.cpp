@@ -1,5 +1,4 @@
 // This was previously asserting in TryEmitBaseDestructorAsAlias()
-// RUN: %cheri_purecap_cc1 -mconstructor-aliases -mllvm -cheri-cap-table-abi=legacy -O2 -std=c++11 -fcxx-exceptions -fexceptions -o - -emit-llvm %s | FileCheck %s
 // RUN: %cheri_purecap_cc1 -mconstructor-aliases -mllvm -cheri-cap-table-abi=pcrel -O2 -std=c++11 -fcxx-exceptions -fexceptions -o - -emit-llvm %s | FileCheck %s
 
 class a {

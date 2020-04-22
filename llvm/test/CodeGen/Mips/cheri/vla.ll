@@ -2,17 +2,6 @@
 ; Check that we can generate position dependent code (but it probably won't work)
 ; RUN: %cheri_llc -verify-machineinstrs -target-abi n64 -relocation-model=static -o - %s -O0 | %cheri_FileCheck %s -check-prefixes N64
 ; RUN: %cheri_llc -verify-machineinstrs -target-abi purecap -relocation-model=static -cheri-cap-table-abi=pcrel -o - %s -O0  | %cheri_FileCheck %s -check-prefixes CAPTABLE
-; RUN: %cheri_llc -verify-machineinstrs -target-abi purecap -relocation-model=static -cheri-cap-table-abi=legacy -o - %s -O0 \
-; RUN:   -filetype=obj | llvm-objdump -r -d - | FileCheck %s -check-prefix OBJ
-
-; FIXME: Why is LLVM generating an invalid cgetpccsetoffset
-; CHECK-NOT: cgetpccsetoffset        $c12, test
-; OBJ-NOT:   cgetpccsetoffset        $c12, $zero
-; Previously it would generate this relocation:
-; OBJ-NOT:  R_MIPS_32/R_MIPS_NONE/R_MIPS_NONE	test
-; llc without relocation-model pic generates invalid code
-; OBJ: R_MIPS_CALL16/R_MIPS_NONE/R_MIPS_NONE	test
-; OBJ-NOT:  R_MIPS_32/R_MIPS_NONE/R_MIPS_NONE	test
 
 ; Function Attrs: noinline nounwind optnone
 ; define void @foo(i64 %i) {

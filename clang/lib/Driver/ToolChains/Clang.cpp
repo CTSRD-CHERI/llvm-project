@@ -1762,42 +1762,22 @@ static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
     }
   }
 
-  // Add the -cap-table-abi and -cap-tls-abi flags (ignore for non-purecap ABIs)
-  bool IsCapTable = true;
-  StringRef DefaultCapTableABI = "pcrel";
-  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
-    StringRef v = A->getValue();
-    if (ABIName == "purecap") {
-      CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + v));
+  // Add the -cap-table-abi flags (ignore for non-purecap ABIs)
+  if (ABIName == "purecap") {
+    StringRef DefaultCapTableABI = "pcrel";
+    StringRef ChosenCapTableABI = DefaultCapTableABI;
+    if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
+      ChosenCapTableABI = A->getValue();
+      A->claim();
     }
-    IsCapTable = v != "legacy";
-    A->claim();
-  } else {
-    // TODO: eventually remove this and drop legacy support
-    IsCapTable = Args.hasFlag(options::OPT_cheri_cap_table,
-                              options::OPT_no_cheri_cap_table, true);
-    StringRef ChosenABI = IsCapTable ? DefaultCapTableABI : "legacy";
-    if (ABIName == "purecap") {
-      CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(
-          Args.MakeArgString("-cheri-cap-table-abi=" + ChosenABI));
-    }
-  }
-  bool MxCapTable = Args.hasFlag(options::OPT_cheri_large_cap_table,
-                                 options::OPT_no_cheri_large_cap_table, false);
-  if (IsCapTable) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(
+        Args.MakeArgString("-cheri-cap-table-abi=" + ChosenCapTableABI));
+    bool MxCapTable =
+        Args.hasFlag(options::OPT_cheri_large_cap_table,
+                     options::OPT_no_cheri_large_cap_table, false);
     CmdArgs.push_back("-mllvm");
     CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
-  }
-
-  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_tls_abi)) {
-    StringRef v = A->getValue();
-    if (ABIName == "purecap") {
-      CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=" + v));
-    }
-    A->claim();
   }
 }
 
