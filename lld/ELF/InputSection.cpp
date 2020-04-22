@@ -1331,8 +1331,7 @@ template <class ELFT> void InputSection::writeTo(uint8_t *buf) {
   // and then apply relocations.
   memcpy(buf + outSecOff, data().data(), data().size());
   uint8_t *bufEnd = buf + outSecOff + data().size();
-  if (config->processCapRelocs && !config->relocatable &&
-      name == ".global_sizes") {
+  if (!config->relocatable && name == ".global_sizes") {
     fillGlobalSizesSection<ELFT>(this, buf + outSecOff, bufEnd);
   }
 

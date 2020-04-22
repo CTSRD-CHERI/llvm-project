@@ -297,13 +297,6 @@ def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[D
 def cheri_comparison_exact : Flag<["-"], "cheri-comparison=exact">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Equality comparisons between capabilities compare all capability fields">;
 
-def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
-  Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
-def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,
-  Group<cheri_Group>, HelpText<"Assume that the linker handles capabilities (don't use capsizefix)">;
-def verbose_capsizefix: Flag<["-"], "verbose-capsizefix">, Flags<[CC1Option]>,
-  Group<cheri_Group>, HelpText<"Run capsizefix tool in verbose mode if required">;
-
 class InternalDriverOpt : Group<internal_driver_Group>,
   Flags<[DriverOption, HelpHidden]>;
 def driver_mode : Joined<["--"], "driver-mode=">, Group<internal_driver_Group>,

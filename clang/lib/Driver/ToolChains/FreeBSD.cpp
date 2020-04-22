@@ -407,16 +407,6 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(std::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
-  if (Args.hasFlag(options::OPT_external_capsizefix, options::OPT_no_capsizefix,
-                   false)) {
-    Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
-    ArgStringList SizeFixArgs;
-    if (Args.hasArg(options::OPT_verbose_capsizefix))
-      SizeFixArgs.push_back("--verbose");
-    SizeFixArgs.push_back(Output.getFilename());
-    InputInfoList In= {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
-    C.addCommand(std::make_unique<Command>(JA, *this, Exec, SizeFixArgs, In));
-  }
 }
 
 /// FreeBSD - FreeBSD tool chain which can call as(1) and ld(1) directly.
