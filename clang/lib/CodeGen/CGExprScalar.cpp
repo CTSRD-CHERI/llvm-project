@@ -501,9 +501,8 @@ public:
     llvm::Value *V = CGF.GetAddrOfLabel(E->getLabel());
     auto &TI = CGF.getContext().getTargetInfo();
     if (TI.areAllPointersCapabilities()) {
-      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-      if (V->getType()->getPointerAddressSpace() != CapAS)
-        V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
+      assert(V->getType()->getPointerAddressSpace() ==
+          CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
     }
     return Builder.CreateBitCast(V, ConvertType(E->getType()));
   }
@@ -648,10 +647,8 @@ public:
     llvm::Value *Addr = EmitLValue(E->getSubExpr()).getPointer(CGF);
     auto &TI = CGF.getContext().getTargetInfo();
     if (TI.areAllPointersCapabilities()) {
-      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-      if (Addr->getType()->getPointerAddressSpace() != CapAS) {
-        Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
-      }
+      assert(Addr->getType()->getPointerAddressSpace() ==
+             CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
     }
     if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
       auto BoundedAddr = CGF.setCHERIBoundsOnAddrOf(
@@ -2387,19 +2384,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Type *DestType = ConvertType(DestTy);
     if (Src->getType() == DestType)
       return Src;
-    auto &TI = CGF.getContext().getTargetInfo();
     QualType SrcTy = E->getType();
     QualType SrcPointeeTy = SrcTy->getPointeeType();
     QualType DstPointeeTy = DestTy->getPointeeType();
-    if (TI.SupportsCapabilities()) {
-      if (SrcPointeeTy->isFunctionType() && DstPointeeTy->isFunctionType()) {
-        // FIXME: Should we handle casts in the other direction by doing a
-        // pcc-relative cfromptr?
-        if (Kind == CK_PointerToCHERICapability)
-          Src = CodeGenFunction::FunctionAddressToCapability(CGF, Src);
-      }
-    }
-
     return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(
         CGF, Src, SrcPointeeTy.getAddressSpace(),
         DstPointeeTy.getAddressSpace(), DestType);
@@ -2477,10 +2464,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Type *AddrTy = Addr->getType();
     auto &TI = CGF.getContext().getTargetInfo();
     if (TI.areAllPointersCapabilities()) {
-      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-      if (AddrTy->getPointerAddressSpace() != CapAS) {
-        Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
-      }
+      assert(AddrTy->getPointerAddressSpace() ==
+             CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
     }
     return Addr;
   }
