@@ -1,6 +1,5 @@
 ; RUN: %cheri_llc %s -o - -relocation-model=static | %cheri_FileCheck %s
 ; RUN: %cheri_llc %s -o - -relocation-model=pic | %cheri_FileCheck %s
-; RUN: %cheri_llc %s -o - -relocation-model=pic -legacy-cheri-cap-relocs | %cheri_FileCheck %s -check-prefix LEGACY
 ; RUN: %cheri_llc %s -o - -filetype=obj | llvm-readobj -r | %cheri_FileCheck -check-prefix=RELOCS %s
 ; ModuleID = 'global_init.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -46,55 +45,3 @@ target triple = "cheri-unknown-freebsd"
 ; RELOCS-NEXT:    0x{{10|20}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0xC
 ; RELOCS-NEXT:    0x{{20|40}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x0
 ; RELOCS-NEXT:  }
-
-
-
-; LEGACY:      .data
-; LEGACY-NEXT: .globl  b
-; LEGACY-NEXT: .p2align        {{5|4}}
-; LEGACY-NEXT: b:
-; LEGACY-NEXT: .Ltmp0:
-; LEGACY-NEXT: .space [[#CAP_SIZE]]
-; LEGACY-NEXT: .Ltmp1:
-; LEGACY-NEXT: .space [[#CAP_SIZE]]
-; LEGACY-NEXT: .Ltmp2:
-; LEGACY-NEXT: .space [[#CAP_SIZE]]
-; LEGACY-NEXT: .size   b, {{96|48}}
-
-; LEGACY:      .section	.data.rel.ro,"aw",@progbits
-; LEGACY-NEXT: .globl  c
-; LEGACY-NEXT: .p2align        {{5|4}}
-; LEGACY-NEXT: c:
-; LEGACY-NEXT: .Ltmp3:
-; LEGACY-NEXT: .space [[#CAP_SIZE]]
-; LEGACY-NEXT: .Ltmp4:
-; LEGACY-NEXT: .space [[#CAP_SIZE]]
-; LEGACY-NEXT: .Ltmp5:
-; LEGACY-NEXT: .space [[#CAP_SIZE]]
-; LEGACY-NEXT: .size   c, {{96|48}}
-
-; LEGACY:	.section	__cap_relocs,"a",@progbits
-; LEGACY:	.8byte	.Ltmp0
-; LEGACY:	.8byte	a
-; LEGACY:	.8byte	8
-; LEGACY:	.space	16
-; LEGACY:	.8byte	.Ltmp1
-; LEGACY:	.8byte	a
-; LEGACY:	.8byte	4
-; LEGACY:	.space	16
-; LEGACY:	.8byte	.Ltmp2
-; LEGACY:	.8byte	a
-; LEGACY:	.8byte	0
-; LEGACY:	.space	16
-; LEGACY:	.8byte	.Ltmp3
-; LEGACY:	.8byte	a
-; LEGACY:	.8byte	16
-; LEGACY:	.space	16
-; LEGACY:	.8byte	.Ltmp4
-; LEGACY:	.8byte	a
-; LEGACY:	.8byte	12
-; LEGACY:	.space	16
-; LEGACY:	.8byte	.Ltmp5
-; LEGACY:	.8byte	a
-; LEGACY:	.8byte	0
-; LEGACY:	.space	16

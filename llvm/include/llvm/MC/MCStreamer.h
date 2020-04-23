@@ -126,9 +126,6 @@ public:
   virtual void emitRawBytes(StringRef Data);
 
   virtual void finish();
-
-  /// Whether to use the __cap_relocs hack (if the target supports capabilities)
-  virtual bool useLegacyCapRelocs() const;
 };
 
 // FIXME: declared here because it is used from
@@ -1070,10 +1067,6 @@ protected:
   virtual void EmitCheriCapabilityImpl(const MCSymbol *Value,
                                        const MCExpr *Addend, unsigned CapSize,
                                        SMLoc Loc = SMLoc());
-
-  // Emit a CHERI capability using the legacy __cap_relocs hack
-  virtual void EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
-                                         SMLoc Loc = SMLoc());
 };
 
 /// Create a dummy machine code streamer, which does nothing. This is useful for

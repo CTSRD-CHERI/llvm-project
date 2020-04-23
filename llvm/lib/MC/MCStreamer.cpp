@@ -91,14 +91,6 @@ void MCTargetStreamer::emitRawBytes(StringRef Data) {
 
 void MCTargetStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
 
-static cl::opt<bool> LegacyCheriCapRelocs(
-    "legacy-cheri-cap-relocs", cl::init(false), cl::Hidden,
-    cl::desc("Use the legacy __cap_relocs hack when emitting capabilities"));
-
-bool MCTargetStreamer::useLegacyCapRelocs() const {
-  return LegacyCheriCapRelocs;
-}
-
 MCStreamer::MCStreamer(MCContext &Ctx)
     : Context(Ctx), CurrentWinFrameInfo(nullptr),
       UseAssemblerInfoForParsing(false) {
@@ -214,47 +206,7 @@ void MCStreamer::EmitCheriCapability(const MCSymbol *Value,
   if (!Addend) {
     Addend = MCConstantExpr::create(0, Context);
   }
-  if (LLVM_UNLIKELY(TargetStreamer->useLegacyCapRelocs())) {
-    // XXXAR: The legacy path still exists to allow comparing bounds quality vs
-    // the R_CHERI_CAPABILITY approach.
-    // TODO: remove this at some point in the future
-    assert(Value);
-    auto *E = MCBinaryExpr::createAdd(MCSymbolRefExpr::create(Value, Context),
-                                      Addend, Context);
-    EmitLegacyCHERICapability(E, CapSize, Loc);
-  } else {
-    EmitCheriCapabilityImpl(Value, Addend, CapSize, Loc);
-  }
-}
-
-void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
-                                           unsigned CapSize, SMLoc Loc) {
-  assert(TargetStreamer->useLegacyCapRelocs());
-  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
-    EmitCheriIntcap(CE->getValue(), CapSize);
-    return;
-  }
-  assert(CapSize == 32 || CapSize == 16);
-  // MCStreamers with proper capability support will emit real relocations
-  // instead of using the __cap_relocs hack
-  MCSymbol *Here = Context.createTempSymbol();
-  emitLabel(Here);
-  const MCSectionELF *Section =
-      dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
-  const MCSymbolELF *Group = nullptr;
-  if (Section && Section->getGroup())
-    Group = Section->getGroup();
-
-  if (Group) {
-    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
-                          ELF::SHF_ALLOC | ELF::SHF_GROUP, 0, Group->getName());
-    FatRelocs.push_back(std::make_tuple(Here, Value, Group->getName()));
-  } else {
-    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
-    FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
-  }
-  // We do this here to ensure that the section exists.
-  emitZeros(CapSize);
+  EmitCheriCapabilityImpl(Value, Addend, CapSize, Loc);
 }
 
 void MCStreamer::EmitCheriCapabilityImpl(const MCSymbol *Value,
