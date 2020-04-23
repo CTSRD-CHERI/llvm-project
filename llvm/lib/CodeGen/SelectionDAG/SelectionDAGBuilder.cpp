@@ -6414,7 +6414,6 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     MFI.setStackProtectorIndex(FI);
     EVT PtrTy = TLI.getFrameIndexTy(DAG.getDataLayout());
 
-
     SDValue FIN = DAG.getFrameIndex(FI, PtrTy);
 
     // Store the stack protector onto the stack.
