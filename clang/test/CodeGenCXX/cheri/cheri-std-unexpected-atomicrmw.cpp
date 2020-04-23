@@ -15,13 +15,13 @@ __attribute__((__require_constant_initialization__)) static handler __handler;
 
 #ifdef INVALID_ATOMIC_CALL
 handler set_handler_sync(handler func) noexcept {
-  return __sync_lock_test_and_set(&__handler, func); // expected-error {{the __sync_* atomic builtins only work with integers and not capability type 'handler' (aka 'void (* __capability)()').}}
-  // AST-NOT: DeclRefExpr {{.*}} '__sync_lock_test_and_set_16' '__int128 (volatile __int128 * __capability, __int128, ...) noexcept'
+  return __sync_lock_test_and_set(&__handler, func); // expected-error {{the __sync_* atomic builtins only work with integers and not capability type 'handler' (aka 'void (*)()').}}
+  // AST-NOT: DeclRefExpr {{.*}} '__sync_lock_test_and_set_16' '__int128 (volatile __int128 *, __int128, ...) noexcept'
 }
 
 handler get_handler_sync() noexcept {
-  return __sync_fetch_and_add(&__handler, (handler)0); // expected-error {{the __sync_* atomic builtins only work with integers and not capability type 'handler' (aka 'void (* __capability)()').}}
-  // AST-NOT: DeclRefExpr {{.*}} '__sync_fetch_and_add_16' '__int128 (volatile __int128 * __capability, __int128, ...) noexcept'
+  return __sync_fetch_and_add(&__handler, (handler)0); // expected-error {{the __sync_* atomic builtins only work with integers and not capability type 'handler' (aka 'void (*)()').}}
+  // AST-NOT: DeclRefExpr {{.*}} '__sync_fetch_and_add_16' '__int128 (volatile __int128 *, __int128, ...) noexcept'
 }
 #endif
 

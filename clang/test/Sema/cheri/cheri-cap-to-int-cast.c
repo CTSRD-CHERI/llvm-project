@@ -1,6 +1,6 @@
-// RUN: %cheri_cc1 -o - %s -fsyntax-only -verify
-// RUN: %cheri_cc1 -o - %s -fsyntax-only -verify -ast-dump | FileCheck %s -check-prefix AST
-// RUN: %cheri_purecap_cc1 -o - %s -fsyntax-only -verify
+// RUN: %cheri_cc1 -o - %s -fsyntax-only -verify=expected,hybrid
+// RUN: %cheri_cc1 -o - %s -fsyntax-only -verify=expected,hybrid -ast-dump | FileCheck %s -check-prefix AST
+// RUN: %cheri_purecap_cc1 -o - %s -fsyntax-only -verify=expected,purecap
 
 #pragma clang diagnostic warning "-Wcapability-to-integer-cast"
 #pragma clang diagnostic warning "-Wpedantic"
@@ -77,17 +77,26 @@ struct test {
 };
 
 void foo(void) {
-  unsigned long x1 = (unsigned long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'unsigned long' is most likely an error}}
+  unsigned long x1 = (unsigned long)a;
+  // hybrid-warning@-1{{cast from capability type 'void * __capability' to non-capability, non-address type 'unsigned long' is most likely an error}}
+  // purecap-warning@-2{{cast from capability type 'void *' to non-capability, non-address type 'unsigned long' is most likely an error}}
   // AST: CStyleCastExpr {{.+}} 'unsigned long' <PointerToIntegral>
 
-  long x2 = (long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
+  long x2 = (long)a;
+  // hybrid-warning@-1{{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
+  // purecap-warning@-2{{cast from capability type 'void *' to non-capability, non-address type 'long' is most likely an error}}
   // AST: CStyleCastExpr {{.+}} 'long' <PointerToIntegral>
 
-  int x3 = (int)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'int' is most likely an error}}
-  // expected-warning@-1{{cast to smaller integer type 'int' from 'void * __capability'}}
+  int x3 = (int)a;
+  // hybrid-warning@-1{{cast from capability type 'void * __capability' to non-capability, non-address type 'int' is most likely an error}}
+  // purecap-warning@-2{{cast from capability type 'void *' to non-capability, non-address type 'int' is most likely an error}}
+  // hybrid-warning@-3{{cast to smaller integer type 'int' from 'void * __capability'}}
+  // purecap-warning@-4{{cast to smaller integer type 'int' from 'void *'}}
   // AST: CStyleCastExpr {{.+}} 'int' <PointerToIntegral>
 
-  ptrdiff_t x4 = (ptrdiff_t)a;  // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}}
+  ptrdiff_t x4 = (ptrdiff_t)a;
+  // hybrid-warning@-1{{cast from capability type 'void * __capability' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}}
+  // purecap-warning@-2{{cast from capability type 'void *' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}}
   // AST: CStyleCastExpr {{.+}} 'ptrdiff_t':'long' <PointerToIntegral>
 
   // These are okay
@@ -131,11 +140,8 @@ void test_cheri_to_from_cap(void) {
   struct test *tptr;
   int * x = 0;
   (__cheri_tocap char* __capability)x;
-#ifdef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2{{invalid __cheri_tocap from 'int * __capability' to unrelated type 'char * __capability'}}
-#else
-  // expected-error@-4{{invalid __cheri_tocap from 'int *' to unrelated type 'char * __capability'}}
-#endif
+  // hybrid-error@-1{{invalid __cheri_tocap from 'int *' to unrelated type 'char * __capability'}}
+  // purecap-error@-2{{invalid __cheri_tocap from 'int *' to unrelated type 'char *'}}
   (__cheri_tocap struct test* __capability)t; // expected-error{{invalid source type 'struct test' for __cheri_tocap: source must be a pointer}}
   (__cheri_tocap struct test)tptr; // expected-error{{invalid target type 'struct test' for __cheri_tocap: target must be a capability}}
   (__cheri_fromcap struct test*)t; // expected-error{{invalid source type 'struct test' for __cheri_fromcap: source must be a capability}}
@@ -143,23 +149,24 @@ void test_cheri_to_from_cap(void) {
 #ifdef __CHERI_PURE_CAPABILITY__
   // Check no-op warning when in purecap
   (void)(__cheri_fromcap struct test*)tptr;
-  // expected-warning@-1 {{__cheri_fromcap from 'struct test * __capability' to 'struct test * __capability' is a no-op}}
+  // expected-warning@-1 {{__cheri_fromcap from 'struct test *' to 'struct test *' is a no-op}}
 #endif
   int* __capability intptr_to_cap = (__cheri_tocap int* __capability)x;
-#ifdef __CHERI_PURE_CAPABILITY__
-  // expected-warning@-2 {{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
-#else
+  // purecap-warning@-1 {{__cheri_tocap from 'int *' to 'int *' is a no-op}}
+#ifndef __CHERI_PURE_CAPABILITY__
   // Check no-op warning when in hybrid ABI
   int* __capability intptr_to_cap2 = (__cheri_tocap int* __capability)intptr_to_cap;
   // expected-warning@-1 {{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
 #endif
   // AST: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
   const int* __capability const_intcap = (__cheri_tocap int* __capability)x;
-#ifdef __CHERI_PURE_CAPABILITY__
-  // expected-warning@-2 {{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
-#endif
+  // purecap-warning@-1 {{__cheri_tocap from 'int *' to 'int *' is a no-op}}
   // AST: ImplicitCastExpr {{.+}} 'const int * __capability' <NoOp>
   // AST-NEXT: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
-  (__cheri_tocap int* __capability)const_intcap; // expected-error{{invalid __cheri_tocap from 'const int * __capability' to unrelated type 'int * __capability'}}
-  (__cheri_fromcap int* __capability)const_intcap; // expected-error{{invalid __cheri_fromcap from 'const int * __capability' to unrelated type 'int * __capability'}}
+  (__cheri_tocap int* __capability)const_intcap;
+  // hybrid-error@-1{{invalid __cheri_tocap from 'const int * __capability' to unrelated type 'int * __capability'}}
+  // purecap-error@-2{{invalid __cheri_tocap from 'const int *' to unrelated type 'int *'}}
+  (__cheri_fromcap int* __capability)const_intcap;
+  // hybrid-error@-1{{invalid __cheri_fromcap from 'const int * __capability' to unrelated type 'int * __capability'}}
+  // purecap-error@-2{{invalid __cheri_fromcap from 'const int *' to unrelated type 'int *'}}
 }

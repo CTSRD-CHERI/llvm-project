@@ -599,7 +599,7 @@ private:
     Context->InitBuiltinTypes(*Target);
 
     // Adjust printing policy based on language options.
-    Context->setPrintingPolicy(PrintingPolicy(LangOpt));
+    Context->setPrintingPolicy(PrintingPolicy(LangOpt, &*Target));
 
     // We didn't have access to the comment options when the ASTContext was
     // constructed, so register them now.

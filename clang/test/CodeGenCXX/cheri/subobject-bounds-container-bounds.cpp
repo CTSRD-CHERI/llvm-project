@@ -126,9 +126,9 @@ extern "C" void do_stuff(void *);
 //
 extern "C" void clearcmentry() {
   do_stuff(&cmdtable[CMDTABLESIZE]);
-  // expected-remark@-1{{using size of containing type 'struct tblentry * __capability [31]' instead of object type 'struct tblentry * __capability' for subobject bounds on &array[<CONSTANT>]}}
-  // expected-remark@-2{{setting sub-object bounds for pointer to 'struct tblentry * __capability' to 496 bytes}}
-  // expected-remark@-3{{setting bounds for array subscript on 'struct tblentry * __capability [31]' to 496 bytes}}
+  // expected-remark@-1{{using size of containing type 'struct tblentry *[31]' instead of object type 'struct tblentry *' for subobject bounds on &array[<CONSTANT>]}}
+  // expected-remark@-2{{setting sub-object bounds for pointer to 'struct tblentry *' to 496 bytes}}
+  // expected-remark@-3{{setting bounds for array subscript on 'struct tblentry *[31]' to 496 bytes}}
 }
 
 // CHECK-LABEL: @clearcmentry2(
@@ -139,9 +139,9 @@ extern "C" void clearcmentry() {
 //
 extern "C" void clearcmentry2() {
   do_stuff(&cmdtable[0]);
-  // expected-remark@-1{{using size of containing type 'struct tblentry * __capability [31]' instead of object type 'struct tblentry * __capability' for subobject bounds on &array[0]}}
-  // expected-remark@-2{{setting sub-object bounds for pointer to 'struct tblentry * __capability' to 496 bytes}}
-  // expected-remark@-3{{setting bounds for array subscript on 'struct tblentry * __capability [31]' to 496 bytes}}
+  // expected-remark@-1{{using size of containing type 'struct tblentry *[31]' instead of object type 'struct tblentry *' for subobject bounds on &array[0]}}
+  // expected-remark@-2{{setting sub-object bounds for pointer to 'struct tblentry *' to 496 bytes}}
+  // expected-remark@-3{{setting bounds for array subscript on 'struct tblentry *[31]' to 496 bytes}}
 }
 
 // CHECK-LABEL: @clearcmentry3(
@@ -153,9 +153,9 @@ extern "C" void clearcmentry2() {
 //
 extern "C" void clearcmentry3() {
   do_stuff(&cmdtable[1]);
-  // expected-remark@-1{{using size of containing type 'struct tblentry * __capability [31]' instead of object type 'struct tblentry * __capability' for subobject bounds on &array[<CONSTANT>]}}
-  // expected-remark@-2{{setting sub-object bounds for pointer to 'struct tblentry * __capability' to 496 bytes}}
-  // expected-remark@-3{{setting bounds for array subscript on 'struct tblentry * __capability [31]' to 496 bytes}}
+  // expected-remark@-1{{using size of containing type 'struct tblentry *[31]' instead of object type 'struct tblentry *' for subobject bounds on &array[<CONSTANT>]}}
+  // expected-remark@-2{{setting sub-object bounds for pointer to 'struct tblentry *' to 496 bytes}}
+  // expected-remark@-3{{setting bounds for array subscript on 'struct tblentry *[31]' to 496 bytes}}
 }
 
 union U global_u;

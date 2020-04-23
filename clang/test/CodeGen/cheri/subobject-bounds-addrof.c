@@ -58,13 +58,13 @@ void foo(void);
 void test_fnptr(struct ContainsFnPtr *s) {
   do_stuff_with_fn_ptr(&foo); // expected-remark {{not setting bounds for pointer to 'void (void)' (address of function)}}
   // DBG-NEXT: subobj bounds check: address of function -> not setting bounds
-  do_stuff_with_fn_ptr_ptr(&s->fn_ptr); // expected-remark-re {{setting sub-object bounds for field 'fn_ptr' (pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)')) to {{16|32}} bytes}}
+  do_stuff_with_fn_ptr_ptr(&s->fn_ptr); // expected-remark-re {{setting sub-object bounds for field 'fn_ptr' (pointer to 'fn_ptr_ty' (aka 'void (*)(void)')) to {{16|32}} bytes}}
   // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[#CAP_SIZE]]
   fn_ptr_ty fnptr_array[4];
   struct ContainsFnPtr onstack;
-  do_stuff_with_fn_ptr_ptr(&onstack.fn_ptr); // expected-remark-re {{setting sub-object bounds for field 'fn_ptr' (pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)')) to {{16|32}} bytes}}
+  do_stuff_with_fn_ptr_ptr(&onstack.fn_ptr); // expected-remark-re {{setting sub-object bounds for field 'fn_ptr' (pointer to 'fn_ptr_ty' (aka 'void (*)(void)')) to {{16|32}} bytes}}
   // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[#CAP_SIZE]]
-  do_stuff_with_fn_ptr_ptr(&fnptr_array[2]); // expected-remark-re {{setting sub-object bounds for pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)') to {{16|32}} bytes}}
+  do_stuff_with_fn_ptr_ptr(&fnptr_array[2]); // expected-remark-re {{setting sub-object bounds for pointer to 'fn_ptr_ty' (aka 'void (*)(void)') to {{16|32}} bytes}}
   //  expected-remark-re@-1{{setting bounds for array subscript on 'fn_ptr_ty [4]' to {{64|128}} bytes}}
   // DBG-NEXT: subscript 'fn_ptr_ty [4]' subobj bounds check: subscript on constant size array -> setting bounds for 'fn_ptr_ty [4]' subscript to {{64|128}}
   // DBG-NEXT: subobj bounds check: Found array subscript -> index is a constant -> const array index is not end and bounds==aggressive -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[#CAP_SIZE]]
@@ -79,11 +79,11 @@ struct WithAtomicInt {
 
 void test_atomic(atomic_int_t* array, struct WithAtomicInt *s) {
   do_stuff_with_void_ptr(&array[0]); // expected-remark {{not setting bounds for pointer to 'atomic_int_t' (aka '_Atomic(int)') (should set bounds on full array but size is not known)}}
-  // expected-remark@-1{{not setting bounds for array subscript on 'atomic_int_t * __capability' (aka '_Atomic(int) * __capability') (array subscript on non-array type)}}
+  // expected-remark@-1{{not setting bounds for array subscript on 'atomic_int_t *' (aka '_Atomic(int) *') (array subscript on non-array type)}}
   // DBG-NEXT: subscript 'atomic_int_t * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
   // DBG-NEXT: subobj bounds check: Found array subscript -> index is a constant -> should set bounds on full array but size is not known -> not setting bounds
   do_stuff_with_void_ptr(&array[2]); // expected-remark {{setting sub-object bounds for pointer to 'atomic_int_t' (aka '_Atomic(int)') to 4 bytes}}
-  // expected-remark@-1{{not setting bounds for array subscript on 'atomic_int_t * __capability' (aka '_Atomic(int) * __capability') (array subscript on non-array type)}}
+  // expected-remark@-1{{not setting bounds for array subscript on 'atomic_int_t *' (aka '_Atomic(int) *') (array subscript on non-array type)}}
   // DBG-NEXT: subscript 'atomic_int_t * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
   // DBG-NEXT: subobj bounds check: Found array subscript -> index is a constant -> const array index is not end and bounds==aggressive -> unwrapping _Atomic type -> Found scalar type -> setting bounds for 'atomic_int_t' address to 4
   do_stuff_with_void_ptr(&at_int); // expected-remark {{setting bounds for pointer to 'atomic_int_t' (aka '_Atomic(int)') to 4 bytes}}

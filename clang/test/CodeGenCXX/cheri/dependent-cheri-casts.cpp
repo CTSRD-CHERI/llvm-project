@@ -57,16 +57,19 @@ long call_bad_int(int not_cap) {
 
 template <typename srcty> int* cheri_fromcap_dep(srcty arg) {
   return (__cheri_fromcap int*)arg;
-  // expected-error-re@-1{{invalid __cheri_fromcap from 'long * __capability' to unrelated type 'int *{{( __capability)?}}'}}
-  // expected-error@-2{{invalid source type 'int' for __cheri_fromcap: source must be a capability}}
-  // hybrid-error@-3{{invalid source type 'int *' for __cheri_fromcap: source must be a capability}}
-  // purecap-warning@-4{{__cheri_fromcap from 'int * __capability' to 'int * __capability' is a no-op}}
+  // hybrid-error@-1{{invalid __cheri_fromcap from 'long * __capability' to unrelated type 'int *'}}
+  // purecap-error@-2{{invalid __cheri_fromcap from 'long *' to unrelated type 'int *'}}
+  // expected-error@-3{{invalid source type 'int' for __cheri_fromcap: source must be a capability}}
+  // hybrid-error@-4{{invalid source type 'int *' for __cheri_fromcap: source must be a capability}}
+  // purecap-warning@-5{{__cheri_fromcap from 'int *' to 'int *' is a no-op}}
 }
 template <typename srcty> int* __capability cheri_tocap_dep(srcty arg) {
   return (__cheri_tocap int* __capability)arg;
-  // expected-error-re@-1{{invalid __cheri_tocap from 'long *{{( __capability)?}}' to unrelated type 'int * __capability'}}
-  // expected-error@-2{{invalid source type 'int' for __cheri_tocap: source must be a pointer}}
-  // expected-warning@-3{{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
+  // hybrid-error@-1{{invalid __cheri_tocap from 'long *' to unrelated type 'int * __capability'}}
+  // purecap-error@-2{{invalid __cheri_tocap from 'long *' to unrelated type 'int *'}}
+  // expected-error@-3{{invalid source type 'int' for __cheri_tocap: source must be a pointer}}
+  // hybrid-warning@-4{{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
+  // purecap-warning@-5{{__cheri_tocap from 'int *' to 'int *' is a no-op}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z12fromcap_goodU12__capabilityPi
@@ -76,7 +79,7 @@ template <typename srcty> int* __capability cheri_tocap_dep(srcty arg) {
 // CHECK-NEXT:    ret i32* [[TMP0]]
 //
 int* fromcap_good(int* __capability cap_ptr) {
-  return cheri_fromcap_dep(cap_ptr); // purecap-note{{in instantiation of function template specialization 'cheri_fromcap_dep<int * __capability>' requested here}}
+  return cheri_fromcap_dep(cap_ptr); // purecap-note{{in instantiation of function template specialization 'cheri_fromcap_dep<int *>' requested here}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z10tocap_goodPi
@@ -86,11 +89,13 @@ int* fromcap_good(int* __capability cap_ptr) {
 // CHECK-NEXT:    ret i32 addrspace(200)* [[TMP0]]
 //
 int* __capability tocap_good(int* not_cap_ptr) {
-  return cheri_tocap_dep(not_cap_ptr); // purecap-note{{in instantiation of function template specialization 'cheri_tocap_dep<int * __capability>' requested here}}
+  return cheri_tocap_dep(not_cap_ptr); // purecap-note{{in instantiation of function template specialization 'cheri_tocap_dep<int *>' requested here}}
 }
 #ifndef CODEGEN
 int* fromcap_bad_incompatible_type(long* __capability cap_ptr) {
-  return cheri_fromcap_dep(cap_ptr); // expected-note{{in instantiation of function template specialization 'cheri_fromcap_dep<long * __capability>' requested here}}
+  return cheri_fromcap_dep(cap_ptr);
+  // hybrid-note@-1{{in instantiation of function template specialization 'cheri_fromcap_dep<long * __capability>' requested here}}
+  // purecap-note@-2{{in instantiation of function template specialization 'cheri_fromcap_dep<long *>' requested here}}
 }
 int* fromcap_bad_int(int not_cap) {
   return cheri_fromcap_dep(not_cap); // expected-note{{in instantiation of function template specialization 'cheri_fromcap_dep<int>' requested here}}
@@ -100,7 +105,7 @@ int* fromcap_bad_not_cap_ptr_hybrid(int* not_cap_ptr) {
 }
 
 int* __capability tocap_bad_incompatible_type(long* not_cap_ptr) {
-  return cheri_tocap_dep(not_cap_ptr); // expected-note-re{{in instantiation of function template specialization 'cheri_tocap_dep<long *{{( __capability)?}}>' requested here}}
+  return cheri_tocap_dep(not_cap_ptr); // expected-note{{in instantiation of function template specialization 'cheri_tocap_dep<long *>' requested here}}
 }
 int* __capability tocap_bad_int(int not_cap) {
   return cheri_tocap_dep(not_cap); // expected-note{{in instantiation of function template specialization 'cheri_tocap_dep<int>' requested here}}
@@ -117,12 +122,12 @@ template <typename T1, typename T2> T1 both_dependent_addr(T2 arg) {
   return (__cheri_addr T1)arg;
   // expected-error@-1{{invalid source type 'foo' for __cheri_addr: source must be a capability}}
   // hybrid-error@-2{{integral pointer type 'char *' is not a valid target type for __cheri_addr: target must be an integer type}}
-  // purecap-error@-3{{capability type 'char * __capability' is not a valid target type for __cheri_addr: target must be an integer type}}
+  // purecap-error@-3{{capability type 'char *' is not a valid target type for __cheri_addr: target must be an integer type}}
 }
 template <typename T1, typename T2> T1 both_dependent_offset(T2 arg) {
   return (__cheri_offset T1)arg;
   // expected-error@-1{{invalid source type 'foo' for __cheri_offset: source must be a capability}}
-  // expected-error-re@-2{{invalid target type 'char *{{( __capability)?}}' for __cheri_offset: target must be an integer type}}
+  // expected-error@-2{{invalid target type 'char *' for __cheri_offset: target must be an integer type}}
 }
 
 template <typename T1, typename T2> T1 both_dependent_fromcap(T2 arg) {
@@ -135,7 +140,7 @@ template <typename T1, typename T2> T1 both_dependent_tocap(T2 arg) {
   // expected-error@-1{{invalid source type 'foo' for __cheri_tocap: source must be a pointer}}
   // expected-error@-2{{invalid target type 'long' for __cheri_tocap: target must be a capability}}
   // hybrid-error@-3{{invalid target type 'char *' for __cheri_tocap: target must be a capability}}
-  // purecap-warning@-4{{__cheri_tocap from 'void * __capability' to 'char * __capability' is a no-op}}
+  // purecap-warning@-4{{__cheri_tocap from 'void *' to 'char *' is a no-op}}
 }
 
 void both_dependent_offset_instantiate() {

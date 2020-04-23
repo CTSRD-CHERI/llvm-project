@@ -66,12 +66,12 @@ void check_sub(__intcap_t cap1, __intcap_t cap2, ptrdiff_t ptrdiff) {
 void test_pointers(char* ptr, __intcap_t intcap, ptrdiff_t ptrdiff) {
 
   char* p1 = ptr - intcap;
-  // offset-warning@-1{{subtracting '__intcap_t' from 'char * __capability' may yield an incorrect result if the '__intcap_t' value is derived from a pointer since it will only consider the capability offset}}}
+  // offset-warning@-1{{subtracting '__intcap_t' from 'char *' may yield an incorrect result if the '__intcap_t' value is derived from a pointer since it will only consider the capability offset}}}
   char* p2 = ptr - ptrdiff;
 
   // ptr -= ptr;
   ptr -= intcap;
-  // offset-warning@-1{{subtracting '__intcap_t' from 'char * __capability' may yield an incorrect result if the '__intcap_t' value is derived from a pointer since it will only consider the capability offset}}}
+  // offset-warning@-1{{subtracting '__intcap_t' from 'char *' may yield an incorrect result if the '__intcap_t' value is derived from a pointer since it will only consider the capability offset}}}
   ptr -= ptrdiff;
 }
 

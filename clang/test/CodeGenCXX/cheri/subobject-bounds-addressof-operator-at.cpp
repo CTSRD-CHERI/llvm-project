@@ -26,18 +26,18 @@ void do_stuff(const int *) {}
 void test_string(const string &const_str, string &mutable_str) {
   do_stuff(&const_str[0]); // expected-warning{{pointer created from reference returned by 'operator[]' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'const char' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'const char & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'const char &'}}
 
   do_stuff(&mutable_str[0]);  // expected-warning{{pointer created from reference returned by 'operator[]' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'char' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'char & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'char &'}}
 
   do_stuff(&const_str.at(0));  // expected-warning{{pointer created from reference returned by 'at' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'const char' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'const char & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'const char &'}}
   do_stuff(&mutable_str.at(0));  // expected-warning{{pointer created from reference returned by 'at' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'char' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'char & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'char &'}}
 
   // These are fine
   do_stuff(const_str.data());
@@ -72,18 +72,18 @@ template<typename T>
 void test_vector(const vector<T> &const_vec, vector<T> &mutable_vec) {
   do_stuff(&const_vec[0]); // expected-warning{{pointer created from reference returned by 'operator[]' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'const int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'const int &'}}
 
   do_stuff(&mutable_vec[0]);  // expected-warning{{pointer created from reference returned by 'operator[]' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'int &'}}
 
   do_stuff(&const_vec.at(0));  // expected-warning{{pointer created from reference returned by 'at' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'const int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'const int &'}}
   do_stuff(&mutable_vec.at(0));  // expected-warning{{pointer created from reference returned by 'at' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'int &'}}
 
   // These are fine
   do_stuff(const_vec.data());
@@ -92,16 +92,16 @@ void test_vector(const vector<T> &const_vec, vector<T> &mutable_vec) {
   // Check that we also warn for front() and back()
   do_stuff(&const_vec.front());  // expected-warning{{pointer created from reference returned by 'front' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'const int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'const int &'}}
   do_stuff(&mutable_vec.front());  // expected-warning{{pointer created from reference returned by 'front' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'int &'}}
   do_stuff(&const_vec.back());  // expected-warning{{pointer created from reference returned by 'back' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'const int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'const int &'}}
   do_stuff(&mutable_vec.back());  // expected-warning{{pointer created from reference returned by 'back' will be bounded to a single element}}
   // expected-remark@-1{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
-  // expected-note@-2{{add an explicit cast to 'int & __capability'}}
+  // expected-note@-2{{add an explicit cast to 'int &'}}
 
   // Explicit cast to reference should not warn:
   do_stuff(&(const T&)const_vec.at(0)); // expected-remark{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}

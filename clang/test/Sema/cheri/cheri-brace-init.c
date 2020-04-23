@@ -56,7 +56,7 @@ void test_union(void* __capability a) {
 }
 
 #else /* __CHERI_PURE_CAPABILITY__ */
-// warn about the conversion from void* __capability -> bool even in C mode (already an error in C++)
+// warn about the conversion from void * -> bool even in C mode (already an error in C++)
 
 typedef _Bool bool;
 #define true 1
@@ -70,7 +70,7 @@ struct pointer_and_bool {
 struct pointer_and_bool pb_array[3] = {
     { "foo", false },
     { "bar", true },
-    { NULL, NULL },  // expected-error {{type 'void * __capability __attribute__((cheri_no_provenance))' cannot be narrowed to 'bool' (aka '_Bool') in initializer list}}
+    { NULL, NULL },  // expected-error {{type 'void * __attribute__((cheri_no_provenance))' cannot be narrowed to 'bool' (aka '_Bool') in initializer list}}
 };
 
 #endif

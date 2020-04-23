@@ -34,7 +34,7 @@ _Static_assert(sizeof(int&&) == 4, "Reference size incorrect");
 // CHECK:     | |-PackedAttr {{.*}} <line:8:18>
 // CHECK-NEXT:| |-AnnotateAttr {{.*}} <col:25, col:59> "underaligned_capability"
 // CHECK-NEXT:| |-CXXRecordDecl {{.*}} <line:4:1, col:8> col:8 implicit struct foo_cap
-// CHECK-NEXT:| |-FieldDecl {{.*}} <line:5:2, col:8> col:8 a 'void * __capability'
+// CHECK-NEXT:| |-FieldDecl {{.*}} <line:5:2, col:8> col:8 a 'void *'
 // CHECK-NEXT:| |-FieldDecl {{.*}} <line:6:2, col:7> col:7 d 'long'
 // CHECK-NEXT:| `-FieldDecl {{.*}} <line:7:2, col:7> col:7 e 'long'
 // CHECK:     |-CXXRecordDecl {{.*}} <line:12:1, line:16:1> line:12:8 referenced struct foo_int definition
