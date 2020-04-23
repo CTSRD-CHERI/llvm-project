@@ -89,7 +89,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
   else if (ABIName.empty() && (Triple.getEnvironment() == llvm::Triple::GNUABI64))
     ABIName = "n64";
 
-  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap" ||
+  if (ABIName == "purecap" ||
       Triple.getEnvironment() == llvm::Triple::CheriPurecap ||
       Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri64 ||
       Triple.getSubArch() == llvm::Triple::MipsSubArch_cheri128 ||
@@ -110,9 +110,6 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
       CPUName = DefMips64CPU;
-      break;
-    case llvm::Triple::cheri:
-      CPUName = CHERICPU;
       break;
     }
   }

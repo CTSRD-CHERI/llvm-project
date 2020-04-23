@@ -54,7 +54,6 @@ static bool isMIPSBareMetal(const llvm::Triple& Triple) {
   case llvm::Triple::mips64el:
   case llvm::Triple::mips64:
   case llvm::Triple::mipsel:
-  case llvm::Triple::cheri:
     if (Triple.getVendor() != llvm::Triple::UnknownVendor)
       return false;
     if (Triple.getOS() != llvm::Triple::UnknownOS)
@@ -198,7 +197,7 @@ void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
     LibName += getTriple().getArchName();
   } else {
     assert(Target == BaremetalTarget::MIPS);
-    if (getTriple().getArch() == llvm::Triple::cheri && !IsCheriPurecap) {
+    if (getTriple().getArch() == llvm::Triple::mips64 && !IsCheriPurecap) {
       LibName += "mips64";
     } else if (getTriple().isMIPS() && IsCheriPurecap) {
       LibName += "cheri"; // TODO: would be nice to have CHERI size here

@@ -275,8 +275,7 @@ std::string tools::getCPUName(const ArgList &Args, const llvm::Triple &T,
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
-  case llvm::Triple::mips64el:
-  case llvm::Triple::cheri: {
+  case llvm::Triple::mips64el: {
     StringRef CPUName;
     StringRef ABIName;
     mips::getMipsCPUAndABI(Args, T, CPUName, ABIName);
@@ -929,7 +928,6 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
     case llvm::Triple::mipsel:
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
-    case llvm::Triple::cheri:
       PIC = true; // "-fpic"
       break;
 
@@ -951,7 +949,6 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
     case llvm::Triple::aarch64:
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
-    case llvm::Triple::cheri:
     case llvm::Triple::x86:
     case llvm::Triple::x86_64:
       IsPICLevelTwo = false; // "-fpie"
