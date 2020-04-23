@@ -18,6 +18,7 @@
 #include "MipsMCTargetDesc.h"
 #include "MipsTargetObjectFile.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -25,8 +26,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
-
-#include "../cheri-compressed-cap/cheri_compressed_cap.h"
 
 using namespace llvm;
 
