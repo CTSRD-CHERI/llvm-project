@@ -26,10 +26,6 @@ Target &llvm::getTheMips64elTarget() {
   static Target TheMips64elTarget;
   return TheMips64elTarget;
 }
-Target &llvm::getTheMipsCheriTarget() {
-  static Target TheMipsCheriTarget;
-  return TheMipsCheriTarget;
-}
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTargetInfo() {
   RegisterTarget<Triple::mips,
@@ -48,8 +44,4 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTargetInfo() {
                  /*HasJIT=*/true>
       B(getTheMips64elTarget(), "mips64el", "MIPS (64-bit little endian)",
         "Mips");
-
-  RegisterTarget<Triple::mips64,
-        /*HasJIT=*/true>
-      C(getTheMipsCheriTarget(), "cheri", "CHERI", "Mips");
 }

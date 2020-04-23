@@ -1330,5 +1330,4 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsAsmPrinter() {
   RegisterAsmPrinter<MipsAsmPrinter> Y(getTheMipselTarget());
   RegisterAsmPrinter<MipsAsmPrinter> A(getTheMips64Target());
   RegisterAsmPrinter<MipsAsmPrinter> B(getTheMips64elTarget());
-  RegisterAsmPrinter<MipsAsmPrinter> C(getTheMipsCheriTarget());
 }

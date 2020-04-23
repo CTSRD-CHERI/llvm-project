@@ -195,8 +195,7 @@ static MCInstrAnalysis *createMipsMCInstrAnalysis(const MCInstrInfo *Info) {
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTargetMC() {
   for (Target *T : {&getTheMipsTarget(), &getTheMipselTarget(),
-                    &getTheMips64Target(), &getTheMips64elTarget(),
-                    &getTheMipsCheriTarget()}) {
+                    &getTheMips64Target(), &getTheMips64elTarget()}) {
     // Register the MC asm info.
     RegisterMCAsmInfoFn X(*T, createMipsMCAsmInfo);
 
@@ -232,7 +231,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTargetMC() {
   }
 
   // Register the MC Code Emitter
-  for (Target *T : {&getTheMipsTarget(), &getTheMips64Target(), &getTheMipsCheriTarget()})
+  for (Target *T : {&getTheMipsTarget(), &getTheMips64Target()})
     TargetRegistry::RegisterMCCodeEmitter(*T, createMipsMCCodeEmitterEB);
 
   for (Target *T : {&getTheMipselTarget(), &getTheMips64elTarget()})

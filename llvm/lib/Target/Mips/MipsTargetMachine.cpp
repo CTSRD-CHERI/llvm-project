@@ -61,7 +61,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTarget() {
   RegisterTargetMachine<MipselTargetMachine> Y(getTheMipselTarget());
   RegisterTargetMachine<MipsebTargetMachine> A(getTheMips64Target());
   RegisterTargetMachine<MipselTargetMachine> B(getTheMips64elTarget());
-  RegisterTargetMachine<MipsCheriTargetMachine> C(getTheMipsCheriTarget());
 
   PassRegistry *PR = PassRegistry::getPassRegistry();
   initializeGlobalISel(*PR);
@@ -193,15 +192,6 @@ MipselTargetMachine::MipselTargetMachine(const Target &T, const Triple &TT,
                                          Optional<CodeModel::Model> CM,
                                          CodeGenOpt::Level OL, bool JIT)
     : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, true) {}
-
-void MipsCheriTargetMachine::anchor() { }
-
-MipsCheriTargetMachine::
-MipsCheriTargetMachine(const Target &T, const Triple &TT,
-                      StringRef CPU, StringRef FS, const TargetOptions &Options,
-                      Optional<Reloc::Model> RM, Optional<CodeModel::Model> CM,
-                      CodeGenOpt::Level OL, bool JIT)
-  : MipsebTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT) {}
 
 const MipsSubtarget *
 MipsTargetMachine::getSubtargetImpl(const Function &F) const {
