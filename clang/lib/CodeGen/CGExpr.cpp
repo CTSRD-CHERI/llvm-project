@@ -3321,22 +3321,6 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
   return LV;
 }
 
-llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
-                                                          llvm::Value *Addr,
-                                                          llvm::Type *CapTy,
-                                                          bool IsDirectCall) {
-  auto* VTy = cast<llvm::PointerType>(Addr->getType());
-  unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-  if (!CapTy)
-    CapTy = VTy->getElementType()->getPointerTo(CapAS);
-  const bool IsFunction = isa<llvm::FunctionType>(VTy->getPointerElementType());
-  if (IsDirectCall) {
-    assert(IsFunction);
-    return Addr; // Don't add a cast for direct calls
-  }
-  return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
-}
-
 static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
                                             GlobalDecl GD,
                                             bool IsDirectCall) {
@@ -3349,9 +3333,10 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
 
   llvm::Value *V = CGM.GetAddrOfFunction(GD);
   auto &TI = CGF.getContext().getTargetInfo();
-  if (TI.areAllPointersCapabilities())
-    V = CodeGenFunction::FunctionAddressToCapability(CGF, V, nullptr,
-                                                     IsDirectCall);
+  if (TI.areAllPointersCapabilities()) {
+    assert(V->getType()->getPointerAddressSpace() ==
+        CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
+  }
 
   if (!FD->hasPrototype()) {
     if (const FunctionProtoType *Proto =
@@ -3487,10 +3472,10 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
       VD->getAnyInitializer(VD);
       llvm::Constant *Val = ConstantEmitter(*this).emitAbstract(
           E->getLocation(), *VD->evaluateValue(), VD->getType());
+      assert(Val && "failed to emit constant expression");
 
       Address Addr = Address::invalid();
       if (!VD->getType()->isReferenceType()) {
-        assert(Val && "failed to emit constant expression");
         // Spill the constant value to a global.
         Addr = CGM.createUnnamedGlobalFrom(*VD, Val,
                                            getContext().getDeclAlign(VD));
@@ -3501,34 +3486,18 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
         if (PTy != Addr.getType())
           Addr = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy);
       } else {
-        // If this is a CHERI reference to a function then convert the function
-        // address to a capability
-        const ReferenceType *RT = cast<ReferenceType>(VD->getType().getTypePtr());
-        llvm::Value* Result = Val; // use llvm::Value for
-                                   // CodeGenFunction::FunctionAddressToCapability
-        if (RT->isCHERICapability() && RT->getPointeeType()->isFunctionType()) {
-          // First strip the addrspacecast if the ConstantEmitter inserted it
-          if (const auto CE = dyn_cast<llvm::ConstantExpr>(Val)) {
-            if (CE->getOpcode() == llvm::Instruction::AddrSpaceCast) {
-              Result = CE->getOperand(0);
-            }
-          }
-
-          unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-          llvm::Type *ResTy = Result->getType();
-          if (ResTy->getPointerAddressSpace() != CapAS) {
-            Result = FunctionAddressToCapability(*this, Result);
-          }
+        const ReferenceType *RT = VD->getType()->getAs<ReferenceType>();
+        if (RT->isCHERICapability()) {
+          assert(Val->getType()->getPointerAddressSpace() ==
+                 CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
         }
-
-        assert(Result && "failed to emit reference constant expression");
         // Should we be using the alignment of the constant pointer we emitted?
         CharUnits Alignment =
             getNaturalTypeAlignment(E->getType(),
                                     /* BaseInfo= */ nullptr,
                                     /* TBAAInfo= */ nullptr,
                                     /* forPointeeType= */ true);
-        Addr = Address(Result, Alignment);
+        Addr = Address(Val, Alignment);
       }
       return MakeAddrLValue(Addr, T, AlignmentSource::Decl);
     }

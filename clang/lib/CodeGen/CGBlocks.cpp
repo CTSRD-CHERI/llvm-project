@@ -65,8 +65,10 @@ static llvm::Constant *buildDisposeHelper(CodeGenModule &CGM,
 }
 
 static llvm::Value *getFunctionPointer(CodeGenFunction &CGF, llvm::Value *V) {
-  if (CGF.getContext().getTargetInfo().areAllPointersCapabilities())
-    return CodeGenFunction::FunctionAddressToCapability(CGF, V);
+  if (CGF.getContext().getTargetInfo().areAllPointersCapabilities()) {
+    assert(V->getType()->getPointerAddressSpace() ==
+        CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
+  }
   return V;
 }
 

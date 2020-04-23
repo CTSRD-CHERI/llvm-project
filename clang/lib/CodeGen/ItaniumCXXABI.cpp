@@ -2507,10 +2507,8 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
   llvm::Value *dtorV = dtor.getCallee();
   auto &TI = CGF.getContext().getTargetInfo();
   if (TI.areAllPointersCapabilities()) {
-    if (dtorV->getType()->getPointerAddressSpace() != AS) {
-      // dtorTy defined above will be the right capability type
-      dtorV = CodeGenFunction::FunctionAddressToCapability(CGF, dtorV, dtorTy);
-    }
+    assert(dtorV->getType()->getPointerAddressSpace() ==
+        CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
   }
   dtorV = CGF.Builder.CreateBitCast(dtorV, dtorTy);
 
