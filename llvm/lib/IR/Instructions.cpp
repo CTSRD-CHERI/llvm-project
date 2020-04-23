@@ -445,10 +445,18 @@ void CallInst::init(FunctionType *FTy, Value *Func, ArrayRef<Value *> Args,
           (FTy->isVarArg() && Args.size() > FTy->getNumParams())) &&
          "Calling a function with bad signature!");
 
-  for (unsigned i = 0; i != Args.size(); ++i)
-    assert((i >= FTy->getNumParams() ||
-            FTy->getParamType(i) == Args[i]->getType()) &&
-           "Calling a function with a bad signature!");
+  for (unsigned i = 0; i != Args.size(); ++i) {
+    if (i < FTy->getNumParams() && FTy->getParamType(i) != Args[i]->getType()) {
+      errs() << "FTy->getNumParams() = " << FTy->getNumParams() << "\n";
+      errs() << "FTy->getParamType(" << i << ") = ";
+      FTy->getParamType(i)->dump();
+      errs() << "Args[" << i << "]->getType() = ";
+      Args[i]->getType()->dump();
+      errs() << "FTy = ";
+      FTy->dump();
+      llvm_unreachable("Calling a function with a bad signature!");
+    }
+  }
 #endif
 
   llvm::copy(Args, op_begin());
@@ -2597,7 +2605,7 @@ bool CastInst::isNoopCast(Instruction::CastOps Opcode,
       return false;
     return true;
   };
-  
+
   switch (Opcode) {
     default: llvm_unreachable("Invalid CastOp");
     case Instruction::Trunc:
