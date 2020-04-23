@@ -192,7 +192,6 @@ void TargetLoweringObjectFileELF::Initialize(MCContext &Ctx,
   case Triple::mipsel:
   case Triple::mips64:
   case Triple::mips64el:
-  case Triple::cheri:
     // MIPS uses indirect pointer to refer personality functions and types, so
     // that the eh_frame section can be read-only. DW.ref.personality will be
     // generated for relocation.

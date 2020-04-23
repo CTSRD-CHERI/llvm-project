@@ -34,7 +34,6 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
   case avr:            return "avr";
   case bpfeb:          return "bpfeb";
   case bpfel:          return "bpfel";
-  case cheri:          return "cheri";
   case hexagon:        return "hexagon";
   case hsail64:        return "hsail64";
   case hsail:          return "hsail";
@@ -101,7 +100,6 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case ppc64le:
   case ppc:         return "ppc";
 
-  case cheri:
   case mips:
   case mipsel:
   case mips64:
@@ -279,7 +277,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("armeb", armeb)
     .Case("avr", avr)
     .StartsWith("bpf", BPFArch)
-    .Case("cheri", cheri)
+    .Case("cheri", mips64)
     .Case("mips", mips)
     .Case("mipsel", mipsel)
     .Case("mips64", mips64)
@@ -421,7 +419,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Cases("mips64", "mips64eb", "mipsn32", "mipsisa64r6",
            "mips64r6", "mipsn32r6", Triple::mips64)
     .StartsWith("mips64c", Triple::mips64) // purecap/hybrid CHERI
-    .Case("cheri", Triple::cheri)          // TODO: remove
+    .Case("cheri", Triple::mips64)          // TODO: remove
     .Cases("mips64el", "mipsn32el", "mipsisa64r6el", "mips64r6el",
            "mipsn32r6el", Triple::mips64el)
     .Case("r600", Triple::r600)
@@ -569,7 +567,8 @@ static Triple::ObjectFormatType parseFormat(StringRef EnvironmentName) {
     .Default(Triple::UnknownObjectFormat);
 }
 
-static Triple::SubArchType parseSubArch(StringRef SubArchName) {
+static Triple::SubArchType parseSubArch(StringRef SubArchName,
+                                        Triple::ArchType Arch) {
   if (SubArchName.startswith("mips")) {
     if (SubArchName.endswith("r6el") || SubArchName.endswith("r6")) {
       return Triple::MipsSubArch_r6;
@@ -584,16 +583,10 @@ static Triple::SubArchType parseSubArch(StringRef SubArchName) {
         .EndsWith("c64hybrid", Triple::MipsSubArch_cheri64)
         .Default(Triple::NoSubArch);
   }
-#ifdef NOTYET
-  if (SubArchName.startswith("cheri")) {
-    // Support encoding the CHERI abi and size in the triple name
-    return StringSwitch<Triple::SubArchType>(SubArchName)
-        .StartsWith("cheri128", Triple::MipsSubArch_cheri128)
-        .StartsWith("cheri256", Triple::MipsSubArch_cheri256)
-        .StartsWith("cheri64", Triple::MipsSubArch_cheri64)
-        .Default(Triple::MipsSubArch_cheri128);
+  // Backwards compat:
+  if (Arch == Triple::mips64 && SubArchName == "cheri") {
+    return Triple::MipsSubArch_cheri128;
   }
-#endif
 
   if (SubArchName == "powerpcspe")
     return Triple::PPCSubArch_spe;
@@ -718,7 +711,6 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::mips64el:
   case Triple::mips:
   case Triple::mipsel:
-  case Triple::cheri:
   case Triple::msp430:
   case Triple::nvptx64:
   case Triple::nvptx:
@@ -768,7 +760,7 @@ Triple::Triple(const Twine &Str)
   StringRef(Data).split(Components, '-', /*MaxSplit*/ 3);
   if (Components.size() > 0) {
     Arch = parseArch(Components[0]);
-    SubArch = parseSubArch(Components[0]);
+    SubArch = parseSubArch(Components[0], Arch);
     if (Components.size() > 1) {
       Vendor = parseVendor(Components[1]);
       if (Components.size() > 2) {
@@ -810,7 +802,7 @@ Triple::Triple(const Twine &Str)
 Triple::Triple(const Twine &ArchStr, const Twine &VendorStr, const Twine &OSStr)
     : Data((ArchStr + Twine('-') + VendorStr + Twine('-') + OSStr).str()),
       Arch(parseArch(ArchStr.str())),
-      SubArch(parseSubArch(ArchStr.str())),
+      SubArch(parseSubArch(ArchStr.str(), Arch)),
       Vendor(parseVendor(VendorStr.str())),
       OS(parseOS(OSStr.str())),
       Environment(), ObjectFormat(Triple::UnknownObjectFormat) {
@@ -827,7 +819,7 @@ Triple::Triple(const Twine &ArchStr, const Twine &VendorStr, const Twine &OSStr,
     : Data((ArchStr + Twine('-') + VendorStr + Twine('-') + OSStr + Twine('-') +
             EnvironmentStr).str()),
       Arch(parseArch(ArchStr.str())),
-      SubArch(parseSubArch(ArchStr.str())),
+      SubArch(parseSubArch(ArchStr.str(), Arch)),
       Vendor(parseVendor(VendorStr.str())),
       OS(parseOS(OSStr.str())),
       Environment(parseEnvironment(EnvironmentStr.str())),
@@ -1315,7 +1307,6 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::amdil64:
   case llvm::Triple::bpfeb:
   case llvm::Triple::bpfel:
-  case llvm::Triple::cheri:
   case llvm::Triple::hsail64:
   case llvm::Triple::le64:
   case llvm::Triple::mips64:
@@ -1356,7 +1347,6 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::avr:
   case Triple::bpfeb:
   case Triple::bpfel:
-  case Triple::cheri: // No 32-bit version
   case Triple::msp430:
   case Triple::ppc64le:
   case Triple::systemz:
@@ -1439,7 +1429,6 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::amdil64:
   case Triple::bpfeb:
   case Triple::bpfel:
-  case Triple::cheri:
   case Triple::hsail64:
   case Triple::le64:
   case Triple::mips64:
@@ -1546,7 +1535,6 @@ Triple Triple::getLittleEndianArchVariant() const {
   case Triple::ppc:
   case Triple::sparcv9:
   case Triple::systemz:
-  case Triple::cheri:
 
   // ARM is intentionally unsupported here, changing the architecture would
   // drop any arch suffixes.

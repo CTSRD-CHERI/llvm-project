@@ -101,8 +101,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   } else if (FS.find("+cheri64") != StringRef::npos) {
     Ret += "-pf200:64:64:64:32";
     MinStackAlignBits = 64;
-  } else if (FS.find("+cheri256") != StringRef::npos ||
-             Triple(TT).getArch() == Triple::cheri) {
+  } else if (FS.find("+cheri256") != StringRef::npos) {
     Ret += "-pf200:256:256:256:64";
     MinStackAlignBits = 256;
   }

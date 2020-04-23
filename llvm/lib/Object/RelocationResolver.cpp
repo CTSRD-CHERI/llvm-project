@@ -553,7 +553,6 @@ getRelocationResolver(const ObjectFile &Obj) {
         return {supportsBPF, resolveBPF};
       case Triple::mips64el:
       case Triple::mips64:
-      case Triple::cheri:
         return {supportsMips64, resolveMips64};
       case Triple::ppc64le:
       case Triple::ppc64:

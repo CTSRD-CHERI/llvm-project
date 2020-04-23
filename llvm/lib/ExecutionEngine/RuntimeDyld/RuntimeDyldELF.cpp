@@ -247,7 +247,6 @@ llvm::RuntimeDyldELF::create(Triple::ArchType Arch,
   case Triple::mipsel:
   case Triple::mips64:
   case Triple::mips64el:
-  case Triple::cheri:
     return std::make_unique<RuntimeDyldELFMips>(MemMgr, Resolver);
   }
 }
@@ -1790,7 +1789,6 @@ size_t RuntimeDyldELF::getGOTEntrySize() {
   case Triple::mipsel:
   case Triple::mips64:
   case Triple::mips64el:
-  case Triple::cheri:
     if (IsMipsO32ABI || IsMipsN32ABI)
       Result = sizeof(uint32_t);
     else if (IsMipsN64ABI)
