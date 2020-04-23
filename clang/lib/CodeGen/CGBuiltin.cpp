@@ -4703,8 +4703,6 @@ static Value *EmitTargetArchBuiltinExpr(CodeGenFunction *CGF,
   case llvm::Triple::ppc64:
   case llvm::Triple::ppc64le:
     return CGF->EmitPPCBuiltinExpr(BuiltinID, E);
-  case llvm::Triple::mips64:
-    return CGF->EmitMIPSBuiltinExpr(BuiltinID, E);
   case llvm::Triple::r600:
   case llvm::Triple::amdgcn:
     return CGF->EmitAMDGPUBuiltinExpr(BuiltinID, E);
@@ -13256,61 +13254,6 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   case X86::BI__builtin_ia32_psubusb128:
   case X86::BI__builtin_ia32_psubusw128:
     return EmitX86AddSubSatExpr(*this, Ops, false, false);
-  }
-}
-
-Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
-                                            const CallExpr *E) {
-  switch (BuiltinID) {
-  default: return nullptr;
-
-  case Mips::BI__builtin_mips_cheri_get_cap_length:
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_length_get, SizeTy),
-        {EmitScalarExpr(E->getArg(0))});
-  case Mips::BI__builtin_mips_cheri_get_cap_base:
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get, IntPtrTy),
-        {EmitScalarExpr(E->getArg(0))});
-  case Mips::BI__builtin_mips_cheri_and_cap_perms: {
-    Value *Cap = EmitScalarExpr(E->getArg(0));
-    Value *Perms = EmitScalarExpr(E->getArg(1));
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_and, SizeTy),
-        {Cap, Perms});
-  }
-  case Mips::BI__builtin_mips_cheri_get_cap_perms:
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_get, SizeTy),
-        {EmitScalarExpr(E->getArg(0))});
-  case Mips::BI__builtin_mips_cheri_get_cap_type:
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_type_get, IntPtrTy),
-        {EmitScalarExpr(E->getArg(0))});
-  case Mips::BI__builtin_mips_cheri_check_perms: {
-    Value *Cap = EmitScalarExpr(E->getArg(0));
-    Value *Perms = EmitScalarExpr(E->getArg(1));
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_check, SizeTy),
-        {Cap, Perms});
-  }
-  case Mips::BI__builtin_mips_cheri_cap_offset_increment: {
-    Value *Cap = EmitScalarExpr(E->getArg(0));
-    Value *Increment = EmitScalarExpr(E->getArg(1));
-    return Builder.CreateGEP(Cap, Increment,
-                             "__builtin_mips_cheri_cap_offset_increment");
-  }
-  case Mips::BI__builtin_mips_cheri_cap_offset_set: {
-    Value *Cap = EmitScalarExpr(E->getArg(0));
-    Value *Offset = EmitScalarExpr(E->getArg(1));
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_set, SizeTy),
-        {Cap, Offset});
-  }
-  case Mips::BI__builtin_mips_cheri_cap_offset_get:
-    return Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_get, SizeTy),
-        {EmitScalarExpr(E->getArg(0))});
   }
 }
 
