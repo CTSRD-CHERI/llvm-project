@@ -104,9 +104,6 @@ public:
           Arch == llvm::Triple::x86 ||
           Arch == llvm::Triple::x86_64)
         return false;
-      if (getVersion() >= VersionTuple(1, 9) &&
-          (Arch == llvm::Triple::cheri))
-        return false;
       if (getVersion() >= VersionTuple(1, 7) &&
           (Arch == llvm::Triple::mips64))
         return false;

@@ -47,8 +47,7 @@ void freebsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
-  case llvm::Triple::mips64el:
-  case llvm::Triple::cheri: {
+  case llvm::Triple::mips64el: {
     StringRef CPUName;
     StringRef ABIName;
     mips::getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
@@ -232,7 +231,6 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("elf32ltsmip_fbsd");
     break;
   case llvm::Triple::mips64:
-  case llvm::Triple::cheri:
     CmdArgs.push_back("-m");
     if (IsCHERIPureCapABI)
       CmdArgs.push_back("elf64btsmip_cheri_fbsd");
@@ -443,8 +441,8 @@ ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
   // TODO: always use libc++ for MIPS64?
   if (getTriple().getOSMajorVersion() >= 10 || isCheriPurecap())
     return ToolChain::CST_Libcxx;
-  // Always use libc++ for CHERI triples and CHERI subarch:
-  if (getTriple().getArch() == llvm::Triple::cheri)
+  // Always use libc++ for MIPS
+  if (getTriple().isMIPS64())
     return ToolChain::CST_Libcxx;
   if (getTriple().isMIPS()) {
     switch (getTriple().getSubArch()) {

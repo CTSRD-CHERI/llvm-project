@@ -318,7 +318,6 @@ static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-  case llvm::Triple::cheri:
     mips::getMIPSTargetFeatures(D, Triple, Args, Features);
     break;
 
@@ -1610,7 +1609,6 @@ void Clang::RenderTargetOptions(const llvm::Triple &EffectiveTriple,
     AddAArch64TargetArgs(Args, CmdArgs);
     CmdArgs.push_back("-fallow-half-arguments-and-returns");
     break;
-  case llvm::Triple::cheri:
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
@@ -2419,7 +2417,6 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
       case llvm::Triple::mips64el:
-      case llvm::Triple::cheri:
         if (Value == "--trap") {
           CmdArgs.push_back("-target-feature");
           CmdArgs.push_back("+use-tcc-in-div");
@@ -6969,7 +6966,6 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-  case llvm::Triple::cheri:
     AddMIPSTargetArgs(Args, CmdArgs);
     break;
 

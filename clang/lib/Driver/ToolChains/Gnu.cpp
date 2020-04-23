@@ -2620,7 +2620,6 @@ bool Generic_GCC::isPICDefault() const {
     return getTriple().isOSWindows();
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-  case llvm::Triple::cheri:
     return true;
   default:
     return false;
@@ -2656,7 +2655,6 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-  case llvm::Triple::cheri:
   case llvm::Triple::msp430:
     return true;
   case llvm::Triple::sparc:

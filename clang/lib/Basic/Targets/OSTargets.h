@@ -253,7 +253,6 @@ public:
     case llvm::Triple::mipsel:
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
-    case llvm::Triple::cheri:
     case llvm::Triple::ppc:
     case llvm::Triple::ppc64:
     case llvm::Triple::ppc64le:
@@ -410,7 +409,6 @@ public:
     case llvm::Triple::mipsel:
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
-    case llvm::Triple::cheri:
     case llvm::Triple::ppc:
     case llvm::Triple::ppc64:
     case llvm::Triple::ppc64le:
@@ -479,7 +477,6 @@ public:
       break;
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
-    case llvm::Triple::cheri:
     case llvm::Triple::ppc:
     case llvm::Triple::sparcv9:
       this->MCountName = "_mcount";

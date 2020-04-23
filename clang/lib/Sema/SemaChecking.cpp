@@ -1933,7 +1933,6 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
       case llvm::Triple::mips64el:
-      case llvm::Triple::cheri:
         if (CheckMipsBuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;

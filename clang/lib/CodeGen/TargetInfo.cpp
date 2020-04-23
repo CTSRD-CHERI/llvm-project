@@ -10727,7 +10727,6 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
 
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-  case llvm::Triple::cheri:
     return SetCGInfo(new MIPSTargetCodeGenInfo(Types, false, *this));
 
   case llvm::Triple::avr:

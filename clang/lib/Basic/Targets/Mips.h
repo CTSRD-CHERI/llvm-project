@@ -141,7 +141,7 @@ public:
                                " is incompatible with triple " +
                                getTriple().str());
     }
-    if (CapSize > 0 || getTriple().getArch() == llvm::Triple::cheri ||
+    if (CapSize > 0 ||
         getTriple().getEnvironment() == llvm::Triple::CheriPurecap) {
       IsCHERI = true;
     }
@@ -547,7 +547,6 @@ public:
 
   bool hasInt128Type() const override {
     return (getTriple().getArch() == llvm::Triple::mips64 ||
-           getTriple().getArch() == llvm::Triple::cheri ||
            getTriple().getArch() == llvm::Triple::mips64el ||
            ABI == "n32" || ABI == "n64" || ABI == "purecap") ||
            getTargetOpts().ForceEnableInt128;
