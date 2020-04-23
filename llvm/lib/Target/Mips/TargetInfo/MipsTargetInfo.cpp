@@ -49,7 +49,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTargetInfo() {
       B(getTheMips64elTarget(), "mips64el", "MIPS (64-bit little endian)",
         "Mips");
 
-  RegisterTarget<Triple::cheri,
+  RegisterTarget<Triple::mips64,
         /*HasJIT=*/true>
       C(getTheMipsCheriTarget(), "cheri", "CHERI", "Mips");
 }

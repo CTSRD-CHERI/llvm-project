@@ -247,14 +247,14 @@ MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
   StringRef CPUName = MIPS_MC::selectMipsCPU(TM.getTargetTriple(), CPU);
   std::string CheriFeatures;
   // enable capabilties for all cheri-*-* triples even if CPUName != cheri
-  if (TM.getTargetTriple().getArch() == llvm::Triple::cheri) {
+  if (TM.getTargetTriple().getEnvironment() == llvm::Triple::CheriPurecap) {
     if (FS.empty())
       FS = "+chericap,+cheri128";
     else {
       CheriFeatures = FS.str();
       CheriFeatures += ",+chericap";
-      if (!FS.contains("+cheri128") && !FS.contains("+cheri64"))
-        CheriFeatures += ",+cheri256";
+      if (!FS.contains("+cheri256") && !FS.contains("+cheri64"))
+        CheriFeatures += ",+cheri128";
       FS = CheriFeatures;
     }
   }

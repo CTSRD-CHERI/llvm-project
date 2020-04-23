@@ -1150,12 +1150,6 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     return Triple::hexagon;
   case ELF::EM_LANAI:
     return Triple::lanai;
-  case ELF::EM_CHERI256: // CheriABI created with old compiler
-    if (EF.getHeader()->e_ident[ELF::EI_CLASS] != ELF::ELFCLASS64)
-      report_fatal_error("Invalid ELFCLASS!");
-    if (IsLittleEndian)
-      report_fatal_error("CHERI must be big endian!");
-    return Triple::cheri;
   case ELF::EM_MIPS:
     switch (EF.getHeader()->e_ident[ELF::EI_CLASS]) {
     case ELF::ELFCLASS32:
@@ -1165,7 +1159,7 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
       if (Arch == ELF::EF_MIPS_MACH_CHERI256 || Arch == ELF::EF_MIPS_MACH_CHERI128 || Arch == ELF::EF_MIPS_MACH_BERI) {
         if (IsLittleEndian)
           report_fatal_error("BERI/CHERI must be big endian!");
-        return Triple::cheri;
+        return Triple::mips64;
       }
       return IsLittleEndian ? Triple::mips64el : Triple::mips64;
     }

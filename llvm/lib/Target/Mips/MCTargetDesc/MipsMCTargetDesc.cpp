@@ -52,8 +52,9 @@ StringRef MIPS_MC::selectMipsCPU(const Triple &TT, StringRef CPU) {
         CPU = "mips32r6";
       else
         CPU = "mips64r6";
-    } else if (TT.getArch() == Triple::cheri) {
-      // FIXME: do we really want this?
+    } else if (TT.getSubArch() == Triple::MipsSubArch_cheri128) {
+      CPU = "cheri128";
+    } else if (TT.getEnvironment() == Triple::CheriPurecap) {
       CPU = "cheri128";
     } else {
       if (TT.isMIPS32())

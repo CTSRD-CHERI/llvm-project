@@ -88,7 +88,6 @@ public:
     hsail64,        // AMD HSAIL with 64-bit pointers
     spir,           // SPIR: standard portable IR for OpenCL 32-bit version
     spir64,         // SPIR: standard portable IR for OpenCL 64-bit version
-    cheri,          // Capability Hardware Enhanced RISC Instructions
     kalimba,        // Kalimba: generic kalimba
     shave,          // SHAVE: Movidius vector VLIW processors
     lanai,          // Lanai: Lanai 32-bit
@@ -724,8 +723,7 @@ public:
 
   /// Tests whether the target is MIPS 64-bit (little and big endian).
   bool isMIPS64() const {
-    return getArch() == Triple::mips64 || getArch() == Triple::mips64el ||
-           getArch() == Triple::cheri;
+    return getArch() == Triple::mips64 || getArch() == Triple::mips64el;
   }
 
   /// Tests whether the target is MIPS (little and big endian, 32- or 64-bit).

@@ -565,6 +565,20 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::CheriPurecap, T.getEnvironment());
   EXPECT_EQ(Triple::NoSubArch, T.getSubArch());
 
+  // Backwards compat with build scripts:
+  T = Triple("cheri-unknown-freebsd");
+  EXPECT_EQ(Triple::mips64, T.getArch());
+  EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::FreeBSD, T.getOS());
+  EXPECT_EQ(Triple::MipsSubArch_cheri128, T.getSubArch());
+  T = Triple("cheri-purecap");
+  EXPECT_EQ(Triple::mips64, T.getArch());
+  EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::UnknownOS, T.getOS());
+  EXPECT_EQ(Triple::MipsSubArch_cheri128, T.getSubArch());
+
   T = Triple("mips64c128");
   EXPECT_EQ(Triple::mips64, T.getArch());
   EXPECT_EQ(Triple::CheriPurecap, T.getEnvironment());
