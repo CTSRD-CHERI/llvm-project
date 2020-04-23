@@ -140,17 +140,12 @@ public:
 
   llvm::Constant *EmitNullMemberPointer(const MemberPointerType *MPT) override;
 
-  llvm::Constant *EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) override;
+  llvm::Constant *EmitMemberFunctionPointer(const CXXMethodDecl *MD) override;
   llvm::Constant *EmitMemberDataPointer(const MemberPointerType *MPT,
                                         CharUnits offset) override;
-  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT,
-                                          CodeGenFunction* CGF) override;
-  llvm::Value *
-  EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
-                                     const CXXMethodDecl *MD) override;
-  llvm::Value *BuildMemberPointer(const CXXMethodDecl *MD,
-                                  CharUnits ThisAdjustment,
-                                  CodeGenFunction* CGF);
+  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT) override;
+  llvm::Constant *BuildMemberPointer(const CXXMethodDecl *MD,
+                                     CharUnits ThisAdjustment);
 
   llvm::Value *EmitMemberPointerComparison(CodeGenFunction &CGF,
                                            llvm::Value *L, llvm::Value *R,
@@ -659,7 +654,7 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   // TODO: use new CHERI CXX ABI
   bool IsCheriABI = getContext().getTargetInfo().areAllPointersCapabilities();
   llvm::Value *IsVirtual;
-  if (UseARMMethodPtrABI || IsCheriABI) // XXXAR: TODO: use tag bit instead
+  if (UseARMMethodPtrABI) // XXXAR: TODO: use tag bit instead
     IsVirtual = Builder.CreateAnd(RawAdj, ptrdiff_1);
   else {
     IsVirtual = Builder.CreateAnd(FnPtr, ptrdiff_1);
@@ -1019,21 +1014,12 @@ ItaniumCXXABI::EmitMemberDataPointer(const MemberPointerType *MPT,
 }
 
 llvm::Constant *
-ItaniumCXXABI::EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) {
-  return cast<llvm::Constant>(BuildMemberPointer(MD, CharUnits::Zero(),
-                                                  nullptr));
+ItaniumCXXABI::EmitMemberFunctionPointer(const CXXMethodDecl *MD) {
+  return BuildMemberPointer(MD, CharUnits::Zero());
 }
 
-llvm::Value *
-ItaniumCXXABI::EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
-                                                  const CXXMethodDecl *MD) {
-  return BuildMemberPointer(MD, CharUnits::Zero(), &CGF);
-}
-
-llvm::Value *
-ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
-                                  CharUnits ThisAdjustment,
-                                  CodeGenFunction* CGF) {
+llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
+                                                  CharUnits ThisAdjustment) {
   assert(MD->isInstance() && "Member function must not be static!");
 
   CodeGenTypes &Types = CGM.getTypes();
@@ -1041,7 +1027,6 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
 
   // Get the function pointer (or index if this is a virtual function).
   llvm::Constant *MemPtr[2];
-  llvm::Value* NonConstAddr = nullptr;
   if (MD->isVirtual()) {
     uint64_t Index = CGM.getItaniumVTableContext().getMethodVTableIndex(MD);
 
@@ -1091,16 +1076,8 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     llvm::Constant *addr = CGM.GetAddrOfFunction(MD, Ty);
 
     if (TI.areAllPointersCapabilities()) {
-      if (CGF) {
-        // llvm::errs() << "emitting local member pointer to " << MD->getQualifiedNameAsString() << "\n";
-        NonConstAddr = CodeGenFunction::FunctionAddressToCapability(
-            *CGF, addr, CGM.VoidPtrTy);
-      }
-      else {
-        // llvm::errs() << "emitting global member pointer to " << MD->getQualifiedNameAsString() << "\n";
-        addr = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(addr, CGM.VoidPtrTy);
-      }
-      MemPtr[0] = addr;
+      MemPtr[0] = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(
+          addr, CGM.VoidPtrTy);
     } else {
       MemPtr[0] = llvm::ConstantExpr::getPtrToInt(addr, CGM.PtrDiffTy);
     }
@@ -1108,25 +1085,15 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
                                        (UseARMMethodPtrABI ? 2 : 1) *
                                        ThisAdjustment.getQuantity());
   }
-  if (NonConstAddr) {
-    auto MemPtrTy = llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy);
-    auto Align = CGM.getContext().toCharUnitsFromBits(TI.getCHERICapabilityAlign());
-    auto alloca = CGF->CreateTempAlloca(MemPtrTy, Align, "memptr_tmp");
-    CGF->Builder.CreateStore(NonConstAddr, CGF->Builder.CreateStructGEP(alloca, 0));
-    CGF->Builder.CreateStore(MemPtr[1], CGF->Builder.CreateStructGEP(alloca, 1));
-    return CGF->Builder.CreateLoad(alloca);
-  } else {
-    auto Result = llvm::ConstantStruct::getAnon(MemPtr, false);
-    // TODO: how to set the required alignment?
-    return Result;
-  }
+  auto Result = llvm::ConstantStruct::getAnon(MemPtr, false);
+  // TODO: how to set the required alignment?
+  return Result;
 }
 
 
 
 llvm::Constant *ItaniumCXXABI::EmitMemberPointer(const APValue &MP,
-                                                 QualType MPType,
-                                                 CodeGenFunction* CGF) {
+                                                 QualType MPType) {
   const MemberPointerType *MPT = MPType->castAs<MemberPointerType>();
   const ValueDecl *MPD = MP.getMemberPointerDecl();
   if (!MPD)
@@ -1135,7 +1102,7 @@ llvm::Constant *ItaniumCXXABI::EmitMemberPointer(const APValue &MP,
   CharUnits ThisAdjustment = getMemberPointerPathAdjustment(MP);
 
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(MPD))
-    return cast<llvm::Constant>(BuildMemberPointer(MD, ThisAdjustment, CGF));
+    return BuildMemberPointer(MD, ThisAdjustment);
 
   CharUnits FieldOffset =
     getContext().toCharUnitsFromBits(getContext().getFieldOffset(MPD));
@@ -1378,17 +1345,13 @@ void ItaniumCXXABI::emitThrow(CodeGenFunction &CGF, const CXXThrowExpr *E) {
 
   // The address of the destructor.  If the exception type has a
   // trivial destructor (or isn't a record), we just pass null.
-  llvm::Value *Dtor = nullptr;
+  llvm::Constant *Dtor = nullptr;
   if (const RecordType *RecordTy = ThrowType->getAs<RecordType>()) {
     CXXRecordDecl *Record = cast<CXXRecordDecl>(RecordTy->getDecl());
     if (!Record->hasTrivialDestructor()) {
       CXXDestructorDecl *DtorD = Record->getDestructor();
       Dtor = CGM.getAddrOfCXXStructor(GlobalDecl(DtorD, Dtor_Complete));
-      if (CGF.getContext().getTargetInfo().areAllPointersCapabilities())
-        Dtor = CodeGenFunction::FunctionAddressToCapability(CGF, Dtor,
-                                                            CGM.Int8PtrTy);
-      // Dtor = llvm::ConstantExpr::getBitCast(Dtor, CGM.Int8PtrTy);
-      Dtor = CGF.Builder.CreateBitCast(Dtor, CGM.Int8PtrTy);
+      Dtor = llvm::ConstantExpr::getBitCast(Dtor, CGM.Int8PtrTy);
     }
   }
   if (!Dtor) Dtor = llvm::Constant::getNullValue(CGM.Int8PtrTy);
@@ -2372,9 +2335,7 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
     guard = new llvm::GlobalVariable(CGM.getModule(), guardTy,
                                      false, var->getLinkage(),
                                      llvm::ConstantInt::get(guardTy, 0),
-                                     guardName.str(), nullptr,
-                                     llvm::GlobalVariable::NotThreadLocal,
-                                     CGM.getTargetCodeGenInfo().getDefaultAS());
+                                     guardName.str());
     guard->setDSOLocal(var->isDSOLocal());
     guard->setVisibility(var->getVisibility());
     // If the variable is thread-local, so is its guard variable.
@@ -3063,9 +3024,7 @@ ItaniumRTTIBuilder::GetAddrOfExternalRTTIDescriptor(QualType Ty) {
     GV = new llvm::GlobalVariable(CGM.getModule(), CGM.Int8PtrTy,
                                   /*isConstant=*/true,
                                   llvm::GlobalValue::ExternalLinkage, nullptr,
-                                  Name, nullptr,
-                                  llvm::GlobalValue::NotThreadLocal,
-                                  CGM.getTargetCodeGenInfo().getDefaultAS());
+                                  Name);
     const CXXRecordDecl *RD = Ty->getAsCXXRecordDecl();
     CGM.setGVProperties(GV, RD);
   }
@@ -3432,15 +3391,7 @@ void ItaniumRTTIBuilder::BuildVTablePointer(const Type *Ty) {
   }
 
   llvm::Constant *VTable =
-    CGM.getModule().getGlobalVariable(VTableName);
-  if (VTable)
-    VTable = llvm::ConstantExpr::getBitCast(VTable, CGM.Int8PtrPtrTy);
-  else {
-    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-    VTable = new llvm::GlobalVariable(CGM.getModule(), CGM.Int8PtrTy, /*isConstant*/true,
-            llvm::GlobalVariable::ExternalLinkage, nullptr, VTableName,
-            nullptr, llvm::GlobalValue::NotThreadLocal, DefaultAS);
-  }
+    CGM.getModule().getOrInsertGlobal(VTableName, CGM.Int8PtrTy);
   CGM.setDSOLocal(cast<llvm::GlobalValue>(VTable->stripPointerCasts()));
 
   llvm::Type *PtrDiffTy =
@@ -3682,9 +3633,7 @@ llvm::Constant *ItaniumRTTIBuilder::BuildTypeInfo(
   llvm::GlobalVariable *OldGV = M.getNamedGlobal(Name);
   llvm::GlobalVariable *GV =
       new llvm::GlobalVariable(M, Init->getType(),
-                               /*isConstant=*/true, Linkage, Init, Name,
-                               nullptr, llvm::GlobalVariable::NotThreadLocal,
-                               CGM.getTargetCodeGenInfo().getDefaultAS());
+                               /*isConstant=*/true, Linkage, Init, Name);
 
   // If there's already an old global variable, replace it with the new one.
   if (OldGV) {

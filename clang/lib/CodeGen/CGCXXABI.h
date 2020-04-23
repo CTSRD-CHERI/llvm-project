@@ -186,24 +186,14 @@ public:
   virtual llvm::Constant *EmitNullMemberPointer(const MemberPointerType *MPT);
 
   /// Create a member pointer for the given method.
-  virtual llvm::Constant *
-  EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD);
-
-  /// XXX: CHERI:
-  /// This needs to be different from EmitMemberFunctionPointerGlobal
-  /// because there we can rely on capsizefix the set the correct permissions
-  /// but inside a function we need to derrive from PCC
-  virtual llvm::Value *
-  EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
-                                     const CXXMethodDecl *MD) = 0;
+  virtual llvm::Constant *EmitMemberFunctionPointer(const CXXMethodDecl *MD);
 
   /// Create a member pointer for the given field.
   virtual llvm::Constant *EmitMemberDataPointer(const MemberPointerType *MPT,
                                                 CharUnits offset);
 
   /// Create a member pointer for the given member pointer constant.
-  virtual llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT,
-                                            CodeGenFunction *CGF);
+  virtual llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT);
 
   /// Emit a comparison between two member pointers.  Returns an i1.
   virtual llvm::Value *
