@@ -1,5 +1,3 @@
-// REQUIRES: riscv-registered-target
-
 // RUN: %riscv32_cheri_cc1 -o - -emit-llvm %s | FileCheck %s --check-prefixes=RV32IXCHERI
 // RUN: %riscv64_cheri_cc1 -o - -emit-llvm %s | FileCheck %s --check-prefixes=RV64IXCHERI
 
