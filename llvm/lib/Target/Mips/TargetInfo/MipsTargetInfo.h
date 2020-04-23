@@ -13,7 +13,6 @@ namespace llvm {
 
 class Target;
 
-Target &getTheMipsCheriTarget();
 Target &getTheMipsTarget();
 Target &getTheMipselTarget();
 Target &getTheMips64Target();

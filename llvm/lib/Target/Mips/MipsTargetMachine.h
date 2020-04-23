@@ -92,33 +92,6 @@ public:
                       CodeGenOpt::Level OL, bool JIT);
 };
 
-/// MipsCheriTargetMachine - MIPS with CHERI capability extensions.
-class MipsCheriTargetMachine : public MipsebTargetMachine {
-  void anchor() override;
-public:
-  MipsCheriTargetMachine(const Target &T, const Triple &TT,
-                        StringRef CPU, StringRef FS,
-                        const TargetOptions &Options,
-                        Optional<Reloc::Model> RM, Optional<CodeModel::Model> CM,
-                        CodeGenOpt::Level OL, bool JIT);
-
-private:
-  bool isCapabilitySizeCompatible(const DataLayout &Candidate) const {
-    if (!getSubtargetImpl()->isCheri())
-      return true;
-    switch (Candidate.getPointerSizeInBits(200)) {
-    case 64:
-      return getSubtargetImpl()->isCheri64();
-    case 128:
-      return getSubtargetImpl()->isCheri128();
-    case 256:
-      return getSubtargetImpl()->isCheri256();
-    default:
-      llvm_unreachable("DataLayout does not have a valid size for AS200");
-    }
-  }
-};
-
 } // end namespace llvm
 
 #endif // LLVM_LIB_TARGET_MIPS_MIPSTARGETMACHINE_H

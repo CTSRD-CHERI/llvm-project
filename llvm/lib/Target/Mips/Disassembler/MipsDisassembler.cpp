@@ -63,6 +63,8 @@ public:
 
   bool hasCnMips() const { return STI.getFeatureBits()[Mips::FeatureCnMips]; }
 
+  bool hasCHERI() const { return STI.getFeatureBits()[Mips::FeatureMipsCheri]; }
+
   bool hasCnMipsP() const { return STI.getFeatureBits()[Mips::FeatureCnMipsP]; }
 
   bool hasCOP3() const {
@@ -70,16 +72,6 @@ public:
     return !hasMips32() && !hasMips3();
   }
 
-  DecodeStatus getInstruction(MCInst &Instr, uint64_t &Size,
-                              ArrayRef<uint8_t> Bytes, uint64_t Address,
-                              raw_ostream &CStream) const override;
-};
-
-class CheriDisassembler : public MipsDisassembler {
-public:
-  CheriDisassembler(const MCSubtargetInfo &STI, MCContext &Ctx) :
-    MipsDisassembler(STI, Ctx, true) {}
-  /// getInstruction - See MCDisassembler.
   DecodeStatus getInstruction(MCInst &Instr, uint64_t &Size,
                               ArrayRef<uint8_t> Bytes, uint64_t Address,
                               raw_ostream &CStream) const override;
@@ -577,14 +569,6 @@ static MCDisassembler *createMipsDisassembler(
   return new MipsDisassembler(STI, Ctx, true);
 }
 
-static MCDisassembler *createCheriDisassembler(
-                       const Target &T,
-                       const MCSubtargetInfo &STI,
-                       MCContext &Ctx) {
-  return new CheriDisassembler(STI, Ctx);
-}
-
-
 static MCDisassembler *createMipselDisassembler(
                        const Target &T,
                        const MCSubtargetInfo &STI,
@@ -602,8 +586,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsDisassembler() {
                                          createMipsDisassembler);
   TargetRegistry::RegisterMCDisassembler(getTheMips64elTarget(),
                                          createMipselDisassembler);
-  TargetRegistry::RegisterMCDisassembler(getTheMipsCheriTarget(),
-                                         createCheriDisassembler);
 }
 
 #include "MipsGenDisassemblerTables.inc"
@@ -1345,6 +1327,14 @@ DecodeStatus MipsDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
       return Result;
   }
 
+  if (hasCHERI()) {
+    LLVM_DEBUG(dbgs() << "Trying CHERI table (32-bit opcodes):\n");
+    Result =
+        decodeInstruction(DecoderTableCHERI32, Instr, Insn, Address, this, STI);
+    if (Result != MCDisassembler::Fail)
+      return Result;
+  }
+
   if (hasMips32r6() && isGP64()) {
     LLVM_DEBUG(
         dbgs() << "Trying Mips32r6_64r6 (GPR64) table (32-bit opcodes):\n");
@@ -1420,44 +1410,6 @@ DecodeStatus MipsDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   if (Result != MCDisassembler::Fail)
     return Result;
 
-  return MCDisassembler::Fail;
-}
-
-DecodeStatus CheriDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
-                                               ArrayRef<uint8_t> Bytes,
-                                               uint64_t Address,
-                                               raw_ostream &CStream) const {
-  uint32_t Insn;
-  // If we try deconding an unknown isntruction advance by 4 bytes
-  // Otherwise llvm-objdump will only advance by one byte and wrongly disassemble
-  // the rest of the function after it encounters an unknown instruction
-  Size = 4;
-  DecodeStatus Result = readInstruction32(Bytes, Address, Size, Insn,
-          /*IsBigEndian*/ true, /*IsMicroMips*/false);
-  if (Result == MCDisassembler::Fail)
-    return MCDisassembler::Fail;
-
-  // Try this as a CHERI instruction
-  Result = decodeInstruction(DecoderTableCHERI32, Instr, Insn, Address,
-                             this, STI);
-  if (Result != MCDisassembler::Fail) {
-    Size = 4;
-    return Result;
-  }
-  // If that fails, try it as a generic MIPS64 instruction
-  Result = decodeInstruction(DecoderTableMips6432, Instr, Insn, Address,
-                             this, STI);
-  if (Result != MCDisassembler::Fail) {
-    Size = 4;
-    return Result;
-  }
-  // If we fail to decode in Mips64 decoder space we can try in Mips32
-  Result = decodeInstruction(DecoderTableMips32, Instr, Insn, Address,
-                             this, STI);
-  if (Result != MCDisassembler::Fail) {
-    Size = 4;
-    return Result;
-  }
   return MCDisassembler::Fail;
 }
 
