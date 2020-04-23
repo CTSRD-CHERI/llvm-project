@@ -2387,6 +2387,23 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     QualType SrcTy = E->getType();
     QualType SrcPointeeTy = SrcTy->getPointeeType();
     QualType DstPointeeTy = DestTy->getPointeeType();
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (Kind == CK_PointerToCHERICapability && TI.SupportsCapabilities()) {
+      // Note: the backend can't tell whether the cast resulted from a function
+      // or a data pointer, so we tell it whether to use DDC or PPC here:
+      bool IncludesFunctionType =
+          SrcPointeeTy->isFunctionType() || DstPointeeTy->isFunctionType() ||
+          E->IgnoreCasts()->getType()->isFunctionPointerType();
+      // TODO: Should we handle casts in the other direction by doing a
+      //   PCC-relative conversion?
+      if (IncludesFunctionType) {
+        Value *PCC =
+            Builder.CreateIntrinsic(llvm::Intrinsic::cheri_pcc_get, {}, {});
+        return Builder.CreateIntrinsic(
+            llvm::Intrinsic::cheri_cap_from_pointer, {CGF.PtrDiffTy},
+            {PCC, Builder.CreatePtrToInt(Src, CGF.PtrDiffTy)});
+      }
+    }
     return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(
         CGF, Src, SrcPointeeTy.getAddressSpace(),
         DstPointeeTy.getAddressSpace(), DestType);
