@@ -2722,7 +2722,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                               N->getDebugLoc());
   }
 
-  if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
+  if (ABI.IsCheriPureCap()) {
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() || DAG.getDataLayout().isFatPointer(GVTy);
     EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
@@ -2765,104 +2765,56 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
       assert(GlobalTy == CapType && Ty == MVT::i64 && "Should only have a ptrtoint node here");
       return DAG.getNode(ISD::PTRTOINT, SDLoc(N), Ty, Addr);
     } else {
-      llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
       GV->dump();
 #endif
-      assert(false && "SHOULD HAVE USED CAP TABLE");
+      llvm_unreachable("SHOULD HAVE USED CAP TABLE");
     }
   }
 
-  if (isCheriPointer(GV->getType(), &DAG.getDataLayout()))
-    Ty = MVT::i64;
-  SDValue Global;
-
+  assert(!ABI.IsCheriPureCap());
   if (!isPositionIndependent()) {
     const MipsTargetObjectFile *TLOF =
         static_cast<const MipsTargetObjectFile *>(
             getTargetMachine().getObjFileLowering());
     const GlobalObject *GO = GV->getBaseObject();
-    if (GO && TLOF->IsGlobalInSmallSection(GO, getTargetMachine())) {
+    if (GO && TLOF->IsGlobalInSmallSection(GO, getTargetMachine()))
       // %gp_rel relocation
-      Global = getAddrGPRel(N, SDLoc(N), Ty, DAG, ABI.IsN64());
-    } else {
-                                    // %hi/%lo relocation
-      Global = Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
-                                    // %highest/%higher/%hi/%lo relocation
-                                    : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
-    }
-  } else {
-    // Every other architecture would use shouldAssumeDSOLocal in here, but
-    // mips is special.
-    // * In PIC code mips requires got loads even for local statics!
-    // * To save on got entries, for local statics the got entry contains the
-    //   page and an additional add instruction takes care of the low bits.
-    // * It is legal to access a hidden symbol with a non hidden undefined,
-    //   so one cannot guarantee that all access to a hidden symbol will know
-    //   it is hidden.
-    // * Mips linkers don't support creating a page and a full got entry for
-    //   the same symbol.
-    // * Given all that, we have to use a full got entry for hidden symbols :-(
-    if (GV->hasLocalLinkage())
-      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(),
-                            GV->isThreadLocal());
+      return getAddrGPRel(N, SDLoc(N), Ty, DAG, ABI.IsN64());
 
-    else if (Subtarget.useXGOT() || HugeGOT)
-      Global = getAddrGlobalLargeGOT(
-          N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16, MipsII::MO_GOT_LO16,
-          DAG.getEntryNode(),
-          MachinePointerInfo::getGOT(DAG.getMachineFunction()),
-          GV->isThreadLocal());
-    else
-      Global = getAddrGlobal(
-          N, SDLoc(N), Ty, DAG,
-          (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT,
-          DAG.getEntryNode(),
-          MachinePointerInfo::getGOT(DAG.getMachineFunction()),
-          GV->isThreadLocal());
+                                // %hi/%lo relocation
+    return Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
+                                // %highest/%higher/%hi/%lo relocation
+                                : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
   }
-  if (isCheriPointer(GV->getType(), &DAG.getDataLayout())) {
-    assert(!ABI.IsCheriPureCap());
-    // Allow compiling some LLVM IR generated for cap-table:
-    if (isa<Function>(GV) || GV->getType()->getElementType()->isFunctionTy()) {
-      // Derive function pointers from PCC instead of $ddc
-      Global = setPccOffset(DAG, SDLoc(N), Global);
-    } else {
-      Global = cFromDDC(DAG, SDLoc(N), Global);
-    }
-    StringRef Name = GV->getName();
-    if (!SkipGlobalBounds &&
-        !isa<Function>(GV) &&
-        !GV->hasWeakLinkage() &&
-        !GV->hasWeakAnyLinkage() &&
-        !GV->hasExternalWeakLinkage() &&
-        !GV->hasSection() &&
-        !Name.startswith("__start_") &&
-        !Name.startswith("__stop_")) {
-      if (GV->hasInternalLinkage() || GV->hasLocalLinkage()) {
-        uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
-        Global =
-            setBounds(DAG, Global, SizeBytes, /*CSetBoundsStatsLogged=*/true);
-      } else {
-        const Module &M = *GV->getParent();
-        std::string Name = (Twine(".size.")+GV->getName()).str();
-        GlobalVariable *SizeGV = M.getGlobalVariable(Name);
-        Type *I64 = Type::getInt64Ty(*DAG.getContext());
-        if (!SizeGV) {
-          SizeGV = new GlobalVariable(const_cast<Module&>(M),
-              I64, /*isConstant*/true,
-              GlobalValue::LinkOnceAnyLinkage, ConstantInt::get(I64, 0),
-              Twine(".size.")+GV->getName());
-          SizeGV->setSection(".global_sizes");
-        }
-        SDValue Size = DAG.getGlobalAddress(SizeGV, SDLoc(Global), MVT::i64);
-        Size = DAG.getLoad(MVT::i64, SDLoc(Global), DAG.getEntryNode(), Size,
-            MachinePointerInfo(SizeGV));
-        Global = setBounds(DAG, Global, Size, /*CSetBoundsStatsLogged=*/true);
-      }
-    }
-  }
-  return Global;
+
+  // Every other architecture would use shouldAssumeDSOLocal in here, but
+  // mips is special.
+  // * In PIC code mips requires got loads even for local statics!
+  // * To save on got entries, for local statics the got entry contains the
+  //   page and an additional add instruction takes care of the low bits.
+  // * It is legal to access a hidden symbol with a non hidden undefined,
+  //   so one cannot guarantee that all access to a hidden symbol will know
+  //   it is hidden.
+  // * Mips linkers don't support creating a page and a full got entry for
+  //   the same symbol.
+  // * Given all that, we have to use a full got entry for hidden symbols :-(
+  if (GV->hasLocalLinkage())
+    return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(),
+                        GV->isThreadLocal());
+
+  if (Subtarget.useXGOT() || HugeGOT)
+    return getAddrGlobalLargeGOT(
+        N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16, MipsII::MO_GOT_LO16,
+        DAG.getEntryNode(),
+        MachinePointerInfo::getGOT(DAG.getMachineFunction()),
+        GV->isThreadLocal());
+
+  return getAddrGlobal(
+      N, SDLoc(N), Ty, DAG,
+      (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT,
+      DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()),
+      GV->isThreadLocal());
 }
 
 SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
@@ -2887,23 +2839,15 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
     return SDValue(DAG.getMachineNode(Mips::PseudoPccRelativeAddress, SDLoc(N),
                                       CapType, BANode),
                    0);
+  } else {
+    return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(),
+                        /*IsForTls=*/false);
   }
-  // XXXAR: keep supporting the legacy ABI for now
-  if (ABI.IsCheriPureCap())
-    Ty = MVT::i64;
-  auto Result = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(),
-                             /*IsForTls=*/false);
-  if (ABI.IsCheriPureCap())
-    Result = setPccOffset(DAG, SDLoc(N), Result);
-  return Result;
 }
 
 SDValue MipsTargetLowering::
 lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 {
-  // FIXME: this needs to be revisited for cap-table
-  // assert(!ABI.IsCheriPureCap());
-
   // If the relocation model is PIC, use the General Dynamic TLS Model or
   // Local Dynamic TLS model, otherwise use the Initial Exec or
   // Local Exec TLS Model.
@@ -4513,10 +4457,6 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   bool GlobalOrExternal = false, IsCallReloc = false;
 
   const bool CheriCapTable = Subtarget.useCheriCapTable();
-  // In the legacy ABI we want to load only the vaddr and the use cgetpccsetoffset
-  if (ABI.IsCheriPureCap() && !CheriCapTable)
-    Ty = MVT::i64;
-
   // The long-calls feature is ignored in case of PIC.
   // While we do not support -mshared / -mno-shared properly,
   // ignore long-calls in case of -mabicalls too.
@@ -4602,18 +4542,6 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     GlobalOrExternal = true;
   }
-  if (CheriCapTable && !GlobalOrExternal) {
-    // XXXAR: FIXME: calling function pointers may require some more changes for
-    // shared libs!
-  }
-  // If we're in the sandbox ABI, then we need to turn the address into a
-  // PCC-derived capability.
-  if (ABI.IsCheriPureCap() && (!Callee.getValueType().isFatPointer())) {
-    if (CheriCapTable)
-      llvm_unreachable("Should not derive address from PCC with cap table");
-    Callee = setPccOffset(DAG, DL, Callee);
-  }
-
 
   SmallVector<SDValue, 8> Ops(1, Chain);
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
@@ -4894,7 +4822,6 @@ SDValue MipsTargetLowering::LowerFormalArguments(
 
   unsigned CurArgIdx = 0;
   CCInfo.rewindByValRegsInfo();
-  unsigned CapArgReg = -1U;
 
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -4971,8 +4898,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       // Create load nodes to retrieve arguments from the stack
       SDValue ArgValue;
       if (ABI.IsCheriPureCap()) {
-        if (CapArgReg == -1U)
-          CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(CapType));
+        Register CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(CapType));
         SDValue Addr = DAG.getPointerAdd(DL, DAG.getCopyFromReg(Chain, DL,
               CapArgReg, CapType), VA.getLocMemOffset());
         ArgValue = DAG.getLoad(LocVT, DL, Chain, Addr, MachinePointerInfo());
