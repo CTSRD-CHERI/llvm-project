@@ -1126,63 +1126,6 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
 
 }
 
-template <class ELFT>
-static void fillGlobalSizesSection(InputSection* isec, uint8_t* buf, uint8_t* bufEnd) {
-  static std::mutex mu;
-  std::lock_guard<std::mutex> lock(mu);
-
-#ifdef DEBUG_CAP_RELOCS
-  if (Config->verboseCapRelocs)
-    message("Write .global_sizes: IS = " + toString(IS));
-#endif
-
-  foreachGlobalSizesSymbol<ELFT>(isec, [&](StringRef realSymName, Symbol *target,
-                                        uint64_t offset) {
-    uint64_t resolvedSize = target->getSize();
-    uint8_t *location = buf + offset;
-    assert(location + 8 <= bufEnd); // Should use a span type instead
-    bool sizeIsUnknown = resolvedSize == 0;
-    if (sizeIsUnknown || target->isUndefined()) {
-      // HACK for environ and __progname (both are capabilities):
-      if (target->isSectionStartSymbol) {
-        assert(!target->getOutputSection() ||
-               target->getOutputSection()->size == 0);
-        sizeIsUnknown = false; // output section is empty -> size 0 is fine
-      } else if (isSectionEndSymbol(realSymName) ||
-                 isSectionStartSymbol(realSymName)) {
-        sizeIsUnknown = false; // zero size is fine for section start/end
-      } else if (config->shared &&
-                 (realSymName == "__progname" || realSymName == "environ")) {
-        message("Using .global_size for symbol " + realSymName +
-                " in shared lib (assuming size==sizeof(void* __capability)");
-        resolvedSize = config->capabilitySize;
-        sizeIsUnknown = false;
-      } else {
-        warn("Could not find .global_size for " + verboseToString(target));
-      }
-    }
-    if (sizeIsUnknown && (isec->getOutputSection()->flags & SHF_WRITE) == 0) {
-      error("Unknown .global_sizes value for " + realSymName +
-            " but section was not marked as writable");
-    }
-    uint64_t existing = read64(location);
-    if (existing != 0 && existing != resolvedSize) {
-      // The value might not be zero if we are linking against a file built
-      // with -r (e.g. openpam_static_modules.o) In that case we need to check
-      // whether the existing value and the value we want to write matches
-      error("Conflicting values for .size." + realSymName +
-            "\n>>> was already initialized to 0x" + utohexstr(existing) +
-            " in " + toString(isec) + "\n>>> expected value is 0x" +
-            utohexstr(resolvedSize));
-    }
-
-    write64(location, resolvedSize);
-    if (config->verboseCapRelocs)
-      message("Writing size 0x" + utohexstr(resolvedSize) + " for " +
-              verboseToString(target));
-  });
-}
-
 // For each function-defining prologue, find any calls to __morestack,
 // and replace them with calls to __morestack_non_split.
 static void switchMorestackCallsToMorestackNonSplit(
@@ -1331,10 +1274,6 @@ template <class ELFT> void InputSection::writeTo(uint8_t *buf) {
   // and then apply relocations.
   memcpy(buf + outSecOff, data().data(), data().size());
   uint8_t *bufEnd = buf + outSecOff + data().size();
-  if (!config->relocatable && name == ".global_sizes") {
-    fillGlobalSizesSection<ELFT>(this, buf + outSecOff, bufEnd);
-  }
-
   relocate<ELFT>(buf, bufEnd);
 }
 
