@@ -1,4 +1,4 @@
-//===- IntrinsicsMips.td - Defines Mips intrinsics ---------*- tablegen -*-===//
+//===- IntrinsicsCHERICap.td - Defines CHERI intrinsics ----*- tablegen -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -50,27 +50,23 @@ def int_cheri_cap_type_get :
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_tag_get  :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_tag">,
   GCCBuiltin<"__builtin_cheri_tag_get">,
   Intrinsic<[llvm_i1_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_sealed_get  :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_sealed">,
   GCCBuiltin<"__builtin_cheri_sealed_get">,
   Intrinsic<[llvm_i1_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 
 def int_cheri_cap_tag_clear  :
-  GCCBuiltinAlias<"__builtin_mips_cheri_clear_cap_tag">,
   GCCBuiltin<"__builtin_cheri_tag_clear">,
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 
 def int_cheri_cap_seal :
-  GCCBuiltinAlias<"__builtin_mips_cheri_seal_cap">,
   GCCBuiltin<"__builtin_cheri_seal">,
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
@@ -81,7 +77,6 @@ def int_cheri_cap_conditional_seal :
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_unseal  :
-  GCCBuiltinAlias<"__builtin_mips_cheri_unseal_cap">,
   GCCBuiltin<"__builtin_cheri_unseal">,
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
@@ -95,7 +90,6 @@ def int_cheri_cap_perms_check :
   Intrinsic<[], [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem, IntrHasSideEffects, IntrWillReturn]>;
 def int_cheri_cap_type_check :
-  GCCBuiltinAlias<"__builtin_mips_cheri_check_type">,
   GCCBuiltin<"__builtin_cheri_type_check">,
   Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem, IntrHasSideEffects, IntrWillReturn]>;
@@ -107,11 +101,9 @@ def int_cheri_stack_cap_get :
   GCCBuiltin<"__builtin_cheri_stack_get">,
   Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_ddc_get :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_global_data_cap">,
   GCCBuiltin<"__builtin_cheri_global_data_get">,
   Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_pcc_get :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_program_counter_cap">,
   GCCBuiltin<"__builtin_cheri_program_counter_get">,
   Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem, IntrWillReturn]>;
 
