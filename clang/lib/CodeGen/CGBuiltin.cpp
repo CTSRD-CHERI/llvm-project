@@ -3821,82 +3821,80 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_cap_from_pointer: {
     Value *GlobalCap = EmitScalarExpr(E->getArg(0));
     Value *Ptr = Builder.CreatePtrToInt(EmitScalarExpr(E->getArg(1)), IntPtrTy);
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer, IntPtrTy),
-        {GlobalCap, Ptr}));
+    return RValue::get(Builder.CreateIntrinsic(
+        Intrinsic::cheri_cap_from_pointer, {IntPtrTy}, {GlobalCap, Ptr}));
   }
   case Builtin::BI__builtin_cheri_cap_to_pointer: {
     Value *GlobalCap = EmitScalarExpr(E->getArg(0));
     Value *Cap = EmitScalarExpr(E->getArg(1));
-    Value *Ptr = Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_to_pointer, IntPtrTy),
-        {GlobalCap, Cap});
+    Value *Ptr = Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_to_pointer,
+                                         {IntPtrTy}, {GlobalCap, Cap});
     return RValue::get(Builder.CreateIntToPtr(Ptr, ConvertType(E->getType())));
   }
 
   case Builtin::BI__builtin_cheri_bounds_set:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set, SizeTy),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_bounds_set, {SizeTy},
         {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
   case Builtin::BI__builtin_cheri_bounds_set_exact:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set_exact, SizeTy),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_bounds_set_exact, {SizeTy},
         {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
   case Builtin::BI__builtin_cheri_length_get:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_length_get, SizeTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_length_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_base_get:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get, IntPtrTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_base_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_perms_and:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_and, SizeTy),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_perms_and, {SizeTy},
         {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
   case Builtin::BI__builtin_cheri_perms_get:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_get, SizeTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_perms_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_flags_set:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_flags_set, SizeTy),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_flags_set, {SizeTy},
         {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
   case Builtin::BI__builtin_cheri_flags_get:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_flags_get, SizeTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_flags_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_type_get:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_type_get, IntPtrTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_type_get, {IntPtrTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_perms_check:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_check, SizeTy),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_perms_check, {SizeTy},
         {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
   case Builtin::BI__builtin_cheri_offset_increment:
     return RValue::get(Builder.CreateGEP(EmitScalarExpr(E->getArg(0)),
                                          EmitScalarExpr(E->getArg(1)),
                                          "__builtin_cheri_offset_increment"));
   case Builtin::BI__builtin_cheri_offset_set:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_set, SizeTy),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_offset_set, {SizeTy},
         {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
   case Builtin::BI__builtin_cheri_offset_get:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_get, SizeTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_offset_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
 
   // Round to capability precision:
   // TODO: should we handle targets that don't have any precision constraints
   // here or in the backend?
   case Builtin::BI__builtin_cheri_round_representable_length:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_round_representable_length, {SizeTy}),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_round_representable_length, {SizeTy},
         {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_representable_alignment_mask:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_representable_alignment_mask, {SizeTy}),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_representable_alignment_mask, {SizeTy},
         {EmitScalarExpr(E->getArg(0))}));
 
   case Builtin::BI__builtin_cheri_callback_create: {
@@ -3926,17 +3924,17 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   }
 
   case Builtin::BI__builtin_cheri_address_get:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get, IntPtrTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_address_get,
+                                {IntPtrTy}, {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_address_set:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_set, IntPtrTy),
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_address_set, {IntPtrTy},
         {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
   case Builtin::BI__builtin_cheri_cap_load_tags:
-    return RValue::get(Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_load_tags, SizeTy),
-        {EmitScalarExpr(E->getArg(0))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_load_tags, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
 
   case Builtin::BI__fastfail:
     return RValue::get(EmitMSVCBuiltinExpr(MSVCIntrin::__fastfail, E));
