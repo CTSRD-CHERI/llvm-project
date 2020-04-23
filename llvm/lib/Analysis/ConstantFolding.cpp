@@ -918,7 +918,7 @@ Constant *SymbolicallyEvaluateGEP(const GEPOperator *GEP,
 
   auto *PTy = cast<PointerType>(Ptr->getType());
   if ((Ptr->isNullValue() || BasePtr != 0) &&
-      !DL.isNonIntegralPointerType(PTy)) {
+      !DL.isNonIntegralPointerType(PTy) && !DL.isFatPointer(PTy)) {
     Constant *C = ConstantInt::get(Ptr->getContext(), Offset + BasePtr);
     return ConstantExpr::getIntToPtr(C, ResTy);
   }
