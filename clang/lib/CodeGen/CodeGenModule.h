@@ -1100,8 +1100,7 @@ public:
   // Make sure that this type is translated.
   void UpdateCompletedType(const TagDecl *TD);
 
-  llvm::Constant *getMemberPointerConstant(const UnaryOperator *e,
-                                           CodeGenFunction *CGF);
+  llvm::Constant *getMemberPointerConstant(const UnaryOperator *e);
 
   /// Emit type info if type of an expression is a variably modified
   /// type. Also emit proper debug info for cast types.

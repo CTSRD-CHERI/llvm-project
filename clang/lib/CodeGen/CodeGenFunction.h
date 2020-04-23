@@ -3860,9 +3860,6 @@ public:
   RValue EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
                                       ReturnValueSlot ReturnValue);
 
-  llvm::Value* EmitCXXMemberPointerAddressOf(const UnaryOperator *uo);
-
-
   RValue EmitCXXOperatorMemberCallExpr(const CXXOperatorCallExpr *E,
                                        const CXXMethodDecl *MD,
                                        ReturnValueSlot ReturnValue);

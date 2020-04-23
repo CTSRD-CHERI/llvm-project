@@ -45,7 +45,7 @@ int call_virt(A* a) {
 int call_local_nonvirt(A* a) {
   // CHECK-LABEL: @_Z18call_local_nonvirtP1A(
   MemberPtr local_nonvirt = &A::nonvirt2;
-  // CAPTABLE: store i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A8nonvirt2Ev to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)*
+  // CAPTABLE: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A8nonvirt2Ev to i8 addrspace(200)*), i64 0 }, { i8 addrspace(200)*, i64 } addrspace(200)* %local_nonvirt, align 16
   return (a->*local_nonvirt)();
 }
 

@@ -2337,20 +2337,3 @@ llvm::Value *CodeGenFunction::EmitDynamicCast(Address ThisAddr,
 
   return Value;
 }
-
-llvm::Value *
-CodeGenFunction::EmitCXXMemberPointerAddressOf(const UnaryOperator *uo) {
-  // Member pointer constants always have a very particular form.
-  const MemberPointerType *type = cast<MemberPointerType>(uo->getType());
-  const ValueDecl *decl = cast<DeclRefExpr>(uo->getSubExpr())->getDecl();
-
-  // A member function pointer.
-  // We have to be
-  if (const CXXMethodDecl *method = dyn_cast<CXXMethodDecl>(decl))
-    return CGM.getCXXABI().EmitNonGlobalMemberFunctionPointer(*this, method);
-
-  // Otherwise, a member data pointer.
-  uint64_t fieldOffset = getContext().getFieldOffset(decl);
-  CharUnits chars = getContext().toCharUnitsFromBits((int64_t) fieldOffset);
-  return CGM.getCXXABI().EmitMemberDataPointer(type, chars);
-}
