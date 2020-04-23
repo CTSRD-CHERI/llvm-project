@@ -16,16 +16,19 @@ int external_global;
 
 // CHECK-LABEL: define {{[^@]+}}@global_fn_to_cap() #0
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @external_fn to i8*) to i8 addrspace(200)*)
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP0]], i64 ptrtoint (void ()* @external_fn to i64))
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 void* __capability global_fn_to_cap(void) {
   // ASM-LABEL: global_fn_to_cap:
-  // ASM-MIPS: ld $1, %got_disp(external_fn)($1)
-  // ASM-MIPS-NEXT: cgetpccsetoffset	$c3, $1
-  // ASM-RISCV: auipc a0, %got_pcrel_hi(external_fn)
-  // ASM-RISCV-NEXT:  ld a0, %pcrel_lo(
-  // FIXME-CHERI-RISCV: This is wrong:
-  // ASM-RISCV-NEXT:  cfromptr ca0, ddc, a0
+  // ASM-MIPS:      cgetpcc $c1
+  // ASM-MIPS-NEXT: ld $1, %got_disp(external_fn)($1)
+  // ASM-MIPS-NEXT: cfromptr $c3, $c1, $1
+  // ASM-RISCV: cspecialr ca0, pcc
+  // ASM-RISCV: auipc a1, %got_pcrel_hi(external_fn)
+  // ASM-RISCV-NEXT:  ld a1, %pcrel_lo(
+  // ASM-RISCV-NEXT:  cfromptr ca0, ca0, a1
   return (__cheri_tocap void* __capability)&external_fn;
 }
 
@@ -50,15 +53,41 @@ void* __capability global_data_to_cap(void) {
 // CHECK-NEXT:    store void ()* [[FN_PTR]], void ()** [[FN_PTR_ADDR]], align 8
 // CHECK-NEXT:    [[TMP0:%.*]] = load void ()*, void ()** [[FN_PTR_ADDR]], align 8
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast void ()* [[TMP0]] to i8*
-// CHECK-NEXT:    [[TMP2:%.*]] = addrspacecast i8* [[TMP1]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+// CHECK-NEXT:    [[TMP3:%.*]] = ptrtoint i8* [[TMP1]] to i64
+// CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP2]], i64 [[TMP3]])
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP4]]
 //
 void* __capability fn_ptr_to_cap(void (*fn_ptr)(void)) {
-  // Note: for function pointers we don't currently infer that we have to derive from PCC:
   // ASM-LABEL: fn_ptr_to_cap:
+  // ASM-MIPS:      cgetpcc $c1
+  // ASM-MIPS-NEXT: cfromptr $c3, $c1, $1
+  // ASM-RISCV:      cspecialr ca1, pcc
+  // ASM-RISCV-NEXT: cfromptr ca0, ca1, a0
+  return (__cheri_tocap void* __capability)fn_ptr;
+}
+
+// CHECK-LABEL: define {{[^@]+}}@fn_ptr_to_cap_not_smart_enough
+// CHECK-SAME: (void ()* [[FN_PTR:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[FN_PTR_ADDR:%.*]] = alloca void ()*, align 8
+// CHECK-NEXT:    [[TMP:%.*]] = alloca i8*, align 8
+// CHECK-NEXT:    store void ()* [[FN_PTR]], void ()** [[FN_PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load void ()*, void ()** [[FN_PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = bitcast void ()* [[TMP0]] to i8*
+// CHECK-NEXT:    store i8* [[TMP1]], i8** [[TMP]], align 8
+// CHECK-NEXT:    [[TMP2:%.*]] = load i8*, i8** [[TMP]], align 8
+// CHECK-NEXT:    [[TMP3:%.*]] = addrspacecast i8* [[TMP2]] to i8 addrspace(200)*
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+//
+void* __capability fn_ptr_to_cap_not_smart_enough(void (*fn_ptr)(void)) {
+  // ASM-LABEL: fn_ptr_to_cap_not_smart_enough:
   // ASM-MIPS:  cfromddc $c3, $1
   // ASM-RISCV: cfromptr ca0, ddc, a0
-  return (__cheri_tocap void* __capability)fn_ptr;
+  // Note: In this case clang doesn't see that the result is actual a function
+  // so it uses DDC:
+  void* tmp = (void*)fn_ptr;
+  return (__cheri_tocap void* __capability)tmp;
 }
 
 // CHECK-LABEL: define {{[^@]+}}@data_ptr_to_cap
