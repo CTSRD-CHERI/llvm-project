@@ -20,7 +20,6 @@ template <typename T> class ArrayRef;
 class MCTargetOptions;
 class MCAsmInfo;
 class StringRef;
-class TargetRegisterClass;
 
 class MipsABIInfo {
 public:
