@@ -181,7 +181,7 @@ void test2(int *array) {
   do_stuff_untyped(&array[0]);
   // aggressive-or-less-remark@-1{{not setting bounds for pointer to 'int' (should set bounds on full array but size is not known)}}
   // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
-  // common-remark@-3{{not setting bounds for array subscript on 'int * __capability' (array subscript on non-array type)}}
+  // common-remark@-3{{not setting bounds for array subscript on 'int *' (array subscript on non-array type)}}
 
   // SUBOBJECT-SAFE-NOT: @llvm.cheri.cap.bounds.set.i64
   // AGGRESSIVE-SAFE-NOT: @llvm.cheri.cap.bounds.set.i64

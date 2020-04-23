@@ -7,4 +7,4 @@ void f() {
   g(p ? p+1 : rshprog);
 }
 // expected-no-diagnostics
-// CHECK: ConditionalOperator {{.*}} {{.*}} 'const char * __capability'
+// CHECK: ConditionalOperator {{.*}} {{.*}} 'const char *'

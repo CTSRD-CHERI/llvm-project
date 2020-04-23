@@ -2,7 +2,7 @@
 // RUN: %cheri_cc1 -std=c11 -fsyntax-only %s -w -target-abi purecap -emit-llvm -DSKIP_ERRORS -o - | %cheri_FileCheck %s -check-prefix IR
 
 // On a variable declaration __attribute__((aligned(4))) sets the alignment to 4
-__attribute__((aligned(4))) void *data; // expected-warning-re{{alignment (4) of 'void * __capability' is less than the required capability alignment ({{8|16|32}})}}
+__attribute__((aligned(4))) void *data; // expected-warning-re{{alignment (4) of 'void *' is less than the required capability alignment ({{8|16|32}})}}
 // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 // IR: @data = addrspace(200) global i8 addrspace(200)* null, align 4
 
@@ -68,7 +68,7 @@ struct DBT7 { // expected-warning-re{{alignment (1) of 'struct DBT7' is less tha
 struct DBT7 dbt7;
 // IR: @dbt7 = addrspace(200) global %struct.DBT7 zeroinitializer, align 1
 struct DBT8 {
-  __attribute__((packed)) void *data; // expected-warning-re{{alignment (1) of 'void * __capability' is less than the required capability alignment ({{8|16|32}})}}
+  __attribute__((packed)) void *data; // expected-warning-re{{alignment (1) of 'void *' is less than the required capability alignment ({{8|16|32}})}}
                                       // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 };
 struct DBT8 dbt8;
@@ -76,7 +76,7 @@ struct DBT8 dbt8;
 
 #ifndef SKIP_ERRORS
 // _Alignas gives sensible errors:
-_Alignas(4) void *data2; // expected-error-re{{requested alignment is less than minimum alignment of {{8|16|32}} for type 'void * __capability'}}
-// expected-warning-re@-1{{alignment (4) of 'void * __capability' is less than the required capability alignment ({{8|16|32}})}}
+_Alignas(4) void *data2; // expected-error-re{{requested alignment is less than minimum alignment of {{8|16|32}} for type 'void *'}}
+// expected-warning-re@-1{{alignment (4) of 'void *' is less than the required capability alignment ({{8|16|32}})}}
 // expected-note@-2{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 #endif

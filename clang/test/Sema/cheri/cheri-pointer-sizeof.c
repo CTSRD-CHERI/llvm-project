@@ -31,7 +31,7 @@ _Static_assert(sizeof(struct bar) == 2 * _MIPS_SZCAP / 8, "Pointer size incorrec
 // CHECK-NEXT: |-VarDecl {{.*}} <line:11:1, col:12> col:12 referenced si 'struct foo':'struct foo'
 // CHECK-NEXT: |-VarDecl {{.*}} <line:12:1, col:7> col:7 referenced a 'long'
 // CHECK-NEXT: |-RecordDecl {{.*}} <line:14:1, line:18:1> line:14:8 struct bar definition
-// CHECK-NEXT: | |-FieldDecl {{.*}} <line:15:2, col:8> col:8 a 'void * __capability'
+// CHECK-NEXT: | |-FieldDecl {{.*}} <line:15:2, col:8> col:8 a 'void *'
 // CHECK-NEXT: | |-FieldDecl {{.*}} <line:16:2, col:7> col:7 d 'long'
 // CHECK-NEXT: | `-FieldDecl {{.*}} <line:17:2, col:7> col:7 e 'long'
-// CHECK-NEXT: |-VarDecl {{.*}} <line:19:1, col:7> col:7 referenced b 'void * __capability'
+// CHECK-NEXT: |-VarDecl {{.*}} <line:19:1, col:7> col:7 referenced b 'void *'

@@ -1295,6 +1295,8 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
   ABI.reset(createCXXABI(Target));
   AddrSpaceMap = getAddressSpaceMap(Target, LangOpts);
   AddrSpaceMapMangling = isAddrSpaceMapManglingEnabled(Target, LangOpts);
+  PrintingPolicy.SuppressCapabilityQualifier =
+      Target.areAllPointersCapabilities();
 
   // C99 6.2.5p19.
   InitBuiltinType(VoidTy,              BuiltinType::Void);

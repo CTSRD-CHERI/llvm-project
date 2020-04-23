@@ -1,12 +1,12 @@
-// RUN: %cheri_purecap_cc1 -fsyntax-only  %s -verify
-// RUN: %cheri_cc1 "-target-abi" "n64" -fsyntax-only  %s -verify
+// RUN: %cheri_purecap_cc1 -fsyntax-only  %s -verify=expected,purecap
+// RUN: %cheri_cc1 "-target-abi" "n64" -fsyntax-only  %s -verify=expected,hybrid
 
 // check that we reject usage of the __sync atomic builtins with capabilites
 // as this would result in wrong code generation
 
 // Check that we can emit assembly without crashing
-// RUN: %cheri_cc1 "-target-abi" "n64" -S -o /dev/null %s -verify
-// RUN: %cheri_purecap_cc1 -S -o /dev/null %s -verify
+// RUN: %cheri_cc1 "-target-abi" "n64" -S -o /dev/null %s -verify=expected,hybrid
+// RUN: %cheri_purecap_cc1 -S -o /dev/null %s -verify=expected,purecap
 // XFAIL: cheri_is_256
 // CHERI256 doesn't support the __sync_* builtins yet
 
@@ -45,9 +45,13 @@ int capability_ptr() {
   void* __capability foo_cap;
   void* __capability result = 0;
   void* __capability newval = (__cheri_tocap void* __capability * __capability)&foo_cap;
-  do_atomic_ops(&foo_cap, result, newval); // expected-error 13 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
+  do_atomic_ops(&foo_cap, result, newval);
+  // hybrid-error@-1 13 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
+  // purecap-error@-2 13 {{the __sync_* atomic builtins only work with integers and not capability type 'void *'.}}
   // check that calling the size-suffixed functions fails too
-  do_suffixed_atomic_ops(&foo_cap, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
+  do_suffixed_atomic_ops(&foo_cap, result, newval);
+  // hybrid-error@-1 5 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
+  // purecap-error@-2 5 {{the __sync_* atomic builtins only work with integers and not capability type 'void *'.}}
 }
 
 int intcap() {
@@ -96,9 +100,9 @@ void memory_checks(_Atomic(int*) *Ap, int**p, int* val) {
   (void)__c11_atomic_fetch_add(Ap, 1, memory_order_seq_cst);
   (void)__c11_atomic_init(Ap, val);
   (void)__c11_atomic_fetch_sub(Ap, 1, memory_order_seq_cst);
-  (void)__c11_atomic_fetch_and(Ap, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to atomic integer ('_Atomic(int * __capability) * __capability' invalid)}}
-  (void)__c11_atomic_fetch_or(Ap, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to atomic integer ('_Atomic(int * __capability) * __capability' invalid)}}
-  (void)__c11_atomic_fetch_xor(Ap, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to atomic integer ('_Atomic(int * __capability) * __capability' invalid)}}
+  (void)__c11_atomic_fetch_and(Ap, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to atomic integer ('_Atomic(int *) *' invalid)}}
+  (void)__c11_atomic_fetch_or(Ap, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to atomic integer ('_Atomic(int *) *' invalid)}}
+  (void)__c11_atomic_fetch_xor(Ap, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to atomic integer ('_Atomic(int *) *' invalid)}}
   (void)__c11_atomic_exchange(Ap, val, memory_order_seq_cst);
   (void)__c11_atomic_compare_exchange_strong(Ap, p, val, memory_order_seq_cst, memory_order_relaxed);
   (void)__c11_atomic_compare_exchange_weak(Ap, p, val, memory_order_seq_cst, memory_order_relaxed);
@@ -110,16 +114,16 @@ void memory_checks(_Atomic(int*) *Ap, int**p, int* val) {
   (void)__atomic_fetch_sub(p, 1, memory_order_seq_cst);
   (void)__atomic_add_fetch(p, 1, memory_order_seq_cst);
   (void)__atomic_sub_fetch(p, 1, memory_order_seq_cst);
-  (void)__atomic_fetch_and(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_fetch_or(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_fetch_xor(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_fetch_nand(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_fetch_min(p, val, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_fetch_max(p, val, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_and_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_or_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_xor_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
-  (void)__atomic_nand_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int * __capability * __capability' invalid)}}
+  (void)__atomic_fetch_and(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_fetch_or(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_fetch_xor(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_fetch_nand(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_fetch_min(p, val, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_fetch_max(p, val, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_and_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_or_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_xor_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
+  (void)__atomic_nand_fetch(p, 1, memory_order_seq_cst); // expected-error {{address argument to atomic operation must be a pointer to integer ('int **' invalid)}}
   (void)__atomic_exchange_n(p, val, memory_order_seq_cst);
   (void)__atomic_exchange(p, p, p, memory_order_seq_cst);
   (void)__atomic_compare_exchange(p, p, p, 0, memory_order_seq_cst, memory_order_relaxed);

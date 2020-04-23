@@ -49,7 +49,7 @@ constexpr void* voidptr_constant = (void*)0x1; // expected-error{{constexpr vari
 constexpr long long_from_voidptr_constant = (long)(void*)0x1;  // expected-note{{declared here}}
 // expected-error@-1{{constexpr variable 'long_from_voidptr_constant' must be initialized by a constant expression}}
 // expected-note@-2{{cast that performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
-// purecap-warning@-3{{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
+// purecap-warning@-3{{cast from capability type 'void *' to non-capability, non-address type 'long' is most likely an error}}
 static_assert(long_from_voidptr_constant == 1, ""); // expected-error{{static_assert expression is not an integral constant expression}}
 // expected-note@-1{{initializer of 'long_from_voidptr_constant' is not a constant expression}}
 constexpr INTTYPE intcap_from_voidptr_constant = (INTTYPE)(void*)0x2;  // expected-note{{declared here}}

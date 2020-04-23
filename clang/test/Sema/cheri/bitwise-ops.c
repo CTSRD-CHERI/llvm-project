@@ -40,7 +40,7 @@ void check_xor(void *ptr, uintptr_t cap, int i) {
   cap ^= i;   // offset-warning{{using xor on a capability type only operates on the offset}}
   cap ^= cap; // offset-warning{{using xor on a capability type only operates on the offset}}
 
-  uintptr_t hash = ptr ^ 0x1234567;                                  // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
+  uintptr_t hash = ptr ^ 0x1234567;                                  // expected-error{{invalid operands to binary expression ('void *' and 'int')}}
   uintptr_t hash2 = (__intcap_t)ptr ^ 0x1234567;                     // offset-warning{{using xor on a capability type only operates on the offset}}
   uintptr_t hash3 = cap ^ 0x1234567;                                 // offset-warning{{using xor on a capability type only operates on the offset}}
   uintptr_t nonsense = (__intcap_t)ptr ^ cap;                        // offset-warning{{using xor on a capability type only operates on the offset}}
@@ -127,7 +127,7 @@ typedef _Bool bool;
 #endif
 
 void set_low_pointer_bits(void *ptr, uintptr_t cap) {
-  bool aligned = ptr & 7;     // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
+  bool aligned = ptr & 7;     // expected-error{{invalid operands to binary expression ('void *' and 'int')}}
   bool aligned_bad = cap & 7; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
   // store flag in low pointer bits
@@ -137,16 +137,16 @@ void set_low_pointer_bits(void *ptr, uintptr_t cap) {
     with_flags &= ~3; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   }
 
-  ptr &= 3; // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
+  ptr &= 3; // expected-error{{invalid operands to binary expression ('void *' and 'int')}}
   cap &= 3; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
-  ptr &= ~3; // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
+  ptr &= ~3; // expected-error{{invalid operands to binary expression ('void *' and 'int')}}
   cap &= ~3; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
-  ptr &= cap; // expected-error{{invalid operands to binary expression ('void * __capability' and 'uintptr_t' (aka '__uintcap_t'))}}
+  ptr &= cap; // expected-error{{invalid operands to binary expression ('void *' and 'uintptr_t' (aka '__uintcap_t'))}}
   cap &= cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
-  ptr &= ~cap; // expected-error{{invalid operands to binary expression ('void * __capability' and 'uintptr_t' (aka '__uintcap_t'))}}
+  ptr &= ~cap; // expected-error{{invalid operands to binary expression ('void *' and 'uintptr_t' (aka '__uintcap_t'))}}
   cap &= ~cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 }
 
