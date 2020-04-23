@@ -297,29 +297,6 @@ public:
   size_t getSize() const override;
 };
 
-template <typename ELFT, typename CallBack>
-static void foreachGlobalSizesSymbol(InputSection *isec, CallBack &&cb) {
-  assert(isec->name == ".global_sizes");
-  for (Symbol *b : isec->file->getSymbols()) {
-    if (auto *d = dyn_cast<Defined>(b)) {
-      if (d->section != isec)
-        continue;
-      // skip the initial .global_sizes symbol (exists e.g. in
-      // openpam_static_modules.o)
-      if (d->isSection() && d->isLocal() && d->getName().empty())
-        continue;
-      StringRef name = d->getName();
-      if (!name.startswith(".size.")) {
-        error(".global_sizes symbol name is invalid: " + verboseToString(d));
-        continue;
-      }
-      StringRef realSymName = name.drop_front(strlen(".size."));
-      Symbol *target = symtab->find(realSymName);
-      cb(realSymName, target, d->value);
-    }
-  }
-}
-
 inline bool isSectionEndSymbol(StringRef name) {
   // Section end symbols like __preinit_array_end, etc. should actually be
   // zero size symbol since they are just markers for the end of a section

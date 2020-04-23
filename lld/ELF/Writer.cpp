@@ -1990,28 +1990,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
-  if (true) {
+  if (InX<ELFT>::capRelocs) {
     finalizeSynthetic(InX<ELFT>::capRelocs);
-
-    if (OutputSection *gs = findSection(".global_sizes"))
-      // Also check if the .global_sizes section needs to be writable:
-      for (BaseCommand *cmd : gs->sectionCommands)
-        if (auto *isd = dyn_cast<InputSectionDescription>(cmd))
-          for (InputSection *isec : isd->sections)
-            foreachGlobalSizesSymbol<ELFT>(
-                isec, [&gs](StringRef name, Symbol *sym, uint64_t offset) {
-                  (void)offset;
-                  if (name == "__progname" || name == "environ")
-                    // These are provided by crt1.c and we know the size so
-                    // we don't need to change .global_sizes to be writable
-                    return;
-                  if (sym->isUndefined() && (gs->flags & SHF_WRITE) == 0) {
-                    warn(".global_sizes section contains unresolved values -> "
-                         "making writable because it references unresolved "
-                         "symbol " + name);
-                    gs->flags |= SHF_WRITE;
-                  }
-                });
   }
 
   if (in.plt && in.plt->isNeeded())
