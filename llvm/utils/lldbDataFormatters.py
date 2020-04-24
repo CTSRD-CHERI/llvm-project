@@ -3,6 +3,8 @@ LLDB Formatters for LLVM data types.
 
 Load into LLDB with 'command script import /path/to/lldbDataFormatters.py'
 """
+import lldb
+
 
 def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand('type category define -e llvm -l c++')
@@ -15,6 +17,17 @@ def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.ArrayRefSynthProvider '
                            '-x "^llvm::ArrayRef<.+>$"')
+    # doesn't seem to handle subclasses (add more as needed):
+    for c in ('Value', 'Instruction', 'Constant', 'User', 'CallInst', 'CallBase',
+              'IntrinsicInst'):
+        debugger.HandleCommand('type summary add -w llvm '
+                               '-e -F lldbDataFormatters.ValueSummaryProvider '
+                               'llvm::' + c)
+    for c in ('Type', 'IntegerType', 'FunctionType', 'StructType', 'ArrayType',
+              'VectorType', 'PointerType'):
+        debugger.HandleCommand('type summary add -w llvm '
+                               '-e -F lldbDataFormatters.TypeSummaryProvider '
+                               'llvm::' + c)
     debugger.HandleCommand('type summary add -w llvm '
                            '-F lldbDataFormatters.OptionalSummaryProvider '
                            '-x "^llvm::Optional<.+>$"')
@@ -140,3 +153,29 @@ def ConstStringSummaryProvider(valobj, internal_dict):
     if valobj.GetNumChildren() == 1:
         return valobj.GetChildAtIndex(0).GetSummary()
     return ""
+
+
+def getExpressionPath(val):
+    stream = lldb.SBStream()
+    val.GetExpressionPath(stream)
+    return stream.GetData()
+
+
+def ValueSummaryProvider(valobj, internal_dict):
+    if valobj.GetValue() is None:
+        return None
+    summary = valobj.GetFrame().EvaluateExpression(
+        'llvm::valueDbgString(' + getExpressionPath(valobj) + ')').GetSummary()
+    if summary is None:
+        summary = "ERROR"
+    return summary.strip('\"')  # strip the quotes added by std::string summary
+
+
+def TypeSummaryProvider(valobj, internal_dict):
+    if valobj.GetValue() is None:
+        return None
+    summary = valobj.GetFrame().EvaluateExpression(
+        'llvm::typeDbgString(' + getExpressionPath(valobj) + ')').GetSummary()
+    if summary is None:
+        summary = "ERROR"
+    return summary.strip('\"')  # strip the quotes added by std::string summary
