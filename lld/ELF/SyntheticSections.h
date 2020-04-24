@@ -1048,7 +1048,7 @@ public:
   std::vector<InputSection *> exidxSections;
 
 private:
-  size_t size;
+  size_t size = 0;
 
   // Instead of storing pointers to the .ARM.exidx InputSections from
   // InputObjects, we store pointers to the executable sections that need
