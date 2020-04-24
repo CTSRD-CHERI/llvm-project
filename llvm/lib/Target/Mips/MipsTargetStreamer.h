@@ -20,8 +20,6 @@
 
 namespace llvm {
 
-struct MipsABIFlagsSection;
-
 // TODO: move this somewhere common
 llvm::Optional<unsigned> getCheriCapabilitySize(FeatureBitset Features);
 
