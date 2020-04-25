@@ -1681,9 +1681,7 @@ Optional<StringRef> Function::getSectionPrefix() const {
 }
 
 bool Function::nullPointerIsDefined() const {
-  return getFnAttribute("null-pointer-is-valid")
-          .getValueAsString()
-          .equals("true");
+  return hasFnAttribute(Attribute::NullPointerIsValid);
 }
 
 bool llvm::NullPointerIsDefined(const Function *F, unsigned AS) {
