@@ -772,7 +772,9 @@ AttributeSetNode::AttributeSetNode(ArrayRef<Attribute> Attrs)
                 "Too many attributes");
 
   for (const auto &I : *this) {
-    if (!I.isStringAttribute()) {
+    if (I.isStringAttribute()) {
+      StringAttrs.insert({ I.getKindAsString(), I });
+    } else {
       Attribute::AttrKind Kind = I.getKindAsEnum();
       AvailableAttrs[Kind / 8] |= 1ULL << (Kind % 8);
     }
@@ -859,10 +861,7 @@ AttributeSetNode *AttributeSetNode::get(LLVMContext &C, const AttrBuilder &B) {
 }
 
 bool AttributeSetNode::hasAttribute(StringRef Kind) const {
-  for (const auto &I : *this)
-    if (I.hasAttribute(Kind))
-      return true;
-  return false;
+  return StringAttrs.count(Kind);
 }
 
 Attribute AttributeSetNode::getAttribute(Attribute::AttrKind Kind) const {
@@ -875,10 +874,7 @@ Attribute AttributeSetNode::getAttribute(Attribute::AttrKind Kind) const {
 }
 
 Attribute AttributeSetNode::getAttribute(StringRef Kind) const {
-  for (const auto &I : *this)
-    if (I.hasAttribute(Kind))
-      return I;
-  return {};
+  return StringAttrs.lookup(Kind);
 }
 
 MaybeAlign AttributeSetNode::getAlignment() const {
