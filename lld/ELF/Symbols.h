@@ -260,6 +260,9 @@ public:
   uint8_t isPreemptible : 1;
 
   // True if an undefined or shared symbol is used from a live section.
+  //
+  // NOTE: In Writer.cpp the field is used to mark local defined symbols
+  // which are referenced by relocations when -r or --emit-relocs is given.
   uint8_t used : 1;
 
   // True if a symbol is referenced by a dynamic relocation and therefore needs
