@@ -3377,16 +3377,15 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
     CE->setDependentCastKind(Op.Kind);
     return Op.complete(CE);
   }
-  // __cheri_offset and __cheri_addr is valid for __uintcap_t as well
-  bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, true);
-  if (!SrcIsCap) {
+  // __cheri_offset and __cheri_addr is valid for __uintcap_t and pointers:
+  bool SrcIsValidCap = SrcTy->isIntCapType();
+  if (const PointerType *PT = SrcTy->getAs<PointerType>())
+    SrcIsValidCap = PT->isCHERICapability();
+  if (!SrcIsValidCap) {
     // Note: __cheri_addr can be used on plain pointers since otherwise it would
     // be very difficult to write code that compiles both in hybrid and in
     // purecap mode. However, the offset cast only makes sense for capabilities!
-    // XXXAR: Currently, __cheri_addr is allowed on references. Should we allow
-    // this without an address-of operator first?
-    if (IsOffsetCast || (!SrcTy->isPointerType() && !SrcTy->isReferenceType() &&
-                         !SrcTy->isIntCapType())) {
+    if (IsOffsetCast || (!SrcTy->isPointerType() && !SrcTy->isIntCapType())) {
       // XXXKG: What about functions?
       Diag(SubExpr->getBeginLoc(),
            diag::err_cheri_offset_addr_invalid_source_type)
