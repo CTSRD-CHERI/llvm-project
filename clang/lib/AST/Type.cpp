@@ -554,6 +554,8 @@ bool Type::isIntCapType() const {
     QualType Ty = ET->getDecl()->getIntegerType();
     if (!Ty.isNull())
       return Ty->isIntCapType();
+  } else if (const AtomicType *AT = getAs<AtomicType>()) {
+    return AT->getValueType()->isIntCapType();
   }
   return false;
 }
@@ -577,6 +579,8 @@ bool Type::canCarryProvenance(const ASTContext &C) const {
     return false; // avoid doubly-annotating a type
   if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType)) {
     return ET->getDecl()->getIntegerType()->canCarryProvenance(C);
+  } else if (const AtomicType *AT = getAs<AtomicType>()) {
+    return AT->getValueType()->canCarryProvenance(C);
   }
   // Some other kind of capability type -> assume it can carry provenance
   return true;
