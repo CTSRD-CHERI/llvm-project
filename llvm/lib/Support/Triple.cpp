@@ -782,15 +782,23 @@ Triple::Triple(const Twine &Str)
               .Default(UnknownEnvironment);
     }
   }
-  if (Environment == UnknownEnvironment) {
-    if (Components[0].startswith("mips64c")) {
-      // allow mips64c for purecap and mips64c128hybrid for CHERI128 (hybrid)
-      Environment = Components[0].endswith("hybrid") ? Triple::GNUABI64
-                                                     : Triple::CheriPurecap;
-    }
-  }
   if (ObjectFormat == UnknownObjectFormat)
     ObjectFormat = getDefaultFormat(*this);
+
+  // Compat to allow "mips64c128-clang" to be purecap clang
+  // TODO: remove this
+  if (Environment == UnknownEnvironment && Components.size() == 1 &&
+      Components[0].startswith("mips64c")) {
+    // allow mips64c for purecap and mips64c128hybrid for CHERI128 (hybrid)
+    // And remove the hybrid suffix from the string representation:
+    if (Components[0].endswith("hybrid")) {
+      Components[0].consume_back("hybrid");
+      setArchName(Components[0]);
+      setEnvironment(Triple::GNUABI64);
+    } else {
+      setEnvironment(Triple::CheriPurecap);
+    }
+  }
 }
 
 /// Construct a triple from string representations of the architecture,
@@ -982,6 +990,11 @@ std::string Triple::normalize(StringRef Str) {
       NormalizedEnvironment = Twine("android", AndroidVersion).str();
       Components[3] = NormalizedEnvironment;
     }
+  }
+
+  if (Components[0] == "cheri") {
+    assert(Arch == Triple::mips64);
+    Components[0] = "mips64c128";
   }
 
   // SUSE uses "gnueabi" to mean "gnueabihf"

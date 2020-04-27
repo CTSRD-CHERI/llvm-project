@@ -572,37 +572,39 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
   EXPECT_EQ(Triple::FreeBSD, T.getOS());
   EXPECT_EQ(Triple::MipsSubArch_cheri128, T.getSubArch());
-  T = Triple("cheri-purecap");
-  EXPECT_EQ(Triple::mips64, T.getArch());
-  EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
-  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
-  EXPECT_EQ(Triple::UnknownOS, T.getOS());
-  EXPECT_EQ(Triple::MipsSubArch_cheri128, T.getSubArch());
+  EXPECT_EQ(T.normalize(), "mips64c128-unknown-freebsd");
 
   T = Triple("mips64c128");
   EXPECT_EQ(Triple::mips64, T.getArch());
   EXPECT_EQ(Triple::CheriPurecap, T.getEnvironment());
   EXPECT_EQ(Triple::MipsSubArch_cheri128, T.getSubArch());
+  EXPECT_EQ(T.normalize(), "mips64c128-unknown-unknown-purecap");
   T = Triple("mips64c256");
   EXPECT_EQ(Triple::mips64, T.getArch());
   EXPECT_EQ(Triple::CheriPurecap, T.getEnvironment());
   EXPECT_EQ(Triple::MipsSubArch_cheri256, T.getSubArch());
+  EXPECT_EQ(T.normalize(), "mips64c256-unknown-unknown-purecap");
   T = Triple("mips64c64");
   EXPECT_EQ(Triple::mips64, T.getArch());
   EXPECT_EQ(Triple::CheriPurecap, T.getEnvironment());
   EXPECT_EQ(Triple::MipsSubArch_cheri64, T.getSubArch());
+  EXPECT_EQ(T.normalize(), "mips64c64-unknown-unknown-purecap");
+
   T = Triple("mips64c128hybrid");
   EXPECT_EQ(Triple::mips64, T.getArch());
   EXPECT_EQ(Triple::GNUABI64, T.getEnvironment());
   EXPECT_EQ(Triple::MipsSubArch_cheri128, T.getSubArch());
+  EXPECT_EQ(T.normalize(), "mips64c128-unknown-unknown-gnuabi64");
   T = Triple("mips64c256hybrid");
   EXPECT_EQ(Triple::mips64, T.getArch());
   EXPECT_EQ(Triple::GNUABI64, T.getEnvironment());
   EXPECT_EQ(Triple::MipsSubArch_cheri256, T.getSubArch());
+  EXPECT_EQ(T.normalize(), "mips64c256-unknown-unknown-gnuabi64");
   T = Triple("mips64c64hybrid");
   EXPECT_EQ(Triple::mips64, T.getArch());
   EXPECT_EQ(Triple::GNUABI64, T.getEnvironment());
   EXPECT_EQ(Triple::MipsSubArch_cheri64, T.getSubArch());
+  EXPECT_EQ(T.normalize(), "mips64c64-unknown-unknown-gnuabi64");
 
   T = Triple("mipsisa32r6-unknown-linux-gnu");
   EXPECT_EQ(Triple::mips, T.getArch());
