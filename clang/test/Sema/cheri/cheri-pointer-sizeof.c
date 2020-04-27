@@ -1,6 +1,6 @@
-// RUN: %cheri256_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
-// RUN: %cheri128_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
+// RUN: %cheri_purecap_cc1 -fsyntax-only %s -ast-dump - -verify | FileCheck %s
 // expected-no-diagnostics
+
 _Pragma("pointer_interpretation push")
 _Pragma("pointer_interpretation integer")
 struct foo {
@@ -22,8 +22,6 @@ _Static_assert(sizeof(b) == _MIPS_SZCAP / 8, "Pointer size incorrect");
 _Static_assert(sizeof(si) == 24, "Pointer size incorrect");
 _Static_assert(sizeof(struct bar) == 2 * _MIPS_SZCAP / 8, "Pointer size incorrect");
 
-// RUN: %cheri256_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -ast-dump | FileCheck %s
-// RUN: %cheri128_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -ast-dump | FileCheck %s
 // CHECK:      |-RecordDecl {{.*}} <{{.*}}/cheri-pointer-sizeof.c:6:1, line:10:1> line:6:8 struct foo definition
 // CHECK-NEXT: | |-FieldDecl {{.*}} <line:7:2, col:8> col:8 a 'long'
 // CHECK-NEXT: | |-FieldDecl {{.*}} <line:8:2, col:7> col:7 d 'long'

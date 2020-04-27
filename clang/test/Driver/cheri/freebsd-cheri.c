@@ -2,7 +2,7 @@
 // RUN:   -target cheri-pc-freebsd11 %s                              \
 // RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcheri_tree -### 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-CHERI %s
-// CHECK-CHERI: "-cc1" "-triple" "cheri-pc-freebsd11"
+// CHECK-CHERI: "-cc1" "-triple" "mips64c128-pc-freebsd11"
 // CHECK-CHERI: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
 // CHECK-CHERI: "--eh-frame-hdr" "-dynamic-linker" "{{.*}}ld-elf{{.*}}" "-o" "a.out" "{{.*}}crt1.o" "{{.*}}crti.o" "{{.*}}crtbegin.o" "-L[[SYSROOT]]/usr/lib" "{{.*}}.o" "--start-group" "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed" "-lc" "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed" "--end-group" "{{.*}}crtend.o" "{{.*}}crtn.o"
 //

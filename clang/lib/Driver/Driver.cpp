@@ -575,30 +575,29 @@ static llvm::Triple computeTargetTriple(const Driver &D,
       Target.setEnvironment(llvm::Triple::CheriPurecap);
       if (Target.isMIPS32())
         D.Diag(diag::err_drv_unsupported_opt_for_target) << "-mabi=purecap" << Target.str();
-      if (Target.getSubArch() == llvm::Triple::NoSubArch) {
-        const char *ArchName = nullptr;
-        if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
-          if (A->getOption().matches(options::OPT_cheri)) {
-            ArchName = "mips64c128";
-          } else {
-            ArchName = llvm::StringSwitch<const char *>(A->getValue())
-                           .Case("64", "mips64c64")
-                           .Case("128", "mips64c128")
-                           .Case("256", "mips64c256")
-                           .Default("mips64c128");
-          }
-        } else if (Arg *A2 = Args.getLastArg(options::OPT_mcpu_EQ)) {
-          ArchName = llvm::StringSwitch<const char *>(A2->getValue())
-                           .Case("cheri64", "mips64c64")
-                           .Case("cheri128", "mips64c128")
-                           .Case("cheri256", "mips64c256")
-                           .Default(nullptr);
-        }
-        // TODO: there is no Triple::setSubArch();
-        if (ArchName)
-          Target.setArchName(ArchName);
-      }
     }
+    // Adjust CHERI subarch based on -cheri/-mcpu flags
+    const char *ArchName = nullptr;
+    if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
+      if (A->getOption().matches(options::OPT_cheri)) {
+        ArchName = "mips64c128";
+      } else {
+        ArchName = llvm::StringSwitch<const char *>(A->getValue())
+                       .Case("64", "mips64c64")
+                       .Case("128", "mips64c128")
+                       .Case("256", "mips64c256")
+                       .Default("mips64c128");
+      }
+    } else if (Arg *A2 = Args.getLastArg(options::OPT_mcpu_EQ)) {
+      ArchName = llvm::StringSwitch<const char *>(A2->getValue())
+                     .Case("cheri64", "mips64c64")
+                     .Case("cheri128", "mips64c128")
+                     .Case("cheri256", "mips64c256")
+                     .Default(nullptr);
+    }
+    // TODO: there is no Triple::setSubArch();
+    if (ArchName)
+      Target.setArchName(ArchName);
   }
 
   // If target is RISC-V adjust the target triple according to

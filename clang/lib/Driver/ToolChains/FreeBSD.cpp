@@ -439,10 +439,8 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
 ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
   // Always use libc++ for CHERI purecap
   // TODO: always use libc++ for MIPS64?
-  if (getTriple().getOSMajorVersion() >= 10 || isCheriPurecap())
-    return ToolChain::CST_Libcxx;
-  // Always use libc++ for MIPS
-  if (getTriple().isMIPS64())
+  if (getTriple().getOSMajorVersion() == 0 ||
+      getTriple().getOSMajorVersion() >= 10 || isCheriPurecap())
     return ToolChain::CST_Libcxx;
   if (getTriple().isMIPS()) {
     switch (getTriple().getSubArch()) {

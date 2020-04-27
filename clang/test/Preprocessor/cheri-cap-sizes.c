@@ -11,52 +11,31 @@
 // RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri=128 -mcpu=cheri128 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-128,CHERI128 %s
 
-// now try -mcpu=256:
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=cheri256 \
-// RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-256,CHERI256 %s
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=cheri256 -mabi=purecap \
-// RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-256,CHERI256 %s
-// or with -cheri=256
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri=256 \
-// RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-256,CHERI256 %s
-// or with both
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri=256 -mcpu=cheri256 \
-// RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-256,CHERI256 %s
-
 // Try with -march=mips64
 // RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=mips4 -cheri=128 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-128,CHERI128 %s
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=mips4 -cheri=256 \
-// RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-256,CHERI256 %s
 // and -mcpu=mips4
 // RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -march=mips64 -cheri=128 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-128,CHERI128 %s
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -march=mips64 -cheri=256 \
-// RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-256,CHERI256 %s
 
-// now try a non-cheri triple but -mcpu=cheri{128,256}
+// now try a non-cheri triple but -mcpu=cheri128
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -mcpu=cheri128 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,CHERI128 -DARCHNAME=CHERI128 %s
-// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -mcpu=cheri256 \
-// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,CHERI256 -DARCHNAME=CHERI256 %s
 
 // now try a non-cheri triple with -cheri
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,CHERI128 -DARCHNAME=MIPS3 %s
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=128 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,CHERI128 -DARCHNAME=MIPS3 %s
-// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=256 \
-// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,CHERI256 -DARCHNAME=MIPS3 %s
+// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=128 \
+// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,128 -DARCHNAME=MIPS3 %s
 
 
 // MIPS: #define _MIPS_ARCH_[[ARCHNAME]] 1
 // CHERI128: #define _MIPS_CAP_ALIGN_MASK 0xfffffffffffffff0
-// CHERI256: #define _MIPS_CAP_ALIGN_MASK 0xffffffffffffffe0
 // CHERI128: #define _MIPS_SZCAP 128
-// CHERI256: #define _MIPS_SZCAP 256
 // CHECK: #define __CHERI_ADDRESS_BITS__ 64
 // CHERI128: #define __CHERI_CAPABILITY_WIDTH__ 128
-// CHERI256: #define __CHERI_CAPABILITY_WIDTH__ 256
 // PURECAP: #define __CHERI_PURE_CAPABILITY__ 2
 // MIPS-NOT: __CHERI_PURE_CAPABILITY__
 // CHECK: #define __CHERI__ 1
@@ -64,7 +43,6 @@
 // CHECK: #define __INTCAP_MAX__ 9223372036854775807L
 
 // CHERI128: #define __INTCAP_WIDTH__ 128
-// CHERI256: #define __INTCAP_WIDTH__ 256
 
 // Using the 128/256-bit integer type for __INTPTR_MAX__ does not make sense
 // See https://github.com/CTSRD-CHERI/llvm-project/issues/316
@@ -72,19 +50,14 @@
 // CHECK:     #define __INTPTR_TYPE__ __intcap_t
 
 // CHERI128: #define __SIZEOF_CHERI_CAPABILITY__ 16
-// CHERI256: #define __SIZEOF_CHERI_CAPABILITY__ 32
 // CHERI128: #define __SIZEOF_INTCAP__ 16
-// CHERI256: #define __SIZEOF_INTCAP__ 32
 
 // MIPS: #define __SIZEOF_POINTER__ 8
 // PURECAP-128: #define __SIZEOF_POINTER__ 16
-// PURECAP-256: #define __SIZEOF_POINTER__ 32
 
 // CHERI128: #define __SIZEOF_UINTCAP__ 16
-// CHERI256: #define __SIZEOF_UINTCAP__ 32
 // CHECK:    #define __UINTCAP_MAX__ 18446744073709551615UL
 // CHERI128: #define __UINTCAP_WIDTH__ 128
-// CHERI256: #define __UINTCAP_WIDTH__ 256
 
 // MIPS:        #define __UINTPTR_MAX__ 18446744073709551615UL
 // Using the 128/256-bit integer type for __UINTPTR_MAX__ does not make sense
@@ -95,4 +68,3 @@
 // PURECAP:     #define __UINTPTR_TYPE__ __uintcap_t
 // MIPS:        #define __UINTPTR_WIDTH__ 64
 // PURECAP-128: #define __UINTPTR_WIDTH__ 128
-// PURECAP-256: #define __UINTPTR_WIDTH__ 256

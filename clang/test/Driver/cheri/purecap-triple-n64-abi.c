@@ -4,10 +4,10 @@
 // First check that -cc1 gives errors:
 // RUN: not %clang -cc1 -triple cheri-unknown-freebsd-purecap -cheri-size 128 -target-cpu mips4 -target-abi n64 %s -emit-llvm -o - 2>&1 | FileCheck %s --check-prefix N64-ABI-WITH-PURECAP-TRIPLE
 // RUN: not %clang -cc1as -triple cheri-unknown-freebsd-purecap -cheri-size 128 -target-cpu mips4 -target-abi n64 %s -o - 2>&1 | FileCheck %s --check-prefix N64-ABI-WITH-PURECAP-TRIPLE
-// N64-ABI-WITH-PURECAP-TRIPLE: error: ABI 'n64' is incompatible with target triple 'cheri-unknown-freebsd-purecap'
+// N64-ABI-WITH-PURECAP-TRIPLE: error: ABI 'n64' is incompatible with target triple 'mips64c128-unknown-freebsd-purecap'
 // RUN: not %clang -cc1 -triple cheri-unknown-freebsd-gnuabi64 -cheri-size 128 -target-cpu mips4 -target-abi purecap %s -emit-llvm -o - 2>&1 | FileCheck %s --check-prefix PURECAP-ABI-WITH-N64-TRIPLE
 // RUN: not %clang -cc1as -triple cheri-unknown-freebsd-gnuabi64 -cheri-size 128 -target-cpu mips4 -target-abi purecap %s -o - 2>&1 | FileCheck %s --check-prefix PURECAP-ABI-WITH-N64-TRIPLE
-// PURECAP-ABI-WITH-N64-TRIPLE: error: ABI 'purecap' is incompatible with target triple 'cheri-unknown-freebsd-gnuabi64'
+// PURECAP-ABI-WITH-N64-TRIPLE: error: ABI 'purecap' is incompatible with target triple 'mips64c128-unknown-freebsd-gnuabi64'
 
 // These ones are fine:
 // RUN: %clang -cc1 -triple cheri-unknown-freebsd -cheri-size 128 -target-cpu mips4 -target-abi purecap %s -emit-llvm -o /dev/null
@@ -33,29 +33,29 @@
 
 // RUN: %clang --target=cheri-unknown-freebsd-purecap -cheri=128 -mcpu=mips4 -EB -mabi=64 %s -S -emit-llvm -o /dev/null -v 2>&1 | FileCheck %s --check-prefix OVERRIDING-PURECAP
 
-// OVERRIDING-PURECAP: warning: overriding triple 'cheri-unknown-freebsd-purecap' environment 'purecap' since an explicit -mabi=64 flag was passed [-Woption-ignored]
-// OVERRIDING-PURECAP: Target: cheri-unknown-freebsd-gnuabi64
-// OVERRIDING-PURECAP: -cc1 -triple cheri-unknown-freebsd-gnuabi64
+// OVERRIDING-PURECAP: warning: overriding triple 'mips64c128-unknown-freebsd-purecap' environment 'purecap' since an explicit -mabi=64 flag was passed [-Woption-ignored]
+// OVERRIDING-PURECAP: Target: mips64c128-unknown-freebsd-gnuabi64
+// OVERRIDING-PURECAP: -cc1 -triple mips64c128-unknown-freebsd-gnuabi64
 // OVERRIDING-PURECAP-SAME: -target-abi n64
 
 // RUN: echo "" > %t.s
 // RUN: %clang --target=cheri-unknown-freebsd-purecap -cheri=128 -mcpu=mips4 -EB -mabi=64 %t.s -c -o /dev/null -v 2>&1 | FileCheck %s --check-prefix OVERRIDING-PURECAP-ASM
-// OVERRIDING-PURECAP-ASM: Target: cheri-unknown-freebsd-gnuabi64
-// OVERRIDING-PURECAP-ASM: -cc1as -triple cheri-unknown-freebsd-gnuabi64
+// OVERRIDING-PURECAP-ASM: Target: mips64c128-unknown-freebsd-gnuabi64
+// OVERRIDING-PURECAP-ASM: -cc1as -triple mips64c128-unknown-freebsd-gnuabi64
 // OVERRIDING-PURECAP-ASM-SAME: -target-abi n64
 
 
 // Check that n64 -> purecap also works:
 // RUN: %clang --target=cheri-unknown-freebsd-gnuabi64 -cheri=128 -mcpu=mips4 -EB -mabi=purecap %s -S -emit-llvm -o /dev/null -v 2>&1 | FileCheck %s --check-prefix OVERRIDING-N64
-// OVERRIDING-N64: warning: overriding triple 'cheri-unknown-freebsd-gnuabi64' environment 'gnuabi64' since an explicit -mabi=purecap flag was passed [-Woption-ignored]
+// OVERRIDING-N64: warning: overriding triple 'mips64c128-unknown-freebsd-gnuabi64' environment 'gnuabi64' since an explicit -mabi=purecap flag was passed [-Woption-ignored]
 // OVERRIDING-N64: Target: mips64c128-unknown-freebsd-purecap
 // OVERRIDING-N64: -cc1 -triple mips64c128-unknown-freebsd-purecap
 // OVERRIDING-N64-SAME: -target-abi purecap
 
 // RUN: echo "" > %t.s
-// RUN: %clang --target=cheri-unknown-freebsd-gnuabi64 -cheri=256 -mcpu=mips4 -EB -mabi=purecap %t.s -c -o /dev/null -v 2>&1 | FileCheck %s --check-prefix OVERRIDING-N64-ASM
-// OVERRIDING-N64-ASM: Target: mips64c256-unknown-freebsd-purecap
-// OVERRIDING-N64-ASM: -cc1as -triple mips64c256-unknown-freebsd-purecap
+// RUN: %clang --target=cheri-unknown-freebsd-gnuabi64 -cheri -mcpu=mips4 -EB -mabi=purecap %t.s -c -o /dev/null -v 2>&1 | FileCheck %s --check-prefix OVERRIDING-N64-ASM
+// OVERRIDING-N64-ASM: Target: mips64c128-unknown-freebsd-purecap
+// OVERRIDING-N64-ASM: -cc1as -triple mips64c128-unknown-freebsd-purecap
 // OVERRIDING-N64-ASM-SAME: -target-abi purecap
 
 // MIPS32 triple should be rejected with -purecap

@@ -3400,8 +3400,8 @@
 // MIPS64EL:#define mips 1
 //
 
-// RUN: %cheri256_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI256 %s
-// RUN: %cheri128_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI128 %s
+// RUN: %cheri256_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=mips64c256-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI256 %s
+// RUN: %cheri128_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=mips64c128-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI128 %s
 
 // CHERI-COMMON: #define MIPSEB 1
 // CHERI-COMMON-NEXT: #define _ABI64 3
@@ -3771,54 +3771,29 @@
 // CHERI-COMMON-NEXT: #define mips 1
 
 
-// RUN: %cheri128_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX %s
-// CHERI128-SANDBOX: #define _MIPS_FPSET 32
-// CHERI128-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 2
-// CHERI128-SANDBOX: #define __CHERI_SANDBOX__ 4
-// CHERI128-SANDBOX: #define __INTPTR_FMTd__ "Pd"
-// CHERI128-SANDBOX: #define __INTPTR_FMTi__ "Pi"
-// CHERI128-SANDBOX: #define __INTPTR_MAX__ 9223372036854775807L
-// CHERI128-SANDBOX: #define __INTPTR_TYPE__ __intcap_t
-// CHERI128-SANDBOX: #define __INTPTR_WIDTH__ 128
-// CHERI128-SANDBOX: #define __UINTPTR_FMTX__ "PX"
-// CHERI128-SANDBOX: #define __UINTPTR_FMTo__ "Po"
-// CHERI128-SANDBOX: #define __UINTPTR_FMTu__ "Pu"
-// CHERI128-SANDBOX: #define __UINTPTR_FMTx__ "Px"
-// CHERI128-SANDBOX: #define __UINTPTR_MAX__ 18446744073709551615UL
-// CHERI128-SANDBOX: #define __UINTPTR_TYPE__ __uintcap_t
-// CHERI128-SANDBOX: #define __UINTPTR_WIDTH__ 128
-// CHERI128-SANDBOX: #define __mips_fpr 64
+// RUN: %cheri_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-PURECAP %s
+// CHERI128-PURECAP: #define _MIPS_FPSET 32
+// CHERI128-PURECAP: #define __CHERI_PURE_CAPABILITY__ 2
+// CHERI128-PURECAP: #define __CHERI_SANDBOX__ 4
+// CHERI128-PURECAP: #define __INTPTR_FMTd__ "Pd"
+// CHERI128-PURECAP: #define __INTPTR_FMTi__ "Pi"
+// CHERI128-PURECAP: #define __INTPTR_MAX__ 9223372036854775807L
+// CHERI128-PURECAP: #define __INTPTR_TYPE__ __intcap_t
+// CHERI128-PURECAP: #define __INTPTR_WIDTH__ 128
+// CHERI128-PURECAP: #define __UINTPTR_FMTX__ "PX"
+// CHERI128-PURECAP: #define __UINTPTR_FMTo__ "Po"
+// CHERI128-PURECAP: #define __UINTPTR_FMTu__ "Pu"
+// CHERI128-PURECAP: #define __UINTPTR_FMTx__ "Px"
+// CHERI128-PURECAP: #define __UINTPTR_MAX__ 18446744073709551615UL
+// CHERI128-PURECAP: #define __UINTPTR_TYPE__ __uintcap_t
+// CHERI128-PURECAP: #define __UINTPTR_WIDTH__ 128
+// CHERI128-PURECAP: #define __mips_fpr 64
 
-// RUN: %cheri128_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX-SOFT %s
-// CHERI128-SANDBOX-SOFT: #define _MIPS_FPSET 32
-// CHERI128-SANDBOX-SOFT: #define __mips_fpr 64
-// CHERI128-SANDBOX-SOFT-NOT: #define __mips_hard_float 1
-// CHERI128-SANDBOX-SOFT: #define __mips_soft_float 1
-
-
-// RUN: %cheri256_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX %s
-// CHERI256-SANDBOX: #define _MIPS_FPSET 32
-// CHERI256-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 2
-// CHERI256-SANDBOX: #define __CHERI_SANDBOX__ 4
-// CHERI256-SANDBOX: #define __INTPTR_FMTd__ "Pd"
-// CHERI256-SANDBOX: #define __INTPTR_FMTi__ "Pi"
-// CHERI256-SANDBOX: #define __INTPTR_MAX__ 9223372036854775807L
-// CHERI256-SANDBOX: #define __INTPTR_TYPE__ __intcap_t
-// CHERI256-SANDBOX: #define __INTPTR_WIDTH__ 256
-// CHERI256-SANDBOX: #define __UINTPTR_FMTX__ "PX"
-// CHERI256-SANDBOX: #define __UINTPTR_FMTo__ "Po"
-// CHERI256-SANDBOX: #define __UINTPTR_FMTu__ "Pu"
-// CHERI256-SANDBOX: #define __UINTPTR_FMTx__ "Px"
-// CHERI256-SANDBOX: #define __UINTPTR_MAX__ 18446744073709551615UL
-// CHERI256-SANDBOX: #define __UINTPTR_TYPE__ __uintcap_t
-// CHERI256-SANDBOX: #define __UINTPTR_WIDTH__ 256
-// CHERI256-SANDBOX: #define __mips_fpr 64
-
-// RUN: %cheri128_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX-SOFT %s
-// CHERI256-SANDBOX-SOFT: #define _MIPS_FPSET 32
-// CHERI256-SANDBOX-SOFT: #define __mips_fpr 64
-// CHERI256-SANDBOX-SOFT-NOT: #define __mips_hard_float 1
-// CHERI256-SANDBOX-SOFT: #define __mips_soft_float 1
+// RUN: %cheri128_cc1 -E -dM -ffreestanding -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI-PURECAP-SOFT %s
+// CHERI-PURECAP-SOFT: #define _MIPS_FPSET 32
+// CHERI-PURECAP-SOFT: #define __mips_fpr 64
+// CHERI-PURECAP-SOFT-NOT: #define __mips_hard_float 1
+// CHERI-PURECAP-SOFT: #define __mips_soft_float 1
 
 
 // Check MIPS arch and isa macros
