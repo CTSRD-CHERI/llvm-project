@@ -29,7 +29,7 @@ static uint8_t GetMagicIndexForSegment(PhdrEntry* Segment) {
 
 template <class ELFT>
 CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
-    : SyntheticSection(SHF_ALLOC | (Config->Pic ? SHF_WRITE : 0), /* XXX: actually RELRO */
+    : SyntheticSection(SHF_ALLOC, /* XXX: actually RELRO */
                        SHT_PROGBITS, 8, "__cap_relocs") {
   this->Entsize = RelocSize;
 }
@@ -280,77 +280,6 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 
   if (!addEntry(Loc, {Target, CapabilityOffset, TargetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
-  }
-  if (Loc.NeedsDynReloc) {
-    // XXXAR: We don't need to create a symbol here since if we pass nullptr
-    // to the dynamic reloc it will add a relocation against the load address
-#ifdef DEBUG_CAP_RELOCS
-    llvm::sys::path::filename(Loc.Section->File->getName());
-    StringRef Filename = llvm::sys::path::filename(Loc.Section->File->getName());
-    std::string SymbolHackName = ("__caprelocs_hack_" + Loc.Section->Name + "_" +
-                                  Filename).str();
-    auto LocationSym = Symtab->find(SymbolHackName);
-    if (!LocationSym) {
-        Symtab->addDefined<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
-                                 STT_OBJECT, Loc.Offset, Config->CapabilitySize,
-                                 STB_GLOBAL, Loc.Section, Loc.Section->File);
-        LocationSym = Symtab->find(SymbolHackName);
-        assert(LocationSym);
-    }
-
-    // Needed because local symbols cannot be used in dynamic relocations
-    // TODO: do this better
-    // message("Adding dyn reloc at " + toString(this) + "+0x" +
-    // utohexstr(CurrentEntryOffset))
-#endif
-    assert(CurrentEntryOffset < getSize());
-    // Add a dynamic relocation so that RTLD fills in the right base address
-    // We only have the offset relative to the load address...
-    // Ideally RTLD/crt_init_globals would just add the load address to all
-    // cap_relocs entries that have a RELATIVE flag set instead of requiring a
-    // full Elf_Rel/Elf_Rela
-    // The addend is zero here since it will be written in writeTo()
-    assert(!Config->IsRela);
-    In.RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
-                            true, nullptr, 0});
-    ContainsDynamicRelocations = true;
-  }
-  if (TargetNeedsDynReloc) {
-#ifdef DEBUG_CAP_RELOCS
-    message("Adding dyn reloc at " + toString(this) + "+0x" +
-            utohexstr(OffsetInOutSec) + " against " + Target.verboseToString());
-    message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
-#endif
-
-    bool RelativeToLoadAddress = false;
-    RelType RelocKind;
-    if (Target.Sym->IsPreemptible) {
-      RelocKind = *elf::Target->AbsPointerRel;
-    } else {
-      // If the target is not preemptible we can optimize this to a relative
-      // relocation agaist the image base
-      RelativeToLoadAddress = true;
-      RelocKind = elf::Target->RelativeRel;
-    }
-    // The addend is not used as the offset into the capability here, as we
-    // have the offset field in the __cap_relocs for that. The Addend
-    // will be zero unless we are targetting a string constant as these
-    // don't have a symbol and will be like .rodata.str+0x1234
-    int64_t Addend = Target.Offset;
-    // Capability target is the second field -> offset + 8
-    assert((CurrentEntryOffset + 8) < getSize());
-    In.RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + 8,
-                            RelativeToLoadAddress, Target.Sym, Addend});
-    ContainsDynamicRelocations = true;
-    if (!RelativeToLoadAddress) {
-      // We also add a size relocation for the size field here
-      assert(Config->EMachine == EM_MIPS);
-      RelType Size64Rel = R_MIPS_CHERI_SIZE | (R_MIPS_64 << 8);
-      // Capability size is the fourth field -> offset + 24
-      assert((CurrentEntryOffset + 24) < getSize());
-      In.RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 24,
-                             Target.Sym);
-    }
   }
 }
 
