@@ -341,8 +341,8 @@ class LLVMConfig(object):
         extra_args = []
         if tool == "llc":  # TODO: add this to clang as well?
             extra_args = ["-verify-machineinstrs"]
-        cheri128_args = [triple_opt + '=cheri-unknown-freebsd', '-mcpu=cheri128', '-mattr=+cheri128'] + extra_args
-        cheri256_args = [triple_opt + '=cheri-unknown-freebsd', '-mcpu=cheri256', '-mattr=+cheri256'] + extra_args
+        cheri128_args = [triple_opt + '=mips64-unknown-freebsd', '-mcpu=cheri128', '-mattr=+cheri128'] + extra_args
+        cheri256_args = [triple_opt + '=mips64-unknown-freebsd', '-mcpu=cheri256', '-mattr=+cheri256'] + extra_args
         riscv32_cheri_args = [triple_opt + '=riscv32-unknown-freebsd', '-mattr=+xcheri'] + extra_args
         riscv64_cheri_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+xcheri'] + extra_args
         riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64', '-mattr=+cap-mode'] + riscv32_cheri_args
@@ -471,9 +471,9 @@ class LLVMConfig(object):
 
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-        cheri128_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd',
+        cheri128_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
                 '-target-cpu', 'cheri128', '-cheri-size', '128', '-mllvm', '-verify-machineinstrs']
-        cheri256_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd',
+        cheri256_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
                 '-target-cpu', 'cheri256', '-cheri-size', '256', '-mllvm', '-verify-machineinstrs']
         riscv32_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
                 '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
@@ -492,7 +492,7 @@ class LLVMConfig(object):
             default_cheri_cpu = 'cheri256'
             cheri_cc1_args = cheri256_cc1_args
 
-        cheri_clang_args = ['-target', 'cheri-unknown-freebsd', '-nostdinc',
+        cheri_clang_args = ['-target', 'mips64-unknown-freebsd', '-nostdinc',
                             '-mcpu=' + default_cheri_cpu, '-msoft-float']
         riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
         riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
@@ -570,14 +570,6 @@ class LLVMConfig(object):
         self.config.substitutions.append(
             (' %clang-cl ',
              """\"*** invalid substitution, use '%clang_cl'. ***\""""))
-
-        # Only tests inside Driver/ should be using the %clang substitution with a cheri triple
-        self.config.substitutions.append(('%clang_cc1.+cheri-unknown-freebsd.+',
-            """false "*** Do not use 'clang_cc1' with cheri triple in tests, use 'cheri_cc1'. ***" """))
-        self.config.substitutions.append(('%clang.+cheri-unknown-freebsd.+',
-            """false "*** Do not use 'clang' with cheri triple in tests, use 'cheri_clang'. ***" """))
-
-
 
     def use_lld(self, additional_tool_dirs=[], required=True):
         """Configure the test suite to be able to invoke lld.

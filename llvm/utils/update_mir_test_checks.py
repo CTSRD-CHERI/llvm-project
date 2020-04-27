@@ -110,12 +110,12 @@ def build_run_list(test, run_lines, verbose=False):
         common.verify_filecheck_prefixes(filecheck_cmd)
 
         if llc_cmd.startswith("%"):
-            llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
-            llc_cmd = llc_cmd.replace("%cheri128_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
-            llc_cmd = llc_cmd.replace("%cheri256_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
-            llc_cmd = llc_cmd.replace("%cheri_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
-            llc_cmd = llc_cmd.replace("%cheri128_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
-            llc_cmd = llc_cmd.replace("%cheri256_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
+            llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+            llc_cmd = llc_cmd.replace("%cheri128_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+            llc_cmd = llc_cmd.replace("%cheri256_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
+            llc_cmd = llc_cmd.replace("%cheri_llc", "llc -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+            llc_cmd = llc_cmd.replace("%cheri128_llc", "llc -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+            llc_cmd = llc_cmd.replace("%cheri256_llc", "llc -mtriple=mips64-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
             llc_cmd = llc_cmd.replace("%riscv32_cheri_purecap_llc", "llc -mtriple=riscv32-unknown-freebsd -target-abi il32pc64 -mattr=+xcheri,+cap-mode")
             llc_cmd = llc_cmd.replace("%riscv64_cheri_purecap_llc", "llc -mtriple=riscv64-unknown-freebsd -target-abi l64pc128 -mattr=+xcheri,+cap-mode")
             llc_cmd = llc_cmd.replace("%riscv32_cheri_llc", "llc -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
