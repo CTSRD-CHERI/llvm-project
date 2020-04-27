@@ -1,8 +1,6 @@
 ; REQUIRES: clang
-; FIXME: when using llc the FoldCapIntrinsics.cpp pass doesn't seem to run
-; TODO: %cheri_llc %s -o - | FileCheck %s
-; RUN: %cheri_clang -S %s -xir -o - -O3 -emit-llvm | FileCheck %s -check-prefix IR
-; RUN: %cheri_clang -S %s -xir -o - -O3 | FileCheck %s
+; RUN: %cheri_opt %s -S -O3 | FileCheck %s -check-prefix IR
+; RUN: %cheri_opt %s -S -O3 | %cheri_llc -o - | FileCheck %s
 target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
@@ -22,17 +20,17 @@ target triple = "cheri-unknown-freebsd"
 define i8 addrspace(200)* @add_cap() #0 {
 entry:
   %cap = alloca i8 addrspace(200)*, align 16
-  store i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*), i8 addrspace(200)** %cap, align 16
+  store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 100), i8 addrspace(200)** %cap, align 16
   %0 = load i8 addrspace(200)*, i8 addrspace(200)** %cap, align 16
   %add.ptr = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 924
   ret i8 addrspace(200)* %add.ptr
   ; This creates a potentially valid capability:
   ; IR-LABEL: @add_cap()
-  ; IR:       ret i8 addrspace(200)* inttoptr (i64 1024 to i8 addrspace(200)*)
+  ; IR:       ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1024)
   ; CHECK-LABEL: add_cap
   ; CHECK: daddiu $1, $zero, 1024
   ; CHECK: jr $ra
-  ; CHECK: cfromddc $c3, $1
+  ; CHECK: cincoffset $c3, $cnull, $1
 }
 
 define i8 addrspace(200)* @add_uintcap_t() #0 {
@@ -49,7 +47,7 @@ entry:
   ret i8 addrspace(200)* %5
   ; This always creates an untagged capability:
   ; IR-LABEL: @add_uintcap_t()
-  ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 1024)
+  ; IR: ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1024)
 
   ; CHECK-LABEL: add_uintcap_t
   ; CHECK: daddiu	$1, $zero, 1024

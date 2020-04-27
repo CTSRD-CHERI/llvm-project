@@ -41,7 +41,6 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Transforms/CHERICap.h"
 #include "llvm/Transforms/Scalar.h"
 #include <string>
 
@@ -69,7 +68,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTarget() {
   initializeMicroMipsSizeReducePass(*PR);
   initializeMipsPreLegalizerCombinerPass(*PR);
   initializeMipsOptimizePICCallPass(*PR);
-  initializeCHERICapFoldIntrinsicsPass(*PR);
   initializeCheriAddressingModeFolderPass(*PR);
   initializeCheriRangeCheckerPass(*PR);
 }
@@ -309,9 +307,6 @@ void MipsPassConfig::addIRPasses() {
   if (getMipsSubtarget().inMips16HardFloat())
     addPass(createMips16HardFloatPass());
   if (getMipsSubtarget().isCheri()) {
-    if (getOptLevel() != CodeGenOpt::Level::None) {
-      addPass(createCHERICapFoldIntrinsicsPass());
-    }
     addPass(createCheriLoopPointerDecanonicalize());
     addPass(createAggressiveDCEPass());
     addPass(createCheriRangeChecker());

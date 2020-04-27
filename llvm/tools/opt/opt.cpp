@@ -601,7 +601,6 @@ int main(int argc, char **argv) {
 
   // Add the Cheri IR -> IR passes
   initializeCheriBoundAllocasPass(Registry);
-  initializeCHERICapFoldIntrinsicsPass(Registry); // FIXME: remove
 
 #ifdef BUILD_EXAMPLES
   initializeExampleIRTransforms(Registry);

@@ -1873,6 +1873,144 @@ Instruction *InstCombiner::foldIntrinsicWithOverflowCommon(IntrinsicInst *II) {
   return nullptr;
 }
 
+template <Intrinsic::ID GetIntrinsic, Intrinsic::ID SetIntrinsic>
+Instruction *foldSetOffsetOrAddress(InstCombiner* IC, IntrinsicInst *II) {
+  // We can ignore any other set_addr/set_offset instructons since the final
+  // setaddr will override those. For setoffset we have to be a bit more
+  // conservative since a setoffset/incoffset/setaddr could have caused the
+  // value to become unrepresetable.
+  Value *Op0 = II->getArgOperand(0);
+  Value *Op1 = II->getArgOperand(1);
+  // If the input argument to setaddr/setoffset is another setoffset/setaddr,
+  // we can use the base argument of that setoffset/setaddr.
+  // Replace set{offset,addr}(set{offset,addr}(C, A), B) with
+  // set{offset,addr}(C, B). Must come before the setoffset to
+  // incoffset transformation in case C is an add.
+  Value *Base = Op0->stripPointerCastsSameRepresentation();
+  if (auto *II0 = dyn_cast<IntrinsicInst>(Base)) {
+    // Note: I'm not sure this is always beneficial, so let's do a one-use
+    // check be sure that the original one can be removed
+    if (II0->hasOneUse() &&
+        (II0->getIntrinsicID() == Intrinsic::cheri_cap_offset_set ||
+         II0->getIntrinsicID() == Intrinsic::cheri_cap_address_set)) {
+      Value *PreviousSetBase = II0->getArgOperand(0);
+      LLVM_DEBUG(dbgs() << "II->setOperand(0) -> "; PreviousSetBase->dump());
+      if (isa<ConstantPointerNull>(PreviousSetBase))
+        II->removeParamAttr(0, Attribute::NonNull);
+      return IC->replaceOperand(*II, 0, PreviousSetBase);
+    }
+  }
+
+  // setaddr(arg, getaddr(arg)) -> arg
+  // setoffset(arg, getoffset(arg)) -> arg
+  Value *LHS, *RHS;
+  if (match(Op1, m_Intrinsic<GetIntrinsic>(m_Value(RHS)))) {
+    if (RHS->stripPointerCastsSameRepresentation() ==
+        Op0->stripPointerCastsSameRepresentation()) {
+      return IC->replaceInstUsesWith(*II, Op0);
+    }
+  }
+
+  // If the value is derived from NULL, we can always optimize it to a single
+  // GEP (either constant or non-constant).
+  // Note: the same value will be used in assembly for constants that are
+  // expensive to synthesize. Small integers are rematerialized since the
+  // backend handles them in isTriviallyReMaterializable and friends.
+  Value *BaseBeforePointerArith =
+      getBasePtrIgnoringCapabilityAddressManipulation(Op0, IC->getDataLayout());
+  if (auto *Null = dyn_cast<ConstantPointerNull>(BaseBeforePointerArith)) {
+    Value *Op1 = II->getArgOperand(1);
+    if (auto ConstOp1 = dyn_cast<Constant>(Op1)) {
+      if (ConstOp1->isZeroValue())
+        return IC->replaceInstUsesWith(*II, Null);
+      return IC->replaceInstUsesWith(
+          *II, ConstantExpr::getGetElementPtr(
+                   II->getType()->getPointerElementType(), Null, ConstOp1));
+    } else {
+      return GetElementPtrInst::Create(II->getType()->getPointerElementType(),
+                                       Null, Op1);
+    }
+  }
+  // fold chains of set{offset,addr}, (inc-offset/GEP)+ into a single set-{offset,addr}
+  if (auto ConstOp1 = dyn_cast<ConstantInt>(Op1)) {
+    User *OnlyUser = II->hasOneUse() ? *II->user_begin() : nullptr;
+    bool MadeChange = false;
+    while (OnlyUser) {
+      // Look through bitcasts:
+      if (auto BC = dyn_cast<BitCastOperator>(OnlyUser)) {
+        OnlyUser = BC->hasOneUse() ? *BC->user_begin() : nullptr;
+        continue;
+      }
+      // If there is only a single use of the set{offset,address} result, we
+      // might be able to fold it into a single setoffset.
+      // For example: GEP(setaddr(A, 100), 50) -> setaddr(A, 150)
+      if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(OnlyUser)) {
+        APInt Offset(Op1->getType()->getIntegerBitWidth(), 0);
+        if (GEP->accumulateConstantOffset(IC->getDataLayout(), Offset)) {
+          LLVM_DEBUG(dbgs() << "Folding constant GEP into set: "; GEP->dump());
+          IC->replaceOperand(*II, 1,
+                             ConstantInt::get(ConstOp1->getType(),
+                                              ConstOp1->getValue() + Offset));
+          IC->replaceInstUsesWith(*GEP, II);
+          ConstOp1 = cast<ConstantInt>(II->getArgOperand(1));
+          MadeChange = true;
+          LLVM_DEBUG(dbgs() << "Result= "; II->dump());
+          OnlyUser = II->hasOneUse() ? *II->user_begin() : nullptr;
+          continue;
+        }
+      }
+      // TODO: should we also try to fold non-constant values?
+#if 0 // from CheriFoldCapIntrinsics, not ported yet.
+    Value* Arg = nullptr;
+    if (Value *Increment = getOffsetIncrement(OnlyUser, &Arg)) {
+      assert(Arg == CI);
+      Instruction *ReplacedInstr = cast<Instruction>(OnlyUser);
+      IRBuilder<> B(ReplacedInstr);
+      Value *NewOffset = B.CreateAdd(CI->getOperand(1), Increment);
+      LLVM_DEBUG(dbgs() << "CI->setOperand(1) -> "; NewOffset->dump());
+      CI->setOperand(1, NewOffset);
+      LLVM_DEBUG(dbgs() << "New CI: "; CI->dump());
+      // We have to move this instruction after the offset instruction
+      // because otherwise we use a value that has not yet been defined
+      CI->moveAfter(ReplacedInstr);
+      // Keep doing this transformation for incoffset chains with only a
+      // single user:
+      OnlyUser = ReplacedInstr->hasOneUse() ? *ReplacedInstr->user_begin() : nullptr;
+      LLVM_DEBUG(dbgs() << "Replacing all uses: "; ReplacedInstr->dump();
+                     dbgs() << "New replacement: "; CI->dump(););
+      ReplacedInstr->replaceAllUsesWith(CI);
+      // erasing here can cause a crash -> add to list so that caller can remove it
+      // ReplacedInstr->eraseFromParent();
+      ToErase.insert(ReplacedInstr);
+      assert(OnlyUser != ReplacedInstr && "Should not cause an infinite loop!");
+      Modified = true;
+      if (!OnlyUser)
+        break;
+    }
+#endif
+      // No change made -> exit loop
+      break;
+    }
+    if (MadeChange)
+      return II;
+  }
+
+  // TODO: handle more complex cases with more than one add.
+  if (match(Op1, m_Add(m_Value(LHS), m_Value(RHS)))) {
+    Value *Add = nullptr;
+    if (match(LHS, m_Intrinsic<GetIntrinsic>(m_Specific(Base))))
+      Add = RHS;
+    else if (match(RHS, m_Intrinsic<GetIntrinsic>(m_Specific(Base))))
+      Add = LHS;
+    if (Add) {
+      // TODO: BinaryOperator::Create()
+      return GetElementPtrInst::Create(II->getType()->getPointerElementType(),
+                                       Base, Add);
+    }
+  }
+  return nullptr;
+}
+
 /// CallInst simplification. This mostly only handles folding of intrinsic
 /// instructions. For normal calls, it allows visitCallBase to do the heavy
 /// lifting.
@@ -1880,8 +2018,9 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   // Don't try to simplify calls without uses. It will not do anything useful,
   // but will result in the following folds being skipped.
   if (!CI.use_empty())
-    if (Value *V = SimplifyCall(&CI, SQ.getWithInstruction(&CI)))
+    if (Value *V = SimplifyCall(&CI, SQ.getWithInstruction(&CI))) {
       return replaceInstUsesWith(CI, V);
+    }
 
   if (isFreeCall(&CI, &TLI))
     return visitFree(CI);
@@ -2587,8 +2726,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
         // csetboundsexact(csetbounds(x, len), len) -> csetboundsexact(x, len)
         // Update csetboundsexact to use the input argument of csetbounds.
         // If M0 is dead after this it will also be removed here.
-        II->setArgOperand(0, M0->getArgOperand(0));
-        return II;
+        return replaceOperand(*II, 0, M0->getArgOperand(0));
       }
     }
     // Check if we can completely omit the setbounds (all uses are known to be
@@ -2657,7 +2795,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
         // Note: we fetch the operand here again, since Op0 might have a different
         // pointer type than i8*. Unnecessary casts will be removed later.
         LLVM_DEBUG(dbgs() << "IC: Replacing setbounds use" << *U->getUser() << "\n");
-        U->set(II->getArgOperand(0));
+        replaceUse(*U, II->getArgOperand(0));
         LLVM_DEBUG(dbgs() << "    with " << *U->getUser() << '\n');
       }
       MadeIRChange = true;
@@ -2665,6 +2803,19 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     }
     break;
   }
+  case Intrinsic::cheri_cap_offset_set:
+    if (Instruction *I =
+            foldSetOffsetOrAddress<Intrinsic::cheri_cap_offset_get,
+                                   Intrinsic::cheri_cap_offset_set>(this, II))
+      return I;
+    break;
+  case Intrinsic::cheri_cap_address_set:
+    if (Instruction *I =
+            foldSetOffsetOrAddress<Intrinsic::cheri_cap_address_get,
+                                   Intrinsic::cheri_cap_address_set>(this, II))
+      return I;
+    break;
+
   case Intrinsic::x86_bmi_bextr_32:
   case Intrinsic::x86_bmi_bextr_64:
   case Intrinsic::x86_tbm_bextri_u32:

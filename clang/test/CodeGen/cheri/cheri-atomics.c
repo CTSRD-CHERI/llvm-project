@@ -11,25 +11,19 @@ int main(void) {
   // TODO: implement this inline
   __c11_atomic_init(&p, (int *)7);
   // CHECK: [[P_AS_I8:%.+]] = bitcast i32 addrspace(200)* addrspace(200)* %p to i8 addrspace(200)*
-  // CHECK: [[INITVAL:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 7)
-  // CHECK: [[P_AS_I8_PTRPTR:%.+]] = bitcast i32 addrspace(200)* addrspace(200)* %p to i8 addrspace(200)* addrspace(200)*
-  // CHECK: store i8 addrspace(200)* [[INITVAL]], i8 addrspace(200)* addrspace(200)* [[P_AS_I8_PTRPTR]], align
+  // CHECK:  store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 7) to i32 addrspace(200)*), i32 addrspace(200)* addrspace(200)* %p,
 
   __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST); // expected-warning {{misaligned atomic operation may incur significant performance penalty}}
-  // CHECK: [[INC:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 4)
-  // CHECK: call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* nonnull [[INC]], i32 signext 5)
+  // CHECK: call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 4), i32 signext 5)
   __c11_atomic_fetch_sub(&p, 2, __ATOMIC_SEQ_CST); // expected-warning {{misaligned atomic operation may incur significant performance penalty}}
-  // CHECK: [[INC2:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 8)
-  // CHECK: call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* nonnull [[INC2]], i32 signext 5)
+  // CHECK: call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 8), i32 signext 5)
   int *c = __c11_atomic_load(&p, __ATOMIC_SEQ_CST);
   // CHECK: [[C_VALUE:%.+]] = load atomic i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %p seq_cst, align
   __c11_atomic_store(&p, 0, __ATOMIC_SEQ_CST);
   // CHECK: store atomic i32 addrspace(200)* null, i32 addrspace(200)* addrspace(200)* %p seq_cst, align
   int* expected = (int*)(__UINTPTR_TYPE__)1;
   __c11_atomic_compare_exchange_strong(&p, &expected, c, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-  // CHECK: [[EXPECTED_I8:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-  // CHECK: [[EXPECTED:%.+]] = bitcast i8 addrspace(200)* [[EXPECTED_I8]] to i32 addrspace(200)*
-  // CHECK: cmpxchg i32 addrspace(200)* addrspace(200)* %p, i32 addrspace(200)* [[EXPECTED]], i32 addrspace(200)* [[C_VALUE]] seq_cst seq_cst
+  // CHECK: cmpxchg i32 addrspace(200)* addrspace(200)* %p, i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i32 addrspace(200)*), i32 addrspace(200)* [[C_VALUE]] seq_cst seq_cst
 
   int* old = __c11_atomic_exchange(&p, c, __ATOMIC_SEQ_CST);
   // CHECK: atomicrmw xchg i32 addrspace(200)* addrspace(200)* %p, i32 addrspace(200)* [[C_VALUE]] seq_cst

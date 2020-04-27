@@ -17,7 +17,6 @@ set(LLVM_LINK_COMPONENTS
   ObjCARCOpts
   Remarks
   ScalarOpts
-  CHERICapOpts
   Support
   Target
   TransformUtils

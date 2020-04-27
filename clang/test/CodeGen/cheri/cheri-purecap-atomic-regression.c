@@ -72,9 +72,7 @@ _Atomic(int *) a;
 //
 // OPT-LABEL: @test_store(
 // OPT-NEXT:  entry:
-// OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-// OPT-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// OPT-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[#CAP_SIZE]], !tbaa !6
+// OPT-NEXT:    store atomic i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i32 addrspace(200)*), i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[#CAP_SIZE]], !tbaa !6
 // OPT-NEXT:    ret void
 //
 void test_store() {
@@ -82,11 +80,10 @@ void test_store() {
   // ASM-LABEL: test_store:
   // TODO: why is this not going in the delay slot?
   // ASM: clcbi	$c1, %captab20(a)($c26)
-  // ASM-NEXT: cincoffset	$c2, $cnull, 1
   // ASM-NEXT: sync
+  // ASM-NEXT: cincoffset	$c2, $cnull, 1
   // ASM-NEXT: csc	$c2, $zero, 0($c1)
   // ASM-NEXT: sync
   // ASM-NEXT: cjr	$c17
   // ASM-NEXT: nop
-
 }

@@ -51,14 +51,12 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
   return mtx;
 }
 
-
 // BROKEN-OPT-LABEL: @this_broke_qmutex(
 // BROKEN-OPT-NEXT:  entry:
-// BROKEN-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 1)
 // BROKEN-OPT-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[MTX:%.*]])
 // BROKEN-OPT-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
 // BROKEN-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* [[MTX]], i64 [[AND]])
-// BROKEN-OPT-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], [[TMP0]]
+// BROKEN-OPT-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], getelementptr (i8, i8 addrspace(200)* null, i64 1)
 // BROKEN-OPT-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // BROKEN-OPT:       if.then:
 // BROKEN-OPT-NEXT:    [[AND1:%.*]] = and i64 [[TMP1]], -2
@@ -120,11 +118,10 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 // TODO: should we diagnose these cases where we actually emit a runtime check?
 // BROKEN-OPT-LABEL: @can_fold_the_bitand_provenance_check(
 // BROKEN-OPT-NEXT:  entry:
-// BROKEN-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 1)
 // BROKEN-OPT-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[MTX:%.*]])
 // BROKEN-OPT-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
 // BROKEN-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* [[MTX]], i64 [[AND]])
-// BROKEN-OPT-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], [[TMP0]]
+// BROKEN-OPT-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], getelementptr (i8, i8 addrspace(200)* null, i64 1)
 // BROKEN-OPT-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // BROKEN-OPT:       if.then:
 // BROKEN-OPT-NEXT:    [[AND1:%.*]] = and i64 [[TMP1]], -2

@@ -1,6 +1,5 @@
 ; RUN: %cheri_purecap_opt -S -O3 %s | FileCheck %s
 
-
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri-vla.c'
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri-vla.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -31,8 +30,6 @@ define void @foo() local_unnamed_addr #0 {
   ; Other targets don't do so leave it like this
   call void @test(i8 addrspace(200)* getelementptr inbounds ([5 x i8], [5 x i8] addrspace(200)* @.str, i64 0, i64 0)) #1
   ; CHECK-NOTYET: call void @test(i8 addrspace(200)* nonnull getelementptr inbounds ([5 x i8], [5 x i8] addrspace(200)* @.str, i64 0, i64 0))
-
-
   ret void
 }
 

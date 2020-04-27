@@ -48,8 +48,6 @@
 ; CHECK-NEXT:      Scalarize Masked Memory Intrinsics
 ; CHECK-NEXT:      Expand reduction intrinsics
 ; CHECK-NEXT:      Expand Atomic instructions
-; CHERI-NEXT:    CHERI fold capability intrinsics
-; CHERI-NEXT:    FunctionPass Manager
 ; CHECK-NEXT:      Dominator Tree Construction
 ; CHECK-NEXT:      Natural Loop Information
 ; CHERI-NEXT:      Scalar Evolution Analysis

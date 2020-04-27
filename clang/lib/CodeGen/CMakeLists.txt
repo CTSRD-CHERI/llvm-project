@@ -14,7 +14,6 @@ set(LLVM_LINK_COMPONENTS
   LTO
   Linker
   MC
-  CHERICapOpts
   ObjCARCOpts
   Object
   Passes
