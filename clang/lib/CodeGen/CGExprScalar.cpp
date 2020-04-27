@@ -2399,9 +2399,11 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (IncludesFunctionType) {
         Value *PCC =
             Builder.CreateIntrinsic(llvm::Intrinsic::cheri_pcc_get, {}, {});
-        return Builder.CreateIntrinsic(
+        assert(CGF.CGM.getDataLayout().isFatPointer(DestType));
+        auto PccDerivedCap = Builder.CreateIntrinsic(
             llvm::Intrinsic::cheri_cap_from_pointer, {CGF.PtrDiffTy},
             {PCC, Builder.CreatePtrToInt(Src, CGF.PtrDiffTy)});
+        return Builder.CreatePointerCast(PccDerivedCap, DestType);
       }
     }
     return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(
