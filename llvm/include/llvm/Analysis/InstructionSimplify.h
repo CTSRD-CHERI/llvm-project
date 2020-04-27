@@ -294,6 +294,16 @@ bool recursivelySimplifyInstruction(Instruction *I,
                                     const DominatorTree *DT = nullptr,
                                     AssumptionCache *AC = nullptr);
 
+/// Return the underlying Value*, stripping all GEP, pointer cast and
+/// setoffset/setaddr intrinsics (i.e. everything that keeps the non-address
+/// bits of CHERI capabilities the same)
+Value *getBasePtrIgnoringCapabilityAddressManipulation(Value *V,
+                                                       const DataLayout &DL);
+/// Similar to getBasePtrIgnoringCapabilityAddressManipulation but also strips
+/// intrinsics that modify the capability metadata (including sealing and
+/// cleartag)
+Value *getBasePtrIgnoringCapabilityManipulation(Value *V, const DataLayout &DL);
+
 // These helper functions return a SimplifyQuery structure that contains as
 // many of the optional analysis we use as are currently valid.  This is the
 // strongly preferred way of constructing SimplifyQuery in passes.

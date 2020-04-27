@@ -1,7 +1,7 @@
 // default is address:
-// RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
-// RUN: %cheri_purecap_cc1 -cheri-uintcap=offset -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,OFFSET -enable-var-scope
-// RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations -Wno-cheri-provenance | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
+// RUN: %cheri_purecap_cc1 -cheri-uintcap=offset -emit-llvm %s -O2 -o - -Wno-cheri-provenance -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,OFFSET -enable-var-scope
+// RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -emit-llvm %s -O2 -o - -Wno-cheri-provenance -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
 
 long uintcap_to_long(__uintcap_t cap) {
   // BOTH-LABEL: define i64 @uintcap_to_long(i8 addrspace(200)* readnone
@@ -21,9 +21,8 @@ long cap_to_long(void *__capability cap) {
 
 long write_uintcap(__uintcap_t *cap) {
   // BOTH-LABEL: @write_uintcap(
-  // OFFSET: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 5)
-  // ADDR:   [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 5)
-  // BOTH-NEXT: store i8 addrspace(200)* [[RESULT]], i8 addrspace(200)* addrspace(200)* %cap
+  // BOTH-NEXT: entry:
+  // BOTH-NEXT: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 5), i8 addrspace(200)* addrspace(200)* %cap
   // BOTH-NEXT: ret i64 5
   *cap = 5;
   return *cap;
@@ -126,14 +125,12 @@ long modulo_return_long(__uintcap_t cap) {
 
 void do_unlock(void);
 // BOTH-LABEL: @this_broke_qmutex(
-// OFFSET:       [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 1)
-// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[MTX:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-// ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[MTX:%.*]])
+// OFFSET:       [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[MTX:%.*]])
+// ADDR:         [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[MTX:%.*]])
 // BOTH-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
 // OFFSET-NEXT:  [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[MTX]], i64 [[AND]])
 // ADDR-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[MTX]], i64 [[AND]])
-// BOTH-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], [[TMP0]]
+// BOTH-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], getelementptr (i8, i8 addrspace(200)* null, i64 1)
 // BOTH-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // BOTH:       if.then:
 // BOTH-NEXT:    tail call void @do_unlock()

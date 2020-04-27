@@ -146,8 +146,7 @@ uintptr_t test_cg_eq_op_rhs_noprov(uintptr_t lhs, no_provenance_uintptr_t rhs) {
 // CHECK-NEXT:    [[SUB1:%.*]] = sub i64 0, [[TMP2]]
 // CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG_PTR]], i64 [[SUB1]])
 // CHECK-NEXT:    call void @check(i8 addrspace(200)* [[TMP3]]) #4
-// CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 -5)
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* nonnull [[TMP4]]) #4
+// CHECK-NEXT:    call void @check(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -5)) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_unary_minus(uintptr_t arg, char *arg_ptr) {
@@ -180,11 +179,11 @@ void test_cg_unary_not(uintptr_t arg, char *arg_ptr) {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i8 addrspace(200)* [[ARG:%.*]], null
 // CHECK-NEXT:    [[CONV:%.*]] = zext i1 [[TOBOOL]] to i64
-// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[CONV]])
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
 // CHECK-NEXT:    call void @check(i8 addrspace(200)* [[TMP0]]) #4
 // CHECK-NEXT:    [[TOBOOL1:%.*]] = icmp eq i8 addrspace(200)* [[ARG_PTR:%.*]], null
 // CHECK-NEXT:    [[CONV4:%.*]] = zext i1 [[TOBOOL1]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[CONV4]])
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV4]]
 // CHECK-NEXT:    call void @check(i8 addrspace(200)* [[TMP1]]) #4
 // CHECK-NEXT:    ret void
 //

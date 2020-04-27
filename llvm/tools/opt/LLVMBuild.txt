@@ -27,7 +27,6 @@ required_libraries =
  IPO
  Instrumentation
  Scalar
- CHERICap
  ObjCARC
  Passes
  all-targets

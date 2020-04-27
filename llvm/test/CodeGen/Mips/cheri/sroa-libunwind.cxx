@@ -14,23 +14,23 @@ extern "C" __uintcap_t minimal_test_case(__int128 y) {
   __uintcap_t r;
   __builtin_memcpy(&r, (void *)(__uintcap_t)y, sizeof(r));
   return r;
-   // CHECK:      [[CONV:%.+]] = trunc i128 %y to i64
-   // CHECK-NEXT: [[CAP:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 [[CONV]])
-   // CHECK-NEXT: [[SROA_CAST:%.+]] = bitcast i8 addrspace(200)* [[CAP]] to i8 addrspace(200)* addrspace(200)*
-   // Alignment is 1 here since we can't know what y contained:
-   // CHECK-NEXT: %r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[SROA_CAST]], align 1
-   // CHECK-NEXT: ret i8 addrspace(200)* %r.0.copyload
+  // CHECK:      [[CONV:%.+]] = trunc i128 %y to i64
+  // CHECK-NEXT: [[CAP:%.+]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+  // CHECK-NEXT: [[SROA_CAST:%.+]] = bitcast i8 addrspace(200)* [[CAP]] to i8 addrspace(200)* addrspace(200)*
+  // Alignment is 1 here since we can't know what y contained:
+  // CHECK-NEXT: %r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[SROA_CAST]], align 1
+  // CHECK-NEXT: ret i8 addrspace(200)* %r.0.copyload
 }
 extern "C" __uintcap_t minimal_test_case2(__int128 y) {
   __uintcap_t r;
   __builtin_memcpy(&r, (__uintcap_t*)(void *)(__uintcap_t)y, sizeof(r));
   return r;
-   // CHECK:      [[CONV:%.+]] = trunc i128 %y to i64
-   // CHECK-NEXT: [[CAP:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 [[CONV]])
-   // CHECK-NEXT: [[SROA_CAST:%.+]] = bitcast i8 addrspace(200)* [[CAP]] to i8 addrspace(200)* addrspace(200)*
-   // Alignment is 16/32 due to the explicit cast to __uintcap_t*
-   // CHECK-NEXT: %r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[SROA_CAST]], align 16
-   // CHECK-NEXT: ret i8 addrspace(200)* %r.0.copyload
+  // CHECK:      [[CONV:%.+]] = trunc i128 %y to i64
+  // CHECK-NEXT: [[CAP:%.+]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+  // CHECK-NEXT: [[SROA_CAST:%.+]] = bitcast i8 addrspace(200)* [[CAP]] to i8 addrspace(200)* addrspace(200)*
+  // Alignment is 16/32 due to the explicit cast to __uintcap_t*
+  // CHECK-NEXT: %r.0.copyload = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[SROA_CAST]], align 16
+  // CHECK-NEXT: ret i8 addrspace(200)* %r.0.copyload
 }
 
 extern "C" __uintcap_t minimal_test_case3(__int128 y) {

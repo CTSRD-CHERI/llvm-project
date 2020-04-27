@@ -29,6 +29,7 @@
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Analysis/VectorUtils.h"
 #include "llvm/IR/Cheri.h"
+#include "llvm/IR/CheriIntrinsics.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
@@ -5054,6 +5055,162 @@ static Value *SimplifyRelativeLoad(Constant *Ptr, Constant *Offset,
   return ConstantExpr::getBitCast(LoadedLHSPtr, Int8PtrTy);
 }
 
+Value *
+llvm::getBasePtrIgnoringCapabilityAddressManipulation(Value *V,
+                                                      const DataLayout &DL) {
+  // Calling an llvm.cheri.cap.$INTRIN.get() on a null value or
+  // an integer stored in a capability always returns 0 or -1 (for CGetLen and
+  // CGetType) unless $INTRIN is offset/address (in which case it returns the
+  // int value)
+
+  // Strip GEPs and pointer casts
+  while (GEPOperator *GEP =
+             dyn_cast<GEPOperator>(V->stripPointerCastsSameRepresentation())) {
+    V = GEP->getPointerOperand();
+  }
+  // The base for inttoptr instructions is NULL
+  // TODO: disallow inttoptr for capabilities?
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(V)) {
+    if (CE->isCast() && CE->getOpcode() == Instruction::IntToPtr) {
+      assert(CE->getNumOperands() == 1);
+      return ConstantPointerNull::get(cast<PointerType>(V->getType()));
+    }
+  }
+  if (auto *I2P = dyn_cast<IntToPtrInst>(V)) {
+    return ConstantPointerNull::get(cast<PointerType>(V->getType()));
+  }
+  Value *Op0 = nullptr;
+  // We can ignore all setoffset/incoffset/setaddr operations if called on
+  // null -> set OnlyIfRootWasNull=true when recursing. This currently doesn't
+  // change anything but if we were to also infer for non-null values we
+  // would need to abort any further analysis after a setoffset/incoffset or
+  // setaddr since the intrinsic could cause the capability to become
+  // unrepresentable (which is not an issue if it is already null)
+  if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityAddressManipulation(Op0, DL);
+  } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_address_set>(
+                          m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityAddressManipulation(Op0, DL);
+  }
+  return V;
+}
+
+Value *llvm::getBasePtrIgnoringCapabilityManipulation(Value *V,
+                                                      const DataLayout &DL) {
+  V = getBasePtrIgnoringCapabilityAddressManipulation(V, DL);
+  Value *Op0 = nullptr;
+  if (match(V, m_Intrinsic<Intrinsic::cheri_cap_bounds_set>(m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityManipulation(Op0, DL);
+  } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_bounds_set_exact>(
+                          m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityManipulation(Op0, DL);
+  } else if (match(V,
+                   m_Intrinsic<Intrinsic::cheri_cap_flags_set>(m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityManipulation(Op0, DL);
+  } else if (match(V,
+                   m_Intrinsic<Intrinsic::cheri_cap_perms_and>(m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityManipulation(Op0, DL);
+  } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_seal>(m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityManipulation(Op0, DL);
+  } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_seal_entry>(
+                          m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityManipulation(Op0, DL);
+  } else if (match(V,
+                   m_Intrinsic<Intrinsic::cheri_cap_tag_clear>(m_Value(Op0)))) {
+    return getBasePtrIgnoringCapabilityManipulation(Op0, DL);
+  }
+  return V;
+}
+
+static Value *
+stripAndAccumulateGEPsAndPointerCastsSameRepr(Value *V, const DataLayout &DL,
+                                              APInt &OffsetAPInt) {
+  Value *Result = V->stripPointerCastsSameRepresentation();
+  for (int i = 0; i < 5; i++) {
+    // Look through pointer casts and accumulate constant GEPs:
+    Value *NewVal =
+        Result->stripAndAccumulateConstantOffsets(DL, OffsetAPInt,
+                                                   /*AllowNonInbounds=*/true);
+    NewVal = NewVal->stripPointerCastsSameRepresentation();
+    if (NewVal == Result)
+      return NewVal;
+    Result = NewVal;
+  }
+  return Result;
+}
+
+template <Intrinsic::ID Intrin, Intrinsic::ID SetIntrin>
+static Value *inferCapabilityOffsetOrAddr(Value *V, Type *ResultTy,
+                                          const DataLayout &DL) {
+  // Try to infer the offset/address from a prior setoffset/setaddr value
+  Value *IntrinArg = nullptr;
+  // getaddr(setaddr(A, B)) -> B and getoffset(setoffset(A, B)) -> B
+  if (match(V, m_Intrinsic<SetIntrin>(m_Value(), m_Value(IntrinArg)))) {
+    return IntrinArg;
+  }
+  // get{addr,offset}(setaddr(NULL, B)) -> B
+  if (match(V, m_Intrinsic<Intrinsic::cheri_cap_address_set>(
+                   m_Zero(), m_Value(IntrinArg)))) {
+    return IntrinArg;
+  }
+  // get{addr,offset}(setoffset(NULL, B)) -> B
+  if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
+                   m_Zero(), m_Value(IntrinArg)))) {
+    return IntrinArg;
+  }
+
+  // get{addr,offset}(GEP(NULL, B)) -> B
+  if (auto GEP = dyn_cast<GetElementPtrInst>(V)) {
+    if (isa<ConstantPointerNull>(GEP->getPointerOperand()) &&
+        GEP->getNumIndices() == 1 &&
+        GEP->getOperand(1)->getType() == ResultTy) {
+      return GEP->getOperand(1);
+    }
+  }
+
+  APInt OffsetAPInt(DL.getIndexTypeSizeInBits(V->getType()), 0);
+  // Look through pointer casts and accumulate constant GEPs:
+  Value *BasePtr =
+      stripAndAccumulateGEPsAndPointerCastsSameRepr(V, DL, OffsetAPInt);
+  // If the value can be expressed as NULL+offset we can return that offset
+  // for both getoffset and getaddress:
+  if (isa<ConstantPointerNull>(BasePtr)) {
+    return ConstantInt::get(ResultTy, OffsetAPInt);
+  } else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(BasePtr)) {
+    if (CE->isCast() && CE->getOpcode() == Instruction::IntToPtr) {
+      // For inttoptr values both getoffset and getaddr return the integer
+      // value
+      assert(CE->getNumOperands() == 1);
+      auto *IntVal = cast<ConstantInt>(CE->getOperand(0));
+      return ConstantInt::get(ResultTy, IntVal->getValue() + OffsetAPInt);
+    }
+  }
+  // We can also fold chains of constant GEPS:
+  // For example: getoffset(GEP(setoffset(A, Const1), 100) -> Const1 + 100
+  ConstantInt *ConstSetArg;
+  if (match(BasePtr,
+            m_Intrinsic<SetIntrin>(m_Value(), m_ConstantInt(ConstSetArg)))) {
+    return ConstantInt::get(ResultTy, ConstSetArg->getValue() + OffsetAPInt);
+  }
+
+  // TODO: is there anything else we can infer?
+  return nullptr;
+}
+
+Value *simplifyCapabilityGetOffset(Value *V, Type *ResultTy,
+                                   const DataLayout &DL) {
+  return inferCapabilityOffsetOrAddr<Intrinsic::cheri_cap_offset_get,
+                                     Intrinsic::cheri_cap_offset_set>(
+      V, ResultTy, DL);
+}
+
+Value *simplifyCapabilityGetAddress(Value *V, Type *ResultTy,
+                                    const DataLayout &DL) {
+  return inferCapabilityOffsetOrAddr<Intrinsic::cheri_cap_address_get,
+                                     Intrinsic::cheri_cap_address_set>(
+      V, ResultTy, DL);
+}
+
 static Value *simplifyUnaryIntrinsic(Function *F, Value *Op0,
                                      const SimplifyQuery &Q) {
   // Idempotent functions return the same result when called repeatedly.
@@ -5080,6 +5237,49 @@ static Value *simplifyUnaryIntrinsic(Function *F, Value *Op0,
     if (llvm::cheri::isKnownUntaggedCapability(Op0, &Q.DL))
       return Constant::getNullValue(F->getReturnType());
     break;
+  case Intrinsic::cheri_cap_sealed_get:
+  case Intrinsic::cheri_cap_flags_get:
+  case Intrinsic::cheri_cap_base_get:
+    // Values derived from NULL and where the only operations that have been
+    // applied are address manipulations, always have the following properties:
+    // - base is zero
+    // - unsealed
+    // - permissions are zero
+    // - flags are zero
+    // However some fields may vary across architectures:
+    // - length either -1/0
+    // - type either -1/0
+    // TODO: for some of these we could ignore more things
+    if (isa<ConstantPointerNull>(
+            getBasePtrIgnoringCapabilityAddressManipulation(Op0, Q.DL))) {
+      return Constant::getNullValue(F->getReturnType());
+    }
+    break;
+  case Intrinsic::cheri_cap_perms_get:
+    // TODO: For getperms we can ignore almost all CHERI intrinsics since there
+    // is no setperms that could add permission bits.
+    // However, this is unlikely to be particularly beneficial to optimizations,
+    // so be conservative for now.
+    if (isa<ConstantPointerNull>(
+            // Maybe: getBasePtrIgnoringCapabilityManipulation(Op0, Q.DL))) {
+            getBasePtrIgnoringCapabilityAddressManipulation(Op0, Q.DL))) {
+      return Constant::getNullValue(F->getReturnType());
+    }
+    break;
+    // Note: No optimizations for getting type/length optimizing this since this
+    // could differ across implementations of CHERI.
+  case Intrinsic::cheri_cap_type_get:
+  case Intrinsic::cheri_cap_length_get:
+    break;
+  case Intrinsic::cheri_cap_address_get:
+    if (Value *V = simplifyCapabilityGetAddress(Op0, F->getReturnType(), Q.DL))
+      return V;
+    break;
+  case Intrinsic::cheri_cap_offset_get:
+    if (Value *V = simplifyCapabilityGetOffset(Op0, F->getReturnType(), Q.DL))
+      return V;
+    break;
+
   case Intrinsic::exp:
     // exp(log(x)) -> x
     if (Q.CxtI->hasAllowReassoc() &&
@@ -5192,6 +5392,30 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
         return Op0;
     }
     break;
+  case Intrinsic::cheri_cap_offset_set:
+  case Intrinsic::cheri_cap_address_set: {
+    Value *Base = getBasePtrIgnoringCapabilityAddressManipulation(Op0, Q.DL);
+    if (auto *Null = dyn_cast<ConstantPointerNull>(Base)) {
+      // The non-constant case is handled in InstCombine since it requires
+      // creating a new instruction
+      if (auto *ConstOp1 = dyn_cast<Constant>(Op1)) {
+        if (ConstOp1->isZeroValue())
+          return Null;  // simplify setoffset(NULL, 0) -> null
+        return ConstantExpr::getGetElementPtr(
+            F->getReturnType()->getPointerElementType(), Null, ConstOp1);
+      }
+    }
+    // setaddr(arg, getaddr(arg)) -> arg
+    // setoffset(arg, getoffset(arg)) -> arg
+    if (auto *II1 = dyn_cast<IntrinsicInst>(Op1)) {
+      if (II1->getIntrinsicID() == cheri::correspondingGetIntrinsic(IID) &&
+          II1->getArgOperand(0)->stripPointerCastsSameRepresentation() ==
+              Op0->stripPointerCastsSameRepresentation()) {
+        return Op0;
+      }
+    }
+    break;
+  }
   case Intrinsic::uadd_sat:
     // sat(MAX + X) -> MAX
     // sat(X + MAX) -> MAX

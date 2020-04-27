@@ -559,6 +559,7 @@ extern bool LargeCapTable;
     SDValue getCallTargetFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
                                       SelectionDAG &DAG, SDValue Chain,
                                       const MachinePointerInfo &PtrInfo) const {
+      assert(ABI.IsCheriPureCap());
       return getFromCapTable(N, DL, Ty, DAG, Chain, PtrInfo,
                              MipsII::MO_CAPTAB_CALL_HI16,
                              MipsII::MO_CAPTAB_CALL_LO16,
@@ -569,6 +570,7 @@ extern bool LargeCapTable;
     SDValue getDataFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
                                 SelectionDAG &DAG, SDValue Chain,
                                 const MachinePointerInfo &PtrInfo) const {
+      assert(ABI.IsCheriPureCap());
       return getFromCapTable(N, DL, Ty, DAG, Chain, PtrInfo,
                              MipsII::MO_CAPTAB_HI16, MipsII::MO_CAPTAB_LO16,
                              MipsII::MO_CAPTAB20, MipsISD::GotHi);
@@ -580,6 +582,7 @@ extern bool LargeCapTable;
                             const MachinePointerInfo &PtrInfo,
                             unsigned HiFlag, unsigned LoFlag,
                             unsigned SmallFlag, unsigned HiOpc) const {
+      assert(ABI.IsCheriPureCap());
       if (LargeCapTable || SmallFlag == 0) {
         return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiFlag, LoFlag,
                                          Chain, &PtrInfo, true, HiOpc);
@@ -593,6 +596,7 @@ extern bool LargeCapTable;
     SDValue getCapToCapTable(NodeTy *N, const SDLoc &DL, SelectionDAG &DAG,
                              unsigned HiFlag, unsigned LoFlag,
                              unsigned SmallFlag, unsigned HiOpc) const {
+      assert(ABI.IsCheriPureCap());
       if (LargeCapTable || SmallFlag == 0) {
         return _getGlobalCapBigImmediate(N, SDLoc(N), CapType, DAG, HiFlag, LoFlag,
                                          SDValue(), nullptr, false, HiOpc);
@@ -613,6 +617,7 @@ extern bool LargeCapTable;
                                 const MachinePointerInfo *PtrInfo,
                                 bool DoLoad) const {
       assert(Ty.isFatPointer());
+      assert(ABI.IsCheriPureCap());
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
       SDValue Tgt = DAG.getNode(MipsISD::WrapperCapOp, DL, CapType,
                                 getCapGlobalReg(DAG, CapType), Off);

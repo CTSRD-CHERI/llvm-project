@@ -42,7 +42,9 @@ class CmdArgs(object):
         parser = argparse.ArgumentParser()
         parser.add_argument("--llvm-bindir", type=Path, required=True)
         parser.add_argument("--verbose", action="store_true")
+        parser.add_argument("tests", default=[], nargs=argparse.ZERO_OR_MORE)
         self.args = parser.parse_args()
+        print(self.args)
         self.llvm_bindir = self.args.llvm_bindir  # type: Path
         if not self.llvm_bindir.exists():
             sys.exit("FATAL: --llvm-bindir does not exist")
@@ -106,14 +108,18 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
 
 
 def main():
-    args = CmdArgs()
+    options = CmdArgs()
     architectures = [MIPSConfig, RISCV32Config, RISCV64Config]
     # TODO: add command line flag to select subsets
     # TODO: add option to delete all files that don't exist in Inputs/ to handle renaming
-    for test in (Path(__file__).parent / "Inputs").glob("*.ll"):
+    if options.args.tests:
+        options.args.tests = [Path(x) for x in options.args.tests]
+    else:
+        options.args.tests = (Path(__file__).parent / "Inputs").glob("*.ll")
+    for test in options.args.tests:
         for arch_def in architectures:
             with test.open("rb") as input_file:
-                update_one_test(test.name, input_file, arch_def, args)
+                update_one_test(test.name, input_file, arch_def, options)
 
 
 if __name__ == "__main__":

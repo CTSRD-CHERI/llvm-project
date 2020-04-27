@@ -40,7 +40,6 @@ required_libraries =
  MipsInfo
  Scalar
  SelectionDAG
- CHERICap
  Support
  Target
  TransformUtils
