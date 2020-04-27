@@ -2641,7 +2641,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
     if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
       const GlobalValue *GV = N->getGlobal();
       auto *Ty = GV->getValueType();
-      if (Ty->isSized() && (GV->hasInternalLinkage() || GV->hasLocalLinkage())){
+      if (Ty->isSized() && GV->isDefinitionExact() && !SkipGlobalBounds){
         uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(Ty);
         if (cheri::ShouldCollectCSetBoundsStats) {
           addGlobalsCSetBoundsStats(GV, DAG, "MipsTargetLowering::lowerADDRSPACECAST",
