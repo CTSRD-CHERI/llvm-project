@@ -9,28 +9,28 @@
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-NONE %s
 // CHERI-ABI-NONE: "-target-cpu" "{{cheri(128)?}}" {{.*}} "-target-abi" "n64"
 
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -mcpu=cheri256 -c %s -o - | llvm-readobj -h - \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -mcpu=cheri128 -c %s -o - | llvm-readobj -h - \
 // RUN:   | FileCheck -check-prefix=NONE-HEADERS %s
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -mcpu=cheri256 -mabi=n64 -c %s -o - \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -mcpu=cheri128 -mabi=n64 -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=N64-HEADERS %s
-// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -mcpu=cheri256 -mabi=purecap -c %s -o - \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -mcpu=cheri128 -mabi=purecap -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=SANDBOX-HEADERS %s
 
-// NONE-HEADERS:     Arch: cheri
-// NONE-HEADERS:     Flags [ (0x30C20006)
+// NONE-HEADERS:     Arch: mips64
+// NONE-HEADERS:     Flags [ (0x30C10006)
 // NONE-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
-// NONE-HEADERS:       EF_MIPS_MACH_CHERI256
+// NONE-HEADERS:       EF_MIPS_MACH_CHERI128
 
-// N64-HEADERS:     Arch: cheri
-// N64-HEADERS:     Flags [ (0x30C20006)
+// N64-HEADERS:     Arch: mips64
+// N64-HEADERS:     Flags [ (0x30C10006)
 // N64-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
-// N64-HEADERS:       EF_MIPS_MACH_CHERI256
+// N64-HEADERS:       EF_MIPS_MACH_CHERI128
 
 
-// SANDBOX-HEADERS: Arch: cheri
-// SANDBOX-HEADERS: Flags [ (0x30C2C006)
+// SANDBOX-HEADERS: Arch: mips64
+// SANDBOX-HEADERS: Flags [ (0x30C1C006)
 // SANDBOX-HEADERS:    EF_MIPS_ABI_CHERIABI
-// SANDBOX-HEADERS:    EF_MIPS_MACH_CHERI256
+// SANDBOX-HEADERS:    EF_MIPS_MACH_CHERI128
 
 
 
@@ -75,18 +75,18 @@
 // RUN: %plain_clang_cheri_triple_allowed -target mips64c128hybrid-unknown-freebsd -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-N64-HEADERS %s
 
-// CHERI128-HEADERS:     Arch: cheri
+// CHERI128-HEADERS:     Arch: mips64
 // CHERI128-HEADERS:     Flags [ (0x30C10006)
 // CHERI128-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
 // CHERI128-HEADERS:       EF_MIPS_MACH_CHERI128
 
-// CHERI128-N64-HEADERS:     Arch: cheri
+// CHERI128-N64-HEADERS:     Arch: mips64
 // CHERI128-N64-HEADERS:     Flags [ (0x30C10006)
 // CHERI128-N64-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
 // CHERI128-N64-HEADERS:       EF_MIPS_MACH_CHERI128
 
 
-// CHERI128-SANDBOX-HEADERS: Arch: cheri
+// CHERI128-SANDBOX-HEADERS: Arch: mips64
 // CHERI128-SANDBOX-HEADERS: Flags [ (0x30C1C006)
 // CHERI128-SANDBOX-HEADERS:    EF_MIPS_ABI_CHERIABI
 // CHERI128-SANDBOX-HEADERS:    EF_MIPS_MACH_CHERI128
