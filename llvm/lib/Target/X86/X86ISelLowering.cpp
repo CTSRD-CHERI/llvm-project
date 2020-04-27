@@ -7470,8 +7470,8 @@ static bool getFauxShuffleMask(SDValue N, const APInt &DemandedElts,
            Scl.getOpcode() == ISD::ANY_EXTEND ||
            Scl.getOpcode() == ISD::ZERO_EXTEND) {
       Scl = Scl.getOperand(0);
-      if (MinBitsPerElt > Scl.getScalarValueSizeInBits())
-        MinBitsPerElt = Scl.getScalarValueSizeInBits();
+      MinBitsPerElt =
+          std::min<unsigned>(MinBitsPerElt, Scl.getScalarValueSizeInBits());
     }
     if ((MinBitsPerElt % 8) != 0)
       return false;
@@ -7494,6 +7494,8 @@ static bool getFauxShuffleMask(SDValue N, const APInt &DemandedElts,
     unsigned SrcIdx = SrcExtract.getConstantOperandVal(1);
     unsigned SrcByte = SrcIdx * (SrcVT.getScalarSizeInBits() / 8);
     unsigned DstByte = DstIdx * NumBytesPerElt;
+    MinBitsPerElt =
+        std::min<unsigned>(MinBitsPerElt, SrcVT.getScalarSizeInBits());
 
     // Create 'identity' byte level shuffle mask and then add inserted bytes.
     if (Opcode == ISD::SCALAR_TO_VECTOR) {
