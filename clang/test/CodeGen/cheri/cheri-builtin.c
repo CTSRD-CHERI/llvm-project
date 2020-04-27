@@ -1,8 +1,6 @@
 // REQUIRES: mips-registered-target
 
-// RUN: %cheri128_cc1 -o - -O0 -emit-llvm %s | FileCheck %s --check-prefixes=CHECK,CHECK128
-// RUN: %cheri256_cc1 -o - -O0 -emit-llvm %s | FileCheck %s --check-prefixes=CHECK,CHECK256
-// FIXME: we shouldn't really be testing ASM output in clang
+// RUN: %cheri128_cc1 -o - -O0 -emit-llvm %s | FileCheck %s --check-prefixes=CHECK
 // RUN: %cheri128_cc1 -o - -O0 -S %s | FileCheck %s -check-prefixes=ASM,ASM128
 // RUN: %cheri256_cc1 -o - -O0 -S %s | FileCheck %s -check-prefixes=ASM,ASM256
 void * __capability results[12];
@@ -11,29 +9,9 @@ long long testDeprecated(void * __capability foo)
 {
 	// CHECK-LABEL: @testDeprecated(
 	long long x;
-	// CHECK: call i64 @llvm.cheri.cap.length.get.i64
-	// CHECK: call i64 @llvm.cheri.cap.perms.get.i64
-	// CHECK: call i64 @llvm.cheri.cap.type.get.i64
-	// CHECK: call i1 @llvm.cheri.cap.tag.get
-	// CHECK: call i1 @llvm.cheri.cap.sealed.get
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.seal
-	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.unseal
 	// CHECK: call void @llvm.mips.cap.cause.set(i64 42)
-	// CHECK: call void @llvm.cheri.cap.perms.check.i64
-	// CHECK: call void @llvm.cheri.cap.type.check
 	// CHECK: call i64 @llvm.mips.cap.cause.get()
-	x &= __builtin_mips_cheri_get_cap_length(foo);
-	x &= __builtin_mips_cheri_get_cap_perms(foo);
-	x &= __builtin_mips_cheri_get_cap_type(foo);
-	x &= __builtin_mips_cheri_get_cap_tag(foo);
-	x &= __builtin_mips_cheri_get_cap_sealed(foo);
-	results[1] = __builtin_mips_cheri_and_cap_perms(foo, 12);
-	results[4] = __builtin_mips_cheri_seal_cap(foo, foo);
-	results[5] = __builtin_mips_cheri_unseal_cap(foo, foo);
 	__builtin_mips_cheri_set_cause(42);
-	__builtin_mips_cheri_check_perms(foo, 12);
-	__builtin_mips_cheri_check_type(foo, results[0]);
 	return x & __builtin_mips_cheri_get_cause();
 }
 long long test(void* __capability foo)
