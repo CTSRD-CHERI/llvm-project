@@ -69,10 +69,10 @@
 
 
 // mips64c128 should generate a purecap 128 binary
-// RUN: %plain_clang_cheri_triple_allowed -target mips64c128-unknown-freebsd -c %s -o - \
+// RUN: %plain_clang_cheri_triple_allowed -target mips64c128 -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-SANDBOX-HEADERS %s
 // And mips64c128hybrid should generate a hybrid 128 binary
-// RUN: %plain_clang_cheri_triple_allowed -target mips64c128hybrid-unknown-freebsd -c %s -o - \
+// RUN: %plain_clang_cheri_triple_allowed -target mips64c128hybrid -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-N64-HEADERS %s
 
 // CHERI128-HEADERS:     Arch: mips64

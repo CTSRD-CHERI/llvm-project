@@ -31,7 +31,7 @@
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,128 -DARCHNAME=MIPS3 %s
 
 
-// MIPS: #define _MIPS_ARCH_[[ARCHNAME]] 1
+// MIPS: #define _MIPS_ARCH_CHERI128 1
 // CHERI128: #define _MIPS_CAP_ALIGN_MASK 0xfffffffffffffff0
 // CHERI128: #define _MIPS_SZCAP 128
 // CHECK: #define __CHERI_ADDRESS_BITS__ 64

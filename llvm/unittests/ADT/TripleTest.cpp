@@ -806,8 +806,9 @@ TEST(TripleTest, MutateNameCHERI) {
   EXPECT_EQ(Triple::UnknownOS, T.getOS());
   EXPECT_EQ(Triple::CheriPurecap, T.getEnvironment());
   EXPECT_EQ(Triple::NoSubArch, T.getSubArch());
+  EXPECT_EQ(T.str(), "mips64c---purecap");
   T.setOS(Triple::FreeBSD);
-  EXPECT_EQ(T.str(), "mips64c--freebsd");
+  EXPECT_EQ(T.str(), "mips64c--freebsd-purecap");
   T.setEnvironment(Triple::CheriPurecap);
   EXPECT_EQ(Triple::CheriPurecap, T.getEnvironment());
   EXPECT_EQ(T.str(), "mips64c--freebsd-purecap");

@@ -5,10 +5,10 @@
 // CHECK-CHERI-SANDBOX-NOEXCEPTIONS-NOT: #define __GXX_RTTI 1
 // CHECK-CHERI-SANDBOX-NOEXCEPTIONS-NOT: #define __cpp_rtti 1
 
-// RUN: %clang -fgnuc-version=4.2.1 -x c++ -target cheri -mabi=n64 -E -dM %s |  FileCheck -check-prefix=CHECK-CHERI-N64 %s
-// RUN: %clang_cc1 -fgnuc-version=4.2.1 -x c++ -triple cheri -target-abi n64 -E -dM %s | FileCheck -check-prefix=CHECK-CHERI-N64 %s
-// RUN: %clang -fgnuc-version=4.2.1 -x c++ -target cheri -mabi=n64 -fexceptions -E -dM %s |  FileCheck -check-prefixes=CHECK-CHERI-N64,CHECK-CHERI-N64-FEXCEPTIONS %s
-// RUN: %clang_cc1 -fgnuc-version=4.2.1 -x c++ -triple cheri -target-abi n64 -fexceptions -E -dM %s | FileCheck -check-prefixes=CHECK-CHERI-N64,CHECK-CHERI-N64-FEXCEPTIONS %s
+// RUN: %clang -fgnuc-version=4.2.1 -x c++ -target mips64c128-none-none -mabi=n64 -E -dM %s |  FileCheck -check-prefix=CHECK-CHERI-N64 %s
+// RUN: %cheri_cc1 -fgnuc-version=4.2.1 -x c++ -target-abi n64 -E -dM %s | FileCheck -check-prefix=CHECK-CHERI-N64 %s
+// RUN: %clang -fgnuc-version=4.2.1 -x c++ -target mips64c128-none-none -mabi=n64 -fexceptions -E -dM %s |  FileCheck -check-prefixes=CHECK-CHERI-N64,CHECK-CHERI-N64-FEXCEPTIONS %s
+// RUN: %cheri_cc1 -fgnuc-version=4.2.1 -x c++ -target-abi n64 -fexceptions -E -dM %s | FileCheck -check-prefixes=CHECK-CHERI-N64,CHECK-CHERI-N64-FEXCEPTIONS %s
 // CHECK-CHERI-N64-FEXCEPTIONS: #define __EXCEPTIONS 1
 // CHECK-CHERI-N64: #define __GXX_RTTI 1
 // CHECK-CHERI-N64: #define __cpp_rtti 1
