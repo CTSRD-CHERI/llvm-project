@@ -7713,39 +7713,45 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
   }
 
   if (TAL == TAL_DeclSpec) {
-    // possible deprecated use; move to the outermost pointer declarator
-    // unless this is a typedef'd pointer type
-    if (const TypedefType *TT = CurType->getAs<TypedefType>()) {
-      // If the underlying type is a pointer, Create a new instance of this
-      // Typedef with a memory capability as the underlying type
-      if (TT->isPointerType()) {
+    // Possible deprecated use; move to the outermost pointer declarator,
+    // unless this is a typedef'd pointer type or similar where we instead
+    // create a new instance of this type with a memory capability as the
+    // underlying type.
+    if (CurType->isPointerType() || CurType->isReferenceType()) {
+      // typedef'd types are special as they cache their capability
+      // counterparts; all other cases are shared with the declarator chunk
+      // case at the end of the function.
+      if (const TypedefType *TT = CurType->getAs<TypedefType>()) {
         CurType = S.Context.getTypedefType(TT->getDecl(), QualType(), true);
         return;
       }
-    }
-    isDeprecatedUse = true;
-    for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
-      DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
-      switch (chunk.Kind) {
-        case DeclaratorChunk::Pointer: {
-          ParsedAttr *attrCopy = declarator.getAttributePool()
-                 .create(const_cast<IdentifierInfo *>(attr.getAttrName()),
-                         attr.getRange(),
-                         const_cast<IdentifierInfo *>(attr.getScopeName()),
-                         attr.getScopeLoc(), nullptr, 0, ParsedAttr::AS_GNU);
-          chunk.getAttrs().addAtEnd(attrCopy);
-          return;
-        }
-        case DeclaratorChunk::BlockPointer:
-        case DeclaratorChunk::Paren:
-        case DeclaratorChunk::Array:
-        case DeclaratorChunk::Function:
-        case DeclaratorChunk::Reference:
-        case DeclaratorChunk::Pipe:
-          continue;
-        case DeclaratorChunk::MemberPointer:
-          llvm_unreachable("Should this be handled?"); continue;
+    } else {
+      for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
+        DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
+        switch (chunk.Kind) {
+          case DeclaratorChunk::Pointer: {
+            // Put this attribute in the right place after the next pointer
+            // chunk so we are called again but with isDeprecatedUse true.
+            isDeprecatedUse = true;
+            ParsedAttr *attrCopy = declarator.getAttributePool()
+                   .create(const_cast<IdentifierInfo *>(attr.getAttrName()),
+                           attr.getRange(),
+                           const_cast<IdentifierInfo *>(attr.getScopeName()),
+                           attr.getScopeLoc(), nullptr, 0, ParsedAttr::AS_GNU);
+            chunk.getAttrs().addAtEnd(attrCopy);
+            return;
+          }
+          case DeclaratorChunk::BlockPointer:
+          case DeclaratorChunk::Paren:
+          case DeclaratorChunk::Array:
+          case DeclaratorChunk::Function:
+          case DeclaratorChunk::Reference:
+          case DeclaratorChunk::Pipe:
+            continue;
+          case DeclaratorChunk::MemberPointer:
+            llvm_unreachable("Should this be handled?"); continue;
 
+        }
       }
     }
   } else {
@@ -7793,20 +7799,26 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
                                           " __capability ");
         isDeprecatedUse = false;
       }
-      if (CurType->isPointerType() || CurType->isReferenceType()) {
-        // preserve existing qualifiers on CurType
-        Qualifiers Qs = CurType.getQualifiers();
-        if (const PointerType *PT = CurType->getAs<PointerType>())
-          CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
-        else if (const LValueReferenceType *LRT = CurType->getAs<LValueReferenceType>())
-          CurType = S.Context.getLValueReferenceType(LRT->getPointeeType(), true, ASTContext::PIK_Capability);
-        else if (const RValueReferenceType *RRT = CurType->getAs<RValueReferenceType>())
-          CurType = S.Context.getRValueReferenceType(RRT->getPointeeType(), ASTContext::PIK_Capability);
-        if (Qs.hasQualifiers())
-          CurType = S.Context.getQualifiedType(CurType, Qs);
-        return;
-      }
     }
+  }
+
+  if (CurType->isPointerType() || CurType->isReferenceType()) {
+    // preserve existing qualifiers on CurType
+    Qualifiers Qs = CurType.getQualifiers();
+
+    if (const PointerType *PT = CurType->getAs<PointerType>())
+      CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
+    else if (const LValueReferenceType *LRT = CurType->getAs<LValueReferenceType>())
+      CurType = S.Context.getLValueReferenceType(LRT->getPointeeType(), true, ASTContext::PIK_Capability);
+    else if (const RValueReferenceType *RRT = CurType->getAs<RValueReferenceType>())
+      CurType = S.Context.getRValueReferenceType(RRT->getPointeeType(), ASTContext::PIK_Capability);
+    else
+      llvm_unreachable("Don't know how to turn CurType into a capability");
+
+    if (Qs.hasQualifiers())
+      CurType = S.Context.getQualifiedType(CurType, Qs);
+
+    return;
   }
 
   S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
