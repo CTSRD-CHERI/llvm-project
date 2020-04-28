@@ -40,6 +40,7 @@
 #include "llvm/Support/ArrayRecycler.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/CheriSetBounds.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MachineValueType.h"
@@ -861,14 +862,17 @@ public:
   SDValue getLogicalNOT(const SDLoc &DL, SDValue Val, EVT VT);
 
   /// Generate a CHERI CSetBounds intrinsic.
-  /// Also create a log record if CSetBounds stats are being gathered unless
-  /// CSetBoundsStatsAlreadyLogged is set to true.
-  SDValue getCSetBounds(SDValue Val, SDValue Length,
-                        bool CSetBoundsStatsAlreadyLogged = false);
-  SDValue getCSetBounds(SDValue Val, uint64_t Length,
-                        bool CSetBoundsStatsAlreadyLogged = false) {
-    return getCSetBounds(Val, getIntPtrConstant(Length, SDLoc(Val)),
-                         CSetBoundsStatsAlreadyLogged);
+  /// Also create a log record if CSetBounds stats are being gathered
+  SDValue getCSetBounds(SDValue Val, const SDLoc &DL, SDValue Length,
+                        Align Alignment, StringRef Pass,
+                        cheri::SetBoundsPointerSource Kind,
+                        const Twine &Reason = "", std::string SrcLoc = {});
+  SDValue getCSetBounds(SDValue Val, const SDLoc &DL, uint64_t Length,
+                        Align Alignment, StringRef Pass,
+                        cheri::SetBoundsPointerSource Kind,
+                        const Twine &Reason = "", std::string SrcLoc = {}) {
+    return getCSetBounds(Val, DL, getIntPtrConstant(Length, SDLoc(Val)),
+                         Alignment, Pass, Kind, Reason, SrcLoc);
   }
 
   // Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default

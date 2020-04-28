@@ -34,6 +34,8 @@ public:
   }
 
   bool runOnFunction(Function &F) override {
+    assert(cheri::ShouldCollectCSetBoundsStats &&
+           "Should not have been created otherwise");
     // errs() << "Logging bounds for " << F.getName() << "\n";
     DominatorTree *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     AssumptionCache *AC =
@@ -103,7 +105,7 @@ public:
               // This may not be quite true since some might use shared memory
               // but shouldn't really matter for analysis purposes
               cheri::CSetBoundsStats->add(
-                  Alignment, KnownSize, "function with alloc_size",
+                  Align(Alignment), KnownSize, "function with alloc_size",
                   cheri::SetBoundsPointerSource::Heap,
                   "call to " +
                       (CalledFunc ? CalledFunc->getName() : "function pointer"),

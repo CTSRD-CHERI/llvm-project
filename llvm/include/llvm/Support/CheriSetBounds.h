@@ -20,6 +20,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Alignment.h"
 
 namespace llvm {
 
@@ -55,9 +56,9 @@ enum class SetBoundsPointerSource {
 class CSetBoundsStatistics {
 public:
   struct Entry {
-    uint64_t KnownAlignment;
     Optional<uint64_t> RequestedSize;
     Optional<uint64_t> RequestedSizeMultipleOf;
+    Align KnownAlignment;
     SetBoundsPointerSource PointerKind;
     std::string SourceLocation;
     std::string Pass;
@@ -66,7 +67,7 @@ public:
   CSetBoundsStatistics();
   ~CSetBoundsStatistics();
 
-  void add(unsigned KnownAlignment, Optional<uint64_t> Length, StringRef Pass,
+  void add(Align KnownAlignment, Optional<uint64_t> Length, StringRef Pass,
            SetBoundsPointerSource Kind, const Twine &Details,
            std::string SourceLoc, Optional<uint64_t> SizeMultipleOf = None);
   void print(llvm::raw_ostream &OS, StringRef MainFile, bool PrintHeader);

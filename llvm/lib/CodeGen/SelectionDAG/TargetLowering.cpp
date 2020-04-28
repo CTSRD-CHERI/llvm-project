@@ -6768,15 +6768,11 @@ SDValue TargetLowering::unalignedLoadStoreCSetbounds(const char *loadOrStore,
   // setting bounds in hybrid mode)
   if (!Ptr->getValueType(0).isFatPointer())
     return Ptr;
-  if (cheri::ShouldCollectCSetBoundsStats) {
-    cheri::CSetBoundsStats->add(
-        CapSize, CapSize, "expanding unaligned capability load/store",
-        cheri::SetBoundsPointerSource::Stack,
-        StringRef("expanding unaligned capability ") + loadOrStore,
-        cheri::inferSourceLocation(DL.getDebugLoc(),
-                                   DAG.getMachineFunction().getName()));
-  }
-  return DAG.getCSetBounds(Ptr, CapSize, /*CSetBoundsStatsAlreadyLogged=*/true);
+  return DAG.getCSetBounds(Ptr, DL, CapSize, Align(CapSize),
+                           "expanding unaligned capability load/store",
+                           cheri::SetBoundsPointerSource::Stack,
+                           StringRef("expanding unaligned capability ") +
+                               loadOrStore);
 }
 
 std::pair<SDValue, SDValue>

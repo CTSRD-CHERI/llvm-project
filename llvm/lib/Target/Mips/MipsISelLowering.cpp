@@ -1373,6 +1373,7 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
   case Intrinsic::cheri_cap_bounds_set:
   case Intrinsic::cheri_cap_bounds_set_exact:
   case Intrinsic::cheri_bounded_stack_cap: {
+    // FIXME: this should be target-independent
     auto SrcOperand = N->getOperand(1);
     auto SizeOperand = N->getOperand(2);
     if (SrcOperand->getOpcode() != ISD::INTRINSIC_WO_CHAIN)
@@ -2604,7 +2605,8 @@ static void addGlobalsCSetBoundsStats(const GlobalValue *GV, SelectionDAG &DAG,
     AllocSize = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
   }
   cheri::CSetBoundsStats->add(
-      GV->getAlignment(), Size, Pass, cheri::SetBoundsPointerSource::GlobalVar,
+      MaybeAlign(GV->getAlignment()).valueOrOne(), Size, Pass,
+      cheri::SetBoundsPointerSource::GlobalVar,
       "load of global " + GV->getName() + " (alloc size=" + Twine(AllocSize) +
           ")",
       cheri::inferSourceLocation(DL, DAG.getMachineFunction().getName()));
@@ -4432,25 +4434,25 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (ABI.IsCheriPureCap()) {
     if (FirstOffset != -1) {
       SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
-      PtrOff = setBounds(DAG, PtrOff, LastOffset, /*CSetBoundsStatsLogged=*/true);
-      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
-          DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
-          DAG.getIntPtrConstant(0xFFD7, DL));
-      RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
+      std::string BoundsDetails;
       if (cheri::ShouldCollectCSetBoundsStats) {
         StringRef Name = "<unknown function>";
         if (ES) {
           Name = ES->getSymbol();
-        } else if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
+        } else if (GlobalAddressSDNode *G =
+                       dyn_cast<GlobalAddressSDNode>(Callee)) {
           Name = G->getGlobal()->getName();
         }
-        cheri::CSetBoundsStats->add(
-            1, LastOffset, "variadic call lowering",
-            cheri::SetBoundsPointerSource::Stack,
-            StringRef("setting varargs bounds for call to ") + Name,
-            cheri::inferSourceLocation(DL.getDebugLoc(),
-                                       DAG.getMachineFunction().getName()));
+        BoundsDetails =
+            (Twine("setting varargs bounds for call to ") + Name).str();
       }
+      PtrOff = DAG.getCSetBounds(
+          PtrOff, DL, LastOffset, Align(), "MIPS variadic call lowering",
+          cheri::SetBoundsPointerSource::Stack, BoundsDetails);
+      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
+          DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
+          DAG.getIntPtrConstant(0xFFD7, DL));
+      RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
     } else {
       bool ShouldClearC13 = false;
       // We only need to clear $c13 (for on-stack arguments if the calling

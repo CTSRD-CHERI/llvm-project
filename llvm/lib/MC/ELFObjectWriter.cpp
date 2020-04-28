@@ -575,8 +575,7 @@ void ELFWriter::writeSymbol(SymbolTableWriter &Writer, uint32_t StringIndex,
         std::min(SecAlign, PowerOf2Floor(SecAlign + Symbol.getOffset()));
 #endif
     // Assume we don't get any better than 4 byte alignment:
-    uint64_t MinAlign = 4;
-    cheri::CSetBoundsStats->add(MinAlign, Size, "ELF symbol table",
+    cheri::CSetBoundsStats->add(Align(4), Size, "ELF symbol table",
                                 cheri::SetBoundsPointerSource::CodePointer,
                                 "Function " + Symbol.getName(), "UNKNOWN");
   }

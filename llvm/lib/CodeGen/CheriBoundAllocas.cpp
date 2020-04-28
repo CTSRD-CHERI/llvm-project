@@ -284,11 +284,11 @@ public:
       }
 
       if (cheri::ShouldCollectCSetBoundsStats) {
-        cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
-                                 cheri::SetBoundsPointerSource::Stack,
-                                 "set bounds on " +
-                                     cheri::inferLocalVariableName(AI),
-                                 cheri::inferSourceLocation(AI));
+        cheri::addSetBoundsStats(
+            AI->getAlign().valueOrOne(), Size, getPassName(),
+            cheri::SetBoundsPointerSource::Stack,
+            "set bounds on " + cheri::inferLocalVariableName(AI),
+            cheri::inferSourceLocation(AI));
       }
       LLVM_DEBUG(auto S = cheri::inferConstantValue(Size);
                  dbgs() << AI->getFunction()->getName()

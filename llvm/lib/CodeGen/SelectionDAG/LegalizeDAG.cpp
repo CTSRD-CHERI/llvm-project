@@ -1614,8 +1614,6 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
       DAG.getTargetConstant(Intrinsic::cheri_cap_address_get, dl, SizeVT);
     SDValue SetAddr =
       DAG.getTargetConstant(Intrinsic::cheri_cap_address_set, dl, SizeVT);
-    SDValue SetBounds =
-      DAG.getTargetConstant(Intrinsic::cheri_cap_bounds_set, dl, SizeVT);
     SDValue CRRL =
       DAG.getTargetConstant(Intrinsic::cheri_round_representable_length, dl,
                             SizeVT);
@@ -1641,16 +1639,9 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
       DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, VT, SetAddr, SP, Tmp1);
     // Move the stack pointer *before* setting the bounds!
     Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
-    Tmp1 =
-      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, VT, SetBounds, Tmp1, Tmp2);
-    if (cheri::ShouldCollectCSetBoundsStats) {
-      llvm::Optional<uint64_t> KnownSize = None;
-      if (auto CSDN = dyn_cast<ConstantSDNode>(Size)) {
-        KnownSize = CSDN->getZExtValue();
-      }
-      cheri::CSetBoundsStats->add(Align, KnownSize, "ExpandDYNAMIC_STACKALLOC", cheri::SetBoundsPointerSource::Stack,
-      "", cheri::inferSourceLocation(Node->getDebugLoc(), DAG.getMachineFunction().getName()));
-    }
+    Tmp1 = DAG.getCSetBounds(
+        Tmp1, dl, Tmp2, llvm::MaybeAlign(Align).valueOrOne(),
+        "ExpandDYNAMIC_STACKALLOC", cheri::SetBoundsPointerSource::Stack);
   } else {
     Tmp1 = DAG.getNode(ISD::SUB, dl, VT, SP, Size);       // Value
     if (Align > StackAlign)

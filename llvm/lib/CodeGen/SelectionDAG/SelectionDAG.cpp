@@ -6431,20 +6431,23 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
 }
 
-SDValue SelectionDAG::getCSetBounds(SDValue Val, SDValue Length,
-                                    bool CSetBoundsStatsAlreadyLogged) {
-  if (!CSetBoundsStatsAlreadyLogged && cheri::ShouldCollectCSetBoundsStats) {
+SDValue SelectionDAG::getCSetBounds(SDValue Val, const SDLoc &DL,
+                                    SDValue Length, Align Alignment,
+                                    StringRef Pass,
+                                    cheri::SetBoundsPointerSource Kind,
+                                    const Twine &Details, std::string SrcLoc) {
+  if (cheri::ShouldCollectCSetBoundsStats) {
     Optional<uint64_t> SizeConst;
     if (ConstantSDNode *Constant = dyn_cast<ConstantSDNode>(Length.getNode())) {
       SizeConst = Constant->getZExtValue();
     }
-    cheri::CSetBoundsStats->add(
-        1, SizeConst, "SelectionDAG::getCSetBounds",
-        cheri::SetBoundsPointerSource::Unknown, "<unnkonwn reason>",
-        cheri::inferSourceLocation(Val.getDebugLoc(),
-                                   getMachineFunction().getName()));
+    if (SrcLoc.empty()) {
+      SrcLoc = cheri::inferSourceLocation(DL.getDebugLoc(),
+                                          getMachineFunction().getName());
+    }
+    cheri::CSetBoundsStats->add(Alignment, SizeConst, Pass, Kind, Details,
+                                SrcLoc);
   }
-  SDLoc DL(Val);
   Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
   // Using the bounded stack cap intrinisic allows reuse of the same register:
   if (isa<FrameIndexSDNode>(Val.getNode()))

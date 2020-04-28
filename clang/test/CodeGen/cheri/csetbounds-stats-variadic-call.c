@@ -11,7 +11,7 @@ extern int foo(int, ...);
 
 int test(void) {
   return foo(3, 1, 2, 3, 4ULL); // promoted to u64 in variadic call -> 4 * 8 bytes
-  // CSV-NEXT:   0,32,s,"{{.+}}/csetbounds-stats-variadic-call.c:[[@LINE-1]]","variadic call lowering","setting varargs bounds for call to foo"
+  // CSV-NEXT:   0,32,s,"{{.+}}/csetbounds-stats-variadic-call.c:[[@LINE-1]]","MIPS variadic call lowering","setting varargs bounds for call to foo"
 }
 
 // CSV-EMPTY:

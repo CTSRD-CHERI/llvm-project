@@ -1601,7 +1601,7 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
                                         : "non-allocating placement new[]",
                            /*isSubObject=*/false,
                            "for type " + allocType.getAsString(),
-                           allocation.getAlignment().getQuantity()),
+                           allocation.getAlignment().getAsAlign()),
           allocation.getAlignment());
     }
 
@@ -1790,7 +1790,7 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
   if (llvm::cheri::ShouldCollectCSetBoundsStats && !ReservedGlobalPlacement) {
     // TODO: placement new with pointer might not be heap!
     auto Kind = llvm::cheri::SetBoundsPointerSource::Heap;
-    uint64_t KnownAlignment = allocation.getAlignment().getQuantity();
+    llvm::Align KnownAlignment = allocation.getAlignment().getAsAlign();
     llvm::Optional<uint64_t> AllocSizeConstant =
         llvm::cheri::inferConstantValue(allocSize);
     llvm::Optional<uint64_t> MultipleOf;

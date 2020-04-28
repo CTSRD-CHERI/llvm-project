@@ -37,7 +37,7 @@ inline Optional<uint64_t> inferConstantValue(Value *V) {
   return Result;
 }
 
-inline void addSetBoundsStats(unsigned KnownAlignment, Value *Length,
+inline void addSetBoundsStats(Align KnownAlignment, Value *Length,
                               StringRef Pass, SetBoundsPointerSource Kind,
                               const Twine &Details, std::string SourceLoc,
                               Optional<uint64_t> SizeMultipleOf = None) {

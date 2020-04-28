@@ -75,7 +75,7 @@ int test(void) {
 // CSV-NEXT: 0,<unknown>,s,"<somewhere in _Z11test_allocai>","ExpandDYNAMIC_STACKALLOC",""
 // CSV-NEXT: 0,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","ExpandDYNAMIC_STACKALLOC",""
 // CSV-NEXT: 2,12,g,"<somewhere in _Z20load_global_variablev>","MipsTargetLowering::lowerGlobalAddress","load of global global_foo (alloc size=12)"
-// CSV-NEXT: 0,32,s,"<somewhere in _Z4testv>","variadic call lowering","setting varargs bounds for call to _Z3fooiz"
+// CSV-NEXT: 0,32,s,"<somewhere in _Z4testv>","MIPS variadic call lowering","setting varargs bounds for call to _Z3fooiz"
 
 
 // CSV-EMPTY:

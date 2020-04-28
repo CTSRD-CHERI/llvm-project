@@ -134,8 +134,8 @@ class CheriRangeChecker : public FunctionPass,
       Instruction *DebugInst = dyn_cast<Instruction>(AlignmentSource);
       if (!DebugInst)
         DebugInst = InsertPt;
-      cheri::addSetBoundsStats(getKnownAlignment(AlignmentSource, *TD), Size,
-                               getPassName(), AO.Src, "",
+      cheri::addSetBoundsStats(Align(getKnownAlignment(AlignmentSource, *TD)),
+                               Size, getPassName(), AO.Src, "",
                                cheri::inferSourceLocation(DebugInst));
     }
     if (BitCast == AO.ValueSrc.Base)

@@ -41,12 +41,12 @@ namespace cheri {
 StatsFormat ShouldCollectCSetBoundsStats = StatsOff;
 ManagedStatic<CSetBoundsStatistics> CSetBoundsStats;
 
-void CSetBoundsStatistics::add(unsigned KnownAlignment,
+void CSetBoundsStatistics::add(Align KnownAlignment,
                                Optional<uint64_t> KnownSize, StringRef Pass,
                                SetBoundsPointerSource Kind,
                                const Twine &Details, std::string SourceLoc,
                                Optional<uint64_t> SizeMultipleOf) {
-  Entries.push_back({KnownAlignment, KnownSize, SizeMultipleOf, Kind,
+  Entries.push_back({KnownSize, SizeMultipleOf, KnownAlignment, Kind,
                      std::move(SourceLoc), Pass.str(), Details.str()});
 }
 
@@ -70,7 +70,7 @@ void CSetBoundsStatistics::print(llvm::raw_ostream &OS, StringRef MainFile,
       } else {
         OS << ",\n\t{";
       }
-      OS << "\n\t\t\"alignment\": " << E.KnownAlignment;
+      OS << "\n\t\t\"alignment\": " << E.KnownAlignment.value();
       if (E.RequestedSize)
         OS << ",\n\t\t\"size\": " << *E.RequestedSize;
       else
@@ -91,10 +91,7 @@ void CSetBoundsStatistics::print(llvm::raw_ostream &OS, StringRef MainFile,
     for (const Entry &E : Entries) {
       // The analysis scripts expect alignment as a power of two instead of the
       // value
-      unsigned AlignmentBits = 0;
-      // Log2_64 will return -1 for 0 but we want 0 in that case
-      if (E.KnownAlignment != 0)
-        AlignmentBits = Log2_64(E.KnownAlignment);
+      unsigned AlignmentBits = Log2(E.KnownAlignment);
       OS << AlignmentBits << ',';
       if (E.RequestedSize) {
         OS << *E.RequestedSize;
