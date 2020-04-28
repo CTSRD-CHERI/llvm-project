@@ -371,8 +371,12 @@ static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
     DEBUG_TAG("reached max depth -> false");
     return false;
   }
+  if (DL) {
+    V = getBasePtrIgnoringCapabilityAddressManipulation(const_cast<Value *>(V),
+                                                        *DL);
+  }
   if (isa<ConstantPointerNull>(V)) {
-    DEBUG_TAG("NULL pointer -> true");
+    DEBUG_TAG("NULL base pointer -> true");
     return true; // NULL is always untagged
   } else if (const auto *II = dyn_cast<IntrinsicInst>(V)) {
     switch (II->getIntrinsicID()) {
