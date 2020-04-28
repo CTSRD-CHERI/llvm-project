@@ -10,7 +10,6 @@
 // RUN: %cheri_cc1 -o - -S %s | FileCheck %s --check-prefixes=ASM,ASM-MIPS
 // RUN: %riscv64_cheri_cc1 -o - -S %s | FileCheck %s --check-prefixes=ASM,ASM-RISCV
 
-
 void external_fn(void);
 int external_global;
 
@@ -20,7 +19,7 @@ int external_global;
 // CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP0]], i64 ptrtoint (void ()* @external_fn to i64))
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
-void* __capability global_fn_to_cap(void) {
+void *__capability global_fn_to_cap(void) {
   // ASM-LABEL: global_fn_to_cap:
   // ASM-MIPS:      cgetpcc $c1
   // ASM-MIPS-NEXT: ld $1, %got_disp(external_fn)($1)
@@ -29,21 +28,25 @@ void* __capability global_fn_to_cap(void) {
   // ASM-RISCV: auipc a1, %got_pcrel_hi(external_fn)
   // ASM-RISCV-NEXT:  ld a1, %pcrel_lo(
   // ASM-RISCV-NEXT:  cfromptr ca0, ca0, a1
-  return (__cheri_tocap void* __capability)&external_fn;
+  return (__cheri_tocap void *__capability) & external_fn;
 }
 
 // CHECK-LABEL: define {{[^@]+}}@global_data_to_cap() #0
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    ret i8 addrspace(200)* addrspacecast (i8* bitcast (i32* @external_global to i8*) to i8 addrspace(200)*)
 //
-void* __capability global_data_to_cap(void) {
+void *__capability global_data_to_cap(void) {
   // ASM-LABEL: global_data_to_cap:
   // ASM-MIPS: ld $1, %got_disp(external_global)($1)
-  // ASM-MIPS-NEXT: cfromddc $c3, $1
+  // ASM-MIPS-NEXT: cfromddc $c1, $1
+  // MIPS automatically sets bounds in hybrid mode for global variables
+  // ASM-MIPS-NEXT: csetbounds $c3, $c1, 4
   // ASM-RISCV: auipc a0, %got_pcrel_hi(external_global)
   // ASM-RISCV-NEXT:  ld a0, %pcrel_lo(
   // ASM-RISCV-NEXT:  cfromptr ca0, ddc, a0
-  return (__cheri_tocap void* __capability)&external_global;
+  // We do not set bounds on RISCV
+  // ASM-RISCV-NOT: csetbounds
+  return (__cheri_tocap void *__capability) & external_global;
 }
 
 // CHECK-LABEL: define {{[^@]+}}@fn_ptr_to_cap
@@ -58,13 +61,13 @@ void* __capability global_data_to_cap(void) {
 // CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP2]], i64 [[TMP3]])
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP4]]
 //
-void* __capability fn_ptr_to_cap(void (*fn_ptr)(void)) {
+void *__capability fn_ptr_to_cap(void (*fn_ptr)(void)) {
   // ASM-LABEL: fn_ptr_to_cap:
   // ASM-MIPS:      cgetpcc $c1
   // ASM-MIPS-NEXT: cfromptr $c3, $c1, $1
   // ASM-RISCV:      cspecialr ca1, pcc
   // ASM-RISCV-NEXT: cfromptr ca0, ca1, a0
-  return (__cheri_tocap void* __capability)fn_ptr;
+  return (__cheri_tocap void *__capability)fn_ptr;
 }
 
 // CHECK-LABEL: define {{[^@]+}}@fn_ptr_to_cap_not_smart_enough
@@ -80,14 +83,14 @@ void* __capability fn_ptr_to_cap(void (*fn_ptr)(void)) {
 // CHECK-NEXT:    [[TMP3:%.*]] = addrspacecast i8* [[TMP2]] to i8 addrspace(200)*
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
-void* __capability fn_ptr_to_cap_not_smart_enough(void (*fn_ptr)(void)) {
+void *__capability fn_ptr_to_cap_not_smart_enough(void (*fn_ptr)(void)) {
   // ASM-LABEL: fn_ptr_to_cap_not_smart_enough:
   // ASM-MIPS:  cfromddc $c3, $1
   // ASM-RISCV: cfromptr ca0, ddc, a0
   // Note: In this case clang doesn't see that the result is actual a function
   // so it uses DDC:
-  void* tmp = (void*)fn_ptr;
-  return (__cheri_tocap void* __capability)tmp;
+  void *tmp = (void *)fn_ptr;
+  return (__cheri_tocap void *__capability)tmp;
 }
 
 // CHECK-LABEL: define {{[^@]+}}@data_ptr_to_cap
@@ -100,10 +103,10 @@ void* __capability fn_ptr_to_cap_not_smart_enough(void (*fn_ptr)(void)) {
 // CHECK-NEXT:    [[TMP2:%.*]] = addrspacecast i8* [[TMP1]] to i8 addrspace(200)*
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
 //
-void* __capability data_ptr_to_cap(int* data_ptr) {
+void *__capability data_ptr_to_cap(int *data_ptr) {
   // Note: For data pointers we derive from DDC:
   // ASM-LABEL: data_ptr_to_cap:
   // ASM-MIPS:  cfromddc $c3, $1
   // ASM-RISCV: cfromptr ca0, ddc, a0
-  return (__cheri_tocap void* __capability)data_ptr;
+  return (__cheri_tocap void *__capability)data_ptr;
 }
