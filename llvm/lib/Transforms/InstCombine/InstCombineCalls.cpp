@@ -4461,7 +4461,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     // Note: New assumption intrinsics created here are registered by
     // the InstCombineIRInserter object.
     FunctionType *AssumeIntrinsicTy = II->getFunctionType();
-    Value *AssumeIntrinsic = II->getCalledValue();
+    Value *AssumeIntrinsic = II->getCalledOperand();
     Value *A, *B;
     if (match(IIOperand, m_And(m_Value(A), m_Value(B)))) {
       Builder.CreateCall(AssumeIntrinsicTy, AssumeIntrinsic, A, II->getName());
@@ -4839,7 +4839,7 @@ Instruction *InstCombiner::visitCallBase(CallBase &Call) {
 
   // If the callee is a pointer to a function, attempt to move any casts to the
   // arguments of the call/callbr/invoke.
-  Value *Callee = Call.getCalledValue();
+  Value *Callee = Call.getCalledOperand();
   if (!isa<Function>(Callee) && transformConstExprCastCall(Call))
     return nullptr;
 
@@ -4958,7 +4958,8 @@ Instruction *InstCombiner::visitCallBase(CallBase &Call) {
 /// If the callee is a constexpr cast of a function, attempt to move the cast to
 /// the arguments of the call/callbr/invoke.
 bool InstCombiner::transformConstExprCastCall(CallBase &Call) {
-  auto *Callee = dyn_cast<Function>(Call.getCalledValue()->stripPointerCasts());
+  auto *Callee =
+      dyn_cast<Function>(Call.getCalledOperand()->stripPointerCasts());
   if (!Callee)
     return false;
 
@@ -5076,7 +5077,7 @@ bool InstCombiner::transformConstExprCastCall(CallBase &Call) {
     // If the callee is just a declaration, don't change the varargsness of the
     // call.  We don't want to introduce a varargs call where one doesn't
     // already exist.
-    PointerType *APTy = cast<PointerType>(Call.getCalledValue()->getType());
+    PointerType *APTy = cast<PointerType>(Call.getCalledOperand()->getType());
     if (FT->isVarArg()!=cast<FunctionType>(APTy->getElementType())->isVarArg())
       return false;
 
@@ -5244,7 +5245,7 @@ bool InstCombiner::transformConstExprCastCall(CallBase &Call) {
 Instruction *
 InstCombiner::transformCallThroughTrampoline(CallBase &Call,
                                              IntrinsicInst &Tramp) {
-  Value *Callee = Call.getCalledValue();
+  Value *Callee = Call.getCalledOperand();
   Type *CalleeTy = Callee->getType();
   FunctionType *FTy = Call.getFunctionType();
   AttributeList Attrs = Call.getAttributes();

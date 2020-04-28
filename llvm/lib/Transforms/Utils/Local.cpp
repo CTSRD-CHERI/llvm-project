@@ -1965,7 +1965,7 @@ CallInst *llvm::createCallMatchingInvoke(InvokeInst *II) {
   SmallVector<OperandBundleDef, 1> OpBundles;
   II->getOperandBundlesAsDefs(OpBundles);
   CallInst *NewCall = CallInst::Create(II->getFunctionType(),
-                                       II->getCalledValue(), Args, OpBundles);
+                                       II->getCalledOperand(), Args, OpBundles);
   NewCall->setCallingConv(II->getCallingConv());
   NewCall->setAttributes(II->getAttributes());
   NewCall->setDebugLoc(II->getDebugLoc());
@@ -2016,7 +2016,7 @@ BasicBlock *llvm::changeToInvokeAndSplitBasicBlock(CallInst *CI,
   // as of this time.
 
   InvokeInst *II =
-      InvokeInst::Create(CI->getFunctionType(), CI->getCalledValue(), Split,
+      InvokeInst::Create(CI->getFunctionType(), CI->getCalledOperand(), Split,
                          UnwindEdge, InvokeArgs, OpBundles, CI->getName(), BB);
   II->setDebugLoc(CI->getDebugLoc());
   II->setCallingConv(CI->getCallingConv());
@@ -2047,7 +2047,7 @@ static bool markAliveBlocks(Function &F,
     // canonicalizes unreachable insts into stores to null or undef.
     for (Instruction &I : *BB) {
       if (auto *CI = dyn_cast<CallInst>(&I)) {
-        Value *Callee = CI->getCalledValue();
+        Value *Callee = CI->getCalledOperand();
         // Handle intrinsic calls.
         if (Function *F = dyn_cast<Function>(Callee)) {
           auto IntrinsicID = F->getIntrinsicID();
@@ -2122,7 +2122,7 @@ static bool markAliveBlocks(Function &F,
     Instruction *Terminator = BB->getTerminator();
     if (auto *II = dyn_cast<InvokeInst>(Terminator)) {
       // Turn invokes that call 'nounwind' functions into ordinary calls.
-      Value *Callee = II->getCalledValue();
+      Value *Callee = II->getCalledOperand();
       if ((isa<ConstantPointerNull>(Callee) &&
            !NullPointerIsDefined(BB->getParent())) ||
           isa<UndefValue>(Callee)) {
