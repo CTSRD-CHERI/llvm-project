@@ -7698,7 +7698,6 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const ParsedAttr &Attr,
 /// pointer/reference should be treated as a capability.
 static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &state,
                                        TypeAttrLocation TAL, ParsedAttr& attr) {
-  static bool isDeprecatedUse = false;
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
 
@@ -7730,9 +7729,46 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
         DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
         switch (chunk.Kind) {
           case DeclaratorChunk::Pointer: {
+            // Check for an ambiguous use where this is more than one pointer
+            // level, like __capability T **. We do this by checking that the next
+            // chunk isn't a pointer without the attribute.
+            if (i > 1) {
+              DeclaratorChunk &nextChunk = declarator.getTypeObject(i-2);
+              if (nextChunk.Kind == DeclaratorChunk::Pointer) {
+                auto Attr = nextChunk.getAttrs();
+                if (!Attr.hasAttribute(ParsedAttr::AT_CHERICapability)) {
+                  S.Diag(nextChunk.Loc, diag::err_cheri_capability_attribute_ambiguous);
+                  return;
+                }
+              }
+            }
+
+            // Output a deprecated usage warning with a FixItHint
+            SourceRange AttrRange;
+            SourceLocation AttrLoc = attr.getLoc();
+            if (AttrLoc.isValid()) {
+              // The cheri_capability attribute should always be inserted via
+              // the predefined __capability macro, but we also cater for when it
+              // isn't in the else branch
+              if (AttrLoc.isMacroID()) {
+                CharSourceRange expansionRange =
+                    S.SourceMgr.getImmediateExpansionRange(AttrLoc);
+                AttrRange.setBegin(expansionRange.getBegin());
+                AttrRange.setEnd(expansionRange.getEnd());
+              } else {
+                // Calculate extended range to include the preceding
+                // __attribute(( and following ))
+                AttrRange.setBegin(AttrLoc.getLocWithOffset(-15));
+                AttrRange.setEnd(AttrLoc.getLocWithOffset(18));
+              }
+            }
+            S.Diag(chunk.Loc, diag::warn_cheri_capability_attribute_location)
+                << FixItHint::CreateRemoval(AttrRange)
+                << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
+                                              " __capability ");
+
             // Put this attribute in the right place after the next pointer
-            // chunk so we are called again but with isDeprecatedUse true.
-            isDeprecatedUse = true;
+            // chunk so we are called again with the parsed pointer type.
             ParsedAttr *attrCopy = declarator.getAttributePool()
                    .create(const_cast<IdentifierInfo *>(attr.getAttrName()),
                            attr.getRange(),
@@ -7752,52 +7788,6 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
             llvm_unreachable("Should this be handled?"); continue;
 
         }
-      }
-    }
-  } else {
-    unsigned currChunkIdx = state.getCurrentChunkIndex();
-    DeclaratorChunk &chunk = declarator.getTypeObject(state.getCurrentChunkIndex());
-    if (chunk.Kind == DeclaratorChunk::Pointer || chunk.Kind == DeclaratorChunk::Reference) {
-      if (isDeprecatedUse) {
-        // Check for an ambiguous use where this is more than one pointer
-        // level, like __capability T **. We do this by checking that the next
-        // chunk isn't a pointer without the attribute.
-        if (currChunkIdx > 0) {
-          DeclaratorChunk &nextChunk = declarator.getTypeObject(currChunkIdx-1);
-          if (nextChunk.Kind == DeclaratorChunk::Pointer) {
-            auto Attr = nextChunk.getAttrs();
-            if (!Attr.hasAttribute(ParsedAttr::AT_CHERICapability)) {
-              isDeprecatedUse = false;
-              S.Diag(nextChunk.Loc, diag::err_cheri_capability_attribute_ambiguous);
-              return;
-            }
-          }
-        }
-
-        // Output a deprecated usage warning with a FixItHint
-        SourceRange AttrRange;
-        SourceLocation AttrLoc = attr.getLoc();
-        if (AttrLoc.isValid()) {
-          // The cheri_capability attribute should always be inserted via
-          // the predefined __capability macro, but we also cater for when it
-          // isn't in the else branch
-          if (AttrLoc.isMacroID()) {
-            CharSourceRange expansionRange =
-                S.SourceMgr.getImmediateExpansionRange(AttrLoc);
-            AttrRange.setBegin(expansionRange.getBegin());
-            AttrRange.setEnd(expansionRange.getEnd());
-          } else {
-            // Calculate extended range to include the preceding
-            // __attribute(( and following ))
-            AttrRange.setBegin(AttrLoc.getLocWithOffset(-15));
-            AttrRange.setEnd(AttrLoc.getLocWithOffset(18));
-          }
-        }
-        S.Diag(chunk.Loc, diag::warn_cheri_capability_attribute_location)
-            << FixItHint::CreateRemoval(AttrRange)
-            << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
-                                          " __capability ");
-        isDeprecatedUse = false;
       }
     }
   }
