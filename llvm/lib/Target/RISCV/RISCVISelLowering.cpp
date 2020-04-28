@@ -32,11 +32,9 @@
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/IntrinsicsRISCV.h"
-#include "llvm/Support/CheriSetBounds.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Utils/CheriSetBounds.h"
 
 using namespace llvm;
 
@@ -487,30 +485,7 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     if (ToCap == FromCap)
       return Op0;
     unsigned NewOp = ToCap ? ISD::INTTOPTR : ISD::PTRTOINT;
-    SDValue Result = DAG.getNode(NewOp, DL, Op.getValueType(), Op0);
-    if (ToCap) {
-      assert(Op.getValueType() == CapType);
-      LLVM_DEBUG(dbgs() << "Lowering ptr->cap addrspacecast: "; Op.dump(&DAG));
-      // Add a CSetBounds if we know the size statically:
-      if (auto *N = dyn_cast<GlobalAddressSDNode>(Op0)) {
-        // Note: the IR should explicitly derive from PCC for functions.
-        assert(!isa<Function>(N->getGlobal()->getBaseObject()) &&
-               "Should have explicitly derived from PCC!");
-        const GlobalValue *GV = N->getGlobal();
-        auto *Ty = GV->getValueType();
-        if (Ty->isSized() && GV->isDefinitionExact()){
-          uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(Ty);
-          Result = DAG.getCSetBounds(
-              Result, DL, SizeBytes, Align(GV->getAlignment()),
-              "RISCVISelLowering::lowerADDRSPACECAST",
-              cheri::SetBoundsPointerSource::GlobalVar,
-              "load of global " + GV->getName());
-        }
-      }
-      LLVM_DEBUG(dbgs() << "Lowering ptr->cap addrspacecast result: ";
-                 Result.dump(&DAG));
-    }
-    return Result;
+    return DAG.getNode(NewOp, DL, Op.getValueType(), Op0);
   }
   case ISD::INTRINSIC_WO_CHAIN:
     return LowerINTRINSIC_WO_CHAIN(Op, DAG);

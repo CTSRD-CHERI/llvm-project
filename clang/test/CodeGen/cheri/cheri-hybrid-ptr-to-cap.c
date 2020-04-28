@@ -39,12 +39,10 @@ void* __capability global_fn_to_cap(void) {
 void* __capability global_data_to_cap(void) {
   // ASM-LABEL: global_data_to_cap:
   // ASM-MIPS: ld $1, %got_disp(external_global)($1)
-  // ASM-MIPS-NEXT: cfromddc $c1, $1
-  // ASM-MIPS-NEXT: csetbounds $c3, $c1, 4
+  // ASM-MIPS-NEXT: cfromddc $c3, $1
   // ASM-RISCV: auipc a0, %got_pcrel_hi(external_global)
   // ASM-RISCV-NEXT:  ld a0, %pcrel_lo(
-  // ASM-RISCV-NEXT:  cfromptr ca1, ddc, a0
-  // ASM-RISCV-NEXT:  csetbounds ca0, ca1, 4
+  // ASM-RISCV-NEXT:  cfromptr ca0, ddc, a0
   return (__cheri_tocap void* __capability)&external_global;
 }
 
