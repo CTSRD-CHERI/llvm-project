@@ -798,8 +798,6 @@ static SDValue performSELECTCombine(SDNode *N, SelectionDAG &DAG,
   if (!FalseC->getZExtValue()) {
     ISD::CondCode CC = cast<CondCodeSDNode>(SetCC.getOperand(2))->get();
     SDValue True = N->getOperand(1);
-    EVT TrueVT = True.getValueType();
-    assert(TrueVT.isInteger());
 
     SetCC = DAG.getSetCC(DL, SetCC.getValueType(), SetCC.getOperand(0),
                          SetCC.getOperand(1),

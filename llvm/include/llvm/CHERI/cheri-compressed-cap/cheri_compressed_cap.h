@@ -871,6 +871,7 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
     const uint64_t cursor = cap->_cr_cursor;
     cc128_length_t orig_length65 = cap->_cr_top - cap->cr_base;
     cc128_debug_assert((orig_length65 >> 64) <= 1 && "Length must be smaller than 1 << 65");
+    (void)orig_length65;
     cc128_debug_assert((req_top >> 64) <= 1 && "New top must be smaller than 1 << 65");
     cc128_debug_assert(req_base >= cap->cr_base && "Cannot decrease base");
     cc128_debug_assert(req_top <= cap->_cr_top && "Cannot increase top");
