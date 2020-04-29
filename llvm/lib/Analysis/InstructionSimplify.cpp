@@ -5130,7 +5130,7 @@ stripAndAccumulateGEPsAndPointerCastsSameRepr(Value *V, const DataLayout &DL,
     // Look through pointer casts and accumulate constant GEPs:
     Value *NewVal =
         Result->stripAndAccumulateConstantOffsets(DL, OffsetAPInt,
-                                                   /*AllowNonInbounds=*/true);
+                                                  /*AllowNonInbounds=*/true);
     NewVal = NewVal->stripPointerCastsSameRepresentation();
     if (NewVal == Result)
       return NewVal;
@@ -5400,7 +5400,7 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
       // creating a new instruction
       if (auto *ConstOp1 = dyn_cast<Constant>(Op1)) {
         if (ConstOp1->isZeroValue())
-          return Null;  // simplify setoffset(NULL, 0) -> null
+          return Null; // simplify setoffset(NULL, 0) -> null
         return ConstantExpr::getGetElementPtr(
             F->getReturnType()->getPointerElementType(), Null, ConstOp1);
       }
