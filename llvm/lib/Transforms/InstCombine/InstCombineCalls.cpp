@@ -1874,7 +1874,7 @@ Instruction *InstCombiner::foldIntrinsicWithOverflowCommon(IntrinsicInst *II) {
 }
 
 template <Intrinsic::ID GetIntrinsic, Intrinsic::ID SetIntrinsic>
-Instruction *foldSetOffsetOrAddress(InstCombiner* IC, IntrinsicInst *II) {
+Instruction *foldSetOffsetOrAddress(InstCombiner *IC, IntrinsicInst *II) {
   // We can ignore any other set_addr/set_offset instructons since the final
   // setaddr will override those. For setoffset we have to be a bit more
   // conservative since a setoffset/incoffset/setaddr could have caused the
@@ -1931,19 +1931,38 @@ Instruction *foldSetOffsetOrAddress(InstCombiner* IC, IntrinsicInst *II) {
                                        Null, Op1);
     }
   }
-  // fold chains of set{offset,addr}, (inc-offset/GEP)+ into a single set-{offset,addr}
-  if (auto ConstOp1 = dyn_cast<ConstantInt>(Op1)) {
-    User *OnlyUser = II->hasOneUse() ? *II->user_begin() : nullptr;
+
+  // fold chains of set{offset,addr}, (inc-offset/GEP)+ into a single
+  // set-{offset,addr} If there is only a single use of the set{offset,address}
+  // result, we might be able to fold it into a single setoffset. For example:
+  // GEP(setaddr(A, 100), 50) -> setaddr(A, 150)
+  // FIXME: is this fold really beneficial? Maybe we should change it to
+  //   GEP(set{offset,addr}(A, 100), 50) -> GEP(set{offset,addr}(A, 0), 150)?
+  //   Although that should probably only happy in the backend.
+
+  // XXXAR: Should this be a cl::opt so we can compare codegen?
+  bool FoldSingleUseGEPIntoArg = true;
+  if (FoldSingleUseGEPIntoArg && isa<ConstantInt>(Op1)) {
+    auto ConstOp1 = cast<ConstantInt>(Op1);
+    Use *OnlyUse = II->getSingleUndroppableUse();
     bool MadeChange = false;
-    while (OnlyUser) {
-      // Look through bitcasts:
+    while (OnlyUse) {
+      User *OnlyUser = OnlyUse->getUser();
+      if (ConstOp1->isZero()) {
+        // Don't do this simplification for a set{addr,offset}(A, 0), since
+        // All CHERI targets can perform those operations without sythesizing a
+        // constant by using the zero register (and the GEP offset can often be
+        // folded into a load/store immediate operand)
+        // TODO: this decision should probably be made later on during codegen
+        // and not here. But for now it improves code generation, so keep it
+        // here
+        break;
+      }
+      // Look through bitcasts and add a new bitcast instruction
       if (auto BC = dyn_cast<BitCastOperator>(OnlyUser)) {
-        OnlyUser = BC->hasOneUse() ? *BC->user_begin() : nullptr;
+        OnlyUse = BC->getSingleUndroppableUse();
         continue;
       }
-      // If there is only a single use of the set{offset,address} result, we
-      // might be able to fold it into a single setoffset.
-      // For example: GEP(setaddr(A, 100), 50) -> setaddr(A, 150)
       if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(OnlyUser)) {
         APInt Offset(Op1->getType()->getIntegerBitWidth(), 0);
         if (GEP->accumulateConstantOffset(IC->getDataLayout(), Offset)) {
@@ -1951,11 +1970,19 @@ Instruction *foldSetOffsetOrAddress(InstCombiner* IC, IntrinsicInst *II) {
           IC->replaceOperand(*II, 1,
                              ConstantInt::get(ConstOp1->getType(),
                                               ConstOp1->getValue() + Offset));
-          IC->replaceInstUsesWith(*GEP, II);
+          // Add back the bitcasts if necessary
+          if (II->getType() == GEP->getType()) {
+            IC->replaceInstUsesWith(*GEP, II);
+          } else {
+            auto *NewI = new BitCastInst(II, GEP->getType());
+            IC->InsertNewInstWith(NewI, *GEP);
+            NewI->takeName(GEP);
+            IC->replaceInstUsesWith(*GEP, NewI);
+          }
           ConstOp1 = cast<ConstantInt>(II->getArgOperand(1));
           MadeChange = true;
           LLVM_DEBUG(dbgs() << "Result= "; II->dump());
-          OnlyUser = II->hasOneUse() ? *II->user_begin() : nullptr;
+          OnlyUse = II->getSingleUndroppableUse();
           continue;
         }
       }
