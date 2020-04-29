@@ -39,10 +39,10 @@ int ptr_fn(Dwarf_Error* a);
 int main() {
   ptr_fn(&a);
   val_fn(a);
-  varargs_fn(a); // expected-warning{{call to function 'varargs_fn' with no prototype may lead to run-time stack corruption on CHERI.}}
+  varargs_fn(a); // expected-warning{{call to function 'varargs_fn' with no prototype may lead to run-time stack corruption}}
   // expected-note@-1{{Calling functions without prototypes is dangerous}}
   undefined_fn(a); // expected-warning{{implicit declaration of function 'undefined_fn' is invalid in C99}}
-  // expected-warning@-1{{call to function 'undefined_fn' with no prototype may lead to run-time stack corruption on CHERI.}}
+  // expected-warning@-1{{call to function 'undefined_fn' with no prototype may lead to run-time stack corruption}}
   // expected-note@-2{{Calling functions without prototypes is dangerous}}
   // expected-note@-3{{candidate function declaration needs parameter types}}
 

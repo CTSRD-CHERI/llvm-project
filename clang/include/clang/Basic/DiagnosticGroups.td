@@ -126,18 +126,18 @@ def CHERIIntCapArithmetic : DiagGroup<"cheri-intcap-arithmetic">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
 def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplicitConversionSign, CHERIImplicitConversion]>;
-def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
-def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
+def CHERIPrototypes: DiagGroup<"cheri-prototypes">;
+def CHERIPrototypesStrict: DiagGroup<"cheri-prototypes-strict">;
 // Remarks about setting/not setting subobject bounds
 def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
 
 def CheriAll : DiagGroup<"cheri",
      [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion, CheriSubobjectBounds,
       CHERIIntCapArithmetic, CHERIProvenance,
-      CHERIImplicitConversionSign, MIPSCHERIPrototypes, MIPSCHERIPrototypesStrict]>;
+      CHERIImplicitConversionSign, CHERIPrototypes]>;
 // CHERI warnings that are too noisy to turn on by default
 def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
-def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, MIPSCHERIPrototypesStrict]>;
+def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, CHERIPrototypesStrict]>;
 // Warnings/Errors for bugs in the MIPS/CHERI backend
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
 
@@ -883,7 +883,7 @@ def Move : DiagGroup<"move", [
 
 def Extra : DiagGroup<"extra", [
     DeprecatedCopy,
-    MIPSCHERIPrototypesStrict, // this is quite noisy so only on for -Wextra
+    CHERIPrototypesStrict, // this is quite noisy so only on for -Wextra
     MissingFieldInitializers,
     IgnoredQualifiers,
     InitializerOverrides,

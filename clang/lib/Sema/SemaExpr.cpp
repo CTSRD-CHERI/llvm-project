@@ -6069,10 +6069,10 @@ static void checkDirectCallValidity(Sema &S, const Expr *Fn,
   if (S.Context.getTargetInfo().SupportsCapabilities()) {
     bool NoProto = !Callee->getBuiltinID() && Callee->getType()->isFunctionNoProtoType();
     if (NoProto && ArgExprs.size() > 0) {
-      S.Diag(Fn->getBeginLoc(), diag::warn_mips_cheri_call_no_func_proto)
+      S.Diag(Fn->getBeginLoc(), diag::warn_cheri_call_no_func_proto)
           << Callee->getName() << Fn->getSourceRange();
-      S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_decl_add_types);
-      S.Diag(Fn->getBeginLoc(), diag::note_mips_cheri_func_noproto_explanation);
+      S.Diag(Callee->getLocation(), diag::note_cheri_func_decl_add_types);
+      S.Diag(Fn->getBeginLoc(), diag::note_cheri_func_noproto_explanation);
       return;
     }
   }
@@ -15598,11 +15598,11 @@ static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
   if (SrcCCType != DstCCType) {
     // converting variadic to non-variadic is an error by default, the other is
     // a pedantic warning that is often a false positive
-    unsigned DiagID = diag::warn_mips_cheri_fnptr_proto_noproto_conversion;
-    unsigned ExplainID = diag::note_mips_cheri_func_noproto_explanation;
+    unsigned DiagID = diag::warn_cheri_fnptr_proto_noproto_conversion;
+    unsigned ExplainID = diag::note_cheri_func_noproto_explanation;
     if (SrcCCType == CCType::Variadic || DstCCType == CCType::Variadic) {
-      DiagID = diag::warn_mips_cheri_fnptr_variadic_nonvariadic_conversion;
-      ExplainID = diag::note_mips_cheri_func_variadic_explanation;
+      DiagID = diag::warn_cheri_fnptr_variadic_nonvariadic_conversion;
+      ExplainID = diag::note_cheri_func_variadic_explanation;
     }
     S.Diag(Loc, DiagID) << (int)SrcCCType << SrcType << (int)DstCCType
                         << DstType;

@@ -1158,29 +1158,29 @@ def err_cheri_method_class_must_have_correct_type: Error<
   "the argument to attribute '%0' must be a CHERI class">;
 def err_cheri_invalid_callback_cast: Error<
   "CHERI callback function pointers may only be cast to other CHERI callback types">;
-def warn_mips_cheri_call_no_func_proto: Warning<
-  "call to function '%0' with no prototype may lead to run-time stack corruption on CHERI.">,
-  InGroup<MIPSCHERIPrototypes>; // , DefaultError;
-def warn_mips_cheri_fnptr_variadic_nonvariadic_conversion: Warning<
+def warn_cheri_call_no_func_proto: Warning<
+  "call to function '%0' with no prototype may lead to run-time stack corruption">,
+  InGroup<CHERIPrototypes>; // , DefaultError;
+def warn_cheri_fnptr_variadic_nonvariadic_conversion: Warning<
   "converting %select{function type without prototype|variadic function type|function type}0 "
   "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
-  "will cause wrong parameters to be passed at run-time.">,
-  InGroup<MIPSCHERIPrototypes>, DefaultError;  // This will almost certainly crash at runtime -> DefaultError
-def warn_mips_cheri_fnptr_proto_noproto_conversion: Warning<
+  "may cause incorrect parameters to be passed at run time">,
+  InGroup<CHERIPrototypes>, DefaultError;  // This will almost certainly crash at run time -> DefaultError
+def warn_cheri_fnptr_proto_noproto_conversion: Warning<
   "converting %select{function type without prototype|variadic function type|function type}0 "
   "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
-  "may cause wrong parameters to be passed at run-time.">,
-  DefaultIgnore, InGroup<MIPSCHERIPrototypesStrict>;  // This is really noisy (at least for CheriBSD so make it opt-in)
-def note_mips_cheri_func_variadic_explanation : Note<
-  "In the CHERI pure-capability ABI parameters to variadic functions must be passed "
-  "on the stack. This means a non-variadic function called with this calling convention "
-  "will read garbage values from the argument registers.">;
-def note_mips_cheri_func_noproto_explanation : Note<
-  "Calling functions without prototypes is dangerous because in the CHERI pure-capability ABI "
+  "may cause incorrect parameters to be passed at run time">,
+  DefaultIgnore, InGroup<CHERIPrototypesStrict>;  // This is really noisy (at least for CheriBSD so make it opt-in)
+def note_cheri_func_variadic_explanation : Note<
+  "The calling convention for variadic functions may pass all arguments on the stack. "
+  "This means a non-variadic function called with this calling convention "
+  "may read uninitialized values from the argument registers.">;
+def note_cheri_func_noproto_explanation : Note<
+  "Calling functions without prototypes is dangerous because on some architectures (e.g. pure-capability MIPS) "
   "integer and pointer arguments are passed in different registers. If the call includes a "
-  "parameter that does not match the function definition, the function will read garbage "
+  "parameter that does not match the function definition, the function will read uninitialized "
   "values from the argument registers.">;
-def note_mips_cheri_func_decl_add_types : Note<
+def note_cheri_func_decl_add_types : Note<
   "candidate function declaration needs parameter types">;
 def err_cheri_capability_attribute_ambiguous : Error<
   "use of __capability is ambiguous">;
