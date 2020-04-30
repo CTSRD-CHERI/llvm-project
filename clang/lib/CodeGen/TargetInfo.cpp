@@ -396,7 +396,7 @@ static Address emitMergePHI(CodeGenFunction &CGF,
   return Address(PHI, Align);
 }
 
-TargetCodeGenInfo::~TargetCodeGenInfo() { delete Info; }
+TargetCodeGenInfo::~TargetCodeGenInfo() = default;
 
 // If someone can figure out a general rule for this, that would be great.
 // It's probably just doomed to be platform-dependent, though.
@@ -716,7 +716,7 @@ public:
 class DefaultTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   DefaultTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new DefaultABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<DefaultABIInfo>(CGT)) {}
 };
 
 ABIArgInfo DefaultABIInfo::classifyArgumentType(QualType Ty) const {
@@ -903,7 +903,7 @@ class WebAssemblyTargetCodeGenInfo final : public TargetCodeGenInfo {
 public:
   explicit WebAssemblyTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT,
                                         WebAssemblyABIInfo::ABIKind K)
-      : TargetCodeGenInfo(new WebAssemblyABIInfo(CGT, K)) {}
+      : TargetCodeGenInfo(std::make_unique<WebAssemblyABIInfo>(CGT, K)) {}
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &CGM) const override {
@@ -1029,8 +1029,8 @@ class PNaClABIInfo : public ABIInfo {
 
 class PNaClTargetCodeGenInfo : public TargetCodeGenInfo {
  public:
-  PNaClTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new PNaClABIInfo(CGT)) {}
+   PNaClTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT)
+       : TargetCodeGenInfo(std::make_unique<PNaClABIInfo>(CGT)) {}
 };
 
 void PNaClABIInfo::computeInfo(CGFunctionInfo &FI) const {
@@ -1271,7 +1271,7 @@ public:
   X86_32TargetCodeGenInfo(CodeGen::CodeGenTypes &CGT, bool DarwinVectorABI,
                           bool RetSmallStructInRegABI, bool Win32StructABI,
                           unsigned NumRegisterParameters, bool SoftFloatABI)
-      : TargetCodeGenInfo(new X86_32ABIInfo(
+      : TargetCodeGenInfo(std::make_unique<X86_32ABIInfo>(
             CGT, DarwinVectorABI, RetSmallStructInRegABI, Win32StructABI,
             NumRegisterParameters, SoftFloatABI)) {}
 
@@ -2474,7 +2474,7 @@ private:
 class X86_64TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   X86_64TargetCodeGenInfo(CodeGen::CodeGenTypes &CGT, X86AVXABILevel AVXLevel)
-      : TargetCodeGenInfo(new X86_64ABIInfo(CGT, AVXLevel)) {}
+      : TargetCodeGenInfo(std::make_unique<X86_64ABIInfo>(CGT, AVXLevel)) {}
 
   const X86_64ABIInfo &getABIInfo() const {
     return static_cast<const X86_64ABIInfo&>(TargetCodeGenInfo::getABIInfo());
@@ -2618,7 +2618,7 @@ class WinX86_64TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   WinX86_64TargetCodeGenInfo(CodeGen::CodeGenTypes &CGT,
                              X86AVXABILevel AVXLevel)
-      : TargetCodeGenInfo(new WinX86_64ABIInfo(CGT, AVXLevel)) {}
+      : TargetCodeGenInfo(std::make_unique<WinX86_64ABIInfo>(CGT, AVXLevel)) {}
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &CGM) const override;
@@ -4366,8 +4366,8 @@ class PPC32TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   PPC32TargetCodeGenInfo(CodeGenTypes &CGT, bool SoftFloatABI,
                          bool RetSmallStructInRegABI)
-      : TargetCodeGenInfo(new PPC32_SVR4_ABIInfo(CGT, SoftFloatABI,
-                                                 RetSmallStructInRegABI)) {}
+      : TargetCodeGenInfo(std::make_unique<PPC32_SVR4_ABIInfo>(
+            CGT, SoftFloatABI, RetSmallStructInRegABI)) {}
 
   static bool isStructReturnInRegABI(const llvm::Triple &Triple,
                                      const CodeGenOptions &Opts);
@@ -4757,8 +4757,8 @@ public:
   PPC64_SVR4_TargetCodeGenInfo(CodeGenTypes &CGT,
                                PPC64_SVR4_ABIInfo::ABIKind Kind, bool HasQPX,
                                bool SoftFloatABI)
-      : TargetCodeGenInfo(new PPC64_SVR4_ABIInfo(CGT, Kind, HasQPX,
-                                                 SoftFloatABI)) {}
+      : TargetCodeGenInfo(std::make_unique<PPC64_SVR4_ABIInfo>(
+            CGT, Kind, HasQPX, SoftFloatABI)) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const override {
     // This is recovered from gcc output.
@@ -5316,7 +5316,7 @@ private:
 class AArch64TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   AArch64TargetCodeGenInfo(CodeGenTypes &CGT, AArch64ABIInfo::ABIKind Kind)
-      : TargetCodeGenInfo(new AArch64ABIInfo(CGT, Kind)) {}
+      : TargetCodeGenInfo(std::make_unique<AArch64ABIInfo>(CGT, Kind)) {}
 
   StringRef getARCRetainAutoreleasedReturnValueMarker() const override {
     return "mov\tfp, fp\t\t// marker for objc_retainAutoreleaseReturnValue";
@@ -5983,7 +5983,7 @@ private:
 class ARMTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   ARMTargetCodeGenInfo(CodeGenTypes &CGT, ARMABIInfo::ABIKind K)
-    :TargetCodeGenInfo(new ARMABIInfo(CGT, K)) {}
+      : TargetCodeGenInfo(std::make_unique<ARMABIInfo>(CGT, K)) {}
 
   const ARMABIInfo &getABIInfo() const {
     return static_cast<const ARMABIInfo&>(TargetCodeGenInfo::getABIInfo());
@@ -6664,7 +6664,7 @@ public:
 class NVPTXTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   NVPTXTargetCodeGenInfo(CodeGenTypes &CGT)
-      : TargetCodeGenInfo(new NVPTXABIInfo(CGT, *this)) {}
+      : TargetCodeGenInfo(std::make_unique<NVPTXABIInfo>(CGT, *this)) {}
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &M) const override;
@@ -6956,7 +6956,8 @@ public:
 class SystemZTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   SystemZTargetCodeGenInfo(CodeGenTypes &CGT, bool HasVector, bool SoftFloatABI)
-    : TargetCodeGenInfo(new SystemZABIInfo(CGT, HasVector, SoftFloatABI)) {}
+      : TargetCodeGenInfo(
+            std::make_unique<SystemZABIInfo>(CGT, HasVector, SoftFloatABI)) {}
 };
 
 }
@@ -7279,7 +7280,7 @@ namespace {
 class MSP430TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   MSP430TargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new DefaultABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<DefaultABIInfo>(CGT)) {}
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &M) const override;
 };
@@ -7348,7 +7349,7 @@ class MIPSTargetCodeGenInfo : public CommonCheriTargetCodeGenInfo {
   unsigned SizeOfUnwindException;
 public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32, CodeGenModule &CGM)
-    : CommonCheriTargetCodeGenInfo(new MipsABIInfo(CGT, IsO32, CGM)),
+    : CommonCheriTargetCodeGenInfo(std::make_unique<MipsABIInfo>(CGT, IsO32, CGM)),
       SizeOfUnwindException(IsO32 ? 24 : 32) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const override {
@@ -7994,7 +7995,7 @@ namespace {
 class AVRTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   AVRTargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new DefaultABIInfo(CGT)) { }
+      : TargetCodeGenInfo(std::make_unique<DefaultABIInfo>(CGT)) {}
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &CGM) const override {
@@ -8107,7 +8108,7 @@ private:
 class HexagonTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   HexagonTargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new HexagonABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<HexagonABIInfo>(CGT)) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const override {
     return 29;
@@ -8605,7 +8606,7 @@ namespace {
 class LanaiTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   LanaiTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT)
-      : TargetCodeGenInfo(new LanaiABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<LanaiABIInfo>(CGT)) {}
 };
 }
 
@@ -8873,7 +8874,7 @@ ABIArgInfo AMDGPUABIInfo::classifyArgumentType(QualType Ty,
 class AMDGPUTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   AMDGPUTargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new AMDGPUABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<AMDGPUABIInfo>(CGT)) {}
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &M) const override;
   unsigned getOpenCLKernelCallingConv() const override;
@@ -9131,7 +9132,7 @@ namespace {
 class SparcV8TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   SparcV8TargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new SparcV8ABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<SparcV8ABIInfo>(CGT)) {}
 };
 } // end anonymous namespace
 
@@ -9393,7 +9394,7 @@ namespace {
 class SparcV9TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   SparcV9TargetCodeGenInfo(CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new SparcV9ABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<SparcV9ABIInfo>(CGT)) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const override {
     return 14;
@@ -9486,7 +9487,7 @@ private:
 class ARCTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   ARCTargetCodeGenInfo(CodeGenTypes &CGT)
-      : TargetCodeGenInfo(new ARCABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<ARCABIInfo>(CGT)) {}
 };
 
 
@@ -9679,7 +9680,7 @@ class XCoreTargetCodeGenInfo : public TargetCodeGenInfo {
   mutable TypeStringCache TSC;
 public:
   XCoreTargetCodeGenInfo(CodeGenTypes &CGT)
-    :TargetCodeGenInfo(new XCoreABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<XCoreABIInfo>(CGT)) {}
   void emitTargetMD(const Decl *D, llvm::GlobalValue *GV,
                     CodeGen::CodeGenModule &M) const override;
 };
@@ -9866,7 +9867,7 @@ namespace {
 class SPIRTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   SPIRTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT)
-    : TargetCodeGenInfo(new DefaultABIInfo(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<DefaultABIInfo>(CGT)) {}
   unsigned getOpenCLKernelCallingConv() const override;
 };
 
@@ -10668,7 +10669,7 @@ class RISCVTargetCodeGenInfo : public CommonCheriTargetCodeGenInfo {
 public:
   RISCVTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT, unsigned XLen,
                          unsigned FLen)
-      : CommonCheriTargetCodeGenInfo(new RISCVABIInfo(CGT, XLen, FLen)) {}
+      : CommonCheriTargetCodeGenInfo(std::make_unique<RISCVABIInfo>(CGT, XLen, FLen)) {}
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &CGM) const override {
