@@ -49,7 +49,7 @@ class GoogleTest(TestFormat):
             litConfig.warning(
                 "unable to discover google-tests in %r: %s. Process output: %s"
                 % (path, sys.exc_info()[1], exc.output))
-            raise StopIteration
+            return
 
         nested_tests = []
         for ln in output.splitlines(False):  # Don't keep newlines.
