@@ -538,7 +538,7 @@ bool Type::isCHERICapabilityType(const ASTContext &Context,
       return Context.getTargetInfo().areAllPointersCapabilities();
   } else if (const AtomicType *AT = getAs<AtomicType>())
     return AT->getValueType()->isCHERICapabilityType(Context, IncludeIntCap);
-  else if  (const MemberPointerType *MPT = getAs<MemberPointerType>())
+  else if (const MemberPointerType *MPT = getAs<MemberPointerType>())
     // XXXAR: Currently member function pointers contain capabities, but
     // pointers to member data don't
     return Context.getTargetInfo().areAllPointersCapabilities() && MPT->isMemberFunctionPointer();
@@ -557,6 +557,14 @@ bool Type::isIntCapType() const {
   } else if (const AtomicType *AT = getAs<AtomicType>()) {
     return AT->getValueType()->isIntCapType();
   }
+  return false;
+}
+
+bool Type::isCapabilityPointerType() const {
+  if (const PointerType *PT = getAs<PointerType>())
+    return PT->isCHERICapability();
+  else if (const AtomicType *AT = getAs<AtomicType>())
+    return AT->getValueType()->isCapabilityPointerType();
   return false;
 }
 

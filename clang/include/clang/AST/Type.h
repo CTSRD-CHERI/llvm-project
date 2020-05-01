@@ -2004,14 +2004,20 @@ public:
   bool isFunctionNoProtoType() const { return getAs<FunctionNoProtoType>(); }
   bool isFunctionProtoType() const { return getAs<FunctionProtoType>(); }
   bool isPointerType() const;
-  /// Return struct of this type is a CHERI capability type. If \p IncludeIntCap
+  /// Returns true if this type is a CHERI capability type.
+  /// If \p IncludeIntCap
   /// is true this also includes __uintcap_t and __intcap_t, otherwise it will
   /// return false for these types. This is useful for cases such as checking
   /// the validity of casts where __uintcap_t is not handled the same way as
   /// pointers.
   bool isCHERICapabilityType(const ASTContext &Context,
                              bool IncludeIntCap = true) const;
-  bool isIntCapType() const;       // __uintcap_t or __intcap_t
+  /// Returns true for __uintcap_t or __intcap_t (and enums/_Atomic with that
+  /// underlying type)
+  bool isIntCapType() const;
+  /// Returns true for pointers that are implemented as CHERI capabilities
+  /// and _Atomic with capability pointers as the underlying type.
+  bool isCapabilityPointerType() const;
 
   /// Whether this type can hold tagged capability values.
   /// This is true for capability types that have not been annotated with
