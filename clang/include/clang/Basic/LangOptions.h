@@ -190,10 +190,23 @@ public:
                   /// (More C compatible than offset)
   };
 
+  enum CheriCapIntConversion {
+    CapInt_Strict, /// All conversions (including (u)intcap<->int need explicit
+                   /// casts). Unlikely to be useful very often but could
+                   /// detect some cases of accidental tag-stripping.
+    CapInt_Explicit, /// Require explicit casts for pointer -> capability and
+                     /// integer -> capability pointer
+    CapInt_Address,  /// Conversions return the address or create an untagged
+                     /// capability with the address
+    CapInt_Relative, /// Perform conversions relative to DDC (previous
+                     /// default)
+    CapInt_Invalid = -1,
+  };
+
   // Work around for bugs in the expression classification which can cause
   // us to reject valid code even if there is no capability to pointer
   // conversion.
-  enum CheriCapConversionMode {
+  enum CheriCapConversionWorkaroundMode {
     CapConv_Err,
     CapConv_Ignore,
   };
@@ -395,6 +408,16 @@ public:
 
   bool cheriUIntCapUsesOffset() const {
     return getCheriUIntCap() == UIntCap_Offset;
+  }
+
+  bool explicitConversionsFromCap() const {
+    return getCheriCapToInt() == CapInt_Explicit ||
+           getCheriCapToInt() == CapInt_Strict;
+  }
+
+  bool explicitConversionsToCap() const {
+    return getCheriIntToCap() == CapInt_Explicit ||
+           getCheriIntToCap() == CapInt_Strict;
   }
 
   /// Reset all of the options that are not considered when building a

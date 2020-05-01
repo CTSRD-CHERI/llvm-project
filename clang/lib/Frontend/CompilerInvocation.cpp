@@ -2748,11 +2748,12 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   // Error or not on capability to pointer conversions.
   if (const Arg *A = Args.getLastArg(OPT_cheri_conversion_error)) {
     auto ConvErrMode =
-        llvm::StringSwitch<LangOptions::CheriCapConversionMode>(A->getValue())
+        llvm::StringSwitch<LangOptions::CheriCapConversionWorkaroundMode>(
+            A->getValue())
             .Case("error", LangOptions::CapConv_Err)
             .Case("ignore", LangOptions::CapConv_Ignore)
-            .Default((LangOptions::CheriCapConversionMode)-1);
-    if (ConvErrMode == (LangOptions::CheriCapConversionMode)-1) {
+            .Default((LangOptions::CheriCapConversionWorkaroundMode)-1);
+    if (ConvErrMode == (LangOptions::CheriCapConversionWorkaroundMode)-1) {
       Diags.Report(diag::err_drv_invalid_value)
           << A->getAsString(Args) << A->getValue();
     } else
@@ -2761,6 +2762,30 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.CheriCompareExact =
       Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
                    Opts.CheriCompareExact);
+
+  auto GetCapIntMode = [&](const Arg *A) {
+    auto Mode =
+        llvm::StringSwitch<LangOptions::CheriCapIntConversion>(A->getValue())
+            .Case("explicit", LangOptions::CapInt_Explicit)
+            .Case("strict", LangOptions::CapInt_Strict)
+            .Case("address", LangOptions::CapInt_Address)
+            .Case("relative", LangOptions::CapInt_Relative)
+            .Default(LangOptions::CapInt_Invalid);
+    if (Mode == LangOptions::CapInt_Invalid)
+      Diags.Report(diag::err_drv_invalid_value)
+          << A->getAsString(Args) << A->getValue();
+    return Mode;
+  };
+  if (const Arg *A = Args.getLastArg(OPT_cheri_cap_to_int_EQ)) {
+    auto Mode = GetCapIntMode(A);
+    if (Mode != LangOptions::CapInt_Invalid)
+      Opts.setCheriCapToInt(Mode);
+  }
+  if (const Arg *A = Args.getLastArg(OPT_cheri_int_to_cap_EQ)) {
+    auto Mode = GetCapIntMode(A);
+    if (Mode != LangOptions::CapInt_Invalid)
+      Opts.setCheriIntToCap(Mode);
+  }
 
   // Parse the -cheri-bounds= option to determine whether we should set more
   // bounds on capabilities (e.g. when passing subobject references to
