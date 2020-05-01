@@ -976,9 +976,8 @@ static constexpr unsigned attrIdxToArrayIdx(unsigned Index) {
   return Index == AttributeList::FunctionIndex ? 0 : Index + 1;
 }
 
-AttributeListImpl::AttributeListImpl(LLVMContext &C,
-                                     ArrayRef<AttributeSet> Sets)
-    : Context(C), NumAttrSets(Sets.size()) {
+AttributeListImpl::AttributeListImpl(ArrayRef<AttributeSet> Sets)
+    : NumAttrSets(Sets.size()) {
   assert(!Sets.empty() && "pointless AttributeListImpl");
 
   // There's memory after the node where we can store the entries in.
@@ -1037,7 +1036,7 @@ AttributeList AttributeList::getImpl(LLVMContext &C,
     void *Mem = pImpl->Alloc.Allocate(
         AttributeListImpl::totalSizeToAlloc<AttributeSet>(AttrSets.size()),
         alignof(AttributeListImpl));
-    PA = new (Mem) AttributeListImpl(C, AttrSets);
+    PA = new (Mem) AttributeListImpl(AttrSets);
     pImpl->AttrsLists.InsertNode(PA, InsertPoint);
   }
 
@@ -1361,8 +1360,6 @@ AttributeList::addAllocSizeAttr(LLVMContext &C, unsigned Index,
 //===----------------------------------------------------------------------===//
 // AttributeList Accessor Methods
 //===----------------------------------------------------------------------===//
-
-LLVMContext &AttributeList::getContext() const { return pImpl->getContext(); }
 
 AttributeSet AttributeList::getParamAttributes(unsigned ArgNo) const {
   return getAttributes(ArgNo + FirstArgIndex);
