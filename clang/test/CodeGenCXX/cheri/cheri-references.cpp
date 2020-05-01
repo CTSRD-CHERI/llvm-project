@@ -12,16 +12,13 @@ void f() {
   // CHECK-NEXT: store %class.A addrspace(200)* %a1, %class.A addrspace(200)* addrspace(200)* %a2, align [[#CAP_SIZE]]
   bool b = &a2 == (A*)0x1234567;
   // CHECK-NEXT: [[REF_ADDR:%.+]] = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a2, align [[#CAP_SIZE]]
-  // CHECK-NEXT: [[FAKE_CAP:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 19088743)
-  // CHECK-NEXT: [[FAKE_A_PTR:%.+]] = bitcast i8 addrspace(200)* [[FAKE_CAP]] to %class.A addrspace(200)*
-  // CHECK-NEXT: %cmp = icmp eq %class.A addrspace(200)* [[REF_ADDR]], [[FAKE_A_PTR]]
+  // CHECK-NEXT: %cmp = icmp eq %class.A addrspace(200)* [[REF_ADDR]], bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 19088743) to %class.A addrspace(200)*)
   // CHECK-NEXT: %frombool = zext i1 %cmp to i8
   // CHECK-NEXT: store i8 %frombool, i8 addrspace(200)* %b, align 1
   bool b2 = &a2 == (void*)0x1234567;
   // CHECK-NEXT: [[REF_ADDR:%.+]] = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a2, align [[#CAP_SIZE]]
   // CHECK-NEXT: [[REF_ADDR_VOID:%.+]] = bitcast %class.A addrspace(200)* [[REF_ADDR]] to i8 addrspace(200)*
-  // CHECK-NEXT: [[FAKE_VOID_PTR:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 19088743)
-  // CHECK-NEXT: %cmp1 = icmp eq i8 addrspace(200)* [[REF_ADDR_VOID]], [[FAKE_VOID_PTR]]
+  // CHECK-NEXT: %cmp1 = icmp eq i8 addrspace(200)* [[REF_ADDR_VOID]], getelementptr (i8, i8 addrspace(200)* null, i64 19088743)
   // CHECK-NEXT: %frombool2 = zext i1 %cmp1 to i8
   // CHECK-NEXT: store i8 %frombool2, i8 addrspace(200)* %b2, align 1
 

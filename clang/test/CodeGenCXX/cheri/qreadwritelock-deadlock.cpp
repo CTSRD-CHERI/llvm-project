@@ -1,4 +1,3 @@
-// RUN: %cheri_purecap_cc1 -x c++ -std=c++11 -emit-llvm -o - %s
 // RUN: %cheri_purecap_cc1 -x c++ -std=c++11 -emit-llvm -o - %s | FileCheck %s
 
 // QReadWriteLock was never being unlocked because we were write a $ddc derived
@@ -69,13 +68,13 @@ enum class intcap_enum : __intcap_t {
 void test2() {
   // CHECK-LABEL: @_Z5test2v()
   void *v = (void *)1;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* %v
   void *v2 = (void *)(__intcap_t)2;
   // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 2)
   void *v3 = (void *)(intcap_enum)3;  // This previously crashed the compiler
   // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 3)
   void *v4 = (void *)(long)4;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 4)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 4), i8 addrspace(200)* addrspace(200)* %v4
   void *v5 = (void *)intcap_enum::val1;
   // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 5)
   void *v6 = (void *)(__intcap_t)intcap_enum::val2;

@@ -65,9 +65,7 @@ int main2(_Atomic(int*) p) {
 _Atomic(int *) a;
 // CHECK-LABEL: @test_store(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// CHECK-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[#CAP_SIZE]]
+// CHECK-NEXT:    store atomic i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i32 addrspace(200)*), i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[#CAP_SIZE]]
 // CHECK-NEXT:    ret void
 //
 // OPT-LABEL: @test_store(

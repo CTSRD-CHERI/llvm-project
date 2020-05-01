@@ -2584,9 +2584,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Value* IntToPtr = nullptr;
 
     if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext())) {
-      IntToPtr = CGF.setCapabilityIntegerValue(
-          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(DestLLVMTy)),
-          IntResult);
+      IntToPtr = Builder.CreateBitCast(
+          Builder.CreateGEP(llvm::ConstantPointerNull::get(CGF.Int8CheriCapTy),
+                            IntResult),
+          DestLLVMTy);
     } else {
       // assert(!SrcIsCheriCap);
       // TODO: generate CFromPtr/CFromInt depending on value (for constants use
