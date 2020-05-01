@@ -7,12 +7,11 @@ target triple = "cheri-unknown-freebsd"
 define i8 addrspace(200)* @cmalloc(i64 %s) nounwind {
 entry:
   %call = tail call i8* @malloc(i64 %s) nounwind
-  %0 = ptrtoint i8* %call to i64
-  %1 = inttoptr i64 %0 to i8 addrspace(200)*
+  %cap = addrspacecast i8* %call to i8 addrspace(200)*
   ; CHECK: csetbounds
-  %2 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %1, i64 %s)
+  %bounded = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %cap, i64 %s)
   ; CHECK: .end cmalloc
-  ret i8 addrspace(200)* %2
+  ret i8 addrspace(200)* %bounded
 }
 
 declare noalias i8* @malloc(i64) nounwind
