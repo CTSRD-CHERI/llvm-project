@@ -3223,10 +3223,15 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
     return Op.complete(CE);
   }
 
-  // We don't included __uintcap_t here since it should be be allowed to use
-  // a __cheri_{to,from}cap on __uintcap_t
-  const bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, false);
-  const bool DestIsCap = DestTy->isCHERICapabilityType(Context, false);
+  // We allow __cheri_fromcap to convert from capability pointers and uintcap_t
+  // to pointer types (both integral and capability, i.e. no-op casts).
+  // __cheri_tocap can be used from integral pointers to capability pointers,
+  // but not to convert to __uintcap_t (yet).
+  const bool SrcIsCapPtr = SrcTy->isCapabilityPointerType();
+  const bool SrcIsIntCap = SrcTy->isIntCapType();
+  const bool DestIsCapPtr = DestTy->isCapabilityPointerType();
+  const bool DestIsIntCap = DestTy->isIntCapType();
+  // TODO: C++ references
   Op.Kind = CK_NoOp;
   if (IsToCap) {
     // __cheri_tocap
@@ -3236,24 +3241,33 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
           << SrcTy << IsToCap;
       return ExprError();
     }
-    if (!DestIsCap) {
+    if (!DestIsCapPtr) {
       Diag(TSInfo->getTypeLoc().getBeginLoc(),
            diag::err_cheri_to_from_cap_invalid_target_type)
           << DestTy << IsToCap;
       return ExprError();
     }
     // No-op if SrcTy is a capability
-    if (!SrcIsCap)
+    if (!SrcTy->isCHERICapabilityType(Context, true))
       Op.Kind = CK_PointerToCHERICapability;
-
   } else {
-    // __cheri_fromcap
-    if (!SrcIsCap) {
+    // __cheri_fromcap can be used for capablity pointers and __(u)intcap_t
+    if (SrcIsIntCap && !DestIsIntCap) {
+      // Add an implicit conversion to void* __capability if the source is an
+      // __(u)intcap_t to ensure correct CK_foo chains
+      Op.SrcExpr = ImpCastExprToType(
+          Op.SrcExpr.get(),
+          Context.getPointerType(Context.VoidTy, ASTContext::PIK_Capability),
+          CK_BitCast);
+    }
+    bool SrcIsValidCapTy = SrcIsCapPtr || SrcIsIntCap;
+    if (!SrcIsValidCapTy) {
       Diag(SubExpr->getExprLoc(),
            diag::err_cheri_to_from_cap_invalid_source_type)
           << SrcTy << IsToCap;
       return ExprError();
     }
+    // FIXME: allow the DestTy->isIntegerType() case
     if (!DestTy->isPointerType()) {
       Diag(TSInfo->getTypeLoc().getBeginLoc(),
            diag::err_cheri_to_from_cap_invalid_target_type)
@@ -3261,7 +3275,9 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
       return ExprError();
     }
     // No-op if DestTy is a capability
-    if (!DestIsCap)
+    if (DestIsCapPtr || DestIsIntCap)
+      Op.Kind = CK_NoOp;
+    else
       Op.Kind = CK_CHERICapabilityToPointer;
   }
 
@@ -3273,7 +3289,10 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   //     return hasSameType(LHS, RHS);
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
   Expr *MaybeImpConv = Op.SrcExpr.get();
-  if (!CheckCHERIAssignCompatible(DestTy, SrcTy, MaybeImpConv)) {
+  // Note: we can't use SrcTy for the check here  since we may have inserted an
+  // implicit cast from __uintcap_t to void* __capability.
+  if (!CheckCHERIAssignCompatible(DestTy, Op.SrcExpr.get()->getType(),
+                                  MaybeImpConv)) {
     Diag(MaybeImpConv->getExprLoc(), diag::err_cheri_to_from_cap_unrelated_type)
         << IsToCap << SrcTy << DestTy;
     return ExprError();
