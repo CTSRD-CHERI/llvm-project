@@ -234,6 +234,8 @@ def main():
         continue
       clang_args[0:1] = SUBST[clang_args[0]]
       clang_args = [filename if i == '%s' else i for i in clang_args] + args.clang_args
+      # Remove all -verify arguments since they could cause the IR generation to fail
+      clang_args = [x for x in clang_args if not x.startswith("-verify")]
 
       # Permit piping the output through opt
       if not (len(commands) == 2 or
