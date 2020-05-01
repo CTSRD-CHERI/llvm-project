@@ -4587,8 +4587,12 @@ SDValue MipsTargetLowering::setPccOffset(SelectionDAG &DAG, const SDLoc DL,
 
 SDValue MipsTargetLowering::cFromDDC(SelectionDAG &DAG, const SDLoc DL,
                                      SDValue Offset) const {
-  auto CFromDDC = DAG.getConstant(Intrinsic::cheri_cap_from_ddc, DL, MVT::i64);
-  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, CFromDDC, Offset);
+  auto GetDDC = DAG.getConstant(Intrinsic::cheri_ddc_get, DL, MVT::i64);
+  auto DDC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetDDC);
+  auto CFromPtr =
+      DAG.getConstant(Intrinsic::cheri_cap_from_pointer, DL, MVT::i64);
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, CFromPtr, DDC,
+                     Offset);
 }
 
 /// LowerCallResult - Lower the result values of a call into the

@@ -853,7 +853,6 @@ def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),
           (CToPtr GPCR:$rs1, GPCRC0IsDDC:$rs2)>;
 def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, GPR:$rs2),
           (CFromPtr GPCRC0IsDDC:$rs1, GPR:$rs2)>;
-def : Pat<(int_cheri_cap_from_ddc GPR:$rs2), (CFromPtr DDC, $rs2)>;
 def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
 
 // TODO: Only for hybrid; use CIncOffset C0 etc for CheriABI
@@ -863,7 +862,6 @@ def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
 /// Null Capability Patterns
 
 def : Pat<(int_cheri_cap_from_pointer DDC, (XLenVT 0)), (CLenVT (COPY C0))>;
-def : Pat<(int_cheri_cap_from_ddc (XLenVT 0)), (CLenVT (COPY C0))>;
 def : Pat<(inttoptr (XLenVT 0)), (CLenVT (COPY C0))>;
 
 /// Pointer-Comparison Instructions
