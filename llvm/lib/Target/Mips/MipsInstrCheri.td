@@ -672,7 +672,6 @@ def : InstAlias<"cgetnull_old $dst", (CFromPtr CheriOpnd:$dst, DDC, ZERO_64), 1>
 // def : InstAlias<"cfromint $dst, $src", (CIncOffset CheriOpnd:$dst, CNULL, GPR64Opnd:$src), 1>;
 
 // So that we can use ptr -> int without a warning that $c0 access is deprecated in .s files
-def : Pat<(int_cheri_cap_from_ddc GPR64Opnd:$addr), (CFromPtr DDC, $addr)>;
 def : InstAlias<"cfromddc $dst, $src", (CFromPtr CheriOpnd:$dst, DDC, GPR64Opnd:$src), 1>;
 
 ////////////////////////////////////////////////////////////////////////////////
