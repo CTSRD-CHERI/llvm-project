@@ -292,6 +292,21 @@ def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option, NoDriver
            "This is highly unsafe and will almost certainly not work at runtime)">,
   Values<"conservative,references-only,subobject-safe,aggressive,very-aggressive,everywhere-unsafe">;
 
+def cheri_cap_to_int_EQ : Joined<["-"], "cheri-cap-to-int=">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"How to convert capabilities to integer values. Choices are: "
+           "'explicit' (require explicit casts when casting capability pointers to pointer/integer), "
+           "'strict' (like 'explicit' but also require explicit casts to convert __(u)intcap_t to integer), "
+           "'address' (return the address when casting from capability to pointer/integer) "
+           "'relative' (create DDC or PCC relative offsets when casting from capability to pointer/integer)">,
+  Values<"explicit,strict,address,relative">;
+def cheri_int_to_cap_EQ : Joined<["-"], "cheri-int-to-cap=">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"How to convert capabilities to integer values. Choices are: "
+           "'explicit' (require explicit casts when casting to capabilities), "
+           "'strict' (like 'explicit' but also require explicit casts to convert integers to __(u)intcap_t), "
+           "'address' (create untagged capabilities holding the pointer address when casting from pointer/integer) "
+           "'relative' (derive capabilities from DDC or PCC when converting from pointer/integer)">,
+  Values<"explicit,strict,address,relative">;
+
 def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Equality comparisons between capabilities only compare the address (default)">;
 def cheri_comparison_exact : Flag<["-"], "cheri-comparison=exact">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
