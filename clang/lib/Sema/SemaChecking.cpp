@@ -1816,6 +1816,13 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   // Memory capability functions
   case Builtin::BI__builtin_cheri_callback_create:
     return SemaBuiltinCHERICapCreate(*this, TheCall);
+  case Builtin::BI__builtin_cheri_cap_to_pointer:
+    if (Context.getTargetInfo().areAllPointersCapabilities()) {
+      Diag(TheCall->getBeginLoc(), diag::err_builtin_target_unsupported)
+          << TheCall->getSourceRange();
+      return ExprError();
+    }
+    break;
   // OpenCL v2.0, s6.13.16 - Pipe functions
   case Builtin::BIread_pipe:
   case Builtin::BIwrite_pipe:
