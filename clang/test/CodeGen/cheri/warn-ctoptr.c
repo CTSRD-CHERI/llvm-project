@@ -3,15 +3,16 @@
 // Simplified test case for the error we had in hybrid mode comparing values to SIG_IGN (works fine in purecap)
 
 // Check all the warnings:
-// TODO: Check the IR
-// RUN: %cheri_cc1 -Wcheri-pointer-conversion -S %s -o - -O0 -verify -cheri-uintcap=offset | FileCheck %s -implicit-check-not ctoptr
+// TODO: Check the IR instead of assembly
+// RUN: %cheri_cc1 -Wcheri-pointer-conversion -DCHECK_BAD_CODE %s -emit-llvm -o /dev/null -verify -cheri-uintcap=offset
+// RUN: %cheri_purecap_cc1 -Wcheri-pointer-conversion -DCHECK_BAD_CODE -S %s -o - -O0 -cheri-uintcap=offset -verify=purecap
+// RUN: %cheri_cc1 -Wcheri-pointer-conversion -S %s -o - -O1 -verify | FileCheck %s -implicit-check-not ctoptr  --check-prefixes CHECK,HYBRID
 
-// And finally try compiling this in purecap mode (and verify doesn't create any ctoptr except for the builtin call):
-// RUN: %cheri_purecap_cc1 -Wcheri-pointer-conversion -S %s -o - -O0 -cheri-uintcap=offset -verify=purecap | FileCheck %s -check-prefix PURECAP -implicit-check-not ctoptr
-// purecap-no-diagnostics
+// And finally try compiling this in purecap mode (and verify doesn't create any ctoptr):
+// RUN: %cheri_purecap_cc1 -Wcheri-pointer-conversion -S %s -o - -O1 -verify=purecap-codegen | FileCheck %s -implicit-check-not ctoptr --check-prefixes CHECK,PURECAP
+// purecap-codegen-no-diagnostics
 
 // CHECK: .file "warn-ctoptr.c"
-// PURECAP: .file "warn-ctoptr.c"
 
 typedef __UINTPTR_TYPE__ uintptr_t;
 
@@ -32,8 +33,8 @@ int test(void *__capability cap) {
   // expected-warning@-2{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-3{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_addr cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
   // CHECK-LABEL: test:
-  // CHECK: ctoptr {{.+}}, $ddc
-  // CHECK: ctoptr {{.+}}, $ddc
+  // HYBRID: ctoptr {{.+}}, $ddc
+  // HYBRID: ctoptr {{.+}}, $ddc
   // CHECK .end test
 }
 
@@ -41,7 +42,7 @@ uintptr_t test2a(void *__capability cap) {
   return (uintptr_t)cap; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_addr cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
   // CHECK-LABEL: test2a:
-  // CHECK: ctoptr {{.+}}, $ddc
+  // HYBRID: ctoptr {{.+}}, $ddc
   // CHECK .end test2a
 }
 
@@ -50,31 +51,33 @@ uintptr_t test2b(void *__capability cap) {
   return (uintptr_t)GLOBAL_SIG_IGN;
 }
 
-#ifdef CHECK_BAD_CODE
 int test3(void *ptr) {
-  // Don't warn here, we used an explicit __cheri_fromcap (but currently not allowed for __uintcap_t)
-  return ptr == ((__cheri_fromcap void *)(__uintcap_t)1); // expected-error{{invalid source type '__uintcap_t' for __cheri_fromcap: source must be a capability}}
+  // Don't warn here, we used an explicit __cheri_fromcap
+  return ptr == ((__cheri_fromcap void *)(__uintcap_t)1);
+  // CHECK-LABEL: test3:
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // CHECK .end test4
 }
-#endif
 
 int test3a(void *ptr) {
   // Don't warn here, we used an explicit __cheri_fromcap
   return ptr == ((__cheri_fromcap void *)(void *__capability)1);
   // CHECK-LABEL: test3a:
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end test3a
 }
 
 int test4(void *ptr) {
+#if defined(__CHERI_PURE_CAPABILITY__) && !defined(CHECK_BAD_CODE)
+  return 0;
+#else
   // Don't warn here, we used an explicit __builtin_cheri_ctoptr
   return ptr == __builtin_cheri_cap_to_pointer(__builtin_cheri_global_data_get(), (void *__capability)(__uintcap_t)1);
+  // purecap-error@-1{{builtin is not supported on this target}}
+#endif
   // CHECK-LABEL: test4:
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end test4
-  // This generates a ctoptr even in the purecap ABI (since we explicitly used the builtin):
-  // PURECAP-LABEL: test4:
-  // PURECAP: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
-  // PURECAP .end test4
 }
 
 // FIXME: We should guess the right instruction (possibly opt-in with -data-dependent-provenacne)
@@ -83,7 +86,7 @@ void *cast_constant_uintcap_to_intptr(void) {
   return (void *)(__uintcap_t)1; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cast_constant_uintcap_to_intptr:
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cast_constant_uintcap_to_intptr
 }
 
@@ -93,7 +96,7 @@ void *cast_constant_uintcap_to_intptr2(void) {
   return (void *)cap; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cast_constant_uintcap_to_intptr2:
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cast_constant_uintcap_to_intptr2
 }
 
@@ -102,7 +105,7 @@ void *cast_uintcap_to_intptr(__uintcap_t cap) {
   return (void *)cap; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cast_uintcap_to_intptr:
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cast_uintcap_to_intptr
 }
 
@@ -117,7 +120,7 @@ int cheribsd_test(void) {
   return SIG_IGN == SIG_DFL; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cheribsd_test:
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cheribsd_test
 }
 
@@ -149,8 +152,8 @@ int test_sig_macros() {
 
   return 0;
   // CHECK-LABEL: test_sig_macros:
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
-  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end test_sig_macros
 }
 
@@ -166,6 +169,7 @@ void *cast_capptr_to_intptr_explicit(void *__capability cap) {
 void *cast_uintcap_to_intptr_implicit(__uintcap_t cap) {
   // Should also warn about ctoptr
   return cap; // expected-warning{{incompatible integer to pointer conversion returning '__uintcap_t' from a function with result type 'void *'}}
+  // purecap-warning@-1{{incompatible integer to pointer conversion returning '__uintcap_t' from a function with result type 'void *'}}
 }
 
 void *cast_uintcap_to_intptr_explicit(__uintcap_t cap) {
@@ -174,42 +178,41 @@ void *cast_uintcap_to_intptr_explicit(__uintcap_t cap) {
 #endif
 
 // Check that this does not warn since it only uses cfromddc (which could also be a bug but a different one):
-#define PTREXPAND_CP(src,dst,fld) do { (dst).fld = (void * __capability)(__intcap_t)(src).fld; } while (0)
-
+#define PTREXPAND_CP(src, dst, fld)                        \
+  do {                                                     \
+    (dst).fld = (void *__capability)(__intcap_t)(src).fld; \
+  } while (0)
 
 struct kinfo_proc {
-  struct vmspace *ki_vmspace;   /* pointer to kernel vmspace struct */
+  struct vmspace *ki_vmspace; /* pointer to kernel vmspace struct */
   char other_stuff[1024];
 };
 struct kinfo_proc_c {
-  void * __capability    ki_vmspace;           /* struct vmspace */
+  void *__capability ki_vmspace; /* struct vmspace */
   char other_stuff[1024];
 };
 
 void *
-cheriabi_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc_c *ki_c)
-{
+cheriabi_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc_c *ki_c) {
   PTREXPAND_CP(*ki, *ki_c, ki_vmspace);
   return ki_c;
   // CHECK-LABEL: cheriabi_kinfo_proc_out
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
-  // CHECK:     cincoffset	$c1, $cnull, ${{[0-9]+}}
+  // HYBRID:     cincoffset	$c{{[0-9]+}}, $cnull, ${{[0-9]+}}
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
   // CHECK: .end cheriabi_kinfo_proc_out
-
 }
 
-void * __capability same_thing_expanded(const struct kinfo_proc *ki, struct kinfo_proc_c *ki_c) {
-  (*ki_c).ki_vmspace = (void * __capability)(__intcap_t)(*ki).ki_vmspace;
+void *__capability same_thing_expanded(const struct kinfo_proc *ki, struct kinfo_proc_c *ki_c) {
+  (*ki_c).ki_vmspace = (void *__capability)(__intcap_t)(*ki).ki_vmspace;
   return ki_c->ki_vmspace;
   // CHECK-LABEL: same_thing_expanded:
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
-  // CHECK:     cincoffset	$c1, $cnull, ${{[0-9]+}}
+  // HYBRID:     cincoffset	$c{{[0-9]+}}, $cnull, ${{[0-9]+}}
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
   // CHECK: .end same_thing_expanded
-
 }
