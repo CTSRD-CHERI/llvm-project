@@ -5,8 +5,7 @@
 
 ; ModuleID = 'global.c'
 
-; Note: under-aligned -> will need two csw instructions
-@x = global i64 0, align 4
+@x = global i64 0, align 8
 
 ; Function Attrs: nounwind
 define void @foo(i64 %y) addrspace(200) nounwind {
@@ -16,12 +15,10 @@ define void @foo(i64 %y) addrspace(200) nounwind {
 ; BOUNDS-NEXT:    daddu $1, $1, $25
 ; BOUNDS-NEXT:    daddiu $1, $1, %lo(%neg(%gp_rel(foo)))
 ; BOUNDS-NEXT:    ld $1, %got_disp(x)($1)
-; BOUNDS-NEXT:    dsrl $2, $4, 32
 ; BOUNDS-NEXT:    cfromddc $c1, $1
 ; BOUNDS-NEXT:    csetbounds $c1, $c1, 8
-; BOUNDS-NEXT:    csw $2, $zero, 0($c1)
 ; BOUNDS-NEXT:    jr $ra
-; BOUNDS-NEXT:    csw $4, $zero, 4($c1)
+; BOUNDS-NEXT:    csd $4, $zero, 0($c1)
 ;
 ; NOBOUNDS-LABEL: foo:
 ; NOBOUNDS:       # %bb.0: # %entry
@@ -29,11 +26,9 @@ define void @foo(i64 %y) addrspace(200) nounwind {
 ; NOBOUNDS-NEXT:    daddu $1, $1, $25
 ; NOBOUNDS-NEXT:    daddiu $1, $1, %lo(%neg(%gp_rel(foo)))
 ; NOBOUNDS-NEXT:    ld $1, %got_disp(x)($1)
-; NOBOUNDS-NEXT:    dsrl $2, $4, 32
-; NOBOUNDS-NEXT:    sw $2, 0($1)
 ; NOBOUNDS-NEXT:    jr $ra
-; NOBOUNDS-NEXT:    sw $4, 4($1)
+; NOBOUNDS-NEXT:    sd $4, 0($1)
 entry:
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @x to i64 addrspace(200)*), align 4
+  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @x to i64 addrspace(200)*), align 8
   ret void
 }
