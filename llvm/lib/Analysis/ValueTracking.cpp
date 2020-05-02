@@ -401,7 +401,7 @@ static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
         return CI->isZeroValue(); // cfromptr with zero returns NULL
       }
       DEBUG_TAG("CFromPtr on nonconst -> false");
-      return false; // We don't know if the source NULL -> could be tagged
+      return false; // We don't know if the source is NULL -> could be tagged
     default:
       DEBUG_TAG("unknown intrinsic -> false");
       // Any other intrinsic returning a capability could be a tagged value
