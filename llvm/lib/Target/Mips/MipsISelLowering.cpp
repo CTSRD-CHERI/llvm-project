@@ -3627,7 +3627,7 @@ static SDValue createStoreLR(unsigned Opc, SelectionDAG &DAG, StoreSDNode *SD,
 // Expand an unaligned 32 or 64-bit integer store node.
 static SDValue lowerUnalignedIntStore(StoreSDNode *SD, SelectionDAG &DAG,
                                       bool IsLittle,
-                                      const MipsTargetLowering &TL) {
+                                      const MipsTargetLowering &TLI) {
   SDValue Value = SD->getValue(), Chain = SD->getChain();
   EVT VT = Value.getValueType();
   SDValue BasePtr = SD->getBasePtr();
@@ -3635,7 +3635,7 @@ static SDValue lowerUnalignedIntStore(StoreSDNode *SD, SelectionDAG &DAG,
   // CHERI doesn't have a capability version of SDR / SDL, so we fall back to
   // generic code.
   if (BasePtr->getValueType(0).isFatPointer()) {
-    return TL.expandUnalignedStore(SD, DAG);
+    return TLI.expandUnalignedStore(SD, DAG);
   }
 
   // Expand
