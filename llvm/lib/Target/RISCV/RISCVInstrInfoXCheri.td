@@ -859,6 +859,11 @@ def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
 def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, $rs2)>;
 def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
 
+def : Pat<(int_cheri_cap_to_pointer (CLenVT (int_cheri_ddc_get)), GPCR:$rs1),
+          (CToPtr $rs1, DDC)>;
+def : Pat<(int_cheri_cap_from_pointer (CLenVT (int_cheri_ddc_get)), GPR:$rs2),
+          (CFromPtr DDC, $rs2)>;
+
 /// Null Capability Patterns
 
 def : Pat<(int_cheri_cap_from_pointer DDC, (XLenVT 0)), (CLenVT (COPY C0))>;

@@ -569,7 +569,6 @@ define i8 addrspace(200) *@conditional_seal(i8 addrspace(200) *%cap1, i8 addrspa
 
 declare iXLEN @llvm.cheri.cap.to.pointer(i8 addrspace(200) *, i8 addrspace(200) *)
 declare i8 addrspace(200) *@llvm.cheri.cap.from.pointer(i8 addrspace(200) *, iXLEN)
-declare i8 addrspace(200) *@llvm.cheri.cap.from.ddc(iXLEN)
 declare iXLEN @llvm.cheri.cap.diff(i8 addrspace(200) *, i8 addrspace(200) *)
 declare i8 addrspace(200) *@llvm.cheri.ddc.get()
 declare i8 addrspace(200) *@llvm.cheri.pcc.get()
@@ -596,6 +595,31 @@ define iXLEN @to_pointer(i8 addrspace(200) *%cap1, i8 addrspace(200) *%cap2) nou
 ; CHECK-L64PC128-NEXT:    ctoptr a0, ca0, ca1
 ; CHECK-L64PC128-NEXT:    cret
   %ptr = call iXLEN @llvm.cheri.cap.to.pointer(i8 addrspace(200) *%cap1, i8 addrspace(200) *%cap2)
+  ret iXLEN %ptr
+}
+
+define iXLEN @to_pointer_ddc_relative(i8 addrspace(200) *%cap) nounwind {
+; CHECK-ILP32-LABEL: to_pointer_ddc_relative:
+; CHECK-ILP32:       # %bb.0:
+; CHECK-ILP32-NEXT:    ctoptr a0, ca0, ddc
+; CHECK-ILP32-NEXT:    ret
+;
+; CHECK-LP64-LABEL: to_pointer_ddc_relative:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    ctoptr a0, ca0, ddc
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-IL32PC64-LABEL: to_pointer_ddc_relative:
+; CHECK-IL32PC64:       # %bb.0:
+; CHECK-IL32PC64-NEXT:    ctoptr a0, ca0, ddc
+; CHECK-IL32PC64-NEXT:    cret
+;
+; CHECK-L64PC128-LABEL: to_pointer_ddc_relative:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    ctoptr a0, ca0, ddc
+; CHECK-L64PC128-NEXT:    cret
+  %ddc = call i8 addrspace(200) *@llvm.cheri.ddc.get()
+  %ptr = call iXLEN @llvm.cheri.cap.to.pointer(i8 addrspace(200) *%ddc, i8 addrspace(200) *%cap)
   ret iXLEN %ptr
 }
 
@@ -643,7 +667,8 @@ define i8 addrspace(200) *@from_ddc(iXLEN %ptr) nounwind {
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    cfromptr ca0, ddc, a0
 ; CHECK-L64PC128-NEXT:    cret
-  %cap = call i8 addrspace(200) *@llvm.cheri.cap.from.ddc(iXLEN %ptr)
+  %ddc = call i8 addrspace(200) *@llvm.cheri.ddc.get()
+  %cap = call i8 addrspace(200) *@llvm.cheri.cap.from.pointer(i8 addrspace(200) *%ddc, iXLEN %ptr)
   ret i8 addrspace(200) *%cap
 }
 
