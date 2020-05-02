@@ -3,7 +3,7 @@
 
 ; ModuleID = 'global.c'
 
-@x = addrspace(200) global i64 0, align 4
+@x = addrspace(200) global i64 0, align 8
 
 ; Function Attrs: nounwind
 define void @foo(i64 %y) addrspace(200) #0 {
