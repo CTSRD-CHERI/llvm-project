@@ -9,7 +9,7 @@ target triple = "cheri-unknown-freebsd"
 
 %struct.foo = type { i128 }
 
-@x = internal addrspace(200) global %struct.foo zeroinitializer, align 4
+@x = internal addrspace(200) global %struct.foo zeroinitializer, align 8
 
 ; Function Attrs: noinline nounwind
 define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0 {
