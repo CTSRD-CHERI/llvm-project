@@ -3547,8 +3547,8 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   // Return if load is aligned or if MemVT is neither i32 nor i64.
   if ((LD->getAlignment() >= MemVT.getSizeInBits() / 8)) {
     return SDValue();
-  } else if (Subtarget.isABI_CheriPureCap()) {
-    // Can't use LWL/LWR in pure capability ABI -> fall back to generic code
+  } else if (LD->getBasePtr()->getValueType(0).isFatPointer()) {
+    // No capability version of LWL/LWR -> fall back to generic code
     std::pair<SDValue, SDValue> P = expandUnalignedLoad(LD, DAG);
     return DAG.getMergeValues({P.first, P.second}, SDLoc(LD));
   } else if (((MemVT != MVT::i32) && (MemVT != MVT::i64))) {
@@ -3632,8 +3632,8 @@ static SDValue lowerUnalignedIntStore(StoreSDNode *SD, SelectionDAG &DAG,
   EVT VT = Value.getValueType();
   SDValue BasePtr = SD->getBasePtr();
 
-  // CHERI doesn't have a capability version of SDR / SDL, so we turn this into
-  // a sequence of byte stores and shifts.
+  // CHERI doesn't have a capability version of SDR / SDL, so we fall back to
+  // generic code.
   if (BasePtr->getValueType(0).isFatPointer()) {
     return TL.expandUnalignedStore(SD, DAG);
   }
