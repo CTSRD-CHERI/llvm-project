@@ -478,7 +478,8 @@ def : Pat<(i32 (ptrtoint CheriOpnd:$rt)),
 }
 def : Pat<(int_cheri_cap_to_pointer (CapRegType (int_cheri_ddc_get)), CheriOpnd:$rt),
           (CToPtr DDC, $rt)>;
-
+def : Pat<(int_cheri_cap_from_pointer (CapRegType (int_cheri_ddc_get)), GPR64Opnd:$rt),
+          (CFromPtr DDC, $rt)>;
 
 let Predicates = [IsCHERI], DecoderNamespace="CHERI" in {
 def STORECAP : CheriFmtCLS<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd0IsDDC:$cb),
