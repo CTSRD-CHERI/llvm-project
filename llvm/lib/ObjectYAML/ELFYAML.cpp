@@ -690,6 +690,7 @@ void ScalarEnumerationTraits<ELFYAML::ELF_DYNTAG>::enumeration(
 #define HEXAGON_DYNAMIC_TAG(name, value)
 #define PPC_DYNAMIC_TAG(name, value)
 #define PPC64_DYNAMIC_TAG(name, value)
+#define RISCV_DYNAMIC_TAG(name, value)
 // Ignore marker tags such as DT_HIOS (maps to DT_VERNEEDNUM), etc.
 #define DYNAMIC_TAG_MARKER(name, value)
 
@@ -731,6 +732,13 @@ void ScalarEnumerationTraits<ELFYAML::ELF_DYNTAG>::enumeration(
 #undef PPC64_DYNAMIC_TAG
 #define PPC64_DYNAMIC_TAG(name, value)
     break;
+  case ELF::EM_RISCV:
+#undef RISCV_DYNAMIC_TAG
+#define RISCV_DYNAMIC_TAG(name, value) DYNAMIC_TAG(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef RISCV_DYNAMIC_TAG
+#define RISCV_DYNAMIC_TAG(name, value)
+    break;
   default:
 #include "llvm/BinaryFormat/DynamicTags.def"
     break;
@@ -740,6 +748,7 @@ void ScalarEnumerationTraits<ELFYAML::ELF_DYNTAG>::enumeration(
 #undef HEXAGON_DYNAMIC_TAG
 #undef PPC_DYNAMIC_TAG
 #undef PPC64_DYNAMIC_TAG
+#undef RISCV_DYNAMIC_TAG
 #undef DYNAMIC_TAG_MARKER
 #undef STRINGIFY
 #undef DYNAMIC_TAG
