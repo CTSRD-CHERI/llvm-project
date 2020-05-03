@@ -31,6 +31,11 @@
 #define PPC64_DYNAMIC_TAG_DEFINED
 #endif
 
+#ifndef RISCV_DYNAMIC_TAG
+#define RISCV_DYNAMIC_TAG(name, value) DYNAMIC_TAG(name, value)
+#define RISCV_DYNAMIC_TAG_DEFINED
+#endif
+
 #ifndef DYNAMIC_TAG_MARKER
 #define DYNAMIC_TAG_MARKER(name, value) DYNAMIC_TAG(name, value)
 #define DYNAMIC_TAG_MARKER_DEFINED
