@@ -114,12 +114,14 @@ cheri_cap_from_pointer(const void * __capability __cap, const void *__ptr) {
                    (void *)__ptr);
 }
 
+#ifndef __CHERI_PURE_CAPABILITY__
 static inline
 void * cheri_cap_to_pointer(const void * __capability __cap,
                             const void * __capability __offset) {
   return __IF_CAPS(__builtin_cheri_cap_to_pointer(__cap, __offset),
                    (void *)__offset);
 }
+#endif
 
 static inline
 void cheri_perms_check(const void * __capability __cap, cheri_perms_t __perms) {
