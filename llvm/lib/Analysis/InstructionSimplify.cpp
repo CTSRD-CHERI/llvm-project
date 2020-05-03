@@ -5266,8 +5266,8 @@ static Value *simplifyUnaryIntrinsic(Function *F, Value *Op0,
       return Constant::getNullValue(F->getReturnType());
     }
     break;
-    // Note: No optimizations for getting type/length optimizing this since this
-    // could differ across implementations of CHERI.
+  // Note: No optimizations for getting type/length since this
+  // could differ across implementations of CHERI.
   case Intrinsic::cheri_cap_type_get:
   case Intrinsic::cheri_cap_length_get:
     break;
