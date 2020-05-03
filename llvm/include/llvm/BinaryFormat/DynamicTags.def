@@ -226,6 +226,10 @@ PPC_DYNAMIC_TAG(PPC_OPT, 0x70000001) // Has TLS optimization.
 PPC64_DYNAMIC_TAG(PPC64_GLINK, 0x70000000) // Address of 32 bytes before the
                                            // first glink lazy resolver stub.
 
+// RISC-V specific dynamic table entries.
+RISCV_DYNAMIC_TAG(RISCV_CHERI___CAPRELOCS, 0x7000c000)    // start of __cap_relocs section
+RISCV_DYNAMIC_TAG(RISCV_CHERI___CAPRELOCSSZ, 0x7000c001)  // size of __cap_relocs section
+
 // Sun machine-independent extensions.
 DYNAMIC_TAG(AUXILIARY, 0x7FFFFFFD) // Shared object to load before self
 DYNAMIC_TAG(USED, 0x7FFFFFFE)      // Same as DT_NEEDED

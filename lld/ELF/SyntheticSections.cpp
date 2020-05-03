@@ -1548,6 +1548,11 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       addInSec(DT_MIPS_CHERI___CAPRELOCS, InX<ELFT>::capRelocs);
       addSize(DT_MIPS_CHERI___CAPRELOCSSZ, InX<ELFT>::capRelocs->getParent());
     }
+  } else if (config->emachine == EM_RISCV) {
+    if (InX<ELFT>::capRelocs && InX<ELFT>::capRelocs->isNeeded()) {
+      addInSec(DT_RISCV_CHERI___CAPRELOCS, InX<ELFT>::capRelocs);
+      addSize(DT_RISCV_CHERI___CAPRELOCSSZ, InX<ELFT>::capRelocs->getParent());
+    }
   }
 
   // DT_PPC_GOT indicates to glibc Secure PLT is used. If DT_PPC_GOT is absent,
