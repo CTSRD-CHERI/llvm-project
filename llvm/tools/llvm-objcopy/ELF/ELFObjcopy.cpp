@@ -610,6 +610,7 @@ static Error handleArgs(const CopyConfig &Config, Object &Obj,
   if (Config.OutputArch) {
     Obj.Machine = Config.OutputArch.getValue().EMachine;
     Obj.OSABI = Config.OutputArch.getValue().OSABI;
+    Obj.Flags = Config.OutputArch.getValue().ELF_Flags;
   }
 
   // It is important to remove the sections first. For example, we want to
