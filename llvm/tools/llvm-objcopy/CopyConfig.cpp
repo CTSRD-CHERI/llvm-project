@@ -269,6 +269,9 @@ static const StringMap<MachineInfo> TargetMap{
     {"elf32-tradbigmips", {ELF::EM_MIPS, false, false}},
     {"elf32-tradlittlemips", {ELF::EM_MIPS, false, true}},
     {"elf64-tradbigmips", {ELF::EM_MIPS, true, false}},
+    {"elf64-tradbigmips-purecap",
+     {ELF::EM_MIPS, ELF::ELFOSABI_NONE, ELF::EF_MIPS_ABI_CHERIABI, true,
+      false}},
     {"elf64-tradlittlemips", {ELF::EM_MIPS, true, true}},
     // SPARC
     {"elf32-sparc", {ELF::EM_SPARC, false, false}},
