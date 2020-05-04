@@ -462,10 +462,16 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
 
   case R_RISCV_TLS_DTPREL32:
-    write32le(loc, val - dtpOffset);
+    if (config->isCheriABI())
+      write32le(loc, val);
+    else
+      write32le(loc, val - dtpOffset);
     break;
   case R_RISCV_TLS_DTPREL64:
-    write64le(loc, val - dtpOffset);
+    if (config->isCheriABI())
+      write64le(loc, val);
+    else
+      write64le(loc, val - dtpOffset);
     break;
 
   case R_RISCV_RELAX:
