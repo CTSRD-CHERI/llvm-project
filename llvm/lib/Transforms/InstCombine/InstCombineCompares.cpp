@@ -4962,20 +4962,28 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
   // For now just skip this optimization if one of the icmp operands is a CHERI
   // capability that might have the tag bit set.
   if (isCheriPointer(Ty, &DL)) {
-    if (!(cheri::isKnownUntaggedCapability(I.getOperand(0), &DL) &&
-        cheri::isKnownUntaggedCapability(I.getOperand(1), &DL))) {
+    if (!cheri::isKnownUntaggedCapability(I.getOperand(0), &DL) ||
+        !cheri::isKnownUntaggedCapability(I.getOperand(1), &DL)) {
       // At least one operand might be tagged -> we can't simplify this yet!
       return nullptr;
     } else {
       // convert the capability icmp to a vaddr icmp. The cheri_cap_address_get
       // Intrinsics will be removed if they refer to a constant value
       Builder.SetInsertPoint(&I);
-      auto Addr1 = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get,
-                                           DL.getIntPtrType(I.getOperand(0)->getType()), I.getOperand(0), nullptr, "op0_addr");
-      auto Addr2 = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get,
-                                           DL.getIntPtrType(I.getOperand(0)->getType()), I.getOperand(1), nullptr, "op1_addr");
-      I.setOperand(0, Addr1);
-      I.setOperand(1, Addr2);
+      auto CapAS = I.getOperand(0)->getType()->getPointerAddressSpace();
+      auto I8CapTy =
+          IntegerType::getInt8Ty(I.getContext())->getPointerTo(CapAS);
+      auto Addr1 = Builder.CreateIntrinsic(
+          Intrinsic::cheri_cap_address_get,
+          DL.getIntPtrType(I.getOperand(0)->getType()),
+          Builder.CreateBitCast(I.getOperand(0), I8CapTy), nullptr, "op0_addr");
+      auto Addr2 = Builder.CreateIntrinsic(
+          Intrinsic::cheri_cap_address_get,
+          DL.getIntPtrType(I.getOperand(0)->getType()),
+          Builder.CreateBitCast(I.getOperand(1), I8CapTy), nullptr, "op1_addr");
+      replaceOperand(I, 0, Addr1);
+      replaceOperand(I, 1, Addr2);
+      return &I;
     }
     BitWidth = DL.getPointerAddrSizeInBits(Ty);
   }
