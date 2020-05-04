@@ -3231,34 +3231,53 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   const bool SrcIsIntCap = SrcTy->isIntCapType();
   const bool DestIsCapPtr = DestTy->isCapabilityPointerType();
   const bool DestIsIntCap = DestTy->isIntCapType();
+
+  QualType CheckedDestTy = DestTy;
+  QualType CheckedSrcTy = SrcTy;
   // TODO: C++ references
   Op.Kind = CK_NoOp;
   if (IsToCap) {
-    // __cheri_tocap
+    // __cheri_tocap can be used to convert integer pointers to capability
+    // pointers and __(u)intcap_t
     if (!SrcTy->isPointerType()) {
       Diag(SubExpr->getExprLoc(),
            diag::err_cheri_to_from_cap_invalid_source_type)
           << SrcTy << IsToCap;
       return ExprError();
     }
-    if (!DestIsCapPtr) {
+    if (!DestIsCapPtr && !DestIsIntCap) {
       Diag(TSInfo->getTypeLoc().getBeginLoc(),
            diag::err_cheri_to_from_cap_invalid_target_type)
           << DestTy << IsToCap;
       return ExprError();
     }
-    // No-op if SrcTy is a capability
-    if (!SrcTy->isCHERICapabilityType(Context, true))
+    if (DestIsIntCap) {
+      // If we are casting to __intcap_t, we have to insert an implicit cast
+      // from Foo* -> Foo* __capability and then convert that to intcap_t after.
+      assert(SrcTy->isPointerType());
+      CheckedDestTy = Context.getPointerType(SrcTy->getPointeeType(),
+                                             ASTContext::PIK_Capability);
+      if (!SrcIsCapPtr) {
+        Op.SrcExpr = ImpCastExprToType(Op.SrcExpr.get(), CheckedDestTy,
+                                       CK_PointerToCHERICapability);
+      }
+      // Main cast expression is now Foo* __capability -> __intcap_t
+      Op.Kind = CK_PointerToIntegral;
+    } else if (SrcIsCapPtr) {
+      // No-op if SrcTy is alrady a capability pointer
+      Op.Kind = CK_NoOp;
+    } else {
       Op.Kind = CK_PointerToCHERICapability;
+    }
   } else {
-    // __cheri_fromcap can be used for capablity pointers and __(u)intcap_t
+    // __cheri_fromcap can be used for capability pointers and __(u)intcap_t
     if (SrcIsIntCap && !DestIsIntCap) {
       // Add an implicit conversion to void* __capability if the source is an
       // __(u)intcap_t to ensure correct CK_foo chains
-      Op.SrcExpr = ImpCastExprToType(
-          Op.SrcExpr.get(),
-          Context.getPointerType(Context.VoidTy, ASTContext::PIK_Capability),
-          CK_BitCast);
+      CheckedSrcTy =
+          Context.getPointerType(Context.VoidTy, ASTContext::PIK_Capability);
+      Op.SrcExpr =
+          ImpCastExprToType(Op.SrcExpr.get(), CheckedSrcTy, CK_BitCast);
     }
     bool SrcIsValidCapTy = SrcIsCapPtr || SrcIsIntCap;
     if (!SrcIsValidCapTy) {
@@ -3291,8 +3310,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   Expr *MaybeImpConv = Op.SrcExpr.get();
   // Note: we can't use SrcTy for the check here  since we may have inserted an
   // implicit cast from __uintcap_t to void* __capability.
-  if (!CheckCHERIAssignCompatible(DestTy, Op.SrcExpr.get()->getType(),
-                                  MaybeImpConv)) {
+  if (!CheckCHERIAssignCompatible(CheckedDestTy, CheckedSrcTy, MaybeImpConv)) {
     Diag(MaybeImpConv->getExprLoc(), diag::err_cheri_to_from_cap_unrelated_type)
         << IsToCap << SrcTy << DestTy;
     return ExprError();
