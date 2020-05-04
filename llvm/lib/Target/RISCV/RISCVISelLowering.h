@@ -164,6 +164,8 @@ public:
   Register
   getExceptionSelectorRegister(const Constant *PersonalityFn) const override;
 
+  uint32_t getExceptionPointerAS() const override;
+
   bool shouldExtendTypeInLibCall(EVT Type) const override;
 
   /// Returns the register with the specified architectural or ABI name. This
