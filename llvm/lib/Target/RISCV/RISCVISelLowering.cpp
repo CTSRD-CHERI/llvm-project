@@ -846,11 +846,13 @@ SDValue RISCVTargetLowering::lowerFRAMEADDR(SDValue Op,
 
 SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op,
                                              SelectionDAG &DAG) const {
-  const RISCVRegisterInfo &RI = *Subtarget.getRegisterInfo();
+  // TODO: We need createRISCVMCRegisterInfo to have the ABI so it can
+  // correctly initialise our MCRegisterInfo subclass, as we should be able to
+  // use RI.getRARegister() at the end of this function.
+  //const RISCVRegisterInfo &RI = *Subtarget.getRegisterInfo();
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setReturnAddressIsTaken(true);
-  MVT XLenVT = Subtarget.getXLenVT();
   int XLenInBytes = Subtarget.getXLen() / 8;
 
   if (verifyReturnAddressArgumentIsConstant(Op, DAG))
@@ -869,8 +871,10 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op,
 
   // Return the value of the return address register, marking it an implicit
   // live-in.
-  Register Reg = MF.addLiveIn(RI.getRARegister(), getRegClassFor(XLenVT));
-  return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, XLenVT);
+  MCPhysReg PhysReg = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
+      ? RISCV::C1 : RISCV::X1;
+  Register Reg = MF.addLiveIn(PhysReg, getRegClassFor(VT.getSimpleVT()));
+  return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, VT);
 }
 
 SDValue RISCVTargetLowering::lowerShiftLeftParts(SDValue Op,
@@ -972,9 +976,11 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   default:
     return SDValue();    // Don't custom lower most intrinsics.
   case Intrinsic::thread_pointer: {
+    MCPhysReg PhysReg = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
+        ? RISCV::C4 : RISCV::X4;
     EVT PtrVT = getPointerTy(DAG.getDataLayout(),
                              DAG.getDataLayout().getGlobalsAddressSpace());
-    return DAG.getRegister(RISCV::X4, PtrVT);
+    return DAG.getRegister(PhysReg, PtrVT);
   }
   }
 }
@@ -3401,12 +3407,18 @@ bool RISCVTargetLowering::canLowerPointerTypeCmpXchg(
 
 Register RISCVTargetLowering::getExceptionPointerRegister(
     const Constant *PersonalityFn) const {
-  return RISCV::X10;
+  return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
+      ? RISCV::C10 : RISCV::X10;
 }
 
 Register RISCVTargetLowering::getExceptionSelectorRegister(
     const Constant *PersonalityFn) const {
-  return RISCV::X11;
+  return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
+      ? RISCV::C11 : RISCV::X11;
+}
+
+uint32_t RISCVTargetLowering::getExceptionPointerAS() const {
+  return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) ? 200 : 0;
 }
 
 bool RISCVTargetLowering::shouldExtendTypeInLibCall(EVT Type) const {
