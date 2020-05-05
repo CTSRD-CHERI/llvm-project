@@ -2369,7 +2369,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
     Expr::EvalResult Result;
     if (E->EvaluateAsRValue(Result, CGF.getContext()) &&
-        Result.Val.isNullPointer()) {
+        // XXXAR: also have to handle .isInt() case here for __(u)intcap_t
+        ((Result.Val.isInt() && Result.Val.getInt().isNullValue()) ||
+         (Result.Val.isLValue() && Result.Val.isNullPointer()))) {
       // If E has side effect, it is emitted even if its final result is a
       // null pointer. In that case, a DCE pass should be able to
       // eliminate the useless instructions emitted during translating E.

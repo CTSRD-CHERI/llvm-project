@@ -266,3 +266,156 @@ char *test_intcap_to_ptr_via_capptr_addr(__intcap_t cap) {
   // AST-NEXT:  CStyleCastExpr {{.+}} 'void * __capability' <IntegralToPointer>
   // AST-NEXT:  ImplicitCastExpr {{.+}} '__intcap_t':'__intcap_t' <LValueToRValue> part_of_explicit_cast
 }
+
+/// NULL/constant conversions:
+
+// CHECK-LABEL: define {{[^@]+}}@test_constant_intcap_to_ptr
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
+// CHECK-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* [[TMP0]])
+// CHECK-NEXT:    [[TMP3:%.*]] = inttoptr i64 [[TMP2]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP3]]
+//
+char *test_constant_intcap_to_ptr(__intcap_t cap) {
+  return (char *)(__intcap_t)1; // expected-warning{{will result in a CToPtr operation}} // expected-note{{to get the virtual address use}}
+  // AST-LABEL: FunctionDecl {{.+}} test_constant_intcap_to_ptr
+  // AST:       CStyleCastExpr {{.+}} 'char *' <IntegralToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t __attribute__((cheri_no_provenance))':'__intcap_t' <IntegralCast>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 1
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_constant_zero_intcap_to_ptr
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    ret i8* null
+//
+char *test_constant_zero_intcap_to_ptr(__intcap_t cap) {
+  return (char *)(__intcap_t)0;
+  // AST-LABEL: FunctionDecl {{.+}} test_constant_zero_intcap_to_ptr
+  // AST:       CStyleCastExpr {{.+}} 'char *' <NullToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t __attribute__((cheri_no_provenance))':'__intcap_t' <IntegralCast>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 0
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_constant_intcap_to_ptr_fromcap
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast i8 addrspace(200)* [[TMP0]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP1]]
+//
+char *test_constant_intcap_to_ptr_fromcap(__intcap_t cap) {
+  return (__cheri_fromcap char *)(__intcap_t)1;
+  // AST-LABEL: FunctionDecl {{.+}} test_constant_intcap_to_ptr_fromcap
+  // AST:       CStyleCastExpr {{.+}} 'char *' <CHERICapabilityToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t __attribute__((cheri_no_provenance))':'__intcap_t' <IntegralCast>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 1
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_constant_zero_intcap_to_ptr_fromcap
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    ret i8* null
+//
+char *test_constant_zero_intcap_to_ptr_fromcap(__intcap_t cap) {
+  return (__cheri_fromcap char *)(__intcap_t)0;
+  // AST-LABEL: FunctionDecl {{.+}} test_constant_zero_intcap_to_ptr_fromcap
+  // TODO: this should be NullToPointer
+  // AST:       CStyleCastExpr {{.+}} 'char *' <CHERICapabilityToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t __attribute__((cheri_no_provenance))':'__intcap_t' <IntegralCast>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 0
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_null_capptr_to_ptr_default
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    ret i8* null
+//
+char *test_null_capptr_to_ptr_default(__intcap_t cap) {
+  return (char *)(char *__capability)0; // expected-warning{{cast from capability type 'char * __capability __attribute__((cheri_no_provenance))' to non-capability type 'char *' is most likely an error; use __cheri_fromcap to convert between pointers and capabilities}}
+  // AST-LABEL: FunctionDecl {{.+}} test_null_capptr_to_ptr_default
+  // AST:       CStyleCastExpr {{.+}} 'char *' <CHERICapabilityToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <NullToPointer>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 0
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_null_capptr_to_ptr_fromcap
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    ret i8* null
+//
+char *test_null_capptr_to_ptr_fromcap(__intcap_t cap) {
+  return (__cheri_fromcap char *)(char *__capability)0;
+  // AST-LABEL: FunctionDecl {{.+}} test_null_capptr_to_ptr_fromcap
+  // AST:       CStyleCastExpr {{.+}} 'char *' <CHERICapabilityToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <NullToPointer>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 0
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_null_capptr_to_ptr_addr
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
+// CHECK-NEXT:    [[TMP1:%.*]] = inttoptr i64 [[TMP0]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP1]]
+//
+char *test_null_capptr_to_ptr_addr(__intcap_t cap) {
+  return (char *)(__cheri_addr long)(char *__capability)0;
+  // AST-LABEL: FunctionDecl {{.+}} test_null_capptr_to_ptr_addr
+  // AST:       CStyleCastExpr {{.+}} 'char *' <IntegralToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'long' <CHERICapabilityToAddress>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <NullToPointer>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 0
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_constant_capptr_to_ptr_default
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast i8 addrspace(200)* [[TMP0]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP1]]
+//
+char *test_constant_capptr_to_ptr_default(__intcap_t cap) {
+  return (char *)(char *__capability)(__intcap_t)1; // expected-warning{{cast from capability type 'char * __capability __attribute__((cheri_no_provenance))' to non-capability type 'char *' is most likely an error; use __cheri_fromcap to convert between pointers and capabilities}}
+  // AST-LABEL: FunctionDecl {{.+}} test_constant_capptr_to_ptr_default
+  // AST:       CStyleCastExpr {{.+}} 'char *' <CHERICapabilityToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <IntegralToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t __attribute__((cheri_no_provenance))':'__intcap_t' <IntegralCast>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 1
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_constant_capptr_to_ptr_fromcap
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast i8 addrspace(200)* [[TMP0]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP1]]
+//
+char *test_constant_capptr_to_ptr_fromcap(__intcap_t cap) {
+  return (__cheri_fromcap char *)(char *__capability)(__intcap_t)1;
+  // AST-LABEL: FunctionDecl {{.+}} test_constant_capptr_to_ptr_fromcap
+  // AST:       CStyleCastExpr {{.+}} 'char *' <CHERICapabilityToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <IntegralToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t __attribute__((cheri_no_provenance))':'__intcap_t' <IntegralCast>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 1
+}
+
+// CHECK-LABEL: define {{[^@]+}}@test_constant_capptr_to_ptr_addr
+// CHECK-SAME: (i8 addrspace(200)* [[CAP:%.*]]) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP2]]
+//
+char *test_constant_capptr_to_ptr_addr(__intcap_t cap) {
+  return (char *)(__cheri_addr long)(char *__capability)(__intcap_t)1;
+  // AST-LABEL: FunctionDecl {{.+}} test_constant_capptr_to_ptr_addr
+  // AST:       CStyleCastExpr {{.+}} 'char *' <IntegralToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'long' <CHERICapabilityToAddress>
+  // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <IntegralToPointer>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t __attribute__((cheri_no_provenance))':'__intcap_t' <IntegralCast>
+  // AST-NEXT:  IntegerLiteral {{.+}} 'int' 1
+}
