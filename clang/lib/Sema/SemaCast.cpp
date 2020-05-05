@@ -2143,9 +2143,14 @@ static void checkIntToPointerCast(bool CStyle, const SourceRange &OpRange,
       !SrcType->isCHERICapabilityType(Ctx, true) &&
       !SrcExpr->isValueDependent() && !SrcExpr->isTypeDependent() &&
       !SrcExpr->isIntegerConstantExpr(Ctx)) {
-    Self.Diag(OpRange.getBegin(), diag::warn_capability_no_provenance)
-        << DestType;
-    Self.Diag(OpRange.getBegin(), diag::note_insert_intptr_fixit);
+    auto IsPurecap = Self.Context.getTargetInfo().areAllPointersCapabilities();
+    // No need to warn in hybrid mode since we will generate a DDC-relative
+    // capability.
+    if (IsPurecap) {
+      Self.Diag(OpRange.getBegin(), diag::warn_capability_no_provenance)
+          << DestType;
+      Self.Diag(OpRange.getBegin(), diag::note_insert_intptr_fixit);
+    }
   }
 
   // Not warning on reinterpret_cast, boolean, constant expressions, etc

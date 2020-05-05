@@ -2,6 +2,7 @@
 // We pipe through opt -mem2reg to make the test checks shorter (but keep -O0 to avoid seeing any instcombine folds)
 // RUN: %cheri_cc1 -Wno-cheri-capability-misuse -ast-dump %s | FileCheck %s --check-prefix=AST
 // RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -verify -emit-llvm -o - -disable-O0-optnone %s | opt -S -mem2reg -o - | FileCheck %s
+// expected-no-diagnostics
 // TODO: could split this into a Sema+CodeGen test, but having both here is easier
 
 // CHECK-LABEL: define {{[^@]+}}@test_long_to_capptr
@@ -11,10 +12,7 @@
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
 char *__capability test_long_to_capptr(long l) {
-  // FIXME: this warning is wrong since it will use cfromddc!!
   return (char *__capability)l;
-  // FIXME: wrong: expected-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-  // FIXME: wrong: expected-note@-2{{insert cast to intptr_t to silence this warning}}
   // AST-LABEL: FunctionDecl {{.+}} test_long_to_capptr
   // AST:       CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <IntegralToPointer>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'long' <LValueToRValue> part_of_explicit_cast
@@ -39,10 +37,7 @@ char *__capability test_intcap_to_capptr(__intcap_t l) {
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
 char *__capability test_ptr_to_capptr_default(char *p) {
-  // FIXME: this warning is wrong since it will use cfromddc!!
   return (char *__capability)p;
-  // FIXME: wrong: expected-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-  // FIXME: wrong: expected-note@-2{{insert cast to intptr_t to silence this warning}}
   // AST-LABEL: FunctionDecl {{.+}} test_ptr_to_capptr_default
   // AST:       CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
