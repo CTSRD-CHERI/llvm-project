@@ -856,15 +856,23 @@ def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, GPR:$rs2),
 def : Pat<(int_cheri_cap_from_ddc GPR:$rs2), (CFromPtr DDC, $rs2)>;
 def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
 
-// TODO: Only for hybrid; use CIncOffset C0 etc for CheriABI
-def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, $rs2)>;
-def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
+let Predicates = [IsPureCapABI] in {
+def : Pat<(inttoptr GPR:$rs2), (CIncOffset C0, GPR:$rs2)>;
+def : Pat<(inttoptr simm12:$imm12), (CIncOffsetImm C0, simm12:$imm12)>;
+def : Pat<(ptrtoint GPCR:$rs1), (CGetAddr GPCR:$rs1)>;
+}
+
+let Predicates = [NotPureCapABI] in {
+def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, GPR:$rs2)>;
+def : Pat<(ptrtoint GPCR:$rs1), (CToPtr GPCR:$rs1, DDC)>;
+}
 
 /// Null Capability Patterns
 
 def : Pat<(int_cheri_cap_from_pointer DDC, (XLenVT 0)), (CLenVT (COPY C0))>;
 def : Pat<(int_cheri_cap_from_ddc (XLenVT 0)), (CLenVT (COPY C0))>;
 def : Pat<(inttoptr (XLenVT 0)), (CLenVT (COPY C0))>;
+def : Pat<(ptrtoint C0), (XLenVT (COPY X0))>;
 
 /// Pointer-Comparison Instructions
 

@@ -42,8 +42,7 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-NEXT:    cmove cs0, cnull
 ; PURECAP-NEXT:    bnez a0, .LBB0_2
 ; PURECAP-NEXT:  # %bb.1: # %bb
-; PURECAP-NEXT:    addi a0, zero, 32
-; PURECAP-NEXT:    cfromptr cs0, ddc, a0
+; PURECAP-NEXT:    cincoffset cs0, cnull, 32
 ; PURECAP-NEXT:  .LBB0_2: # %bb
 ; PURECAP-NEXT:  .LBB0_3: # %bb
 ; PURECAP-NEXT:    # Label of block must be emitted
