@@ -3232,10 +3232,9 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   const bool DestIsCapPtr = DestTy->isCapabilityPointerType();
   const bool DestIsIntCap = DestTy->isIntCapType();
 
-  QualType CheckedDestTy = DestTy;
-  QualType CheckedSrcTy = SrcTy;
   // TODO: C++ references
   Op.Kind = CK_NoOp;
+  bool CheckPtrConversion = true;
   if (IsToCap) {
     // __cheri_tocap can be used to convert integer pointers to capability
     // pointers and __(u)intcap_t
@@ -3252,11 +3251,9 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
       return ExprError();
     }
     if (DestIsIntCap) {
-      // If we are casting to __intcap_t, we have to insert an implicit cast
-      // from Foo* -> Foo* __capability and then convert that to intcap_t after.
       assert(SrcTy->isPointerType());
-      CheckedDestTy = Context.getPointerType(SrcTy->getPointeeType(),
-                                             ASTContext::PIK_Capability);
+      // We are not converting between pointer types -> no need to check
+      CheckPtrConversion = false;
       Op.Kind =
           SrcIsCapPtr ? CK_PointerToIntegral : CK_PointerToCHERICapability;
     } else if (SrcIsCapPtr) {
@@ -3274,24 +3271,32 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
           << SrcTy << IsToCap;
       return ExprError();
     }
-    // FIXME: allow the DestTy->isIntegerType() case
+    // TODO: allow the DestTy->isIntegerType() case?
     if (!DestTy->isPointerType()) {
       Diag(TSInfo->getTypeLoc().getBeginLoc(),
            diag::err_cheri_to_from_cap_invalid_target_type)
           << DestTy << IsToCap;
       return ExprError();
     }
-    if (SrcIsIntCap && !DestIsIntCap) {
-      // Add an implicit conversion to void* __capability if the source is an
-      // __(u)intcap_t to ensure correct CK_foo chains
-      CheckedSrcTy = Context.getPointerType(DestTy->getPointeeType(),
-                                            ASTContext::PIK_Capability);
-    }
-    // No-op if DestTy is a capability
-    if (DestIsCapPtr || DestIsIntCap)
+    if (SrcIsIntCap || DestIsIntCap) {
+      // We are not converting between pointer types -> no need to check whether
+      // the two pointer types are compatible:
+      CheckPtrConversion = false;
+      if (SrcIsIntCap && DestIsIntCap) {
+        Op.Kind = CK_NoOp;
+      } else if (SrcIsIntCap) {
+        Op.Kind =
+            DestIsCapPtr ? CK_IntegralToPointer : CK_CHERICapabilityToPointer;
+      } else if (DestIsIntCap) {
+        assert(SrcIsCapPtr);
+        Op.Kind = CK_PointerToIntegral;
+      }
+    } else if (DestIsCapPtr) {
+      // Both pointers, CheckCHERIAssignCompatible can change it to CK_BitCast
       Op.Kind = CK_NoOp;
-    else
+    } else {
       Op.Kind = CK_CHERICapabilityToPointer;
+    }
   }
 
   // C++ checks if the types are exactly the same -> this will fail because
@@ -3302,7 +3307,8 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   //     return hasSameType(LHS, RHS);
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
   Expr *MaybeImpConv = Op.SrcExpr.get();
-  if (!CheckCHERIAssignCompatible(CheckedDestTy, CheckedSrcTy, MaybeImpConv)) {
+  if (CheckPtrConversion &&
+      !CheckCHERIAssignCompatible(DestTy, SrcTy, MaybeImpConv)) {
     Diag(MaybeImpConv->getExprLoc(), diag::err_cheri_to_from_cap_unrelated_type)
         << IsToCap << SrcTy << DestTy;
     return ExprError();
