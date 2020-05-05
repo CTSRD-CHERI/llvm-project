@@ -2361,7 +2361,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (Kind == CK_PointerToCHERICapability) {
         CGF.CGM.PointerCastStats->PointerToCap.push_back(
             {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
-      } else {
+      } else if (Kind == CK_CHERICapabilityToPointer) {
         CGF.CGM.PointerCastStats->CapToPointer.push_back(
             {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
       }
@@ -2385,10 +2385,12 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (Src->getType() == DestType)
       return Src;
     QualType SrcTy = E->getType();
-    QualType SrcPointeeTy = SrcTy->getPointeeType();
-    QualType DstPointeeTy = DestTy->getPointeeType();
-    auto &TI = CGF.getContext().getTargetInfo();
-    if (Kind == CK_PointerToCHERICapability && TI.SupportsCapabilities()) {
+    QualType SrcPointeeTy =
+        SrcTy->isIntCapType() ? SrcTy : SrcTy->getPointeeType();
+    QualType DstPointeeTy =
+        DestTy->isIntCapType() ? DestTy : DestTy->getPointeeType();
+    if (Kind == CK_PointerToCHERICapability) {
+      assert(CGF.getContext().getTargetInfo().SupportsCapabilities());
       // Note: the backend can't tell whether the cast resulted from a function
       // or a data pointer, so we tell it whether to use DDC or PPC here:
       bool IncludesFunctionType =

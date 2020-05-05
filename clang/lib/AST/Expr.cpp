@@ -1709,13 +1709,12 @@ bool CastExpr::CastConsistency() const {
   case CK_CHERICapabilityToPointer:
     assert(getType()->isPointerType());
     assert(!getType()->getAs<PointerType>()->isCHERICapability());
-    assert(getSubExpr()->getType()->isPointerType());
-    assert(getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
+    assert(getSubExpr()->getType()->isCapabilityPointerType() ||
+           getSubExpr()->getType()->isIntCapType());
     goto CheckNoBasePath;
 
   case CK_PointerToCHERICapability:
-    assert(getType()->isPointerType());
-    assert(getType()->getAs<PointerType>()->isCHERICapability());
+    assert(getType()->isCapabilityPointerType() || getType()->isIntCapType());
     assert(getSubExpr()->getType()->isPointerType());
     assert(!getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
     goto CheckNoBasePath;

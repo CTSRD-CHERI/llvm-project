@@ -12466,7 +12466,6 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_NonAtomicToAtomic:
   case CK_AddressSpaceConversion:
   case CK_CHERICapabilityToPointer:
-  case CK_PointerToCHERICapability:
   case CK_IntToOCLSampler:
   case CK_FixedPointCast:
   case CK_IntegralToFixedPoint:
@@ -12569,6 +12568,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
     // Do the same checks as CK_PointerToIntegral since this is effectively
     // what __cheri_addr does.
     LLVM_FALLTHROUGH;
+  case CK_PointerToCHERICapability:
   case CK_PointerToIntegral: {
     CCEDiag(E, diag::note_constexpr_invalid_cast) << 2;
 

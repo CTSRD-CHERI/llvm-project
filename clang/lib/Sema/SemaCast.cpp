@@ -3257,12 +3257,8 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
       assert(SrcTy->isPointerType());
       CheckedDestTy = Context.getPointerType(SrcTy->getPointeeType(),
                                              ASTContext::PIK_Capability);
-      if (!SrcIsCapPtr) {
-        Op.SrcExpr = ImpCastExprToType(Op.SrcExpr.get(), CheckedDestTy,
-                                       CK_PointerToCHERICapability);
-      }
-      // Main cast expression is now Foo* __capability -> __intcap_t
-      Op.Kind = CK_PointerToIntegral;
+      Op.Kind =
+          SrcIsCapPtr ? CK_PointerToIntegral : CK_PointerToCHERICapability;
     } else if (SrcIsCapPtr) {
       // No-op if SrcTy is alrady a capability pointer
       Op.Kind = CK_NoOp;
@@ -3271,14 +3267,6 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
     }
   } else {
     // __cheri_fromcap can be used for capability pointers and __(u)intcap_t
-    if (SrcIsIntCap && !DestIsIntCap) {
-      // Add an implicit conversion to void* __capability if the source is an
-      // __(u)intcap_t to ensure correct CK_foo chains
-      CheckedSrcTy =
-          Context.getPointerType(Context.VoidTy, ASTContext::PIK_Capability);
-      Op.SrcExpr =
-          ImpCastExprToType(Op.SrcExpr.get(), CheckedSrcTy, CK_BitCast);
-    }
     bool SrcIsValidCapTy = SrcIsCapPtr || SrcIsIntCap;
     if (!SrcIsValidCapTy) {
       Diag(SubExpr->getExprLoc(),
@@ -3292,6 +3280,12 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
            diag::err_cheri_to_from_cap_invalid_target_type)
           << DestTy << IsToCap;
       return ExprError();
+    }
+    if (SrcIsIntCap && !DestIsIntCap) {
+      // Add an implicit conversion to void* __capability if the source is an
+      // __(u)intcap_t to ensure correct CK_foo chains
+      CheckedSrcTy = Context.getPointerType(DestTy->getPointeeType(),
+                                            ASTContext::PIK_Capability);
     }
     // No-op if DestTy is a capability
     if (DestIsCapPtr || DestIsIntCap)
@@ -3308,8 +3302,6 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   //     return hasSameType(LHS, RHS);
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
   Expr *MaybeImpConv = Op.SrcExpr.get();
-  // Note: we can't use SrcTy for the check here  since we may have inserted an
-  // implicit cast from __uintcap_t to void* __capability.
   if (!CheckCHERIAssignCompatible(CheckedDestTy, CheckedSrcTy, MaybeImpConv)) {
     Diag(MaybeImpConv->getExprLoc(), diag::err_cheri_to_from_cap_unrelated_type)
         << IsToCap << SrcTy << DestTy;

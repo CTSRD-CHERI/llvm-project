@@ -113,8 +113,6 @@ char *test_intcap_to_ptr_fromcap(__intcap_t cap) {
   // AST-LABEL: FunctionDecl {{.+}} test_intcap_to_ptr_fromcap
   // AST:       ImplicitCastExpr {{.+}} 'char *' <BitCast>
   // AST-NEXT:  CStyleCastExpr {{.+}} 'void *' <CHERICapabilityToPointer>
-  // TODO: is this implicit cast needed?
-  // AST-NEXT:  ImplicitCastExpr {{.+}} 'void * __capability' <BitCast> part_of_explicit_cast
   // AST-NEXT:  ImplicitCastExpr {{.+}} '__intcap_t':'__intcap_t' <LValueToRValue> part_of_explicit_cast
 }
 
@@ -188,8 +186,6 @@ char *test_capptr_to_ptr_via_intcap_fromcap(char *__capability cap) {
   return (__cheri_fromcap char *)(__intcap_t)cap;
   // AST-LABEL: FunctionDecl {{.+}} test_capptr_to_ptr_via_intcap_fromcap
   // AST:       CStyleCastExpr {{.+}} 'char *' <CHERICapabilityToPointer>
-  // AST-NEXT:  ImplicitCastExpr {{.+}} 'char * __capability' <BitCast> part_of_explicit_cast
-  // AST-NEXT:  ImplicitCastExpr {{.+}} 'void * __capability' <BitCast> part_of_explicit_cast
   // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t':'__intcap_t' <PointerToIntegral>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char * __capability' <LValueToRValue> part_of_explicit_cast
 }
