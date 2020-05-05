@@ -46,11 +46,8 @@ void lock() {
   // It was generating an i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*)
   // instead of a csetoffset on null
   // CHECK-LABEL: @_Z4lockv()
-  // CHECK: [[WRITE_DUMMY:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 2)
-  // TODO: these bitcasts are stupid, can we stop emitting them so the optimizer doesn't have to remove them?
-  // CHECK: [[CASTED1:%.+]] = bitcast i8 addrspace(200)* [[WRITE_DUMMY]] to %class.QReadWriteLockPrivate addrspace(200)*
-  // CHECK: [[CASTED2:%.+]] = bitcast %class.QReadWriteLockPrivate addrspace(200)* [[CASTED1]] to i8 addrspace(200)*
-  // CHECK: call zeroext i1 @_Z17testAndSetAcquirePvS_(i8 addrspace(200)* null, i8 addrspace(200)* [[CASTED2]])
+  // CHECK: entry:
+  // CHECK-NEXT: call zeroext i1 @_Z17testAndSetAcquirePvS_(i8 addrspace(200)* null, i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2))
   if (testAndSetAcquire(nullptr, dummyLockedForWrite))
     return;
 
@@ -70,39 +67,39 @@ void test2() {
   void *v = (void *)1;
   // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* %v
   void *v2 = (void *)(__intcap_t)2;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 2)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2), i8 addrspace(200)* addrspace(200)* %v2
   void *v3 = (void *)(intcap_enum)3;  // This previously crashed the compiler
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 3)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3), i8 addrspace(200)* addrspace(200)* %v3
   void *v4 = (void *)(long)4;
   // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 4), i8 addrspace(200)* addrspace(200)* %v4
   void *v5 = (void *)intcap_enum::val1;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 5)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 5), i8 addrspace(200)* addrspace(200)* %v5
   void *v6 = (void *)(__intcap_t)intcap_enum::val2;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 6)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 6), i8 addrspace(200)* addrspace(200)* %v6
 
   __intcap_t i = 11;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 11)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 11), i8 addrspace(200)* addrspace(200)* %i
   __intcap_t i2 = (__intcap_t)12;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 12)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 12), i8 addrspace(200)* addrspace(200)* %i2
   __intcap_t i3 = (__intcap_t)(void *)(intcap_enum)13;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 13)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 13), i8 addrspace(200)* addrspace(200)* %i3
   __intcap_t i4 = (__intcap_t)(long)14;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 14)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 14), i8 addrspace(200)* addrspace(200)* %i4
   __intcap_t i5 = (__intcap_t)intcap_enum::val3;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 15)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 15), i8 addrspace(200)* addrspace(200)* %i5
   __intcap_t i6 = (__intcap_t)(void *)intcap_enum::val4;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 16)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 16), i8 addrspace(200)* addrspace(200)* %i6
 
   void* constant1 = dummyLockedForRead;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* %constant1
   void* constant2 = dummyLockedForWrite;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 2)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2), i8 addrspace(200)* addrspace(200)* %constant2
 
   // Since these variables are const, the load can be elided:
   void *constant3 = dummyLockedForReadExported;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* %constant3
   void *constant4 = dummyLockedForWriteExported;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 2)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2), i8 addrspace(200)* addrspace(200)* %constant4
 
   // However, these are non-const and exported so actually need to be loaded:
   void *constant5 = dummyLockedForReadExportedNonConst;

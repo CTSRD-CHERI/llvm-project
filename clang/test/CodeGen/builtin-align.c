@@ -62,8 +62,7 @@ int up_2 = __builtin_align_up(256, 32);
 /// Capture the IR type here to use in the remaining FileCheck captures:
 // CHECK: define {{[^@]+}}@get_type() #0
 // CHECK-NEXT:  entry:
-// INTCAP-NEXT:    call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
-// POINTER-NEXT:   ret [[$TYPE:.+]] {{null|%0}}
+// POINTER-NEXT:   ret [[$TYPE:.+]] null
 // INTEGER-NEXT:   ret [[$TYPE:.+]] 0
 //
 TYPE get_type(void) {

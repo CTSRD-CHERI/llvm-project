@@ -65,7 +65,7 @@ char *__capability test_ptr_to_capptr_tocap(char *p) {
 // CHECK-SAME: (i8* [[P:%.*]]) #0
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[P]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[TMP0]])
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 char *__capability test_ptr_to_capptr_via_addr_intcap(char *p) {
@@ -80,7 +80,7 @@ char *__capability test_ptr_to_capptr_via_addr_intcap(char *p) {
 // CHECK-SAME: (i8* [[P:%.*]]) #0
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[P]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[TMP0]])
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 __intcap_t test_ptr_to_intcap_default(char *p) {
@@ -107,7 +107,7 @@ __intcap_t test_ptr_to_intcap_tocap(char *p) {
 // CHECK-SAME: (i8* [[P:%.*]]) #0
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[P]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[TMP0]])
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 __intcap_t test_ptr_to_intcap_addr(char *p) {

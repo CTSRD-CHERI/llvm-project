@@ -72,21 +72,18 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 // WORKS-NEXT:    [[MTX_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // WORKS-NEXT:    store i8 addrspace(200)* [[MTX:%.*]], i8 addrspace(200)* addrspace(200)* [[MTX_ADDR]], align [[#CAP_SIZE]]
 // WORKS-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[MTX_ADDR]], align [[#CAP_SIZE]]
-// WORKS-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 1)
 // WORKS-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP0]])
-// WORKS-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP1]])
+// WORKS-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
 // WORKS-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
 // WORKS-NEXT:    [[BITAND_SHOULD_NULLDERIVE:%.*]] = icmp ule i64 [[TMP3]], 4096
 // WORKS-NEXT:    [[BITAND_PROVENANCE:%.*]] = select i1 [[BITAND_SHOULD_NULLDERIVE]], i8 addrspace(200)* null, i8 addrspace(200)* [[TMP0]]
 // WORKS-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* [[BITAND_PROVENANCE]], i64 [[AND]])
-// WORKS-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 1)
-// WORKS-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP4]], [[TMP5]]
+// WORKS-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP4]], getelementptr (i8, i8 addrspace(200)* null, i64 1)
 // WORKS-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // WORKS:       if.then:
-// WORKS-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 -2)
 // WORKS-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[MTX_ADDR]], align [[#CAP_SIZE]]
 // WORKS-NEXT:    [[TMP8:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP7]])
-// WORKS-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP6]])
+// WORKS-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -2))
 // WORKS-NEXT:    [[AND1:%.*]] = and i64 [[TMP8]], [[TMP9]]
 // WORKS-NEXT:    [[BITAND_SHOULD_NULLDERIVE2:%.*]] = icmp ule i64 [[TMP9]], 4096
 // WORKS-NEXT:    [[BITAND_PROVENANCE3:%.*]] = select i1 [[BITAND_SHOULD_NULLDERIVE2]], i8 addrspace(200)* null, i8 addrspace(200)* [[TMP7]]
@@ -137,21 +134,18 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 // WORKS-NEXT:    [[MTX_ADDR:%.*]] = alloca i8 addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // WORKS-NEXT:    store i8 addrspace(200)* [[MTX:%.*]], i8 addrspace(200)* addrspace(200)* [[MTX_ADDR]], align [[#CAP_SIZE]]
 // WORKS-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[MTX_ADDR]], align [[#CAP_SIZE]]
-// WORKS-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 1)
 // WORKS-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP0]])
-// WORKS-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP1]])
+// WORKS-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
 // WORKS-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
 // WORKS-NEXT:    [[BITAND_SHOULD_NULLDERIVE:%.*]] = icmp ule i64 [[TMP3]], 4096
 // WORKS-NEXT:    [[BITAND_PROVENANCE:%.*]] = select i1 [[BITAND_SHOULD_NULLDERIVE]], i8 addrspace(200)* null, i8 addrspace(200)* [[TMP0]]
 // WORKS-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* [[BITAND_PROVENANCE]], i64 [[AND]])
-// WORKS-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 1)
-// WORKS-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP4]], [[TMP5]]
+// WORKS-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP4]], getelementptr (i8, i8 addrspace(200)* null, i64 1)
 // WORKS-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // WORKS:       if.then:
-// WORKS-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set.i64(i8 addrspace(200)* null, i64 -2)
 // WORKS-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[MTX_ADDR]], align [[#CAP_SIZE]]
 // WORKS-NEXT:    [[TMP8:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP7]])
-// WORKS-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* [[TMP6]])
+// WORKS-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -2))
 // WORKS-NEXT:    [[AND1:%.*]] = and i64 [[TMP8]], [[TMP9]]
 // WORKS-NEXT:    [[BITAND_SHOULD_NULLDERIVE2:%.*]] = icmp ule i64 [[TMP9]], 4096
 // WORKS-NEXT:    [[BITAND_PROVENANCE3:%.*]] = select i1 [[BITAND_SHOULD_NULLDERIVE2]], i8 addrspace(200)* null, i8 addrspace(200)* [[TMP7]]

@@ -4517,6 +4517,14 @@ public:
                ? setPointerAddress(Ptr, NewVal)
                : setPointerOffset(Ptr, NewVal);
   }
+  llvm::Value *getNullDerivedCapability(llvm::Type *ResultTy,
+                                        llvm::Value *IntValue) {
+    assert(isa<llvm::PointerType>(ResultTy));
+    return Builder.CreateBitCast(
+        Builder.CreateGEP(llvm::ConstantPointerNull::get(Int8CheriCapTy),
+                          IntValue),
+        ResultTy);
+  }
   llvm::Value *setPointerOffset(llvm::Value *Ptr, llvm::Value *Offset) {
     return getTargetHooks().setPointerOffset(*this, Ptr, Offset);
   }

@@ -13,8 +13,8 @@ extern int s32;
 // CHECK-LABEL: @_Z8zext_capv(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @u32, align 4
-// CHECK-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[TMP1]])
+// CHECK-NEXT:    [[CONV:%.*]] = zext i32 [[TMP0]] to i64
+// CHECK-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
 //
 __uintcap_t zext_cap() {
@@ -32,12 +32,11 @@ unsigned long long zext_64() {
 
 // And these should sign-extend
 
-
 // CHECK-LABEL: @_Z8sext_capv(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @s32, align 4
-// CHECK-NEXT:    [[TMP1:%.*]] = sext i32 [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 [[TMP1]])
+// CHECK-NEXT:    [[CONV:%.*]] = sext i32 [[TMP0]] to i64
+// CHECK-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
 //
 __intcap_t sext_cap() {

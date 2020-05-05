@@ -42,7 +42,7 @@ const __uintcap_t flags = thinFlag | reservedFlag; // expected-warning{{binary e
 // CHECK-NEXT: define void @set_one(
 void set_one(__intcap_t *arg) {
   *arg = 1;
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
+  // CHECK: store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1)
   *arg = (__intcap_t)__builtin_cheri_offset_increment(0, 2);
   // CHECK: getelementptr (i8, i8 addrspace(200)* null, i64 2)
 }

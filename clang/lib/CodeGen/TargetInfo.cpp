@@ -771,6 +771,10 @@ public:
 
   llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &CGF, llvm::Value *Ptr,
                                 llvm::Value *Offset) const override {
+    if (isa<llvm::ConstantPointerNull>(Ptr)) {
+      // Avoid unncessary work for instcombine;
+      return CGF.getNullDerivedCapability(Ptr->getType(), Offset);
+    }
     if (!SetOffset)
       SetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_set,
                                        CGF.SizeTy);
@@ -785,6 +789,10 @@ public:
   llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &CGF,
                                  llvm::Value *Ptr,
                                  llvm::Value *Addr) const override {
+    if (isa<llvm::ConstantPointerNull>(Ptr)) {
+      // Avoid unncessary work for instcombine;
+      return CGF.getNullDerivedCapability(Ptr->getType(), Addr);
+    }
     if (!SetAddr)
       SetAddr = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_set,
                                      CGF.IntPtrTy);
