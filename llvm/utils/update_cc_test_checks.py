@@ -237,6 +237,13 @@ def main():
       # Remove all -verify arguments since they could cause the IR generation to fail
       clang_args = [x for x in clang_args if not x.startswith("-verify")]
 
+      if '-ast-dump' in clang_args:
+          print('WARNING: Skipping -ast-dump RUN line: ' + l, file=sys.stderr)
+          continue
+      if '-fsynatx-only' in clang_args:
+          print('WARNING: Skipping -fsynatx-only RUN line: ' + l, file=sys.stderr)
+          continue
+
       # Permit piping the output through opt
       if not (len(commands) == 2 or
               (len(commands) == 3 and commands[1].startswith('opt'))):
