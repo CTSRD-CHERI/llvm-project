@@ -8942,7 +8942,27 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   assert(Error == ASTContext::GE_None && "Should not codegen an error");
 
   llvm::SmallVector<Value*, 4> Ops;
+  Address PtrOp0 = Address::invalid();
   for (unsigned i = 0, e = E->getNumArgs() - 1; i != e; i++) {
+    if (i == 0) {
+      switch (BuiltinID) {
+      case NEON::BI__builtin_neon_vld1_v:
+      case NEON::BI__builtin_neon_vld1q_v:
+      case NEON::BI__builtin_neon_vld1_dup_v:
+      case NEON::BI__builtin_neon_vld1q_dup_v:
+      case NEON::BI__builtin_neon_vld1_lane_v:
+      case NEON::BI__builtin_neon_vld1q_lane_v:
+      case NEON::BI__builtin_neon_vst1_v:
+      case NEON::BI__builtin_neon_vst1q_v:
+      case NEON::BI__builtin_neon_vst1_lane_v:
+      case NEON::BI__builtin_neon_vst1q_lane_v:
+        // Get the alignment for the argument in addition to the value;
+        // we'll use it later.
+        PtrOp0 = EmitPointerWithAlignment(E->getArg(0));
+        Ops.push_back(PtrOp0.getPointer());
+        continue;
+      }
+    }
     if ((ICEArguments & (1 << i)) == 0) {
       Ops.push_back(EmitScalarExpr(E->getArg(i)));
     } else {
@@ -10644,24 +10664,20 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vld1_v:
   case NEON::BI__builtin_neon_vld1q_v: {
     Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::get(VTy, DefaultAS));
-    auto Alignment = CharUnits::fromQuantity(
-        BuiltinID == NEON::BI__builtin_neon_vld1_v ? 8 : 16);
-    return Builder.CreateAlignedLoad(VTy, Ops[0], Alignment);
+    return Builder.CreateAlignedLoad(VTy, Ops[0], PtrOp0.getAlignment());
   }
   case NEON::BI__builtin_neon_vst1_v:
   case NEON::BI__builtin_neon_vst1q_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::get(VTy, DefaultAS));
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
-    return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
+    return Builder.CreateAlignedStore(Ops[1], Ops[0], PtrOp0.getAlignment());
   case NEON::BI__builtin_neon_vld1_lane_v:
   case NEON::BI__builtin_neon_vld1q_lane_v: {
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ty = llvm::PointerType::get(VTy->getElementType(), DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    auto Alignment = CharUnits::fromQuantity(
-        BuiltinID == NEON::BI__builtin_neon_vld1_lane_v ? 8 : 16);
-    Ops[0] =
-        Builder.CreateAlignedLoad(VTy->getElementType(), Ops[0], Alignment);
+    Ops[0] = Builder.CreateAlignedLoad(VTy->getElementType(), Ops[0],
+                                       PtrOp0.getAlignment());
     return Builder.CreateInsertElement(Ops[1], Ops[0], Ops[2], "vld1_lane");
   }
   case NEON::BI__builtin_neon_vld1_dup_v:
@@ -10669,10 +10685,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Value *V = UndefValue::get(Ty);
     Ty = llvm::PointerType::get(VTy->getElementType(), DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    auto Alignment = CharUnits::fromQuantity(
-        BuiltinID == NEON::BI__builtin_neon_vld1_dup_v ? 8 : 16);
-    Ops[0] =
-        Builder.CreateAlignedLoad(VTy->getElementType(), Ops[0], Alignment);
+    Ops[0] = Builder.CreateAlignedLoad(VTy->getElementType(), Ops[0],
+                                       PtrOp0.getAlignment());
     llvm::Constant *CI = ConstantInt::get(Int32Ty, 0);
     Ops[0] = Builder.CreateInsertElement(V, Ops[0], CI);
     return EmitNeonSplat(Ops[0], CI);
@@ -10682,8 +10696,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2]);
     Ty = llvm::PointerType::get(Ops[1]->getType(), DefaultAS);
-    return Builder.CreateDefaultAlignedStore(Ops[1],
-                                             Builder.CreateBitCast(Ops[0], Ty));
+    return Builder.CreateAlignedStore(Ops[1], Builder.CreateBitCast(Ops[0], Ty),
+                                      PtrOp0.getAlignment());
   case NEON::BI__builtin_neon_vld2_v:
   case NEON::BI__builtin_neon_vld2q_v: {
     llvm::Type *PTy = llvm::PointerType::get(VTy, DefaultAS);
