@@ -1193,7 +1193,7 @@ TEST(Support, NormalizePath) {
   Tests.emplace_back("a", "a", "a");
   Tests.emplace_back("a/b", "a\\b", "a/b");
   Tests.emplace_back("a\\b", "a\\b", "a/b");
-  Tests.emplace_back("a\\\\b", "a\\\\b", "a\\\\b");
+  Tests.emplace_back("a\\\\b", "a\\\\b", "a//b");
   Tests.emplace_back("\\a", "\\a", "/a");
   Tests.emplace_back("a\\", "a\\", "a/");
   Tests.emplace_back("a\\t", "a\\t", "a/t");
