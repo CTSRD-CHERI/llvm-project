@@ -27,7 +27,6 @@
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
 #include "lld/Common/Strings.h"
-#include "lld/Common/Threads.h"
 #include "lld/Common/Version.h"
 #include "llvm/ADT/SetOperations.h"
 #include "llvm/ADT/StringExtras.h"
@@ -39,6 +38,7 @@
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/MipsABIFlags.h"
 #include "llvm/Support/MD5.h"
+#include "llvm/Support/Parallel.h"
 #include "llvm/Support/TimeProfiler.h"
 #include <cstdlib>
 #include <thread>
