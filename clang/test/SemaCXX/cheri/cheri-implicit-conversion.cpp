@@ -125,3 +125,18 @@ char *flag2str[] = {
 // expected-warning@-2 4 {{ISO C++11 does not allow conversion from string literal to 'char *'}}
 #endif
 };
+
+#ifdef __cplusplus
+void test_references(int &ptrref, int &__capability capref) {
+  int &ptr1 = ptrref; // okay
+  int &ptr2 = capref; // expected-error {{converting capability type 'int & __capability' to non-capability type 'int &' without an explicit cast; if this is intended use __cheri_fromcap}}
+
+  int &__capability cap1 = capref; // okay
+  int &__capability cap2 = ptrref; // expected-error {{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast; if this is intended use __cheri_tocap}}
+
+  int i;
+
+  int &ptrref2 = i;
+  int &__capability capref2 = i; //expected-error{{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast; if this is intended use __cheri_tocap}}
+}
+#endif
