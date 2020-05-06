@@ -1726,9 +1726,15 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   Expr::EvalResult Result;
   if (E->EvaluateAsRValue(Result, CGM.getContext()) &&
       !Result.hasSideEffects()) {
-    if (Result.Val.isInt())
-      return RValue::get(llvm::ConstantInt::get(getLLVMContext(),
-                                                Result.Val.getInt()));
+    if (Result.Val.isInt()) {
+      llvm::Constant *C =
+          llvm::ConstantInt::get(getLLVMContext(), Result.Val.getInt());
+      // For expressions of type __intcap_t (e.g. __builtin_align_{up,down}) we
+      // have to convert the result to a capability type:
+      if (E->getType()->isIntCapType())
+        C = CGM.getNullDerivedConstantCapability(Int8CheriCapTy, C);
+      return RValue::get(C);
+    }
     if (Result.Val.isFloat())
       return RValue::get(llvm::ConstantFP::get(getLLVMContext(),
                                                Result.Val.getFloat()));

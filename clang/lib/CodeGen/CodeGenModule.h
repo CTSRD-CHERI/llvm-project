@@ -1229,6 +1229,15 @@ public:
   /// Emit the metadata for a defined method in a CHERI sandbox
   void EmitSandboxDefinedMethod(StringRef, StringRef, llvm::Function *);
 
+  llvm::Constant *getNullDerivedConstantCapability(llvm::Type *ResultTy,
+                                                   llvm::Constant *IntValue) {
+    assert(isa<llvm::PointerType>(ResultTy));
+    return llvm::ConstantExpr::getBitCast(
+        llvm::ConstantExpr::getGetElementPtr(
+            Int8Ty, llvm::ConstantPointerNull::get(Int8CheriCapTy), IntValue),
+        ResultTy);
+  }
+
   /// Return the appropriate linkage for the vtable, VTT, and type information
   /// of the given class.
   llvm::GlobalVariable::LinkageTypes getVTableLinkage(const CXXRecordDecl *RD);
