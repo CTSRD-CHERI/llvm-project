@@ -246,6 +246,7 @@ module LLVM_intrinsic_gen {
   module IR_InstrTypes { header "IR/InstrTypes.h" export * }
   module IR_Instructions { header "IR/Instructions.h" export * }
   module IR_Cheri { header "IR/Cheri.h" export * }
+  module IR_CheriIntrinsics { header "IR/CheriIntrinsics.h" export * }
 
   // Intrinsics.h
   module IR_CFG { header "IR/CFG.h" export * }
@@ -386,7 +387,7 @@ module LLVM_Utils {
 
     umbrella "Support"
     module * { export * }
-    
+
     // Exclude this; it should only be used on Windows.
     exclude header "Support/Windows/WindowsSupport.h"
 

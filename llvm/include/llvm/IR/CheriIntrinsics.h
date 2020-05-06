@@ -21,7 +21,7 @@
 namespace llvm {
 namespace cheri {
 
-Intrinsic::ID correspondingSetIntrinsic(Intrinsic::ID GetIntrin) {
+inline Intrinsic::ID correspondingSetIntrinsic(Intrinsic::ID GetIntrin) {
   switch (GetIntrin) {
   case Intrinsic::cheri_cap_offset_get:
     return Intrinsic::cheri_cap_offset_set;
@@ -33,7 +33,7 @@ Intrinsic::ID correspondingSetIntrinsic(Intrinsic::ID GetIntrin) {
     llvm_unreachable("No matching set intrinsic");
   }
 }
-Intrinsic::ID correspondingGetIntrinsic(Intrinsic::ID SetIntrin) {
+inline Intrinsic::ID correspondingGetIntrinsic(Intrinsic::ID SetIntrin) {
   switch (SetIntrin) {
   case Intrinsic::cheri_cap_offset_set:
     return Intrinsic::cheri_cap_offset_get;
