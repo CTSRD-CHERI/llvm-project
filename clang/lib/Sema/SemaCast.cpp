@@ -2142,7 +2142,7 @@ static void checkIntToPointerCast(bool CStyle, const SourceRange &OpRange,
   if (DestType->isCHERICapabilityType(Ctx, true) &&
       !SrcType->isCHERICapabilityType(Ctx, true) &&
       !SrcExpr->isValueDependent() && !SrcExpr->isTypeDependent() &&
-      !SrcExpr->isIntegerConstantExpr(Ctx)) {
+      !SrcExpr->isNullPointerConstant(Ctx, Expr::NPC_NeverValueDependent)) {
     auto IsPurecap = Self.Context.getTargetInfo().areAllPointersCapabilities();
     // No need to warn in hybrid mode (inside a function) since we will generate
     // a DDC-relative capability. However, we currently generate untagged values
