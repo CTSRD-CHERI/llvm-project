@@ -2144,9 +2144,12 @@ static void checkIntToPointerCast(bool CStyle, const SourceRange &OpRange,
       !SrcExpr->isValueDependent() && !SrcExpr->isTypeDependent() &&
       !SrcExpr->isIntegerConstantExpr(Ctx)) {
     auto IsPurecap = Self.Context.getTargetInfo().areAllPointersCapabilities();
-    // No need to warn in hybrid mode since we will generate a DDC-relative
-    // capability.
-    if (IsPurecap) {
+    // No need to warn in hybrid mode (inside a function) since we will generate
+    // a DDC-relative capability. However, we currently generate untagged values
+    // for global capabilities created from integer constants in hybrid mode.
+    // FIXME: make this behaviour more consistent
+    if (IsPurecap ||
+        (!Self.getEnclosingFunction() && SrcExpr->isIntegerConstantExpr(Ctx))) {
       Self.Diag(OpRange.getBegin(), diag::warn_capability_no_provenance)
           << DestType;
       Self.Diag(OpRange.getBegin(), diag::note_insert_intptr_fixit);
