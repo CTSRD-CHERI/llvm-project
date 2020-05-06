@@ -15,8 +15,7 @@ void* __capability foo(void *__capability x){
   // CHECK-PURECAP: [[CONV:%.+]] = sext i32 {{%.+}} to i64
   // CHECK-PURECAP-NEXT: getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
   return (void* __capability)pi;
-  // expected-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
+  // purecap-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // hybrid-warning@-2{{cast to 'void * __capability' from smaller integer type 'int'}}
   // purecap-warning@-3{{cast to 'void *' from smaller integer type 'int'}}
-  // expected-note@-4{{insert cast to intptr_t to silence this warning}}
 }

@@ -74,15 +74,13 @@ sigact_flag_test(const ksigaction_t *act, int flag)
 }
 
 bool test(const struct sigaction_c *act, const struct sigaction_native* act_n) {
-  return (__sighandler_t * __capability)act->sa_sigaction ==
-      (__sighandler_t * __capability)act_n->sa_sigaction; // expected-warning{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-      // expected-note@-1{{insert cast to intptr_t to silence this warning}}
+  return (__sighandler_t * __capability) act->sa_sigaction ==
+         (__sighandler_t * __capability) act_n->sa_sigaction;
 }
 
 bool test2(const struct sigaction_c *act, const struct sigaction_native* act_n) {
-  return (__sighandler_t * __capability)act->sa_handler ==
-    (__sighandler_t * __capability)act_n->sa_handler; // expected-warning{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-    // expected-note@-1{{insert cast to intptr_t to silence this warning}}
+  return (__sighandler_t * __capability) act->sa_handler ==
+         (__sighandler_t * __capability) act_n->sa_handler;
 }
 
 __sighandler_t * __capability test3(const struct sigaction_c *act, const struct sigaction_native* act_n) {

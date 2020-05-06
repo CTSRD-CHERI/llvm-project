@@ -61,7 +61,7 @@ int test3(void *ptr) {
 
 int test3a(void *ptr) {
   // Don't warn here, we used an explicit __cheri_fromcap
-  return ptr == ((__cheri_fromcap void *)(void *__capability)1);
+  return ptr == ((__cheri_fromcap void *)(__intcap_t)1);
   // CHECK-LABEL: test3a:
   // HYBRID: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end test3a

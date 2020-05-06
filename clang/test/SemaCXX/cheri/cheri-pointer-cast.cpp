@@ -65,9 +65,8 @@ T offset_set(T x, long off) {
   return reinterpret_cast<T>(__builtin_cheri_offset_set(reinterpret_cast<void* __capability>(x), off));
   // hybrid-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long'}}
   // purecap-warning@-2 {{cast from capability type 'void *' to non-capability, non-address type 'long'}}
-  // expected-warning@-3 {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-  // expected-note@-4 {{insert cast to intptr_t to silence this warning}}
-  // hybrid-error@-5 {{cast from capability type 'void * __capability' to non-capability type 'x *'}}
+  // purecap-warning@-3 {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
+  // hybrid-error@-4 {{cast from capability type 'void * __capability' to non-capability type 'x *'}}
 }
 
 struct x {

@@ -130,9 +130,9 @@ void cast_noprov_via_ptr(uintptr_t arg, no_provenance_uintptr_t noprov, uintptr_
   // casting via pointer types should retain the no-provenance attribute
   // In hybrid mode these cases warn since we generate CFromPtr instructions
   check((uintptr_t)(void *)noprov ARITH_OP arg); // hybrid-warning{{it is not clear which should be used as the source of provenance}}
-  check((uintptr_t)(void *)1 ARITH_OP arg);  // hybrid-warning{{it is not clear which should be used as the source of provenance}}
+  check((uintptr_t)(void *)(uintptr_t)1 ARITH_OP arg); // hybrid-warning{{it is not clear which should be used as the source of provenance}}
   check(arg ARITH_OP(uintptr_t)(void *) noprov);  // hybrid-warning{{it is not clear which should be used as the source of provenance}}
-  check(arg ARITH_OP(uintptr_t)(void *) 1);  // hybrid-warning{{it is not clear which should be used as the source of provenance}}
+  check(arg ARITH_OP(uintptr_t)(void *)(uintptr_t)1); // hybrid-warning{{it is not clear which should be used as the source of provenance}}
 }
 
 /// Check warnings for compound assignment operators.

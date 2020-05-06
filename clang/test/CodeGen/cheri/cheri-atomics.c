@@ -9,7 +9,7 @@ int main(void) {
   _Atomic(int*) p;
 
   // TODO: implement this inline
-  __c11_atomic_init(&p, (int *)7);
+  __c11_atomic_init(&p, (int *)(__intcap_t)7);
   // CHECK: [[P_AS_I8:%.+]] = bitcast i32 addrspace(200)* addrspace(200)* %p to i8 addrspace(200)*
   // CHECK:  store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 7) to i32 addrspace(200)*), i32 addrspace(200)* addrspace(200)* %p,
 
