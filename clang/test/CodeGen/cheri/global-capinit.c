@@ -3,14 +3,12 @@
 // RUNNOT: %cheri_cc1 -Wno-error=cheri-capability-misuse -emit-obj -o - %s | llvm-objdump -t -r -
 // RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -verify=expected,hybrid -emit-llvm -o - %s | FileCheck %s --check-prefix=HYBRID
 // RUN: %cheri_purecap_cc1 -Wno-error=cheri-capability-misuse -verify=expected,purecap -emit-llvm -o - %s | FileCheck %s --check-prefix=PURECAP
+// hybrid-no-diagnostics
 
 extern void extern_fn(void);
 extern char extern_data;
 
 char *__capability global_cap_const = (char *__capability)(long)1234;
-// expected-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-// hybrid-note@-2{{insert cast to __intcap_t to silence this warning}}
-// purecap-note@-3{{insert cast to intptr_t to silence this warning}}
 // HYBRID:  @global_cap_const = global i8 addrspace(200)* inttoptr (i64 1234 to i8 addrspace(200)*), align 16
 // PURECAP: @global_cap_const = addrspace(200) global i8 addrspace(200)* inttoptr (i64 1234 to i8 addrspace(200)*), align 16
 
@@ -20,8 +18,6 @@ char *__capability global_cap_const = (char *__capability)(long)1234;
 // AST-NEXT:  IntegerLiteral {{.+}} 'int' 1234
 
 char *global_ptr_const = (char *)(long)1234;
-// purecap-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-// purecap-note@-2{{insert cast to intptr_t to silence this warning}}
 // HYBRID-NEXT: @global_ptr_const = global i8* inttoptr (i64 1234 to i8*), align 8
 // PURECAP-NEXT: @global_ptr_const = addrspace(200) global i8 addrspace(200)* inttoptr (i64 1234 to i8 addrspace(200)*), align 16
 // AST-LABEL: VarDecl {{.+}} global_ptr_const 'char *' cinit

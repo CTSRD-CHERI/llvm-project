@@ -46,21 +46,15 @@ static_assert((((INTTYPE)&x) & 3) == 0, ""); // expected-error{{not an integral 
 // Check that we can look through casts of INTTYPE -> pointer
 constexpr void* voidptr_constant = (void*)0x1; // expected-error{{constexpr variable 'voidptr_constant' must be initialized by a constant expression}}
 // expected-note@-1{{cast that performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
-// purecap-warning@-2{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-// purecap-note@-3{{insert cast to intptr_t to silence this warning}}
 constexpr long long_from_voidptr_constant = (long)(void*)0x1;  // expected-note{{declared here}}
 // expected-error@-1{{constexpr variable 'long_from_voidptr_constant' must be initialized by a constant expression}}
 // expected-note@-2{{cast that performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
 // purecap-warning@-3{{cast from capability type 'void *' to non-capability, non-address type 'long' is most likely an error}}
-// purecap-warning@-4{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-// purecap-note@-5{{insert cast to intptr_t to silence this warning}}
 static_assert(long_from_voidptr_constant == 1, ""); // expected-error{{static_assert expression is not an integral constant expression}}
 // expected-note@-1{{initializer of 'long_from_voidptr_constant' is not a constant expression}}
 constexpr INTTYPE intcap_from_voidptr_constant = (INTTYPE)(void*)0x2;  // expected-note{{declared here}}
 // expected-error@-1{{constexpr variable 'intcap_from_voidptr_constant' must be initialized by a constant expression}}
 // expected-note@-2{{cast that performs the conversions of a reinterpret_cast is not allowed in a constant expression}}
-// purecap-warning@-3{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-// purecap-note@-4{{insert cast to intptr_t to silence this warning}}
 static_assert(intcap_from_voidptr_constant == 2, ""); // expected-error{{static_assert expression is not an integral constant expression}}
 // expected-note@-1{{initializer of 'intcap_from_voidptr_constant' is not a constant expression}}
 
