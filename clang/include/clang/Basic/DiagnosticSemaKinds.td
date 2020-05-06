@@ -6641,7 +6641,7 @@ def warn_capability_pointer_cast : Warning<
    "error; use __cheri_fromcap to convert between pointers and capabilities">,
   InGroup<CHERICaps>, DefaultError;
 def note_insert_intptr_fixit : Note<
-  "insert cast to intptr_t to silence this warning">;
+  "insert cast to %select{intptr_t|__intcap_t}0 to silence this warning">;
 def err_cheri_to_from_cap_unrelated_type : Error<
   "invalid __cheri_%select{from|to}0cap from %1 to unrelated type %2">;
 def err_cheri_to_from_cap_invalid_target_type: Error<

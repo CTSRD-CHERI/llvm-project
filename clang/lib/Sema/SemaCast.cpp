@@ -2152,7 +2152,12 @@ static void checkIntToPointerCast(bool CStyle, const SourceRange &OpRange,
         (!Self.getEnclosingFunction() && SrcExpr->isIntegerConstantExpr(Ctx))) {
       Self.Diag(OpRange.getBegin(), diag::warn_capability_no_provenance)
           << DestType;
-      Self.Diag(OpRange.getBegin(), diag::note_insert_intptr_fixit);
+      // Only suggest the cast via __intcap_t if the value is a constant. If
+      // not this cause programmers to silence a real problem that should be
+      // fixed differently.
+      if (SrcExpr->isIntegerConstantExpr(Ctx))
+        Self.Diag(OpRange.getBegin(), diag::note_insert_intptr_fixit)
+            << !IsPurecap;
     }
   }
 
