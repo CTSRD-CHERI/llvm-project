@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import math
 import subprocess
 import sys
 import typing
@@ -13,7 +14,8 @@ class ArchSpecificValues(object):
     def __init__(self, architecture: str, *, cap_range, cap_width,
                  purecap_lit_command_prefix: bytes,
                  hybrid_lit_command_prefix: bytes, datalayout: bytes):
-        self.datalayout = datalayout
+        self.hybrid_datalayout = datalayout
+        self.purecap_datalayout = datalayout + b"-A200-P200-G200"
         self.hybrid_lit_command_prefix = hybrid_lit_command_prefix
         self.purecap_lit_command_prefix = purecap_lit_command_prefix
         self.cap_width = cap_width
@@ -26,15 +28,15 @@ class ArchSpecificValues(object):
 MIPSConfig = ArchSpecificValues("MIPS", cap_range=64, cap_width=128,
                                 purecap_lit_command_prefix=b"%cheri128_purecap_",
                                 hybrid_lit_command_prefix=b"%cheri128_",
-                                datalayout=b"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200")
+                                datalayout=b"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128")
 RISCV32Config = ArchSpecificValues("RISCV32", cap_range=32, cap_width=64,
                                    purecap_lit_command_prefix=b"%riscv32_cheri_purecap_",
                                    hybrid_lit_command_prefix=b"%riscv32_cheri_",
-                                   datalayout=b"e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200")
+                                   datalayout=b"e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128")
 RISCV64Config = ArchSpecificValues("RISCV64", cap_range=64, cap_width=128,
                                    purecap_lit_command_prefix=b"%riscv64_cheri_purecap_",
                                    hybrid_lit_command_prefix=b"%riscv64_cheri_",
-                                   datalayout=b"e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200")
+                                   datalayout=b"e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128")
 
 
 class CmdArgs(object):
@@ -61,10 +63,24 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                     arch_def: ArchSpecificValues, args: CmdArgs):
     print("Updating", test_name, "for", arch_def.name)
     output_path = Path(arch_def.tests_path, test_name)
+    manual_checks_only = False
+    current_arch_if = b"@IF-" + arch_def.name.encode() + b"@"
     with output_path.open("wb") as output_file:
         output_file.write(b"; DO NOT EDIT -- This file was generated from " + str(
             Path(input_file.name).relative_to(LLVM_SRC_PATH)).encode("utf-8") + b"\n")
         for line in input_file.readlines():
+            if b"!DO NOT AUTOGEN!" in line:
+                manual_checks_only = True
+                continue
+            if line.startswith(b"@IF-"):
+                if line.startswith(current_arch_if):
+                    print("REMOVING", current_arch_if, "from line: ", line)
+                    line = line[len(current_arch_if):]
+                elif line.startswith(b"@IF-RISCV64@") or line.startswith(b"@IF-RISCV32@") or line.startswith(b"@IF-MIPS@"):
+                    print("Ignoring @IF- directive for other architecture: ", line)
+                    continue
+                else:
+                    sys.exit("Invalid @IF- directive: " + line.decode("utf-8"))
             converted_line = line.replace(b"%generic_cheri_purecap_",
                                           arch_def.purecap_lit_command_prefix)
             converted_line = converted_line.replace(b"%generic_cheri_hybrid_",
@@ -77,15 +93,28 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                 arch_def.cap_width).encode("utf-8"))
             converted_line = converted_line.replace(b"@CAP_BYTES@", str(
                 int(arch_def.cap_width // 8)).encode("utf-8"))
+            converted_line = converted_line.replace(b"@CAP_BYTES_P2@", str(
+                int(math.log2(arch_def.cap_width / 8))).encode("utf-8"))
+            converted_line = converted_line.replace(b"@CAP_RANGE_BITS@", str(
+                arch_def.cap_range).encode("utf-8"))
+            converted_line = converted_line.replace(b"@CAP_RANGE_BYTES@", str(
+                int(arch_def.cap_range // 8)).encode("utf-8"))
+            converted_line = converted_line.replace(b"@CAP_RANGE_BYTES_P2@", str(
+                int(math.log2(arch_def.cap_range / 8))).encode("utf-8"))
             # Opt tests require a datalayout since the lit substitutions don't
             # include it in their commandline
-            converted_line = converted_line.replace(b"@PURECAP_DATALAYOUT@", arch_def.datalayout)
+            converted_line = converted_line.replace(b"@PURECAP_DATALAYOUT@", arch_def.purecap_datalayout)
+            converted_line = converted_line.replace(b"@HYBRID_DATALAYOUT@", arch_def.hybrid_datalayout)
             if args.verbose and converted_line != line:
                 print("Adjusted line:")
                 print("  Before:", line)
                 print("  After: ", converted_line)
             output_file.write(converted_line)
     print("Wrote pre-processed test input to", output_file.name)
+
+    if manual_checks_only:
+        print("Not auto-generating check lines.")
+        return
 
     # Generate the check lines using update_*_test_checks.py
     update_scripts_dir = LLVM_SRC_PATH / "utils"
