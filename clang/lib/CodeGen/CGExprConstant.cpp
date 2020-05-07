@@ -1851,6 +1851,18 @@ llvm::Constant *ConstantLValueEmitter::tryEmit() {
     value = applyOffset(value);
   }
 
+  if (Value.mustBeNullDerivedCap() &&
+      (DestType->isCapabilityPointerType() || DestType->isIntCapType())) {
+    assert(isa<llvm::PointerType>(destTy));
+    assert(isa<llvm::PointerType>(value->getType()));
+    // Emit a GEP on NULL instead to ensure the result is always untagged.
+    // Before we had this check, cases such as
+    // `(char *__capability)(__cheri_addr __intcap_t)&extern_data` were
+    // incorrectly emitted as a tagged value rather than an integer constant.
+    return CGM.getNullDerivedConstantCapability(
+        destTy, llvm::ConstantExpr::getPtrToInt(value, CGM.PtrDiffTy));
+  }
+
   // Convert to the appropriate type; this could be an lvalue for
   // an integer.  FIXME: performAddrSpaceCast
   if (isa<llvm::PointerType>(destTy))
@@ -1878,8 +1890,14 @@ ConstantLValueEmitter::tryEmitAbsolute(llvm::Type *destTy) {
   C = llvm::ConstantExpr::getIntegerCast(getOffset(), intptrTy,
                                          /*isSigned*/ false);
 
-  // FIXME: This may or may not be a valid pointer on CHERI
-  // See https://github.com/CTSRD-CHERI/llvm/issues/268
+  if (Value.mustBeNullDerivedCap() &&
+      DestType->isCHERICapabilityType(CGM.getContext())) {
+    // For capability constant expressions (derived from an absolute integer
+    // value) we emit a GEP on NULL to ensure the result is always untagged.
+    return CGM.getNullDerivedConstantCapability(destPtrTy, C);
+  }
+  assert(!CGM.getTarget().areAllPointersCapabilities() &&
+         "Should only emit inttoptr global intcap_t in hybrid mode");
   C = llvm::ConstantExpr::getIntToPtr(C, destPtrTy);
   return C;
 }
@@ -2052,26 +2070,16 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
 
     if (DestType->isIntCapType()) {
-      // If we use an inttoptr inside a function the backend will generate a
-      // CFromPtr $ddc which probably gives a valid capability with vaddr = AsInt
-      // We really want a null-derived value here instead!
-      // This previously broke cases such as QReadWriteLock which writes 0x2
-      // to indicate write locked state but since it was not equal to
-      // (__intptr_t)0x2 it assumed it was a valid QReadWriteLockerPrivate and
-      // then crashed trying to read memory at address 0x2
-      //
-      // See https://github.com/CTSRD-CHERI/llvm/issues/268
-
-      // Would be nice use CGF->setPointerOffset() but we can't since that
-      // is not a llvm::Constant
-      // if (CGF)
-      //   return CGF->setCapabilityIntegerValue(
-      //       llvm::ConstantPointerNull::get(cast<llvm::PointerType>(TargetTy)),
-      //       AsInt);
-
-      // Note: CodeGenFunction needs to convert this into a
-      // CGF.getCapabilityIntegerValue
-      return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
+      assert(Value.mustBeNullDerivedCap());
+      if (Value.mustBeNullDerivedCap()) {
+        // Emit a GEP on NULL instead of inttoptr to ensure the result is always
+        // untagged.
+        return CGM.getNullDerivedConstantCapability(TargetTy, AsInt);
+      } else {
+        assert(!CGM.getTarget().areAllPointersCapabilities() &&
+               "Should only emit inttoptr global intcap_t in hybrid mode");
+        return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
+      }
     }
     assert(!DestType->isCHERICapabilityType(CGM.getContext()));
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)

@@ -2794,6 +2794,22 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   const uint64_t CapWidth = DL.getPointerTypeSize(CV->getType());
   // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
   // and offset 5.
+
+  // NULL + constant -> emit intcap constant value
+  // This IR construct is used to generate guaranteed untagged values
+  if (auto *GEP = dyn_cast<GEPOperator>(CV)) {
+    if (isa<ConstantPointerNull>(GEP->getPointerOperand())) {
+      APInt Value(DL.getIndexSizeInBits(GEP->getPointerAddressSpace()), 0);
+      if (GEP->accumulateConstantOffset(DL, Value)) {
+        AP.OutStreamer->EmitCheriIntcap(Value.getSExtValue(), CapWidth);
+        return;
+      } else {
+        // TODO: create untagged caps here:
+        //  llvm_unreachable("Unhandled NULL-derived global capability init!");
+      }
+    }
+  }
+
   const MCExpr *Expr = AP.lowerConstant(CV);
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr)) {
     AP.OutStreamer->EmitCheriIntcap(CE->getValue(), CapWidth);
