@@ -116,7 +116,7 @@ class APValue {
   typedef llvm::APSInt APSInt;
   typedef llvm::APFloat APFloat;
 public:
-  enum ValueKind {
+  enum ValueKind : uint8_t {
     /// There is no such object (it's outside its lifetime).
     None,
     /// This object has an indeterminate value (C++ [basic.indet]).
@@ -232,6 +232,8 @@ public:
 
 private:
   ValueKind Kind;
+  // CHERI-only: ensure that we emit an NULL-derived ap
+  bool MustBeNullDerivedCap = false;
 
   struct ComplexAPSInt {
     APSInt Real, Imag;
@@ -593,6 +595,16 @@ public:
   APValue &operator=(APValue RHS) {
     swap(RHS);
     return *this;
+  }
+
+  void setMustBeNullDerivedCap(bool NewValue) {
+    assert(isInt() || isLValue());
+    MustBeNullDerivedCap = NewValue;
+  }
+
+  bool mustBeNullDerivedCap() const {
+    assert(isInt() || isLValue());
+    return MustBeNullDerivedCap;
   }
 
 private:

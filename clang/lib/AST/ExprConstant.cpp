@@ -1497,6 +1497,7 @@ namespace {
     SubobjectDesignator Designator;
     bool IsNullPtr : 1;
     bool InvalidBase : 1;
+    bool MustBeNullDerivedCap : 1;
 
     const APValue::LValueBase getLValueBase() const { return Base; }
     CharUnits &getLValueOffset() { return Offset; }
@@ -1516,6 +1517,7 @@ namespace {
         V = APValue(Base, Offset, Designator.Entries,
                     Designator.IsOnePastTheEnd, IsNullPtr);
       }
+      V.setMustBeNullDerivedCap(MustBeNullDerivedCap);
     }
     void setFrom(ASTContext &Ctx, const APValue &V) {
       assert(V.isLValue() && "Setting LValue from a non-LValue?");
@@ -1524,6 +1526,7 @@ namespace {
       InvalidBase = false;
       Designator = SubobjectDesignator(Ctx, V);
       IsNullPtr = V.isNullPointer();
+      MustBeNullDerivedCap = V.mustBeNullDerivedCap();
     }
 
     void set(APValue::LValueBase B, bool BInvalid = false) {
@@ -1541,6 +1544,7 @@ namespace {
       InvalidBase = BInvalid;
       Designator = SubobjectDesignator(getType(B));
       IsNullPtr = false;
+      MustBeNullDerivedCap = false;
     }
 
     void setNull(ASTContext &Ctx, QualType PointerTy) {
@@ -1550,6 +1554,7 @@ namespace {
       InvalidBase = false;
       Designator = SubobjectDesignator(PointerTy->getPointeeType());
       IsNullPtr = true;
+      MustBeNullDerivedCap = true;
     }
 
     void setInvalid(APValue::LValueBase B, unsigned I = 0) {
@@ -8102,12 +8107,21 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
   switch (E->getCastKind()) {
   default:
     break;
+  case CK_CHERICapabilityToAddress:
+  case CK_CHERICapabilityToOffset:
+  case CK_PointerToIntegral: // FIXME: can this happen for void* __capability ->
+                             // __intcap_t?
+    llvm_unreachable("Should not be evaluated here");
+    break;
+  case CK_PointerToCHERICapability:
+  case CK_CHERICapabilityToPointer:
+    assert(!Info.Ctx.getTargetInfo().areAllPointersCapabilities() &&
+           "Should not be generated in purecap mode!");
+    LLVM_FALLTHROUGH;
   case CK_BitCast:
   case CK_CPointerToObjCPointerCast:
   case CK_BlockPointerToObjCPointerCast:
   case CK_AnyPointerToBlockPointerCast:
-  case CK_CHERICapabilityToPointer:
-  case CK_PointerToCHERICapability:
   case CK_AddressSpaceConversion:
     if (!Visit(SubExpr))
       return false;
@@ -8127,13 +8141,17 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
         Result.Designator.setInvalid();
         if (SubExpr->getType()->isVoidPointerType())
           CCEDiag(E, diag::note_constexpr_invalid_cast)
-            << 3 << SubExpr->getType();
+              << 3 << SubExpr->getType();
         else
           CCEDiag(E, diag::note_constexpr_invalid_cast) << 2;
       }
     }
     if (E->getCastKind() == CK_AddressSpaceConversion && Result.IsNullPtr)
       ZeroInitialization(E);
+    if (E->getCastKind() == CK_PointerToCHERICapability) {
+      // An explicit __cheri_tocap means this value might be tagged.
+      Result.MustBeNullDerivedCap = false;
+    }
     return true;
 
   case CK_DerivedToBase:
@@ -8176,10 +8194,20 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
     if (!EvaluateIntegerOrLValue(SubExpr, Value, Info))
       break;
 
+    if (SubExpr->getType()->isIntCapType()) {
+      // Casts from __(u)intcap_t propagate the null-derived status
+      Result.MustBeNullDerivedCap = Value.mustBeNullDerivedCap();
+    } else {
+      assert(SubExpr->getType()->isIntegerType());
+      // In purecap mode this expression can only be provenance-carrying if
+      // it came from a valid __(u)_intcap_t. In hybrid mode casting from
+      // integer to pointer can result in a valid tagged capability.
+      Result.MustBeNullDerivedCap =
+          Info.Ctx.getTargetInfo().areAllPointersCapabilities();
+    }
+
     if (Value.isInt()) {
-      unsigned Size = E->getType()->isCHERICapabilityType(Info.Ctx) ?
-        Info.Ctx.getTargetInfo().getPointerRangeForCHERICapability() :
-        Info.Ctx.getIntRange(E->getType());
+      unsigned Size = Info.Ctx.getIntRange(E->getType());
       uint64_t N = Value.getInt().extOrTrunc(Size).getZExtValue();
       Result.Base = (Expr*)nullptr;
       Result.InvalidBase = false;
@@ -8189,6 +8217,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
       return true;
     } else {
       // Cast is of an lvalue, no need to change value.
+      Value.setMustBeNullDerivedCap(Result.MustBeNullDerivedCap);
       Result.setFrom(Info.Ctx, Value);
       return true;
     }
@@ -12575,6 +12604,36 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
     LValue LV;
     if (!EvaluatePointer(SubExpr, LV, Info))
       return false;
+
+    // Check if the resulting value must be an untagged __intcap_t constant.
+    // This is important for global expressions that should be untagged such as
+    // `__intcap_t x = (__cheri_addr __intcap_t)&foo;` that previously would be
+    // emitted as a tagged capability pointing to foo.
+    bool MustBeNullDerived = true; // can only be false for __(u)intcap_t
+    if (E->getType()->isIntCapType()) {
+      bool IsPurecap = Info.Ctx.getTargetInfo().areAllPointersCapabilities();
+      if (E->getCastKind() == CK_PointerToCHERICapability) {
+        // T* -> __(u)intcap_t
+        assert(E->getType()->isIntCapType());
+        assert(!IsPurecap && "Should not be generated for purecap");
+        // The result can be a valid capability in hybrid mode capability if we
+        // default to deriving from DDC/PCC.
+        MustBeNullDerived = false;
+      } else if (E->getCastKind() == CK_PointerToIntegral) {
+        if (IsPurecap) {
+          // In purecap mode PointerToIntegral can only result in a tagged value
+          // if the resulting type is __(u)intcap_t and the original expression
+          // was a capability.
+          if (SubExpr->getType()->isCHERICapabilityType(Info.Ctx))
+            MustBeNullDerived = LV.MustBeNullDerivedCap;
+        } else {
+          // In hybrid mode PointerToIntegral can result in a tagged value
+          // as long as the source was not marked as null-derived
+          MustBeNullDerived = LV.MustBeNullDerivedCap;
+        }
+      }
+    }
+    LV.MustBeNullDerivedCap = MustBeNullDerived;
 
     if (LV.getLValueBase()) {
       // Only allow based lvalue casts if they are lossless.

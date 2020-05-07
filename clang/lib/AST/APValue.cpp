@@ -302,6 +302,7 @@ APValue::APValue(const APValue &RHS) : Kind(None) {
     setAddrLabelDiff(RHS.getAddrLabelDiffLHS(), RHS.getAddrLabelDiffRHS());
     break;
   }
+  MustBeNullDerivedCap = RHS.MustBeNullDerivedCap;
 }
 
 void APValue::DestroyDataAndMakeUninit() {
@@ -372,6 +373,7 @@ bool APValue::needsCleanup() const {
 
 void APValue::swap(APValue &RHS) {
   std::swap(Kind, RHS.Kind);
+  std::swap(MustBeNullDerivedCap, RHS.MustBeNullDerivedCap);
   char TmpData[DataSize];
   memcpy(TmpData, Data.buffer, DataSize);
   memcpy(Data.buffer, RHS.Data.buffer, DataSize);
@@ -401,6 +403,8 @@ void APValue::dump(raw_ostream &OS) const {
     return;
   case Int:
     OS << "Int: " << getInt();
+    if (MustBeNullDerivedCap)
+      OS << " <must-be-null-derived>";
     return;
   case Float:
     OS << "Float: " << GetApproxValue(getFloat());
@@ -425,6 +429,8 @@ void APValue::dump(raw_ostream &OS) const {
     return;
   case LValue:
     OS << "LValue: <todo>";
+    if (MustBeNullDerivedCap)
+      OS << " <must-be-null-derived>";
     return;
   case Array:
     OS << "Array: ";
