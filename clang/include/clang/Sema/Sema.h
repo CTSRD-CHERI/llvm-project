@@ -12052,6 +12052,10 @@ private:
 
   ExprResult CheckBuiltinFunctionCall(FunctionDecl *FDecl,
                                       unsigned BuiltinID, CallExpr *TheCall);
+
+  bool CheckTSBuiltinFunctionCall(llvm::Triple::ArchType Arch,
+                                  unsigned BuiltinID, CallExpr *TheCall);
+
   void checkFortifiedBuiltinMemoryFunction(FunctionDecl *FD, CallExpr *TheCall);
 
   bool CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
