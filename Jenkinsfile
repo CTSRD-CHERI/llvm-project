@@ -132,6 +132,7 @@ CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${
 # Run lit with python3 to avoid multiprocessing errors
 CMAKE_ARGS+=("-DPYTHON_EXECUTABLE=$(which python3)")
 '''
+    def individualTestTimeout = 240
     if (TEST_RELEASE_BUILD) {
          buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF" "-DBUILD_SHARED_LIBS=OFF" "-DLLVM_ENABLE_EXPENSIVE_CHECKS=OFF")'''
     } else {
@@ -141,28 +142,29 @@ CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")
 '''
     }
     if (TEST_WITH_SANITIZERS) {
+        individualTestTimeout = 600  // Sanitizer builds are slow
         buildScript += '''
 CMAKE_ARGS+=("-DLLVM_USE_SANITIZER=Address;Undefined")
 '''
     }
 
-buildScript += '''
+    buildScript += """
 # Also don't set the default target or default sysroot when running tests as it breaks quite a few
 # max 1 hour total and max 2 minutes per test
-CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output ${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout 240")
+CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output \${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout ${individualTestTimeout}")
 
 rm -f CMakeCache.txt
-cmake -G Ninja "${CMAKE_ARGS[@]}" ../llvm
+cmake -G Ninja "\${CMAKE_ARGS[@]}" ../llvm
 
 # build
-ninja -v ${JFLAG}
+ninja -v \${JFLAG}
 
 # install
 ninja install
 
 # Remove all old JUnit XML files:
-rm -fv ${WORKSPACE}/llvm-test-*.xml
-'''
+rm -fv \${WORKSPACE}/llvm-test-*.xml
+"""
         sh buildScript
     }
     runTests('check-all')
