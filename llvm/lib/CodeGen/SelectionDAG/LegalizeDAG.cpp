@@ -330,7 +330,7 @@ SelectionDAGLegalize::ExpandConstantFP(ConstantFPSDNode *CFP, bool UseCP) {
   SDValue CPIdx = DAG.getConstantPool(
       LLVMC, TLI.getPointerTy(DAG.getDataLayout(),
                               DAG.getDataLayout().getGlobalsAddressSpace()));
-  unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
+  Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
   if (Extend) {
     SDValue Result = DAG.getExtLoad(
         ISD::EXTLOAD, dl, OrigVT, DAG.getEntryNode(), CPIdx,
@@ -352,7 +352,7 @@ SDValue SelectionDAGLegalize::ExpandConstant(ConstantSDNode *CP) {
       CP->getConstantIntValue(),
       TLI.getPointerTy(DAG.getDataLayout(),
                        DAG.getDataLayout().getGlobalsAddressSpace()));
-  unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
+  Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
   SDValue Result = DAG.getLoad(
       VT, dl, DAG.getEntryNode(), CPIdx,
       MachinePointerInfo::getConstantPool(DAG.getMachineFunction()), Alignment);
@@ -2004,7 +2004,7 @@ SDValue SelectionDAGLegalize::ExpandBUILD_VECTOR(SDNode *Node) {
     SDValue CPIdx = DAG.getConstantPool(
         CP, TLI.getPointerTy(DAG.getDataLayout(),
                              DAG.getDataLayout().getGlobalsAddressSpace()));
-    unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
+    Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
     return DAG.getLoad(
         VT, dl, DAG.getEntryNode(), CPIdx,
         MachinePointerInfo::getConstantPool(DAG.getMachineFunction()),
@@ -2544,9 +2544,9 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(SDNode *Node,
       FudgeFactor,
       TLI.getPointerTy(DAG.getDataLayout(),
                        DAG.getDataLayout().getGlobalsAddressSpace()));
-  unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
+  Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
   CPIdx = DAG.getNode(ISD::ADD, dl, CPIdx.getValueType(), CPIdx, CstOffset);
-  Alignment = std::min(Alignment, 4u);
+  Alignment = commonAlignment(Alignment, 4);
   SDValue FudgeInReg;
   if (DestVT == MVT::f32)
     FudgeInReg = DAG.getLoad(
