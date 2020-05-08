@@ -41,6 +41,7 @@ add_llvm_component_library(LLVMAnalysis
   IVUsers.cpp
   IndirectCallPromotionAnalysis.cpp
   InlineCost.cpp
+  InlineAdvisor.cpp
   InstCount.cpp
   InstructionPrecedenceTracking.cpp
   InstructionSimplify.cpp
