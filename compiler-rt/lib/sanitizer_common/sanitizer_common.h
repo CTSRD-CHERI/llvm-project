@@ -143,6 +143,7 @@ void RunFreeHooks(const void *ptr);
 class ReservedAddressRange {
  public:
   uptr Init(usize size, const char *name = nullptr, uptr fixed_addr = 0);
+  uptr InitAligned(usize size, usize align, const char *name = nullptr);
   uptr Map(uptr fixed_addr, usize size, const char *name = nullptr);
   uptr MapOrDie(uptr fixed_addr, usize size, const char *name = nullptr);
   void Unmap(uptr addr, usize size);
