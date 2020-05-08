@@ -1236,3 +1236,5 @@ Note that the warning is disabled by default, so -Wmax-tokens must be used
 in addition with the pragmas or -fmax-tokens flag to get any warnings.
 }];
 }
+
+def WebAssemblyExceptionSpec : DiagGroup<"wasm-exception-spec">;
