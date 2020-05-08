@@ -510,7 +510,7 @@ static SDValue getTargetNode(BlockAddressSDNode *N, SDLoc DL, EVT Ty,
 
 static SDValue getTargetNode(ConstantPoolSDNode *N, SDLoc DL, EVT Ty,
                              SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlignment(),
+  return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlign(),
                                    N->getOffset(), Flags);
 }
 
