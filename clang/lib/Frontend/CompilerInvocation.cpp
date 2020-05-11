@@ -3455,6 +3455,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   }
 
   Opts.BranchTargetEnforcement = Args.hasArg(OPT_mbranch_target_enforce);
+  Opts.SpeculativeLoadHardening = Args.hasArg(OPT_mspeculative_load_hardening);
 }
 
 static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
