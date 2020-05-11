@@ -3950,6 +3950,9 @@ public:
   llvm::Value *EmitSVEPMull(SVETypeFlags TypeFlags,
                             llvm::SmallVectorImpl<llvm::Value *> &Ops,
                             unsigned BuiltinID);
+  llvm::Value *EmitSVEMovl(SVETypeFlags TypeFlags,
+                           llvm::ArrayRef<llvm::Value *> Ops,
+                           unsigned BuiltinID);
   llvm::Value *EmitSVEPredicateCast(llvm::Value *Pred,
                                     llvm::ScalableVectorType *VTy);
   llvm::Value *EmitSVEGatherLoad(SVETypeFlags TypeFlags,
