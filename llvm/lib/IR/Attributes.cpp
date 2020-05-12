@@ -377,6 +377,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "noinline";
   if (hasAttribute(Attribute::NonLazyBind))
     return "nonlazybind";
+  if (hasAttribute(Attribute::NoMerge))
+    return "nomerge";
   if (hasAttribute(Attribute::NonNull))
     return "nonnull";
   if (hasAttribute(Attribute::NoRedZone))
