@@ -46,7 +46,7 @@ template<typename T>
 INLINE typename T::Type atomic_fetch_add(volatile T *a,
     typename T::Type v, memory_order mo) {
   (void)mo;
-  DCHECK(((vaddr)a % sizeof(*a)));
+  DCHECK(!((vaddr)a % sizeof(*a)));
   return __sync_fetch_and_add(&a->val_dont_use, v);
 }
 
