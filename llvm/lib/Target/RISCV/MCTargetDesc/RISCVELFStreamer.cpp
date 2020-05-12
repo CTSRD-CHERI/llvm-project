@@ -95,22 +95,10 @@ void RISCVTargetELFStreamer::emitDirectiveOptionNoRelax() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionCapMode() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionNoCapMode() {}
 
-void RISCVELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
-  unsigned XLenInBytes = Is64Bit ? 8 : 4;
-  assert(CapSize == 2 * XLenInBytes);
-
-  // Pad to ensure that the (u)intcap_t is aligned
-  emitValueToAlignment(CapSize, 0, 1, 0);
-
-  if (Value == 0) {
-    emitZeros(CapSize);
-  } else {
-    // TODO: we should probably move the CHERI capability encoding somewhere else.
-    // Maybe to BinaryFormat or Object?
-    // NB: Opposite order to MIPS due to endianness.
-    emitIntValue(Value, XLenInBytes);
-    emitIntValue(0, XLenInBytes);
-  }
+void RISCVELFStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
+                                       SMLoc Loc) {
+  assert(CapSize == (Is64Bit ? 16 : 8));
+  emitCheriIntcapGeneric(Expr, CapSize, Loc);
 }
 
 void RISCVELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,

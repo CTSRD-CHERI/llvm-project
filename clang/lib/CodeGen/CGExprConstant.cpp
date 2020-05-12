@@ -2070,7 +2070,6 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
 
     if (DestType->isIntCapType()) {
-      assert(Value.mustBeNullDerivedCap());
       if (Value.mustBeNullDerivedCap()) {
         // Emit a GEP on NULL instead of inttoptr to ensure the result is always
         // untagged.

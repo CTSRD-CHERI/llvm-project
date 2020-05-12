@@ -119,7 +119,8 @@ public:
                       std::move(Emitter)),
         Is64Bit(Is64Bit) {}
 
-  void EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) override;
+  void emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
+                       SMLoc Loc) override;
 
 protected:
   void EmitCheriCapabilityImpl(const MCSymbol *Symbol, const MCExpr *Addend,

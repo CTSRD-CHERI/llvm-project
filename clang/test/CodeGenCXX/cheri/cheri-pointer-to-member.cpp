@@ -14,22 +14,22 @@ public:
 
 // compare IR with simulated function pointers:
 struct mem_fn_ptr {
-  void* ptr;
+  void *ptr;
   long offset;
 };
 // UTC_ARGS: --disable
 void func(void);
-mem_fn_ptr virt = { (void*)32, 1 };
-mem_fn_ptr nonvirt = { (void*)&func, 1 };
-// CHECK: @virt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, align [[#CAP_SIZE]]
+mem_fn_ptr virt = {(void *)32, 1};
+mem_fn_ptr nonvirt = {(void *)&func, 1};
+// CHECK: @virt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 32), i64 1 }, align [[#CAP_SIZE]]
 // CHECK: @nonvirt = addrspace(200) global { i8 addrspace(200)*, i64 } {
 // CHECK-SAME: i8 addrspace(200)* bitcast (void () addrspace(200)* @_Z4funcv to i8 addrspace(200)*), i64 1 }, align [[#CAP_SIZE]]
 
 // now the real thing
-typedef int (A::* AMemberFuncPtr)();
+typedef int (A::*AMemberFuncPtr)();
 
 AMemberFuncPtr global_null_func_ptr = nullptr;
-int A::* global_data_ptr = &A::y;
+int A::*global_data_ptr = &A::y;
 AMemberFuncPtr global_nonvirt_func_ptr = &A::bar;
 AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
 // CHECK: @global_null_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } zeroinitializer, align [[#CAP_SIZE]]
@@ -39,7 +39,6 @@ AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
 // CHECK-SAME: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i64 0 }, align [[#CAP_SIZE]]
 // CHECK: @global_virt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, align [[#CAP_SIZE]]
 // UTC_ARGS: --enable
-
 
 // CHECK-LABEL: define {{[^@]+}}@main() addrspace(200) #2
 // CHECK-NEXT:  entry:
@@ -62,7 +61,7 @@ AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
 // CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3fooEv to i8 addrspace(200)*), i64 0 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[FUNC_PTR]], align 16
 // CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i64 0 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[FUNC_PTR_2]], align 16
 // CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[VIRTUAL_FUNC_PTR]], align 16
-// CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 16 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[VIRTUAL_FUNC_PTR_2]], align 16
+// CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[VIRTUAL_FUNC_PTR_2]], align 16
 // CHECK-NEXT:    [[TMP0:%.*]] = load i64, i64 addrspace(200)* [[DATA_PTR]], align 8
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[CLASS_A]] addrspace(200)* [[A]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[MEMPTR_OFFSET:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 [[TMP0]]
@@ -77,9 +76,9 @@ AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
 int main() {
   A a;
   // FIXME: alignment is wrong
-  int A::* null_data_ptr = nullptr;
-  int A::* data_ptr = &A::x;
-  int A::* data_ptr_2 = &A::y;
+  int A::*null_data_ptr = nullptr;
+  int A::*data_ptr = &A::x;
+  int A::*data_ptr_2 = &A::y;
 
   AMemberFuncPtr null_func_ptr = nullptr;
 
@@ -108,7 +107,7 @@ int main() {
 // N64-NEXT:    [[MEMPTR_TOBOOL:%.*]] = icmp ne i64 [[PTR]], -1
 // N64-NEXT:    ret i1 [[MEMPTR_TOBOOL]]
 //
-bool data_ptr_is_nonnull(int A::* ptr) {
+bool data_ptr_is_nonnull(int A::*ptr) {
   return static_cast<bool>(ptr);
 }
 
@@ -128,7 +127,7 @@ bool data_ptr_is_nonnull(int A::* ptr) {
 // N64-NEXT:    [[MEMPTR_TOBOOL:%.*]] = icmp eq i64 [[PTR]], -1
 // N64-NEXT:    ret i1 [[MEMPTR_TOBOOL]]
 //
-bool data_ptr_is_null(int A::* ptr) {
+bool data_ptr_is_null(int A::*ptr) {
   return !ptr;
 }
 
@@ -150,7 +149,7 @@ bool data_ptr_is_null(int A::* ptr) {
 // N64-NEXT:    [[TMP0:%.*]] = icmp eq i64 [[PTR1]], [[PTR2]]
 // N64-NEXT:    ret i1 [[TMP0]]
 //
-bool data_ptr_equal(int A::* ptr1, int A::* ptr2) {
+bool data_ptr_equal(int A::*ptr1, int A::*ptr2) {
   return ptr1 == ptr2;
 }
 
@@ -172,7 +171,7 @@ bool data_ptr_equal(int A::* ptr1, int A::* ptr2) {
 // N64-NEXT:    [[TMP0:%.*]] = icmp ne i64 [[PTR1]], [[PTR2]]
 // N64-NEXT:    ret i1 [[TMP0]]
 //
-bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
+bool data_ptr_not_equal(int A::*ptr1, int A::*ptr2) {
   return ptr1 != ptr2;
 }
 
@@ -200,7 +199,7 @@ bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
 // N64-NEXT:    [[TMP2:%.*]] = load i32, i32* [[TMP1]], align 4, !tbaa !2
 // N64-NEXT:    ret i32 [[TMP2]]
 //
-int data_ptr_dereferece(A* a, int A::* ptr) {
+int data_ptr_dereferece(A *a, int A::*ptr) {
   return a->*ptr;
 }
 
@@ -237,7 +236,6 @@ int data_ptr_dereferece(A* a, int A::* ptr) {
 //
 bool func_ptr_is_nonnull(AMemberFuncPtr ptr) {
   return static_cast<bool>(ptr);
-
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z16func_ptr_is_nullM1AFivE
@@ -271,7 +269,6 @@ bool func_ptr_is_nonnull(AMemberFuncPtr ptr) {
 //
 bool func_ptr_is_null(AMemberFuncPtr ptr) {
   return !ptr;
-
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z14func_ptr_equalM1AFivES1_
@@ -325,7 +322,6 @@ bool func_ptr_is_null(AMemberFuncPtr ptr) {
 //
 bool func_ptr_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
   return ptr1 == ptr2;
-
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z18func_ptr_not_equalM1AFivES1_
@@ -379,7 +375,6 @@ bool func_ptr_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
 //
 bool func_ptr_not_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
   return ptr1 != ptr2;
-
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z20func_ptr_dereferenceP1AMS_FivE
@@ -447,14 +442,14 @@ bool func_ptr_not_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
 // N64-NEXT:    [[CALL:%.*]] = tail call signext i32 [[TMP4]](%class.A* [[THIS_ADJUSTED]]) #5
 // N64-NEXT:    ret i32 [[CALL]]
 //
-int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
+int func_ptr_dereference(A *a, AMemberFuncPtr ptr) {
   return (a->*ptr)();
 }
 
 // Check using Member pointers as return values an parameters
 // CHECK-LABEL: define {{[^@]+}}@_Z15return_func_ptrv() addrspace(200) #1
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 16 to i8 addrspace(200)*), i64 1 }
+// CHECK-NEXT:    ret { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }
 //
 // N64-LABEL: define {{[^@]+}}@_Z15return_func_ptrv() local_unnamed_addr #2
 // N64-NEXT:  entry:
@@ -512,9 +507,17 @@ AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
 
 // taken from temporaries.cpp
 namespace PR7556 {
-  struct A { ~A(); };
-  struct B { int i; ~B(); };
-  struct C { int C::*pm; ~C(); };
+struct A {
+  ~A();
+};
+struct B {
+  int i;
+  ~B();
+};
+struct C {
+  int C::*pm;
+  ~C();
+};
 // CHECK-LABEL: define {{[^@]+}}@_ZN6PR75563fooEv() addrspace(200) #1
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[AGG_TMP_ENSURED:%.*]] = alloca %"struct.PR7556::A", align 1, addrspace(200)
@@ -543,13 +546,13 @@ namespace PR7556 {
 // N64-NEXT:    call void @_ZN6PR75561CD1Ev(%"struct.PR7556::C"* nonnull [[AGG_TMP_ENSURED2]]) #5
 // N64-NEXT:    ret void
 //
-  void foo() {
-    A();
+void foo() {
+  A();
 
-    // B() is initialized using memset:
-    B();
+  // B() is initialized using memset:
+  B();
 
-    // C can't be zero-initialized due to pointer to data member:
-    C();
-  }
+  // C can't be zero-initialized due to pointer to data member:
+  C();
 }
+} // namespace PR7556

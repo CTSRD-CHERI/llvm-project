@@ -20,21 +20,21 @@ const auto dummyLockedForWrite = reinterpret_cast<QReadWriteLockPrivate *>(quint
 // Try as an exported variable:
 extern "C" const auto dummyLockedForReadExported = reinterpret_cast<QReadWriteLockPrivate *>(quintptr(StateLockedForRead));
 extern "C" const auto dummyLockedForWriteExported = reinterpret_cast<QReadWriteLockPrivate *>(quintptr(StateLockedForWrite));
-// CHECK: @dummyLockedForReadExported = addrspace(200) constant %class.QReadWriteLockPrivate addrspace(200)* inttoptr (i64 1 to %class.QReadWriteLockPrivate addrspace(200)*)
-// CHECK: @dummyLockedForWriteExported = addrspace(200) constant %class.QReadWriteLockPrivate addrspace(200)* inttoptr (i64 2 to %class.QReadWriteLockPrivate addrspace(200)*)
+// CHECK: @dummyLockedForReadExported = addrspace(200) constant %class.QReadWriteLockPrivate addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to %class.QReadWriteLockPrivate addrspace(200)*)
+// CHECK: @dummyLockedForWriteExported = addrspace(200) constant %class.QReadWriteLockPrivate addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2) to %class.QReadWriteLockPrivate addrspace(200)*)
 
 // Try as an exported variable (but non-const so it actually needs to be loaded:
 extern "C" auto dummyLockedForReadExportedNonConst = reinterpret_cast<QReadWriteLockPrivate *>(quintptr(StateLockedForRead));
 extern "C" auto dummyLockedForWriteExportedNonConst = reinterpret_cast<QReadWriteLockPrivate *>(quintptr(StateLockedForWrite));
-// CHECK: @dummyLockedForReadExportedNonConst = addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* inttoptr (i64 1 to %class.QReadWriteLockPrivate addrspace(200)*)
-// CHECK: @dummyLockedForWriteExportedNonConst = addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* inttoptr (i64 2 to %class.QReadWriteLockPrivate addrspace(200)*)
+// CHECK: @dummyLockedForReadExportedNonConst = addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to %class.QReadWriteLockPrivate addrspace(200)*)
+// CHECK: @dummyLockedForWriteExportedNonConst = addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2) to %class.QReadWriteLockPrivate addrspace(200)*)
 
 namespace {
 // and again as a local one
 static auto dummyLockedForReadLocalNonConst = reinterpret_cast<QReadWriteLockPrivate *>(quintptr(StateLockedForRead));
 static auto dummyLockedForWriteLocalNonConst = reinterpret_cast<QReadWriteLockPrivate *>(quintptr(StateLockedForWrite));
-// CHECK: @_ZN12_GLOBAL__N_131dummyLockedForReadLocalNonConstE = internal addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* inttoptr (i64 1 to %class.QReadWriteLockPrivate addrspace(200)*)
-// CHECK: @_ZN12_GLOBAL__N_132dummyLockedForWriteLocalNonConstE = internal addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* inttoptr (i64 2 to %class.QReadWriteLockPrivate addrspace(200)*)
+// CHECK: @_ZN12_GLOBAL__N_131dummyLockedForReadLocalNonConstE = internal addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to %class.QReadWriteLockPrivate addrspace(200)*)
+// CHECK: @_ZN12_GLOBAL__N_132dummyLockedForWriteLocalNonConstE = internal addrspace(200) global %class.QReadWriteLockPrivate addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2) to %class.QReadWriteLockPrivate addrspace(200)*)
 }
 
 

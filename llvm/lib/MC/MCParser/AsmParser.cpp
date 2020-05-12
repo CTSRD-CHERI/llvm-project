@@ -5804,7 +5804,7 @@ bool AsmParser::parseDirectiveCheriCap(SMLoc DirectiveLoc) {
   unsigned CapSize = getTargetParser().getCheriCapabilitySize();
   // Allow .chericap 0x123456 to create an untagged uintcap_t
   if (SymExpr->evaluateAsAbsolute(Offset)) {
-    getStreamer().EmitCheriIntcap(Offset, CapSize, ExprLoc);
+    getStreamer().emitCheriIntcap(Offset, CapSize, ExprLoc);
   } else {
     const MCSymbolRefExpr *SRE = nullptr;
     if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(SymExpr)) {

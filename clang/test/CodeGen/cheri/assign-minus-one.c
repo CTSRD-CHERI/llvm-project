@@ -6,7 +6,7 @@ static void *a = (char *)-1;
 void *b;
 // CHECK-LABEL: @c(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    store i8 addrspace(200)* inttoptr (i64 -1 to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @b
+// CHECK-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -1), i8 addrspace(200)* addrspace(200)* @b
 // CHECK-NEXT:    ret void
 //
 void c() { b = a; }

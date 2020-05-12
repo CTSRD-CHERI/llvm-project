@@ -215,8 +215,36 @@ void MCStreamer::EmitCheriCapabilityImpl(const MCSymbol *Value,
   report_fatal_error("EmitCheriCapability is not implemented for this target!");
 }
 
-void MCStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) {
-  report_fatal_error("EmitCheriCapability is not implemented for this target!");
+void MCStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
+                                 SMLoc Loc) {
+  report_fatal_error(
+      "emitCheriIntcap(MCExpr *) is not implemented for this target!");
+}
+
+void MCStreamer::emitCheriIntcapGeneric(const MCExpr *Expr, unsigned CapSize,
+                                        SMLoc Loc) {
+  // Pad to ensure that the (u)intcap_t is aligned
+  // Note: this assumes that capability alignment is the same as the size.
+  emitValueToAlignment(CapSize, 0, 1, 0);
+  int64_t AbsValue;
+  if (Expr->evaluateAsAbsolute(AbsValue, *this) && AbsValue == 0) {
+    // Emit a single zero-fill block for zero values.
+    emitZeros(CapSize);
+  } else {
+    const unsigned AddressSize = Context.getAsmInfo()->getCodePointerSize();
+    assert(CapSize == 2 * AddressSize && "Unknown CHERI capability format?");
+    // Could use cheri-compressed-cap here for constants, but we know that the
+    // address is always the first/second 64-bit value depending on endianess.
+    if (Context.getAsmInfo()->isLittleEndian()) {
+      // Little-endian architectures (e.g. CHERI-RISCV) place the address first.
+      emitValue(Expr, AddressSize, Loc);
+      emitIntValue(0, AddressSize);
+    } else {
+      // Big-endian architectures (e.g. CHERI-MIPS) place the address second.
+      emitIntValue(0, AddressSize);
+      emitValue(Expr, AddressSize, Loc);
+    }
+  }
 }
 
 /// Emit NumBytes bytes worth of the value specified by FillValue.
