@@ -24,20 +24,18 @@
 
 namespace __sanitizer {
 
-template<usize mask>
-usize GetLowPtrBits(uptr ptr) {
+template <usize mask>
+inline usize GetLowPtrBits(uptr ptr) {
 #ifdef __CHERI_PURE_CAPABILITY__
   return cheri_low_bits_get(ptr, mask);
 #else
   return ptr & mask;
 #endif
 }
-uptr SetLowPtrBits(uptr ptr, usize bits) {
-  return ptr | bits;
-}
+inline uptr SetLowPtrBits(uptr ptr, usize bits) { return ptr | bits; }
 
-template<usize mask>
-uptr ClearLowPtrBits(uptr ptr) {
+template <usize mask>
+inline uptr ClearLowPtrBits(uptr ptr) {
 #ifdef __CHERI_PURE_CAPABILITY__
   return cheri_low_bits_clear(ptr, mask);
 #else
