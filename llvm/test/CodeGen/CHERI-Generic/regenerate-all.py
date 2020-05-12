@@ -38,6 +38,9 @@ RISCV64Config = ArchSpecificValues("RISCV64", cap_range=64, cap_width=128,
                                    hybrid_lit_command_prefix=b"%riscv64_cheri_",
                                    datalayout=b"e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128")
 
+ALL_ARCHITECTURES = [MIPSConfig, RISCV32Config, RISCV64Config]
+ALL_ARCHITECTURE_IF_STRS = [b"@IF-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES]
+ALL_ARCHITECTURE_IFNOT_STRS = [b"@IFNOT-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES]
 
 class CmdArgs(object):
     def __init__(self):
@@ -65,6 +68,7 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     output_path = Path(arch_def.tests_path, test_name)
     manual_checks_only = False
     current_arch_if = b"@IF-" + arch_def.name.encode() + b"@"
+    current_arch_ifnot = b"@IFNOT-" + arch_def.name.encode() + b"@"
     with output_path.open("wb") as output_file:
         output_file.write(b"; DO NOT EDIT -- This file was generated from " + str(
             Path(input_file.name).relative_to(LLVM_SRC_PATH)).encode("utf-8") + b"\n")
@@ -72,15 +76,30 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
             if b"!DO NOT AUTOGEN!" in line:
                 manual_checks_only = True
                 continue
+            # Handle @IF-<arch>@ and @IFNOT-<arch>@ prefixes:
             if line.startswith(b"@IF-"):
                 if line.startswith(current_arch_if):
                     print("REMOVING", current_arch_if, "from line: ", line)
                     line = line[len(current_arch_if):]
-                elif line.startswith(b"@IF-RISCV64@") or line.startswith(b"@IF-RISCV32@") or line.startswith(b"@IF-MIPS@"):
+                elif any(line.startswith(prefix) for prefix in ALL_ARCHITECTURE_IF_STRS):
                     print("Ignoring @IF- directive for other architecture: ", line)
                     continue
                 else:
                     sys.exit("Invalid @IF- directive: " + line.decode("utf-8"))
+            if line.startswith(b"@IFNOT-"):
+                if line.startswith(current_arch_ifnot):
+                    print("Skipping", current_arch_ifnot, "line: ", line)
+                    continue
+                valid_directive = False
+                for prefix in ALL_ARCHITECTURE_IFNOT_STRS:
+                    if line.startswith(prefix):
+                        print("Removing @IFNOT- directive for other architecture: ", line)
+                        line = line[len(current_arch_if):]
+                        valid_directive = True
+                        break
+                if not valid_directive:
+                    sys.exit("Invalid @IF- directive: " + line.decode("utf-8"))
+
             converted_line = line.replace(b"%generic_cheri_purecap_",
                                           arch_def.purecap_lit_command_prefix)
             converted_line = converted_line.replace(b"%generic_cheri_hybrid_",
@@ -138,7 +157,7 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
 
 def main():
     options = CmdArgs()
-    architectures = [MIPSConfig, RISCV32Config, RISCV64Config]
+    architectures = ALL_ARCHITECTURES
     # TODO: add command line flag to select subsets
     # TODO: add option to delete all files that don't exist in Inputs/ to handle renaming
     if options.args.tests:

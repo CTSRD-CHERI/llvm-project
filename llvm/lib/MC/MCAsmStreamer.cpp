@@ -346,7 +346,7 @@ public:
 
   void EmitCheriCapabilityImpl(const MCSymbol *Symbol, const MCExpr *Addend,
                                unsigned CapSize, SMLoc Loc = SMLoc()) override;
-  void EmitCheriIntcap(int64_t Value, unsigned CapSize,
+  void emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
                        SMLoc Loc = SMLoc()) override;
 
   bool emitRelocDirective(const MCExpr &Offset, StringRef Name,
@@ -2070,11 +2070,17 @@ void MCAsmStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize,
+void MCAsmStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
                                     SMLoc Loc) {
-  // XXXAR: always emit as hex?
-  OS << "\t.chericap\t" << Value;
-  EmitEOL();
+  int64_t AbsValue;
+  if (Expr->evaluateAsAbsolute(AbsValue, *this)) {
+    // XXXAR: always emit as hex?
+    // TODO: always use the generic printing once all tests have been updated
+    OS << "\t.chericap\t" << AbsValue;
+    EmitEOL();
+  } else {
+    emitCheriIntcapGeneric(Expr, CapSize, Loc);
+  }
 }
 
 bool MCAsmStreamer::emitRelocDirective(const MCExpr &Offset, StringRef Name,

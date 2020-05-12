@@ -233,7 +233,7 @@ public:
 private:
   ValueKind Kind;
   // CHERI-only: ensure that we emit an NULL-derived ap
-  bool MustBeNullDerivedCap = false;
+  bool MustBeNullDerivedCap = true;
 
   struct ComplexAPSInt {
     APSInt Real, Imag;
@@ -598,12 +598,12 @@ public:
   }
 
   void setMustBeNullDerivedCap(bool NewValue) {
-    assert(isInt() || isLValue());
+    assert(isInt() || isLValue() || isMemberPointer());
     MustBeNullDerivedCap = NewValue;
   }
 
   bool mustBeNullDerivedCap() const {
-    assert(isInt() || isLValue());
+    assert(isInt() || isLValue() || isMemberPointer());
     return MustBeNullDerivedCap;
   }
 

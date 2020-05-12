@@ -2795,24 +2795,29 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
   // and offset 5.
 
-  // NULL + constant -> emit intcap constant value
-  // This IR construct is used to generate guaranteed untagged values
   if (auto *GEP = dyn_cast<GEPOperator>(CV)) {
+    // NULL + constant -> emit intcap constant value
     if (isa<ConstantPointerNull>(GEP->getPointerOperand())) {
+      // This IR construct is used to generate guaranteed untagged values
       APInt Value(DL.getIndexSizeInBits(GEP->getPointerAddressSpace()), 0);
       if (GEP->accumulateConstantOffset(DL, Value)) {
-        AP.OutStreamer->EmitCheriIntcap(Value.getSExtValue(), CapWidth);
-        return;
+        AP.OutStreamer->emitCheriIntcap(Value.getSExtValue(), CapWidth);
       } else {
-        // TODO: create untagged caps here:
-        //  llvm_unreachable("Unhandled NULL-derived global capability init!");
+        // Create an untagged capability from an expression:
+        // This can happen for e.g. __intcap_t x = (__cheri_addr long)&x; etc.
+        assert(GEP->getNumOperands() == 2 && "Unexpected operand count");
+        const MCExpr *Expr =
+            AP.lowerConstant(cast<Constant>(GEP->getOperand(1)));
+        assert(Expr && "Could not lower constant expr?");
+        AP.OutStreamer->emitCheriIntcap(Expr, CapWidth);
       }
+      return;
     }
   }
 
   const MCExpr *Expr = AP.lowerConstant(CV);
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr)) {
-    AP.OutStreamer->EmitCheriIntcap(CE->getValue(), CapWidth);
+    AP.OutStreamer->emitCheriIntcap(CE->getValue(), CapWidth);
     return;
   }
   GlobalValue *GV;
@@ -2880,7 +2885,7 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 
   if (isa<ConstantPointerNull>(CV)) {
     if (CV->getType()->isPointerTy() && DL.isFatPointer(CV->getType()))
-      AP.OutStreamer->EmitCheriIntcap(0, Size);
+      AP.OutStreamer->emitCheriIntcap((int64_t)0, Size);
     else
       AP.OutStreamer->emitIntValue(0, Size);
     return;

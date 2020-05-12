@@ -37,11 +37,11 @@ quintptr qtHookData[] = {
 
 // CHECK-HYBRID: @qtHookData = global [7 x i64] [i64 3, i64 7, i64 331776, i64 0, i64 0, i64 0, i64 16], align 8
 // CHECK-PURECAP: @qtHookData = addrspace(200) global [7 x i8 addrspace(200)*]
-// CHECK-PURECAP-SAME: [i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*),
-// CHECK-PURECAP-SAME:  i8 addrspace(200)* inttoptr (i64 7 to i8 addrspace(200)*),
-// CHECK-PURECAP-SAME:  i8 addrspace(200)* inttoptr (i64 331776 to i8 addrspace(200)*),
+// CHECK-PURECAP-SAME: [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3),
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 7),
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 331776),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* null, i8 addrspace(200)* null, i8 addrspace(200)* null,
-// CHECK-PURECAP-SAME:  i8 addrspace(200)* inttoptr (i64 16 to i8 addrspace(200)*)], align [[#CAP_SIZE]]
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 16)], align [[#CAP_SIZE]]
 
 // HYBRID-ASM-LABEL: qtHookData:
 // HYBRID-ASM-NEXT: 	.8byte	3
@@ -91,7 +91,7 @@ quintptr array2[4] = {
 // HYBRID-ASM-NEXT:	.size	array2, 32
 
 // CHECK-PURECAP: @array2 = addrspace(200) global [4 x i8 addrspace(200)*]
-// CHECK-PURECAP-SAME: [i8 addrspace(200)* inttoptr (i64 42 to i8 addrspace(200)*),
+// CHECK-PURECAP-SAME: [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 42),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* bitcast ([4 x i8 addrspace(200)*] addrspace(200)* @array2 to i8 addrspace(200)*),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* null,
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* null], align [[#CAP_SIZE]]

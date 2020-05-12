@@ -786,6 +786,7 @@ void APValue::setLValue(LValueBase B, const CharUnits &O, NoLValuePath,
   LVal.Offset = O;
   LVal.resizePath((unsigned)-1);
   LVal.IsNullPtr = IsNullPtr;
+  setMustBeNullDerivedCap(B.isNull() || IsNullPtr);
 }
 
 void APValue::setLValue(LValueBase B, const CharUnits &O,
@@ -799,6 +800,7 @@ void APValue::setLValue(LValueBase B, const CharUnits &O,
   LVal.resizePath(Path.size());
   memcpy(LVal.getPath(), Path.data(), Path.size() * sizeof(LValuePathEntry));
   LVal.IsNullPtr = IsNullPtr;
+  setMustBeNullDerivedCap(B.isNull() || IsNullPtr);
 }
 
 const ValueDecl *APValue::getMemberPointerDecl() const {
@@ -827,6 +829,7 @@ void APValue::MakeLValue() {
   static_assert(sizeof(LV) <= DataSize, "LV too big");
   new ((void*)(char*)Data.buffer) LV();
   Kind = LValue;
+  setMustBeNullDerivedCap(false);
 }
 
 void APValue::MakeArray(unsigned InitElts, unsigned Size) {
@@ -844,4 +847,5 @@ void APValue::MakeMemberPointer(const ValueDecl *Member, bool IsDerivedMember,
   MPD->MemberAndIsDerivedMember.setInt(IsDerivedMember);
   MPD->resizePath(Path.size());
   memcpy(MPD->getPath(), Path.data(), Path.size()*sizeof(const CXXRecordDecl*));
+  setMustBeNullDerivedCap(false);
 }

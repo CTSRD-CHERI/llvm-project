@@ -13,6 +13,7 @@
 #include "MipsTargetStreamer.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
@@ -127,22 +128,12 @@ void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
   insert(DF);
 }
 
-void MipsELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
-  assert(CapSize == 32 || CapSize == 16);
-  // Pad to ensure that the (u)intcap_t is aligned
-  emitValueToAlignment(CapSize, 0, 1, 0);
-  if (Value == 0) {
-    emitZeros(CapSize);
-  } else {
-    // TODO: we should probably move the CHERI capability encoding somewhere else.
-    // Maybe to BinaryFormat or Object?
-    emitIntValue(0, 8);
-    emitIntValue(Value, 8);
-    if (CapSize == 32) {
-      emitIntValue(0, 8);
-      emitIntValue(0, 8);
-    }
-  }
+void MipsELFStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
+                                      SMLoc Loc) {
+  assert(CapSize == 16 && "Only CHERI-128 is supported");
+  assert(!getContext().getAsmInfo()->isLittleEndian() &&
+         "Only big-endian MIPS is supported");
+  emitCheriIntcapGeneric(Expr, CapSize, Loc);
 }
 
 void MipsELFStreamer::emitIntValue(uint64_t Value, unsigned Size) {
