@@ -2384,18 +2384,15 @@ bool SelectionDAG::isSplatValue(SDValue V, const APInt &DemandedElts,
     return true;
   }
   case ISD::EXTRACT_SUBVECTOR: {
+    // Offset the demanded elts by the subvector index.
     SDValue Src = V.getOperand(0);
-    ConstantSDNode *SubIdx = dyn_cast<ConstantSDNode>(V.getOperand(1));
+    uint64_t Idx = V.getConstantOperandVal(1);
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
-    if (SubIdx && SubIdx->getAPIntValue().ule(NumSrcElts - NumElts)) {
-      // Offset the demanded elts by the subvector index.
-      uint64_t Idx = SubIdx->getZExtValue();
-      APInt UndefSrcElts;
-      APInt DemandedSrc = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
-      if (isSplatValue(Src, DemandedSrc, UndefSrcElts)) {
-        UndefElts = UndefSrcElts.extractBits(NumElts, Idx);
-        return true;
-      }
+    APInt UndefSrcElts;
+    APInt DemandedSrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
+    if (isSplatValue(Src, DemandedSrcElts, UndefSrcElts)) {
+      UndefElts = UndefSrcElts.extractBits(NumElts, Idx);
+      return true;
     }
     break;
   }
@@ -2694,21 +2691,16 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     break;
   }
   case ISD::INSERT_SUBVECTOR: {
-    // If we know the element index, demand any elements from the subvector and
-    // the remainder from the src its inserted into, otherwise assume we need
-    // the original demanded base elements and ALL the inserted subvector
-    // elements.
+    // Demand any elements from the subvector and the remainder from the src its
+    // inserted into.
     SDValue Src = Op.getOperand(0);
     SDValue Sub = Op.getOperand(1);
-    auto *SubIdx = dyn_cast<ConstantSDNode>(Op.getOperand(2));
+    uint64_t Idx = Op.getConstantOperandVal(2);
     unsigned NumSubElts = Sub.getValueType().getVectorNumElements();
-    APInt DemandedSubElts = APInt::getAllOnesValue(NumSubElts);
+    APInt DemandedSubElts = DemandedElts.extractBits(NumSubElts, Idx);
     APInt DemandedSrcElts = DemandedElts;
-    if (SubIdx && SubIdx->getAPIntValue().ule(NumElts - NumSubElts)) {
-      uint64_t Idx = SubIdx->getZExtValue();
-      DemandedSubElts = DemandedElts.extractBits(NumSubElts, Idx);
-      DemandedSrcElts.insertBits(APInt::getNullValue(NumSubElts), Idx);
-    }
+    DemandedSrcElts.insertBits(APInt::getNullValue(NumSubElts), Idx);
+
     Known.One.setAllBits();
     Known.Zero.setAllBits();
     if (!!DemandedSubElts) {
@@ -2724,18 +2716,12 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     break;
   }
   case ISD::EXTRACT_SUBVECTOR: {
-    // If we know the element index, just demand that subvector elements,
-    // otherwise demand them all.
+    // Offset the demanded elts by the subvector index.
     SDValue Src = Op.getOperand(0);
-    ConstantSDNode *SubIdx = dyn_cast<ConstantSDNode>(Op.getOperand(1));
+    uint64_t Idx = Op.getConstantOperandVal(1);
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
-    APInt DemandedSrc = APInt::getAllOnesValue(NumSrcElts);
-    if (SubIdx && SubIdx->getAPIntValue().ule(NumSrcElts - NumElts)) {
-      // Offset the demanded elts by the subvector index.
-      uint64_t Idx = SubIdx->getZExtValue();
-      DemandedSrc = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
-    }
-    Known = computeKnownBits(Src, DemandedSrc, Depth + 1);
+    APInt DemandedSrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
+    Known = computeKnownBits(Src, DemandedSrcElts, Depth + 1);
     break;
   }
   case ISD::SCALAR_TO_VECTOR: {
@@ -3976,18 +3962,12 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     return ComputeNumSignBits(InVec, DemandedSrcElts, Depth + 1);
   }
   case ISD::EXTRACT_SUBVECTOR: {
-    // If we know the element index, just demand that subvector elements,
-    // otherwise demand them all.
+    // Offset the demanded elts by the subvector index.
     SDValue Src = Op.getOperand(0);
-    ConstantSDNode *SubIdx = dyn_cast<ConstantSDNode>(Op.getOperand(1));
+    uint64_t Idx = Op.getConstantOperandVal(1);
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
-    APInt DemandedSrc = APInt::getAllOnesValue(NumSrcElts);
-    if (SubIdx && SubIdx->getAPIntValue().ule(NumSrcElts - NumElts)) {
-      // Offset the demanded elts by the subvector index.
-      uint64_t Idx = SubIdx->getZExtValue();
-      DemandedSrc = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
-    }
-    return ComputeNumSignBits(Src, DemandedSrc, Depth + 1);
+    APInt DemandedSrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
+    return ComputeNumSignBits(Src, DemandedSrcElts, Depth + 1);
   }
   case ISD::CONCAT_VECTORS: {
     // Determine the minimum number of sign bits across all demanded
@@ -4008,21 +3988,16 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     return Tmp;
   }
   case ISD::INSERT_SUBVECTOR: {
-    // If we know the element index, demand any elements from the subvector and
-    // the remainder from the src its inserted into, otherwise assume we need
-    // the original demanded base elements and ALL the inserted subvector
-    // elements.
+    // Demand any elements from the subvector and the remainder from the src its
+    // inserted into.
     SDValue Src = Op.getOperand(0);
     SDValue Sub = Op.getOperand(1);
-    auto *SubIdx = dyn_cast<ConstantSDNode>(Op.getOperand(2));
+    uint64_t Idx = Op.getConstantOperandVal(2);
     unsigned NumSubElts = Sub.getValueType().getVectorNumElements();
-    APInt DemandedSubElts = APInt::getAllOnesValue(NumSubElts);
+    APInt DemandedSubElts = DemandedElts.extractBits(NumSubElts, Idx);
     APInt DemandedSrcElts = DemandedElts;
-    if (SubIdx && SubIdx->getAPIntValue().ule(NumElts - NumSubElts)) {
-      uint64_t Idx = SubIdx->getZExtValue();
-      DemandedSubElts = DemandedElts.extractBits(NumSubElts, Idx);
-      DemandedSrcElts.insertBits(APInt::getNullValue(NumSubElts), Idx);
-    }
+    DemandedSrcElts.insertBits(APInt::getNullValue(NumSubElts), Idx);
+
     Tmp = std::numeric_limits<unsigned>::max();
     if (!!DemandedSubElts) {
       Tmp = ComputeNumSignBits(Sub, DemandedSubElts, Depth + 1);
@@ -4373,7 +4348,6 @@ static SDValue foldCONCAT_VECTORS(const SDLoc &DL, EVT VT,
     if (Op.getOpcode() != ISD::EXTRACT_SUBVECTOR ||
         Op.getOperand(0).getValueType() != VT ||
         (IdentitySrc && Op.getOperand(0) != IdentitySrc) ||
-        !isa<ConstantSDNode>(Op.getOperand(1)) ||
         Op.getConstantOperandVal(1) != IdentityIndex) {
       IsIdentity = false;
       break;
