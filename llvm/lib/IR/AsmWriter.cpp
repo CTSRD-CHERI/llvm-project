@@ -1934,6 +1934,7 @@ static void writeDICompositeType(raw_ostream &Out, const DICompositeType *N,
   Printer.printMetadata("templateParams", N->getRawTemplateParams());
   Printer.printString("identifier", N->getIdentifier());
   Printer.printMetadata("discriminator", N->getRawDiscriminator());
+  Printer.printMetadata("dataLocation", N->getRawDataLocation());
   Out << ")";
 }
 

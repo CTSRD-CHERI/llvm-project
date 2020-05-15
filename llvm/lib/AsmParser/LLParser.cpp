@@ -4631,7 +4631,8 @@ bool LLParser::ParseDICompositeType(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(vtableHolder, MDField, );                                           \
   OPTIONAL(templateParams, MDField, );                                         \
   OPTIONAL(identifier, MDStringField, );                                       \
-  OPTIONAL(discriminator, MDField, );
+  OPTIONAL(discriminator, MDField, );                                          \
+  OPTIONAL(dataLocation, MDField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
@@ -4640,8 +4641,8 @@ bool LLParser::ParseDICompositeType(MDNode *&Result, bool IsDistinct) {
     if (auto *CT = DICompositeType::buildODRType(
             Context, *identifier.Val, tag.Val, name.Val, file.Val, line.Val,
             scope.Val, baseType.Val, size.Val, align.Val, offset.Val, flags.Val,
-            elements.Val, runtimeLang.Val, vtableHolder.Val,
-            templateParams.Val, discriminator.Val)) {
+            elements.Val, runtimeLang.Val, vtableHolder.Val, templateParams.Val,
+            discriminator.Val, dataLocation.Val)) {
       Result = CT;
       return false;
     }
@@ -4653,7 +4654,7 @@ bool LLParser::ParseDICompositeType(MDNode *&Result, bool IsDistinct) {
       (Context, tag.Val, name.Val, file.Val, line.Val, scope.Val, baseType.Val,
        size.Val, align.Val, offset.Val, flags.Val, elements.Val,
        runtimeLang.Val, vtableHolder.Val, templateParams.Val, identifier.Val,
-       discriminator.Val));
+       discriminator.Val, dataLocation.Val));
   return false;
 }
 
