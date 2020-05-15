@@ -162,6 +162,9 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
   Subtarget = &DefaultSubtarget;
   initAsmInfo();
 
+  // Mips supports the debug entry values.
+  setSupportsDebugEntryValues(true);
+
   // HACK: Update the default CFA register for CHERI purecap
   ABI.updateCheriInitialFrameStateHack(*AsmInfo, *MRI);
   if (Subtarget->isCheri()) {
