@@ -145,7 +145,9 @@ class Configuration(object):
         self.configure_src_root()
         self.configure_obj_root()
         self.configure_cxx_stdlib_under_test()
-        self.configure_cxx_library_root()
+        self.cxx_library_root = self.get_lit_conf('cxx_library_root', self.libcxx_obj_root)
+        self.abi_library_root = self.get_lit_conf('abi_library_path', None)
+        self.cxx_runtime_root = self.get_lit_conf('cxx_runtime_root', self.cxx_library_root)
         self.configure_compile_flags()
         self.configure_link_flags()
         self.configure_env()
@@ -188,6 +190,8 @@ class Configuration(object):
             if k not in os.environ or os.environ[k] != v:
                 show_env_vars[k] = v
         self.lit_config.note('Adding environment variables: %r' % show_env_vars)
+        self.lit_config.note("Linking against the C++ Library at {}".format(self.cxx_library_root))
+        self.lit_config.note("Running against the C++ Library at {}".format(self.cxx_runtime_root))
         sys.stderr.flush()  # Force flushing to avoid broken output on Windows
 
     def get_test_format(self):
@@ -288,12 +292,6 @@ class Configuration(object):
                     break
             else:
                 self.libcxx_obj_root = self.project_obj_root
-
-    def configure_cxx_library_root(self):
-        self.cxx_library_root = self.get_lit_conf('cxx_library_root',
-                                                  self.libcxx_obj_root)
-        self.cxx_runtime_root = self.get_lit_conf('cxx_runtime_root',
-                                                   self.cxx_library_root)
 
     def configure_use_system_cxx_lib(self):
         # This test suite supports testing against either the system library or
@@ -615,7 +613,6 @@ class Configuration(object):
 
     def configure_link_flags_abi_library_path(self):
         # Configure ABI library paths.
-        self.abi_library_root = self.get_lit_conf('abi_library_path')
         if self.abi_library_root:
             self.cxx.link_flags += ['-L' + self.abi_library_root]
             if not self.target_info.is_windows():
@@ -631,10 +628,9 @@ class Configuration(object):
         if self.link_shared:
             self.cxx.link_flags += ['-lc++']
         else:
-            cxx_library_root = self.get_lit_conf('cxx_library_root')
-            if cxx_library_root:
+            if self.cxx_library_root:
                 libname = self.make_static_lib_name('c++')
-                abs_path = os.path.join(cxx_library_root, libname)
+                abs_path = os.path.join(self.cxx_library_root, libname)
                 assert os.path.exists(abs_path) and \
                        "static libc++ library does not exist"
                 self.cxx.link_flags += [abs_path]
@@ -664,10 +660,9 @@ class Configuration(object):
                 if self.link_shared and libcxxabi_shared:
                     link_flags += ['-lc++abi']
                 else:
-                    cxxabi_library_root = self.get_lit_conf('abi_library_path')
-                    if cxxabi_library_root:
+                    if self.abi_library_root:
                         libname = self.make_static_lib_name('c++abi')
-                        abs_path = os.path.join(cxxabi_library_root, libname)
+                        abs_path = os.path.join(self.abi_library_root, libname)
                         self.cxx.link_libcxxabi_flag = abs_path
                         link_flags += [abs_path]
                     else:
