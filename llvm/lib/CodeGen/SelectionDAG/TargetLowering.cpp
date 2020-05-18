@@ -1080,6 +1080,8 @@ bool TargetLowering::SimplifyDemandedBits(
   case ISD::EXTRACT_SUBVECTOR: {
     // Offset the demanded elts by the subvector index.
     SDValue Src = Op.getOperand(0);
+    if (Src.getValueType().isScalableVector())
+      break;
     uint64_t Idx = Op.getConstantOperandVal(1);
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
     APInt DemandedSrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
@@ -2558,6 +2560,8 @@ bool TargetLowering::SimplifyDemandedVectorElts(
   case ISD::EXTRACT_SUBVECTOR: {
     // Offset the demanded elts by the subvector index.
     SDValue Src = Op.getOperand(0);
+    if (Src.getValueType().isScalableVector())
+      break;
     uint64_t Idx = Op.getConstantOperandVal(1);
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
     APInt DemandedSrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
