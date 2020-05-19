@@ -1255,12 +1255,12 @@ static Value *getAISize(LLVMContext &Context, Value *Amt) {
   return Amt;
 }
 
-Align computeAllocaDefaultAlign(Type *Ty, BasicBlock *BB) {
+static Align computeAllocaDefaultAlign(Type *Ty, BasicBlock *BB) {
   const DataLayout &DL = BB->getModule()->getDataLayout();
   return DL.getPrefTypeAlign(Ty);
 }
 
-Align computeAllocaDefaultAlign(Type *Ty, Instruction *I) {
+static Align computeAllocaDefaultAlign(Type *Ty, Instruction *I) {
   return computeAllocaDefaultAlign(Ty, I->getParent());
 }
 
@@ -1342,12 +1342,12 @@ void LoadInst::AssertOK() {
          "Alignment required for atomic load");
 }
 
-Align computeLoadStoreDefaultAlign(Type *Ty, BasicBlock *BB) {
+static Align computeLoadStoreDefaultAlign(Type *Ty, BasicBlock *BB) {
   const DataLayout &DL = BB->getModule()->getDataLayout();
   return DL.getABITypeAlign(Ty);
 }
 
-Align computeLoadStoreDefaultAlign(Type *Ty, Instruction *I) {
+static Align computeLoadStoreDefaultAlign(Type *Ty, Instruction *I) {
   return computeLoadStoreDefaultAlign(Ty, I->getParent());
 }
 

@@ -3331,6 +3331,7 @@ static bool isSortedByValueNo(ArrayRef<CCValAssign> ArgLocs) {
 }
 #endif
 
+namespace {
 /// This is a helper class for lowering variable arguments parameters.
 class VarArgsLoweringHelper {
 public:
@@ -3368,6 +3369,7 @@ private:
   CallingConv::ID CallConv;
   CCState &CCInfo;
 };
+} // namespace
 
 void VarArgsLoweringHelper::createVarArgAreaAndStoreRegisters(
     SDValue &Chain, unsigned StackSize) {
