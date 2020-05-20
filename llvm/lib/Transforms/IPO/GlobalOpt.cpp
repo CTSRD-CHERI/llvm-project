@@ -2342,7 +2342,6 @@ OptimizeFunctions(Module &M,
     // wouldn't be safe in the presence of inalloca.
     // FIXME: We should also hoist alloca affected by this to the entry
     // block if possible.
-    // FIXME: handle preallocated
     if (F->getAttributes().hasAttrSomewhere(Attribute::InAlloca) &&
         !F->hasAddressTaken()) {
       RemoveAttribute(F, Attribute::InAlloca);

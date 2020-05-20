@@ -1439,10 +1439,6 @@ Type *AttributeList::getParamByValType(unsigned Index) const {
   return getAttributes(Index+FirstArgIndex).getByValType();
 }
 
-Type *AttributeList::getParamPreallocatedType(unsigned Index) const {
-  return getAttributes(Index + FirstArgIndex).getPreallocatedType();
-}
-
 MaybeAlign AttributeList::getStackAlignment(unsigned Index) const {
   return getAttributes(Index).getStackAlignment();
 }
