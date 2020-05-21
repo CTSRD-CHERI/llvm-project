@@ -129,8 +129,9 @@ struct Configuration {
   std::vector<llvm::StringRef> filterList;
   std::vector<llvm::StringRef> searchPaths;
   std::vector<llvm::StringRef> symbolOrderingFile;
-  std::vector<llvm::StringRef> warnIfFileLinked;
+  std::vector<llvm::StringRef> thinLTOModulesToCompile;
   std::vector<llvm::StringRef> undefined;
+  std::vector<llvm::StringRef> warnIfFileLinked;
   std::vector<SymbolVersion> dynamicList;
   std::vector<uint8_t> buildIdVector;
   llvm::MapVector<std::pair<const InputSectionBase *, const InputSectionBase *>,
