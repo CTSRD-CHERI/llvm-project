@@ -335,9 +335,9 @@ def CSpecialRW : RVInstCheriSCR<0x1, 0, OPC_CHERI, (outs GPCR:$rd),
                                 "cspecialrw", "$rd, $imm5, $rs1">;
 
 def : InstAlias<"cspecialr $cd, $scr",
-                (CSpecialRW GPCR:$cd, special_capreg:$scr,       C0)>;
+                (CSpecialRW GPCR:$cd, special_capreg:$scr,           C0)>;
 def : InstAlias<"cspecialw $scr, $cs",
-                (CSpecialRW       C0, special_capreg:$scr, GPCR:$cs)>;
+                (CSpecialRW       C0, special_capreg:$scr, GPCRNoC0:$cs)>;
 }
 
 //===----------------------------------------------------------------------===//

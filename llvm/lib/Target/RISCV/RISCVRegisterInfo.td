@@ -212,6 +212,19 @@ def GPRNoX0 : RegisterClass<"RISCV", [XLenVT], 32, (add
       [RegInfo<32,32,32>, RegInfo<64,64,64>, RegInfo<32,32,32>]>;
 }
 
+def GPCRNoC0 : RegisterClass<"RISCV", [CLenVT], 64, (add
+    (sequence "C%u", 10, 17),
+    (sequence "C%u", 5, 7),
+    (sequence "C%u", 28, 31),
+    (sequence "C%u", 8, 9),
+    (sequence "C%u", 18, 27),
+    (sequence "C%u", 1, 4)
+  )> {
+  let RegInfos = RegInfoByHwMode<
+      [RV32,              RV64,                 DefaultMode],
+      [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<64,64,64>]>;
+}
+
 def GPRNoX0X2 : RegisterClass<"RISCV", [XLenVT], 32, (add
     (sequence "X%u", 10, 17),
     (sequence "X%u", 5, 7),
