@@ -224,6 +224,7 @@ struct CopyConfig {
   bool StripDebug = false;
   bool StripNonAlloc = false;
   bool StripSections = false;
+  bool StripSwiftSymbols = false;
   bool StripUnneeded = false;
   bool Weaken = false;
   bool DecompressDebugSections = false;
