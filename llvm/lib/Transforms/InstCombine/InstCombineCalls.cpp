@@ -2603,6 +2603,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   case Intrinsic::ceil:
   case Intrinsic::floor:
   case Intrinsic::round:
+  case Intrinsic::roundeven:
   case Intrinsic::nearbyint:
   case Intrinsic::rint:
   case Intrinsic::trunc: {

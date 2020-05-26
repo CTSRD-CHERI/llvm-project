@@ -3372,6 +3372,10 @@ Intrinsic::ID llvm::getIntrinsicForCallSite(const CallBase &CB,
   case LibFunc_roundf:
   case LibFunc_roundl:
     return Intrinsic::round;
+  case LibFunc_roundeven:
+  case LibFunc_roundevenf:
+  case LibFunc_roundevenl:
+    return Intrinsic::roundeven;
   case LibFunc_pow:
   case LibFunc_powf:
   case LibFunc_powl:
@@ -3712,6 +3716,7 @@ bool llvm::isKnownNeverNaN(const Value *V, const TargetLibraryInfo *TLI,
     case Intrinsic::rint:
     case Intrinsic::nearbyint:
     case Intrinsic::round:
+    case Intrinsic::roundeven:
       return isKnownNeverNaN(II->getArgOperand(0), TLI, Depth + 1);
     case Intrinsic::sqrt:
       return isKnownNeverNaN(II->getArgOperand(0), TLI, Depth + 1) &&
