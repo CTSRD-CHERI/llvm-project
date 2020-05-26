@@ -27,7 +27,7 @@ namespace __sanitizer {
 template<usize mask>
 usize GetLowPtrBits(uptr ptr) {
 #ifdef __CHERI_PURE_CAPABILITY__
-  return cheri_get_low_ptr_bits(ptr, mask);
+  return cheri_low_bits_get(ptr, mask);
 #else
   return ptr & mask;
 #endif
@@ -39,7 +39,7 @@ uptr SetLowPtrBits(uptr ptr, usize bits) {
 template<usize mask>
 uptr ClearLowPtrBits(uptr ptr) {
 #ifdef __CHERI_PURE_CAPABILITY__
-  return cheri_clear_low_ptr_bits(ptr, mask);
+  return cheri_low_bits_clear(ptr, mask);
 #else
   return ptr & ~mask;
 #endif
