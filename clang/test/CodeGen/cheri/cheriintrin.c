@@ -26,10 +26,13 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i);
 // CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP4]]) #5
 // CHECK-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP5]]) #5
-// CHECK-NEXT:    [[TMP6:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP6]]) #5
-// CHECK-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP7]]) #5
+// CHECK-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP6]]) #5
+// CHECK-NEXT:    [[TMP7:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP7]]) #5
+// CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP7]]) #5
+// CHECK-NEXT:    [[LNOT:%.*]] = xor i1 [[TMP7]], true
+// CHECK-NEXT:    call void @use_bool(i1 zeroext [[LNOT]]) #5
 // CHECK-NEXT:    [[TMP8:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP8]]) #5
 // CHECK-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.round.representable.length.i64(i64 [[I]])
@@ -44,8 +47,8 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i);
 // CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP13]]) #5
 // CHECK-NEXT:    [[TMP14:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP14]]) #5
-// CHECK-NEXT:    [[LNOT:%.*]] = xor i1 [[TMP14]], true
-// CHECK-NEXT:    call void @use_bool(i1 zeroext [[LNOT]]) #5
+// CHECK-NEXT:    [[LNOT1:%.*]] = xor i1 [[TMP14]], true
+// CHECK-NEXT:    call void @use_bool(i1 zeroext [[LNOT1]]) #5
 // CHECK-NEXT:    [[CMP:%.*]] = icmp eq i64 [[TMP13]], -2
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[CMP]]) #5
 // CHECK-NEXT:    [[TMP15:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* [[CAP]])
@@ -61,8 +64,8 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i);
 // CHECK-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP20]]) #5
 // CHECK-NEXT:    [[TMP21:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    [[CONV1:%.*]] = and i64 [[TMP21]], 4294967295
-// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[CONV1]]) #5
+// CHECK-NEXT:    [[CONV2:%.*]] = and i64 [[TMP21]], 4294967295
+// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[CONV2]]) #5
 // CHECK-NEXT:    [[TMP22:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 4)
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP22]]) #5
 // CHECK-NEXT:    [[TMP23:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 -3)
@@ -80,43 +83,45 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i);
 // CHECK-NEXT:    ret void
 //
 void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i) {
-  use_size_t(cheri_get_address(cap));
-  use_cap(cheri_set_address(cap, i));
+  use_size_t(cheri_address_get(cap));
+  use_cap(cheri_address_set(cap, i));
 
-  use_size_t(cheri_get_base(cap));
+  use_size_t(cheri_base_get(cap));
 
-  use_size_t(cheri_get_length(cap));
+  use_size_t(cheri_length_get(cap));
 
-  use_size_t(cheri_get_offset(cap));
-  use_cap(cheri_set_offset(cap, i));
+  use_size_t(cheri_offset_get(cap));
+  use_cap(cheri_offset_set(cap, i));
 
-  use_bool(cheri_is_tagged(cap));
-  use_cap(cheri_clear_tag(cap));
+  use_cap(cheri_tag_clear(cap));
+  use_bool(cheri_tag_get(cap));
+  use_bool(cheri_is_valid(cap));
+  use_bool(cheri_is_invalid(cap));
 
   use_bool(cheri_is_subset(cap, cap2));
 
-  use_size_t(cheri_round_representable_length(i));
+  use_size_t(cheri_representable_length(i));
   use_size_t(cheri_representable_alignment_mask(i));
 
-  use_cap(cheri_set_bounds(cap, i));
-  use_cap(cheri_set_bounds_exact(cap, i));
+  use_cap(cheri_bounds_set(cap, i));
+  use_cap(cheri_bounds_set_exact(cap, i));
 
   /* Check that the cheri_otype_t type is defined */
-  _Static_assert(__builtin_types_compatible_p(cheri_otype_t *, __typeof__(cheri_get_type(cap)) *), "");
+  _Static_assert(__builtin_types_compatible_p(cheri_otype_t *, __typeof__(cheri_type_get(cap)) *), "");
   _Static_assert(__builtin_types_compatible_p(cheri_otype_t *, long *), "");
   _Static_assert(CHERI_OTYPE_UNSEALED == -1, "RISCV and MIPS expect -2");
   _Static_assert(CHERI_OTYPE_SENTRY == -2, "RISCV and MIPS expect -2");
-  use_size_t((unsigned long)cheri_get_type(cap));
+  use_size_t((unsigned long)cheri_type_get(cap));
   use_bool(cheri_is_sealed(cap));
   use_bool(cheri_is_unsealed(cap));
   use_bool(cheri_is_sentry(cap));
-  use_cap(cheri_make_sentry(cap));
+  use_cap(cheri_sentry_create(cap));
   use_cap(cheri_seal(cap, cap2));
   use_cap(cheri_unseal(cap, cap2));
 
-  use_cap(cheri_build_cap(cap, cap2));
-  use_cap(cheri_conditional_seal(cap, cap2));
-  use_cap(cheri_copy_type(cap, cap2));
+  use_cap(cheri_cap_build(cap, cap2));
+  use_cap(cheri_seal_conditionally(cap, cap2));
+  use_cap(cheri_type_copy(cap, cap2));
 
   _Static_assert(CHERI_PERM_GLOBAL != 0, "must be defined");
   _Static_assert(CHERI_PERM_EXECUTE != 0, "must be defined");
@@ -130,18 +135,18 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i) {
   _Static_assert(CHERI_PERM_UNSEAL != 0, "must be defined");
   _Static_assert(CHERI_PERM_SYSTEM_REGS != 0, "must be defined");
   /* Check that CHERI_PERMS_T is defined */
-  cheri_perms_t cap_perms = cheri_get_perms(cap);
+  cheri_perms_t cap_perms = cheri_perms_get(cap);
   use_size_t(cap_perms);
-  use_cap(cheri_and_perms(cap, CHERI_PERM_LOAD));
-  use_cap(cheri_clear_perms(cap, CHERI_PERM_EXECUTE));
+  use_cap(cheri_perms_and(cap, CHERI_PERM_LOAD));
+  use_cap(cheri_perms_clear(cap, CHERI_PERM_EXECUTE));
 
-  use_cap(cheri_get_ddc());
-  use_cap(cheri_get_pcc());
+  use_cap(cheri_ddc_get());
+  use_cap(cheri_pcc_get());
 
-  use_size_t(cheri_get_flags(cap));
-  use_cap(cheri_set_flags(cap, i));
+  use_size_t(cheri_flags_get(cap));
+  use_cap(cheri_flags_set(cap, i));
 
-  use_size_t(cheri_load_tags(cap));
+  use_size_t(cheri_tags_load(cap));
 }
 
 /* We also define macros for __builtin_is_aligned/__builtin_align_{up,down}().
@@ -150,6 +155,7 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i) {
  * TOOD: we may want to provide nicer names in stdalign.h.
  */
 void test_alignment_builtins(void *__capability cap, __SIZE_TYPE__ align);
+
 void test_alignment_builtins(void *__capability cap, __SIZE_TYPE__ align) {
   use_cap(cheri_align_up(cap, align));
   use_cap(cheri_align_down(cap, align));

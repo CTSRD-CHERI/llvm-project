@@ -96,7 +96,7 @@ void check_and(void *ptr, uintptr_t cap, int i) {
   // i is promoted to __intcap_t here so the warning triggers:
   uintptr_t int_and_cap = i & cap;   // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   // Verify the full message once:
-  uintptr_t cap_and_int = cap & i;   // bitand-warning{{using bitwise and on a capability type may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/vaddr_t; if you are attempting to store data in the low pointer bits use the cheri_{get,set,clear}_low_ptr_bits() macros.}}
+  uintptr_t cap_and_int = cap & i;   // bitand-warning{{using bitwise and on a capability type may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/vaddr_t; if you are attempting to store data in the low pointer bits use the cheri_low_bits_{get,set,clear}() macros.}}
   uintptr_t cap_and_cap = cap & cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
   i &= i;
@@ -179,37 +179,39 @@ void check_without_macros(void *mtx) {
 void check_with_macros(void *mtx) {
   // This should not trigger any warnings
   __uintcap_t u = (__uintcap_t)mtx;
-  u = cheri_set_low_ptr_bits(u, 1);
-  if (cheri_get_low_ptr_bits(u, 3) == 1) {
+  u = cheri_low_bits_set(u, 31, 1);
+  if (cheri_low_bits_get(u, 3) == 1) {
     do_unlock();
   }
-  u = cheri_clear_low_ptr_bits(u, 3);
+  u = cheri_low_bits_clear(u, 3);
 }
 
 void check_bad_macro_values(void *mtx) {
   __uintcap_t u = (__uintcap_t)mtx;
   // Bad replacement of u &= ~3: should trigger unused result warning
-  cheri_clear_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  cheri_low_bits_clear(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
   // Bad replacement of u | 3: should trigger unused result warning
-  cheri_set_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  cheri_low_bits_set(u, 31, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
   // get should also have warn unused result
-  cheri_get_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  cheri_low_bits_get(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
 
   // call the implementation directly
-  __cheri_clear_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
-  __cheri_set_low_ptr_bits(u, 3);   // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
-  __cheri_get_low_ptr_bits(u, 3);   // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  __cheri_low_bits_clear(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  __cheri_low_bits_or(u, 3);    // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  __cheri_low_bits_get(u, 3);   // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
 
   // getting or clearing too many bits should warn:
   unsigned long value;
-  value = cheri_get_low_ptr_bits(u, 32); // expected-error{{static_assert failed due to requirement '32 < 32' "Should only use the low 5 pointer bits"}}
-  value = cheri_get_low_ptr_bits(u, 31); // This is fine
+  value = cheri_low_bits_get(u, 32);
+  // expected-error@-1{{static_assert failed due to requirement '32 < (31 + 1)' "Using too many low pointer bits"}}
+  // expected-error@-2{{static_assert failed due to requirement '(32 & (32 + 1)) == 0' "Mask must be all ones"}}
+  value = cheri_low_bits_get(u, 31); // This is fine
 
   // Check that the other macros also work in if statements
-  if (cheri_set_low_ptr_bits(u, 3) == 1) {
+  if (cheri_low_bits_set(u, 31, 3) == 1) {
     do_unlock();
   }
-  if (cheri_clear_low_ptr_bits(u, 3) == 1) {
+  if (cheri_low_bits_clear(u, 3) == 1) {
     do_unlock();
   }
 }
