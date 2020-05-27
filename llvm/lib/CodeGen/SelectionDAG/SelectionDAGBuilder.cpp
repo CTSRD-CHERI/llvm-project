@@ -3480,7 +3480,6 @@ void SelectionDAGBuilder::visitShuffleVector(const User &I) {
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   EVT VT = TLI.getValueType(DAG.getDataLayout(), I.getType());
   EVT SrcVT = Src1.getValueType();
-  unsigned SrcNumElts = SrcVT.getVectorNumElements();
 
   if (all_of(Mask, [](int Elem) { return Elem == 0; }) &&
       VT.isScalableVector()) {
@@ -3497,6 +3496,7 @@ void SelectionDAGBuilder::visitShuffleVector(const User &I) {
   // for targets that support a SPLAT_VECTOR for non-scalable vector types.
   assert(!VT.isScalableVector() && "Unsupported scalable vector shuffle");
 
+  unsigned SrcNumElts = SrcVT.getVectorNumElements();
   unsigned MaskNumElts = Mask.size();
 
   if (SrcNumElts == MaskNumElts) {
