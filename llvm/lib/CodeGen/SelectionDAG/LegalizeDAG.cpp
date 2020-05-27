@@ -1603,8 +1603,12 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
   SDValue SP = DAG.getCopyFromReg(Chain, dl, SPReg, VT);
   Chain = SP.getValue(1);
   unsigned Align = cast<ConstantSDNode>(Tmp3)->getZExtValue();
-  unsigned StackAlign =
-      DAG.getSubtarget().getFrameLowering()->getStackAlignment();
+  const TargetFrameLowering *TFL = DAG.getSubtarget().getFrameLowering();
+  unsigned Opc =
+      TFL->getStackGrowthDirection() == TargetFrameLowering::StackGrowsUp ?
+      ISD::ADD : ISD::SUB;
+
+  unsigned StackAlign = TFL->getStackAlignment();
   if (VT.isFatPointer()) {
     EVT SizeVT = Size.getValueType();
     SDValue GetAddr =
@@ -1628,7 +1632,7 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
       Tmp3 = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, SizeVT, CRAM, Size);
     }
 
-    Tmp1 = DAG.getNode(ISD::SUB, dl, SizeVT, Tmp1, Tmp2);
+    Tmp1 = DAG.getNode(Opc, dl, SizeVT, Tmp1, Tmp2);
     if (Align > StackAlign || !TLI.cheriCapabilityTypeHasPreciseBounds())
       Tmp1 = DAG.getNode(ISD::AND, dl, SizeVT, Tmp1, Tmp3);
 
@@ -1640,7 +1644,7 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
         Tmp1, dl, Tmp2, llvm::MaybeAlign(Align).valueOrOne(),
         "ExpandDYNAMIC_STACKALLOC", cheri::SetBoundsPointerSource::Stack);
   } else {
-    Tmp1 = DAG.getNode(ISD::SUB, dl, VT, SP, Size);       // Value
+    Tmp1 = DAG.getNode(Opc, dl, VT, SP, Size);       // Value
     if (Align > StackAlign)
       Tmp1 = DAG.getNode(ISD::AND, dl, VT, Tmp1,
                          DAG.getConstant(-(uint64_t)Align, dl, VT));
