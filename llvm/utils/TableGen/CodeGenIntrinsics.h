@@ -143,7 +143,7 @@ struct CodeGenIntrinsic {
   // True if the intrinsic is marked as speculatable.
   bool isSpeculatable;
 
-  enum ArgAttribute {
+  enum ArgAttrKind {
     NoCapture,
     NoAlias,
     Returned,
@@ -153,7 +153,19 @@ struct CodeGenIntrinsic {
     ImmArg
   };
 
-  std::vector<std::pair<unsigned, ArgAttribute>> ArgumentAttributes;
+  struct ArgAttribute {
+    unsigned Index;
+    ArgAttrKind Kind;
+
+    ArgAttribute(unsigned Idx, ArgAttrKind K)
+        : Index(Idx), Kind(K) {}
+
+    bool operator<(const ArgAttribute &Other) const {
+      return std::tie(Index, Kind) < std::tie(Other.Index, Other.Kind);
+    }
+  };
+
+  std::vector<ArgAttribute> ArgumentAttributes;
 
   bool hasProperty(enum SDNP Prop) const {
     return Properties & (1 << Prop);
