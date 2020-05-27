@@ -273,7 +273,6 @@ Expected<std::unique_ptr<NumericVariableUse>> Pattern::parseNumericVariableUse(
 Expected<std::unique_ptr<ExpressionAST>> Pattern::parseNumericOperand(
     StringRef &Expr, AllowedOperand AO, Optional<size_t> LineNumber,
     FileCheckPatternContext *Context, const SourceMgr &SM) {
-
   if (Expr.startswith("(")) {
     if (AO != AllowedOperand::Any)
       return ErrorDiagnostic::get(

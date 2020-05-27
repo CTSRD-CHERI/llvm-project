@@ -10,7 +10,6 @@
 #include "../lib/Support/FileCheckImpl.h"
 #include "llvm/Support/Regex.h"
 #include "llvm/Testing/Support/Error.h"
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <tuple>
 #include <unordered_set>
@@ -726,7 +725,6 @@ TEST_F(FileCheckTest, ParseNumericSubstitutionBlock) {
       "'VAR_LOWER_HEX' (%x), need an explicit format specifier",
       Tester.parseSubst("FOO+VAR_LOWER_HEX").takeError());
 
-
   // Simple parenthesized expressions:
   EXPECT_THAT_EXPECTED(Tester.parseSubst("(1)"), Succeeded());
   EXPECT_THAT_EXPECTED(Tester.parseSubst("(1+1)"), Succeeded());
@@ -747,7 +745,25 @@ TEST_F(FileCheckTest, ParseNumericSubstitutionBlock) {
                         Tester.parseSubst("((1+2+3").takeError());
   expectDiagnosticError("missing ')' at end of nested expression",
                         Tester.parseSubst("((1+2)+3").takeError());
-  // Valid empty expression.
+
+  // Test missing operation between operands:
+  expectDiagnosticError("unsupported operation '('",
+                        Tester.parseSubst("(1)(2)").takeError());
+  expectDiagnosticError("unsupported operation '('",
+                        Tester.parseSubst("2(X)").takeError());
+
+  // Test more closing than opening parentheses. The diagnostic messages are
+  // not ideal, but for now simply check that we reject invalid input.
+  expectDiagnosticError("invalid operand format ')'",
+                        Tester.parseSubst(")").takeError());
+  expectDiagnosticError("unsupported operation ')'",
+                        Tester.parseSubst("1)").takeError());
+  expectDiagnosticError("unsupported operation ')'",
+                        Tester.parseSubst("(1+2))").takeError());
+  expectDiagnosticError("unsupported operation ')'",
+                        Tester.parseSubst("(2))").takeError());
+  expectDiagnosticError("unsupported operation ')'",
+                        Tester.parseSubst("(1))(").takeError());
 }
 
 TEST_F(FileCheckTest, ParsePattern) {

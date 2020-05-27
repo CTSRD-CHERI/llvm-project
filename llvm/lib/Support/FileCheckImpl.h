@@ -665,7 +665,8 @@ private:
   /// \p Context points to the class instance holding the live string and
   /// numeric variables. \returns the class representing that operand in the
   /// AST of the expression or an error holding a diagnostic against \p SM
-  /// otherwise.
+  /// otherwise. If \p Expr starts with a "(" this function will attempt to
+  /// parse a parenthesized expression.
   static Expected<std::unique_ptr<ExpressionAST>>
   parseNumericOperand(StringRef &Expr, AllowedOperand AO,
                       Optional<size_t> LineNumber,
