@@ -6359,7 +6359,8 @@ void Sema::AddOverloadCandidate(
     }
   }
 
-  if (EnableIfAttr *FailedAttr = CheckEnableIf(Function, Args)) {
+  if (EnableIfAttr *FailedAttr =
+          CheckEnableIf(Function, CandidateSet.getLocation(), Args)) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_fail_enable_if;
     Candidate.DeductionFailure.Data = FailedAttr;
@@ -6465,11 +6466,10 @@ Sema::SelectBestMethod(Selector Sel, MultiExprArg Args, bool IsInstance,
   return nullptr;
 }
 
-static bool
-convertArgsForAvailabilityChecks(Sema &S, FunctionDecl *Function, Expr *ThisArg,
-                                 ArrayRef<Expr *> Args, Sema::SFINAETrap &Trap,
-                                 bool MissingImplicitThis, Expr *&ConvertedThis,
-                                 SmallVectorImpl<Expr *> &ConvertedArgs) {
+static bool convertArgsForAvailabilityChecks(
+    Sema &S, FunctionDecl *Function, Expr *ThisArg, SourceLocation CallLoc,
+    ArrayRef<Expr *> Args, Sema::SFINAETrap &Trap, bool MissingImplicitThis,
+    Expr *&ConvertedThis, SmallVectorImpl<Expr *> &ConvertedArgs) {
   if (ThisArg) {
     CXXMethodDecl *Method = cast<CXXMethodDecl>(Function);
     assert(!isa<CXXConstructorDecl>(Method) &&
@@ -6514,17 +6514,7 @@ convertArgsForAvailabilityChecks(Sema &S, FunctionDecl *Function, Expr *ThisArg,
   if (!Function->isVariadic() && Args.size() < Function->getNumParams()) {
     for (unsigned i = Args.size(), e = Function->getNumParams(); i != e; ++i) {
       ParmVarDecl *P = Function->getParamDecl(i);
-      Expr *DefArg = P->hasUninstantiatedDefaultArg()
-                         ? P->getUninstantiatedDefaultArg()
-                         : P->getDefaultArg();
-      // This can only happen in code completion, i.e. when PartialOverloading
-      // is true.
-      if (!DefArg)
-        return false;
-      ExprResult R =
-          S.PerformCopyInitialization(InitializedEntity::InitializeParameter(
-                                          S.Context, Function->getParamDecl(i)),
-                                      SourceLocation(), DefArg);
+      ExprResult R = S.BuildCXXDefaultArgExpr(CallLoc, Function, P);
       if (R.isInvalid())
         return false;
       ConvertedArgs.push_back(R.get());
@@ -6536,7 +6526,9 @@ convertArgsForAvailabilityChecks(Sema &S, FunctionDecl *Function, Expr *ThisArg,
   return true;
 }
 
-EnableIfAttr *Sema::CheckEnableIf(FunctionDecl *Function, ArrayRef<Expr *> Args,
+EnableIfAttr *Sema::CheckEnableIf(FunctionDecl *Function,
+                                  SourceLocation CallLoc,
+                                  ArrayRef<Expr *> Args,
                                   bool MissingImplicitThis) {
   auto EnableIfAttrs = Function->specific_attrs<EnableIfAttr>();
   if (EnableIfAttrs.begin() == EnableIfAttrs.end())
@@ -6547,7 +6539,7 @@ EnableIfAttr *Sema::CheckEnableIf(FunctionDecl *Function, ArrayRef<Expr *> Args,
   // FIXME: We should look into making enable_if late-parsed.
   Expr *DiscardedThis;
   if (!convertArgsForAvailabilityChecks(
-          *this, Function, /*ThisArg=*/nullptr, Args, Trap,
+          *this, Function, /*ThisArg=*/nullptr, CallLoc, Args, Trap,
           /*MissingImplicitThis=*/true, DiscardedThis, ConvertedArgs))
     return *EnableIfAttrs.begin();
 
@@ -6877,7 +6869,8 @@ Sema::AddMethodCandidate(CXXMethodDecl *Method, DeclAccessPair FoundDecl,
     }
   }
 
-  if (EnableIfAttr *FailedAttr = CheckEnableIf(Method, Args, true)) {
+  if (EnableIfAttr *FailedAttr =
+          CheckEnableIf(Method, CandidateSet.getLocation(), Args, true)) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_fail_enable_if;
     Candidate.DeductionFailure.Data = FailedAttr;
@@ -7329,7 +7322,8 @@ void Sema::AddConversionCandidate(
            "Can only end up with a standard conversion sequence or failure");
   }
 
-  if (EnableIfAttr *FailedAttr = CheckEnableIf(Conversion, None)) {
+  if (EnableIfAttr *FailedAttr =
+          CheckEnableIf(Conversion, CandidateSet.getLocation(), None)) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_fail_enable_if;
     Candidate.DeductionFailure.Data = FailedAttr;
@@ -7499,7 +7493,8 @@ void Sema::AddSurrogateCandidate(CXXConversionDecl *Conversion,
     }
   }
 
-  if (EnableIfAttr *FailedAttr = CheckEnableIf(Conversion, None)) {
+  if (EnableIfAttr *FailedAttr =
+          CheckEnableIf(Conversion, CandidateSet.getLocation(), None)) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_fail_enable_if;
     Candidate.DeductionFailure.Data = FailedAttr;
@@ -14148,7 +14143,8 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
   // resolution process, we still need to handle the enable_if attribute. Do
   // that here, so it will not hide previous -- and more relevant -- errors.
   if (auto *MemE = dyn_cast<MemberExpr>(NakedMemExpr)) {
-    if (const EnableIfAttr *Attr = CheckEnableIf(Method, Args, true)) {
+    if (const EnableIfAttr *Attr =
+            CheckEnableIf(Method, LParenLoc, Args, true)) {
       Diag(MemE->getMemberLoc(),
            diag::err_ovl_no_viable_member_function_in_call)
           << Method << Method->getSourceRange();
