@@ -1676,7 +1676,7 @@ void InitListChecker::CheckReferenceType(const InitializedEntity &Entity,
     }
   }
   // FIXME: Why are we updating the syntactic init list?
-  if (!VerifyOnly)
+  if (!VerifyOnly && expr)
     IList->setInit(Index, expr);
 
   if (hadError)
