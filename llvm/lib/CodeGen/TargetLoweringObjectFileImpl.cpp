@@ -1988,7 +1988,7 @@ TargetLoweringObjectFileXCOFF::getTargetSymbol(const GlobalValue *GV,
   // function entry point. We choose to always return a function descriptor
   // here.
   if (const GlobalObject *GO = dyn_cast<GlobalObject>(GV)) {
-    if (GO->isDeclaration())
+    if (GO->isDeclarationForLinker())
       return cast<MCSectionXCOFF>(getSectionForExternalReference(GO, TM))
           ->getQualNameSymbol();
 
@@ -2016,7 +2016,7 @@ MCSection *TargetLoweringObjectFileXCOFF::getExplicitSectionGlobal(
 
 MCSection *TargetLoweringObjectFileXCOFF::getSectionForExternalReference(
     const GlobalObject *GO, const TargetMachine &TM) const {
-  assert(GO->isDeclaration() &&
+  assert(GO->isDeclarationForLinker() &&
          "Tried to get ER section for a defined global.");
 
   SmallString<128> Name;
@@ -2138,6 +2138,7 @@ XCOFF::StorageClass TargetLoweringObjectFileXCOFF::getStorageClassForGlobal(
     return XCOFF::C_HIDEXT;
   case GlobalValue::ExternalLinkage:
   case GlobalValue::CommonLinkage:
+  case GlobalValue::AvailableExternallyLinkage:
     return XCOFF::C_EXT;
   case GlobalValue::ExternalWeakLinkage:
   case GlobalValue::LinkOnceAnyLinkage:
@@ -2148,9 +2149,6 @@ XCOFF::StorageClass TargetLoweringObjectFileXCOFF::getStorageClassForGlobal(
   case GlobalValue::AppendingLinkage:
     report_fatal_error(
         "There is no mapping that implements AppendingLinkage for XCOFF.");
-  case GlobalValue::AvailableExternallyLinkage:
-    report_fatal_error("unhandled AvailableExternallyLinkage when mapping "
-                       "linkage to StorageClass");
   }
   llvm_unreachable("Unknown linkage type!");
 }
