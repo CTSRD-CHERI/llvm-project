@@ -40,6 +40,7 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsPowerPC.h"
+#include "llvm/IR/MatrixBuilder.h"
 #include "llvm/IR/Module.h"
 #include <cstdarg>
 
@@ -4043,6 +4044,11 @@ Value *ScalarExprEmitter::EmitAdd(const BinOpInfo &op) {
     }
   }
 
+  if (op.Ty->isConstantMatrixType()) {
+    llvm::MatrixBuilder<CGBuilderTy> MB(Builder);
+    return MB.CreateAdd(op.LHS, op.RHS);
+  }
+
   if (op.Ty->isUnsignedIntegerType() &&
       CGF.SanOpts.has(SanitizerKind::UnsignedIntegerOverflow) &&
       !CanElideOverflowCheck(CGF.getContext(), op))
@@ -4260,6 +4266,11 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
           return Builder.CreateNSWSub(op.LHS, op.RHS, "sub");
         return EmitOverflowCheckedBinOp(op);
       }
+    }
+
+    if (op.Ty->isConstantMatrixType()) {
+      llvm::MatrixBuilder<CGBuilderTy> MB(Builder);
+      return MB.CreateSub(op.LHS, op.RHS);
     }
 
     if (op.Ty->isUnsignedIntegerType() &&
