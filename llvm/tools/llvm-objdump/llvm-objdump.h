@@ -52,8 +52,6 @@ extern cl::opt<bool> UnwindInfo;
 
 extern StringSet<> FoundSectionSet;
 
-} // namespace objdump
-
 typedef std::function<bool(llvm::object::SectionRef const &)> FilterPredicate;
 
 /// A filtered iterator for SectionRefs that skips sections based on some given
@@ -119,7 +117,6 @@ SectionFilter ToolSectionFilter(llvm::object::ObjectFile const &O,
                                 uint64_t *Idx = nullptr);
 
 bool isRelocAddressLess(object::RelocationRef A, object::RelocationRef B);
-void printRawClangAST(const object::ObjectFile *O);
 void printRelocations(const object::ObjectFile *O);
 void printCapRelocations(const object::ObjectFile *O);
 void printDynamicRelocations(const object::ObjectFile *O);
@@ -149,6 +146,7 @@ std::string getFileNameForError(const object::Archive::Child &C,
 SymbolInfoTy createSymbolInfo(const object::ObjectFile *Obj,
                               const object::SymbolRef &Symbol);
 
+} // namespace objdump
 } // end namespace llvm
 
 #endif
