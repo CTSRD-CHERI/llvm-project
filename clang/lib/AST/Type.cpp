@@ -3119,6 +3119,8 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
     return "queue_t";
   case OCLReserveID:
     return "reserve_id_t";
+  case IncompleteMatrixIdx:
+    return "<incomplete matrix index type>";
   case OMPArraySection:
     return "<OpenMP array section type>";
   case OMPArrayShaping:
@@ -4147,6 +4149,7 @@ bool Type::canHaveNullability(bool ResultIfUnknown) const {
 #include "clang/Basic/AArch64SVEACLETypes.def"
     case BuiltinType::BuiltinFn:
     case BuiltinType::NullPtr:
+    case BuiltinType::IncompleteMatrixIdx:
     case BuiltinType::OMPArraySection:
     case BuiltinType::OMPArrayShaping:
     case BuiltinType::OMPIterator:

@@ -3532,6 +3532,7 @@ bool InitializationSequence::isAmbiguous() const {
   case FK_NonConstLValueReferenceBindingToTemporary:
   case FK_NonConstLValueReferenceBindingToBitfield:
   case FK_NonConstLValueReferenceBindingToVectorElement:
+  case FK_NonConstLValueReferenceBindingToMatrixElement:
   case FK_NonConstLValueReferenceBindingToUnrelated:
   case FK_RValueReferenceBindingToLValue:
   case FK_ReferenceAddrspaceMismatchTemporary:
@@ -4727,7 +4728,8 @@ static void TryReferenceInitialization(Sema &S,
 /// which a reference can never bind). Attempting to bind a reference to
 /// such a glvalue will always create a temporary.
 static bool isNonReferenceableGLValue(Expr *E) {
-  return E->refersToBitField() || E->refersToVectorElement();
+  return E->refersToBitField() || E->refersToVectorElement() ||
+         E->refersToMatrixElement();
 }
 
 static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
@@ -4901,6 +4903,9 @@ static void TryReferenceInitializationCore(Sema &S,
         else if (Initializer->refersToVectorElement())
           FK = InitializationSequence::
               FK_NonConstLValueReferenceBindingToVectorElement;
+        else if (Initializer->refersToMatrixElement())
+          FK = InitializationSequence::
+              FK_NonConstLValueReferenceBindingToMatrixElement;
         else
           llvm_unreachable("unexpected kind of compatible initializer");
         break;
@@ -9037,6 +9042,11 @@ bool InitializationSequence::Diagnose(Sema &S,
       << Args[0]->getSourceRange();
     break;
 
+  case FK_NonConstLValueReferenceBindingToMatrixElement:
+    S.Diag(Kind.getLocation(), diag::err_reference_bind_to_matrix_element)
+        << DestType.isVolatileQualified() << Args[0]->getSourceRange();
+    break;
+
   case FK_RValueReferenceBindingToLValue:
     S.Diag(Kind.getLocation(), diag::err_lvalue_to_rvalue_ref)
       << DestType.getNonReferenceType() << OnlyArg->getType()
@@ -9412,6 +9422,10 @@ void InitializationSequence::dump(raw_ostream &OS) const {
 
     case FK_NonConstLValueReferenceBindingToVectorElement:
       OS << "non-const lvalue reference bound to vector element";
+      break;
+
+    case FK_NonConstLValueReferenceBindingToMatrixElement:
+      OS << "non-const lvalue reference bound to matrix element";
       break;
 
     case FK_NonConstLValueReferenceBindingToUnrelated:
