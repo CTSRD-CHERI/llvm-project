@@ -170,7 +170,6 @@ struct Configuration {
   bool gdbIndex;
   bool gnuHash = false;
   bool gnuUnique;
-  bool hasDynamicList = false;
   bool hasDynSymTab;
   bool ignoreDataAddressEquality;
   bool ignoreFunctionAddressEquality;
@@ -202,6 +201,7 @@ struct Configuration {
   bool sortCapRelocs;
   bool singleRoRx;
   bool shared;
+  bool symbolic;
   bool isStatic = false;
   bool sysvHash = false;
   bool target1Rel;
