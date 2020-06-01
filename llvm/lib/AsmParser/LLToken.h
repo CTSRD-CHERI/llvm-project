@@ -394,6 +394,8 @@ enum Kind {
   kw_alwaysInline,
   kw_calls,
   kw_callee,
+  kw_params,
+  kw_param,
   kw_hotness,
   kw_unknown,
   kw_hot,
