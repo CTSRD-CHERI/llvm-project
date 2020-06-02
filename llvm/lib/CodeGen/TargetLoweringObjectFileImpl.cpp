@@ -884,7 +884,7 @@ MCSection *TargetLoweringObjectFileELF::getSectionForMachineBasicBlock(
     Name += MBB.getParent()->getName();
   } else {
     Name += MBB.getParent()->getSection()->getName();
-    if (TM.getUniqueBBSectionNames()) {
+    if (TM.getUniqueBasicBlockSectionNames()) {
       Name += ".";
       Name += MBB.getSymbol()->getName();
     } else {
