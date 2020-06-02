@@ -184,6 +184,7 @@ void initializeIRCELegacyPassPass(PassRegistry&);
 void initializeIRTranslatorPass(PassRegistry&);
 void initializeIVUsersWrapperPassPass(PassRegistry&);
 void initializeIfConverterPass(PassRegistry&);
+void initializeImmutableModuleSummaryIndexWrapperPassPass(PassRegistry&);
 void initializeImplicitNullChecksPass(PassRegistry&);
 void initializeIndVarSimplifyLegacyPassPass(PassRegistry&);
 void initializeIndirectBrExpandPassPass(PassRegistry&);
