@@ -1353,7 +1353,6 @@ AggExprEmitter::VisitLambdaExpr(LambdaExpr *E) {
 }
 
 void AggExprEmitter::VisitExprWithCleanups(ExprWithCleanups *E) {
-  CGF.enterFullExpression(E);
   CodeGenFunction::RunCleanupsScope cleanups(CGF);
   Visit(E->getSubExpr());
 }

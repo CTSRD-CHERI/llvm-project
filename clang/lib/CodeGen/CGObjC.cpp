@@ -3258,7 +3258,6 @@ static llvm::Value *emitARCRetainLoadOfScalar(CodeGenFunction &CGF,
 llvm::Value *CodeGenFunction::EmitARCRetainScalarExpr(const Expr *e) {
   // The retain needs to happen within the full-expression.
   if (const ExprWithCleanups *cleanups = dyn_cast<ExprWithCleanups>(e)) {
-    enterFullExpression(cleanups);
     RunCleanupsScope scope(*this);
     return EmitARCRetainScalarExpr(cleanups->getSubExpr());
   }
@@ -3274,7 +3273,6 @@ llvm::Value *
 CodeGenFunction::EmitARCRetainAutoreleaseScalarExpr(const Expr *e) {
   // The retain needs to happen within the full-expression.
   if (const ExprWithCleanups *cleanups = dyn_cast<ExprWithCleanups>(e)) {
-    enterFullExpression(cleanups);
     RunCleanupsScope scope(*this);
     return EmitARCRetainAutoreleaseScalarExpr(cleanups->getSubExpr());
   }
@@ -3385,7 +3383,6 @@ static llvm::Value *emitARCUnsafeUnretainedScalarExpr(CodeGenFunction &CGF,
 llvm::Value *CodeGenFunction::EmitARCUnsafeUnretainedScalarExpr(const Expr *e) {
   // Look through full-expressions.
   if (const ExprWithCleanups *cleanups = dyn_cast<ExprWithCleanups>(e)) {
-    enterFullExpression(cleanups);
     RunCleanupsScope scope(*this);
     return emitARCUnsafeUnretainedScalarExpr(*this, cleanups->getSubExpr());
   }

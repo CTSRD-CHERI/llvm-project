@@ -447,6 +447,10 @@ public:
   /// This is invalid if sret is not in use.
   Address ReturnValuePointer = Address::invalid();
 
+  /// If a return statement is being visited, this holds the return statment's
+  /// result expression.
+  const Expr *RetExpr = nullptr;
+
   /// Return true if a label was seen in the current scope.
   bool hasLabelBeenSeenInCurrentScope() const {
     if (CurLexicalScope)
@@ -650,9 +654,6 @@ public:
   Address NormalCleanupDest = Address::invalid();
 
   unsigned NextCleanupDestIndex = 1;
-
-  /// FirstBlockInfo - The head of a singly-linked-list of block layouts.
-  CGBlockInfo *FirstBlockInfo = nullptr;
 
   /// EHResumeBlock - Unified block containing a call to llvm.eh.resume.
   llvm::BasicBlock *EHResumeBlock = nullptr;
@@ -1928,7 +1929,6 @@ public:
   /// information about the block, including the block invoke function, the
   /// captured variables, etc.
   llvm::Value *EmitBlockLiteral(const BlockExpr *);
-  static void destroyBlockInfos(CGBlockInfo *info);
 
   llvm::Function *GenerateBlockFunction(GlobalDecl GD,
                                         const CGBlockInfo &Info,
@@ -4276,14 +4276,6 @@ public:
   void EmitCXXConstructExpr(const CXXConstructExpr *E, AggValueSlot Dest);
 
   void EmitSynthesizedCXXCopyCtor(Address Dest, Address Src, const Expr *Exp);
-
-  void enterFullExpression(const FullExpr *E) {
-    if (const auto *EWC = dyn_cast<ExprWithCleanups>(E))
-      if (EWC->getNumObjects() == 0)
-        return;
-    enterNonTrivialFullExpression(E);
-  }
-  void enterNonTrivialFullExpression(const FullExpr *E);
 
   void EmitCXXThrowExpr(const CXXThrowExpr *E, bool KeepInsertionPoint = true);
 
