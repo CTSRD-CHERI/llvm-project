@@ -6850,6 +6850,9 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_INTCAP_ID:
       T = Context.IntCapTy;
       break;
+    case PREDEF_TYPE_BFLOAT16_ID:
+      T = Context.BFloat16Ty;
+      break;
     case PREDEF_TYPE_HALF_ID:
       T = Context.HalfTy;
       break;

@@ -4779,8 +4779,9 @@ Value *CodeGenFunction::EmitTargetBuiltinExpr(unsigned BuiltinID,
 
 static llvm::VectorType *GetNeonType(CodeGenFunction *CGF,
                                      NeonTypeFlags TypeFlags,
-                                     bool HasLegalHalfType=true,
-                                     bool V1Ty=false) {
+                                     bool HasLegalHalfType = true,
+                                     bool V1Ty = false,
+                                     bool AllowBFloatArgsAndRet = true) {
   int IsQuad = TypeFlags.isQuad();
   switch (TypeFlags.getEltType()) {
   case NeonTypeFlags::Int8:
@@ -4789,6 +4790,11 @@ static llvm::VectorType *GetNeonType(CodeGenFunction *CGF,
   case NeonTypeFlags::Int16:
   case NeonTypeFlags::Poly16:
     return llvm::FixedVectorType::get(CGF->Int16Ty, V1Ty ? 1 : (4 << IsQuad));
+  case NeonTypeFlags::BFloat16:
+    if (AllowBFloatArgsAndRet)
+      return llvm::FixedVectorType::get(CGF->BFloatTy, V1Ty ? 1 : (4 << IsQuad));
+    else
+      return llvm::FixedVectorType::get(CGF->Int16Ty, V1Ty ? 1 : (4 << IsQuad));
   case NeonTypeFlags::Float16:
     if (HasLegalHalfType)
       return llvm::FixedVectorType::get(CGF->HalfTy, V1Ty ? 1 : (4 << IsQuad));
@@ -5804,8 +5810,11 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   bool Usgn = Type.isUnsigned();
   bool Quad = Type.isQuad();
   const bool HasLegalHalfType = getTarget().hasLegalHalfType();
+  const bool AllowBFloatArgsAndRet =
+      getTargetHooks().getABIInfo().allowBFloatArgsAndRet();
 
-  llvm::VectorType *VTy = GetNeonType(this, Type, HasLegalHalfType);
+  llvm::VectorType *VTy = GetNeonType(this, Type, HasLegalHalfType, false,
+                                      AllowBFloatArgsAndRet);
   llvm::Type *Ty = VTy;
   if (!Ty)
     return nullptr;
@@ -7276,7 +7285,9 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   bool rightShift = false;
 
   llvm::VectorType *VTy = GetNeonType(this, Type,
-                                      getTarget().hasLegalHalfType());
+                                      getTarget().hasLegalHalfType(),
+                                      false,
+                                      getTarget().hasBFloat16Type());
   llvm::Type *Ty = VTy;
   if (!Ty)
     return nullptr;
