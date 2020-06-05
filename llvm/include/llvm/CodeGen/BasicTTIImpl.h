@@ -890,6 +890,8 @@ public:
 
     // Assuming that all loads of legal types cost 1.
     unsigned Cost = LT.first;
+    if (CostKind != TTI::TCK_RecipThroughput)
+      return Cost;
 
     if (Src->isVectorTy() &&
         Src->getPrimitiveSizeInBits() < LT.second.getSizeInBits()) {
