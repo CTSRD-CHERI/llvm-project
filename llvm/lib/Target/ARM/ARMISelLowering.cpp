@@ -17951,8 +17951,7 @@ bool ARMTargetLowering::isCheapToSpeculateCtlz() const {
 }
 
 bool ARMTargetLowering::shouldExpandShift(SelectionDAG &DAG, SDNode *N) const {
-  return !Subtarget->hasMinSize() || Subtarget->isTargetWindows() ||
-         Subtarget->isTargetDarwin();
+  return !Subtarget->hasMinSize() || Subtarget->isTargetWindows();
 }
 
 Value *ARMTargetLowering::emitLoadLinked(IRBuilder<> &Builder, Value *Addr,
