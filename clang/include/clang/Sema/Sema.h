@@ -10814,9 +10814,10 @@ public:
                                CheckedConversionKind CCK
                                   = CCK_ImplicitConversion);
 
-  /// ImpCastPointerToCHERICapability - Checks if pointer type FromTy can be implicitly converted to
-  /// capability type ToTy
-  bool ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr *&From, bool Diagnose = true);
+  /// ImpCastPointerToCHERICapability - Checks if pointer type FromTy can be
+  /// implicitly converted to capability type ToTy
+  bool ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
+                                       Expr *&From, bool Diagnose);
 
   /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
   /// to the conversion from scalar type ScalarTy to the Boolean type.

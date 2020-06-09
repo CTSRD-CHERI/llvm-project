@@ -4471,20 +4471,6 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
             From->getType()->getPointeeType().getAddressSpace())
       CK = CK_AddressSpaceConversion;
 
-    const bool FromIsCap = FromType->isCHERICapabilityType(Context);
-    const bool ToIsCap = ToType->isCHERICapabilityType(Context);
-    if (FromIsCap != ToIsCap) {
-      if (SCS.isInvalidCHERICapabilityConversion()) {
-        unsigned DiagID = FromIsCap ? diag::err_typecheck_convert_cap_to_ptr :
-                                      diag::err_typecheck_convert_ptr_to_cap;
-        Diag(From->getBeginLoc(), DiagID) << FromType << ToType << false
-            << FixItHint::CreateInsertion(From->getBeginLoc(), "(__cheri_" +
-                                          std::string(FromIsCap ? "from" : "to") +
-                                          "cap " + ToType.getAsString() + ")");
-        return ExprError();
-      }
-      CK = FromIsCap ? CK_CHERICapabilityToPointer : CK_PointerToCHERICapability;
-    }
     // ImpCastExprToType may return an ExprError, so cache the current value of
     Expr *FromOld = From;
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context), CK, VK,
