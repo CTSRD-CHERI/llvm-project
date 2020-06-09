@@ -727,7 +727,8 @@ void AsmPrinter::emitFunctionHeader() {
   MF->setSection(getObjFileLowering().SectionForGlobal(&F, TM));
   OutStreamer->SwitchSection(MF->getSection());
 
-  emitVisibility(CurrentFnSym, F.getVisibility());
+  if (!MAI->hasVisibilityOnlyWithLinkage())
+    emitVisibility(CurrentFnSym, F.getVisibility());
 
   if (MAI->needsFunctionDescriptors() &&
       F.getLinkage() != GlobalValue::InternalLinkage)
@@ -1544,23 +1545,29 @@ bool AsmPrinter::doFinalization(Module &M) {
 
     MCSymbol *Name = getSymbol(&F);
     // Function getSymbol gives us the function descriptor symbol for XCOFF.
-    if (TM.getTargetTriple().isOSBinFormatXCOFF() && !F.isIntrinsic()) {
 
-      // Get the function entry point symbol.
-      MCSymbol *FnEntryPointSym = TLOF.getFunctionEntryPointSymbol(&F, TM);
-      if (cast<MCSymbolXCOFF>(FnEntryPointSym)->hasRepresentedCsectSet())
-        // Emit linkage for the function entry point.
-        emitLinkage(&F, FnEntryPointSym);
+    if (!TM.getTargetTriple().isOSBinFormatXCOFF()) {
+      GlobalValue::VisibilityTypes V = F.getVisibility();
+      if (V == GlobalValue::DefaultVisibility)
+        continue;
 
-      // Emit linkage for the function descriptor.
-      emitLinkage(&F, Name);
+      emitVisibility(Name, V, false);
+      continue;
     }
 
-    GlobalValue::VisibilityTypes V = F.getVisibility();
-    if (V == GlobalValue::DefaultVisibility)
+    if (F.isIntrinsic())
       continue;
 
-    emitVisibility(Name, V, false);
+    // Handle the XCOFF case.
+    // Variable `Name` is the function descriptor symbol (see above). Get the
+    // function entry point symbol.
+    MCSymbol *FnEntryPointSym = TLOF.getFunctionEntryPointSymbol(&F, TM);
+    if (cast<MCSymbolXCOFF>(FnEntryPointSym)->hasRepresentedCsectSet())
+      // Emit linkage for the function entry point.
+      emitLinkage(&F, FnEntryPointSym);
+
+    // Emit linkage for the function descriptor.
+    emitLinkage(&F, Name);
   }
 
   // Emit the remarks section contents.
