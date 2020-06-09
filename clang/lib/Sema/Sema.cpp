@@ -602,28 +602,91 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
     }
   }
 
-  // Only allow implicit casts from pointers to CHERI capabilities
+  // Check for conversions between capabilities and integers
+  // We only allow implicit casts from pointers to CHERI capabilities
   // for the following cases:
   //
   // - String literal
   // - Null literal
   // - address-of (&) expressions and types are compatible
   // - array/function to pointer decay and types are compatible
-  if (const PointerType *EPTy = dyn_cast<PointerType>(ExprTy)) {
-    if (const PointerType *TPTy = dyn_cast<PointerType>(TypeTy)) {
-      if (!EPTy->isCHERICapability() && TPTy->isCHERICapability()) {
-        if (!ImpCastPointerToCHERICapability(ExprTy, TypeTy, E))
-          return ExprError();
+  // Note: we skip this check for uintcap_t conversions, since those should
+  // be handled differently
+  bool CheckCapConversion = true;
+  switch (Kind) {
+  case CK_ArrayToPointerDecay:
+  case CK_BuiltinFnToFnPtr:
+  case CK_FunctionToPointerDecay:
+  case CK_PointerToIntegral:
+  case CK_PointerToBoolean:
+  case CK_MemberPointerToBoolean:
+  case CK_IntegralToPointer:
+  case CK_IntegralCast:
+  case CK_NullToPointer:
+  case CK_NullToMemberPointer:
+    CheckCapConversion = false;
+    break;
+  case CK_CHERICapabilityToPointer:
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress:
+  case CK_PointerToCHERICapability:
+    // If these were created as an implicit cast expression, we have to check
+    // that they are valid.
+    CheckCapConversion = true;
+    break;
+  default:
+    break;
+  }
+  if (CheckCapConversion) {
+    if (getLangOpts().CPlusPlus) {
+      assert(!TypeTy->isIntCapType() && "Should not be allowed in C++");
+      assert(!ExprTy->isIntCapType() && "Should not be allowed in C++");
+    } else {
+      // In C we don't check cap->uintcap conversions since T*->int
+      // conversions are allowed (with a warning).
+      CheckCapConversion = !TypeTy->isIntCapType() && !ExprTy->isIntCapType();
+    }
+  }
+  ExprTy = E->getType();
+  const bool FromIsCap =
+      ExprTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
+  const bool ResultIsCap =
+      TypeTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
+  if (CheckCapConversion && FromIsCap != ResultIsCap) {
+    Optional<unsigned> DiagID;
+    if (FromIsCap && !ResultIsCap) {
+      // T* __capability -> T* is never allowed implicitly.
+      DiagID = diag::err_typecheck_convert_cap_to_ptr;
+    } else if (ResultIsCap && !FromIsCap) {
+      if (isa<PointerType>(ExprTy) && isa<PointerType>(TypeTy)) {
+        if (!ImpCastPointerToCHERICapability(ExprTy, TypeTy, E, true))
+          return ExprError(); // diagnostics already emitted
+        DiagID = None;        // got a permitted explicit conversion
+      } else {
+        DiagID = diag::err_typecheck_convert_ptr_to_cap;
       }
     }
+    if (DiagID) {
+      // Note: ImpCastPointerToCHERICapability may have changed E, so we must
+      // use E->getType() instead of ExprTy
+      auto Fixit = FixItHint::CreateInsertion(
+          E->getBeginLoc(), "(__cheri_" +
+                                std::string(FromIsCap ? "from" : "to") +
+                                "cap " + TypeTy.getAsString() + ")");
+      return ExprError(Diag(E->getBeginLoc(), *DiagID)
+                       << E->getType() << TypeTy << false << Fixit);
+    }
+    Kind =
+        FromIsCap ? CK_CHERICapabilityToPointer : CK_PointerToCHERICapability;
   }
 
   return ImplicitCastExpr::Create(Context, Ty, Kind, E, BasePath, VK);
 }
 
-bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr *&From, bool Diagnose) {
-
-  assert(FromTy->isPointerType() && ToTy->isPointerType() && ToTy->getAs<PointerType>()->isCHERICapability() &&
+bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
+                                           Expr *&From, bool Diagnose) {
+  assert(FromTy->isPointerType() && ToTy->isPointerType() &&
+         ToTy->getAs<PointerType>()->isCHERICapability() &&
          "Both argument types should be PointerType");
 
   bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
@@ -648,6 +711,18 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr 
     }
   }
 
+  // Note: after the decay check to get char* instead of char (&)[N] in
+  // diagnostics messages for C++
+  if (getLangOpts().getCheriIntToCap() != LangOptions::CapInt_Relative) {
+    // All pointer -> capability conversions must be explicit unless we are
+    // compiling in "relative" mode
+    if (Diagnose) {
+      Diag(From->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
+          << From->getType() << ToTy << false;
+    }
+    return false;
+  }
+
   // The type check for address-of (&) could have failed above but may
   // still succeed below when we look at pointee types
   if (!(StrLit || NullConstant || Decayed || (AddrOf && CompatTypes))) {
@@ -657,9 +732,10 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr 
     if (CheckCHERIAssignCompatible(TPointee, EPointee, From, false)) {
       if (Diagnose)
         Diag(From->getExprLoc(), diag::warn_typecheck_convert_ptr_to_cap)
-                                    << From->getType() << ToTy
-                                    << FixItHint::CreateInsertion(From->getExprLoc(), "(__cheri_tocap "
-                                                                                      + ToTy.getAsString() + ")");
+            << From->getType() << ToTy
+            << FixItHint::CreateInsertion(From->getExprLoc(),
+                                          "(__cheri_tocap " +
+                                              ToTy.getAsString() + ")");
       CompatTypes = true;
     } else {
       // Check for integer pointee types with differences only in sign

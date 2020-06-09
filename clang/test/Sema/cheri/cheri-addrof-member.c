@@ -77,7 +77,7 @@ void addrof_uintcap_t(__uintcap_t cap, struct as *__capability asc, struct as *a
 }
 
 void different_types(int i) {
-  float * __capability f = &i; // expected-error {{cannot implicitly or explicitly convert non-capability  type 'int *' to unrelated capability type 'float * __capability'}}
+  float *__capability f = &i; // expected-error {{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
   void * __capability v = &i; // okay
 }
 

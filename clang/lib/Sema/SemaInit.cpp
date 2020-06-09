@@ -6023,13 +6023,23 @@ void InitializationSequence::InitializeFrom(Sema &S,
       SetFailed(InitializationSequence::FK_ConversionFailed);
   } else {
     if (ICS.isStandard() && ICS.Standard.Third == ICK_Qualification) {
-      if (SourceType->isCHERICapabilityType(Context) &&
-        !DestType->isCHERICapabilityType(Context)) {
-          SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
-          return;
-      } else if (DestType->isCHERICapabilityType(Context) &&
-          !SourceType->isCHERICapabilityType(Context)) {
-        // pointer-to-capability conversions are checked elsewhere
+      const bool SrcIsCap = SourceType->isCHERICapabilityType(Context);
+      const bool DestIsCap = DestType->isCHERICapabilityType(Context);
+      if (SrcIsCap && !DestIsCap) {
+        // T* __capability -> T* is never allowed implicitly
+        SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
+      } else if (DestIsCap && !SrcIsCap) {
+        // T* -> T* __capability is only allowed in variable initialization
+        // (unless we are using the explicit conversion mode).
+        // We return an error here for casts so that static_cast reports an
+        // error. Note: C-style/reinterpret_cast are still allowed since they
+        // use another fallback path.
+        if (S.getLangOpts().explicitConversionsToCap() ||
+            Kind.isExplicitCast()) {
+          SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
+        }
+        // Implicit pointer-to-capability conversions are checked elsewhere
+        // TODO: should we check here instead?
       }
     }
     AddConversionSequenceStep(ICS, DestType, TopLevelOfInitList);

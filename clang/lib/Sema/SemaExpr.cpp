@@ -9097,6 +9097,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // int or null -> A*
     if (RHSType->isIntegerType()) {
+      assert(!LHSType->isCapabilityPointerType());
       Kind = CK_IntegralToPointer; // FIXME: null
       return IntToPointer;
     }
