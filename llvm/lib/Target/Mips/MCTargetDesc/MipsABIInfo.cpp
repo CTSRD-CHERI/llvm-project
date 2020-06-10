@@ -74,7 +74,7 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
     return MipsABIInfo::N32();
   if (ABIName.startswith("n64"))
     return MipsABIInfo::N64();
-  if (ABIName.startswith("sandbox") || ABIName.startswith("purecap"))
+  if (ABIName.startswith("purecap"))
     return MipsABIInfo::CheriPureCap();
   if (TT.getEnvironment() == llvm::Triple::GNUABIN32)
     return MipsABIInfo::N32();
