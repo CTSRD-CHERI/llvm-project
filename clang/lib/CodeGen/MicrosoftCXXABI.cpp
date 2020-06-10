@@ -1697,11 +1697,10 @@ void MicrosoftCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
                [](const VTableComponent &VTC) { return VTC.isRTTIKind(); }))
       RTTI = getMSCompleteObjectLocator(RD, *Info);
 
-    ConstantInitBuilder builder(CGM);
-    auto components = builder.beginStruct();
-    CGVT.createVTableInitializer(components, VTLayout, RTTI,
-                                 VTable->hasLocalLinkage());
-    components.finishAndSetAsInitializer(VTable);
+    ConstantInitBuilder Builder(CGM);
+    auto Components = Builder.beginStruct();
+    CGVT.createVTableInitializer(Components, VTLayout, RTTI);
+    Components.finishAndSetAsInitializer(VTable);
 
     emitVTableTypeMetadata(*Info, RD, VTable);
   }
