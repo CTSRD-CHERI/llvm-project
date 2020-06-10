@@ -8997,14 +8997,16 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // int -> T*
     if (RHSType->isIntegerType()) {
-      // Implicit casts from int -> memory capabilities are not allowed (except for null)
+      // Implicit casts from int -> T* __capability are not allowed (except for
+      // conversions from null)
       const Expr::NullPointerConstantKind RHSNullKind =
-          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+          RHS.get()->isNullPointerConstant(Context,
+                                           Expr::NPC_ValueDependentIsNotNull);
       bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
       if (LHSPointer->isCHERICapability() && !RHSIsNull &&
           !RHSType->isIntCapType())
         return Incompatible;
-      Kind = CK_IntegralToPointer; // FIXME: null?
+      Kind = RHSIsNull ? CK_NullToPointer : CK_IntegralToPointer;
       return IntToPointer;
     }
 
@@ -11585,9 +11587,9 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
 
     // We only implicitly cast the NULL constant to a memory capability
     if (LHSIsNull && !LHSIsCap && RHSIsCap)
-        LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToCHERICapability);
+      LHS = ImpCastExprToType(LHS.get(), RHSType, CK_NullToPointer);
     else if (RHSIsNull && !RHSIsCap && LHSIsCap)
-        RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToCHERICapability);
+      RHS = ImpCastExprToType(RHS.get(), LHSType, CK_NullToPointer);
 
     // All of the following pointer-related warnings are GCC extensions, except
     // when handling null pointer constants.
