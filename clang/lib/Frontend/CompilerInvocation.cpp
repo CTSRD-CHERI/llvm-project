@@ -3609,11 +3609,6 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
   Opts.OpenCLExtensionsAsWritten = Args.getAllArgValues(OPT_cl_ext_EQ);
 
   llvm::Triple T(Opts.Triple);
-  if (T.isMIPS() && Opts.ABI == "sandbox") {
-    // rename sandbox ABI to purecap ABI and output a deprecated warning
-    Opts.ABI = "purecap";
-    Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
-  }
   if (T.isMIPS()) {
     if (Opts.ABI != "purecap" && T.getEnvironment() == llvm::Triple::CheriPurecap) {
       // Can't use -mabi=64 with -purecap triple

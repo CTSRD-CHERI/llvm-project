@@ -2086,7 +2086,7 @@ QualType Sema::BuildPointerType(QualType T,
   // representation into a plain pointer-range-sized integer
   if (PointerInterpretation == ASTContext::PIK_Integer
       && Context.getTargetInfo().areAllPointersCapabilities()) {
-    // This is not a real pointer type in the sandbox ABI
+    // This is not a real pointer type in the purecap ABI
     // ptrdiff_t will be the same size as a plain mips pointer
     // FIXME: this ValidPointer approach is a HACK to ensure that we return
     // getTrivialTypeSourceInfo(T) later, need to do something better

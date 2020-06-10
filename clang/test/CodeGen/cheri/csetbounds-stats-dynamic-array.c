@@ -8,8 +8,8 @@
 
 // CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
 
-// CSV-NEXT: 0,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:17","CHERI sandbox ABI setup","set bounds on local variable buf"
-// CSV-NEXT: 4,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:23","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
+// CSV-NEXT: 0,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:17","CHERI bound stack allocations","set bounds on local variable buf"
+// CSV-NEXT: 4,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:23","CHERI bound stack allocations","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
 
 extern int do_stuff(char* buf, int n);
 

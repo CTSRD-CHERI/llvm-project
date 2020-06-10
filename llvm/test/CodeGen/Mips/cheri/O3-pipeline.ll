@@ -55,7 +55,7 @@
 ; CHERI-NEXT:      Post-Dominator Tree Construction
 ; CHERI-NEXT:      Aggressive Dead Code Elimination
 ; CHERI-NEXT:      CHERI range checker
-; CHERI-NEXT:    CHERI sandbox ABI setup
+; CHERI-NEXT:    CHERI bound stack allocations
 ; CHERI-NEXT:    FunctionPass Manager
 ; CHERI-NEXT:      Dominator Tree Construction
 ; CHERI-NEXT:      Natural Loop Information
