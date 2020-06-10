@@ -1164,7 +1164,7 @@ def PATCHPOINT : StandardPseudoInstruction {
   let usesCustomInserter = 1;
 }
 def STATEPOINT : StandardPseudoInstruction {
-  let OutOperandList = (outs);
+  let OutOperandList = (outs variable_ops);
   let InOperandList = (ins variable_ops);
   let usesCustomInserter = 1;
   let mayLoad = 1;
