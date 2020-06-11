@@ -18907,7 +18907,7 @@ ExprResult RebuildUnknownAnyExpr::VisitImplicitCastExpr(ImplicitCastExpr *E) {
     assert(E->getValueKind() == VK_RValue);
     assert(E->getObjectKind() == OK_Ordinary);
 
-    E->setType(DestType);
+    E->setType(DestType, S.Context, E->getSubExpr());
 
     // Rebuild the sub-expression as the pointee (function) type.
     DestType = DestType->castAs<PointerType>()->getPointeeType();
@@ -18923,7 +18923,7 @@ ExprResult RebuildUnknownAnyExpr::VisitImplicitCastExpr(ImplicitCastExpr *E) {
 
     assert(isa<BlockPointerType>(E->getType()));
 
-    E->setType(DestType);
+    E->setType(DestType, S.Context, E->getSubExpr());
 
     // The sub-expression has to be a lvalue reference, so rebuild it as such.
     DestType = S.Context.getLValueReferenceType(DestType);

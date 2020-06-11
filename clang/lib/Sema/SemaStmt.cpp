@@ -3078,7 +3078,7 @@ static void TryMoveInitialization(Sema& S,
                                   bool ConvertingConstructorsOnly,
                                   ExprResult &Res) {
   ImplicitCastExpr AsRvalue(ImplicitCastExpr::OnStack, Value->getType(),
-                            CK_NoOp, Value, VK_XValue);
+                            CK_NoOp, Value, VK_XValue, S.Context);
 
   Expr *InitExpr = &AsRvalue;
 

@@ -7275,10 +7275,9 @@ void Sema::AddConversionCandidate(
   // well-formed.
   DeclRefExpr ConversionRef(Context, Conversion, false, Conversion->getType(),
                             VK_LValue, From->getBeginLoc());
-  ImplicitCastExpr ConversionFn(ImplicitCastExpr::OnStack,
-                                Context.getPointerType(Conversion->getType()),
-                                CK_FunctionToPointerDecay,
-                                &ConversionRef, VK_RValue);
+  ImplicitCastExpr ConversionFn(
+      ImplicitCastExpr::OnStack, Context.getPointerType(Conversion->getType()),
+      CK_FunctionToPointerDecay, &ConversionRef, VK_RValue, Context);
 
   QualType ConversionType = Conversion->getConversionType();
   if (!isCompleteType(From->getBeginLoc(), ConversionType)) {

@@ -2213,7 +2213,7 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
         SizeTy, SourceLocation());
     ImplicitCastExpr DesiredAlignment(ImplicitCastExpr::OnStack, AlignValT,
                                       CK_IntegralCast, &AlignmentLiteral,
-                                      VK_RValue);
+                                      VK_RValue, Context);
 
     // Adjust placement args by prepending conjured size and alignment exprs.
     llvm::SmallVector<Expr *, 8> CallArgs;
@@ -3713,7 +3713,8 @@ Sema::SemaBuiltinOperatorNewDeleteOverloaded(ExprResult TheCallResult,
   auto Callee = dyn_cast<ImplicitCastExpr>(TheCall->getCallee());
   assert(Callee && Callee->getCastKind() == CK_BuiltinFnToFnPtr &&
          "Callee expected to be implicit cast to a builtin function pointer");
-  Callee->setType(OperatorNewOrDelete->getType());
+  Callee->setType(OperatorNewOrDelete->getType(), Context,
+                  Callee->getSubExpr());
 
   return TheCallResult;
 }

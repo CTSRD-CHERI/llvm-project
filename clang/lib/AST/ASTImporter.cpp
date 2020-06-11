@@ -6899,7 +6899,8 @@ ExpectedStmt ASTNodeImporter::VisitExplicitCastExpr(ExplicitCastExpr *E) {
       return ToBridgeKeywordLocOrErr.takeError();
     return new (Importer.getToContext()) ObjCBridgedCastExpr(
         *ToLParenLocOrErr, OCE->getBridgeKind(), E->getCastKind(),
-        *ToBridgeKeywordLocOrErr, ToTypeInfoAsWritten, ToSubExpr);
+        *ToBridgeKeywordLocOrErr, ToTypeInfoAsWritten, ToSubExpr,
+        Importer.getToContext());
   }
   default:
     llvm_unreachable("Cast expression of unsupported type!");

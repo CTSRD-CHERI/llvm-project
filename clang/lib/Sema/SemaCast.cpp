@@ -114,10 +114,9 @@ namespace {
       const QualType CastTy = castExpr->getType();
 #ifndef NDEBUG
       if (CastTy->isIntCapType()) {
-        QualType ProvenanceCheckedTy = castExpr->getType();
-        CastExpr::checkProvenance(Self.Context, &ProvenanceCheckedTy,
-                                  castExpr->getSubExpr());
-        assert(CastTy == ProvenanceCheckedTy && "checkProvenance not called?");
+        assert(CastTy == CastExpr::provenanceCheckedTy(
+                             CastTy, Self.Context, castExpr->getSubExpr()) &&
+               "checkProvenance not called?");
       }
 #endif
       // For C-style casts from uintptr_t -> void* flag the void* argument
@@ -141,7 +140,8 @@ namespace {
         if (!CastTy->hasAttr(attr::CHERINoProvenance) &&
             !ExprCanCarryProvenance) {
           castExpr->setType(Self.Context.getAttributedType(
-              attr::CHERINoProvenance, CastTy, CastTy));
+                                attr::CHERINoProvenance, CastTy, CastTy),
+                            /* ProvenanceChecked=*/true);
         }
       }
 
@@ -406,9 +406,9 @@ ExprResult Sema::BuildBuiltinBitCastExpr(SourceLocation KWLoc,
       return ExprError();
   }
 
-  BuiltinBitCastExpr *BCE =
-      new (Context) BuiltinBitCastExpr(Op.ResultType, Op.ValueKind, Op.Kind,
-                                       Op.SrcExpr.get(), TSI, KWLoc, RParenLoc);
+  BuiltinBitCastExpr *BCE = new (Context)
+      BuiltinBitCastExpr(Op.ResultType, Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
+                         TSI, KWLoc, RParenLoc, Context);
   return Op.complete(BCE);
 }
 
