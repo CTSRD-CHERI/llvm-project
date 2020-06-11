@@ -3262,7 +3262,7 @@ public:
 class CastExpr : public Expr {
   Stmt *Op;
 
-  bool CastConsistency() const;
+  bool CastConsistency(const ASTContext &Ctx) const;
 
   const CXXBaseSpecifier * const *path_buffer() const {
     return const_cast<CastExpr*>(this)->path_buffer();
@@ -3279,7 +3279,7 @@ protected:
     assert((CastExprBits.BasePathSize == BasePathSize) &&
            "BasePathSize overflow!");
     setDependence(computeDependence(this));
-    assert(CastConsistency());
+    assert(CastConsistency(Ctx));
   }
 
   /// Construct an empty cast.

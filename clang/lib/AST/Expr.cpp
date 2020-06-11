@@ -1648,7 +1648,66 @@ SourceLocation MemberExpr::getEndLoc() const {
   return EndLoc;
 }
 
-bool CastExpr::CastConsistency() const {
+bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
+
+#if !defined(NDEBUG)
+  bool IsPurecap = Ctx.getTargetInfo().areAllPointersCapabilities();
+#endif
+  // Basic CHERI sanity checks here:
+  switch (getCastKind()) {
+  case CK_NullToPointer:
+    // This can be either a capability NULL pointer or a non-capability one.
+    break;
+  case CK_FunctionToPointerDecay:
+  case CK_ArrayToPointerDecay:
+  case CK_BuiltinFnToFnPtr:
+    // For purecap these should create capabilities and not integer pointers
+    assert(getType()->isCapabilityPointerType() == IsPurecap);
+    break;
+  case CK_NullToMemberPointer:
+    // Member data pointers are always integer offset, function pointers are
+    // capabilities in the purecap ABI
+    if (getType()->isMemberDataPointerType())
+      assert(!getType()->isCHERICapabilityType(Ctx));
+    else
+      assert(getType()->isCHERICapabilityType(Ctx) == IsPurecap);
+    break;
+  case CK_PointerToCHERICapability:
+    assert(getType()->isCHERICapabilityType(Ctx));
+    assert(!getSubExpr()->getType()->isCHERICapabilityType(Ctx));
+    break;
+  case CK_CHERICapabilityToPointer:
+  case CK_CHERICapabilityToAddress:
+  case CK_CHERICapabilityToOffset:
+    assert(getSubExpr()->getType()->isCHERICapabilityType(Ctx));
+    assert(!getType()->isCHERICapabilityType(Ctx, /*IncludeIntCap=*/false));
+    break;
+
+  case CK_ToVoid:    // always allowed
+  case CK_Dependent: // We don't know the real type yet
+  case CK_IntegralCast:
+  case CK_PointerToIntegral:
+  case CK_IntegralToPointer:
+  case CK_FloatingToIntegral:
+  case CK_FixedPointToIntegral:
+    // These can convert capability <-> non-capability
+    break;
+  case CK_IntegralToBoolean:
+  case CK_PointerToBoolean:
+  case CK_MemberPointerToBoolean:
+  case CK_IntegralToFloating:
+  case CK_IntegralToFixedPoint:
+    assert(!getType()->isCHERICapabilityType(Ctx));
+    break;
+
+  default:
+    // All other cast kinds should not change isCHERICapabilityType():
+    assert((getType()->isCHERICapabilityType(Ctx) ==
+            getSubExpr()->getType()->isCHERICapabilityType(Ctx)) &&
+           "Changed capability pointer qualifier with an invalid cast");
+    break;
+  }
+
   switch (getCastKind()) {
   case CK_DerivedToBase:
   case CK_UncheckedDerivedToBase:
