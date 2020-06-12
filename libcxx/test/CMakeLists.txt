@@ -105,17 +105,19 @@ if(LIBCXX_TEST_GDB_PRETTY_PRINTERS)
 endif()
 
 if (LIBCXX_INCLUDE_TESTS)
+  include(AddLLVM) # for configure_lit_site_cfg and add_lit_testsuite
+
   if (LIBCXX_TARGET_INFO MATCHES "CheriBSDRemoteTI")
     message(STATUS "Test suite to run on CheriBSD -> max one thread possible")
     set(LIBCXX_LIT_EXTRA_ARGS "-j1")
   else()
     set(LIBCXX_LIT_EXTRA_ARGS)
   endif()
-  include(AddLLVM) # for configure_lit_site_cfg and add_lit_testsuit
 
   configure_lit_site_cfg(
-    ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
-    ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg)
+    "${LIBCXX_TEST_CONFIG}"
+    ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
+    MAIN_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/lit.cfg.py")
 
   add_custom_target(check-cxx-deps
     DEPENDS cxx ${LIBCXX_TEST_DEPS}
