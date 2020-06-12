@@ -2025,9 +2025,6 @@ bool IRTranslator::translateAtomicCmpXchg(const User &U,
                                           MachineIRBuilder &MIRBuilder) {
   const AtomicCmpXchgInst &I = cast<AtomicCmpXchgInst>(U);
 
-  if (I.isWeak())
-    return false;
-
   auto &TLI = *MF->getSubtarget().getTargetLowering();
   auto Flags = TLI.getAtomicMemOperandFlags(I, *DL);
 
