@@ -873,8 +873,16 @@ void CastOperation::CheckDynamicCast() {
   // Check that the dynamic cast doesn't change the capability qualifier
   if (DestReference && IsBadCheriReferenceCast(DestReference, SrcExpr.get(),
                                                Self.getASTContext())) {
-    Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_reference_cast_capability_qualifier)
-            << CT_Dynamic << 0 << DestType;
+    Self.Diag(OpRange.getBegin(),
+              diag::err_bad_cxx_reference_cast_capability_qualifier)
+        << CT_Dynamic << 0 << DestType;
+    SrcExpr = ExprError();
+    return;
+  }
+  if (!DestReference && SrcType->isCHERICapabilityType(Self.Context) !=
+                            DestType->isCHERICapabilityType(Self.Context)) {
+    Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_cast_capability_qualifier)
+        << CT_Dynamic << SrcType << DestType;
     SrcExpr = ExprError();
     return;
   }
@@ -1286,6 +1294,15 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
   // just the usual constness stuff.
   if (const PointerType *SrcPointer = SrcType->getAs<PointerType>()) {
     QualType SrcPointee = SrcPointer->getPointeeType();
+    if (SrcPointer->isCHERICapability() &&
+        !DestType->isCHERICapabilityType(Self.Context)) {
+      // Changing the capability qualifier is not possible with static_cast.
+      // Return a more specific message than "is not allowed" for pointer casts.
+      if (DestType->isAnyPointerType())
+        msg = diag::err_bad_cxx_cast_capability_qualifier;
+      return TC_NotApplicable;
+    }
+
     if (SrcPointee->isVoidType()) {
       if (const PointerType *DestPointer = DestType->getAs<PointerType>()) {
         QualType DestPointee = DestPointer->getPointeeType();
@@ -2864,11 +2881,18 @@ void CastOperation::CheckCapabilityConversions() {
   if (SrcExpr.isInvalid())
     return; // already invalid -> nothing to check.
 
-  bool SrcIsCap = SrcExpr.get()->getType()->isCHERICapabilityType(
-      Self.Context, /*IncludeIntCap=*/false);
-  bool FromIsCap =
+  if (Kind == CK_ToVoid || Kind == CK_Dependent)
+    return; // Nothing we can/should check for these casts
+
+  auto SrcType = SrcExpr.get()->getType();
+  bool SrcIsCap =
+      SrcType->isCHERICapabilityType(Self.Context, /*IncludeIntCap=*/false);
+  bool DestIsCap =
       DestType->isCHERICapabilityType(Self.Context, /*IncludeIntCap=*/false);
-  if (FromIsCap != SrcIsCap) {
+  // Since references are handled differently, only perform this check if both
+  // src and dest are references.
+  if (DestType->isReferenceType() == SrcType->isReferenceType() &&
+      DestIsCap != SrcIsCap) {
     switch (Kind) {
     case CK_PointerToCHERICapability:
     case CK_CHERICapabilityToPointer:
