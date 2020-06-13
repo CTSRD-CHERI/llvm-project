@@ -1163,7 +1163,12 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #  thread_state pointer is in a0
 #
 DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
-  // x0 is zero
+  // x0 is zero (index 0 is used for PC)
+#ifdef __CHERI_PURE_CAPABILITY__
+  csc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // store ra as pc
+#else
+  sd    x1, (8 * 0)(a0) // store ra as pc
+#endif
   save_gpr 1
   save_gpr 2
   save_gpr 3

@@ -4132,10 +4132,11 @@ public:
 
   uintptr_t  getSP() const         { return _registers[2]; }
   void      setSP(uintptr_t value) { _registers[2] = value; }
-  uintptr_t  getIP() const         { return _registers[1]; }
-  void      setIP(uintptr_t value) { _registers[1] = value; }
+  uintptr_t  getIP() const         { return _registers[0]; }
+  void      setIP(uintptr_t value) { _registers[0] = value; }
 
 private:
+  // _registers[0] holds the pc
   uintptr_t _registers[32];
   double   _floats[32];
 #ifdef __CHERI_PURE_CAPABILITY__
@@ -4192,7 +4193,7 @@ inline bool Registers_riscv::validRegister(int regNum) const {
 
 inline uintptr_t Registers_riscv::getRegister(int regNum) const {
   if (regNum == UNW_REG_IP)
-    return _registers[1];
+    return _registers[0];
   if (regNum == UNW_REG_SP)
     return _registers[2];
   if (regNum == UNW_RISCV_X0)
@@ -4208,7 +4209,7 @@ inline uintptr_t Registers_riscv::getRegister(int regNum) const {
 
 inline void Registers_riscv::setRegister(int regNum, uintptr_t value) {
   if (regNum == UNW_REG_IP)
-    _registers[1] = value;
+    _registers[0] = value;
   else if (regNum == UNW_REG_SP)
     _registers[2] = value;
   else if (regNum == UNW_RISCV_X0)

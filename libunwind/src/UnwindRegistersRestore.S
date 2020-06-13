@@ -1235,6 +1235,11 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 #endif
 
   // x0 is zero
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // restore pc into ra
+#else
+  ld    x1, (8 * 0)(a0) // restore pc into ra
+#endif
   restore_gpr 1
   restore_gpr 2
   restore_gpr 3
