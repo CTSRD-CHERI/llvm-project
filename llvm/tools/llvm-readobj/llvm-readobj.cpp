@@ -550,6 +550,8 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer,
       Dumper->printCOFFResources();
     if (opts::COFFLoadConfig)
       Dumper->printCOFFLoadConfig();
+    if (opts::CGProfile)
+      Dumper->printCGProfile();
     if (opts::Addrsig)
       Dumper->printAddrsig();
     if (opts::CodeView)
