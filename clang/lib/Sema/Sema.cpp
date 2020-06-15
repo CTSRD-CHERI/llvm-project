@@ -685,28 +685,35 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
 
 bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
                                            Expr *&From, bool Diagnose) {
-  assert(FromTy->isPointerType() && ToTy->isPointerType() &&
-         ToTy->getAs<PointerType>()->isCHERICapability() &&
-         "Both argument types should be PointerType");
-
   bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
   bool NullConstant = From->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull);
   bool AddrOf = false;
   bool Decayed = false;
   bool CompatTypes = false;
 
+  // Function-to-pointer and array-to-pointer decay
+  ExprResult DecayedExpr = DefaultFunctionArrayConversion(From, Diagnose);
+  if (DecayedExpr.isUsable() && !DecayedExpr.isInvalid()) {
+    From = DecayedExpr.get();
+    FromTy = From->getType();
+  }
+  assert(FromTy->isPointerType() && ToTy->isPointerType() &&
+         "Both argument types should be PointerType");
+  assert(ToTy->getAs<PointerType>()->isCHERICapability() &&
+         "Target type must be a capability pointer");
+
+  if (ImplicitCastExpr *Imp = dyn_cast<ImplicitCastExpr>(From)) {
+    if (Imp->getCastKind() == CK_ArrayToPointerDecay
+        || Imp->getCastKind() == CK_FunctionToPointerDecay) {
+      Decayed = true;
+      CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From);
+    }
+  }
+
   // address-of (&)
   if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(From)) {
     if (UnOp->getOpcode() == UO_AddrOf) {
       AddrOf = true;
-      CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From);
-    }
-  }
-  // Function-to-pointer and array-to-pointer decay
-  if (ImplicitCastExpr* Imp = dyn_cast<ImplicitCastExpr>(From)) {
-    if (Imp->getCastKind() == CK_ArrayToPointerDecay
-        || Imp->getCastKind() == CK_FunctionToPointerDecay) {
-      Decayed = true;
       CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From);
     }
   }

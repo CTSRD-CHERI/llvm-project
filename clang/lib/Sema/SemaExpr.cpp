@@ -15821,17 +15821,8 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   case CHERICapabilityToPointer:
   case PointerToCHERICapability: {
     bool PtrToCap = ConvTy == PointerToCHERICapability;
-
     if (PtrToCap) {
-      // first perform array|function to pointer decay
-      ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SrcExpr);
-      if (Decayed.isInvalid()) {
-        isInvalid = true;
-        return true;
-        break;
-      }
-      SrcExpr = Decayed.get();
-      SrcType = SrcExpr->getType();
+      // Some implicit conversions are permitted for pointer -> cap
       if (ImpCastPointerToCHERICapability(SrcType, DstType, SrcExpr, false))
         return false;
     }
