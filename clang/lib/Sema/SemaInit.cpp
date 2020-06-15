@@ -9100,9 +9100,9 @@ bool InitializationSequence::Diagnose(Sema &S,
     // CHERI: in the case of initializing a capability from a pointer,
     // output error message here if the types are not compatible, so that we
     // get the same error message for both C and C++.
-    if (FromType->isPointerType()
-        && !FromType->isCHERICapabilityType(S.Context, false)
-        && DestType->isCHERICapabilityType(S.Context, false)) {
+    if (FromType->isPointerType() && DestType->isPointerType() &&
+        FromType->isCHERICapabilityType(S.Context, false) !=
+            DestType->isCHERICapabilityType(S.Context, false)) {
       S.Diag(Kind.getLocation(),
              diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
           << FromType << DestType << false;
