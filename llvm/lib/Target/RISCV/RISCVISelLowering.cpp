@@ -3413,8 +3413,8 @@ Register RISCVTargetLowering::getExceptionPointerRegister(
 
 Register RISCVTargetLowering::getExceptionSelectorRegister(
     const Constant *PersonalityFn) const {
-  return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
-      ? RISCV::C11 : RISCV::X11;
+  // This is an index, so always an integer GPR register
+  return RISCV::X11;
 }
 
 uint32_t RISCVTargetLowering::getExceptionPointerAS() const {
