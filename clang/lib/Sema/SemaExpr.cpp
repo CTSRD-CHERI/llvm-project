@@ -8959,22 +8959,15 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
       LangAS AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
       LangAS AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
-      if (AddrSpaceL != AddrSpaceR)
+      if (AddrSpaceL != AddrSpaceR) {
         Kind = CK_AddressSpaceConversion;
-      else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
-        // only allow implicit casts to and from function pointer capabilities
-        if (!LHSPointer->isCHERICapability() && RHSPointer->isCHERICapability())
-          Kind = CK_CHERICapabilityToPointer;
-        else if (LHSPointer->isCHERICapability() && !RHSPointer->isCHERICapability())
-          Kind = CK_PointerToCHERICapability;
-        else
-          Kind = CK_BitCast;
-      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability()) {
+      } else if (LHSPointer->isCHERICapability() !=
+                 RHSPointer->isCHERICapability()) {
         // all other implicit casts to and from capabilities are not allowed
-        Kind = RHSPointer->isCHERICapability() ? CK_CHERICapabilityToPointer :
-                                                 CK_PointerToCHERICapability;
-        return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer :
-                                                 PointerToCHERICapability;
+        Kind = RHSPointer->isCHERICapability() ? CK_CHERICapabilityToPointer
+                                               : CK_PointerToCHERICapability;
+        return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer
+                                               : PointerToCHERICapability;
       } else {
         if (Context.hasCvrSimilarType(RHSType, LHSType))
           Kind = CK_NoOp;
