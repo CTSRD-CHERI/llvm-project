@@ -15832,12 +15832,14 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
                         : diag::err_typecheck_convert_cap_to_ptr;
     MayHaveConvFixit = true;
     isInvalid = true;
-    Hint = FixItHint::CreateInsertion(SrcExpr->getBeginLoc(), "(__cheri_" +
-                                      std::string(PtrToCap ? "to" : "from") +
-                                      "cap " + DstType.getAsString() + ")");
+    Hint = FixItHint::CreateInsertion(
+        SrcExpr->getBeginLoc(), "(__cheri_" +
+                                    std::string(PtrToCap ? "to" : "from") +
+                                    "cap " + DstType.getAsString() + ")");
     Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
+    if (Complained)
+      *Complained = true;
     return true;
-    break;
   }
   case Incompatible:
     if (maybeDiagnoseAssignmentToFunction(*this, DstType, SrcExpr)) {
