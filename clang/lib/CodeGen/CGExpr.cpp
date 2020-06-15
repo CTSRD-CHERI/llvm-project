@@ -2199,15 +2199,8 @@ LValue CodeGenFunction::EmitLValue(const Expr *E) {
     return EmitVAArgExprLValue(cast<VAArgExpr>(E));
   case Expr::DeclRefExprClass:
     return EmitDeclRefLValue(cast<DeclRefExpr>(E));
-  case Expr::ConstantExprClass: {
-    const ConstantExpr *CE = cast<ConstantExpr>(E);
-    if (llvm::Value *Result = ConstantEmitter(*this).tryEmitConstantExpr(CE)) {
-      QualType RetType = cast<CallExpr>(CE->getSubExpr()->IgnoreImplicit())
-                             ->getCallReturnType(getContext());
-      return MakeNaturalAlignAddrLValue(Result, RetType);
-    }
+  case Expr::ConstantExprClass:
     return EmitLValue(cast<ConstantExpr>(E)->getSubExpr());
-  }
   case Expr::ParenExprClass:
   case Expr::NoChangeBoundsExprClass:
     return EmitLValue(cast<ParenExpr>(E)->getSubExpr());
