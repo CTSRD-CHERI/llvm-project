@@ -1,6 +1,6 @@
 // check that we get the same (or more) errors when compiling as C++ code
-// RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify=expected,expected-cxx,implicit
-// RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify=expected,expected-c,implicit
+// RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify=expected,expected-c,implicit,implicit-c
+// RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify=expected,expected-cxx,implicit,implicit-cxx
 // RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify=expected,expected-c,explicit,explicit-c -cheri-int-to-cap=explicit
 // RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify=expected,expected-cxx,explicit,explicit-cxx -cheri-int-to-cap=explicit
 
@@ -27,9 +27,9 @@ void addrof(void) {
   s.cap = &global_int; // explicit-error{{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
   // unrelated types give an error
   float *__capability fcap = &global_int;
-  // implicit-error@-1 {{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
-  // explicit-cxx-error@-2{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
-  // explicit-c-error@-3{{converting non-capability type 'int *' to capability type 'float * __capability' without an explicit cast}}
+  // implicit-error@-1{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
+  // explicit-c-error@-2{{converting non-capability type 'int *' to capability type 'float * __capability' without an explicit cast}}
+  // explicit-cxx-error@-3{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
 
   // but assigning function pointers always works
   voidfn_ptr fnptr = addrof;

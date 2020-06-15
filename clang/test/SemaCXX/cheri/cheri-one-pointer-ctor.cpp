@@ -1,5 +1,6 @@
-// RUN: %cheri_cc1 -std=c++11 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
-// RUN: %cheri_purecap_cc1 -std=c++11 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -std=c++11
+// RUN: %cheri_cc1 -std=c++11 -x c++ %s -fsyntax-only -Wall -Wno-unused-variable -verify
+// RUN: %cheri_purecap_cc1 -std=c++11 -x c++ %s -fsyntax-only -Wall -Wno-unused-variable -std=c++11 -verify=purecap
+// purecap-no-diagnostics
 // previous changes broke constructors that take one pointer argument and treated them as a functional C style case (-Wcapability-to-integer-cast)
 
 #ifdef __CHERI_PURE_CAPABILITY__
