@@ -2915,9 +2915,13 @@ void CastOperation::CheckCapabilityConversions() {
 
   if (Kind == CK_PointerToCHERICapability &&
       Self.getLangOpts().explicitConversionsToCap()) {
-    Self.Diag(SrcExpr.get()->getBeginLoc(),
-              diag::err_typecheck_convert_ptr_to_cap)
-        << SrcExpr.get()->getType() << DestType << false
+    Expr *Placeholder = nullptr;
+    Self.Diag(
+        SrcExpr.get()->getBeginLoc(),
+        Self.CheckCHERIAssignCompatible(SrcType, DestType, Placeholder, false)
+            ? diag::err_typecheck_convert_ptr_to_cap
+            : diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+        << SrcType << DestType << false
         << FixItHint::CreateReplacement(
                OpRange, "(__cheri_tocap " + DestType.getAsString() + ")");
     SrcExpr = ExprError();
@@ -2927,7 +2931,7 @@ void CastOperation::CheckCapabilityConversions() {
       Self.getLangOpts().explicitConversionsFromCap()) {
     Self.Diag(SrcExpr.get()->getBeginLoc(),
               diag::err_typecheck_convert_cap_to_ptr)
-        << SrcExpr.get()->getType() << DestType << false
+        << SrcType << DestType << false
         << FixItHint::CreateReplacement(
                OpRange, "(__cheri_fromcap " + DestType.getAsString() + ")");
     SrcExpr = ExprError();
