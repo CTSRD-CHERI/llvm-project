@@ -9095,20 +9095,19 @@ bool InitializationSequence::Diagnose(Sema &S,
     break;
   }
   case FK_ConversionFailed: {
-    QualType FromType = Args[0]->getType();
+    QualType FromType = OnlyArg->getType();
 
     // CHERI: in the case of initializing a capability from a pointer,
     // output error message here if the types are not compatible, so that we
     // get the same error message for both C and C++.
-    Expr *SrcExpr = Args[0];
     if (FromType->isPointerType()
         && !FromType->isCHERICapabilityType(S.Context, false)
         && DestType->isCHERICapabilityType(S.Context, false)) {
-      S.Diag(SrcExpr->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
-            << FromType << DestType << false;
+      S.Diag(Kind.getLocation(),
+             diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+          << FromType << DestType << false;
       return true;
     } else {
-      QualType FromType = OnlyArg->getType();
       PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
         << (int)Entity.getKind()
         << DestType
