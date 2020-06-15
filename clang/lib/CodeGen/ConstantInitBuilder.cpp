@@ -132,7 +132,7 @@ llvm::Constant *
 ConstantAggregateBuilderBase::getRelativeOffset(llvm::IntegerType *offsetType,
                                                 llvm::Constant *target) {
   return getRelativeOffsetToPosition(offsetType, target,
-                                     Builder.SelfReferences.size());
+                                     Builder.Buffer.size() - Begin);
 }
 
 llvm::Constant *ConstantAggregateBuilderBase::getRelativeOffsetToPosition(
