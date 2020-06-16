@@ -2773,6 +2773,7 @@ void ItaniumCXXABI::EmitThreadLocalInitFuncs(
         llvm::GlobalVariable::NotThreadLocal,
         CGM.getTargetCodeGenInfo().getTlsAddressSpace());
     Guard->setThreadLocal(true);
+    Guard->setThreadLocalMode(CGM.GetDefaultLLVMTLSModel());
 
     CharUnits GuardAlign = CharUnits::One();
     Guard->setAlignment(GuardAlign.getAsAlign());
