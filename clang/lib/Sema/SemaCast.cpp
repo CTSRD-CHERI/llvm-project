@@ -327,11 +327,11 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
       if (Op.SrcExpr.isInvalid())
         return ExprError();
       DiscardMisalignedMemberAddress(DestType.getTypePtr(), E);
+      Op.Kind = CK_NoOp;
     }
-    return Op.complete(CXXConstCastExpr::Create(Context, Op.ResultType,
-                                  Op.ValueKind, Op.SrcExpr.get(), DestTInfo,
-                                                OpLoc, Parens.getEnd(),
-                                                AngleBrackets));
+    return Op.complete(CXXConstCastExpr::Create(
+        Context, Op.ResultType, Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
+        DestTInfo, OpLoc, Parens.getEnd(), AngleBrackets));
 
   case tok::kw_dynamic_cast: {
     // dynamic_cast is not supported in C++ for OpenCL.

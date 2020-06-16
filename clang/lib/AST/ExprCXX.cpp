@@ -785,13 +785,13 @@ CXXReinterpretCastExpr::CreateEmpty(const ASTContext &C, unsigned PathSize) {
 }
 
 CXXConstCastExpr *CXXConstCastExpr::Create(const ASTContext &C, QualType T,
-                                           ExprValueKind VK, Expr *Op,
-                                           TypeSourceInfo *WrittenTy,
+                                           ExprValueKind VK, CastKind CK,
+                                           Expr *Op, TypeSourceInfo *WrittenTy,
                                            SourceLocation L,
                                            SourceLocation RParenLoc,
                                            SourceRange AngleBrackets) {
-  return new (C)
-      CXXConstCastExpr(T, VK, Op, WrittenTy, L, RParenLoc, AngleBrackets, C);
+  return new (C) CXXConstCastExpr(T, VK, CK, Op, WrittenTy, L, RParenLoc,
+                                  AngleBrackets, C);
 }
 
 CXXConstCastExpr *CXXConstCastExpr::CreateEmpty(const ASTContext &C) {

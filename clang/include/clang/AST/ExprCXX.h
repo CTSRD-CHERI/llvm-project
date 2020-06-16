@@ -543,12 +543,14 @@ public:
 class CXXConstCastExpr final
     : public CXXNamedCastExpr,
       private llvm::TrailingObjects<CXXConstCastExpr, CXXBaseSpecifier *> {
-  CXXConstCastExpr(QualType ty, ExprValueKind VK, Expr *op,
+  CXXConstCastExpr(QualType ty, ExprValueKind VK, CastKind CK, Expr *op,
                    TypeSourceInfo *writtenTy, SourceLocation l,
                    SourceLocation RParenLoc, SourceRange AngleBrackets,
                    const ASTContext &Ctx)
-      : CXXNamedCastExpr(CXXConstCastExprClass, ty, VK, CK_NoOp, op, 0,
-                         writtenTy, l, RParenLoc, AngleBrackets, Ctx) {}
+      : CXXNamedCastExpr(CXXConstCastExprClass, ty, VK, CK, op, 0, writtenTy, l,
+                         RParenLoc, AngleBrackets, Ctx) {
+    assert(CK == CK_NoOp || CK == CK_Dependent);
+  }
 
   explicit CXXConstCastExpr(EmptyShell Empty)
       : CXXNamedCastExpr(CXXConstCastExprClass, Empty, 0) {}
@@ -558,7 +560,7 @@ public:
   friend TrailingObjects;
 
   static CXXConstCastExpr *Create(const ASTContext &Context, QualType T,
-                                  ExprValueKind VK, Expr *Op,
+                                  ExprValueKind VK, CastKind CK, Expr *Op,
                                   TypeSourceInfo *WrittenTy, SourceLocation L,
                                   SourceLocation RParenLoc,
                                   SourceRange AngleBrackets);
