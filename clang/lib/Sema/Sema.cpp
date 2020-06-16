@@ -602,7 +602,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
     }
   }
 
-  // Check for conversions between capabilities and integers
+  // Check for conversions between capabilities and integers.
   // We only allow implicit casts from pointers to CHERI capabilities
   // for the following cases:
   //
@@ -612,59 +612,38 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
   // - array/function to pointer decay and types are compatible
   // Note: we skip this check for uintcap_t conversions, since those should
   // be handled differently
-  bool CheckCapConversion = true;
-  switch (Kind) {
-  case CK_ArrayToPointerDecay:
-  case CK_BuiltinFnToFnPtr:
-  case CK_FunctionToPointerDecay:
-  case CK_PointerToIntegral:
-  case CK_PointerToBoolean:
-  case CK_MemberPointerToBoolean:
-  case CK_IntegralToPointer:
-  case CK_IntegralCast:
-  case CK_NullToPointer:
-  case CK_NullToMemberPointer:
-    CheckCapConversion = false;
-    break;
-  case CK_CHERICapabilityToPointer:
-  case CK_CHERICapabilityToOffset:
-  case CK_CHERICapabilityToAddress:
-  case CK_PointerToCHERICapability:
-    // If these were created as an implicit cast expression, we have to check
-    // that they are valid.
-    CheckCapConversion = true;
-    break;
-  default:
-    break;
-  }
-  if (CheckCapConversion) {
-    if (getLangOpts().CPlusPlus) {
-      assert(!TypeTy->isIntCapType() && "Should not be allowed in C++");
-      assert(!ExprTy->isIntCapType() && "Should not be allowed in C++");
-    } else {
-      // In C we don't check cap->uintcap conversions since T*->int
-      // conversions are allowed (with a warning).
-      CheckCapConversion = !TypeTy->isIntCapType() && !ExprTy->isIntCapType();
-    }
-  }
   ExprTy = E->getType();
-  const bool FromIsCap =
-      ExprTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
-  const bool ResultIsCap =
-      TypeTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
-  if (CheckCapConversion && FromIsCap != ResultIsCap) {
+  auto ShouldCheckCastForCapConversion = [](CastKind CK) {
+    // We don't need to check for cap <-> non-cap conversions for the following
+    // cast kinds. For the decay this is required to avoid infinite recursion.
+    switch (CK) {
+    case CK_NullToPointer:          // always valid
+    case CK_NullToMemberPointer:    // always valid
+    case CK_FunctionToPointerDecay: // Checked in CastConsistency()
+    case CK_ArrayToPointerDecay:    // Checked in CastConsistency()
+    case CK_BuiltinFnToFnPtr:       // Checked in CastConsistency()
+      return false;
+    default:
+      return true;
+    }
+  };
+  if (Ty->isPointerType() && ShouldCheckCastForCapConversion(Kind)) {
+    const bool FromIsCap =
+        ExprTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
+    const bool ResultIsCap =
+        TypeTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
     Optional<unsigned> DiagID;
-    if (FromIsCap && !ResultIsCap) {
+    if (FromIsCap && !ResultIsCap && ExprTy->isPointerType()) {
       // T* __capability -> T* is never allowed implicitly.
       DiagID = diag::err_typecheck_convert_cap_to_ptr;
     } else if (ResultIsCap && !FromIsCap) {
-      if (isa<PointerType>(ExprTy) && isa<PointerType>(TypeTy)) {
-        if (!ImpCastPointerToCHERICapability(ExprTy, TypeTy, E, true))
-          return ExprError(); // diagnostics already emitted
-        DiagID = None;        // got a permitted explicit conversion
-      } else {
-        DiagID = diag::err_typecheck_convert_ptr_to_cap;
-      }
+      // ImpCastPointerToCHERICapability can create new implicit
+      // CK_FunctionToPointerDecay/CK_ArrayToPointerDecay so we need to avoid
+      // infinite recursion here
+      if (!ImpCastPointerToCHERICapability(ExprTy, TypeTy, E, true))
+        return ExprError();               // diagnostics already emitted
+      DiagID = None;                      // got a permitted explicit conversion
+      Kind = CK_PointerToCHERICapability; // update cast-kind for the new cast
     }
     if (DiagID) {
       // Note: ImpCastPointerToCHERICapability may have changed E, so we must
@@ -676,8 +655,6 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
       return ExprError(Diag(E->getBeginLoc(), *DiagID)
                        << E->getType() << TypeTy << false << Fixit);
     }
-    Kind =
-        FromIsCap ? CK_CHERICapabilityToPointer : CK_PointerToCHERICapability;
   }
 
   return ImplicitCastExpr::Create(Context, Ty, Kind, E, BasePath, VK);
