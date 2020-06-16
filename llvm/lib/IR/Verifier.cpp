@@ -2762,8 +2762,8 @@ void Verifier::visitUIToFPInst(UIToFPInst &I) {
          &I);
 
   if (SrcVec && DstVec)
-    Assert(cast<VectorType>(SrcTy)->getNumElements() ==
-               cast<VectorType>(DestTy)->getNumElements(),
+    Assert(cast<VectorType>(SrcTy)->getElementCount() ==
+               cast<VectorType>(DestTy)->getElementCount(),
            "UIToFP source and dest vector length mismatch", &I);
 
   visitInstruction(I);
@@ -2785,8 +2785,8 @@ void Verifier::visitSIToFPInst(SIToFPInst &I) {
          &I);
 
   if (SrcVec && DstVec)
-    Assert(cast<VectorType>(SrcTy)->getNumElements() ==
-               cast<VectorType>(DestTy)->getNumElements(),
+    Assert(cast<VectorType>(SrcTy)->getElementCount() ==
+               cast<VectorType>(DestTy)->getElementCount(),
            "SIToFP source and dest vector length mismatch", &I);
 
   visitInstruction(I);
@@ -2808,8 +2808,8 @@ void Verifier::visitFPToUIInst(FPToUIInst &I) {
          "FPToUI result must be integer or integer vector", &I);
 
   if (SrcVec && DstVec)
-    Assert(cast<VectorType>(SrcTy)->getNumElements() ==
-               cast<VectorType>(DestTy)->getNumElements(),
+    Assert(cast<VectorType>(SrcTy)->getElementCount() ==
+               cast<VectorType>(DestTy)->getElementCount(),
            "FPToUI source and dest vector length mismatch", &I);
 
   visitInstruction(I);
@@ -2831,8 +2831,8 @@ void Verifier::visitFPToSIInst(FPToSIInst &I) {
          "FPToSI result must be integer or integer vector", &I);
 
   if (SrcVec && DstVec)
-    Assert(cast<VectorType>(SrcTy)->getNumElements() ==
-               cast<VectorType>(DestTy)->getNumElements(),
+    Assert(cast<VectorType>(SrcTy)->getElementCount() ==
+               cast<VectorType>(DestTy)->getElementCount(),
            "FPToSI source and dest vector length mismatch", &I);
 
   visitInstruction(I);
@@ -2854,9 +2854,9 @@ void Verifier::visitPtrToIntInst(PtrToIntInst &I) {
          &I);
 
   if (SrcTy->isVectorTy()) {
-    VectorType *VSrc = cast<VectorType>(SrcTy);
-    VectorType *VDest = cast<VectorType>(DestTy);
-    Assert(VSrc->getNumElements() == VDest->getNumElements(),
+    auto *VSrc = cast<VectorType>(SrcTy);
+    auto *VDest = cast<VectorType>(DestTy);
+    Assert(VSrc->getElementCount() == VDest->getElementCount(),
            "PtrToInt Vector width mismatch", &I);
   }
 
@@ -2879,9 +2879,9 @@ void Verifier::visitIntToPtrInst(IntToPtrInst &I) {
   Assert(SrcTy->isVectorTy() == DestTy->isVectorTy(), "IntToPtr type mismatch",
          &I);
   if (SrcTy->isVectorTy()) {
-    VectorType *VSrc = cast<VectorType>(SrcTy);
-    VectorType *VDest = cast<VectorType>(DestTy);
-    Assert(VSrc->getNumElements() == VDest->getNumElements(),
+    auto *VSrc = cast<VectorType>(SrcTy);
+    auto *VDest = cast<VectorType>(DestTy);
+    Assert(VSrc->getElementCount() == VDest->getElementCount(),
            "IntToPtr Vector width mismatch", &I);
   }
   visitInstruction(I);
