@@ -685,6 +685,9 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
 
 bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
                                            Expr *&From, bool Diagnose) {
+  assert(ToTy->isPointerType() && "Target types should be PointerType");
+  assert(ToTy->getAs<PointerType>()->isCHERICapability() &&
+         "Target type must be a capability pointer");
   bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
   bool NullConstant = From->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull);
   bool AddrOf = false;
@@ -697,10 +700,20 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
     From = DecayedExpr.get();
     FromTy = From->getType();
   }
-  assert(FromTy->isPointerType() && ToTy->isPointerType() &&
-         "Both argument types should be PointerType");
-  assert(ToTy->getAs<PointerType>()->isCHERICapability() &&
-         "Target type must be a capability pointer");
+
+  // FIXME: clean up control-flow in this function
+  if (!FromTy->isPointerType()) {
+    // Implicit casts can never be valid for non-pointer types
+    goto err;
+  }
+  if (getLangOpts().getCheriIntToCap() != LangOptions::CapInt_Relative) {
+    // All pointer -> capability conversions must be explicit unless we are
+    // compiling in "relative" mode
+    CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From, false);
+    // Note: this check comes after the decay check to get char* instead of
+    // char (&)[N] in diagnostics messages for C++.
+    goto err;
+  }
 
   if (ImplicitCastExpr *Imp = dyn_cast<ImplicitCastExpr>(From)) {
     if (Imp->getCastKind() == CK_ArrayToPointerDecay
@@ -716,18 +729,6 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
       AddrOf = true;
       CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From);
     }
-  }
-
-  // Note: after the decay check to get char* instead of char (&)[N] in
-  // diagnostics messages for C++
-  if (getLangOpts().getCheriIntToCap() != LangOptions::CapInt_Relative) {
-    // All pointer -> capability conversions must be explicit unless we are
-    // compiling in "relative" mode
-    if (Diagnose) {
-      Diag(From->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
-          << From->getType() << ToTy << false;
-    }
-    return false;
   }
 
   // The type check for address-of (&) could have failed above but may
@@ -746,7 +747,8 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
       CompatTypes = true;
     } else {
       // Check for integer pointee types with differences only in sign
-      // (if they were exactly the same integer type then the above if-test would have succeeded)
+      // (if they were exactly the same integer type then the above if-test
+      // would have succeeded)
       if (TPointee->isIntegerType() && EPointee->isIntegerType()) {
         if (TPointee->isSignedIntegerType())
           TPointee = Context.getCorrespondingUnsignedType(TPointee);
@@ -761,21 +763,20 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
         }
       }
     }
-    if (!(StrLit || NullConstant || Decayed || AddrOf || CompatTypes)) {
-      if (Diagnose) {
-        Diag(From->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
-                                 << From->getType() << ToTy << false;
-      }
-      return false;
-    } else if (!CompatTypes) {
-      if (Diagnose) {
-        Diag(From->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
-                                 << From->getType() << ToTy << false;
-      }
-      return false;
+    if (!(StrLit || NullConstant || Decayed || AddrOf || CompatTypes) ||
+        !CompatTypes) {
+      goto err;
     }
   }
   return true;
+err:
+  if (Diagnose) {
+    Diag(From->getExprLoc(),
+         CompatTypes ? diag::err_typecheck_convert_ptr_to_cap
+                     : diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+        << From->getType() << ToTy << false;
+  }
+  return false;
 }
 
 /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
