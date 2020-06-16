@@ -748,6 +748,9 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
   return true;
 err:
   if (Diagnose) {
+    // void* should always compatible in C
+    if (!LangOpts.CPlusPlus && ToTy->isVoidPointerType())
+      CompatTypes = true;
     Diag(From->getExprLoc(),
          CompatTypes ? diag::err_typecheck_convert_ptr_to_cap
                      : diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
