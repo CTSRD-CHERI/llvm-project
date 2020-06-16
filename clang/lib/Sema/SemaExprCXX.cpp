@@ -4134,6 +4134,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   default:
     llvm_unreachable("Improper first standard conversion");
   }
+  assert(From && "Should have returned an error for SCS.First");
 
   // Perform the second implicit conversion
   switch (SCS.Second) {
@@ -4438,6 +4439,8 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     llvm_unreachable("Improper second standard conversion");
   }
 
+  assert(From && "Should have returned an error for SCS.Second");
+
   switch (SCS.Third) {
   case ICK_Identity:
     // Nothing to do.
@@ -4496,6 +4499,8 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     llvm_unreachable("Improper third standard conversion");
   }
 
+  assert(From && "Should have returned an error for SCS.Third");
+
   // If this conversion sequence involved a scalar -> atomic conversion, perform
   // that conversion now.
   if (!ToAtomicType.isNull()) {
@@ -4503,6 +4508,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
         ToAtomicType->castAs<AtomicType>()->getValueType(), From->getType()));
     From = ImpCastExprToType(From, ToAtomicType, CK_NonAtomicToAtomic,
                              VK_RValue, nullptr, CCK).get();
+    assert(From);
   }
 
   // Materialize a temporary if we're implicitly converting to a reference
@@ -4513,6 +4519,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     if (Res.isInvalid())
       return ExprError();
     From = Res.get();
+    assert(From);
   }
 
   // If this conversion sequence succeeded and involved implicitly converting a
