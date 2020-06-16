@@ -17,8 +17,7 @@ void addrof(void) {
   // capability from taking address of global in hybrid mode is allowed
   int *__capability intcap = &global_int; // explicit-error{{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
   void *__capability vcap = &global_int;
-  // explicit-cxx-error@-1{{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
-  // explicit-c-error@-2{{converting non-capability type 'void *' to capability type 'void * __capability' without an explicit cast}}
+  // explicit-error@-1{{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
   // and fine for pointers
   int *intptr = &global_int;
   void *vptr = &global_int;
@@ -28,8 +27,7 @@ void addrof(void) {
   // unrelated types give an error
   float *__capability fcap = &global_int;
   // implicit-error@-1{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
-  // explicit-c-error@-2{{converting non-capability type 'int *' to capability type 'float * __capability' without an explicit cast}}
-  // explicit-cxx-error@-3{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
+  // explicit-error@-2{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'float * __capability'}}
 
   // but assigning function pointers always works
   voidfn_ptr fnptr = addrof;
@@ -46,12 +44,9 @@ int foo(int *__capability cap_arg_int, void *__capability cap_arg_void, int *ptr
   // implicit-warning@-1 {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
   // explicit-error@-2 {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
   unsigned int *__capability uintcap = ptr_arg_int;
-#ifdef __cplusplus
-  // expected-error@-2{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'unsigned int * __capability'}}
-#else
-  // implicit-warning@-4{{implicit conversion from non-capability type 'int *' to capability type 'unsigned int * __capability' converts between integer types with different signs}}
-  // explicit-error@-5{{converting non-capability type 'int *' to capability type 'unsigned int * __capability' without an explicit cast}}
-#endif
+  // explicit-error@-1{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'unsigned int * __capability'}}
+  // implicit-c-warning@-2{{implicit conversion from non-capability type 'int *' to capability type 'unsigned int * __capability' converts between integer types with different signs}}
+  // implicit-cxx-error@-3{{cannot implicitly or explicitly convert non-capability type 'int *' to unrelated capability type 'unsigned int * __capability'}}
   void *__capability vcap = ptr_arg_int; // expected-error {{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
   // cap -> pointer
   int *intptr = cap_arg_int; // expected-error {{converting capability type 'int * __capability' to non-capability type 'int *' without an explicit cast}}
@@ -96,11 +91,15 @@ void fn_taking_const_char_cap(const char *__capability s); // explicit-cxx-note{
 void str_to_ptr(void) {
   // ISO C++11 does not allow conversion from string literal to const char* is fine:
   const char *ptr = "foo";
-  const char *__capability cap = "foo"; // explicit-error-re{{converting non-capability type 'const {{(char \(&\)\[4\])|(char \*)}}' to capability type 'const char * __capability' without an explicit cast}}
+  const char *__capability cap = "foo";
+  // explicit-cxx-error@-1{{converting non-capability type 'const char (&)[4]' to capability type 'const char * __capability' without an explicit cast}}
+  // explicit-c-error@-2{{converting non-capability type 'char *' to capability type 'const char * __capability' without an explicit cast}}
 
   // check that we can also call functions with string literals:
   fn_taking_const_char_ptr("foo");
-  fn_taking_const_char_cap("foo"); // explicit-error-re{{converting non-capability type 'const {{(char \(&\)\[4\])|(char \*)}}' to capability type 'const char * __capability' without an explicit cast}}
+  fn_taking_const_char_cap("foo");
+  // explicit-cxx-error@-1{{converting non-capability type 'const char (&)[4]' to capability type 'const char * __capability' without an explicit cast}}
+  // explicit-c-error@-2{{converting non-capability type 'char *' to capability type 'const char * __capability' without an explicit cast}}
 
   // but conversion from a pointer isn't
   const char *__capability cap2 = ptr;
