@@ -172,6 +172,12 @@ void *cast_uintcap_to_intptr_implicit(__uintcap_t cap) {
   // purecap-warning@-1{{incompatible integer to pointer conversion returning '__uintcap_t' from a function with result type 'void *'}}
 }
 
+void *__capability cast_uintcap_to_cap_ptr_implicit(__uintcap_t cap) {
+  // Should also warn about ctoptr
+  return cap; // expected-warning{{incompatible integer to pointer conversion returning '__uintcap_t' from a function with result type 'void * __capability'}}
+  // purecap-warning@-1{{incompatible integer to pointer conversion returning '__uintcap_t' from a function with result type 'void *'}}
+}
+
 void *cast_uintcap_to_intptr_explicit(__uintcap_t cap) {
   return (void *)cap; // this should warn!
 }

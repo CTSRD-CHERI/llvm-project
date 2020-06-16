@@ -622,6 +622,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
     case CK_FunctionToPointerDecay: // Checked in CastConsistency()
     case CK_ArrayToPointerDecay:    // Checked in CastConsistency()
     case CK_BuiltinFnToFnPtr:       // Checked in CastConsistency()
+    case CK_IntegralToPointer:      // Checked later
       return false;
     default:
       return true;
