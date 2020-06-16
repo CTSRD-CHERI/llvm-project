@@ -7666,8 +7666,8 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     ResultTy = S.Context.getBlockPointerType(ResultTy);
   else {
     ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
-    if (LHSTy->isCHERICapabilityType(S.Context)
-        || RHSTy->isCHERICapabilityType(S.Context)) {
+    if (LHSTy->isCHERICapabilityType(S.Context, false) ||
+        RHSTy->isCHERICapabilityType(S.Context, false)) {
       PIK = ASTContext::PIK_Capability;
     }
     ResultTy = S.Context.getPointerType(ResultTy, PIK);
@@ -7716,20 +7716,17 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   QualType lhptee = LHSTy->castAs<PointerType>()->getPointeeType();
   QualType rhptee = RHSTy->castAs<PointerType>()->getPointeeType();
 
-  // Get the cast kind to use for adding qualifiers
-  // XXXAR: There should probably be a CK_CHERICapabilityToPointer here?
-  CastKind NopCastKind = (lhptee.getAddressSpace() == rhptee.getAddressSpace())
-    ?  CK_NoOp : CK_AddressSpaceConversion;
-
   // ignore qualifiers on void (C99 6.5.15p3, clause 6)
   if (lhptee->isVoidType() && rhptee->isIncompleteOrObjectType()) {
     // Figure out necessary qualifiers (C99 6.5.15p6)
     QualType destPointee
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
-    QualType destType = S.Context.getPointerType(destPointee,
-      RHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
+    QualType destType = S.Context.getPointerType(
+        destPointee, RHSTy->isCHERICapabilityType(S.Context, false)
+                         ? ASTContext::PIK_Capability
+                         : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
-    LHS = S.ImpCastExprToType(LHS.get(), destType, NopCastKind);
+    LHS = S.ImpCastExprToType(LHS.get(), destType, CK_NoOp);
     // Promote to void*.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_BitCast);
     return destType;
@@ -7737,8 +7734,10 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   if (rhptee->isVoidType() && lhptee->isIncompleteOrObjectType()) {
     QualType destPointee
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
-    QualType destType = S.Context.getPointerType(destPointee,
-      LHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
+    QualType destType = S.Context.getPointerType(
+        destPointee, LHSTy->isCHERICapabilityType(S.Context, false)
+                         ? ASTContext::PIK_Capability
+                         : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -8990,15 +8989,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // int -> T*
     if (RHSType->isIntegerType()) {
-      // Implicit casts from int -> T* __capability are not allowed (except for
-      // conversions from null)
-      const Expr::NullPointerConstantKind RHSNullKind =
-          RHS.get()->isNullPointerConstant(Context,
-                                           Expr::NPC_ValueDependentIsNotNull);
-      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
-      if (LHSPointer->isCHERICapability() && !RHSIsNull &&
-          !RHSType->isIntCapType())
-        return Incompatible;
+      bool RHSIsNull =
+          RHS.get()->isNullPointerConstant(
+              Context, Expr::NPC_ValueDependentIsNotNull) != Expr::NPCK_NotNull;
       Kind = RHSIsNull ? CK_NullToPointer : CK_IntegralToPointer;
       return IntToPointer;
     }
@@ -9139,13 +9132,6 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // T* -> int
     if (LHSType->isIntegerType()) {
-      // Implicit casts from memory capabilities -> int are not allowed (except for null)
-      const Expr::NullPointerConstantKind RHSNullKind =
-          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
-      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
-      if (RHSPointer->isCHERICapability() && !RHSIsNull &&
-          !LHSType->isIntCapType())
-        return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
     }
