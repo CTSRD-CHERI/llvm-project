@@ -665,8 +665,10 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
   assert(ToTy->isPointerType() && "Target types should be PointerType");
   assert(ToTy->getAs<PointerType>()->isCHERICapability() &&
          "Target type must be a capability pointer");
+  if (From->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull)) {
+    return true; // NULL constants are always fine
+  }
   bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
-  bool NullConstant = From->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull);
   bool AddrOf = false;
   bool Decayed = false;
   bool CompatTypes = false;
@@ -685,7 +687,7 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
   }
   if (getLangOpts().getCheriIntToCap() != LangOptions::CapInt_Relative) {
     // All pointer -> capability conversions must be explicit unless we are
-    // compiling in "relative" mode
+    // compiling in "relative" mode.
     CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From, false);
     // Note: this check comes after the decay check to get char* instead of
     // char (&)[N] in diagnostics messages for C++.
@@ -710,7 +712,7 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
 
   // The type check for address-of (&) could have failed above but may
   // still succeed below when we look at pointee types
-  if (!(StrLit || NullConstant || Decayed || (AddrOf && CompatTypes))) {
+  if (!(StrLit || Decayed || (AddrOf && CompatTypes))) {
     // Check if pointee types are assign compatible
     QualType TPointee = ToTy->getAs<PointerType>()->getPointeeType();
     QualType EPointee = FromTy->getAs<PointerType>()->getPointeeType();
@@ -740,8 +742,7 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
         }
       }
     }
-    if (!(StrLit || NullConstant || Decayed || AddrOf || CompatTypes) ||
-        !CompatTypes) {
+    if (!(StrLit || Decayed || AddrOf || CompatTypes) || !CompatTypes) {
       goto err;
     }
   }
