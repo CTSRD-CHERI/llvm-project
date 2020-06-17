@@ -252,6 +252,7 @@ declare i8 addrspace(200) *@llvm.cheri.cap.tag.clear(i8 addrspace(200) *)
 declare i8 addrspace(200) *@llvm.cheri.cap.build(i8 addrspace(200) *, i8 addrspace(200) *)
 declare i8 addrspace(200) *@llvm.cheri.cap.type.copy(i8 addrspace(200) *, i8 addrspace(200) *)
 declare i8 addrspace(200) *@llvm.cheri.cap.conditional.seal(i8 addrspace(200) *, i8 addrspace(200) *)
+declare i8 addrspace(200) *@llvm.cheri.cap.seal.entry(i8 addrspace(200) *)
 
 define i8 addrspace(200) *@seal(i8 addrspace(200) *%cap1, i8 addrspace(200) *%cap2) nounwind {
 ; CHECK-ILP32-LABEL: seal:
@@ -562,6 +563,30 @@ define i8 addrspace(200) *@conditional_seal(i8 addrspace(200) *%cap1, i8 addrspa
 ; CHECK-L64PC128-NEXT:    ccseal ca0, ca0, ca1
 ; CHECK-L64PC128-NEXT:    cret
   %newcap = call i8 addrspace(200) *@llvm.cheri.cap.conditional.seal(i8 addrspace(200) *%cap1, i8 addrspace(200) *%cap2)
+  ret i8 addrspace(200) *%newcap
+}
+
+define i8 addrspace(200) *@seal_entry(i8 addrspace(200) *%cap) nounwind {
+; CHECK-ILP32-LABEL: seal_entry:
+; CHECK-ILP32:       # %bb.0:
+; CHECK-ILP32-NEXT:    csealentry ca0, ca0
+; CHECK-ILP32-NEXT:    ret
+;
+; CHECK-LP64-LABEL: seal_entry:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    csealentry ca0, ca0
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-IL32PC64-LABEL: seal_entry:
+; CHECK-IL32PC64:       # %bb.0:
+; CHECK-IL32PC64-NEXT:    csealentry ca0, ca0
+; CHECK-IL32PC64-NEXT:    cret
+;
+; CHECK-L64PC128-LABEL: seal_entry:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    csealentry ca0, ca0
+; CHECK-L64PC128-NEXT:    cret
+  %newcap = call i8 addrspace(200) *@llvm.cheri.cap.seal.entry(i8 addrspace(200) *%cap)
   ret i8 addrspace(200) *%newcap
 }
 
