@@ -648,12 +648,6 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
 
   // Load the function pointer.
   llvm::Value *FnPtr = Builder.CreateExtractValue(MemFnPtr, 0, "memptr.ptr");
-  llvm::Value *FnPtrAddr;
-  if (CGF.CGM.getDataLayout().isFatPointer(FnPtr->getType()))
-    FnPtrAddr =
-        CGF.getTargetHooks().getPointerAddress(CGF, FnPtr, "memptr.ptr.addr");
-  else
-    FnPtrAddr = FnPtr;
 
   // If the LSB in the function pointer is 1, the function pointer points to
   // a virtual function.
@@ -663,6 +657,13 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   if (UseARMMethodPtrABI) // XXXAR: TODO: use tag bit instead
     IsVirtual = Builder.CreateAnd(RawAdj, ptrdiff_1);
   else {
+    llvm::Value *FnPtrAddr;
+    if (CGF.CGM.getDataLayout().isFatPointer(FnPtr->getType()))
+      FnPtrAddr =
+          CGF.getTargetHooks().getPointerAddress(CGF, FnPtr, "memptr.ptr.addr");
+    else
+      FnPtrAddr = FnPtr;
+
     IsVirtual = Builder.CreateAnd(FnPtrAddr, ptrdiff_1);
   }
   IsVirtual = Builder.CreateIsNotNull(IsVirtual, "memptr.isvirtual");
