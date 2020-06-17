@@ -173,6 +173,9 @@ protected:
   /// alignment is supported.
   bool UseDotAlignForAlignment = false;
 
+  /// This is true if a CHERI pure capability ABI is in use.
+  bool IsCheriPurecapABI = false;
+
   //===--- Data Emission Directives -------------------------------------===//
 
   /// This should be set to the directive used to get some number of zero (and
@@ -551,6 +554,10 @@ public:
 
   bool useDotAlignForAlignment() const {
     return UseDotAlignForAlignment;
+  }
+
+  bool isCheriPurecapABI() const {
+    return IsCheriPurecapABI;
   }
 
   const char *getZeroDirective() const { return ZeroDirective; }

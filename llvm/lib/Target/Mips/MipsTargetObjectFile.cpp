@@ -196,9 +196,10 @@ MipsTargetObjectFile::getDebugThreadLocalSymbol(const MCSymbol *Sym) const {
 }
 
 TailPaddingAmount
-MipsTargetObjectFile::getTailPaddingForPreciseBounds(uint64_t Size) const {
+MipsTargetObjectFile::getTailPaddingForPreciseBounds(
+    uint64_t Size, const TargetMachine &TM) const {
   const MipsSubtarget &Subtarget =
-      *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
+      *static_cast<const MipsTargetMachine &>(TM).getSubtargetImpl();
   if (!Subtarget.isCheri())
     return TailPaddingAmount::None;
   if (Subtarget.isCheri128()) {
@@ -211,9 +212,10 @@ MipsTargetObjectFile::getTailPaddingForPreciseBounds(uint64_t Size) const {
 }
 
 Align
-MipsTargetObjectFile::getAlignmentForPreciseBounds(uint64_t Size) const {
+MipsTargetObjectFile::getAlignmentForPreciseBounds(
+    uint64_t Size, const TargetMachine &TM) const {
   const MipsSubtarget &Subtarget =
-      *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
+      *static_cast<const MipsTargetMachine &>(TM).getSubtargetImpl();
   if (!Subtarget.isCheri())
     return Align();
   if (Subtarget.isCheri128()) {
@@ -224,18 +226,8 @@ MipsTargetObjectFile::getAlignmentForPreciseBounds(uint64_t Size) const {
   return Align();
 }
 
-bool MipsTargetObjectFile::isCheriPurecapABI() const {
-  if (TM) {
-    const MipsSubtarget &Subtarget =
-        *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
-    return Subtarget.getABI().IsCheriPureCap();
-  } else {
-    return getTargetTriple().getEnvironment() == Triple::CheriPurecap;
-  }
-}
-
-int MipsTargetObjectFile::getCheriCapabilitySize() const {
+int MipsTargetObjectFile::getCheriCapabilitySize(const TargetMachine &TM) const {
   const MipsSubtarget &Subtarget =
-      *static_cast<const MipsTargetMachine &>(*TM).getSubtargetImpl();
+      *static_cast<const MipsTargetMachine &>(TM).getSubtargetImpl();
   return Subtarget.getCapSizeInBytes();
 }

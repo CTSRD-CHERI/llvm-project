@@ -203,6 +203,23 @@ void AsmPrinter::emitCallSiteValue(uint64_t Value, unsigned Encoding) const {
     OutStreamer->emitIntValue(Value, GetSizeOfEncodedValue(Encoding));
 }
 
+void AsmPrinter::emitCallSiteCheriCapability(const MCSymbol *Hi,
+                                             const MCSymbol *Lo) const {
+  const TargetLoweringObjectFile &TLOF = getObjFileLowering();
+  // Get the Hi-Lo expression. We use (and need) Lo since the offset needs to
+  // be a constant expression, whereas CurrentFnSym is preemptible.
+  const MCExpr *DiffToStart = MCBinaryExpr::createSub(
+      MCSymbolRefExpr::create(Hi, OutContext),
+      MCSymbolRefExpr::create(Lo, OutContext),
+      OutContext);
+  // Note: we cannot use Lo here since that is a local symbol and then
+  // EmitCheriCapability() will create a relocation against section plus offset
+  // rather than function + offset. We need the right bounds and permissions
+  // info.
+  OutStreamer->EmitCheriCapability(CurrentFnSym, DiffToStart,
+                                   TLOF.getCheriCapabilitySize(TM));
+}
+
 //===----------------------------------------------------------------------===//
 // Dwarf Lowering Routines
 //===----------------------------------------------------------------------===//
