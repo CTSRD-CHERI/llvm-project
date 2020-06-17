@@ -980,6 +980,15 @@ def : CheriBccSwapPat<setle, BGE>;
 def : CheriBccSwapPat<setugt, BLTU>;
 def : CheriBccSwapPat<setule, BGEU>;
 
+let Predicates = [HasCheri, IsPureCapABI] in {
+let isCall = 1, Defs=[X1] in
+let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
+def PseudoCapBRIND : Pseudo<(outs), (ins GPCR:$rs1), []>,
+                     PseudoInstExpansion<(CJALR C0, GPCR:$rs1)>;
+
+def : Pat<(brind GPCR:$rs1), (PseudoCapBRIND GPCR:$rs1)>;
+} // Predicates = [HasCheri, IsPureCapABI]
+
 /// Assertion Instructions
 
 def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
