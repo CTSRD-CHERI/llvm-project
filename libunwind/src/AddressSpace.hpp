@@ -655,7 +655,7 @@ static uintptr_t calculateImageBase(struct dl_phdr_info *pinfo) {
 #ifdef __CHERI_PURE_CAPABILITY__
   // For statically linked pure-capability programs, it is generally not
   // possible to have a dlpi_addr capabibility with address zero but the bounds
-  // of the executable mapping because capability compresseion prevents
+  // of the executable mapping because capability compression prevents
   // creation of such a massively out-of-bounds capability.
   // Therefore, the kernel and libc ensure that dlpi_addr is (untagged) zero
   // and dpli_phdr spans the executable mapping.
