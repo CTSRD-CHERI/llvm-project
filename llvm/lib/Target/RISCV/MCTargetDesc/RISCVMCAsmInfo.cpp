@@ -19,8 +19,11 @@ using namespace llvm;
 
 void RISCVMCAsmInfo::anchor() {}
 
-RISCVMCAsmInfo::RISCVMCAsmInfo(const Triple &TT) {
+RISCVMCAsmInfo::RISCVMCAsmInfo(const Triple &TT, RISCVABI::ABI ABI) {
   CodePointerSize = CalleeSaveStackSlotSize = TT.isArch64Bit() ? 8 : 4;
+  IsCheriPurecapABI =
+      ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI);
+
   CommentString = "#";
   AlignmentIsInBytes = false;
   SupportsDebugInformation = true;

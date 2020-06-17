@@ -47,14 +47,6 @@ public:
   bool IsRV64() const {
     return getTargetTriple().isArch64Bit();
   }
-
-  bool isCheriPureCapABI() const {
-    return isCheriPureCapABI(Options.MCOptions.getABIName());
-  }
-
-  static bool isCheriPureCapABI(StringRef ABI) {
-    return ABI.startswith("il32pc64") || ABI.startswith("l64pc128");
-  }
 };
 }
 

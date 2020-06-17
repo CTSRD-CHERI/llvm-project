@@ -53,7 +53,8 @@ static MCRegisterInfo *createRISCVMCRegisterInfo(const Triple &TT) {
 static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
                                        const Triple &TT,
                                        const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new RISCVMCAsmInfo(TT);
+  RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.getABIName());
+  MCAsmInfo *MAI = new RISCVMCAsmInfo(TT, ABI);
 
   Register SP = MRI.getDwarfRegNum(RISCV::X2, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, SP, 0);

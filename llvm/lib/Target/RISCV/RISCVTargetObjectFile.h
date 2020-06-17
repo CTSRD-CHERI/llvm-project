@@ -48,6 +48,8 @@ public:
 
   Align getAlignmentForPreciseBounds(uint64_t Size,
                                      const TargetMachine &TM) const override;
+
+  int getCheriCapabilitySize(const TargetMachine &TM) const override;
 };
 
 } // end namespace llvm
