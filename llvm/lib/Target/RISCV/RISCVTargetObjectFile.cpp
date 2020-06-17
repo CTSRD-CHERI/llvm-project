@@ -8,6 +8,7 @@
 
 #include "RISCVTargetObjectFile.h"
 #include "RISCVTargetMachine.h"
+#include "Utils/RISCVCompressedCap.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"
@@ -110,4 +111,24 @@ MCSection *RISCVELFTargetObjectFile::getSectionForConstant(
 
   // Otherwise, we work the same as ELF.
   return TargetLoweringObjectFileELF::getSectionForConstant(DL, Kind, C, Align);
+}
+
+TailPaddingAmount
+RISCVELFTargetObjectFile::getTailPaddingForPreciseBounds(
+    uint64_t Size, const TargetMachine &TM) const {
+  const RISCVTargetMachine &RTM = static_cast<const RISCVTargetMachine &>(TM);
+  if (!RTM.isCheriPureCapABI())
+    return TailPaddingAmount::None;
+
+  return RISCVCompressedCap::getRequiredTailPadding(Size, RTM.IsRV64());
+}
+
+Align
+RISCVELFTargetObjectFile::getAlignmentForPreciseBounds(
+    uint64_t Size, const TargetMachine &TM) const {
+  const RISCVTargetMachine &RTM = static_cast<const RISCVTargetMachine &>(TM);
+  if (!RTM.isCheriPureCapABI())
+    return Align();
+
+  return RISCVCompressedCap::getRequiredAlignment(Size, RTM.IsRV64());
 }
