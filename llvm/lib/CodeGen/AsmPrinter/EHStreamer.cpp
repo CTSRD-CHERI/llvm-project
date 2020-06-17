@@ -531,19 +531,18 @@ MCSymbol *EHStreamer::emitExceptionTable() {
                                      EndLabel->getName());
       Asm->emitCallSiteOffset(EndLabel, BeginLabel, CallSiteEncoding);
 
-      const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
-      const bool IsPurecap = TLOF.isCheriPurecapABI();
       // Offset of the landing pad relative to the start of the procedure.
       if (!S.LPad) {
         if (VerboseAsm)
           Asm->OutStreamer->AddComment("    has no landing pad");
         Asm->emitCallSiteValue(0, CallSiteEncoding);
       } else {
+        const bool IsPurecap = Asm->OutContext.getAsmInfo()->isCheriPurecapABI();
         if (IsPurecap) {
           // In order to avoid having to pad to capability alignment and use
-          // a full capability for the no landing pad case, we emit a 0xc byte
-          // here to indicate that there is a valid capability at the next
-          // capability-aligned location.
+          // a full capability for the no landing pad case, we emit a 0xc value
+          // (encoding-dependent) here to indicate that there is a valid
+          // capability at the next capability-aligned location.
           Asm->OutStreamer->AddComment("(landing pad is a capability)");
           Asm->emitCallSiteValue(0xc, CallSiteEncoding);
         }
@@ -555,16 +554,8 @@ MCSymbol *EHStreamer::emitExceptionTable() {
           // For purecap we currently emit a capability relocation for the
           // landing pad target since the saved PC value will be an immutable
           // sentry capability which does not allow adding an offset.
-          // Get the Hi-Lo expression.
-          const MCExpr *DiffToStart = MCBinaryExpr::createSub(
-              MCSymbolRefExpr::create(S.LPad->LandingPadLabel, Asm->OutContext),
-              MCSymbolRefExpr::create(EHFuncBeginSym, Asm->OutContext),
-              Asm->OutContext);
-          // Note: we cannot use EHFuncBeginSym here since that is a local
-          // symbol and then EmitCheriCapability() will create a relocation
-          // against section plus offset rather than function + offset
-          Asm->OutStreamer->EmitCheriCapability(Asm->CurrentFnSym, DiffToStart,
-                                                TLOF.getCheriCapabilitySize());
+          Asm->emitCallSiteCheriCapability(S.LPad->LandingPadLabel,
+                                           EHFuncBeginSym);
         } else {
           Asm->emitCallSiteOffset(S.LPad->LandingPadLabel, EHFuncBeginSym,
                                   CallSiteEncoding);

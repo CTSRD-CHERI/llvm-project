@@ -525,9 +525,9 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   Align Alignment = getGVAlignment(GV, DL);
 
   const TailPaddingAmount TailPadding =
-      getObjFileLowering().getTailPaddingForPreciseBounds(Size);
+      getObjFileLowering().getTailPaddingForPreciseBounds(Size, TM);
   const Align PreciseAlignment =
-      getObjFileLowering().getAlignmentForPreciseBounds(Size);
+      getObjFileLowering().getAlignmentForPreciseBounds(Size, TM);
 
   if (PreciseAlignment > Alignment) {
     LLVM_DEBUG(dbgs() << "\nIncreased alignment for global from "

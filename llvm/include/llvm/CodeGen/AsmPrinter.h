@@ -577,6 +577,9 @@ public:
                           unsigned Encoding) const;
   /// Emit an integer value corresponding to the call site encoding
   void emitCallSiteValue(uint64_t Value, unsigned Encoding) const;
+  /// Emit a CHERI capability to a call site
+  void emitCallSiteCheriCapability(const MCSymbol *Hi,
+                                   const MCSymbol *Lo) const;
 
   /// Get the value for DW_AT_APPLE_isa. Zero if no isa encoding specified.
   virtual unsigned getISAEncoding() { return 0; }

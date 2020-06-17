@@ -226,13 +226,17 @@ public:
   /// the end to ensure that we cannot access another variable that happens to
   /// be located in the bytes that are accessible after the end of the object
   /// due to the bounds having been rounded up.
-  virtual TailPaddingAmount getTailPaddingForPreciseBounds(uint64_t Size) const {
+  virtual TailPaddingAmount
+  getTailPaddingForPreciseBounds(uint64_t Size, const TargetMachine &TM) const {
     return TailPaddingAmount::None;
   }
-  virtual Align getAlignmentForPreciseBounds(uint64_t Size) const {
+
+  virtual Align getAlignmentForPreciseBounds(uint64_t Size,
+                                             const TargetMachine &TM) const {
     return Align();
   }
-  virtual int getCheriCapabilitySize() const {
+
+  virtual int getCheriCapabilitySize(const TargetMachine &TM) const {
     llvm_unreachable("getCheriCapabilitySize should only be called for targets"
                      "that support CHERI");
   }
