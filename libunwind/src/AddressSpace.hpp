@@ -652,6 +652,17 @@ static uintptr_t calculateImageBase(struct dl_phdr_info *pinfo) {
     }
   }
 #endif
+#ifdef __CHERI_PURE_CAPABILITY__
+  // For statically linked pure-capability programs, it is generally not
+  // possible to have a dlpi_addr capabibility with address zero but the bounds
+  // of the executable mapping because capability compresseion prevents
+  // creation of such a massively out-of-bounds capability.
+  // Therefore, the kernel and libc ensure that dlpi_addr is (untagged) zero
+  // and dpli_phdr spans the executable mapping.
+  if (image_base == 0 && !__builtin_cheri_tag_get((void *)image_base)) {
+    image_base = (uintptr_t)pinfo->dlpi_phdr;
+  }
+#endif
   return image_base;
 }
 
@@ -667,14 +678,15 @@ static LocalAddressSpace::pint_t getPhdrCapability(uintptr_t image_base,
   // We have to work around the position dependent linking case where
   // dlpi_addr will contain just the binary range (and can't a be massively
   // out of bounds cap with a zero vaddr due to Cheri128 constaints). In that
-  // case phdr->p_vaddr will be within the bounds of pinfo->dlpi_addr so we
+  // case phdr->p_vaddr will be within the bounds of image_base so we
   // just set the address to match the vaddr
   if (&_DYNAMIC == NULL) {
     // static linking / position dependent workaround:
     vaddr_t base = __builtin_cheri_base_get((void *)image_base);
     vaddr_t end = base + __builtin_cheri_length_get((void *)image_base);
     if (phdr->p_vaddr >= base && phdr->p_vaddr < end) {
-      return image_base + (phdr->p_vaddr - base);
+      return (uintptr_t)__builtin_cheri_address_set((void *)image_base,
+                                                    phdr->p_vaddr);
     }
   }
   // Otherwise just fall back to the default behaviour
@@ -747,6 +759,7 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t pinfo_size,
   if (ProcessFrameHeaderCache.find(pinfo, pinfo_size, data))
     return 1;
 
+  uintptr_t image_base = calculateImageBase(pinfo);
 #ifdef __CHERI_PURE_CAPABILITY__
   check_same_type<__uintcap_t, decltype(pinfo->dlpi_addr)>();
   check_same_type<const Elf_Phdr *, decltype(pinfo->dlpi_phdr)>();
@@ -756,29 +769,24 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t pinfo_size,
   // which is always executable.
   //
   // TODO: __builtin_cheri_top_get_would be nice
-  if (__builtin_cheri_length_get((void *)pinfo->dlpi_addr) +
-          __builtin_cheri_base_get((void *)pinfo->dlpi_addr) <
+  if (__builtin_cheri_length_get((void *)image_base) +
+          __builtin_cheri_base_get((void *)image_base) <
       cbdata->targetAddr) {
     CHERI_DBG("%#p out of bounds of %#p (%s)\n",
-              (void *)cbdata->targetAddr.get(), (void *)pinfo->dlpi_addr,
+              (void *)cbdata->targetAddr.get(), (void *)image_base,
               pinfo->dlpi_name);
     return false;
   }
 #endif
-
-  uintptr_t image_base = calculateImageBase(pinfo);
   bool found_obj = false;
   bool found_hdr = false;
-  CHERI_DBG("Checking %s for target 0x%jx (%#p). Base=%p->%p(%#p)\n",
-            pinfo->dlpi_name, (uintmax_t)cbdata->targetAddr.address(),
-            (void *)cbdata->targetAddr.get(), (void *)pinfo->dlpi_addr,
-            (void *)((char *)pinfo->dlpi_addr +
-                     __builtin_cheri_length_get((void *)pinfo->dlpi_addr)),
-            (void *)pinfo->dlpi_addr);
+  CHERI_DBG("Checking %s for target 0x%jx (%#p). Base=%#p\n", pinfo->dlpi_name,
+            (uintmax_t)cbdata->targetAddr.address(),
+            (void *)cbdata->targetAddr.get(), (void *)image_base);
 #ifdef __CHERI_PURE_CAPABILITY__
   assert(cbdata->targetAddr.isValid());
-  if (!__builtin_cheri_tag_get((void *)pinfo->dlpi_addr)) {
-    _LIBUNWIND_ABORT("dlpi_addr was untagged. CheriBSD needs to be updated!");
+  if (!__builtin_cheri_tag_get((void *)image_base)) {
+    _LIBUNWIND_ABORT("image_base was untagged. CheriBSD needs to be updated!");
   }
 #endif
 
