@@ -56,7 +56,13 @@ static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
   RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.getABIName());
   MCAsmInfo *MAI = new RISCVMCAsmInfo(TT, ABI);
 
-  Register SP = MRI.getDwarfRegNum(RISCV::X2, true);
+  Register SPReg;
+  if (ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI))
+    SPReg = RISCV::C2;
+  else
+    SPReg = RISCV::X2;
+
+  unsigned SP = MRI.getDwarfRegNum(SPReg, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, SP, 0);
   MAI->addInitialFrameState(Inst);
 
