@@ -262,6 +262,7 @@ def CClearTag       : Cheri_r<0xb, "ccleartag", GPCR>;
 def CBuildCap       : Cheri_rr<0x1d, "cbuildcap", GPCR, GPCR>;
 def CCopyType       : Cheri_rr<0x1e, "ccopytype", GPCR, GPCR>;
 def CCSeal          : Cheri_rr<0x1f, "ccseal", GPCR, GPCR>;
+def CSealEntry      : Cheri_r<0x11, "csealentry", GPCR>;
 
 def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
@@ -843,6 +844,7 @@ def : PatGpcr<int_cheri_cap_tag_clear, CClearTag>;
 def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
 def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;
 def : PatGpcrGpcr<int_cheri_cap_conditional_seal, CCSeal>;
+def : PatGpcr<int_cheri_cap_seal_entry, CSealEntry>;
 
 // TODO: Make this rematerialisable like MIPS
 def : PatGpcrGpr<int_cheri_bounded_stack_cap, CSetBounds>;
