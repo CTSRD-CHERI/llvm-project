@@ -641,6 +641,7 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
     return DAG.getUNDEF(Op.getValueType());
 
   unsigned NumElts = DemandedElts.getBitWidth();
+  unsigned BitWidth = DemandedBits.getBitWidth();
   KnownBits LHSKnown, RHSKnown;
   switch (Op.getOpcode()) {
   case ISD::BITCAST: {
@@ -746,7 +747,6 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
             DAG.getValidMaximumShiftAmountConstant(Op, DemandedElts)) {
       SDValue Op0 = Op.getOperand(0);
       unsigned ShAmt = MaxSA->getZExtValue();
-      unsigned BitWidth = DemandedBits.getBitWidth();
       unsigned NumSignBits =
           DAG.ComputeNumSignBits(Op0, DemandedElts, Depth + 1);
       unsigned UpperDemandedBits = BitWidth - DemandedBits.countTrailingZeros();
@@ -763,7 +763,7 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
     // width as the setcc result, and (3) the result of a setcc conforms to 0 or
     // -1, we may be able to bypass the setcc.
     if (DemandedBits.isSignMask() &&
-        Op0.getScalarValueSizeInBits() == DemandedBits.getBitWidth() &&
+        Op0.getScalarValueSizeInBits() == BitWidth &&
         getBooleanContents(Op0.getValueType()) ==
             BooleanContent::ZeroOrNegativeOneBooleanContent) {
       // If we're testing X < 0, then this compare isn't needed - just use X!
@@ -778,9 +778,15 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
   }
   case ISD::SIGN_EXTEND_INREG: {
     // If none of the extended bits are demanded, eliminate the sextinreg.
+    SDValue Op0 = Op.getOperand(0);
     EVT ExVT = cast<VTSDNode>(Op.getOperand(1))->getVT();
-    if (DemandedBits.getActiveBits() <= ExVT.getScalarSizeInBits())
-      return Op.getOperand(0);
+    unsigned ExBits = ExVT.getScalarSizeInBits();
+    if (DemandedBits.getActiveBits() <= ExBits)
+      return Op0;
+    // If the input is already sign extended, just drop the extension.
+    unsigned NumSignBits = DAG.ComputeNumSignBits(Op0, DemandedElts, Depth + 1);
+    if (NumSignBits >= (BitWidth - ExBits + 1))
+      return Op0;
     break;
   }
   case ISD::INSERT_VECTOR_ELT: {
