@@ -1708,6 +1708,9 @@ void ASTStmtReader::VisitLambdaExpr(LambdaExpr *E) {
                                       CEnd = E->capture_init_end();
        C != CEnd; ++C)
     *C = Record.readSubExpr();
+
+  // Ok, not one past the end.
+  E->getStoredStmts()[NumCaptures] = Record.readSubStmt();
 }
 
 void

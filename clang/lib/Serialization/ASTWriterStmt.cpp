@@ -1612,6 +1612,8 @@ void ASTStmtWriter::VisitLambdaExpr(LambdaExpr *E) {
     Record.AddStmt(*C);
   }
 
+  Record.AddStmt(E->getBody());
+
   Code = serialization::EXPR_LAMBDA;
 }
 
