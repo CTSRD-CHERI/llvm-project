@@ -245,11 +245,6 @@ InputArgList Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings,
                            diag::warn_drv_empty_joined_argument,
                            SourceLocation()) > DiagnosticsEngine::Warning;
     }
-
-    if (A->getOption().matches(options::OPT_mabi_EQ)) {
-      StringRef Value = A->getValue();
-      A->claim();
-    }
   }
 
   for (const Arg *A : Args.filtered(options::OPT_UNKNOWN)) {
