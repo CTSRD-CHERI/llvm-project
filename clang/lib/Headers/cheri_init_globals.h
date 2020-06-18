@@ -186,7 +186,6 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
     src = __builtin_cheri_offset_increment(src, reloc->offset);
-    /* XXX: Permit on RISC-V once supported */
 #if __has_builtin(__builtin_cheri_seal_entry)
     if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
       /* Convert function pointers to sentries: */
