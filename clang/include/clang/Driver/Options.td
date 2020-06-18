@@ -277,10 +277,6 @@ def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[DriverOption,
   HelpText<"Use the capability address when performing computations on uintcap_t (more C compatible but may break copying GC)">;
 def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">;
-def cheri_conversion_error : Joined<["-"], "cheri-conversion-error=">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
-  HelpText<"Don't emit errors for conversions between capabilities "
-           "and pointers">,
-  Values<"error,ignore">;
 def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option, NoDriverOption]>, Group<cheri_Group>,
   HelpText<"Choose when to tighten bounds on capabilities. Choices are: "
            "'conservative' (only stack allocations, default), "

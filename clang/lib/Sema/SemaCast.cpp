@@ -755,8 +755,6 @@ static TryCastResult getCastAwayConstnessCastKind(CastAwayConstnessKind CACK,
 
 static bool IsBadCheriReferenceCast(const ReferenceType *Dest, Expr *SrcExpr,
                                     ASTContext &Ctx) {
-  if (Ctx.getLangOpts().getCheriCapConversion() == LangOptions::CapConv_Ignore)
-    return false;
   bool SrcIsCapRef = Ctx.getTargetInfo().areAllPointersCapabilities();
   if (auto SrcRef = SrcExpr->getRealReferenceType(Ctx)->getAs<ReferenceType>())
     SrcIsCapRef = SrcRef->isCHERICapability();
@@ -2004,10 +2002,6 @@ static void DiagnoseCHERIPtr(Sema &Self, Expr *SrcExpr, QualType DestType,
 CastKind CastOperation::checkCapabilityToIntCast() {
   if (IsCheriFromCap)
     return CK_NoOp; // Already doing a __cheri_fromcap cast, no need to check
-
-  if (Self.Context.getLangOpts().getCheriCapConversion() ==
-      LangOptions::CapConv_Ignore)
-    return CK_NoOp;
 
   QualType SrcType = SrcExpr.get()->getRealReferenceType(Self.Context);
   if (SrcType->isDependentType() || DestType->isDependentType())

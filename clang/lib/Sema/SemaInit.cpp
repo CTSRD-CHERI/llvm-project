@@ -1508,10 +1508,6 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
 
 bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
                                      unsigned *Index, unsigned *StructuredIndex) {
-  if (SemaRef.Context.getLangOpts().getCheriCapConversion() ==
-      LangOptions::CapConv_Ignore)
-    return false;
-
   // XXXAR: expr->getType() will return int for int&!
   QualType ExprType = expr->getRealReferenceType(SemaRef.Context);
   if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
@@ -4728,10 +4724,6 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
   // XXXAR: keep runnign this code for non-CHERI for now to catch bugs in getRealReferenceType()
   // if (!TI.SupportsCapabilities())
   //  return; // no capability support -> don't attempt to diagnose
-
-  if (S.getASTContext().getLangOpts().getCheriCapConversion() ==
-      LangOptions::CapConv_Ignore)
-    return;
 
   // FIXME: don't error on rvalue references.
 
