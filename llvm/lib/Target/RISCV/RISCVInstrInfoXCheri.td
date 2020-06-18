@@ -981,7 +981,7 @@ def : CheriBccSwapPat<setugt, BLTU>;
 def : CheriBccSwapPat<setule, BGEU>;
 
 let Predicates = [HasCheri, IsPureCapABI] in {
-let isCall = 1, Defs=[X1] in
+let isCall = 1, Defs = [C1] in
 let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
 def PseudoCapBRIND : Pseudo<(outs), (ins GPCR:$rs1), []>,
                      PseudoInstExpansion<(CJALR C0, GPCR:$rs1)>;
