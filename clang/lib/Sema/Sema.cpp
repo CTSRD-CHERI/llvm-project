@@ -672,7 +672,6 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
   bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
   bool AddrOf = false;
   bool Decayed = false;
-  bool CompatTypes = false;
 
   // Function-to-pointer and array-to-pointer decay
   ExprResult DecayedExpr = DefaultFunctionArrayConversion(From, Diagnose);
@@ -681,20 +680,34 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
     FromTy = From->getType();
   }
 
+  auto ImplicitConversionFailure = [&](bool CompatTypes) {
+    if (Diagnose) {
+      // Converting to void* should always print the compatible types warning.
+      if (ToTy->isVoidPointerType())
+        CompatTypes = true;
+      Diag(From->getExprLoc(),
+           CompatTypes ? diag::err_typecheck_convert_ptr_to_cap
+                       : diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+          << From->getType() << ToTy << false;
+    }
+    return false;
+  };
+
   // FIXME: clean up control-flow in this function
   if (!FromTy->isPointerType()) {
     // Implicit casts can never be valid for non-pointer types
-    goto err;
+    return ImplicitConversionFailure(/*CompatTypes=*/false);
   }
   if (getLangOpts().getCheriIntToCap() != LangOptions::CapInt_Relative) {
     // All pointer -> capability conversions must be explicit unless we are
     // compiling in "relative" mode.
-    CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From, false);
+    bool CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From, false);
     // Note: this check comes after the decay check to get char* instead of
     // char (&)[N] in diagnostics messages for C++.
-    goto err;
+    return ImplicitConversionFailure(CompatTypes);
   }
 
+  bool CompatTypes = false;
   if (ImplicitCastExpr *Imp = dyn_cast<ImplicitCastExpr>(From)) {
     if (Imp->getCastKind() == CK_ArrayToPointerDecay
         || Imp->getCastKind() == CK_FunctionToPointerDecay) {
@@ -744,21 +757,10 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
       }
     }
     if (!(StrLit || Decayed || AddrOf || CompatTypes) || !CompatTypes) {
-      goto err;
+      return ImplicitConversionFailure(CompatTypes);
     }
   }
   return true;
-err:
-  if (Diagnose) {
-    // Converting to void* should always print the compatible types warning.
-    if (ToTy->isVoidPointerType())
-      CompatTypes = true;
-    Diag(From->getExprLoc(),
-         CompatTypes ? diag::err_typecheck_convert_ptr_to_cap
-                     : diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
-        << From->getType() << ToTy << false;
-  }
-  return false;
 }
 
 /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
