@@ -2456,12 +2456,14 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
       }
     }
     if (SrcIsCap && !DestType->isIntCapType()) {
-      Kind = CK_CHERICapabilityToAddress;
-      // XXXAR: this would be more consistent but would cause too much code to
-      //  not behave as expected in offset mode:
-      //  Kind = Self.getLangOpts().cheriUIntCapUsesAddr()
+      // Note: In offset mode (size_t)cap_ptr always returns an address and not
+      // an offset. Changing that behaviour would change offset mode from being
+      // "mostly compatible" to being "completely incompatible" with existing C
+      // code. Therefore we shouldn't use the following here:
+      //   Kind = Self.getLangOpts().cheriUIntCapUsesAddr()
       //           ? CK_CHERICapabilityToAddress
       //           : CK_CHERICapabilityToOffset;
+      Kind = CK_CHERICapabilityToAddress;
     } else {
       Kind = CK_PointerToIntegral;
     }
