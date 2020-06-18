@@ -170,15 +170,17 @@ unsigned MipsTargetLowering::getVectorTypeBreakdownForCallingConv(
 
 SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty,
                                          bool IsForTls) const {
-  MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
-  return DAG.getRegister(FI->getGlobalBaseReg(IsForTls), Ty);
+  MachineFunction &MF = DAG.getMachineFunction();
+  MipsFunctionInfo *FI = MF.getInfo<MipsFunctionInfo>();
+  return DAG.getRegister(FI->getGlobalBaseReg(MF, IsForTls), Ty);
 }
 
 SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
   assert(Ty.isFatPointer());
   assert(ABI.IsCheriPureCap());
-  MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
-  return DAG.getRegister(FI->getCapGlobalBaseRegForGlobalISel(), Ty);
+  MachineFunction &MF = DAG.getMachineFunction();
+  MipsFunctionInfo *FI = MF.getInfo<MipsFunctionInfo>();
+  return DAG.getRegister(FI->getCapGlobalBaseRegForGlobalISel(MF), Ty);
 }
 
 SDValue MipsTargetLowering::getTargetNode(GlobalAddressSDNode *N, EVT Ty,
@@ -4482,35 +4484,38 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
 
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    const GlobalValue *GV = G->getGlobal();
+      const GlobalValue *Val = G->getGlobal();
     if (CheriCapTable) {
-      Callee = getCallTargetFromCapTable(G, DL, CapType, DAG, Chain,
-                                         FuncInfo->callPtrInfo(GV));
-      IsCallReloc = true;
-    } else if (IsPIC || ABI.IsCheriPureCap()) {
-      // Legacy ABI also needs to load from GOT in non-PIC since otherwise
-      // it will attempt to use a JAL relocation in a CGetPCCSetOffset (and
-      // corrupt the instruction)
-      InternalLinkage = GV->hasInternalLinkage();
+        Callee = getCallTargetFromCapTable(G, DL, CapType, DAG, Chain,
+                                           FuncInfo->callPtrInfo(MF, Val));
+        IsCallReloc = true;
+      } else if (IsPIC || ABI.IsCheriPureCap()) {
+        // Legacy ABI also needs to load from GOT in non-PIC since otherwise
+        // it will attempt to use a JAL relocation in a CGetPCCSetOffset (and
+        // corrupt the instruction)
+        InternalLinkage = Val->hasInternalLinkage();
 
-      if (InternalLinkage)
-        Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
-      else if (Subtarget.useXGOT()) {
-        Callee = getAddrGlobalLargeGOT(
-            G, DL, Ty, DAG, MipsII::MO_CALL_HI16, MipsII::MO_CALL_LO16, Chain,
-            FuncInfo->callPtrInfo(GV), GV->isThreadLocal());
-        IsCallReloc = true;
+        if (InternalLinkage)
+          Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64(),
+                                GV->isThreadLocal());
+        else if (Subtarget.useXGOT()) {
+          Callee = getAddrGlobalLargeGOT(
+              G, DL, Ty, DAG, MipsII::MO_CALL_HI16, MipsII::MO_CALL_LO16, Chain,
+              FuncInfo->callPtrInfo(MF, Val), Val->isThreadLocal());
+          IsCallReloc = true;
+        } else {
+          Callee = getAddrGlobal(G, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
+                                 FuncInfo->callPtrInfo(MF, Val),
+                                 Val->isThreadLocal());
+          IsCallReloc = true;
+        }
       } else {
-        Callee = getAddrGlobal(G, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
-                               FuncInfo->callPtrInfo(GV), GV->isThreadLocal());
-        IsCallReloc = true;
+        assert(!ABI.IsCheriPureCap());
+        Callee = DAG.getTargetGlobalAddress(
+            Val, DL, getPointerTy(DAG.getDataLayout(), 0), 0,
+            MipsII::MO_NO_FLAG);
       }
-    } else {
-      assert(!ABI.IsCheriPureCap());
-      Callee = DAG.getTargetGlobalAddress(
-          GV, DL, getPointerTy(DAG.getDataLayout(), 0), 0, MipsII::MO_NO_FLAG);
-    }
-    GlobalOrExternal = true;
+      GlobalOrExternal = true;
   }
   else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     const char *Sym = S->getSymbol();
@@ -4527,11 +4532,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     } else if (Subtarget.useXGOT()) {
       Callee = getAddrGlobalLargeGOT(S, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                      MipsII::MO_CALL_LO16, Chain,
-                                     FuncInfo->callPtrInfo(Sym), /*IsForTls=*/false);
+                                     FuncInfo->callPtrInfo(MF, Sym), /*IsForTls=*/false);
       IsCallReloc = true;
     } else { // PIC
       Callee = getAddrGlobal(S, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
-                             FuncInfo->callPtrInfo(Sym), /*IsForTls=*/false);
+                             FuncInfo->callPtrInfo(MF, Sym), /*IsForTls=*/false);
       IsCallReloc = true;
     }
 

@@ -65,7 +65,7 @@ bool MipsDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
 /// getGlobalBaseReg - Output the instructions required to put the
 /// GOT address into a register.
 SDNode *MipsDAGToDAGISel::getGlobalBaseReg(bool IsForTls) {
-  Register GlobalBaseReg = MF->getInfo<MipsFunctionInfo>()->getGlobalBaseReg(IsForTls);
+  Register GlobalBaseReg = MF->getInfo<MipsFunctionInfo>()->getGlobalBaseReg(*MF, IsForTls);
   // XXXAR: address space 0 is correct here since it will never be used
   // for capabilities
   return CurDAG
