@@ -4946,8 +4946,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_cheri_comparison_address,
                   options::OPT_cheri_comparison_exact);
 
-  Args.AddLastArg(CmdArgs, options::OPT_cheri_conversion_error);
-
   RenderARCMigrateToolOptions(D, Args, CmdArgs);
 
   // Add preprocessing options like -I, -D, etc. if we are using the

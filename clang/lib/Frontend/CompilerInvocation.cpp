@@ -2745,20 +2745,6 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                            ? LangOptions::CheriUIntCapMode::UIntCap_Addr
                            : LangOptions::CheriUIntCapMode::UIntCap_Offset);
 
-  // Error or not on capability to pointer conversions.
-  if (const Arg *A = Args.getLastArg(OPT_cheri_conversion_error)) {
-    auto ConvErrMode =
-        llvm::StringSwitch<LangOptions::CheriCapConversionWorkaroundMode>(
-            A->getValue())
-            .Case("error", LangOptions::CapConv_Err)
-            .Case("ignore", LangOptions::CapConv_Ignore)
-            .Default((LangOptions::CheriCapConversionWorkaroundMode)-1);
-    if (ConvErrMode == (LangOptions::CheriCapConversionWorkaroundMode)-1) {
-      Diags.Report(diag::err_drv_invalid_value)
-          << A->getAsString(Args) << A->getValue();
-    } else
-      Opts.setCheriCapConversion(ConvErrMode);
-  }
   Opts.CheriCompareExact =
       Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
                    Opts.CheriCompareExact);

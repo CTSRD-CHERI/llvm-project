@@ -203,14 +203,6 @@ public:
     CapInt_Invalid = -1,
   };
 
-  // Work around for bugs in the expression classification which can cause
-  // us to reject valid code even if there is no capability to pointer
-  // conversion.
-  enum CheriCapConversionWorkaroundMode {
-    CapConv_Err,
-    CapConv_Ignore,
-  };
-
   // TODO: this should probably be flags
 #if 0
     CBM_ReferencesAggressive, /// (unused for now, might set more bounds)
