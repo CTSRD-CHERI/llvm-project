@@ -1,5 +1,5 @@
-; RUN: %generic_cheri_purecap_llc %s -o - | FileCheck %s --check-prefix=PURECAP
-; RUN: sed '/PURECAP-ONLY/d' %s | %generic_cheri_hybrid_llc -o - | FileCheck %s --check-prefix=HYBRID
+; RUN: %generic_cheri_purecap_llc %s -o - < %s | FileCheck %s --check-prefix=PURECAP
+; RUN: %generic_cheri_hybrid_llc -o - < %s  | FileCheck %s --check-prefix=HYBRID
 ; Check that the target-independent CHERI intrinsics are support for all architectures
 ; The grouping/ordering in this test is based on the RISC-V instruction listing
 ; in the CHERI ISA specification (Appendix C.1 in ISAv7).
@@ -156,7 +156,6 @@ declare i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)*, iCAP
 declare iCAPRANGE @llvm.cheri.cap.diff(i8 addrspace(200)*, i8 addrspace(200)*)
 declare i8 addrspace(200)* @llvm.cheri.ddc.get()
 declare i8 addrspace(200)* @llvm.cheri.pcc.get()
-declare i8 addrspace(200)* @llvm.cheri.stack.cap.get()
 
 define iCAPRANGE @to_pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
   %ptr = call iCAPRANGE @llvm.cheri.cap.to.pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
@@ -194,11 +193,6 @@ define i8 addrspace(200)* @pcc_get() nounwind {
   %cap = call i8 addrspace(200)* @llvm.cheri.pcc.get()
   ret i8 addrspace(200)* %cap
 }
-
-define i8 addrspace(200)* @stack_get() nounwind {            ; PURECAP-ONLY
-  %cap = call i8 addrspace(200)* @llvm.cheri.stack.cap.get() ; PURECAP-ONLY
-  ret i8 addrspace(200)* %cap                                ; PURECAP-ONLY
-}                                                            ; PURECAP-ONLY
 
 ; Assertion Instructions
 
