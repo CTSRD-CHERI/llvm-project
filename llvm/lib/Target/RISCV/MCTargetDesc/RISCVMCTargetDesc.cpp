@@ -47,7 +47,15 @@ static MCInstrInfo *createRISCVMCInstrInfo() {
 static MCRegisterInfo *
 createRISCVMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitRISCVMCRegisterInfo(X, RISCV::X1);
+  RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.getABIName());
+
+  Register RAReg;
+  if (ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI))
+    RAReg = RISCV::C1;
+  else
+    RAReg = RISCV::X1;
+
+  InitRISCVMCRegisterInfo(X, RAReg);
   return X;
 }
 
