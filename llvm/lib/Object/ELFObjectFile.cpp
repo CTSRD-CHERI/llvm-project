@@ -347,6 +347,10 @@ SubtargetFeatures ELFObjectFileBase::getRISCVFeatures() const {
       case 'c':
         Features.AddFeature(Arch.take_front());
         break;
+      case 'x':
+        if (Arch.startswith("xcheri"))
+          Features.AddFeature("xcheri");
+        break; // Ignore unexpected features.
       }
 
       // FIXME: Handle version numbers.

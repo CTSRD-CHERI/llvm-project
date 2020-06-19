@@ -2005,9 +2005,11 @@ bool RISCVAsmParser::parseDirectiveAttribute() {
       else if (Arch[0] == 'd') {
         setFeatureBits(RISCV::FeatureStdExtF, "f");
         setFeatureBits(RISCV::FeatureStdExtD, "d");
-      } else if (Arch[0] == 'c') {
+      } else if (Arch[0] == 'c')
         setFeatureBits(RISCV::FeatureStdExtC, "c");
-      } else
+      else if (Arch.consume_front("xcheri"))
+        setFeatureBits(RISCV::FeatureCheri, "xcheri");
+      else
         return Error(ValueExprLoc, "bad arch string " + Arch);
 
       Arch = Arch.drop_front(1);
@@ -2047,6 +2049,8 @@ bool RISCVAsmParser::parseDirectiveAttribute() {
         formalArchStr = (Twine(formalArchStr) + "_d2p0").str();
       if (getFeatureBits(RISCV::FeatureStdExtC))
         formalArchStr = (Twine(formalArchStr) + "_c2p0").str();
+      if (getFeatureBits(RISCV::FeatureCheri))
+        formalArchStr = (Twine(formalArchStr) + "_xcheri0p0").str();
 
       getTargetStreamer().emitTextAttribute(Tag, formalArchStr);
     }
