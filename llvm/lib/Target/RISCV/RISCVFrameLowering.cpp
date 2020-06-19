@@ -753,8 +753,14 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
   for (auto &CS : NonLibcallCSI) {
     // Insert the spill to the stack frame.
     Register Reg = CS.getReg();
+    // Do not set a kill flag on values that are also marked as live-in. This
+    // happens with the @llvm-returnaddress intrinsic and with arguments passed
+    // in callee saved registers.
+    // Omitting the kill flags is conservatively correct even if the live-in is
+    // not used after all.
+    bool IsLiveIn = MF->getRegInfo().isLiveIn(Reg);
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-    TII.storeRegToStackSlot(MBB, MI, Reg, true, CS.getFrameIdx(), RC, TRI);
+    TII.storeRegToStackSlot(MBB, MI, Reg, !IsLiveIn, CS.getFrameIdx(), RC, TRI);
   }
 
   return true;
