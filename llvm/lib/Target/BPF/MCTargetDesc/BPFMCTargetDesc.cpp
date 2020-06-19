@@ -38,7 +38,8 @@ static MCInstrInfo *createBPFMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createBPFMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createBPFMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitBPFMCRegisterInfo(X, BPF::R11 /* RAReg doesn't exist */);
   return X;

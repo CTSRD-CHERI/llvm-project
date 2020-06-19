@@ -44,7 +44,8 @@ static MCInstrInfo *createRISCVMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createRISCVMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createRISCVMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitRISCVMCRegisterInfo(X, RISCV::X1);
   return X;

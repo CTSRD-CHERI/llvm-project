@@ -1778,14 +1778,14 @@ static void disassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     for (unsigned I = 0; I != MAttrs.size(); ++I)
       Features.AddFeature(MAttrs[I]);
 
+  MCTargetOptions MCOptions;
   std::unique_ptr<const MCRegisterInfo> MRI(
-      TheTarget->createMCRegInfo(TripleName));
+      TheTarget->createMCRegInfo(TripleName, MCOptions));
   if (!MRI)
     reportError(Obj->getFileName(),
                 "no register info for target " + TripleName);
 
   // Set up disassembler.
-  MCTargetOptions MCOptions;
   std::unique_ptr<const MCAsmInfo> AsmInfo(
       TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   if (!AsmInfo)

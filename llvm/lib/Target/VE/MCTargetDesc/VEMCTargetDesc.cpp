@@ -46,7 +46,8 @@ static MCInstrInfo *createVEMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createVEMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createVEMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitVEMCRegisterInfo(X, VE::SX10);
   return X;

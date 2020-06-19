@@ -163,8 +163,8 @@ Analysis::Analysis(const Target &Target, std::unique_ptr<MCInstrInfo> InstrInfo,
     return;
 
   const InstructionBenchmark &FirstPoint = Clustering.getPoints().front();
-  RegInfo_.reset(Target.createMCRegInfo(FirstPoint.LLVMTriple));
   MCTargetOptions MCOptions;
+  RegInfo_.reset(Target.createMCRegInfo(FirstPoint.LLVMTriple, MCOptions));
   AsmInfo_.reset(
       Target.createMCAsmInfo(*RegInfo_, FirstPoint.LLVMTriple, MCOptions));
   SubtargetInfo_.reset(Target.createMCSubtargetInfo(FirstPoint.LLVMTriple,

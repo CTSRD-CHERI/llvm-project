@@ -36,7 +36,8 @@ static MCInstrInfo *createMSP430MCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createMSP430MCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createMSP430MCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitMSP430MCRegisterInfo(X, MSP430::PC);
   return X;

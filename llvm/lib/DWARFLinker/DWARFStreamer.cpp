@@ -40,12 +40,12 @@ bool DwarfStreamer::init(Triple TheTriple) {
   TripleName = TheTriple.getTriple();
 
   // Create all the MC Objects.
-  MRI.reset(TheTarget->createMCRegInfo(TripleName));
+  MCTargetOptions MCOptions = mc::InitMCTargetOptionsFromFlags();
+  MRI.reset(TheTarget->createMCRegInfo(TripleName, MCOptions));
   if (!MRI)
     return error(Twine("no register info for target ") + TripleName, Context),
            false;
 
-  MCTargetOptions MCOptions = mc::InitMCTargetOptionsFromFlags();
   MAI.reset(TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   if (!MAI)
     return error("no asm info for target " + TripleName, Context), false;

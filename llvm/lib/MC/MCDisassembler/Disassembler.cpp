@@ -53,11 +53,12 @@ LLVMCreateDisasmCPUFeatures(const char *TT, const char *CPU,
   if (!TheTarget)
     return nullptr;
 
-  std::unique_ptr<const MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TT));
+  MCTargetOptions MCOptions;
+  std::unique_ptr<const MCRegisterInfo> MRI(
+      TheTarget->createMCRegInfo(TT, MCOptions));
   if (!MRI)
     return nullptr;
 
-  MCTargetOptions MCOptions;
   // Get the assembler info needed to setup the MCContext.
   std::unique_ptr<const MCAsmInfo> MAI(
       TheTarget->createMCAsmInfo(*MRI, TT, MCOptions));

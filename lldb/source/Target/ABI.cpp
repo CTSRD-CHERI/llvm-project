@@ -16,6 +16,7 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/Log.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/TargetRegistry.h"
 #include <cctype>
 
@@ -212,8 +213,9 @@ std::unique_ptr<llvm::MCRegisterInfo> ABI::MakeMCRegisterInfo(const ArchSpec &ar
              lookup_error);
     return nullptr;
   }
+  llvm::MCTargetOptions MCOptions;
   std::unique_ptr<llvm::MCRegisterInfo> info_up(
-      target->createMCRegInfo(triple));
+      target->createMCRegInfo(triple, MCOptions));
   assert(info_up);
   return info_up;
 }

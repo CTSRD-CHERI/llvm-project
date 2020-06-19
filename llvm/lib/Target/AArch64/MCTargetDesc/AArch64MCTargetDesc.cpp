@@ -230,7 +230,8 @@ void AArch64_MC::initLLVMToCVRegMapping(MCRegisterInfo *MRI) {
     MRI->mapLLVMRegToCVReg(RegMap[I].Reg, static_cast<int>(RegMap[I].CVReg));
 }
 
-static MCRegisterInfo *createAArch64MCRegisterInfo(const Triple &Triple) {
+static MCRegisterInfo *
+createAArch64MCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitAArch64MCRegisterInfo(X, AArch64::LR);
   AArch64_MC::initLLVMToCVRegMapping(X);

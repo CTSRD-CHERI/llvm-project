@@ -352,10 +352,11 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+  MCTargetOptions MCOptions = mc::InitMCTargetOptionsFromFlags();
+  std::unique_ptr<MCRegisterInfo> MRI(
+      TheTarget->createMCRegInfo(TripleName, MCOptions));
   assert(MRI && "Unable to create target register info!");
 
-  MCTargetOptions MCOptions = mc::InitMCTargetOptionsFromFlags();
   std::unique_ptr<MCAsmInfo> MAI(
       TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   assert(MAI && "Unable to create target asm info!");

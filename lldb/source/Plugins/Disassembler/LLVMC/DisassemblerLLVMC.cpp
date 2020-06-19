@@ -888,8 +888,9 @@ DisassemblerLLVMC::MCDisasmInstance::Create(const char *triple, const char *cpu,
   if (!instr_info_up)
     return Instance();
 
+  llvm::MCTargetOptions MCOptions;
   std::unique_ptr<llvm::MCRegisterInfo> reg_info_up(
-      curr_target->createMCRegInfo(triple));
+      curr_target->createMCRegInfo(triple, MCOptions));
   if (!reg_info_up)
     return Instance();
 
@@ -898,7 +899,6 @@ DisassemblerLLVMC::MCDisasmInstance::Create(const char *triple, const char *cpu,
   if (!subtarget_info_up)
     return Instance();
 
-  llvm::MCTargetOptions MCOptions;
   std::unique_ptr<llvm::MCAsmInfo> asm_info_up(
       curr_target->createMCAsmInfo(*reg_info_up, triple, MCOptions));
   if (!asm_info_up)

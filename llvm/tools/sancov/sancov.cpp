@@ -716,11 +716,11 @@ static void getObjectCoveragePoints(const object::ObjectFile &O,
       TheTarget->createMCSubtargetInfo(TripleName, "", ""));
   failIfEmpty(STI, "no subtarget info for target " + TripleName);
 
+  MCTargetOptions MCOptions;
   std::unique_ptr<const MCRegisterInfo> MRI(
-      TheTarget->createMCRegInfo(TripleName));
+      TheTarget->createMCRegInfo(TripleName, MCOptions));
   failIfEmpty(MRI, "no register info for target " + TripleName);
 
-  MCTargetOptions MCOptions;
   std::unique_ptr<const MCAsmInfo> AsmInfo(
       TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   failIfEmpty(AsmInfo, "no asm info for target " + TripleName);

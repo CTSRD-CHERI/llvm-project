@@ -44,7 +44,8 @@ MCInstrInfo *llvm::createAVRMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createAVRMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createAVRMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitAVRMCRegisterInfo(X, 0);
 

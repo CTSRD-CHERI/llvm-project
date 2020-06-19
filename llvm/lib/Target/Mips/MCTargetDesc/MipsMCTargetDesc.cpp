@@ -72,7 +72,8 @@ static MCInstrInfo *createMipsMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createMipsMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createMipsMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   // FIXME: would be nice if we had a MCTargetOptions instance here instead of
   // just the triple.

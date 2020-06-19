@@ -44,7 +44,8 @@ static MCInstrInfo *createLanaiMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createLanaiMCRegisterInfo(const Triple & /*TT*/) {
+static MCRegisterInfo *
+createLanaiMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitLanaiMCRegisterInfo(X, Lanai::RCA, 0, 0, Lanai::PC);
   return X;
