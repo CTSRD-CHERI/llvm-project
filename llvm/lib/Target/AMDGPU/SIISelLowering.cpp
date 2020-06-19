@@ -3879,6 +3879,7 @@ MachineBasicBlock *SITargetLowering::EmitInstrWithCustomInserter(
     MachineBasicBlock::iterator MII = MI;
     const DebugLoc &DL = MI.getDebugLoc();
     MachineOperand &Dest = MI.getOperand(0);
+    MachineOperand &CarryDest = MI.getOperand(1);
     MachineOperand &Src0 = MI.getOperand(2);
     MachineOperand &Src1 = MI.getOperand(3);
     MachineOperand &Src2 = MI.getOperand(4);
@@ -3915,6 +3916,9 @@ MachineBasicBlock *SITargetLowering::EmitInstrWithCustomInserter(
     }
 
     BuildMI(*BB, MII, DL, TII->get(Opc), Dest.getReg()).add(Src0).add(Src1);
+
+    BuildMI(*BB, MII, DL, TII->get(AMDGPU::COPY), CarryDest.getReg())
+      .addReg(AMDGPU::SCC);
     MI.eraseFromParent();
     return BB;
   }
