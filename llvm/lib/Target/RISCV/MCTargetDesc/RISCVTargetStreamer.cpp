@@ -45,6 +45,9 @@ void RISCVTargetStreamer::emitTargetAttributes(const MCSubtargetInfo &STI) {
   if (STI.hasFeature(RISCV::FeatureStdExtC))
     Arch += "_c2p0";
 
+  if (STI.hasFeature(RISCV::FeatureCheri))
+    Arch += "_xcheri0p0";
+
   emitTextAttribute(RISCVAttrs::ARCH, Arch);
 }
 
