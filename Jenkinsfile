@@ -6,7 +6,8 @@ properties([
         disableResume(),
         [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm-project/'],
         [$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
-        [$class: 'JobPropertyImpl', throttle: [count: 2, durationName: 'hour', userBoost: true]],
+        // FIXME: doesn't seem to work: copyArtifactPermission('*'),
+        rateLimitBuilds([count: 2, durationName: 'hour', userBoost: true]),
         durabilityHint('PERFORMANCE_OPTIMIZED'),
         pipelineTriggers([githubPush(), pollSCM('@daily')])
 ])
