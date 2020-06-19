@@ -19,10 +19,11 @@
 #include "RISCVGenRegisterInfo.inc"
 
 namespace llvm {
+class RISCVSubtarget;
 
 struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
 
-  RISCVRegisterInfo(unsigned HwMode);
+  RISCVRegisterInfo(const RISCVSubtarget &STI);
 
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID) const override;
