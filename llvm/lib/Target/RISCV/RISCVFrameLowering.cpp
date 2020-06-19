@@ -657,6 +657,12 @@ MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
     MachineBasicBlock::iterator MI) const {
   Register SPReg = getSPReg();
   DebugLoc DL = MI->getDebugLoc();
+  unsigned Opcode = MI->getOpcode();
+
+  assert((Opcode == RISCV::ADJCALLSTACKDOWNCAP ||
+          Opcode == RISCV::ADJCALLSTACKUPCAP) ==
+         RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
+         "Should use capability adjustments if and only if ABI is purecap");
 
   if (!hasReservedCallFrame(MF)) {
     // If space has not been reserved for a call frame, ADJCALLSTACKDOWN and
@@ -670,7 +676,8 @@ MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
       // Ensure the stack remains aligned after adjustment.
       Amount = alignSPAdjust(Amount);
 
-      if (MI->getOpcode() == RISCV::ADJCALLSTACKDOWN)
+      if (Opcode == RISCV::ADJCALLSTACKDOWN ||
+          Opcode == RISCV::ADJCALLSTACKDOWNCAP)
         Amount = -Amount;
 
       adjustReg(MBB, MI, DL, SPReg, SPReg, Amount, MachineInstr::NoFlags);

@@ -1358,6 +1358,18 @@ defm : CheriStPat<truncstorei32, CSW, GPR>;
 defm : CheriStPat<store, CSD, GPR>;
 } // Predicates = [HasCheri, IsRV64, IsCapMode]
 
+/// Other pseudo-instructions
+
+// Pessimistically assume the stack pointer will be clobbered
+let Predicates = [HasCheri, IsPureCapABI] in {
+let Defs = [C2], Uses = [C2] in {
+def ADJCALLSTACKDOWNCAP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                 [(callseq_start timm:$amt1, timm:$amt2)]>;
+def ADJCALLSTACKUPCAP   : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                 [(callseq_end timm:$amt1, timm:$amt2)]>;
+} // Defs = [C2], Uses = [C2]
+} // Predicates = [HasCheri, IsPureCapABI]
+
 /// 'A' (Atomic Instructions) extension
 
 let Predicates = [HasCheri, HasStdExtA, IsCapMode] in {

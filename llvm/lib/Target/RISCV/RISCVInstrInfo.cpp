@@ -33,7 +33,12 @@ using namespace llvm;
 #include "RISCVGenInstrInfo.inc"
 
 RISCVInstrInfo::RISCVInstrInfo(RISCVSubtarget &STI)
-    : RISCVGenInstrInfo(RISCV::ADJCALLSTACKDOWN, RISCV::ADJCALLSTACKUP),
+    : RISCVGenInstrInfo(RISCVABI::isCheriPureCapABI(STI.getTargetABI())
+                            ? RISCV::ADJCALLSTACKDOWNCAP
+                            : RISCV::ADJCALLSTACKDOWN,
+                        RISCVABI::isCheriPureCapABI(STI.getTargetABI())
+                            ? RISCV::ADJCALLSTACKUPCAP
+                            : RISCV::ADJCALLSTACKUP),
       STI(STI) {}
 
 unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
