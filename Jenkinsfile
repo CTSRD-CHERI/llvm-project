@@ -61,7 +61,7 @@ if (TEST_WITH_SANITIZERS) {
     cheribuildArgs.add('--llvm/use-asan')
 }
 // By default max 1 hour total and max 2 minutes per test
-cmakeArgs.add("-DLLVM_LIT_ARGS=--xunit-xml-output ${env.WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout ${individualTestTimeout}")
+cmakeArgs.add("-DLLVM_LIT_ARGS=--xunit-xml-output llvm-test-output.xml --max-time 3600 --timeout ${individualTestTimeout}")
 // Quote and join the cmake args
 cheribuildCmakeOption = '\'--llvm/cmake-options=\"' + cmakeArgs.join('\" \"') + '\"\''
 echo("CMake options = ${cheribuildCmakeOption}")
@@ -87,5 +87,5 @@ cheribuildProject(target: 'llvm-native', architecture: 'native',
         tarballName: "cheri-clang-llvm.tar.xz",
         runTests: true,
         uniqueId: env.JOB_NAME,
-        junitXmlFiles: "llvm-test-output.xml",
+        junitXmlFiles: "llvm-project-build/llvm-test-output.xml",
 )
