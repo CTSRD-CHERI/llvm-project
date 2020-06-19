@@ -85,5 +85,6 @@ cheribuildProject(target: 'llvm-native', architecture: 'native',
         skipArchiving: !archiveArtifacts, skipTarball: !archiveArtifacts,
         tarballName: "cheri-clang-llvm.tar.xz",
         runTests: true,
+        uniqueId: env.JOB_NAME,
         junitXmlFiles: "llvm-test-output.xml",
 )
