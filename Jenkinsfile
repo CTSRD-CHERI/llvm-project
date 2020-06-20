@@ -96,7 +96,7 @@ cheribuildProject(target: 'llvm-native', architecture: 'native',
             // FIXME: We should fix the FreeBSD build servers, but deleting the
             //  files first so that they aren't scanned for warnings probably
             //  helps speed up recordIssues() anyway.
-            sh "find llvm-project-build -type d -name Output -exec rm -rf {} +"
+            sh "find llvm-project-build -type d -name Output -prune -exec rm -rf {} +"
         },
         junitXmlFiles: "llvm-project-build/llvm-test-output.xml",
 )
