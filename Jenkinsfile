@@ -75,6 +75,7 @@ if (env.JOB_NAME.startsWith('CLANG-LLVM-linux/') || env.JOB_NAME.startsWith('CLA
     def archiveBranches = ['master', 'dev']
     if (!env.CHANGE_ID && (archiveBranches.contains(env.BRANCH_NAME))) {
         archiveArtifacts = true
+        cheribuildArgs.add("--use-all-cores")
     }
 }
 
