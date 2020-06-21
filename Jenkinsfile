@@ -1,15 +1,10 @@
 @Library('ctsrd-jenkins-scripts') _
 
-properties([
-        // compressBuildLog(), // Broken, see https://issues.jenkins-ci.org/browse/JENKINS-54680
-        disableConcurrentBuilds(),
-        disableResume(),
-        [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm-project/'],
-        [$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
-        // FIXME: doesn't seem to work: copyArtifactPermission('*'),
+// Set the default job properties (work around properties() not being additive but replacing)
+setDefaultJobProperties([
         rateLimitBuilds([count: 2, durationName: 'hour', userBoost: true]),
-        durabilityHint('PERFORMANCE_OPTIMIZED'),
-        pipelineTriggers([githubPush(), pollSCM('@daily')])
+        [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm-project/'],
+        copyArtifactPermission('*'), // Downstream jobs need the compiler tarball
 ])
 
 
