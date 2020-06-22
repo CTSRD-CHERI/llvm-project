@@ -826,7 +826,7 @@ Type *DataLayout::getIntPtrType(Type *Ty) const {
   }
   IntegerType *IntTy = IntegerType::get(Ty->getContext(), NumBits);
   if (VectorType *VecTy = dyn_cast<VectorType>(Ty))
-    return FixedVectorType::get(IntTy, VecTy->getNumElements());
+    return VectorType::get(IntTy, VecTy);
   return IntTy;
 }
 
