@@ -454,6 +454,9 @@ Expected<bool> BugDriver::diffProgram(const Module &Program,
       errs() << "While diffing output: " << Error << '\n';
       exit(1);
     }
+#define DEBUG_TYPE "bugpoint-diff"
+    LLVM_DEBUG(dbgs() << "Files are different: " << ReferenceOutputFile
+                      << " vs " << *Output << '\n');
     FilesDifferent = true;
   } else {
     // Remove the generated output if there are no differences.
