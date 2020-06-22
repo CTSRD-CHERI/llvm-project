@@ -165,7 +165,8 @@ static Value *getStrlenWithNull(IRBuilder<> &Builder, Value *Str) {
 static Value *callAppendStringN(IRBuilder<> &Builder, Value *Desc, Value *Str,
                                 Value *Length, bool isLast) {
   auto Int64Ty = Builder.getInt64Ty();
-  auto CharPtrTy = Builder.getInt8PtrTy();
+  auto CharPtrTy =
+      Builder.getInt8PtrTy(Str->getType()->getPointerAddressSpace());
   auto Int32Ty = Builder.getInt32Ty();
   auto M = Builder.GetInsertBlock()->getModule();
   auto Fn = M->getOrInsertFunction("__ockl_printf_append_string_n", Int64Ty,

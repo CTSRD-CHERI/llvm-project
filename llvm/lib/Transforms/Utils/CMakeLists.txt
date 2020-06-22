@@ -77,3 +77,5 @@ add_llvm_component_library(LLVMTransformUtils
   DEPENDS
   intrinsics_gen
   )
+
+add_compile_definitions(LLVM_NO_DEFAULT_ADDRESS_SPACE=1)

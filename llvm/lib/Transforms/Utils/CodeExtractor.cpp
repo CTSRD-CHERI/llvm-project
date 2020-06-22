@@ -797,8 +797,11 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
     LLVM_DEBUG(dbgs() << "instr used in func: " << *output << "\n");
     if (AggregateArgs)
       paramTy.push_back(output->getType());
-    else
-      paramTy.push_back(PointerType::getUnqual(output->getType()));
+    else {
+      // FIXME: is allocaAS the right AS?
+      paramTy.push_back(PointerType::get(
+          output->getType(), M->getDataLayout().getAllocaAddrSpace()));
+    }
   }
 
   LLVM_DEBUG({
@@ -812,7 +815,9 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
   if (AggregateArgs && (inputs.size() + outputs.size() > 0)) {
     StructTy = StructType::get(M->getContext(), paramTy);
     paramTy.clear();
-    paramTy.push_back(PointerType::getUnqual(StructTy));
+    // FIXME: is allocaAS the right AS?
+    paramTy.push_back(
+        PointerType::get(StructTy, M->getDataLayout().getAllocaAddrSpace()));
   }
   FunctionType *funcType =
                   FunctionType::get(RetTy, paramTy,
@@ -1014,7 +1019,9 @@ static void insertLifetimeMarkersSurroundingCall(
     Module *M, ArrayRef<Value *> LifetimesStart, ArrayRef<Value *> LifetimesEnd,
     CallInst *TheCall) {
   LLVMContext &Ctx = M->getContext();
-  auto Int8PtrTy = Type::getInt8PtrTy(Ctx);
+  // FIXME: is allocaAS correct?
+  auto Int8PtrTy =
+      Type::getInt8PtrTy(Ctx, M->getDataLayout().getAllocaAddrSpace());
   auto NegativeOne = ConstantInt::getSigned(Type::getInt64Ty(Ctx), -1);
   Instruction *Term = TheCall->getParent()->getTerminator();
 
