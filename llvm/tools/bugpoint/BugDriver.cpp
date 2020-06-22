@@ -31,6 +31,12 @@ namespace llvm {
 Triple TargetTriple;
 }
 
+static cl::opt<bool>
+    ForceMiscompilationDebug("force-miscompilation-debug",
+                             cl::desc("Don't fall back to crash debugging if "
+                                      "miscompilation debugging failed"),
+                             cl::init(false));
+
 DiscardTemp::~DiscardTemp() {
   if (SaveTemps) {
     if (Error E = File.keep())
@@ -223,6 +229,10 @@ Error BugDriver::run() {
     outs() << "\n*** Output matches: Debugging miscompilation!\n";
     if (Error E = debugMiscompilation()) {
       errs() << toString(std::move(E));
+      if (ForceMiscompilationDebug)
+        return make_error<StringError>(
+            "*** Requested miscompilation debugging but cannot continue!\n",
+            inconvertibleErrorCode());
       return debugCodeGeneratorCrash();
     }
     return Error::success();
