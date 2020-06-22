@@ -252,7 +252,6 @@ private:
   FunctionCallee SanCovTraceGepFunction;
   FunctionCallee SanCovTraceSwitchFunction;
   GlobalVariable *SanCovLowestStack;
-  InlineAsm *EmptyAsm;
   Type *IntptrTy, *PcAddrTy, *Int64Ty, *GlobalsInt64PtrTy, *Int32Ty,
       *GlobalsInt32PtrTy, *Int16Ty, *Int8Ty, *GlobalsInt8PtrTy,
       *Int1Ty, *GlobalsInt1PtrTy;
@@ -494,11 +493,6 @@ bool ModuleSanitizerCoverage::instrumentModule(
       GlobalValue::ThreadLocalMode::InitialExecTLSModel);
   if (Options.StackDepth && !SanCovLowestStack->isDeclaration())
     SanCovLowestStack->setInitializer(Constant::getAllOnesValue(IntptrTy));
-
-  // We insert an empty inline asm after cov callbacks to avoid callback merge.
-  EmptyAsm = InlineAsm::get(FunctionType::get(IRB.getVoidTy(), false),
-                            StringRef(""), StringRef(""),
-                            /*hasSideEffects=*/true);
 
   SanCovTracePC = M.getOrInsertFunction(SanCovTracePCName, VoidTy);
   SanCovTracePCGuard =
@@ -929,11 +923,11 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
   IRBuilder<> IRB(&*IP);
   IRB.SetCurrentDebugLocation(EntryLoc);
   if (Options.TracePC) {
-    IRB.CreateCall(SanCovTracePC); // gets the PC using GET_CALLER_PC.
-    IRB.CreateCall(EmptyAsm, {}); // Avoids callback merge.
+    IRB.CreateCall(SanCovTracePC)
+        ->setCannotMerge(); // gets the PC using GET_CALLER_PC.
   }
   if (Options.TracePCGuard) {
-#if 0 // WTF is this using inttoptr instead of a GEP?
+#if 0 // Why is this using inttoptr instead of a GEP???
     auto GuardPtr = IRB.CreateIntToPtr(
         IRB.CreateAdd(IRB.CreatePointerCast(FunctionGuardArray, IntptrTy),
                       ConstantInt::get(IntptrTy, Idx * 4)),
@@ -944,7 +938,6 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
         {ConstantInt::get(Int32Ty, 0), ConstantInt::get(IntptrTy, Idx)});
 #endif
     IRB.CreateCall(SanCovTracePCGuard, GuardPtr);
-    IRB.CreateCall(EmptyAsm, {}); // Avoids callback merge.
   }
   if (Options.Inline8bitCounters) {
     auto CounterPtr = IRB.CreateGEP(
