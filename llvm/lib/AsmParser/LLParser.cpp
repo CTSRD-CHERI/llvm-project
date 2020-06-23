@@ -3664,9 +3664,10 @@ bool LLParser::ParseValID(ValID &ID, PerFunctionState *PFS) {
             ExplicitTypeLoc,
             "explicit pointee type doesn't match operand's pointee type");
 
-      unsigned GEPWidth = BaseType->isVectorTy()
-                              ? cast<VectorType>(BaseType)->getNumElements()
-                              : 0;
+      unsigned GEPWidth =
+          BaseType->isVectorTy()
+              ? cast<FixedVectorType>(BaseType)->getNumElements()
+              : 0;
 
       ArrayRef<Constant *> Indices(Elts.begin() + 1, Elts.end());
       for (Constant *Val : Indices) {
@@ -3674,7 +3675,7 @@ bool LLParser::ParseValID(ValID &ID, PerFunctionState *PFS) {
         if (!ValTy->isIntOrIntVectorTy())
           return Error(ID.Loc, "getelementptr index must be an integer");
         if (auto *ValVTy = dyn_cast<VectorType>(ValTy)) {
-          unsigned ValNumEl = ValVTy->getNumElements();
+          unsigned ValNumEl = cast<FixedVectorType>(ValVTy)->getNumElements();
           if (GEPWidth && (ValNumEl != GEPWidth))
             return Error(
                 ID.Loc,
