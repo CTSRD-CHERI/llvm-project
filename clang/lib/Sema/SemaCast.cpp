@@ -2877,7 +2877,7 @@ void CastOperation::CheckCapabilityConversions() {
   if (SrcExpr.isInvalid())
     return; // already invalid -> nothing to check.
 
-  if (Kind == CK_ToVoid || Kind == CK_Dependent)
+  if (Kind == CK_ToVoid || Kind == CK_Dependent || Kind == CK_ToUnion)
     return; // Nothing we can/should check for these casts
 
   auto SrcType = SrcExpr.get()->getType();

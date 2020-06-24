@@ -1683,8 +1683,9 @@ bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
     assert(!getType()->isCHERICapabilityType(Ctx, /*IncludeIntCap=*/false));
     break;
 
-  case CK_ToVoid:    // always allowed
-  case CK_Dependent: // We don't know the real type yet
+  case CK_ToVoid:    // This is always allowed.
+  case CK_Dependent: // We don't know the real type yet.
+  case CK_ToUnion:   // Checks that the union is valid are performed elsewhere.
   case CK_IntegralCast:
   case CK_PointerToIntegral:
   case CK_IntegralToPointer:
