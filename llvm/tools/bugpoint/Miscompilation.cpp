@@ -653,6 +653,20 @@ static Expected<std::vector<Function *>> DebugAMiscompilation(
   PrintFunctionList(MiscompiledFunctions);
   outs() << '\n';
 
+  // Output a bunch of bitcode files for the user...
+  outs() << "Outputting reduced bitcode files which expose the problem:\n";
+  ValueToValueMapTy VMap;
+  Module *ToNotOptimize = CloneModule(BD.getProgram(), VMap).release();
+  Module *ToOptimize =
+      SplitFunctionsOutOfModule(ToNotOptimize, MiscompiledFunctions, VMap)
+          .release();
+  outs() << "  Non-optimized portion: ";
+  BD.EmitProgressBitcode(*ToNotOptimize, "funcs-tonotoptimize", true);
+  delete ToNotOptimize; // Delete hacked module.
+  outs() << "  Portion that is input to optimizer: ";
+  BD.EmitProgressBitcode(*ToOptimize, "funcs-tooptimize");
+  delete ToOptimize; // Delete hacked module.
+
   // See if we can rip any loops out of the miscompiled functions and still
   // trigger the problem.
 
