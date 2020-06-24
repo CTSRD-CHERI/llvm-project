@@ -527,7 +527,15 @@ ReduceMiscompiledBlocks::TestFuncs(const std::vector<BasicBlock *> &BBs) {
   if (std::unique_ptr<Module> New =
           BD.extractMappedBlocksFromModule(BBsOnClone, ToOptimize.get())) {
     Expected<bool> Ret = TestFn(BD, std::move(New), std::move(ToNotOptimize));
-    BD.setNewProgram(std::move(Orig));
+    if (Error E = Ret.takeError())
+      return std::move(E);
+    if (!*Ret) {
+      outs() << "*** Block extraction masked the problem.  Undoing.\n";
+      BD.setNewProgram(std::move(Orig)); // failed
+      return false;
+    }
+    BD.setNewProgram(std::move(New));
+    assert(Ret);
     return Ret;
   }
   BD.setNewProgram(std::move(Orig));
@@ -672,6 +680,9 @@ static Expected<std::vector<Function *>> DebugAMiscompilation(
       outs() << '\n';
     }
   }
+
+  if (!DisableBlockExtraction)
+    WithColor::warning() << "ExtractBlocks is broken for custom executors!";
 
   if (!BugpointIsInterrupted && !DisableBlockExtraction) {
     Expected<bool> Ret = ExtractBlocks(BD, TestFn, MiscompiledFunctions);
