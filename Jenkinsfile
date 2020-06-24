@@ -30,7 +30,7 @@ if (env.JOB_NAME.toLowerCase().contains("sanitizer")) {
 
 cheribuildArgs = [
         '--llvm/build-type=Release', // DEBUG builds are too slow, we use release + assertions
-        '--install-prefix=/sdk', // This path is expected by downstream jobs
+        '--install-prefix=/', // This path is expected by downstream jobs
         '--without-sdk', // Use host compilers
         '--llvm/build-everything', // build all targets
         '--llvm/install-toolchain-only', // but only install compiler+binutils
