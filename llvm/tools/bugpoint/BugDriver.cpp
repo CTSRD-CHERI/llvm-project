@@ -219,14 +219,16 @@ Error BugDriver::run() {
   // Diff the output of the raw program against the reference output.  If it
   // matches, then we assume there is a miscompilation bug and try to
   // diagnose it.
-  outs() << "*** Checking the code generator...\n";
+  WithColor(outs(), HighlightColor::Remark)
+      << "*** Checking the code generator...\n";
   Expected<bool> Diff = diffProgram(*Program, "", "", false);
   if (Error E = Diff.takeError()) {
     errs() << toString(std::move(E));
     return debugCodeGeneratorCrash();
   }
   if (!*Diff) {
-    outs() << "\n*** Output matches: Debugging miscompilation!\n";
+    WithColor(outs(), HighlightColor::Remark)
+        << "\n*** Output matches: Debugging miscompilation!\n";
     if (Error E = debugMiscompilation()) {
       errs() << toString(std::move(E));
       if (ForceMiscompilationDebug)
@@ -238,8 +240,10 @@ Error BugDriver::run() {
     return Error::success();
   }
 
-  outs() << "\n*** Input program does not match reference diff!\n";
-  outs() << "Debugging code generator problem!\n";
+  WithColor(outs(), HighlightColor::Warning)
+      << "\n*** Input program does not match reference diff!\n";
+  WithColor(outs(), HighlightColor::Remark)
+      << "Debugging code generator problem!\n";
   if (Error E = debugCodeGenerator()) {
     errs() << toString(std::move(E));
     return debugCodeGeneratorCrash();

@@ -84,7 +84,7 @@ ReduceMiscompilingPasses::doTest(std::vector<std::string> &Prefix,
   if (Error E = Diff.takeError())
     return std::move(E);
   if (*Diff) {
-    outs() << " nope.\n";
+    WithColor(outs(), raw_ostream::RED, true) << " nope.\n";
     if (Suffix.empty()) {
       errs() << BD.getToolName() << ": I'm confused: the test fails when "
              << "no passes are run, nondeterministic program?\n";
@@ -92,7 +92,8 @@ ReduceMiscompilingPasses::doTest(std::vector<std::string> &Prefix,
     }
     return KeepSuffix; // Miscompilation detected!
   }
-  outs() << " yup.\n"; // No miscompilation!
+  WithColor(outs(), raw_ostream::GREEN, true)
+      << " yup.\n"; // No miscompilation!
 
   if (Prefix.empty())
     return NoFailure;
@@ -125,11 +126,12 @@ ReduceMiscompilingPasses::doTest(std::vector<std::string> &Prefix,
   if (Error E = Diff.takeError())
     return std::move(E);
   if (*Diff) {
-    outs() << " nope.\n";
+    WithColor(outs(), raw_ostream::RED, true) << " nope.\n";
     sys::fs::remove(BitcodeResult);
     return KeepPrefix;
   }
-  outs() << " yup.\n"; // No miscompilation!
+  WithColor(outs(), raw_ostream::GREEN, true)
+      << " yup.\n"; // No miscompilation!
 
   // Ok, so now we know that the prefix passes work, try running the suffix
   // passes on the result of the prefix passes.
@@ -171,12 +173,13 @@ ReduceMiscompilingPasses::doTest(std::vector<std::string> &Prefix,
   if (Error E = Diff.takeError())
     return std::move(E);
   if (*Diff) {
-    outs() << " nope.\n";
+    WithColor(outs(), raw_ostream::RED, true) << " nope.\n";
     return KeepSuffix;
   }
 
   // Otherwise, we must not be running the bad pass anymore.
-  outs() << " yup.\n"; // No miscompilation!
+  WithColor(outs(), raw_ostream::GREEN, true)
+      << " yup.\n"; // No miscompilation!
   // Restore orig program & free test.
   BD.setNewProgram(std::move(OriginalInput));
   return NoFailure;
@@ -635,9 +638,10 @@ static Expected<std::vector<Function *>> DebugAMiscompilation(
       return std::move(E);
     }
   }
-  outs() << "\n*** The following function"
-         << (MiscompiledFunctions.size() == 1 ? " is" : "s are")
-         << " being miscompiled: ";
+  WithColor(outs(), HighlightColor::Note)
+      << "\n*** The following function"
+      << (MiscompiledFunctions.size() == 1 ? " is" : "s are")
+      << " being miscompiled: ";
   PrintFunctionList(MiscompiledFunctions);
   outs() << '\n';
 
@@ -660,9 +664,10 @@ static Expected<std::vector<Function *>> DebugAMiscompilation(
       if (Error E = Ret.takeError())
         return std::move(E);
 
-      outs() << "\n*** The following function"
-             << (MiscompiledFunctions.size() == 1 ? " is" : "s are")
-             << " being miscompiled: ";
+      WithColor(outs(), HighlightColor::Note)
+          << "\n*** The following function"
+          << (MiscompiledFunctions.size() == 1 ? " is" : "s are")
+          << " being miscompiled: ";
       PrintFunctionList(MiscompiledFunctions);
       outs() << '\n';
     }
@@ -683,9 +688,10 @@ static Expected<std::vector<Function *>> DebugAMiscompilation(
       if (Error E = Ret.takeError())
         return std::move(E);
 
-      outs() << "\n*** The following function"
-             << (MiscompiledFunctions.size() == 1 ? " is" : "s are")
-             << " being miscompiled: ";
+      WithColor(outs(), HighlightColor::Note)
+          << "\n*** The following function"
+          << (MiscompiledFunctions.size() == 1 ? " is" : "s are")
+          << " being miscompiled: ";
       PrintFunctionList(MiscompiledFunctions);
       outs() << '\n';
     }
@@ -706,23 +712,27 @@ static Expected<bool> TestOptimizer(BugDriver &BD, std::unique_ptr<Module> Test,
   std::unique_ptr<Module> Optimized =
       BD.runPassesOn(Test.get(), BD.getPassesToRun());
   if (!Optimized) {
-    errs() << " Error running this sequence of passes"
-           << " on the input program!\n";
+    WithColor(errs(), HighlightColor::Error)
+        << " Error running this sequence of passes on the input program!\n";
     BD.EmitProgressBitcode(*Test, "pass-error", false);
     BD.setNewProgram(std::move(Test));
     if (Error E = BD.debugOptimizerCrash())
       return std::move(E);
     return false;
   }
-  outs() << "done.\n";
+  WithColor(outs(), raw_ostream::GREEN, true) << "done.\n";
 
-  outs() << "  Checking to see if the merged program executes correctly: ";
+  WithColor(outs(), HighlightColor::Remark)
+      << "  Checking to see if the merged program executes correctly: ";
   bool Broken;
   auto Result = testMergedProgram(BD, *Optimized, *Safe, Broken);
   if (Error E = Result.takeError())
     return std::move(E);
   if (auto New = std::move(*Result)) {
-    outs() << (Broken ? " nope.\n" : " yup.\n");
+    if (Broken)
+      WithColor(outs(), raw_ostream::RED, true) << " nope.\n";
+    else
+      WithColor(outs(), raw_ostream::GREEN, true) << " yup.\n";
     // Delete the original and set the new program.
     BD.setNewProgram(std::move(New));
   }
@@ -747,9 +757,10 @@ Error BugDriver::debugMiscompilation() {
           inconvertibleErrorCode());
   }
 
-  outs() << "\n*** Found miscompiling pass"
-         << (getPassesToRun().size() == 1 ? "" : "es") << ": "
-         << getPassesString(getPassesToRun()) << '\n';
+  WithColor(outs(), HighlightColor::Note)
+      << "\n*** Found miscompiling pass"
+      << (getPassesToRun().size() == 1 ? "" : "es") << ": "
+      << getPassesString(getPassesToRun()) << '\n';
   EmitProgressBitcode(*Program, "passinput");
 
   Expected<std::vector<Function *>> MiscompiledFunctions =
