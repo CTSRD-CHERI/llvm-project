@@ -44,6 +44,7 @@
 #include "ToolChains/RTEMS.h"
 #include "ToolChains/Solaris.h"
 #include "ToolChains/TCE.h"
+#include "ToolChains/VE.h"
 #include "ToolChains/WebAssembly.h"
 #include "ToolChains/XCore.h"
 #include "clang/Basic/Version.h"
@@ -4950,6 +4951,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
                Target.getArch() == llvm::Triple::ppc64le)
         TC = std::make_unique<toolchains::PPCLinuxToolChain>(*this, Target,
                                                               Args);
+      else if (Target.getArch() == llvm::Triple::ve)
+        TC = std::make_unique<toolchains::VEToolChain>(*this, Target, Args);
+
       else
         TC = std::make_unique<toolchains::Linux>(*this, Target, Args);
       break;
@@ -5049,6 +5053,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       case llvm::Triple::riscv32:
       case llvm::Triple::riscv64:
         TC = std::make_unique<toolchains::RISCVToolChain>(*this, Target, Args);
+        break;
+      case llvm::Triple::ve:
+        TC = std::make_unique<toolchains::VEToolChain>(*this, Target, Args);
         break;
       default:
         if (Target.getVendor() == llvm::Triple::Myriad)
