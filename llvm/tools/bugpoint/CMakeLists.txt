@@ -39,3 +39,4 @@ add_llvm_tool(bugpoint
   SUPPORT_PLUGINS
   )
 export_executable_symbols_for_plugins(bugpoint)
+add_compile_definitions(LLVM_NO_DEFAULT_ADDRESS_SPACE=1)

@@ -841,8 +841,11 @@ CleanupAndPrepareModules(BugDriver &BD, std::unique_ptr<Module> Test,
   // Add the resolver to the Safe module.
   // Prototype: void *getPointerToNamedFunction(const char* Name)
   FunctionCallee resolverFunc = Safe->getOrInsertFunction(
-      "getPointerToNamedFunction", Type::getInt8PtrTy(Safe->getContext()),
-      Type::getInt8PtrTy(Safe->getContext()));
+      "getPointerToNamedFunction",
+      Type::getInt8PtrTy(Safe->getContext(),
+                         Safe->getDataLayout().getGlobalsAddressSpace()),
+      Type::getInt8PtrTy(Safe->getContext(),
+                         Safe->getDataLayout().getGlobalsAddressSpace()));
 
   // Use the function we just added to get addresses of functions we need.
   for (Module::iterator F = Safe->begin(), E = Safe->end(); F != E; ++F) {
@@ -907,7 +910,9 @@ CleanupAndPrepareModules(BugDriver &BD, std::unique_ptr<Module> Test,
 
           // Cast the result from the resolver to correctly-typed function.
           CastInst *CastedResolver = new BitCastInst(
-              Resolver, PointerType::getUnqual(F->getFunctionType()),
+              Resolver,
+              PointerType::get(F->getFunctionType(),
+                               Safe->getDataLayout().getProgramAddressSpace()),
               "resolverCast", LookupBB);
 
           // Save the value in our cache.
