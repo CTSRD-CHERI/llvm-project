@@ -2339,7 +2339,6 @@ Error BitcodeReader::parseConstants() {
     uint64_t Op0Idx;
     uint64_t Op1Idx;
     uint64_t Op2Idx;
-    unsigned CstNo;
   };
   std::vector<DelayedShufTy> DelayedShuffles;
   while (true) {
@@ -2353,6 +2352,9 @@ Error BitcodeReader::parseConstants() {
     case BitstreamEntry::Error:
       return error("Malformed block");
     case BitstreamEntry::EndBlock:
+      if (NextCstNo != ValueList.size())
+        return error("Invalid constant reference");
+
       // Once all the constants have been read, go through and resolve forward
       // references.
       //
@@ -2365,7 +2367,6 @@ Error BitcodeReader::parseConstants() {
         uint64_t Op0Idx = DelayedShuffle.Op0Idx;
         uint64_t Op1Idx = DelayedShuffle.Op1Idx;
         uint64_t Op2Idx = DelayedShuffle.Op2Idx;
-        uint64_t CstNo = DelayedShuffle.CstNo;
         Constant *Op0 = ValueList.getConstantFwdRef(Op0Idx, OpTy);
         Constant *Op1 = ValueList.getConstantFwdRef(Op1Idx, OpTy);
         Type *ShufTy =
@@ -2376,12 +2377,9 @@ Error BitcodeReader::parseConstants() {
         SmallVector<int, 16> Mask;
         ShuffleVectorInst::getShuffleMask(Op2, Mask);
         Value *V = ConstantExpr::getShuffleVector(Op0, Op1, Mask);
-        ValueList.assignValue(V, CstNo, DelayedShuffle.CurFullTy);
+        ValueList.assignValue(V, NextCstNo, DelayedShuffle.CurFullTy);
+        ++NextCstNo;
       }
-
-      if (NextCstNo != ValueList.size())
-        return error("Invalid constant reference");
-
       ValueList.resolveConstantForwardRefs();
       return Error::success();
     case BitstreamEntry::Record:
@@ -2737,8 +2735,7 @@ Error BitcodeReader::parseConstants() {
       if (Record.size() < 3 || !OpTy)
         return error("Invalid record");
       DelayedShuffles.push_back(
-          {OpTy, OpTy, CurFullTy, Record[0], Record[1], Record[2], NextCstNo});
-      ++NextCstNo;
+          {OpTy, OpTy, CurFullTy, Record[0], Record[1], Record[2]});
       continue;
     }
     case bitc::CST_CODE_CE_SHUFVEC_EX: { // [opty, opval, opval, opval]
@@ -2748,8 +2745,7 @@ Error BitcodeReader::parseConstants() {
       if (Record.size() < 4 || !RTy || !OpTy)
         return error("Invalid record");
       DelayedShuffles.push_back(
-          {OpTy, RTy, CurFullTy, Record[1], Record[2], Record[3], NextCstNo});
-      ++NextCstNo;
+          {OpTy, RTy, CurFullTy, Record[1], Record[2], Record[3]});
       continue;
     }
     case bitc::CST_CODE_CE_CMP: {     // CE_CMP: [opty, opval, opval, pred]
