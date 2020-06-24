@@ -6586,7 +6586,7 @@ def err_typecheck_convert_ptr_to_cap: Error<"converting non-capability"
   "%select{| reference to}2 type %0 to capability type %1 without "
   "an explicit cast; if this is intended use __cheri_tocap">;
 def err_typecheck_convert_ptr_to_cap_unrelated_type: Error<"cannot implicitly "
-  "or explicitly convert non-capability %select{| reference to}2 type %0 to "
+  "or explicitly convert non-capability%select{| reference to}2 type %0 to "
   "unrelated capability type %1">;
 
 def warn_uintcap_bitwise_and : Warning<
@@ -6625,6 +6625,10 @@ def warn_capability_no_provenance : Warning<
   "cast from provenance-free integer type to pointer type will give pointer"
   " that can not be dereferenced">,
   InGroup<CHERICaps>;
+def err_capability_no_provenance : Error<warn_capability_no_provenance.Text>;
+def note_capability_no_provenance_fixit : Note<
+  "use an explicit capability conversion or insert a cast to "
+  "%select{|__}0%select{u|}1select{intptr_t|__intcap_t}0 if this is intended">;
 def warn_capability_integer_cast : Warning<
   "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,
   // XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
@@ -6640,8 +6644,6 @@ def warn_capability_pointer_cast : Warning<
   "cast from capability type %0 to non-capability type %1 is most likely an "
    "error; use __cheri_fromcap to convert between pointers and capabilities">,
   InGroup<CHERICaps>, DefaultError;
-def note_insert_intptr_fixit : Note<
-  "insert cast to %select{intptr_t|__intcap_t}0 to silence this warning">;
 def err_cheri_to_from_cap_unrelated_type : Error<
   "invalid __cheri_%select{from|to}0cap from %1 to unrelated type %2">;
 def err_cheri_to_from_cap_invalid_target_type: Error<
@@ -6998,6 +7000,9 @@ def err_bad_cxx_cast_qualifiers_away : Error<
 def err_bad_cxx_reference_cast_capability_qualifier : Error<
 "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
 "functional-style cast}0 to reference type %2 changes __capability qualifier">;
+def err_bad_cxx_cast_capability_qualifier : Error<
+  "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
+  "functional-style cast}0 from %1 to %2 changes capability qualifier">;
 def err_bad_cxx_cast_addr_space_mismatch : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
   "functional-style cast}0 from %1 to %2 converts between mismatching address"

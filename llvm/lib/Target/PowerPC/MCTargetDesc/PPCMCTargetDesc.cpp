@@ -64,7 +64,8 @@ static MCInstrInfo *createPPCMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createPPCMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createPPCMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   bool isPPC64 =
       (TT.getArch() == Triple::ppc64 || TT.getArch() == Triple::ppc64le);
   unsigned Flavour = isPPC64 ? 0 : 1;

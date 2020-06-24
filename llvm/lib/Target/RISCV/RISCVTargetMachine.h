@@ -43,6 +43,10 @@ public:
   }
 
   TargetTransformInfo getTargetTransformInfo(const Function &F) override;
+
+  bool IsRV64() const {
+    return getTargetTriple().isArch64Bit();
+  }
 };
 }
 

@@ -262,6 +262,7 @@ def CClearTag       : Cheri_r<0xb, "ccleartag", GPCR>;
 def CBuildCap       : Cheri_rr<0x1d, "cbuildcap", GPCR, GPCR>;
 def CCopyType       : Cheri_rr<0x1e, "ccopytype", GPCR, GPCR>;
 def CCSeal          : Cheri_rr<0x1f, "ccseal", GPCR, GPCR>;
+def CSealEntry      : Cheri_r<0x11, "csealentry", GPCR>;
 
 def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
@@ -843,6 +844,7 @@ def : PatGpcr<int_cheri_cap_tag_clear, CClearTag>;
 def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
 def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;
 def : PatGpcrGpcr<int_cheri_cap_conditional_seal, CCSeal>;
+def : PatGpcr<int_cheri_cap_seal_entry, CSealEntry>;
 
 // TODO: Make this rematerialisable like MIPS
 def : PatGpcrGpr<int_cheri_bounded_stack_cap, CSetBounds>;
@@ -980,6 +982,15 @@ def : CheriBccSwapPat<setle, BGE>;
 def : CheriBccSwapPat<setugt, BLTU>;
 def : CheriBccSwapPat<setule, BGEU>;
 
+let Predicates = [HasCheri, IsPureCapABI] in {
+let isCall = 1, Defs = [C1] in
+let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
+def PseudoCapBRIND : Pseudo<(outs), (ins GPCR:$rs1), []>,
+                     PseudoInstExpansion<(CJALR C0, GPCR:$rs1)>;
+
+def : Pat<(brind GPCR:$rs1), (PseudoCapBRIND GPCR:$rs1)>;
+} // Predicates = [HasCheri, IsPureCapABI]
+
 /// Assertion Instructions
 
 def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
@@ -987,7 +998,7 @@ def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
 /// Special Capability Register Access Instructions
 
 def : Pat<(int_cheri_ddc_get), (CSpecialRW SCR_DDC.Encoding, C0)>;
-let Predicates = [HasCheri] in
+let Predicates = [HasCheri, IsPureCapABI] in
 def : Pat<(int_cheri_stack_cap_get), (CLenVT (COPY C2))>;
 
 let Predicates = [HasCheri, IsCapMode] in
@@ -1346,6 +1357,18 @@ defm : CheriLdPat<load, CLD>;
 defm : CheriStPat<truncstorei32, CSW, GPR>;
 defm : CheriStPat<store, CSD, GPR>;
 } // Predicates = [HasCheri, IsRV64, IsCapMode]
+
+/// Other pseudo-instructions
+
+// Pessimistically assume the stack pointer will be clobbered
+let Predicates = [HasCheri, IsPureCapABI] in {
+let Defs = [C2], Uses = [C2] in {
+def ADJCALLSTACKDOWNCAP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                 [(callseq_start timm:$amt1, timm:$amt2)]>;
+def ADJCALLSTACKUPCAP   : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                 [(callseq_end timm:$amt1, timm:$amt2)]>;
+} // Defs = [C2], Uses = [C2]
+} // Predicates = [HasCheri, IsPureCapABI]
 
 /// 'A' (Atomic Instructions) extension
 

@@ -17,10 +17,10 @@
 #include "RISCVRegisterInfo.h"
 #include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
+#include "Utils/RISCVCompressedCap.h"
 #include "Utils/RISCVMatInt.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -1321,6 +1321,7 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(
     const SDValue Op, KnownBits &Known, const APInt &DemandedElts,
     const SelectionDAG &DAG, unsigned Depth) const {
   Known.resetAll();
+  bool IsRV64 = Subtarget.is64Bit();
   switch (Op.getOpcode()) {
   default: break;
   case ISD::INTRINSIC_WO_CHAIN: {
@@ -1329,12 +1330,14 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(
     case Intrinsic::cheri_round_representable_length:
       if (CapTypeHasPreciseBounds) {
         Known = DAG.computeKnownBits(Op.getOperand(1));
-      } else if (Subtarget.is64Bit()) {
+      } else if (IsRV64) {
         KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
         uint64_t MinLength = KnownLengthBits.One.getZExtValue();
         uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
-        uint64_t MinRoundedLength = cc128_get_representable_length(MinLength);
-        uint64_t MaxRoundedLength = cc128_get_representable_length(MaxLength);
+        uint64_t MinRoundedLength =
+          RISCVCompressedCap::getRepresentableLength(MinLength, IsRV64);
+        uint64_t MaxRoundedLength =
+          RISCVCompressedCap::getRepresentableLength(MaxLength, IsRV64);
         bool MinRoundedOverflow = MinRoundedLength < MinLength;
         bool MaxRoundedOverflow = MaxRoundedLength < MaxLength;
 
@@ -1386,13 +1389,13 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(
     case Intrinsic::cheri_representable_alignment_mask:
       if (CapTypeHasPreciseBounds) {
         Known.setAllOnes();
-      } else if (Subtarget.is64Bit()) {
+      } else if (IsRV64) {
         KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
         uint64_t MinLength = KnownLengthBits.One.getZExtValue();
         uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
 
-        Known.Zero |= ~cc128_get_alignment_mask(MinLength);
-        Known.One |= cc128_get_alignment_mask(MaxLength);
+        Known.Zero |= ~RISCVCompressedCap::getAlignmentMask(MinLength, IsRV64);
+        Known.One |= RISCVCompressedCap::getAlignmentMask(MaxLength, IsRV64);
       }
       break;
     }
@@ -1402,27 +1405,18 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(
 
 TailPaddingAmount
 RISCVTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
-  if (!Subtarget.hasCheri())
+  if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return TailPaddingAmount::None;
-  if (Subtarget.is64Bit()) {
-    return static_cast<TailPaddingAmount>(
-        llvm::alignTo(Size, cc128_get_required_alignment(Size)) - Size);
-  } else {
-    // TODO: cc64 helpers
-    return TailPaddingAmount::None;
-  }
+
+  return RISCVCompressedCap::getRequiredTailPadding(Size, Subtarget.is64Bit());
 }
 
 Align
 RISCVTargetLowering::getAlignmentForPreciseBounds(uint64_t Size) const {
-  if (!Subtarget.hasCheri())
+  if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return Align();
-  if (Subtarget.is64Bit()) {
-    return Align(cc128_get_required_alignment(Size));
-  } else {
-    // TODO: cc64 helpers
-    return Align();
-  }
+
+  return RISCVCompressedCap::getRequiredAlignment(Size, Subtarget.is64Bit());
 }
 
 static MachineBasicBlock *emitReadCycleWidePseudo(MachineInstr &MI,
@@ -3413,8 +3407,8 @@ Register RISCVTargetLowering::getExceptionPointerRegister(
 
 Register RISCVTargetLowering::getExceptionSelectorRegister(
     const Constant *PersonalityFn) const {
-  return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
-      ? RISCV::C11 : RISCV::X11;
+  // This is an index, so always an integer GPR register
+  return RISCV::X11;
 }
 
 uint32_t RISCVTargetLowering::getExceptionPointerAS() const {

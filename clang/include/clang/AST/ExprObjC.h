@@ -1637,9 +1637,10 @@ class ObjCBridgedCastExpr final
 public:
   ObjCBridgedCastExpr(SourceLocation LParenLoc, ObjCBridgeCastKind Kind,
                       CastKind CK, SourceLocation BridgeKeywordLoc,
-                      TypeSourceInfo *TSInfo, Expr *Operand)
+                      TypeSourceInfo *TSInfo, Expr *Operand,
+                      const ASTContext &Ctx)
       : ExplicitCastExpr(ObjCBridgedCastExprClass, TSInfo->getType(), VK_RValue,
-                         CK, Operand, 0, TSInfo),
+                         CK, Operand, 0, TSInfo, Ctx),
         LParenLoc(LParenLoc), BridgeKeywordLoc(BridgeKeywordLoc), Kind(Kind) {}
 
   /// Construct an empty Objective-C bridged cast.

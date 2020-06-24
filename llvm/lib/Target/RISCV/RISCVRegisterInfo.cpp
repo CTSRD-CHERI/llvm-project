@@ -36,9 +36,11 @@ static_assert(RISCV::F1_D == RISCV::F0_D + 1, "Register list not consecutive");
 static_assert(RISCV::F31_D == RISCV::F0_D + 31,
               "Register list not consecutive");
 
-RISCVRegisterInfo::RISCVRegisterInfo(unsigned HwMode)
-    : RISCVGenRegisterInfo(RISCV::X1, /*DwarfFlavour*/0, /*EHFlavor*/0,
-                           /*PC*/0, HwMode) {}
+RISCVRegisterInfo::RISCVRegisterInfo(const RISCVSubtarget &STI)
+    : RISCVGenRegisterInfo(RISCVABI::isCheriPureCapABI(STI.getTargetABI())
+                               ? RISCV::C1 : RISCV::X1,
+                           /*DwarfFlavour*/0, /*EHFlavor*/0,
+                           /*PC*/0, STI.getHwMode()) {}
 
 const MCPhysReg *
 RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {

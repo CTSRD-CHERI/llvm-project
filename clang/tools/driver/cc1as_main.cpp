@@ -379,10 +379,11 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
   // it later.
   SrcMgr.setIncludeDirs(Opts.IncludePaths);
 
-  std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(Opts.Triple));
+  MCTargetOptions MCOptions;
+  std::unique_ptr<MCRegisterInfo> MRI(
+      TheTarget->createMCRegInfo(Opts.Triple, MCOptions));
   assert(MRI && "Unable to create target register info!");
 
-  MCTargetOptions MCOptions;
   std::unique_ptr<MCAsmInfo> MAI(
       TheTarget->createMCAsmInfo(*MRI, Opts.Triple, MCOptions));
   assert(MAI && "Unable to create target asm info!");

@@ -56,7 +56,8 @@ static MCInstrInfo *createAMDGPUMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createAMDGPUMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createAMDGPUMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   if (TT.getArch() == Triple::r600)
     InitR600MCRegisterInfo(X, 0);

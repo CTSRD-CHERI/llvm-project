@@ -397,7 +397,7 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   // pads so the section must be relocated.
   // XXX: Would be nice if there was a ELF::SHF_RELRO/SHF_INITIALIZED_DATA
   //   so I don't also have to modify lld.
-  if (isCheriPurecapABI()) {
+  if (Ctx->getAsmInfo()->isCheriPurecapABI()) {
     // TODO: Could we (ab)use SHF_OS_NONCONFORMING
     LSDASectionFlags |= ELF::SHF_WRITE;
   }

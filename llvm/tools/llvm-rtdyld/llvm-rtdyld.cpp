@@ -746,11 +746,12 @@ static int linkAndVerify() {
   if (!STI)
     ErrorAndExit("Unable to create subtarget info!");
 
-  std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+  MCTargetOptions MCOptions;
+  std::unique_ptr<MCRegisterInfo> MRI(
+      TheTarget->createMCRegInfo(TripleName, MCOptions));
   if (!MRI)
     ErrorAndExit("Unable to create target register info!");
 
-  MCTargetOptions MCOptions;
   std::unique_ptr<MCAsmInfo> MAI(
       TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   if (!MAI)

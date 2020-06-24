@@ -59,8 +59,8 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
     else
       CapTypes = "-pf200:64:64:64:32";
 
-    StringRef ABI = Options.MCOptions.getABIName();
-    if (ABI.startswith("il32pc64") || ABI.startswith("l64pc128"))
+    RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.MCOptions.getABIName());
+    if (ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI))
       PurecapOptions = "-A200-P200-G200";
   }
 

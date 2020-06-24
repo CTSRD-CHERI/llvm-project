@@ -2213,7 +2213,7 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
         SizeTy, SourceLocation());
     ImplicitCastExpr DesiredAlignment(ImplicitCastExpr::OnStack, AlignValT,
                                       CK_IntegralCast, &AlignmentLiteral,
-                                      VK_RValue);
+                                      VK_RValue, Context);
 
     // Adjust placement args by prepending conjured size and alignment exprs.
     llvm::SmallVector<Expr *, 8> CallArgs;
@@ -3713,7 +3713,8 @@ Sema::SemaBuiltinOperatorNewDeleteOverloaded(ExprResult TheCallResult,
   auto Callee = dyn_cast<ImplicitCastExpr>(TheCall->getCallee());
   assert(Callee && Callee->getCastKind() == CK_BuiltinFnToFnPtr &&
          "Callee expected to be implicit cast to a builtin function pointer");
-  Callee->setType(OperatorNewOrDelete->getType());
+  Callee->setType(OperatorNewOrDelete->getType(), Context,
+                  Callee->getSubExpr());
 
   return TheCallResult;
 }
@@ -4133,6 +4134,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   default:
     llvm_unreachable("Improper first standard conversion");
   }
+  assert(From && "Should have returned an error for SCS.First");
 
   // Perform the second implicit conversion
   switch (SCS.Second) {
@@ -4437,6 +4439,8 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     llvm_unreachable("Improper second standard conversion");
   }
 
+  assert(From && "Should have returned an error for SCS.Second");
+
   switch (SCS.Third) {
   case ICK_Identity:
     // Nothing to do.
@@ -4470,20 +4474,6 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
             From->getType()->getPointeeType().getAddressSpace())
       CK = CK_AddressSpaceConversion;
 
-    const bool FromIsCap = FromType->isCHERICapabilityType(Context);
-    const bool ToIsCap = ToType->isCHERICapabilityType(Context);
-    if (FromIsCap != ToIsCap) {
-      if (SCS.isInvalidCHERICapabilityConversion()) {
-        unsigned DiagID = FromIsCap ? diag::err_typecheck_convert_cap_to_ptr :
-                                      diag::err_typecheck_convert_ptr_to_cap;
-        Diag(From->getBeginLoc(), DiagID) << FromType << ToType << false
-            << FixItHint::CreateInsertion(From->getBeginLoc(), "(__cheri_" +
-                                          std::string(FromIsCap ? "from" : "to") +
-                                          "cap " + ToType.getAsString() + ")");
-        return ExprError();
-      }
-      CK = FromIsCap ? CK_CHERICapabilityToPointer : CK_PointerToCHERICapability;
-    }
     // ImpCastExprToType may return an ExprError, so cache the current value of
     Expr *FromOld = From;
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context), CK, VK,
@@ -4509,6 +4499,8 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     llvm_unreachable("Improper third standard conversion");
   }
 
+  assert(From && "Should have returned an error for SCS.Third");
+
   // If this conversion sequence involved a scalar -> atomic conversion, perform
   // that conversion now.
   if (!ToAtomicType.isNull()) {
@@ -4516,6 +4508,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
         ToAtomicType->castAs<AtomicType>()->getValueType(), From->getType()));
     From = ImpCastExprToType(From, ToAtomicType, CK_NonAtomicToAtomic,
                              VK_RValue, nullptr, CCK).get();
+    assert(From);
   }
 
   // Materialize a temporary if we're implicitly converting to a reference
@@ -4526,6 +4519,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     if (Res.isInvalid())
       return ExprError();
     From = Res.get();
+    assert(From);
   }
 
   // If this conversion sequence succeeded and involved implicitly converting a

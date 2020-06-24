@@ -1508,10 +1508,6 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
 
 bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
                                      unsigned *Index, unsigned *StructuredIndex) {
-  if (SemaRef.Context.getLangOpts().getCheriCapConversion() ==
-      LangOptions::CapConv_Ignore)
-    return false;
-
   // XXXAR: expr->getType() will return int for int&!
   QualType ExprType = expr->getRealReferenceType(SemaRef.Context);
   if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
@@ -4729,10 +4725,6 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
   // if (!TI.SupportsCapabilities())
   //  return; // no capability support -> don't attempt to diagnose
 
-  if (S.getASTContext().getLangOpts().getCheriCapConversion() ==
-      LangOptions::CapConv_Ignore)
-    return;
-
   // FIXME: don't error on rvalue references.
 
   // Check that we aren't converting between capability and non-capability references
@@ -6023,13 +6015,23 @@ void InitializationSequence::InitializeFrom(Sema &S,
       SetFailed(InitializationSequence::FK_ConversionFailed);
   } else {
     if (ICS.isStandard() && ICS.Standard.Third == ICK_Qualification) {
-      if (SourceType->isCHERICapabilityType(Context) &&
-        !DestType->isCHERICapabilityType(Context)) {
-          SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
-          return;
-      } else if (DestType->isCHERICapabilityType(Context) &&
-          !SourceType->isCHERICapabilityType(Context)) {
-        // pointer-to-capability conversions are checked elsewhere
+      const bool SrcIsCap = SourceType->isCHERICapabilityType(Context);
+      const bool DestIsCap = DestType->isCHERICapabilityType(Context);
+      if (SrcIsCap && !DestIsCap) {
+        // T* __capability -> T* is never allowed implicitly
+        SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
+      } else if (DestIsCap && !SrcIsCap) {
+        // T* -> T* __capability is only allowed in variable initialization
+        // (unless we are using the explicit conversion mode).
+        // We return an error here for casts so that static_cast reports an
+        // error. Note: C-style/reinterpret_cast are still allowed since they
+        // use another fallback path.
+        if (S.getLangOpts().explicitConversionsToCap() ||
+            Kind.isExplicitCast()) {
+          SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
+        }
+        // Implicit pointer-to-capability conversions are checked elsewhere
+        // TODO: should we check here instead?
       }
     }
     AddConversionSequenceStep(ICS, DestType, TopLevelOfInitList);
@@ -9085,20 +9087,19 @@ bool InitializationSequence::Diagnose(Sema &S,
     break;
   }
   case FK_ConversionFailed: {
-    QualType FromType = Args[0]->getType();
+    QualType FromType = OnlyArg->getType();
 
     // CHERI: in the case of initializing a capability from a pointer,
     // output error message here if the types are not compatible, so that we
     // get the same error message for both C and C++.
-    Expr *SrcExpr = Args[0];
-    if (FromType->isPointerType()
-        && !FromType->isCHERICapabilityType(S.Context, false)
-        && DestType->isCHERICapabilityType(S.Context, false)) {
-      S.Diag(SrcExpr->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
-            << FromType << DestType << false;
+    if (FromType->isPointerType() && DestType->isPointerType() &&
+        FromType->isCHERICapabilityType(S.Context, false) !=
+            DestType->isCHERICapabilityType(S.Context, false)) {
+      S.Diag(Kind.getLocation(),
+             diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+          << FromType << DestType << false;
       return true;
     } else {
-      QualType FromType = OnlyArg->getType();
       PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
         << (int)Entity.getKind()
         << DestType

@@ -6899,7 +6899,8 @@ ExpectedStmt ASTNodeImporter::VisitExplicitCastExpr(ExplicitCastExpr *E) {
       return ToBridgeKeywordLocOrErr.takeError();
     return new (Importer.getToContext()) ObjCBridgedCastExpr(
         *ToLParenLocOrErr, OCE->getBridgeKind(), E->getCastKind(),
-        *ToBridgeKeywordLocOrErr, ToTypeInfoAsWritten, ToSubExpr);
+        *ToBridgeKeywordLocOrErr, ToTypeInfoAsWritten, ToSubExpr,
+        Importer.getToContext());
   }
   default:
     llvm_unreachable("Cast expression of unsupported type!");
@@ -7751,7 +7752,7 @@ ExpectedStmt ASTNodeImporter::VisitCXXNamedCastExpr(CXXNamedCastExpr *E) {
         ToTypeInfoAsWritten, ToOperatorLoc, ToRParenLoc, ToAngleBrackets);
   } else if (isa<CXXConstCastExpr>(E)) {
     return CXXConstCastExpr::Create(
-        Importer.getToContext(), ToType, VK, ToSubExpr, ToTypeInfoAsWritten,
+        Importer.getToContext(), ToType, VK, CK, ToSubExpr, ToTypeInfoAsWritten,
         ToOperatorLoc, ToRParenLoc, ToAngleBrackets);
   } else {
     llvm_unreachable("Unknown cast type");

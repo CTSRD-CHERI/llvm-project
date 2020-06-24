@@ -37,7 +37,8 @@ static MCInstrInfo *createNVPTXMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createNVPTXMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createNVPTXMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   // PTX does not have a return address register.
   InitNVPTXMCRegisterInfo(X, 0);

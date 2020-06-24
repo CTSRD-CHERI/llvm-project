@@ -414,7 +414,7 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
   uint64_t raReg = addressSpace.getULEB128(p, cieContentEnd);
   assert(raReg < 255 && "return address register too large");
   cieInfo->returnAddressRegister = (uint8_t)raReg;
-#ifdef __CHERI_PURE_CAPABILITY__
+#if defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
   // FIXME: This is entirely wrong, but for some reason we get the wrong value
   // from the compiler-generated DWARF
   if (cieInfo->returnAddressRegister != UNW_MIPS_C17) {

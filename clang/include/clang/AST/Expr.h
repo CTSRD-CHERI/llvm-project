@@ -3262,7 +3262,7 @@ public:
 class CastExpr : public Expr {
   Stmt *Op;
 
-  bool CastConsistency() const;
+  bool CastConsistency(const ASTContext &Ctx) const;
 
   const CXXBaseSpecifier * const *path_buffer() const {
     return const_cast<CastExpr*>(this)->path_buffer();
@@ -3271,15 +3271,15 @@ class CastExpr : public Expr {
 
 protected:
   CastExpr(StmtClass SC, QualType ty, ExprValueKind VK, const CastKind kind,
-           Expr *op, unsigned BasePathSize)
-      : Expr(SC, ty, VK, OK_Ordinary), Op(op) {
+           Expr *op, unsigned BasePathSize, const ASTContext &Ctx)
+      : Expr(SC, provenanceCheckedTy(ty, Ctx, op), VK, OK_Ordinary), Op(op) {
     CastExprBits.Kind = kind;
     CastExprBits.PartOfExplicitCast = false;
     CastExprBits.BasePathSize = BasePathSize;
     assert((CastExprBits.BasePathSize == BasePathSize) &&
            "BasePathSize overflow!");
     setDependence(computeDependence(this));
-    assert(CastConsistency());
+    assert(CastConsistency(Ctx));
   }
 
   /// Construct an empty cast.
@@ -3347,10 +3347,24 @@ public:
 
   // Check if @p Dst can carry provenance (i.e. CHERI tag bits) and if not
   // change it to the non-provenance carrying annotated type.
-  // This only applies to (u)intcap_t.
-  // This function must be called in all ::Create functions since we can't
-  // pass ASTContext& to all constructors
-  static void checkProvenance(const ASTContext &C, QualType *Dst, Expr *Src);
+  // Note: This only applies to (u)intcap_t.
+  static QualType checkProvenanceImpl(QualType T, const ASTContext &Ctx,
+                                      const Expr *Src);
+  static inline QualType provenanceCheckedTy(QualType T, const ASTContext &Ctx,
+                                             const Expr *op) {
+    if (LLVM_UNLIKELY(T->isIntCapType()))
+      return checkProvenanceImpl(T, Ctx, op);
+    return T;
+  }
+  // Always pass the ASTContext to setType() to allow calling checkProvenance():
+  void setType(QualType t) = delete;
+  void setType(QualType t, const ASTContext &Ctx, const Expr *Src) {
+    Expr::setType(provenanceCheckedTy(t, Ctx, Src));
+  }
+  void setType(QualType t, bool ProvenanceChecked) {
+    assert(ProvenanceChecked);
+    Expr::setType(t);
+  };
 
   // Iterators
   child_range children() { return child_range(&Op, &Op+1); }
@@ -3382,8 +3396,10 @@ class ImplicitCastExpr final
       private llvm::TrailingObjects<ImplicitCastExpr, CXXBaseSpecifier *> {
 
   ImplicitCastExpr(QualType ty, CastKind kind, Expr *op,
-                   unsigned BasePathLength, ExprValueKind VK)
-    : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, BasePathLength) { }
+                   unsigned BasePathLength, ExprValueKind VK,
+                   const ASTContext &Ctx)
+      : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, BasePathLength, Ctx) {
+  }
 
   /// Construct an empty implicit cast.
   explicit ImplicitCastExpr(EmptyShell Shell, unsigned PathSize)
@@ -3392,9 +3408,8 @@ class ImplicitCastExpr final
 public:
   enum OnStack_t { OnStack };
   ImplicitCastExpr(OnStack_t _, QualType ty, CastKind kind, Expr *op,
-                   ExprValueKind VK)
-    : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, 0) {
-  }
+                   ExprValueKind VK, const ASTContext &Ctx)
+      : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, 0, Ctx) {}
 
   bool isPartOfExplicitCast() const { return CastExprBits.PartOfExplicitCast; }
   void setIsPartOfExplicitCast(bool PartOfExplicitCast) {
@@ -3448,8 +3463,8 @@ class ExplicitCastExpr : public CastExpr {
 protected:
   ExplicitCastExpr(StmtClass SC, QualType exprTy, ExprValueKind VK,
                    CastKind kind, Expr *op, unsigned PathSize,
-                   TypeSourceInfo *writtenTy)
-    : CastExpr(SC, exprTy, VK, kind, op, PathSize), TInfo(writtenTy) {}
+                   TypeSourceInfo *writtenTy, const ASTContext &Ctx)
+      : CastExpr(SC, exprTy, VK, kind, op, PathSize, Ctx), TInfo(writtenTy) {}
 
   /// Construct an empty explicit cast.
   ExplicitCastExpr(StmtClass SC, EmptyShell Shell, unsigned PathSize)
@@ -3483,10 +3498,11 @@ class CStyleCastExpr final
   CastKind DependentCastKind = CK_Dependent;
 
   CStyleCastExpr(QualType exprTy, ExprValueKind vk, CastKind kind, Expr *op,
-                 unsigned PathSize, TypeSourceInfo *writtenTy,
-                 SourceLocation l, SourceLocation r)
-    : ExplicitCastExpr(CStyleCastExprClass, exprTy, vk, kind, op, PathSize,
-                       writtenTy), LPLoc(l), RPLoc(r) {}
+                 unsigned PathSize, TypeSourceInfo *writtenTy, SourceLocation l,
+                 SourceLocation r, const ASTContext &Ctx)
+      : ExplicitCastExpr(CStyleCastExprClass, exprTy, vk, kind, op, PathSize,
+                         writtenTy, Ctx),
+        LPLoc(l), RPLoc(r) {}
 
   /// Construct an empty C-style explicit cast.
   explicit CStyleCastExpr(EmptyShell Shell, unsigned PathSize)

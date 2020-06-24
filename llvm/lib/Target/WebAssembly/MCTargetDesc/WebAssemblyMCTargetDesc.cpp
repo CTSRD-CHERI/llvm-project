@@ -46,7 +46,8 @@ static MCInstrInfo *createMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createMCRegisterInfo(const Triple & /*T*/) {
+static MCRegisterInfo *
+createMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   auto *X = new MCRegisterInfo();
   InitWebAssemblyMCRegisterInfo(X, 0);
   return X;

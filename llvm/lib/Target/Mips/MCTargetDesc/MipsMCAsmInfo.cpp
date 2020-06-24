@@ -33,6 +33,8 @@ MipsMCAsmInfo::MipsMCAsmInfo(const Triple &TheTriple,
     PrivateGlobalPrefix = ".L";
   PrivateLabelPrefix = PrivateGlobalPrefix;
 
+  IsCheriPurecapABI = ABI.IsCheriPureCap();
+
   AlignmentIsInBytes          = false;
   Data16bitsDirective         = "\t.2byte\t";
   Data32bitsDirective         = "\t.4byte\t";

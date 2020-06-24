@@ -13,6 +13,7 @@
 #ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCASMINFO_H
 #define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCASMINFO_H
 
+#include "Utils/RISCVBaseInfo.h"
 #include "llvm/MC/MCAsmInfoELF.h"
 
 namespace llvm {
@@ -22,7 +23,7 @@ class RISCVMCAsmInfo : public MCAsmInfoELF {
   void anchor() override;
 
 public:
-  explicit RISCVMCAsmInfo(const Triple &TargetTriple);
+  explicit RISCVMCAsmInfo(const Triple &TargetTriple, RISCVABI::ABI TargetABI);
 
   const MCExpr *getExprForFDESymbol(const MCSymbol *Sym, unsigned Encoding,
                                     MCStreamer &Streamer) const override;

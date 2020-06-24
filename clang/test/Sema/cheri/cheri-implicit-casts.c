@@ -9,11 +9,11 @@ void g() {
 }
 void h() {
   char * __capability x;
-  int y = x; // expected-error {{initializing 'int' with an expression of incompatible type 'char * __capability'}}
+  int y = x; // expected-warning {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'char * __capability'}}
 }
 void m() {
   int x;
-  char * __capability y = x; // expected-error {{initializing 'char * __capability' with an expression of incompatible type 'int'}}
+  char *__capability y = x; // expected-warning {{incompatible integer to pointer conversion initializing 'char * __capability' with an expression of type 'int'}}
 }
 void i() {
   __uintcap_t x;

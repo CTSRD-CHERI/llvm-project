@@ -14,6 +14,7 @@
 #include "llvm/Support/Host.h"
 #include "llvm/Support/SwapByteOrder.h"
 #include "llvm/Support/TargetParser.h"
+#include "llvm/Support/WithColor.h"
 #include <cassert>
 #include <cstring>
 using namespace llvm;
@@ -390,6 +391,10 @@ static Triple::ArchType parseARMArch(StringRef ArchName) {
 }
 
 static Triple::ArchType parseArch(StringRef ArchName) {
+  if (ArchName.equals("cheri")) {
+    ArchName = "mips64";
+    WithColor::warning() << "cheri architecture name is deprecated; please use mips64 with -cheri=128 or mips64c128 instead\n";
+  }
   auto AT = StringSwitch<Triple::ArchType>(ArchName)
     .Cases("i386", "i486", "i586", "i686", Triple::x86)
     // FIXME: Do we need to support these?

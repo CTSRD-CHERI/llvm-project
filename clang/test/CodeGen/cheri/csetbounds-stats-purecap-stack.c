@@ -17,8 +17,8 @@ extern int use_pointer(void *);
 int use_stack_var() {
   int x = 1;
   return use_pointer(&x);
-  // CSV-NODEBUG-NEXT: 2,4,s,"<somewhere in use_stack_var>","CHERI sandbox ABI setup","set bounds on AllocaInst x"
-  // CSV-DEBUG-NEXT:   2,4,s,"{{.+}}/csetbounds-stats-purecap-stack.c:[[@LINE-3]]","CHERI sandbox ABI setup","set bounds on local variable x"
+  // CSV-NODEBUG-NEXT: 2,4,s,"<somewhere in use_stack_var>","CHERI bound stack allocations","set bounds on AllocaInst x"
+  // CSV-DEBUG-NEXT:   2,4,s,"{{.+}}/csetbounds-stats-purecap-stack.c:[[@LINE-3]]","CHERI bound stack allocations","set bounds on local variable x"
 }
 
 // CSV-EMPTY:

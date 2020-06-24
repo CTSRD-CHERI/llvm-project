@@ -449,9 +449,6 @@ def warn_drv_msvc_not_found : Warning<
   "try running Clang from a developer command prompt">,
   InGroup<DiagGroup<"msvc-not-found">>;
 
-def warn_cheri_sandbox_abi_is_purecap : Warning<
-  "CHERI ABI 'sandbox' is deprecated; use 'purecap' instead">,
-  InGroup<Deprecated>;
 def warn_cheri_purecap_nopic_broken : Warning<
   "Using -fno-pic with the purecap ABI will generate completely broken code. ">,
   InGroup<MIPSCHERIBugs>, DefaultError;

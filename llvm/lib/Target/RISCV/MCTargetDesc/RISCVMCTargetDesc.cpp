@@ -44,18 +44,34 @@ static MCInstrInfo *createRISCVMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createRISCVMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createRISCVMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitRISCVMCRegisterInfo(X, RISCV::X1);
+  RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.getABIName());
+
+  Register RAReg;
+  if (ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI))
+    RAReg = RISCV::C1;
+  else
+    RAReg = RISCV::X1;
+
+  InitRISCVMCRegisterInfo(X, RAReg);
   return X;
 }
 
 static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
                                        const Triple &TT,
                                        const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new RISCVMCAsmInfo(TT);
+  RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.getABIName());
+  MCAsmInfo *MAI = new RISCVMCAsmInfo(TT, ABI);
 
-  Register SP = MRI.getDwarfRegNum(RISCV::X2, true);
+  Register SPReg;
+  if (ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI))
+    SPReg = RISCV::C2;
+  else
+    SPReg = RISCV::X2;
+
+  unsigned SP = MRI.getDwarfRegNum(SPReg, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, SP, 0);
   MAI->addInitialFrameState(Inst);
 

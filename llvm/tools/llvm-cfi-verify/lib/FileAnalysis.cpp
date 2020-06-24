@@ -384,12 +384,12 @@ Error FileAnalysis::initialiseDisassemblyMembers() {
          "\", failed with error: " + ErrorString)
             .str());
 
-  RegisterInfo.reset(ObjectTarget->createMCRegInfo(TripleName));
+  MCTargetOptions MCOptions;
+  RegisterInfo.reset(ObjectTarget->createMCRegInfo(TripleName, MCOptions));
   if (!RegisterInfo)
     return make_error<UnsupportedDisassembly>(
         "Failed to initialise RegisterInfo.");
 
-  MCTargetOptions MCOptions;
   AsmInfo.reset(
       ObjectTarget->createMCAsmInfo(*RegisterInfo, TripleName, MCOptions));
   if (!AsmInfo)

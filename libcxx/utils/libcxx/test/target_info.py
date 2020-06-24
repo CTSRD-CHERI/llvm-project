@@ -223,13 +223,9 @@ class CheriBSDRemoteTI(DefaultTargetInfo):
 
     def add_cxx_compile_flags(self, flags):
         explicit_flags = shlex.split(self.full_config.get_lit_conf('test_compiler_flags'))
-        assert "-G0" in explicit_flags, explicit_flags
-        assert "-msoft-float in explicit_flags", explicit_flags
         if self.full_config.link_shared is False:
             # we currently only support static linking so we need to add _LIBCPP_BUILD_STATIC
             flags += ["-D_LIBCPP_BUILD_STATIC"]
-        if self.full_config.get_lit_conf('target_triple').startswith("cheri-"):
-            assert '-mabi=purecap' in explicit_flags, explicit_flags
 
     # def configure_env(self, env): pass
     def allow_cxxabi_link(self):

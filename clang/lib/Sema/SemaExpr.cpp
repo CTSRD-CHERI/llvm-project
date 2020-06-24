@@ -717,7 +717,7 @@ ExprResult Sema::CallExprUnaryConversions(Expr *E) {
   // to function type.
   if (Ty->isFunctionType()) {
     Res = ImpCastExprToType(E, Context.getPointerType(Ty),
-                            CK_FunctionToPointerDecay).get();
+                            CK_FunctionToPointerDecay);
     if (Res.isInvalid())
       return ExprError();
   }
@@ -7666,8 +7666,8 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     ResultTy = S.Context.getBlockPointerType(ResultTy);
   else {
     ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
-    if (LHSTy->isCHERICapabilityType(S.Context)
-        || RHSTy->isCHERICapabilityType(S.Context)) {
+    if (LHSTy->isCHERICapabilityType(S.Context, false) ||
+        RHSTy->isCHERICapabilityType(S.Context, false)) {
       PIK = ASTContext::PIK_Capability;
     }
     ResultTy = S.Context.getPointerType(ResultTy, PIK);
@@ -7716,20 +7716,17 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   QualType lhptee = LHSTy->castAs<PointerType>()->getPointeeType();
   QualType rhptee = RHSTy->castAs<PointerType>()->getPointeeType();
 
-  // Get the cast kind to use for adding qualifiers
-  // XXXAR: There should probably be a CK_CHERICapabilityToPointer here?
-  CastKind NopCastKind = (lhptee.getAddressSpace() == rhptee.getAddressSpace())
-    ?  CK_NoOp : CK_AddressSpaceConversion;
-
   // ignore qualifiers on void (C99 6.5.15p3, clause 6)
   if (lhptee->isVoidType() && rhptee->isIncompleteOrObjectType()) {
     // Figure out necessary qualifiers (C99 6.5.15p6)
     QualType destPointee
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
-    QualType destType = S.Context.getPointerType(destPointee,
-      RHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
+    QualType destType = S.Context.getPointerType(
+        destPointee, RHSTy->isCHERICapabilityType(S.Context, false)
+                         ? ASTContext::PIK_Capability
+                         : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
-    LHS = S.ImpCastExprToType(LHS.get(), destType, NopCastKind);
+    LHS = S.ImpCastExprToType(LHS.get(), destType, CK_NoOp);
     // Promote to void*.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_BitCast);
     return destType;
@@ -7737,8 +7734,10 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   if (rhptee->isVoidType() && lhptee->isIncompleteOrObjectType()) {
     QualType destPointee
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
-    QualType destType = S.Context.getPointerType(destPointee,
-      LHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
+    QualType destType = S.Context.getPointerType(
+        destPointee, LHSTy->isCHERICapabilityType(S.Context, false)
+                         ? ASTContext::PIK_Capability
+                         : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -8959,22 +8958,15 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
       LangAS AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
       LangAS AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
-      if (AddrSpaceL != AddrSpaceR)
+      if (AddrSpaceL != AddrSpaceR) {
         Kind = CK_AddressSpaceConversion;
-      else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
-        // only allow implicit casts to and from function pointer capabilities
-        if (!LHSPointer->isCHERICapability() && RHSPointer->isCHERICapability())
-          Kind = CK_CHERICapabilityToPointer;
-        else if (LHSPointer->isCHERICapability() && !RHSPointer->isCHERICapability())
-          Kind = CK_PointerToCHERICapability;
-        else
-          Kind = CK_BitCast;
-      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability()) {
+      } else if (LHSPointer->isCHERICapability() !=
+                 RHSPointer->isCHERICapability()) {
         // all other implicit casts to and from capabilities are not allowed
-        Kind = RHSPointer->isCHERICapability() ? CK_CHERICapabilityToPointer :
-                                                 CK_PointerToCHERICapability;
-        return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer :
-                                                 PointerToCHERICapability;
+        Kind = RHSPointer->isCHERICapability() ? CK_CHERICapabilityToPointer
+                                               : CK_PointerToCHERICapability;
+        return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer
+                                               : PointerToCHERICapability;
       } else {
         if (Context.hasCvrSimilarType(RHSType, LHSType))
           Kind = CK_NoOp;
@@ -8997,14 +8989,10 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // int -> T*
     if (RHSType->isIntegerType()) {
-      // Implicit casts from int -> memory capabilities are not allowed (except for null)
-      const Expr::NullPointerConstantKind RHSNullKind =
-          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
-      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
-      if (LHSPointer->isCHERICapability() && !RHSIsNull &&
-          !RHSType->isIntCapType())
-        return Incompatible;
-      Kind = CK_IntegralToPointer; // FIXME: null?
+      bool RHSIsNull =
+          RHS.get()->isNullPointerConstant(
+              Context, Expr::NPC_ValueDependentIsNotNull) != Expr::NPCK_NotNull;
+      Kind = RHSIsNull ? CK_NullToPointer : CK_IntegralToPointer;
       return IntToPointer;
     }
 
@@ -9097,6 +9085,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // int or null -> A*
     if (RHSType->isIntegerType()) {
+      assert(!LHSType->isCapabilityPointerType());
       Kind = CK_IntegralToPointer; // FIXME: null
       return IntToPointer;
     }
@@ -9143,13 +9132,6 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // T* -> int
     if (LHSType->isIntegerType()) {
-      // Implicit casts from memory capabilities -> int are not allowed (except for null)
-      const Expr::NullPointerConstantKind RHSNullKind =
-          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
-      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
-      if (RHSPointer->isCHERICapability() && !RHSIsNull &&
-          !LHSType->isIntCapType())
-        return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
     }
@@ -11584,9 +11566,9 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
 
     // We only implicitly cast the NULL constant to a memory capability
     if (LHSIsNull && !LHSIsCap && RHSIsCap)
-        LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToCHERICapability);
+      LHS = ImpCastExprToType(LHS.get(), RHSType, CK_NullToPointer);
     else if (RHSIsNull && !RHSIsCap && LHSIsCap)
-        RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToCHERICapability);
+      RHS = ImpCastExprToType(RHS.get(), LHSType, CK_NullToPointer);
 
     // All of the following pointer-related warnings are GCC extensions, except
     // when handling null pointer constants.
@@ -15818,17 +15800,8 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   case CHERICapabilityToPointer:
   case PointerToCHERICapability: {
     bool PtrToCap = ConvTy == PointerToCHERICapability;
-
     if (PtrToCap) {
-      // first perform array|function to pointer decay
-      ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SrcExpr);
-      if (Decayed.isInvalid()) {
-        isInvalid = true;
-        return true;
-        break;
-      }
-      SrcExpr = Decayed.get();
-      SrcType = SrcExpr->getType();
+      // Some implicit conversions are permitted for pointer -> cap
       if (ImpCastPointerToCHERICapability(SrcType, DstType, SrcExpr, false))
         return false;
     }
@@ -15838,33 +15811,20 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
                         : diag::err_typecheck_convert_cap_to_ptr;
     MayHaveConvFixit = true;
     isInvalid = true;
-    Hint = FixItHint::CreateInsertion(SrcExpr->getBeginLoc(), "(__cheri_" +
-                                      std::string(PtrToCap ? "to" : "from") +
-                                      "cap " + DstType.getAsString() + ")");
+    Hint = FixItHint::CreateInsertion(
+        SrcExpr->getBeginLoc(), "(__cheri_" +
+                                    std::string(PtrToCap ? "to" : "from") +
+                                    "cap " + DstType.getAsString() + ")");
     Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
+    if (Complained)
+      *Complained = true;
     return true;
-    break;
   }
   case Incompatible:
     if (maybeDiagnoseAssignmentToFunction(*this, DstType, SrcExpr)) {
       if (Complained)
         *Complained = true;
       return true;
-    }
-
-    // CHERI: in the case of implicit conversion of address-of expressions to capabilities,
-    // output error message here if the types are not compatible, so that we
-    // get the same error message for both C and C++.
-    if (SrcType->isPointerType()
-        && !SrcType->isCHERICapabilityType(Context, false)
-        && DstType->isCHERICapabilityType(Context, false)) {
-      if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(SrcExpr)) {
-        if (UnOp->getOpcode() == UO_AddrOf) {
-          Diag(SrcExpr->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
-            << SrcType << DstType << false;
-          return true;
-        }
-      }
     }
 
     DiagKind = diag::err_typecheck_convert_incompatible;
@@ -18907,7 +18867,7 @@ ExprResult RebuildUnknownAnyExpr::VisitImplicitCastExpr(ImplicitCastExpr *E) {
     assert(E->getValueKind() == VK_RValue);
     assert(E->getObjectKind() == OK_Ordinary);
 
-    E->setType(DestType);
+    E->setType(DestType, S.Context, E->getSubExpr());
 
     // Rebuild the sub-expression as the pointee (function) type.
     DestType = DestType->castAs<PointerType>()->getPointeeType();
@@ -18923,7 +18883,7 @@ ExprResult RebuildUnknownAnyExpr::VisitImplicitCastExpr(ImplicitCastExpr *E) {
 
     assert(isa<BlockPointerType>(E->getType()));
 
-    E->setType(DestType);
+    E->setType(DestType, S.Context, E->getSubExpr());
 
     // The sub-expression has to be a lvalue reference, so rebuild it as such.
     DestType = S.Context.getLValueReferenceType(DestType);

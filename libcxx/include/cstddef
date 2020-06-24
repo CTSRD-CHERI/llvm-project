@@ -79,8 +79,8 @@ template <>          struct __libcpp_is_integral<__int128_t>         { enum { va
 template <>          struct __libcpp_is_integral<__uint128_t>        { enum { value = 1 }; };
 #endif
 #if __has_feature(capabilities)
-template <>          struct __libcpp_is_integral<__intcap_t>         : public true_type {};
-template <>          struct __libcpp_is_integral<__uintcap_t>        : public true_type {};
+template <>          struct __libcpp_is_integral<__intcap_t>         { enum { value = 1 }; };
+template <>          struct __libcpp_is_integral<__uintcap_t>        { enum { value = 1 }; };
 #endif
 
 _LIBCPP_END_NAMESPACE_STD

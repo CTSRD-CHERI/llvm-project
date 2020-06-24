@@ -657,7 +657,14 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   if (UseARMMethodPtrABI) // XXXAR: TODO: use tag bit instead
     IsVirtual = Builder.CreateAnd(RawAdj, ptrdiff_1);
   else {
-    IsVirtual = Builder.CreateAnd(FnPtr, ptrdiff_1);
+    llvm::Value *FnPtrAddr;
+    if (CGF.CGM.getDataLayout().isFatPointer(FnPtr->getType()))
+      FnPtrAddr =
+          CGF.getTargetHooks().getPointerAddress(CGF, FnPtr, "memptr.ptr.addr");
+    else
+      FnPtrAddr = FnPtr;
+
+    IsVirtual = Builder.CreateAnd(FnPtrAddr, ptrdiff_1);
   }
   IsVirtual = Builder.CreateIsNotNull(IsVirtual, "memptr.isvirtual");
   Builder.CreateCondBr(IsVirtual, FnVirtual, FnNonVirtual);

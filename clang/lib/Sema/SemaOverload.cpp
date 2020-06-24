@@ -201,7 +201,6 @@ void StandardConversionSequence::setAsIdentityConversion() {
   BindsToRvalue = false;
   BindsImplicitObjectArgumentWithoutRefQualifier = false;
   ObjCLifetimeConversionBinding = false;
-  IncompatibleCHERIConversion = false;
   CopyConstructor = nullptr;
 }
 
@@ -1960,17 +1959,6 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
                                          ObjCLifetimeConversion)) {
     SCS.Third = ICK_Qualification;
     SCS.QualificationIncludesObjCLifetime = ObjCLifetimeConversion;
-    // Check for CHERI type conversion
-    if (FromType->isCHERICapabilityType(S.getASTContext())
-        != ToType->isCHERICapabilityType(S.getASTContext())) {
-      // Check implicit pointer-to-capability conversion.
-      // Don't output warnings at this point as they will be output later.
-      bool validCHERIConversion = false;
-      if (FromType->isPointerType() && ToType->isPointerType() && ToType->getAs<PointerType>()->isCHERICapability())
-        validCHERIConversion = S.ImpCastPointerToCHERICapability(FromType, ToType, From, false);
-
-      SCS.setInvalidCHERIConversion(!validCHERIConversion);
-    }
     FromType = ToType;
   } else {
     // No conversion required
@@ -7275,10 +7263,9 @@ void Sema::AddConversionCandidate(
   // well-formed.
   DeclRefExpr ConversionRef(Context, Conversion, false, Conversion->getType(),
                             VK_LValue, From->getBeginLoc());
-  ImplicitCastExpr ConversionFn(ImplicitCastExpr::OnStack,
-                                Context.getPointerType(Conversion->getType()),
-                                CK_FunctionToPointerDecay,
-                                &ConversionRef, VK_RValue);
+  ImplicitCastExpr ConversionFn(
+      ImplicitCastExpr::OnStack, Context.getPointerType(Conversion->getType()),
+      CK_FunctionToPointerDecay, &ConversionRef, VK_RValue, Context);
 
   QualType ConversionType = Conversion->getConversionType();
   if (!isCompleteType(From->getBeginLoc(), ConversionType)) {

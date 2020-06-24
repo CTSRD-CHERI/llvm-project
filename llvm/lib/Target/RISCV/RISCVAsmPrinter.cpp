@@ -194,13 +194,7 @@ void RISCVAsmPrinter::emitAttributes() {
   RISCVTargetStreamer &RTS =
       static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
 
-  const Triple &TT = TM.getTargetTriple();
-  StringRef CPU = TM.getTargetCPU();
-  StringRef FS = TM.getTargetFeatureString();
-  const RISCVTargetMachine &RTM = static_cast<const RISCVTargetMachine &>(TM);
-  const RISCVSubtarget STI(TT, CPU, FS, /*ABIName=*/"", RTM);
-
-  RTS.emitTargetAttributes(STI);
+  RTS.emitTargetAttributes(*TM.getMCSubtargetInfo());
 }
 
 // Force static initialization.

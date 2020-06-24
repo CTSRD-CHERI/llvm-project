@@ -299,11 +299,13 @@ ENUM_LANGOPT(SignedOverflowBehavior, SignedOverflowBehaviorTy, 2, SOB_Undefined,
              "signed integer overflow handling")
 ENUM_LANGOPT(CheriUIntCap, CheriUIntCapMode, 1, UIntCap_Offset,
              "CHERI uintcap_t handling")
+ENUM_LANGOPT(CheriCapToInt, CheriCapIntConversion, 2, CapInt_Relative, // TODO: CapInt_Explicit,
+             "CHERI capability to integer conversion semantics")
+ENUM_LANGOPT(CheriIntToCap, CheriCapIntConversion, 2, CapInt_Relative, // TODO: CapInt_Explicit,
+             "CHERI integer to capability conversion semantics")
 LANGOPT(CheriCompareExact, 1, 0, "whether capability comparisons compare all fields instead of just the address")
 ENUM_LANGOPT(CheriBounds, CheriBoundsMode, 3, CBM_Conservative,
              "whether to reduce bounds when passing pointers/references to subobjects")
-ENUM_LANGOPT(CheriCapConversion, CheriCapConversionMode, 1, CapConv_Err,
-             "error on conversions between pointers and capabilities")
 // See test/CodeGen/CHERI/bitwise-and-in-conditional.c for the motivating use case (deadlocks in mutex code)
 LANGOPT(CheriDataDependentProvenance, 1, 0, "Derive pointer provenance for bitwise-and operations depending on value of the RHS")
 

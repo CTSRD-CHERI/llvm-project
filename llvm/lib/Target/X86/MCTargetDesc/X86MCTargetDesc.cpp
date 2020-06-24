@@ -307,7 +307,8 @@ static MCInstrInfo *createX86MCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createX86MCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createX86MCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   unsigned RA = (TT.getArch() == Triple::x86_64)
                     ? X86::RIP  // Should have dwarf #16.
                     : X86::EIP; // Should have dwarf #8.

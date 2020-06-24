@@ -245,19 +245,6 @@ InputArgList Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings,
                            diag::warn_drv_empty_joined_argument,
                            SourceLocation()) > DiagnosticsEngine::Warning;
     }
-
-    if (A->getOption().matches(options::OPT_mabi_EQ)) {
-      StringRef Value = A->getValue();
-      A->claim();
-      if (Value == "sandbox") {
-        // output a warning that -mabi=sandbox is deprecated and replace with
-        // -mabi=purecap
-        Diag(diag::warn_cheri_sandbox_abi_is_purecap);
-        Args.append(
-            new Arg(getOpts().getOption(options::OPT_mabi_EQ), "-mabi=",
-                    A->getIndex(), "purecap"));
-      }
-    }
   }
 
   for (const Arg *A : Args.filtered(options::OPT_UNKNOWN)) {

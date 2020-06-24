@@ -2745,22 +2745,33 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                            ? LangOptions::CheriUIntCapMode::UIntCap_Addr
                            : LangOptions::CheriUIntCapMode::UIntCap_Offset);
 
-  // Error or not on capability to pointer conversions.
-  if (const Arg *A = Args.getLastArg(OPT_cheri_conversion_error)) {
-    auto ConvErrMode =
-        llvm::StringSwitch<LangOptions::CheriCapConversionMode>(A->getValue())
-            .Case("error", LangOptions::CapConv_Err)
-            .Case("ignore", LangOptions::CapConv_Ignore)
-            .Default((LangOptions::CheriCapConversionMode)-1);
-    if (ConvErrMode == (LangOptions::CheriCapConversionMode)-1) {
-      Diags.Report(diag::err_drv_invalid_value)
-          << A->getAsString(Args) << A->getValue();
-    } else
-      Opts.setCheriCapConversion(ConvErrMode);
-  }
   Opts.CheriCompareExact =
       Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
                    Opts.CheriCompareExact);
+
+  auto GetCapIntMode = [&](const Arg *A) {
+    auto Mode =
+        llvm::StringSwitch<LangOptions::CheriCapIntConversion>(A->getValue())
+            .Case("explicit", LangOptions::CapInt_Explicit)
+            .Case("strict", LangOptions::CapInt_Strict)
+            .Case("address", LangOptions::CapInt_Address)
+            .Case("relative", LangOptions::CapInt_Relative)
+            .Default(LangOptions::CapInt_Invalid);
+    if (Mode == LangOptions::CapInt_Invalid)
+      Diags.Report(diag::err_drv_invalid_value)
+          << A->getAsString(Args) << A->getValue();
+    return Mode;
+  };
+  if (const Arg *A = Args.getLastArg(OPT_cheri_cap_to_int_EQ)) {
+    auto Mode = GetCapIntMode(A);
+    if (Mode != LangOptions::CapInt_Invalid)
+      Opts.setCheriCapToInt(Mode);
+  }
+  if (const Arg *A = Args.getLastArg(OPT_cheri_int_to_cap_EQ)) {
+    auto Mode = GetCapIntMode(A);
+    if (Mode != LangOptions::CapInt_Invalid)
+      Opts.setCheriIntToCap(Mode);
+  }
 
   // Parse the -cheri-bounds= option to determine whether we should set more
   // bounds on capabilities (e.g. when passing subobject references to
@@ -3609,11 +3620,6 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
   Opts.OpenCLExtensionsAsWritten = Args.getAllArgValues(OPT_cl_ext_EQ);
 
   llvm::Triple T(Opts.Triple);
-  if (T.isMIPS() && Opts.ABI == "sandbox") {
-    // rename sandbox ABI to purecap ABI and output a deprecated warning
-    Opts.ABI = "purecap";
-    Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
-  }
   if (T.isMIPS()) {
     if (Opts.ABI != "purecap" && T.getEnvironment() == llvm::Triple::CheriPurecap) {
       // Can't use -mabi=64 with -purecap triple

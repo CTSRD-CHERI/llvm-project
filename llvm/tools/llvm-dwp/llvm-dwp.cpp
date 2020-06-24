@@ -708,11 +708,12 @@ int main(int argc, char **argv) {
   std::string TripleName = TheTriple.getTriple();
 
   // Create all the MC Objects.
-  std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+  MCTargetOptions MCOptions = llvm::mc::InitMCTargetOptionsFromFlags();
+  std::unique_ptr<MCRegisterInfo> MRI(
+      TheTarget->createMCRegInfo(TripleName, MCOptions));
   if (!MRI)
     return error(Twine("no register info for target ") + TripleName, Context);
 
-  MCTargetOptions MCOptions = llvm::mc::InitMCTargetOptionsFromFlags();
   std::unique_ptr<MCAsmInfo> MAI(
       TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   if (!MAI)

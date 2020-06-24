@@ -8,7 +8,9 @@
 
 #include "RISCVTargetObjectFile.h"
 #include "RISCVTargetMachine.h"
+#include "Utils/RISCVCompressedCap.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"
 
@@ -110,4 +112,30 @@ MCSection *RISCVELFTargetObjectFile::getSectionForConstant(
 
   // Otherwise, we work the same as ELF.
   return TargetLoweringObjectFileELF::getSectionForConstant(DL, Kind, C, Align);
+}
+
+TailPaddingAmount
+RISCVELFTargetObjectFile::getTailPaddingForPreciseBounds(
+    uint64_t Size, const TargetMachine &TM) const {
+  if (!getContext().getAsmInfo()->isCheriPurecapABI())
+    return TailPaddingAmount::None;
+
+  const RISCVTargetMachine &RTM = static_cast<const RISCVTargetMachine &>(TM);
+  return RISCVCompressedCap::getRequiredTailPadding(Size, RTM.IsRV64());
+}
+
+Align
+RISCVELFTargetObjectFile::getAlignmentForPreciseBounds(
+    uint64_t Size, const TargetMachine &TM) const {
+  if (!getContext().getAsmInfo()->isCheriPurecapABI())
+    return Align();
+
+  const RISCVTargetMachine &RTM = static_cast<const RISCVTargetMachine &>(TM);
+  return RISCVCompressedCap::getRequiredAlignment(Size, RTM.IsRV64());
+}
+
+int RISCVELFTargetObjectFile::getCheriCapabilitySize(
+    const TargetMachine &TM) const {
+  const RISCVTargetMachine &RTM = static_cast<const RISCVTargetMachine &>(TM);
+  return RTM.IsRV64() ? 16 : 8;
 }

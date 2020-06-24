@@ -40,7 +40,8 @@ static MCInstrInfo *createARCMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createARCMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createARCMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   auto *X = new MCRegisterInfo();
   InitARCMCRegisterInfo(X, ARC::BLINK);
   return X;

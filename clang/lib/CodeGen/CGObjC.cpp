@@ -1453,9 +1453,8 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
   ValueDecl *selfDecl = setterMethod->getSelfDecl();
   DeclRefExpr self(getContext(), selfDecl, false, selfDecl->getType(),
                    VK_LValue, SourceLocation());
-  ImplicitCastExpr selfLoad(ImplicitCastExpr::OnStack,
-                            selfDecl->getType(), CK_LValueToRValue, &self,
-                            VK_RValue);
+  ImplicitCastExpr selfLoad(ImplicitCastExpr::OnStack, selfDecl->getType(),
+                            CK_LValueToRValue, &self, VK_RValue, getContext());
   ObjCIvarRefExpr ivarRef(ivar, ivar->getType().getNonReferenceType(),
                           SourceLocation(), SourceLocation(),
                           &selfLoad, true, true);
@@ -1466,7 +1465,7 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
                   SourceLocation());
   ImplicitCastExpr argLoad(ImplicitCastExpr::OnStack,
                            argType.getUnqualifiedType(), CK_LValueToRValue,
-                           &arg, VK_RValue);
+                           &arg, VK_RValue, getContext());
 
   // The property type can differ from the ivar type in some situations with
   // Objective-C pointer types, we can always bit cast the RHS in these cases.
@@ -1487,9 +1486,8 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
   } else if (ivarRef.getType()->isPointerType()) {
     argCK = CK_BitCast;
   }
-  ImplicitCastExpr argCast(ImplicitCastExpr::OnStack,
-                           ivarRef.getType(), argCK, &argLoad,
-                           VK_RValue);
+  ImplicitCastExpr argCast(ImplicitCastExpr::OnStack, ivarRef.getType(), argCK,
+                           &argLoad, VK_RValue, getContext());
   Expr *finalArg = &argLoad;
   if (!getContext().hasSameUnqualifiedType(ivarRef.getType(),
                                            argLoad.getType()))

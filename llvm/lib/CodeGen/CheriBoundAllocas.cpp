@@ -98,7 +98,7 @@ public:
   CheriBoundAllocas() : ModulePass(ID) {
     initializeCheriBoundAllocasPass(*PassRegistry::getPassRegistry());
   }
-  StringRef getPassName() const override { return "CHERI sandbox ABI setup"; }
+  StringRef getPassName() const override { return "CHERI bound stack allocations"; }
   void visitAllocaInst(AllocaInst &AI) { Allocas.push_back(&AI); }
   bool runOnModule(Module &Mod) override {
     M = &Mod;

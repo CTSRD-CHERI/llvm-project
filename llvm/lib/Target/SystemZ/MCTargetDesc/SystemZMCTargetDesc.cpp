@@ -164,7 +164,8 @@ static MCInstrInfo *createSystemZMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createSystemZMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *
+createSystemZMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitSystemZMCRegisterInfo(X, SystemZ::R14D);
   return X;

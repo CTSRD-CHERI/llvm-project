@@ -657,6 +657,12 @@ MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
     MachineBasicBlock::iterator MI) const {
   Register SPReg = getSPReg();
   DebugLoc DL = MI->getDebugLoc();
+  unsigned Opcode = MI->getOpcode();
+
+  assert((Opcode == RISCV::ADJCALLSTACKDOWNCAP ||
+          Opcode == RISCV::ADJCALLSTACKUPCAP) ==
+         RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
+         "Should use capability adjustments if and only if ABI is purecap");
 
   if (!hasReservedCallFrame(MF)) {
     // If space has not been reserved for a call frame, ADJCALLSTACKDOWN and
@@ -670,7 +676,8 @@ MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
       // Ensure the stack remains aligned after adjustment.
       Amount = alignSPAdjust(Amount);
 
-      if (MI->getOpcode() == RISCV::ADJCALLSTACKDOWN)
+      if (Opcode == RISCV::ADJCALLSTACKDOWN ||
+          Opcode == RISCV::ADJCALLSTACKDOWNCAP)
         Amount = -Amount;
 
       adjustReg(MBB, MI, DL, SPReg, SPReg, Amount, MachineInstr::NoFlags);
@@ -746,8 +753,14 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
   for (auto &CS : NonLibcallCSI) {
     // Insert the spill to the stack frame.
     Register Reg = CS.getReg();
+    // Do not set a kill flag on values that are also marked as live-in. This
+    // happens with the @llvm-returnaddress intrinsic and with arguments passed
+    // in callee saved registers.
+    // Omitting the kill flags is conservatively correct even if the live-in is
+    // not used after all.
+    bool IsLiveIn = MF->getRegInfo().isLiveIn(Reg);
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-    TII.storeRegToStackSlot(MBB, MI, Reg, true, CS.getFrameIdx(), RC, TRI);
+    TII.storeRegToStackSlot(MBB, MI, Reg, !IsLiveIn, CS.getFrameIdx(), RC, TRI);
   }
 
   return true;

@@ -1648,7 +1648,66 @@ SourceLocation MemberExpr::getEndLoc() const {
   return EndLoc;
 }
 
-bool CastExpr::CastConsistency() const {
+bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
+
+#if !defined(NDEBUG)
+  bool IsPurecap = Ctx.getTargetInfo().areAllPointersCapabilities();
+#endif
+  // Basic CHERI sanity checks here:
+  switch (getCastKind()) {
+  case CK_NullToPointer:
+    // This can be either a capability NULL pointer or a non-capability one.
+    break;
+  case CK_FunctionToPointerDecay:
+  case CK_ArrayToPointerDecay:
+  case CK_BuiltinFnToFnPtr:
+    // For purecap these should create capabilities and not integer pointers
+    assert(getType()->isCapabilityPointerType() == IsPurecap);
+    break;
+  case CK_NullToMemberPointer:
+    // Member data pointers are always integer offset, function pointers are
+    // capabilities in the purecap ABI
+    if (getType()->isMemberDataPointerType())
+      assert(!getType()->isCHERICapabilityType(Ctx));
+    else
+      assert(getType()->isCHERICapabilityType(Ctx) == IsPurecap);
+    break;
+  case CK_PointerToCHERICapability:
+    assert(getType()->isCHERICapabilityType(Ctx));
+    assert(!getSubExpr()->getType()->isCHERICapabilityType(Ctx));
+    break;
+  case CK_CHERICapabilityToPointer:
+  case CK_CHERICapabilityToAddress:
+  case CK_CHERICapabilityToOffset:
+    assert(getSubExpr()->getType()->isCHERICapabilityType(Ctx));
+    assert(!getType()->isCHERICapabilityType(Ctx, /*IncludeIntCap=*/false));
+    break;
+
+  case CK_ToVoid:    // always allowed
+  case CK_Dependent: // We don't know the real type yet
+  case CK_IntegralCast:
+  case CK_PointerToIntegral:
+  case CK_IntegralToPointer:
+  case CK_FloatingToIntegral:
+  case CK_FixedPointToIntegral:
+    // These can convert capability <-> non-capability
+    break;
+  case CK_IntegralToBoolean:
+  case CK_PointerToBoolean:
+  case CK_MemberPointerToBoolean:
+  case CK_IntegralToFloating:
+  case CK_IntegralToFixedPoint:
+    assert(!getType()->isCHERICapabilityType(Ctx));
+    break;
+
+  default:
+    // All other cast kinds should not change isCHERICapabilityType():
+    assert((getType()->isCHERICapabilityType(Ctx) ==
+            getSubExpr()->getType()->isCHERICapabilityType(Ctx)) &&
+           "Changed capability pointer qualifier with an invalid cast");
+    break;
+  }
+
   switch (getCastKind()) {
   case CK_DerivedToBase:
   case CK_UncheckedDerivedToBase:
@@ -1907,13 +1966,15 @@ const FieldDecl *CastExpr::getTargetFieldForToUnionCast(const RecordDecl *RD,
   return nullptr;
 }
 
-void CastExpr::checkProvenance(const ASTContext &C, QualType *Dst,
-                               class Expr *Src) {
-  if (!(*Dst)->isIntCapType())
-    return;
+QualType CastExpr::checkProvenanceImpl(QualType Ty, const ASTContext &C,
+                                       const Expr *Src) {
+  // This check is only needed for (u)intcap_t since all other types either
+  // always carry provenance (pointers+references) or never do.
+  if (!Ty->isIntCapType())
+    return Ty;
 
-  if (!(*Dst)->canCarryProvenance(C))
-    return;  // avoid doubly-annotating a type
+  if (!Ty->canCarryProvenance(C))
+    return Ty; // avoid doubly-annotating a type
 
   // If we are casting an definitely not-provenance carrying value to a
   // (u)intcap_t, mark the result as not carrying provenance.
@@ -1939,13 +2000,14 @@ void CastExpr::checkProvenance(const ASTContext &C, QualType *Dst,
   if (!ExprCanCarryProvenance) {
     // FIXME: allowing __uintcap_t as the underlying type for enums is not
     // ideal, as this means we need a const_cast here.
-    if ((*Dst)->isEnumeralType()) {
-      *Dst = const_cast<ASTContext &>(C).getAttributedType(
-          attr::CHERINoProvenance, *Dst, *Dst);
+    if (Ty->isEnumeralType()) {
+      return const_cast<ASTContext &>(C).getAttributedType(
+          attr::CHERINoProvenance, Ty, Ty);
     } else {
-      *Dst = C.getNonProvenanceCarryingType(*Dst);
+      return C.getNonProvenanceCarryingType(Ty);
     }
   }
+  return Ty;
 }
 
 ImplicitCastExpr *ImplicitCastExpr::Create(const ASTContext &C, QualType T,
@@ -1959,9 +2021,8 @@ ImplicitCastExpr *ImplicitCastExpr::Create(const ASTContext &C, QualType T,
   assert((Kind != CK_LValueToRValue ||
           !(T->isNullPtrType() || T->getAsCXXRecordDecl())) &&
          "invalid type for lvalue-to-rvalue conversion");
-  checkProvenance(C, &T, Operand);
   ImplicitCastExpr *E =
-    new (Buffer) ImplicitCastExpr(T, Kind, Operand, PathSize, VK);
+      new (Buffer) ImplicitCastExpr(T, Kind, Operand, PathSize, VK, C);
   if (PathSize)
     std::uninitialized_copy_n(BasePath->data(), BasePath->size(),
                               E->getTrailingObjects<CXXBaseSpecifier *>());
@@ -1982,9 +2043,8 @@ CStyleCastExpr *CStyleCastExpr::Create(const ASTContext &C, QualType T,
                                        SourceLocation L, SourceLocation R) {
   unsigned PathSize = (BasePath ? BasePath->size() : 0);
   void *Buffer = C.Allocate(totalSizeToAlloc<CXXBaseSpecifier *>(PathSize));
-  checkProvenance(C, &T, Op);
   CStyleCastExpr *E =
-    new (Buffer) CStyleCastExpr(T, VK, K, Op, PathSize, WrittenTy, L, R);
+      new (Buffer) CStyleCastExpr(T, VK, K, Op, PathSize, WrittenTy, L, R, C);
   if (PathSize)
     std::uninitialized_copy_n(BasePath->data(), BasePath->size(),
                               E->getTrailingObjects<CXXBaseSpecifier *>());

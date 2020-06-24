@@ -88,6 +88,9 @@ ccopytype c1, c2, c3
 # CHECK-INST: ccseal cra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x3e]
 ccseal c1, c2, c3
+# CHECK-INST: csealentry cra, csp
+# CHECK: encoding: [0xdb,0x00,0x11,0xff]
+csealentry c1, c2
 
 # CHECK-INST: ctoptr ra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x24]
