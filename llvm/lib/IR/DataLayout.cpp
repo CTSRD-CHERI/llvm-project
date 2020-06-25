@@ -261,8 +261,8 @@ void DataLayout::parseSpecifier(StringRef Desc) {
 
     switch (Specifier) {
     case 's':
-      // Ignored for backward compatibility.
-      // FIXME: remove this on LLVM 4.0.
+      // Deprecated, but ignoring here to preserve loading older textual llvm
+      // ASM file
       break;
     case 'E':
       BigEndian = true;
