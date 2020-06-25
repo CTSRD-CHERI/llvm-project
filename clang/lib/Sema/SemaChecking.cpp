@@ -15363,7 +15363,8 @@ ExprResult Sema::SemaBuiltinMatrixColumnMajorLoad(CallExpr *TheCall,
   if (checkArgCount(*this, TheCall, 4))
     return ExprError();
 
-  Expr *PtrExpr = TheCall->getArg(0);
+  unsigned PtrArgIdx = 0;
+  Expr *PtrExpr = TheCall->getArg(PtrArgIdx);
   Expr *RowsExpr = TheCall->getArg(1);
   Expr *ColumnsExpr = TheCall->getArg(2);
   Expr *StrideExpr = TheCall->getArg(3);
@@ -15387,14 +15388,14 @@ ExprResult Sema::SemaBuiltinMatrixColumnMajorLoad(CallExpr *TheCall,
   QualType ElementTy;
   if (!PtrTy) {
     Diag(PtrExpr->getBeginLoc(), diag::err_builtin_matrix_pointer_arg)
-        << "first";
+        << PtrArgIdx + 1;
     ArgError = true;
   } else {
     ElementTy = PtrTy->getPointeeType().getUnqualifiedType();
 
     if (!ConstantMatrixType::isValidElementType(ElementTy)) {
       Diag(PtrExpr->getBeginLoc(), diag::err_builtin_matrix_pointer_arg)
-          << "first";
+          << PtrArgIdx + 1;
       ArgError = true;
     }
   }
@@ -15470,8 +15471,9 @@ ExprResult Sema::SemaBuiltinMatrixColumnMajorStore(CallExpr *TheCall,
   if (checkArgCount(*this, TheCall, 3))
     return ExprError();
 
+  unsigned PtrArgIdx = 1;
   Expr *MatrixExpr = TheCall->getArg(0);
-  Expr *PtrExpr = TheCall->getArg(1);
+  Expr *PtrExpr = TheCall->getArg(PtrArgIdx);
   Expr *StrideExpr = TheCall->getArg(2);
 
   bool ArgError = false;
@@ -15510,7 +15512,7 @@ ExprResult Sema::SemaBuiltinMatrixColumnMajorStore(CallExpr *TheCall,
   auto *PtrTy = PtrExpr->getType()->getAs<PointerType>();
   if (!PtrTy) {
     Diag(PtrExpr->getBeginLoc(), diag::err_builtin_matrix_pointer_arg)
-        << "second";
+        << PtrArgIdx + 1;
     ArgError = true;
   } else {
     QualType ElementTy = PtrTy->getPointeeType();
