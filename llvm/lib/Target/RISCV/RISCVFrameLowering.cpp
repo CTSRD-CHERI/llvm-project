@@ -738,6 +738,8 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
 
   const char *SpillLibCall = getSpillLibCallName(*MF, CSI);
   if (SpillLibCall) {
+    assert(!RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
+           "Save/restore libcall not implemented for purecap");
     // Add spill libcall via non-callee-saved register t0.
     BuildMI(MBB, MI, DL, TII.get(RISCV::PseudoCALLReg), RISCV::X5)
         .addExternalSymbol(SpillLibCall, RISCVII::MO_CALL)
@@ -790,6 +792,8 @@ bool RISCVFrameLowering::restoreCalleeSavedRegisters(
 
   const char *RestoreLibCall = getRestoreLibCallName(*MF, CSI);
   if (RestoreLibCall) {
+    assert(!RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
+           "Save/restore libcall not implemented for purecap");
     // Add restore libcall via tail call.
     MachineBasicBlock::iterator NewMI =
         BuildMI(MBB, MI, DL, TII.get(RISCV::PseudoTAIL))
