@@ -1,14 +1,11 @@
 #include "llvm/Transforms/Utils/VNCoercion.h"
-#include "llvm/Transforms/Scalar/GVN.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/ConstantFolding.h"
-#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "vncoerce"
+
 namespace llvm {
 namespace VNCoercion {
 
@@ -55,7 +52,7 @@ bool canCoerceMustAliasedValueToLoad(Value *StoredVal, Type *LoadTy,
   // anything that is a fat pointer.
   if (DL.isFatPointer(StoredVal->getType()) != DL.isFatPointer(LoadTy))
     return false;
-  // FIXME: we can transform fat pointers
+  // FIXME: we should be able to transform fat pointers
 
   return true;
 }
@@ -400,8 +397,6 @@ int analyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr, LoadInst *DepLI,
 
   return analyzeLoadFromClobberingWrite(LoadTy, LoadPtr, DepPtr, Size * 8, DL, TLI);
 }
-
-
 
 int analyzeLoadFromClobberingMemInst(Type *LoadTy, Value *LoadPtr,
                                      MemIntrinsic *MI, const DataLayout &DL,
