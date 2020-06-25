@@ -960,7 +960,8 @@ def : Pat<(brind (add GPR:$rs1, simm12:$imm12)),
 // destination.
 // Define AsmString to print "call" when compile with -S flag.
 // Define isCodeGenOnly = 0 to support parsing assembly "call" instruction.
-let isCall = 1, isBarrier = 1, isCodeGenOnly = 0, hasSideEffects = 0,
+let Predicates = [NotCapMode],
+    isCall = 1, isBarrier = 1, isCodeGenOnly = 0, hasSideEffects = 0,
     mayStore = 0, mayLoad = 0 in
 def PseudoCALLReg : Pseudo<(outs GPR:$rd), (ins call_symbol:$func), []> {
   let AsmString = "call\t$rd, $func";
