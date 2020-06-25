@@ -8109,8 +8109,6 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
     break;
   case CK_CHERICapabilityToAddress:
   case CK_CHERICapabilityToOffset:
-  case CK_PointerToIntegral: // FIXME: can this happen for void* __capability ->
-                             // __intcap_t?
     llvm_unreachable("Should not be evaluated here");
     break;
   case CK_PointerToCHERICapability:
