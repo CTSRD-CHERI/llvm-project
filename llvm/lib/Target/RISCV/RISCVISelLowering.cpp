@@ -846,10 +846,7 @@ SDValue RISCVTargetLowering::lowerFRAMEADDR(SDValue Op,
 
 SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op,
                                              SelectionDAG &DAG) const {
-  // TODO: We need createRISCVMCRegisterInfo to have the ABI so it can
-  // correctly initialise our MCRegisterInfo subclass, as we should be able to
-  // use RI.getRARegister() at the end of this function.
-  //const RISCVRegisterInfo &RI = *Subtarget.getRegisterInfo();
+  const RISCVRegisterInfo &RI = *Subtarget.getRegisterInfo();
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setReturnAddressIsTaken(true);
@@ -871,9 +868,8 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op,
 
   // Return the value of the return address register, marking it an implicit
   // live-in.
-  MCPhysReg PhysReg = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
-      ? RISCV::C1 : RISCV::X1;
-  Register Reg = MF.addLiveIn(PhysReg, getRegClassFor(VT.getSimpleVT()));
+  Register Reg =
+      MF.addLiveIn(RI.getRARegister(), getRegClassFor(VT.getSimpleVT()));
   return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, VT);
 }
 
