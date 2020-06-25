@@ -1045,7 +1045,7 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     auto getVtableOffsetAsPointer = [&](uint64_t Offset) {
       llvm::Constant *Value = llvm::ConstantInt::get(CGM.PtrDiffTy, Offset);
       if (TI.areAllPointersCapabilities()) {
-        return llvm::ConstantExpr::getIntToPtr(Value, CGM.VoidPtrTy);
+        return CGM.getNullDerivedConstantCapability(CGM.VoidPtrTy, Value);
       }
       return Value;
     };
@@ -3537,7 +3537,9 @@ llvm::Constant *ItaniumRTTIBuilder::BuildTypeInfo(
         llvm::ConstantInt::get(CGM.Int64Ty, ((uint64_t)1) << 63);
     TypeNameField = llvm::ConstantExpr::getAdd(TypeNameField, flag);
     TypeNameField =
-        llvm::ConstantExpr::getIntToPtr(TypeNameField, CGM.Int8PtrTy);
+        CGM.getContext().getTargetInfo().areAllPointersCapabilities()
+            ? CGM.getNullDerivedConstantCapability(CGM.Int8PtrTy, TypeNameField)
+            : llvm::ConstantExpr::getIntToPtr(TypeNameField, CGM.Int8PtrTy);
   } else {
     TypeNameField = llvm::ConstantExpr::getBitCast(TypeName, CGM.Int8PtrTy);
   }
