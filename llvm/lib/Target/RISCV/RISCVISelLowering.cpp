@@ -1792,10 +1792,11 @@ static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State,
                                      VA1.getLocVT(), CCValAssign::Full));
   } else {
     // Both halves must be passed on the stack, with proper alignment.
-    unsigned StackAlign = std::max(XLenInBytes, ArgFlags1.getOrigAlign());
+    Align StackAlign =
+        std::max(Align(XLenInBytes), ArgFlags1.getNonZeroOrigAlign());
     State.addLoc(
         CCValAssign::getMem(VA1.getValNo(), VA1.getValVT(),
-                            State.AllocateStack(XLenInBytes, Align(StackAlign)),
+                            State.AllocateStack(XLenInBytes, StackAlign),
                             VA1.getLocVT(), CCValAssign::Full));
     State.addLoc(CCValAssign::getMem(
         ValNo2, ValVT2, State.AllocateStack(XLenInBytes, Align(XLenInBytes)),
@@ -1891,8 +1892,8 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
   // not apply.
   // TODO: Pure capability varargs bounds
   unsigned TwoXLenInBytes = (2 * XLen) / 8;
-  if (!IsFixed && !RISCVABI::isCheriPureCapABI(ABI) &&
-      ArgFlags.getOrigAlign() == TwoXLenInBytes &&
+  if (!IsFixed && && !RISCVABI::isCheriPureCapABI(ABI) &&
+      ArgFlags.getNonZeroOrigAlign() == TwoXLenInBytes &&
       DL.getTypeAllocSize(OrigTy) == TwoXLenInBytes) {
     unsigned RegIdx = State.getFirstUnallocated(ArgGPRs);
     // Skip 'odd' register if necessary.

@@ -842,7 +842,7 @@ WebAssemblyTargetLowering::LowerCall(CallLoweringInfo &CLI,
       assert(VT != MVT::iPTR && "Legalized args should be concrete");
       Type *Ty = VT.getTypeForEVT(*DAG.getContext());
       Align Alignment =
-          std::max(Align(Out.Flags.getOrigAlign()), Layout.getABITypeAlign(Ty));
+          std::max(Out.Flags.getNonZeroOrigAlign(), Layout.getABITypeAlign(Ty));
       unsigned Offset =
           CCInfo.AllocateStack(Layout.getTypeAllocSize(Ty), Alignment);
       CCInfo.addLoc(CCValAssign::getMem(ArgLocs.size(), VT.getSimpleVT(),
@@ -916,7 +916,7 @@ WebAssemblyTargetLowering::LowerCall(CallLoweringInfo &CLI,
     if (In.Flags.isInConsecutiveRegsLast())
       fail(DL, DAG,
            "WebAssembly hasn't implemented cons regs last return values");
-    // Ignore In.getOrigAlign() because all our arguments are passed in
+    // Ignore In.getNonZeroOrigAlign() because all our arguments are passed in
     // registers.
     InTys.push_back(In.VT);
   }
@@ -1003,7 +1003,7 @@ SDValue WebAssemblyTargetLowering::LowerFormalArguments(
       fail(DL, DAG, "WebAssembly hasn't implemented cons regs arguments");
     if (In.Flags.isInConsecutiveRegsLast())
       fail(DL, DAG, "WebAssembly hasn't implemented cons regs last arguments");
-    // Ignore In.getOrigAlign() because all our arguments are passed in
+    // Ignore In.getNonZeroOrigAlign() because all our arguments are passed in
     // registers.
     InVals.push_back(In.Used ? DAG.getNode(WebAssemblyISD::ARGUMENT, DL, In.VT,
                                            DAG.getTargetConstant(InVals.size(),
