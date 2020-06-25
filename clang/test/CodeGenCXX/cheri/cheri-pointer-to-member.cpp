@@ -37,7 +37,7 @@ AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
 // CHECK: @global_data_ptr = addrspace(200) global i64 [[$A_Y_OFFSET:20|36]], align 8
 // CHECK: @global_nonvirt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } {
 // CHECK-SAME: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i64 0 }, align [[#CAP_SIZE]]
-// CHECK: @global_virt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, align [[#CAP_SIZE]]
+// CHECK: @global_virt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 [[#CAP_SIZE]]), i64 1 }, align [[#CAP_SIZE]]
 // UTC_ARGS: --enable
 
 // CHECK-LABEL: define {{[^@]+}}@main() addrspace(200) #2
@@ -61,7 +61,7 @@ AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
 // CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3fooEv to i8 addrspace(200)*), i64 0 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[FUNC_PTR]], align 16
 // CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i64 0 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[FUNC_PTR_2]], align 16
 // CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[VIRTUAL_FUNC_PTR]], align 16
-// CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[VIRTUAL_FUNC_PTR_2]], align 16
+// CHECK-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 [[#CAP_SIZE]]), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[VIRTUAL_FUNC_PTR_2]], align 16
 // CHECK-NEXT:    [[TMP0:%.*]] = load i64, i64 addrspace(200)* [[DATA_PTR]], align 8
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[CLASS_A]] addrspace(200)* [[A]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[MEMPTR_OFFSET:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 [[TMP0]]
@@ -449,7 +449,7 @@ int func_ptr_dereference(A *a, AMemberFuncPtr ptr) {
 // Check using Member pointers as return values an parameters
 // CHECK-LABEL: define {{[^@]+}}@_Z15return_func_ptrv() addrspace(200) #1
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[#CAP_SIZE]] to i8 addrspace(200)*), i64 1 }
+// CHECK-NEXT:    ret { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 [[#CAP_SIZE]]), i64 1 }
 //
 // N64-LABEL: define {{[^@]+}}@_Z15return_func_ptrv() local_unnamed_addr #2
 // N64-NEXT:  entry:
