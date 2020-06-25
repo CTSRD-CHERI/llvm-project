@@ -23,6 +23,8 @@
 
 using namespace llvm;
 
+extern cl::opt<bool> ZeroReturnSlotAfterRestore;
+
 // Get the ID of the libcall used for spilling and restoring callee saved
 // registers. The ID is representative of the number of registers saved or
 // restored by the libcall, except it is zero-indexed - ID 0 corresponds to a
@@ -780,11 +782,22 @@ bool RISCVFrameLowering::restoreCalleeSavedRegisters(
 
   // Manually restore values not restored by libcall. Insert in reverse order.
   // loadRegFromStackSlot can insert multiple instructions.
+  const bool IsPurecapABI = RISCVABI::isCheriPureCapABI(STI.getTargetABI());
   const auto &NonLibcallCSI = getNonLibcallCSI(CSI);
   for (auto &CS : reverse(NonLibcallCSI)) {
     Register Reg = CS.getReg();
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
     TII.loadRegFromStackSlot(MBB, MI, Reg, CS.getFrameIdx(), RC, TRI);
+    if (ZeroReturnSlotAfterRestore && Reg == TRI->getRARegister()) {
+      // Note: this assumes that RA is only restored once prior to returning.
+      // This should be true in the current code-generation and should be
+      // unlikely to change in the future.
+      // FIXME: it also assumes that all loads from the stack into the (C)RA
+      //  register are loads of the return value.
+      // FIXME: Can we be confident that this store will not be removed?
+      TII.storeRegToStackSlot(MBB, MI, IsPurecapABI ? RISCV::C0 : RISCV::X0,
+                              false, CS.getFrameIdx(), RC, TRI);
+    }
     assert(MI != MBB.begin() && "loadRegFromStackSlot didn't insert any code!");
   }
 
