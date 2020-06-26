@@ -66,6 +66,7 @@
 // & -> reference (optionally followed by an address space number)
 // C -> const
 // D -> volatile
+// R -> restrict
 // m -> memory capability
 
 // The third value provided to the macro specifies information about attributes
