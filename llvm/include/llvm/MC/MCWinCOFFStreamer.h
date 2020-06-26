@@ -67,6 +67,8 @@ public:
                       TailPaddingAmount TailPadding) override;
   void emitIdent(StringRef IdentString) override;
   void EmitWinEHHandlerData(SMLoc Loc) override;
+  void emitCGProfileEntry(const MCSymbolRefExpr *From,
+                          const MCSymbolRefExpr *To, uint64_t Count) override;
   void finishImpl() override;
 
   /// \}
@@ -75,6 +77,9 @@ protected:
   const MCSymbol *CurSymbol;
 
   void emitInstToData(const MCInst &Inst, const MCSubtargetInfo &STI) override;
+
+  void finalizeCGProfileEntry(const MCSymbolRefExpr *&S);
+  void finalizeCGProfile();
 
 private:
   void Error(const Twine &Msg) const;
