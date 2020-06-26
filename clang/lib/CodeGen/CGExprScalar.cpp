@@ -4115,8 +4115,8 @@ Value *ScalarExprEmitter::EmitFixedPointBinOp(const BinOpInfo &op) {
   switch (op.Opcode) {
   case BO_AddAssign:
   case BO_Add: {
-    if (ResultFixedSema.isSaturated()) {
-      llvm::Intrinsic::ID IID = ResultFixedSema.isSigned()
+    if (CommonFixedSema.isSaturated()) {
+      llvm::Intrinsic::ID IID = CommonFixedSema.isSigned()
                                     ? llvm::Intrinsic::sadd_sat
                                     : llvm::Intrinsic::uadd_sat;
       Result = Builder.CreateBinaryIntrinsic(IID, FullLHS, FullRHS);
@@ -4127,8 +4127,8 @@ Value *ScalarExprEmitter::EmitFixedPointBinOp(const BinOpInfo &op) {
   }
   case BO_SubAssign:
   case BO_Sub: {
-    if (ResultFixedSema.isSaturated()) {
-      llvm::Intrinsic::ID IID = ResultFixedSema.isSigned()
+    if (CommonFixedSema.isSaturated()) {
+      llvm::Intrinsic::ID IID = CommonFixedSema.isSigned()
                                     ? llvm::Intrinsic::ssub_sat
                                     : llvm::Intrinsic::usub_sat;
       Result = Builder.CreateBinaryIntrinsic(IID, FullLHS, FullRHS);
@@ -4140,14 +4140,12 @@ Value *ScalarExprEmitter::EmitFixedPointBinOp(const BinOpInfo &op) {
   case BO_MulAssign:
   case BO_Mul: {
     llvm::Intrinsic::ID IID;
-    if (ResultFixedSema.isSaturated())
-      IID = ResultFixedSema.isSigned()
-                ? llvm::Intrinsic::smul_fix_sat
-                : llvm::Intrinsic::umul_fix_sat;
+    if (CommonFixedSema.isSaturated())
+      IID = CommonFixedSema.isSigned() ? llvm::Intrinsic::smul_fix_sat
+                                       : llvm::Intrinsic::umul_fix_sat;
     else
-      IID = ResultFixedSema.isSigned()
-                ? llvm::Intrinsic::smul_fix
-                : llvm::Intrinsic::umul_fix;
+      IID = CommonFixedSema.isSigned() ? llvm::Intrinsic::smul_fix
+                                       : llvm::Intrinsic::umul_fix;
     Result = Builder.CreateIntrinsic(IID, {FullLHS->getType()},
         {FullLHS, FullRHS, Builder.getInt32(CommonFixedSema.getScale())});
     break;
@@ -4155,11 +4153,11 @@ Value *ScalarExprEmitter::EmitFixedPointBinOp(const BinOpInfo &op) {
   case BO_DivAssign:
   case BO_Div: {
     llvm::Intrinsic::ID IID;
-    if (ResultFixedSema.isSaturated())
-      IID = ResultFixedSema.isSigned() ? llvm::Intrinsic::sdiv_fix_sat
+    if (CommonFixedSema.isSaturated())
+      IID = CommonFixedSema.isSigned() ? llvm::Intrinsic::sdiv_fix_sat
                                        : llvm::Intrinsic::udiv_fix_sat;
     else
-      IID = ResultFixedSema.isSigned() ? llvm::Intrinsic::sdiv_fix
+      IID = CommonFixedSema.isSigned() ? llvm::Intrinsic::sdiv_fix
                                        : llvm::Intrinsic::udiv_fix;
     Result = Builder.CreateIntrinsic(IID, {FullLHS->getType()},
         {FullLHS, FullRHS, Builder.getInt32(CommonFixedSema.getScale())});
