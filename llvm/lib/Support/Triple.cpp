@@ -11,6 +11,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/SwapByteOrder.h"
@@ -19,6 +20,7 @@
 #include "llvm/Support/WithColor.h"
 #include <cassert>
 #include <cstring>
+
 using namespace llvm;
 
 StringRef Triple::getArchTypeName(ArchType Kind) {
