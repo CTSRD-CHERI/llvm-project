@@ -4247,19 +4247,24 @@ llvm::getArgumentAliasingToReturnedPointer(const CallBase *Call,
 
 bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
     const CallBase *Call, bool MustPreserveNullness) {
+  switch (Call->getIntrinsicID()) {
   // NOTE: we can't return true for setbounds even though the resulting pointer
   // aliases with the target. It might not grant access to the last few bytes!
   // If we return true here for setbounds, then GVN will remove some
   // loads that would have trapped at runtime. See cheri-intrinisics.ll test.
-  return /* Call->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set ||
-         Call->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set_exact ||
-         Call->getIntrinsicID() == Intrinsic::cheri_bounded_stack_cap || */
-         Call->getIntrinsicID() == Intrinsic::launder_invariant_group ||
-         Call->getIntrinsicID() == Intrinsic::strip_invariant_group ||
-         Call->getIntrinsicID() == Intrinsic::aarch64_irg ||
-         Call->getIntrinsicID() == Intrinsic::aarch64_tagp ||
-         (!MustPreserveNullness &&
-          Call->getIntrinsicID() == Intrinsic::ptrmask);
+  // case Intrinsic::cheri_cap_bounds_set:
+  // case Intrinsic::cheri_cap_bounds_set_exact:
+  // case Intrinsic::cheri_bounded_stack_cap:
+  case Intrinsic::launder_invariant_group:
+  case Intrinsic::strip_invariant_group:
+  case Intrinsic::aarch64_irg:
+  case Intrinsic::aarch64_tagp:
+    return true;
+  case Intrinsic::ptrmask:
+    return !MustPreserveNullness;
+  default:
+    return false;
+  }
 }
 
 /// \p PN defines a loop-variant pointer to an object.  Check if the
