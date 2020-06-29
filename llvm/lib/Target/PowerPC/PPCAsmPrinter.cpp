@@ -327,7 +327,7 @@ void PPCAsmPrinter::emitEndOfAsmFile(Module &M) {
 
 void PPCAsmPrinter::LowerSTACKMAP(StackMaps &SM, const MachineInstr &MI) {
   unsigned NumNOPBytes = MI.getOperand(1).getImm();
-
+  
   auto &Ctx = OutStreamer->getContext();
   MCSymbol *MILabel = Ctx.createTempSymbol();
   OutStreamer->emitLabel(MILabel);
@@ -1702,16 +1702,15 @@ void PPCAIXAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
 
   // Handle common symbols.
   if (GVKind.isCommon() || GVKind.isBSSLocal()) {
-    unsigned Align =
-      GV->getAlignment() ? GV->getAlignment() : DL.getPreferredAlignment(GV);
+    Align Alignment = GV->getAlign().getValueOr(DL.getPreferredAlign(GV));
     uint64_t Size = DL.getTypeAllocSize(GV->getType()->getElementType());
 
     if (GVKind.isBSSLocal())
       OutStreamer->emitXCOFFLocalCommonSymbol(
           OutContext.getOrCreateSymbol(GVSym->getUnqualifiedName()), Size,
-          GVSym, Align);
+          GVSym, Alignment.value());
     else
-      OutStreamer->emitCommonSymbol(GVSym, Size, Align,
+      OutStreamer->emitCommonSymbol(GVSym, Size, Alignment.value(),
                                     TailPaddingAmount::None);
     return;
   }
