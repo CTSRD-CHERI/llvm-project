@@ -2111,7 +2111,7 @@ static const CXXMethodDecl *computeKeyFunction(ASTContext &Context,
     if (MD->isImplicit())
       continue;
 
-    if (MD->isInlineSpecified())
+    if (MD->isInlineSpecified() || MD->isConstexpr())
       continue;
 
     if (MD->hasInlineBody())
