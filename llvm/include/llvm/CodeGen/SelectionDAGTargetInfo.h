@@ -50,7 +50,7 @@ public:
   /// request here, legalize will resort to using simple loads and stores.
   virtual SDValue EmitTargetCodeForMemcpy(
       SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Op1,
-      SDValue Op2, SDValue Op3, unsigned Align, bool isVolatile,
+      SDValue Op2, SDValue Op3, Align Alignment, bool isVolatile,
       bool AlwaysInline, bool MustPreserveCheriCapabilities,
       MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
     return SDValue();

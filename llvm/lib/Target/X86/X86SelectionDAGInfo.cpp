@@ -289,7 +289,7 @@ static SDValue emitConstantSizeRepmov(
 
 SDValue X86SelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
-    SDValue Size, unsigned Align, bool isVolatile, bool AlwaysInline,
+    SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
     bool /*MustPreserveCheriCaps*/,
     MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
   // If to a segment-relative address space, use the default lowering.
@@ -308,10 +308,10 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemcpy(
 
   /// Handle constant sizes,
   if (ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size))
-    return emitConstantSizeRepmov(DAG, Subtarget, dl, Chain, Dst, Src,
-                                  ConstantSize->getZExtValue(),
-                                  Size.getValueType(), Align, isVolatile,
-                                  AlwaysInline, DstPtrInfo, SrcPtrInfo);
+    return emitConstantSizeRepmov(
+        DAG, Subtarget, dl, Chain, Dst, Src, ConstantSize->getZExtValue(),
+        Size.getValueType(), Alignment.value(), isVolatile, AlwaysInline,
+        DstPtrInfo, SrcPtrInfo);
 
   return SDValue();
 }
