@@ -257,6 +257,12 @@ typedef __UINTPTR_TYPE__ uintptr_t;
 #define _UINTPTR_T
 #endif
 
+/* uintcap_t/intcap_t typedefs for hybrid CHERI code: */
+#if __has_feature(capabilities)
+typedef __intcap_t intcap_t;
+typedef __uintcap_t uintcap_t;
+#endif
+
 /* C99 7.18.1.5 Greatest-width integer types.
  */
 typedef __INTMAX_TYPE__  intmax_t;
