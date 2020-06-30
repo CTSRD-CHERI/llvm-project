@@ -36,11 +36,11 @@ SDValue WebAssemblySelectionDAGInfo::EmitTargetCodeForMemcpy(
 
 SDValue WebAssemblySelectionDAGInfo::EmitTargetCodeForMemmove(
     SelectionDAG &DAG, const SDLoc &DL, SDValue Chain, SDValue Op1, SDValue Op2,
-    SDValue Op3, unsigned Align, bool IsVolatile,
+    SDValue Op3, Align Alignment, bool IsVolatile,
     bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
   return EmitTargetCodeForMemcpy(
-      DAG, DL, Chain, Op1, Op2, Op3, Align, IsVolatile, false,
+      DAG, DL, Chain, Op1, Op2, Op3, Alignment.value(), IsVolatile, false,
       MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo);
 }
 
