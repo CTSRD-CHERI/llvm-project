@@ -9,18 +9,19 @@
 
 #if !defined(__STDDEF_H) || defined(__need_ptrdiff_t) ||                       \
     defined(__need_size_t) || defined(__need_wchar_t) ||                       \
-    defined(__need_NULL) || defined(__need_wint_t) || defined(__need_vaddr_t)
+    defined(__need_NULL) || defined(__need_wint_t) ||                          \
+    defined(__need_ptraddr_t)
 
 #if !defined(__need_ptrdiff_t) && !defined(__need_size_t) &&                   \
     !defined(__need_wchar_t) && !defined(__need_NULL) &&                       \
-    !defined(__need_wint_t) && !defined(__need_vaddr_t)
+    !defined(__need_wint_t) && !defined(__need_ptraddr_t)
 /* Always define miscellaneous pieces when modules are available. */
 #if !__has_feature(modules)
 #define __STDDEF_H
 #endif
 #define __need_ptrdiff_t
 #define __need_size_t
-#define __need_vaddr_t
+#define __need_ptraddr_t
 #define __need_wchar_t
 #define __need_NULL
 #define __need_STDDEF_H_misc
@@ -51,17 +52,18 @@ typedef __SIZE_TYPE__ size_t;
 #undef __need_size_t
 #endif /*defined(__need_size_t) */
 
-#if defined(__need_vaddr_t)
-#if !(defined(_VADDR_T) || defined(_VADDR_T_DECLARED)) || __has_feature(modules)
-/* Always define vaddr_t when modules are available. */
+#if defined(__need_ptraddr_t)
+#if !(defined(_PTRADDR_T) || defined(_PTRADDR_T_DECLARED)) ||                  \
+    __has_feature(modules)
+/* Always define ptraddr_t when modules are available. */
 #if !__has_feature(modules)
-#define _VADDR_T
-#define _VADDR_T_DECLARED /* FreeBSD */
+#define _PTRADDR_T
+#define _PTRADDR_T_DECLARED /* FreeBSD */
 #endif
-typedef unsigned __PTRDIFF_TYPE__ vaddr_t;
+typedef __PTRADDR_TYPE__ ptraddr_t;
 #endif
-#undef __need_vaddr_t
-#endif /*defined(__need_size_t) */
+#undef __need_ptraddr_t
+#endif /*defined(__need_ptraddr_t) */
 
 #if defined(__need_STDDEF_H_misc)
 /* ISO9899:2011 7.20 (C11 Annex K): Define rsize_t if __STDC_WANT_LIB_EXT1__ is

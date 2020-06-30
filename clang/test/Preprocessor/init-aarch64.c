@@ -203,6 +203,12 @@
 // AARCH64-NEXT: #define __ORDER_PDP_ENDIAN__ 3412
 // AARCH64-NEXT: #define __POINTER_WIDTH__ 64
 // AARCH64-NEXT: #define __PRAGMA_REDEFINE_EXTNAME 1
+// AARCH64-NEXT: #define __PTRADDR_FMTX__ "lX"
+// AARCH64-NEXT: #define __PTRADDR_FMTo__ "lo"
+// AARCH64-NEXT: #define __PTRADDR_FMTu__ "lu"
+// AARCH64-NEXT: #define __PTRADDR_FMTx__ "lx"
+// AARCH64-NEXT: #define __PTRADDR_TYPE__ long unsigned int
+// AARCH64-NEXT: #define __PTRADDR_WIDTH__ 64
 // AARCH64-NEXT: #define __PTRDIFF_FMTd__ "ld"
 // AARCH64-NEXT: #define __PTRDIFF_FMTi__ "li"
 // AARCH64-NEXT: #define __PTRDIFF_MAX__ 9223372036854775807L
