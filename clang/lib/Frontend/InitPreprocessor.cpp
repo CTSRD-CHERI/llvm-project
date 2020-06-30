@@ -892,6 +892,18 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   DefineType("__PTRDIFF_TYPE__", TI.getPtrDiffType(0), Builder);
   DefineFmt("__PTRDIFF", TI.getPtrDiffType(0), TI, Builder);
   DefineTypeWidth("__PTRDIFF_WIDTH__", TI.getPtrDiffType(0), TI, Builder);
+  /*
+   * ptraddr_t can be used to hold the address of a pointer.
+   * For most architectures this is the same as uintptr_t, but for CHERI it is
+   * half the size of uintptr_t and store hold tag bits.
+   */
+  auto PtrAddrTy =
+      TI.areAllPointersCapabilities()
+          ? TI.getIntTypeByWidth(TI.getPointerRangeForCHERICapability(), false)
+          : TI.getUIntPtrType();
+  DefineType("__PTRADDR_TYPE__", PtrAddrTy, Builder);
+  DefineFmt("__PTRADDR", PtrAddrTy, TI, Builder);
+  DefineTypeWidth("__PTRADDR_WIDTH__", PtrAddrTy, TI, Builder);
   DefineType("__INTPTR_TYPE__", TI.getIntPtrType(), Builder);
   DefineFmt("__INTPTR", TI.getIntPtrType(), TI, Builder);
   DefineTypeWidth("__INTPTR_WIDTH__", TI.getIntPtrType(), TI, Builder);
