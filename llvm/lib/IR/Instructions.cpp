@@ -1551,6 +1551,13 @@ AtomicCmpXchgInst::AtomicCmpXchgInst(Value *Ptr, Value *Cmp, Value *NewVal,
   Init(Ptr, Cmp, NewVal, SuccessOrdering, FailureOrdering, SSID);
 }
 
+Align AtomicCmpXchgInst::getAlign() const {
+  // The default here is to assume it has NATURAL alignment, not
+  // DataLayout-specified alignment.
+  const DataLayout &DL = getModule()->getDataLayout();
+  return Align(DL.getTypeStoreSize(getCompareOperand()->getType()));
+}
+
 //===----------------------------------------------------------------------===//
 //                       AtomicRMWInst Implementation
 //===----------------------------------------------------------------------===//
@@ -1630,6 +1637,13 @@ StringRef AtomicRMWInst::getOperationName(BinOp Op) {
   }
 
   llvm_unreachable("invalid atomicrmw operation");
+}
+
+Align AtomicRMWInst::getAlign() const {
+  // The default here is to assume it has NATURAL alignment, not
+  // DataLayout-specified alignment.
+  const DataLayout &DL = getModule()->getDataLayout();
+  return Align(DL.getTypeStoreSize(getValOperand()->getType()));
 }
 
 //===----------------------------------------------------------------------===//

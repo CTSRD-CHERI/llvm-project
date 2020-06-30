@@ -105,7 +105,7 @@ namespace {
     bool isIdempotentRMW(AtomicRMWInst *RMWI);
     bool simplifyIdempotentRMW(AtomicRMWInst *RMWI);
 
-    bool expandAtomicOpToLibcall(Instruction *I, unsigned Size, unsigned Align,
+    bool expandAtomicOpToLibcall(Instruction *I, unsigned Size, Align Alignment,
                                  Value *PointerOperand, Value *ValueOperand,
                                  Value *CASExpected, AtomicOrdering Ordering,
                                  AtomicOrdering Ordering2,
@@ -153,39 +153,6 @@ static unsigned getAtomicOpSize(AtomicCmpXchgInst *CASI) {
   return DL.getTypeStoreSize(CASI->getCompareOperand()->getType());
 }
 
-// Helper functions to retrieve the alignment of atomic instructions.
-static unsigned getAtomicOpAlign(LoadInst *LI) {
-  unsigned Align = LI->getAlignment();
-  // In the future, if this IR restriction is relaxed, we should
-  // return DataLayout::getABITypeAlignment when there's no align
-  // value.
-  assert(Align != 0 && "An atomic LoadInst always has an explicit alignment");
-  return Align;
-}
-
-static unsigned getAtomicOpAlign(StoreInst *SI) {
-  unsigned Align = SI->getAlignment();
-  // In the future, if this IR restriction is relaxed, we should
-  // return DataLayout::getABITypeAlignment when there's no align
-  // value.
-  assert(Align != 0 && "An atomic StoreInst always has an explicit alignment");
-  return Align;
-}
-
-static unsigned getAtomicOpAlign(AtomicRMWInst *RMWI) {
-  // TODO(PR27168): This instruction has no alignment attribute, but unlike the
-  // default alignment for load/store, the default here is to assume
-  // it has NATURAL alignment, not DataLayout-specified alignment.
-  const DataLayout &DL = RMWI->getModule()->getDataLayout();
-  return DL.getTypeStoreSize(RMWI->getValOperand()->getType());
-}
-
-static unsigned getAtomicOpAlign(AtomicCmpXchgInst *CASI) {
-  // TODO(PR27168): same comment as above.
-  const DataLayout &DL = CASI->getModule()->getDataLayout();
-  return DL.getTypeStoreSize(CASI->getCompareOperand()->getType());
-}
-
 // Helper functions to retrieve whether an atomic instruction is operating on a
 // capability value.
 static unsigned getAtomicOpIsCap(LoadInst *LI) {
@@ -217,8 +184,9 @@ static bool atomicSizeSupported(const TargetLowering *TLI, Inst *I) {
     return TLI->supportsAtomicCapabilityOperations();
 
   unsigned Size = getAtomicOpSize(I);
-  unsigned Align = getAtomicOpAlign(I);
-  return Align >= Size && Size <= TLI->getMaxAtomicSizeInBitsSupported() / 8;
+  Align Alignment = I->getAlign();
+  return Alignment >= Size &&
+         Size <= TLI->getMaxAtomicSizeInBitsSupported() / 8;
 }
 
 bool AtomicExpand::runOnFunction(Function &F) {
@@ -1539,7 +1507,7 @@ bool llvm::expandAtomicRMWToCmpXchg(AtomicRMWInst *AI,
 // must be one of the potentially-specialized sizes, and the value
 // type must actually exist in C on the target (otherwise, the
 // function wouldn't actually be defined.)
-static bool canUseSizedAtomicCall(unsigned Size, unsigned Align,
+static bool canUseSizedAtomicCall(unsigned Size, Align Alignment,
                                   const DataLayout &DL) {
   // TODO: "LargestSize" is an approximation for "largest type that
   // you can express in C". It seems to be the case that int128 is
@@ -1549,7 +1517,7 @@ static bool canUseSizedAtomicCall(unsigned Size, unsigned Align,
   // really be some more reliable way in LLVM of determining integer
   // sizes which are valid in the target's C ABI...
   unsigned LargestSize = DL.getLargestLegalIntTypeSizeInBits() >= 64 ? 16 : 8;
-  return Align >= Size &&
+  return Alignment >= Size &&
          (Size == 1 || Size == 2 || Size == 4 || Size == 8 || Size == 16) &&
          Size <= LargestSize;
 }
@@ -1559,11 +1527,10 @@ void AtomicExpand::expandAtomicLoadToLibcall(LoadInst *I) {
       RTLIB::ATOMIC_LOAD,   RTLIB::ATOMIC_LOAD_1, RTLIB::ATOMIC_LOAD_2,
       RTLIB::ATOMIC_LOAD_4, RTLIB::ATOMIC_LOAD_8, RTLIB::ATOMIC_LOAD_16};
   unsigned Size = getAtomicOpSize(I);
-  unsigned Align = getAtomicOpAlign(I);
   bool IsCap = getAtomicOpIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
-      I, Size, Align, I->getPointerOperand(), nullptr, nullptr,
+      I, Size, I->getAlign(), I->getPointerOperand(), nullptr, nullptr,
       I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
   (void)expanded;
   assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor Load");
@@ -1574,11 +1541,10 @@ void AtomicExpand::expandAtomicStoreToLibcall(StoreInst *I) {
       RTLIB::ATOMIC_STORE,   RTLIB::ATOMIC_STORE_1, RTLIB::ATOMIC_STORE_2,
       RTLIB::ATOMIC_STORE_4, RTLIB::ATOMIC_STORE_8, RTLIB::ATOMIC_STORE_16};
   unsigned Size = getAtomicOpSize(I);
-  unsigned Align = getAtomicOpAlign(I);
   bool IsCap = getAtomicOpIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
-      I, Size, Align, I->getPointerOperand(), I->getValueOperand(), nullptr,
+      I, Size, I->getAlign(), I->getPointerOperand(), I->getValueOperand(), nullptr,
       I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
   (void)expanded;
   assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor Store");
@@ -1590,11 +1556,10 @@ void AtomicExpand::expandAtomicCASToLibcall(AtomicCmpXchgInst *I) {
       RTLIB::ATOMIC_COMPARE_EXCHANGE_2, RTLIB::ATOMIC_COMPARE_EXCHANGE_4,
       RTLIB::ATOMIC_COMPARE_EXCHANGE_8, RTLIB::ATOMIC_COMPARE_EXCHANGE_16};
   unsigned Size = getAtomicOpSize(I);
-  unsigned Align = getAtomicOpAlign(I);
   bool IsCap = getAtomicOpIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
-      I, Size, Align, I->getPointerOperand(), I->getNewValOperand(),
+      I, Size, I->getAlign(), I->getPointerOperand(), I->getNewValOperand(),
       I->getCompareOperand(), I->getSuccessOrdering(), I->getFailureOrdering(),
       Libcalls, IsCap);
   (void)expanded;
@@ -1664,13 +1629,12 @@ void AtomicExpand::expandAtomicRMWToLibcall(AtomicRMWInst *I) {
   ArrayRef<RTLIB::Libcall> Libcalls = GetRMWLibcall(I->getOperation());
 
   unsigned Size = getAtomicOpSize(I);
-  unsigned Align = getAtomicOpAlign(I);
   bool IsCap = getAtomicOpIsCap(I);
 
   bool Success = false;
   if (!Libcalls.empty())
     Success = expandAtomicOpToLibcall(
-        I, Size, Align, I->getPointerOperand(), I->getValOperand(), nullptr,
+        I, Size, I->getAlign(), I->getPointerOperand(), I->getValOperand(), nullptr,
         I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
 
   // The expansion failed: either there were no libcalls at all for
@@ -1702,7 +1666,7 @@ void AtomicExpand::expandAtomicRMWToLibcall(AtomicRMWInst *I) {
 // 'I' are extracted from the Instruction subclass by the
 // caller. Depending on the particular call, some will be null.
 bool AtomicExpand::expandAtomicOpToLibcall(
-    Instruction *I, unsigned Size, unsigned Align, Value *PointerOperand,
+    Instruction *I, unsigned Size, Align Alignment, Value *PointerOperand,
     Value *ValueOperand, Value *CASExpected, AtomicOrdering Ordering,
     AtomicOrdering Ordering2, ArrayRef<RTLIB::Libcall> Libcalls, bool IsCap) {
   assert(Libcalls.size() == 6);
@@ -1713,10 +1677,10 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   IRBuilder<> Builder(I);
   IRBuilder<> AllocaBuilder(&I->getFunction()->getEntryBlock().front());
 
-  bool UseSizedLibcall = !IsCap && canUseSizedAtomicCall(Size, Align, DL);
+  bool UseSizedLibcall = !IsCap && canUseSizedAtomicCall(Size, Alignment, DL);
   Type *SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
 
-  const llvm::Align AllocaAlignment(DL.getPrefTypeAlignment(SizedIntTy));
+  const Align AllocaAlignment = DL.getPrefTypeAlign(SizedIntTy);
 
   // TODO: the "order" argument type is "int", not int32. So
   // getInt32Ty may be wrong if the arch uses e.g. 16-bit ints.
