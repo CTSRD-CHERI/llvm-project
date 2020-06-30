@@ -611,6 +611,9 @@ struct AttributeComparator {
     if (L->isNoSync != R->isNoSync)
       return R->isNoSync;
 
+    if (L->isNoFree != R->isNoFree)
+      return R->isNoFree;
+
     if (L->isWillReturn != R->isWillReturn)
       return R->isWillReturn;
 
@@ -778,10 +781,11 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
     }
 
     if (!intrinsic.canThrow ||
-        (intrinsic.ModRef != CodeGenIntrinsic::ReadWriteMem && !intrinsic.hasSideEffects) ||
-        intrinsic.isNoReturn || intrinsic.isNoSync || intrinsic.isWillReturn ||
-        intrinsic.isCold || intrinsic.isNoDuplicate || intrinsic.isConvergent ||
-        intrinsic.isSpeculatable || intrinsic.hasSideEffects) {
+        (intrinsic.ModRef != CodeGenIntrinsic::ReadWriteMem &&
+         !intrinsic.hasSideEffects) ||
+        intrinsic.isNoReturn || intrinsic.isNoSync || intrinsic.isNoFree ||
+        intrinsic.isWillReturn || intrinsic.isCold || intrinsic.isNoDuplicate ||
+        intrinsic.isConvergent || intrinsic.isSpeculatable || intrinsic.hasSideEffects) {
       OS << "      const Attribute::AttrKind Atts[] = {";
       bool addComma = false;
       if (!intrinsic.canThrow) {
@@ -798,6 +802,12 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         if (addComma)
           OS << ",";
         OS << "Attribute::NoSync";
+        addComma = true;
+      }
+      if (intrinsic.isNoFree) {
+        if (addComma)
+          OS << ",";
+        OS << "Attribute::NoFree";
         addComma = true;
       }
       if (intrinsic.isWillReturn) {
