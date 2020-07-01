@@ -1772,9 +1772,8 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
   // (vaddr_t)cap1 - (vaddr_t)cap2 --> cheri_cap_diff(cap1, cap2)
   if (match(Op0, m_Intrinsic<Intrinsic::cheri_cap_address_get>(m_Value(X))) &&
       match(Op1, m_Intrinsic<Intrinsic::cheri_cap_address_get>(m_Value(Y)))) {
-    Value *F =
-        Intrinsic::getDeclaration(I.getModule(), Intrinsic::cheri_cap_diff,
-                                  Op0->getType());
+    Function *F = Intrinsic::getDeclaration(
+        I.getModule(), Intrinsic::cheri_cap_diff, Op0->getType());
     auto *Call = CallInst::Create(F, {X, Y});
     assert(Call->getType() == I.getType());
     return Call;

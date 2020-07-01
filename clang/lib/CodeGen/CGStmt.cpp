@@ -1137,7 +1137,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
           // If this is CHERI, enforce this in hardware
           if (Ty->isCHERICapabilityType(getContext())) {
             unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-            llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_seal);
+            auto *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_seal);
             llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
             RetV = Builder.CreateCall(F,
                {Builder.CreateBitCast(RetV, CapPtrTy),
