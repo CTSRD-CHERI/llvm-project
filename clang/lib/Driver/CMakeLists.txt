@@ -69,7 +69,7 @@ add_clang_library(clangDriver
   ToolChains/RTEMS.cpp
   ToolChains/Solaris.cpp
   ToolChains/TCE.cpp
-  ToolChains/VE.cpp
+  ToolChains/VEToolchain.cpp
   ToolChains/WebAssembly.cpp
   ToolChains/XCore.cpp
   ToolChains/PPCLinux.cpp
