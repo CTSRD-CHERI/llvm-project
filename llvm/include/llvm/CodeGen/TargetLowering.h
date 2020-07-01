@@ -1507,7 +1507,7 @@ public:
   /// type has the alignment requirement of another type.
   virtual Align getABIAlignmentForCallingConv(Type *ArgTy,
                                               DataLayout DL) const {
-    return Align(DL.getABITypeAlignment(ArgTy));
+    return DL.getABITypeAlign(ArgTy);
   }
 
   /// If true, then instruction selection should seek to shrink the FP constant
@@ -2615,7 +2615,7 @@ public:
   /// this information should not be provided because it will generate more
   /// loads.
   virtual bool hasPairedLoad(EVT /*LoadedType*/,
-                             unsigned & /*RequiredAlignment*/) const {
+                             Align & /*RequiredAlignment*/) const {
     return false;
   }
 
