@@ -283,6 +283,12 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   // Effectively disable jump table generation.
   setMinimumJumpTableEntries(INT_MAX);
+
+  // Jumps are expensive, compared to logic
+  setJumpIsExpensive();
+
+  // We can use any register for comparisons
+  setHasMultipleConditionRegisters();
 }
 
 EVT RISCVTargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
