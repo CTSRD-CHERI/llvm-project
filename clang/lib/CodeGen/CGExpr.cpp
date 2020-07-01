@@ -5289,8 +5289,9 @@ EmitConditionalOperatorLValue(const AbstractConditionalOperator *expr) {
       // because it can't be used.
       if (auto *ThrowExpr = dyn_cast<CXXThrowExpr>(live->IgnoreParens())) {
         EmitCXXThrowExpr(ThrowExpr);
-        llvm::Type *Ty =
-            llvm::PointerType::getUnqual(ConvertType(dead->getType()));
+        llvm::Type *Ty = llvm::PointerType::get(
+            ConvertType(dead->getType()),
+            CGM.getDataLayout().getGlobalsAddressSpace());
         return MakeAddrLValue(
             Address(llvm::UndefValue::get(Ty), CharUnits::One()),
             dead->getType());
