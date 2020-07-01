@@ -966,8 +966,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
     const TargetRegisterClass &RC = STI.isGP64bit() ?
       Mips::GPR64RegClass : Mips::GPR32RegClass;
     int FI = MF.getFrameInfo().CreateStackObject(TRI->getSpillSize(RC),
-                                                 TRI->getSpillAlignment(RC),
-                                                 false);
+                                                 TRI->getSpillAlign(RC), false);
     RS->addScavengingFrameIndex(FI);
   }
 
@@ -997,8 +996,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   const TargetRegisterClass &RC =
       ABI.ArePtrs64bit() ? Mips::GPR64RegClass : Mips::GPR32RegClass;
   int FI = MF.getFrameInfo().CreateStackObject(TRI->getSpillSize(RC),
-                                               TRI->getSpillAlignment(RC),
-                                               false);
+                                               TRI->getSpillAlign(RC), false);
   RS->addScavengingFrameIndex(FI);
 }
 
