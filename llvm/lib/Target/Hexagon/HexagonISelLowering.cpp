@@ -1992,8 +1992,7 @@ bool HexagonTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
     // The offset value comes through Modifier register. For now, assume the
     // offset is 0.
     Info.offset = 0;
-    Info.align =
-        MaybeAlign(DL.getABITypeAlignment(Info.memVT.getTypeForEVT(Cont)));
+    Info.align = DL.getABITypeAlign(Info.memVT.getTypeForEVT(Cont));
     Info.flags = MachineMemOperand::MOLoad;
     return true;
   }
