@@ -32,7 +32,7 @@ entry:
 ; CHECK-NEXT:         .globl  global
 ; CHECK-NEXT:         .p2align        3
 ; CHECK-NEXT: global:
-; CHECK-NEXT:         .8byte  123                     # 0x7b
+; CHECK-NEXT:         .8byte  123
 ; CHECK-NEXT:         .size   global, 8
 
 attributes #0 = { nounwind }

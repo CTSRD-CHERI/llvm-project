@@ -516,7 +516,7 @@ def LOADCAP_BigImm : CheriFmtCLS_BigImm<0x1D, (outs CheriOpnd:$cs), (ins simm16s
 // Load via a capability register
 let canFoldAsLoad = 1, DecoderNamespace="CHERI" in
 multiclass LoadViaCapScaled<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC, PatFrag loadType, Operand simm, PatFrag immfrag> {
-  def #NAME# : CheriFmtCLX<t, sExt,
+  def NAME : CheriFmtCLX<t, sExt,
                              (outs RC:$rd),
                              (ins GPR64Opnd:$rt, simm:$offset, CheriOpnd0IsDDC:$cb),
                              !strconcat(instr_asm, "\t$rd, ${rt}, ${offset}(${cb})"),
@@ -533,7 +533,7 @@ multiclass LoadViaCap0<Instruction Op, PatFrag loadType> {
 // Store via a capability register
 let DecoderNamespace="CHERI" in
 multiclass StoreViaCapScaled<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType, Operand simm, PatFrag immfrag> {
-  def #NAME# : CheriFmtCSX<t, e,
+  def NAME : CheriFmtCSX<t, e,
                              (outs),
                              (ins RC:$rs, GPR64Opnd:$rt, simm:$offset, CheriOpnd0IsDDC:$cb),
                              !strconcat(instr_asm, "\t$rs, ${rt}, ${offset}(${cb})"),

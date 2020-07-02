@@ -766,8 +766,8 @@ class CommonCheriTargetCodeGenInfo : public TargetCodeGenInfo {
   }
 
 public:
-  CommonCheriTargetCodeGenInfo(ABIInfo *info = nullptr)
-      : TargetCodeGenInfo(info) {}
+  CommonCheriTargetCodeGenInfo(std::unique_ptr<ABIInfo> info)
+      : TargetCodeGenInfo(std::move(info)) {}
 
   llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &CGF, llvm::Value *Ptr,
                                 llvm::Value *Offset) const override {
@@ -7349,8 +7349,9 @@ class MIPSTargetCodeGenInfo : public CommonCheriTargetCodeGenInfo {
   unsigned SizeOfUnwindException;
 public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32, CodeGenModule &CGM)
-    : CommonCheriTargetCodeGenInfo(std::make_unique<MipsABIInfo>(CGT, IsO32, CGM)),
-      SizeOfUnwindException(IsO32 ? 24 : 32) {}
+      : CommonCheriTargetCodeGenInfo(
+            std::make_unique<MipsABIInfo>(CGT, IsO32, CGM)),
+        SizeOfUnwindException(IsO32 ? 24 : 32) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const override {
     return 29;
@@ -10669,7 +10670,8 @@ class RISCVTargetCodeGenInfo : public CommonCheriTargetCodeGenInfo {
 public:
   RISCVTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT, unsigned XLen,
                          unsigned FLen)
-      : CommonCheriTargetCodeGenInfo(std::make_unique<RISCVABIInfo>(CGT, XLen, FLen)) {}
+      : CommonCheriTargetCodeGenInfo(
+            std::make_unique<RISCVABIInfo>(CGT, XLen, FLen)) {}
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &CGM) const override {

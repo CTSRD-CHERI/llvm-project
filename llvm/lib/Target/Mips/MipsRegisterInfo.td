@@ -337,12 +337,12 @@ let Namespace = "Mips" in {
   // TODO: assign DWARF register numbers to the special hwregs
   def CAPHWR0 : MipsReg<0, "chwr_ddc">;
   def CAPHWR1 : MipsReg<1, "chwr_userlocal">;
-  foreach I = 2-7 in def CAPHWR#I : MipsReg<#I, ""#I>;
+  foreach I = 2-7 in def CAPHWR#I : MipsReg<I, ""#I>;
   def CAPHWR8 : MipsReg<8, "chwr_priv_userlocal">;
-  foreach I = 9-21 in def CAPHWR#I : MipsReg<#I, ""#I>;
+  foreach I = 9-21 in def CAPHWR#I : MipsReg<I, ""#I>;
   def CAPHWR22 : MipsReg<22, "chwr_kr1c">;
   def CAPHWR23 : MipsReg<23, "chwr_kr2c">;
-  foreach I = 24-28 in def CAPHWR#I : MipsReg<#I, ""#I>;
+  foreach I = 24-28 in def CAPHWR#I : MipsReg<I, ""#I>;
   def CAPHWR29 : MipsReg<29, "chwr_kcc">;
   def CAPHWR30 : MipsReg<30, "chwr_kdc">;
   def CAPHWR31 : MipsReg<31, "chwr_epcc">;
