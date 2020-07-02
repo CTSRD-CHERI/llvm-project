@@ -4679,7 +4679,6 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
   // Create a reference to the named value.  This ensures that it is emitted
   // if a deferred decl.
   llvm::Constant *Aliasee;
-  unsigned AS = 0;
   llvm::GlobalValue::LinkageTypes LT;
   if (isa<llvm::FunctionType>(DeclTy)) {
     AS = getFunctionAddrSpace();
@@ -4687,7 +4686,7 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
                                       /*ForVTable=*/false);
     LT = getFunctionLinkage(GD);
   } else {
-    AS = getTargetCodeGenInfo().getDefaultAS();
+    unsigned AS = getDataLayout().getGlobalsAddressSpace();
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
                                     llvm::PointerType::get(DeclTy, AS),
                                     /*D=*/nullptr);
