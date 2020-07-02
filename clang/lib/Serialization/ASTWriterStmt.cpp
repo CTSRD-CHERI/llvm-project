@@ -1623,7 +1623,8 @@ void ASTStmtWriter::VisitLambdaExpr(LambdaExpr *E) {
     Record.AddStmt(*C);
   }
 
-  Record.AddStmt(E->getBody());
+  // Don't serialize the body. It belongs to the call operator declaration.
+  // LambdaExpr only stores a copy of the Stmt *.
 
   Code = serialization::EXPR_LAMBDA;
 }
