@@ -1595,55 +1595,55 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
                 outs() << '>';
               }
             }
-          }
-        }
+            // Add a comment which symbol is being loaded for cap-table loads
+            int64_t CapTableOffset = std::numeric_limits<int64_t>::min();
+            // In .o files we can just use -r to get useful results
+            if (MIA && CheriCapTableAddress &&
+                MIA->isCapTableLoad(Inst, CapTableOffset) &&
+                !Obj->isRelocatableObject()) {
 
-        // Add a comment which symbol is being loaded for cap-table loads
-        int64_t CapTableOffset = std::numeric_limits<int64_t>::min();
-        // In .o files we can just use -r to get useful results
-        if (MIA && CheriCapTableAddress &&
-            MIA->isCapTableLoad(Inst, CapTableOffset) &&
-            !Obj->isRelocatableObject()) {
+              uint64_t Target = *CheriCapTableAddress + CapTableOffset;
+              // TODO: share this code:
 
-          uint64_t Target = *CheriCapTableAddress + CapTableOffset;
-          // TODO: share this code:
+              // In a relocatable object, the target's section must reside in
+              // the same section as the call instruction or it is accessed
+              // through a relocation.
+              //
+              // In a non-relocatable object, the target may be in any section.
+              //
+              // N.B. We don't walk the relocations in the relocatable case yet.
+              auto *TargetSectionSymbols = &Symbols;
+              if (!Obj->isRelocatableObject()) {
+                auto SectionAddress = std::upper_bound(
+                    SectionAddresses.begin(), SectionAddresses.end(), Target,
+                    [](uint64_t LHS,
+                       const std::pair<uint64_t, SectionRef> &RHS) {
+                      return LHS < RHS.first;
+                    });
+                if (SectionAddress != SectionAddresses.begin()) {
+                  --SectionAddress;
+                  TargetSectionSymbols = &AllSymbols[SectionAddress->second];
+                } else {
+                  TargetSectionSymbols = nullptr;
+                }
+              }
 
-          // In a relocatable object, the target's section must reside in
-          // the same section as the call instruction or it is accessed
-          // through a relocation.
-          //
-          // In a non-relocatable object, the target may be in any section.
-          //
-          // N.B. We don't walk the relocations in the relocatable case yet.
-          auto *TargetSectionSymbols = &Symbols;
-          if (!Obj->isRelocatableObject()) {
-            auto SectionAddress = std::upper_bound(
-                SectionAddresses.begin(), SectionAddresses.end(), Target,
-                [](uint64_t LHS, const std::pair<uint64_t, SectionRef> &RHS) {
-                  return LHS < RHS.first;
-                });
-            if (SectionAddress != SectionAddresses.begin()) {
-              --SectionAddress;
-              TargetSectionSymbols = &AllSymbols[SectionAddress->second];
-            } else {
-              TargetSectionSymbols = nullptr;
-            }
-          }
-
-          // Find the first symbol in the section whose offset is less than
-          // or equal to the target.
-          if (TargetSectionSymbols) {
-            auto TargetSym = std::upper_bound(
-                TargetSectionSymbols->begin(), TargetSectionSymbols->end(),
-                Target, [](uint64_t LHS, const SymbolInfoTy &RHS) {
-                  return LHS < RHS.Addr;
-                });
-            if (TargetSym != TargetSectionSymbols->begin()) {
-              --TargetSym;
-              outs() << "\t# probably " << TargetSym->Name;
-              uint64_t Disp = Target - TargetSym->Addr;
-              if (Disp)
-                outs() << "+0x" << utohexstr(Disp);
+              // Find the first symbol in the section whose offset is less than
+              // or equal to the target.
+              if (TargetSectionSymbols) {
+                auto TargetSym = std::upper_bound(
+                    TargetSectionSymbols->begin(), TargetSectionSymbols->end(),
+                    Target, [](uint64_t LHS, const SymbolInfoTy &RHS) {
+                      return LHS < RHS.Addr;
+                    });
+                if (TargetSym != TargetSectionSymbols->begin()) {
+                  --TargetSym;
+                  outs() << "\t# probably " << TargetSym->Name;
+                  uint64_t Disp = Target - TargetSym->Addr;
+                  if (Disp)
+                    outs() << "+0x" << utohexstr(Disp);
+                }
+              }
             }
           }
         }
