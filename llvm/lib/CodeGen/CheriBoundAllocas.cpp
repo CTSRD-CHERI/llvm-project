@@ -267,7 +267,7 @@ public:
             new AllocaInst(TypeWithPadding, AI->getType()->getAddressSpace(),
                            nullptr, "", AI);
           NewAI->takeName(AI);
-          NewAI->setAlignment(MaybeAlign(AI->getAlignment()));
+          NewAI->setAlignment(AI->getAlign());
           NewAI->setUsedWithInAlloca(AI->isUsedWithInAlloca());
           NewAI->setSwiftError(AI->isSwiftError());
           NewAI->copyMetadata(*AI);
@@ -283,11 +283,11 @@ public:
       }
 
       if (cheri::ShouldCollectCSetBoundsStats) {
-        cheri::addSetBoundsStats(
-            AI->getAlign().valueOrOne(), Size, getPassName(),
-            cheri::SetBoundsPointerSource::Stack,
-            "set bounds on " + cheri::inferLocalVariableName(AI),
-            cheri::inferSourceLocation(AI));
+        cheri::addSetBoundsStats(AI->getAlign(), Size, getPassName(),
+                                 cheri::SetBoundsPointerSource::Stack,
+                                 "set bounds on " +
+                                     cheri::inferLocalVariableName(AI),
+                                 cheri::inferSourceLocation(AI));
       }
       LLVM_DEBUG(auto S = cheri::inferConstantValue(Size);
                  dbgs() << AI->getFunction()->getName()
