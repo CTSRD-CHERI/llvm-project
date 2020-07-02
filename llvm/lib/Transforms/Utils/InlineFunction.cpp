@@ -2134,10 +2134,12 @@ llvm::InlineResult llvm::InlineFunction(CallBase &CB, InlineFunctionInfo &IFI,
     Module *M = Caller->getParent();
     unsigned AllocaAS = M->getDataLayout().getAllocaAddrSpace();
     // Get the two intrinsics we care about.
-    Function *StackSave = Intrinsic::getDeclaration(M, Intrinsic::stacksave,
-      { Type::getInt8PtrTy(CS->getContext(), AllocaAS) });
-    Function *StackRestore=Intrinsic::getDeclaration(M,Intrinsic::stackrestore,
-      { Type::getInt8PtrTy(CS->getContext(), AllocaAS) });
+    Function *StackSave = Intrinsic::getDeclaration(
+        M, Intrinsic::stacksave,
+        {Type::getInt8PtrTy(Caller->getContext(), AllocaAS)});
+    Function *StackRestore = Intrinsic::getDeclaration(
+        M, Intrinsic::stackrestore,
+        {Type::getInt8PtrTy(Caller->getContext(), AllocaAS)});
 
     // Insert the llvm.stacksave.
     CallInst *SavedPtr = IRBuilder<>(&*FirstNewBlock, FirstNewBlock->begin())
