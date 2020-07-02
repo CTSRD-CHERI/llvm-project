@@ -4681,7 +4681,6 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
   llvm::Constant *Aliasee;
   llvm::GlobalValue::LinkageTypes LT;
   if (isa<llvm::FunctionType>(DeclTy)) {
-    AS = getFunctionAddrSpace();
     Aliasee = GetOrCreateLLVMFunction(AA->getAliasee(), DeclTy, GD,
                                       /*ForVTable=*/false);
     LT = getFunctionLinkage(GD);
