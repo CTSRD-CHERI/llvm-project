@@ -45,10 +45,9 @@ std::string lld::toString(const elf::Symbol &sym) {
   return ret;
 }
 
-namespace elf {
 static std::string getLocationNonTemplate(InputSectionBase *isec,
                                           uint64_t symOffset);
-}
+
 std::string lld::verboseToString(const Symbol *b, uint64_t symOffset) {
   std::string msg;
 
@@ -96,7 +95,7 @@ std::string lld::verboseToString(const Symbol *b, uint64_t symOffset) {
   if (name.empty()) {
     if (dr && dr->section) {
       if (isec) {
-        name = elf::getLocationNonTemplate(isec, symOffset);
+        name = ::getLocationNonTemplate(isec, symOffset);
       } else {
         name = (dr->section->name + "+0x" + utohexstr(symOffset)).str();
       }
@@ -117,7 +116,7 @@ std::string lld::verboseToString(const Symbol *b, uint64_t symOffset) {
   return msg;
 }
 
-std::string toELFString(const Archive::Symbol &b) {
+std::string lld::toELFString(const Archive::Symbol &b) {
   return demangle(b.getName());
 }
 
@@ -435,8 +434,8 @@ void elf::maybeWarnUnorderableSymbol(const Symbol *sym) {
     report(": unable to order discarded symbol: ");
 }
 
-static std::string elf::getLocationNonTemplate(InputSectionBase *isec,
-                                               uint64_t symOffset) {
+static std::string getLocationNonTemplate(InputSectionBase *isec,
+                                          uint64_t symOffset) {
   switch (config->ekind) {
   default:
     llvm_unreachable("Invalid kind");

@@ -225,7 +225,7 @@ void elf::combineEhSections() {
   v.erase(std::remove(v.begin(), v.end(), nullptr), v.end());
 }
 
-template <class ELFT> void combineCapRelocsSections() {
+template <class ELFT> void elf::combineCapRelocsSections() {
   for (InputSectionBase *&s : inputSections) {
     if (s->name != "__cap_relocs")
       continue;
@@ -867,7 +867,7 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
 //
 // This function returns true if a section needs to be put into a
 // PT_GNU_RELRO segment.
-bool isRelroSection(const OutputSection *sec) {
+bool elf::isRelroSection(const OutputSection *sec) {
   if (!config->zRelro)
     return false;
 
@@ -3124,7 +3124,3 @@ template void elf::combineCapRelocsSections<ELF32LE>();
 template void elf::combineCapRelocsSections<ELF32BE>();
 template void elf::combineCapRelocsSections<ELF64LE>();
 template void elf::combineCapRelocsSections<ELF64BE>();
-
-} // namespace elf
-} // namespace lld
-
