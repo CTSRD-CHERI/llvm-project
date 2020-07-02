@@ -4463,7 +4463,7 @@ template <class ELFT> void GNUStyle<ELFT>::printHashSymbols(const ELFO *Obj) {
   if (this->dumper()->getDynamicStringTable().empty())
     return;
   auto StringTable = this->dumper()->getDynamicStringTable();
-  auto DynSyms = this->dumper()->dynamic_symbols();
+  Elf_Sym_Range DynSyms = this->dumper()->dynamic_symbols();
 
   auto PrintHashTable = [&](const Elf_Hash *SysVHash) {
     if (ELFT::Is64Bits)
@@ -4471,6 +4471,16 @@ template <class ELFT> void GNUStyle<ELFT>::printHashSymbols(const ELFO *Obj) {
     else
       OS << "  Num Buc:    Value  Size   Type   Bind Vis      Ndx Name";
     OS << "\n";
+
+    const Elf_Sym *FirstSym = DynSyms.empty() ? nullptr : &DynSyms[0];
+    if (!FirstSym) {
+      Optional<DynRegionInfo> DynSymRegion = this->dumper()->getDynSymRegion();
+      this->reportUniqueWarning(
+          createError(Twine("unable to print symbols for the .hash table: the "
+                            "dynamic symbol table ") +
+                      (DynSymRegion ? "is empty" : "was not found")));
+      return;
+    }
 
     auto Buckets = SysVHash->buckets();
     auto Chains = SysVHash->chains();
@@ -4490,7 +4500,7 @@ template <class ELFT> void GNUStyle<ELFT>::printHashSymbols(const ELFO *Obj) {
           break;
         }
 
-        printHashedSymbol(Obj, &DynSyms[0], Ch, StringTable, Buc);
+        printHashedSymbol(Obj, FirstSym, Ch, StringTable, Buc);
         Visited[Ch] = true;
       }
     }
@@ -4521,6 +4531,16 @@ template <class ELFT> void GNUStyle<ELFT>::printHashSymbols(const ELFO *Obj) {
     return;
   }
 
+  const Elf_Sym *FirstSym = DynSyms.empty() ? nullptr : &DynSyms[0];
+  if (!FirstSym) {
+    Optional<DynRegionInfo> DynSymRegion = this->dumper()->getDynSymRegion();
+    this->reportUniqueWarning(createError(
+        Twine("unable to print symbols for the .gnu.hash table: the "
+              "dynamic symbol table ") +
+        (DynSymRegion ? "is empty" : "was not found")));
+    return;
+  }
+
   auto Buckets = GnuHash->buckets();
   for (uint32_t Buc = 0; Buc < GnuHash->nbuckets; Buc++) {
     if (Buckets[Buc] == ELF::STN_UNDEF)
@@ -4529,7 +4549,7 @@ template <class ELFT> void GNUStyle<ELFT>::printHashSymbols(const ELFO *Obj) {
     uint32_t GnuHashable = Index - GnuHash->symndx;
     // Print whole chain
     while (true) {
-      printHashedSymbol(Obj, &DynSyms[0], Index++, StringTable, Buc);
+      printHashedSymbol(Obj, FirstSym, Index++, StringTable, Buc);
       // Chain ends at symbol with stopper bit
       if ((GnuHash->values(DynSyms.size())[GnuHashable++] & 1) == 1)
         break;
