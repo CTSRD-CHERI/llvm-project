@@ -20,7 +20,7 @@ define i32 @test_clobber_c2(i32 signext %intval, i8 addrspace(200)* %ptrval, i8 
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c2},~{$1}"() #1
   ; MIR-LABEL: name: test_clobber_c2
-  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c2, 12, implicit-def early-clobber $at
+  ; MIR: INLINEASM &"syscall\0A", 1 /* sideeffect attdialect */, 12 /* clobber */, implicit-def early-clobber $a0, 12 /* clobber */, implicit-def early-clobber $c2, 12 /* clobber */, implicit-def early-clobber $at
   ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1
@@ -49,7 +49,7 @@ define i32 @test_clobber_c3(i32 signext %intval, i8 addrspace(200)* %ptrval, i8 
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c3},~{$1}"() #1
   ; MIR-LABEL: name: test_clobber_c3
-  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c3, 12, implicit-def early-clobber $at
+  ; MIR: INLINEASM &"syscall\0A", 1 /* sideeffect attdialect */, 12 /* clobber */, implicit-def early-clobber $a0, 12 /* clobber */, implicit-def early-clobber $c3, 12 /* clobber */, implicit-def early-clobber $at
   ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1
@@ -79,7 +79,7 @@ define i32 @test_clobber_c4(i32 signext %intval, i8 addrspace(200)* %ptrval, i8 
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c4},~{$1}"() #1
   ; MIR-LABEL: name: test_clobber_c4
-  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c4, 12, implicit-def early-clobber $at
+  ; MIR: INLINEASM &"syscall\0A", 1 /* sideeffect attdialect */, 12 /* clobber */, implicit-def early-clobber $a0, 12 /* clobber */, implicit-def early-clobber $c4, 12 /* clobber */, implicit-def early-clobber $at
   ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1
@@ -109,7 +109,7 @@ define i32 @test_clobber_c3_c4(i32 signext %intval, i8 addrspace(200)* %ptrval, 
 entry:
   tail call void asm sideeffect "syscall\0A", "~{$4},~{$c3},~{$c4},~{$1}"() #1
   ; MIR-LABEL: name: test_clobber_c3_c4
-  ; MIR: INLINEASM &"syscall\0A", 1, 12, implicit-def early-clobber $a0, 12, implicit-def early-clobber $c3, 12, implicit-def early-clobber $c4, 12, implicit-def early-clobber $at
+  ; MIR: INLINEASM &"syscall\0A", 1 /* sideeffect attdialect */, 12 /* clobber */, implicit-def early-clobber $a0, 12 /* clobber */, implicit-def early-clobber $c3, 12 /* clobber */, implicit-def early-clobber $c4, 12 /* clobber */, implicit-def early-clobber $at
   ; MIR: PseudoReturnCap
   %0 = load volatile i8, i8 addrspace(200)* %ptrval, align 1
   %1 = load volatile i8, i8 addrspace(200)* %ptrval2, align 1

@@ -162,7 +162,7 @@ body:             |
   ; CHECK:        DBG_VALUE $c3, $noreg, !18, !DIExpression(), debug-location !21
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:cherigpr = COPY $c3
   ; CHECK-NEXT:   DBG_VALUE [[COPY]], $noreg, !18, !DIExpression(), debug-location !21
-  ; CHECK-NEXT:   INLINEASM &"li $$zero, 1", 25, 12, implicit-def early-clobber $at, !23, debug-location !22
+  ; CHECK-NEXT:   INLINEASM &"li $$zero, 1", 25 /* sideeffect mayload maystore attdialect */, 12 /* clobber */, implicit-def early-clobber $at, !23, debug-location !22
   ; This used to keep the cincoffsetimm even though it was only used by debug instructions
   ; CHECK-NOT: CIncOffsetImm
   ; The DBG_VALUE should have been updated to use $noreg:
