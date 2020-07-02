@@ -1677,10 +1677,10 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   uint64_t CapSizeBytes =
       Ctx.toCharUnitsFromBits(Ctx.getTargetInfo().getCHERICapabilityAlign())
           .getQuantity();
-  uint64_t DstAlignBytes = DstAlignCU.getQuantity();
-  bool UnderAligned = DstAlignBytes < CapSizeBytes;
+  Align DstAlign = DstAlignCU.getAsAlign();
+  bool UnderAligned = DstAlign < CapSizeBytes;
   if (UnderAligned && MemInst) {
-    // See if __builtin_assume_aligned() was used to increase the alignemnt.
+    // See if __builtin_assume_aligned() was used to increase the alignment.
     // In order to compute this alignment we need to use getKnownAlignment().
     // This will parse the @llvm.assume() intrinsics and compute the new
     // alignment but in order to do so it needs an AssumptionCache (and
@@ -1688,21 +1688,21 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
     // We also need to pass the call instruction as the context since the
     // alignment cannot be computed otherwise.
 
-    assert(MemInst->getDestAlignment() == DstAlignBytes);
+    assert(MemInst->getDestAlign() == DstAlign);
     // We need an assumption cache for getKnownAlignment(). This may be
     // expensive so we only do it if the alignment check failed.
     AssumptionCache AC(*CGF.CurFn);
     DominatorTree DT(*CGF.CurFn);
     auto KnownAlign = llvm::getKnownAlignment(
         MemInst->getRawDest(), CGF.CGM.getDataLayout(), MemInst, &AC, &DT);
-    if (KnownAlign > DstAlignBytes) {
+    if (KnownAlign > DstAlign) {
       // Check if we are still underaligned with __builtin_assume_aligned()
       // and update the memcpy/memmove src alignment. This will be done later
       // in LLVM anyway but since we have already computed we may as well set
       // it.
-      DstAlignBytes = KnownAlign;
-      UnderAligned = DstAlignBytes < CapSizeBytes;
-      MemInst->setDestAlignment(DstAlignBytes);
+      DstAlign = KnownAlign;
+      UnderAligned = DstAlign < CapSizeBytes;
+      MemInst->setDestAlignment(DstAlign);
     }
   }
   // TODO: should only really warn if the size is small enough to be inlined.
@@ -1710,7 +1710,7 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
     // TODO: this warning should be emitted by the backend instead
     CGF.CGM.getDiags().Report(Src->getExprLoc(),
                               diag::warn_cheri_memintrin_misaligned_inefficient)
-        << Function << (unsigned)DstAlignBytes << UnderlyingSrcTy;
+        << Function << (unsigned)DstAlign.value() << UnderlyingSrcTy;
     // TODO: add a fixit?
     CGF.CGM.getDiags().Report(Src->getExprLoc(),
                               diag::note_cheri_memintrin_misaligned_fixit)
@@ -8055,12 +8055,16 @@ Value *CodeGenFunction::EmitSVEPrefetchLoad(SVETypeFlags TypeFlags,
 
   // Implement the index operand if not omitted.
   if (Ops.size() > 3) {
-    BasePtr = Builder.CreateBitCast(BasePtr, MemoryTy->getPointerTo());
+    BasePtr = Builder.CreateBitCast(
+        BasePtr,
+        MemoryTy->getPointerTo(BasePtr->getType()->getPointerAddressSpace()));
     BasePtr = Builder.CreateGEP(MemoryTy, BasePtr, Ops[2]);
   }
 
   // Prefetch intriniscs always expect an i8*
-  BasePtr = Builder.CreateBitCast(BasePtr, llvm::PointerType::getUnqual(Int8Ty));
+  BasePtr = Builder.CreateBitCast(
+      BasePtr, llvm::PointerType::get(
+                   Int8Ty, BasePtr->getType()->getPointerAddressSpace()));
   Value *PrfOp = Ops.back();
 
   Function *F = CGM.getIntrinsic(BuiltinID, Predicate->getType());

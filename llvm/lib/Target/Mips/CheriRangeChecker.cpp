@@ -75,11 +75,10 @@ class CheriRangeChecker : public FunctionPass,
   }
 
   AllocOperands getRangeForAllocation(ValueSource Src) {
-    CallSite Malloc = CallSite(Src.Base);
     // FIXME: This should not hardcode function names but instead use the
     //  alloc_size attribute!
-    if (Malloc != CallSite()) {
-      Function *Fn = Malloc.getCalledFunction();
+    if (auto Malloc = dyn_cast<CallBase>(Src.Base)) {
+      Function *Fn = Malloc->getCalledFunction();
       if (!Fn)
         return AllocOperands();
       switch (StringSwitch<int>(Fn->getName())
@@ -93,13 +92,13 @@ class CheriRangeChecker : public FunctionPass,
       default:
         return AllocOperands();
       case 1:
-        return AllocOperands{Malloc.getArgument(0), nullptr, Src,
+        return AllocOperands{Malloc->getArgOperand(0), nullptr, Src,
                              cheri::SetBoundsPointerSource::Heap};
       case 2:
-        return AllocOperands{Malloc.getArgument(1), nullptr, Src,
+        return AllocOperands{Malloc->getArgOperand(1), nullptr, Src,
                              cheri::SetBoundsPointerSource::Heap};
       case 3:
-        return AllocOperands{Malloc.getArgument(0), Malloc.getArgument(1),
+        return AllocOperands{Malloc->getArgOperand(0), Malloc->getArgOperand(1),
                              Src, cheri::SetBoundsPointerSource::Heap};
       }
     } else if (AllocaInst *AI = dyn_cast<AllocaInst>(Src.Base)) {
@@ -181,7 +180,7 @@ public:
           Value *Src = P2I->getOperand(0)->stripPointerCasts();
           if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Src))
             return GV->hasExternalLinkage() ? 0 : P2I;
-          if (isa<AllocaInst>(Src) || CallSite(Src) != CallSite()) {
+          if (isa<AllocaInst>(Src) || isa<CallBase>(Src)) {
             return P2I;
           }
         }
@@ -200,8 +199,7 @@ public:
       if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Src.Base)) {
         if (GV->hasExternalLinkage())
           return;
-      } else if (!(isa<AllocaInst>(Src.Base) ||
-                   CallSite(Src.Base) != CallSite()))
+      } else if (!(isa<AllocaInst>(Src.Base) || isa<CallBase>(Src.Base)))
         return;
       AllocOperands AO = getRangeForAllocation(Src);
       if (AO != AllocOperands())

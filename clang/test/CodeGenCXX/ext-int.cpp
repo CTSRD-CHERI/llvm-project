@@ -148,10 +148,10 @@ void TakesVarargs(int i, ...) {
   __builtin_va_start(args, i);
   // LIN: %[[STARTAD:.+]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %[[ARGS]]
   // LIN: %[[STARTAD1:.+]] = bitcast %struct.__va_list_tag* %[[STARTAD]] to i8*
-  // LIN: call void @llvm.va_start(i8* %[[STARTAD1]])
+  // LIN: call void @llvm.va_start.p0i8(i8* %[[STARTAD1]])
   // WIN: %[[ARGSLLIFETIMESTART:.+]] = bitcast i8** %[[ARGS]] to i8*
   // WIN: %[[ARGSSTART:.+]] = bitcast i8** %[[ARGS]] to i8*
-  // WIN: call void @llvm.va_start(i8* %[[ARGSSTART]])
+  // WIN: call void @llvm.va_start.p0i8(i8* %[[ARGSSTART]])
 
   _ExtInt(92) A = __builtin_va_arg(args, _ExtInt(92));
   // LIN: %[[AD1:.+]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %[[ARGS]]
@@ -236,9 +236,9 @@ void TakesVarargs(int i, ...) {
   __builtin_va_end(args);
   // LIN: %[[ENDAD:.+]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %[[ARGS]]
   // LIN: %[[ENDAD1:.+]] = bitcast %struct.__va_list_tag* %[[ENDAD]] to i8*
-  // LIN: call void @llvm.va_end(i8* %[[ENDAD1]])
+  // LIN: call void @llvm.va_end.p0i8(i8* %[[ENDAD1]])
   // WIN: %[[ARGSEND:.+]] = bitcast i8** %[[ARGS]] to i8*
-  // WIN: call void @llvm.va_end(i8* %[[ARGSEND]])
+  // WIN: call void @llvm.va_end.p0i8(i8* %[[ARGSEND]])
 }
 void typeid_tests() {
   // LIN: define void @_Z12typeid_testsv()

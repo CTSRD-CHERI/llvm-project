@@ -68,7 +68,7 @@ public:
               // basic block since the asssume will always dominated it.
               // See llvm::isValidAssumeForContext()
               Instruction* Ctx = &BB.back();
-              uint64_t Alignment = getKnownAlignment(&I, DL, Ctx, AC, DT);
+              Align Alignment = getKnownAlignment(&I, DL, Ctx, AC, DT);
               Optional<uint64_t> KnownSize;
               Optional<uint64_t> SizeMultipleOf;
 
@@ -105,7 +105,7 @@ public:
               // This may not be quite true since some might use shared memory
               // but shouldn't really matter for analysis purposes
               cheri::CSetBoundsStats->add(
-                  Align(Alignment), KnownSize, "function with alloc_size",
+                  Alignment, KnownSize, "function with alloc_size",
                   cheri::SetBoundsPointerSource::Heap,
                   "call to " +
                       (CalledFunc ? CalledFunc->getName() : "function pointer"),
