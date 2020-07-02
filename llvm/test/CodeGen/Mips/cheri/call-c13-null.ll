@@ -14,15 +14,15 @@ declare i8 addrspace(200)* @many_cap_args(i8 addrspace(200)* %arg1, i8 addrspace
 
 
 ; Check that the debug output prints
-; DEBUG-OUTPUT-CHECK:      Clearing $c13 in call_one_arg_from_many_arg(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; DEBUG-OUTPUT-CHECK:      Clearing $c13 in call_one_arg_from_many_arg(is varargs: 0) callee = {{t[0-9]+}}: iFATPTR128 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*) addrspace(200)* @one_arg> 0
 ; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_one_arg_from_many_arg(is varargs: 0)
-; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_with_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_with_va_start(is varargs: 1) callee = {{t[0-9]+}}: iFATPTR128 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*) addrspace(200)* @one_arg> 0
 ; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_one_arg_from_variadic_with_va_start(is varargs: 1)
-; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_without_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_without_va_start(is varargs: 1) callee = {{t[0-9]+}}: iFATPTR128 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*) addrspace(200)* @one_arg> 0
 ; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_one_arg_from_variadic_without_va_start(is varargs: 1)
-; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_varargs(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_varargs(is varargs: 1) callee = {{t[0-9]+}}: iFATPTR128 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...) addrspace(200)* @variadic> 0
 ; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_variadic_no_onstack_from_varargs(is varargs: 1)
-; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_many_args(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_many_args(is varargs: 0) callee = {{t[0-9]+}}: iFATPTR128 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...) addrspace(200)* @variadic> 0
 ; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_variadic_no_onstack_from_many_args(is varargs: 0)
 
 ; CHECK-LABEL: .text

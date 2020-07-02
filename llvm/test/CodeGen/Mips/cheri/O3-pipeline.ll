@@ -139,9 +139,10 @@
 ; CHERI-NEXT:      CHERI invalidate pass
 ; CHECK-NEXT:      Fixup Statepoint Caller Saved
 ; CHECK-NEXT:      PostRA Machine Sink
-; CHECK-NEXT:      MachineDominator Tree Construction
-; CHECK-NEXT:      Machine Natural Loop Construction
+; CHERI-NEXT:      MachineDominator Tree Construction
+; CHERI-NEXT:      Machine Natural Loop Construction
 ; CHECK-NEXT:      Machine Block Frequency Analysis
+; MIPS-NEXT:       MachineDominator Tree Construction
 ; CHECK-NEXT:      MachinePostDominator Tree Construction
 ; CHECK-NEXT:      Lazy Machine Block Frequency Analysis
 ; CHECK-NEXT:      Machine Optimization Remark Emitter

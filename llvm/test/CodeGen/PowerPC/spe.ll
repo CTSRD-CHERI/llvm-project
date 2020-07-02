@@ -1325,16 +1325,12 @@ define dso_local float @test_fma(i32 %d) local_unnamed_addr #0 {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mflr 0
 ; CHECK-NEXT:    stw 0, 4(1)
-; CHECK-NEXT:    stwu 1, -48(1)
-; CHECK-NEXT:    .cfi_def_cfa_offset 48
+; CHECK-NEXT:    stwu 1, -32(1)
+; CHECK-NEXT:    .cfi_def_cfa_offset 32
 ; CHECK-NEXT:    .cfi_offset lr, 4
-; CHECK-NEXT:    .cfi_offset r29, -12
-; CHECK-NEXT:    .cfi_offset r30, -8
-; CHECK-NEXT:    .cfi_offset r29, -40
-; CHECK-NEXT:    .cfi_offset r30, -32
+; CHECK-NEXT:    .cfi_offset r29, -24
+; CHECK-NEXT:    .cfi_offset r30, -16
 ; CHECK-NEXT:    cmpwi 3, 1
-; CHECK-NEXT:    stw 29, 36(1) # 4-byte Folded Spill
-; CHECK-NEXT:    stw 30, 40(1) # 4-byte Folded Spill
 ; CHECK-NEXT:    evstdd 29, 8(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    evstdd 30, 16(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    blt 0, .LBB57_3
@@ -1355,13 +1351,11 @@ define dso_local float @test_fma(i32 %d) local_unnamed_addr #0 {
 ; CHECK-NEXT:  .LBB57_3:
 ; CHECK-NEXT:    # implicit-def: $r5
 ; CHECK-NEXT:  .LBB57_4: # %for.cond.cleanup
+; CHECK-NEXT:    mr 3, 5
 ; CHECK-NEXT:    evldd 30, 16(1) # 8-byte Folded Reload
 ; CHECK-NEXT:    evldd 29, 8(1) # 8-byte Folded Reload
-; CHECK-NEXT:    mr 3, 5
-; CHECK-NEXT:    lwz 30, 40(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 29, 36(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 0, 52(1)
-; CHECK-NEXT:    addi 1, 1, 48
+; CHECK-NEXT:    lwz 0, 36(1)
+; CHECK-NEXT:    addi 1, 1, 32
 ; CHECK-NEXT:    mtlr 0
 ; CHECK-NEXT:    blr
 entry:

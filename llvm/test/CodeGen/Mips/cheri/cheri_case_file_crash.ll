@@ -1,14 +1,13 @@
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o /dev/null
 ; ModuleID = '<stdin>'
 source_filename = "bugpoint-output-4bb8cd9.bc"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
-declare i32 @__gxx_personality_v0(...)
+declare i32 @__gxx_personality_v0(...) addrspace(200)
 
 declare void @b()
 
-define void @c() personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+define void @c() personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*) {
   invoke void @d()
           to label %1 unwind label %4
 

@@ -50,6 +50,7 @@ struct addrinfo c(char* a) {
 // ASM-NEXT: clcbi	$c12, %capcall20(memcpy)($c1)
 // ASM-NEXT: csetbounds	$c3, $c11, 16
 // ASM-NEXT: .Ltmp2:
+// ASM-NEXT: #DEBUG_VALUE: c:a <- [DW_OP_LLVM_entry_value 1] $c3
 // ASM-NEXT: cjalr	$c12, $c17
 // ASM-NEXT: daddiu	$4, $zero, 16
 }
