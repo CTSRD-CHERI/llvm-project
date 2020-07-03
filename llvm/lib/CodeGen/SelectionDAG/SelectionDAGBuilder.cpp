@@ -5886,9 +5886,13 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     Ops[1] = SrcValue;
     Ops[2] = DAG.getTargetConstant(*cast<ConstantInt>(I.getArgOperand(1)), sdl,
                                    MVT::i32); // arg index
-    SDValue Res = DAG.getNode(
-        ISD::PREALLOCATED_ARG, sdl,
-        DAG.getVTList(TLI.getPointerTy(DAG.getDataLayout()), MVT::Other), Ops);
+    SDValue Res =
+        DAG.getNode(ISD::PREALLOCATED_ARG, sdl,
+                    DAG.getVTList(TLI.getPointerTy(
+                                      DAG.getDataLayout(),
+                                      DAG.getDataLayout().getAllocaAddrSpace()),
+                                  MVT::Other),
+                    Ops);
     setValue(&I, Res);
     DAG.setRoot(Res.getValue(1));
     return;
