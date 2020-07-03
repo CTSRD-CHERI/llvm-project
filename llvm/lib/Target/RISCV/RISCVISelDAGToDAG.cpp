@@ -422,6 +422,7 @@ void RISCVDAGToDAGISel::doPeepholeLoadStoreOffset() {
     case RISCV::LD:
     case RISCV::LC_64:
     case RISCV::LC_128:
+    case RISCV::FLH:
     case RISCV::FLW:
     case RISCV::FLD:
       BaseOpIdx = 0;
@@ -449,6 +450,7 @@ void RISCVDAGToDAGISel::doPeepholeLoadStoreOffset() {
     case RISCV::SD:
     case RISCV::SC_64:
     case RISCV::SC_128:
+    case RISCV::FSH:
     case RISCV::FSW:
     case RISCV::FSD:
       BaseOpIdx = 1;

@@ -52,6 +52,7 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
   case RISCV::LBU:
   case RISCV::LH:
   case RISCV::LHU:
+  case RISCV::FLH:
   case RISCV::LW:
   case RISCV::FLW:
   case RISCV::LWU:
@@ -90,6 +91,7 @@ unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
   case RISCV::SB:
   case RISCV::SH:
   case RISCV::SW:
+  case RISCV::FSH:
   case RISCV::FSW:
   case RISCV::SD:
   case RISCV::FSD:
@@ -132,7 +134,9 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
   // FPR->FPR copies
   unsigned Opc;
-  if (RISCV::FPR32RegClass.contains(DstReg, SrcReg))
+  if (RISCV::FPR16RegClass.contains(DstReg, SrcReg))
+    Opc = RISCV::FSGNJ_H;
+  else if (RISCV::FPR32RegClass.contains(DstReg, SrcReg))
     Opc = RISCV::FSGNJ_S;
   else if (RISCV::FPR64RegClass.contains(DstReg, SrcReg))
     Opc = RISCV::FSGNJ_D;
@@ -169,6 +173,8 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
                RISCV::CSC_64 : RISCV::CSC_128;
+    // TODO: else if (RISCV::FPR16RegClass.hasSubClassEq(RC))
+    // TODO:   Opcode = RISCV::CFSH;
     else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
       Opcode = RISCV::CFSW;
     else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
@@ -182,6 +188,8 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
                RISCV::SC_64 : RISCV::SC_128;
+    else if (RISCV::FPR16RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FSH;
     else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
       Opcode = RISCV::FSW;
     else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
@@ -222,6 +230,8 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
                RISCV::CLC_64 : RISCV::CLC_128;
+    // TODO: else if (RISCV::FPR16RegClass.hasSubClassEq(RC))
+    // TODO:   Opcode = RISCV::CFLH;
     else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
       Opcode = RISCV::CFLW;
     else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
@@ -235,6 +245,8 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
                RISCV::LC_64 : RISCV::LC_128;
+    else if (RISCV::FPR16RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FLH;
     else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
       Opcode = RISCV::FLW;
     else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
