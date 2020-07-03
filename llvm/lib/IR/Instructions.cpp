@@ -1306,11 +1306,6 @@ AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, Value *ArraySize,
   setName(Name);
 }
 
-void AllocaInst::setAlignment(Align Align) {
-  assert(Align <= MaximumAlignment &&
-         "Alignment is greater than MaximumAlignment!");
-  setSubclassData<AlignmentField>(encode(Align));
-}
 
 bool AllocaInst::isArrayAllocation() const {
   if (ConstantInt *CI = dyn_cast<ConstantInt>(getOperand(0)))
@@ -1402,12 +1397,6 @@ LoadInst::LoadInst(Type *Ty, Value *Ptr, const Twine &Name, bool isVolatile,
   setName(Name);
 }
 
-void LoadInst::setAlignment(Align Align) {
-  assert(Align <= MaximumAlignment &&
-         "Alignment is greater than MaximumAlignment!");
-  setSubclassData<AlignmentField>(encode(Align));
-}
-
 //===----------------------------------------------------------------------===//
 //                           StoreInst Implementation
 //===----------------------------------------------------------------------===//
@@ -1479,11 +1468,6 @@ StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile, Align Align,
   AssertOK();
 }
 
-void StoreInst::setAlignment(Align Alignment) {
-  assert(Alignment <= MaximumAlignment &&
-         "Alignment is greater than MaximumAlignment!");
-  setSubclassData<AlignmentField>(encode(Alignment));
-}
 
 //===----------------------------------------------------------------------===//
 //                       AtomicCmpXchgInst Implementation
