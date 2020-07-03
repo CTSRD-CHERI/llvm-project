@@ -4356,7 +4356,6 @@ SDValue DAGTypeLegalizer::PromoteIntRes_EXTRACT_SUBVECTOR(SDNode *N) {
   EVT OutVT = N->getValueType(0);
   EVT NOutVT = TLI.getTypeToTransformTo(*DAG.getContext(), OutVT);
   assert(NOutVT.isVector() && "This type must be promoted to a vector type");
-  unsigned OutNumElems = OutVT.getVectorNumElements();
   EVT NOutVTElem = NOutVT.getVectorElementType();
 
   SDLoc dl(N);
@@ -4393,6 +4392,7 @@ SDValue DAGTypeLegalizer::PromoteIntRes_EXTRACT_SUBVECTOR(SDNode *N) {
 
   EVT InVT = InOp0.getValueType();
 
+  unsigned OutNumElems = OutVT.getVectorNumElements();
   SmallVector<SDValue, 8> Ops;
   Ops.reserve(OutNumElems);
   for (unsigned i = 0; i != OutNumElems; ++i) {
