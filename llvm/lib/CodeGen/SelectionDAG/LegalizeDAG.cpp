@@ -1602,13 +1602,13 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
   SDValue Size  = Tmp2.getOperand(1);
   SDValue SP = DAG.getCopyFromReg(Chain, dl, SPReg, VT);
   Chain = SP.getValue(1);
-  unsigned Align = cast<ConstantSDNode>(Tmp3)->getZExtValue();
+  Align Alignment = cast<ConstantSDNode>(Tmp3)->getAlignValue();
   const TargetFrameLowering *TFL = DAG.getSubtarget().getFrameLowering();
   unsigned Opc =
       TFL->getStackGrowthDirection() == TargetFrameLowering::StackGrowsUp ?
       ISD::ADD : ISD::SUB;
 
-  unsigned StackAlign = TFL->getStackAlignment();
+  Align StackAlign = TFL->getStackAlign();
   if (VT.isFatPointer()) {
     EVT SizeVT = Size.getValueType();
     SDValue GetAddr =
@@ -1626,14 +1626,14 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
 
     if (TLI.cheriCapabilityTypeHasPreciseBounds()) {
       Tmp2 = Size;
-      Tmp3 = DAG.getConstant(-(uint64_t)Align, dl, SizeVT);
+      Tmp3 = DAG.getConstant(-Alignment.value(), dl, SizeVT);
     } else {
       Tmp2 = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, SizeVT, CRRL, Size);
       Tmp3 = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, SizeVT, CRAM, Size);
     }
 
     Tmp1 = DAG.getNode(Opc, dl, SizeVT, Tmp1, Tmp2);
-    if (Align > StackAlign || !TLI.cheriCapabilityTypeHasPreciseBounds())
+    if (Alignment > StackAlign || !TLI.cheriCapabilityTypeHasPreciseBounds())
       Tmp1 = DAG.getNode(ISD::AND, dl, SizeVT, Tmp1, Tmp3);
 
     Tmp1 =
@@ -1641,13 +1641,14 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
     // Move the stack pointer *before* setting the bounds!
     Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
     Tmp1 = DAG.getCSetBounds(
-        Tmp1, dl, Tmp2, llvm::MaybeAlign(Align).valueOrOne(),
+        Tmp1, dl, Tmp2,
+         Alignment,
         "ExpandDYNAMIC_STACKALLOC", cheri::SetBoundsPointerSource::Stack);
   } else {
     Tmp1 = DAG.getNode(Opc, dl, VT, SP, Size);       // Value
-    if (Align > StackAlign)
+    if (Alignment > StackAlign)
       Tmp1 = DAG.getNode(ISD::AND, dl, VT, Tmp1,
-                         DAG.getConstant(-(uint64_t)Align, dl, VT));
+                         DAG.getConstant(-Alignment.value(), dl, VT));
     Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
   }
 
