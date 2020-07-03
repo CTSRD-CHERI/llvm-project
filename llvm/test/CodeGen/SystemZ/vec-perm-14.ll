@@ -46,6 +46,7 @@ define <4 x i8> @fun1(<2 x i8> %arg) {
 ; CHECK-NEXT:        .space  1
 ; CHECK-NEXT:        .space  1
 ; CHECK-NEXT:        .space  1
+; CHECK-NEXT:        .size .LCPI1_0, 16
 ; CHECK-NEXT:        .text
 ; CHECK-NEXT:        .globl  fun1
 ; CHECK-NEXT:        .p2align        4
@@ -81,6 +82,7 @@ define <4 x i8> @fun2(<2 x i8> %arg) {
 ; CHECK-NEXT:        .space  1
 ; CHECK-NEXT:        .space  1
 ; CHECK-NEXT:        .space  1
+; CHECK-NEXT:        .size .LCPI2_0, 16
 ; CHECK-NEXT:        .text
 ; CHECK-NEXT:        .globl  fun2
 ; CHECK-NEXT:        .p2align        4

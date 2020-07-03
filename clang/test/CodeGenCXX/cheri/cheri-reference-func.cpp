@@ -6,6 +6,6 @@ int& f(void);
 
 void g() {
   int&(&fn)(void) = f;
-  // CHECK: call void @_Z6invokeIRFRivEEvOT_(i32 addrspace(200)* () addrspace(200)* @_Z1fv)
+  // CHECK: call void @_Z6invokeIRFRivEEvOT_(i32 addrspace(200)* () addrspace(200)* nonnull @_Z1fv)
   invoke(fn);
 }
