@@ -15,6 +15,7 @@
 #define LLVM_CODEGEN_TARGETLOWERINGOBJECTFILE_H
 
 #include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include <cstdint>
 
 namespace llvm {

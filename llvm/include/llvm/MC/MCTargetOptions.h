@@ -39,6 +39,8 @@ enum class CheriCapabilityTableABI {
                           /// approaches possible here)
 };
 
+enum class TailPaddingAmount : uint64_t { None = 0u };
+
 class StringRef;
 
 class MCTargetOptions {

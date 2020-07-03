@@ -22,6 +22,8 @@
 #include "llvm/MC/MCLinkerOptimizationHint.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCWinEH.h"
+#include "llvm/MC/MCWinEH.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/SMLoc.h"
@@ -61,8 +63,6 @@ struct DefRangeFramePointerRelHeader;
 }
 
 using MCSectionSubPair = std::pair<MCSection *, const MCExpr *>;
-
-enum class TailPaddingAmount : uint64_t { None = 0u };
 
 /// Target specific streamer interface. This is used so that targets can
 /// implement support for target specific assembly directives.
