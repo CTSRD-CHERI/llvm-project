@@ -586,9 +586,10 @@ class CXXAddrspaceCastExpr final
       private llvm::TrailingObjects<CXXAddrspaceCastExpr, CXXBaseSpecifier *> {
   CXXAddrspaceCastExpr(QualType ty, ExprValueKind VK, CastKind Kind, Expr *op,
                        TypeSourceInfo *writtenTy, SourceLocation l,
-                       SourceLocation RParenLoc, SourceRange AngleBrackets)
+                       SourceLocation RParenLoc, SourceRange AngleBrackets,
+                       const ASTContext &Ctx)
       : CXXNamedCastExpr(CXXAddrspaceCastExprClass, ty, VK, Kind, op, 0,
-                         writtenTy, l, RParenLoc, AngleBrackets) {}
+                         writtenTy, l, RParenLoc, AngleBrackets, Ctx) {}
 
   explicit CXXAddrspaceCastExpr(EmptyShell Empty)
       : CXXNamedCastExpr(CXXAddrspaceCastExprClass, Empty, 0) {}

@@ -805,7 +805,7 @@ CXXAddrspaceCastExpr::Create(const ASTContext &C, QualType T, ExprValueKind VK,
                              SourceLocation L, SourceLocation RParenLoc,
                              SourceRange AngleBrackets) {
   return new (C) CXXAddrspaceCastExpr(T, VK, K, Op, WrittenTy, L, RParenLoc,
-                                      AngleBrackets);
+                                      AngleBrackets, C);
 }
 
 CXXAddrspaceCastExpr *CXXAddrspaceCastExpr::CreateEmpty(const ASTContext &C) {

@@ -1746,7 +1746,7 @@ static void diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF,
   auto UnderlyingDstTy = QualType(
       Dst->IgnoreImpCasts()->getType()->getPointeeOrArrayElementType(), 0);
   diagnoseMisalignedCapabiliyCopyDest(
-      CGF, Function, Src, CGF.getNaturalTypeAlignment(UnderlyingDstTy));
+      CGF, Function, Src, CGF.CGM.getNaturalTypeAlignment(UnderlyingDstTy));
 }
 
 RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
