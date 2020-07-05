@@ -1063,7 +1063,7 @@ static FieldDecl *addFieldToRecordDecl(ASTContext &C, DeclContext *DC,
 CGOpenMPRuntime::CGOpenMPRuntime(CodeGenModule &CGM, StringRef FirstSeparator,
                                  StringRef Separator)
     : CGM(CGM), FirstSeparator(FirstSeparator), Separator(Separator),
-      OffloadEntriesInfoManager(CGM) {
+      OMPBuilder(CGM.getModule()), OffloadEntriesInfoManager(CGM) {
   ASTContext &C = CGM.getContext();
   RecordDecl *RD = C.buildImplicitRecord("ident_t");
   QualType KmpInt32Ty = C.getIntTypeForBitwidth(/*DestWidth=*/32, /*Signed=*/1);
@@ -1084,7 +1084,7 @@ CGOpenMPRuntime::CGOpenMPRuntime(CodeGenModule &CGM, StringRef FirstSeparator,
   KmpCriticalNameTy = llvm::ArrayType::get(CGM.Int32Ty, /*NumElements*/ 8);
 
   // Initialize Types used in OpenMPIRBuilder from OMPKinds.def
-  llvm::omp::types::initializeTypes(CGM.getModule());
+  OMPBuilder.initialize();
   loadOffloadInfoMetadata();
 }
 
@@ -1281,8 +1281,8 @@ static llvm::Function *emitParallelOrTeamsOutlinedFunction(
 
   // TODO: Temporarily inform the OpenMPIRBuilder, if any, about the new
   //       parallel region to make cancellation barriers work properly.
-  llvm::OpenMPIRBuilder *OMPBuilder = CGM.getOpenMPIRBuilder();
-  PushAndPopStackRAII PSR(OMPBuilder, CGF, HasCancel);
+  llvm::OpenMPIRBuilder &OMPBuilder = CGM.getOpenMPRuntime().getOMPBuilder();
+  PushAndPopStackRAII PSR(&OMPBuilder, CGF, HasCancel);
   CGOpenMPOutlinedRegionInfo CGInfo(*CS, ThreadIDVar, CodeGen, InnermostKind,
                                     HasCancel, OutlinedHelperName);
   CodeGenFunction::CGCapturedStmtRAII CapInfoRAII(CGF, &CGInfo);
@@ -1319,7 +1319,7 @@ llvm::Function *CGOpenMPRuntime::emitTaskOutlinedFunction(
         CGF.EmitLoadOfPointerLValue(CGF.GetAddrOfLocalVar(TaskTVar),
                                     TaskTVar->getType()->castAs<PointerType>())
             .getPointer(CGF)};
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_omp_task),
                         TaskArgs);
   };
@@ -1566,8 +1566,8 @@ llvm::Value *CGOpenMPRuntime::getThreadID(CodeGenFunction &CGF,
   CGBuilderTy::InsertPointGuard IPG(CGF.Builder);
   CGF.Builder.SetInsertPoint(Elem.second.ServiceInsertPt);
   llvm::CallInst *Call = CGF.Builder.CreateCall(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___kmpc_global_thread_num),
+      OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                            OMPRTL___kmpc_global_thread_num),
       emitUpdateLocation(CGF, Loc));
   Call->setCallingConv(CGF.getRuntimeCC());
   Elem.second.ThreadID = Call;
@@ -1786,7 +1786,7 @@ Address CGOpenMPRuntime::getAddrOfThreadPrivate(CodeGenFunction &CGF,
                          CGM.getSize(CGM.GetTargetTypeStoreSize(VarTy)),
                          getOrCreateThreadPrivateCache(VD)};
   return Address(CGF.EmitRuntimeCall(
-                     llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+                     OMPBuilder.getOrCreateRuntimeFunction(
                          CGM.getModule(), OMPRTL___kmpc_threadprivate_cached),
                      Args),
                  VDAddr.getAlignment());
@@ -1798,7 +1798,7 @@ void CGOpenMPRuntime::emitThreadPrivateVarInit(
   // Call kmp_int32 __kmpc_global_thread_num(&loc) to init OpenMP runtime
   // library.
   llvm::Value *OMPLoc = emitUpdateLocation(CGF, Loc);
-  CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                           CGM.getModule(), OMPRTL___kmpc_global_thread_num),
                       OMPLoc);
   // Call __kmpc_threadprivate_register(&loc, &var, ctor, cctor/*NULL*/, dtor)
@@ -1807,7 +1807,7 @@ void CGOpenMPRuntime::emitThreadPrivateVarInit(
       OMPLoc, CGF.Builder.CreatePointerCast(VDAddr.getPointer(), CGM.VoidPtrTy),
       Ctor, CopyCtor, Dtor};
   CGF.EmitRuntimeCall(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      OMPBuilder.getOrCreateRuntimeFunction(
           CGM.getModule(), OMPRTL___kmpc_threadprivate_register),
       Args);
 }
@@ -2072,7 +2072,7 @@ Address CGOpenMPRuntime::getAddrOfArtificialThreadPrivate(CodeGenFunction &CGF,
   return Address(
       CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
           CGF.EmitRuntimeCall(
-              llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+              OMPBuilder.getOrCreateRuntimeFunction(
                   CGM.getModule(), OMPRTL___kmpc_threadprivate_cached),
               Args),
           VarLVType->getPointerTo(/*AddrSpace=*/0)),
@@ -2126,8 +2126,8 @@ void CGOpenMPRuntime::emitParallelCall(CodeGenFunction &CGF, SourceLocation Loc,
     return;
   llvm::Value *RTLoc = emitUpdateLocation(CGF, Loc);
   auto &M = CGM.getModule();
-  auto &&ThenGen = [&M, OutlinedFn, CapturedVars, RTLoc](CodeGenFunction &CGF,
-                                                         PrePostActionTy &) {
+  auto &&ThenGen = [&M, OutlinedFn, CapturedVars, RTLoc,
+                    this](CodeGenFunction &CGF, PrePostActionTy &) {
     // Build call __kmpc_fork_call(loc, n, microtask, var1, .., varn);
     CGOpenMPRuntime &RT = CGF.CGM.getOpenMPRuntime();
     llvm::Value *Args[] = {
@@ -2139,18 +2139,17 @@ void CGOpenMPRuntime::emitParallelCall(CodeGenFunction &CGF, SourceLocation Loc,
     RealArgs.append(CapturedVars.begin(), CapturedVars.end());
 
     llvm::FunctionCallee RTLFn =
-        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-            M, OMPRTL___kmpc_fork_call);
+        OMPBuilder.getOrCreateRuntimeFunction(M, OMPRTL___kmpc_fork_call);
     CGF.EmitRuntimeCall(RTLFn, RealArgs);
   };
-  auto &&ElseGen = [&M, OutlinedFn, CapturedVars, RTLoc,
-                    Loc](CodeGenFunction &CGF, PrePostActionTy &) {
+  auto &&ElseGen = [&M, OutlinedFn, CapturedVars, RTLoc, Loc,
+                    this](CodeGenFunction &CGF, PrePostActionTy &) {
     CGOpenMPRuntime &RT = CGF.CGM.getOpenMPRuntime();
     llvm::Value *ThreadID = RT.getThreadID(CGF, Loc);
     // Build calls:
     // __kmpc_serialized_parallel(&Loc, GTid);
     llvm::Value *Args[] = {RTLoc, ThreadID};
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             M, OMPRTL___kmpc_serialized_parallel),
                         Args);
 
@@ -2169,7 +2168,7 @@ void CGOpenMPRuntime::emitParallelCall(CodeGenFunction &CGF, SourceLocation Loc,
 
     // __kmpc_end_serialized_parallel(&Loc, GTid);
     llvm::Value *EndArgs[] = {RT.emitUpdateLocation(CGF, Loc), ThreadID};
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             M, OMPRTL___kmpc_end_serialized_parallel),
                         EndArgs);
   };
@@ -2288,12 +2287,12 @@ void CGOpenMPRuntime::emitCriticalRegion(CodeGenFunction &CGF,
         CGF.EmitScalarExpr(Hint), CGM.Int32Ty, /*isSigned=*/false));
   }
   CommonActionTy Action(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      OMPBuilder.getOrCreateRuntimeFunction(
           CGM.getModule(),
           Hint ? OMPRTL___kmpc_critical_with_hint : OMPRTL___kmpc_critical),
       EnterArgs,
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___kmpc_end_critical),
+      OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                            OMPRTL___kmpc_end_critical),
       Args);
   CriticalOpGen.setAction(Action);
   emitInlinedDirective(CGF, OMPD_critical, CriticalOpGen);
@@ -2310,10 +2309,10 @@ void CGOpenMPRuntime::emitMasterRegion(CodeGenFunction &CGF,
   // }
   // Prepare arguments and build a call to __kmpc_master
   llvm::Value *Args[] = {emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc)};
-  CommonActionTy Action(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CommonActionTy Action(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_master),
                         Args,
-                        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+                        OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_end_master),
                         Args,
                         /*Conditional=*/true);
@@ -2326,15 +2325,14 @@ void CGOpenMPRuntime::emitTaskyieldCall(CodeGenFunction &CGF,
                                         SourceLocation Loc) {
   if (!CGF.HaveInsertPoint())
     return;
-  llvm::OpenMPIRBuilder *OMPBuilder = CGF.CGM.getOpenMPIRBuilder();
-  if (OMPBuilder) {
-    OMPBuilder->CreateTaskyield(CGF.Builder);
+  if (CGF.CGM.getLangOpts().OpenMPIRBuilder) {
+    OMPBuilder.CreateTaskyield(CGF.Builder);
   } else {
     // Build call __kmpc_omp_taskyield(loc, thread_id, 0);
     llvm::Value *Args[] = {
         emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc),
         llvm::ConstantInt::get(CGM.IntTy, /*V=*/0, /*isSigned=*/true)};
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_omp_taskyield),
                         Args);
   }
@@ -2353,10 +2351,10 @@ void CGOpenMPRuntime::emitTaskgroupRegion(CodeGenFunction &CGF,
   // __kmpc_end_taskgroup(ident_t *, gtid);
   // Prepare arguments and build a call to __kmpc_taskgroup
   llvm::Value *Args[] = {emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc)};
-  CommonActionTy Action(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CommonActionTy Action(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_taskgroup),
                         Args,
-                        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+                        OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_end_taskgroup),
                         Args);
   TaskgroupOpGen.setAction(Action);
@@ -2463,10 +2461,10 @@ void CGOpenMPRuntime::emitSingleRegion(CodeGenFunction &CGF,
   }
   // Prepare arguments and build a call to __kmpc_single
   llvm::Value *Args[] = {emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc)};
-  CommonActionTy Action(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CommonActionTy Action(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_single),
                         Args,
-                        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+                        OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_end_single),
                         Args,
                         /*Conditional=*/true);
@@ -2514,7 +2512,7 @@ void CGOpenMPRuntime::emitSingleRegion(CodeGenFunction &CGF,
         CpyFn,                        // void (*) (void *, void *) <copy_func>
         DidItVal                      // i32 did_it
     };
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_copyprivate),
                         Args);
   }
@@ -2531,10 +2529,10 @@ void CGOpenMPRuntime::emitOrderedRegion(CodeGenFunction &CGF,
   // Prepare arguments and build a call to __kmpc_ordered
   if (IsThreads) {
     llvm::Value *Args[] = {emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc)};
-    CommonActionTy Action(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CommonActionTy Action(OMPBuilder.getOrCreateRuntimeFunction(
                               CGM.getModule(), OMPRTL___kmpc_ordered),
                           Args,
-                          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+                          OMPBuilder.getOrCreateRuntimeFunction(
                               CGM.getModule(), OMPRTL___kmpc_end_ordered),
                           Args);
     OrderedOpGen.setAction(Action);
@@ -2583,9 +2581,8 @@ void CGOpenMPRuntime::emitBarrierCall(CodeGenFunction &CGF, SourceLocation Loc,
   // Check if we should use the OMPBuilder
   auto *OMPRegionInfo =
       dyn_cast_or_null<CGOpenMPRegionInfo>(CGF.CapturedStmtInfo);
-  llvm::OpenMPIRBuilder *OMPBuilder = CGF.CGM.getOpenMPIRBuilder();
-  if (OMPBuilder) {
-    CGF.Builder.restoreIP(OMPBuilder->CreateBarrier(
+  if (CGF.CGM.getLangOpts().OpenMPIRBuilder) {
+    CGF.Builder.restoreIP(OMPBuilder.CreateBarrier(
         CGF.Builder, Kind, ForceSimpleCall, EmitChecks));
     return;
   }
@@ -2602,8 +2599,8 @@ void CGOpenMPRuntime::emitBarrierCall(CodeGenFunction &CGF, SourceLocation Loc,
   if (OMPRegionInfo) {
     if (!ForceSimpleCall && OMPRegionInfo->hasCancel()) {
       llvm::Value *Result = CGF.EmitRuntimeCall(
-          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-              CGM.getModule(), OMPRTL___kmpc_cancel_barrier),
+          OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                                OMPRTL___kmpc_cancel_barrier),
           Args);
       if (EmitChecks) {
         // if (__kmpc_cancel_barrier()) {
@@ -2623,7 +2620,7 @@ void CGOpenMPRuntime::emitBarrierCall(CodeGenFunction &CGF, SourceLocation Loc,
       return;
     }
   }
-  CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                           CGM.getModule(), OMPRTL___kmpc_barrier),
                       Args);
 }
@@ -2875,7 +2872,7 @@ void CGOpenMPRuntime::emitForStaticFinish(CodeGenFunction &CGF,
                                    : OMP_IDENT_WORK_SECTIONS),
       getThreadID(CGF, Loc)};
   auto DL = ApplyDebugLocation::CreateDefaultArtificial(CGF, Loc);
-  CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                           CGM.getModule(), OMPRTL___kmpc_for_static_fini),
                       Args);
 }
@@ -2924,7 +2921,7 @@ void CGOpenMPRuntime::emitNumThreadsClause(CodeGenFunction &CGF,
   llvm::Value *Args[] = {
       emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc),
       CGF.Builder.CreateIntCast(NumThreads, CGF.Int32Ty, /*isSigned*/ true)};
-  CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                           CGM.getModule(), OMPRTL___kmpc_push_num_threads),
                       Args);
 }
@@ -2939,21 +2936,20 @@ void CGOpenMPRuntime::emitProcBindClause(CodeGenFunction &CGF,
   llvm::Value *Args[] = {
       emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc),
       llvm::ConstantInt::get(CGM.IntTy, unsigned(ProcBind), /*isSigned=*/true)};
-  CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                           CGM.getModule(), OMPRTL___kmpc_push_proc_bind),
                       Args);
 }
 
 void CGOpenMPRuntime::emitFlush(CodeGenFunction &CGF, ArrayRef<const Expr *>,
                                 SourceLocation Loc, llvm::AtomicOrdering AO) {
-  llvm::OpenMPIRBuilder *OMPBuilder = CGF.CGM.getOpenMPIRBuilder();
-  if (OMPBuilder) {
-    OMPBuilder->CreateFlush(CGF.Builder);
+  if (CGF.CGM.getLangOpts().OpenMPIRBuilder) {
+    OMPBuilder.CreateFlush(CGF.Builder);
   } else {
     if (!CGF.HaveInsertPoint())
       return;
     // Build call void __kmpc_flush(ident_t *loc)
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_flush),
                         emitUpdateLocation(CGF, Loc));
   }
@@ -4308,12 +4304,12 @@ CGOpenMPRuntime::emitTaskInit(CodeGenFunction &CGF, SourceLocation Loc,
       DeviceID = CGF.Builder.getInt64(OMP_DEVICEID_UNDEF);
     AllocArgs.push_back(DeviceID);
     NewTask = CGF.EmitRuntimeCall(
-        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+        OMPBuilder.getOrCreateRuntimeFunction(
             CGM.getModule(), OMPRTL___kmpc_omp_target_task_alloc),
         AllocArgs);
   } else {
     NewTask =
-        CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+        CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                                 CGM.getModule(), OMPRTL___kmpc_omp_task_alloc),
                             AllocArgs);
   }
@@ -4330,7 +4326,7 @@ CGOpenMPRuntime::emitTaskInit(CodeGenFunction &CGF, SourceLocation Loc,
     llvm::Value *Tid = getThreadID(CGF, DC->getBeginLoc());
     Tid = CGF.Builder.CreateIntCast(Tid, CGF.IntTy, /*isSigned=*/false);
     llvm::Value *EvtVal = CGF.EmitRuntimeCall(
-        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+        OMPBuilder.getOrCreateRuntimeFunction(
             CGM.getModule(), OMPRTL___kmpc_task_allow_completion_event),
         {Loc, Tid, NewTask});
     EvtVal = CGF.EmitScalarConversion(EvtVal, C.VoidPtrTy, Evt->getType(),
@@ -4469,7 +4465,7 @@ CGOpenMPRuntime::emitTaskInit(CodeGenFunction &CGF, SourceLocation Loc,
     // FIXME: Emit the function and ignore its result for now unless the
     // runtime function is properly implemented.
     (void)CGF.EmitRuntimeCall(
-        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+        OMPBuilder.getOrCreateRuntimeFunction(
             CGM.getModule(), OMPRTL___kmpc_omp_reg_task_with_affinity),
         {LocRef, GTid, NewTask, NumOfElements, AffinListPtr});
   }
@@ -4972,7 +4968,7 @@ Address CGOpenMPRuntime::emitDepobjDependClause(
   llvm::Value *Args[] = {ThreadID, Size, Allocator};
 
   llvm::Value *Addr =
-      CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                               CGM.getModule(), OMPRTL___kmpc_alloc),
                           Args, ".dep.arr.addr");
   Addr = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
@@ -5025,7 +5021,7 @@ void CGOpenMPRuntime::emitDestroyClause(CodeGenFunction &CGF, LValue DepobjLVal,
   llvm::Value *Args[] = {ThreadID, DepObjAddr, Allocator};
 
   // _kmpc_free(gtid, addr, nullptr);
-  (void)CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  (void)CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                                 CGM.getModule(), OMPRTL___kmpc_free),
                             Args);
 }
@@ -5126,11 +5122,11 @@ void CGOpenMPRuntime::emitTaskCall(CodeGenFunction &CGF, SourceLocation Loc,
     }
     if (!Data.Dependences.empty()) {
       CGF.EmitRuntimeCall(
-          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+          OMPBuilder.getOrCreateRuntimeFunction(
               CGM.getModule(), OMPRTL___kmpc_omp_task_with_deps),
           DepTaskArgs);
     } else {
-      CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                               CGM.getModule(), OMPRTL___kmpc_omp_task),
                           TaskArgs);
     }
@@ -5150,8 +5146,8 @@ void CGOpenMPRuntime::emitTaskCall(CodeGenFunction &CGF, SourceLocation Loc,
     DepWaitTaskArgs[5] = llvm::ConstantPointerNull::get(CGF.VoidPtrTy);
   }
   auto &M = CGM.getModule();
-  auto &&ElseCodeGen = [&M, &TaskArgs, ThreadID, NewTaskNewTaskTTy, TaskEntry,
-                        &Data, &DepWaitTaskArgs,
+  auto &&ElseCodeGen = [this, &M, &TaskArgs, ThreadID, NewTaskNewTaskTTy,
+                        TaskEntry, &Data, &DepWaitTaskArgs,
                         Loc](CodeGenFunction &CGF, PrePostActionTy &) {
     CodeGenFunction::RunCleanupsScope LocalScope(CGF);
     // Build void __kmpc_omp_wait_deps(ident_t *, kmp_int32 gtid,
@@ -5159,9 +5155,9 @@ void CGOpenMPRuntime::emitTaskCall(CodeGenFunction &CGF, SourceLocation Loc,
     // ndeps_noalias, kmp_depend_info_t *noalias_dep_list); if dependence info
     // is specified.
     if (!Data.Dependences.empty())
-      CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-                              M, OMPRTL___kmpc_omp_wait_deps),
-                          DepWaitTaskArgs);
+      CGF.EmitRuntimeCall(
+          OMPBuilder.getOrCreateRuntimeFunction(M, OMPRTL___kmpc_omp_wait_deps),
+          DepWaitTaskArgs);
     // Call proxy_task_entry(gtid, new_task);
     auto &&CodeGen = [TaskEntry, ThreadID, NewTaskNewTaskTTy,
                       Loc](CodeGenFunction &CGF, PrePostActionTy &Action) {
@@ -5176,10 +5172,10 @@ void CGOpenMPRuntime::emitTaskCall(CodeGenFunction &CGF, SourceLocation Loc,
     // Build void __kmpc_omp_task_complete_if0(ident_t *, kmp_int32 gtid,
     // kmp_task_t *new_task);
     RegionCodeGenTy RCG(CodeGen);
-    CommonActionTy Action(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CommonActionTy Action(OMPBuilder.getOrCreateRuntimeFunction(
                               M, OMPRTL___kmpc_omp_task_begin_if0),
                           TaskArgs,
-                          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+                          OMPBuilder.getOrCreateRuntimeFunction(
                               M, OMPRTL___kmpc_omp_task_complete_if0),
                           TaskArgs);
     RCG.setAction(Action);
@@ -5275,7 +5271,7 @@ void CGOpenMPRuntime::emitTaskLoopCall(CodeGenFunction &CGF, SourceLocation Loc,
       Result.TaskDupFn ? CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
                              Result.TaskDupFn, CGF.VoidPtrTy)
                        : llvm::ConstantPointerNull::get(CGF.VoidPtrTy)};
-  CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                           CGM.getModule(), OMPRTL___kmpc_taskloop),
                       TaskArgs);
 }
@@ -5620,7 +5616,7 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
       Lock         // kmp_critical_name *&<lock>
   };
   llvm::Value *Res = CGF.EmitRuntimeCall(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      OMPBuilder.getOrCreateRuntimeFunction(
           CGM.getModule(),
           WithNowait ? OMPRTL___kmpc_reduce_nowait : OMPRTL___kmpc_reduce),
       Args);
@@ -5663,7 +5659,7 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
   RegionCodeGenTy RCG(CodeGen);
   CommonActionTy Action(
       nullptr, llvm::None,
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      OMPBuilder.getOrCreateRuntimeFunction(
           CGM.getModule(), WithNowait ? OMPRTL___kmpc_end_reduce_nowait
                                       : OMPRTL___kmpc_end_reduce),
       EndArgs);
@@ -5788,7 +5784,7 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
         Lock       // kmp_critical_name *&<lock>
     };
     CommonActionTy Action(nullptr, llvm::None,
-                          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+                          OMPBuilder.getOrCreateRuntimeFunction(
                               CGM.getModule(), OMPRTL___kmpc_end_reduce),
                           EndArgs);
     AtomicRCG.setAction(Action);
@@ -6128,7 +6124,7 @@ llvm::Value *CGOpenMPRuntime::emitTaskReductionInit(
         CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
             TaskRedInput.getPointer(), CGM.VoidPtrTy)};
     return CGF.EmitRuntimeCall(
-        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+        OMPBuilder.getOrCreateRuntimeFunction(
             CGM.getModule(), OMPRTL___kmpc_taskred_modifier_init),
         Args);
   }
@@ -6139,7 +6135,7 @@ llvm::Value *CGOpenMPRuntime::emitTaskReductionInit(
       llvm::ConstantInt::get(CGM.IntTy, Size, /*isSigned=*/true),
       CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(TaskRedInput.getPointer(),
                                                       CGM.VoidPtrTy)};
-  return CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  return CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                                  CGM.getModule(), OMPRTL___kmpc_taskred_init),
                              Args);
 }
@@ -6157,7 +6153,7 @@ void CGOpenMPRuntime::emitTaskReductionFini(CodeGenFunction &CGF,
                                                 IsWorksharingReduction ? 1 : 0,
                                                 /*isSigned=*/true)};
   (void)CGF.EmitRuntimeCall(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      OMPBuilder.getOrCreateRuntimeFunction(
           CGM.getModule(), OMPRTL___kmpc_task_reduction_modifier_fini),
       Args);
 }
@@ -6193,7 +6189,7 @@ Address CGOpenMPRuntime::getTaskReductionItem(CodeGenFunction &CGF,
                              SharedLVal.getPointer(CGF), CGM.VoidPtrTy)};
   return Address(
       CGF.EmitRuntimeCall(
-          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+          OMPBuilder.getOrCreateRuntimeFunction(
               CGM.getModule(), OMPRTL___kmpc_task_reduction_get_th_data),
           Args),
       SharedLVal.getAlignment());
@@ -6204,15 +6200,14 @@ void CGOpenMPRuntime::emitTaskwaitCall(CodeGenFunction &CGF,
   if (!CGF.HaveInsertPoint())
     return;
 
-  llvm::OpenMPIRBuilder *OMPBuilder = CGF.CGM.getOpenMPIRBuilder();
-  if (OMPBuilder) {
-    OMPBuilder->CreateTaskwait(CGF.Builder);
+  if (CGF.CGM.getLangOpts().OpenMPIRBuilder) {
+    OMPBuilder.CreateTaskwait(CGF.Builder);
   } else {
     // Build call kmp_int32 __kmpc_omp_taskwait(ident_t *loc, kmp_int32
     // global_tid);
     llvm::Value *Args[] = {emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc)};
     // Ignore return result until untied tasks are supported.
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___kmpc_omp_taskwait),
                         Args);
   }
@@ -6273,7 +6268,7 @@ void CGOpenMPRuntime::emitCancellationPointCall(
           CGF.Builder.getInt32(getCancellationKind(CancelRegion))};
       // Ignore return result until untied tasks are supported.
       llvm::Value *Result = CGF.EmitRuntimeCall(
-          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+          OMPBuilder.getOrCreateRuntimeFunction(
               CGM.getModule(), OMPRTL___kmpc_cancellationpoint),
           Args);
       // if (__kmpc_cancellationpoint()) {
@@ -6303,17 +6298,15 @@ void CGOpenMPRuntime::emitCancelCall(CodeGenFunction &CGF, SourceLocation Loc,
   auto &M = CGM.getModule();
   if (auto *OMPRegionInfo =
           dyn_cast_or_null<CGOpenMPRegionInfo>(CGF.CapturedStmtInfo)) {
-    auto &&ThenGen = [&M, Loc, CancelRegion,
+    auto &&ThenGen = [this, &M, Loc, CancelRegion,
                       OMPRegionInfo](CodeGenFunction &CGF, PrePostActionTy &) {
       CGOpenMPRuntime &RT = CGF.CGM.getOpenMPRuntime();
       llvm::Value *Args[] = {
           RT.emitUpdateLocation(CGF, Loc), RT.getThreadID(CGF, Loc),
           CGF.Builder.getInt32(getCancellationKind(CancelRegion))};
       // Ignore return result until untied tasks are supported.
-      llvm::Value *Result =
-          CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-                                  M, OMPRTL___kmpc_cancel),
-                              Args);
+      llvm::Value *Result = CGF.EmitRuntimeCall(
+          OMPBuilder.getOrCreateRuntimeFunction(M, OMPRTL___kmpc_cancel), Args);
       // if (__kmpc_cancel()) {
       //   exit from construct;
       // }
@@ -6409,7 +6402,7 @@ void CGOpenMPRuntime::emitUsesAllocatorsInit(CodeGenFunction &CGF,
       CGF.EmitLoadOfScalar(AllocatorTraitsLVal, AllocatorTraits->getExprLoc());
 
   llvm::Value *AllocatorVal =
-      CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                               CGM.getModule(), OMPRTL___kmpc_init_allocator),
                           {ThreadId, MemSpaceHandle, NumTraits, Traits});
   // Store to allocator.
@@ -6433,8 +6426,8 @@ void CGOpenMPRuntime::emitUsesAllocatorsFini(CodeGenFunction &CGF,
                                           CGF.getContext().VoidPtrTy,
                                           Allocator->getExprLoc());
   (void)CGF.EmitRuntimeCall(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___kmpc_destroy_allocator),
+      OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                            OMPRTL___kmpc_destroy_allocator),
       {ThreadId, AllocatorVal});
 }
 
@@ -9076,8 +9069,8 @@ void CGOpenMPRuntime::emitUserDefinedMapper(const OMPDeclareMapperDecl *D,
   // pre-existing components.
   llvm::Value *OffloadingArgs[] = {Handle};
   llvm::Value *PreviousSize = MapperCGF.EmitRuntimeCall(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___tgt_mapper_num_components),
+      OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                            OMPRTL___tgt_mapper_num_components),
       OffloadingArgs);
   llvm::Value *ShiftedPreviousSize = MapperCGF.Builder.CreateShl(
       PreviousSize,
@@ -9184,7 +9177,7 @@ void CGOpenMPRuntime::emitUserDefinedMapper(const OMPDeclareMapperDecl *D,
     llvm::Value *OffloadingArgs[] = {Handle, CurBaseArg, CurBeginArg,
                                      CurSizeArg, CurMapType};
     MapperCGF.EmitRuntimeCall(
-        llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+        OMPBuilder.getOrCreateRuntimeFunction(
             CGM.getModule(), OMPRTL___tgt_push_mapper_component),
         OffloadingArgs);
   }
@@ -9266,8 +9259,8 @@ void CGOpenMPRuntime::emitUDMapperArrayInitOrDel(
   // data structure.
   llvm::Value *OffloadingArgs[] = {Handle, Base, Begin, ArraySize, MapTypeArg};
   MapperCGF.EmitRuntimeCall(
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___tgt_push_mapper_component),
+      OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                            OMPRTL___tgt_push_mapper_component),
       OffloadingArgs);
 }
 
@@ -9290,7 +9283,7 @@ void CGOpenMPRuntime::emitTargetNumIterationsCall(
     if (llvm::Value *NumIterations = SizeEmitter(CGF, *LD)) {
       llvm::Value *Args[] = {DeviceID, NumIterations};
       CGF.EmitRuntimeCall(
-          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+          OMPBuilder.getOrCreateRuntimeFunction(
               CGM.getModule(), OMPRTL___kmpc_push_target_tripcount),
           Args);
     }
@@ -9419,7 +9412,7 @@ void CGOpenMPRuntime::emitTargetCall(
                                        NumTeams,
                                        NumThreads};
       Return = CGF.EmitRuntimeCall(
-          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+          OMPBuilder.getOrCreateRuntimeFunction(
               CGM.getModule(), HasNowait ? OMPRTL___tgt_target_teams_nowait
                                          : OMPRTL___tgt_target_teams),
           OffloadingArgs);
@@ -9432,7 +9425,7 @@ void CGOpenMPRuntime::emitTargetCall(
                                        InputInfo.SizesArray.getPointer(),
                                        MapTypesArray};
       Return = CGF.EmitRuntimeCall(
-          llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+          OMPBuilder.getOrCreateRuntimeFunction(
               CGM.getModule(),
               HasNowait ? OMPRTL___tgt_target_nowait : OMPRTL___tgt_target),
           OffloadingArgs);
@@ -10068,7 +10061,7 @@ llvm::Function *CGOpenMPRuntime::emitRequiresDirectiveRegFun() {
            "Target or declare target region expected.");
     if (HasRequiresUnifiedSharedMemory)
       Flags = OMP_REQ_UNIFIED_SHARED_MEMORY;
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___tgt_register_requires),
                         llvm::ConstantInt::get(CGM.Int64Ty, Flags));
     CGF.FinishFunction();
@@ -10096,9 +10089,8 @@ void CGOpenMPRuntime::emitTeamsCall(CodeGenFunction &CGF,
   RealArgs.append(std::begin(Args), std::end(Args));
   RealArgs.append(CapturedVars.begin(), CapturedVars.end());
 
-  llvm::FunctionCallee RTLFn =
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___kmpc_fork_teams);
+  llvm::FunctionCallee RTLFn = OMPBuilder.getOrCreateRuntimeFunction(
+      CGM.getModule(), OMPRTL___kmpc_fork_teams);
   CGF.EmitRuntimeCall(RTLFn, RealArgs);
 }
 
@@ -10126,7 +10118,7 @@ void CGOpenMPRuntime::emitNumTeamsClause(CodeGenFunction &CGF,
   // Build call __kmpc_push_num_teamss(&loc, global_tid, num_teams, thread_limit)
   llvm::Value *PushNumTeamsArgs[] = {RTLoc, getThreadID(CGF, Loc), NumTeamsVal,
                                      ThreadLimitVal};
-  CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+  CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                           CGM.getModule(), OMPRTL___kmpc_push_num_teams),
                       PushNumTeamsArgs);
 }
@@ -10181,7 +10173,7 @@ void CGOpenMPRuntime::emitTargetDataCalls(
     llvm::Value *OffloadingArgs[] = {
         DeviceID,         PointerNum,    BasePointersArrayArg,
         PointersArrayArg, SizesArrayArg, MapTypesArrayArg};
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___tgt_target_data_begin),
                         OffloadingArgs);
 
@@ -10218,7 +10210,7 @@ void CGOpenMPRuntime::emitTargetDataCalls(
     llvm::Value *OffloadingArgs[] = {
         DeviceID,         PointerNum,    BasePointersArrayArg,
         PointersArrayArg, SizesArrayArg, MapTypesArrayArg};
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+    CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                             CGM.getModule(), OMPRTL___tgt_target_data_end),
                         OffloadingArgs);
   };
@@ -10380,9 +10372,9 @@ void CGOpenMPRuntime::emitTargetDataStandAloneCall(
       llvm_unreachable("Unexpected standalone target data directive.");
       break;
     }
-    CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-                            CGM.getModule(), RTLFn),
-                        OffloadingArgs);
+    CGF.EmitRuntimeCall(
+        OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(), RTLFn),
+        OffloadingArgs);
   };
 
   auto &&TargetThenGen = [this, &ThenGen, &D, &InputInfo, &MapTypesArray](
@@ -11073,15 +11065,13 @@ void CGOpenMPRuntime::emitDoacrossInit(CodeGenFunction &CGF,
           CGF.Builder.CreateConstArrayGEP(DimsAddr, 0).getPointer(),
           CGM.VoidPtrTy)};
 
-  llvm::FunctionCallee RTLFn =
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___kmpc_doacross_init);
+  llvm::FunctionCallee RTLFn = OMPBuilder.getOrCreateRuntimeFunction(
+      CGM.getModule(), OMPRTL___kmpc_doacross_init);
   CGF.EmitRuntimeCall(RTLFn, Args);
   llvm::Value *FiniArgs[DoacrossCleanupTy::DoacrossFinArgs] = {
       emitUpdateLocation(CGF, D.getEndLoc()), getThreadID(CGF, D.getEndLoc())};
-  llvm::FunctionCallee FiniRTLFn =
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-          CGM.getModule(), OMPRTL___kmpc_doacross_fini);
+  llvm::FunctionCallee FiniRTLFn = OMPBuilder.getOrCreateRuntimeFunction(
+      CGM.getModule(), OMPRTL___kmpc_doacross_fini);
   CGF.EHStack.pushCleanup<DoacrossCleanupTy>(NormalAndEHCleanup, FiniRTLFn,
                                              llvm::makeArrayRef(FiniArgs));
 }
@@ -11109,12 +11099,12 @@ void CGOpenMPRuntime::emitDoacrossOrdered(CodeGenFunction &CGF,
       CGF.Builder.CreateConstArrayGEP(CntAddr, 0).getPointer()};
   llvm::FunctionCallee RTLFn;
   if (C->getDependencyKind() == OMPC_DEPEND_source) {
-    RTLFn = llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-        CGM.getModule(), OMPRTL___kmpc_doacross_post);
+    RTLFn = OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                                  OMPRTL___kmpc_doacross_post);
   } else {
     assert(C->getDependencyKind() == OMPC_DEPEND_sink);
-    RTLFn = llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
-        CGM.getModule(), OMPRTL___kmpc_doacross_wait);
+    RTLFn = OMPBuilder.getOrCreateRuntimeFunction(CGM.getModule(),
+                                                  OMPRTL___kmpc_doacross_wait);
   }
   CGF.EmitRuntimeCall(RTLFn, Args);
 }
@@ -11218,14 +11208,13 @@ Address CGOpenMPRuntime::getAddressOfLocalVariable(CodeGenFunction &CGF,
   llvm::Value *Args[] = {ThreadID, Size, Allocator};
 
   llvm::Value *Addr =
-      CGF.EmitRuntimeCall(llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(
+      CGF.EmitRuntimeCall(OMPBuilder.getOrCreateRuntimeFunction(
                               CGM.getModule(), OMPRTL___kmpc_alloc),
                           Args, getName({CVD->getName(), ".void.addr"}));
   llvm::Value *FiniArgs[OMPAllocateCleanupTy::CleanupArgs] = {ThreadID, Addr,
                                                               Allocator};
-  llvm::FunctionCallee FiniRTLFn =
-      llvm::OpenMPIRBuilder::getOrCreateRuntimeFunction(CGM.getModule(),
-                                                        OMPRTL___kmpc_free);
+  llvm::FunctionCallee FiniRTLFn = OMPBuilder.getOrCreateRuntimeFunction(
+      CGM.getModule(), OMPRTL___kmpc_free);
 
   CGF.EHStack.pushCleanup<OMPAllocateCleanupTy>(NormalAndEHCleanup, FiniRTLFn,
                                                 llvm::makeArrayRef(FiniArgs));

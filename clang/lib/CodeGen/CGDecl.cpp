@@ -1421,7 +1421,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
   Address address = Address::invalid();
   Address AllocaAddr = Address::invalid();
   Address OpenMPLocalAddr = Address::invalid();
-  if (CGM.getOpenMPIRBuilder())
+  if (CGM.getLangOpts().OpenMPIRBuilder)
     OpenMPLocalAddr = OMPBuilderCBHelpers::getAddressOfLocalVariable(*this, &D);
   else
     OpenMPLocalAddr =
