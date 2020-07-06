@@ -368,7 +368,7 @@ class Test:
         REQUIRES annotations for this test.
         """
         import lit.TestRunner
-        parsed = lit.TestRunner._parseKeywords(self.getSourcePath(), require_script=False)
+        parsed = lit.TestRunner._parseKeywords(self, require_script=False)
         feature_keywords = ('UNSUPPORTED:', 'REQUIRES:', 'XFAIL:')
         boolean_expressions = itertools.chain.from_iterable(
             parsed[k] or [] for k in feature_keywords

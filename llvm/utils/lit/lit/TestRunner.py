@@ -1375,7 +1375,7 @@ class IntegratedTestKeywordParser(object):
         return output
 
 
-def _parseKeywords(sourcepath, additional_parsers=[],
+def _parseKeywords(test, additional_parsers=[],
                    require_script=True):
     """_parseKeywords
 
@@ -1387,6 +1387,7 @@ def _parseKeywords(sourcepath, additional_parsers=[],
     Returns a dictionary mapping each custom parser to its value after
     parsing the test.
     """
+    sourcepath = test.getSourcePath()
     # Install the built-in keyword parsers.
     script = []
     assert isinstance(test, lit.Test.Test)
@@ -1475,7 +1476,7 @@ def parseIntegratedTestScript(test, additional_parsers=[],
     is optional or ignored.
     """
     # Parse the test sources and extract test properties
-    parsed = _parseKeywords(test.getSourcePath(), additional_parsers, require_script)
+    parsed = _parseKeywords(test, additional_parsers, require_script)
     script = parsed['RUN:'] or []
     test.xfails = parsed['XFAIL:'] or []
     test.requires = parsed['REQUIRES:'] or []
