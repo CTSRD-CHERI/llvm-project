@@ -114,7 +114,8 @@ OpenMPIRBuilder::getOrCreateRuntimeFunction(Module &M, RuntimeFunction FnID) {
   assert(Fn && "Failed to create OpenMP runtime function");
 
   // Cast the function to the expected type if necessary
-  Constant *C = ConstantExpr::getBitCast(Fn, FnTy->getPointerTo());
+  Constant *C = ConstantExpr::getBitCast(
+      Fn, FnTy->getPointerTo(M.getDataLayout().getProgramAddressSpace()));
   return {FnTy, C};
 }
 
