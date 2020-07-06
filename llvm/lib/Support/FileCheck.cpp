@@ -611,6 +611,12 @@ Pattern::parseBinop(StringRef Expr, StringRef &RemainingExpr,
   case '-':
     EvalBinop = operator-;
     break;
+  case '*':
+    EvalBinop = operator*;
+    break;
+  case '/':
+    EvalBinop = operator/;
+    break;
   default:
     return ErrorDiagnostic::get(
         SM, OpLoc, Twine("unsupported operation '") + Twine(Operator) + "'");
