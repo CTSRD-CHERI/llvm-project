@@ -746,7 +746,7 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
             {Builder.CreateBitCast(VFPAddr, CGF.Int8PtrTy), TypeId});
       }
       VFPAddr =
-          Builder.CreateBitCast(VFPAddr, FTy->getPointerTo()->getPointerTo(DefaultAS));
+          Builder.CreateBitCast(VFPAddr, FTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS));
       VirtualFn = Builder.CreateAlignedLoad(VFPAddr, CGF.getPointerAlign(),
                                             "memptr.virtualfn");
     }
@@ -1542,10 +1542,10 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastToVoid(CodeGenFunction &CGF,
 
   auto *ClassDecl =
       cast<CXXRecordDecl>(SrcRecordTy->castAs<RecordType>()->getDecl());
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   // Get the vtable pointer.
-  llvm::Value *VTable = CGF.GetVTablePtr(ThisAddr, PtrDiffLTy->getPointerTo(DefaultAS),
-      ClassDecl);
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Value *VTable = CGF.GetVTablePtr(
+      ThisAddr, PtrDiffLTy->getPointerTo(DefaultAS), ClassDecl);
 
   // Get the offset-to-top from the vtable.
   llvm::Value *OffsetToTop =
@@ -1571,8 +1571,7 @@ bool ItaniumCXXABI::EmitBadCastCall(CodeGenFunction &CGF) {
 }
 
 llvm::Value *
-ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF,
-                                         Address This,
+ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF, Address This,
                                          const CXXRecordDecl *ClassDecl,
                                          const CXXRecordDecl *BaseClassDecl) {
   llvm::Value *VTablePtr = CGF.GetVTablePtr(This, CGM.Int8PtrTy, ClassDecl);
@@ -1580,15 +1579,18 @@ ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF,
       CGM.getItaniumVTableContext().getVirtualBaseOffsetOffset(ClassDecl,
                                                                BaseClassDecl);
   unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-  llvm::Value *VBaseOffsetPtr =
-    CGF.Builder.CreateConstGEP1_64(VTablePtr, VBaseOffsetOffset.getQuantity(),
-                                   "vbase.offset.ptr");
-  VBaseOffsetPtr = CGF.Builder.CreateBitCast(VBaseOffsetPtr,
-                                             CGM.PtrDiffTy->getPointerTo(DefaultAS));
-
-  llvm::Value *VBaseOffset =
-    CGF.Builder.CreateAlignedLoad(VBaseOffsetPtr, CGF.getPointerAlign(),
-                                  "vbase.offset");
+  llvm::Value *VBaseOffsetPtr = CGF.Builder.CreateConstGEP1_64(
+      VTablePtr, VBaseOffsetOffset.getQuantity(), "vbase.offset.ptr");
+  bool IsPurecap =
+      CGF.getContext().getTargetInfo().areAllPointersCapabilities();
+  VBaseOffsetPtr = CGF.Builder.CreateBitCast(
+      VBaseOffsetPtr,
+      IsPurecap ? CGM.Int8PtrPtrTy : CGM.PtrDiffTy->getPointerTo(DefaultAS));
+  llvm::Value *VBaseOffset = CGF.Builder.CreateAlignedLoad(
+      VBaseOffsetPtr, CGF.getPointerAlign(),
+      IsPurecap ? "vbase.offset.intcap" : "vbase.offset");
+  if (IsPurecap)
+    VBaseOffset = CGF.getCapabilityIntegerValue(VBaseOffset);
 
   return VBaseOffset;
 }
@@ -2027,10 +2029,6 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
     llvm::Value *OffsetPtr =
         CGF.Builder.CreateConstInBoundsGEP1_64(VTablePtr, VirtualAdjustment);
 
-    OffsetPtr =
-      CGF.Builder.CreateBitCast(OffsetPtr, PtrDiffTy->getPointerTo(AS));
-
-    // Load the adjustment offset from the vtable.
     // Load the adjustment offset from the vtable.
     llvm::Value *Offset;
     if (CGF.getContext().getTargetInfo().areAllPointersCapabilities()) {
@@ -2046,6 +2044,7 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
       Offset =
           CGF.Builder.CreateAlignedLoad(OffsetPtr, CGF.getPointerAlign());
     }
+
     // Adjust our pointer.
     ResultPtr = CGF.Builder.CreateInBoundsGEP(V.getPointer(), Offset);
   } else {
