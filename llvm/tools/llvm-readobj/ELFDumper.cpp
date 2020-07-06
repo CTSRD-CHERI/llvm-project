@@ -6807,14 +6807,14 @@ void LLVMStyle<ELFT>::printDynamicRelocations(const ELFO *Obj) {
   const DynRegionInfo &DynRelaRegion = this->dumper()->getDynRelaRegion();
   const DynRegionInfo &DynRelrRegion = this->dumper()->getDynRelrRegion();
   const DynRegionInfo &DynPLTRelRegion = this->dumper()->getDynPLTRelRegion();
-  if (DynRelRegion.Size && DynRelaRegion.Size)
-    report_fatal_error("There are both REL and RELA dynamic relocations");
+
   W.startLine() << "Dynamic Relocations {\n";
   W.indent();
-  if (DynRelaRegion.Size > 0)
+  if (DynRelaRegion.Size > 0) {
     for (const Elf_Rela &Rela : this->dumper()->dyn_relas())
       printDynamicRelocation(Obj, Rela);
-  else
+  }
+  if (DynRelRegion.Size > 0) {
     for (const Elf_Rel &Rel : this->dumper()->dyn_rels()) {
       Elf_Rela Rela;
       Rela.r_offset = Rel.r_offset;
@@ -6822,6 +6822,8 @@ void LLVMStyle<ELFT>::printDynamicRelocations(const ELFO *Obj) {
       Rela.r_addend = 0;
       printDynamicRelocation(Obj, Rela);
     }
+  }
+
   if (DynRelrRegion.Size > 0) {
     Elf_Relr_Range Relrs = this->dumper()->dyn_relrs();
     std::vector<Elf_Rela> RelrRelas =
