@@ -39,10 +39,10 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV32IXCHERI-NEXT:    cjalr ca2
 ; RV32IXCHERI-NEXT:  .LBB0_5: # %lpad
 ; RV32IXCHERI-NEXT:    # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca2, %captab_pcrel_hi(__cxa_end_catch)
-; RV32IXCHERI-NEXT:    clc ca2, %pcrel_lo(.LBB0_5)(ca2)
+; RV32IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(__cxa_end_catch)
+; RV32IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB0_5)(ca1)
 ; RV32IXCHERI-NEXT:    csc ca0, 8(csp)
-; RV32IXCHERI-NEXT:    cjalr ca2
+; RV32IXCHERI-NEXT:    cjalr ca1
 ; RV32IXCHERI-NEXT:    j .LBB0_2
 ; RV32IXCHERI-NEXT:  .LBB0_2: # %try.cont
 ; RV32IXCHERI-NEXT:    clc cra, 24(csp)
@@ -73,10 +73,10 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV64IXCHERI-NEXT:    cjalr ca2
 ; RV64IXCHERI-NEXT:  .LBB0_5: # %lpad
 ; RV64IXCHERI-NEXT:    # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca2, %captab_pcrel_hi(__cxa_end_catch)
-; RV64IXCHERI-NEXT:    clc ca2, %pcrel_lo(.LBB0_5)(ca2)
+; RV64IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(__cxa_end_catch)
+; RV64IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB0_5)(ca1)
 ; RV64IXCHERI-NEXT:    csc ca0, 0(csp)
-; RV64IXCHERI-NEXT:    cjalr ca2
+; RV64IXCHERI-NEXT:    cjalr ca1
 ; RV64IXCHERI-NEXT:    j .LBB0_2
 ; RV64IXCHERI-NEXT:  .LBB0_2: # %try.cont
 ; RV64IXCHERI-NEXT:    clc cra, 32(csp)

@@ -50,8 +50,9 @@ bar:
 # .captable should be in the R/W data segment for lazy binding
 # LAZY-SEGMENTS-NEXT:   03 .data .captable .rld_map .got {{$}}
 
-# WITH-TABLE-LAZY-LABEL: DynamicSection [ (19 entries)
+# WITH-TABLE-LAZY-LABEL: DynamicSection [ (20 entries)
 # WITH-TABLE-LAZY-NEXT:    Tag                Type                 Name/Value
+# WITH-TABLE-LAZY-NEXT:    0x000000006FFFFFFB FLAGS_1              PIE
 # WITH-TABLE-LAZY-NEXT:    0x0000000000000015 DEBUG                0x0
 # WITH-TABLE-LAZY-NEXT:    0x0000000000000006 SYMTAB               0x240
 # WITH-TABLE-LAZY-NEXT:    0x000000000000000B SYMENT               24 (bytes)
@@ -64,7 +65,7 @@ bar:
 # WITH-TABLE-LAZY-NEXT:    0x0000000070000011 MIPS_SYMTABNO        1
 # WITH-TABLE-LAZY-NEXT:    0x000000007000000A MIPS_LOCAL_GOTNO     2
 # WITH-TABLE-LAZY-NEXT:    0x0000000070000013 MIPS_GOTSYM          0x1
-# WITH-TABLE-LAZY-NEXT:    0x0000000000000003 PLTGOT               0x20440
+# WITH-TABLE-LAZY-NEXT:    0x0000000000000003 PLTGOT               0x20450
 # WITH-TABLE-LAZY-NEXT:    0x0000000070000035 MIPS_RLD_MAP_REL
 # With lazy binding the captable needs to be in the writable area
 # WITH-TABLE-LAZY-NEXT:    0x000000007000C003 MIPS_CHERI_CAPTABLE  0x20420

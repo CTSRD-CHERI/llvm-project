@@ -5,7 +5,6 @@
 
 define dso_local i8* @ptr(i8** %ptr, i8* %val) {
 ; CHECK-LABEL: ptr:
-; CHECK:       .Lptr$local:
 ; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  // %bb.0: // %entry
 ; CHECK-NEXT:    mov x8, x0
@@ -23,7 +22,6 @@ entry:
 
 define dso_local i64 @int(i64* %ptr, i64 %val) {
 ; CHECK-LABEL: int:
-; CHECK:       .Lint$local:
 ; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  // %bb.0: // %entry
 ; CHECK-NEXT:    mov x8, x0

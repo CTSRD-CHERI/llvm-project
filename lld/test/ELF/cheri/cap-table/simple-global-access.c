@@ -1,24 +1,14 @@
 // REQUIRES: clang
 
-// RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-128.o
-// RUN: %cheri256_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-256.o
-// RUN: llvm-objdump -d -r %t-128.o | FileCheck %s --check-prefix OBJECT
-// RUN: llvm-objdump -d -r %t-256.o | FileCheck %s --check-prefix OBJECT
-// RUN: ld.lld -o %t-128.exe %t-128.o
-// RUN: ld.lld -o %t-256.exe %t-256.o
-// RUN: llvm-objdump -d -r --cap-relocs -t %t-128.exe | FileCheck %s --check-prefixes EXE,EXE128
-// RUN: llvm-objdump -d -r --cap-relocs -t %t-256.exe | FileCheck %s --check-prefixes EXE,EXE256
+// RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
+// RUN: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix OBJECT
+// RUN: ld.lld -o %t.exe %t.o
+// RUN: llvm-objdump -d -r --cap-relocs -t %t.exe | FileCheck %s --check-prefixes EXE,EXE128
 
-// OBJECT:       4: 3c 01 00 00 lui	$1, 0
-// OBJECT-NEXT:       0000000000000004: R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE	global
-// OBJECT-NEXT:  8: 64 21 00 00 daddiu	$1, $1, 0
-// OBJECT-NEXT:       0000000000000008: R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE	global
-// OBJECT-NEXT:  c: d8 41 08 00 clc $c2, $1, 0($c1)
-// OBJECT:      18: 3c 03 00 00 lui     $3, 0
-// OBJECT-NEXT:       000000000000018:  R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE  global2
-// OBJECT-NEXT: 1c: 64 63 00 00 daddiu  $3, $3, 0
-// OBJECT-NEXT:       00000000000001c:  R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE  global2
-// OBJECT-NEXT: 20: d8 21 18 00 clc     $c1, $3, 0($c1)
+// OBJECT:       0000000000000004: R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE	global
+// OBJECT:       0000000000000008: R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE	global
+// OBJECT:       000000000000018:  R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE  global2
+// OBJECT:       00000000000001c:  R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE  global2
 
 
 
@@ -32,10 +22,9 @@
 
 // EXE:          3c 01 00 00 	lui	$1, 0
 // EXE-NEXT:     64 21 00 00 	daddiu	$1, $1, 0
-// EXE:          3c 03 00 00   lui     $3, 0
-// This is the second entry into the cap table so it should be 32/16 bytes
-// EXE128-NEXT:  64 63 00 10   daddiu  $3, $3, 16
-// EXE256-NEXT:  64 63 00 20   daddiu  $3, $3, 32
+// EXE:          3c 01 00 00   lui $1, 0 <simple-global-access.c+0x120000000>
+// This is the second entry into the cap table so it should be 16 bytes
+// EXE-NEXT:  64 21 00 10   daddiu  $1, $1, 16 <simple-global-access.c+0x120000010>
 
 int global = 1;
 long global2 = 3;

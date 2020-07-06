@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // RUN: %cheri_purecap_cc1 -debug-info-kind=standalone -emit-obj -o %t.purecap.o %s
 // RUN: llvm-dwarfdump -debug-frame %t.purecap.o | FileCheck %s -check-prefixes PURECAP,CHECK
 // RUN: %cheri_cc1 "-mrelocation-model" "pic" -debug-info-kind=standalone -emit-obj -o %t.hybrid.o %s
@@ -10,9 +11,6 @@
 // RUN: %cheri_purecap_clang -g -c -o %t.purecap-driver.o %s -fomit-frame-pointer -gdwarf-4 -fno-addrsig -fno-unwind-tables
 // RUN: llvm-dwarfdump -debug-frame %t.purecap-driver.o | FileCheck %s -check-prefixes PURECAP,CHECK
 
-
-
-
 int* external_func(int);
 
 int* test(int i) {
@@ -23,6 +21,7 @@ int* test(int i) {
 // Purecap uses $c17 (reg 89) for returns and $c11 (reg 83) for the default CFA:
 
 // CHECK-LABEL: 00000000
+// CHECK-NEXT: Format: DWARF32
 // CHECK-NEXT: Version: 4
 // n64 uses ra (register 31)
 // HYBRID:  Return address column: 31
@@ -33,6 +32,7 @@ int* test(int i) {
 // CHECK-NEXT: DW_CFA_nop
 
 // CHECK-LABEL: 00000018
+// CHECK-NEXT: Format: DWARF32
 // CHECK-NEXT: DW_CFA_advance_loc: 4
 
 // PURECAP-NEXT: DW_CFA_def_cfa_offset: +{{32|64}}

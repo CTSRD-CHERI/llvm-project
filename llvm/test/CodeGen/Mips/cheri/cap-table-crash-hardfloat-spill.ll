@@ -22,8 +22,8 @@ define float @return_constant_pool() nounwind readnone {
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $1
 ; PURECAP-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c1)
-; PURECAP-NEXT:    clw $2, $zero, 0($c1)
-; PURECAP-NEXT:    mtc1 $2, $f0
+; PURECAP-NEXT:    clw $1, $zero, 0($c1)
+; PURECAP-NEXT:    mtc1 $1, $f0
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 

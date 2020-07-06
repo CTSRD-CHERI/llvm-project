@@ -1,9 +1,5 @@
-; RUN: %cheri128_purecap_llc -O0 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI128 '-D#CAP_SIZE=16'
-; RUN: %cheri256_purecap_llc -O0 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI256 '-D#CAP_SIZE=32'
+; RUN: %cheri_purecap_llc -O0 %s -o - | %cheri_FileCheck %s -check-prefixes CHECK
 ; ModuleID = 'cheri-stack.c'
-source_filename = "cheri-stack.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
 
 ; Function Attrs: argmemonly nounwind
 declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture) #2
@@ -50,14 +46,14 @@ entry:
 ; that we're loading from the same place that we spill
 ; CHECK-LABEL: has_spill
 ;
-; CHECK: cincoffset	$c11, $c11, -[[FRAMESIZE:([0-9]+)]]
+; CHECK: cincoffset	$c11, $c11, -[[#FRAMESIZE:]]
 ; CHECK: csc	$c17, $zero, [[C17OFFSET:([0-9]+|sp)]]($c11)
 ; CHECK: clcbi $c12, %capcall20(use_arg)
-; CHECK: csw    $2, $zero, [[#CAP_SIZE - 8]]($c11)
+; CHECK: csw    ${{([0-9]+)}}, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK: cjalr	$c12, $c17
 ; CHECK: clw	${{([0-9]+)}}, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK: clc	$c17, $zero, [[C17OFFSET]]($c11)
-; CHECK: cincoffset	$c11, $c11, [[FRAMESIZE]]
+; CHECK: cincoffset	$c11, $c11, [[#FRAMESIZE]]
 
   %x.addr = alloca i32, align 4, addrspace(200)
   store i32 %x, i32 addrspace(200)* %x.addr, align 4
@@ -74,16 +70,13 @@ entry:
 ; CHECK-LABEL: dynamic_alloca
 ; CHECK: cincoffset	$c24, $c11, $zero
 ; CHECK:      dsll $1, $4, 2
-; CHERI128:   croundrepresentablelength $[[REPRSIZE:[0-9]+]], $[[SIZE:[0-9]+]]
+; CHECK:   croundrepresentablelength $[[REPRSIZE:[0-9]+]], $[[SIZE:[0-9]+]]
 ; CHECK:      cmove $c[[TEMPCAP:[0-9]+]], $c11
 ; CHECK-NEXT: cgetaddr	$[[ADDR:([0-9]+|sp)]], $c[[TEMPCAP]]
-; CHERI128-NEXT: dsubu	$[[ADDR]], $[[ADDR]], $[[REPRSIZE]]
-; CHERI256-NEXT: dsubu	$[[ADDR]], $[[ADDR]], $[[REPRSIZE:([0-9]+|sp)]]
-; No need to realign the stack for CHERI256
-; CHERI128-NEXT: crepresentablealignmentmask $[[SP_ALIGN_MASK:[0-9]+]], $[[SIZE]]
-; CHERI128-NEXT: and	$[[ADDR1:([0-9]+|sp)]], $[[ADDR]], $[[SP_ALIGN_MASK]]
-; CHERI128-NEXT: csetaddr $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[ADDR1]]
-; CHERI256-NEXT: csetaddr $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[ADDR]]
+; CHECK-NEXT: dsubu	$[[ADDR]], $[[ADDR]], $[[REPRSIZE]]
+; CHECK-NEXT: crepresentablealignmentmask $[[SP_ALIGN_MASK:[0-9]+]], $[[SIZE]]
+; CHECK-NEXT: and	$[[ADDR1:([0-9]+|sp)]], $[[ADDR]], $[[SP_ALIGN_MASK]]
+; CHECK-NEXT: csetaddr $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[ADDR1]]CodeGen/Mips/cheri/invalid-candaddr.ll
 ; CHECK-NEXT: csetbounds $c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], $[[REPRSIZE]]
 ; CHECK-NEXT: cmove $c11, $c[[TEMPCAP1]]
 ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TEMPCAP2]], ${{([0-9]+)}}

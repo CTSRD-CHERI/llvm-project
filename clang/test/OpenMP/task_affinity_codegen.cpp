@@ -47,7 +47,7 @@ int main() {
 
   // <num_elem> = <num_iters> + 1 constant affinity for affinity(a)
   // CHECK: [[NUM_ELEMS:%.+]] = add nuw i64 1, [[CONV]]
-  // CHECK: [[SV:%.+]] = call i8* @llvm.stacksave()
+  // CHECK: [[SV:%.+]] = call i8* @llvm.stacksave.p0i8()
   // CHECK: store i8* [[SV]], i8** [[SV_ADDR:%.+]],
 
   // kmp_task_affinity_info_t affs[<num_elem>];
@@ -123,7 +123,7 @@ int main() {
   // CHECK: [[BC:%.+]] = bitcast %struct.kmp_task_affinity_info_t* [[AFFS_ADDR]] to i8*
   // CHECK: call i32 @__kmpc_omp_reg_task_with_affinity(%struct.ident_t* @{{.+}} i32 [[GTID]], i8* [[TD]], i32 [[NAFFS]], i8* [[BC]])
   // CHECK: [[SV:%.+]] = load i8*, i8** [[SV_ADDR]],
-  // CHECK: call void @llvm.stackrestore(i8* [[SV]])
+  // CHECK: call void @llvm.stackrestore.p0i8(i8* [[SV]])
 #pragma omp task affinity(iterator(i=0:a): p[i]) affinity(a)
   ;
   return 0;

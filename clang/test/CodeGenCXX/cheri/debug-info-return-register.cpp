@@ -12,6 +12,7 @@ int test(int arg1, int arg2) {
 // CHECK: .debug_frame contents:
 // CHECK-EMPTY:
 // CHECK-NEXT: 00000000 000000{{.+}} ffffffff CIE
+// CHECK-NEXT:  Format: DWARF32
 // DWARF4-NEXT: Version:               4
 // FIXME: passing -gdwarf-4 crashes -> just check for version 1 here
 // DWARF2-NEXT: Version:          1
