@@ -1770,7 +1770,7 @@ printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
   outs() << "\n";
 }
 
-void printCapRelocations(const ObjectFile *Obj) {
+void objdump::printCapRelocations(const ObjectFile *Obj) {
   if (!Obj->isELF()) {
     WithColor::error(errs(), ToolName)
         << "This operation is only currently supported "
