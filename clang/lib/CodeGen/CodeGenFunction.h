@@ -1754,6 +1754,7 @@ public:
       ~InlinedRegionBodyRAII() { CGF.AllocaInsertPt = OldAllocaIP; }
     };
   };
+
 private:
   /// CXXThisDecl - When generating code for a C++ member function,
   /// this will hold the implicit 'this' declaration.
