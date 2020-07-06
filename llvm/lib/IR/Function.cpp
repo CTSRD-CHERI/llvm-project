@@ -888,9 +888,8 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
   case IIT_IFATPTR256:
   case IIT_IFATPTR512:
   case IIT_IFATPTRAny: {
-    OutputTable.push_back(IITDescriptor::get(IITDescriptor::Pointer,
-                                             200));
-    DecodeIITType(++NextElt, Infos, OutputTable);
+    OutputTable.push_back(IITDescriptor::get(IITDescriptor::Pointer, 200));
+    DecodeIITType(++NextElt, Infos, Info, OutputTable);
     return;
   }
   case IIT_ARG: {
