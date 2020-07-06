@@ -2240,7 +2240,7 @@ static bool CC_RISCV_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   if (LocVT.isFatPointer()) {
     unsigned CLen = LocVT.getSizeInBits();
-    unsigned Offset6 = State.AllocateStack(CLen / 8, CLen / 8);
+    unsigned Offset6 = State.AllocateStack(CLen / 8, Align(CLen / 8));
     State.addLoc(CCValAssign::getMem(ValNo, ValVT, Offset6, LocVT, LocInfo));
     return false;
   }
