@@ -2605,7 +2605,7 @@ static void addGlobalsCSetBoundsStats(const GlobalValue *GV, SelectionDAG &DAG,
     AllocSize = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
   }
   cheri::CSetBoundsStats->add(
-      MaybeAlign(GV->getAlignment()).valueOrOne(), Size, Pass,
+      GV->getPointerAlignment(DAG.getDataLayout()), Size, Pass,
       cheri::SetBoundsPointerSource::GlobalVar,
       "load of global " + GV->getName() + " (alloc size=" + Twine(AllocSize) +
           ")",
