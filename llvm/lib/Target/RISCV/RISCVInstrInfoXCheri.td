@@ -670,7 +670,7 @@ def : InstAlias<"csd $rs2, (${rs1})",
 /// 'A' (Atomic Instructions) extension
 
 let DecoderNamespace = "CapModeOnly_" in {
-let Predicates = [HasStdExtA, IsCapMode] in {
+let Predicates = [HasCheri, HasStdExtA, IsCapMode] in {
 defm CLR_B       : CLR_r_aq_rl<0b000, "clr.b">;
 defm CSC_B       : CAMO_rr_aq_rl<0b00011, 0b000, "csc.b">;
 
@@ -688,9 +688,9 @@ defm CAMOMIN_W   : CAMO_rr_aq_rl<0b10000, 0b010, "camomin.w">;
 defm CAMOMAX_W   : CAMO_rr_aq_rl<0b10100, 0b010, "camomax.w">;
 defm CAMOMINU_W  : CAMO_rr_aq_rl<0b11000, 0b010, "camominu.w">;
 defm CAMOMAXU_W  : CAMO_rr_aq_rl<0b11100, 0b010, "camomaxu.w">;
-} // Predicates = [HasStdExtA, IsCapMode]
+} // Predicates = [HasCheri, HasStdExtA, IsCapMode]
 
-let Predicates = [HasStdExtA, IsRV64, IsCapMode] in {
+let Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode] in {
 defm CLR_D       : CLR_r_aq_rl<0b011, "clr.d">;
 defm CSC_D       : CAMO_rr_aq_rl<0b00011, 0b011, "csc.d">;
 defm CAMOSWAP_D  : CAMO_rr_aq_rl<0b00001, 0b011, "camoswap.d">;
@@ -702,7 +702,7 @@ defm CAMOMIN_D   : CAMO_rr_aq_rl<0b10000, 0b011, "camomin.d">;
 defm CAMOMAX_D   : CAMO_rr_aq_rl<0b10100, 0b011, "camomax.d">;
 defm CAMOMINU_D  : CAMO_rr_aq_rl<0b11000, 0b011, "camominu.d">;
 defm CAMOMAXU_D  : CAMO_rr_aq_rl<0b11100, 0b011, "camomaxu.d">;
-} // Predicates = [HasStdExtA, IsRV64, IsCapMode]
+} // Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode]
 } // DecoderNamespace = "CapModeOnly_"
 
 let DecoderNamespace = "RISCV32CapModeOnly_",
