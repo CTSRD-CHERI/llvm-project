@@ -113,7 +113,7 @@ class alignas(IdentifierInfoAlignment) IdentifierInfo {
   // True if this is a mangled OpenMP variant name.
   unsigned IsMangledOpenMPVariantName : 1;
 
-  // 28 bits left in a 64-bit word.
+  // 26 bits left in a 64-bit word.
 
   // Managed by the language front-end.
   void *FETokenInfo = nullptr;
