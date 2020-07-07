@@ -1,5 +1,6 @@
 #include "llvm/Transforms/Utils/VNCoercion.h"
 #include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/Debug.h"
