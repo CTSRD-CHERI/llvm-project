@@ -76,10 +76,10 @@ define signext i32 @cap_covers_pages_regression(i8 addrspace(200)* %cap, i64 zer
 ; OPTNONE-NEXT:    sltu $5, $3, $4
 ; OPTNONE-NEXT:    xori $5, $5, 1
 ; OPTNONE-NEXT:    dsubu $3, $3, $4
-; OPTNONE-NEXT:    sltu $6, $3, $1
-; OPTNONE-NEXT:    xori $6, $6, 1
-; OPTNONE-NEXT:    and $5, $5, $6
-; OPTNONE-NEXT:    dsll $1, $5, 32
+; OPTNONE-NEXT:    sltu $1, $3, $1
+; OPTNONE-NEXT:    xori $1, $1, 1
+; OPTNONE-NEXT:    and $1, $5, $1
+; OPTNONE-NEXT:    dsll $1, $1, 32
 ; OPTNONE-NEXT:    dsrl $1, $1, 32
 ; OPTNONE-NEXT:    csd $2, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
 ; OPTNONE-NEXT:    move $2, $1
