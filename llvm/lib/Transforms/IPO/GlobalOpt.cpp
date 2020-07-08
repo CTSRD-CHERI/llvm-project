@@ -2339,12 +2339,15 @@ static void RemovePreallocated(Function *F) {
     CB->eraseFromParent();
 
     Builder.SetInsertPoint(PreallocatedSetup);
-    auto *StackSave =
-        Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::stacksave));
+    auto *AllocaI8Ptr = Type::getInt8PtrTy(
+        M->getContext(), M->getDataLayout().getAllocaAddrSpace());
+    auto *StackSave = Builder.CreateCall(
+        Intrinsic::getDeclaration(M, Intrinsic::stacksave, {AllocaI8Ptr}));
 
     Builder.SetInsertPoint(NewCB->getNextNonDebugInstruction());
-    Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::stackrestore),
-                       StackSave);
+    Builder.CreateCall(
+        Intrinsic::getDeclaration(M, Intrinsic::stackrestore, {AllocaI8Ptr}),
+        StackSave);
 
     // Replace @llvm.call.preallocated.arg() with alloca.
     // Cannot modify users() while iterating over it, so make a copy.
