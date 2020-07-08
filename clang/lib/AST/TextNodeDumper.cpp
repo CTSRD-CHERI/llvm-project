@@ -448,7 +448,7 @@ void TextNodeDumper::Visit(const APValue &Value, QualType Ty) {
       ColorScope Color(OS, ShowColors, ValueColor);
       OS << Value.getInt();
     }
-    if (Value.mustBeNullDerivedCap()) {
+    if (Ty->isIntCapType() && Value.mustBeNullDerivedCap()) {
       ColorScope Color(OS, ShowColors, AttrColor);
       OS << " <must-be-null-derived>";
     }
