@@ -138,8 +138,9 @@ class Configuration(object):
         self.configure_obj_root()
         self.cxx_stdlib_under_test = self.get_lit_conf('cxx_stdlib_under_test', 'libc++')
         self.cxx_library_root = self.get_lit_conf('cxx_library_root', self.libcxx_obj_root)
-        self.abi_library_root = self.get_lit_conf('abi_library_path', None)
+        self.abi_library_root = self.get_lit_conf('abi_library_root', None)
         self.cxx_runtime_root = self.get_lit_conf('cxx_runtime_root', self.cxx_library_root)
+        self.abi_runtime_root = self.get_lit_conf('abi_runtime_root', self.abi_library_root)
         self.configure_compile_flags()
         self.configure_link_flags()
         self.configure_env()
@@ -177,6 +178,8 @@ class Configuration(object):
         self.lit_config.note('Adding environment variables: %r' % show_env_vars)
         self.lit_config.note("Linking against the C++ Library at {}".format(self.cxx_library_root))
         self.lit_config.note("Running against the C++ Library at {}".format(self.cxx_runtime_root))
+        self.lit_config.note("Linking against the ABI Library at {}".format(self.abi_library_root))
+        self.lit_config.note("Running against the ABI Library at {}".format(self.abi_runtime_root))
         sys.stderr.flush()  # Force flushing to avoid broken output on Windows
 
     def get_test_format(self):
@@ -454,10 +457,11 @@ class Configuration(object):
         # Configure ABI library paths.
         if self.abi_library_root:
             self.cxx.link_flags += ['-L' + self.abi_library_root]
+        if self.abi_runtime_root:
             if not self.target_info.is_windows():
-                self.cxx.link_flags += ['-Wl,-rpath,' + self.abi_library_root]
+                self.cxx.link_flags += ['-Wl,-rpath,' + self.abi_runtime_root]
             else:
-                self.add_path(self.exec_env, self.abi_library_root)
+                self.add_path(self.exec_env, self.abi_runtime_root)
 
     def configure_link_flags_cxx_library(self):
         if self.link_shared:
@@ -649,6 +653,7 @@ class Configuration(object):
         sub.append(('%{link_flags}',    ' '.join(map(pipes.quote, self.cxx.link_flags))))
         self.lit_config.warning('self.cxx.link_libcxxabi_flag=%s' % self.cxx.link_libcxxabi_flag)
         sub.append(('%{link_libcxxabi}', pipes.quote(self.cxx.link_libcxxabi_flag)))
+
         codesign_ident = self.get_lit_conf('llvm_codesign_identity', '')
         env_vars = ' '.join('%s=%s' % (k, pipes.quote(v)) for (k, v) in self.exec_env.items())
         exec_args = [
