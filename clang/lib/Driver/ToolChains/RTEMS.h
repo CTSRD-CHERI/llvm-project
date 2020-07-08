@@ -18,9 +18,9 @@ namespace clang {
 namespace driver {
 namespace tools {
 namespace rtems {
-class LLVM_LIBRARY_VISIBILITY Linker : public GnuTool {
+class LLVM_LIBRARY_VISIBILITY Linker : public Tool {
 public:
-  Linker(const ToolChain &TC) : GnuTool("rtems::Linker", "ld.lld", TC) {}
+  Linker(const ToolChain &TC) : Tool("rtems::Linker", "ld.lld", TC) {}
 
   bool hasIntegratedCPP() const override { return false; }
   bool isLinkJob() const override { return true; }

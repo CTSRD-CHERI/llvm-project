@@ -45,7 +45,7 @@ static const TargetRegisterClass &getGlobalBaseRegClass(MachineFunction &MF) {
   return Mips::GPR32RegClass;
 }
 
-Register MipsFunctionInfo::getGlobalBaseRegUnchecked(MachineFunction &MF) const {
+Register MipsFunctionInfo::getGlobalBaseRegUnchecked() const {
   assert(GlobalBaseReg);
   return GlobalBaseReg;
 }
@@ -80,8 +80,8 @@ Register MipsFunctionInfo::getCapGlobalBaseReg(MachineFunction &MF) {
 Register MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel(MachineFunction &MF) {
   assert(static_cast<const MipsSubtarget&>(MF.getSubtarget()).useCheriCapTable());
   if (!CapGlobalBaseReg) {
-    getCapGlobalBaseReg();
-    initCapGlobalBaseReg();
+    getCapGlobalBaseReg(MF);
+    initCapGlobalBaseReg(MF);
   }
   return CapGlobalBaseReg;
 }
@@ -125,8 +125,8 @@ Register MipsFunctionInfo::getCapEntryPointReg(MachineFunction &MF) {
 Register MipsFunctionInfo::getGlobalBaseRegForGlobalISel(MachineFunction &MF) {
   if (static_cast<const MipsSubtarget&>(MF.getSubtarget()).useCheriCapTable()) {
     if (!CapGlobalBaseReg) {
-      getCapGlobalBaseReg();
-      initCapGlobalBaseReg();
+      getCapGlobalBaseReg(MF);
+      initCapGlobalBaseReg(MF);
     }
     return CapGlobalBaseReg;
   }

@@ -4497,7 +4497,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
         if (InternalLinkage)
           Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64(),
-                                GV->isThreadLocal());
+                                Val->isThreadLocal());
         else if (Subtarget.useXGOT()) {
           Callee = getAddrGlobalLargeGOT(
               G, DL, Ty, DAG, MipsII::MO_CALL_HI16, MipsII::MO_CALL_LO16, Chain,
@@ -4522,7 +4522,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     if (CheriCapTable) {
       Callee = getCallTargetFromCapTable(S, DL, CapType, DAG, Chain,
-                                         FuncInfo->callPtrInfo(Sym));
+                                         FuncInfo->callPtrInfo(MF, Sym));
       IsCallReloc = true;
     } else if (!IsPIC) { // static
       assert(!ABI.IsCheriPureCap());

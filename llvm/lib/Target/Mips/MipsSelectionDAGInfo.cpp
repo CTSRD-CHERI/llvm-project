@@ -59,7 +59,7 @@ SDValue callFunction(SelectionDAG &DAG, SDLoc dl, SDValue Chain, const char
 /// Helper that emits the memcpy / memmove call, as required.
 SDValue EmitTargetCodeForMemOp(SelectionDAG &DAG, const SDLoc &dl,
                                SDValue Chain, SDValue Dst, SDValue Src,
-                               SDValue Size, unsigned Align, bool isVolatile,
+                               SDValue Size, Align Alignment, bool isVolatile,
                                bool AlwaysInline,
                                bool MustPreserveCheriCapabilities,
                                MachinePointerInfo DstPtrInfo,
@@ -94,30 +94,28 @@ MipsSelectionDAGInfo::~MipsSelectionDAGInfo() {
 
 SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
-    SDValue Size, unsigned Align, bool isVolatile, bool AlwaysInline,
+    SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
     bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
   return EmitTargetCodeForMemOp(
-      DAG, dl, Chain, Dst, Src, Size, Align, isVolatile, AlwaysInline,
+      DAG, dl, Chain, Dst, Src, Size, Alignment, isVolatile, AlwaysInline,
       MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo, true);
 }
 
 SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemmove(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
-    SDValue Size, unsigned Align, bool isVolatile,
+    SDValue Size, Align Alignment, bool isVolatile,
     bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
   return EmitTargetCodeForMemOp(
-      DAG, dl, Chain, Dst, Src, Size, Align, isVolatile, false,
+      DAG, dl, Chain, Dst, Src, Size, Alignment, isVolatile, false,
       MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo, false);
 }
 
-SDValue
-MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl,
-                                          SDValue Chain, SDValue Dst,
-                                          SDValue Src, SDValue Size,
-                                          unsigned Align, bool isVolatile,
-                                          MachinePointerInfo DstPtrInfo) const {
+SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
+    SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
+    SDValue Size, Align Alignment, bool isVolatile,
+    MachinePointerInfo DstPtrInfo) const {
   // If we're setting via an AS0 pointer, do the normal thing.
   unsigned DstAS = DstPtrInfo.getAddrSpace();
   if (DstAS == 0)
@@ -127,7 +125,7 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
   llvm::Align CapAlign = STI.getCapAlignment();
   // If this is capability aligned, but not a multiple of capability size, we
   // might have given up too early trying to emit capability instructions.
-  if (Align >= CapAlign.value()) {
+  if (Alignment >= CapAlign.value()) {
     unsigned CapSize = STI.getCapSizeInBytes();
     if (auto ConstantSize = dyn_cast<ConstantSDNode>(Size)) {
       uint64_t SizeVal = ConstantSize->getZExtValue();
@@ -137,11 +135,11 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
         if (isa<ConstantSDNode>(Src) && cast<ConstantSDNode>(Src)->isNullValue()) {
           SmallVector<SDValue, 8> OutChains;
           SDValue ZeroCap = DAG.getNullCapability(dl);
-          for (uint64_t i=0 ; i<(SizeVal / CapSize) ; i++) {
-            uint64_t DstOff = i*CapSize;
+          for (uint64_t i = 0; i < (SizeVal / CapSize); i++) {
+            uint64_t DstOff = i * CapSize;
             SDValue Store = DAG.getStore(Chain, dl, ZeroCap,
                 DAG.getMemBasePlusOffset(Dst, DstOff, dl),
-                DstPtrInfo.getWithOffset(DstOff), Align, isVolatile ?
+                DstPtrInfo.getWithOffset(DstOff), Alignment, isVolatile ?
                 MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
             OutChains.push_back(Store);
           }
@@ -152,7 +150,7 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
           while (Remainder >= 8) {
             SDValue Store = DAG.getStore(Chain, dl, Zero64,
                 DAG.getMemBasePlusOffset(Dst, Done, dl),
-                DstPtrInfo.getWithOffset(Done), Align, isVolatile ?
+                DstPtrInfo.getWithOffset(Done), Alignment, isVolatile ?
                 MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
             OutChains.push_back(Store);
             Done += 8;
@@ -192,7 +190,7 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
             }
             SDValue Store = DAG.getStore(Chain, dl, Zero,
                 DAG.getMemBasePlusOffset(Dst, DstOff, dl),
-                DstPtrInfo.getWithOffset(DstOff), Align, isVolatile ?
+                DstPtrInfo.getWithOffset(DstOff), Alignment, isVolatile ?
                 MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
             OutChains.push_back(Store);
           }
@@ -206,4 +204,3 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
     STI.isABI_CheriPureCap() ?  "memset" : "memset_c";
   return callFunction(DAG, dl, Chain, memFnName, Dst, Src, Size);
 }
-
