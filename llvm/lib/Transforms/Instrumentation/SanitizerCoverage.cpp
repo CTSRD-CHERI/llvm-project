@@ -937,7 +937,7 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
         FunctionGuardArray->getValueType(), FunctionGuardArray,
         {ConstantInt::get(Int32Ty, 0), ConstantInt::get(IntptrTy, Idx)});
 #endif
-    IRB.CreateCall(SanCovTracePCGuard, GuardPtr);
+    IRB.CreateCall(SanCovTracePCGuard, GuardPtr)->setCannotMerge();
   }
   if (Options.Inline8bitCounters) {
     auto CounterPtr = IRB.CreateGEP(
