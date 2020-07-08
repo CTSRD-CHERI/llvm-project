@@ -154,6 +154,7 @@ struct Configuration {
   bool checkSections;
   bool compressDebugSections;
   bool cref;
+  std::vector<std::pair<llvm::GlobPattern, uint64_t>> deadRelocInNonAlloc;
   bool defineCommon;
   bool demangle = true;
   bool dependentLibraries;
