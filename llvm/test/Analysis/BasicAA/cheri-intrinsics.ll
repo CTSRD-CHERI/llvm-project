@@ -1,5 +1,5 @@
-; RUN: opt < %s -basicaa -gvn -S | FileCheck -check-prefix=CHECK-GVN %s
-; RUN: opt < %s -basicaa -aa-eval -print-all-alias-modref-info -disable-output 2>&1 | FileCheck %s
+; RUN: opt < %s -basic-aa -gvn -S | FileCheck -check-prefix=CHECK-GVN %s
+; RUN: opt < %s -basic-aa -aa-eval -print-all-alias-modref-info -disable-output 2>&1 | FileCheck %s
 
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 
