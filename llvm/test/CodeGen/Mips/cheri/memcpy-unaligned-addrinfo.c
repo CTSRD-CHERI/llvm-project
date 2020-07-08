@@ -37,29 +37,28 @@ struct addrinfo {
 // CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[RETVAL_SROA_0_0_COPYLOAD]], 0, !dbg !25
 // CHECK-NEXT:    ret { i8 addrspace(200)* } [[DOTFCA_0_INSERT]], !dbg !25
 //
-struct addrinfo c(char* a) {
+struct addrinfo c(char *a) {
   struct addrinfo d;
   __builtin_memcpy(&d, a, sizeof(struct addrinfo));
   // expected-warning@-1{{found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast}}
   return d;
 
-// ASM:      .Ltmp1:
-// ASM-NEXT: .loc 1 42 0 prologue_end
-// ASM-NEXT: csetbounds $c4, $c3, 16
-// ASM-NEXT: clcbi	$c12, %capcall20(memcpy)($c1)
-// ASM-NEXT: csetbounds	$c3, $c11, 16
-// ASM-NEXT: .Ltmp2:
-// ASM-NEXT: #DEBUG_VALUE: c:a <- [DW_OP_LLVM_entry_value 1] $c3
-// ASM-NEXT: cjalr	$c12, $c17
-// ASM-NEXT: daddiu	$4, $zero, 16
+  // ASM:      .Ltmp1:
+  // ASM-NEXT: .loc 1 42 3 prologue_end
+  // ASM-NEXT: csetbounds $c4, $c3, 16
+  // ASM-NEXT: clcbi	$c12, %capcall20(memcpy)($c1)
+  // ASM-NEXT: csetbounds	$c3, $c11, 16
+  // ASM-NEXT: .Ltmp2:
+  // ASM-NEXT: #DEBUG_VALUE: c:a <- [DW_OP_LLVM_entry_value 1] $c3
+  // ASM-NEXT: cjalr	$c12, $c17
+  // ASM-NEXT: daddiu	$4, $zero, 16
 }
-
 
 struct group {
   char *b;
 };
-void do_stuff(struct group* g);
+void do_stuff(struct group *g);
 // OPTNONE-LABEL: define {{[^@]+}}@copy_group
 // OPTNONE-SAME: (i8 addrspace(200)* [[A:%.*]]) addrspace(200) #0
 // OPTNONE-NEXT:  entry:
@@ -93,12 +92,12 @@ void do_stuff(struct group* g);
 // CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull [[TMP0]]) #5, !dbg !43
 // CHECK-NEXT:    ret void, !dbg !43
 //
-void copy_group(const char* a) {
+void copy_group(const char *a) {
   // derived from the unaligned memcpy used in getgrent
   // NOTE: this buffer will be aligned sensibly at -O2 so that we can use a csc/clc
   char buffer[sizeof(struct group)];
-  __builtin_memcpy(buffer, &a, sizeof(char*));
-  struct group* g = (struct group*)buffer;
+  __builtin_memcpy(buffer, &a, sizeof(char *));
+  struct group *g = (struct group *)buffer;
   do_stuff(g);
 }
 
@@ -132,14 +131,14 @@ void copy_group(const char* a) {
 // CHECK-NEXT:    tail call void @do_stuff(%struct.group addrspace(200)* [[TMP0]]) #5, !dbg !54
 // CHECK-NEXT:    ret void, !dbg !55
 //
-void copy_group2(const char* a, char* buffer) {
+void copy_group2(const char *a, char *buffer) {
 
   // derived from the unaligned memcpy used in getgrent
   // Note: this will result in an unaligned memcpy
-  __builtin_memcpy(buffer, &a, sizeof(char*));
+  __builtin_memcpy(buffer, &a, sizeof(char *));
   // expected-warning@-1{{found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime}}
   // expected-note@-2{{use __builtin_assume_aligned()}}
-  struct group* g = (struct group*)buffer;
+  struct group *g = (struct group *)buffer;
   do_stuff(g);
 }
 
@@ -187,4 +186,3 @@ void copy_group3(char *buffer, struct group a, long size) {
   struct group *g = (struct group *)buffer;
   do_stuff(g);
 }
-

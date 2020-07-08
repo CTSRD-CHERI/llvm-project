@@ -45,10 +45,10 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
+; ASM-NEXT:    sll $1, $4, 0
+; ASM-NEXT:    andi $1, $1, 1
 ; ASM-NEXT:    csc $c1, $zero, 0($c11)
-; ASM-NEXT:    beqz $2, .LBB0_5
+; ASM-NEXT:    beqz $1, .LBB0_5
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
 ; ASM-NEXT:    b .LBB0_2
@@ -158,10 +158,10 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
+; ASM-NEXT:    sll $1, $4, 0
+; ASM-NEXT:    andi $1, $1, 1
 ; ASM-NEXT:    csc $c1, $zero, 32($c24) # 16-byte Folded Spill
-; ASM-NEXT:    beqz $2, .LBB1_5
+; ASM-NEXT:    beqz $1, .LBB1_5
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
 ; ASM-NEXT:    b .LBB1_2
@@ -289,10 +289,10 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
+; ASM-NEXT:    sll $1, $4, 0
+; ASM-NEXT:    andi $1, $1, 1
 ; ASM-NEXT:    csc $c1, $zero, 32($c24) # 16-byte Folded Spill
-; ASM-NEXT:    beqz $2, .LBB2_3
+; ASM-NEXT:    beqz $1, .LBB2_3
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
 ; ASM-NEXT:    b .LBB2_2
