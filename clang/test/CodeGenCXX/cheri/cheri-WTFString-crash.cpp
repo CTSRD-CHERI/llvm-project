@@ -37,8 +37,8 @@ bool isAlignedToMachineWord(const void* pointer)
 
 // CHECK:      define zeroext i1 @_Z22isAlignedToMachineWord
 // CHECK-NEXT:   entry:
-// CHECK-NEXT:   %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %pointer) #2
-// CHECK-NEXT:   %and.i = and i64 %0, 7
-// CHECK-NEXT:   %tobool.i = icmp eq i64 %and.i, 0
-// CHECK-NEXT:   ret i1 %tobool.i
+// CHECK-NEXT:   [[ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %pointer) #2
+// CHECK-NEXT:   [[AND:%.*]] = and i64 [[ADDR]], 7
+// CHECK-NEXT:   [[TOBOOL:%.*]] = icmp eq i64 [[AND]], 0
+// CHECK-NEXT:   ret i1 [[TOBOOL]]
 // CHECK-NEXT: }
