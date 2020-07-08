@@ -76,7 +76,7 @@ entry:
 ; CHECK-NEXT: dsubu	$[[ADDR]], $[[ADDR]], $[[REPRSIZE]]
 ; CHECK-NEXT: crepresentablealignmentmask $[[SP_ALIGN_MASK:[0-9]+]], $[[SIZE]]
 ; CHECK-NEXT: and	$[[ADDR1:([0-9]+|sp)]], $[[ADDR]], $[[SP_ALIGN_MASK]]
-; CHECK-NEXT: csetaddr $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[ADDR1]]CodeGen/Mips/cheri/invalid-candaddr.ll
+; CHECK-NEXT: csetaddr $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[ADDR1]]
 ; CHECK-NEXT: csetbounds $c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], $[[REPRSIZE]]
 ; CHECK-NEXT: cmove $c11, $c[[TEMPCAP1]]
 ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TEMPCAP2]], ${{([0-9]+)}}
