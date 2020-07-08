@@ -2,13 +2,13 @@
 
 // RUN: rm -f %t.json %t.csv
 // RUN: %cheri_clang -g %s -mllvm -collect-csetbounds-stats -Xclang -cheri-stats-file=%t.json -c -o - -###
-// RUN: %cheri_cc1 %s -mllvm -collect-csetbounds-stats=json -cheri-stats-file=%t.json -S -o /dev/null "-dwarf-column-info" "-debug-info-kind=standalone"
+// RUN: %cheri_cc1 %s -mllvm -collect-csetbounds-stats=json -cheri-stats-file=%t.json -S -o /dev/null "-debug-info-kind=standalone"
 // RUN: FileCheck -input-file %t.json %s -check-prefix JSON
 
-// RUN: %cheri_cc1 %s -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t.csv -S -o /dev/null "-dwarf-column-info" "-debug-info-kind=standalone"
+// RUN: %cheri_cc1 %s -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t.csv -S -o /dev/null "-debug-info-kind=standalone"
 // RUN: FileCheck -input-file %t.csv %s -check-prefix CSV
 // Should not create a second header:
-// RUN: %cheri_cc1 %s -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t.csv -S -o /dev/null "-dwarf-column-info" "-debug-info-kind=standalone"
+// RUN: %cheri_cc1 %s -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t.csv -S -o /dev/null "-debug-info-kind=standalone"
 // RUN: FileCheck -input-file %t.csv %s -check-prefixes CSV,CSV-APPEND
 
 extern void* malloc(unsigned long);

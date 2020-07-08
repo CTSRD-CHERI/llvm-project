@@ -1,18 +1,18 @@
 // REQUIRES: asserts, mips-registered-target
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-llvm -O0 -o - %s | FileCheck %s -check-prefix CHECK-IR
-// RUN: %cheri_cc1 -mrelocation-model pic "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-llvm -O0 -o - %s | FileCheck %s -check-prefix CHECK-IR
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-llvm -O0 -o - %s | FileCheck %s -check-prefix CHECK-IR
+// RUN: %cheri_cc1 -mrelocation-model pic "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-llvm -O0 -o - %s | FileCheck %s -check-prefix CHECK-IR
 
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-cheri.o %s
-// RUN: %cheri_cc1 -mllvm -cheri-cap-table-abi=pcrel "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-cheri.o %s
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-cheri.o %s
+// RUN: %cheri_cc1 -mllvm -cheri-cap-table-abi=pcrel "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-cheri.o %s
 
 // Generate a .o file and compare the debug info:
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-cheri.o %s -mllvm -debug-only=dwarfdebug
-// RUN: %clang_cc1 -triple=mips64-unknown-freebsd "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-mips.o %s
-// RUN: %cheri_cc1 "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-hybrid.o %s
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-cheri.o %s -mllvm -debug-only=dwarfdebug
+// RUN: %clang_cc1 -triple=mips64-unknown-freebsd "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-mips.o %s
+// RUN: %cheri_cc1 "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-obj -O0 -o %t-hybrid.o %s
 
 // Check that hybrid and MIPS generated asm is the same:
-// RUN: %clang_cc1 -triple=mips64-unknown-freebsd "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" -mstack-alignment=32  -S -O0 -o %t-mips.s %s
-// RUN: %cheri_cc1 "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" -mstack-alignment=32 -S -O0 -o %t-hybrid.s %s
+// RUN: %clang_cc1 -triple=mips64-unknown-freebsd "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" -mstack-alignment=32  -S -O0 -o %t-mips.s %s
+// RUN: %cheri_cc1 "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" -mstack-alignment=32 -S -O0 -o %t-hybrid.s %s
 // Should be the same other than some ELF flags:
 // RUN: diff -u %t-mips.s %t-hybrid.s
 
@@ -125,11 +125,10 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addr
 
 // Check the optimized debug info (should no longer have the two j variables but should have a register for i:
 
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" \
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" \
 // RUN: -emit-obj -O2 -o - %s | llvm-dwarfdump -debug-info - | FileCheck %s -check-prefixes DEBUG-INFO-OPT,CHERI-DEBUG-INFO-OPT
-// RUN: %cheri_cc1 -mllvm -cheri-cap-table-abi=pcrel "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" \
+// RUN: %cheri_cc1 -mllvm -cheri-cap-table-abi=pcrel "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb" \
 // RUN: -emit-obj -O2 -o - %s | llvm-dwarfdump -debug-info - | FileCheck %s -check-prefixes DEBUG-INFO-OPT,MIPS-DEBUG-INFO-OPT
-
 
 // DEBUG-INFO-OPT-LABEL: .debug_info contents:
 // DEBUG-INFO-OPT-NEXT: 0x00000000: Compile Unit:

@@ -1,10 +1,9 @@
-// RUNs: %cheri_purecap_cc1 -munwind-tables -mllvm -cheri-cap-table-abi=pcrel -dwarf-column-info -debug-info-kind=line-tables-only -dwarf-version=5 -debugger-tuning=gdb -nobuiltininc -cheri-uintcap=offset -O2 -std=c++11 -mstack-alignment=16 -S %s -emit-llvm -o %s.opt.ll
-// RUNs: %cheri128_purecap_cc1 -munwind-tables -mllvm -cheri-cap-table-abi=pcrel -dwarf-column-info -debug-info-kind=standalone -dwarf-version=2 -debugger-tuning=gdb -nobuiltininc -cheri-uintcap=offset -O2 -std=c++11 -mstack-alignment=16 -o - -S %s
+// RUNs: %cheri_purecap_cc1 -munwind-tables -mllvm -cheri-cap-table-abi=pcrel -debug-info-kind=line-tables-only -dwarf-version=5 -debugger-tuning=gdb -nobuiltininc -cheri-uintcap=offset -O2 -std=c++11 -mstack-alignment=16 -S %s -emit-llvm -o %s.opt.ll
+// RUNs: %cheri128_purecap_cc1 -munwind-tables -mllvm -cheri-cap-table-abi=pcrel -debug-info-kind=standalone -dwarf-version=2 -debugger-tuning=gdb -nobuiltininc -cheri-uintcap=offset -O2 -std=c++11 -mstack-alignment=16 -o - -S %s
 // RUN: %cheri128_purecap_cc1 -cheri-uintcap=offset -O2 -std=c++11 -o - -emit-llvm %s | FileCheck %s
 // Check that this no longer crashes:
 // RUN: %cheri128_purecap_cc1 -cheri-uintcap=offset -O2 -std=c++11 -o /dev/null -S %s -verify
 // REQUIRES: clang
-
 
 // This previously caused crashes when casting __int128 to __uintcap_t
 
