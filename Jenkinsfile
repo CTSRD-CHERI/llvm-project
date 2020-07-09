@@ -64,7 +64,7 @@ cheribuildArgs.add(cheribuildCmakeOption)
 def archiveArtifacts = false
 if (env.JOB_NAME.startsWith('CLANG-LLVM-linux/') || env.JOB_NAME.startsWith('CLANG-LLVM-freebsd/')) {
     // Skip pull requests and non-default branches:
-    def archiveBranches = ['master', 'dev']
+    def archiveBranches = ['master', 'dev', 'upstream-llvm-merge']
     if (!env.CHANGE_ID && (archiveBranches.contains(env.BRANCH_NAME))) {
         archiveArtifacts = true
         cheribuildArgs.add("--use-all-cores")
