@@ -154,7 +154,7 @@ class Slice {
   uint64_t EndOffset = 0;
 
   /// The minimum alignment requirement of this slice.
-  uint64_t MinAlignment = 1;
+  Align MinAlignment = {};
 
   /// Indicates if this slice reads or writes Cheri tags.
   /// This should cover the cases of loads or stores of Cheri capabilities
@@ -168,21 +168,20 @@ class Slice {
 public:
   Slice() = default;
 
-  Slice(uint64_t BeginOffset, uint64_t EndOffset, uint64_t MinAlignment,
+  Slice(uint64_t BeginOffset, uint64_t EndOffset, Align MinAlignment,
         bool ReadsTags, bool WritesTags, Use *U, bool IsSplittable)
       : BeginOffset(BeginOffset), EndOffset(EndOffset),
         MinAlignment(MinAlignment), ReadsTags(ReadsTags),
-        WritesTags(WritesTags),
-        UseAndIsSplittable(U, IsSplittable) {}
+        WritesTags(WritesTags), UseAndIsSplittable(U, IsSplittable) {}
 
   uint64_t beginOffset() const { return BeginOffset; }
   uint64_t endOffset() const { return EndOffset; }
-  uint64_t minAlignment() const { return MinAlignment; }
+  Align minAlignment() const { return MinAlignment; }
   bool isAligned(uint64_t Offset) const {
     assert(!(isSplittable() && minAlignment() > 1));
-    return (Offset & (minAlignment() - 1)) == 0;
+    return llvm::isAligned(minAlignment(), Offset);
   }
-  void makeAligned(uint64_t Alignment) { MinAlignment = Alignment; }
+  void makeAligned(Align Alignment) { MinAlignment = Alignment; }
   bool isSplittable() const { return UseAndIsSplittable.getInt(); }
   void makeUnsplittable() { UseAndIsSplittable.setInt(false); }
 
@@ -750,10 +749,10 @@ private:
       EndOffset = AllocSize;
     }
 
-    unsigned MinAlign = 1;
+    Align MinAlign = {};
     const DataLayout &DL = AS.AI.getModule()->getDataLayout();
     if ((ReadsTags || WritesTags) && !IsSplittable)
-      MinAlign = getCapabilitySize(DL);
+      MinAlign = Align(getCapabilitySize(DL));
 
     AS.Slices.push_back(Slice(BeginOffset, EndOffset, MinAlign, ReadsTags,
                               WritesTags, U, IsSplittable));
@@ -938,14 +937,10 @@ private:
                                            bool IsDest) {
     const DataLayout &DL = I.getModule()->getDataLayout();
     uint64_t CapSize = getCapabilitySize(DL);
-    unsigned CapAlign = CapSize;
     if (CapSize == 0)
       return;
-
-    unsigned AIAlign = AS.AI.getAlignment();
-    if (!AIAlign)
-      AIAlign = DL.getABITypeAlignment(AS.AI.getAllocatedType());
-
+    Align CapAlign(CapSize);
+    Align AIAlign = AS.AI.getAlign();
     if (AIAlign < CapAlign)
       return;
 
@@ -1199,7 +1194,7 @@ void AllocaSlices::processTaggedSlices() {
                         << S.beginOffset() << ", " << S.endOffset() << "] "
                         << (S.writesTags() ? "(writes tags)" : "")
                         << (S.readsTags() ? "(reads tags)" : "") << "\n");
-      Slice ToFind(S.beginOffset(), S.endOffset(), 1, !S.readsTags(),
+      Slice ToFind(S.beginOffset(), S.endOffset(), Align(), !S.readsTags(),
                    !S.writesTags(), S.getUse(), true);
       auto I = partition_point(Slices, [&](Slice &I) {
         return !(ToFind < I || ToFind == I);
@@ -1218,7 +1213,7 @@ void AllocaSlices::processTaggedSlices() {
 
   const DataLayout &DL = AI.getModule()->getDataLayout();
   for (unsigned Idx : Unsplittable) {
-    Slices[Idx].makeAligned(getCapabilitySize(DL));
+    Slices[Idx].makeAligned(Align(getCapabilitySize(DL)));
     Slices[Idx].makeUnsplittable();
   }
 
@@ -1278,7 +1273,7 @@ void AllocaSlices::printSlice(raw_ostream &OS, const_iterator I,
      << (I->readsTags() ? " (reads tags)" : "")
      << (I->writesTags() ? " (writes tags)" : "");
   if (I->minAlignment() != 1)
-    OS << " (aligned " << I->minAlignment() << ")";
+    OS << " (aligned " << I->minAlignment().value() << ")";
 }
 
 void AllocaSlices::printUse(raw_ostream &OS, const_iterator I,
@@ -4213,11 +4208,10 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
       SplitLoads.push_back(PLoad);
 
       // Now build a new slice for the alloca.
-      NewSlices.push_back(
-          Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize,
-                1, false, false,
-                &PLoad->getOperandUse(PLoad->getPointerOperandIndex()),
-                /*IsSplittable*/ false));
+      NewSlices.push_back(Slice(
+          BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize, Align(),
+          false, false, &PLoad->getOperandUse(PLoad->getPointerOperandIndex()),
+          /*IsSplittable*/ false));
       LLVM_DEBUG(dbgs() << "    new slice [" << NewSlices.back().beginOffset()
                         << ", " << NewSlices.back().endOffset()
                         << "): " << *PLoad << "\n");
@@ -4365,7 +4359,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
       // Now build a new slice for the alloca.
       NewSlices.push_back(
           Slice(BaseOffset + PartOffset, BaseOffset + PartOffset + PartSize,
-                1, false, false,
+                Align(), false, false,
                 &PStore->getOperandUse(PStore->getPointerOperandIndex()),
                 /*IsSplittable*/ false));
       LLVM_DEBUG(dbgs() << "    new slice [" << NewSlices.back().beginOffset()
