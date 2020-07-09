@@ -4244,7 +4244,7 @@ void llvm::UpgradeSectionAttributes(Module &M) {
   }
 }
 
-
+namespace {
 // Prior to LLVM 10.0, the strictfp attribute could be used on individual
 // callsites within a function that did not also have the strictfp attribute.
 // Since 10.0, if strict FP semantics are needed within a function, the
@@ -4262,7 +4262,7 @@ struct StrictFPUpgradeVisitor : public InstVisitor<StrictFPUpgradeVisitor> {
   void visitCallBase(CallBase &Call) {
     if (!Call.isStrictFP())
       return;
-    if (dyn_cast<ConstrainedFPIntrinsic>(&Call))
+    if (isa<ConstrainedFPIntrinsic>(&Call))
       return;
     // If we get here, the caller doesn't have the strictfp attribute
     // but this callsite does. Replace the strictfp attribute with nobuiltin.
@@ -4270,6 +4270,7 @@ struct StrictFPUpgradeVisitor : public InstVisitor<StrictFPUpgradeVisitor> {
     Call.addAttribute(AttributeList::FunctionIndex, Attribute::NoBuiltin);
   }
 };
+} // namespace
 
 void llvm::UpgradeFunctionAttributes(Function &F) {
   // If a function definition doesn't have the strictfp attribute,

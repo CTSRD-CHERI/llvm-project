@@ -3656,9 +3656,9 @@ struct FriendCountAndPosition {
 };
 
 template <class T>
-FriendCountAndPosition getFriendCountAndPosition(
+static FriendCountAndPosition getFriendCountAndPosition(
     const FriendDecl *FD,
-    std::function<T(const FriendDecl *)> GetCanTypeOrDecl) {
+    llvm::function_ref<T(const FriendDecl *)> GetCanTypeOrDecl) {
   unsigned int FriendCount = 0;
   llvm::Optional<unsigned int> FriendPosition;
   const auto *RD = cast<CXXRecordDecl>(FD->getLexicalDeclContext());
@@ -3680,7 +3680,7 @@ FriendCountAndPosition getFriendCountAndPosition(
   return {FriendCount, *FriendPosition};
 }
 
-FriendCountAndPosition getFriendCountAndPosition(const FriendDecl *FD) {
+static FriendCountAndPosition getFriendCountAndPosition(const FriendDecl *FD) {
   if (FD->getFriendType())
     return getFriendCountAndPosition<QualType>(FD, [](const FriendDecl *F) {
       if (TypeSourceInfo *TSI = F->getFriendType())
