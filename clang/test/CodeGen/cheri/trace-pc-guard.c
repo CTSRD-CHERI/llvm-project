@@ -39,10 +39,10 @@ extern int fail2(void);
 // MIPS-NEXT:    [[FOO:%.*]] = alloca [10 x i8], align 1
 // MIPS-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32* getelementptr inbounds ([1 x i32], [1 x i32]* @__sancov_gen_, i32 0, i64 0))
 // MIPS-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [10 x i8], [10 x i8]* [[FOO]], i64 0, i64 0
-// MIPS-NEXT:    call void @llvm.lifetime.start.p0i8(i64 10, i8* nonnull [[TMP0]]) #4
+// MIPS-NEXT:    call void @llvm.lifetime.start.p0i8(i64 10, i8* nonnull [[TMP0]])
 // MIPS-NEXT:    [[CALL:%.*]] = call i8* @gets(i8* nonnull [[TMP0]])
 // MIPS-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8* nonnull [[TMP0]])
-// MIPS-NEXT:    call void @llvm.lifetime.end.p0i8(i64 10, i8* nonnull [[TMP0]]) #4
+// MIPS-NEXT:    call void @llvm.lifetime.end.p0i8(i64 10, i8* nonnull [[TMP0]])
 // MIPS-NEXT:    ret i32 0
 //
 // PURECAP-LABEL: @main(
@@ -50,10 +50,10 @@ extern int fail2(void);
 // PURECAP-NEXT:    [[FOO:%.*]] = alloca [10 x i8], align 1, addrspace(200)
 // PURECAP-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32 addrspace(200)* getelementptr inbounds ([1 x i32], [1 x i32] addrspace(200)* @__sancov_gen_, i32 0, i64 0))
 // PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [10 x i8], [10 x i8] addrspace(200)* [[FOO]], i64 0, i64 0
-// PURECAP-NEXT:    call void @llvm.lifetime.start.p200i8(i64 10, i8 addrspace(200)* nonnull [[TMP0]]) #4
-// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @gets(i8 addrspace(200)* nonnull [[TMP0]]) #4
+// PURECAP-NEXT:    call void @llvm.lifetime.start.p200i8(i64 10, i8 addrspace(200)* nonnull [[TMP0]])
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @gets(i8 addrspace(200)* nonnull [[TMP0]])
 // PURECAP-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8 addrspace(200)* nonnull [[TMP0]])
-// PURECAP-NEXT:    call void @llvm.lifetime.end.p200i8(i64 10, i8 addrspace(200)* nonnull [[TMP0]]) #4
+// PURECAP-NEXT:    call void @llvm.lifetime.end.p200i8(i64 10, i8 addrspace(200)* nonnull [[TMP0]])
 // PURECAP-NEXT:    ret i32 0
 //
 int main(void) {
@@ -70,14 +70,14 @@ int main(void) {
 // MIPS-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_ELSE:%.*]]
 // MIPS:       if.then:
 // MIPS-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32* getelementptr inbounds ([4 x i32], [4 x i32]* @__sancov_gen_.1, i32 0, i64 1))
-// MIPS-NEXT:    [[CALL:%.*]] = tail call signext i32 @fail1() #4
+// MIPS-NEXT:    [[CALL:%.*]] = tail call signext i32 @fail1()
 // MIPS-NEXT:    br label [[RETURN:%.*]]
 // MIPS:       if.else:
 // MIPS-NEXT:    [[CMP1:%.*]] = icmp slt i32 [[I]], 200
 // MIPS-NEXT:    br i1 [[CMP1]], label [[IF_THEN2:%.*]], label [[IF_END4:%.*]]
 // MIPS:       if.then2:
 // MIPS-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32* getelementptr inbounds ([4 x i32], [4 x i32]* @__sancov_gen_.1, i32 0, i64 2))
-// MIPS-NEXT:    [[CALL3:%.*]] = tail call signext i32 @fail2() #4
+// MIPS-NEXT:    [[CALL3:%.*]] = tail call signext i32 @fail2()
 // MIPS-NEXT:    br label [[RETURN]]
 // MIPS:       if.end4:
 // MIPS-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32* getelementptr inbounds ([4 x i32], [4 x i32]* @__sancov_gen_.1, i32 0, i64 3))
@@ -94,14 +94,14 @@ int main(void) {
 // PURECAP-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_ELSE:%.*]]
 // PURECAP:       if.then:
 // PURECAP-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32 addrspace(200)* getelementptr inbounds ([4 x i32], [4 x i32] addrspace(200)* @__sancov_gen_.1, i32 0, i64 1))
-// PURECAP-NEXT:    [[CALL:%.*]] = tail call signext i32 @fail1() #4
+// PURECAP-NEXT:    [[CALL:%.*]] = tail call signext i32 @fail1()
 // PURECAP-NEXT:    br label [[RETURN:%.*]]
 // PURECAP:       if.else:
 // PURECAP-NEXT:    [[CMP1:%.*]] = icmp slt i32 [[I]], 200
 // PURECAP-NEXT:    br i1 [[CMP1]], label [[IF_THEN2:%.*]], label [[IF_END4:%.*]]
 // PURECAP:       if.then2:
 // PURECAP-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32 addrspace(200)* getelementptr inbounds ([4 x i32], [4 x i32] addrspace(200)* @__sancov_gen_.1, i32 0, i64 2))
-// PURECAP-NEXT:    [[CALL3:%.*]] = tail call signext i32 @fail2() #4
+// PURECAP-NEXT:    [[CALL3:%.*]] = tail call signext i32 @fail2()
 // PURECAP-NEXT:    br label [[RETURN]]
 // PURECAP:       if.end4:
 // PURECAP-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32 addrspace(200)* getelementptr inbounds ([4 x i32], [4 x i32] addrspace(200)* @__sancov_gen_.1, i32 0, i64 3))
