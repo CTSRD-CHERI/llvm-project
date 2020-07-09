@@ -320,21 +320,12 @@ const RegisterBankInfo *MipsSubtarget::getRegBankInfo() const {
 
 void MipsSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
                                         unsigned NumRegionInstrs) const {
-  // copied from AMDGPU:
-#if 0
-
-  // Track register pressure so the scheduler can try to decrease
-  // pressure once register usage is above the threshold defined by
-  // SIRegisterInfo::getRegPressureSetLimit()
-  Policy.ShouldTrackPressure = true;
-  // Enabling both top down and bottom up scheduling seems to give us less
-  // register spills than just using one of these approaches on its own.
-  Policy.OnlyTopDown = false;
-  Policy.OnlyBottomUp = true;
-
-  Policy.ShouldTrackLaneMasks = false;
-  Policy.DisableLatencyHeuristic = true;
-#endif
+  // Note: OnlyTopDown seems to work better for latency scheduling
+  //  Policy.OnlyTopDown = true;
+  //  Policy.OnlyBottomUp = false;
+  //  Policy.DisableLatencyHeuristic = false;
+  //  Policy.ComputeDFSResult = true;
+  //  Policy.ShouldTrackPressure = true;
 }
 
 InstructionSelector *MipsSubtarget::getInstructionSelector() const {
