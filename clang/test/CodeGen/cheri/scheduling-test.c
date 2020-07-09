@@ -25,41 +25,42 @@
 // FLAGS-NEXT:             EF_MIPS_PIC (0x2)
 // FLAGS-NEXT:           ]
 
+// FIXME: This should be an IR level test but that's annoying to get working for purecap and non-purecap
 
-// TODO: This should be an IR level test but that's annoying to get working for purecap and non-purecap
-
-long test2(const void* a1, const void* a2) {
-  const long l1 = *(const long*)a1;
-  const long l2 = *(const long*)a2;
-  const long diff = (const char*)a1 - (const char*)a2;
+long test2(const void *a1, const void *a2) {
+  const long diff = (const char *)a1 - (const char *)a2;
+  const long l1 = *(const long *)a1;
+  const long l2 = *(const long *)a2;
   return l1 - l2 + diff;
   // Check that there are two instructions between load and use (this does not happen with -mcpu=mips4)
   // CHECK-LABEL: test2:
   // Check that there are two instructions between load of $1/$2 and the use:
+  // FIXME: after recent instcombine changes the IR generated does not allow for
+  //        a 2-instruction gap since it no longer subtracts the argument registers
   // BERI:      ld	$1, 0($4)
   // BERI-NEXT: ld	$2, 0($5)
-  // BERI-NEXT: dsubu	$3, $4, $5
-  // BERI-NEXT: daddu	$1, $3, $1
-  // BERI-NEXT: dsubu	$2, $1, $2
+  // BERI-NEXT: daddu $1, $1, $4
+  // BERI-NEXT: daddu $2, $2, $5
+  // BERI-NEXT: dsubu $2, $1, $2
 
   // Same for purecap:
   // PURECAP:      cld	$1, $zero, 0($c3)
   // PURECAP-NEXT: cld	$2, $zero, 0($c4)
   // PURECAP-NEXT: csub	$3, $c3, $c4
-  // PURECAP-NEXT: dsubu	$1, $1, $2
-  // PURECAP-NEXT: daddu	$2, $1, $3
+  // PURECAP-NEXT: daddu $1, $1, $3
+  // PURECAP-NEXT: dsubu $2, $1, $2
 
   // With -mcpu=mips we use the load result immediately
-  // MIPS4:      dsubu	$1, $4, $5
+  // MIPS4:      ld	$1, 0($5)
+  // MIPS4-NEXT: daddu	$1, $1, $5
   // MIPS4-NEXT: ld	$2, 0($4)
-  // MIPS4-NEXT: daddu	$1, $1, $2
-  // MIPS4-NEXT: ld	$2, 0($5)
-  // MIPS4-NEXT: dsubu	$2, $1, $2
+  // MIPS4-NEXT: daddu	$2, $2, $4
+  // MIPS4-NEXT: dsubu	$2, $2, $1
 }
 
-long test3(const void* a1, const void* a2, long extra1, long extra2) {
-  const long l1 = *(const long*)a1;
-  const long l2 = *(const long*)a2;
+long test3(const void *a1, const void *a2, long extra1, long extra2) {
+  const long l1 = *(const long *)a1;
+  const long l2 = *(const long *)a2;
   const long extra = extra1 + extra2;
   return l1 - l2 + extra;
   // CHECK-LABEL: test3:
