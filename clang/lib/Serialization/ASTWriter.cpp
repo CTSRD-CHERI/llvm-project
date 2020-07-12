@@ -1124,7 +1124,6 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
   MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 16)); // Clang min.
   MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Relocatable
   MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Timestamps
-  MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // PCHHasObjectFile
   MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Errors
   MetadataAbbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // SVN branch/tag
   unsigned MetadataAbbrevCode = Stream.EmitAbbrev(std::move(MetadataAbbrev));
@@ -1139,7 +1138,6 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
         CLANG_VERSION_MINOR,
         !isysroot.empty(),
         IncludeTimestamps,
-        Context.getLangOpts().BuildingPCHWithObjectFile,
         ASTHasCompilerErrors};
     Stream.EmitRecordWithBlob(MetadataAbbrevCode, Record,
                               getClangFullRepositoryVersion());
