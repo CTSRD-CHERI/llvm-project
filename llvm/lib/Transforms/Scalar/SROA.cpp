@@ -165,6 +165,7 @@ class Slice {
   /// Storage for both the use of this slice and whether it can be
   /// split.
   PointerIntPair<Use *, 1, bool> UseAndIsSplittable;
+
 public:
   Slice() = default;
 
@@ -2283,7 +2284,7 @@ static bool isIntegerWideningViable(Partition &P, Type *AllocaTy,
   if (SizeInBits > IntegerType::MAX_INT_BITS)
     return false;
   if (AllocaTy->isPointerTy() &&
-      SizeInBits*8 > DL.getLargestLegalIntTypeSizeInBits())
+      SizeInBits > DL.getLargestLegalIntTypeSizeInBits())
     return false;
 
 
