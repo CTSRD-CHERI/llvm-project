@@ -721,6 +721,7 @@ void X86_64::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_X86_64_GOT64:
   case R_X86_64_GOTOFF64:
   case R_X86_64_GOTPC64:
+  case R_X86_64_RELATIVE:
     write64le(loc, val);
     break;
   default:
