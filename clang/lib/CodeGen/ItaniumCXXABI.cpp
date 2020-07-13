@@ -1644,6 +1644,8 @@ ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF, Address This,
                                                IsPurecap ? CGM.Int8PtrPtrTy : CGM.PtrDiffTy->getPointerTo(DefaultAS));
     VBaseOffset = CGF.Builder.CreateAlignedLoad(
         VBaseOffsetPtr, CGF.getPointerAlign(), "vbase.offset");
+    if (IsPurecap)
+      VBaseOffset = CGF.getCapabilityIntegerValue(VBaseOffset);
   }
   return VBaseOffset;
 }
