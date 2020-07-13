@@ -130,7 +130,7 @@ class GoogleTest(TestFormat):
             #  litConfig.note(
             #      "Skipping gtests because cheri-tests-filter=" +
             #      litConfig.cheri_test_mode)
-            return lit.Test.UNSUPPORTED, "Skipping gtests because cheri-tests-filter=" + litConfig.cheri_test_mode
+            return lit.Test.SKIPPED, "Skipping gtests because cheri-tests-filter=" + litConfig.cheri_test_mode
 
         if litConfig.noExecute:
             return lit.Test.PASS, ''
