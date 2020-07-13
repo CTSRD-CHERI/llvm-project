@@ -931,11 +931,10 @@ private:
     return true;
   }
 
-  void insertStrictAlignmentSlicesForRange(Instruction &I,
-                                           unsigned OffsetWidth,
+  void insertStrictAlignmentSlicesForRange(Instruction &I, unsigned OffsetWidth,
                                            uint64_t BeginOffset,
-                                           uint64_t EndOffset,
-                                           bool IsDest) {
+                                           uint64_t EndOffset, bool IsDest,
+                                           bool IsSplittable) {
     const DataLayout &DL = I.getModule()->getDataLayout();
     uint64_t CapSize = getCapabilitySize(DL);
     if (CapSize == 0)
@@ -950,7 +949,7 @@ private:
          CapOffset + CapSize <= EndOffset; CapOffset += CapSize)
       if (CapOffset < AllocSize)
         insertUse(I, APInt(OffsetWidth, CapOffset), CapSize, !IsDest, IsDest,
-                  true);
+                  IsSplittable);
   }
 
   void visitMemTransferInst(MemTransferInst &II) {
@@ -987,7 +986,7 @@ private:
           if (AS.Slices[I].getUse() == nullptr)
             continue; // This can happen due to .kill() in a previous iteration
           if (AS.Slices[I].getUse()->getUser() != &II)
-            break;
+            continue;
           AS.Slices[I].kill();
         }
       return markAsDead(II);
@@ -1027,6 +1026,8 @@ private:
           if (AS.Slices[I].getUse() == nullptr)
             continue; // This can happen due to .kill() in a previous iteration
           if (AS.Slices[I].getUse()->getUser() != &II)
+            continue;
+          if (AS.Slices[I].beginOffset() >= PrevP.endOffset())
             break;
           AS.Slices[I].kill();
         }
@@ -1035,20 +1036,35 @@ private:
 
       // Otherwise we have an offset transfer within the same alloca. We can't
       // split those.
+      LLVM_DEBUG(dbgs() << " offset transfer -> marking as unsplittable:\n";
+                 AS.dump(&PrevP););
       PrevP.makeUnsplittable();
+      // We also have to mark the slices inserted for CHERI tag handling (in
+      // insertStrictAlignmentSlicesForRange()) as unsplittable.
+      for (unsigned I = PrevIdx + 1; I < AS.Slices.size(); I++) {
+        Slice &S = AS.Slices[I];
+        if (S.beginOffset() >= PrevP.beginOffset() &&
+            S.endOffset() <= PrevP.endOffset() &&
+            S.getUse()->getUser() == &II) {
+          S.makeUnsplittable();
+          LLVM_DEBUG(AS.dump(&S));
+        }
+        if (S.beginOffset() >= PrevP.endOffset())
+          break;
+      }
     }
 
+    // Insert the use now that we've fixed up the splittable nature.
+    bool IsSplittable = Inserted && Length;
     if (HandlesTags) {
       bool IsDest = (*U == II.getRawDest());
       assert(((*U == II.getRawDest()) || (*U == II.getRawSource())) &&
              "Unexpected source and destination for meminst");
       insertStrictAlignmentSlicesForRange(II, Offset.getBitWidth(), RawOffset,
-                                          RawOffset + Size, IsDest);
+                                          RawOffset + Size, IsDest,
+                                          IsSplittable);
     }
-
-    // Insert the use now that we've fixed up the splittable nature.
-    insertUse(II, Offset, Size, false, false,
-              /*IsSplittable=*/Inserted && Length);
+    insertUse(II, Offset, Size, false, false, IsSplittable);
 
     // Check that we ended up with a valid index in the map.
     assert(AS.Slices[PrevIdx].getUse()->getUser() == &II &&
@@ -1222,6 +1238,9 @@ void AllocaSlices::processTaggedSlices() {
   // ToRemove vector is increasing.
   for (auto II = ToRemove.rbegin(), E = ToRemove.rend(); II != E; ++II) {
     std::swap(Slices[*II], Slices[Slices.size() - 1]);
+    LLVM_DEBUG(dbgs() << "Removing slice: ";
+               printSlice(dbgs(), Slices.end() - 1);
+               printUse(dbgs(), Slices.end() - 1); dbgs() << '\n');
     Slices.pop_back();
   }
 
