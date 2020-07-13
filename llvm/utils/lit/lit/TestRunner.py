@@ -1375,7 +1375,7 @@ class IntegratedTestKeywordParser(object):
         return output
 
 
-def _parseKeywords(test, additional_parsers=[],
+def _parseKeywords(sourcepath, additional_parsers=[],
                    require_script=True):
     """_parseKeywords
 
@@ -1387,10 +1387,8 @@ def _parseKeywords(test, additional_parsers=[],
     Returns a dictionary mapping each custom parser to its value after
     parsing the test.
     """
-    sourcepath = test.getSourcePath()
     # Install the built-in keyword parsers.
     script = []
-    assert isinstance(test, lit.Test.Test)
     builtin_parsers = [
         IntegratedTestKeywordParser('RUN:', ParserKind.COMMAND, initial_value=script),
         IntegratedTestKeywordParser('XFAIL:', ParserKind.BOOLEAN_EXPR),
@@ -1461,7 +1459,8 @@ def parseIntegratedTestScript(test, additional_parsers=[],
     """
     # Parse the test sources and extract test properties
     try:
-        parsed = _parseKeywords(test, additional_parsers, require_script)
+        parsed = _parseKeywords(test.getSourcePath(), additional_parsers,
+                                require_script)
     except ValueError as e:
         return lit.Test.Result(Test.UNRESOLVED, str(e))
     script = parsed['RUN:'] or []
