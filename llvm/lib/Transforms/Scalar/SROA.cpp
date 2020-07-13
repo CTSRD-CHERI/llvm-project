@@ -908,8 +908,8 @@ private:
     uint64_t CapSize = getCapabilitySize(II.getModule()->getDataLayout());
     if (CapSize == 0)
       return false;
-
-    if (AS.AI.getAlignment() < CapSize)
+    Align CapAlign(CapSize);
+    if (AS.AI.getAlign() < CapAlign)
       return false;
 
     if (!canRangeContainCapabilities(CapSize, Offset, Offset + Size))
@@ -921,11 +921,11 @@ private:
     if (Offset % CapSize != 0)
       return false;
 
-    unsigned SrcAlign = II.getSourceAlignment();
-    unsigned DstAlign = II.getDestAlignment();
-    if (SrcAlign && SrcAlign < CapSize)
+    auto SrcAlign = II.getSourceAlign();
+    auto DstAlign = II.getDestAlign();
+    if (SrcAlign && *SrcAlign < CapAlign)
       return false;
-    if (DstAlign && DstAlign < CapSize)
+    if (DstAlign && *DstAlign < CapAlign)
       return false;
 
     return true;
