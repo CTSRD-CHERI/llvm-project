@@ -1245,7 +1245,7 @@ void AllocaSlices::processTaggedSlices() {
   }
 
   // Finally, resort all the slices.
-  llvm::sort(Slices);
+  llvm::stable_sort(Slices);
 }
 
 AllocaSlices::AllocaSlices(const DataLayout &DL, AllocaInst &AI)
