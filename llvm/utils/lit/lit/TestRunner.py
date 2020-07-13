@@ -1420,21 +1420,6 @@ def _parseKeywords(test, additional_parsers=[],
         if command_type == 'END.' and parser.getValue() is True:
             break
 
-    # HACK to allow running only cheri tests:
-    is_cheri_test = False
-    # tests are CHERI tests if they are inside a cheri directory. They are also
-    # cheri tests if they use any of the CHERI substitutions in the RUN: lines
-    if "/cheri/" in test.getFullName().lower():
-        is_cheri_test = True
-    if not is_cheri_test and (script and any("%cheri" in command for command in script)):
-        # print("Test", test.getFullName(), "uses cheri substitutions")
-        is_cheri_test = True
-    if is_cheri_test:
-        test.requires.append(CheriTestMode.feature_include_cheri_tests)
-    else:
-        # This test should not be run when running cheri tests only
-        test.unsupported.append(CheriTestMode.feature_cheri_tests_only)
-
     # Verify the script contains a run line.
     if require_script and not script:
         raise ValueError("Test has no 'RUN:' line")
@@ -1485,6 +1470,24 @@ def parseIntegratedTestScript(test, additional_parsers=[],
     test.unsupported += parsed['UNSUPPORTED:'] or []
     if parsed['ALLOW_RETRIES:']:
         test.allowed_retries = parsed['ALLOW_RETRIES:'][0]
+
+    # HACK to allow running only cheri tests:
+    # Tests are CHERI tests if they are inside a cheri directory. They are also
+    # cheri tests if they use any of the CHERI substitutions in the RUN: lines
+    if test.config.cheri_test_mode != CheriTestMode.INCLUDE:
+        is_cheri_test = False
+        assert isinstance(test.path_in_suite, tuple)
+        if "cheri" in test.path_in_suite or "CHERI" in test.path_in_suite or "CHERI-Generic" in test.path_in_suite:
+            is_cheri_test = True
+        if not is_cheri_test and (script and any("%cheri" in command for command in script)):
+            # print("Test", test.getFullName(), "uses cheri substitutions")
+            is_cheri_test = True
+
+        if is_cheri_test and test.config.cheri_test_mode == CheriTestMode.EXCLUDE:
+            return lit.Test.Result(Test.SKIPPED, "Skipped since CHERI tests are excluded.")
+        elif not is_cheri_test and test.config.cheri_test_mode == CheriTestMode.ONLY:
+            return lit.Test.Result(Test.SKIPPED, "Not a CHERI test and only running CHERI tests.")
+
 
     # Enforce REQUIRES:
     missing_required_features = test.getMissingRequiredFeatures()

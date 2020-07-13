@@ -7,9 +7,6 @@ class CheriTestMode(object):
     EXCLUDE = "exclude"
     ONLY = "only"
 
-    feature_include_cheri_tests = "include-cheri-tests"
-    feature_cheri_tests_only = "cheri-tests-only"
-
 
 class TestingConfig(object):
     """"
@@ -55,17 +52,9 @@ class TestingConfig(object):
 
         # Set the default available features based on the LitConfig.
         available_features = []
-        if litConfig.cheri_test_mode == CheriTestMode.INCLUDE:
-            # run the cheri tests as well
-            available_features.append(CheriTestMode.feature_include_cheri_tests)
-        elif litConfig.cheri_test_mode == CheriTestMode.ONLY:
-            # run the cheri tests and exclude all that don't use %cheri_foo
-            available_features.append(CheriTestMode.feature_cheri_tests_only)
-            available_features.append(CheriTestMode.feature_include_cheri_tests)
-        elif litConfig.cheri_test_mode == CheriTestMode.EXCLUDE:
+        if litConfig.cheri_test_mode == CheriTestMode.EXCLUDE:
             litConfig.warning("Not running CHERI tests (is this intended?)")
-            assert CheriTestMode.INCLUDE not in available_features
-        else:
+        elif litConfig.cheri_test_mode not in (CheriTestMode.INCLUDE, CheriTestMode.ONLY):
             litConfig.fatal("Invalid value for litConfig.cheri_test_mode " +
                             litConfig.cheri_test_mode)
         if litConfig.useValgrind:
@@ -83,6 +72,7 @@ class TestingConfig(object):
                              test_exec_root = None,
                              test_source_root = None,
                              excludes = [],
+                             cheri_test_mode = litConfig.cheri_test_mode,
                              available_features = available_features,
                              pipefail = True)
 
@@ -129,6 +119,7 @@ class TestingConfig(object):
                  environment, substitutions, unsupported,
                  test_exec_root, test_source_root, excludes,
                  available_features, pipefail, limit_to_features = [],
+                 cheri_test_mode = CheriTestMode.INCLUDE,
                  is_early = False, parallelism_group = None):
         self.parent = parent
         self.name = str(name)
@@ -140,6 +131,7 @@ class TestingConfig(object):
         self.test_exec_root = test_exec_root
         self.test_source_root = test_source_root
         self.excludes = set(excludes)
+        self.cheri_test_mode = cheri_test_mode
         self.available_features = set(available_features)
         self.pipefail = pipefail
         # This list is used by TestRunner.py to restrict running only tests that
