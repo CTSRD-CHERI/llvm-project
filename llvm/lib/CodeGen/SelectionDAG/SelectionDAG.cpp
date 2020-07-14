@@ -2749,6 +2749,9 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
   case ISD::EXTRACT_SUBVECTOR: {
     // Offset the demanded elts by the subvector index.
     SDValue Src = Op.getOperand(0);
+    // Bail until we can represent demanded elements for scalable vectors.
+    if (Src.getValueType().isScalableVector())
+      break;
     uint64_t Idx = Op.getConstantOperandVal(1);
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
     APInt DemandedSrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
@@ -4004,6 +4007,9 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   case ISD::EXTRACT_SUBVECTOR: {
     // Offset the demanded elts by the subvector index.
     SDValue Src = Op.getOperand(0);
+    // Bail until we can represent demanded elements for scalable vectors.
+    if (Src.getValueType().isScalableVector())
+      break;
     uint64_t Idx = Op.getConstantOperandVal(1);
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
     APInt DemandedSrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
