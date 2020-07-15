@@ -9974,8 +9974,7 @@ namespace {
       const ConstantArrayType *CAT =
           Info.Ctx.getAsConstantArrayType(E->getType());
       if (!CAT) {
-        if (const IncompleteArrayType *IAT =
-                Info.Ctx.getAsIncompleteArrayType(E->getType())) {
+        if (E->getType()->isIncompleteArrayType()) {
           // We can be asked to zero-initialize a flexible array member; this
           // is represented as an ImplicitValueInitExpr of incomplete array
           // type. In this case, the array has zero elements.
