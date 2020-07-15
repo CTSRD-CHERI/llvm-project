@@ -30,7 +30,7 @@ inline void runDeltaPasses(TestRunner &Tester) {
   reduceBasicBlocksDeltaPass(Tester);
   reduceGlobalsDeltaPass(Tester);
   reduceMetadataDeltaPass(Tester);
-  // reduceArgumentsDeltaPass(Tester); // This one seems to crash
+  reduceArgumentsDeltaPass(Tester);
   reduceInstructionsDeltaPass(Tester);
   reduceOperandBundesDeltaPass(Tester);
   reduceAttributesDeltaPass(Tester);

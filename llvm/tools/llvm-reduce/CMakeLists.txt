@@ -26,3 +26,5 @@ add_llvm_tool(llvm-reduce
   DEPENDS
   intrinsics_gen
   )
+
+add_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)
