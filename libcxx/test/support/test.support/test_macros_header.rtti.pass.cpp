@@ -6,20 +6,23 @@
 //
 //===----------------------------------------------------------------------===//
 
-// "support/test_macros.hpp"
+// Make sure the TEST_HAS_NO_RTTI macro is NOT defined when the -fno-rtti
+// feature isn't defined.
 
-// #define TEST_HAS_NO_EXCEPTIONS
+// UNSUPPORTED: -fno-rtti
 
 #include "test_macros.h"
 
-int main(int, char**) {
-#if defined(TEST_HAS_NO_EXCEPTIONS)
-    try { ((void)0); } catch (...) {} // expected-error {{exceptions disabled}}
-#else
-    try { ((void)0); } catch (...) {}
-#error exceptions enabled
-// expected-error@-1 {{exceptions enabled}}
+#ifdef TEST_HAS_NO_RTTI
+#  error "TEST_HAS_NO_RTTI should NOT be defined"
 #endif
 
-  return 0;
+struct A { virtual ~A() { } };
+struct B : A { };
+
+int main(int, char**) {
+    A* ptr = new B;
+    (void)dynamic_cast<B*>(ptr);
+    delete ptr;
+    return 0;
 }

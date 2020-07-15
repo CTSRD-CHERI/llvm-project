@@ -14,6 +14,8 @@
 
 // const char* name() const;
 
+// UNSUPPORTED: -fno-rtti
+
 #include <typeindex>
 #include <string>
 #include <cassert>

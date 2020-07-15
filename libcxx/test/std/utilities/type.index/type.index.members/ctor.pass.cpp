@@ -14,6 +14,8 @@
 
 // type_index(const type_info& rhs);
 
+// UNSUPPORTED: -fno-rtti
+
 #include <typeinfo>
 #include <typeindex>
 #include <cassert>
