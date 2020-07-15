@@ -3522,6 +3522,8 @@ def target_abi : Separate<["-"], "target-abi">,
 def target_sdk_version_EQ : Joined<["-"], "target-sdk-version=">,
   HelpText<"The version of target SDK used for compilation">;
 
+def cheri_size : Separate<["-"], "cheri-size">,
+  HelpText<"CHERI capability size">, Group<cheri_Group>;
 }
 
 def target_linker_version : Separate<["-"], "target-linker-version">,
