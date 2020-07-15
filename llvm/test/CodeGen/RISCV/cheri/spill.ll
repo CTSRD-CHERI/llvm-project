@@ -26,6 +26,7 @@ define void @test_spill_slot(i8 addrspace(200)** %ptr) nounwind {
 ; RV32IXCHERI-ILP32-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-ILP32-NEXT:    #APP
 ; RV32IXCHERI-ILP32-NEXT:    nop
+; RV32IXCHERI-ILP32-EMPTY:
 ; RV32IXCHERI-ILP32-NEXT:    #NO_APP
 ; RV32IXCHERI-ILP32-NEXT:    lc ca0, 16(sp)
 ; RV32IXCHERI-ILP32-NEXT:    lw a1, 12(sp)
@@ -67,6 +68,7 @@ define void @test_spill_slot(i8 addrspace(200)** %ptr) nounwind {
 ; RV64IXCHERI-LP64-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-LP64-NEXT:    #APP
 ; RV64IXCHERI-LP64-NEXT:    nop
+; RV64IXCHERI-LP64-EMPTY:
 ; RV64IXCHERI-LP64-NEXT:    #NO_APP
 ; RV64IXCHERI-LP64-NEXT:    lc ca0, 16(sp)
 ; RV64IXCHERI-LP64-NEXT:    ld a1, 8(sp)
