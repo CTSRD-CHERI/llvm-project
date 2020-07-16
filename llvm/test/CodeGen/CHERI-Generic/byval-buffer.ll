@@ -5,9 +5,10 @@
 ; it because the frontend would almost always emit a local alloca already.
 
 ; First check that non-CHERI targets add a memcpy
-; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC
-; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,RV64,RV64-PIC
-; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,MIPS,MIPS-PIC
+; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | sed 's/p200i8/p0i8/g' > %t-nocheri.ll
+; RUN: llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC
+; RUN: llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,RV64,RV64-PIC
+; RUN: llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic  < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,MIPS,MIPS-PIC
 ; Next check purecap targets:
 ; RUN: %riscv64_cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-RV64
 ; RUN: %cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-MIPS

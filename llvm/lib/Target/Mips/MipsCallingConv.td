@@ -336,6 +336,7 @@ def RetCC_Mips : CallingConv<[
 ]>;
 
 def CC_Mips_ByVal : CallingConv<[
+  CCIfSubtarget<"isABI_CheriPureCap()", CCIfByVal<CCPassByVal<16, 16>>>,
   CCIfSubtarget<"isABI_O32()", CCIfByVal<CCPassByVal<4, 4>>>,
   CCIfByVal<CCPassByVal<8, 8>>
 ]>;
@@ -380,8 +381,8 @@ def CC_Mips_FixedArg : CallingConv<[
 def CC_Mips_VarArg : CallingConv<[
   // If this is the CHERI purecap ABI then we need to pass everything on the
   // stack for variadic functions.
-  CCIfSubtarget<"isABI_CheriPureCap()", CCDelegateTo<CC_MipsCheriPureCap_VarArg>>,
   CCIfByVal<CCDelegateTo<CC_Mips_ByVal>>,
+  CCIfSubtarget<"isABI_CheriPureCap()", CCDelegateTo<CC_MipsCheriPureCap_VarArg>>,
 
   CCIfSubtarget<"isABI_O32()", CCDelegateTo<CC_MipsO32_FP>>,
   CCDelegateTo<CC_MipsN_VarArg>

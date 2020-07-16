@@ -80,7 +80,6 @@
 #include <utility>
 #include <vector>
 
-
 using namespace llvm;
 
 #define DEBUG_TYPE "mips-lower"
@@ -4261,19 +4260,23 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     // ByVal Arg.
     if (Flags.isByVal()) {
-      unsigned FirstByValReg, LastByValReg;
-      unsigned ByValIdx = CCInfo.getInRegsParamsProcessed();
-      CCInfo.getInRegsParamInfo(ByValIdx, FirstByValReg, LastByValReg);
-
+      unsigned FirstByValReg = ~0u, LastByValReg = ~0u;
       assert(Flags.getByValSize() &&
              "ByVal args of size 0 should have been ignored by front-end.");
-      assert(ByValIdx < CCInfo.getInRegsParamsCount());
+      if (CCInfo.getInRegsParamsCount() > 0) {
+        unsigned ByValIdx = CCInfo.getInRegsParamsProcessed();
+        CCInfo.getInRegsParamInfo(ByValIdx, FirstByValReg, LastByValReg);
+        assert(ByValIdx < CCInfo.getInRegsParamsCount());
+      }
       assert(!IsTailCall &&
              "Do not tail-call optimize if there is a byval argument.");
       passByValArg(Chain, DL, RegsToPass, MemOpChains, StackPtr, MFI, DAG, Arg,
                    FirstByValReg, LastByValReg, Flags, Subtarget.isLittle(),
                    VA);
       CCInfo.nextInRegsParam();
+      if (FirstOffset == -1)
+        FirstOffset = VA.getLocMemOffset();
+      LastOffset = VA.getLocMemOffset() + Flags.getByValSize();
       continue;
     }
 
@@ -5804,7 +5807,7 @@ void MipsTargetLowering::passByValArg(
   SDValue Src = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
   SDValue Dst = DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
   Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
-                        DAG.getIntPtrConstant(MemCpySize, DL), Align(Alignment),
+                        DAG.getIntPtrConstant(MemCpySize, DL), Alignment,
                         /*isVolatile=*/false, /*AlwaysInline=*/false,
                         /*isTailCall=*/false,
                         /*MustPreserveCheriCapabilities=*/false,
@@ -5829,7 +5832,7 @@ void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
   int VaArgOffset;
 
   if (ABI.IsCheriPureCap()) {
-    int FI = MFI.CreateFixedObject(RegSizeInBytes, 0, true);
+    int FI = MFI.CreateFixedObject(Subtarget.getCapSizeInBytes(), 0, true);
     MipsFI->setVarArgsFrameIndex(FI);
     return;
   }
