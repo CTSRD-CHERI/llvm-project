@@ -9301,11 +9301,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     ComputeValueVTs(*this, DL, Args[i].Ty, ValueVTs);
     // FIXME: Split arguments if CLI.IsPostTypeLegalization
     Type *FinalType = Args[i].Ty;
-    // Ignore byval attribute on CHERI capability arguments because we just
-    // pass them in capability registers
-    bool isArgCHERICapability = FinalType->isPointerTy() &&
-      DL.isFatPointer(FinalType->getPointerAddressSpace());
-    if (Args[i].IsByVal && !isArgCHERICapability)
+    if (Args[i].IsByVal)
       FinalType = cast<PointerType>(Args[i].Ty)->getElementType();
     bool NeedsRegBlock = functionArgumentNeedsConsecutiveRegisters(
         FinalType, CLI.CallConv, CLI.IsVarArg);
@@ -9352,7 +9348,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
         Flags.setSwiftError();
       if (Args[i].IsCFGuardTarget)
         Flags.setCFGuardTarget();
-      if (Args[i].IsByVal && !isArgCHERICapability)
+      if (Args[i].IsByVal)
         Flags.setByVal();
       if (Args[i].IsPreallocated) {
         Flags.setPreallocated();
@@ -9372,7 +9368,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
         // in the various CC lowering callbacks.
         Flags.setByVal();
       }
-      if ((Args[i].IsByVal && !isArgCHERICapability) || Args[i].IsInAlloca || Args[i].IsPreallocated) {
+      if (Args[i].IsByVal || Args[i].IsInAlloca || Args[i].IsPreallocated) {
         PointerType *Ty = cast<PointerType>(Args[i].Ty);
         Type *ElementTy = Ty->getElementType();
 
@@ -9819,11 +9815,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     bool isArgValueUsed = !Arg.use_empty();
     unsigned PartBase = 0;
     Type *FinalType = Arg.getType();
-
-    // Ignore byval attribute on CHERI capability arguments because we just
-    // pass them in capability registers
-    bool isArgCHERICapability = isCheriPointer(FinalType, &DAG.getDataLayout());
-    if (Arg.hasAttribute(Attribute::ByVal) && !isArgCHERICapability)
+    if (Arg.hasAttribute(Attribute::ByVal))
       FinalType = Arg.getParamByValType();
     bool NeedsRegBlock = TLI->functionArgumentNeedsConsecutiveRegisters(
         FinalType, F.getCallingConv(), F.isVarArg());
@@ -9867,7 +9859,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
         Flags.setSwiftSelf();
       if (Arg.hasAttribute(Attribute::SwiftError))
         Flags.setSwiftError();
-      if (Arg.hasAttribute(Attribute::ByVal) && !isArgCHERICapability)
+      if (Arg.hasAttribute(Attribute::ByVal))
         Flags.setByVal();
       if (Arg.hasAttribute(Attribute::InAlloca)) {
         Flags.setInAlloca();
