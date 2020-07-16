@@ -552,7 +552,10 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoLA:
   case RISCV::PseudoLA_TLS_IE:
   case RISCV::PseudoLA_TLS_GD:
+  case RISCV::PseudoCLLC:
   case RISCV::PseudoCLGC:
+  case RISCV::PseudoCLA_TLS_IE:
+  case RISCV::PseudoCLC_TLS_GD:
     return 8;
   case RISCV::PseudoAtomicLoadNand32:
   case RISCV::PseudoAtomicLoadNand64:
@@ -574,6 +577,41 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     return 16;
   case RISCV::PseudoMaskedCmpXchg32:
     return 32;
+  case RISCV::PseudoCmpXchgCap:
+  case RISCV::PseudoCheriCmpXchgCap:
+    return 16;
+  case RISCV::PseudoCheriAtomicSwap8:
+  case RISCV::PseudoCheriAtomicSwap16:
+  case RISCV::PseudoCheriAtomicLoadAdd8:
+  case RISCV::PseudoCheriAtomicLoadAdd16:
+  case RISCV::PseudoCheriAtomicLoadAnd8:
+  case RISCV::PseudoCheriAtomicLoadAnd16:
+  case RISCV::PseudoCheriAtomicLoadOr8:
+  case RISCV::PseudoCheriAtomicLoadOr16:
+  case RISCV::PseudoCheriAtomicLoadXor8:
+  case RISCV::PseudoCheriAtomicLoadXor16:
+  case RISCV::PseudoCheriAtomicLoadSub8:
+  case RISCV::PseudoCheriAtomicLoadSub16:
+    return 16;
+  case RISCV::PseudoCheriAtomicLoadNand8:
+  case RISCV::PseudoCheriAtomicLoadNand16:
+  case RISCV::PseudoCheriAtomicLoadNand32:
+  case RISCV::PseudoCheriAtomicLoadNand64:
+    return 20;
+  case RISCV::PseudoCheriAtomicLoadMax8:
+  case RISCV::PseudoCheriAtomicLoadMax16:
+  case RISCV::PseudoCheriAtomicLoadMin8:
+  case RISCV::PseudoCheriAtomicLoadMin16:
+  case RISCV::PseudoCheriAtomicLoadUMax8:
+  case RISCV::PseudoCheriAtomicLoadUMax16:
+  case RISCV::PseudoCheriAtomicLoadUMin8:
+  case RISCV::PseudoCheriAtomicLoadUMin16:
+    return 24;
+  case RISCV::PseudoCheriCmpXchg8:
+  case RISCV::PseudoCheriCmpXchg16:
+  case RISCV::PseudoCheriCmpXchg32:
+  case RISCV::PseudoCheriCmpXchg64:
+    return 16;
   case TargetOpcode::INLINEASM:
   case TargetOpcode::INLINEASM_BR: {
     const MachineFunction &MF = *MI.getParent()->getParent();
