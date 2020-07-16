@@ -27,9 +27,9 @@
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/CodeGenOptions.h"
 #include "clang/Basic/DiagnosticFrontend.h"
-#include "clang/Basic/FixedPoint.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Sema/SemaDiagnostic.h"
+#include "llvm/ADT/APFixedPoint.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Cheri.h"
@@ -362,8 +362,9 @@ public:
   /// and an integer.
   Value *EmitFixedPointConversion(Value *Src, QualType SrcTy, QualType DstTy,
                                   SourceLocation Loc);
-  Value *EmitFixedPointConversion(Value *Src, FixedPointSemantics &SrcFixedSema,
-                                  FixedPointSemantics &DstFixedSema,
+  Value *EmitFixedPointConversion(Value *Src,
+                                  llvm::FixedPointSemantics &SrcFixedSema,
+                                  llvm::FixedPointSemantics &DstFixedSema,
                                   SourceLocation Loc,
                                   bool DstIsInteger = false);
 
@@ -1660,17 +1661,17 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
 Value *ScalarExprEmitter::EmitFixedPointConversion(Value *Src, QualType SrcTy,
                                                    QualType DstTy,
                                                    SourceLocation Loc) {
-  FixedPointSemantics SrcFPSema =
-      CGF.getContext().getFixedPointSemantics(SrcTy);
-  FixedPointSemantics DstFPSema =
-      CGF.getContext().getFixedPointSemantics(DstTy);
+  auto SrcFPSema = CGF.getContext().getFixedPointSemantics(SrcTy);
+  auto DstFPSema = CGF.getContext().getFixedPointSemantics(DstTy);
   return EmitFixedPointConversion(Src, SrcFPSema, DstFPSema, Loc,
                                   DstTy->isIntegerType());
 }
 
 Value *ScalarExprEmitter::EmitFixedPointConversion(
-    Value *Src, FixedPointSemantics &SrcFPSema, FixedPointSemantics &DstFPSema,
+    Value *Src, llvm::FixedPointSemantics &SrcFPSema,
+    llvm::FixedPointSemantics &DstFPSema,
     SourceLocation Loc, bool DstIsInteger) {
+  using llvm::APFixedPoint;
   using llvm::APInt;
   using llvm::ConstantInt;
   using llvm::Value;
@@ -3119,12 +3120,10 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
     // Now, convert from our invented integer literal to the type of the unary
     // op. This will upscale and saturate if necessary. This value can become
     // undef in some cases.
-    FixedPointSemantics SrcSema =
-        FixedPointSemantics::GetIntegerSemantics(value->getType()
-                                                      ->getScalarSizeInBits(),
-                                                 /*IsSigned=*/true);
-    FixedPointSemantics DstSema =
-        CGF.getContext().getFixedPointSemantics(Info.Ty);
+    auto SrcSema =
+        llvm::FixedPointSemantics::GetIntegerSemantics(
+            value->getType()->getScalarSizeInBits(), /*IsSigned=*/true);
+    auto DstSema = CGF.getContext().getFixedPointSemantics(Info.Ty);
     Info.RHS = EmitFixedPointConversion(Info.RHS, SrcSema, DstSema,
                                         E->getExprLoc());
     value = EmitFixedPointBinOp(Info);
