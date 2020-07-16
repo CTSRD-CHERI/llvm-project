@@ -80,6 +80,7 @@ entry:
   ; RV64-PIC: lb a0, 0(s0)
   ; RV64: call assert_eq{{(@plt)?}}
 
+  ; PURECAP-RV64: cincoffset csp, csp, -1104
   ; PURECAP-RV64: auipcc c{{[a-z0-9]+}}, %captab_pcrel_hi(global_foo)
   ; PURECAP-RV64-NEXT: clc cs0, %pcrel_lo(.LBB{{.+}})(c{{[a-z0-9]+}})
   ; PURECAP-RV64: auipcc c{{[a-z0-9]+}}, %captab_pcrel_hi(memset)
@@ -87,10 +88,13 @@ entry:
   ; PURECAP-RV64: auipcc c{{[a-z0-9]+}}, %captab_pcrel_hi(assert_eq)
   ; PURECAP-RV64: clc [[ASSERT_EQ_CAP:cs[0-9]]], %pcrel_lo(.LBB{{.+}})(c{{[a-z0-9]+}})
   ; PURECAP-RV64: auipcc [[MEMCPY_CAP:c[a-z0-9]+]], %captab_pcrel_hi(memcpy)
-  ; PURECAP-RV64: addi a2, zero, 1024
-  ; PURECAP-RV64: cmove ca1, cs0
-  ; PURECAP-RV64: cjalr [[MEMCPY_CAP]]
+  ; PURECAP-RV64: cincoffset cs1, csp, 16
+  ; PURECAP-RV64-NEXT: addi a2, zero, 1024
+  ; PURECAP-RV64-NEXT: cmove ca0, cs1
+  ; PURECAP-RV64-NEXT: cmove ca1, cs0
+  ; PURECAP-RV64-NEXT: cjalr [[MEMCPY_CAP]]
   ; PURECAP-RV64: auipcc c{{[a-z0-9]+}}, %captab_pcrel_hi(foo_byval)
+  ; PURECAP-RV64: cmove ca0, cs1
   ; PURECAP-RV64: clb a0, 0(cs0)
   ; PURECAP-RV64: cjalr [[ASSERT_EQ_CAP]]
 
@@ -105,15 +109,21 @@ entry:
   ; MIPS-PIC: lb $4, 0($16)
   ; MIPS-PIC: ld $25, %call16(assert_eq)($gp)
 
-  ; PURECAP-MIPS: clcbi	$c18, %captab20(global_foo)($c19)
-  ; PURECAP-MIPS: clcbi	$c12, %capcall20(memset)($c19)
+  ; PURECAP-MIPS: daddiu $1, $zero, -1104
+  ; PURECAP-MIPS: cincoffset $c11, $c11, $1
+  ; PURECAP-MIPS: clcbi $c18, %captab20(global_foo)($c20)
+  ; PURECAP-MIPS: clcbi $c12, %capcall20(memset)($c20)
   ; PURECAP-MIPS: clb $4, $zero, 0($c18)
-  ; PURECAP-MIPS: clcbi	$c12, %capcall20(assert_eq)($c19)
-  ; PURECAP-MIPS: clcbi	$c12, %capcall20(memcpy)($c19)
-  ; PURECAP-MIPS: daddiu $4, $zero, 1024
-  ; PURECAP-MIPS: clcbi	$c12, %capcall20(foo_byval)($c19)
+  ; PURECAP-MIPS: clcbi $c12, %capcall20(assert_eq)($c20)
+  ; PURECAP-MIPS: clcbi $c12, %capcall20(memcpy)($c20)
+  ; PURECAP-MIPS: cmove $c19, $c11
+  ; PURECAP-MIPS: cmove $c3, $c19
+  ; PURECAP-MIPS: cmove $c4, $c18
+  ; PURECAP-MIPS: csetbounds $c1, $c19, 1024
+  ; PURECAP-MIPS: clcbi $c12, %capcall20(foo_byval)($c20)
+  ; PURECAP-MIPS: candperm $c13, $c1, $1
   ; PURECAP-MIPS: clb $4, $zero, 0($c18)
-  ; PURECAP-MIPS: clcbi	$c12, %capcall20(assert_eq)($c19)
+  ; PURECAP-MIPS: clcbi $c12, %capcall20(assert_eq)($c20)
 
 }
 
