@@ -1255,6 +1255,10 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
     assert(APInt::isSameValue(Int, Val.getValue()));
     assert(!isT && "Cannot create INTTOPTR targetconstant");
     MVT IntVT = MVT::getIntegerVT(AddrBitWidth);
+    // XXXAR: If this is actually needed somewhere we should add a
+    // DAG.getIntCapConstant() helper function.
+    assert(Int.isNullValue() && "Should not create non-zero capability "
+                                "constants with SelectionDAG::getConstant()");
     return getNode(ISD::INTTOPTR, DL, VT, getConstant(Int, DL, IntVT));
   }
   assert(VT.isInteger() && "Cannot create FP integer constant!");
