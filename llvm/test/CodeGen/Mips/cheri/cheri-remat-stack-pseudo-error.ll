@@ -3,6 +3,7 @@
 ; This previously crashed because we were attempting to rematerialize a bounded stack cap where the size was not an immediate
 ; This caused use of a dead register -> fix this by only rematerializing ones with immediates
 ; RUN: %cheri_purecap_llc %s -o %t.mir -stop-before="simple-register-coalescing"
+; RUN: %cheri_purecap_llc %t.mir -o - -start-before="simple-register-coalescing" -stop-after="simple-register-coalescing" -verify-machineinstrs
 ; RUN: %cheri_purecap_llc %t.mir -o - -start-before="simple-register-coalescing" -stop-after="simple-register-coalescing" -verify-machineinstrs | FileCheck %s
 ; RUN: %cheri_purecap_llc %t.mir -o /dev/null -start-before="simple-register-coalescing" -verify-machineinstrs
 ; Try compiling the full thing
@@ -51,11 +52,15 @@ entry:
   %byval-temp = alloca %struct.Dwarf_Error, align 8, addrspace(200)
   %0 = bitcast %struct.Dwarf_Error addrspace(200)* %byval-temp to i8 addrspace(200)*
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %0, i8 addrspace(200)* align 4 bitcast (%struct.Dwarf_Error addrspace(200)* @a to i8 addrspace(200)*), i64 4096, i1 false)
-  call addrspace(200) void bitcast (void (...) addrspace(200)* @fn2 to void (%struct.Dwarf_Error addrspace(200)*) addrspace(200)*)(%struct.Dwarf_Error addrspace(200)* byval align 8 %byval-temp)
+  call addrspace(200) void bitcast (void (...) addrspace(200)* @fn2 to void (%struct.Dwarf_Error addrspace(200)*) addrspace(200)*)(%struct.Dwarf_Error addrspace(200)* align 8 %byval-temp)
   ret void
 }
 
 ; CHECK-LABEL: name: fn1
+; CHECK: stack:
+; CHECK-NEXT: - { id: 0, name: byval-temp, type: default, offset: 0, size: 4096, alignment: 8,
+; CHECK-NEXT:     stack-id: default, callee-saved-register: '', callee-saved-restored: true,
+; CHECK-NEXT:     debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
 ; CHECK: [[OFFSET:%.+]]:gpr64 = DADDiu $zero_64, 4096
 ; CHECK: [[STACK_CAP:%.+]]:cherigpr = CheriBoundedStackPseudoReg %stack.0.byval-temp, 0, [[OFFSET]]
 ; CHECK: [[A_CAP:%.+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a
@@ -100,7 +105,7 @@ entry:
   %byval-temp = alloca %struct.Dwarf_Error_small, align 8, addrspace(200)
   %0 = bitcast %struct.Dwarf_Error_small addrspace(200)* %byval-temp to i8 addrspace(200)*
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %0, i8 addrspace(200)* align 4 bitcast (%struct.Dwarf_Error_small addrspace(200)* @a_small to i8 addrspace(200)*), i64 512, i1 false)
-  call addrspace(200) void bitcast (void (...) addrspace(200)* @fn2 to void (%struct.Dwarf_Error_small addrspace(200)*) addrspace(200)*)(%struct.Dwarf_Error_small addrspace(200)* byval align 8 %byval-temp)
+  call addrspace(200) void bitcast (void (...) addrspace(200)* @fn2 to void (%struct.Dwarf_Error_small addrspace(200)*) addrspace(200)*)(%struct.Dwarf_Error_small addrspace(200)* align 8 %byval-temp)
   ret void
 }
 ; Same thing with a smaller stack frame. In this case we can rematerialize it:
