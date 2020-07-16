@@ -5692,6 +5692,9 @@ void MipsTargetLowering::copyByValRegs(
   if (!NumRegs)
     return;
 
+  assert(!ABI.IsCheriPureCap() &&
+         "Byval args in integer registers does not work for purecap");
+
   // Copy arg registers.
   MVT RegTy = MVT::getIntegerVT(GPRSizeInBytes * 8);
   const TargetRegisterClass *RC = getRegClassFor(RegTy);
@@ -5717,16 +5720,20 @@ void MipsTargetLowering::passByValArg(
     const CCValAssign &VA) const {
   unsigned ByValSizeInBytes = Flags.getByValSize();
   unsigned OffsetInBytes = 0; // From beginning of struct
-  unsigned RegSizeInBytes = Subtarget.getGPRSizeInBytes();
+  unsigned RegSizeInBytes = ABI.IsCheriPureCap()
+                                ? Subtarget.getCapSizeInBytes()
+                                : Subtarget.getGPRSizeInBytes();
   Align Alignment =
       std::min(Flags.getNonZeroByValAlign(), Align(RegSizeInBytes));
   EVT PtrTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace()),
       RegTy = MVT::getIntegerVT(RegSizeInBytes * 8);
   unsigned NumRegs = LastReg - FirstReg;
 
-  // Don't pass parts of the struct in integer registers (will break caps)
-  // TODO: should also not happen in hybrid abi for structs with caps
-  if (NumRegs && !ABI.IsCheriPureCap()) {
+  if (NumRegs) {
+    // Don't pass parts of the struct in integer registers (will break caps)
+    // TODO: should also not happen in hybrid abi for structs with caps
+    assert(!ABI.IsCheriPureCap() &&
+           "Byval args in integer registers does not work for purecap");
     ArrayRef<MCPhysReg> ArgRegs = ABI.GetByValArgRegs();
     bool LeftoverBytes = (NumRegs * RegSizeInBytes > ByValSizeInBytes);
     unsigned I = 0;
