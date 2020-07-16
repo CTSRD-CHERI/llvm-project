@@ -38,8 +38,10 @@ static const MCPhysReg CheriCapArgRegs[8] = {
 }
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
+  // In the purecap ABI we don't pass parts of byval arguments in registers and
+  // instead always memcpy() the entire struct.
   if (IsCheriPureCap())
-    return makeArrayRef(CheriCapArgRegs);
+    return {};
   if (IsO32())
     return makeArrayRef(O32IntRegs);
   if (IsN32() || IsN64())
