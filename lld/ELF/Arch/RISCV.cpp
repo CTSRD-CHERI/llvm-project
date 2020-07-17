@@ -24,6 +24,7 @@ class RISCV final : public TargetInfo {
 public:
   RISCV();
   uint32_t calcEFlags() const override;
+  bool calcIsCheriAbi() const override;
   int getCapabilitySize() const override;
   void writeGotHeader(uint8_t *buf) const override;
   void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
@@ -149,6 +150,16 @@ uint32_t RISCV::calcEFlags() const {
   }
 
   return target;
+}
+
+bool RISCV::calcIsCheriAbi() const {
+  bool isCheriAbi = config->eflags & EF_RISCV_CHERIABI;
+
+  if (config->isCheriAbi && !objectFiles.empty() && !isCheriAbi)
+    error(toString(objectFiles.front()) +
+          ": object file is non-CheriABI but emulation forces it");
+
+  return isCheriAbi;
 }
 
 void RISCV::writeGotHeader(uint8_t *buf) const {
