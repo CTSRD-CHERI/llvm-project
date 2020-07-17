@@ -154,6 +154,10 @@ private:
   SmallPtrSet<MCSymbol *, 8> ExtSymSDNodeSymbols;
 
   static void ValidateGV(const GlobalVariable *GV);
+  // Record a list of GlobalAlias associated with a GlobalObject.
+  // This is used for AIX's extra-label-at-definition aliasing strategy.
+  DenseMap<const GlobalObject *, SmallVector<const GlobalAlias *, 1>>
+      GOAliasMap;
 
 public:
   PPCAIXAsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
@@ -172,6 +176,8 @@ public:
   void emitGlobalVariable(const GlobalVariable *GV) override;
 
   void emitFunctionDescriptor() override;
+
+  void emitFunctionEntryLabel() override;
 
   void emitEndOfAsmFile(Module &) override;
 
@@ -1730,6 +1736,10 @@ void PPCAIXAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   emitLinkage(GV, EmittedInitSym);
   emitAlignment(getGVAlignment(GV, DL), GV);
   OutStreamer->emitLabel(EmittedInitSym);
+  // Emit aliasing label for global variable.
+  llvm::for_each(GOAliasMap[GV], [this](const GlobalAlias *Alias) {
+    OutStreamer->emitLabel(getSymbol(Alias));
+  });
   emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(), 0);
 }
 
@@ -1741,6 +1751,13 @@ void PPCAIXAsmPrinter::emitFunctionDescriptor() {
   // Emit function descriptor.
   OutStreamer->SwitchSection(
       cast<MCSymbolXCOFF>(CurrentFnDescSym)->getRepresentedCsect());
+
+  // Emit aliasing label for function descriptor csect.
+  llvm::for_each(GOAliasMap[&MF->getFunction()],
+                 [this](const GlobalAlias *Alias) {
+                   OutStreamer->emitLabel(getSymbol(Alias));
+                 });
+
   // Emit function entry point address.
   OutStreamer->emitValue(MCSymbolRefExpr::create(CurrentFnSym, OutContext),
                          PointerSize);
@@ -1754,6 +1771,16 @@ void PPCAIXAsmPrinter::emitFunctionDescriptor() {
   OutStreamer->emitIntValue(0, PointerSize);
 
   OutStreamer->SwitchSection(Current.first, Current.second);
+}
+
+void PPCAIXAsmPrinter::emitFunctionEntryLabel() {
+  PPCAsmPrinter::emitFunctionEntryLabel();
+  // Emit aliasing label for function entry point label.
+  llvm::for_each(
+      GOAliasMap[&MF->getFunction()], [this](const GlobalAlias *Alias) {
+        OutStreamer->emitLabel(
+            getObjFileLowering().getFunctionEntryPointSymbol(Alias, TM));
+      });
 }
 
 void PPCAIXAsmPrinter::emitEndOfAsmFile(Module &M) {
@@ -1791,10 +1818,6 @@ void PPCAIXAsmPrinter::emitEndOfAsmFile(Module &M) {
 }
 
 bool PPCAIXAsmPrinter::doInitialization(Module &M) {
-  if (M.alias_size() > 0u)
-    report_fatal_error(
-        "module has aliases, which LLVM does not yet support for AIX");
-
   const bool Result = PPCAsmPrinter::doInitialization(M);
 
   auto setCsectAlignment = [this](const GlobalObject *GO) {
@@ -1819,6 +1842,15 @@ bool PPCAIXAsmPrinter::doInitialization(Module &M) {
 
   for (const auto &F : M)
     setCsectAlignment(&F);
+
+  // Construct an aliasing list for each GlobalObject.
+  for (const auto &Alias : M.aliases()) {
+    const GlobalObject *Base = Alias.getBaseObject();
+    if (!Base)
+      report_fatal_error(
+          "alias without a base object is not yet supported on AIX");
+    GOAliasMap[Base].push_back(&Alias);
+  }
 
   return Result;
 }
