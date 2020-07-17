@@ -78,7 +78,7 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
     sizeRel = R_MIPS_CHERI_SIZE;
   }
   // Make the CheriABI start address more similar to the BFD output
-  if (config->osabi == ELFOSABI_FREEBSD && config->isCheriABI()) {
+  if (config->osabi == ELFOSABI_FREEBSD && config->isCheriAbi) {
     // All the FreeBSD MIPS linker scripts use 0x120000000 (18*256M)
     // XXXAR: TODO: actually it is 0x120000000 + SIZEOF_HEADERS (0x120000ae0)
     defaultImageBase = 0x0000000120000000;
@@ -602,7 +602,7 @@ void MIPS<ELFT>::relocate(uint8_t *loc, const Relocation &rel,
   // Detect cross-mode jump/branch and fix instruction.
   val = fixupCrossModeJump<ELFT>(loc, type, val);
 
-  if (!config->isCheriABI()) {
+  if (!config->isCheriAbi) {
     // Thread pointer and DRP offsets from the start of TLS data area.
     // https://www.linux-mips.org/wiki/NPTL
     if (type == R_MIPS_TLS_DTPREL_HI16 || type == R_MIPS_TLS_DTPREL_LO16 ||

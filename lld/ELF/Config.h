@@ -353,22 +353,8 @@ struct Configuration {
   // Size of a CHERI capability
   int capabilitySize = 0;
 
-  inline bool isCheriABI() const { return cheriABI; }
-  // We need to set the searchPaths before createFiles() is called since linker
-  // scripts might contain INPUT() commands. Add a getter and setter for
-  // CheriABI to ensure this is always the case
-  inline void setIsCheriABI(bool set) {
-    if (!set)
-      return;
-    cheriABI = true;
-    // add the default search paths for CheriABI
-    searchPaths.emplace_back("=/libcheri");
-    searchPaths.emplace_back("=/usr/libcheri");
-    searchPaths.emplace_back("=/usr/local/libcheri");
-  }
-
-private:
-  bool cheriABI = false;
+  // True if we are creating a pure-capability CheriABI output.
+  bool isCheriAbi = false;
 };
 
 // The only instance of Configuration struct.

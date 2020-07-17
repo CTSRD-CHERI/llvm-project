@@ -1102,7 +1102,7 @@ void MipsGotSection::writeTo(uint8_t *buf) {
     // to write offset 0 instead of -0x7000 to match the captable.
     for (const std::pair<Symbol *, size_t> &p : g.tls)
       write(p.second, p.first,
-            (p.first->isPreemptible || config->isCheriABI()) ? 0 : -0x7000);
+            (p.first->isPreemptible || config->isCheriAbi) ? 0 : -0x7000);
     for (const std::pair<Symbol *, size_t> &p : g.dynTlsSymbols) {
       if (p.first == nullptr && !config->isPic)
         write(p.second, nullptr, 1);
@@ -1114,7 +1114,7 @@ void MipsGotSection::writeTo(uint8_t *buf) {
           write(p.second, nullptr, 1);
         // In the legacy CHERI ABI we still use the GOT for TLS so we need
         // to write offset 0 instead of -0x8000 to match the captable.
-        write(p.second + 1, p.first, config->isCheriABI() ? 0 : -0x8000);
+        write(p.second + 1, p.first, config->isCheriAbi ? 0 : -0x8000);
       }
     }
   }
@@ -1519,7 +1519,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       addInSecRelative(DT_MIPS_RLD_MAP_REL, in.mipsRldMap);
     }
     uint64_t targetCheriFlags = 0;
-    if (config->isCheriABI()) {
+    if (config->isCheriAbi) {
       if (InX<ELFT>::mipsAbiFlags)
         if (auto abi = InX<ELFT>::mipsAbiFlags->getCheriAbiVariant())
           targetCheriFlags |= *abi;
@@ -1659,7 +1659,7 @@ void RelocationBaseSection::addReloc(const DynamicReloc &reloc) {
     if (reloc.type != R_MIPS_CHERI_CAPABILITY)
       const_cast<InputSectionBase*>(isec)->freeBSDMipsRelocationsHack.push_back(reloc);
   }
-  if (config->isCheriABI() && config->relativeCapRelocsOnly &&
+  if (config->isCheriAbi && config->relativeCapRelocsOnly &&
       reloc.inputSec->name == "__cap_relocs") {
     warn("attempting to add a dynamic relocation against the __cap_relocs "
          "section. If this is intended pass --no-relative-cap-relocs.");
@@ -1684,7 +1684,7 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->link = 0;
 
-  if (config->isCheriABI() && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
+  if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
     assert(in.cheriCapTable->getParent()->sectionIndex != UINT32_MAX);
     // For MIPS CheriABI we use the captable as the sh_info value
     if (in.relaPlt == this)
@@ -2135,7 +2135,7 @@ void SymbolTableBaseSection::finalizeContents() {
 
   // XXXAR: in the CheriABI case it is possible that we have local symbols
   // in .dynsym (for function pointers in the PLT ABI)
-  if (config->isCheriABI()) {
+  if (config->isCheriAbi) {
     sortSymTabSymbols();
   }
 
@@ -3751,7 +3751,7 @@ static uint8_t getAbiVersion() {
     // Bump this number everytime we break the ABI to avoid strange runtime
     // crashes (happened e.g. when using a binary with the old TLS offset
     // on a new kernel).
-    if (config->isCheriABI())
+    if (config->isCheriAbi)
       return 3; // Bump for every incompatible change
     if (!config->isPic && !config->relocatable &&
         (config->eflags & (EF_MIPS_PIC | EF_MIPS_CPIC)) == EF_MIPS_CPIC)

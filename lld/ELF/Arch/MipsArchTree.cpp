@@ -74,12 +74,12 @@ static void checkFlags(ArrayRef<FileFlags> files) {
   bool fp = files[0].flags & EF_MIPS_FP64;
 
   // Handle explicit ABI selection via -melf64btsmip_cheri_fbsd
-  if ((config->isCheriABI() && abi != EF_MIPS_ABI_CHERIABI) ||
-      (!config->isCheriABI() && abi == EF_MIPS_ABI_CHERIABI)) {
+  if ((config->isCheriAbi && abi != EF_MIPS_ABI_CHERIABI) ||
+      (!config->isCheriAbi && abi == EF_MIPS_ABI_CHERIABI)) {
     error(toString(files[0].file) + ": ABI '" + getAbiName(abi) +
           "' is incompatible with explicitly selected linker emulation '" +
           config->emulation + "'");
-    abi = config->isCheriABI() ? EF_MIPS_ABI_CHERIABI : 0;
+    abi = config->isCheriAbi ? EF_MIPS_ABI_CHERIABI : 0;
   }
 
   for (const FileFlags &f : files) {
@@ -508,8 +508,8 @@ void elf::checkMipsShlibCompatible(InputFile *f, uint64_t inputCheriFlags,
   assert(f->emachine == config->emachine);
   uint32_t abi = f->eflags & (EF_MIPS_ABI | EF_MIPS_ABI2);
   // Mips can't link against cheriabi and the other way around
-  if ((config->isCheriABI() && abi != EF_MIPS_ABI_CHERIABI) ||
-      (!config->isCheriABI() && abi == EF_MIPS_ABI_CHERIABI)) {
+  if ((config->isCheriAbi && abi != EF_MIPS_ABI_CHERIABI) ||
+      (!config->isCheriAbi && abi == EF_MIPS_ABI_CHERIABI)) {
     // assert(errorCount() && "Should have already caused an errors");
     // llvm_unreachable("Should have been checked earlier!");
     if (!errorCount())
