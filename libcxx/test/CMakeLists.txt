@@ -107,13 +107,6 @@ endif()
 if (LIBCXX_INCLUDE_TESTS)
   include(AddLLVM) # for configure_lit_site_cfg and add_lit_target
 
-  if (LIBCXX_TARGET_INFO MATCHES "CheriBSDRemoteTI")
-    message(STATUS "Test suite to run on CheriBSD -> max one thread possible")
-    set(LIBCXX_LIT_EXTRA_ARGS "-j1")
-  else()
-    set(LIBCXX_LIT_EXTRA_ARGS)
-  endif()
-
   configure_lit_site_cfg(
     "${LIBCXX_TEST_CONFIG}"
     ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
@@ -127,7 +120,7 @@ if (LIBCXX_INCLUDE_TESTS)
     "Running libcxx tests"
     ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS check-cxx-deps
-    PARAMS "${LIBCXX_TEST_PARAMS}${LIBCXX_LIT_EXTRA_ARGS}")
+    PARAMS "${LIBCXX_TEST_PARAMS}")
 endif()
 
 if (LIBCXX_GENERATE_COVERAGE)
