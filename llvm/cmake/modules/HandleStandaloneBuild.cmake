@@ -1,13 +1,11 @@
-if (NOT DEFINED LLVM_PATH)
-  set(LLVM_PATH ${CMAKE_CURRENT_LIST_DIR}/../../../llvm CACHE PATH "" FORCE)
-endif()
+string(TOUPPER "${PROJECT_NAME}" _proj_upper)
 
 if(NOT IS_DIRECTORY ${LLVM_PATH})
-  message(FATAL_ERROR
-    "The provided LLVM_PATH (${LLVM_PATH}) is not a valid directory. Note that "
-    "building libc++ outside of the monorepo is not supported anymore. Please "
-    "use a Standalone build against the monorepo, a Runtimes build or a classic "
-    "monorepo build.")
+    message(FATAL_ERROR
+            "The provided LLVM_PATH (${LLVM_PATH}) is not a valid directory. Note that "
+            "building ${PROJECT_NAME} outside of the monorepo is not supported anymore. Please "
+            "use a Standalone build against the monorepo, a Runtimes build or a classic "
+            "monorepo build.")
 endif()
 
 set(LLVM_INCLUDE_DIR ${LLVM_PATH}/include CACHE PATH "Path to llvm/include")
@@ -25,7 +23,7 @@ else()
 endif()
 
 message(STATUS "Configuring for standalone build.")
-set(LIBCXX_STANDALONE_BUILD 1)
+set(${_proj_upper}_STANDALONE_BUILD 1)
 
 # Add LLVM Functions --------------------------------------------------------
 if (WIN32)
@@ -52,7 +50,7 @@ endif()
 # In a standalone build, we don't have llvm to automatically generate the
 # llvm-lit script for us.  So we need to provide an explicit directory that
 # the configurator should write the script into.
-set(LLVM_LIT_OUTPUT_DIR "${libcxx_BINARY_DIR}/bin")
+set(LLVM_LIT_OUTPUT_DIR "${PROJECT_BINARY_DIR}/bin")
 
 if (LLVM_INCLUDE_TESTS)
   # Required LIT Configuration ------------------------------------------------

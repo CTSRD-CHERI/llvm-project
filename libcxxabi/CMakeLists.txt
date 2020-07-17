@@ -30,7 +30,10 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR LIBCXXABI_STANDALONE_B
   set(PACKAGE_BUGREPORT "llvm-bugs@lists.llvm.org")
 
   # Find the LLVM sources and simulate LLVM CMake options.
-  include(HandleOutOfTreeLLVM)
+  if (NOT DEFINED LLVM_PATH)
+    set(LLVM_PATH ${CMAKE_CURRENT_LIST_DIR}/../llvm CACHE PATH "" FORCE)
+  endif()
+  include(${LLVM_PATH}/cmake/modules/HandleStandaloneBuild.cmake)
 endif()
 
 # Require out of source build.
