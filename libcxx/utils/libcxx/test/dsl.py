@@ -220,12 +220,18 @@ class Feature(object):
     self._compileFlag = compileFlag
     self._linkFlag = linkFlag
     self._isSupported = when
+    self.__cachedIsSupported = {}
 
   def isSupported(self, config):
     """
     Return whether the feature is supported by the given TestingConfig.
     """
-    return self._isSupported(config)
+    result = self.__cachedIsSupported.get(config, None)
+    if result is None:
+      result = self._isSupported(config)
+      assert result is not None, "Should return True or False"
+      self.__cachedIsSupported[config] = result
+    return result
 
   def enableIn(self, config):
     """
