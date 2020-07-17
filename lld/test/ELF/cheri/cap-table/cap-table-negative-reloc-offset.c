@@ -153,8 +153,8 @@ int __start(void) {
 
 
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK: [[__MAN_MACROS_ADDR:0000000120020820]] g     O .data.rel.ro		 0000000000000440 __man_macros
-// CHECK: [[MAN_MACROS_ADDR:0000000120020c60]] g     O .data.rel.ro		 0000000000000010 man_macros
+// CHECK: [[__MAN_MACROS_ADDR:0000000000030820]] g     O .data.rel.ro		 0000000000000440 __man_macros
+// CHECK: [[MAN_MACROS_ADDR:0000000000030c60]] g     O .data.rel.ro		 0000000000000010 man_macros
 
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 // CHECK: 0x[[MAN_MACROS_ADDR]]	Base: __man_macros (0x[[__MAN_MACROS_ADDR]])	Offset: 0xffffffffffffd280	Length: 0x0000000000000440	Permissions: 0x4000000000000000 (Constant)

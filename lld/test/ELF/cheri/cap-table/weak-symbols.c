@@ -46,17 +46,17 @@ int __start(void) {
 // DYNAMIC-EXE: 0000000000030810 g       .bss             0000000000000000 end
 // DYNAMIC-EXE: 0000000000010730 g       .text            0000000000000000 etext
 
-// STATIC-EXE: 0000000120010430 l       .text             0000000000000000 .hidden __init_array_end
-// STATIC-EXE: 0000000120010430 l       .text             0000000000000000 .hidden __init_array_start
+// STATIC-EXE: 0000000000020430 l       .text             0000000000000000 .hidden __init_array_end
+// STATIC-EXE: 0000000000020430 l       .text             0000000000000000 .hidden __init_array_start
 //                      ^------- Start of .text segment (actual value doesn't matter as long as iteration terminates immediately)
-// STATIC-EXE: 0000000120020548 l       .preinit_array    0000000000000000 .hidden __preinit_array_end
-// STATIC-EXE: 0000000120020540 l       .preinit_array    0000000000000008 .hidden __preinit_array_start
-// STATIC-EXE: 0000000120020550 l       .captable         00000000000000b0 _CHERI_CAPABILITY_TABLE_
+// STATIC-EXE: 0000000000030548 l       .preinit_array    0000000000000000 .hidden __preinit_array_end
+// STATIC-EXE: 0000000000030540 l       .preinit_array    0000000000000008 .hidden __preinit_array_start
+// STATIC-EXE: 0000000000030550 l       .captable         00000000000000b0 _CHERI_CAPABILITY_TABLE_
 // STATIC-EXE: 0000000000000000  w      *UND*             0000000000000000 _DYNAMIC
-// STATIC-EXE: 0000000120010538 g     F .text             0000000000000008 __start
-// STATIC-EXE: 0000000120030610 g       .got              0000000000000000 _edata
-// STATIC-EXE: 0000000120030610 g       .bss              0000000000000000 _end
-// STATIC-EXE: 0000000120010540 g       .text             0000000000000000 _etext
-// STATIC-EXE: 0000000120030610 g       .got              0000000000000000 edata
-// STATIC-EXE: 0000000120030610 g       .bss              0000000000000000 end
-// STATIC-EXE: 0000000120010540 g       .text             0000000000000000 etext
+// STATIC-EXE: 0000000000020538 g     F .text             0000000000000008 __start
+// STATIC-EXE: 0000000000040610 g       .got              0000000000000000 _edata
+// STATIC-EXE: 0000000000040610 g       .bss              0000000000000000 _end
+// STATIC-EXE: 0000000000020540 g       .text             0000000000000000 _etext
+// STATIC-EXE: 0000000000040610 g       .got              0000000000000000 edata
+// STATIC-EXE: 0000000000040610 g       .bss              0000000000000000 end
+// STATIC-EXE: 0000000000020540 g       .text             0000000000000000 etext

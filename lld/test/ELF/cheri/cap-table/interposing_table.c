@@ -60,4 +60,4 @@ int __start(void) {
 // CHECK: SYMBOL TABLE:
 // CHECK: 0000000[[libc_interposing_addr:[0-9a-f]+]] l     O .data		 0000000000000540 .hidden __libc_interposing
 // CHECK: CAPABILITY RELOCATION RECORDS:
-// CHECK: 0x0000000[[libc_interposing_addr]]	Base: __wrap_accept (0x0000000120011020)	Offset: 0x0000000000000000	Length: 0x0000000000000038	Permissions: 0x8000000000000000 (Function)
+// CHECK: 0x0000000[[libc_interposing_addr]]	Base: __wrap_accept (0x0000000000021020)	Offset: 0x0000000000000000	Length: 0x0000000000000038	Permissions: 0x8000000000000000 (Function)
