@@ -82,4 +82,4 @@ add_llvm_component_library(LLVMTransformUtils
   intrinsics_gen
   )
 
-add_compile_definitions(LLVM_NO_DEFAULT_ADDRESS_SPACE=1)
+add_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)
