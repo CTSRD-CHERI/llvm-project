@@ -669,7 +669,7 @@ static int64_t getTlsTpOffset(const Symbol &s) {
     // data and 0xf000 of the program's TLS segment.
     //
     // For CheriABI we always use an offset of 0 to stay representable.
-    if (!config->isCheriABI())
+    if (!config->isCheriAbi)
       return s.getVA(0) + (tls->p_vaddr & (tls->p_align - 1)) - 0x7000;
     LLVM_FALLTHROUGH;
   case EM_RISCV:
