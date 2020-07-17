@@ -627,7 +627,7 @@ declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) addrspace(200) #
 ; Function Attrs: nounwind readnone
 declare i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) addrspace(200) #3
 
-declare inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)*, %"class.JSC::ExecState" addrspace(200)*, %"class.JSC::JSValue" addrspace(200)* byval align 16) local_unnamed_addr addrspace(200) #2
+declare inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)*, %"class.JSC::ExecState" addrspace(200)*, %"class.JSC::JSValue" addrspace(200)* align 16) local_unnamed_addr addrspace(200) #2
 
 
 ; Function Attrs: nounwind
@@ -933,7 +933,7 @@ if.then15:                                        ; preds = %do.body
   %23 = load %"class.JSC::VM" addrspace(200)*, %"class.JSC::VM" addrspace(200)* addrspace(200)* %22, align 16
   %24 = bitcast %"class.JSC::JSValue" addrspace(200)* %agg.tmp1.i to %"class.JSC::JSObject" addrspace(200)* addrspace(200)*
   store %"class.JSC::JSObject" addrspace(200)* %call17, %"class.JSC::JSObject" addrspace(200)* addrspace(200)* %24, align 16
-  %call2.i = tail call inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)* nonnull %23, %"class.JSC::ExecState" addrspace(200)* %state, %"class.JSC::JSValue" addrspace(200)* byval nonnull align 16 %agg.tmp1.i) #4
+  %call2.i = tail call inreg { i8 addrspace(200)* } @_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE(%"class.JSC::VM" addrspace(200)* nonnull %23, %"class.JSC::ExecState" addrspace(200)* %state, %"class.JSC::JSValue" addrspace(200)* nonnull align 16 %agg.tmp1.i) #4
   %25 = extractvalue { i8 addrspace(200)* } %call2.i, 0
   call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull %19)
   br label %cleanup44
