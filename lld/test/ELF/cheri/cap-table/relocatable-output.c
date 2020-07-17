@@ -14,7 +14,7 @@
 // RUN: ld.lld -o %t.exe %t-combined.o
 // This previously failed with a duplicate _CHERI_CAPABILITY_TABLE_ symbol error
 // RUN: llvm-objdump -t %t.exe | FileCheck %s
-// CHECK: 0000000120020320 l        .captable		 00000000000000{{3|6}}0 .hidden _CHERI_CAPABILITY_TABLE_
+// CHECK: 0000000000030320 l        .captable		 00000000000000{{3|6}}0 .hidden _CHERI_CAPABILITY_TABLE_
 
 #ifdef FIRST
 int global = 1;

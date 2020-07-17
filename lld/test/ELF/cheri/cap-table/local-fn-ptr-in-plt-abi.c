@@ -119,9 +119,9 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x1200203d0 (return1@CAPTABLE.0) Base: 0x120010370 (return1+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x1200203e0 (use_callback@CAPTABLE) Base: 0x120010380 (use_callback+0) Length: {{[0-9]+}} Perms: Function
-// STATIC-NEXT:     0x1200203f0 (global_return2@CAPTABLE) Base: 0x1200102f0 (global_return2+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x0303d0 (return1@CAPTABLE.0) Base: 0x20370 (return1+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x0303e0 (use_callback@CAPTABLE) Base: 0x20380 (use_callback+0) Length: {{[0-9]+}} Perms: Function
+// STATIC-NEXT:     0x0303f0 (global_return2@CAPTABLE) Base: 0x202f0 (global_return2+0) Length: 12 Perms: Function
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      return1@CAPTABLE.0

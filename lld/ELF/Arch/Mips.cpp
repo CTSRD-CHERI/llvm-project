@@ -77,12 +77,6 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
     absPointerRel = R_MIPS_CHERI_ABSPTR;
     sizeRel = R_MIPS_CHERI_SIZE;
   }
-  // Make the CheriABI start address more similar to the BFD output
-  if (config->osabi == ELFOSABI_FREEBSD && config->isCheriAbi) {
-    // All the FreeBSD MIPS linker scripts use 0x120000000 (18*256M)
-    // XXXAR: TODO: actually it is 0x120000000 + SIZEOF_HEADERS (0x120000ae0)
-    defaultImageBase = 0x0000000120000000;
-  }
 }
 
 template <class ELFT> uint32_t MIPS<ELFT>::calcEFlags() const {
