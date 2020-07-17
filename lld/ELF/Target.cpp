@@ -75,8 +75,6 @@ TargetInfo *elf::getTarget() {
   case EM_HEXAGON:
     return getHexagonTargetInfo();
   case EM_MIPS:
-    if (config->isCheriAbi)
-      return getMipsTargetInfo<ELF64BE>(); // TODO: custom target info?
     switch (config->ekind) {
     case ELF32LEKind:
       return getMipsTargetInfo<ELF32LE>();
