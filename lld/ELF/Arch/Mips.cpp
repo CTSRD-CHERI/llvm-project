@@ -26,6 +26,7 @@ template <class ELFT> class MIPS final : public TargetInfo {
 public:
   MIPS();
   uint32_t calcEFlags() const override;
+  bool calcIsCheriAbi() const override;
   int getCapabilitySize() const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
@@ -81,6 +82,16 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
 
 template <class ELFT> uint32_t MIPS<ELFT>::calcEFlags() const {
   return calcMipsEFlags<ELFT>();
+}
+
+template <class ELFT> bool MIPS<ELFT>::calcIsCheriAbi() const {
+  bool isCheriAbi = (config->eflags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI;
+
+  if (config->isCheriAbi && !objectFiles.empty() && !isCheriAbi)
+    error(toString(objectFiles.front()) +
+          ": object file is non-CheriABI but emulation forces it");
+
+  return isCheriAbi;
 }
 
 template <class ELFT> int MIPS<ELFT>::getCapabilitySize() const {

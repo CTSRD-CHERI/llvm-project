@@ -14,22 +14,17 @@
 # RUN: llvm-readobj -h %t-cheri256-hybrid-main.o | FileCheck --check-prefix=CHERI256-HYBRID-FLAGS %s
 
 
-# Check that setting an explicit emulation doesn't infer the target ABI from the first .o:
+# Check that setting an explicit CHERI emulation overrides the target ABI from the first .o:
 # Check that it links fine if we don't pass a -m flag:
 # RUN: ld.lld %t-cheri128-hybrid-lib.o %t-cheri128-hybrid-main.o -o /dev/null
 # But with -melf64btsmip_cheri_fbsd the target ABI should be purecap (and therefore linking should fail)!
 # RUN: not ld.lld -melf64btsmip_cheri_fbsd %t-cheri128-hybrid-lib.o %t-cheri128-hybrid-main.o -o %t.exe 2>&1 | FileCheck -DCHERI_TYPE=cheri128 -check-prefix HYBRID-input-with-explicit-PURECAP %s
-# HYBRID-input-with-explicit-PURECAP: error: {{.*}}-cheri128-hybrid-lib.o: ABI 'n64' is incompatible with explicitly selected linker emulation 'elf64btsmip_cheri_fbsd'
-# HYBRID-input-with-explicit-PURECAP: error: {{.*}}-cheri128-hybrid-lib.o: ABI 'n64' is incompatible with target ABI 'purecap'
-# HYBRID-input-with-explicit-PURECAP: error: {{.*}}-cheri128-hybrid-main.o: ABI 'n64' is incompatible with target ABI 'purecap'
+# HYBRID-input-with-explicit-PURECAP: error: {{.*}}-cheri128-hybrid-lib.o: object file is non-CheriABI but emulation forces it
 
 # Similarly purecap input should work fine without a -m flag:
 # RUN: ld.lld %t-cheri128-lib.o %t-cheri128-main.o -o /dev/null
-# But it should fail if we use -melf64btsmip_fbsd explicitly
-# RUN: not ld.lld -melf64btsmip_fbsd %t-cheri128-lib.o %t-cheri128-main.o -o %t.exe 2>&1 | FileCheck -DCHERI_TYPE=cheri256 -check-prefix PURECAP-input-with-explicit-N64 %s
-# PURECAP-input-with-explicit-N64: error: {{.*}}-cheri128-lib.o: ABI 'purecap' is incompatible with explicitly selected linker emulation 'elf64btsmip_fbsd'
-# PURECAP-input-with-explicit-N64: error: {{.*}}-cheri128-lib.o: ABI 'purecap' is incompatible with target ABI 'n64'
-# PURECAP-input-with-explicit-N64: error: {{.*}}-cheri128-main.o: ABI 'purecap' is incompatible with target ABI 'n64'
+# But with -melf64btsmip_fbsd the target ABI should be inferred as purecap and allowed:
+# RUN: ld.lld -melf64btsmip_fbsd %t-cheri128-lib.o %t-cheri128-main.o -o /dev/null
 
 # Now check that lld does not allow to link incompatible CHERI files
 

@@ -143,6 +143,13 @@ ErrorPlace elf::getErrorPlace(const uint8_t *loc) {
 
 TargetInfo::~TargetInfo() {}
 
+bool TargetInfo::calcIsCheriAbi() const {
+  if (config->isCheriAbi)
+    error("emulation forces CheriABI but not supported for the current target");
+
+  return false;
+}
+
 int64_t TargetInfo::getImplicitAddend(const uint8_t *buf, RelType type) const {
   return 0;
 }

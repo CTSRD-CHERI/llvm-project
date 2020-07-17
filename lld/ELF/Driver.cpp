@@ -1504,12 +1504,7 @@ void LinkerDriver::inferMachineType() {
     config->ekind = f->ekind;
     config->emachine = f->emachine;
     config->osabi = f->osabi;
-    if (f->emachine == EM_MIPS) {
-      config->mipsN32Abi = isMipsN32Abi(f);
-      config->isCheriAbi = (f->eflags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI;
-    }
-    if (f->emachine == EM_RISCV)
-      config->isCheriABI = f->eflags & EF_RISCV_CHERIABI;
+    config->mipsN32Abi = f->emachine == EM_MIPS && isMipsN32Abi(f);
     return;
   }
   error("target emulation unknown: -m or at least one .o file required");
@@ -2176,6 +2171,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
   target = getTarget();
 
   config->eflags = target->calcEFlags();
+  config->isCheriAbi = target->calcIsCheriAbi();
   // maxPageSize (sometimes called abi page size) is the maximum page size that
   // the output can be run on. For example if the OS can use 4k or 64k page
   // sizes then maxPageSize must be 64k for the output to be useable on both.
