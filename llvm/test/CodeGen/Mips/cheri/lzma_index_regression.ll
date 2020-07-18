@@ -19,10 +19,10 @@ define void @r() #0 {
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c2, %captab20(q)($c1)
 ; CHECK-NEXT:    clcbi $c1, %captab20(p)($c1)
-; CHECK-NEXT:    clc $c3, $zero, 16($c1)
-; CHECK-NEXT:    csc $c3, $zero, 16($c2)
 ; CHECK-NEXT:    cld $1, $zero, 32($c1)
 ; CHECK-NEXT:    csd $1, $zero, 32($c2)
+; CHECK-NEXT:    clc $c1, $zero, 16($c1)
+; CHECK-NEXT:    csc $c1, $zero, 16($c2)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 ;
@@ -33,12 +33,12 @@ define void @r() #0 {
 ; CHERI256-NEXT:    cgetpccincoffset $c1, $1
 ; CHERI256-NEXT:    clcbi $c2, %captab20(q)($c1)
 ; CHERI256-NEXT:    clcbi $c1, %captab20(p)($c1)
-; CHERI256-NEXT:    cld $1, $zero, 32($c1)
-; CHERI256-NEXT:    csd $1, $zero, 32($c2)
 ; CHERI256-NEXT:    cld $1, $zero, 48($c1)
 ; CHERI256-NEXT:    csd $1, $zero, 48($c2)
 ; CHERI256-NEXT:    cld $1, $zero, 40($c1)
 ; CHERI256-NEXT:    csd $1, $zero, 40($c2)
+; CHERI256-NEXT:    cld $1, $zero, 32($c1)
+; CHERI256-NEXT:    csd $1, $zero, 32($c2)
 ; CHERI256-NEXT:    cjr $c17
 ; CHERI256-NEXT:    nop
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 bitcast (%struct.m addrspace(200)* getelementptr inbounds (%struct.am, %struct.am addrspace(200)* @q, i32 0, i32 1) to i8 addrspace(200)*), i8 addrspace(200)* align 16 bitcast (%struct.m addrspace(200)* getelementptr inbounds (%struct.am, %struct.am addrspace(200)* @p, i32 0, i32 1) to i8 addrspace(200)*), i64 24, i1 false)

@@ -18,8 +18,7 @@ cheriabi_fetch_syscall_arg.exit119:
 define void @CHERIABI_SYS_mknodat_fill_uap1() #0 {
 ; CHECK-LABEL: CHERIABI_SYS_mknodat_fill_uap1:
 ; CHECK:       # %bb.0: # %cheriabi_fetch_syscall_arg.exit119
-; CHECK-NEXT:    cincoffset $c1, $cnull, $1
-; CHECK-NEXT:    csc $c1, $1, 0($ddc)
+; CHECK-NEXT:    .insn
 cheriabi_fetch_syscall_arg.exit119:
   %0 = getelementptr i8, i8 addrspace(200)* null, i64 undef
   store i8 addrspace(200)* %0, i8 addrspace(200)** undef, align 16
