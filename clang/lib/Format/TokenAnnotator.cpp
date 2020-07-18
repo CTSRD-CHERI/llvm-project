@@ -3314,6 +3314,9 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
   if (Right.is(TT_RangeBasedForLoopColon) &&
       !Style.SpaceBeforeRangeBasedForLoopColon)
     return false;
+  if (Left.is(TT_BitFieldColon))
+    return Style.BitFieldColonSpacing == FormatStyle::BFCS_Both ||
+           Style.BitFieldColonSpacing == FormatStyle::BFCS_After;
   if (Right.is(tok::colon)) {
     if (Line.First->isOneOf(tok::kw_case, tok::kw_default) ||
         !Right.getNextNonComment() || Right.getNextNonComment()->is(tok::semi))
@@ -3330,6 +3333,9 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
       return false;
     if (Right.is(TT_CSharpNamedArgumentColon))
       return false;
+    if (Right.is(TT_BitFieldColon))
+      return Style.BitFieldColonSpacing == FormatStyle::BFCS_Both ||
+             Style.BitFieldColonSpacing == FormatStyle::BFCS_Before;
     return true;
   }
   if (Left.is(TT_UnaryOperator)) {
