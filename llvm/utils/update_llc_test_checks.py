@@ -80,7 +80,7 @@ def main():
           known_command = True
         elif first_command_list[0] == "opt":
           known_command = True
-          first_command_list[0] = args.opt_binary
+          first_command_list[0] = ti.args.opt_binary
           first_command = " ".join(first_command_list)
         if not known_command:
           common.warn('WARNING: Skipping RUN line with more than two commands and unknown first tool: ' + l)
