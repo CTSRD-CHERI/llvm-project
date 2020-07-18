@@ -29,13 +29,14 @@ def main():
     parser.add_argument('--execdir', type=str, required=True)
     parser.add_argument('--codesign_identity', type=str, required=False, default=None)
     parser.add_argument('--env', type=str, nargs='*', required=False, default=dict())
-    (args, remaining) = parser.parse_known_args(sys.argv[1:])
+    parser.add_argument("command", nargs=argparse.ONE_OR_MORE)
+    args = parser.parse_args()
 
-    if len(remaining) < 2:
+    commandLine = args.command  # argparse will strip the initial '--'
+    if len(commandLine) < 1:
         sys.stderr.write('Missing actual commands to run')
         return 1
 
-    commandLine = remaining[1:] # Skip the '--'
 
     ssh = lambda command: ['ssh', '-oBatchMode=yes', args.host, command]
     scp = lambda src, dst: ['scp', '-q', '-oBatchMode=yes', src, '{}:{}'.format(args.host, dst)]
