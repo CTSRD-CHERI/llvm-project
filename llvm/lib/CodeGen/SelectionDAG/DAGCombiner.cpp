@@ -983,7 +983,8 @@ bool DAGCombiner::reassociationCanBreakAddressingModePattern(unsigned Opc,
   // (load/store (add, (add, x, offset1), offset2)) ->
   // (load/store (add, x, offset1+offset2)).
 
-  if (Opc != ISD::ADD || N0.getOpcode() != ISD::ADD)
+  if ((Opc != ISD::ADD && Opc != ISD::PTRADD) ||
+      (N0.getOpcode() != ISD::ADD && N0.getOpcode() != ISD::PTRADD))
     return false;
 
   if (N0.hasOneUse())
@@ -2147,14 +2148,62 @@ static SDValue foldAddSubBoolOfMaskedVal(SDNode *N, SelectionDAG &DAG) {
   return DAG.getNode(IsAdd ? ISD::SUB : ISD::ADD, DL, VT, C1, LowBit);
 }
 
+/// Try to fold a pointer arithmetic node, preferring integer arithmetic.
+/// This needs to be done separately from normal addition, because pointer
+/// addition is not commutative.
 SDValue DAGCombiner::visitPTRADD(SDNode *N) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
+  EVT PtrVT = N0.getValueType();
+  EVT IntVT = N1.getValueType();
+  SDLoc DL(N);
+
+  // fold (ptradd undef, y) -> undef
+  if (N0.isUndef())
+    return N0;
+
+  // fold (ptradd x, undef) -> undef
+  if (N1.isUndef())
+    return DAG.getUNDEF(PtrVT);
+
   // fold (ptradd x, 0) -> 0
-  // This needs to be done separately from normal addition, because pointer
-  // addition is not commutative.
   if (isNullConstant(N1))
     return N0;
+
+  // Reassociate: (ptradd (ptradd x, y), z) -> (ptradd x, (add y, z)) if:
+  //   * x is a null pointer; or
+  //   * the add can be constant-folded; or
+  //   * the add can be combined and z is not a constant; or
+  //   * y is a constant and z has one use; or
+  //   * y is a constant and (ptradd x, y) has one use; or
+  //   * (ptradd x, y) and z have one use and z is not a constant.
+  //
+  // Some of these overly-restrictive conditions are to not obfuscate CAndAddr
+  // patterns. Once we represent that with PTRMASK that will be less of a
+  // concern, though we might still want to detect code not using the builtins
+  // and canonicalise it to a PTRMASK.
+  if (N0.getOpcode() == ISD::PTRADD &&
+      !reassociationCanBreakAddressingModePattern(ISD::PTRADD, DL, N0, N1)) {
+    SDValue X = N0.getOperand(0);
+    SDValue Y = N0.getOperand(1);
+    SDValue Z = N1;
+
+    SDValue Add = DAG.getNode(ISD::ADD, DL, IntVT, {Y, Z});
+    SDValue VisitedAdd = visit(Add.getNode());
+    if (VisitedAdd)
+      Add = VisitedAdd;
+
+    if (isNullConstant(X) ||
+        DAG.isConstantIntBuildVectorOrConstantInt(Add) ||
+        (VisitedAdd && !DAG.isConstantIntBuildVectorOrConstantInt(Z)) ||
+        (DAG.isConstantIntBuildVectorOrConstantInt(Y) && Z.hasOneUse()) ||
+        (DAG.isConstantIntBuildVectorOrConstantInt(Y) && N0.hasOneUse()) ||
+        (N0.hasOneUse() && Z.hasOneUse() &&
+         !DAG.isConstantIntBuildVectorOrConstantInt(Z))) {
+      return DAG.getPointerAdd(DL, X, Add);
+    }
+  }
+
   return SDValue();
 }
 
