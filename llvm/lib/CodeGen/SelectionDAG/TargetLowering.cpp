@@ -6989,12 +6989,6 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     SDValue StackPtr = StackBase;
     unsigned Offset = 0;
 
-    EVT PtrVT = Ptr.getValueType();
-    EVT StackPtrVT = StackPtr.getValueType();
-
-    SDValue PtrIncrement = DAG.getConstant(RegBytes, dl, PtrVT);
-    SDValue StackPtrIncrement = DAG.getConstant(RegBytes, dl, StackPtrVT);
-
     // Do all but one copies using the full register width.
     for (unsigned i = 1; i < NumRegs; i++) {
       // Load one integer register's worth from the original location.
@@ -7009,8 +7003,8 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
       // Increment the pointers.
       Offset += RegBytes;
 
-      Ptr = DAG.getObjectPtrOffset(dl, Ptr, PtrIncrement);
-      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, StackPtrIncrement);
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, RegBytes);
+      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, RegBytes);
     }
 
     // The last copy may be partial.  Do an extending load.
@@ -7163,7 +7157,6 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
     MVT RegVT = getRegisterType(
         *DAG.getContext(),
         EVT::getIntegerVT(*DAG.getContext(), StoreMemVT.getSizeInBits()));
-    EVT PtrVT = Ptr.getValueType();
     unsigned StoredBytes = StoreMemVT.getStoreSize();
     unsigned RegBytes = RegVT.getSizeInBits() / 8;
     unsigned NumRegs = (StoredBytes + RegBytes - 1) / RegBytes;
@@ -7177,10 +7170,6 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
         Chain, dl, Val, StackPtr,
         MachinePointerInfo::getFixedStack(MF, FrameIndex, 0), StoreMemVT);
 
-    EVT StackPtrVT = StackPtr.getValueType();
-
-    SDValue PtrIncrement = DAG.getConstant(RegBytes, dl, PtrVT);
-    SDValue StackPtrIncrement = DAG.getConstant(RegBytes, dl, StackPtrVT);
     SmallVector<SDValue, 8> Stores;
     unsigned Offset = 0;
 
@@ -7197,8 +7186,8 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                     ST->getMemOperand()->getFlags()));
       // Increment the pointers.
       Offset += RegBytes;
-      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, StackPtrIncrement);
-      Ptr = DAG.getObjectPtrOffset(dl, Ptr, PtrIncrement);
+      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, RegBytes);
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, RegBytes);
     }
 
     // The last store may be partial.  Do a truncating store.  On big-endian
