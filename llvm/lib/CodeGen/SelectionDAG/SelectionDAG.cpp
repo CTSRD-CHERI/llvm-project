@@ -5315,6 +5315,13 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
       return V;
     break;
   }
+  case ISD::PTRADD:
+    assert(VT.isFatPointer() && "PTRADD result must be a capability type!");
+    assert(N1.getValueType().isFatPointer() &&
+           "First PTRADD argument must be a capability type!");
+    assert(N2.getValueType().isInteger() &&
+           "Second PTRADD argument must be an integer type!");
+    break;
   case ISD::AND:
     assert(VT.isInteger() && "This operator does not apply to FP types!");
     assert(N1.getValueType() == N2.getValueType() &&
