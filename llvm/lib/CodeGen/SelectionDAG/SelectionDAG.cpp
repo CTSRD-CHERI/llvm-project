@@ -5321,6 +5321,9 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
            "First PTRADD argument must be a capability type!");
     assert(N2.getValueType().isInteger() &&
            "Second PTRADD argument must be an integer type!");
+    // ptradd(X, 0) -> X.
+    if (N2C && N2C->isNullValue())
+      return N1;
     break;
   case ISD::AND:
     assert(VT.isInteger() && "This operator does not apply to FP types!");
