@@ -4000,15 +4000,13 @@ template <class ELFT> void GNUStyle<ELFT>::printGroupSections(const ELFO *Obj) {
        << "   [Index]    Name\n";
     for (const GroupMember &GM : G.Members) {
       const GroupSection *MainGroup = Map[GM.Index];
-      if (MainGroup != &G) {
-        OS.flush();
-        errs() << "Error: section [" << format_decimal(GM.Index, 5)
-               << "] in group section [" << format_decimal(G.Index, 5)
-               << "] already in group section ["
-               << format_decimal(MainGroup->Index, 5) << "]";
-        errs().flush();
-        continue;
-      }
+      if (MainGroup != &G)
+        this->reportUniqueWarning(
+            createError("section with index " + Twine(GM.Index) +
+                        ", included in the group section with index " +
+                        Twine(MainGroup->Index) +
+                        ", was also found in the group section with index " +
+                        Twine(G.Index)));
       OS << "   [" << format_decimal(GM.Index, 5) << "]   " << GM.Name << "\n";
     }
   }
@@ -6592,15 +6590,13 @@ void LLVMStyle<ELFT>::printGroupSections(const ELFO *Obj) {
     ListScope L(W, "Section(s) in group");
     for (const GroupMember &GM : G.Members) {
       const GroupSection *MainGroup = Map[GM.Index];
-      if (MainGroup != &G) {
-        W.flush();
-        errs() << "Error: " << GM.Name << " (" << GM.Index
-               << ") in a group " + G.Name + " (" << G.Index
-               << ") is already in a group " + MainGroup->Name + " ("
-               << MainGroup->Index << ")\n";
-        errs().flush();
-        continue;
-      }
+      if (MainGroup != &G)
+        this->reportUniqueWarning(
+            createError("section with index " + Twine(GM.Index) +
+                        ", included in the group section with index " +
+                        Twine(MainGroup->Index) +
+                        ", was also found in the group section with index " +
+                        Twine(G.Index)));
       W.startLine() << GM.Name << " (" << GM.Index << ")\n";
     }
   }
