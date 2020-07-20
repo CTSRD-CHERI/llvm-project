@@ -31,25 +31,9 @@ static void check_reg(unw_cursor_t *cursor, const char *name,
 
 #define CHECK_REG(num, expected) check_reg(cursor, #num, num, expected)
 
-// unwind_context_t size should be the size of the CHERI256 context for all
-// archictectures
-static constexpr size_t expected_context_size = 68 * 8 + 33 * 32;
-// This helper gives better static assert error messages for older versions of
-// clang
-template <unsigned A, unsigned B> void check_size() {
-  static_assert(A == B, "Building against wrong libunwind.h header?");
-}
-
 int main() {
   unw_context_t context;
   unw_cursor_t cursor;
-  // Sizeof unw_context_t must be a multiple of sizeof(void*)
-  check_size<sizeof(unw_context_t) % sizeof(void *), 0>();
-  check_size<sizeof(unw_context_t), expected_context_size>();
-  check_size<sizeof(unw_context_t) / sizeof(uint64_t),
-             _LIBUNWIND_CONTEXT_SIZE>();
-  check_size<sizeof(unw_context_t) / sizeof(uint64_t),
-             expected_context_size / 8>();
 
   // Call unw_getcontext() once to avoid registers being clobbered by lazy
   // binding resolvers in RTLD.
