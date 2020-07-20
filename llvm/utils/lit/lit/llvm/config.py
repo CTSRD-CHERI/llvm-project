@@ -314,6 +314,10 @@ class LLVMConfig(object):
             ToolSubst(r'\| \bnot\b', command=FindTool('not'), verbatim=True, unresolved='fatal')]
 
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
+        tool_patterns.append(ToolSubst('%cheri128_FileCheck', FindTool('FileCheck'),
+                                       extra_args=['-D\\#CAP_SIZE=16']))
+        tool_patterns.append(ToolSubst('%cheri64_FileCheck', FindTool('FileCheck'),
+                                       extra_args=['-D\\#CAP_SIZE=8']))
         tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
                                        extra_args=['-D\\#CAP_SIZE=' + default_cheri_size]))
         if not self.lit_config.quiet:

@@ -116,7 +116,11 @@ def main():
       filecheck_cmd = ''
       if len(commands) > 1:
         filecheck_cmd = commands[1]
-      if filecheck_cmd.startswith("%cheri_FileCheck"):
+      if filecheck_cmd.startswith("%cheri64_FileCheck"):
+        filecheck_cmd = filecheck_cmd.replace("%cheri64_FileCheck", "FileCheck '-D#CAP_SIZE=8'")
+      elif filecheck_cmd.startswith("%cheri128_FileCheck"):
+        filecheck_cmd = filecheck_cmd.replace("%cheri128_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
+      elif filecheck_cmd.startswith("%cheri_FileCheck"):
         filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
       common.verify_filecheck_prefixes(filecheck_cmd)
       if llc_tool not in LLC_LIKE_TOOLS:
