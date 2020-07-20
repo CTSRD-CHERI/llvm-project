@@ -7386,6 +7386,9 @@ private:
     //
     // map(p[1:24])
     // p, &p[1], 24*sizeof(float), TARGET_PARAM | TO | FROM
+    // for data directives
+    // p, p, sizeof(float*), TARGET_PARAM | TO | FROM
+    // p, &p[1], 24*sizeof(float), PTR_AND_OBJ | TO | FROM
     //
     // map(s)
     // &s, &s, sizeof(S2), TARGET_PARAM | TO | FROM
@@ -7564,9 +7567,15 @@ private:
       if (Ty->isAnyPointerType() && std::next(I) != CE) {
         BP = CGF.EmitLoadOfPointer(BP, Ty->castAs<PointerType>());
 
-        // We do not need to generate individual map information for the
-        // pointer, it can be associated with the combined storage.
-        ++I;
+        // For non-data directives, we do not need to generate individual map
+        // information for the pointer, it can be associated with the combined
+        // storage.
+        if (CGF.CGM.getOpenMPRuntime().hasRequiresUnifiedSharedMemory() ||
+            !CurDir.is<const OMPExecutableDirective *>() ||
+            !isOpenMPTargetDataManagementDirective(
+                CurDir.get<const OMPExecutableDirective *>()
+                    ->getDirectiveKind()))
+          ++I;
       }
     }
 
@@ -7640,6 +7649,7 @@ private:
                 isa<MemberExpr>(Next->getAssociatedExpression()) ||
                 isa<ArraySubscriptExpr>(Next->getAssociatedExpression()) ||
                 isa<OMPArraySectionExpr>(Next->getAssociatedExpression()) ||
+                isa<OMPArrayShapingExpr>(Next->getAssociatedExpression()) ||
                 isa<UnaryOperator>(Next->getAssociatedExpression()) ||
                 isa<BinaryOperator>(Next->getAssociatedExpression())) &&
                "Unexpected expression");
