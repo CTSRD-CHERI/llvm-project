@@ -70,24 +70,20 @@ int main() {
                      [ lo_value ] "r"(expected_lo) /* inputs */                \
                    : "lo", "hi" /* clobbers */)
 #elif defined(__x86_64__)
-  // Check the values of r14 + r15 since they will almost certainly not be
+  // Check the value of r14 since they will almost certainly not be
   // clobbered between the asm volatile and the call to unw_init_local()
   size_t expected_r14 = 0x87654321;
-  size_t expected_r15 = 0x12345678;
   auto check_reg_values = [=](unw_context_t *context, unw_cursor_t *cursor) {
     (void)context;
     CHECK_REG(UNW_X86_64_R14, expected_r14);
-    CHECK_REG(UNW_X86_64_R15, expected_r15);
   };
   // Setup some registers that we can compare to the values stored in the
   // unw_cursor
 #define ASM_SETUP_CONTEXT()                                                    \
   __asm__ volatile("movq %[r14_value], %%r14\n\t"                              \
-                   "movq %[r15_value], %%r15\n\t"                              \
-                   : /* no outputs */                                          \
-                   : [ r14_value ] "X"(expected_r14),                          \
-                     [ r15_value ] "X"(expected_r15) /* inputs */              \
-                   : "r14", "r15" /* clobbers */)
+                   :                               /* no outputs */            \
+                   : [r14_value] "X"(expected_r14) /* inputs */                \
+                   : "r14" /* clobbers */)
 #else
 #warning "Test not implemented for this architecture"
   auto check_reg_values = [](unw_context_t *context, unw_cursor_t *cursor) {
