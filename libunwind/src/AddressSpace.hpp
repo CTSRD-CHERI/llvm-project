@@ -61,9 +61,9 @@ namespace libunwind {
   {
     const struct mach_header*   mh;
     const void*                 dwarf_section;
+    uintptr_t                   dwarf_section_length;
     const void*                 compact_unwind_section;
-    size_t                      dwarf_section_length;
-    size_t                      compact_unwind_section_length;
+    uintptr_t                   compact_unwind_section_length;
   };
   #if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) \
                                  && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1070)) \
