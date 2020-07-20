@@ -69,6 +69,7 @@ def parseScript(test, preamble):
 
     # Parse the test file, including custom directives
     additionalCompileFlags = []
+    additionalLinkFlags = []
     fileDependencies = []
     parsers = [
         lit.TestRunner.IntegratedTestKeywordParser('FILE_DEPENDENCIES:',
@@ -76,7 +77,10 @@ def parseScript(test, preamble):
                                                    initial_value=fileDependencies),
         lit.TestRunner.IntegratedTestKeywordParser('ADDITIONAL_COMPILE_FLAGS:',
                                                    lit.TestRunner.ParserKind.LIST,
-                                                   initial_value=additionalCompileFlags)
+                                                   initial_value=additionalCompileFlags),
+        lit.TestRunner.IntegratedTestKeywordParser('ADDITIONAL_LINK_FLAGS:',
+                                                   lit.TestRunner.ParserKind.LIST,
+                                                   initial_value=additionalLinkFlags),
     ]
 
     scriptInTest = lit.TestRunner.parseIntegratedTestScript(test, additional_parsers=parsers,
@@ -94,9 +98,11 @@ def parseScript(test, preamble):
     script += preamble
     script += scriptInTest
 
+
     # Add compile flags specified with ADDITIONAL_COMPILE_FLAGS.
     substitutions = [(s, x + ' ' + ' '.join(additionalCompileFlags)) if s == '%{compile_flags}'
-                            else (s, x) for (s, x) in substitutions]
+                     else (s, x + ' ' + ' '.join(additionalLinkFlags)) if s == '%{link_flags}' else (s, x) for
+                     (s, x) in substitutions]
 
     # Perform substitutions in the script itself.
     script = lit.TestRunner.applySubstitutions(script, substitutions,
