@@ -871,10 +871,10 @@ inline bool LocalAddressSpace::findUnwindSections(pc_t targetAddr,
                                                   UnwindInfoSections &info) {
 #ifdef __APPLE__
   dyld_unwind_sections dyldInfo;
-  if (_dyld_find_unwind_sections((void *)targetAddr, &dyldInfo)) {
+  if (_dyld_find_unwind_sections(targetAddr.get(), &dyldInfo)) {
     info.dso_base                      = (uintptr_t)dyldInfo.mh;
  #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
-    info.dwarf_section                 = (uintptr_t)dyldInfo.dwarf_section;
+    info.set_dwarf_section((uintptr_t)dyldInfo.dwarf_section);
     info.dwarf_section_length          = dyldInfo.dwarf_section_length;
  #endif
     info.compact_unwind_section        = (uintptr_t)dyldInfo.compact_unwind_section;
