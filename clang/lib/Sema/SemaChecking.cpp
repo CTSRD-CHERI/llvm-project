@@ -1989,7 +1989,6 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
                   ? "__builtin_return_address"
                   : "__builtin_frame_address")
           << TheCall->getSourceRange();
-    TheCall->setType(Context.VoidPtrTy);
     break;
   }
 
