@@ -16,6 +16,7 @@ config.llvm_unwinder            = True
 config.builtins_library         = "@LIBUNWIND_BUILTINS_LIBRARY@"
 config.enable_threads           = @LIBUNWIND_ENABLE_THREADS@
 config.use_sanitizer            = "@LLVM_USE_SANITIZER@"
+config.sanitizer_library        = "@LIBUNWIND_SANITIZER_LIBRARY@"
 config.enable_32bit             = @LIBUNWIND_BUILD_32_BITS@
 config.target_info              = "@LIBUNWIND_TARGET_INFO@"
 config.test_linker_flags        = "@LIBUNWIND_TEST_LINKER_FLAGS@"

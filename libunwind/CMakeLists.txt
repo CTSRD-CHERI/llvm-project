@@ -341,6 +341,56 @@ if (LIBUNWIND_HAS_COMMENT_LIB_PRAGMA)
   endif()
 endif()
 
+# Sanitizer flags =============================================================
+function(get_sanitizer_flags OUT_VAR USE_SANITIZER)
+    message(STATUS "get_sanitizer_flags LIBUNWIND_SANITIZER_FLAGS=${LIBUNWIND_SANITIZER_FLAGS}")
+    set(LIBUNWIND_SANITIZER_FLAGS)
+    set(USE_SANITIZER "${USE_SANITIZER}")
+    # NOTE: LLVM_USE_SANITIZER checks for a UNIX like system instead of MSVC.
+    if (USE_SANITIZER AND LLVM_ON_UNIX)
+        append_flags_if_supported(LIBUNWIND_SANITIZER_FLAGS "-fno-omit-frame-pointer")
+
+        if (NOT uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG" AND
+            NOT uppercase_CMAKE_BUILD_TYPE STREQUAL "RELWITHDEBINFO")
+            append_flags_if_supported(LIBUNWIND_SANITIZER_FLAGS "-gline-tables-only")
+        endif()
+        if (USE_SANITIZER STREQUAL "Address")
+            append_flags(LIBUNWIND_SANITIZER_FLAGS "-fsanitize=address")
+        elseif (USE_SANITIZER MATCHES "Memory(WithOrigins)?")
+            append_flags(LIBUNWIND_SANITIZER_FLAGS -fsanitize=memory)
+            if (USE_SANITIZER STREQUAL "MemoryWithOrigins")
+                append_flags(LIBUNWIND_SANITIZER_FLAGS "-fsanitize-memory-track-origins")
+            endif()
+        elseif (USE_SANITIZER STREQUAL "Undefined")
+            append_flags(LIBUNWIND_SANITIZER_FLAGS "-fsanitize=undefined;-fno-sanitize=vptr,function;-fno-sanitize-recover=all")
+        elseif (USE_SANITIZER STREQUAL "Address;Undefined" OR
+                USE_SANITIZER STREQUAL "Undefined;Address")
+            append_flags(LIBUNWIND_SANITIZER_FLAGS "-fsanitize=address,undefined;-fno-sanitize=vptr,function;-fno-sanitize-recover=all")
+        elseif (USE_SANITIZER STREQUAL "Thread")
+            append_flags(LIBUNWIND_SANITIZER_FLAGS -fsanitize=thread)
+        elseif (USE_SANITIZER STREQUAL "DataFlow")
+            append_flags(LIBUNWIND_SANITIZER_FLAGS -fsanitize=dataflow)
+        else()
+            message(WARNING "Unsupported value of LLVM_USE_SANITIZER: ${USE_SANITIZER}")
+        endif()
+    elseif(USE_SANITIZER AND MSVC)
+        message(WARNING "LLVM_USE_SANITIZER is not supported on this platform.")
+    endif()
+    set(${OUT_VAR} "${LIBUNWIND_SANITIZER_FLAGS}" PARENT_SCOPE)
+endfunction()
+
+# Configure for sanitizers. If LIBCXX_STANDALONE_BUILD then we have to do
+# the flag translation ourselves. Othewise LLVM's CMakeList.txt will handle it.
+if (LIBUNWIND_STANDALONE_BUILD)
+    set(LLVM_USE_SANITIZER "" CACHE STRING
+        "Define the sanitizer used to build the library and tests")
+endif()
+get_sanitizer_flags(LIBUNWIND_SANITIZER_FLAGS "${LLVM_USE_SANITIZER}")
+if (LIBUNWIND_STANDALONE_BUILD AND LIBUNWIND_SANITIZER_FLAGS)
+    add_flags("${LIBUNWIND_SANITIZER_FLAGS}")
+    message(STATUS "LIBUNWIND_SANITIZER_FLAGS=${LIBUNWIND_SANITIZER_FLAGS}")
+endif()
+
 #===============================================================================
 # Setup Source Code
 #===============================================================================
