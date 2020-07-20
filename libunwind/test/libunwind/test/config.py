@@ -61,7 +61,8 @@ class Configuration(LibcxxConfiguration):
         # in the search order. This is especially important for static linking.
         if self.link_shared:
             # dladdr needs libdl on Linux
-            self.cxx.link_flags += ['-lunwind', '-ldl']
+            self.cxx.link_flags += ['-L', os.path.join(self.libunwind_obj_root, "lib"),
+                                    '-lunwind', '-ldl']
         else:
             libname = self.make_static_lib_name('unwind')
             abs_path = os.path.join(self.libunwind_obj_root, "lib", libname)
