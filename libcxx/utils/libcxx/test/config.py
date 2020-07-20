@@ -517,8 +517,10 @@ class Configuration(object):
         cxx_abi = self.get_lit_conf('cxx_abi', self.default_cxx_abi_library)
         link_flags = []
         if cxx_abi == 'libstdc++':
+            self.cxx.link_libcxxabi_flag = '-lstdc++'
             link_flags += ['-lstdc++']
         elif cxx_abi == 'libsupc++':
+            self.cxx.link_libcxxabi_flag = '-lsupc++'
             link_flags += ['-lsupc++']
         elif cxx_abi == 'libcxxabi':
             # If the C++ library requires explicitly linking to libc++abi, or
@@ -530,6 +532,7 @@ class Configuration(object):
                 libcxxabi_shared = self.get_lit_bool('libcxxabi_shared', default=True)
                 if self.link_shared and libcxxabi_shared:
                     link_flags += ['-lc++abi']
+                    self.cxx.link_libcxxabi_flag = '-lc++abi'
                 else:
                     if self.abi_library_root:
                         libname = self.make_static_lib_name('c++abi')
@@ -540,6 +543,7 @@ class Configuration(object):
                         link_flags += ['-lc++abi']
         elif cxx_abi == 'libcxxrt':
             link_flags += ['-lcxxrt']
+            self.cxx.link_libcxxabi_flag = '-lcxxrt'
         elif cxx_abi == 'vcruntime':
             debug_suffix = 'd' if self.debug_build else ''
             link_flags += ['-l%s%s' % (lib, debug_suffix) for lib in
