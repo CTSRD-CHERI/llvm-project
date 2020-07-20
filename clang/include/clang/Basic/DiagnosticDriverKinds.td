@@ -475,6 +475,9 @@ def warn_drv_abi_overriding_triple : Warning<
   "overriding triple '%0' environment '%1' since an explicit -mabi=%2 flag was passed">,
   InGroup<OptionIgnored>;
 
+def warn_drv_use_ld_non_word : Warning<
+  "'-fuse-ld=' taking a path is deprecated. Use '--ld-path=' instead">;
+
 def warn_drv_fine_grained_bitfield_accesses_ignored : Warning<
   "option '-ffine-grained-bitfield-accesses' cannot be enabled together with a sanitizer; flag ignored">,
   InGroup<OptionIgnored>;
