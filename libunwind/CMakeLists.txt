@@ -304,8 +304,8 @@ else()
 endif()
 
 # Cross-unwinding
-if (NOT LIBUNWIND_ENABLE_CROSS_UNWINDING)
-  add_compile_flags(-D_LIBUNWIND_IS_NATIVE_ONLY)
+if (LIBUNWIND_ENABLE_CROSS_UNWINDING)
+  add_compile_flags(-D_LIBUNWIND_ENABLE_CROSS_UNWINDING)
 endif()
 
 # Threading-support

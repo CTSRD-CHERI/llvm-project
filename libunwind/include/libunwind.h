@@ -99,6 +99,8 @@ typedef struct unw_proc_info_t unw_proc_info_t;
 #ifdef __cplusplus
 extern "C" {
 #endif
+extern size_t unw_context_size(void) LIBUNWIND_AVAIL;
+extern size_t unw_cursor_size(void) LIBUNWIND_AVAIL;
 
 extern int unw_getcontext(unw_context_t *) LIBUNWIND_AVAIL;
 extern int unw_init_local(unw_cursor_t *, unw_context_t *) LIBUNWIND_AVAIL;
