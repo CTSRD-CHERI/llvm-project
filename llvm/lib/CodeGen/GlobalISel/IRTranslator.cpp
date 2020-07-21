@@ -1760,10 +1760,6 @@ bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
     MIB->copyIRFlags(CI);
 
   for (auto &Arg : enumerate(CI.arg_operands())) {
-    // Some intrinsics take metadata parameters. Reject them.
-    if (isa<MetadataAsValue>(Arg.value()))
-      return false;
-
     // If this is required to be an immediate, don't materialize it in a
     // register.
     if (CI.paramHasAttr(Arg.index(), Attribute::ImmArg)) {
@@ -1776,6 +1772,11 @@ bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
       } else {
         MIB.addFPImm(cast<ConstantFP>(Arg.value()));
       }
+    } else if (auto MD = dyn_cast<MetadataAsValue>(Arg.value())) {
+      auto *MDN = dyn_cast<MDNode>(MD->getMetadata());
+      if (!MDN) // This was probably an MDString.
+        return false;
+      MIB.addMetadata(MDN);
     } else {
       ArrayRef<Register> VRegs = getOrCreateVRegs(*Arg.value());
       if (VRegs.size() > 1)
