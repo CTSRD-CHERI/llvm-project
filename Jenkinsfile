@@ -104,7 +104,7 @@ if (archiveArtifacts) {
                     skipInitialSetup: true, // No need to checkout git
                     nodeLabel: null, buildStage: "Run libunwind+libcxxabi+libcxx tests",
                     // Ensure we test failures don't prevent creation of the junit file
-                    extraArgs: '--keep-install-dir --install-prefix=/',
+                    extraArgs: '--keep-install-dir --install-prefix=/ --without-sdk',
                     runTests: true,
                     // Set the status message on the current commit of the LLVM repo
                     gitHubStatusArgs: result.gitInfo, skipTarball: true,
