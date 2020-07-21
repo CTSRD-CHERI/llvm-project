@@ -96,8 +96,21 @@ Map defaultArgs = [target              : 'llvm-native', architecture: 'native',
 
 if (archiveArtifacts) {
     parallel "Build+Test": {
-        // Run the full test suite
-        cheribuildProject(defaultArgs)
+        node (nodeLabel) {
+            // Run the full test suite
+            def result = cheribuildProject(defaultArgs + [nodeLabel: null]) // already have a node
+            // Run the libunwind+libcxxabi+libcxx tests to check we didn't regress native builds
+            cheribuildProject(target: 'llvm-libs', architecture: 'native',
+                    skipInitialSetup: true, // No need to checkout git
+                    nodeLabel: null, buildStage: "Run libunwind+libcxxabi+libcxx tests",
+                    // Ensure we test failures don't prevent creation of the junit file
+                    extraArgs: '--keep-install-dir --install-prefix=/',
+                    runTests: true,
+                    // Set the status message on the current commit of the LLVM repo
+                    gitHubStatusArgs: result.gitInfo, skipTarball: true,
+                    uniqueId: "llvm-libraries/${env.JOB_BASE_NAME}/${nodeLabel}/",
+                    junitXmlFiles: "llvm-libs-build/llvm-test-output.xml",)
+        }
     }, "Build LTO": {
         // Build for archiving (with LTO, only toolchain binaries)
         String ltoCheribuildArgs = cheribuildArgs.join(" ")
