@@ -104,15 +104,14 @@ if (archiveArtifacts) {
             def result = cheribuildProject(defaultArgs + [nodeLabel: null]) // already have a node
             // Run the libunwind+libcxxabi+libcxx tests to check we didn't regress native builds
             cheribuildProject(target: 'llvm-libs', architecture: 'native',
-                    skipInitialSetup: true, // No need to checkout git
+                    skipTarball: true, skipInitialSetup: true, // No need to checkout git
                     nodeLabel: null, buildStage: "Run libunwind+libcxxabi+libcxx tests",
                     // Ensure we test failures don't prevent creation of the junit file
                     extraArgs: '--keep-install-dir --install-prefix=/ --without-sdk',
-                    runTests: true,
                     // Set the status message on the current commit of the LLVM repo
-                    gitHubStatusArgs: result.gitInfo, skipTarball: true,
+                    gitHubStatusArgs: result.gitInfo,
                     uniqueId: "llvm-libraries/${env.JOB_BASE_NAME}/${nodeLabel}/",
-                    junitXmlFiles: "llvm-libs-build/llvm-test-output.xml",)
+                    runTests: true, junitXmlFiles: "llvm-libs-build/llvm-libs-test-results.xml")
         }
     }, "Build LTO": {
         // Build for archiving (with LTO, only toolchain binaries)
