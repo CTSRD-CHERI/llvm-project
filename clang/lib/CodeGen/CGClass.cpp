@@ -2514,14 +2514,16 @@ void CodeGenFunction::InitializeVTablePointer(const VPtr &Vptr) {
 
   // Finally, store the address point. Use the same LLVM types as the field to
   // support optimization.
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  unsigned GlobalsAS = CGM.getDataLayout().getDefaultGlobalsAddressSpace();
+  unsigned ProgAS = CGM.getDataLayout().getProgramAddressSpace();
   llvm::Type *VTablePtrTy =
       llvm::FunctionType::get(CGM.Int32Ty, /*isVarArg=*/true)
-          ->getPointerTo(DefaultAS)
-          ->getPointerTo(DefaultAS);
-  VTableField = Builder.CreateBitCast(VTableField,
-                                      VTablePtrTy->getPointerTo(DefaultAS));
-  VTableAddressPoint = Builder.CreateBitCast(VTableAddressPoint, VTablePtrTy);
+          ->getPointerTo(ProgAS)
+          ->getPointerTo(GlobalsAS);
+  VTableField = Builder.CreatePointerBitCastOrAddrSpaceCast(
+      VTableField, VTablePtrTy->getPointerTo(GlobalsAS));
+  VTableAddressPoint = Builder.CreatePointerBitCastOrAddrSpaceCast(
+      VTableAddressPoint, VTablePtrTy);
 
   llvm::StoreInst *Store = Builder.CreateStore(VTableAddressPoint, VTableField);
   TBAAAccessInfo TBAAInfo = CGM.getTBAAVTablePtrAccessInfo(VTablePtrTy);

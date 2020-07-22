@@ -2405,7 +2405,7 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
     }
   }
   llvm::PointerType *guardPtrTy = guardTy->getPointerTo(
-                                    CGM.getTargetCodeGenInfo().getDefaultAS());
+      CGF.CGM.getDataLayout().getDefaultGlobalsAddressSpace());
 
   // Create the guard variable if we don't already have it (as we
   // might if we're double-emitting this function body).
