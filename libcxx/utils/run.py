@@ -25,11 +25,7 @@ def main():
     parser.add_argument('--env', type=str, nargs='*', required=False, default=dict())
     parser.add_argument("command", nargs=argparse.ONE_OR_MORE)
     args = parser.parse_args()
-
-    commandLine = args.command  # argparse will strip the initial '--'
-    if len(commandLine) < 1:
-        sys.stderr.write('Missing actual commands to run')
-        exit(1)
+    commandLine = args.command
 
     # Do any necessary codesigning.
     if args.codesign_identity:
