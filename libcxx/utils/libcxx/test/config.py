@@ -86,7 +86,7 @@ class Configuration(object):
         self.use_target = False
         self.use_system_cxx_lib = self.get_lit_bool('use_system_cxx_lib', False)
         self.use_clang_verify = False
-        self.default_cxx_abi_library = 'libcxxabi'
+        self.default_cxx_abi_library = None
 
     def get_lit_conf(self, name, default=None):
         val = self.lit_config.params.get(name, None)
@@ -152,14 +152,14 @@ class Configuration(object):
         self.configure_sanitizer()
         self.configure_coverage()
         self.configure_modules()
-        self.configure_substitutions()
-        self.configure_features()
-        self.configure_new_params()
         # Add the ABI library link flags to cxx for use by libunwind tests
         # This works for me on macOS and FreeBSD but for other systems
         # we may need to add more linker flags (but probably not the full
         # call to self.target_info.add_cxx_link_flags()).
         self.cxx.abi_library_link_flags = self.get_link_flags_abi_library()
+        self.configure_substitutions()
+        self.configure_features()
+        self.configure_new_params()
         self.configure_new_features()
 
     def configure_new_features(self):
@@ -515,8 +515,16 @@ class Configuration(object):
         if self.default_cxx_abi_library is None:
             self.default_cxx_abi_library = self.target_info.default_cxx_abi_library()
         cxx_abi = self.get_lit_conf('cxx_abi', self.default_cxx_abi_library)
+        if cxx_abi == 'default':
+            cxx_abi = self.default_cxx_abi_library
+        cxx_abi_lib_path = self.get_lit_conf('cxx_abi_lib_path', None)
+        self.lit_config.warning(
+            'default_cxx_abi_library=%s, cxx_abi=%s,cxx_abi_lib_path=%s' % (self.default_cxx_abi_library, cxx_abi, cxx_abi_lib_path))
         link_flags = []
-        if cxx_abi == 'libstdc++':
+        if cxx_abi_lib_path:
+            link_flags += [cxx_abi_lib_path]
+            self.cxx.link_libcxxabi_flag = cxx_abi_lib_path
+        elif cxx_abi == 'libstdc++':
             self.cxx.link_libcxxabi_flag = '-lstdc++'
             link_flags += ['-lstdc++']
         elif cxx_abi == 'libsupc++':
@@ -705,6 +713,7 @@ class Configuration(object):
         sub.append(('%{flags}',         ' '.join(map(pipes.quote, flags))))
         sub.append(('%{compile_flags}', ' '.join(map(pipes.quote, compile_flags))))
         sub.append(('%{link_flags}',    ' '.join(map(pipes.quote, self.cxx.link_flags))))
+        self.lit_config.warning('self.cxx.link_libcxxabi_flag=%s' % self.cxx.link_libcxxabi_flag)
         sub.append(('%{link_libcxxabi}', pipes.quote(self.cxx.link_libcxxabi_flag)))
         codesign_ident = self.get_lit_conf('llvm_codesign_identity', '')
         env_vars = ' '.join('%s=%s' % (k, pipes.quote(v)) for (k, v) in self.exec_env.items())

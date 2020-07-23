@@ -98,6 +98,10 @@ set(LIBUNWIND_TEST_LINKER_FLAGS "" CACHE STRING
 set(LIBUNWIND_TEST_COMPILER_FLAGS "" CACHE STRING
     "Additional compiler flags for test programs.")
 option(LIBUNWIND_TEST_ENABLE_EXCEPTIONS "Also include tests requiring C++ exceptions." ON)
+set(LIBUNWIND_TEST_CXX_ABI_LIB_PATH "" CACHE PATH "Path to the C++ ABI library to use for testing.")
+set(CXXABIS none default libcxxabi libcxxrt libstdc++ libsupc++ vcruntime)
+set(LIBUNWIND_CXX_ABI "default" CACHE STRING "Name of the C++ ABI library to use for testing.")
+set_property(CACHE LIBUNWIND_CXX_ABI PROPERTY STRINGS ;${CXXABIS})
 set(LIBUNWIND_USE_VERSION_SCRIPT "" CACHE PATH "version script to use when linking libunwind.so.")
 
 option(LIBUNWIND_ENABLE_SHARED "Build libunwind as a shared library." ON)
