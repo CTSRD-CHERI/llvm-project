@@ -1062,6 +1062,9 @@ private:
   // FIXME: What about debug intrinsics? This matches old behavior, but
   // doesn't make sense.
   void visitIntrinsicInst(IntrinsicInst &II) {
+    if (II.isDroppable())
+      return;
+
     if (!IsOffsetKnown)
       return PI.setAborted(&II);
 
@@ -2035,7 +2038,7 @@ static bool isVectorPromotionViableForSlice(Partition &P, const Slice &S,
     if (!S.isSplittable())
       return false; // Skip any unsplittable intrinsics.
   } else if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(U->getUser())) {
-    if (!II->isLifetimeStartOrEnd())
+    if (!II->isLifetimeStartOrEnd() && !II->isDroppable())
       return false;
   } else if (U->get()->getType()->getPointerElementType()->isStructTy()) {
     // Disable vector promotion when there are loads or stores of an FCA.
@@ -2270,7 +2273,7 @@ static bool isIntegerWideningViableForSlice(const Slice &S,
     if (!S.isSplittable())
       return false; // Skip any unsplittable intrinsics.
   } else if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(U->getUser())) {
-    if (!II->isLifetimeStartOrEnd())
+    if (!II->isLifetimeStartOrEnd() && !II->isDroppable())
       return false;
   } else {
     return false;
@@ -3307,13 +3310,21 @@ private:
   }
 
   bool visitIntrinsicInst(IntrinsicInst &II) {
-    assert(II.isLifetimeStartOrEnd());
+    assert((II.isLifetimeStartOrEnd() || II.isDroppable()) &&
+           "Unexpected intrinsic!");
     LLVM_DEBUG(dbgs() << "    original: " << II << "\n");
-    assert(II.getArgOperand(1) == OldPtr);
 
     // Record this instruction for deletion.
     Pass.DeadInsts.insert(&II);
 
+    if (II.isDroppable()) {
+      assert(II.getIntrinsicID() == Intrinsic::assume && "Expected assume");
+      // TODO For now we forget assumed information, this can be improved.
+      OldPtr->dropDroppableUsesByUser(II);
+      return true;
+    }
+
+    assert(II.getArgOperand(1) == OldPtr);
     // Lifetime intrinsics are only promotable if they cover the whole alloca.
     // Therefore, we drop lifetime intrinsics which don't cover the whole
     // alloca.
