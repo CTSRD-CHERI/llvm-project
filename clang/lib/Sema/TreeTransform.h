@@ -3531,7 +3531,8 @@ public:
     // Build the CallExpr
     ExprResult TheCall = CallExpr::Create(
         SemaRef.Context, Callee, SubExprs, Builtin->getCallResultType(),
-        Expr::getValueKindForType(Builtin->getReturnType()), RParenLoc);
+        Expr::getValueKindForType(Builtin->getReturnType()), RParenLoc,
+        FPOptionsOverride());
 
     // Type-check the __builtin_shufflevector expression.
     return SemaRef.SemaBuiltinShuffleVector(cast<CallExpr>(TheCall.get()));
@@ -10543,6 +10544,15 @@ TreeTransform<Derived>::TransformCallExpr(CallExpr *E) {
   // FIXME: Wrong source location information for the '('.
   SourceLocation FakeLParenLoc
     = ((Expr *)Callee.get())->getSourceRange().getBegin();
+
+  Sema::FPFeaturesStateRAII FPFeaturesState(getSema());
+  if (E->hasStoredFPFeatures()) {
+    FPOptionsOverride NewOverrides = E->getFPFeatures();
+    getSema().CurFPFeatures =
+        NewOverrides.applyOverrides(getSema().getLangOpts());
+    getSema().FpPragmaStack.CurrentValue = NewOverrides.getAsOpaqueInt();
+  }
+
   return getDerived().RebuildCallExpr(Callee.get(), FakeLParenLoc,
                                       Args,
                                       E->getRParenLoc());
