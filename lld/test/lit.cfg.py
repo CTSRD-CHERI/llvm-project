@@ -91,7 +91,7 @@ if (lit.util.which('cvtres', config.environment['PATH']) or
         config.llvm_libxml2_enabled):
     config.available_features.add('manifest_tool')
 
-if config.llvm_libxml2_enabled:
+if config.have_libxml2:
     config.available_features.add('libxml2')
 
 if config.have_dia_sdk:
