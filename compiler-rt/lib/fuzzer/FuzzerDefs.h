@@ -20,7 +20,6 @@
 #include <string>
 #include <vector>
 
-#include "FuzzerPlatform.h"
 #ifdef __CHERI_PURE_CAPABILITY__
 using VirtAddr = vaddr_t;
 #else
@@ -68,8 +67,7 @@ typedef Vector<uint8_t> Unit;
 typedef Vector<Unit> UnitVector;
 typedef int (*UserCallback)(const uint8_t *Data, size_t Size);
 
-ATTRIBUTE_INTERFACE int FuzzerDriver(int *argc, char ***argv,
-                                     UserCallback Callback);
+int FuzzerDriver(int *argc, char ***argv, UserCallback Callback);
 
 uint8_t *ExtraCountersBegin();
 uint8_t *ExtraCountersEnd();
