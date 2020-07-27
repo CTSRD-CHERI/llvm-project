@@ -1413,7 +1413,24 @@ bool MachineInstr::hasUnmodeledSideEffects() const {
     if (ExtraInfo & InlineAsm::Extra_HasSideEffects)
       return true;
   }
+  return false;
+}
 
+bool MachineInstr::mayTrap() const {
+  if (hasProperty(MCID::MayTrap)) {
+    // TODO: Query TII whether this instruction can really trap
+    return true;
+  }
+  if (hasProperty(MCID::MayTrapOnSealedInput)) {
+    for (const auto &Op : explicit_uses()) {
+      auto &OpInfo = getDesc().OpInfo[getOperandNo(&Op)];
+      if (OpInfo.mustBeUnsealedCapability() && Op.maybeSealed()) {
+        // TODO: Check whether the def is safe (e.g. produced by a previous
+        // CIncOffset, etc).
+        return true;
+      }
+    }
+  }
   return false;
 }
 

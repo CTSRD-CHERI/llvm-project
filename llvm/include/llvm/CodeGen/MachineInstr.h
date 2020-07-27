@@ -1566,6 +1566,15 @@ public:
   ///
   bool hasUnmodeledSideEffects() const;
 
+  /// Returns true if this instruction can trap (e.g. CHERI instructions)
+  /// This can be used to check whether this instruction is safe to
+  /// unconditionally hoist.
+  /// Note: FP exceptions are tracked separately so this does not return true
+  /// for instructions with mayRaiseFPException()
+  /// TODO: we should probably also return true for mayRaiseFPException()
+  ///   once we have checked that tests still pass
+  bool mayTrap() const;
+
   /// Returns true if it is illegal to fold a load across this instruction.
   bool isLoadFoldBarrier() const;
 

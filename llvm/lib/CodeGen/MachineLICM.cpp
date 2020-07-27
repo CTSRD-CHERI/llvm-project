@@ -1048,6 +1048,15 @@ bool MachineLICMBase::IsLICMCandidate(MachineInstr &I) {
       !IsGuaranteedToExecute(I.getParent()))
     return false;
 
+  if (I.mayTrap()) {
+    if (!IsGuaranteedToExecute(I.getParent()))
+      return false;
+    // TODO: we probably also shouldn't be hoisting potentially trapping
+    // instructions if there is an earlier trap/noreturn call
+    LLVM_DEBUG(dbgs() << "Potentially trapping instruction is candidate: ";
+               I.dump());
+  }
+
   return true;
 }
 

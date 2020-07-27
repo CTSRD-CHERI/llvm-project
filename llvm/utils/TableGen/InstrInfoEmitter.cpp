@@ -169,6 +169,9 @@ InstrInfoEmitter::GetOperandInfo(const CodeGenInstruction &Inst) {
       if (Op.Rec->isSubClassOf("BranchTargetOperand"))
         Res += "|(1<<MCOI::BranchTarget)";
 
+      if (Op.TrapsIfSealedCapability)
+        Res += "|(1<<MCOI::TrapsIfSealedCapability)";
+
       // Fill in operand type.
       Res += ", ";
       assert(!Op.OperandType.empty() && "Invalid operand type.");
@@ -752,7 +755,10 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
   if (Inst.canFoldAsLoad)      OS << "|(1ULL<<MCID::FoldableAsLoad)";
   if (Inst.mayLoad)            OS << "|(1ULL<<MCID::MayLoad)";
   if (Inst.mayStore)           OS << "|(1ULL<<MCID::MayStore)";
+  if (Inst.mayTrap)            OS << "|(1ULL<<MCID::MayTrap)";
   if (Inst.mayRaiseFPException) OS << "|(1ULL<<MCID::MayRaiseFPException)";
+  if (Inst.mayTrapOnSealedInput) OS << "|(1ULL<<MCID::MayTrapOnSealedInput)";
+  if (Inst.defsCanBeSealed)     OS << "|(1ULL<<MCID::DefsCanBeSealed)";
   if (Inst.isPredicable)       OS << "|(1ULL<<MCID::Predicable)";
   if (Inst.isConvertibleToThreeAddress) OS << "|(1ULL<<MCID::ConvertibleTo3Addr)";
   if (Inst.isCommutable)       OS << "|(1ULL<<MCID::Commutable)";
