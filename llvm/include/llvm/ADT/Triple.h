@@ -145,6 +145,8 @@ public:
     Apple,
     PC,
     SCEI,
+    BGP,
+    BGQ,
     Freescale,
     IBM,
     ImaginationTechnologies,
@@ -180,6 +182,7 @@ public:
     Minix,
     RTEMS,
     NaCl,       // Native Client
+    CNK,        // BG/P Compute-Node Kernel
     AIX,
     CUDA,       // NVIDIA CUDA
     NVCL,       // NVIDIA OpenCL
