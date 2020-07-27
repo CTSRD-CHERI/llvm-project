@@ -1712,6 +1712,12 @@ bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
     assert(!getType()->isCHERICapabilityType(Ctx));
     break;
 
+  case CK_LValueBitCast:
+    // This creates a reference, but they are not included as part of the
+    // QualType. Since the type can change from e.g. class Foo -> char*& we
+    // cannot check whether the capability qualifier has changed.
+    break;
+
   default:
     // All other cast kinds should not change isCHERICapabilityType():
     assert((getType()->isCHERICapabilityType(Ctx) ==
