@@ -234,26 +234,40 @@ CGIOperandList::ParseOperandName(const std::string &Op, bool AllowWholeOp) {
 static void ParseConstraint(const std::string &CStr, CGIOperandList &Ops,
                             Record *Rec) {
   // EARLY_CLOBBER: @early $reg
-  std::string::size_type wpos = CStr.find_first_of(" \t");
   std::string::size_type start = CStr.find_first_not_of(" \t");
+  std::string::size_type wpos = CStr.find_first_of(" \t", start);
   std::string Tok = CStr.substr(start, wpos - start);
-  if (Tok == "@earlyclobber") {
-    std::string Name = CStr.substr(wpos+1);
-    wpos = Name.find_first_not_of(" \t");
+  auto ParseBooleanConstraintOp = [&Rec, &Ops, &CStr](StringRef Constraint,
+                                                      std::string &Name) {
+    auto wpos = Name.find_first_not_of(" \t");
     if (wpos == std::string::npos)
-      PrintFatalError(
-        Rec->getLoc(), "Illegal format for @earlyclobber constraint in '" +
-        Rec->getName() + "': '" + CStr + "'");
+      PrintFatalError(Rec->getLoc(), "Illegal format for " + Constraint +
+                                         " constraint in '" + Rec->getName() +
+                                         "': '" + CStr + "'");
     Name = Name.substr(wpos);
-    std::pair<unsigned,unsigned> Op = Ops.ParseOperandName(Name, false);
+    return Ops.ParseOperandName(Name, false);
+  };
+  if (Tok == "@earlyclobber") {
+    std::string Name = CStr.substr(wpos + 1);
+    std::pair<unsigned, unsigned> Op =
+        ParseBooleanConstraintOp("@earlyclobber", Name);
 
     // Build the string for the operand
     if (!Ops[Op.first].Constraints[Op.second].isNone())
-      PrintFatalError(
-        Rec->getLoc(), "Operand '" + Name + "' of '" + Rec->getName() +
-        "' cannot have multiple constraints!");
+      PrintFatalError(Rec->getLoc(), "Operand '" + Name + "' of '" +
+                                         Rec->getName() +
+                                         "' cannot have multiple constraints!");
     Ops[Op.first].Constraints[Op.second] =
-    CGIOperandList::ConstraintInfo::getEarlyClobber();
+        CGIOperandList::ConstraintInfo::getEarlyClobber();
+    return;
+  }
+
+  if (Tok == "@traps_if_sealed") {
+    std::string Name = CStr.substr(wpos + 1);
+    std::pair<unsigned, unsigned> Op =
+        ParseBooleanConstraintOp("@traps_if_sealed", Name);
+    // TODO: should check that this is an input operand
+    Ops[Op.first].TrapsIfSealedCapability = true;
     return;
   }
 
@@ -411,6 +425,7 @@ CodeGenInstruction::CodeGenInstruction(Record *R)
   mayStore     = R->getValueAsBitOrUnset("mayStore", Unset);
   mayStore_Unset = Unset;
   mayRaiseFPException = R->getValueAsBit("mayRaiseFPException");
+  mayTrap = R->getValueAsBit("mayTrap");
   hasSideEffects = R->getValueAsBitOrUnset("hasSideEffects", Unset);
   hasSideEffects_Unset = Unset;
 
@@ -429,6 +444,19 @@ CodeGenInstruction::CodeGenInstruction(Record *R)
   // Parse Constraints.
   ParseConstraints(std::string(R->getValueAsString("Constraints")), Operands,
                    R);
+  bool HasTrapOnSealedOpConstraint = false;
+  for (auto &Op : Operands) {
+    if (Op.TrapsIfSealedCapability)
+      HasTrapOnSealedOpConstraint = true;
+  }
+  mayTrapOnSealedInput = R->getValueAsBitOrUnset("mayTrapOnSealedInput", Unset);
+  if (Unset)
+    mayTrapOnSealedInput = HasTrapOnSealedOpConstraint;
+  defsCanBeSealed = R->getValueAsBit("defsCanBeSealed");
+  // Instructions that load values can write a sealed value.
+  // FIXME: should this always be explicitly specified?
+  if (mayLoad && !mayLoad_Unset)
+    defsCanBeSealed = true;
 
   // Parse the DisableEncoding field.
   Operands.ProcessDisableEncoding(

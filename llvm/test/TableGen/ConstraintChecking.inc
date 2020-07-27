@@ -1,6 +1,10 @@
 include "llvm/Target/Target.td"
 
-def TestTarget : Target;
+def archInstrInfo : InstrInfo { }
+
+def TestTarget : Target {
+  let InstructionSet = archInstrInfo;
+}
 
 class Encoding : Instruction {
   field bits<8> Inst;
@@ -30,4 +34,5 @@ class TestInstructionWithConstraints<string cstr> : Encoding {
   let Inst{2} = dest2{0};
   let Inst{1} = src1{0};
   let Inst{0} = src2{0};
+  let Namespace = "MyNamespace";
 }
