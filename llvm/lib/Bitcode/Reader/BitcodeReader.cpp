@@ -1720,7 +1720,7 @@ Error BitcodeReader::parseTypeTableBody() {
     case bitc::TYPE_CODE_NUMENTRY: // TYPE_CODE_NUMENTRY: [numentries]
       // TYPE_CODE_NUMENTRY contains a count of the number of types in the
       // type list.  This allows us to reserve space.
-      if (Record.size() < 1)
+      if (Record.empty())
         return error("Invalid record");
       TypeList.resize(Record[0]);
       continue;
@@ -1761,7 +1761,7 @@ Error BitcodeReader::parseTypeTableBody() {
       ResultTy = Type::getTokenTy(Context);
       break;
     case bitc::TYPE_CODE_INTEGER: { // INTEGER: [width]
-      if (Record.size() < 1)
+      if (Record.empty())
         return error("Invalid record");
 
       uint64_t NumBits = Record[0];
@@ -1773,7 +1773,7 @@ Error BitcodeReader::parseTypeTableBody() {
     }
     case bitc::TYPE_CODE_POINTER: { // POINTER: [pointee type] or
                                     //          [pointee type, address space]
-      if (Record.size() < 1)
+      if (Record.empty())
         return error("Invalid record");
       unsigned AddressSpace = 0;
       if (Record.size() == 2)
@@ -1828,7 +1828,7 @@ Error BitcodeReader::parseTypeTableBody() {
       break;
     }
     case bitc::TYPE_CODE_STRUCT_ANON: {  // STRUCT: [ispacked, eltty x N]
-      if (Record.size() < 1)
+      if (Record.empty())
         return error("Invalid record");
       SmallVector<Type*, 8> EltTys;
       for (unsigned i = 1, e = Record.size(); i != e; ++i) {
@@ -1848,7 +1848,7 @@ Error BitcodeReader::parseTypeTableBody() {
       continue;
 
     case bitc::TYPE_CODE_STRUCT_NAMED: { // STRUCT: [ispacked, eltty x N]
-      if (Record.size() < 1)
+      if (Record.empty())
         return error("Invalid record");
 
       if (NumRecords >= TypeList.size())
@@ -3720,7 +3720,7 @@ Error BitcodeReader::parseModule(uint64_t ResumeBit,
       break;
     /// MODULE_CODE_VSTOFFSET: [offset]
     case bitc::MODULE_CODE_VSTOFFSET:
-      if (Record.size() < 1)
+      if (Record.empty())
         return error("Invalid record");
       // Note that we subtract 1 here because the offset is relative to one word
       // before the start of the identification or module block, which was
@@ -3874,7 +3874,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
     default: // Default behavior: reject
       return error("Invalid value");
     case bitc::FUNC_CODE_DECLAREBLOCKS: {   // DECLAREBLOCKS: [nblocks]
-      if (Record.size() < 1 || Record[0] == 0)
+      if (Record.empty() || Record[0] == 0)
         return error("Invalid record");
       // Create all the basic blocks for the function.
       FunctionBBs.resize(Record[0]);
@@ -4716,7 +4716,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       InstructionList.push_back(I);
       break;
     case bitc::FUNC_CODE_INST_PHI: { // PHI: [ty, val0,bb0, ...]
-      if (Record.size() < 1)
+      if (Record.empty())
         return error("Invalid record");
       // The first record specifies the type.
       FullTy = getFullyStructuredTypeByID(Record[0]);
@@ -5209,7 +5209,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       // number of operand bundle blocks.  These blocks are read into
       // OperandBundles and consumed at the next call or invoke instruction.
 
-      if (Record.size() < 1 || Record[0] >= BundleTags.size())
+      if (Record.empty() || Record[0] >= BundleTags.size())
         return error("Invalid record");
 
       std::vector<Value *> Inputs;
@@ -5742,7 +5742,7 @@ Error ModuleSummaryIndexBitcodeReader::parseModule() {
         }
         /// MODULE_CODE_VSTOFFSET: [offset]
         case bitc::MODULE_CODE_VSTOFFSET:
-          if (Record.size() < 1)
+          if (Record.empty())
             return error("Invalid record");
           // Note that we subtract 1 here because the offset is relative to one
           // word before the start of the identification or module block, which
