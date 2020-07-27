@@ -67,6 +67,11 @@ HoistCheapInsts("hoist-cheap-insts",
                 cl::desc("MachineLICM should hoist even cheap instructions"),
                 cl::init(false), cl::Hidden);
 
+static cl::opt<bool> IgnoreRegPressure(
+    "machinelicm-ignore-reg-pressure",
+    cl::desc("Ignore register pressure when hoisting instructions"),
+    cl::init(false), cl::Hidden);
+
 static cl::opt<bool>
 SinkInstsToAvoidSpills("sink-insts-to-avoid-spills",
                        cl::desc("MachineLICM should sink instructions into "
@@ -1295,7 +1300,7 @@ bool MachineLICMBase::IsProfitableToHoist(MachineInstr &MI) {
 
   // Visit BBs from header to current BB, if hoisting this doesn't cause
   // high register pressure, then it's safe to proceed.
-  if (!CanCauseHighRegPressure(Cost, CheapInstr)) {
+  if (IgnoreRegPressure || !CanCauseHighRegPressure(Cost, CheapInstr)) {
     LLVM_DEBUG(dbgs() << "Hoist non-reg-pressure: " << MI);
     ++NumLowRP;
     return true;
