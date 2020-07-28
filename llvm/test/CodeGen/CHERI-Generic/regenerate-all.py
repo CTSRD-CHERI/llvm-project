@@ -13,7 +13,8 @@ LLVM_SRC_PATH = Path(__file__).parent.parent.parent.parent
 class ArchSpecificValues(object):
     def __init__(self, architecture: str, *, cap_range, cap_width,
                  purecap_lit_command_prefix: bytes,
-                 hybrid_lit_command_prefix: bytes, datalayout: bytes):
+                 hybrid_lit_command_prefix: bytes, datalayout: bytes,
+                 base_architecture: str = None):
         self.hybrid_datalayout = datalayout
         self.purecap_datalayout = datalayout + b"-A200-P200-G200"
         self.hybrid_lit_command_prefix = hybrid_lit_command_prefix
@@ -21,6 +22,7 @@ class ArchSpecificValues(object):
         self.cap_width = cap_width
         self.cap_range = cap_range
         self.name = architecture
+        self.base_name = base_architecture if base_architecture is not None else architecture
         self.tests_path = Path(__file__).parent / architecture
         assert self.tests_path.exists(), self.tests_path
 
@@ -29,18 +31,21 @@ MIPSConfig = ArchSpecificValues("MIPS", cap_range=64, cap_width=128,
                                 purecap_lit_command_prefix=b"%cheri128_purecap_",
                                 hybrid_lit_command_prefix=b"%cheri128_",
                                 datalayout=b"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128")
-RISCV32Config = ArchSpecificValues("RISCV32", cap_range=32, cap_width=64,
+RISCV32Config = ArchSpecificValues("RISCV32", base_architecture="RISCV", cap_range=32, cap_width=64,
                                    purecap_lit_command_prefix=b"%riscv32_cheri_purecap_",
                                    hybrid_lit_command_prefix=b"%riscv32_cheri_",
                                    datalayout=b"e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128")
-RISCV64Config = ArchSpecificValues("RISCV64", cap_range=64, cap_width=128,
+RISCV64Config = ArchSpecificValues("RISCV64", base_architecture="RISCV", cap_range=64, cap_width=128,
                                    purecap_lit_command_prefix=b"%riscv64_cheri_purecap_",
                                    hybrid_lit_command_prefix=b"%riscv64_cheri_",
                                    datalayout=b"e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128")
 
 ALL_ARCHITECTURES = [MIPSConfig, RISCV32Config, RISCV64Config]
-ALL_ARCHITECTURE_IF_STRS = [b"@IF-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES]
-ALL_ARCHITECTURE_IFNOT_STRS = [b"@IFNOT-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES]
+ALL_ARCHITECTURE_IF_STRS = set([b"@IF-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES] + [
+                            b"@IF-" + arch_def.base_name.encode() + b"@" for arch_def in ALL_ARCHITECTURES])
+ALL_ARCHITECTURE_IFNOT_STRS = set([b"@IFNOT-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES] + [
+                               b"@IFNOT-" + arch_def.base_name.encode() + b"@" for arch_def in ALL_ARCHITECTURES])
+
 
 class CmdArgs(object):
     def __init__(self):
@@ -68,7 +73,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     output_path = Path(arch_def.tests_path, test_name)
     manual_checks_only = False
     current_arch_if = b"@IF-" + arch_def.name.encode() + b"@"
+    current_arch_base_if = b"@IF-" + arch_def.base_name.encode() + b"@"
     current_arch_ifnot = b"@IFNOT-" + arch_def.name.encode() + b"@"
+    current_arch_base_ifnot = b"@IFNOT-" + arch_def.base_name.encode() + b"@"
     with output_path.open("wb") as output_file:
         output_file.write(b"; DO NOT EDIT -- This file was generated from " + str(
             Path(input_file.name).relative_to(LLVM_SRC_PATH)).encode("utf-8") + b"\n")
@@ -81,6 +88,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                 if line.startswith(current_arch_if):
                     print("REMOVING", current_arch_if, "from line: ", line)
                     line = line[len(current_arch_if):]
+                elif line.startswith(current_arch_base_if):
+                    print("REMOVING", current_arch_base_if, "from line: ", line)
+                    line = line[len(current_arch_base_if):]
                 elif any(line.startswith(prefix) for prefix in ALL_ARCHITECTURE_IF_STRS):
                     print("Ignoring @IF- directive for other architecture: ", line)
                     continue
@@ -89,6 +99,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
             if line.startswith(b"@IFNOT-"):
                 if line.startswith(current_arch_ifnot):
                     print("Skipping", current_arch_ifnot, "line: ", line)
+                    continue
+                elif line.startswith(current_arch_base_ifnot):
+                    print("Skipping", current_arch_base_ifnot, "line: ", line)
                     continue
                 valid_directive = False
                 for prefix in ALL_ARCHITECTURE_IFNOT_STRS:
