@@ -5,7 +5,7 @@
 ; it because the frontend would almost always emit a local alloca already.
 
 ; First check that non-CHERI targets add a memcpy
-; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | sed 's/p200i8/p0i8/g' > %t-nocheri.ll
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s > %t-nocheri.ll
 ; RUN: llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC
 ; RUN: llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,RV64,RV64-PIC
 ; RUN: llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic  < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,MIPS,MIPS-PIC
