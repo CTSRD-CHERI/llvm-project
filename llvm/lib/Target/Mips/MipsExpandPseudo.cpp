@@ -665,7 +665,7 @@ bool MipsExpandPseudo::expandPccRelativeAddr(
       .addReg(ScratchReg, RegState::Kill)
       .addDisp(Target, -4, MipsII::MO_PCREL_LO);
   auto BundleEnd =
-      BuildMI(BB, I, DL, TII->get(Mips::CGetPccIncOffset), ResultReg)
+      BuildMI(BB, I, DL, TII->get(Mips::CGetPCCIncOffset), ResultReg)
           .addReg(ScratchReg, RegState::Kill)
           .getInstr();
   // Bundle the three instructions to ensure that the offsets are correct:
