@@ -361,7 +361,7 @@ def : InstAlias<"cspecialw $scr, $cs",
 // Fast Register-Clearing Instructions
 //===----------------------------------------------------------------------===//
 
-let Predicates = [HasCheri] in {
+let Predicates = [HasCheri], hasSideEffects = 1 in {
 def Clear   : Cheri_clear<0xd, "clear">;
 def FPClear : Cheri_clear<0x10, "fpclear">;
 }
