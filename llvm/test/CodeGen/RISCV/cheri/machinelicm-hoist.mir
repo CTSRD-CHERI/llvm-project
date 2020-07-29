@@ -100,8 +100,6 @@ body:             |
   ; CHECK-NEXT:   [[CSub:%[0-9]+]]:gpr = CSub [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CMove:%[0-9]+]]:gpcr = CMove [[COPY1]]
   ; CHECK-NEXT:   [[CTestSubset:%[0-9]+]]:gpr = CTestSubset [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   Clear 1, 1
-  ; CHECK-NEXT:   FPClear 1, 1
   ; CHECK-NEXT:   [[CRRL:%[0-9]+]]:gpr = CRRL [[COPY]]
   ; CHECK-NEXT:   [[CRAM:%[0-9]+]]:gpr = CRAM [[COPY]]
   ; CHECK-NEXT:   PseudoBR %bb.2
@@ -136,6 +134,8 @@ body:             |
   ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr = CToPtr [[COPY1]], [[COPY3]]
   ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:gpcr = CFromPtr [[COPY3]], [[COPY]]
   ; CHECK-NEXT:   [[CSpecialRW:%[0-9]+]]:gpcr = CSpecialRW 0, [[COPY1]]
+  ; CHECK-NEXT:   Clear 1, 1
+  ; CHECK-NEXT:   FPClear 1, 1
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.4.for.inc:
   ; CHECK-NEXT:   successors: %bb.2(0x7c000000), %bb.1(0x04000000)
