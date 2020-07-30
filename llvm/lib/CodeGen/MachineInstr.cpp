@@ -1427,6 +1427,26 @@ bool MachineInstr::mayTrap() const {
       if (OpInfo.mustBeUnsealedCapability() && Op.maybeSealed()) {
         // TODO: Check whether the def is safe (e.g. produced by a previous
         // CIncOffset, etc).
+        if (const MachineFunction *MF = getMFIfAvailable(*this)) {
+          auto *TII = MF->getSubtarget().getInstrInfo();
+          if (Op.isReg()) {
+            // Check if the def can be sealed:
+            auto &MRI = MF->getRegInfo();
+            Register Reg = Op.getReg();
+            if (Reg.isVirtual()) {
+              auto *Def = MRI.getUniqueVRegDef(Reg);
+              if (isTargetSpecificOpcode(Def->getOpcode()) &&
+                  !Def->hasProperty(MCID::DefsCanBeSealed)) {
+                // Input is a target-specific opcode that doesn't have the may
+                // be sealed flag set -> cannot be sealed.
+                continue;
+              }
+            } else if (Reg.isPhysical() && MRI.isConstantPhysReg(Reg)) {
+              // Only CNULL is constant and that can never be sealed.
+              continue;
+            }
+          }
+        }
         return true;
       }
     }
