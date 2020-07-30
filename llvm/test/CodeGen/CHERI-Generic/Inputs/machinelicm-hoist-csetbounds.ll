@@ -2,9 +2,9 @@
 ; even if the source pointer could be NULL. On MIPS and RISC-V this results in a
 ; tag violation so we must ensure that the CSetBounds happens after the NULL check.
 
-; Note: Opt correctly hoists the condition+csetbounds into a preheader, but LLC does the wrong thing.
+; Note: Opt correctly hoists the condition+csetbounds into a preheader, and LLC
+; used to unconditionally hoist the csetbounds.
 ; RUN: %generic_cheri_purecap_opt -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
-; FIXME: This is currently wrong as it hoists the CSetBounds in MachineLICM
 ; RUN: %generic_cheri_purecap_llc -O3 < %s | FileCheck %s
 
 ; Generated from the following C code (with subobject bounds):

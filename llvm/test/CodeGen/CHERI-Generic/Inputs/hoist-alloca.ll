@@ -35,24 +35,24 @@
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.0.buf1, 0, 492
 @IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-@IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
+@IF-RISCV@; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+@IF-RISCV@; FIXME-MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.1.buf2, 0, 88
 @IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-@IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
+@IF-RISCV@; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+@IF-RISCV@; FIXME-MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_cond
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.0.buf1, 0, 492
 @IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-@IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
+@IF-RISCV@; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+@IF-RISCV@; FIXME-MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.1.buf2, 0, 88
 @IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-@IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
+@IF-RISCV@; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+@IF-RISCV@; FIXME-MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 
 ; RUN: %generic_cheri_purecap_llc -O1 -o - < %s | FileCheck %s
 

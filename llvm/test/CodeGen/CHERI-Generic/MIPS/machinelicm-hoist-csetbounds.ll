@@ -4,9 +4,9 @@
 ; even if the source pointer could be NULL. On MIPS and RISC-V this results in a
 ; tag violation so we must ensure that the CSetBounds happens after the NULL check.
 
-; Note: Opt correctly hoists the condition+csetbounds into a preheader, but LLC does the wrong thing.
+; Note: Opt correctly hoists the condition+csetbounds into a preheader, and LLC
+; used to unconditionally hoist the csetbounds.
 ; RUN: %cheri128_purecap_opt -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
-; FIXME: This is currently wrong as it hoists the CSetBounds in MachineLICM
 ; RUN: %cheri128_purecap_llc -O3 < %s | FileCheck %s
 
 ; Generated from the following C code (with subobject bounds):
@@ -38,14 +38,13 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    csc $c19, $zero, 32($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc $c18, $zero, 16($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
-; CHECK-NEXT:    cincoffset $c1, $c3, 4
 ; CHECK-NEXT:    cmove $c18, $c3
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c20, $1
-; CHECK-NEXT:    addiu $16, $zero, -1
+; CHECK-NEXT:    cgetpccincoffset $c19, $1
+; CHECK-NEXT:    cincoffset $c20, $c3, 4
 ; CHECK-NEXT:    b .LBB0_2
-; CHECK-NEXT:    csetbounds $c19, $c1, 4
+; CHECK-NEXT:    addiu $16, $zero, -1
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
 ; CHECK-NEXT:    addiu $16, $16, 1
@@ -58,10 +57,10 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    clcbi $c12, %capcall20(call)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(call)($c19)
 ; CHECK-NEXT:    csetbounds $c3, $c18, 4
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c4, $c19
+; CHECK-NEXT:    csetbounds $c4, $c20, 4
 ; CHECK-NEXT:    b .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup

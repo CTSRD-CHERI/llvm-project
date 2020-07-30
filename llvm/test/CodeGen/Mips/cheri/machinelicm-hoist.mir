@@ -95,27 +95,10 @@ body:             |
   ; CHECK-NEXT:   [[CGetAddr:%[0-9]+]]:gpr64 = CGetAddr [[COPY2]]
   ; CHECK-NEXT:   [[CGetAndAddr:%[0-9]+]]:gpr64 = CGetAndAddr [[COPY2]], [[COPY]]
   ; CHECK-NEXT:   [[CGetFlags:%[0-9]+]]:gpr64 = CGetFlags [[COPY2]]
-  ; CHECK-NEXT:   [[CSeal:%[0-9]+]]:cherigpr = CSeal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CUnSeal:%[0-9]+]]:cherigpr = CUnSeal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CSetFlags:%[0-9]+]]:cherigpr = CSetFlags [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetOffset:%[0-9]+]]:cherigpr = CSetOffset [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:cherigpr = CIncOffsetImm [[COPY1]], 10
-  ; CHECK-NEXT:   [[CSetBounds:%[0-9]+]]:cherigpr = CSetBounds [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsExact:%[0-9]+]]:cherigpr = CSetBoundsExact [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:cherigpr = CSetBoundsImm [[COPY1]], 10
   ; CHECK-NEXT:   [[CClearTag:%[0-9]+]]:cherigpr = CClearTag [[COPY1]]
-  ; CHECK-NEXT:   [[CBuildCap:%[0-9]+]]:cherigpr = CBuildCap [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCopyType:%[0-9]+]]:cherigpr = CCopyType [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCSeal:%[0-9]+]]:cherigpr = CCSeal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CSetAddr:%[0-9]+]]:cherigpr = CSetAddr [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CAndAddr:%[0-9]+]]:cherigpr = CAndAddr [[COPY1]], [[COPY]]
   ; CHECK-NEXT:   [[CSetPCCOffset:%[0-9]+]]:cherigpr = CSetPCCOffset [[COPY]]
   ; CHECK-NEXT:   [[CGetPCCIncOffset:%[0-9]+]]:cherigpr = CGetPCCIncOffset [[COPY]]
   ; CHECK-NEXT:   [[CGetPCCSetAddr:%[0-9]+]]:cherigpr = CGetPCCSetAddr [[COPY]]
-  ; CHECK-NEXT:   [[CSealEntry:%[0-9]+]]:cherigpr = CSealEntry [[COPY1]]
-  ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr64 = CToPtr [[COPY1]], [[COPY3]]
-  ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:cherigpr = CFromPtr [[COPY3]], [[COPY]]
   ; CHECK-NEXT:   [[CSub:%[0-9]+]]:gpr64 = CSub [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CMove:%[0-9]+]]:cherigpr = CMove [[COPY1]]
   ; CHECK-NEXT:   [[CMOVZ:%[0-9]+]]:cherigpr = CMOVZ [[COPY1]], [[COPY]], [[COPY1]]
@@ -144,6 +127,24 @@ body:             |
   ; CHECK-NEXT: bb.3.if.then:
   ; CHECK-NEXT:   successors: %bb.4(0x80000000)
   ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[CSeal:%[0-9]+]]:cherigpr = CSeal [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CUnSeal:%[0-9]+]]:cherigpr = CUnSeal [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CAndPerms1:%[0-9]+]]:cherigpr = CAndPerms [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetFlags:%[0-9]+]]:cherigpr = CSetFlags [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetOffset:%[0-9]+]]:cherigpr = CSetOffset [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:cherigpr = CIncOffsetImm [[COPY1]], 10
+  ; CHECK-NEXT:   [[CSetBounds:%[0-9]+]]:cherigpr = CSetBounds [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsExact:%[0-9]+]]:cherigpr = CSetBoundsExact [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:cherigpr = CSetBoundsImm [[COPY1]], 10
+  ; CHECK-NEXT:   [[CBuildCap:%[0-9]+]]:cherigpr = CBuildCap [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCopyType:%[0-9]+]]:cherigpr = CCopyType [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCSeal:%[0-9]+]]:cherigpr = CCSeal [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CSetAddr:%[0-9]+]]:cherigpr = CSetAddr [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CAndAddr:%[0-9]+]]:cherigpr = CAndAddr [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSealEntry:%[0-9]+]]:cherigpr = CSealEntry [[COPY1]]
+  ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr64 = CToPtr [[COPY1]], [[COPY3]]
+  ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:cherigpr = CFromPtr [[COPY3]], [[COPY]]
   ; CHECK-NEXT:   [[CGetCause:%[0-9]+]]:gpr64 = CGetCause
   ; CHECK-NEXT:   CSetCause [[COPY]]
   ; CHECK-NEXT:   CCheckPerm [[COPY1]], [[COPY]]
