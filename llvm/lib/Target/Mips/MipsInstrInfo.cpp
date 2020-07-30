@@ -971,6 +971,64 @@ MipsInstrInfo::describeLoadedValue(const MachineInstr &MI, Register Reg) const {
   return TargetInstrInfo::describeLoadedValue(MI, Reg);
 }
 
+Optional<int64_t>
+MipsInstrInfo::getAsIntImmediate(const MachineOperand &Op,
+                                 const MachineRegisterInfo &MRI) const {
+  if (Op.isImm())
+    return Op.getImm();
+  if (Op.isReg()) {
+    Register Reg = Op.getReg();
+    if (Reg == Mips::ZERO || Reg == Mips::ZERO_64)
+      return 0;
+    if (Reg.isVirtual()) {
+      auto *Def = MRI.getUniqueVRegDef(Reg);
+      switch (Def->getOpcode()) {
+      default:
+        return None; // Unknown immediate
+      case Mips::ADDiu:
+      case Mips::DADDiu:
+      case Mips::ORi:
+      case Mips::ORi64: {
+        Register BaseReg = Def->getOperand(1).getReg();
+        if (BaseReg == Mips::ZERO || BaseReg == Mips::ZERO_64)
+          return Def->getOperand(2).getImm();
+        return None;
+      }
+      }
+    }
+  }
+  return None; // Unknown immediate
+}
+
+bool MipsInstrInfo::isSetBoundsInstr(const MachineInstr &I,
+                                     const MachineOperand *&Base,
+                                     const MachineOperand *&Size) const {
+  switch (I.getOpcode()) {
+  default:
+    return false;
+  case Mips::CSetBounds:
+  case Mips::CSetBoundsExact:
+  case Mips::CSetBoundsImm:
+    Base = &I.getOperand(1);
+    Size = &I.getOperand(2);
+    return true;
+  }
+}
+
+bool MipsInstrInfo::isPtrAddInstr(const MachineInstr &I,
+                                  const MachineOperand *&Base,
+                                  const MachineOperand *&Increment) const {
+  switch (I.getOpcode()) {
+  default:
+    return false;
+  case Mips::CIncOffsetImm:
+  case Mips::CIncOffset:
+    Base = &I.getOperand(1);
+    Increment = &I.getOperand(2);
+    return true;
+  }
+}
+
 Optional<RegImmPair> MipsInstrInfo::isAddImmediate(const MachineInstr &MI,
                                                    Register Reg) const {
   // TODO: Handle cases where Reg is a super- or sub-register of the

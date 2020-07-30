@@ -119,14 +119,40 @@ public:
              isReallyTriviallyReMaterializableGeneric(MI, AA)));
   }
 
+  /// For instructions that are marked as mayTrap/mayTrapOnSealed/
+  /// mayTrapOnUntagged this hook can be used to check if certain instructions
+  /// are really safe (e.g. an immediate setbounds on a stack slot).
+  virtual bool isGuaranteedNotToTrap(const MachineInstr &MI) const {
+    return false;
+  }
+  /// Returns true if \p is a CHERI setbounds instruction that will always
+  /// return a valid bounded capability (e.g. for in-bounds FrameIndex).
+  virtual bool isGuaranteedValidSetBounds(const MachineInstr &MI) const;
+  virtual bool isSetBoundsInstr(const MachineInstr &I,
+                                const MachineOperand *&Base,
+                                const MachineOperand *&Size) const {
+    return false;
+  }
+  virtual bool isPtrAddInstr(const MachineInstr &I, const MachineOperand *&Base,
+                             const MachineOperand *&Increment) const {
+    return false;
+  }
+  virtual Optional<int64_t>
+  getAsIntImmediate(const MachineOperand &Op,
+                    const MachineRegisterInfo &MRI) const {
+    if (Op.isImm())
+      return Op.getImm();
+    return None;
+  }
+
 protected:
   /// For instructions with opcodes for which the M_REMATERIALIZABLE flag is
-  /// set, this hook lets the target specify whether the instruction is actually
-  /// trivially rematerializable, taking into consideration its operands. This
-  /// predicate must return false if the instruction has any side effects other
-  /// than producing a value, or if it requres any address registers that are
-  /// not always available.
-  /// Requirements must be check as stated in isTriviallyReMaterializable() .
+  /// set, this hook lets the target specify whether the instruction is
+  /// actually trivially rematerializable, taking into consideration its
+  /// operands. This predicate must return false if the instruction has any
+  /// side effects other than producing a value, or if it requres any
+  /// address registers that are not always available. Requirements must be
+  /// check as stated in isTriviallyReMaterializable() .
   virtual bool isReallyTriviallyReMaterializable(const MachineInstr &MI,
                                                  AAResults *AA) const {
     return false;

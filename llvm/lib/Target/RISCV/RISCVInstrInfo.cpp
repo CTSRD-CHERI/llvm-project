@@ -32,6 +32,8 @@ using namespace llvm;
 #define GET_INSTRINFO_CTOR_DTOR
 #include "RISCVGenInstrInfo.inc"
 
+#define DEBUG_TYPE "riscv-isntrinfo"
+
 RISCVInstrInfo::RISCVInstrInfo(RISCVSubtarget &STI)
     : RISCVGenInstrInfo(RISCVABI::isCheriPureCapABI(STI.getTargetABI())
                             ? RISCV::ADJCALLSTACKDOWNCAP
@@ -633,6 +635,61 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
       return (MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::X0);
   }
   return MI.isAsCheapAsAMove();
+}
+
+Optional<int64_t>
+RISCVInstrInfo::getAsIntImmediate(const MachineOperand &Op,
+                                  const MachineRegisterInfo &MRI) const {
+  if (Op.isImm())
+    return Op.getImm();
+  if (Op.isReg()) {
+    Register Reg = Op.getReg();
+    if (Reg == RISCV::X0)
+      return 0;
+    if (Reg.isVirtual()) {
+      auto *Def = MRI.getUniqueVRegDef(Reg);
+      switch (Def->getOpcode()) {
+      default:
+        return None; // Unknown immediate
+      case RISCV::ADDI:
+      case RISCV::ADDIW:
+      case RISCV::ORI:
+        if (Def->getOperand(1).getReg() == RISCV::X0)
+          return Def->getOperand(2).getImm();
+        return None;
+      }
+    }
+  }
+  return None; // Unknown immediate
+}
+
+bool RISCVInstrInfo::isSetBoundsInstr(const MachineInstr &I,
+                                      const MachineOperand *&Base,
+                                      const MachineOperand *&Size) const {
+  switch (I.getOpcode()) {
+  default:
+    return false;
+  case RISCV::CSetBounds:
+  case RISCV::CSetBoundsExact:
+  case RISCV::CSetBoundsImm:
+    Base = &I.getOperand(1);
+    Size = &I.getOperand(2);
+    return true;
+  }
+}
+
+bool RISCVInstrInfo::isPtrAddInstr(const MachineInstr &I,
+                                   const MachineOperand *&Base,
+                                   const MachineOperand *&Increment) const {
+  switch (I.getOpcode()) {
+  default:
+    return false;
+  case RISCV::CIncOffsetImm:
+  case RISCV::CIncOffset:
+    Base = &I.getOperand(1);
+    Increment = &I.getOperand(2);
+    return true;
+  }
 }
 
 bool RISCVInstrInfo::verifyInstruction(const MachineInstr &MI,
