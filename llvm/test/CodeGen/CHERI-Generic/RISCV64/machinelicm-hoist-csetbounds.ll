@@ -40,29 +40,28 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    csc cs3, 16(csp)
 ; CHECK-NEXT:    csc cs4, 0(csp)
 ; CHECK-NEXT:    cmove cs2, ca1
-; CHECK-NEXT:    mv s1, zero
-; CHECK-NEXT:    seqz s0, s2
-; CHECK-NEXT:    cincoffset ca0, ca1, 4
+; CHECK-NEXT:    mv s0, zero
+; CHECK-NEXT:    seqz s1, s2
+; CHECK-NEXT:    cincoffset cs3, ca1, 4
 ; CHECK-NEXT:    addi s4, zero, 99
-; CHECK-NEXT:    csetbounds cs3, ca0, 4
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    sext.w a0, s1
-; CHECK-NEXT:    addi s1, s1, 1
+; CHECK-NEXT:    sext.w a0, s0
+; CHECK-NEXT:    addi s0, s0, 1
 ; CHECK-NEXT:    bgeu a0, s4, .LBB0_4
 ; CHECK-NEXT:  .LBB0_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    bnez s0, .LBB0_1
+; CHECK-NEXT:    bnez s1, .LBB0_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
 ; CHECK-NEXT:    csetbounds ca0, cs2, 4
+; CHECK-NEXT:    csetbounds ca1, cs3, 4
 ; CHECK-NEXT:  .LBB0_5: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
 ; CHECK-NEXT:    # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca2, %captab_pcrel_hi(call)
 ; CHECK-NEXT:    clc ca2, %pcrel_lo(.LBB0_5)(ca2)
-; CHECK-NEXT:    cmove ca1, cs3
 ; CHECK-NEXT:    cjalr ca2
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup

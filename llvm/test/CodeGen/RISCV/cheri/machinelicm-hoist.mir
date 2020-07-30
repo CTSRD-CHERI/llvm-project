@@ -96,23 +96,7 @@ body:             |
   ; CHECK-NEXT:   [[CGetSealed:%[0-9]+]]:gpr = CGetSealed [[COPY2]]
   ; CHECK-NEXT:   [[CGetOffset:%[0-9]+]]:gpr = CGetOffset [[COPY2]]
   ; CHECK-NEXT:   [[CGetAddr:%[0-9]+]]:gpr = CGetAddr [[COPY2]]
-  ; CHECK-NEXT:   [[CSeal:%[0-9]+]]:gpcr = CSeal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CUnseal:%[0-9]+]]:gpcr = CUnseal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CSetFlags:%[0-9]+]]:gpcr = CSetFlags [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetOffset:%[0-9]+]]:gpcr = CSetOffset [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetAddr:%[0-9]+]]:gpcr = CSetAddr [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:gpcr = CIncOffset [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:gpcr = CIncOffsetImm [[COPY1]], 10
-  ; CHECK-NEXT:   [[CSetBounds:%[0-9]+]]:gpcr = CSetBounds [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsExact:%[0-9]+]]:gpcr = CSetBoundsExact [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:gpcr = CSetBoundsImm [[COPY1]], 10
   ; CHECK-NEXT:   [[CClearTag:%[0-9]+]]:gpcr = CClearTag [[COPY1]]
-  ; CHECK-NEXT:   [[CBuildCap:%[0-9]+]]:gpcr = CBuildCap [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCopyType:%[0-9]+]]:gpcr = CCopyType [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCSeal:%[0-9]+]]:gpcr = CCSeal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CSealEntry:%[0-9]+]]:gpcr = CSealEntry [[COPY1]]
-  ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr = CToPtr [[COPY1]], [[COPY3]]
-  ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:gpcr = CFromPtr [[COPY3]], [[COPY]]
   ; CHECK-NEXT:   [[CSub:%[0-9]+]]:gpr = CSub [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CMove:%[0-9]+]]:gpcr = CMove [[COPY1]]
   ; CHECK-NEXT:   [[CTestSubset:%[0-9]+]]:gpr = CTestSubset [[COPY1]], [[COPY2]]
@@ -134,6 +118,23 @@ body:             |
   ; CHECK-NEXT: bb.3.if.then:
   ; CHECK-NEXT:   successors: %bb.4(0x80000000)
   ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[CSeal:%[0-9]+]]:gpcr = CSeal [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CUnseal:%[0-9]+]]:gpcr = CUnseal [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CAndPerm1:%[0-9]+]]:gpcr = CAndPerm [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetFlags:%[0-9]+]]:gpcr = CSetFlags [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetOffset:%[0-9]+]]:gpcr = CSetOffset [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetAddr:%[0-9]+]]:gpcr = CSetAddr [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:gpcr = CIncOffset [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:gpcr = CIncOffsetImm [[COPY1]], 10
+  ; CHECK-NEXT:   [[CSetBounds:%[0-9]+]]:gpcr = CSetBounds [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsExact:%[0-9]+]]:gpcr = CSetBoundsExact [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:gpcr = CSetBoundsImm [[COPY1]], 10
+  ; CHECK-NEXT:   [[CBuildCap:%[0-9]+]]:gpcr = CBuildCap [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCopyType:%[0-9]+]]:gpcr = CCopyType [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCSeal:%[0-9]+]]:gpcr = CCSeal [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CSealEntry:%[0-9]+]]:gpcr = CSealEntry [[COPY1]]
+  ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr = CToPtr [[COPY1]], [[COPY3]]
+  ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:gpcr = CFromPtr [[COPY3]], [[COPY]]
   ; CHECK-NEXT:   [[CSpecialRW:%[0-9]+]]:gpcr = CSpecialRW 0, [[COPY1]]
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.4.for.inc:
