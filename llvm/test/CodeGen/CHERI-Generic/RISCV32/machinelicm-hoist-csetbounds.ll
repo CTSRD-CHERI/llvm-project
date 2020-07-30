@@ -4,9 +4,9 @@
 ; even if the source pointer could be NULL. On MIPS and RISC-V this results in a
 ; tag violation so we must ensure that the CSetBounds happens after the NULL check.
 
-; Note: Opt correctly hoists the condition+csetbounds into a preheader, but LLC does the wrong thing.
+; Note: Opt correctly hoists the condition+csetbounds into a preheader, and LLC
+; used to unconditionally hoist the csetbounds.
 ; RUN: %riscv32_cheri_purecap_opt -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
-; FIXME: This is currently wrong as it hoists the CSetBounds in MachineLICM
 ; RUN: %riscv32_cheri_purecap_llc -O3 < %s | FileCheck %s
 
 ; Generated from the following C code (with subobject bounds):
@@ -39,29 +39,28 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    csc cs2, 16(csp)
 ; CHECK-NEXT:    csc cs3, 8(csp)
 ; CHECK-NEXT:    csc cs4, 0(csp)
-; CHECK-NEXT:    cmove cs2, ca1
-; CHECK-NEXT:    seqz s0, s2
-; CHECK-NEXT:    cincoffset ca0, ca1, 4
-; CHECK-NEXT:    addi s1, zero, -1
+; CHECK-NEXT:    cmove cs3, ca1
+; CHECK-NEXT:    seqz s1, s3
+; CHECK-NEXT:    cincoffset cs2, ca1, 4
+; CHECK-NEXT:    addi s0, zero, -1
 ; CHECK-NEXT:    addi s4, zero, 99
-; CHECK-NEXT:    csetbounds cs3, ca0, 4
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    addi s1, s1, 1
-; CHECK-NEXT:    bgeu s1, s4, .LBB0_4
+; CHECK-NEXT:    addi s0, s0, 1
+; CHECK-NEXT:    bgeu s0, s4, .LBB0_4
 ; CHECK-NEXT:  .LBB0_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    bnez s0, .LBB0_1
+; CHECK-NEXT:    bnez s1, .LBB0_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    csetbounds ca0, cs2, 4
+; CHECK-NEXT:    csetbounds ca0, cs3, 4
+; CHECK-NEXT:    csetbounds ca1, cs2, 4
 ; CHECK-NEXT:  .LBB0_5: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
 ; CHECK-NEXT:    # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca2, %captab_pcrel_hi(call)
 ; CHECK-NEXT:    clc ca2, %pcrel_lo(.LBB0_5)(ca2)
-; CHECK-NEXT:    cmove ca1, cs3
 ; CHECK-NEXT:    cjalr ca2
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup
