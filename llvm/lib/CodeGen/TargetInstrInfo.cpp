@@ -34,6 +34,8 @@
 #include "llvm/Target/TargetMachine.h"
 #include <cctype>
 
+#define DEBUG_TYPE "targetinstrinfo"
+
 using namespace llvm;
 
 static cl::opt<bool> DisableHazardRecognizer(
@@ -1223,6 +1225,62 @@ TargetInstrInfo::describeLoadedValue(const MachineInstr &MI,
   }
 
   return None;
+}
+
+bool TargetInstrInfo::isGuaranteedValidSetBounds(const MachineInstr &MI) const {
+  const MachineOperand *BoundedOp = nullptr;
+  const MachineOperand *Size = nullptr;
+  if (!isSetBoundsInstr(MI, BoundedOp, Size)) {
+    return false;
+  }
+  const auto &MRI = MI.getMF()->getRegInfo();
+  Optional<int64_t> RequestedSize = getAsIntImmediate(*Size, MRI);
+  if (!RequestedSize || *RequestedSize < 0) {
+    LLVM_DEBUG(dbgs() << "unknown/negative bounds size -> CSetBounds may trap";
+               MI.dump());
+    return false;
+  }
+  Optional<int64_t> ObjectOffset = 0;
+  while (BoundedOp->isReg() && BoundedOp->getReg().isVirtual()) {
+    auto *Def = MRI.getUniqueVRegDef(BoundedOp->getReg());
+    const MachineOperand *Base = nullptr;
+    const MachineOperand *Offset = nullptr;
+    if (isPtrAddInstr(*Def, Base, Offset)) {
+      if (auto NewOffset = getAsIntImmediate(*Offset, MRI)) {
+        ObjectOffset = *ObjectOffset + *NewOffset;
+        BoundedOp = Base;
+        continue; // Try to accumulate CIncOffset sequences
+      }
+    }
+    ObjectOffset = None; // Not CIncOffset or CIncOffset with unknown offset
+    break;
+  }
+  if (!ObjectOffset || *ObjectOffset < 0) {
+    LLVM_DEBUG(
+        dbgs() << "unknown/negative object offset -> CSetBounds may trap";
+        MI.dump());
+    return false;
+  }
+  Optional<int64_t> ObjectSize;
+  // TODO: handle global vars
+  if (BoundedOp->isFI()) {
+    const auto &MFI = MI.getMF()->getFrameInfo();
+    ObjectSize = MFI.getObjectSize(BoundedOp->getIndex());
+  }
+  if (!ObjectSize) {
+    LLVM_DEBUG(dbgs() << "unknown object size -> CSetBounds may trap";
+               MI.dump());
+    return false;
+  }
+  if (*ObjectSize >= *RequestedSize + *ObjectOffset) {
+    LLVM_DEBUG(dbgs() << "In-bounds CSetBounds cannot trap (object size="
+                      << ObjectSize << "offset=" << ObjectOffset
+                      << " req size=" << RequestedSize << ")";
+               MI.dump());
+    return true;
+  }
+  LLVM_DEBUG(dbgs() << "potentially OOB CSetBounds may trap"; MI.dump());
+  return false;
 }
 
 /// Both DefMI and UseMI must be valid.  By default, call directly to the

@@ -171,6 +171,20 @@ public:
   Optional<ParamLoadedValue> describeLoadedValue(const MachineInstr &MI,
                                                  Register Reg) const override;
 
+  bool isGuaranteedNotToTrap(const MachineInstr &MI) const override {
+    if (isGuaranteedValidSetBounds(MI))
+      return true;
+    return false;
+  }
+  virtual bool isSetBoundsInstr(const MachineInstr &I,
+                                const MachineOperand *&Base,
+                                const MachineOperand *&Size) const override;
+  virtual bool isPtrAddInstr(const MachineInstr &I, const MachineOperand *&Base,
+                             const MachineOperand *&Increment) const override;
+  Optional<int64_t>
+  getAsIntImmediate(const MachineOperand &Op,
+                    const MachineRegisterInfo &MRI) const override;
+
 protected:
   bool isZeroImm(const MachineOperand &op) const;
 

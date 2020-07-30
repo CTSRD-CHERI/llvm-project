@@ -36,21 +36,21 @@
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_uncond
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
-; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-; FIXME-MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
-; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-; FIXME-MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_cond
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
-; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-; FIXME-MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
-; FIXME-MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
-; FIXME-MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 
 ; RUN: %riscv32_cheri_purecap_llc -O1 -o - < %s | FileCheck %s
 
@@ -111,20 +111,20 @@ declare void @call(i32 addrspace(200)*, i32 addrspace(200)*) local_unnamed_addr 
 define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: hoist_alloca_cond:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset csp, csp, -640
-; CHECK-NEXT:    csc cra, 632(csp)
-; CHECK-NEXT:    csc cs0, 624(csp)
-; CHECK-NEXT:    csc cs1, 616(csp)
-; CHECK-NEXT:    csc cs2, 608(csp)
-; CHECK-NEXT:    csc cs3, 600(csp)
-; CHECK-NEXT:    csc cs4, 592(csp)
-; CHECK-NEXT:    csc cs5, 584(csp)
+; CHECK-NEXT:    cincoffset csp, csp, -624
+; CHECK-NEXT:    csc cra, 616(csp)
+; CHECK-NEXT:    csc cs0, 608(csp)
+; CHECK-NEXT:    csc cs1, 600(csp)
+; CHECK-NEXT:    csc cs2, 592(csp)
+; CHECK-NEXT:    csc cs3, 584(csp)
 ; CHECK-NEXT:    seqz s0, a0
 ; CHECK-NEXT:    addi s1, zero, 100
-; CHECK-NEXT:    addi s2, zero, 492
-; CHECK-NEXT:    cincoffset cs3, csp, 92
-; CHECK-NEXT:    addi s4, zero, 88
-; CHECK-NEXT:    cincoffset cs5, csp, 4
+; CHECK-NEXT:    addi a0, zero, 492
+; CHECK-NEXT:    cincoffset ca1, csp, 92
+; CHECK-NEXT:    csetbounds cs2, ca1, a0
+; CHECK-NEXT:    addi a0, zero, 88
+; CHECK-NEXT:    cincoffset ca1, csp, 4
+; CHECK-NEXT:    csetbounds cs3, ca1, a0
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
@@ -135,24 +135,22 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    bnez s0, .LBB1_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    csetbounds ca0, cs3, s2
-; CHECK-NEXT:    csetbounds ca1, cs5, s4
 ; CHECK-NEXT:  .LBB1_5: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
 ; CHECK-NEXT:    # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca2, %captab_pcrel_hi(call)
 ; CHECK-NEXT:    clc ca2, %pcrel_lo(.LBB1_5)(ca2)
+; CHECK-NEXT:    cmove ca0, cs2
+; CHECK-NEXT:    cmove ca1, cs3
 ; CHECK-NEXT:    cjalr ca2
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
-; CHECK-NEXT:    clc cs5, 584(csp)
-; CHECK-NEXT:    clc cs4, 592(csp)
-; CHECK-NEXT:    clc cs3, 600(csp)
-; CHECK-NEXT:    clc cs2, 608(csp)
-; CHECK-NEXT:    clc cs1, 616(csp)
-; CHECK-NEXT:    clc cs0, 624(csp)
-; CHECK-NEXT:    clc cra, 632(csp)
-; CHECK-NEXT:    cincoffset csp, csp, 640
+; CHECK-NEXT:    clc cs3, 584(csp)
+; CHECK-NEXT:    clc cs2, 592(csp)
+; CHECK-NEXT:    clc cs1, 600(csp)
+; CHECK-NEXT:    clc cs0, 608(csp)
+; CHECK-NEXT:    clc cra, 616(csp)
+; CHECK-NEXT:    cincoffset csp, csp, 624
 ; CHECK-NEXT:    cret
 entry:
   %buf1 = alloca [123 x i32], align 4, addrspace(200)

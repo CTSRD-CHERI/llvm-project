@@ -1418,7 +1418,11 @@ bool MachineInstr::hasUnmodeledSideEffects() const {
 
 bool MachineInstr::mayTrap() const {
   if (hasProperty(MCID::MayTrap)) {
-    // TODO: Query TII whether this instruction can really trap
+    if (const MachineFunction *MF = getMFIfAvailable(*this)) {
+      auto *TII = MF->getSubtarget().getInstrInfo();
+      if (TII->isGuaranteedNotToTrap(*this))
+        return false;
+    }
     return true;
   }
   if (hasProperty(MCID::MayTrapOnSealedInput)) {
@@ -1445,6 +1449,9 @@ bool MachineInstr::mayTrap() const {
               // Only CNULL is constant and that can never be sealed.
               continue;
             }
+          }
+          if (TII->isGuaranteedNotToTrap(*this)) {
+            return false;
           }
         }
         return true;
