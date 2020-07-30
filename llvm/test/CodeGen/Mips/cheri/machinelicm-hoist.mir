@@ -113,6 +113,9 @@ body:             |
   ; CHECK-NEXT:   [[CTestSubset:%[0-9]+]]:gpr64 = CTestSubset [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CRRL:%[0-9]+]]:gpr64 = CRRL [[COPY]]
   ; CHECK-NEXT:   [[CRAM:%[0-9]+]]:gpr64 = CRAM [[COPY]]
+  ; CHECK-NEXT:   [[CClearTag1:%[0-9]+]]:cherigpr = CClearTag [[CIncOffsetImm]]
+  ; CHECK-NEXT:   [[CClearTag2:%[0-9]+]]:cherigpr = CClearTag [[CAndPerms]]
+  ; CHECK-NEXT:   [[CClearTag3:%[0-9]+]]:cherigpr = CClearTag $cnull
   ; CHECK-NEXT:   B %bb.2, implicit-def $at
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1.for.cond.cleanup:
@@ -149,6 +152,52 @@ body:             |
   ; CHECK-NEXT:   CSetCause [[COPY]]
   ; CHECK-NEXT:   CCheckPerm [[COPY1]], [[COPY]]
   ; CHECK-NEXT:   CCheckType [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CSeal1:%[0-9]+]]:cherigpr = CSeal [[CIncOffsetImm]], [[COPY2]]
+  ; CHECK-NEXT:   [[CUnSeal1:%[0-9]+]]:cherigpr = CUnSeal [[CIncOffsetImm]], [[COPY2]]
+  ; CHECK-NEXT:   [[CAndPerms2:%[0-9]+]]:cherigpr = CAndPerms [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetFlags1:%[0-9]+]]:cherigpr = CSetFlags [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetOffset1:%[0-9]+]]:cherigpr = CSetOffset [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffset1:%[0-9]+]]:cherigpr = CIncOffset [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffsetImm2:%[0-9]+]]:cherigpr = CIncOffsetImm [[CIncOffsetImm]], 10
+  ; CHECK-NEXT:   [[CSetBounds1:%[0-9]+]]:cherigpr = CSetBounds [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsExact1:%[0-9]+]]:cherigpr = CSetBoundsExact [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsImm1:%[0-9]+]]:cherigpr = CSetBoundsImm [[CIncOffsetImm]], 10
+  ; CHECK-NEXT:   [[CBuildCap1:%[0-9]+]]:cherigpr = CBuildCap [[CIncOffsetImm]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCopyType1:%[0-9]+]]:cherigpr = CCopyType [[CIncOffsetImm]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCSeal1:%[0-9]+]]:cherigpr = CCSeal [[CIncOffsetImm]], [[COPY2]]
+  ; CHECK-NEXT:   [[CSetAddr1:%[0-9]+]]:cherigpr = CSetAddr [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CAndAddr1:%[0-9]+]]:cherigpr = CAndAddr [[CIncOffsetImm]], [[COPY]]
+  ; CHECK-NEXT:   [[CSealEntry1:%[0-9]+]]:cherigpr = CSealEntry [[CIncOffsetImm]]
+  ; CHECK-NEXT:   [[CSeal2:%[0-9]+]]:cherigpr = CSeal [[CAndPerms]], [[COPY2]]
+  ; CHECK-NEXT:   [[CUnSeal2:%[0-9]+]]:cherigpr = CUnSeal [[CAndPerms]], [[COPY2]]
+  ; CHECK-NEXT:   [[CAndPerms3:%[0-9]+]]:cherigpr = CAndPerms [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetFlags2:%[0-9]+]]:cherigpr = CSetFlags [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetOffset2:%[0-9]+]]:cherigpr = CSetOffset [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffset2:%[0-9]+]]:cherigpr = CIncOffset [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffsetImm3:%[0-9]+]]:cherigpr = CIncOffsetImm [[CAndPerms]], 10
+  ; CHECK-NEXT:   [[CSetBounds2:%[0-9]+]]:cherigpr = CSetBounds [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsExact2:%[0-9]+]]:cherigpr = CSetBoundsExact [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsImm2:%[0-9]+]]:cherigpr = CSetBoundsImm [[CAndPerms]], 10
+  ; CHECK-NEXT:   [[CBuildCap2:%[0-9]+]]:cherigpr = CBuildCap [[CAndPerms]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCopyType2:%[0-9]+]]:cherigpr = CCopyType [[CAndPerms]], [[COPY2]]
+  ; CHECK-NEXT:   [[CCSeal2:%[0-9]+]]:cherigpr = CCSeal [[CAndPerms]], [[COPY2]]
+  ; CHECK-NEXT:   [[CSetAddr2:%[0-9]+]]:cherigpr = CSetAddr [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CAndAddr2:%[0-9]+]]:cherigpr = CAndAddr [[CAndPerms]], [[COPY]]
+  ; CHECK-NEXT:   [[CSealEntry2:%[0-9]+]]:cherigpr = CSealEntry [[CAndPerms]]
+  ; CHECK-NEXT:   [[CSeal3:%[0-9]+]]:cherigpr = CSeal $cnull, [[COPY2]]
+  ; CHECK-NEXT:   [[CUnSeal3:%[0-9]+]]:cherigpr = CUnSeal $cnull, [[COPY2]]
+  ; CHECK-NEXT:   [[CAndPerms4:%[0-9]+]]:cherigpr = CAndPerms $cnull, [[COPY]]
+  ; CHECK-NEXT:   [[CSetFlags3:%[0-9]+]]:cherigpr = CSetFlags $cnull, [[COPY]]
+  ; CHECK-NEXT:   [[CSetOffset3:%[0-9]+]]:cherigpr = CSetOffset $cnull, [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffset3:%[0-9]+]]:cherigpr = CIncOffset $cnull, [[COPY]]
+  ; CHECK-NEXT:   [[CIncOffsetImm4:%[0-9]+]]:cherigpr = CIncOffsetImm $cnull, 10
+  ; CHECK-NEXT:   [[CSetBounds3:%[0-9]+]]:cherigpr = CSetBounds $cnull, [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsExact3:%[0-9]+]]:cherigpr = CSetBoundsExact $cnull, [[COPY]]
+  ; CHECK-NEXT:   [[CSetBoundsImm3:%[0-9]+]]:cherigpr = CSetBoundsImm $cnull, 10
+  ; CHECK-NEXT:   [[CCopyType3:%[0-9]+]]:cherigpr = CCopyType $cnull, [[COPY2]]
+  ; CHECK-NEXT:   [[CCSeal3:%[0-9]+]]:cherigpr = CCSeal $cnull, [[COPY2]]
+  ; CHECK-NEXT:   [[CSetAddr3:%[0-9]+]]:cherigpr = CSetAddr $cnull, [[COPY]]
+  ; CHECK-NEXT:   [[CAndAddr3:%[0-9]+]]:cherigpr = CAndAddr $cnull, [[COPY]]
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.4.for.inc:
   ; CHECK-NEXT:   successors: %bb.2(0x7c000000), %bb.1(0x04000000)
@@ -261,6 +310,63 @@ body:             |
     ; B.1.10Adjusting to Compressed Capability Precision
     %110:gpr64 = CRRL %0
     %111:gpr64 = CRAM %0
+
+    ; Try using the mutators on a known unsealed cap:
+    %130:cherigpr = CSeal %4, %2
+    %131:cherigpr = CUnSeal %4, %2
+    %132:cherigpr = CAndPerms %4, %0
+    %133:cherigpr = CSetFlags %4, %0
+    %134:cherigpr = CSetOffset %4, %0
+    %135:cherigpr = CIncOffset %4, %0
+    %136:cherigpr = CIncOffsetImm %4, 10
+    %137:cherigpr = CSetBounds %4, %0
+    %138:cherigpr = CSetBoundsExact %4, %0
+    %139:cherigpr = CSetBoundsImm %4, 10
+    %140:cherigpr = CClearTag %4
+    %141:cherigpr = CBuildCap %4, %2
+    %142:cherigpr = CCopyType %4, %2
+    %143:cherigpr = CCSeal %4, %2
+    %144:cherigpr = CSetAddr %4, %0
+    %145:cherigpr = CAndAddr %4, %0
+    %149:cherigpr = CSealEntry %4
+
+    ; Try using the mutators on a known tagger+unsealed cap:
+    %230:cherigpr = CSeal %5, %2
+    %231:cherigpr = CUnSeal %5, %2
+    %232:cherigpr = CAndPerms %5, %0
+    %233:cherigpr = CSetFlags %5, %0
+    %234:cherigpr = CSetOffset %5, %0
+    %235:cherigpr = CIncOffset %5, %0
+    %236:cherigpr = CIncOffsetImm %5, 10
+    %237:cherigpr = CSetBounds %5, %0
+    %238:cherigpr = CSetBoundsExact %5, %0
+    %239:cherigpr = CSetBoundsImm %5, 10
+    %240:cherigpr = CClearTag %5
+    %241:cherigpr = CBuildCap %5, %2
+    %242:cherigpr = CCopyType %5, %2
+    %243:cherigpr = CCSeal %5, %2
+    %244:cherigpr = CSetAddr %5, %0
+    %245:cherigpr = CAndAddr %5, %0
+    %249:cherigpr = CSealEntry %5
+
+    ; Try using the mutators on $cnull
+    %330:cherigpr = CSeal $cnull, %2
+    %331:cherigpr = CUnSeal $cnull, %2
+    %332:cherigpr = CAndPerms $cnull, %0
+    %333:cherigpr = CSetFlags $cnull, %0
+    %334:cherigpr = CSetOffset $cnull, %0
+    %335:cherigpr = CIncOffset $cnull, %0
+    %336:cherigpr = CIncOffsetImm $cnull, 10
+    %337:cherigpr = CSetBounds $cnull, %0
+    %338:cherigpr = CSetBoundsExact $cnull, %0
+    %339:cherigpr = CSetBoundsImm $cnull, 10
+    %340:cherigpr = CClearTag $cnull
+    ; Invalid since it uses $ddc for zero: %341:cherigpr = CBuildCap $cnull, %2
+    %342:cherigpr = CCopyType $cnull, %2
+    %343:cherigpr = CCSeal $cnull, %2
+    %344:cherigpr = CSetAddr $cnull, %0
+    %345:cherigpr = CAndAddr $cnull, %0
+    ; Invalid since it uses $ddc for zero: %349:cherigpr = CSealEntry $cnull
 
   bb.4.for.inc:
     successors: %bb.2(0x7c000000), %bb.1(0x04000000)
