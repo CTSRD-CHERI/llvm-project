@@ -4320,7 +4320,7 @@ static bool isSameUnderlyingObjectInLoop(const PHINode *PN,
   return true;
 }
 
-Value *llvm::GetUnderlyingObject(Value *V, const DataLayout &DL,
+Value *llvm::getUnderlyingObject(Value *V, const DataLayout &DL,
                                  unsigned MaxLookup) {
   if (!V->getType()->isPointerTy())
     return V;
@@ -4366,7 +4366,7 @@ Value *llvm::GetUnderlyingObject(Value *V, const DataLayout &DL,
   return V;
 }
 
-void llvm::GetUnderlyingObjects(const Value *V,
+void llvm::getUnderlyingObjects(const Value *V,
                                 SmallVectorImpl<const Value *> &Objects,
                                 const DataLayout &DL, LoopInfo *LI,
                                 unsigned MaxLookup) {
@@ -4375,7 +4375,7 @@ void llvm::GetUnderlyingObjects(const Value *V,
   Worklist.push_back(V);
   do {
     const Value *P = Worklist.pop_back_val();
-    P = GetUnderlyingObject(P, DL, MaxLookup);
+    P = getUnderlyingObject(P, DL, MaxLookup);
 
     if (!Visited.insert(P).second)
       continue;
@@ -4436,9 +4436,9 @@ static const Value *getUnderlyingObjectFromInt(const Value *V) {
   } while (true);
 }
 
-/// This is a wrapper around GetUnderlyingObjects and adds support for basic
+/// This is a wrapper around getUnderlyingObjects and adds support for basic
 /// ptrtoint+arithmetic+inttoptr sequences.
-/// It returns false if unidentified object is found in GetUnderlyingObjects.
+/// It returns false if unidentified object is found in getUnderlyingObjects.
 bool llvm::getUnderlyingObjectsForCodeGen(const Value *V,
                           SmallVectorImpl<Value *> &Objects,
                           const DataLayout &DL) {
@@ -4448,7 +4448,7 @@ bool llvm::getUnderlyingObjectsForCodeGen(const Value *V,
     V = Working.pop_back_val();
 
     SmallVector<const Value *, 4> Objs;
-    GetUnderlyingObjects(V, Objs, DL);
+    getUnderlyingObjects(V, Objs, DL);
 
     for (const Value *V : Objs) {
       if (!Visited.insert(V).second)
@@ -4461,7 +4461,7 @@ bool llvm::getUnderlyingObjectsForCodeGen(const Value *V,
           continue;
         }
       }
-      // If GetUnderlyingObjects fails to find an identifiable object,
+      // If getUnderlyingObjects fails to find an identifiable object,
       // getUnderlyingObjectsForCodeGen also fails for safety.
       if (!isIdentifiedObject(V)) {
         Objects.clear();
