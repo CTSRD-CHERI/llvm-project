@@ -146,6 +146,7 @@ void MCExpr::print(raw_ostream &OS, const MCAsmInfo *MAI, bool InParens) const {
     case MCBinaryExpr::Mul:  OS <<  '*'; break;
     case MCBinaryExpr::NE:   OS << "!="; break;
     case MCBinaryExpr::Or:   OS <<  '|'; break;
+    case MCBinaryExpr::OrNot: OS << '!'; break;
     case MCBinaryExpr::Shl:  OS << "<<"; break;
     case MCBinaryExpr::Sub:  OS <<  '-'; break;
     case MCBinaryExpr::Xor:  OS <<  '^'; break;
@@ -932,6 +933,7 @@ bool MCExpr::evaluateAsRelocatableImpl(MCValue &Res, const MCAssembler *Asm,
     case MCBinaryExpr::Mul:  Result = LHS * RHS; break;
     case MCBinaryExpr::NE:   Result = LHS != RHS; break;
     case MCBinaryExpr::Or:   Result = LHS | RHS; break;
+    case MCBinaryExpr::OrNot: Result = LHS | ~RHS; break;
     case MCBinaryExpr::Shl:  Result = uint64_t(LHS) << uint64_t(RHS); break;
     case MCBinaryExpr::Sub:  Result = LHS - RHS; break;
     case MCBinaryExpr::Xor:  Result = LHS ^ RHS; break;

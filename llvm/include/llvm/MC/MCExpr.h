@@ -501,6 +501,7 @@ public:
     Mul,  ///< Multiplication.
     NE,   ///< Inequality comparison.
     Or,   ///< Bitwise or.
+    OrNot, ///< Bitwise or not.
     Shl,  ///< Shift left.
     AShr, ///< Arithmetic shift right.
     LShr, ///< Logical shift right.
