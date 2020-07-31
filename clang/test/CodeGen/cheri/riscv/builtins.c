@@ -63,13 +63,13 @@ void standard(void * __capability cap) {
 void buildcap(void * __capability auth, void * __capability bits) {
   // RV32IXCHERI-LABEL: @buildcap(
   // RV64IXCHERI-LABEL: @buildcap(
-  void * __capability volatile tagged = __builtin_cheri_cap_build(auth, bits);
+  void * __capability volatile tagged = __builtin_cheri_cap_build(auth, (__uintcap_t)bits);
   // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.build
   // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.build
-  void * __capability volatile sealed = __builtin_cheri_cap_type_copy(auth, tagged);
+  void * __capability volatile unseal_auth = __builtin_cheri_cap_type_copy(auth, bits);
   // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.type.copy
   // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.type.copy
-  void * __capability volatile condseal = __builtin_cheri_conditional_seal(auth, tagged);
+  void * __capability volatile condseal = __builtin_cheri_conditional_seal(tagged, unseal_auth);
   // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal
   // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal
 }

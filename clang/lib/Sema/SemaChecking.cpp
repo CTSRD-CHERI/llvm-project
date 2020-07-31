@@ -179,6 +179,38 @@ static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
+/// Check that argument \p ArgIndex is a capability type (or an array/function
+/// that decays to a capability type.
+static bool checkCapArg(Sema &S, CallExpr *TheCall, unsigned ArgIndex,
+                        QualType *ResultingSrcTy = nullptr) {
+  clang::Expr *Source = TheCall->getArg(ArgIndex);
+  ASTContext &Ctx = S.Context;
+  QualType SrcTy = Source->getType();
+  // We should also be able to use it with arrays/functions
+  if (SrcTy->canDecayToPointerType())
+    SrcTy = Ctx.getDecayedType(SrcTy);
+
+  // Treat NULL/nullptr/__null/literal 0 as void * __capability.
+  if (!SrcTy->isCapabilityPointerType() &&
+      Source->isNullPointerConstant(Ctx, Expr::NPC_ValueDependentIsNull))
+    SrcTy = Ctx.getPointerType(SrcTy->isPointerType() ? SrcTy->getPointeeType()
+                                                      : Ctx.VoidTy,
+                               ASTContext::PIK_Capability);
+  if (ResultingSrcTy)
+    *ResultingSrcTy = SrcTy;
+  if (!SrcTy->isCapabilityPointerType() && !SrcTy->isIntCapType()) {
+    S.Diag(Source->getExprLoc(), diag::err_typecheck_expect_capability_operand)
+        << SrcTy;
+    return true;
+  }
+  ExprResult SrcArg = S.PerformCopyInitialization(
+      InitializedEntity::InitializeParameter(Ctx, SrcTy, false),
+      SourceLocation(), Source);
+  if (SrcArg.isInvalid())
+    return true;
+  TheCall->setArg(ArgIndex, SrcArg.get());
+  return false;
+}
 
 static bool SemaBuiltinMSVCAnnotation(Sema &S, CallExpr *TheCall) {
   // We need at least one argument.
@@ -1458,6 +1490,8 @@ bool Sema::CheckTSBuiltinFunctionCall(const TargetInfo &TI, unsigned BuiltinID,
   }
 }
 
+static bool checkBuiltinArgument(Sema &S, CallExpr *E, unsigned ArgIndex);
+
 ExprResult
 Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
                                CallExpr *TheCall) {
@@ -1907,6 +1941,119 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     }
     break;
+
+  // We allow using CHERI builtins with any pointer type and (u)intcap_t.
+  // Note: __builtin_cheri_cap_from_pointer and __builtin_cheri_cap_to_pointer
+  // are not overloaded yet. They should be used so rarely that it probably
+  // doesn't matter. We also have __cheri_{to,from}cap for typed conversions.
+  case Builtin::BI__builtin_cheri_bounds_set:
+  case Builtin::BI__builtin_cheri_bounds_set_exact:
+  case Builtin::BI__builtin_cheri_perms_and:
+  case Builtin::BI__builtin_cheri_flags_set:
+  case Builtin::BI__builtin_cheri_offset_increment:
+  case Builtin::BI__builtin_cheri_offset_set:
+  case Builtin::BI__builtin_cheri_address_set: {
+    // The CHERI mutators should accept capability pointer types and
+    // uintcap_t and have the same (const-preserving) result type.
+    if (checkArgCount(*this, TheCall, 2))
+      return ExprError();
+    // First argument must be a capability, type-check second argument normally.
+    QualType SrcTy;
+    if (checkCapArg(*this, TheCall, 0, &SrcTy))
+      return ExprError();
+    if (checkBuiltinArgument(*this, TheCall, 1))
+      return ExprError();
+    TheCall->setType(SrcTy);
+    break;
+  }
+  case Builtin::BI__builtin_cheri_seal:
+  case Builtin::BI__builtin_cheri_unseal:
+  case Builtin::BI__builtin_cheri_conditional_seal:
+  case Builtin::BI__builtin_cheri_cap_type_copy: {
+    // Seal/unseal work in almost same way as the setters: value to be
+    // unsealed/sealed comes first and should therefore be the result type,
+    // second argument is overloaded to be any capability type.
+    if (checkArgCount(*this, TheCall, 2))
+      return ExprError();
+    QualType SrcTy;
+    if (checkCapArg(*this, TheCall, 0, &SrcTy))
+      return ExprError();
+    if (checkCapArg(*this, TheCall, 1))
+      return ExprError();
+    TheCall->setType(SrcTy);
+    break;
+  }
+  case Builtin::BI__builtin_cheri_cap_build: {
+    // CBuildCap takes the authorizing capability as the first argument and
+    // the raw bits (a __uintcap_t) that should become tagged second.
+    // The result is always void * __capability.
+    // XXX: If this restriction turns out to be annoying we can always relax
+    //  this and use the type of the second argument as the return type.
+    if (checkArgCount(*this, TheCall, 2))
+      return ExprError();
+    if (checkCapArg(*this, TheCall, 0))
+      return ExprError();
+
+    QualType BitsTy;
+    if (checkCapArg(*this, TheCall, 1, &BitsTy))
+      return ExprError();
+    // Restrict the second argument to __(u)intcap_t
+    if (!BitsTy->isIntCapType())
+      BitsTy = Context.UnsignedIntCapTy;
+    FunctionDecl *Fn = TheCall->getDirectCallee();
+    assert(Fn && "builtin call without direct callee!");
+    InitializedEntity Entity = InitializedEntity::InitializeParameter(
+        Context, Fn->getParamDecl(1), BitsTy);
+    ExprResult BitsArg =
+        PerformCopyInitialization(Entity, SourceLocation(), TheCall->getArg(1));
+    if (BitsArg.isInvalid())
+      return ExprError();
+    TheCall->setArg(1, BitsArg.get());
+    // Result is always void * __capability
+    TheCall->setType(
+        Context.getPointerType(Context.VoidTy, ASTContext::PIK_Capability));
+    break;
+  }
+  case Builtin::BI__builtin_cheri_tag_clear:
+  case Builtin::BI__builtin_cheri_seal_entry: {
+    // Tag-clear and seal-entry behave like the mutator functions but don't have
+    // a second argument.
+    if (checkArgCount(*this, TheCall, 1))
+      return ExprError();
+    QualType SrcTy;
+    if (checkCapArg(*this, TheCall, 0, &SrcTy))
+      return ExprError();
+    TheCall->setType(SrcTy);
+    break;
+  }
+  case Builtin::BI__builtin_cheri_subset_test: {
+    // For subset testing we allow any capability type for both arguments.
+    if (checkArgCount(*this, TheCall, 2))
+      return ExprError();
+    if (checkCapArg(*this, TheCall, 0))
+      return ExprError();
+    if (checkCapArg(*this, TheCall, 1))
+      return ExprError();
+    break;
+  }
+  case Builtin::BI__builtin_cheri_address_get:
+  case Builtin::BI__builtin_cheri_base_get:
+  case Builtin::BI__builtin_cheri_flags_get:
+  case Builtin::BI__builtin_cheri_length_get:
+  case Builtin::BI__builtin_cheri_offset_get:
+  case Builtin::BI__builtin_cheri_perms_get:
+  case Builtin::BI__builtin_cheri_sealed_get:
+  case Builtin::BI__builtin_cheri_tag_get:
+  case Builtin::BI__builtin_cheri_type_get: {
+    // The CHERI accessors should accept both capability pointer types and
+    // (u)intcap_t arguments.
+    if (checkArgCount(*this, TheCall, 1))
+      return ExprError();
+    if (checkCapArg(*this, TheCall, 0))
+      return ExprError();
+    break;
+  }
+
   // OpenCL v2.0, s6.13.16 - Pipe functions
   case Builtin::BIread_pipe:
   case Builtin::BIwrite_pipe:
