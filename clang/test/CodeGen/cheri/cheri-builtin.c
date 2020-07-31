@@ -86,11 +86,11 @@ long long test(void* __capability foo)
 
 void buildcap(void * __capability auth, __intcap_t bits) {
   // ASM-LABEL: buildcap:
-  void * __capability tagged = __builtin_cheri_cap_build(auth, (void * __capability)bits);
+  void * __capability tagged = __builtin_cheri_cap_build(auth, bits);
   // ASM: cbuildcap $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
-  void * __capability sealed = __builtin_cheri_cap_type_copy(auth, tagged);
+  void * __capability unseal_auth = __builtin_cheri_cap_type_copy(auth, bits);
   // ASM: ccopytype $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
-  void * __capability condseal = __builtin_cheri_conditional_seal(auth, tagged);
+  void * __capability condseal = __builtin_cheri_conditional_seal(tagged, unseal_auth);
   // ASM: ccseal $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
 }
 
