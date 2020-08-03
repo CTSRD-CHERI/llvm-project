@@ -126,13 +126,13 @@ def str_to_commandline(value):
 
 
 def infer_dependent_args(args):
-  if args.clang is None:
-    if args.llvm_bin is None:
+  if not args.clang:
+    if not args.llvm_bin:
       args.clang = 'clang'
     else:
       args.clang = os.path.join(args.llvm_bin, 'clang')
-  if args.opt is None:
-    if args.llvm_bin is None:
+  if not args.opt:
+    if not args.llvm_bin:
       args.opt = 'opt'
     else:
       args.opt = os.path.join(args.llvm_bin, 'opt')
