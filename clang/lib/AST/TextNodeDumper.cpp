@@ -1352,6 +1352,12 @@ void TextNodeDumper::VisitOMPIteratorExpr(const OMPIteratorExpr *Node) {
   }
 }
 
+void TextNodeDumper::VisitConceptSpecializationExpr(
+    const ConceptSpecializationExpr *Node) {
+  OS << " ";
+  dumpBareDeclRef(Node->getFoundDecl());
+}
+
 void TextNodeDumper::VisitRValueReferenceType(const ReferenceType *T) {
   if (T->isSpelledAsLValue())
     OS << " written as lvalue reference";
