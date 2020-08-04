@@ -1943,13 +1943,11 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_address_set: {
     // The CHERI mutators should accept capability pointer types and
     // uintcap_t and have the same (const-preserving) result type.
-    if (checkArgCount(*this, TheCall, 2))
-      return ExprError();
     // First argument must be a capability, type-check second argument normally.
     QualType SrcTy;
-    if (checkCapArg(*this, TheCall, 0, &SrcTy))
-      return ExprError();
-    if (checkBuiltinArgument(*this, TheCall, 1))
+    if (checkArgCount(*this, TheCall, 2) ||
+        checkCapArg(*this, TheCall, 0, &SrcTy) ||
+        checkBuiltinArgument(*this, TheCall, 1))
       return ExprError();
     TheCall->setType(SrcTy);
     break;
@@ -1961,12 +1959,10 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     // Seal/unseal work in almost same way as the setters: value to be
     // unsealed/sealed comes first and should therefore be the result type,
     // second argument is overloaded to be any capability type.
-    if (checkArgCount(*this, TheCall, 2))
-      return ExprError();
     QualType SrcTy;
-    if (checkCapArg(*this, TheCall, 0, &SrcTy))
-      return ExprError();
-    if (checkCapArg(*this, TheCall, 1))
+    if (checkArgCount(*this, TheCall, 2) ||
+        checkCapArg(*this, TheCall, 0, &SrcTy) ||
+        checkCapArg(*this, TheCall, 1))
       return ExprError();
     TheCall->setType(SrcTy);
     break;
@@ -1977,26 +1973,16 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     // The result is always void * __capability.
     // XXX: If this restriction turns out to be annoying we can always relax
     //  this and use the type of the second argument as the return type.
-    if (checkArgCount(*this, TheCall, 2))
-      return ExprError();
-    if (checkCapArg(*this, TheCall, 0))
-      return ExprError();
-
     QualType BitsTy;
-    if (checkCapArg(*this, TheCall, 1, &BitsTy))
+    if (checkArgCount(*this, TheCall, 2) || checkCapArg(*this, TheCall, 0) ||
+        checkCapArg(*this, TheCall, 1, &BitsTy))
       return ExprError();
     // Restrict the second argument to __(u)intcap_t
-    if (!BitsTy->isIntCapType())
-      BitsTy = Context.UnsignedIntCapTy;
-    FunctionDecl *Fn = TheCall->getDirectCallee();
-    assert(Fn && "builtin call without direct callee!");
-    InitializedEntity Entity = InitializedEntity::InitializeParameter(
-        Context, Fn->getParamDecl(1), BitsTy);
-    ExprResult BitsArg =
-        PerformCopyInitialization(Entity, SourceLocation(), TheCall->getArg(1));
-    if (BitsArg.isInvalid())
+    if (!BitsTy->isIntCapType()) {
+      Diag(TheCall->getArg(1)->getExprLoc(), diag::err_typecheck_expect_int)
+          << BitsTy;
       return ExprError();
-    TheCall->setArg(1, BitsArg.get());
+    }
     // Result is always void * __capability
     TheCall->setType(
         Context.getPointerType(Context.VoidTy, ASTContext::PIK_Capability));
@@ -2006,10 +1992,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_seal_entry: {
     // Tag-clear and seal-entry behave like the mutator functions but don't have
     // a second argument.
-    if (checkArgCount(*this, TheCall, 1))
-      return ExprError();
     QualType SrcTy;
-    if (checkCapArg(*this, TheCall, 0, &SrcTy))
+    if (checkArgCount(*this, TheCall, 1) ||
+        checkCapArg(*this, TheCall, 0, &SrcTy))
       return ExprError();
     TheCall->setType(SrcTy);
     break;
@@ -2018,11 +2003,8 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_subset_test: {
     // For subset testing and type checking we allow any capability type for
     // both arguments.
-    if (checkArgCount(*this, TheCall, 2))
-      return ExprError();
-    if (checkCapArg(*this, TheCall, 0))
-      return ExprError();
-    if (checkCapArg(*this, TheCall, 1))
+    if (checkArgCount(*this, TheCall, 2) || checkCapArg(*this, TheCall, 0) ||
+        checkCapArg(*this, TheCall, 1))
       return ExprError();
     break;
   }
@@ -2037,9 +2019,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_type_get: {
     // The CHERI accessors should accept both capability pointer types and
     // (u)intcap_t arguments.
-    if (checkArgCount(*this, TheCall, 1))
-      return ExprError();
-    if (checkCapArg(*this, TheCall, 0))
+    if (checkArgCount(*this, TheCall, 1) || checkCapArg(*this, TheCall, 0))
       return ExprError();
     break;
   }
@@ -2052,12 +2032,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     // First argument is the authorizing capability, the second is the
     // capability to be converted to a relative integer pointer.
     // If the argument is a __(u)intcap_t, we return a (u)intptr_t.
-    if (checkArgCount(*this, TheCall, 2))
-      return ExprError();
-    if (checkCapArg(*this, TheCall, 0))
-      return ExprError();
     QualType SrcTy;
-    if (checkCapArg(*this, TheCall, 1, &SrcTy))
+    if (checkArgCount(*this, TheCall, 2) || checkCapArg(*this, TheCall, 0) ||
+        checkCapArg(*this, TheCall, 1, &SrcTy))
       return ExprError();
     if (SrcTy->isPointerType()) {
       TheCall->setType(Context.getPointerType(SrcTy->getPointeeType(),
@@ -2077,9 +2054,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     // If the non-capability argument is a pointer, the return type will be the
     // the capability equivalent of that pointer, if it's an integer the return
     // type is void * __capability.
-    if (checkArgCount(*this, TheCall, 2))
-      return ExprError();
-    if (checkCapArg(*this, TheCall, 0))
+    if (checkArgCount(*this, TheCall, 2) || checkCapArg(*this, TheCall, 0))
       return ExprError();
     auto PtrArg = TheCall->getArg(1);
     auto PtrTy = PtrArg->getType();
@@ -2102,7 +2077,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     break;
   }
   case Builtin::BI__builtin_cheri_perms_check:
-    // Overloaded to allow any capability type as the first argument
+    // Overloaded to allow any capability type as the first argument.
     if (checkArgCount(*this, TheCall, 2) || checkCapArg(*this, TheCall, 0) ||
         checkBuiltinArgument(*this, TheCall, 1))
       return ExprError();

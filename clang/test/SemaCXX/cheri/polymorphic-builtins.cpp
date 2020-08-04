@@ -110,10 +110,8 @@ void test_buildcap(struct Incomplete *__capability authcap, __uintcap_t ubits, _
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, ubits)), void *__capability), ""); // okay
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, sbits)), void *__capability), ""); // okay
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, charpbits)), void *__capability), "");
-  // purecap-cxx-error@-1{{cannot initialize a parameter of type '__uintcap_t' with an rvalue of type 'char *'}}
-  // purecap-c-warning@-2{{incompatible pointer to integer conversion passing 'char *' to parameter of type '__uintcap_t'}}
-  // hybrid-cxx-error@-3{{cannot initialize a parameter of type '__uintcap_t' with an rvalue of type 'char * __capability'}}
-  // hybrid-c-warning@-4{{incompatible pointer to integer conversion passing 'char * __capability' to parameter of type '__uintcap_t'}}
+  // purecap-error@-1{{used type 'char *' where integer is required}}
+  // hybrid-error@-2{{used type 'char * __capability' where integer is required}}
 }
 
 void cap_to_pointer(struct Incomplete *__capability authcap, void *integerptr, void *__capability capptr, __uintcap_t ui, __intcap_t si) {
