@@ -321,7 +321,7 @@ struct EhSectionPiece {
                  unsigned firstRelocation)
       : inputOff(off), sec(sec), size(size), firstRelocation(firstRelocation) {}
 
-  ArrayRef<uint8_t> data() {
+  ArrayRef<uint8_t> data() const {
     return {sec->data().data() + this->inputOff, size};
   }
 
