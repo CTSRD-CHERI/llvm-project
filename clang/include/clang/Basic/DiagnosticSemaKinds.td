@@ -6652,6 +6652,12 @@ def warn_tautological_compare_objc_bool : Warning<
   "result of comparison of constant %0 with expression of type 'BOOL'"
   " is always %1, as the only well defined values for 'BOOL' are YES and NO">,
   InGroup<TautologicalObjCBoolCompare>;
+def subst_int_range : TextSubstitution<"%0-bit %select{signed|unsigned}1 value">;
+def warn_tautological_compare_value_range : Warning<
+  "result of comparison of "
+  "%select{%4|%sub{subst_int_range}1,2}0 %3 "
+  "%select{%sub{subst_int_range}1,2|%4}0 is always %5">,
+  InGroup<TautologicalValueRangeCompare>, DefaultIgnore;
 
 def warn_typecheck_convert_ptr_to_cap: Warning<"converting non-capability "
   "type %0 to capability type %1 without an explicit cast; if this is intended use __cheri_tocap">,
