@@ -401,7 +401,7 @@ void test_uintcap_t(__uintcap_t arg) {
 // HYBRID-NEXT:    ret void
 //
 void test_null_constant(__uintcap_t arg) {
-  call_overloaded_builtins(void* __capability, (void*)0);
+  call_overloaded_builtins(void *__capability, (void *)0);
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_null_int_ptr
@@ -481,8 +481,90 @@ void test_null_constant(__uintcap_t arg) {
 // HYBRID-NEXT:    ret void
 //
 void test_null_int_ptr(__uintcap_t arg) {
-  call_overloaded_builtins(const int* __capability, (const int* __capability)0);
+  call_overloaded_builtins(const int *__capability, (const int *__capability)0);
 }
+
+// PURECAP-LABEL: define {{[^@]+}}@test_cap_from_ptr
+// PURECAP-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i64 signext [[L:%.*]], i32 signext [[I:%.*]], i32 signext [[U:%.*]]) addrspace(200) #0
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[L]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP2]], i64 [[L]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP2]], i64 [[L]])
+// PURECAP-NEXT:    [[TMP4:%.*]] = sext i32 [[I]] to i64
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[TMP4]])
+// PURECAP-NEXT:    [[TMP6:%.*]] = zext i32 [[U]] to i64
+// PURECAP-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[TMP6]])
+// PURECAP-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 0)
+// PURECAP-NEXT:    ret void
+//
+// HYBRID-LABEL: define {{[^@]+}}@test_cap_from_ptr
+// HYBRID-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i64 signext [[L:%.*]], i32 signext [[I:%.*]], i32 signext [[U:%.*]]) #0
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[L]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP2]], i64 [[L]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP2]], i64 [[L]])
+// HYBRID-NEXT:    [[TMP4:%.*]] = sext i32 [[I]] to i64
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[TMP4]])
+// HYBRID-NEXT:    [[TMP6:%.*]] = zext i32 [[U]] to i64
+// HYBRID-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[TMP6]])
+// HYBRID-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 0)
+// HYBRID-NEXT:    [[TMP9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 0)
+// HYBRID-NEXT:    [[TMP10:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 0)
+// HYBRID-NEXT:    [[TMP11:%.*]] = bitcast i8 addrspace(200)* [[TMP10]] to i64 addrspace(200)*
+// HYBRID-NEXT:    ret void
+//
+void test_cap_from_ptr(void *__capability authcap1, __uintcap_t authcap2, long l, int i, unsigned u) {
+  void *__capability c1 = __builtin_cheri_cap_from_pointer(authcap1, l);
+  void *__capability c2 = __builtin_cheri_cap_from_pointer(authcap2, l);
+  void *__capability c3 = __builtin_cheri_cap_from_pointer(__builtin_cheri_global_data_get(), l);
+  // Check int is extended to i64:
+  void *__capability c4 = __builtin_cheri_cap_from_pointer(authcap1, i); // sign-extend
+  void *__capability c5 = __builtin_cheri_cap_from_pointer(authcap1, u); // zero-extend
+  // Zero argument
+  void *__capability c6 = __builtin_cheri_cap_from_pointer(authcap1, 0);
+#ifndef __CHERI_PURE_CAPABILITY__
+  // pointer type argument
+  void *__capability c7 = __builtin_cheri_cap_from_pointer(authcap1, (void *)0);
+  // Check that we add a bitcast for the return value:
+  long *__capability c8 = __builtin_cheri_cap_from_pointer(authcap1, (long *)0);
+#endif
+}
+
+#ifndef __CHERI_PURE_CAPABILITY__
+// HYBRID-LABEL: define {{[^@]+}}@test_cap_to_ptr
+// HYBRID-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i8 addrspace(200)* [[VCAP:%.*]], i64 addrspace(200)* [[LCAP:%.*]], i32 addrspace(200)* [[ICAP:%.*]]) #0
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i8 addrspace(200)* [[VCAP]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = inttoptr i64 [[TMP0]] to i8*
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[AUTHCAP2]], i8 addrspace(200)* [[VCAP]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = inttoptr i64 [[TMP2]] to i8*
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[TMP4]], i8 addrspace(200)* [[VCAP]])
+// HYBRID-NEXT:    [[TMP6:%.*]] = inttoptr i64 [[TMP5]] to i8*
+// HYBRID-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP8:%.*]] = inttoptr i64 [[TMP7]] to i8*
+// HYBRID-NEXT:    [[TMP9:%.*]] = bitcast i64 addrspace(200)* [[LCAP]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i8 addrspace(200)* [[TMP9]])
+// HYBRID-NEXT:    [[TMP11:%.*]] = inttoptr i64 [[TMP10]] to i64*
+// HYBRID-NEXT:    [[TMP12:%.*]] = bitcast i32 addrspace(200)* [[ICAP]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP13:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i8 addrspace(200)* [[TMP12]])
+// HYBRID-NEXT:    [[TMP14:%.*]] = inttoptr i64 [[TMP13]] to i32*
+// HYBRID-NEXT:    ret void
+//
+void test_cap_to_ptr(void *__capability authcap1, __uintcap_t authcap2, void *__capability vcap,
+                     long *__capability lcap, const int *__capability icap) {
+  void *c1 = __builtin_cheri_cap_to_pointer(authcap1, vcap);
+  void *c2 = __builtin_cheri_cap_to_pointer(authcap2, vcap);
+  void *c3 = __builtin_cheri_cap_to_pointer(__builtin_cheri_global_data_get(), vcap);
+  // Check zero argument is NULL
+  void *c4 = __builtin_cheri_cap_to_pointer(authcap1, 0);
+  // Check that we add a bitcast for the return value:
+  long *c5 = __builtin_cheri_cap_to_pointer(authcap1, lcap);
+  const int *c6 = __builtin_cheri_cap_to_pointer(authcap1, icap);
+}
+#endif
 
 // Array-decay and function-to-pointer decay only works for purecap
 #ifdef __CHERI_PURE_CAPABILITY__
@@ -517,10 +599,10 @@ static char global_buffer[16];
 // PURECAP-NEXT:    ret void
 //
 void test_array(void) {
-  call_overloaded_builtins(const char* __capability, global_buffer);
+  call_overloaded_builtins(const char *__capability, global_buffer);
 }
 
-typedef void (* __capability fnptr_t)(void);
+typedef void (*__capability fnptr_t)(void);
 
 // PURECAP-LABEL: define {{[^@]+}}@test_function() addrspace(200) #0
 // PURECAP-NEXT:  entry:

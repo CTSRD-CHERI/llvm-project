@@ -3939,10 +3939,16 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
   case Builtin::BI__builtin_cheri_cap_from_pointer: {
     Value *GlobalCap = EmitScalarExpr(E->getArg(0));
-    Value *Ptr = Builder.CreatePtrToInt(EmitScalarExpr(E->getArg(1)), IntPtrTy);
-    return RValue::get(Builder.CreateIntrinsic(
-        Intrinsic::cheri_cap_from_pointer, {IntPtrTy},
-        {EmitCastToVoidPtr(GlobalCap), Ptr}));
+    Value *PtrArg = EmitScalarExpr(E->getArg(1));
+    if (PtrArg->getType()->isIntegerTy())
+      PtrArg = Builder.CreateIntCast(
+          PtrArg, IntPtrTy, E->getArg(1)->getType()->isSignedIntegerType());
+    else
+      PtrArg = Builder.CreatePtrToInt(PtrArg, IntPtrTy);
+    return RValue::get(Builder.CreateBitCast(
+        Builder.CreateIntrinsic(Intrinsic::cheri_cap_from_pointer, {IntPtrTy},
+                                {EmitCastToVoidPtr(GlobalCap), PtrArg}),
+        ConvertType(E->getType())));
   }
   case Builtin::BI__builtin_cheri_cap_to_pointer: {
     assert(!getContext().getTargetInfo().areAllPointersCapabilities() &&
@@ -3953,7 +3959,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *Ptr = Builder.CreateIntrinsic(
         llvm::Intrinsic::cheri_cap_to_pointer, {IntPtrTy},
         {EmitCastToVoidPtr(GlobalCap), EmitCastToVoidPtr(Cap)});
-    return RValue::get(Builder.CreateIntToPtr(Ptr, ConvertType(E->getType())));
+    auto *ResultTy = ConvertType(E->getType());
+    if (ResultTy->isIntegerTy())
+      return RValue::get(Builder.CreateIntCast(
+          Ptr, ResultTy, E->getType()->isSignedIntegerType()));
+    else
+      return RValue::get(Builder.CreateIntToPtr(Ptr, ResultTy));
   }
 
   case Builtin::BI__builtin_cheri_address_get:

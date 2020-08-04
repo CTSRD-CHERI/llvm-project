@@ -1934,18 +1934,6 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   // Memory capability functions
   case Builtin::BI__builtin_cheri_callback_create:
     return SemaBuiltinCHERICapCreate(*this, TheCall);
-  case Builtin::BI__builtin_cheri_cap_to_pointer:
-    if (Context.getTargetInfo().areAllPointersCapabilities()) {
-      Diag(TheCall->getBeginLoc(), diag::err_builtin_target_unsupported)
-          << TheCall->getSourceRange();
-      return ExprError();
-    }
-    break;
-
-  // We allow using CHERI builtins with any pointer type and (u)intcap_t.
-  // Note: __builtin_cheri_cap_from_pointer and __builtin_cheri_cap_to_pointer
-  // are not overloaded yet. They should be used so rarely that it probably
-  // doesn't matter. We also have __cheri_{to,from}cap for typed conversions.
   case Builtin::BI__builtin_cheri_bounds_set:
   case Builtin::BI__builtin_cheri_bounds_set_exact:
   case Builtin::BI__builtin_cheri_perms_and:
@@ -2051,6 +2039,64 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     if (checkCapArg(*this, TheCall, 0))
       return ExprError();
+    break;
+  }
+  case Builtin::BI__builtin_cheri_cap_to_pointer: {
+    if (Context.getTargetInfo().areAllPointersCapabilities()) {
+      Diag(TheCall->getBeginLoc(), diag::err_builtin_target_unsupported)
+          << TheCall->getSourceRange();
+      return ExprError();
+    }
+    // First argument is the authorizing capability, the second is the
+    // capability to be converted to a relative integer pointer.
+    // If the argument is a __(u)intcap_t, we return a (u)intptr_t.
+    if (checkArgCount(*this, TheCall, 2))
+      return ExprError();
+    if (checkCapArg(*this, TheCall, 0))
+      return ExprError();
+    QualType SrcTy;
+    if (checkCapArg(*this, TheCall, 1, &SrcTy))
+      return ExprError();
+    if (SrcTy->isPointerType()) {
+      TheCall->setType(Context.getPointerType(SrcTy->getPointeeType(),
+                                              ASTContext::PIK_Integer));
+    } else {
+      assert(SrcTy->isIntCapType());
+      TheCall->setType(SrcTy->isSignedIntegerType() ? Context.getIntPtrType()
+                                                    : Context.getUIntPtrType());
+    }
+    break;
+  }
+  case Builtin::BI__builtin_cheri_cap_from_pointer: {
+    // First argument is the authorizing capability, the second is the
+    // integer to be converted to a capability.
+    // For purecap the second argument must be a (non-capability) integer type
+    // and in hybrid mode we also permit (non-capability) pointer types.
+    // If the non-capability argument is a pointer, the return type will be the
+    // the capability equivalent of that pointer, if it's an integer the return
+    // type is void * __capability.
+    if (checkArgCount(*this, TheCall, 2))
+      return ExprError();
+    if (checkCapArg(*this, TheCall, 0))
+      return ExprError();
+    auto PtrArg = TheCall->getArg(1);
+    auto PtrTy = PtrArg->getType();
+    QualType ResultPointee = Context.VoidTy;
+    if (!PtrTy->isIntegerType() || PtrTy->isIntCapType()) {
+      if (Context.getTargetInfo().areAllPointersCapabilities()) {
+        Diag(PtrArg->getExprLoc(), diag::err_typecheck_expect_int) << PtrTy;
+        return ExprError();
+      } else if (PtrTy->isPointerType() &&
+                 !PtrTy->isCHERICapabilityType(Context)) {
+        ResultPointee = PtrTy->getPointeeType();
+      } else {
+        Diag(PtrArg->getExprLoc(), diag::err_typecheck_expect_scalar_operand)
+            << PtrTy;
+        return ExprError();
+      }
+    }
+    TheCall->setType(
+        Context.getPointerType(ResultPointee, ASTContext::PIK_Capability));
     break;
   }
 
