@@ -39,6 +39,8 @@ void test_good(Cap x) {
   static_assert(__is_same(decltype(__builtin_cheri_unseal(x, nullptr)), T), "");
   static_assert(__is_same(decltype(__builtin_cheri_conditional_seal(x, nullptr)), T), "");
   static_assert(__is_same(decltype(__builtin_cheri_cap_type_copy(x, nullptr)), T), "");
+  static_assert(__is_same(decltype(__builtin_cheri_perms_check(x, 1)), void), "");
+  static_assert(__is_same(decltype(__builtin_cheri_type_check(x, x)), void), "");
 }
 
 void do_test() {
@@ -179,6 +181,21 @@ void test_decay() {
   // hybrid-error@-1{{operand of type 'void (*)()' where capability is required}}
   void (*f2)(void) = __builtin_cheri_bounds_set(&test_decay, 1);
   // hybrid-error@-1{{operand of type 'void (*)()' where capability is required}}
+}
+
+void check_perms_type_check_builtins(const int *__capability capptr, __uintcap_t uintcap, long l) {
+  static_assert(__is_same(__typeof__(__builtin_cheri_perms_check(capptr, 1)), void), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_perms_check(uintcap, 1)), void), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_perms_check(l, 1)), void), "");
+  // expected-error@-1{{operand of type 'long' where capability is required}}
+
+  static_assert(__is_same(__typeof__(__builtin_cheri_type_check(uintcap, capptr)), void), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_type_check(capptr, uintcap)), void), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_type_check(capptr, 0)), void), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_type_check(capptr, l)), void), "");
+  // expected-error@-1{{operand of type 'long' where capability is required}}
+  static_assert(__is_same(__typeof__(__builtin_cheri_type_check(l, capptr)), void), "");
+  // expected-error@-1{{operand of type 'long' where capability is required}}
 }
 
 void test_bad() {
