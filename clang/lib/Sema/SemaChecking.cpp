@@ -2014,8 +2014,10 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     TheCall->setType(SrcTy);
     break;
   }
+  case Builtin::BI__builtin_cheri_type_check:
   case Builtin::BI__builtin_cheri_subset_test: {
-    // For subset testing we allow any capability type for both arguments.
+    // For subset testing and type checking we allow any capability type for
+    // both arguments.
     if (checkArgCount(*this, TheCall, 2))
       return ExprError();
     if (checkCapArg(*this, TheCall, 0))
@@ -2099,6 +2101,12 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
         Context.getPointerType(ResultPointee, ASTContext::PIK_Capability));
     break;
   }
+  case Builtin::BI__builtin_cheri_perms_check:
+    // Overloaded to allow any capability type as the first argument
+    if (checkArgCount(*this, TheCall, 2) || checkCapArg(*this, TheCall, 0) ||
+        checkBuiltinArgument(*this, TheCall, 1))
+      return ExprError();
+    break;
 
   // OpenCL v2.0, s6.13.16 - Pipe functions
   case Builtin::BIread_pipe:
