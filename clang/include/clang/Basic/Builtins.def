@@ -1534,8 +1534,8 @@ BUILTIN(__builtin_cheri_global_data_get, "v*m", "nc")
 BUILTIN(__builtin_cheri_program_counter_get, "v*m", "nc")
 BUILTIN(__builtin_cheri_stack_get, "v*m", "nc")
 
-BUILTIN(__builtin_cheri_cap_from_pointer, "v*mvC*mvC*", "nc")
-BUILTIN(__builtin_cheri_cap_to_pointer, "v*vC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_cap_from_pointer, "v*mvC*mvC*", "nct")
+BUILTIN(__builtin_cheri_cap_to_pointer, "v*vC*mvC*m", "nct")
 
 BUILTIN(__builtin_cheri_cap_build, "v*mvC*mvC*m", "nct")
 BUILTIN(__builtin_cheri_cap_type_copy, "v*mvC*mvC*m", "nct")

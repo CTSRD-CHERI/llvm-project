@@ -1,6 +1,7 @@
 /// Check that (most) CHERI builtins are overloaded to allow any capability
 /// pointer type or (u)intcap_t
-// RUN: %cheri_purecap_cc1 %s -verify=expected,purecap
+// RUN: %cheri_purecap_cc1 %s -verify=expected,purecap,purecap-cxx
+// RUN: %cheri_purecap_cc1 -xc %s -verify=expected,purecap,purecap-c
 // RUN: %cheri_cc1 %s -verify=expected,hybrid,hybrid-cxx
 // RUN: %cheri_cc1 -xc %s -verify=expected,hybrid,hybrid-c
 
@@ -103,13 +104,71 @@ void test_nullptr(__uintcap_t caparg) {
 
 void test_buildcap(struct Incomplete *__capability authcap, __uintcap_t ubits, __intcap_t sbits, char *__capability charpbits) {
   // void * __capability __builtin_cheri_cap_build(<anycap> auth, __(u)intcap_t bits)
+  // Note: we may want to allow any capability type as the second argument if this restriction becomes annoying
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, ubits)), void *__capability), ""); // okay
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, sbits)), void *__capability), ""); // okay
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, charpbits)), void *__capability), "");
-  // purecap-error@-1{{cannot initialize a parameter of type '__uintcap_t' with an rvalue of type 'char *'}}
-  // hybrid-cxx-error@-2{{cannot initialize a parameter of type '__uintcap_t' with an rvalue of type 'char * __capability'}}
-  // hybrid-c-warning@-3{{incompatible pointer to integer conversion passing 'char * __capability' to parameter of type '__uintcap_t'}}
-  // Note: we may want to allow any capability type as the second argument if this restriction becomes annoying
+  // purecap-cxx-error@-1{{cannot initialize a parameter of type '__uintcap_t' with an rvalue of type 'char *'}}
+  // purecap-c-warning@-2{{incompatible pointer to integer conversion passing 'char *' to parameter of type '__uintcap_t'}}
+  // hybrid-cxx-error@-3{{cannot initialize a parameter of type '__uintcap_t' with an rvalue of type 'char * __capability'}}
+  // hybrid-c-warning@-4{{incompatible pointer to integer conversion passing 'char * __capability' to parameter of type '__uintcap_t'}}
+}
+
+void cap_to_pointer(struct Incomplete *__capability authcap, void *integerptr, void *__capability capptr, __uintcap_t ui, __intcap_t si) {
+#ifdef __CHERI_PURE_CAPABILITY__
+  // not available in purecap
+  (void)__builtin_cheri_cap_to_pointer(authcap, capptr); // purecap-error{{builtin is not supported on this target}}
+#else
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_to_pointer(authcap, 0)), void *), ""); // 0 is a NULL pointer -> void*
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_to_pointer(authcap, NULL)), void *), "");
+  // (u)intcap_t -> (u)intptr_t
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_to_pointer(authcap, ui)), unsigned long), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_to_pointer(authcap, si)), signed long), "");
+
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_to_pointer(authcap, (const char *__capability)capptr)), const char *), ""); // okay
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_to_pointer(authcap, capptr)), void *), "");
+  (void)__builtin_cheri_cap_to_pointer(authcap, integerptr); // expected-error{{operand of type 'void *' where capability is required}}
+  (void)__builtin_cheri_cap_to_pointer(integerptr, NULL);    // expected-error{{operand of type 'void *' where capability is required}}
+#endif
+}
+
+void cap_from_pointer(struct Incomplete *__capability authcap, const int *integerptr, const int *__capability capptr, __uintcap_t ui, __intcap_t si, long l, int i) {
+  // Using an integer type results in a void * __capability return value
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, i)), void *__capability), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, l)), void *__capability), "");
+  // However, we reject __(u)intcap_t since that is a capability type:
+  (void)__builtin_cheri_cap_from_pointer(authcap, ui); // expected-error-re{{type '__uintcap_t' where {{(arithmetic or pointer type)|integer}} is required}}
+  (void)__builtin_cheri_cap_from_pointer(authcap, si); // expected-error-re{{type '__intcap_t' where {{(arithmetic or pointer type)|integer}} is required}}
+
+  // NULL is error in C++ (hybrid+purecap) since the operand is nullptr_t, and in
+  // purecap C it's also an error since NULL is defined as (void*)0.
+  (void)__builtin_cheri_cap_from_pointer(authcap, NULL);
+  // purecap-cxx-error@-1{{used type 'nullptr_t' where integer is required}}
+  // purecap-c-error@-2{{used type 'void * __attribute__((cheri_no_provenance))' where integer is required}}
+  // hybrid-cxx-error@-3{{operand of type 'nullptr_t' where arithmetic or pointer type is required}}
+  // (void*)0 is only an error in purecap mode:
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, (void *)0)), void *__capability), "");
+  // purecap-cxx-error@-1{{used type 'void *' where integer is required}}
+  // purecap-c-error@-2{{used type 'void * __attribute__((cheri_no_provenance))' where integer is required}}
+  // Literal zero is fine since it's an integer (and therefore the return type is void* __capability):
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, 0)), void *__capability), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, integerptr)), const int *__capability), "");
+  // purecap-error@-1{{used type 'const int *' where integer is required}}
+  (void)__builtin_cheri_cap_from_pointer(authcap, capptr);
+  // purecap-error@-1{{used type 'const int *' where integer is required}}
+  // hybrid-error@-2{{operand of type 'const int * __capability' where arithmetic or pointer type is required}}
+
+  // authorizing cap must be a capability:
+  (void)__builtin_cheri_cap_from_pointer(integerptr, l);
+  // hybrid-error@-1{{operand of type 'const int *' where capability is required}}
+  (void)__builtin_cheri_cap_from_pointer(l, l);
+  // expected-error@-1{{operand of type 'long' where capability is required}}
+  (void)__builtin_cheri_cap_from_pointer(i, l);
+  // expected-error@-1{{operand of type 'int' where capability is required}}
+  (void)__builtin_cheri_cap_from_pointer(1, l);
+  // expected-error@-1{{operand of type 'int' where capability is required}}
+  // literal zero is a NULL pointer constant so it's accepted as the auth argument
+  static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(0, l)), void *__capability), "");
 }
 
 void test_decay() {
