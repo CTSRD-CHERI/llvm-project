@@ -115,6 +115,24 @@ static uint32_t getEFlags(InputFile *f) {
   return cast<ObjFile<ELF32LE>>(f)->getObj().getHeader()->e_flags;
 }
 
+static bool hasExecutableSection(InputFile *f) {
+  if (config->is64) {
+    auto of = cast<ObjFile<ELF64LE>>(f);
+    auto sections = CHECK(of->getObj().sections(), of);
+    for (const auto section : sections)
+      if (section.sh_flags & SHF_EXECINSTR)
+        return true;
+    return false;
+  } else {
+    auto of = cast<ObjFile<ELF32LE>>(f);
+    auto sections = CHECK(of->getObj().sections(), of);
+    for (const auto section : sections)
+      if (section.sh_flags & SHF_EXECINSTR)
+        return true;
+    return false;
+  }
+}
+
 int RISCV::getCapabilitySize() const {
   return config->is64 ? 16 : 8;
 }
@@ -125,9 +143,22 @@ uint32_t RISCV::calcEFlags() const {
   if (objectFiles.empty())
     return 0;
 
-  uint32_t target = getEFlags(objectFiles.front());
+  bool found_target = false;
+  uint32_t target = 0;
 
   for (InputFile *f : objectFiles) {
+    // All of the currently defined flags are only relevant to
+    // executable code, so ignore flags from objects that do
+    // not contain any executable sections.
+    if (!hasExecutableSection(f))
+      continue;
+
+    if (!found_target) {
+      target = getEFlags(f);
+      found_target = true;
+      continue;
+    }
+
     uint32_t eflags = getEFlags(f);
     if (eflags & EF_RISCV_RVC)
       target |= EF_RISCV_RVC;
@@ -149,6 +180,10 @@ uint32_t RISCV::calcEFlags() const {
             ": cannot link object files with different EF_RISCV_CAP_MODE");
   }
 
+  // If no input files contain executable sections, use the flags from the first
+  // input file.
+  if (!found_target)
+    target = getEFlags(objectFiles.front());
   return target;
 }
 
