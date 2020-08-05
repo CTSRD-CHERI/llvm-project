@@ -29,6 +29,12 @@
 #error "This header requires CHERI capability support"
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#else
+#include <stdbool.h>
+#endif
+
 /* Bump this on every incompatible change */
 #define CHERI_INIT_GLOBALS_VERSION 4
 #define CHERI_INIT_GLOBALS_NUM_ARGS 7
@@ -151,7 +157,7 @@ static __attribute__((always_inline)) void
 cheri_init_globals_impl(const struct capreloc *start_relocs,
                         const struct capreloc *stop_relocs, void *data_cap,
                         const void *code_cap, const void *rodata_cap,
-                        _Bool tight_code_bounds, __SIZE_TYPE__ base_addr) {
+                        bool tight_code_bounds, __SIZE_TYPE__ base_addr) {
   data_cap =
       __builtin_cheri_perms_and(data_cap, global_pointer_permissions_mask);
   code_cap =
@@ -168,12 +174,11 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
       continue;
     }
     const void *base_cap;
-    _Bool can_set_bounds = 1;
+    bool can_set_bounds = true;
     if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
-      /* Do not set tight bounds for functions (unless we are in the plt/fndesc
-       * ABI */
-      can_set_bounds = tight_code_bounds; /* pc-relative ABI -> need large bounds on $pcc */
       base_cap = code_cap; /* code pointer */
+      /* Do not set tight bounds for functions (unless we are in the plt ABI) */
+      can_set_bounds = tight_code_bounds;
     } else if ((reloc->permissions & constant_reloc_flag) ==
                constant_reloc_flag) {
       base_cap = rodata_cap; /* read-only data pointer */
@@ -236,9 +241,10 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
       (const struct capreloc *)((const char *)start_relocs + relocs_size);
 
 #if __CHERI_CAPABILITY_TABLE__ == 3
-  _Bool can_set_code_bounds = 0; /* pc-relative ABI -> need large bounds on $pcc */
+  /* pc-relative ABI -> need large bounds on $pcc */
+  bool can_set_code_bounds = false;
 #else
-  _Bool can_set_code_bounds = 1; /* fn-desc/plt ABI -> tight bounds okay */
+  bool can_set_code_bounds = true; /* fn-desc/plt ABI -> tight bounds okay */
 #endif
   /*
    * We can assume that all relocations in the __cap_relocs section have already
@@ -257,5 +263,9 @@ cheri_init_globals_gdc(void *gdc) {
 #ifndef CHERI_INIT_GLOBALS_GDC_ONLY
 static __attribute__((always_inline, unused)) void cheri_init_globals(void) {
   cheri_init_globals_gdc(__builtin_cheri_global_data_get());
+}
+#endif
+
+#ifdef __cplusplus
 }
 #endif
