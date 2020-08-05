@@ -238,7 +238,8 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    * TODO: use csetboundsexact and teach the linker to align __cap_relocs.
    */
   stop_relocs =
-      (const struct capreloc *)((const char *)start_relocs + relocs_size);
+      (const struct capreloc *)(const void *)((const char *)start_relocs +
+                                              relocs_size);
 
 #if __CHERI_CAPABILITY_TABLE__ == 3
   /* pc-relative ABI -> need large bounds on $pcc */
