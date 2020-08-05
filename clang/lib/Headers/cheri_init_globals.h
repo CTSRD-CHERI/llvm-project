@@ -159,7 +159,7 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
   rodata_cap =
       __builtin_cheri_perms_and(rodata_cap, constant_pointer_permissions_mask);
   for (const struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
-    void **dest = cheri_address_or_offset_set(
+    const void **dest = (const void **)cheri_address_or_offset_set(
         data_cap, reloc->capability_location + base_addr);
     if (reloc->object == 0) {
       /* XXXAR: clang fills uninitialized capabilities with 0xcacaca..., so we
@@ -180,7 +180,7 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
     } else {
       base_cap = data_cap; /* read-write data */
     }
-    void *src =
+    const void *src =
         cheri_address_or_offset_set(base_cap, reloc->object + base_addr);
     if (can_set_bounds && (reloc->size != 0)) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
@@ -197,8 +197,8 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
 static __attribute__((always_inline)) void
 cheri_init_globals_3(void *data_cap, const void *code_cap,
                      const void *rodata_cap) {
-  struct capreloc *start_relocs;
-  struct capreloc *stop_relocs;
+  const struct capreloc *start_relocs;
+  const struct capreloc *stop_relocs;
   __SIZE_TYPE__ start_addr, end_addr;
 #if defined(__mips__)
   __asm__ (".option pic0\n\t"
@@ -224,7 +224,7 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    * rodata and rw data, too so we can access __cap_relocs, no matter where it
    * was placed.
    */
-  start_relocs = cheri_address_or_offset_set(
+  start_relocs = (const struct capreloc *)cheri_address_or_offset_set(
       __builtin_cheri_program_counter_get(), start_addr);
   start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
   /*
@@ -233,7 +233,7 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    * TODO: use csetboundsexact and teach the linker to align __cap_relocs.
    */
   stop_relocs =
-      (struct capreloc *)((__UINTPTR_TYPE__)start_relocs + relocs_size);
+      (const struct capreloc *)((const char *)start_relocs + relocs_size);
 
 #if __CHERI_CAPABILITY_TABLE__ == 3
   _Bool can_set_code_bounds = 0; /* pc-relative ABI -> need large bounds on $pcc */
