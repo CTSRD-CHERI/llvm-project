@@ -176,11 +176,10 @@ public:
       return true;
     return false;
   }
-  virtual bool isSetBoundsInstr(const MachineInstr &I,
-                                const MachineOperand *&Base,
-                                const MachineOperand *&Size) const override;
-  virtual bool isPtrAddInstr(const MachineInstr &I, const MachineOperand *&Base,
-                             const MachineOperand *&Increment) const override;
+  bool isSetBoundsInstr(const MachineInstr &I, const MachineOperand *&Base,
+                        const MachineOperand *&Size) const override;
+  bool isPtrAddInstr(const MachineInstr &I, const MachineOperand *&Base,
+                     const MachineOperand *&Increment) const override;
   Optional<int64_t>
   getAsIntImmediate(const MachineOperand &Op,
                     const MachineRegisterInfo &MRI) const override;
