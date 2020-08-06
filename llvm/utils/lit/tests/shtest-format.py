@@ -32,7 +32,6 @@
 # CHECK: Command Output (stdout):
 # CHECK-NEXT: --
 # CHECK-NEXT: a line with {{.*}}control characters{{.*}}.
-# characters{{[:cntrl:].+}}.
 # CHECK: --
 
 # CHECK: PASS: shtest-format :: external_shell/pass.txt
@@ -113,7 +112,7 @@
 # XUNIT-NEXT: <failure><![CDATA[Script:
 # XUNIT: Command Output (stdout):
 # XUNIT-NEXT: --
-# XUNIT-NEXT: a line with \x1b[2;30;41mcontrol characters\x1b[0m.
+# XUNIT-NEXT: a line with [2;30;41mcontrol characters[0m.
 # XUNIT: </failure>
 # XUNIT-NEXT: </testcase>
 

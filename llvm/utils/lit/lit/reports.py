@@ -68,16 +68,18 @@ class JsonReport(object):
             file.write('\n')
 
 
-def escape_control_chars(s):
-    escape_dict = {chr(c): '\\x' + hex(c)[2:] for c in range(32) if chr(c) not in ('\t', '\n', '\r')}
-    try:
-        s = s.translate(str.maketrans(escape_dict))
-    except AttributeError:
-        # python 2.7 string.translate() does not support multi-character
-        # replacing, so fall back to multiple str.replace() calls.
-        for k, v in escape_dict.items():
-            s = s.replace(k, v)
-    return s
+_invalid_xml_chars_dict = {c: None for c in range(32) if chr(c) not in ('\t', '\n', '\r')}
+
+
+def remove_invalid_xml_chars(s):
+    # According to the XML 1.0 spec, control characters other than
+    # \t,\r, and \n are not permitted anywhere in the document
+    # (https://www.w3.org/TR/xml/#charsets) and therefore this function
+    # removes them to produce a valid XML document.
+    #
+    # Note: In XML 1.1 only \0 is illegal (https://www.w3.org/TR/xml11/#charsets)
+    # but lit currently produces XML 1.0 output.
+    return s.translate(_invalid_xml_chars_dict)
 
 
 class XunitReport(object):
@@ -127,10 +129,13 @@ class XunitReport(object):
             if isinstance(output, bytes):
                 output = output.decode("utf-8", 'ignore')
 
-            # The Jenkins JUnit XML parser throws an exception if the output
-            # contains control characters like \x1b (e.g. if there is some
-            # -fcolor-diagnostics output).
-            output = escape_control_chars(output)
+            # Failing test  output sometimes contains control characters like
+            # \x1b (e.g. if there was some -fcolor-diagnostics output) which are
+            # not allowed inside XML files.
+            # This causes problems with CI systems: for example, the Jenkins
+            # JUnit XML will throw an exception when ecountering those
+            # characters and similar problems also occur with GitLab CI.
+            output = remove_invalid_xml_chars(output)
             file.write(output)
             file.write(']]></failure>\n</testcase>\n')
         elif test.result.code in self.skipped_codes:
