@@ -586,6 +586,8 @@ static OutputSection *findByName(ArrayRef<BaseCommand *> vec,
 static OutputSection *createSection(InputSectionBase *isec,
                                     StringRef outsecName) {
   OutputSection *sec = script->createOutputSection(outsecName, "<internal>");
+  if (!(isec->flags & SHF_ALLOC))
+    sec->addrExpr = [] { return 0; };
   if (outsecName == "__cap_relocs" && !config->relativeCapRelocsOnly) {
     sec->flags |= SHF_WRITE;
   }
@@ -851,9 +853,6 @@ static OutputSection *findFirstSection(PhdrEntry *load) {
 // This function assigns offsets to input sections and an output section
 // for a single sections command (e.g. ".text { *(.text); }").
 void LinkerScript::assignOffsets(OutputSection *sec) {
-  if (!(sec->flags & SHF_ALLOC))
-    dot = 0;
-
   const bool sameMemRegion = ctx->memRegion == sec->memRegion;
   const bool prevLMARegionIsDefault = ctx->lmaRegion == nullptr;
   ctx->memRegion = sec->memRegion;
@@ -861,7 +860,7 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
   if (ctx->memRegion)
     dot = ctx->memRegion->curPos;
 
-  if ((sec->flags & SHF_ALLOC) && sec->addrExpr)
+  if (sec->addrExpr)
     setDot(sec->addrExpr, sec->location, false);
 
   // If the address of the section has been moved forward by an explicit
