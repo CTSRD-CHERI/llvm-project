@@ -1876,8 +1876,11 @@ void MCAsmStreamer::EmitWinCFIEndProc(SMLoc Loc) {
   EmitEOL();
 }
 
-// TODO: Implement
 void MCAsmStreamer::EmitWinCFIFuncletOrFuncEnd(SMLoc Loc) {
+  MCStreamer::EmitWinCFIFuncletOrFuncEnd(Loc);
+
+  OS << "\t.seh_endfunclet";
+  EmitEOL();
 }
 
 void MCAsmStreamer::EmitWinCFIStartChained(SMLoc Loc) {
