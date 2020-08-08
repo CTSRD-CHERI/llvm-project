@@ -8484,6 +8484,9 @@ Decl *Sema::ActOnConceptDefinition(Scope *S,
     return nullptr;
   }
 
+  if (DiagnoseUnexpandedParameterPack(ConstraintExpr))
+    return nullptr;
+
   ConceptDecl *NewDecl = ConceptDecl::Create(Context, DC, NameLoc, Name,
                                              TemplateParameterLists.front(),
                                              ConstraintExpr);
