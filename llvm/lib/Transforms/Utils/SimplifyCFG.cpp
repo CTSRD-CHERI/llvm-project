@@ -163,6 +163,8 @@ STATISTIC(NumSinkCommonCode,
 STATISTIC(NumSinkCommonInstrs,
           "Number of common instructions sunk down to the end block");
 STATISTIC(NumSpeculations, "Number of speculative executed instructions");
+STATISTIC(NumInvokes,
+          "Number of invokes with empty resume blocks simplified into calls");
 
 namespace {
 
@@ -4042,6 +4044,7 @@ bool SimplifyCFGOpt::simplifyCommonResume(ResumeInst *RI) {
          PI != PE;) {
       BasicBlock *Pred = *PI++;
       removeUnwindEdge(Pred);
+      ++NumInvokes;
     }
 
     // In each SimplifyCFG run, only the current processed block can be erased.
@@ -4097,6 +4100,7 @@ bool SimplifyCFGOpt::simplifySingleResume(ResumeInst *RI) {
   for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE;) {
     BasicBlock *Pred = *PI++;
     removeUnwindEdge(Pred);
+    ++NumInvokes;
   }
 
   // The landingpad is now unreachable.  Zap it.
@@ -4217,6 +4221,7 @@ static bool removeEmptyCleanup(CleanupReturnInst *RI) {
     BasicBlock *PredBB = *PI++;
     if (UnwindDest == nullptr) {
       removeUnwindEdge(PredBB);
+      ++NumInvokes;
     } else {
       Instruction *TI = PredBB->getTerminator();
       TI->replaceUsesOfWith(BB, UnwindDest);
