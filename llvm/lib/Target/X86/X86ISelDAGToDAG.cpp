@@ -3990,6 +3990,12 @@ bool X86DAGToDAGISel::tryVPTERNLOG(SDNode *N) {
 
   switch (N->getOpcode()) {
   default: llvm_unreachable("Unexpected opcode!");
+  case X86ISD::ANDNP:
+    if (A == N0)
+      Imm &= ~TernlogMagicA;
+    else
+      Imm = ~(Imm) & TernlogMagicA;
+    break;
   case ISD::AND: Imm &= TernlogMagicA; break;
   case ISD::OR:  Imm |= TernlogMagicA; break;
   case ISD::XOR: Imm ^= TernlogMagicA; break;
@@ -4588,6 +4594,11 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
   case ISD::SRA:
   case ISD::SHL:
     if (tryShiftAmountMod(Node))
+      return;
+    break;
+
+  case X86ISD::ANDNP:
+    if (tryVPTERNLOG(Node))
       return;
     break;
 
