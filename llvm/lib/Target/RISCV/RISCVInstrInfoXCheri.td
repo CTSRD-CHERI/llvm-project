@@ -339,6 +339,9 @@ def PseudoCapTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
 
 let Predicates = [HasCheri] in {
 def CTestSubset : Cheri_rr<0x20, "ctestsubset", GPR, GPCR, GPCRC0IsDDC>;
+def CSEQX       : Cheri_rr<0x21, "csetequalexact", GPR, GPCR, GPCR>;
+
+def : InstAlias<"cseqx $rd, $cs1, $cs2", (CSEQX GPR:$rd, GPCR:$cs1, GPCR:$cs2)>;
 }
 
 //===----------------------------------------------------------------------===//

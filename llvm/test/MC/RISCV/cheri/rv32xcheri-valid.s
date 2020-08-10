@@ -137,6 +137,13 @@ ctestsubset x1, c2, c3
 # CHECK: encoding: [0xdb,0x00,0x30,0x40]
 ctestsubset x1, ddc, c3
 
+# CHECK-INST: csetequalexact ra, csp, cgp
+# CHECK: encoding: [0xdb,0x00,0x31,0x42]
+csetequalexact x1, c2, c3
+# CHECK-INST: csetequalexact ra, csp, cgp
+# CHECK: encoding: [0xdb,0x00,0x31,0x42]
+cseqx x1, c2, c3
+
 # CHECK-INST: cspecialrw cra, uscratchc, csp
 # CHECK: encoding: [0xdb,0x00,0x61,0x02]
 cspecialrw c1, uscratchc, c2
