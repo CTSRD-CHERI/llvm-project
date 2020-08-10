@@ -82,6 +82,9 @@ ccleartag c1, c2
 # CHECK-INST: cbuildcap cra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x3a]
 cbuildcap c1, c2, c3
+# CHECK-INST: cbuildcap cra, ddc, cgp
+# CHECK: encoding: [0xdb,0x00,0x30,0x3a]
+cbuildcap c1, ddc, c3
 # CHECK-INST: ccopytype cra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x3c]
 ccopytype c1, c2, c3
@@ -95,9 +98,15 @@ csealentry c1, c2
 # CHECK-INST: ctoptr ra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x24]
 ctoptr x1, c2, c3
+# CHECK-INST: ctoptr ra, csp, ddc
+# CHECK: encoding: [0xdb,0x00,0x01,0x24]
+ctoptr x1, c2, ddc
 # CHECK-INST: cfromptr cra, csp, gp
 # CHECK: encoding: [0xdb,0x00,0x31,0x26]
 cfromptr c1, c2, x3
+# CHECK-INST: cfromptr cra, ddc, gp
+# CHECK: encoding: [0xdb,0x00,0x30,0x26]
+cfromptr c1, ddc, x3
 # CHECK-INST: csub ra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x28]
 csub x1, c2, c3
@@ -124,6 +133,9 @@ ccall c1, c2
 # CHECK-INST: ctestsubset ra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x40]
 ctestsubset x1, c2, c3
+# CHECK-INST: ctestsubset ra, ddc, cgp
+# CHECK: encoding: [0xdb,0x00,0x30,0x40]
+ctestsubset x1, ddc, c3
 
 # CHECK-INST: cspecialrw cra, uscratchc, csp
 # CHECK: encoding: [0xdb,0x00,0x61,0x02]

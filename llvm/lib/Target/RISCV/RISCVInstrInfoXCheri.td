@@ -269,7 +269,7 @@ def CSetBoundsImm   : Cheri_ri<0x2, "csetbounds", 0>;
 def CClearTag       : Cheri_r<0xb, "ccleartag", GPCR>;
 let mayTrap = 1 in {
 let defsCanBeSealed = 1 in
-def CBuildCap       : Cheri_rr<0x1d, "cbuildcap", GPCR, GPCR>;
+def CBuildCap       : Cheri_rr<0x1d, "cbuildcap", GPCR, GPCR, GPCRC0IsDDC>;
 def CCopyType       : Cheri_rr<0x1e, "ccopytype", GPCR, GPCR>;
 let defsCanBeSealed = 1 in
 def CCSeal          : Cheri_rr<0x1f, "ccseal", GPCR, GPCR>;
@@ -338,7 +338,7 @@ def PseudoCapTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasCheri] in {
-def CTestSubset : Cheri_rr<0x20, "ctestsubset", GPR, GPCR>;
+def CTestSubset : Cheri_rr<0x20, "ctestsubset", GPR, GPCR, GPCRC0IsDDC>;
 }
 
 //===----------------------------------------------------------------------===//
