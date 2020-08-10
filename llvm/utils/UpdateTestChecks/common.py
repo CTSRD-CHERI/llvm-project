@@ -245,9 +245,9 @@ class function_body(object):
         arg_names.add(match.group(3))
         return match.group(1) + match.group(match.lastindex)
     def repl_arg_names(match):
-        if match.group(2) in arg_names:
-            return match.group(1) + match.group(3)
-        return match.group(1) + match.group(2) + match.group(3)
+        if match.group(3) in arg_names:
+            return match.group(1) + match.group(match.lastindex)
+        return match.group(1) + match.group(2) + match.group(match.lastindex)
     if self.attrs != attrs:
       return False
     ans0 = IR_VALUE_RE.sub(drop_arg_names, self.args_and_sig)
