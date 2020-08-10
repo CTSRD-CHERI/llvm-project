@@ -86,7 +86,9 @@ body:             |
   ; CHECK-NEXT:   [[COPY2:%[0-9]+]]:gpcr = COPY $c12
   ; CHECK-NEXT:   [[COPY3:%[0-9]+]]:gpcrc0isddc = COPY $c12
   ; CHECK-NEXT:   [[CIncOffsetImm:%[0-9]+]]:gpcr = CIncOffsetImm [[COPY1]], 4
+  ; CHECK-NEXT:   [[COPY4:%[0-9]+]]:gpcrc0isddc = COPY [[CIncOffsetImm]]
   ; CHECK-NEXT:   [[CAndPerm:%[0-9]+]]:gpcr = CAndPerm [[COPY1]], [[COPY]]
+  ; CHECK-NEXT:   [[COPY5:%[0-9]+]]:gpcrc0isddc = COPY [[CAndPerm]]
   ; CHECK-NEXT:   [[CGetPerm:%[0-9]+]]:gpr = CGetPerm [[COPY2]]
   ; CHECK-NEXT:   [[CGetType:%[0-9]+]]:gpr = CGetType [[COPY2]]
   ; CHECK-NEXT:   [[CGetBase:%[0-9]+]]:gpr = CGetBase [[COPY2]]
@@ -98,7 +100,7 @@ body:             |
   ; CHECK-NEXT:   [[CClearTag:%[0-9]+]]:gpcr = CClearTag [[COPY1]]
   ; CHECK-NEXT:   [[CSub:%[0-9]+]]:gpr = CSub [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CMove:%[0-9]+]]:gpcr = CMove [[COPY1]]
-  ; CHECK-NEXT:   [[CTestSubset:%[0-9]+]]:gpr = CTestSubset [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CTestSubset:%[0-9]+]]:gpr = CTestSubset [[COPY3]], [[COPY2]]
   ; CHECK-NEXT:   [[CRRL:%[0-9]+]]:gpr = CRRL [[COPY]]
   ; CHECK-NEXT:   [[CRAM:%[0-9]+]]:gpr = CRAM [[COPY]]
   ; CHECK-NEXT:   [[CSetFlags:%[0-9]+]]:gpcr = CSetFlags [[CIncOffsetImm]], [[COPY]]
@@ -144,7 +146,7 @@ body:             |
   ; CHECK-NEXT:   [[CSetBounds:%[0-9]+]]:gpcr = CSetBounds [[COPY1]], [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsExact:%[0-9]+]]:gpcr = CSetBoundsExact [[COPY1]], [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:gpcr = CSetBoundsImm [[COPY1]], 10
-  ; CHECK-NEXT:   [[CBuildCap:%[0-9]+]]:gpcr = CBuildCap [[COPY1]], [[COPY2]]
+  ; CHECK-NEXT:   [[CBuildCap:%[0-9]+]]:gpcr = CBuildCap [[COPY3]], [[COPY2]]
   ; CHECK-NEXT:   [[CCopyType:%[0-9]+]]:gpcr = CCopyType [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CCSeal:%[0-9]+]]:gpcr = CCSeal [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CSealEntry:%[0-9]+]]:gpcr = CSealEntry [[COPY1]]
@@ -159,7 +161,7 @@ body:             |
   ; CHECK-NEXT:   [[CSetBounds1:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm]], [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsExact1:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm]], [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsImm1:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm]], 10
-  ; CHECK-NEXT:   [[CBuildCap1:%[0-9]+]]:gpcr = CBuildCap [[CIncOffsetImm]], [[COPY2]]
+  ; CHECK-NEXT:   [[CBuildCap1:%[0-9]+]]:gpcr = CBuildCap [[COPY4]], [[COPY2]]
   ; CHECK-NEXT:   [[CCopyType1:%[0-9]+]]:gpcr = CCopyType [[CIncOffsetImm]], [[COPY2]]
   ; CHECK-NEXT:   [[CCSeal1:%[0-9]+]]:gpcr = CCSeal [[CIncOffsetImm]], [[COPY2]]
   ; CHECK-NEXT:   [[CSealEntry1:%[0-9]+]]:gpcr = CSealEntry [[CIncOffsetImm]]
@@ -169,7 +171,7 @@ body:             |
   ; CHECK-NEXT:   [[CSetBounds2:%[0-9]+]]:gpcr = CSetBounds [[CAndPerm]], [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsExact2:%[0-9]+]]:gpcr = CSetBoundsExact [[CAndPerm]], [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsImm2:%[0-9]+]]:gpcr = CSetBoundsImm [[CAndPerm]], 10
-  ; CHECK-NEXT:   [[CBuildCap2:%[0-9]+]]:gpcr = CBuildCap [[CAndPerm]], [[COPY2]]
+  ; CHECK-NEXT:   [[CBuildCap2:%[0-9]+]]:gpcr = CBuildCap [[COPY5]], [[COPY2]]
   ; CHECK-NEXT:   [[CCopyType2:%[0-9]+]]:gpcr = CCopyType [[CAndPerm]], [[COPY2]]
   ; CHECK-NEXT:   [[CCSeal2:%[0-9]+]]:gpcr = CCSeal [[CAndPerm]], [[COPY2]]
   ; CHECK-NEXT:   [[CSealEntry2:%[0-9]+]]:gpcr = CSealEntry [[CIncOffsetImm]]
@@ -179,7 +181,6 @@ body:             |
   ; CHECK-NEXT:   [[CSetBounds3:%[0-9]+]]:gpcr = CSetBounds $c0, [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsExact3:%[0-9]+]]:gpcr = CSetBoundsExact $c0, [[COPY]]
   ; CHECK-NEXT:   [[CSetBoundsImm3:%[0-9]+]]:gpcr = CSetBoundsImm $c0, 10
-  ; CHECK-NEXT:   [[CBuildCap3:%[0-9]+]]:gpcr = CBuildCap $c0, [[COPY2]]
   ; CHECK-NEXT:   [[CCopyType3:%[0-9]+]]:gpcr = CCopyType $c0, [[COPY2]]
   ; CHECK-NEXT:   [[CCSeal3:%[0-9]+]]:gpcr = CCSeal $c0, [[COPY2]]
   ; CHECK-NEXT:   [[CSealEntry3:%[0-9]+]]:gpcr = CSealEntry $c0
@@ -197,10 +198,12 @@ body:             |
     %1:gpcr = COPY $c11
     %2:gpcr = COPY $c12
     %3:gpcrc0isddc = COPY $c12
-    ; %4 should be known to be unsealed (since CIncOffset succeeded)
+    ; %4/%5 should be known to be unsealed (since CIncOffset succeeded)
     %4:gpcr = CIncOffsetImm %1, 4
-    ; %5, should be known to be tagged and unsealed
-    %5:gpcr = CAndPerm %1, %0
+    %5:gpcrc0isddc = COPY %4
+    ; %6/%7, should be known to be tagged and unsealed
+    %6:gpcr = CAndPerm %1, %0
+    %7:gpcrc0isddc = COPY %6
 
 
     PseudoBR %bb.2
@@ -239,7 +242,7 @@ body:             |
     %39:gpcr = CSetBoundsExact %1, %0
     %40:gpcr = CSetBoundsImm %1, 10
     %41:gpcr = CClearTag %1 ; Note: CClearTag can be hoisted since it can't trap
-    %42:gpcr = CBuildCap %1, %2
+    %42:gpcr = CBuildCap %3, %2
     %43:gpcr = CCopyType %1, %2
     %44:gpcr = CCSeal %1, %2
     %45:gpcr = CSealEntry %1
@@ -251,7 +254,7 @@ body:             |
     %63:gpcr = CMove %1 ; never traps
 
     ; Assertion Instructions
-    %70:gpr = CTestSubset %1, %2 ; never traps
+    %70:gpr = CTestSubset %3, %2 ; never traps
     ; Note: loads not tested here (yet)
 
     ; Special Capabilty Register Access Instructions
@@ -279,27 +282,27 @@ body:             |
     %139:gpcr = CSetBoundsExact %4, %0
     %140:gpcr = CSetBoundsImm %4, 10
     %141:gpcr = CClearTag %4
-    %142:gpcr = CBuildCap %4, %2
+    %142:gpcr = CBuildCap %5, %2
     %143:gpcr = CCopyType %4, %2
     %144:gpcr = CCSeal %4, %2
     %145:gpcr = CSealEntry %4
 
     ; And a known-tagged+unsealed value:
-    %230:gpcr = CSeal %5, %2
-    %231:gpcr = CUnseal %5, %2
-    %232:gpcr = CAndPerm %5, %0
-    %233:gpcr = CSetFlags %5, %0
-    %234:gpcr = CSetOffset %5, %0
-    %235:gpcr = CSetAddr %5, %0
-    %236:gpcr = CIncOffset %5, %0
-    %237:gpcr = CIncOffsetImm %5, 10
-    %238:gpcr = CSetBounds %5, %0
-    %239:gpcr = CSetBoundsExact %5, %0
-    %240:gpcr = CSetBoundsImm %5, 10
-    %241:gpcr = CClearTag %5
-    %242:gpcr = CBuildCap %5, %2
-    %243:gpcr = CCopyType %5, %2
-    %244:gpcr = CCSeal %5, %2
+    %230:gpcr = CSeal %6, %2
+    %231:gpcr = CUnseal %6, %2
+    %232:gpcr = CAndPerm %6, %0
+    %233:gpcr = CSetFlags %6, %0
+    %234:gpcr = CSetOffset %6, %0
+    %235:gpcr = CSetAddr %6, %0
+    %236:gpcr = CIncOffset %6, %0
+    %237:gpcr = CIncOffsetImm %6, 10
+    %238:gpcr = CSetBounds %6, %0
+    %239:gpcr = CSetBoundsExact %6, %0
+    %240:gpcr = CSetBoundsImm %6, 10
+    %241:gpcr = CClearTag %6
+    %242:gpcr = CBuildCap %7, %2
+    %243:gpcr = CCopyType %6, %2
+    %244:gpcr = CCSeal %6, %2
     %245:gpcr = CSealEntry %4
 
     ; Now try using the mutators on constant NULL:
@@ -315,10 +318,9 @@ body:             |
     %339:gpcr = CSetBoundsExact $c0, %0
     %340:gpcr = CSetBoundsImm $c0, 10
     %341:gpcr = CClearTag $c0
-    %342:gpcr = CBuildCap $c0, %2
-    %343:gpcr = CCopyType $c0, %2
-    %344:gpcr = CCSeal $c0, %2
-    %345:gpcr = CSealEntry $c0
+    %344:gpcr = CCopyType $c0, %2
+    %345:gpcr = CCSeal $c0, %2
+    %346:gpcr = CSealEntry $c0
 
   bb.4.for.inc:
     successors: %bb.2(0x7c000000), %bb.1(0x04000000)
