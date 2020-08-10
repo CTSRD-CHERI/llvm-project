@@ -203,3 +203,11 @@ define iCAPRANGE @subset_test(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2
   %subset.zext = zext i1 %subset to iCAPRANGE
   ret iCAPRANGE %subset.zext
 }
+
+declare i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+
+define iCAPRANGE @equal_exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+  %eqex = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+  %eqex.zext = zext i1 %eqex to iCAPRANGE
+  ret iCAPRANGE %eqex.zext
+}

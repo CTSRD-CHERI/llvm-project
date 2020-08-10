@@ -1172,6 +1172,14 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       return DAG.getSetCC(DL, MVT::i1, IntRes,
                           DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
     }
+    case Intrinsic::cheri_cap_equal_exact: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_EQUAL_EXACT, DL, XLenVT,
+                                   N->getOperand(1), N->getOperand(2));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes,
+                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
     // Constant fold CRRL/CRAM when possible
     case Intrinsic::cheri_round_representable_length: {
       if (CapTypeHasPreciseBounds)
@@ -2995,6 +3003,8 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "RISCVISD::CAP_SEALED_GET";
   case RISCVISD::CAP_SUBSET_TEST:
     return "RISCVISD::CAP_SUBSET_TEST";
+  case RISCVISD::CAP_EQUAL_EXACT:
+    return "RISCVISD::CAP_EQUAL_EXACT";
   }
   return nullptr;
 }

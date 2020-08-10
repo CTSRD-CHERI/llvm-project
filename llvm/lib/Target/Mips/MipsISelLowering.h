@@ -225,6 +225,8 @@ extern bool LargeCapTable;
       CapSealedGet,
       /// Legalised int_cheri_cap_subset_test
       CapSubsetTest,
+      /// Legalised int_cheri_cap_equal_exact
+      CapEqualExact,
 
       // DSP shift nodes.
       SHLL_DSP,

@@ -339,6 +339,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::CapTagGet:         return "MipsISD::CapTagGet";
   case MipsISD::CapSealedGet:      return "MipsISD::CapSealedGet";
   case MipsISD::CapSubsetTest:     return "MipsISD::CapSubsetTest";
+  case MipsISD::CapEqualExact:     return "MipsISD::CapEqualExact";
   }
   return nullptr;
 }
@@ -1365,6 +1366,14 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
   }
   case Intrinsic::cheri_cap_subset_test: {
     SDValue IntRes = DAG.getNode(MipsISD::CapSubsetTest, DL, VT,
+                                 N->getOperand(1), N->getOperand(2));
+    IntRes = DAG.getNode(ISD::AssertZext, DL, VT, IntRes,
+                         DAG.getValueType(MVT::i1));
+    return DAG.getSetCC(DL, MVT::i1, IntRes,
+                        DAG.getConstant(0, DL, VT), ISD::SETNE);
+  }
+  case Intrinsic::cheri_cap_equal_exact: {
+    SDValue IntRes = DAG.getNode(MipsISD::CapEqualExact, DL, VT,
                                  N->getOperand(1), N->getOperand(2));
     IntRes = DAG.getNode(ISD::AssertZext, DL, VT, IntRes,
                          DAG.getValueType(MVT::i1));

@@ -484,3 +484,20 @@ define i64 @subset_test(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) noun
   %subset.zext = zext i1 %subset to i64
   ret i64 %subset.zext
 }
+
+declare i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+
+define i64 @equal_exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+; PURECAP-LABEL: equal_exact:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cexeq $2, $c3, $c4
+;
+; HYBRID-LABEL: equal_exact:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    cexeq $2, $c3, $c4
+  %eqex = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+  %eqex.zext = zext i1 %eqex to i64
+  ret i64 %eqex.zext
+}

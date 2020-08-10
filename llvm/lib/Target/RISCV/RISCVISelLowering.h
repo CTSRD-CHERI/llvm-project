@@ -60,6 +60,8 @@ enum NodeType : unsigned {
   CAP_SEALED_GET,
   /// Legalised int_cheri_cap_subset_test
   CAP_SUBSET_TEST,
+  /// Legalised int_cheri_cap_equal_exact
+  CAP_EQUAL_EXACT,
 };
 }
 

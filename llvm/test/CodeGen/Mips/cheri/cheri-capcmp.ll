@@ -151,3 +151,36 @@ define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind 
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
+
+declare i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)*, i8 addrspace(200)*)
+
+define i32 @exeq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+; CHECK-INEXACT-LABEL: exeq:
+; CHECK-INEXACT:       # %bb.0:
+; CHECK-INEXACT-NEXT:    jr $ra
+; CHECK-INEXACT-NEXT:    cexeq $2, $c3, $c4
+;
+; CHECK-EXACT-LABEL: exeq:
+; CHECK-EXACT:       # %bb.0:
+; CHECK-EXACT-NEXT:    jr $ra
+; CHECK-EXACT-NEXT:    cexeq $2, $c3, $c4
+  %cmp = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @nexeq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+; CHECK-INEXACT-LABEL: nexeq:
+; CHECK-INEXACT:       # %bb.0:
+; CHECK-INEXACT-NEXT:    jr $ra
+; CHECK-INEXACT-NEXT:    cnexeq $2, $c3, $c4
+;
+; CHECK-EXACT-LABEL: nexeq:
+; CHECK-EXACT:       # %bb.0:
+; CHECK-EXACT-NEXT:    jr $ra
+; CHECK-EXACT-NEXT:    cnexeq $2, $c3, $c4
+  %cmp = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
+  %not = xor i1 %cmp, true
+  %conv = zext i1 %not to i32
+  ret i32 %conv
+}

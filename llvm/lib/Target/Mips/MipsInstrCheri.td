@@ -39,6 +39,7 @@ def SDT_CheriBoolBinary : SDTypeProfile<1, 2, [
 ]>;
 
 def CapSubsetTest : SDNode<"MipsISD::CapSubsetTest", SDT_CheriBoolBinary>;
+def CapEqualExact : SDNode<"MipsISD::CapEqualExact", SDT_CheriBoolBinary>;
 
 def SDT_CheriCapModify : SDTypeProfile<1, 2, [
   SDTCisVT<0, CapRegType>, SDTCisVT<1, CapRegType>, SDTCisInt<2>
@@ -168,7 +169,7 @@ def CLT : CheriFmtPtrCmp<0x16, GPR64Opnd, "clt", []>;
 def CLE : CheriFmtPtrCmp<0x17, GPR64Opnd, "cle", []>;
 def CLTU : CheriFmtPtrCmp<0x18, GPR64Opnd, "cltu", []>;
 def CLEU : CheriFmtPtrCmp<0x19, GPR64Opnd, "cleu", []>;
-def CEXEQ : CheriFmtPtrCmp<0x1a, GPR64Opnd, "cexeq", []>;
+def CEXEQ : CheriFmtPtrCmp<0x1a, GPR64Opnd, "cexeq", [(set GPR64Opnd: $rd, (CapEqualExact CheriOpnd: $cb, CheriOpnd: $ct))]>;
 def CNEXEQ : CheriFmtPtrCmp<0x21, GPR64Opnd, "cnexeq", []>;
 }
 def : InstAlias<"cgt $rd, $cb, $ct",
@@ -182,7 +183,7 @@ def : InstAlias<"cgeu $rd, $cb, $ct",
 let isCodeGenOnly=1, isCompare=1, isReMaterializable = 1, isAsCheapAsAMove = 1 in {
   def CEQ32 : CheriFmtPtrCmp<0x14, GPR32Opnd, "ceq", []>;
   def CEXEQ32 : CheriFmtPtrCmp<0x1a, GPR32Opnd, "cexeq", []>;
-  def CNEXEQ32 : CheriFmtPtrCmp<0x21, GPR32Opnd, "cnexeq", []>;
+  def CNEXEQ32 : CheriFmtPtrCmp<0x21, GPR32Opnd, "cnexeq", [(set GPR32Opnd: $rd, (i32 (seteq (assertzext (CapEqualExact CheriOpnd: $cb, CheriOpnd: $ct)), (i64 0))))]>;
   def CNE32 : CheriFmtPtrCmp<0x15, GPR32Opnd, "cne", []>;
   def CLT32 : CheriFmtPtrCmp<0x16, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLE32 : CheriFmtPtrCmp<0x17, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;

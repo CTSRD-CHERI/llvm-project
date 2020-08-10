@@ -34,6 +34,8 @@ def riscv_cap_sealed_get  : SDNode<"RISCVISD::CAP_SEALED_GET",
                                    SDT_RISCVCheriBoolUnary>;
 def riscv_cap_subset_test : SDNode<"RISCVISD::CAP_SUBSET_TEST",
                                    SDT_RISCVCheriBoolBinary>;
+def riscv_cap_equal_exact : SDNode<"RISCVISD::CAP_EQUAL_EXACT",
+                                   SDT_RISCVCheriBoolBinary>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -1013,6 +1015,7 @@ def : Pat<(brind GPCR:$rs1), (PseudoCapBRIND GPCR:$rs1)>;
 /// Assertion Instructions
 
 def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
+def : PatGpcrGpcr<riscv_cap_equal_exact, CSEQX>;
 
 /// Special Capability Register Access Instructions
 
