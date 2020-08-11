@@ -3797,11 +3797,7 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
     // Replace the original call result with the first result of the new call.
     Value *TSC = Builder.CreateExtractValue(NewCall, 0);
 
-    std::string Name = std::string(CI->getName());
-    if (!Name.empty()) {
-      CI->setName(Name + ".old");
-      NewCall->setName(Name);
-    }
+    NewCall->takeName(CI);
     CI->replaceAllUsesWith(TSC);
     CI->eraseFromParent();
     return;
@@ -3838,11 +3834,7 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
     NewCall = Builder.CreateCall(NewFn, Args);
     Value *Res = ApplyX86MaskOn1BitsVec(Builder, NewCall, nullptr);
 
-    std::string Name(CI->getName());
-    if (!Name.empty()) {
-      CI->setName(Name + ".old");
-      NewCall->setName(Name);
-    }
+    NewCall->takeName(CI);
     CI->replaceAllUsesWith(Res);
     CI->eraseFromParent();
     return;
@@ -3896,11 +3888,7 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
   }
   assert(NewCall && "Should have either set this variable or returned through "
                     "the default case");
-  std::string Name = std::string(CI->getName());
-  if (!Name.empty()) {
-    CI->setName(Name + ".old");
-    NewCall->setName(Name);
-  }
+  NewCall->takeName(CI);
   CI->replaceAllUsesWith(NewCall);
   CI->eraseFromParent();
 }
@@ -4093,7 +4081,7 @@ void llvm::UpgradeARCRuntime(Module &M) {
       // Create a call instruction that calls the new function.
       CallInst *NewCall = Builder.CreateCall(NewFuncTy, NewFn, Args);
       NewCall->setTailCallKind(cast<CallInst>(CI)->getTailCallKind());
-      NewCall->setName(CI->getName());
+      NewCall->takeName(CI);
 
       // Bitcast the return value back to the type of the old call.
       Value *NewRetVal = Builder.CreateBitCast(NewCall, CI->getType());
