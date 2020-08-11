@@ -1,4 +1,11 @@
-// REQUIRES: clang
+// REQUIRES: clang, x86
+// Fix running llvm-strip on CheriABI binaries with a .rel.plt section.
+// Check that set sh_info correctly for .rel.plt since otherwise llvm-strip will
+// fail. Since all .rel.plt relocations will affect the captable sh_info should
+// point to .cap_table. This test also checks that the sh_info value in .rel.dyn
+// is valid if if .captable is missing.
+
+// FIXME: this test should be using assembly input and not C
 
 // Check x86_64 since MIPS n64 doesn't seem to use .rel.plt:
 // RUN: %clang_cc1 -triple=x86_64-unknown-freebsd -emit-obj -O2 %s -o %t-amd64.o
