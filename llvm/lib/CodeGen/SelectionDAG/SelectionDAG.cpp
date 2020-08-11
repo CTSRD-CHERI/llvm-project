@@ -5989,7 +5989,7 @@ static SDValue getMemsetStringVal(EVT VT, const SDLoc &dl, SelectionDAG &DAG,
   return SDValue(nullptr, 0);
 }
 
-SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, int64_t Offset,
+SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, TypeSize Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
   if (Offset == 0)
@@ -5998,12 +5998,12 @@ SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, int64_t Offset,
   // For integer pointers the offset and pointer type must be identical
   // (otherwise we assert later). For CHERI capabilities we use the the pointer
   // range type as the offset type.
-  EVT OffsetVT = Base.getValueType();
+  EVT VT = Base.getValueType();
   if (Base.getValueType().isFatPointer()) {
-    OffsetVT = TLI->getPointerRangeTy(getDataLayout());
+    VT = TLI->getPointerRangeTy(getDataLayout());
   }
-  return getMemBasePlusOffset(Base, getConstant(Offset, DL, OffsetVT), DL,
-                              Flags);
+  return getMemBasePlusOffset(Base, getConstant(Offset.getFixedSize(), DL, VT),
+                              DL, Flags);
 }
 
 SDValue SelectionDAG::getMemBasePlusOffset(SDValue Ptr, SDValue Offset,
@@ -6238,7 +6238,8 @@ static SDValue getMemcpyLoadsAndStores(
       Value = getMemsetStringVal(VT, dl, DAG, TLI, SubSlice);
       if (Value.getNode()) {
         Store = DAG.getStore(
-            Chain, dl, Value, DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+            Chain, dl, Value,
+            DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
             DstPtrInfo.getWithOffset(DstOff), Alignment.value(), MMOFlags);
         OutChains.push_back(Store);
       }
@@ -6259,15 +6260,16 @@ static SDValue getMemcpyLoadsAndStores(
       if (isDereferenceable)
         SrcMMOFlags |= MachineMemOperand::MODereferenceable;
 
-      Value = DAG.getExtLoad(ISD::EXTLOAD, dl, NVT, Chain,
-                             DAG.getMemBasePlusOffset(Src, SrcOff, dl),
-                             SrcPtrInfo.getWithOffset(SrcOff), VT,
-                             commonAlignment(*SrcAlign, SrcOff).value(),
-                             SrcMMOFlags);
+      Value = DAG.getExtLoad(
+          ISD::EXTLOAD, dl, NVT, Chain,
+          DAG.getMemBasePlusOffset(Src, TypeSize::Fixed(SrcOff), dl),
+          SrcPtrInfo.getWithOffset(SrcOff), VT,
+          commonAlignment(*SrcAlign, SrcOff).value(), SrcMMOFlags);
       OutLoadChains.push_back(Value.getValue(1));
 
       Store = DAG.getTruncStore(
-          Chain, dl, Value, DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+          Chain, dl, Value,
+          DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
           DstPtrInfo.getWithOffset(DstOff), VT, Alignment.value(), MMOFlags);
       OutStoreChains.push_back(Store);
     }
@@ -6422,7 +6424,8 @@ static SDValue getMemmoveLoadsAndStores(
       SrcMMOFlags |= MachineMemOperand::MODereferenceable;
 
     Value = DAG.getLoad(
-        VT, dl, Chain, DAG.getMemBasePlusOffset(Src, SrcOff, dl),
+        VT, dl, Chain,
+        DAG.getMemBasePlusOffset(Src, TypeSize::Fixed(SrcOff), dl),
         SrcPtrInfo.getWithOffset(SrcOff), SrcAlign->value(), SrcMMOFlags);
     LoadValues.push_back(Value);
     LoadChains.push_back(Value.getValue(1));
@@ -6436,7 +6439,8 @@ static SDValue getMemmoveLoadsAndStores(
     SDValue Store;
 
     Store = DAG.getStore(
-        Chain, dl, LoadValues[i], DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+        Chain, dl, LoadValues[i],
+        DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
         DstPtrInfo.getWithOffset(DstOff), Alignment.value(), MMOFlags);
     OutChains.push_back(Store);
     DstOff += VTSize;
@@ -6539,7 +6543,8 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
     }
     assert(Value.getValueType() == VT && "Value with wrong type.");
     SDValue Store = DAG.getStore(
-        Chain, dl, Value, DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+        Chain, dl, Value,
+        DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
         DstPtrInfo.getWithOffset(DstOff), Alignment.value(),
         isVol ? MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
     OutChains.push_back(Store);
