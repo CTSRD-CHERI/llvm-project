@@ -175,7 +175,7 @@ void MetaMap::ResetRange(Processor *proc, uptr p, usize sz) {
   uptr metap = (uptr)MemToMeta(p0);
   uptr metasz = sz0 / kMetaRatio;
   UnmapOrDie((void*)metap, metasz);
-  if (!MmapFixedNoReserve(metap, metasz))
+  if (!MmapFixedSuperNoReserve(metap, metasz))
     Die();
 }
 
