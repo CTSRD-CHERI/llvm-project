@@ -1617,10 +1617,7 @@ void InitListChecker::CheckScalarType(const InitializedEntity &Entity,
       IList->setInit(Index, ResultExpr);
     }
   }
-  if (hadError)
-    ++StructuredIndex;
-  else
-    UpdateStructuredListElement(StructuredList, StructuredIndex, ResultExpr);
+  UpdateStructuredListElement(StructuredList, StructuredIndex, ResultExpr);
   ++Index;
 }
 
@@ -1681,10 +1678,7 @@ void InitListChecker::CheckReferenceType(const InitializedEntity &Entity,
   if (!VerifyOnly && expr)
     IList->setInit(Index, expr);
 
-  if (hadError)
-    ++StructuredIndex;
-  else
-    UpdateStructuredListElement(StructuredList, StructuredIndex, expr);
+  UpdateStructuredListElement(StructuredList, StructuredIndex, expr);
   ++Index;
 }
 
@@ -1735,11 +1729,7 @@ void InitListChecker::CheckVectorType(const InitializedEntity &Entity,
           IList->setInit(Index, ResultExpr);
         }
       }
-      if (hadError)
-        ++StructuredIndex;
-      else
-        UpdateStructuredListElement(StructuredList, StructuredIndex,
-                                    ResultExpr);
+      UpdateStructuredListElement(StructuredList, StructuredIndex, ResultExpr);
       ++Index;
       return;
     }
@@ -3138,8 +3128,12 @@ void InitListChecker::UpdateStructuredListElement(InitListExpr *StructuredList,
 
   if (Expr *PrevInit = StructuredList->updateInit(SemaRef.Context,
                                                   StructuredIndex, expr)) {
-    // This initializer overwrites a previous initializer. Warn.
-    diagnoseInitOverride(PrevInit, expr->getSourceRange());
+    // This initializer overwrites a previous initializer.
+    // No need to diagnose when `expr` is nullptr because a more relevant
+    // diagnostic has already been issued and this diagnostic is potentially
+    // noise.
+    if (expr)
+      diagnoseInitOverride(PrevInit, expr->getSourceRange());
   }
 
   ++StructuredIndex;
