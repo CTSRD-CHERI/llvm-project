@@ -1,8 +1,7 @@
 ; Check that we can handle varargs functions with byval arguments
 ; First check that non-CHERI targets add a memcpy
-; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | sed 's/p200i8/p0i8/g' > %t-nocheri.ll
-; RUN: llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,RV64
-; RUN: llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic  < %t-nocheri.ll | FileCheck %s --check-prefixes CHECK,MIPS
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,RV64
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic  | FileCheck %s --check-prefixes CHECK,MIPS
 ; Next check purecap targets:
 ; RUN: %riscv64_cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-RV64
 ; RUN: %cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-MIPS
@@ -27,22 +26,6 @@
 
 ; Function Attrs: nounwind
 define signext i32 @test_alloca() local_unnamed_addr addrspace(200) #0 {
-entry:
-  %f = alloca %struct.Foo, align 1, addrspace(200)
-  %byval-temp = alloca %struct.Foo, align 1, addrspace(200)
-  %0 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %f, i64 0, i32 0, i64 0
-  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
-  call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %0, i8 0, i64 1024, i1 false)
-  %call = call signext i32 @byref(%struct.Foo addrspace(200)* nonnull %f) #4
-  %1 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %byval-temp, i64 0, i32 0, i64 0
-  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %1) #4
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %1, i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %0, i64 1024, i1 false)
-  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull %byval-temp) #4
-  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %1) #4
-  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
-  ret i32 %call1
-}
-
 ; CHECK-LABEL: test_alloca:
 ; RV64:      addi [[LOCAL_VAR:s0]], sp, 1032
 ; RV64:      addi a2, zero, 1024
@@ -141,21 +124,24 @@ entry:
 ; PURECAP-MIPS-NEXT: candperm $c13, $c1, $1
 ; PURECAP-MIPS-NEXT: cjalr $c12, $c17
 ; PURECAP-MIPS-NEXT: daddiu $4, $zero, 1024
-
-
-; Function Attrs: nounwind
-define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 entry:
-  %f = alloca %struct.Foo, align 8, addrspace(200)
+  %f = alloca %struct.Foo, align 1, addrspace(200)
+  %byval-temp = alloca %struct.Foo, align 1, addrspace(200)
   %0 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %f, i64 0, i32 0, i64 0
   call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
-  call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 8 dereferenceable(1024) %0, i8 0, i64 1024, i1 false)
+  call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %0, i8 0, i64 1024, i1 false)
   %call = call signext i32 @byref(%struct.Foo addrspace(200)* nonnull %f) #4
-  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull byval(%struct.Foo) align 8 %f) #4
+  %1 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %byval-temp, i64 0, i32 0, i64 0
+  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %1) #4
+  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %1, i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %0, i64 1024, i1 false)
+  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull %byval-temp) #4
+  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %1) #4
   call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
   ret i32 %call1
 }
 
+; Function Attrs: nounwind
+define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: test_byval:
 ; Stack frame size should be > 2048 (for some reason it's split into two addi instructions)
 ; RV64:      addi sp, sp, -2032
@@ -270,6 +256,16 @@ entry:
 ; PURECAP-MIPS-NEXT: candperm $c13, $c1, $1
 ; PURECAP-MIPS-NEXT: cjalr $c12, $c17
 ; PURECAP-MIPS-NEXT: daddiu $4, $zero, 1024
+entry:
+  %f = alloca %struct.Foo, align 8, addrspace(200)
+  %0 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %f, i64 0, i32 0, i64 0
+  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
+  call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 8 dereferenceable(1024) %0, i8 0, i64 1024, i1 false)
+  %call = call signext i32 @byref(%struct.Foo addrspace(200)* nonnull %f) #4
+  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull byval(%struct.Foo) align 8 %f) #4
+  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
+  ret i32 %call1
+}
 
 ; Function Attrs: argmemonly nounwind willreturn
 declare void @llvm.lifetime.start.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200) #1
