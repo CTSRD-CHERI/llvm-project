@@ -53,27 +53,26 @@ body:             |
   bb.0 (%ir-block.0):
     ; CHECK-LABEL: name: test_remat
     ; CHECK: ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
-    ; CHECK-NEXT: [[CIncOffsetImm:%[0-9]+]]:gpcr = CIncOffsetImm $c0, 123
     ; CHECK-NEXT: [[PseudoCLGC:%[0-9]+]]:gpcr = PseudoCLGC @external_fn
     ; CHECK-NEXT: [[CMove:%[0-9]+]]:gpcr = CMove $c0
     ; CHECK-NEXT: $c23 = COPY $c2
     ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpcr = COPY $c23
-    ; CHECK-NEXT: [[CIncOffsetImm1:%[0-9]+]]:gpcr = CIncOffsetImm [[COPY]], 321
-    ; CHECK-NEXT: $c10 = COPY [[CIncOffsetImm]]
+    ; CHECK-NEXT: [[CIncOffsetImm:%[0-9]+]]:gpcr = CIncOffsetImm [[COPY]], 321
+    ; CHECK-NEXT: $c10 = CIncOffsetImm $c0, 123
     ; CHECK-NEXT: $c11 = COPY [[CMove]]
-    ; CHECK-NEXT: $c12 = COPY [[CIncOffsetImm1]]
+    ; CHECK-NEXT: $c12 = COPY [[CIncOffsetImm]]
     ; CHECK-NEXT: PseudoCapCALLIndirect [[PseudoCLGC]], csr_il32pc64_l64pc128, implicit-def dead $c1, implicit killed $c10, implicit killed $c11, implicit killed $c12, implicit-def $c2
     ; CHECK-NEXT: ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
     ; CHECK-NEXT: ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
-    ; CHECK-NEXT: $c10 = COPY [[CIncOffsetImm]]
+    ; CHECK-NEXT: $c10 = CIncOffsetImm $c0, 123
     ; CHECK-NEXT: $c11 = COPY [[CMove]]
-    ; CHECK-NEXT: $c12 = COPY [[CIncOffsetImm1]]
+    ; CHECK-NEXT: $c12 = COPY [[CIncOffsetImm]]
     ; CHECK-NEXT: PseudoCapCALLIndirect [[PseudoCLGC]], csr_il32pc64_l64pc128, implicit-def dead $c1, implicit killed $c10, implicit killed $c11, implicit killed $c12, implicit-def $c2
     ; CHECK-NEXT: ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
     ; CHECK-NEXT: ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
-    ; CHECK-NEXT: $c10 = COPY [[CIncOffsetImm]]
+    ; CHECK-NEXT: $c10 = CIncOffsetImm $c0, 123
     ; CHECK-NEXT: $c11 = COPY [[CMove]]
-    ; CHECK-NEXT: $c12 = COPY [[CIncOffsetImm1]]
+    ; CHECK-NEXT: $c12 = COPY [[CIncOffsetImm]]
     ; CHECK-NEXT: PseudoCapCALLIndirect [[PseudoCLGC]], csr_il32pc64_l64pc128, implicit-def dead $c1, implicit killed $c10, implicit killed $c11, implicit killed $c12, implicit-def $c2
     ; CHECK-NEXT: ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
     ; CHECK-NEXT: PseudoCapRET

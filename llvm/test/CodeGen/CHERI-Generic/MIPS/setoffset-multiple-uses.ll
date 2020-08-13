@@ -2,7 +2,6 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/setoffset-multiple-uses.ll
 ; RUN: opt -S -instcombine -o - %s | FileCheck %s
 ; RUN: opt -S -instcombine -o - %s | %cheri128_purecap_llc -O1 - -o - | %cheri_FileCheck %s --check-prefix ASM
-; FIXME: RISCV still inefficient!
 
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 ; Reduced test case for a crash in the new optimization to fold multiple setoffset calls (orignally found when compiling libunwind)
