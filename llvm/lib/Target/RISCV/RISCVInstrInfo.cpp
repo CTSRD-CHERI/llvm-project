@@ -629,6 +629,8 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   switch (Opcode) {
   default:
     break;
+  case RISCV::CIncOffsetImm:
+    return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::C0;
   case RISCV::FSGNJ_D:
   case RISCV::FSGNJ_S:
     // The canonical floatig-point move is fsgnj rd, rs, rs.
