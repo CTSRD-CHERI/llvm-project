@@ -189,6 +189,10 @@ usize internal_munmap(void *addr, usize length) {
 int internal_mprotect(void *addr, usize length, int prot) {
   return internal_syscall(SYSCALL(mprotect), (uptr)addr, length, prot);
 }
+
+int internal_madvise(uptr addr, uptr length, int advice) {
+  return internal_syscall(SYSCALL(madvise), addr, length, advice);
+}
 #endif
 
 usize internal_close(fd_t fd) {

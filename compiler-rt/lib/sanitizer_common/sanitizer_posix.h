@@ -42,6 +42,7 @@ uptr internal_mmap(void *addr, usize length, int prot, int flags,
                    int fd, u64 offset);
 uptr internal_munmap(void *addr, usize length);
 int internal_mprotect(void *addr, usize length, int prot);
+int internal_madvise(uptr addr, usize length, int advice);
 
 // OS
 usize internal_filesize(fd_t fd);  // -1 on error.
