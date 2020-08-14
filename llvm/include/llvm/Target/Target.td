@@ -1565,7 +1565,8 @@ class ComplexDeprecationPredicate<string dep> {
 // by the scheduler.  Each Processor definition requires corresponding
 // instruction itineraries.
 //
-class Processor<string n, ProcessorItineraries pi, list<SubtargetFeature> f> {
+class Processor<string n, ProcessorItineraries pi, list<SubtargetFeature> f,
+                list<SubtargetFeature> tunef = []> {
   // Name - Chip set name.  Used by command line (-mcpu=) to determine the
   // appropriate target chip.
   //
@@ -1581,6 +1582,12 @@ class Processor<string n, ProcessorItineraries pi, list<SubtargetFeature> f> {
 
   // Features - list of
   list<SubtargetFeature> Features = f;
+
+  // TuneFeatures - list of features for tuning for this CPU. If the target
+  // supports -mtune, this should contain the list of features used to make
+  // microarchitectural optimization decisions for a given processor.  While
+  // Features should contain the architectural features for the processor.
+  list<SubtargetFeature> TuneFeatures = tunef;
 }
 
 // ProcessorModel allows subtargets to specify the more general
@@ -1589,8 +1596,9 @@ class Processor<string n, ProcessorItineraries pi, list<SubtargetFeature> f> {
 //
 // Although this class always passes NoItineraries to the Processor
 // class, the SchedMachineModel may still define valid Itineraries.
-class ProcessorModel<string n, SchedMachineModel m, list<SubtargetFeature> f>
-  : Processor<n, NoItineraries, f> {
+class ProcessorModel<string n, SchedMachineModel m, list<SubtargetFeature> f,
+                     list<SubtargetFeature> tunef = []>
+  : Processor<n, NoItineraries, f, tunef> {
   let SchedModel = m;
 }
 

@@ -47,7 +47,7 @@ createBPFMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
 
 static MCSubtargetInfo *createBPFMCSubtargetInfo(const Triple &TT,
                                                  StringRef CPU, StringRef FS) {
-  return createBPFMCSubtargetInfoImpl(TT, CPU, FS);
+  return createBPFMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
 }
 
 static MCStreamer *createBPFMCStreamer(const Triple &T, MCContext &Ctx,

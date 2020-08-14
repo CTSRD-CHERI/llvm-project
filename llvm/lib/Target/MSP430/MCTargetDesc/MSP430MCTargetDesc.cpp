@@ -45,7 +45,7 @@ createMSP430MCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
 
 static MCSubtargetInfo *
 createMSP430MCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
-  return createMSP430MCSubtargetInfoImpl(TT, CPU, FS);
+  return createMSP430MCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
 }
 
 static MCInstPrinter *createMSP430MCInstPrinter(const Triple &T,
