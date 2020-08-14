@@ -835,6 +835,8 @@ private:
   void parseTypeIdCompatibleVtableSummaryRecord(ArrayRef<uint64_t> Record);
   void parseTypeIdCompatibleVtableInfo(ArrayRef<uint64_t> Record, size_t &Slot,
                                        TypeIdCompatibleVtableInfo &TypeId);
+  std::vector<FunctionSummary::ParamAccess>
+  parseParamAccesses(ArrayRef<uint64_t> Record);
 
   std::pair<ValueInfo, GlobalValue::GUID>
   getValueInfoFromValueId(unsigned ValueId);
@@ -5860,8 +5862,8 @@ static void parseTypeIdSummaryRecord(ArrayRef<uint64_t> Record,
     parseWholeProgramDevirtResolution(Record, Strtab, Slot, TypeId);
 }
 
-static std::vector<FunctionSummary::ParamAccess>
-parseParamAccesses(ArrayRef<uint64_t> Record) {
+std::vector<FunctionSummary::ParamAccess>
+ModuleSummaryIndexBitcodeReader::parseParamAccesses(ArrayRef<uint64_t> Record) {
   auto ReadRange = [&]() {
     APInt Lower(FunctionSummary::ParamAccess::RangeWidth,
                 BitcodeReader::decodeSignRotatedValue(Record.front()));
@@ -5887,7 +5889,7 @@ parseParamAccesses(ArrayRef<uint64_t> Record) {
     for (auto &Call : ParamAccess.Calls) {
       Call.ParamNo = Record.front();
       Record = Record.drop_front();
-      Call.Callee = Record.front();
+      Call.Callee = getValueInfoFromValueId(Record.front()).first;
       Record = Record.drop_front();
       Call.Offsets = ReadRange();
     }
