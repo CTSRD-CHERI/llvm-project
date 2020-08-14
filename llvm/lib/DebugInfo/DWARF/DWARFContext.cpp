@@ -256,7 +256,7 @@ static void dumpRnglistsSection(
         break;
       Offset = TableOffset + Length;
     } else {
-      Rnglists.dump(OS, LookupPooledAddress, DumpOpts);
+      Rnglists.dump(rnglistData, OS, LookupPooledAddress, DumpOpts);
     }
   }
 }
@@ -317,7 +317,7 @@ static void dumpLoclistsSection(raw_ostream &OS, DIDumpOptions DumpOpts,
       return;
     }
 
-    Header.dump(OS, DumpOpts);
+    Header.dump(Data, OS, DumpOpts);
 
     uint64_t EndOffset = Header.length() + Header.getHeaderOffset();
     Data.setAddressSize(Header.getAddrSize());
