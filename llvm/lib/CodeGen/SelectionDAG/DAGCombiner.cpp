@@ -16229,7 +16229,7 @@ void DAGCombiner::getStoreMergeCandidates(
                             int64_t &Offset) -> bool {
     // The memory operands must not be volatile/indexed/atomic.
     // TODO: May be able to relax for unordered atomics (see D66309)
-    if (!Other->isSimple() ||  Other->isIndexed())
+    if (!Other->isSimple() || Other->isIndexed())
       return false;
     // Don't mix temporal stores with non-temporal stores.
     if (St->isNonTemporal() != Other->isNonTemporal())
@@ -16291,11 +16291,9 @@ void DAGCombiner::getStoreMergeCandidates(
   auto OverLimitInDependenceCheck = [&](SDNode *StoreNode,
                                         SDNode *RootNode) -> bool {
     auto RootCount = StoreRootCountMap.find(StoreNode);
-    if (RootCount != StoreRootCountMap.end() &&
-        RootCount->second.first == RootNode &&
-        RootCount->second.second > StoreMergeDependenceLimit)
-      return true;
-    return false;
+    return RootCount != StoreRootCountMap.end() &&
+           RootCount->second.first == RootNode &&
+           RootCount->second.second > StoreMergeDependenceLimit;
   };
 
   // We looking for a root node which is an ancestor to all mergable
