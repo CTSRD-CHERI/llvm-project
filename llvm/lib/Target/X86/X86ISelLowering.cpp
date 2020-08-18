@@ -11293,17 +11293,26 @@ static SDValue getAVX512TruncNode(const SDLoc &DL, MVT DstVT, SDValue Src,
                                   const X86Subtarget &Subtarget,
                                   SelectionDAG &DAG, bool ZeroUppers) {
   MVT SrcVT = Src.getSimpleValueType();
+  MVT DstSVT = DstVT.getScalarType();
   unsigned NumDstElts = DstVT.getVectorNumElements();
   unsigned NumSrcElts = SrcVT.getVectorNumElements();
+  unsigned DstEltSizeInBits = DstVT.getScalarSizeInBits();
 
   // Perform a direct ISD::TRUNCATE if possible.
   if (NumSrcElts == NumDstElts)
     return DAG.getNode(ISD::TRUNCATE, DL, DstVT, Src);
 
   if (NumSrcElts > NumDstElts) {
-    MVT TruncVT = MVT::getVectorVT(DstVT.getScalarType(), NumSrcElts);
+    MVT TruncVT = MVT::getVectorVT(DstSVT, NumSrcElts);
     SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, TruncVT, Src);
     return extractSubVector(Trunc, 0, DAG, DL, DstVT.getSizeInBits());
+  }
+
+  if ((NumSrcElts * DstEltSizeInBits) >= 128) {
+    MVT TruncVT = MVT::getVectorVT(DstSVT, NumSrcElts);
+    SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, TruncVT, Src);
+    return widenSubVector(Trunc, ZeroUppers, Subtarget, DAG, DL,
+                          DstVT.getSizeInBits());
   }
 
   // Non-VLX targets must truncate from a 512-bit type, so we need to
@@ -11313,9 +11322,13 @@ static SDValue getAVX512TruncNode(const SDLoc &DL, MVT DstVT, SDValue Src,
     return getAVX512TruncNode(DL, DstVT, NewSrc, Subtarget, DAG, ZeroUppers);
   }
 
-  // Fallback to a X86ISD::VTRUNC.
-  // TODO: Handle cases where we go from 512-bit vectors to sub-128-bit vectors.
-  return DAG.getNode(X86ISD::VTRUNC, DL, DstVT, Src);
+  // Fallback to a X86ISD::VTRUNC, padding if necessary.
+  MVT TruncVT = MVT::getVectorVT(DstSVT, 128 / DstEltSizeInBits);
+  SDValue Trunc = DAG.getNode(X86ISD::VTRUNC, DL, TruncVT, Src);
+  if (DstVT != TruncVT)
+    Trunc = widenSubVector(Trunc, ZeroUppers, Subtarget, DAG, DL,
+                           DstVT.getSizeInBits());
+  return Trunc;
 }
 
 static bool matchShuffleAsVPMOV(ArrayRef<int> Mask, bool SwappedOps,
@@ -11414,7 +11427,8 @@ static SDValue lowerShuffleAsVTRUNC(const SDLoc &DL, MVT VT, SDValue V1,
                                     const APInt &Zeroable,
                                     const X86Subtarget &Subtarget,
                                     SelectionDAG &DAG) {
-  assert((VT == MVT::v16i8 || VT == MVT::v8i16) && "Unexpected VTRUNC type");
+  assert((VT.is128BitVector() || VT.is256BitVector()) &&
+         "Unexpected VTRUNC type");
   if (!Subtarget.hasAVX512())
     return SDValue();
 
@@ -16894,6 +16908,11 @@ static SDValue lowerV16I16Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
                                        Subtarget))
     return V;
 
+  // Try to use lower using a truncation.
+  if (SDValue V = lowerShuffleAsVTRUNC(DL, MVT::v16i16, V1, V2, Mask, Zeroable,
+                                       Subtarget, DAG))
+    return V;
+
   // Try to use shift instructions.
   if (SDValue Shift = lowerShuffleAsShift(DL, MVT::v16i16, V1, V2, Mask,
                                           Zeroable, Subtarget, DAG))
@@ -17002,6 +17021,11 @@ static SDValue lowerV32I8Shuffle(const SDLoc &DL, ArrayRef<int> Mask,
   // Use dedicated pack instructions for masks that match their pattern.
   if (SDValue V = lowerShuffleWithPACK(DL, MVT::v32i8, Mask, V1, V2, DAG,
                                        Subtarget))
+    return V;
+
+  // Try to use lower using a truncation.
+  if (SDValue V = lowerShuffleAsVTRUNC(DL, MVT::v32i8, V1, V2, Mask, Zeroable,
+                                       Subtarget, DAG))
     return V;
 
   // Try to use shift instructions.
