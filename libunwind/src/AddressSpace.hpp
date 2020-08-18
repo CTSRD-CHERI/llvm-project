@@ -663,10 +663,12 @@ static LocalAddressSpace::pint_t getPhdrCapability(uintptr_t image_base,
     "_LIBUNWIND_SUPPORT_DWARF_UNWIND requires _LIBUNWIND_SUPPORT_DWARF_INDEX on this platform."
 #endif
 
+#if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
 #include "FrameHeaderCache.hpp"
 
 // There should be just one of these per process.
 static FrameHeaderCache ProcessFrameHeaderCache;
+#endif
 
 static bool checkAddrInSegment(const Elf_Phdr *phdr, uintptr_t image_base,
                                dl_iterate_cb_data *cbdata) {
@@ -715,10 +717,10 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t pinfo_size,
               (uintmax_t)cbdata->targetAddr.address(), (void *)pinfo->dlpi_addr,
               pinfo->dlpi_name);
     return 0;
-  }
-
+#if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
   if (ProcessFrameHeaderCache.find(pinfo, pinfo_size, data))
     return 1;
+#endif
 
   uintptr_t image_base = calculateImageBase(pinfo);
 #ifdef __CHERI_PURE_CAPABILITY__
@@ -781,7 +783,9 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t pinfo_size,
       if (!boundEhFrameFromPhdr(pinfo, image_base, cbdata)) {
         return 0;
       }
+#if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
       ProcessFrameHeaderCache.add(cbdata->sects);
+#endif
       return 1;
     } else {
       CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
