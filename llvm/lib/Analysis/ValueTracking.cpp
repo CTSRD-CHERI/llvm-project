@@ -78,8 +78,6 @@
 using namespace llvm;
 using namespace llvm::PatternMatch;
 
-const unsigned MaxDepth = 6;
-
 // Controls the number of uses of the value searched for possible
 // dominating comparisons.
 static cl::opt<unsigned> DomConditionsMaxUses("dom-conditions-max-uses",
@@ -119,7 +117,7 @@ struct Query {
   /// bits in x, etc. Regarding the mutual recursion, computeKnownBits can call
   /// isKnownNonZero, which calls computeKnownBits and isKnownToBeAPowerOfTwo
   /// (all of which can call computeKnownBits), and so on.
-  std::array<const Value *, MaxDepth> Excluded;
+  std::array<const Value *, MaxAnalysisRecursionDepth> Excluded;
 
   /// If true, it is safe to use metadata during simplification.
   InstrInfoQuery IIQ;
@@ -882,7 +880,7 @@ static void computeKnownBitsFromAssume(const Value *V, KnownBits &Known,
     }
 
     // The remaining tests are all recursive, so bail out if we hit the limit.
-    if (Depth == MaxDepth)
+    if (Depth == MaxAnalysisRecursionDepth)
       continue;
 
     ICmpInst *Cmp = dyn_cast<ICmpInst>(Arg);
@@ -1723,7 +1721,7 @@ static void computeKnownBitsFromOperator(const Operator *I,
 
     // Otherwise take the unions of the known bit sets of the operands,
     // taking conservative care to avoid excessive recursion.
-    if (Depth < MaxDepth - 1 && !Known.Zero && !Known.One) {
+    if (Depth < MaxAnalysisRecursionDepth - 1 && !Known.Zero && !Known.One) {
       // Skip if every incoming value references to ourself.
       if (dyn_cast_or_null<UndefValue>(P->hasConstantValue()))
         break;
@@ -1745,7 +1743,7 @@ static void computeKnownBitsFromOperator(const Operator *I,
         Known2 = KnownBits(BitWidth);
         // Recurse, but cap the recursion to one level, because we don't
         // want to waste time spinning around in loops.
-        computeKnownBits(IncValue, Known2, MaxDepth - 1, RecQ);
+        computeKnownBits(IncValue, Known2, MaxAnalysisRecursionDepth - 1, RecQ);
         Known.Zero &= Known2.Zero;
         Known.One &= Known2.One;
         // If all bits have been ruled out, there's no need to check
@@ -2064,7 +2062,7 @@ void computeKnownBits(const Value *V, const APInt &DemandedElts,
   }
 
   assert(V && "No Value?");
-  assert(Depth <= MaxDepth && "Limit Search Depth");
+  assert(Depth <= MaxAnalysisRecursionDepth && "Limit Search Depth");
 
 #ifndef NDEBUG
   Type *Ty = V->getType();
@@ -2151,9 +2149,8 @@ void computeKnownBits(const Value *V, const APInt &DemandedElts,
   // assumptions.  Confirm that we've handled them all.
   assert(!isa<ConstantData>(V) && "Unhandled constant data!");
 
-  // Limit search depth.
   // All recursive calls that increase depth must come after this.
-  if (Depth == MaxDepth)
+  if (Depth == MaxAnalysisRecursionDepth)
     return;
 
   // A weak GlobalAlias is totally unknown. A non-weak GlobalAlias has
@@ -2188,7 +2185,7 @@ void computeKnownBits(const Value *V, const APInt &DemandedElts,
 /// types and vectors of integers.
 bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero, unsigned Depth,
                             const Query &Q) {
-  assert(Depth <= MaxDepth && "Limit Search Depth");
+  assert(Depth <= MaxAnalysisRecursionDepth && "Limit Search Depth");
 
   // Attempt to match against constants.
   if (OrZero && match(V, m_Power2OrZero()))
@@ -2207,7 +2204,7 @@ bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero, unsigned Depth,
     return true;
 
   // The remaining tests are all recursive, so bail out if we hit the limit.
-  if (Depth++ == MaxDepth)
+  if (Depth++ == MaxAnalysisRecursionDepth)
     return false;
 
   Value *X = nullptr, *Y = nullptr;
@@ -2336,7 +2333,7 @@ static bool isGEPKnownNonNull(const GEPOperator *GEP, unsigned Depth,
     // to recurse 10k times just because we have 10k GEP operands. We don't
     // bail completely out because we want to handle constant GEPs regardless
     // of depth.
-    if (Depth++ >= MaxDepth)
+    if (Depth++ >= MaxAnalysisRecursionDepth)
       continue;
 
     if (isKnownNonZero(GTI.getOperand(), Depth, Q))
@@ -2520,7 +2517,7 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
     return true;
 
   // Some of the tests below are recursive, so bail out if we hit the limit.
-  if (Depth++ >= MaxDepth)
+  if (Depth++ >= MaxAnalysisRecursionDepth)
     return false;
 
   // Check for pointer simplifications.
@@ -2889,7 +2886,7 @@ static unsigned ComputeNumSignBitsImpl(const Value *V,
     return 1;
 
 #ifndef NDEBUG
-  assert(Depth <= MaxDepth && "Limit Search Depth");
+  assert(Depth <= MaxAnalysisRecursionDepth && "Limit Search Depth");
 
   if (auto *FVTy = dyn_cast<FixedVectorType>(Ty)) {
     assert(
@@ -2916,8 +2913,8 @@ static unsigned ComputeNumSignBitsImpl(const Value *V,
   // Note that ConstantInt is handled by the general computeKnownBits case
   // below.
 
-  if (Depth == MaxDepth)
-    return 1;  // Limit search depth.
+  if (Depth == MaxAnalysisRecursionDepth)
+    return 1;
 
   if (auto *U = dyn_cast<Operator>(V)) {
     switch (Operator::getOpcode(V)) {
@@ -3205,7 +3202,7 @@ static unsigned ComputeNumSignBitsImpl(const Value *V,
 bool llvm::ComputeMultiple(Value *V, unsigned Base, Value *&Multiple,
                            bool LookThroughSExt, unsigned Depth) {
   assert(V && "No Value?");
-  assert(Depth <= MaxDepth && "Limit Search Depth");
+  assert(Depth <= MaxAnalysisRecursionDepth && "Limit Search Depth");
   assert(V->getType()->isIntegerTy() && "Not integer or pointer type!");
 
   Type *T = V->getType();
@@ -3233,7 +3230,7 @@ bool llvm::ComputeMultiple(Value *V, unsigned Base, Value *&Multiple,
     return true;
   }
 
-  if (Depth == MaxDepth) return false;  // Limit search depth.
+  if (Depth == MaxAnalysisRecursionDepth) return false;
 
   Operator *I = dyn_cast<Operator>(V);
   if (!I) return false;
@@ -3435,8 +3432,7 @@ bool llvm::CannotBeNegativeZero(const Value *V, const TargetLibraryInfo *TLI,
   if (auto *CFP = dyn_cast<ConstantFP>(V))
     return !CFP->getValueAPF().isNegZero();
 
-  // Limit search depth.
-  if (Depth == MaxDepth)
+  if (Depth == MaxAnalysisRecursionDepth)
     return false;
 
   auto *Op = dyn_cast<Operator>(V);
@@ -3504,8 +3500,8 @@ static bool cannotBeOrderedLessThanZeroImpl(const Value *V,
     }
   }
 
-  if (Depth == MaxDepth)
-    return false; // Limit search depth.
+  if (Depth == MaxAnalysisRecursionDepth)
+    return false;
 
   const Operator *I = dyn_cast<Operator>(V);
   if (!I)
@@ -3657,7 +3653,7 @@ bool llvm::isKnownNeverInfinity(const Value *V, const TargetLibraryInfo *TLI,
   if (auto *CFP = dyn_cast<ConstantFP>(V))
     return !CFP->isInfinity();
 
-  if (Depth == MaxDepth)
+  if (Depth == MaxAnalysisRecursionDepth)
     return false;
 
   if (auto *Inst = dyn_cast<Instruction>(V)) {
@@ -3712,7 +3708,7 @@ bool llvm::isKnownNeverNaN(const Value *V, const TargetLibraryInfo *TLI,
   if (auto *CFP = dyn_cast<ConstantFP>(V))
     return !CFP->isNaN();
 
-  if (Depth == MaxDepth)
+  if (Depth == MaxAnalysisRecursionDepth)
     return false;
 
   if (auto *Inst = dyn_cast<Instruction>(V)) {
@@ -5024,7 +5020,7 @@ bool llvm::isGuaranteedNotToBeUndefOrPoison(const Value *V,
                                             const Instruction *CtxI,
                                             const DominatorTree *DT,
                                             unsigned Depth) {
-  if (Depth >= MaxDepth)
+  if (Depth >= MaxAnalysisRecursionDepth)
     return false;
 
   if (const auto *A = dyn_cast<Argument>(V)) {
@@ -5292,7 +5288,7 @@ bool llvm::programUndefinedIfPoison(const Instruction *PoisonI) {
   BasicBlock::const_iterator Begin = PoisonI->getIterator(), End = BB->end();
 
   unsigned Iter = 0;
-  while (Iter++ < MaxDepth) {
+  while (Iter++ < MaxAnalysisRecursionDepth) {
     for (auto &I : make_range(Begin, End)) {
       if (&I != PoisonI) {
         if (mustTriggerUB(&I, YieldsPoison))
@@ -5967,7 +5963,7 @@ static Value *lookThroughCast(CmpInst *CmpI, Value *V1, Value *V2,
 SelectPatternResult llvm::matchSelectPattern(Value *V, Value *&LHS, Value *&RHS,
                                              Instruction::CastOps *CastOp,
                                              unsigned Depth) {
-  if (Depth >= MaxDepth)
+  if (Depth >= MaxAnalysisRecursionDepth)
     return {SPF_UNKNOWN, SPNB_NA, false};
 
   SelectInst *SI = dyn_cast<SelectInst>(V);
@@ -6236,7 +6232,7 @@ isImpliedCondAndOr(const BinaryOperator *LHS, CmpInst::Predicate RHSPred,
           LHS->getOpcode() == Instruction::Or) &&
          "Expected LHS to be 'and' or 'or'.");
 
-  assert(Depth <= MaxDepth && "Hit recursion limit");
+  assert(Depth <= MaxAnalysisRecursionDepth && "Hit recursion limit");
 
   // If the result of an 'or' is false, then we know both legs of the 'or' are
   // false.  Similarly, if the result of an 'and' is true, then we know both
@@ -6261,7 +6257,7 @@ llvm::isImpliedCondition(const Value *LHS, CmpInst::Predicate RHSPred,
                          const Value *RHSOp0, const Value *RHSOp1,
                          const DataLayout &DL, bool LHSIsTrue, unsigned Depth) {
   // Bail out when we hit the limit.
-  if (Depth == MaxDepth)
+  if (Depth == MaxAnalysisRecursionDepth)
     return None;
 
   // A mismatch occurs when we compare a scalar cmp to a vector cmp, for
@@ -6673,7 +6669,7 @@ ConstantRange llvm::computeConstantRange(const Value *V, bool UseInstrInfo,
                                          unsigned Depth) {
   assert(V->getType()->isIntOrIntVectorTy() && "Expected integer instruction");
 
-  if (Depth == MaxDepth)
+  if (Depth == MaxAnalysisRecursionDepth)
     return ConstantRange::getFull(V->getType()->getScalarSizeInBits());
 
   const APInt *C;
