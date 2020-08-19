@@ -753,7 +753,7 @@ namespace llvm {
     }
 
     ElementCount getVectorElementCount() const {
-      return { getVectorNumElements(), isScalableVector() };
+      return ElementCount::get(getVectorNumElements(), isScalableVector());
     }
 
     /// Given a vector type, return the minimum number of elements it contains.
