@@ -33,53 +33,55 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i);
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP7]]) #5
 // CHECK-NEXT:    [[LNOT:%.*]] = xor i1 [[TMP7]], true
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[LNOT]]) #5
-// CHECK-NEXT:    [[TMP8:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP8:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP8]]) #5
-// CHECK-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.round.representable.length.i64(i64 [[I]])
-// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP9]]) #5
-// CHECK-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.representable.alignment.mask.i64(i64 [[I]])
+// CHECK-NEXT:    [[TMP9:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP9]]) #5
+// CHECK-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.round.representable.length.i64(i64 [[I]])
 // CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP10]]) #5
-// CHECK-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
-// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP11]]) #5
-// CHECK-NEXT:    [[TMP12:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    [[TMP11:%.*]] = call i64 @llvm.cheri.representable.alignment.mask.i64(i64 [[I]])
+// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP11]]) #5
+// CHECK-NEXT:    [[TMP12:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP12]]) #5
-// CHECK-NEXT:    [[TMP13:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP13]]) #5
-// CHECK-NEXT:    [[TMP14:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP14]]) #5
-// CHECK-NEXT:    [[LNOT1:%.*]] = xor i1 [[TMP14]], true
+// CHECK-NEXT:    [[TMP13:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP13]]) #5
+// CHECK-NEXT:    [[TMP14:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP14]]) #5
+// CHECK-NEXT:    [[TMP15:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    call void @use_bool(i1 zeroext [[TMP15]]) #5
+// CHECK-NEXT:    [[LNOT1:%.*]] = xor i1 [[TMP15]], true
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[LNOT1]]) #5
-// CHECK-NEXT:    [[CMP:%.*]] = icmp eq i64 [[TMP13]], -2
+// CHECK-NEXT:    [[CMP:%.*]] = icmp eq i64 [[TMP14]], -2
 // CHECK-NEXT:    call void @use_bool(i1 zeroext [[CMP]]) #5
-// CHECK-NEXT:    [[TMP15:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP15]]) #5
-// CHECK-NEXT:    [[TMP16:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP16:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP16]]) #5
-// CHECK-NEXT:    [[TMP17:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP17:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP17]]) #5
-// CHECK-NEXT:    [[TMP18:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP18:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP18]]) #5
-// CHECK-NEXT:    [[TMP19:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP19:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP19]]) #5
-// CHECK-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP20]]) #5
-// CHECK-NEXT:    [[TMP21:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    [[CONV2:%.*]] = and i64 [[TMP21]], 4294967295
+// CHECK-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP21]]) #5
+// CHECK-NEXT:    [[TMP22:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[CONV2:%.*]] = and i64 [[TMP22]], 4294967295
 // CHECK-NEXT:    call void @use_size_t(i64 zeroext [[CONV2]]) #5
-// CHECK-NEXT:    [[TMP22:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 4)
-// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP22]]) #5
-// CHECK-NEXT:    [[TMP23:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 -3)
+// CHECK-NEXT:    [[TMP23:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 4)
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP23]]) #5
-// CHECK-NEXT:    [[TMP24:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
+// CHECK-NEXT:    [[TMP24:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 -3)
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP24]]) #5
-// CHECK-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+// CHECK-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP25]]) #5
-// CHECK-NEXT:    [[TMP26:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP26]]) #5
-// CHECK-NEXT:    [[TMP27:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
-// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP27]]) #5
-// CHECK-NEXT:    [[TMP28:%.*]] = call i64 @llvm.cheri.cap.load.tags.i64(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP28]]) #5
+// CHECK-NEXT:    [[TMP26:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP26]]) #5
+// CHECK-NEXT:    [[TMP27:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP27]]) #5
+// CHECK-NEXT:    [[TMP28:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* [[TMP28]]) #5
+// CHECK-NEXT:    [[TMP29:%.*]] = call i64 @llvm.cheri.cap.load.tags.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    call void @use_size_t(i64 zeroext [[TMP29]]) #5
 // CHECK-NEXT:    ret void
 //
 void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i) {
@@ -98,6 +100,7 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i) {
   use_bool(cheri_is_valid(cap));
   use_bool(cheri_is_invalid(cap));
 
+  use_bool(cheri_is_equal_exact(cap, cap2));
   use_bool(cheri_is_subset(cap, cap2));
 
   use_size_t(cheri_representable_length(i));

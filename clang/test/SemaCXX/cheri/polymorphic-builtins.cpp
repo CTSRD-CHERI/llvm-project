@@ -21,6 +21,7 @@ void test_good(Cap x) {
   static_assert(__is_same(decltype(__builtin_cheri_base_get(x)), size_t), "");
   static_assert(__is_same(decltype(__builtin_cheri_bounds_set(x, 1)), T), "");
   static_assert(__is_same(decltype(__builtin_cheri_bounds_set_exact(x, 1)), T), "");
+  static_assert(__is_same(decltype(__builtin_cheri_equal_exact(x, x)), bool), "");
   static_assert(__is_same(decltype(__builtin_cheri_flags_set(x, 1)), T), "");
   static_assert(__is_same(decltype(__builtin_cheri_flags_get(x)), size_t), "");
   static_assert(__is_same(decltype(__builtin_cheri_length_get(x)), size_t), "");
@@ -203,6 +204,7 @@ void test_bad() {
   (void)__builtin_cheri_base_get(x);            // expected-error{{operand of type 'long' where capability is required}}
   (void)__builtin_cheri_bounds_set(x, 1);       // expected-error{{operand of type 'long' where capability is required}}
   (void)__builtin_cheri_bounds_set_exact(x, 1); // expected-error{{operand of type 'long' where capability is required}}
+  (void)__builtin_cheri_equal_exact(x, x);      // expected-error{{operand of type 'long' where capability is required}}
   (void)__builtin_cheri_flags_set(x, 1);        // expected-error{{operand of type 'long' where capability is required}}
   (void)__builtin_cheri_flags_get(x);           // expected-error{{operand of type 'long' where capability is required}}
   (void)__builtin_cheri_length_get(x);          // expected-error{{operand of type 'long' where capability is required}}
@@ -226,6 +228,7 @@ void test_bad() {
   (void)__builtin_cheri_base_get(123);            // expected-error{{operand of type 'int' where capability is required}}
   (void)__builtin_cheri_bounds_set(123, 1);       // expected-error{{operand of type 'int' where capability is required}}
   (void)__builtin_cheri_bounds_set_exact(123, 1); // expected-error{{operand of type 'int' where capability is required}}
+  (void)__builtin_cheri_equal_exact(123, 123);    // expected-error{{operand of type 'int' where capability is required}}
   (void)__builtin_cheri_flags_set(123, 1);        // expected-error{{operand of type 'int' where capability is required}}
   (void)__builtin_cheri_flags_get(123);           // expected-error{{operand of type 'int' where capability is required}}
   (void)__builtin_cheri_length_get(123);          // expected-error{{operand of type 'int' where capability is required}}
@@ -248,6 +251,7 @@ void test_bad() {
   (void)__builtin_cheri_base_get(1.0f);            // expected-error{{operand of type 'float' where capability is required}}
   (void)__builtin_cheri_bounds_set(1.0f, 1);       // expected-error{{operand of type 'float' where capability is required}}
   (void)__builtin_cheri_bounds_set_exact(1.0f, 1); // expected-error{{operand of type 'float' where capability is required}}
+  (void)__builtin_cheri_equal_exact(1.0f, 1.0f);   // expected-error{{operand of type 'float' where capability is required}}
   (void)__builtin_cheri_flags_set(1.0f, 1);        // expected-error{{operand of type 'float' where capability is required}}
   (void)__builtin_cheri_flags_get(1.0f);           // expected-error{{operand of type 'float' where capability is required}}
   (void)__builtin_cheri_length_get(1.0f);          // expected-error{{operand of type 'float' where capability is required}}

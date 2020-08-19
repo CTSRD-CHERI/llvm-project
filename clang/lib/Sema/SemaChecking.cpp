@@ -1999,8 +1999,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     TheCall->setType(SrcTy);
     break;
   }
-  case Builtin::BI__builtin_cheri_type_check:
-  case Builtin::BI__builtin_cheri_subset_test: {
+  case Builtin::BI__builtin_cheri_equal_exact:
+  case Builtin::BI__builtin_cheri_subset_test:
+  case Builtin::BI__builtin_cheri_type_check: {
     // For subset testing and type checking we allow any capability type for
     // both arguments.
     if (checkArgCount(*this, TheCall, 2) || checkCapArg(*this, TheCall, 0) ||
