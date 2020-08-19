@@ -67,9 +67,12 @@ set(LIBUNWIND_HEADERS
     dwarf2.h
     DwarfInstructions.hpp
     DwarfParser.hpp
+    EHHeaderParser.hpp
+    FrameHeaderCache.hpp
     libunwind_ext.h
     Registers.hpp
     RWMutex.hpp
+    Unwind-EHABI.h
     UnwindCursor.hpp
     ../include/libunwind.h
     ../include/unwind.h

@@ -17,6 +17,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "libunwind.h"
+#include "config.h"
+#include "dwarf2.h"
+#include "EHHeaderParser.hpp"
+#include "Registers.hpp"
+
 // We can no longer include C++ headers so duplicate std::min() here
 template<typename T> T uw_min(T a, T b) { return a < b ? a : b; }
 
@@ -41,12 +47,6 @@ struct EHABIIndexEntry {
   uint32_t data;
 };
 #endif
-
-#include "libunwind.h"
-#include "config.h"
-#include "dwarf2.h"
-#include "EHHeaderParser.hpp"
-#include "Registers.hpp"
 
 #ifdef __APPLE__
 
@@ -666,8 +666,9 @@ static LocalAddressSpace::pint_t getPhdrCapability(uintptr_t image_base,
 #if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
 #include "FrameHeaderCache.hpp"
 
-// There should be just one of these per process.
-static FrameHeaderCache ProcessFrameHeaderCache;
+// Typically there is one cache per process, but when libunwind is built as a
+// hermetic static library, then each shared object may have its own cache.
+static FrameHeaderCache TheFrameHeaderCache;
 #endif
 
 static bool checkAddrInSegment(const Elf_Phdr *phdr, uintptr_t image_base,
@@ -718,7 +719,7 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
               pinfo->dlpi_name);
     return 0;
 #if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
-  if (ProcessFrameHeaderCache.find(pinfo, pinfo_size, data))
+  if (TheFrameHeaderCache.find(pinfo, pinfo_size, data))
     return 1;
 #else
   // Avoid warning about unused variable.
@@ -787,7 +788,7 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
         return 0;
       }
 #if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
-      ProcessFrameHeaderCache.add(cbdata->sects);
+      TheFrameHeaderCache.add(cbdata->sects);
 #endif
       return 1;
     } else {
