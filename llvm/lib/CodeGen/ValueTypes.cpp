@@ -50,7 +50,8 @@ EVT EVT::getExtendedVectorVT(LLVMContext &Context, EVT VT, unsigned NumElements,
 
 EVT EVT::getExtendedVectorVT(LLVMContext &Context, EVT VT, ElementCount EC) {
   EVT ResultVT;
-  ResultVT.LLVMTy = VectorType::get(VT.getTypeForEVT(Context), EC);
+  ResultVT.LLVMTy =
+      VectorType::get(VT.getTypeForEVT(Context), {EC.Min, EC.Scalable});
   assert(ResultVT.isExtended() && "Type is not extended!");
   return ResultVT;
 }
