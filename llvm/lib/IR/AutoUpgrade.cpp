@@ -4385,7 +4385,7 @@ MDNode *llvm::upgradeInstructionLoopAttachment(MDNode &N) {
 }
 
 std::string llvm::UpgradeDataLayoutString(StringRef DL, StringRef TT) {
-  std::string AddrSpaces = "-p270:32:32-p271:32:32-p272:64:64";
+  StringRef AddrSpaces = "-p270:32:32-p271:32:32-p272:64:64";
 
   // If X86, and the datalayout matches the expected format, add pointer size
   // address spaces to the datalayout.
@@ -4397,9 +4397,7 @@ std::string llvm::UpgradeDataLayoutString(StringRef DL, StringRef TT) {
   if (!R.match(DL, &Groups))
     return std::string(DL);
 
-  SmallString<1024> Buf;
-  std::string Res = (Groups[1] + AddrSpaces + Groups[3]).toStringRef(Buf).str();
-  return Res;
+  return (Groups[1] + AddrSpaces + Groups[3]).str();
 }
 
 void llvm::UpgradeAttributes(AttrBuilder &B) {
