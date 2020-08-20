@@ -185,7 +185,7 @@ void test2(int intSAParm[static 2]) {
 // CHECK: printf("%+.2lld", (unsigned long long) 123456);
 // CHECK: printf("%1Lf", (long double) 1.23);
 // CHECK: printf("%0u", (unsigned) 31337);
-// CHECK: printf("%#p", (void *) 0);
+// CHECK: printf("%p", (void *) 0);
 // CHECK: printf("%+f", 1.23);
 // CHECK: printf("%-f", 1.23);
 // CHECK: printf("%1$d:%2$.*3$d:%4$.*3$d\n", 1, 2, 3, 4);

@@ -153,6 +153,7 @@ public:
 
     sArg,
     pArg,
+    CHERIpArg,
     nArg,
     PercentArg,
     CArg,
