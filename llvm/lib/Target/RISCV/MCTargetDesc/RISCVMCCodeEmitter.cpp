@@ -88,6 +88,12 @@ public:
   unsigned getVMaskReg(const MCInst &MI, unsigned OpNo,
                        SmallVectorImpl<MCFixup> &Fixups,
                        const MCSubtargetInfo &STI) const;
+
+private:
+  FeatureBitset computeAvailableFeatures(const FeatureBitset &FB) const;
+  void
+  verifyInstructionPredicates(const MCInst &MI,
+                              const FeatureBitset &AvailableFeatures) const;
 };
 } // end anonymous namespace
 
@@ -228,6 +234,9 @@ void RISCVMCCodeEmitter::expandCIncOffsetTPRel(
 void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
                                            SmallVectorImpl<MCFixup> &Fixups,
                                            const MCSubtargetInfo &STI) const {
+  verifyInstructionPredicates(MI,
+                              computeAvailableFeatures(STI.getFeatureBits()));
+
   const MCInstrDesc &Desc = MCII.get(MI.getOpcode());
   // Get byte count of instruction.
   unsigned Size = Desc.getSize();
@@ -459,4 +468,5 @@ unsigned RISCVMCCodeEmitter::getVMaskReg(const MCInst &MI, unsigned OpNo,
   }
 }
 
+#define ENABLE_INSTR_PREDICATE_VERIFIER
 #include "RISCVGenMCCodeEmitter.inc"
