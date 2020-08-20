@@ -247,24 +247,14 @@ private:
 
   TYPEDEF_ELF_TYPES(ELFT)
 
-  DynRegionInfo checkDRI(DynRegionInfo DRI) {
+  DynRegionInfo createDRI(uint64_t Offset, uint64_t Size, uint64_t EntSize) {
     const ELFFile<ELFT> *Obj = ObjF->getELFFile();
-    if (DRI.Addr < Obj->base() ||
-        reinterpret_cast<const uint8_t *>(DRI.Addr) + DRI.Size >
-            Obj->base() + Obj->getBufSize())
+    const uint8_t *Addr = Obj->base() + Offset;
+    if (Addr < Obj->base() || Addr + Size > Obj->base() + Obj->getBufSize())
       reportError(errorCodeToError(llvm::object::object_error::parse_failed),
                   ObjF->getFileName());
-    return DRI;
-  }
 
-  DynRegionInfo createDRIFrom(const Elf_Phdr *P, uintX_t EntSize) {
-    return checkDRI({ObjF->getELFFile()->base() + P->p_offset, P->p_filesz,
-                     EntSize, ObjF->getFileName()});
-  }
-
-  DynRegionInfo createDRIFrom(const Elf_Shdr *S) {
-    return checkDRI({ObjF->getELFFile()->base() + S->sh_offset, S->sh_size,
-                     S->sh_entsize, ObjF->getFileName()});
+    return {Addr, Size, EntSize, ObjF->getFileName()};
   }
 
   void printAttributes();
@@ -1947,7 +1937,8 @@ void ELFDumper<ELFT>::loadDynamicTable(const ELFFile<ELFT> *Obj) {
   DynRegionInfo FromPhdr(ObjF->getFileName());
   bool IsPhdrTableValid = false;
   if (DynamicPhdr) {
-    FromPhdr = createDRIFrom(DynamicPhdr, sizeof(Elf_Dyn));
+    FromPhdr = createDRI(DynamicPhdr->p_offset, DynamicPhdr->p_filesz,
+                         sizeof(Elf_Dyn));
     FromPhdr.SizePrintName = "PT_DYNAMIC size";
     FromPhdr.EntSizePrintName = "";
 
@@ -1962,8 +1953,7 @@ void ELFDumper<ELFT>::loadDynamicTable(const ELFFile<ELFT> *Obj) {
   bool IsSecTableValid = false;
   if (DynamicSec) {
     FromSec =
-        checkDRI({ObjF->getELFFile()->base() + DynamicSec->sh_offset,
-                  DynamicSec->sh_size, sizeof(Elf_Dyn), ObjF->getFileName()});
+        createDRI(DynamicSec->sh_offset, DynamicSec->sh_size, sizeof(Elf_Dyn));
     FromSec.Context = describe(*DynamicSec);
     FromSec.EntSizePrintName = "";
 
@@ -2051,7 +2041,7 @@ ELFDumper<ELFT>::ELFDumper(const object::ELFObjectFile<ELFT> *ObjF,
         DotDynsymSec = &Sec;
 
       if (!DynSymRegion) {
-        DynSymRegion = createDRIFrom(&Sec);
+        DynSymRegion = createDRI(Sec.sh_offset, Sec.sh_size, Sec.sh_entsize);
         DynSymRegion->Context = describe(Sec);
 
         if (Expected<StringRef> E = Obj->getStringTableForSymtab(Sec))
