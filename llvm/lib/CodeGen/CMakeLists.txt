@@ -183,6 +183,7 @@ add_llvm_component_library(LLVMCodeGen
   WinEHPrepare.cpp
   XRayInstrumentation.cpp
 
+  LiveDebugValues/LiveDebugValues.cpp
   LiveDebugValues/VarLocBasedImpl.cpp
 
   ADDITIONAL_HEADER_DIRS
