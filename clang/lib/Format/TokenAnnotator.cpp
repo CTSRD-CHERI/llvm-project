@@ -1725,7 +1725,8 @@ private:
   /// This is a heuristic based on whether \p Tok is an identifier following
   /// something that is likely a type.
   bool isStartOfName(const FormatToken &Tok) {
-    if (Tok.isNot(tok::identifier) || !Tok.Previous)
+    if (Tok.isNot(tok::identifier) || !Tok.Previous ||
+        Tok.is(Keywords.kw___capability))
       return false;
 
     if (Tok.Previous->isOneOf(TT_LeadingJavaAnnotation, Keywords.kw_instanceof,
@@ -1829,7 +1830,8 @@ private:
     // Heuristically try to determine whether the parentheses contain a type.
     bool ParensAreType =
         !Tok.Previous ||
-        Tok.Previous->isOneOf(TT_PointerOrReference, TT_TemplateCloser) ||
+        Tok.Previous->isOneOf(TT_PointerOrReference, TT_TemplateCloser,
+                              Keywords.kw___capability) ||
         Tok.Previous->isSimpleTypeSpecifier();
     bool ParensCouldEndDecl =
         Tok.Next->isOneOf(tok::equal, tok::semi, tok::l_brace, tok::greater);
@@ -1868,7 +1870,8 @@ private:
     // Search for unexpected tokens.
     for (FormatToken *Prev = Tok.Previous; Prev != Tok.MatchingParen;
          Prev = Prev->Previous) {
-      if (!Prev->isOneOf(tok::kw_const, tok::identifier, tok::coloncolon))
+      if (!Prev->isOneOf(tok::kw_const, tok::identifier, tok::coloncolon) &&
+          !Keywords.isCHERICastKeyword(*Prev))
         return false;
     }
     return true;
@@ -2834,7 +2837,8 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
     return true;
   if (Left.is(TT_PointerOrReference))
     return Right.Tok.isLiteral() || Right.is(TT_BlockComment) ||
-           (Right.isOneOf(Keywords.kw_override, Keywords.kw_final) &&
+           (Right.isOneOf(Keywords.kw_override, Keywords.kw_final,
+                          Keywords.kw___capability) &&
             !Right.is(TT_StartOfName)) ||
            (Right.is(tok::l_brace) && Right.BlockKind == BK_Block) ||
            (!Right.isOneOf(TT_PointerOrReference, TT_ArraySubscriptLSquare,

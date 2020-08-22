@@ -754,6 +754,9 @@ struct AdditionalKeywords {
     kw___has_include = &IdentTable.get("__has_include");
     kw___has_include_next = &IdentTable.get("__has_include_next");
 
+    // CHERI keywords
+    kw___capability = &IdentTable.get("__capability");
+
     kw_mark = &IdentTable.get("mark");
 
     kw_extend = &IdentTable.get("extend");
@@ -837,6 +840,9 @@ struct AdditionalKeywords {
   IdentifierInfo *kw___except;
   IdentifierInfo *kw___has_include;
   IdentifierInfo *kw___has_include_next;
+
+  // CHERI keywords
+  IdentifierInfo *kw___capability;
 
   // JavaScript keywords.
   IdentifierInfo *kw_as;
@@ -1044,6 +1050,21 @@ struct AdditionalKeywords {
       return Tok.is(tok::identifier) &&
              CSharpExtraKeywords.find(Tok.Tok.getIdentifierInfo()) ==
                  CSharpExtraKeywords.end();
+    }
+  }
+
+  /// Returns \c true if \p Tok is a CHERI cast keyword, returns
+  /// \c false if it is anything else.
+  bool isCHERICastKeyword(const FormatToken &Tok) const {
+    switch (Tok.Tok.getKind()) {
+    case tok::kw___cheri_tocap:
+    case tok::kw___cheri_fromcap:
+    case tok::kw___cheri_offset:
+    case tok::kw___cheri_addr:
+    case tok::kw___cheri_cast:
+      return true;
+    default:
+      return false;
     }
   }
 
