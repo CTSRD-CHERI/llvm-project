@@ -707,8 +707,8 @@ static bool boundEhFrameFromPhdr(struct dl_phdr_info *pinfo,
   return false;
 }
 
-int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t pinfo_size,
-                             void *data) {
+static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
+                                    size_t pinfo_size, void *data) {
   auto cbdata = static_cast<dl_iterate_cb_data *>(data);
   if (pinfo->dlpi_phnum == 0)
     return 0;
@@ -799,7 +799,8 @@ int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t pinfo_size,
 // Given all the #ifdef's above, the code here is for
 // defined(LIBUNWIND_ARM_EHABI)
 
-int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t, void *data) {
+static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo, size_t,
+                                    void *data) {
   auto *cbdata = static_cast<dl_iterate_cb_data *>(data);
   bool found_obj = false;
   bool found_hdr = false;
