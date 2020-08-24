@@ -1414,6 +1414,7 @@ static const EnumEntry<unsigned> ElfHeaderMipsFlags[] = {
   ENUM_ENT(EF_MIPS_32BITMODE, "32bitmode"),
   ENUM_ENT(EF_MIPS_FP64, "fp64"),
   ENUM_ENT(EF_MIPS_NAN2008, "nan2008"),
+  ENUM_ENT(EF_MIPS_CHERIOSABI, "cheriosabi"),
   ENUM_ENT(EF_MIPS_ABI_O32, "o32"),
   ENUM_ENT(EF_MIPS_ABI_O64, "o64"),
   ENUM_ENT(EF_MIPS_ABI_EABI32, "eabi32"),

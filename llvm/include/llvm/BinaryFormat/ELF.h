@@ -512,6 +512,7 @@ enum : unsigned {
   EF_MIPS_FP64 = 0x00000200,      // Code compiled for a 32-bit machine
                                   // but uses 64-bit FP registers
   EF_MIPS_NAN2008 = 0x00000400,   // Uses IEE 754-2008 NaN encoding
+  EF_MIPS_CHERIOSABI = 0x0000800, // CheriOS style ABI extentions
 
   // ABI flags
   EF_MIPS_ABI_O32 = 0x00001000, // This file follows the first MIPS 32 bit ABI
