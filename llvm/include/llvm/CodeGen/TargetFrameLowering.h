@@ -410,6 +410,10 @@ public:
     return true;
   }
 
+  virtual int createUnsafeEndObject(MachineFunction &MF) const { return -1; }
+
+  virtual bool partitionUnsafeObjects(void) const { return false; }
+
   /// Returns the StackID that scalable vectors should be associated with.
   virtual TargetStackID::Value getStackIDForScalableVectors() const {
     return TargetStackID::Default;
