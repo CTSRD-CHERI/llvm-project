@@ -2172,6 +2172,27 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
       if (sym->includeInDynsym()) {
         partitions[sym->partition - 1].dynSymTab->addSymbol(sym);
+
+        // CheriOS decides at runtime which function entry to expose, so add all
+        // of them to the DynSymTab
+
+        if (config->isCheriOS() && sym->isFunc()) {
+          SmallVector<char, 100> strBuf;
+
+          Symbol *crossDomain = symtab->find(
+              ("__cross_domain_" + sym->getName()).toStringRef(strBuf));
+          if (crossDomain)
+            partitions[sym->partition - 1].dynSymTab->addSymbol(crossDomain);
+
+          strBuf.clear();
+
+          Symbol *crossDomainTrusted = symtab->find(
+              ("__cross_domain_trusted_" + sym->getName()).toStringRef(strBuf));
+          if (crossDomainTrusted)
+            partitions[sym->partition - 1].dynSymTab->addSymbol(
+                crossDomainTrusted);
+        }
+
         if (auto *file = dyn_cast_or_null<SharedFile>(sym->file))
           if (file->isNeeded && !sym->isUndefined())
             addVerneed(sym);
