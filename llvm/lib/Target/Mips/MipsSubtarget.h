@@ -257,6 +257,7 @@ public:
   bool isABI_N32() const;
   bool isABI_O32() const;
   bool isABI_CheriPureCap() const;
+  bool isABI_CheriOS() const;
   const MipsABIInfo &getABI() const;
   bool isABI_FPXX() const { return isABI_O32() && IsFPXX; }
 

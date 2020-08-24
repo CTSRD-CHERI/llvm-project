@@ -51,6 +51,12 @@ CheriCapabilityTableABI MCTargetOptions::cheriCapabilityTableABI() {
   return CapTableABI;
 }
 
+static cl::opt<bool> IsCheriOSABI("is-cherios",
+                                  cl::desc("Use the CheriOS style purecap ABI"),
+                                  cl::init(false));
+
+bool MCTargetOptions::isCheriOSABI() { return IsCheriOSABI.getValue(); }
+
 MCTargetOptions::MCTargetOptions()
     : MCRelaxAll(false), MCNoExecStack(false), MCFatalWarnings(false),
       MCNoWarn(false), MCNoDeprecatedWarn(false),
