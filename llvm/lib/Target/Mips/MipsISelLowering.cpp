@@ -3818,32 +3818,50 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
       ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
       MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);
   Chain = JTEntryValue.getValue(1);
-  assert(isJumpTableRelative());
-  // Each jump table entry contains .4byte	.LBB0_N - .LJTI0_0.
-  // Since the jump table comes before .text this will generally be a positive
-  // number that we can add to the address of the jump-table to get the
-  // address of the basic block:
 
-  // TODO: use a smarter model for jump tables, this is just used because
-  // there is existing infrastucture. Maybe use offset from beginning of func
-  // instead?
+  SDValue Target;
 
-  // Addr is a data capability so won't have Permit_Execute so we have to derive
-  // a new capability from PCC:
-  // We use the jump table capability as the target address capability and
-  // then add on the value loaded from the jump table to get the actual basic
-  // block address:
-  // addrof(BB) = addrof(JT) + *(JT[INDEX])
-  // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
-  // This can be done slightly more efficiently as:
-  // New PPC = CIncOffset, PCC, (CSub(JT, PCC) + *(JT[INDEX]))
-  // But not the following since it might cause JT to become unrepresentable:
-  // New PPC = CIncOffset, PCC, (CSub(JT + *(JT[INDEX]), PCC))
-  JTEntryValue = convertToPCCDerivedCap(Jumptable, dl, DAG, JTEntryValue);
-  auto SealEntry =
-      DAG.getConstant(Intrinsic::cheri_cap_seal_entry, dl, MVT::i64);
-  JTEntryValue = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, SealEntry, JTEntryValue);
-  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, JTEntryValue);
+  if (ABI.IsCheriOS()) {
+
+    // In CheriOS jump table entries are .LBBX_N - FunctionStart.
+    // The ABI specifies a particular (normally C12) should contain a cap to the start of the function
+    MachineFunction& MF = DAG.getMachineFunction();
+    const TargetRegisterClass *RC = getRegClassFor(PTy.V);
+    unsigned Reg = MF.addLiveIn(ABI.GetFunctionAddress(), RC);
+    SDValue FuncStart = DAG.getCopyFromReg(Chain, dl, Reg, PTy);
+    Target = DAG.getNode(ISD::PTRADD, dl, PTy, FuncStart, JTEntryValue);
+
+  } else {
+
+    // In the normal Purecap ABI each jump table entry contains .4byte .LBBX_N - .LJTIX_0
+    // Since the jump table comes before .text this will generally be a positive
+    // number that we can add to the address of the jump-table to get the
+    // address of the basic block:
+
+    // TODO: use a smarter model for jump tables, this is just used because
+    // there is existing infrastucture. Maybe use offset from beginning of func
+    // instead?
+
+    // Addr is a data capability so won't have Permit_Execute so we have to derive
+    // a new capability from PCC:
+    // We use the jump table capability as the target address capability and
+    // then add on the value loaded from the jump table to get the actual basic
+    // block address:
+    // addrof(BB) = addrof(JT) + *(JT[INDEX])
+    // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
+    // This can be done slightly more efficiently as:
+    // New PPC = CIncOffset, PCC, (CSub(JT, PCC) + *(JT[INDEX]))
+    // But not the following since it might cause JT to become unrepresentable:
+    // New PPC = CIncOffset, PCC, (CSub(JT + *(JT[INDEX]), PCC))
+    assert(isJumpTableRelative());
+    JTEntryValue = convertToPCCDerivedCap(Jumptable, dl, DAG, JTEntryValue);
+    auto SealEntry =
+        DAG.getConstant(Intrinsic::cheri_cap_seal_entry, dl, MVT::i64);
+    Target = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, SealEntry,
+                         JTEntryValue);
+  }
+
+  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, Target);
 }
 
 //===----------------------------------------------------------------------===//
@@ -5701,16 +5719,40 @@ bool MipsTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT,
 }
 
 unsigned MipsTargetLowering::getJumpTableEncoding() const {
-  // XXXAR: should we emit capabilities instead?
-  if (ABI.IsCheriPureCap())
-    return MachineJumpTableInfo::EK_LabelDifference32;
-  // TODO: use EK_Custom32 with function entry point - label address?
+  if (ABI.IsCheriPureCap()) {
+    if (ABI.IsCheriOS())
+      return MachineJumpTableInfo::EK_Custom32;
+    else
+      return MachineJumpTableInfo::
+          EK_LabelDifference32; // XXXAR: should we emit capabilities instead?
+  }
+
+  // TODO: use EK_Custom32 with function entry point - label address? (This is
+  // currently what CheriOS does)
 
   // FIXME: For space reasons this should be: EK_GPRel32BlockAddress.
   if (ABI.IsN64() && isPositionIndependent())
     return MachineJumpTableInfo::EK_GPRel64BlockAddress;
 
   return TargetLowering::getJumpTableEncoding();
+}
+
+// When functions are bounded then case blocks cannot be relative to either GP
+// or jump tables Instead we store the difference between the case block and the
+// function start in the jump table
+const MCExpr *MipsTargetLowering::LowerCustomJumpTableEntry(
+    const MachineJumpTableInfo *MJTI, const MachineBasicBlock *MBB,
+    unsigned uid, MCContext &Ctx) const {
+
+  const MCExpr *CaseBlock = MCSymbolRefExpr::create(MBB->getSymbol(), Ctx);
+  const MachineFunction *MF = MBB->getParent();
+
+  MCSymbol *FuncStartSym = MF->getTarget().getSymbol(&MF->getFunction());
+
+  const MCExpr *FuncStart = MCSymbolRefExpr::create(FuncStartSym, Ctx);
+  const MCExpr *Value = MCBinaryExpr::createSub(CaseBlock, FuncStart, Ctx);
+
+  return Value;
 }
 
 bool MipsTargetLowering::useSoftFloat() const {
