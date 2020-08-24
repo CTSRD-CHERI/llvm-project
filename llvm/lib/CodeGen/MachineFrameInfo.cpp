@@ -51,11 +51,13 @@ static inline Align clampStackAlignment(bool ShouldClamp, Align Alignment,
 int MachineFrameInfo::CreateStackObject(uint64_t Size, Align Alignment,
                                         bool IsSpillSlot,
                                         const AllocaInst *Alloca,
-                                        uint8_t StackID) {
+                                        uint8_t StackID, bool isSafe) {
   assert(Size != 0 && "Cannot allocate zero size stack objects!");
+  if (!isSafe)
+    HasStaticUnsafeObjects = true;
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
   Objects.push_back(StackObject(Size, Alignment, 0, false, IsSpillSlot, Alloca,
-                                !IsSpillSlot, StackID));
+                                !IsSpillSlot, StackID, isSafe));
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   assert(Index >= 0 && "Bad frame index!");
   if (StackID == 0)
@@ -63,25 +65,33 @@ int MachineFrameInfo::CreateStackObject(uint64_t Size, Align Alignment,
   return Index;
 }
 
-int MachineFrameInfo::CreateSpillStackObject(uint64_t Size, Align Alignment) {
+int MachineFrameInfo::CreateSpillStackObject(uint64_t Size, Align Alignment,
+                                             bool isSafe) {
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
-  CreateStackObject(Size, Alignment, true);
+  CreateStackObject(Size, Alignment, true, nullptr, 0, isSafe);
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   ensureMaxAlignment(Alignment);
   return Index;
 }
 
 int MachineFrameInfo::CreateVariableSizedObject(Align Alignment,
-                                                const AllocaInst *Alloca) {
+                                                const AllocaInst *Alloca,
+                                                bool isSafe) {
   HasVarSizedObjects = true;
+  if (isSafe)
+    HasVarSizedSafeObjects = true;
+  else
+    HasVarSizedUnsafeObjects = true;
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
-  Objects.push_back(StackObject(0, Alignment, 0, false, false, Alloca, true));
+  Objects.push_back(
+      StackObject(0, Alignment, 0, false, false, Alloca, true, 0, isSafe));
   ensureMaxAlignment(Alignment);
   return (int)Objects.size()-NumFixedObjects-1;
 }
 
 int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
-                                        bool IsImmutable, bool IsAliased) {
+                                        bool IsImmutable, bool IsAliased,
+                                        bool isSafe) {
   assert(Size != 0 && "Cannot allocate zero size fixed stack objects!");
   // The alignment of the frame index can be determined from its offset from
   // the incoming frame position.  If the frame object is at offset 32 and
@@ -89,26 +99,31 @@ int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
   // object is 16-byte aligned. Note that unlike the non-fixed case, if the
   // stack needs realignment, we can't assume that the stack will in fact be
   // aligned.
+  if (!isSafe)
+    HasStaticUnsafeObjects = true;
   Align Alignment =
       commonAlignment(ForcedRealign ? Align(1) : StackAlignment, SPOffset);
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
   Objects.insert(Objects.begin(),
                  StackObject(Size, Alignment, SPOffset, IsImmutable,
                              /*IsSpillSlot=*/false, /*Alloca=*/nullptr,
-                             IsAliased));
+                             IsAliased, 0, isSafe));
   return -++NumFixedObjects;
 }
 
 int MachineFrameInfo::CreateFixedSpillStackObject(uint64_t Size,
                                                   int64_t SPOffset,
-                                                  bool IsImmutable) {
+                                                  bool IsImmutable,
+                                                  bool isSafe) {
+  if (!isSafe)
+    HasStaticUnsafeObjects = true;
   Align Alignment =
       commonAlignment(ForcedRealign ? Align(1) : StackAlignment, SPOffset);
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
   Objects.insert(Objects.begin(),
                  StackObject(Size, Alignment, SPOffset, IsImmutable,
                              /*IsSpillSlot=*/true, /*Alloca=*/nullptr,
-                             /*IsAliased=*/false));
+                             /*IsAliased=*/false, 0, isSafe));
   return -++NumFixedObjects;
 }
 
