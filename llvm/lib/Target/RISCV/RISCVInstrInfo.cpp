@@ -629,6 +629,8 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   switch (Opcode) {
   default:
     break;
+  case RISCV::CMove:
+    return true;
   case RISCV::CIncOffsetImm:
     return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::C0;
   case RISCV::FSGNJ_D:
