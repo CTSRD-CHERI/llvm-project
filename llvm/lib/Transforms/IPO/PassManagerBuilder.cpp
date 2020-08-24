@@ -32,6 +32,7 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Target/CGPassBuilderOption.h"
 #include "llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h"
+#include "llvm/Transforms/CHERICap.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/Attributor.h"
 #include "llvm/Transforms/IPO/ForceFunctionAttrs.h"
@@ -975,6 +976,11 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createCanonicalizeAliasesPass());
     // Rename anon globals to be able to handle them in the summary
     MPM.add(createNameAnonGlobalPass());
+
+    // This should be last
+    auto stackpass = createCHERISafeStacksPass();
+    if (stackpass)
+      MPM.add(stackpass);
   }
 
   MPM.add(createAnnotationRemarksLegacyPass());
@@ -1239,6 +1245,11 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
   addExtensionsToPM(EP_FullLinkTimeOptimizationLast, PM);
 
   PM.add(createAnnotationRemarksLegacyPass());
+
+  // This should be last as it is only meant to provide information for backends
+  auto stackpass = createCHERISafeStacksPass();
+  if (stackpass)
+    PM.add(stackpass);
 
   if (VerifyOutput)
     PM.add(createVerifierPass());
