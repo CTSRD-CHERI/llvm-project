@@ -2855,7 +2855,9 @@ template <class ELFT> void Writer<ELFT>::assignFileOffsets() {
 // Finalize the program headers. We call this function after we assign
 // file offsets and VAs to all sections.
 template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
+  uint64_t phd_ndx = 0;
   for (PhdrEntry *p : part.phdrs) {
+    p->ndx = phd_ndx++;
     OutputSection *first = p->firstSec;
     OutputSection *last = p->lastSec;
 
