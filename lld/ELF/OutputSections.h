@@ -56,6 +56,9 @@ public:
   // section in PT_LOAD.
   PhdrEntry *ptLoad = nullptr;
 
+  // If this section appears in a TLS segment this will point to it
+  PhdrEntry *ptTLS = nullptr;
+
   // Pointer to a relocation section for this section. Usually nullptr because
   // we consume relocations, but if --emit-relocs is specified (which is rare),
   // it may have a non-null value.
