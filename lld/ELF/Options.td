@@ -723,6 +723,11 @@ def captable_scope_file: F<"captable-scope=file">,
 def captable_scope_function: F<"captable-scope=function">,
   HelpText<"Use one captable per function for global accesses (very slow but minimizes scope of $cgp)">;
 
+// Is CheriOS (needed while still masquerading as FreeBSD in lots of places)
+def is_cherios : F<"is-cherios">, HelpText<"Link for CheriOS">;
+
+def lto_stats : F<"lto-stats">, HelpText<"Equivelent to llvm's stats option when using LTO">;
+
 // Options listed below are silently ignored for now for compatibility.
 def: F<"detect-odr-violations">;
 def: Flag<["-"], "g">;

@@ -179,6 +179,10 @@ static lto::Config createConfig() {
   if (config->saveTemps)
     checkError(c.addSaveTemps(config->outputFile.str() + ".",
                               /*UseInputModulePath*/ true));
+
+  if (config->outputStats)
+    c.StatsFile = (config->outputFile + ".stats").str();
+
   return c;
 }
 
