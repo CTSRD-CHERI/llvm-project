@@ -97,8 +97,14 @@ public:
   std::map<const char *, const Mips16HardFloatInfo::FuncSignature *>
   StubsNeeded;
 
+  MCSymbol *getUntrustedExternalEntrySymbol(MachineFunction &MF);
+  MCSymbol *getTrustedExternalEntrySymbol(MachineFunction &MF);
+
 private:
   virtual void anchor();
+
+  MCSymbol *UntrustedExternalEntrySymbol = nullptr;
+  MCSymbol *TrustedExternalEntrySymbol = nullptr;
 
   /// SRetReturnReg - Some subtargets require that sret lowering includes
   /// returning the value of the returned struct in a register. This field
