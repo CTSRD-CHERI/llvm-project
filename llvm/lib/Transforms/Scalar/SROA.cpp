@@ -4767,6 +4767,12 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
     if (AllocaInst *NewAI = rewritePartition(AI, AS, P)) {
       Changed = true;
       if (NewAI != &AI) {
+
+        MDNode *Meta = AI.getMetadata("temporal");
+        if (Meta != nullptr) {
+          NewAI->setMetadata("temporal", Meta);
+        }
+
         uint64_t SizeOfByte = 8;
         uint64_t AllocaSize =
             DL.getTypeSizeInBits(NewAI->getAllocatedType()).getFixedSize();
