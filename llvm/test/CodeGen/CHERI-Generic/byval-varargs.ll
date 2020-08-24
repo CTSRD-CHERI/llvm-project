@@ -319,9 +319,9 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
 ; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memcpy)
 ; PURECAP-RV64-NEXT:    clc ca3, %pcrel_lo(.LBB1_3)(ca3)
-; PURECAP-RV64-NEXT:    cincoffset cs1, csp, 32
+; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
 ; PURECAP-RV64-NEXT:    addi a2, zero, 1024
-; PURECAP-RV64-NEXT:    cmove ca0, cs1
+; PURECAP-RV64-NEXT:    cincoffset cs1, csp, 32
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
 ; Note: no bounds for implicit byval arg memcpy()
 ; TODO: should we add the csetbounds here? Not really necessary if we trust memcpy().
