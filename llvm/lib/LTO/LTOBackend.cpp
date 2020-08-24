@@ -192,6 +192,10 @@ createTargetMachine(const Config &Conf, const Target *TheTarget, Module &M) {
     RelocModel =
         M.getPICLevel() == PICLevel::NotPIC ? Reloc::Static : Reloc::PIC_;
 
+  // CheriOS specfic hack. We might be compiling PIC shared objects into a
+  // non-pie thing.
+  if (MCTargetOptions::isCheriOSABI())
+    RelocModel = Reloc::PIC_;
   Optional<CodeModel::Model> CodeModel;
   if (Conf.CodeModel)
     CodeModel = *Conf.CodeModel;
