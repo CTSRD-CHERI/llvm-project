@@ -1066,6 +1066,22 @@ def GC_LABEL : StandardPseudoInstruction {
   let hasSideEffects = false;
   let isNotDuplicable = true;
 }
+def FUNC_START : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins i32imm:$id);
+  let AsmString = "";
+  let isNotDuplicable = 1;
+  let hasSideEffects = 1;
+  let hasCtrlDep = 1;
+}
+def AUX_FUNC_START : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins i32imm:$id);
+  let AsmString = "";
+  let hasCtrlDep = 1;
+  let isNotDuplicable = 1;
+  let hasSideEffects = 1;
+}
 def ANNOTATION_LABEL : StandardPseudoInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins i32imm:$id);

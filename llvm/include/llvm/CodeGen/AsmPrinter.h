@@ -490,6 +490,8 @@ public:
   /// function.
   virtual void emitFunctionBodyEnd() {}
 
+  virtual void emitAuxFunctionBodyEnd(MCSymbol *Symbol) {}
+
   /// Targets can override this to emit stuff at the start of a basic block.
   /// By default, this method prints the label for the specified
   /// MachineBasicBlock, an alignment (if present) and a comment describing it
@@ -508,6 +510,8 @@ public:
   virtual MCSymbol *GetCPISymbol(unsigned CPID) const;
 
   virtual void emitFunctionEntryLabel();
+
+  virtual void emitAuxFunctionEntryLabel(MCSymbol *Symbol);
 
   virtual void emitFunctionDescriptor() {
     llvm_unreachable("Function descriptor is target-specific.");

@@ -303,6 +303,8 @@ class MachineFunction {
   /// about the control flow of such functions.
   bool ExposesReturnsTwice = false;
 
+  bool HasCustomStart = false;
+
   /// True if the function includes any inline assembly.
   bool HasInlineAsm = false;
 
@@ -547,6 +549,11 @@ public:
   void reset() {
     clear();
     init();
+  }
+
+  bool hasCustomFunctionStarts() const { return HasCustomStart; }
+  void setHasCustomFunctionStarts(bool hasCustom) {
+    HasCustomStart = hasCustom;
   }
 
   /// Reset the currently registered delegate - otherwise assert.

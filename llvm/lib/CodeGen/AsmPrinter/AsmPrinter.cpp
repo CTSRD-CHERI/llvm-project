@@ -838,7 +838,8 @@ void AsmPrinter::emitFunctionHeader() {
 
   // Emit the CurrentFnSym. This is a virtual function to allow targets to do
   // their wild and crazy things as required.
-  emitFunctionEntryLabel();
+  if (!MF->hasCustomFunctionStarts())
+    emitFunctionEntryLabel();
 
   // If the function had address-taken blocks that got deleted, then we have
   // references to the dangling symbols.  Emit them at the start of the function
@@ -876,19 +877,24 @@ void AsmPrinter::emitFunctionHeader() {
 /// EmitFunctionEntryLabel - Emit the label that is the entrypoint for the
 /// function.  This can be overridden by targets as required to do custom stuff.
 void AsmPrinter::emitFunctionEntryLabel() {
-  CurrentFnSym->redefineIfPossible();
+  emitAuxFunctionEntryLabel(CurrentFnSym);
+}
+
+void AsmPrinter::emitAuxFunctionEntryLabel(MCSymbol *Symbol) {
+  Symbol->redefineIfPossible();
 
   // The function label could have already been emitted if two symbols end up
   // conflicting due to asm renaming.  Detect this and emit an error.
-  if (CurrentFnSym->isVariable())
-    report_fatal_error("'" + Twine(CurrentFnSym->getName()) +
+  if (Symbol->isVariable())
+    report_fatal_error("'" + Twine(Symbol->getName()) +
                        "' is a protected alias");
 
-  OutStreamer->emitLabel(CurrentFnSym);
+
+  OutStreamer->emitLabel(Symbol);
 
   if (TM.getTargetTriple().isOSBinFormatELF()) {
     MCSymbol *Sym = getSymbolPreferLocal(MF->getFunction());
-    if (Sym != CurrentFnSym)
+    if (Sym != Symbol)
       OutStreamer->emitLabel(Sym);
   }
 }
@@ -1304,6 +1310,8 @@ void AsmPrinter::emitFunctionBody() {
   // Print out code for the function.
   bool HasAnyRealCode = false;
   int NumInstsInFunction = 0;
+  MCSymbol *AuxSym;
+  SmallVector<MCSymbol *, 2> AuxStarts;
 
   bool CanDoExtraAnalysis = ORE->allowExtraAnalysis(DEBUG_TYPE);
   for (auto &MBB : *MF) {
@@ -1332,6 +1340,15 @@ void AsmPrinter::emitFunctionBody() {
         emitComments(MI, OutStreamer->GetCommentOS());
 
       switch (MI.getOpcode()) {
+      case TargetOpcode::FUNC_START:
+        assert(MF->hasCustomFunctionStarts());
+        emitFunctionEntryLabel();
+        break;
+      case TargetOpcode::AUX_FUNC_START:
+        AuxSym = MI.getOperand(0).getMCSymbol();
+        emitAuxFunctionEntryLabel(AuxSym);
+        AuxStarts.push_back(AuxSym);
+        break;
       case TargetOpcode::CFI_INSTRUCTION:
         emitCFIInstruction(MI);
         break;
@@ -1505,6 +1522,10 @@ void AsmPrinter::emitFunctionBody() {
   }
 
   // Emit target-specific gunk after the function body.
+  for (MCSymbol *AuxEntry : AuxStarts) {
+    emitAuxFunctionBodyEnd(AuxEntry);
+  }
+
   emitFunctionBodyEnd();
 
   if (needFuncLabelsForEHOrDebugInfo(*MF) ||
