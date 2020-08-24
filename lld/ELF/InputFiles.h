@@ -42,6 +42,7 @@ namespace elf {
 using llvm::object::Archive;
 
 class Symbol;
+class SymbolTable;
 
 // If -reproduce option is given, all input files are written
 // to this tar archive.
@@ -334,6 +335,8 @@ public:
   // function does nothing (so we don't instantiate the same file
   // more than once.)
   void fetch(const Archive::Symbol &sym);
+  void fetchRemaining(SymbolTable *sTab);
+  llvm::MapVector<uint64_t, InputFile *> &getChildren() { return children; }
 
   // Check if a non-common symbol should be fetched to override a common
   // definition.
@@ -347,6 +350,7 @@ public:
 private:
   std::unique_ptr<Archive> file;
   llvm::DenseSet<uint64_t> seen;
+  llvm::MapVector<uint64_t, InputFile *> children;
 };
 
 class BitcodeFile : public InputFile {
