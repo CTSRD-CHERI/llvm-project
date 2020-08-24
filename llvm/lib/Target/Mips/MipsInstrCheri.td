@@ -905,6 +905,19 @@ def CapRet : SDNode<"MipsISD::CapRet", SDTNone,
                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 let Predicates=[IsCHERI], hasNoSchedulingInfo=1 in
+def PseudoReturnCapCheriOS : MipsPseudo<(outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11s0: $selector),
+                      [], II_ReturnPseudo> {
+  let isTerminator = 1;
+  let isBarrier = 1;
+  let hasDelaySlot = 0;
+  let isReturn = 1;
+  let isCodeGenOnly = 1;
+  let hasCtrlDep = 1;
+  let hasExtraSrcRegAllocReq = 1;
+  bit isCTI = 1;
+}
+
+let Predicates=[IsCHERI], hasNoSchedulingInfo=1 in
 def PseudoReturnCap: PseudoReturnBase<CheriOpnd>;
 
 let isReturn=1, isTerminator=1, hasDelaySlot=1, isBarrier=1, hasCtrlDep=1,

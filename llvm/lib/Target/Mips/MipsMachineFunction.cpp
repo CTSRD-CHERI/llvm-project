@@ -431,3 +431,21 @@ int MipsFunctionInfo::getMoveF64ViaSpillFI(MachineFunction &MF,
 }
 
 void MipsFunctionInfo::anchor() {}
+
+MCSymbol *
+MipsFunctionInfo::getUntrustedExternalEntrySymbol(MachineFunction &MF) {
+  if (!UntrustedExternalEntrySymbol) {
+    MCContext &Ctx = MF.getContext();
+    UntrustedExternalEntrySymbol =
+        Ctx.getOrCreateSymbol(Twine("__cross_domain_") + Twine(MF.getName()));
+  }
+  return UntrustedExternalEntrySymbol;
+}
+MCSymbol *MipsFunctionInfo::getTrustedExternalEntrySymbol(MachineFunction &MF) {
+  if (!TrustedExternalEntrySymbol) {
+    MCContext &Ctx = MF.getContext();
+    TrustedExternalEntrySymbol = Ctx.getOrCreateSymbol(
+        Twine("__cross_domain_trusted_") + Twine(MF.getName()));
+  }
+  return TrustedExternalEntrySymbol;
+}

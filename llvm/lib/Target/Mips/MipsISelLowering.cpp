@@ -4585,6 +4585,15 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SmallVector<SDValue, 8> Ops(1, Chain);
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
 
+  if (ABI.IsCheriOS()) {
+    assert(!MFI.hasVarSizedUnsafeObjects() && "Need extra code for this");
+    // idc is caller saved here by moving it to c18 which our caller restores to
+    // idc for us
+    RegsToPass.push_back(std::make_pair(
+        ABI.GetReturnData(),
+        DAG.getRegister(FuncInfo->getCapLocalBaseRegForGlobalISel(MF),
+                        CapType)));
+  }
   getOpndList(Ops, RegsToPass, IsPIC, GlobalOrExternal, InternalLinkage,
               IsCallReloc, CLI, Callee, Chain);
 
