@@ -259,6 +259,7 @@ def CAndPerm        : Cheri_rr<0xd, "candperm">;
 def CSetFlags       : Cheri_rr<0xe, "csetflags">;
 def CSetOffset      : Cheri_rr<0xf, "csetoffset">;
 def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffsetImm   : Cheri_ri<0x1, "cincoffset", 1>;

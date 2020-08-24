@@ -631,8 +631,24 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
     break;
   case RISCV::CMove:
     return true;
+  case RISCV::CIncOffset:
+    // Creating a NULL-derived capability is fast since it's the same as moving
+    // to another register and zeroing the capability metadata.
+    // While incrementing a capability by zero is not quite as fast as a move
+    // since it needs to special-case sealed capabilities, we should return true
+    // here to allow for improved code generation.
+    //
+    // Note: this name of hook is confusing and should probably be something
+    // like "isAlmostAsCheapAsAMove" instead since other targets (e.g. AArch64)
+    // also return true for any fast and re-materializable instructions.
+    // Returning true here is required for rematerialization since it will not
+    // be attempted unless isAsCheapAsAMove returns true!
+    return (MI.getOperand(2).isReg() &&
+            MI.getOperand(2).getReg() == RISCV::X0) ||
+           (MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::C0);
   case RISCV::CIncOffsetImm:
-    return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::C0;
+    return (MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 0) ||
+           (MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::C0);
   case RISCV::FSGNJ_D:
   case RISCV::FSGNJ_S:
     // The canonical floatig-point move is fsgnj rd, rs, rs.
