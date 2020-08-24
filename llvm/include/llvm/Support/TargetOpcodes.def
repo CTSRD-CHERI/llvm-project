@@ -39,6 +39,14 @@ HANDLE_TARGET_OPCODE(ANNOTATION_LABEL)
 /// sub-registers.
 HANDLE_TARGET_OPCODE(KILL)
 
+
+/// FUNC_START - This instruction allows us to mark the start of a function
+/// if it does not occur at beginning of the first basic block.
+HANDLE_TARGET_OPCODE(FUNC_START)
+
+/// AUX_FUNC_START - This instruction marks an auxiliary function entry
+HANDLE_TARGET_OPCODE(AUX_FUNC_START)
+
 /// EXTRACT_SUBREG - This instruction takes two operands: a register
 /// that has subregisters, and a subregister index. It returns the
 /// extracted subregister value. This is commonly used to implement
