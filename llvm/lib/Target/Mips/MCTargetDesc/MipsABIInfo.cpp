@@ -34,6 +34,8 @@ static const MCPhysReg CheriCapArgRegs[8] = {
     Mips::C3, Mips::C4, Mips::C5, Mips::C6,
     Mips::C7, Mips::C8, Mips::C9, Mips::C10};
 
+static const MCPhysReg CheriOSCapArgRegs[7] = {
+    Mips::C3, Mips::C4, Mips::C5, Mips::C6, Mips::C7, Mips::C8, Mips::C9};
 }
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
@@ -49,6 +51,8 @@ ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
 }
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetVarArgRegs() const {
+  if (IsCheriOS())
+    return makeArrayRef(CheriOSCapArgRegs);
   if (IsCheriPureCap())
     return makeArrayRef(CheriCapArgRegs);
   if (IsO32())
@@ -75,8 +79,10 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
     return MipsABIInfo::N32();
   if (ABIName.startswith("n64"))
     return MipsABIInfo::N64();
-  if (ABIName.startswith("purecap"))
-    return MipsABIInfo::CheriPureCap();
+  if (ABIName.startswith("purecap")) {
+    if(MCTargetOptions::isCheriOSABI()) return MipsABIInfo::CheriCheriOS();
+    else return MipsABIInfo::CheriPureCap();
+  }
   if (TT.getEnvironment() == llvm::Triple::GNUABIN32)
     return MipsABIInfo::N32();
   assert(Options.getABIName().empty() && "Unknown ABI option for MIPS");
@@ -92,6 +98,10 @@ unsigned MipsABIInfo::GetStackPtr() const {
   return IsCheriPureCap() ?
     Mips::C11 :
     (ArePtrs64bit() ? Mips::SP_64 : Mips::SP);
+}
+
+unsigned MipsABIInfo::GetUnsafeStackPtr() const {
+  return IsCheriOS() ? Mips::C10 : (0);
 }
 
 unsigned MipsABIInfo::GetFramePtr() const {
@@ -110,7 +120,11 @@ unsigned MipsABIInfo::GetBasePtr() const {
 unsigned MipsABIInfo::GetDefaultDataCapability() const { return Mips::DDC; }
 
 unsigned MipsABIInfo::GetGlobalCapability() const {
-  return Mips::C26;
+  return IsCheriOS() ? Mips::C25 : Mips::C26;
+}
+
+unsigned MipsABIInfo::GetLocalCapability() const {
+  return IsCheriOS() ? Mips::C26 : (0);
 }
 
 // HACK: Update the default CFA register for CHERI purecap
@@ -158,10 +172,24 @@ void MipsABIInfo::updateCheriInitialFrameStateHack(const MCAsmInfo &MAI,
   }
 }
 
+const MipsABIInfo::TemporalABILayout *MipsABIInfo::GetTABILayout() const {
+  return isCheriPureCap ? &temporalABILayout : nullptr;
+}
+
 unsigned MipsABIInfo::GetReturnAddress() const {
   return IsCheriPureCap() ?
     Mips::C17 :
     (ArePtrs64bit() ? Mips::RA_64 : Mips::RA);
+}
+
+unsigned MipsABIInfo::GetFunctionAddress() const { return Mips::C12; }
+
+unsigned MipsABIInfo::GetReturnData() const {
+  return IsCheriOS() ? Mips::C18 : (0);
+}
+
+unsigned MipsABIInfo::GetReturnSelector() const {
+  return IsCheriOS() ? 2 : (0);
 }
 
 unsigned MipsABIInfo::GetGlobalPtr() const {
