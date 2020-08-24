@@ -78,6 +78,12 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
     absPointerRel = R_MIPS_CHERI_ABSPTR;
     sizeRel = R_MIPS_CHERI_SIZE;
   }
+
+  if (config->isCheriOS()) {
+    // Capability size is not available to call until the global config object
+    // is setup. This is only an upper bound anyway, so 32 should suffice.
+    defaultCommonPageSize = defaultMaxPageSize = 32;
+  }
 }
 
 template <class ELFT> uint32_t MIPS<ELFT>::calcEFlags() const {
