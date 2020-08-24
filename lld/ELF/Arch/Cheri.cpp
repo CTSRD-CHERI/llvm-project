@@ -19,20 +19,87 @@ using namespace llvm::ELF;
 namespace lld {
 namespace elf {
 
+static uint8_t GetEncodedIndexForSegment(PhdrEntry *Segment) {
+  // CheriOS encodes no segment as index 0 and other indices with a plus 1
+  if (Segment == nullptr)
+    return (uint8_t)0;
+
+  assert(Segment->ndx < 0xFE);
+  return (uint8_t)(Segment->ndx + 1);
+}
+
 // See CheriBSD crt_init_globals()
 template <class ELFT> struct InMemoryCapRelocEntry {
   using NativeUint = typename ELFT::uint;
   using CapRelocUint = llvm::support::detail::packed_endian_specific_integral<
       NativeUint, ELFT::TargetEndianness, llvm::support::aligned>;
-  InMemoryCapRelocEntry(NativeUint loc, NativeUint obj, NativeUint off,
-                        NativeUint s, NativeUint perms)
+
+  using CapRelocUint64 = llvm::support::detail::packed_endian_specific_integral<
+      uint64_t, ELFT::TargetEndianness, llvm::support::aligned>;
+  using CapRelocUint32 = llvm::support::detail::packed_endian_specific_integral<
+      uint32_t, ELFT::TargetEndianness, llvm::support::aligned>;
+  using CapRelocUint16 = llvm::support::detail::packed_endian_specific_integral<
+      uint16_t, ELFT::TargetEndianness, llvm::support::aligned>;
+  using CapRelocUint8 = llvm::support::detail::packed_endian_specific_integral<
+      uint8_t, ELFT::TargetEndianness, llvm::support::aligned>;
+
+  InMemoryCapRelocEntry(uint64_t loc, uint64_t obj, uint64_t off, uint64_t s,
+                        uint64_t perms)
       : capability_location(loc), object(obj), offset(off), size(s),
-        permissions(perms) {}
+        targetSpecific(perms) {}
+
+  InMemoryCapRelocEntry(uint64_t loc, uint64_t obj, uint64_t off, uint64_t s,
+                        uint64_t perms, uint16_t flags, uint8_t locSeg,
+                        uint8_t obSeg)
+      : capability_location(loc), object(obj), offset(off), size(s),
+        targetSpecific(perms, flags, locSeg, obSeg) {}
+
   CapRelocUint capability_location;
   CapRelocUint object;
   CapRelocUint offset;
   CapRelocUint size;
-  CapRelocUint permissions;
+
+  // See CheriOS crt_init_globals
+  struct CheriOSStyle64 {
+    CapRelocUint32 permissions;
+    CapRelocUint16 flags;
+    CapRelocUint8 location_seg_ndx;
+    CapRelocUint8 object_seg_ndx;
+    CheriOSStyle64(uint64_t perms, uint16_t flags, uint8_t LocSeg,
+                   uint8_t obSeg)
+        : permissions(perms >> 32), flags(flags), location_seg_ndx(LocSeg),
+          object_seg_ndx(obSeg) {}
+  };
+
+  struct CheriOSStyle32 {
+    CapRelocUint8 permissions;
+    CapRelocUint8 flags;
+    CapRelocUint8 location_seg_ndx;
+    CapRelocUint8 object_seg_ndx;
+    CheriOSStyle32(uint64_t perms, uint8_t flags, uint8_t LocSeg, uint8_t obSeg)
+        : permissions(perms >> 24), flags(flags), location_seg_ndx(LocSeg),
+          object_seg_ndx(obSeg) {}
+  };
+
+  using cheriOSStyleT =
+      typename std::conditional<sizeof(NativeUint) == 8, CheriOSStyle64,
+                                CheriOSStyle32>::type;
+
+  union TargetSpecific {
+
+    struct BSDStyle {
+      CapRelocUint permissions;
+      BSDStyle(uint64_t perms) : permissions(perms) {}
+    } bsdStyle;
+
+    cheriOSStyleT cheriOSStyle;
+
+    TargetSpecific(uint64_t perms) : bsdStyle(perms) {}
+
+    TargetSpecific(uint64_t perms, uint16_t flags, uint8_t locSeg,
+                   uint8_t obSeg)
+        : cheriOSStyle(perms, flags, locSeg, obSeg){};
+  } targetSpecific;
 };
 
 template <class ELFT>
@@ -114,7 +181,8 @@ SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
     // worst case we fall back to the section + offset
     // Don't warn if the relocation is against an anonymous string constant
     // since clang won't emit a symbol (and no size) for those
-    if (!isec->name.startswith(".rodata.str"))
+    // CheriOS hits this warning a LOT. Is it a bit over-zelous?
+    if (!isec->name.startswith(".rodata.str") && !config->isCheriOS())
       nonFatalWarning("Could not find a real symbol for " + isec->name +
            "+0x" + utohexstr(offset) + " in " + toString(isec->file));
     // Could not find a symbol -> return section+offset
@@ -478,9 +546,37 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
     // In the static case we can compute the final virtual address and write it
     // In the dynamic case we write the virtual address relative to the load
     // address and the runtime linker will add the load address to that
+
+    // CheriOS has a more complicated segment relative encoding that subtracts a
+    // segment base and also outputs a segment index
+
+    Symbol *targetSym = reloc.target.sym();
+
+    bool targetsTLS = targetSym->isTls();
+    bool targetNoOutput = targetSym->getOutputSection() == nullptr;
+
+    OutputSection *locOutputSec = location.section->getOutputSection();
+    OutputSection *targetOutputSec = targetSym->getOutputSection();
+    // FIXME this assert gets hit if you delete the captable in your linker
+    // script but then define symbols that go there.
+    assert(locOutputSec != nullptr);
+
+    PhdrEntry *locationPHDR, *targetPHDR;
+
     uint64_t outSecOffset = location.section->getOffset(location.offset);
-    uint64_t locationVA =
-        location.section->getOutputSection()->addr + outSecOffset;
+    uint64_t locationVA = locOutputSec->addr + outSecOffset;
+
+    if (config->isCheriOS()) {
+      locationPHDR = targetsTLS ? locOutputSec->ptTLS : locOutputSec->ptLoad;
+      targetPHDR = targetNoOutput ? nullptr
+                                  : (targetsTLS ? targetOutputSec->ptTLS
+                                                : targetOutputSec->ptLoad);
+      assert(locationPHDR != nullptr &&
+             "Could not find a program header for relocation location");
+
+      uint64_t OutSegOffset = locationPHDR->p_vaddr;
+      locationVA -= OutSegOffset;
+    }
 
     // For the target the virtual address the addend is always zero so
     // if we need a dynamic reloc we write zero
@@ -488,9 +584,8 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
     // and add a relocation against the load address?
     // Also this would make llvm-objdump --cap-relocs more useful because it
     // would actually display the symbol that the relocation is against
-    uint64_t targetVA = reloc.target.sym()->getVA(reloc.target.offset);
-    bool preemptibleDynReloc =
-        reloc.needsDynReloc && reloc.target.sym()->isPreemptible;
+    uint64_t targetVA = targetSym->getVA(reloc.target.offset);
+    bool preemptibleDynReloc = reloc.needsDynReloc && targetSym->isPreemptible;
     uint64_t targetSize = 0;
     if (preemptibleDynReloc) {
       // If we have a relocation against a preemptible symbol (even in the
@@ -506,32 +601,67 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
       targetSize = getTargetSize<ELFT>(location, reloc,
                                        /*strict=*/!containsLegacyCapRelocs());
     }
-    uint64_t targetOffset = reloc.capabilityOffset;
+
     uint64_t permissions = 0;
     // Fow now Function implies ReadOnly so don't add the flag
-    if (reloc.target.sym()->isFunc()) {
+    if (targetSym->isFunc()) {
       permissions |= CaptablePermissions<ELFT>::function;
-    } else if (auto os = reloc.target.sym()->getOutputSection()) {
-      assert(!reloc.target.sym()->isTls());
+    } else if (!config->isCheriOS() && targetOutputSec) {
+      assert(!targetSym->isTls());
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
-      if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
+      if (((targetOutputSec->flags & SHF_WRITE) == 0) ||
+          isRelroSection(targetOutputSec)) {
         permissions |= CaptablePermissions<ELFT>::readOnly;
-      } else if (os->flags & SHF_EXECINSTR) {
+      } else if (targetOutputSec->flags & SHF_EXECINSTR) {
         warn("Non-function __cap_reloc against symbol in section with "
-             "SHF_EXECINSTR (" + toString(os->name) + ") for symbol " +
+             "SHF_EXECINSTR (" +
+             toString(targetOutputSec->name) + ") for symbol " +
              reloc.target.verboseToString());
       }
     }
 
+    // Having no output segment is allowed to happen.
+    // Sometimes symbols are not really VAs are used as a way to communicate
+    // between a linker script and a program. This means they might not be in
+    // any output segment.
+
+    if (!targetsTLS && !targetNoOutput && config->isCheriOS()) {
+
+      assert(targetPHDR != nullptr &&
+             "Could not find a program header for relocation target");
+
+      targetVA -= targetPHDR->p_vaddr;
+    }
+
+    uint64_t targetOffset = reloc.capabilityOffset;
+
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
-    // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);
 
-    InMemoryCapRelocEntry<ELFT> entry(locationVA, targetVA, targetOffset,
-                                      targetSize, permissions);
+    uint16_t flags = 0;
+    if (targetsTLS)
+      flags |= 1;
+    if (targetNoOutput)
+      flags |= 2;
+
+    // TODO more accurate permission masks
+    InMemoryCapRelocEntry<ELFT> entry =
+        config->isCheriOS()
+            ? InMemoryCapRelocEntry<ELFT>{locationVA,
+                                          targetVA,
+                                          targetOffset,
+                                          targetSize,
+                                          permissions,
+                                          flags,
+                                          GetEncodedIndexForSegment(
+                                              locationPHDR),
+                                          GetEncodedIndexForSegment(targetPHDR)}
+            : InMemoryCapRelocEntry<ELFT>{locationVA, targetVA, targetOffset,
+                                          targetSize, permissions};
+
     memcpy(buf + offset, &entry, sizeof(entry));
-    //     if (errorHandler().verbose) {
-    //       errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
+    //     if (errorHandler().Verbose) {
+    //       errs() << "Added capability reloc: loc=" << utohexstr(locationVA)
     //              << ", object=" << utohexstr(TargetVA)
     //              << ", offset=" << utohexstr(TargetOffset)
     //              << ", size=" << utohexstr(TargetSize)
@@ -558,12 +688,26 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
   assert(offset == getSize() && "Not all data written?");
 }
 
-
-CheriCapTableSection::CheriCapTableSection()
-  : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO for BIND_NOW*/
-                     SHT_PROGBITS, config->capabilitySize, ".captable") {
+CheriCapTableSection::CheriCapTableSection(bool local)
+    : SyntheticSection(SHF_ALLOC |
+                           SHF_WRITE, /* XXX: actually RELRO for BIND_NOW*/
+                       SHT_PROGBITS, config->capabilitySize,
+                       local ? ".cap_table_local" : ".captable") {
   assert(config->capabilitySize > 0);
   this->entsize = config->capabilitySize;
+
+  isLocal = local;
+
+  if (local) {
+    flags |= SHF_TLS;
+  }
+
+  if (local && config->isCheriOS()) {
+    // CheriOS adds a few fixed offset entries to the thread local captable
+    for (uint64_t i = 1; i <= 9; i++) {
+      addFixedEntry(*(Symbol *)i, i - 1);
+    }
+  }
 }
 
 void CheriCapTableSection::writeTo(uint8_t* buf) {
@@ -619,6 +763,8 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   CapTableIndex idx;
   idx.needsSmallImm = false;
   idx.usedInCallExpr = false;
+  idx.isFixed = false;
+  idx.priority = -1;
   idx.firstUse = SymbolAndOffset::fromSectionWithOffset(isec, offset);
   assert(!idx.firstUse->symOrSec.isNull());
   switch (expr) {
@@ -671,6 +817,11 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
     // TODO: should we emit two relocations instead?
     if (!idx.usedInCallExpr)
       it.first->second.usedInCallExpr = false;
+  } else {
+    entries.unfixedEntries++;
+    if (idx.needsSmallImm) {
+      entries.smallEntries++;
+    }
   }
 #if defined(DEBUG_CAP_TABLE)
   std::string DbgContext;
@@ -682,6 +833,21 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   llvm::errs() << "Added symbol " << toString(Sym) << " to .captable"
                << DbgContext << ". Total count " << Entries.size() << "\n";
 #endif
+}
+
+void CheriCapTableSection::addFixedEntry(Symbol &sym, uint64_t index) {
+  assert((config->capTableScope == CapTableScopePolicy::All));
+  CaptableMap &entries = globalEntries;
+  CapTableIndex idx;
+  idx.isFixed = true;
+  idx.index = index;
+  idx.priority = -1;
+  idx.usedInCallExpr = false;
+  idx.needsSmallImm = true;
+  bool added = entries.map.insert(std::make_pair(&sym, idx)).second;
+  assert(added);
+  entries.fixedEntries++;
+  entries.smallEntries++;
 }
 
 void CheriCapTableSection::addDynTlsEntry(Symbol &sym) {
@@ -741,6 +907,183 @@ uint32_t CheriCapTableSection::getTlsOffset(const Symbol &sym) const {
   return it->second.index.getValue() * config->wordsize;
 }
 
+struct sort_pair {
+  uint32_t vector_index;
+  int32_t priority; // priority of being placed in the cap table (larger more
+                    // priority)
+};
+
+void CheriCapTableSection::assignCheriOSIndices(uint64_t startIndex,
+                                                CaptableMap &entries) {
+  uint64_t fixedEntries = entries.fixedEntries;
+  uint64_t unfixedEntries = entries.unfixedEntries;
+  // uint64_t smallEntries = entries.smallEntries;
+
+  // TODO allow per function cap tables as well
+  assert(startIndex == 0);
+
+  uint64_t totalEntries = unfixedEntries + fixedEntries;
+
+  assert(totalEntries == entries.size());
+
+  // Hopefully we have done all lazy resolution now.
+  // Add the remaining symbols to a dummy table to not cause any output, but so
+  // we can still inspect them.
+  if (!CheriCapTableSection::dummySymTab) {
+    SymbolTable *mainTable = symtab;
+    CheriCapTableSection::dummySymTab = make<SymbolTable>();
+    symtab = CheriCapTableSection::dummySymTab; // And THIS is why we don't use
+                                                // globals kids
+    // Process all of the archives
+    for (ArchiveFile *arc : mainTable->getArchives()) {
+      arc->fetchRemaining(CheriCapTableSection::dummySymTab);
+    }
+    symtab = mainTable;
+  }
+
+  // To avoid any double counting
+  llvm::DenseMap<Symbol *, ArchiveFile *> symArcMap;
+
+  // Process each archive and assign preferred indices to symbols found within
+  // based on order within the file
+  for (ArchiveFile *arc : symtab->getArchives()) {
+
+    uint32_t archiveIndex = 0;
+    int32_t prio = (int32_t)arc->groupId;
+
+    for (auto child : arc->getChildren()) {
+      InputFile *file = child.second;
+      for (Symbol *s : file->getSymbols()) {
+
+        Symbol *dummyS = dummySymTab->find(s->getName());
+        Symbol *mainS = symtab->find(s->getName());
+
+        if (dummyS != nullptr && mainS != nullptr) {
+          // Due to the way we add symbols to the aux table, they may be
+          // duplicated If we find two we need to choose a canonical one We
+          // prefer to take the used symbol, unless it is lazy, then we take the
+          // dummy
+          s = mainS->isLazy() ? dummyS : mainS;
+        }
+
+        if (s->isTls() != isLocal)
+          continue; // Only handle symbols from the correct table kind
+
+        // Don't double count usage of the same symbol in the same archive
+        auto it = symArcMap.insert(std::make_pair(s, arc));
+        if (!it.second) {
+          if (it.first->second == arc)
+            continue;
+          it.first->second = arc;
+        }
+
+        // Only give symbols that are likely to be used a preferred index
+        bool likely =
+            (s->isUndefWeak() || s->isTls() || s->isObject() ||
+             (s->isFunc() && !s->getName().startswith("__cross_domain")) ||
+             (s->isDefined() && s->isLocal() &&
+              s->getName().startswith(".LJTI"))) &&
+            !(s->isFile() || s->isSection());
+        uint32_t pref = likely ? (archiveIndex++) : (uint32_t)(~0);
+
+        auto sEnt = entries.map.find(s);
+        if (sEnt != entries.map.end()) {
+          if (mainS) {
+            assert(s == mainS); // We should only see symbols from the main
+                                // symtab need entries.
+          }
+          if (prio > (*sEnt).second.priority) {
+            (*sEnt).second.index = pref;
+            (*sEnt).second.priority = prio;
+          }
+        }
+      }
+    }
+  }
+
+  // A map if which slots are taken.
+  llvm::SmallVector<bool, 0x1000> taken_map(totalEntries, false);
+
+  // Every slot is taken until this one
+  size_t taken_till = 0;
+
+  // First create a map that we can sort efficiently
+  llvm::SmallVector<sort_pair, 0x1000> sortMap(unfixedEntries, {0, 0});
+
+  uint32_t assigned = 0;
+  uint32_t vector_index = 0;
+  uint32_t map_index = 0;
+
+  for (auto &it : entries.map) {
+    if (it.second.isFixed) {
+      // Is fixed
+      assert(it.second.index.hasValue());
+      assert(it.second.index.getValue() < totalEntries);
+      assert(!taken_map[it.second.index.getValue()]);
+      taken_map[it.second.index.getValue()] = true;
+      assigned++;
+    } else {
+      // Has a preferred index
+      if (it.second.index.hasValue()) {
+        assert(map_index < unfixedEntries);
+        sortMap[map_index].vector_index = vector_index;
+        sortMap[map_index].priority = it.second.priority;
+        map_index++;
+      }
+    }
+    vector_index++;
+  }
+
+  // TODO: Currently sort of ignoring need small immediate thing and just
+  // assuming everything can use one.
+
+  // Then sort the map. Give priority for placement first.
+  llvm::sort(sortMap.begin(), sortMap.end(),
+             [](sort_pair a, sort_pair b) -> bool {
+               return a.priority > b.priority;
+             }); // Items that are seen last come first
+
+  // Now assign the indices.
+
+  // First give preferred positions.
+  for (uint32_t i = 0; i != map_index; i++) {
+    auto &entry = (entries.map.begin() + sortMap[i].vector_index)->second;
+    assert(entry.index.hasValue());
+    uint32_t position = entry.index.getValue();
+    if (position == (uint32_t)(~0))
+      continue;
+    position += fixedEntries; // Fixed entries tend to go first and be of
+                              // constant size. Bump everything up.
+
+    if (position < totalEntries && !taken_map[position]) {
+      assigned++;
+      taken_map[position] = true;
+      entry.index = position;
+    } else {
+      entry.index.reset();
+    }
+  }
+
+  // Then by filling in any gaps.
+  for (auto &it : entries.map) {
+    auto &entry = it.second;
+    if (!entry.index.hasValue() || (entry.index.getValue() == (uint32_t)(~0))) {
+      while (taken_map[taken_till]) {
+        taken_till++;
+        assert(taken_till < totalEntries);
+      }
+      assigned++;
+      taken_map[taken_till] = true;
+      entry.index = taken_till;
+      taken_till++;
+    }
+    assert(entry.index.hasValue() && entry.index.getValue() < totalEntries);
+    assert(taken_map[entry.index.getValue()]);
+  }
+
+  assert(assigned == totalEntries);
+}
+
 template <class ELFT>
 uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
                                              CaptableMap &entries,
@@ -751,13 +1094,8 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
   assert(entries.firstIndex == std::numeric_limits<uint64_t>::max() &&
          "Should not be initialized yet!");
   entries.firstIndex = startIndex;
-  for (auto &it : entries.map) {
-    // TODO: looping twice is inefficient, we could keep track of the number of
-    // small entries during insertion
-    if (it.second.needsSmallImm) {
-      smallEntryCount++;
-    }
-  }
+
+  smallEntryCount = entries.smallEntries;
 
   if (config->emachine == EM_MIPS) {
     unsigned maxSmallEntries = (1 << 19) / config->capabilitySize;
@@ -776,6 +1114,13 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     }
   }
 
+  // CheriOS tries to assign indices in a deterministic way based on the order
+  // symbols appear in the input files This results in more deterministic
+  // compilation, but is just an optimisation.
+  if (config->isCheriOS()) {
+    assignCheriOSIndices(startIndex, entries);
+  }
+
   // Only add the @CAPTABLE symbols when running the LLD unit tests
   // errorHandler().exitEarly is set to false if LLD_IN_TEST=1 so just reuse
   // that instead of calling getenv on every iteration
@@ -784,13 +1129,21 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
   uint32_t assignedLargeIndexes = 0;
   for (auto &it : entries.map) {
     CapTableIndex &cti = it.second;
-    if (cti.needsSmallImm) {
-      assert(assignedSmallIndexes < smallEntryCount);
-      cti.index = startIndex + assignedSmallIndexes;
-      assignedSmallIndexes++;
+
+    if (!config->isCheriOS()) {
+      if (cti.needsSmallImm) {
+        assert(assignedSmallIndexes < smallEntryCount);
+        cti.index = startIndex + assignedSmallIndexes;
+        assignedSmallIndexes++;
+      } else {
+        cti.index = startIndex + smallEntryCount + assignedLargeIndexes;
+        assignedLargeIndexes++;
+      }
     } else {
-      cti.index = startIndex + smallEntryCount + assignedLargeIndexes;
-      assignedLargeIndexes++;
+      assert(cti.index.hasValue());
+      assignedSmallIndexes++;
+      if (cti.isFixed)
+        continue;
     }
 
     uint32_t index = *cti.index;
@@ -847,8 +1200,8 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     RelocationBaseSection *dynRelSec =
         it.second.usedInCallExpr ? in.relaPlt : mainPart->relaDyn;
     addCapabilityRelocation<ELFT>(
-        targetSym, elfCapabilityReloc, in.cheriCapTable, off,
-        R_CHERI_CAPABILITY, 0, it.second.usedInCallExpr,
+        targetSym, elfCapabilityReloc, this, off, R_CHERI_CAPABILITY, 0,
+        it.second.usedInCallExpr,
         [&]() {
           return ("\n>>> referenced by " + refName + "\n>>> first used in " +
                   it.second.firstUse->verboseToString())
@@ -947,6 +1300,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 
   valuesAssigned = true;
 }
+
+SymbolTable *CheriCapTableSection::dummySymTab = nullptr;
 
 template class elf::CheriCapRelocsSection<ELF32LE>;
 template class elf::CheriCapRelocsSection<ELF32BE>;
@@ -1079,7 +1434,8 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
   // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
   // pointers to ensure that the runtime linker adds the required trampolines
   // that sets $cgp:
-  if (!isCallExpr && config->emachine == llvm::ELF::EM_MIPS && sym->isFunc()) {
+  if (!config->isCheriOS() && !isCallExpr &&
+      config->emachine == llvm::ELF::EM_MIPS && sym->isFunc()) {
     if (!lld::elf::hasDynamicLinker()) {
       // In static binaries we do not need PLT stubs for function pointers since
       // all functions share the same $cgp

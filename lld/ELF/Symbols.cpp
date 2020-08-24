@@ -272,7 +272,7 @@ uint64_t Symbol::getCapTableVA(const InputSectionBase *isec,
 uint64_t Symbol::getCapTableOffset(const InputSectionBase *isec,
                                    uint64_t offset) const {
   return config->capabilitySize *
-    in.cheriCapTable->getIndex(*this, isec, offset);
+      (isTls() ? in.cheriCapTableLocal : in.cheriCapTable)->getIndex(*this, isec, offset);
 }
 
 uint64_t Symbol::getSize() const {
