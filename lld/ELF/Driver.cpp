@@ -1244,6 +1244,7 @@ static void readConfigs(opt::InputArgList &args) {
   config->warnCommon = args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
   config->warnSymbolOrdering =
       args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
+  config->outputStats = args.hasArg(OPT_lto_stats);
   config->zCapTableDebug = getZFlag(args, "captabledebug", "nocaptabledebug", false);
   config->zCombreloc = getZFlag(args, "combreloc", "nocombreloc", true);
   config->zCopyreloc = getZFlag(args, "copyreloc", "nocopyreloc", true);
@@ -1382,6 +1383,7 @@ static void readConfigs(opt::InputArgList &args) {
     StringRef s = arg->getValue();
     std::tie(config->ekind, config->emachine, config->osabi, config->isCheriAbi) =
         parseEmulation(s);
+    config->setIsCheriOS(args.hasArg(OPT_is_cherios));
     config->mipsN32Abi =
         (s.startswith("elf32btsmipn32") || s.startswith("elf32ltsmipn32"));
     config->emulation = s;
@@ -1675,6 +1677,9 @@ void LinkerDriver::inferMachineType() {
     config->ekind = f->ekind;
     config->emachine = f->emachine;
     config->osabi = f->osabi;
+    if (f->emachine == EM_MIPS) {
+      config->setIsCheriOS(f->eflags & EF_MIPS_CHERIOSABI);
+    }
     config->mipsN32Abi = f->emachine == EM_MIPS && isMipsN32Abi(f);
     return;
   }
