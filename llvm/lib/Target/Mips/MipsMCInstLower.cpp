@@ -131,6 +131,9 @@ MCOperand MipsMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
   case MipsII::MO_CAPTAB20:
     TargetKind = MipsMCExpr::MEK_CAPTABLE20;
     break;
+  case MipsII::MO_CAPTAB_TLS20:
+    TargetKind = MipsMCExpr::MEK_CAPTABLE_TLS20;
+    break;
   case MipsII::MO_CAPTAB_HI16:
     TargetKind = MipsMCExpr::MEK_CAPTABLE_HI16;
     break;

@@ -732,6 +732,9 @@ getExprOpValue(const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
     case MipsMCExpr::MEK_CAPTABLE20:
       FixupKind = Mips::fixup_CHERI_CAPTABLE20;
       break;
+    case MipsMCExpr::MEK_CAPTABLE_TLS20:
+      FixupKind = Mips::fixup_CHERI_CAPTABLE_TLS20;
+      break;
     case MipsMCExpr::MEK_CAPTABLE_HI16:
       FixupKind = Mips::fixup_CHERI_CAPTABLE_HI16;
       break;

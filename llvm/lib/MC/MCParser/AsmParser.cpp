@@ -1369,6 +1369,7 @@ bool AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc,
   case AsmToken::PercentCapTab11:
   case AsmToken::PercentCapTabCall11:
   case AsmToken::PercentCapTab20:
+  case AsmToken::PercentCapTabTLS20:
   case AsmToken::PercentCapTabCall20:
   case AsmToken::PercentCapTab_Lo:
   case AsmToken::PercentCapTabCall_Lo:

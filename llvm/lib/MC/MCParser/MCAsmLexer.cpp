@@ -123,6 +123,7 @@ void AsmToken::dump(raw_ostream &OS) const {
   case AsmToken::PercentCapTab_Rel:  OS << "PercentCapTab_Rel"; break;
   case AsmToken::PercentCapTab11:       OS << "PercentCapTab11";      break;
   case AsmToken::PercentCapTab20:       OS << "PercentCapTab20";      break;
+  case AsmToken::PercentCapTabTLS20:    OS << "PercentCapTabTls20";   break;
   case AsmToken::PercentCapTab_Lo:      OS << "PercentCapTab_Lo";     break;
   case AsmToken::PercentCapTab_Hi:      OS << "PercentCapTab_Hi";     break;
   case AsmToken::PercentCapTabCall11:   OS << "PercentCapTabCall11";  break;

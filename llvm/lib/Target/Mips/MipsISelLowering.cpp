@@ -172,12 +172,15 @@ SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty,
   return DAG.getRegister(FI->getGlobalBaseReg(MF, IsForTls), Ty);
 }
 
-SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
+SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty,
+                                            bool local) const {
   assert(Ty.isFatPointer());
   assert(ABI.IsCheriPureCap());
   MachineFunction &MF = DAG.getMachineFunction();
   MipsFunctionInfo *FI = MF.getInfo<MipsFunctionInfo>();
-  return DAG.getRegister(FI->getCapGlobalBaseRegForGlobalISel(MF), Ty);
+  return DAG.getRegister(local ? FI->getCapLocalBaseRegForGlobalISel(MF)
+                               : FI->getCapGlobalBaseRegForGlobalISel(MF),
+                         Ty);
 }
 
 SDValue MipsTargetLowering::getTargetNode(GlobalAddressSDNode *N, EVT Ty,
@@ -2875,6 +2878,15 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   if (DAG.getTarget().useEmulatedTLS())
     return LowerToTLSEmulatedModel(GA, DAG);
 
+  // In CheriOS ABI we also use the captable for TLS
+  if (ABI.IsCheriOS()) {
+    auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+    EVT Ty = Op.getValueType();
+    EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
+    return getDataFromCapTable(GA, SDLoc(GA), GlobalTy, DAG, DAG.getEntryNode(),
+                               PtrInfo, true);
+  }
+
   SDLoc DL(GA);
   const GlobalValue *GV = GA->getGlobal();
   TLSModel::Model model = getTargetMachine().getTLSModel(GV);
@@ -4697,10 +4709,12 @@ SDValue MipsTargetLowering::LowerCallResult(
       }
     }
 
-    if (!LocalCallOptimization) {
+    if (!LocalCallOptimization && !ABI.IsCheriOS()) {
       // Note: we don't need to restore the entry $cgp when calling a DSO local
       // function since all local functions ensure that $cgp on entry == $cgp on exit
-      Chain = DAG.getCopyToReg(Chain, DL, ABI.GetGlobalCapability(), getCapGlobalReg(CLI.DAG, CapType), InFlag);
+      Chain =
+          DAG.getCopyToReg(Chain, DL, ABI.GetGlobalCapability(),
+                           getCapGlobalReg(CLI.DAG, CapType, false), InFlag);
       InFlag = Chain.getValue(1);
     } else {
       // TODO: at -O1 assert that $cgp before and after is the same?

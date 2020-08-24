@@ -413,7 +413,7 @@ extern bool LargeCapTable;
   protected:
     SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty, bool IsForTls) const;
 
-    SDValue getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const;
+    SDValue getCapGlobalReg(SelectionDAG &DAG, EVT Ty, bool local) const;
 
     // This method creates the following nodes, which are necessary for
     // computing a local symbol's address:
@@ -541,51 +541,58 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getCallTargetFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
                                       SelectionDAG &DAG, SDValue Chain,
-                                      const MachinePointerInfo &PtrInfo) const {
+                                      const MachinePointerInfo &PtrInfo,
+                                      bool local = false) const {
       assert(ABI.IsCheriPureCap());
       return getFromCapTable(N, DL, Ty, DAG, Chain, PtrInfo,
                              MipsII::MO_CAPTAB_CALL_HI16,
                              MipsII::MO_CAPTAB_CALL_LO16,
-                             MipsII::MO_CAPTAB_CALL20, MipsISD::GotHi);
+                             MipsII::MO_CAPTAB_CALL20, MipsISD::GotHi, local);
     }
 
     template <class NodeTy>
     SDValue getDataFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
                                 SelectionDAG &DAG, SDValue Chain,
-                                const MachinePointerInfo &PtrInfo) const {
+                                const MachinePointerInfo &PtrInfo,
+                                bool local = false) const {
       assert(ABI.IsCheriPureCap());
       return getFromCapTable(N, DL, Ty, DAG, Chain, PtrInfo,
                              MipsII::MO_CAPTAB_HI16, MipsII::MO_CAPTAB_LO16,
-                             MipsII::MO_CAPTAB20, MipsISD::GotHi);
+                             local ? MipsII::MO_CAPTAB_TLS20
+                                   : MipsII::MO_CAPTAB20,
+                             MipsISD::GotHi, local);
     }
 
     template <class NodeTy>
     SDValue getFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
                             SelectionDAG &DAG, SDValue Chain,
-                            const MachinePointerInfo &PtrInfo,
-                            unsigned HiFlag, unsigned LoFlag,
-                            unsigned SmallFlag, unsigned HiOpc) const {
+                            const MachinePointerInfo &PtrInfo, unsigned HiFlag,
+                            unsigned LoFlag, unsigned SmallFlag, unsigned HiOpc,
+                            bool local = false) const {
       assert(ABI.IsCheriPureCap());
       if (LargeCapTable || SmallFlag == 0) {
+        assert(local == false);
         return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiFlag, LoFlag,
-                                         Chain, &PtrInfo, true, HiOpc);
+                                         Chain, &PtrInfo, true, HiOpc, local);
       } else {
         return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, SmallFlag,
-                                           Chain, &PtrInfo, true);
+                                           Chain, &PtrInfo, true, local);
       }
     }
 
     template <class NodeTy>
     SDValue getCapToCapTable(NodeTy *N, const SDLoc &DL, SelectionDAG &DAG,
                              unsigned HiFlag, unsigned LoFlag,
-                             unsigned SmallFlag, unsigned HiOpc) const {
+                             unsigned SmallFlag, unsigned HiOpc,
+                             bool local = false) const {
       assert(ABI.IsCheriPureCap());
       if (LargeCapTable || SmallFlag == 0) {
-        return _getGlobalCapBigImmediate(N, SDLoc(N), CapType, DAG, HiFlag, LoFlag,
-                                         SDValue(), nullptr, false, HiOpc);
+        return _getGlobalCapBigImmediate(N, SDLoc(N), CapType, DAG, HiFlag,
+                                         LoFlag, SDValue(), nullptr, false,
+                                         HiOpc, local);
       } else {
         return _getGlobalCapSmallImmediate(N, SDLoc(N), CapType, DAG, SmallFlag,
-                                           SDValue(), nullptr, false);
+                                           SDValue(), nullptr, false, local);
       }
     }
 
@@ -594,18 +601,19 @@ extern bool LargeCapTable;
     //
     // (load (wrappercapop $cgp, %captab20(sym)))
     template <class NodeTy>
-    SDValue
-    _getGlobalCapSmallImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
-                                SelectionDAG &DAG, unsigned Flag, SDValue Chain,
-                                const MachinePointerInfo *PtrInfo,
-                                bool DoLoad) const {
+    SDValue _getGlobalCapSmallImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
+                                        SelectionDAG &DAG, unsigned Flag,
+                                        SDValue Chain,
+                                        const MachinePointerInfo *PtrInfo,
+                                        bool DoLoad, bool local) const {
       assert(Ty.isFatPointer());
       assert(ABI.IsCheriPureCap());
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
       SDValue Tgt = DAG.getNode(MipsISD::WrapperCapOp, DL, CapType,
-                                getCapGlobalReg(DAG, CapType), Off);
+                                getCapGlobalReg(DAG, CapType, local), Off);
       // Why can't I use the target node here directly?
-      // SDNode *Addr = DAG.getMachineNode(Mips::CapGlobalAddrPseudo, DL, Ty, getCapGlobalReg(DAG, CapType), Off);
+      // SDNode *Addr = DAG.getMachineNode(Mips::CapGlobalAddrPseudo, DL, Ty,
+      // getCapGlobalReg(DAG, CapType, local), Off);
       if (DoLoad)
         return DAG.getLoad(Ty, DL, Chain, Tgt, *PtrInfo);
       else
@@ -621,13 +629,14 @@ extern bool LargeCapTable;
                                       SelectionDAG &DAG, unsigned HiFlag,
                                       unsigned LoFlag, SDValue Chain,
                                       const MachinePointerInfo *PtrInfo,
-                                      bool DoLoad, unsigned HiOpc) const {
+                                      bool DoLoad, unsigned HiOpc,
+                                      bool local) const {
       SDValue Off = DAG.getNode(HiOpc, DL, MVT::i64,
                                 getTargetNode(N, MVT::i64, DAG, HiFlag));
       Off = DAG.getNode(MipsISD::Wrapper, DL, MVT::i64, Off,
                         getTargetNode(N, MVT::i64, DAG, LoFlag));
       SDValue Tgt = DAG.getNode(ISD::PTRADD, DL, CapType,
-                                getCapGlobalReg(DAG, CapType), Off);
+                                getCapGlobalReg(DAG, CapType, local), Off);
       if (DoLoad)
         return DAG.getLoad(Ty, DL, Chain, Tgt, *PtrInfo);
       else
