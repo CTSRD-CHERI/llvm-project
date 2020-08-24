@@ -296,7 +296,8 @@ def CToPtr      : Cheri_rr<0x12, "ctoptr", GPR, GPCRC0IsDDC>;
 def CFromPtr    : Cheri_rr<0x13, "cfromptr", GPCR, GPR, GPCRC0IsDDC>;
 }
 def CSub        : Cheri_rr<0x14, "csub", GPR, GPCR>;
-let defsCanBeSealed = 1 in
+let isMoveReg = 1, isReMaterializable = 1, isAsCheapAsAMove = 1,
+    defsCanBeSealed = 1 in
 def CMove       : Cheri_r<0xa, "cmove", GPCR>;
 }
 
