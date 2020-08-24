@@ -260,13 +260,18 @@ getReservedRegs(const MachineFunction &MF) const {
       static_cast<const MipsFrameLowering*>(Subtarget.getFrameLowering());
     if (Subtarget.isABI_CheriPureCap()) {
       Reserved.set(ABI.GetStackPtr());
+      if (ABI.GetUnsafeStackPtr() != 0)
+        Reserved.set(ABI.GetUnsafeStackPtr());
       if (FL->hasFP(MF))
         Reserved.set(ABI.GetFramePtr());
       if (FL->hasBP(MF))
         Reserved.set(ABI.GetBasePtr());
-      if (Subtarget.useCheriCapTable())
-        Reserved.set(ABI.GetGlobalCapability());
-
+      if (Subtarget.useCheriCapTable()) {
+        if (ABI.GetLocalCapability() != 0)
+          Reserved.set(ABI.GetLocalCapability());
+        if (ABI.GetGlobalCapability() != 0)
+          Reserved.set(ABI.GetGlobalCapability());
+      }
     }
     if (Cheri8)
       for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)

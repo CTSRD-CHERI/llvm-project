@@ -25,19 +25,41 @@ class MipsABIInfo {
 public:
   enum class ABI { Unknown, O32, N32, N64 };
 
+  class TemporalABILayout {
+
+  public:
+    int64_t GetThreadLocalOffset_CSP() const { return 4; }
+    int64_t GetThreadLocalOffset_CUSP() const { return 5; }
+    int64_t GetThreadLocalOffset_CDS() const { return 6; }
+    int64_t GetThreadLocalOffset_CDL() const { return 7; }
+    int64_t GetThreadLocalOffset_CGP() const { return 8; }
+
+    int64_t GetStackPointerOffset_Next() const { return -1; }
+    int64_t GetStackPointerOffset_Prev() const { return -2; }
+    int64_t GetStackPointerSize_Prev() const { return 2; }
+    int64_t GetStackPointerAlign_Prev() const { return 1; }
+    int64_t GetMinStack_Size() const { return 0x4000; }
+    TemporalABILayout() {}
+  };
+
 protected:
   ABI ThisABI;
   bool isCheriPureCap = false;
+  bool isCheriOS = false;
+  TemporalABILayout temporalABILayout;
 
 public:
-  MipsABIInfo(ABI ThisABI, bool isAllCap=false) : ThisABI(ThisABI),
-    isCheriPureCap(isAllCap) {}
+  MipsABIInfo(ABI ThisABI, bool isAllCap = false, bool isCheriOSABI = false)
+      : ThisABI(ThisABI), isCheriPureCap(isAllCap), isCheriOS(isCheriOSABI) {}
 
   static MipsABIInfo Unknown() { return MipsABIInfo(ABI::Unknown); }
   static MipsABIInfo O32() { return MipsABIInfo(ABI::O32); }
   static MipsABIInfo N32() { return MipsABIInfo(ABI::N32); }
   static MipsABIInfo N64() { return MipsABIInfo(ABI::N64); }
   static MipsABIInfo CheriPureCap() { return MipsABIInfo(ABI::N64, true); }
+  static MipsABIInfo CheriCheriOS() {
+    return MipsABIInfo(ABI::N64, true, true);
+  }
   static MipsABIInfo computeTargetABI(const Triple &TT, StringRef CPU,
                                       const MCTargetOptions &Options);
 
@@ -46,6 +68,8 @@ public:
   bool IsN32() const { return ThisABI == ABI::N32; }
   bool IsN64() const { return ThisABI == ABI::N64; }
   bool IsCheriPureCap() const { return isCheriPureCap; }
+  bool IsCheriOS() const { return isCheriOS; }
+  const TemporalABILayout *GetTABILayout() const;
   CheriCapabilityTableABI CapabilityTableABI() const {
     assert(IsCheriPureCap());
     return MCTargetOptions::cheriCapabilityTableABI();
@@ -72,7 +96,11 @@ public:
 
   unsigned GetDefaultDataCapability() const;
   unsigned GetReturnAddress() const;
+  unsigned GetFunctionAddress() const;
+  unsigned GetReturnData() const;
+  unsigned GetReturnSelector() const;
   unsigned GetStackPtr() const;
+  unsigned GetUnsafeStackPtr() const;
   unsigned GetFramePtr() const;
   unsigned GetBasePtr() const;
   unsigned GetGlobalPtr() const;
@@ -80,6 +108,7 @@ public:
   /// pure-capability mode, but until all of the new linker work is done we
   /// need a separate $gp and $cgp as a transition step.
   unsigned GetGlobalCapability() const;
+  unsigned GetLocalCapability() const;
   unsigned GetNullPtr() const;
   unsigned GetZeroReg() const;
   unsigned GetPtrAdduOp() const;
