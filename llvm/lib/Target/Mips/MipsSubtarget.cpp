@@ -301,6 +301,7 @@ bool MipsSubtarget::isABI_O32() const { return getABI().IsO32(); }
 bool MipsSubtarget::isABI_CheriPureCap() const {
   return getABI().IsCheriPureCap();
 }
+bool MipsSubtarget::isABI_CheriOS() const { return getABI().IsCheriOS(); }
 const MipsABIInfo &MipsSubtarget::getABI() const { return TM.getABI(); }
 
 const CallLowering *MipsSubtarget::getCallLowering() const {
