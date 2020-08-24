@@ -964,6 +964,9 @@ void MipsTargetELFStreamer::finish() {
   if (getABI().IsCheriPureCap())
     EFlags |= ELF::EF_MIPS_ABI_CHERIABI;
 
+  if (getABI().IsCheriOS())
+    EFlags |= ELF::EF_MIPS_CHERIOSABI;
+
   MCA.setELFHeaderEFlags(EFlags);
 
   // Emit all the option records.

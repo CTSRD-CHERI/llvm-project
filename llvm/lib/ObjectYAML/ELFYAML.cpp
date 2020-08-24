@@ -415,6 +415,7 @@ void ScalarBitSetTraits<ELFYAML::ELF_EF>::bitset(IO &IO,
     BCase(EF_MIPS_32BITMODE);
     BCase(EF_MIPS_FP64);
     BCase(EF_MIPS_NAN2008);
+    BCase(EF_MIPS_CHERIOSABI);
     BCase(EF_MIPS_MICROMIPS);
     BCase(EF_MIPS_ARCH_ASE_M16);
     BCase(EF_MIPS_ARCH_ASE_MDMX);
