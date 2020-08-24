@@ -1635,6 +1635,21 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
   if (D.hasAttr<AnnotateAttr>() && HaveInsertPoint())
     EmitVarAnnotations(&D, address.getPointer());
 
+  bool tsafe = D.hasAttr<TemporalSafeAttr>();
+  bool tunsafe = D.hasAttr<TemporalUnsafeAttr>();
+
+  if (tsafe && tunsafe)
+    CGM.Error(D.getLocation(), "Cannot mark as both temporal safe and unsafe");
+
+  if (tsafe || tunsafe) {
+    llvm::Instruction *value =
+        cast<llvm::Instruction>(emission.Addr.getPointer());
+    llvm::LLVMContext &context = value->getContext();
+    llvm::MDNode *Node = llvm::MDNode::get(
+        context, llvm::MDString::get(context, tsafe ? "safe" : "unsafe"));
+    value->setMetadata("temporal", Node);
+  }
+
   // Make sure we call @llvm.lifetime.end.
   if (emission.useLifetimeMarkers())
     EHStack.pushCleanup<CallLifetimeEnd>(NormalEHLifetimeMarker,
