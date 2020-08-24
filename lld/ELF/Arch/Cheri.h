@@ -187,11 +187,12 @@ private:
 
 class CheriCapTableSection : public SyntheticSection {
 public:
-  CheriCapTableSection();
+  CheriCapTableSection(bool local);
   // InputFile and Offset is needed in order to implement per-file/per-function
   // tables
   void addEntry(Symbol &sym, RelExpr expr, InputSectionBase *isec,
                 uint64_t offset);
+  void addFixedEntry(Symbol &sym, uint64_t index);
   void addDynTlsEntry(Symbol &sym);
   void addTlsIndex();
   void addTlsEntry(Symbol &sym);
@@ -206,6 +207,9 @@ public:
   }
   void writeTo(uint8_t *buf) override;
   template <class ELFT> void assignValuesAndAddCapTableSymbols();
+  // Calculate a preferred captable index for a symbol based on its location in
+  // an input file
+  void calculatePreferredPositions(InputFile *file);
   size_t getSize() const override {
     size_t nonTlsEntries = nonTlsEntryCount();
     if (nonTlsEntries > 0 || !tlsEntries.empty() || !dynTlsEntries.empty()) {
@@ -217,6 +221,11 @@ public:
         (dynTlsEntries.size() * 2 + tlsEntries.size()) * config->wordsize;
     return llvm::alignTo(bytes, config->capabilitySize);
   }
+
+  // Symbols can be added to this table (as opposed to the global one) so that
+  // files can be parsed without having to include them in the output
+  static SymbolTable *dummySymTab;
+
 private:
   struct CapTableIndex {
     // The index will be assigned once all symbols have been added
@@ -225,8 +234,11 @@ private:
     // longer sequence of instructions
     // int64_t Index = -1;
     llvm::Optional<uint32_t> index;
+    // How important putting this symbol at its preferred index is
+    int32_t priority;
     bool needsSmallImm = false;
     bool usedInCallExpr = false;
+    bool isFixed = false;
     llvm::Optional<SymbolAndOffset> firstUse;
   };
   struct CaptableMap {
@@ -234,10 +246,15 @@ private:
     llvm::MapVector<Symbol *, CapTableIndex> map;
     size_t size() const { return map.size(); }
     bool empty() const { return map.empty(); }
+    uint64_t fixedEntries = 0;
+    uint64_t unfixedEntries = 0;
+    uint64_t smallEntries = 0;
   };
   template <class ELFT>
   uint64_t assignIndices(uint64_t startIndex, CaptableMap &entries,
                          const Twine &symContext);
+
+  void assignCheriOSIndices(uint64_t startIndex, CaptableMap &entries);
   /// @return a refernces to the captable map where the given symbol should
   /// be inserted. Usually this will just be the GlobalEntries map, but when
   /// compiling with the experimental per-function/per-file captables it will
@@ -265,6 +282,7 @@ private:
   CaptableMap dynTlsEntries;
   CaptableMap tlsEntries;
   bool valuesAssigned = false;
+  bool isLocal;
   friend class CheriCapTableMappingSection;
 };
 
