@@ -1147,6 +1147,7 @@ def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
           (CIncOffset $cgp, (shift_imm_by_4 imm:$in))>;
 
 def : CapTableWrapperPat<tglobaladdr>;
+def : CapTableWrapperPat<tglobaltlsaddr>;
 def : CapTableWrapperPat<tjumptable>;
 // TODO: add test cases for these:
 def : CapTableWrapperPat<tconstpool>;

@@ -68,6 +68,8 @@ bool MipsFunctionInfo::capGlobalBaseRegSet() const {
   return CapGlobalBaseReg;
 }
 
+bool MipsFunctionInfo::capLocalBaseRegSet() const { return CapLocalBaseReg; }
+
 Register MipsFunctionInfo::getCapGlobalBaseReg(MachineFunction &MF) {
   // Return if it has already been initialized.
   if (CapGlobalBaseReg)
@@ -75,6 +77,15 @@ Register MipsFunctionInfo::getCapGlobalBaseReg(MachineFunction &MF) {
 
   const TargetRegisterClass *RC = &Mips::CheriGPRRegClass;
   return CapGlobalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
+}
+
+Register MipsFunctionInfo::getCapLocalBaseReg(MachineFunction &MF) {
+  // Return if it has already been initialized.
+  if (CapLocalBaseReg)
+    return CapLocalBaseReg;
+
+  const TargetRegisterClass *RC = &Mips::CheriGPRRegClass;
+  return CapLocalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
 }
 
 Register MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel(MachineFunction &MF) {
@@ -86,11 +97,22 @@ Register MipsFunctionInfo::getCapGlobalBaseRegForGlobalISel(MachineFunction &MF)
   return CapGlobalBaseReg;
 }
 
+Register MipsFunctionInfo::getCapLocalBaseRegForGlobalISel(MachineFunction &MF) {
+  assert(
+      static_cast<const MipsSubtarget &>(MF.getSubtarget()).useCheriCapTable());
+  if (!CapLocalBaseReg) {
+    getCapLocalBaseReg(MF);
+    initCapLocalBaseReg(MF);
+  }
+  return CapLocalBaseReg;
+}
+
 Register MipsFunctionInfo::getCapEntryPointReg(MachineFunction &MF) {
   // Return if it has already been initialized.
   if (CapComputedEntryPoint)
     return CapComputedEntryPoint;
-
+  // LETODO: CheriOS solves C12 being sealed with an extra entry. Might need an
+  // extra case here.
   const MipsABIInfo &ABI =
       static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI();
   assert(ABI.IsCheriPureCap());
@@ -313,13 +335,46 @@ void MipsFunctionInfo::initCapGlobalBaseReg(MachineFunction &MF) {
             RegState::Implicit | RegState::Dead);
 #endif
   } else {
-    MF.getRegInfo().addLiveIn(ABIGlobalCapReg);
-    MBB.addLiveIn(ABIGlobalCapReg);
-    BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
-        .addReg(ABIGlobalCapReg);
+    if (ABI.IsCheriOS() && ABIGlobalCapReg == 0) {
+      // CheriOS can reload the global register from the local one if there
+      // is no ABI defined global captable register
+      getCapLocalBaseRegForGlobalISel(MF);
+      BuildMI(MBB, I, DL, TII.get(Mips::LOADCAP), CapGlobalBaseReg)
+          .addReg(ABI.GetNullPtr())
+          .addImm((ABI.GetTABILayout()->GetThreadLocalOffset_CGP()))
+          .addReg(CapLocalBaseReg);
+    } else {
+      MF.getRegInfo().addLiveIn(ABIGlobalCapReg);
+      MBB.addLiveIn(ABIGlobalCapReg);
+      BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
+          .addReg(ABIGlobalCapReg);
+    }
   }
 }
 
+void MipsFunctionInfo::initCapLocalBaseReg(MachineFunction &MF) {
+  if (!CapLocalBaseReg)
+    return;
+
+  auto &TM = static_cast<const MipsTargetMachine &>(MF.getTarget());
+  assert(TM.getABI().IsCheriOS());
+
+  MachineBasicBlock &MBB = MF.front();
+  MachineBasicBlock::iterator I = MBB.begin();
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  DebugLoc DL;
+  const MipsABIInfo &ABI = TM.getABI();
+
+  assert(ABI.IsCheriOS());
+  const unsigned ABILocalCapReg = ABI.GetLocalCapability();
+
+  if (ABILocalCapReg != 0) {
+    MF.getRegInfo().addLiveIn(ABILocalCapReg);
+    MBB.addLiveIn(ABILocalCapReg);
+    BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapLocalBaseReg)
+        .addReg(ABILocalCapReg);
+  }
+}
 
 void MipsFunctionInfo::createEhDataRegsFI(MachineFunction &MF) {
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();

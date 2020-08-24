@@ -839,6 +839,8 @@ public:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE11, E, Ctx);
     case AsmToken::PercentCapTab20:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE20, E, Ctx);
+    case AsmToken::PercentCapTabTLS20:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE_TLS20, E, Ctx);
     case AsmToken::PercentCapTab_Hi:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE_HI16, E, Ctx);
     case AsmToken::PercentCapTab_Lo:
@@ -1537,7 +1539,8 @@ public:
             return false;
         } else if (Bits == 16) {
           if (Expr->getKind() != MipsMCExpr::MEK_CAPTABLE20 &&
-              Expr->getKind() != MipsMCExpr::MEK_CAPCALL20)
+              Expr->getKind() != MipsMCExpr::MEK_CAPCALL20 &&
+              Expr->getKind() != MipsMCExpr::MEK_CAPTABLE_TLS20)
             return false;
         }
       }
@@ -2583,7 +2586,8 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
       ErrLoc = Opnd.getExpr()->getLoc();
       if (auto Expr = dyn_cast<MipsMCExpr>(Opnd.getExpr()))
         ValidRelocation = Expr->getKind() == MipsMCExpr::MEK_CAPTABLE20 ||
-                          Expr->getKind() == MipsMCExpr::MEK_CAPCALL20;
+                          Expr->getKind() == MipsMCExpr::MEK_CAPCALL20 ||
+                          Expr->getKind() == MipsMCExpr::MEK_CAPTABLE_TLS20;
     }
     if (!ValidRelocation && !Opnd.isImm())
       return Error(ErrLoc,
@@ -6714,8 +6718,10 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
            .Case("cbp", ABI.GetBasePtr())
            .Case("cfp", ABI.GetFramePtr())
            .Case("cgp", ABI.GetGlobalCapability())
+           .Case("ctlp", ABI.GetLocalCapability())
            .Case("cra", ABI.GetReturnAddress())
            .Case("csp", ABI.GetStackPtr())
+           .Case("cusp", ABI.GetUnsafeStackPtr())
            .Case("ddc", ABI.GetDefaultDataCapability())
            .Default(-1);
   if (!ABI.IsCheriPureCap() && CC != -1) {
@@ -6753,7 +6759,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
                            .Case("kdc", 30)
                            .Case("epcc", 31)
                            .Default(0);
-      if (InvalidReg) {
+      if (InvalidReg && !AreCheriSysRegsAccessible) {
         ErrorIfNotPending(
             Parser.getTok().getLoc(),
             "Register $" + Name +
@@ -6765,7 +6771,8 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
                 "at any time), use that instead.",
             Parser.getTok().getLocRange());
         return -1;
-      }
+      } else if (InvalidReg)
+        return (Mips::C1 + InvalidReg - 1);
       CC = StringSwitch<unsigned>(Name)
                .Case("ddc", Mips::DDC)
                .Case("idc", Mips::C26)

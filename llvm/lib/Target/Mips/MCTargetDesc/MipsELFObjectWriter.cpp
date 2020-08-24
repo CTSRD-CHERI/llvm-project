@@ -405,6 +405,8 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_MIPS_CHERI_CAPTAB_CLC11;
   case Mips::fixup_CHERI_CAPTABLE20:
     return ELF::R_MIPS_CHERI_CAPTAB20;
+  case Mips::fixup_CHERI_CAPTABLE_TLS20:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS20;
   case Mips::fixup_CHERI_CAPTABLE_LO16:
     return ELF::R_MIPS_CHERI_CAPTAB_LO16;
   case Mips::fixup_CHERI_CAPTABLE_HI16:
