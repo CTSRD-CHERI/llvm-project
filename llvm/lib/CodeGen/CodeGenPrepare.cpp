@@ -6483,9 +6483,7 @@ bool CodeGenPrepare::optimizeFunnelShift(IntrinsicInst *Fsh) {
 /// If we have a SelectInst that will likely profit from branch prediction,
 /// turn it into a branch.
 bool CodeGenPrepare::optimizeSelectInst(SelectInst *SI) {
-  // If branch conversion isn't desirable, exit early.
-  if (DisableSelectToBranch || OptSize ||
-      llvm::shouldOptimizeForSize(SI->getParent(), PSI, BFI.get()))
+  if (DisableSelectToBranch)
     return false;
 
   // Find all consecutive select instructions that share the same condition.
@@ -6519,10 +6517,11 @@ bool CodeGenPrepare::optimizeSelectInst(SelectInst *SI) {
     SelectKind = TargetLowering::ScalarCondVectorVal;
   else
     SelectKind = TargetLowering::ScalarValSelect;
-  
+
   if (TLI->isSelectSupported(SelectKind) &&
-      !isFormingBranchFromSelectProfitable(TTI, TLI, SI))
-      return false;
+      (!isFormingBranchFromSelectProfitable(TTI, TLI, SI) || OptSize ||
+       llvm::shouldOptimizeForSize(SI->getParent(), PSI, BFI.get())))
+    return false;
 
   // The DominatorTree needs to be rebuilt by any consumers after this
   // transformation. We simply reset here rather than setting the ModifiedDT
