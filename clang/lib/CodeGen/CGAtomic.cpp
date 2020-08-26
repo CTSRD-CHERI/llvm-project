@@ -135,7 +135,7 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
         ValueTy = lvalue.getType();
         ValueSizeInBits = C.getTypeSize(ValueTy);
         AtomicTy = ValueTy = CGF.getContext().getExtVectorType(
-            lvalue.getType(), cast<llvm::VectorType>(
+            lvalue.getType(), cast<llvm::FixedVectorType>(
                                   lvalue.getExtVectorAddress().getElementType())
                                   ->getNumElements());
         AtomicSizeInBits = C.getTypeSize(AtomicTy);
