@@ -1782,6 +1782,8 @@ bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
   case CK_ARCExtendBlockObject:
   case CK_ZeroToOCLOpaqueType:
   case CK_IntToOCLSampler:
+  case CK_FloatingToFixedPoint:
+  case CK_FixedPointToFloating:
   case CK_FixedPointCast:
   case CK_FixedPointToIntegral:
   case CK_IntegralToFixedPoint:
