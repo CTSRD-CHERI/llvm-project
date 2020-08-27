@@ -1617,7 +1617,7 @@ const FindAllocaForValueTestParams FindAllocaForValueTests[] = {
       exit:
         ret void
       })",
-     false, false},
+     true, false},
 
     {R"(
       define void @test(i1 %cond, i64* %a) {
