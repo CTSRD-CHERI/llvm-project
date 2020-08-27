@@ -1129,13 +1129,12 @@ void CodeGenFunction::ExpandTypeToArgs(
 
 /// Create a temporary allocation for the purposes of coercion.
 static Address CreateTempAllocaForCoercion(CodeGenFunction &CGF, llvm::Type *Ty,
-                                           CharUnits MinAlign,
-                                           const Twine &Name = "tmp") {
+                                           CharUnits MinAlign) {
   // Don't use an alignment that's worse than what LLVM would prefer.
   auto PrefAlign = CGF.CGM.getDataLayout().getPrefTypeAlignment(Ty);
   CharUnits Align = std::max(MinAlign, CharUnits::fromQuantity(PrefAlign));
 
-  return CGF.CreateTempAlloca(Ty, Align, Name + ".coerce");
+  return CGF.CreateTempAlloca(Ty, Align);
 }
 
 /// EnterStructPointerForCoercedAccess - Given a struct pointer that we are
@@ -1257,7 +1256,7 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
   if (SrcTy == Ty)
     return CGF.Builder.CreateLoad(Src);
 
-  llvm::TypeSize DstSize = CGF.CGM.getDataLayout().getTypeAllocSize(Ty);
+  uint64_t DstSize = CGF.CGM.getDataLayout().getTypeAllocSize(Ty);
 
   if (llvm::StructType *SrcSTy = dyn_cast<llvm::StructType>(SrcTy)) {
     // If Ty is a CHERI capability meaning that we are coercing the struct
@@ -1275,12 +1274,11 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
         }
       }
     }
-    Src = EnterStructPointerForCoercedAccess(Src, SrcSTy,
-                                             DstSize.getFixedSize(), CGF);
+    Src = EnterStructPointerForCoercedAccess(Src, SrcSTy, DstSize, CGF);
     SrcTy = Src.getElementType();
   }
 
-  llvm::TypeSize SrcSize = CGF.CGM.getDataLayout().getTypeAllocSize(SrcTy);
+  uint64_t SrcSize = CGF.CGM.getDataLayout().getTypeAllocSize(SrcTy);
 
   // If the source and destination are integer or pointer types, just do an
   // extension or truncation to the desired type.
@@ -1291,8 +1289,7 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
   }
 
   // If load is legal, just bitcast the src pointer.
-  if (!SrcSize.isScalable() && !DstSize.isScalable() &&
-      SrcSize.getFixedSize() >= DstSize.getFixedSize()) {
+  if (SrcSize >= DstSize) {
     // Generally SrcSize is never greater than DstSize, since this means we are
     // losing bits. However, this can happen in cases where the structure has
     // additional padding, for example due to a user specified alignment.
@@ -1305,12 +1302,10 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
   }
 
   // Otherwise do coercion through memory. This is stupid, but simple.
-  Address Tmp =
-      CreateTempAllocaForCoercion(CGF, Ty, Src.getAlignment(), Src.getName());
-  CGF.Builder.CreateMemCpy(
-      Tmp.getPointer(), Tmp.getAlignment().getAsAlign(), Src.getPointer(),
-      Src.getAlignment().getAsAlign(),
-      llvm::ConstantInt::get(CGF.IntPtrTy, SrcSize.getKnownMinSize()));
+  Address Tmp = CreateTempAllocaForCoercion(CGF, Ty, Src.getAlignment());
+  CGF.Builder.CreateMemCpy(Tmp.getPointer(), Tmp.getAlignment().getAsAlign(),
+                           Src.getPointer(), Src.getAlignment().getAsAlign(),
+                           llvm::ConstantInt::get(CGF.IntPtrTy, SrcSize));
   return CGF.Builder.CreateLoad(Tmp);
 }
 
@@ -1349,7 +1344,7 @@ static void CreateCoercedStore(llvm::Value *Src,
     return;
   }
 
-  llvm::TypeSize SrcSize = CGF.CGM.getDataLayout().getTypeAllocSize(SrcTy);
+  uint64_t SrcSize = CGF.CGM.getDataLayout().getTypeAllocSize(SrcTy);
 
   if (llvm::StructType *DstSTy = dyn_cast<llvm::StructType>(DstTy)) {
     // If Src is a CHERI capability then we load the struct using the
@@ -1370,8 +1365,7 @@ static void CreateCoercedStore(llvm::Value *Src,
         }
       }
     }
-    Dst = EnterStructPointerForCoercedAccess(Dst, DstSTy,
-                                             SrcSize.getFixedSize(), CGF);
+    Dst = EnterStructPointerForCoercedAccess(Dst, DstSTy, SrcSize, CGF);
     DstTy = Dst.getElementType();
   }
 
@@ -1393,12 +1387,10 @@ static void CreateCoercedStore(llvm::Value *Src,
     return;
   }
 
-  llvm::TypeSize DstSize = CGF.CGM.getDataLayout().getTypeAllocSize(DstTy);
+  uint64_t DstSize = CGF.CGM.getDataLayout().getTypeAllocSize(DstTy);
 
   // If store is legal, just bitcast the src pointer.
-  if (isa<llvm::ScalableVectorType>(SrcTy) ||
-      isa<llvm::ScalableVectorType>(DstTy) ||
-      SrcSize.getFixedSize() <= DstSize.getFixedSize()) {
+  if (SrcSize <= DstSize) {
     Dst = CGF.Builder.CreateElementBitCast(Dst, SrcTy);
     CGF.EmitAggregateStore(Src, Dst, DstIsVolatile);
   } else {
@@ -1413,10 +1405,9 @@ static void CreateCoercedStore(llvm::Value *Src,
     // to that information.
     Address Tmp = CreateTempAllocaForCoercion(CGF, SrcTy, Dst.getAlignment());
     CGF.Builder.CreateStore(Src, Tmp);
-    CGF.Builder.CreateMemCpy(
-        Dst.getPointer(), Dst.getAlignment().getAsAlign(), Tmp.getPointer(),
-        Tmp.getAlignment().getAsAlign(),
-        llvm::ConstantInt::get(CGF.IntPtrTy, DstSize.getFixedSize()));
+    CGF.Builder.CreateMemCpy(Dst.getPointer(), Dst.getAlignment().getAsAlign(),
+                             Tmp.getPointer(), Tmp.getAlignment().getAsAlign(),
+                             llvm::ConstantInt::get(CGF.IntPtrTy, DstSize));
   }
 }
 
