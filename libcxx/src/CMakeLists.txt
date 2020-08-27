@@ -332,8 +332,7 @@ endif()
 
 
 if (LIBCXX_BUILD_EXTERNAL_THREAD_LIBRARY)
-  set(LIBCXX_EXTERNAL_THREADING_SUPPORT_SOURCES
-      "${CMAKE_CURRENT_SOURCE_DIR}/../test/support/external_threads.cpp")
+  file(GLOB LIBCXX_EXTERNAL_THREADING_SUPPORT_SOURCES ../test/support/external_threads.cpp)
 
   if (LIBCXX_ENABLE_SHARED)
     add_library(cxx_external_threads SHARED ${LIBCXX_EXTERNAL_THREADING_SUPPORT_SOURCES})
@@ -347,8 +346,6 @@ if (LIBCXX_BUILD_EXTERNAL_THREAD_LIBRARY)
       COMPILE_FLAGS "${LIBCXX_COMPILE_FLAGS}"
       OUTPUT_NAME   "c++external_threads"
   )
-
-  target_link_libraries(cxx_external_threads PRIVATE cxx-headers)
 endif()
 
 if (LIBCXX_INSTALL_LIBRARY)
