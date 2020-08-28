@@ -606,8 +606,8 @@ static void dumpArchive(const Archive *Arc, ScopedPrinter &Writer) {
     else if (COFFImportFile *Imp = dyn_cast<COFFImportFile>(&*ChildOrErr.get()))
       dumpCOFFImportFile(Imp, Writer);
     else
-      reportError(errorCodeToError(readobj_error::unrecognized_file_format),
-                  Arc->getFileName());
+      reportWarning(errorCodeToError(readobj_error::unrecognized_file_format),
+                    Arc->getFileName());
   }
   if (Err)
     reportError(std::move(Err), Arc->getFileName());
