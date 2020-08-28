@@ -371,7 +371,7 @@ void MipsPassConfig::addPreEmitPass() {
 }
 
 bool MipsPassConfig::addIRTranslator() {
-  addPass(new IRTranslator());
+  addPass(new IRTranslator(getOptLevel()));
   return false;
 }
 
