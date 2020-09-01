@@ -171,7 +171,7 @@ template <typename AddressSpaceViewTy>
 struct AP32 {
   static const vaddr kSpaceBeg = 0;
   static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
-  static const usize kMetadataSize = 16;
+  static const usize kMetadataSize = 0;
   typedef __asan::SizeClassMap SizeClassMap;
   static const usize kRegionSizeLog = 20;
   using AddressSpaceView = AddressSpaceViewTy;
