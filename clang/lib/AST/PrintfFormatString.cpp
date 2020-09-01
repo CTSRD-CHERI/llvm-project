@@ -1116,6 +1116,10 @@ bool PrintfSpecifier::hasValidPrecision() const {
   case ConversionSpecifier::PArg:
     return true;
 
+  case ConversionSpecifier::CHERIpArg:
+    // Precision only makes sense when used with '#'
+    return HasAlternativeForm.isSet();
+
   default:
     return false;
   }
