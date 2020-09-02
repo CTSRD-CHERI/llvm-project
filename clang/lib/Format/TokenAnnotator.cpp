@@ -1841,6 +1841,12 @@ private:
             T = T->MatchingParen->Previous->Previous;
             continue;
           }
+        } else if (T->is(TT_AttributeSquare)) {
+          // Handle `x = (foo *[[clang::foo]])&v;`:
+          if (T->MatchingParen && T->MatchingParen->Previous) {
+            T = T->MatchingParen->Previous;
+            continue;
+          }
         } else if (T->canBePointerOrReferenceQualifier()) {
           T = T->Previous;
           continue;
