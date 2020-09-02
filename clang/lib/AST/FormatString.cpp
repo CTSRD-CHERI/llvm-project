@@ -811,6 +811,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target,
         case ConversionSpecifier::sArg:
         case ConversionSpecifier::ScanListArg:
         case ConversionSpecifier::ZArg:
+        case ConversionSpecifier::CHERIpArg:
           return true;
         case ConversionSpecifier::FreeBSDrArg:
         case ConversionSpecifier::FreeBSDyArg:
