@@ -9,7 +9,7 @@ cheribuildArgs = ['--llvm/build-type=Release', // DEBUG builds are too slow, we 
 // Set job properties:
 // Only archive artifacts for the default master and dev builds
 def archiveArtifacts = false
-def jobProperties = [rateLimitBuilds([count: 2, durationName: 'hour', userBoost: true]),
+def jobProperties = [rateLimitBuilds(throttle: [count: 1, durationName: 'hour', userBoost: true]),
                      copyArtifactPermission('*'), // Downstream jobs need the compiler tarball
                      [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm-project/'],
 ]
