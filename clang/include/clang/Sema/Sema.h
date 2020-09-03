@@ -11278,10 +11278,6 @@ public:
                                        AssignmentAction Action,
                                        bool AllowExplicit = false);
   ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
-                                       AssignmentAction Action,
-                                       bool AllowExplicit,
-                                       ImplicitConversionSequence& ICS);
-  ExprResult PerformImplicitConversion(Expr *From, QualType ToType,
                                        const ImplicitConversionSequence& ICS,
                                        AssignmentAction Action,
                                        CheckedConversionKind CCK
