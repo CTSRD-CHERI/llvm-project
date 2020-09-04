@@ -148,7 +148,6 @@ class CombinedAllocator {
     return secondary_.GetBlockBeginFastLocked(p);
   }
 
-
   usize GetActuallyAllocatedSize(void *p) {
     if (primary_.PointerIsMine(p))
       return primary_.GetActuallyAllocatedSize(p);
