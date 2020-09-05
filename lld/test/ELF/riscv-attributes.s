@@ -2,9 +2,9 @@
 
 # RUN: llvm-mc -filetype=obj -triple=riscv64-unknown-elf -mattr=-relax %s -o %t.o
 # RUN: ld.lld %t.o -o %t
-# RUN: llvm-readobj --arch-specific %t | FileCheck %s
+# RUN: llvm-readelf --arch-specific %t | FileCheck %s
 # RUN: ld.lld %t.o %t.o -o %t2
-# RUN: llvm-readobj --arch-specific %t2 | FileCheck %s
+# RUN: llvm-readelf --arch-specific %t2 | FileCheck %s
 
 # CHECK:      BuildAttributes {
 # CHECK-NEXT:   FormatVersion: 0x41
