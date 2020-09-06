@@ -305,6 +305,25 @@ APValue::APValue(const APValue &RHS) : Kind(None) {
   MustBeNullDerivedCap = RHS.MustBeNullDerivedCap;
 }
 
+APValue::APValue(APValue &&RHS) : Kind(RHS.Kind), Data(RHS.Data) {
+  RHS.Kind = None;
+}
+
+APValue &APValue::operator=(const APValue &RHS) {
+  if (this != &RHS)
+    *this = APValue(RHS);
+  return *this;
+}
+
+APValue &APValue::operator=(APValue &&RHS) {
+  if (Kind != None && Kind != Indeterminate)
+    DestroyDataAndMakeUninit();
+  Kind = RHS.Kind;
+  Data = RHS.Data;
+  RHS.Kind = None;
+  return *this;
+}
+
 void APValue::DestroyDataAndMakeUninit() {
   if (Kind == Int)
     ((APSInt*)(char*)Data.buffer)->~APSInt();
@@ -374,10 +393,7 @@ bool APValue::needsCleanup() const {
 void APValue::swap(APValue &RHS) {
   std::swap(Kind, RHS.Kind);
   std::swap(MustBeNullDerivedCap, RHS.MustBeNullDerivedCap);
-  char TmpData[DataSize];
-  memcpy(TmpData, Data.buffer, DataSize);
-  memcpy(Data.buffer, RHS.Data.buffer, DataSize);
-  memcpy(RHS.Data.buffer, TmpData, DataSize);
+  std::swap(Data, RHS.Data);
 }
 
 static double GetApproxValue(const llvm::APFloat &F) {
