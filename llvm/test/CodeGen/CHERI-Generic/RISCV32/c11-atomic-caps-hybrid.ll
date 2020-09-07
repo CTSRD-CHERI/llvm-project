@@ -236,13 +236,11 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_add_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_add_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_add_uintcap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_add_cap
 ; CHECK-NEXT:    lw ra, 12(sp)
@@ -257,13 +255,11 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_add_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_add_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_add_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_add_longptr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    cgetaddr a1, ca1
 ; CHECK-NEXT:    slli a1, a1, 3
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
@@ -286,13 +282,11 @@ entry:
 declare i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)*) #3
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_add_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_add_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_add_longptr_and_short:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    slli a1, a1, 3
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
 ; CHECK-NEXT:    addi a2, zero, 5
@@ -311,13 +305,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_add_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_add_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_add_charptr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    cgetaddr a1, ca1
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
 ; CHECK-NEXT:    addi a2, zero, 5
@@ -334,13 +326,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_add_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_add_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_add_charptr_and_short:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_add_cap
@@ -356,13 +346,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_sub_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_sub_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_sub_uintcap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_sub_cap
 ; CHECK-NEXT:    lw ra, 12(sp)
@@ -377,13 +365,11 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_sub_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_sub_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_sub_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_sub_longptr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    cgetaddr a1, ca1
 ; CHECK-NEXT:    slli a1, a1, 3
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
@@ -403,13 +389,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_sub_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_sub_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_sub_longptr_and_short:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    slli a1, a1, 3
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
 ; CHECK-NEXT:    addi a2, zero, 5
@@ -428,13 +412,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_sub_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_sub_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_sub_charptr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    cgetaddr a1, ca1
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
 ; CHECK-NEXT:    addi a2, zero, 5
@@ -451,13 +433,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_sub_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_sub_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_sub_charptr_and_short:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    cincoffset ca1, cnull, a1
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_sub_cap
@@ -473,13 +453,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_and_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_and_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_and_uintcap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_and_cap
 ; CHECK-NEXT:    lw ra, 12(sp)
@@ -494,13 +472,11 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_and_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_or_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_or_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_or_uintcap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_or_cap
 ; CHECK-NEXT:    lw ra, 12(sp)
@@ -515,13 +491,11 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_or_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_xor_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_xor_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_xor_uintcap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_xor_cap
 ; CHECK-NEXT:    lw ra, 12(sp)
@@ -536,13 +510,11 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_xor_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_max_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_max_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_max_uintcap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_umax_cap
 ; CHECK-NEXT:    lw ra, 12(sp)
@@ -557,13 +529,11 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_umax_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_min_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_min_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 ; CHECK-LABEL: test_fetch_min_uintcap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi sp, sp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    sw ra, 12(sp)
-; CHECK-NEXT:    .cfi_offset ra, -4
 ; CHECK-NEXT:    addi a2, zero, 5
 ; CHECK-NEXT:    call __atomic_fetch_umin_cap
 ; CHECK-NEXT:    lw ra, 12(sp)

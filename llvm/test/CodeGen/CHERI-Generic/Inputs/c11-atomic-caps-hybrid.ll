@@ -76,7 +76,7 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_add_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_add_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = bitcast i8 addrspace(200)** %ptr to i8*
   %call = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* %0, i8 addrspace(200)* %value, i32 signext 5) #4
@@ -86,7 +86,7 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_add_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_add_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_add_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = call iCAPRANGE @llvm.cheri.cap.address.get.iCAPRANGE(i8 addrspace(200)* %value)
   %1 = shl iCAPRANGE %0, 3
@@ -101,7 +101,7 @@ entry:
 declare iCAPRANGE @llvm.cheri.cap.address.get.iCAPRANGE(i8 addrspace(200)*) #3
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_add_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_add_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 entry:
   %conv = sext i16 %value to iCAPRANGE
   %0 = shl nsw iCAPRANGE %conv, 3
@@ -113,7 +113,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_add_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_add_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = call iCAPRANGE @llvm.cheri.cap.address.get.iCAPRANGE(i8 addrspace(200)* %value)
   %1 = getelementptr i8, i8 addrspace(200)* null, iCAPRANGE %0
@@ -123,7 +123,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_add_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_add_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 entry:
   %conv = sext i16 %value to iCAPRANGE
   %0 = getelementptr i8, i8 addrspace(200)* null, iCAPRANGE %conv
@@ -133,7 +133,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_sub_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_sub_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = bitcast i8 addrspace(200)** %ptr to i8*
   %call = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* %0, i8 addrspace(200)* %value, i32 signext 5) #4
@@ -143,7 +143,7 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_sub_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_sub_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_sub_longptr(i64 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = call iCAPRANGE @llvm.cheri.cap.address.get.iCAPRANGE(i8 addrspace(200)* %value)
   %1 = shl iCAPRANGE %0, 3
@@ -155,7 +155,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i64 addrspace(200)* @test_fetch_sub_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i64 addrspace(200)* @test_fetch_sub_longptr_and_short(i64 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 entry:
   %conv = sext i16 %value to iCAPRANGE
   %0 = shl nsw iCAPRANGE %conv, 3
@@ -167,7 +167,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_sub_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_sub_charptr(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = call iCAPRANGE @llvm.cheri.cap.address.get.iCAPRANGE(i8 addrspace(200)* %value)
   %1 = getelementptr i8, i8 addrspace(200)* null, iCAPRANGE %0
@@ -177,7 +177,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_sub_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_sub_charptr_and_short(i8 addrspace(200)** %ptr, i16 signext %value) local_unnamed_addr nounwind {
 entry:
   %conv = sext i16 %value to iCAPRANGE
   %0 = getelementptr i8, i8 addrspace(200)* null, iCAPRANGE %conv
@@ -187,7 +187,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_and_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_and_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = bitcast i8 addrspace(200)** %ptr to i8*
   %call = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* %0, i8 addrspace(200)* %value, i32 signext 5) #4
@@ -197,7 +197,7 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_and_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_or_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_or_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = bitcast i8 addrspace(200)** %ptr to i8*
   %call = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* %0, i8 addrspace(200)* %value, i32 signext 5) #4
@@ -207,7 +207,7 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_or_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_xor_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_xor_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = bitcast i8 addrspace(200)** %ptr to i8*
   %call = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* %0, i8 addrspace(200)* %value, i32 signext 5) #4
@@ -217,7 +217,7 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_xor_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_max_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_max_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = bitcast i8 addrspace(200)** %ptr to i8*
   %call = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* %0, i8 addrspace(200)* %value, i32 signext 5) #4
@@ -227,7 +227,7 @@ entry:
 declare i8 addrspace(200)* @__atomic_fetch_umax_cap(i8*, i8 addrspace(200)*, i32) local_unnamed_addr
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @test_fetch_min_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr #2 {
+define i8 addrspace(200)* @test_fetch_min_uintcap(i8 addrspace(200)** %ptr, i8 addrspace(200)* %value) local_unnamed_addr nounwind {
 entry:
   %0 = bitcast i8 addrspace(200)** %ptr to i8*
   %call = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* %0, i8 addrspace(200)* %value, i32 signext 5) #4
