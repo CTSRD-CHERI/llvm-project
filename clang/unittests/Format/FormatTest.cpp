@@ -8730,8 +8730,6 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
   verifyFormat("typeof(LoooooooooooooooooooooooooooooooooooooooooongName)\n"
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
-  verifyFormat("_Atomic(LooooooooooooooooooooooooooooooooooooooooongName)\n"
-               "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
   verifyFormat("__underlying_type(LooooooooooooooooooooooooooooooongName)\n"
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongReturnType\n"
