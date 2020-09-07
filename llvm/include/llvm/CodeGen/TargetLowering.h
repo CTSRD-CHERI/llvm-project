@@ -1985,9 +1985,12 @@ public:
 
   /// Return true if the backend can lower of pointer-type cmpxchg.
   /// Otherwise it will be converted to an integer-type cmpxchg in the IR
+  /// TODO: remove this hook
   virtual bool canLowerPointerTypeCmpXchg(const DataLayout &DL,
                                           AtomicCmpXchgInst *AI) const {
-    return false;
+    // Capability-type cmxchg always needs to use i8 addrspace(200)* instead of
+    // converting arguments to integer types.
+    return DL.isFatPointer(AI->getCompareOperand()->getType());
   }
 
   /// Returns how the IR-level AtomicExpand pass should expand the given

@@ -857,9 +857,6 @@ extern bool LargeCapTable;
       return true;
     }
 
-    bool canLowerPointerTypeCmpXchg(const DataLayout &DL,
-                                    AtomicCmpXchgInst *AI) const override;
-
     /// Emit a sign-extension using sll/sra, seb, or seh appropriately.
     MachineBasicBlock *emitSignExtendToI32InReg(MachineInstr &MI,
                                                 MachineBasicBlock *BB,

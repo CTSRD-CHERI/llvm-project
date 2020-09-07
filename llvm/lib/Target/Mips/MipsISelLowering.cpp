@@ -1496,13 +1496,6 @@ bool MipsTargetLowering::isCheapToSpeculateCtlz() const {
   return Subtarget.hasMips32();
 }
 
-bool MipsTargetLowering::canLowerPointerTypeCmpXchg(
-    const llvm::DataLayout &DL, llvm::AtomicCmpXchgInst *AI) const {
-  if (Subtarget.isCheri() && DL.isFatPointer(AI->getPointerAddressSpace()))
-    return true;
-  return TargetLowering::canLowerPointerTypeCmpXchg(DL, AI);
-}
-
 bool MipsTargetLowering::shouldFoldConstantShiftPairToMask(
     const SDNode *N, CombineLevel Level) const {
   if (N->getOperand(0).getValueType().isVector())
