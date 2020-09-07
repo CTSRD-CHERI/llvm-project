@@ -6131,7 +6131,8 @@ static SDValue getMemcpyLoadsAndStores(
     SrcAlign = Alignment;
   assert(SrcAlign && "SrcAlign must be set");
   ConstantDataArraySlice Slice;
-  bool CopyFromConstant = isMemSrcFromConstant(Src, Slice);
+  // If marked as volatile, perform a copy even when marked as constant.
+  bool CopyFromConstant = !isVol && isMemSrcFromConstant(Src, Slice);
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
   const MemOp Op =
