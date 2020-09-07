@@ -226,8 +226,6 @@ public:
       LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     }
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
-    if (IsCHERI && CapSize > 0)
-      MaxAtomicInlineWidth = std::max(MaxAtomicInlineWidth, (unsigned short)CapSize);
     SuitableAlign = std::max(CapSize, 128);
   }
 

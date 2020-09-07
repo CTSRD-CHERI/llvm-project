@@ -332,7 +332,7 @@ def err_ifunc_resolver_return : Error<
   "ifunc resolver function must return a pointer">;
 
 def warn_atomic_op_misaligned : Warning<
-  "%select{large|misaligned}0 atomic operation may incur "
+  "%select{large|misaligned|unsupported}0 atomic operation may incur "
   "significant performance penalty">, InGroup<DiagGroup<"atomic-alignment">>;
 
 def warn_alias_with_section : Warning<
