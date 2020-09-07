@@ -837,20 +837,28 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
   case Mips::ATOMIC_SWAP_I64_POSTRA:
     IsOr = true;
     break;
+  CHERI_SMALL_CASES(LOAD_UMIN)
   case Mips::ATOMIC_LOAD_UMIN_I32_POSTRA:
   case Mips::ATOMIC_LOAD_UMIN_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I64_POSTRA:
     IsUnsigned = true;
     LLVM_FALLTHROUGH;
+  CHERI_SMALL_CASES(LOAD_MIN)
   case Mips::ATOMIC_LOAD_MIN_I32_POSTRA:
   case Mips::ATOMIC_LOAD_MIN_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I64_POSTRA:
     IsMin = true;
     break;
+  CHERI_SMALL_CASES(LOAD_UMAX)
   case Mips::ATOMIC_LOAD_UMAX_I32_POSTRA:
   case Mips::ATOMIC_LOAD_UMAX_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I64_POSTRA:
     IsUnsigned = true;
     LLVM_FALLTHROUGH;
+  CHERI_SMALL_CASES(LOAD_MAX)
   case Mips::ATOMIC_LOAD_MAX_I32_POSTRA:
   case Mips::ATOMIC_LOAD_MAX_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I64_POSTRA:
     IsMax = true;
     break;
   default:
@@ -1029,21 +1037,29 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandAtomicBinOp(MBB, MBBI, NMBB, 8);
 
   // CHERI instrs:
-  case Mips::CAP_ATOMIC_SWAP_I8_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_NAND_I8_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_ADD_I8_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_SUB_I8_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_AND_I8_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_OR_I8_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_XOR_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I8_POSTRA:
+  case Mips::CAP_ATOMIC_SWAP_I8_POSTRA:
     return expandAtomicBinOp(MBB, MBBI, NMBB, 1, /*IsCapOp=*/true);
-  case Mips::CAP_ATOMIC_SWAP_I16_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_NAND_I16_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_ADD_I16_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_SUB_I16_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_AND_I16_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_OR_I16_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_XOR_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I16_POSTRA:
+  case Mips::CAP_ATOMIC_SWAP_I16_POSTRA:
     return expandAtomicBinOp(MBB, MBBI, NMBB, 2, /*IsCapOp=*/true);
   case Mips::CAP_ATOMIC_LOAD_ADD_I32_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_SUB_I32_POSTRA:
@@ -1051,6 +1067,10 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case Mips::CAP_ATOMIC_LOAD_OR_I32_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_XOR_I32_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_NAND_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I32_POSTRA:
   case Mips::CAP_ATOMIC_SWAP_I32_POSTRA:
     return expandAtomicBinOp(MBB, MBBI, NMBB, 4, /*IsCapOp=*/true);
   case Mips::CAP_ATOMIC_LOAD_ADD_I64_POSTRA:
@@ -1059,6 +1079,10 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case Mips::CAP_ATOMIC_LOAD_OR_I64_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_XOR_I64_POSTRA:
   case Mips::CAP_ATOMIC_LOAD_NAND_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I64_POSTRA:
   case Mips::CAP_ATOMIC_SWAP_I64_POSTRA:
     return expandAtomicBinOp(MBB, MBBI, NMBB, 8, /*IsCapOp=*/true);
 
