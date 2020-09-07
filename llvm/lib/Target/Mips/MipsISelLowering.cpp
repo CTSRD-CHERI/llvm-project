@@ -1841,6 +1841,10 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::ATOMIC_LOAD_MIN_I32:
     return emitAtomicBinary(MI, BB);
   case Mips::ATOMIC_LOAD_MIN_I64:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I8:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I16:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I32:
+  case Mips::CAP_ATOMIC_LOAD_MIN_I64:
     return emitAtomicBinary(MI, BB);
 
   case Mips::ATOMIC_LOAD_MAX_I8:
@@ -1850,6 +1854,10 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::ATOMIC_LOAD_MAX_I32:
     return emitAtomicBinary(MI, BB);
   case Mips::ATOMIC_LOAD_MAX_I64:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I8:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I16:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I32:
+  case Mips::CAP_ATOMIC_LOAD_MAX_I64:
     return emitAtomicBinary(MI, BB);
 
   case Mips::ATOMIC_LOAD_UMIN_I8:
@@ -1859,6 +1867,10 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::ATOMIC_LOAD_UMIN_I32:
     return emitAtomicBinary(MI, BB);
   case Mips::ATOMIC_LOAD_UMIN_I64:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I8:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I16:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I32:
+  case Mips::CAP_ATOMIC_LOAD_UMIN_I64:
     return emitAtomicBinary(MI, BB);
 
   case Mips::ATOMIC_LOAD_UMAX_I8:
@@ -1868,6 +1880,10 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::ATOMIC_LOAD_UMAX_I32:
     return emitAtomicBinary(MI, BB);
   case Mips::ATOMIC_LOAD_UMAX_I64:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I8:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I16:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I32:
+  case Mips::CAP_ATOMIC_LOAD_UMAX_I64:
     return emitAtomicBinary(MI, BB);
 
   case Mips::PseudoSDIV:
@@ -1944,25 +1960,40 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   }
 }
 
-
 static unsigned getCheriPostRAAtomicOp(const MachineInstr &MI,
-                                       bool* IsCapabilityArg) {
-#define CAP_ATOMIC_POSTRA_CASES(op) \
-    case Mips::CAP_ATOMIC_##op##_I8: return Mips::CAP_ATOMIC_##op##_I8_POSTRA; \
-    case Mips::CAP_ATOMIC_##op##_I16: return Mips::CAP_ATOMIC_##op##_I16_POSTRA; \
-    case Mips::CAP_ATOMIC_##op##_I32: return Mips::CAP_ATOMIC_##op##_I32_POSTRA; \
-    case Mips::CAP_ATOMIC_##op##_I64: return Mips::CAP_ATOMIC_##op##_I64_POSTRA;
+                                       bool *IsCapabilityArg,
+                                       bool *NeedsAdditionalReg) {
+#define CAP_ATOMIC_POSTRA_CASES(op, extrareg)                                  \
+  case Mips::CAP_ATOMIC_##op##_I8:                                             \
+    *NeedsAdditionalReg = extrareg;                                            \
+    return Mips::CAP_ATOMIC_##op##_I8_POSTRA;                                  \
+  case Mips::CAP_ATOMIC_##op##_I16:                                            \
+    *NeedsAdditionalReg = extrareg;                                            \
+    return Mips::CAP_ATOMIC_##op##_I16_POSTRA;                                 \
+  case Mips::CAP_ATOMIC_##op##_I32:                                            \
+    *NeedsAdditionalReg = extrareg;                                            \
+    return Mips::CAP_ATOMIC_##op##_I32_POSTRA;                                 \
+  case Mips::CAP_ATOMIC_##op##_I64:                                            \
+    *NeedsAdditionalReg = extrareg;                                            \
+    return Mips::CAP_ATOMIC_##op##_I64_POSTRA;
 
-    // TODO: case Mips::CAP_ATOMIC_##op##_CAP: return Mips::CAP_ATOMIC_##op##_CAP_POSTRA;
+  // TODO: case Mips::CAP_ATOMIC_##op##_CAP: return
+  // Mips::CAP_ATOMIC_##op##_CAP_POSTRA;
 
+  // clang-format off
   switch (MI.getOpcode()) {
-  CAP_ATOMIC_POSTRA_CASES(LOAD_ADD)
-  CAP_ATOMIC_POSTRA_CASES(LOAD_SUB)
-  CAP_ATOMIC_POSTRA_CASES(LOAD_AND)
-  CAP_ATOMIC_POSTRA_CASES(LOAD_OR)
-  CAP_ATOMIC_POSTRA_CASES(LOAD_XOR)
-  CAP_ATOMIC_POSTRA_CASES(LOAD_NAND)
-  CAP_ATOMIC_POSTRA_CASES(SWAP)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_ADD, false)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_SUB, false)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_AND, false)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_OR, false)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_XOR, false)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_NAND, false)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_MIN, true)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_MAX, true)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_UMIN, true)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_UMAX, true)
+  CAP_ATOMIC_POSTRA_CASES(SWAP, false)
+  // clang-format on
   case Mips::CAP_ATOMIC_SWAP_CAP:
     *IsCapabilityArg = true;
     return Mips::CAP_ATOMIC_SWAP_CAP_POSTRA;
@@ -2061,7 +2092,8 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
     NeedsAdditionalReg = true;
     break;
   default:
-    AtomicOp = getCheriPostRAAtomicOp(MI, &IsCapabilityArg);
+    AtomicOp =
+        getCheriPostRAAtomicOp(MI, &IsCapabilityArg, &NeedsAdditionalReg);
     break;
   }
 
