@@ -735,6 +735,19 @@ let usesCustomInserter = 1 in {
   def CAP_ATOMIC_LOAD_NAND_I16 : CapAtomic2Ops<atomic_load_nand_16, GPR32Opnd>;
   def CAP_ATOMIC_LOAD_NAND_I32 : CapAtomic2Ops<atomic_load_nand_32, GPR32Opnd>;
 
+  def CAP_ATOMIC_LOAD_MIN_I8  : CapAtomic2Ops<atomic_load_min_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_MIN_I16 : CapAtomic2Ops<atomic_load_min_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_MIN_I32 : CapAtomic2Ops<atomic_load_min_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_MAX_I8  : CapAtomic2Ops<atomic_load_max_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_MAX_I16 : CapAtomic2Ops<atomic_load_max_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_MAX_I32 : CapAtomic2Ops<atomic_load_max_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_UMIN_I8  : CapAtomic2Ops<atomic_load_umin_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_UMIN_I16 : CapAtomic2Ops<atomic_load_umin_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_UMIN_I32 : CapAtomic2Ops<atomic_load_umin_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_UMAX_I8  : CapAtomic2Ops<atomic_load_umax_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_UMAX_I16 : CapAtomic2Ops<atomic_load_umax_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_UMAX_I32 : CapAtomic2Ops<atomic_load_umax_32, GPR32Opnd>;
+
   def CAP_ATOMIC_SWAP_I8       : CapAtomic2Ops<atomic_swap_8, GPR32Opnd>;
   def CAP_ATOMIC_SWAP_I16      : CapAtomic2Ops<atomic_swap_16, GPR32Opnd>;
   def CAP_ATOMIC_SWAP_I32      : CapAtomic2Ops<atomic_swap_32, GPR32Opnd>;
@@ -750,6 +763,10 @@ let usesCustomInserter = 1 in {
   def CAP_ATOMIC_LOAD_NAND_I64 : CapAtomic2Ops<atomic_load_nand_64, GPR64Opnd>;
   def CAP_ATOMIC_SWAP_I64      : CapAtomic2Ops<atomic_swap_64, GPR64Opnd>;
   def CAP_ATOMIC_CMP_SWAP_I64  : CapAtomicCmpSwap<atomic_cmp_swap_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_MIN_I64  : CapAtomic2Ops<atomic_load_min_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_MAX_I64  : CapAtomic2Ops<atomic_load_max_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_UMIN_I64 : CapAtomic2Ops<atomic_load_umin_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_UMAX_I64 : CapAtomic2Ops<atomic_load_umax_64, GPR64Opnd>;
 
   // Capability atomics:
   // FIXME: this seems wrong it should be CheriGPROrCNULL
@@ -792,6 +809,10 @@ defm CAP_ATOMIC_LOAD_AND  : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_LOAD_OR   : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_LOAD_XOR  : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_LOAD_NAND : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_MIN  : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_MAX  : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_UMIN : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_UMAX : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_SWAP      : CapAtomicPostRA2Ops;
 
 def CAP_ATOMIC_CMP_SWAP_I8_POSTRA   : CapAtomicCmpSwapPostRA<GPR32Opnd>;
