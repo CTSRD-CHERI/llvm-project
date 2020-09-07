@@ -169,6 +169,7 @@ TEST_F(FormatTest, NestedNameSpecifiers) {
   verifyFormat("::ns::SomeFunction(::ns::SomeOtherFunction())");
   verifyFormat("static constexpr bool Bar = decltype(bar())::value;");
   verifyFormat("static constexpr bool Bar = typeof(bar())::value;");
+  verifyFormat("static constexpr bool Bar = __underlying_type(bar())::value;");
   verifyFormat("static constexpr bool Bar = _Atomic(bar())::value;");
   verifyFormat("bool a = 2 < ::SomeFunction();");
   verifyFormat("ALWAYS_INLINE ::std::string getName();");
@@ -7881,6 +7882,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("[](const decltype(*a) &value) {}");
   verifyFormat("[](const typeof(*a) &value) {}");
   verifyFormat("[](const _Atomic(a *) &value) {}");
+  verifyFormat("[](const __underlying_type(a) &value) {}");
   verifyFormat("decltype(a * b) F();");
   verifyFormat("typeof(a * b) F();");
   verifyFormat("#define MACRO() [](A *a) { return 1; }");
@@ -7950,6 +7952,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("[](const decltype(*a)* ptr) {}", Left);
   verifyFormat("[](const typeof(*a)* ptr) {}", Left);
   verifyFormat("[](const _Atomic(a*)* ptr) {}", Left);
+  verifyFormat("[](const __underlying_type(a)* ptr) {}", Left);
   verifyFormat("typedef typeof /*comment*/ (int(int, int))* MyFuncPtr;", Left);
   verifyFormat("auto x(A&&, B&&, C&&) -> D;", Left);
   verifyFormat("auto x = [](A&&, B&&, C&&) -> D {};", Left);
@@ -8048,6 +8051,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("decltype(*::std::declval<const T &>()) void F();");
   verifyFormat("typeof(*::std::declval<const T &>()) void F();");
   verifyFormat("_Atomic(*::std::declval<const T &>()) void F();");
+  verifyFormat("__underlying_type(*::std::declval<const T &>()) void F();");
   verifyFormat(
       "template <class T, class = typename std::enable_if<\n"
       "                       std::is_integral<T>::value &&\n"
@@ -8074,6 +8078,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyIndependentOfContext("MACRO(_Atomic(A) *a);");
   verifyIndependentOfContext("MACRO(decltype(A) *a);");
   verifyIndependentOfContext("MACRO(typeof(A) *a);");
+  verifyIndependentOfContext("MACRO(__underlying_type(A) *a);");
   verifyIndependentOfContext("MACRO(A *const a);");
   verifyIndependentOfContext("MACRO(A *restrict a);");
   verifyIndependentOfContext("MACRO(A *__restrict__ a);");
@@ -8627,6 +8632,8 @@ TEST_F(FormatTest, BreaksLongDeclarations) {
   verifyFormat("typeof(LoooooooooooooooooooooooooooooooooooooooooongName)\n"
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
   verifyFormat("_Atomic(LooooooooooooooooooooooooooooooooooooooooongName)\n"
+               "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
+  verifyFormat("__underlying_type(LooooooooooooooooooooooooooooooongName)\n"
                "LooooooooooooooooooooooooooooooooooongFunctionDefinition() {}");
   verifyFormat("LoooooooooooooooooooooooooooooooooooooooongReturnType\n"
                "LooooooooooooooooooooooooooongFunctionDeclaration(T... t);");
@@ -11573,6 +11580,7 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeParens) {
   verifyFormat("auto f(int x) -> decltype(x);", NoSpace);
   verifyFormat("auto f(int x) -> typeof(x);", NoSpace);
   verifyFormat("auto f(int x) -> _Atomic(x);", NoSpace);
+  verifyFormat("auto f(int x) -> __underlying_type(x);", NoSpace);
   verifyFormat("int f(T x) noexcept(x.create());", NoSpace);
   verifyFormat("alignas(128) char a[128];", NoSpace);
   verifyFormat("size_t x = alignof(MyType);", NoSpace);
@@ -11623,6 +11631,7 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeParens) {
   verifyFormat("auto f (int x) -> decltype (x);", Space);
   verifyFormat("auto f (int x) -> typeof (x);", Space);
   verifyFormat("auto f (int x) -> _Atomic (x);", Space);
+  verifyFormat("auto f (int x) -> __underlying_type (x);", Space);
   verifyFormat("int f (T x) noexcept (x.create ());", Space);
   verifyFormat("alignas (128) char a[128];", Space);
   verifyFormat("size_t x = alignof (MyType);", Space);
@@ -11677,6 +11686,7 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeParens) {
   verifyFormat("auto f (int x) -> decltype (x);", SomeSpace);
   verifyFormat("auto f (int x) -> typeof (x);", SomeSpace);
   verifyFormat("auto f (int x) -> _Atomic (x);", SomeSpace);
+  verifyFormat("auto f (int x) -> __underlying_type (x);", SomeSpace);
   verifyFormat("int f (T x) noexcept (x.create());", SomeSpace);
   verifyFormat("alignas (128) char a[128];", SomeSpace);
   verifyFormat("size_t x = alignof (MyType);", SomeSpace);
@@ -14908,6 +14918,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                "  SomeFunction([](decltype(x), A *a) {});\n"
                "  SomeFunction([](typeof(x), A *a) {});\n"
                "  SomeFunction([](_Atomic(x), A *a) {});\n"
+               "  SomeFunction([](__underlying_type(x), A *a) {});\n"
                "}");
   verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "    [](const aaaaaaaaaa &a) { return a; });");
