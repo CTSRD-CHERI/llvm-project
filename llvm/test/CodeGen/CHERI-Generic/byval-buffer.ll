@@ -3,7 +3,7 @@
 ; After merging to the LLVM11 branch point certain by-value arguments were no longer being copied.
 ; Changing the IR to use addrspace(0) and compiling for non-CHERI adds memcpy() calls, so we should do the same for purecap.
 ; This (incorrect) behaviour was added in a297402637b73b9d783a229e9b41c57ea7b92e2e, but we apparently never hit
-; it because the frontend would almost always emit a local alloca already.
+; because the frontend would almost always emit a local alloca already.
 
 ; First check that non-CHERI targets add a memcpy
 ; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC
@@ -53,35 +53,32 @@ declare void @llvm.memset.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8,
 define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-STATIC-LABEL: clang_purecap_byval_args:
 ; RV64-STATIC:       # %bb.0: # %entry
-; RV64-STATIC-NEXT:    addi sp, sp, -1072
-; RV64-STATIC-NEXT:    sd ra, 1064(sp)
-; RV64-STATIC-NEXT:    sd s0, 1056(sp)
-; RV64-STATIC-NEXT:    sd s1, 1048(sp)
-; RV64-STATIC-NEXT:    sd s2, 1040(sp)
-; RV64-STATIC-NEXT:    lui s2, %hi(global_foo)
-; RV64-STATIC-NEXT:    addi s0, s2, %lo(global_foo)
+; RV64-STATIC-NEXT:    addi sp, sp, -1056
+; RV64-STATIC-NEXT:    sd ra, 1048(sp)
+; RV64-STATIC-NEXT:    sd s0, 1040(sp)
+; RV64-STATIC-NEXT:    sd s1, 1032(sp)
+; RV64-STATIC-NEXT:    lui s1, %hi(global_foo)
+; RV64-STATIC-NEXT:    addi s0, s1, %lo(global_foo)
 ; RV64-STATIC-NEXT:    addi a2, zero, 1024
 ; RV64-STATIC-NEXT:    mv a0, s0
 ; RV64-STATIC-NEXT:    mv a1, zero
 ; RV64-STATIC-NEXT:    call memset
-; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s2)
+; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
 ; RV64-STATIC-NEXT:    mv a1, zero
 ; RV64-STATIC-NEXT:    call assert_eq
-; RV64-STATIC-NEXT:    addi s1, sp, 16
+; RV64-STATIC-NEXT:    addi a0, sp, 8
 ; RV64-STATIC-NEXT:    addi a2, zero, 1024
-; RV64-STATIC-NEXT:    mv a0, s1
 ; RV64-STATIC-NEXT:    mv a1, s0
 ; RV64-STATIC-NEXT:    call memcpy
-; RV64-STATIC-NEXT:    mv a0, s1
+; RV64-STATIC-NEXT:    addi a0, sp, 8
 ; RV64-STATIC-NEXT:    call foo_byval
-; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s2)
+; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
 ; RV64-STATIC-NEXT:    mv a1, zero
 ; RV64-STATIC-NEXT:    call assert_eq
-; RV64-STATIC-NEXT:    ld s2, 1040(sp)
-; RV64-STATIC-NEXT:    ld s1, 1048(sp)
-; RV64-STATIC-NEXT:    ld s0, 1056(sp)
-; RV64-STATIC-NEXT:    ld ra, 1064(sp)
-; RV64-STATIC-NEXT:    addi sp, sp, 1072
+; RV64-STATIC-NEXT:    ld s1, 1032(sp)
+; RV64-STATIC-NEXT:    ld s0, 1040(sp)
+; RV64-STATIC-NEXT:    ld ra, 1048(sp)
+; RV64-STATIC-NEXT:    addi sp, sp, 1056
 ; RV64-STATIC-NEXT:    ret
 ;
 ; RV64-PIC-LABEL: clang_purecap_byval_args:
@@ -89,7 +86,6 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-PIC-NEXT:    addi sp, sp, -1056
 ; RV64-PIC-NEXT:    sd ra, 1048(sp)
 ; RV64-PIC-NEXT:    sd s0, 1040(sp)
-; RV64-PIC-NEXT:    sd s1, 1032(sp)
 ; RV64-PIC-NEXT:  .LBB0_1: # %entry
 ; RV64-PIC-NEXT:    # Label of block must be emitted
 ; RV64-PIC-NEXT:    auipc s0, %pcrel_hi(global_foo)
@@ -101,17 +97,15 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-PIC-NEXT:    lb a0, 0(s0)
 ; RV64-PIC-NEXT:    mv a1, zero
 ; RV64-PIC-NEXT:    call assert_eq@plt
-; RV64-PIC-NEXT:    addi s1, sp, 8
+; RV64-PIC-NEXT:    addi a0, sp, 16
 ; RV64-PIC-NEXT:    addi a2, zero, 1024
-; RV64-PIC-NEXT:    mv a0, s1
 ; RV64-PIC-NEXT:    mv a1, s0
 ; RV64-PIC-NEXT:    call memcpy@plt
-; RV64-PIC-NEXT:    mv a0, s1
+; RV64-PIC-NEXT:    addi a0, sp, 16
 ; RV64-PIC-NEXT:    call foo_byval
 ; RV64-PIC-NEXT:    lb a0, 0(s0)
 ; RV64-PIC-NEXT:    mv a1, zero
 ; RV64-PIC-NEXT:    call assert_eq@plt
-; RV64-PIC-NEXT:    ld s1, 1032(sp)
 ; RV64-PIC-NEXT:    ld s0, 1040(sp)
 ; RV64-PIC-NEXT:    ld ra, 1048(sp)
 ; RV64-PIC-NEXT:    addi sp, sp, 1056

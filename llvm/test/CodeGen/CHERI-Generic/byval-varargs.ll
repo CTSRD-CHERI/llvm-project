@@ -31,27 +31,21 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) #0 {
 ; RV64:       # %bb.0: # %entry
 ; RV64-NEXT:    addi sp, sp, -2032
 ; RV64-NEXT:    sd ra, 2024(sp)
-; RV64-NEXT:    sd s0, 2016(sp)
-; RV64-NEXT:    sd s1, 2008(sp)
-; RV64-NEXT:    addi sp, sp, -48
-; RV64-NEXT:    addi s0, sp, 1032
+; RV64-NEXT:    addi sp, sp, -32
+; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    addi a2, zero, 1024
-; RV64-NEXT:    mv a0, s0
 ; RV64-NEXT:    mv a1, zero
 ; RV64-NEXT:    call memset@plt
-; RV64-NEXT:    mv a0, s0
+; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    call byref@plt
-; RV64-NEXT:    addi s1, sp, 8
+; RV64-NEXT:    addi a0, sp, 8
+; RV64-NEXT:    addi a1, sp, 1032
 ; RV64-NEXT:    addi a2, zero, 1024
-; RV64-NEXT:    mv a0, s1
-; RV64-NEXT:    mv a1, s0
 ; RV64-NEXT:    call memcpy@plt
 ; RV64-NEXT:    addi a0, zero, 1024
-; RV64-NEXT:    mv a1, s1
+; RV64-NEXT:    addi a1, sp, 8
 ; RV64-NEXT:    call varargs@plt
-; RV64-NEXT:    addi sp, sp, 48
-; RV64-NEXT:    ld s1, 2008(sp)
-; RV64-NEXT:    ld s0, 2016(sp)
+; RV64-NEXT:    addi sp, sp, 32
 ; RV64-NEXT:    ld ra, 2024(sp)
 ; RV64-NEXT:    addi sp, sp, 2032
 ; RV64-NEXT:    ret
@@ -223,28 +217,22 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 ; RV64:       # %bb.0: # %entry
 ; RV64-NEXT:    addi sp, sp, -2032
 ; RV64-NEXT:    sd ra, 2024(sp)
-; RV64-NEXT:    sd s0, 2016(sp)
-; RV64-NEXT:    sd s1, 2008(sp)
-; RV64-NEXT:    addi sp, sp, -48
-; RV64-NEXT:    addi s0, sp, 1032
+; RV64-NEXT:    addi sp, sp, -32
+; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    addi a2, zero, 1024
-; RV64-NEXT:    mv a0, s0
 ; RV64-NEXT:    mv a1, zero
 ; RV64-NEXT:    call memset@plt
-; RV64-NEXT:    mv a0, s0
+; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    call byref@plt
-; RV64-NEXT:    addi s1, sp, 8
+; RV64-NEXT:    addi a0, sp, 8
+; RV64-NEXT:    addi a1, sp, 1032
 ; RV64-NEXT:    addi a2, zero, 1024
-; RV64-NEXT:    mv a0, s1
-; RV64-NEXT:    mv a1, s0
 ; Call memcpy for local alloca: dst=sp+8, src=sp+1032, size=1024
 ; RV64-NEXT:    call memcpy@plt
 ; RV64-NEXT:    addi a0, zero, 1024
-; RV64-NEXT:    mv a1, s1
+; RV64-NEXT:    addi a1, sp, 8
 ; RV64-NEXT:    call varargs@plt
-; RV64-NEXT:    addi sp, sp, 48
-; RV64-NEXT:    ld s1, 2008(sp)
-; RV64-NEXT:    ld s0, 2016(sp)
+; RV64-NEXT:    addi sp, sp, 32
 ; RV64-NEXT:    ld ra, 2024(sp)
 ; RV64-NEXT:    addi sp, sp, 2032
 ; RV64-NEXT:    ret
