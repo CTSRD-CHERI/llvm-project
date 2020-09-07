@@ -142,12 +142,14 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
         AtomicAlign = ValueAlign = lvalue.getAlignment();
         LVal = lvalue;
       }
-      UseLibcall = !C.getTargetInfo().hasBuiltinAtomic(
-          AtomicSizeInBits, C.toBits(lvalue.getAlignment()));
-      if (AtomicTy->isCHERICapabilityType(CGF.CGM.getContext()))
+      if (AtomicTy->isCHERICapabilityType(CGF.CGM.getContext())) {
         UseLibcall =
             CGF.CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
                 Op);
+      } else {
+        UseLibcall = !C.getTargetInfo().hasBuiltinAtomic(
+            AtomicSizeInBits, C.toBits(lvalue.getAlignment()));
+      }
     }
 
     QualType getAtomicType() const { return AtomicTy; }
@@ -781,33 +783,29 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
                   SourceLocation Loc, CharUnits SizeInChars) {
   if (UseOptimizedLibcall) {
     // Load value and pass it to the function directly.
-    if (ValTy->isCHERICapabilityType(CGF.getContext())) {
-      // capabilities can be passed directly without casting to i8*
-      Args.add(RValue::get(Val), ValTy);
-      return;
-    }
     CharUnits Align = CGF.getContext().getTypeAlignInChars(ValTy);
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
-    ValTy =
-        CGF.getContext().getIntTypeForBitwidth(SizeInBits, /*Signed=*/false);
-    llvm::Type *IPtrTy =
-        llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits)->getPointerTo(
-          CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
-    Address Ptr = Address(CGF.Builder.CreateBitCast(Val, IPtrTy), Align);
+    llvm::Value *Arg = Val;
+    // capabilities must be passed directly to the optimized libcall
+    if (!ValTy->isCHERICapabilityType(CGF.getContext())) {
+      // Coerce the value into an appropriately sized integer type.
+      ValTy =
+          CGF.getContext().getIntTypeForBitwidth(SizeInBits, /*Signed=*/false);
+      llvm::Type *IPtrTy =
+          llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits)
+              ->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
+      Arg = CGF.Builder.CreateBitCast(Val, IPtrTy);
+    }
+    Address Ptr = Address(Arg, Align);
     Val = CGF.EmitLoadOfScalar(Ptr, false,
-                               CGF.getContext().getPointerType(ValTy),
-                               Loc);
-    // Coerce the value into an appropriately sized integer type.
+                               CGF.getContext().getPointerType(ValTy), Loc);
     Args.add(RValue::get(Val), ValTy);
   } else {
-    if (false && ValTy->isCHERICapabilityType(CGF.getContext())) {
-      // capabilities can be passed directly without casting to i8*
-      Args.add(RValue::get(Val), ValTy);
-    } else {
-      // Non-optimized functions always take a reference.
-      Args.add(RValue::get(CGF.EmitCastToVoidPtr(Val)),
-                           CGF.getContext().VoidPtrTy);
-    }
+    // Non-optimized functions always take a reference.
+    assert(!ValTy->isCHERICapabilityType(CGF.getContext()) &&
+           "Capabilities should not be passed to the generic libcall");
+    Args.add(RValue::get(CGF.EmitCastToVoidPtr(Val)),
+             CGF.getContext().VoidPtrTy);
   }
 }
 
@@ -835,19 +833,23 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   uint64_t Size = sizeChars.getQuantity();
   unsigned MaxInlineWidthInBits = getTarget().getMaxAtomicInlineWidth();
 
-  bool Oversized = getContext().toBits(sizeChars) > MaxInlineWidthInBits;
+  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
+  bool Oversized =
+      !IsCheriCap && getContext().toBits(sizeChars) > MaxInlineWidthInBits;
   bool Misaligned = (Ptr.getAlignment() % sizeChars) != 0;
   bool UseLibcall = Misaligned | Oversized;
 
-  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
-  if (IsCheriCap) {
-    UseLibcall = CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
-        E->getOp());
+  bool UnsupportedOp = false;
+  if (IsCheriCap &&
+      CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
+          E->getOp())) {
+    UnsupportedOp = true;
+    UseLibcall = true;
   }
-
   if (UseLibcall) {
+    int ErrType = UnsupportedOp ? 2 : (Oversized ? 0 : 1);
     CGM.getDiags().Report(E->getBeginLoc(), diag::warn_atomic_op_misaligned)
-        << !Oversized;
+        << ErrType;
   }
 
   llvm::Value *Order = EmitScalarExpr(E->getOrder());
@@ -1241,7 +1243,10 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
     }
     // Optimized functions have the size in their name.
-    // XXXAR: for capability libcalls we use _cap as the suffix
+    // Libcalls operating on capabilities cannot use the the _8/_16 versions
+    // since those do not know about capability tags and would result in
+    // incorrect values being stored. We therefore call a different libcall that
+    // uses _cap as the suffix.
     if (UseOptimizedLibcall)
       LibCallName += IsCheriCap ? "_cap" : ("_" + llvm::utostr(Size));
     // By default, assume we return a value of the atomic type.
@@ -1426,23 +1431,17 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
 Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   Address Result = Address::invalid();
-  unsigned addrspace;
-  auto addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
+  auto *addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
+  unsigned addrspace = addrTy->getAddressSpace();
   llvm::Type *ty;
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
-    if (!UseLibcall) {
-      // If we aren't using a libcall there is no need to cast to i8*
-      return CGF.Builder.CreateBitCast(addr, getAtomicPointer()->getType());
-      // return CGF.Builder.CreateBitCast();
-    }
-    // For libcalls we cast to an i8*
-    // XXXAR: getDefaultAS and NOT getCheriCapabilityAS() since this should
-    // also work in hybrid mode
-    addrspace = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
-    ty = CGF.Int8Ty;
+    // If capability atomics are natively supported the instruction expects
+    // a capability type. We also pass capabilities to the atomic libcalls
+    // (i.e. always use the optimized ones) since there is no way for the
+    // generic libcall to maintain tags.
+    ty = CGF.CGM.Int8CheriCapTy;
   } else {
     ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
-    addrspace = addrTy->getAddressSpace();
   }
   Result = CGF.Builder.CreateBitCast(addr, ty->getPointerTo(addrspace));
   return Result;
@@ -1452,10 +1451,13 @@ Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
   llvm::Type *Ty = Addr.getElementType();
   // correctly convert fetch_add, etc arguments:
   if (AtomicTy->isCHERICapabilityType(CGF.getContext()) && Ty->isIntegerTy()) {
-    Addr = Address(CGF.setPointerAddress(
-        llvm::ConstantPointerNull::get(CGF.Int8CheriCapTy),
-        CGF.Builder.CreateLoad(Addr)), CGF.getContext().getTypeAlignInChars(AtomicTy));
-    Ty = Addr.getPointer()->getType();
+    auto AlignChars = CGF.getContext().getTypeAlignInChars(AtomicTy);
+    auto *Tmp = CGF.CreateTempAlloca(CGF.Int8CheriCapTy, "atomic-intcap-arg");
+    CGF.Builder.CreateAlignedStore(
+        CGF.getNullDerivedCapability(CGF.Int8CheriCapTy,
+                                     CGF.Builder.CreateLoad(Addr)),
+        Tmp, AlignChars.getAsAlign());
+    return Address(Tmp, AlignChars);
   }
   uint64_t SourceSizeInBits = CGF.CGM.getDataLayout().getTypeSizeInBits(Ty);
   if (SourceSizeInBits != AtomicSizeInBits) {
