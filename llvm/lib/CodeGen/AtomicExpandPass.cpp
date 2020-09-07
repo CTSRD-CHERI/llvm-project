@@ -1095,6 +1095,9 @@ Value *AtomicExpand::insertRMWLLSCLoop(
 /// one.
 AtomicCmpXchgInst *AtomicExpand::convertCmpXchgToIntegerType(AtomicCmpXchgInst *CI) {
   auto *M = CI->getModule();
+  assert(!M->getDataLayout().isFatPointer(CI->getCompareOperand()->getType()) &&
+         "Capabilities should not be converted to integers for CAS instrs");
+
   Type *NewTy = getCorrespondingIntegerType(CI->getCompareOperand()->getType(),
                                             M->getDataLayout());
 

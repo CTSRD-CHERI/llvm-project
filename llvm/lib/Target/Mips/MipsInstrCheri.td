@@ -815,7 +815,6 @@ def : MipsPat<(atomic_load_16 CheriOpnd0IsDDC:$a), (CAPLOAD1632 ZERO_64, (i64 0)
 def : MipsPat<(atomic_load_32 CheriOpnd0IsDDC:$a), (CAPLOAD32 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
 def : MipsPat<(atomic_load_64 CheriOpnd0IsDDC:$a), (CAPLOAD64 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
 def : MipsPat<(atomic_load_cap CheriOpnd0IsDDC:$a), (LOADCAP ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
-
 // Atomic store patterns.
 def : MipsPat<(atomic_store_8 CheriOpnd0IsDDC:$a, GPR64:$v),
               (CAPSTORE8 $v, ZERO_64, (i64 0), $a)>;
@@ -831,10 +830,17 @@ def : MipsPat<(atomic_store_32 CheriOpnd0IsDDC:$a, GPR32:$v),
               (CAPSTORE32 $v, ZERO_64, (i64 0), $a)>;
 def : MipsPat<(atomic_store_64 CheriOpnd0IsDDC:$a, GPR64:$v),
               (CAPSTORE64 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_cap CheriOpnd0IsDDC:$a, CheriOpnd0IsDDC:$v),
+def : MipsPat<(atomic_store_cap CheriOpnd0IsDDC:$a, CheriOpnd:$v),
               (STORECAP $v, ZERO_64, (i64 0), $a)>;
-
-
+}
+let Predicates=[IsCHERI,NotCHERIABI] in {
+def : MipsPat<(atomic_load_cap GPR64Opnd:$a), (LOADCAP GPR64Opnd:$a, (i64 0), DDC)>;
+def : MipsPat<(atomic_store_cap GPR64Opnd:$a, CheriOpnd:$v),
+              (STORECAP $v, GPR64Opnd:$a, (i64 0), DDC)>;
+def : MipsPat<(atomic_swap_cap GPR64Opnd:$a, CheriOpnd:$swap),
+              (CAP_ATOMIC_SWAP_CAP (CFromPtr DDC, GPR64Opnd:$a), CheriOpnd:$swap)>;
+def : MipsPat<(atomic_cmp_swap_cap GPR64Opnd:$a, CheriOpnd:$cmp, CheriOpnd:$swap),
+              (CAP_ATOMIC_CMP_SWAP_CAP (CFromPtr DDC, GPR64Opnd:$a), CheriOpnd:$cmp, CheriOpnd:$swap)>;
 }
 ////////////////////////////////////////////////////////////////////////////////
 // Helpers for capability-using calls and returns
