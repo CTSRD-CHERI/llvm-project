@@ -18311,25 +18311,15 @@ define i64 @atomicrmw_umin_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_monotonic:
 ; RV32IXCHERI:       # %bb.0:
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV32IXCHERI-NEXT:    csc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cmove ca4, ca0
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV32IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV32IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV32IXCHERI-NEXT:    cincoffset ca1, csp, 8
-; RV32IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV32IXCHERI-NEXT:    csc cra, 8(csp)
 ; RV32IXCHERI-NEXT:  .LBB220_1: # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV32IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB220_1)(ca5)
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    cmove ca1, ca4
-; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    cjalr ca5
-; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
-; RV32IXCHERI-NEXT:    clc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
+; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB220_1)(ca3)
+; RV32IXCHERI-NEXT:    mv a2, zero
+; RV32IXCHERI-NEXT:    cjalr ca3
+; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_xchg_cap_monotonic:
@@ -18339,25 +18329,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)* addrs
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_xchg_cap_monotonic:
 ; RV64IXCHERI:       # %bb.0:
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, -48
-; RV64IXCHERI-NEXT:    csc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cmove ca4, ca0
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV64IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV64IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV64IXCHERI-NEXT:    cincoffset ca1, csp, 0
-; RV64IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV64IXCHERI-NEXT:    csc cra, 0(csp)
 ; RV64IXCHERI-NEXT:  .LBB220_1: # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV64IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB220_1)(ca5)
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    cmove ca1, ca4
-; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    cjalr ca5
-; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
-; RV64IXCHERI-NEXT:    clc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
+; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB220_1)(ca3)
+; RV64IXCHERI-NEXT:    mv a2, zero
+; RV64IXCHERI-NEXT:    cjalr ca3
+; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_xchg_cap_monotonic:
@@ -18371,25 +18351,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)* addrs
 define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_acquire:
 ; RV32IXCHERI:       # %bb.0:
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV32IXCHERI-NEXT:    csc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cmove ca6, ca0
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV32IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV32IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV32IXCHERI-NEXT:    cincoffset ca1, csp, 8
-; RV32IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV32IXCHERI-NEXT:    csc cra, 8(csp)
 ; RV32IXCHERI-NEXT:  .LBB221_1: # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV32IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB221_1)(ca5)
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    addi a4, zero, 2
-; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr ca5
-; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
-; RV32IXCHERI-NEXT:    clc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
+; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB221_1)(ca3)
+; RV32IXCHERI-NEXT:    addi a2, zero, 2
+; RV32IXCHERI-NEXT:    cjalr ca3
+; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_xchg_cap_acquire:
@@ -18399,25 +18369,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)* addrspa
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_xchg_cap_acquire:
 ; RV64IXCHERI:       # %bb.0:
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, -48
-; RV64IXCHERI-NEXT:    csc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cmove ca6, ca0
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV64IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV64IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV64IXCHERI-NEXT:    cincoffset ca1, csp, 0
-; RV64IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV64IXCHERI-NEXT:    csc cra, 0(csp)
 ; RV64IXCHERI-NEXT:  .LBB221_1: # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV64IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB221_1)(ca5)
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    addi a4, zero, 2
-; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr ca5
-; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
-; RV64IXCHERI-NEXT:    clc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
+; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB221_1)(ca3)
+; RV64IXCHERI-NEXT:    addi a2, zero, 2
+; RV64IXCHERI-NEXT:    cjalr ca3
+; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_xchg_cap_acquire:
@@ -18431,25 +18391,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)* addrspa
 define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_release:
 ; RV32IXCHERI:       # %bb.0:
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV32IXCHERI-NEXT:    csc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cmove ca6, ca0
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV32IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV32IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV32IXCHERI-NEXT:    cincoffset ca1, csp, 8
-; RV32IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV32IXCHERI-NEXT:    csc cra, 8(csp)
 ; RV32IXCHERI-NEXT:  .LBB222_1: # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV32IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB222_1)(ca5)
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    addi a4, zero, 3
-; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr ca5
-; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
-; RV32IXCHERI-NEXT:    clc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
+; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB222_1)(ca3)
+; RV32IXCHERI-NEXT:    addi a2, zero, 3
+; RV32IXCHERI-NEXT:    cjalr ca3
+; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_xchg_cap_release:
@@ -18459,25 +18409,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)* addrspa
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_xchg_cap_release:
 ; RV64IXCHERI:       # %bb.0:
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, -48
-; RV64IXCHERI-NEXT:    csc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cmove ca6, ca0
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV64IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV64IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV64IXCHERI-NEXT:    cincoffset ca1, csp, 0
-; RV64IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV64IXCHERI-NEXT:    csc cra, 0(csp)
 ; RV64IXCHERI-NEXT:  .LBB222_1: # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV64IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB222_1)(ca5)
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    addi a4, zero, 3
-; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr ca5
-; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
-; RV64IXCHERI-NEXT:    clc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
+; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB222_1)(ca3)
+; RV64IXCHERI-NEXT:    addi a2, zero, 3
+; RV64IXCHERI-NEXT:    cjalr ca3
+; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_xchg_cap_release:
@@ -18491,25 +18431,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)* addrspa
 define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_acq_rel:
 ; RV32IXCHERI:       # %bb.0:
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV32IXCHERI-NEXT:    csc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cmove ca6, ca0
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV32IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV32IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV32IXCHERI-NEXT:    cincoffset ca1, csp, 8
-; RV32IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV32IXCHERI-NEXT:    csc cra, 8(csp)
 ; RV32IXCHERI-NEXT:  .LBB223_1: # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV32IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB223_1)(ca5)
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    addi a4, zero, 4
-; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr ca5
-; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
-; RV32IXCHERI-NEXT:    clc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
+; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB223_1)(ca3)
+; RV32IXCHERI-NEXT:    addi a2, zero, 4
+; RV32IXCHERI-NEXT:    cjalr ca3
+; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_xchg_cap_acq_rel:
@@ -18519,25 +18449,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)* addrspa
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_xchg_cap_acq_rel:
 ; RV64IXCHERI:       # %bb.0:
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, -48
-; RV64IXCHERI-NEXT:    csc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cmove ca6, ca0
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV64IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV64IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV64IXCHERI-NEXT:    cincoffset ca1, csp, 0
-; RV64IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV64IXCHERI-NEXT:    csc cra, 0(csp)
 ; RV64IXCHERI-NEXT:  .LBB223_1: # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV64IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB223_1)(ca5)
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    addi a4, zero, 4
-; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr ca5
-; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
-; RV64IXCHERI-NEXT:    clc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
+; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB223_1)(ca3)
+; RV64IXCHERI-NEXT:    addi a2, zero, 4
+; RV64IXCHERI-NEXT:    cjalr ca3
+; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_xchg_cap_acq_rel:
@@ -18551,25 +18471,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)* addrspa
 define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_seq_cst:
 ; RV32IXCHERI:       # %bb.0:
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV32IXCHERI-NEXT:    csc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cmove ca6, ca0
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV32IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV32IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV32IXCHERI-NEXT:    cincoffset ca1, csp, 8
-; RV32IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV32IXCHERI-NEXT:    csc cra, 8(csp)
 ; RV32IXCHERI-NEXT:  .LBB224_1: # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV32IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB224_1)(ca5)
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
-; RV32IXCHERI-NEXT:    addi a4, zero, 5
-; RV32IXCHERI-NEXT:    cmove ca1, ca6
-; RV32IXCHERI-NEXT:    cjalr ca5
-; RV32IXCHERI-NEXT:    clc ca0, 8(csp)
-; RV32IXCHERI-NEXT:    clc cra, 24(csp)
-; RV32IXCHERI-NEXT:    cincoffset csp, csp, 32
+; RV32IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV32IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB224_1)(ca3)
+; RV32IXCHERI-NEXT:    addi a2, zero, 5
+; RV32IXCHERI-NEXT:    cjalr ca3
+; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_xchg_cap_seq_cst:
@@ -18579,25 +18489,15 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)* addrspa
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_xchg_cap_seq_cst:
 ; RV64IXCHERI:       # %bb.0:
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, -48
-; RV64IXCHERI-NEXT:    csc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cmove ca6, ca0
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    cincoffset ca2, csp, 16
-; RV64IXCHERI-NEXT:    csetbounds ca2, ca2, a0
-; RV64IXCHERI-NEXT:    csc ca1, 16(csp)
-; RV64IXCHERI-NEXT:    cincoffset ca1, csp, 0
-; RV64IXCHERI-NEXT:    csetbounds ca3, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
+; RV64IXCHERI-NEXT:    csc cra, 0(csp)
 ; RV64IXCHERI-NEXT:  .LBB224_1: # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_exchange)
-; RV64IXCHERI-NEXT:    clc ca5, %pcrel_lo(.LBB224_1)(ca5)
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
-; RV64IXCHERI-NEXT:    addi a4, zero, 5
-; RV64IXCHERI-NEXT:    cmove ca1, ca6
-; RV64IXCHERI-NEXT:    cjalr ca5
-; RV64IXCHERI-NEXT:    clc ca0, 0(csp)
-; RV64IXCHERI-NEXT:    clc cra, 32(csp)
-; RV64IXCHERI-NEXT:    cincoffset csp, csp, 48
+; RV64IXCHERI-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; RV64IXCHERI-NEXT:    clc ca3, %pcrel_lo(.LBB224_1)(ca3)
+; RV64IXCHERI-NEXT:    addi a2, zero, 5
+; RV64IXCHERI-NEXT:    cjalr ca3
+; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_xchg_cap_seq_cst:
