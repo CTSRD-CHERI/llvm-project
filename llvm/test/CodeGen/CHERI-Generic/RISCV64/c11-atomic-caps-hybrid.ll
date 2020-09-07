@@ -15,18 +15,14 @@ define i8 addrspace(200)* @test_load(i8 addrspace(200)** nocapture readonly %f) 
 ;
 ; LIBCALLS-LABEL: test_load:
 ; LIBCALLS:       # %bb.0: # %entry
-; LIBCALLS-NEXT:    addi sp, sp, -32
-; LIBCALLS-NEXT:    .cfi_def_cfa_offset 32
-; LIBCALLS-NEXT:    sd ra, 24(sp)
+; LIBCALLS-NEXT:    addi sp, sp, -16
+; LIBCALLS-NEXT:    .cfi_def_cfa_offset 16
+; LIBCALLS-NEXT:    sd ra, 8(sp)
 ; LIBCALLS-NEXT:    .cfi_offset ra, -8
-; LIBCALLS-NEXT:    mv a1, a0
-; LIBCALLS-NEXT:    addi a0, zero, 16
-; LIBCALLS-NEXT:    mv a2, sp
-; LIBCALLS-NEXT:    addi a3, zero, 5
-; LIBCALLS-NEXT:    call __atomic_load
-; LIBCALLS-NEXT:    lc ca0, 0(sp)
-; LIBCALLS-NEXT:    ld ra, 24(sp)
-; LIBCALLS-NEXT:    addi sp, sp, 32
+; LIBCALLS-NEXT:    addi a1, zero, 5
+; LIBCALLS-NEXT:    call __atomic_load_cap
+; LIBCALLS-NEXT:    ld ra, 8(sp)
+; LIBCALLS-NEXT:    addi sp, sp, 16
 ; LIBCALLS-NEXT:    ret
 entry:
   %0 = load atomic i8 addrspace(200)*, i8 addrspace(200)** %f seq_cst, align 16
@@ -43,19 +39,14 @@ define void @test_store(i8 addrspace(200)** nocapture %f, i8 addrspace(200)* %va
 ;
 ; LIBCALLS-LABEL: test_store:
 ; LIBCALLS:       # %bb.0: # %entry
-; LIBCALLS-NEXT:    addi sp, sp, -32
-; LIBCALLS-NEXT:    .cfi_def_cfa_offset 32
-; LIBCALLS-NEXT:    sd ra, 24(sp)
+; LIBCALLS-NEXT:    addi sp, sp, -16
+; LIBCALLS-NEXT:    .cfi_def_cfa_offset 16
+; LIBCALLS-NEXT:    sd ra, 8(sp)
 ; LIBCALLS-NEXT:    .cfi_offset ra, -8
-; LIBCALLS-NEXT:    mv a4, a0
-; LIBCALLS-NEXT:    sc ca1, 0(sp)
-; LIBCALLS-NEXT:    addi a0, zero, 16
-; LIBCALLS-NEXT:    mv a2, sp
-; LIBCALLS-NEXT:    addi a3, zero, 5
-; LIBCALLS-NEXT:    mv a1, a4
-; LIBCALLS-NEXT:    call __atomic_store
-; LIBCALLS-NEXT:    ld ra, 24(sp)
-; LIBCALLS-NEXT:    addi sp, sp, 32
+; LIBCALLS-NEXT:    addi a2, zero, 5
+; LIBCALLS-NEXT:    call __atomic_store_cap
+; LIBCALLS-NEXT:    ld ra, 8(sp)
+; LIBCALLS-NEXT:    addi sp, sp, 16
 ; LIBCALLS-NEXT:    ret
 entry:
   store atomic i8 addrspace(200)* %value, i8 addrspace(200)** %f seq_cst, align 16
@@ -82,21 +73,14 @@ define i8 addrspace(200)* @test_xchg(i8 addrspace(200)** nocapture %f, i8 addrsp
 ;
 ; LIBCALLS-LABEL: test_xchg:
 ; LIBCALLS:       # %bb.0: # %entry
-; LIBCALLS-NEXT:    addi sp, sp, -48
-; LIBCALLS-NEXT:    .cfi_def_cfa_offset 48
-; LIBCALLS-NEXT:    sd ra, 40(sp)
+; LIBCALLS-NEXT:    addi sp, sp, -16
+; LIBCALLS-NEXT:    .cfi_def_cfa_offset 16
+; LIBCALLS-NEXT:    sd ra, 8(sp)
 ; LIBCALLS-NEXT:    .cfi_offset ra, -8
-; LIBCALLS-NEXT:    mv a5, a0
-; LIBCALLS-NEXT:    sc ca1, 16(sp)
-; LIBCALLS-NEXT:    addi a0, zero, 16
-; LIBCALLS-NEXT:    addi a2, sp, 16
-; LIBCALLS-NEXT:    mv a3, sp
-; LIBCALLS-NEXT:    addi a4, zero, 5
-; LIBCALLS-NEXT:    mv a1, a5
-; LIBCALLS-NEXT:    call __atomic_exchange
-; LIBCALLS-NEXT:    lc ca0, 0(sp)
-; LIBCALLS-NEXT:    ld ra, 40(sp)
-; LIBCALLS-NEXT:    addi sp, sp, 48
+; LIBCALLS-NEXT:    addi a2, zero, 5
+; LIBCALLS-NEXT:    call __atomic_exchange_cap
+; LIBCALLS-NEXT:    ld ra, 8(sp)
+; LIBCALLS-NEXT:    addi sp, sp, 16
 ; LIBCALLS-NEXT:    ret
 entry:
   %0 = atomicrmw xchg i8 addrspace(200)** %f, i8 addrspace(200)* %value seq_cst
@@ -112,21 +96,14 @@ define i64 addrspace(200)* @test_xchg_long_ptr(i64 addrspace(200)** nocapture %f
 ;
 ; LIBCALLS-LABEL: test_xchg_long_ptr:
 ; LIBCALLS:       # %bb.0: # %entry
-; LIBCALLS-NEXT:    addi sp, sp, -48
-; LIBCALLS-NEXT:    .cfi_def_cfa_offset 48
-; LIBCALLS-NEXT:    sd ra, 40(sp)
+; LIBCALLS-NEXT:    addi sp, sp, -16
+; LIBCALLS-NEXT:    .cfi_def_cfa_offset 16
+; LIBCALLS-NEXT:    sd ra, 8(sp)
 ; LIBCALLS-NEXT:    .cfi_offset ra, -8
-; LIBCALLS-NEXT:    mv a5, a0
-; LIBCALLS-NEXT:    sc ca1, 16(sp)
-; LIBCALLS-NEXT:    addi a0, zero, 16
-; LIBCALLS-NEXT:    addi a2, sp, 16
-; LIBCALLS-NEXT:    mv a3, sp
-; LIBCALLS-NEXT:    addi a4, zero, 5
-; LIBCALLS-NEXT:    mv a1, a5
-; LIBCALLS-NEXT:    call __atomic_exchange
-; LIBCALLS-NEXT:    lc ca0, 0(sp)
-; LIBCALLS-NEXT:    ld ra, 40(sp)
-; LIBCALLS-NEXT:    addi sp, sp, 48
+; LIBCALLS-NEXT:    addi a2, zero, 5
+; LIBCALLS-NEXT:    call __atomic_exchange_cap
+; LIBCALLS-NEXT:    ld ra, 8(sp)
+; LIBCALLS-NEXT:    addi sp, sp, 16
 ; LIBCALLS-NEXT:    ret
 entry:
   %0 = bitcast i64 addrspace(200)** %f to i8 addrspace(200)**
@@ -160,31 +137,27 @@ define zeroext i1 @test_cmpxchg_weak(i8 addrspace(200)** nocapture %f, i8 addrsp
 ;
 ; LIBCALLS-LABEL: test_cmpxchg_weak:
 ; LIBCALLS:       # %bb.0: # %entry
-; LIBCALLS-NEXT:    addi sp, sp, -48
-; LIBCALLS-NEXT:    .cfi_def_cfa_offset 48
-; LIBCALLS-NEXT:    sd ra, 40(sp)
-; LIBCALLS-NEXT:    sd s0, 32(sp)
+; LIBCALLS-NEXT:    addi sp, sp, -32
+; LIBCALLS-NEXT:    .cfi_def_cfa_offset 32
+; LIBCALLS-NEXT:    sd ra, 24(sp)
+; LIBCALLS-NEXT:    sd s0, 16(sp)
 ; LIBCALLS-NEXT:    .cfi_offset ra, -8
 ; LIBCALLS-NEXT:    .cfi_offset s0, -16
 ; LIBCALLS-NEXT:    mv s0, a1
-; LIBCALLS-NEXT:    lc ca3, 0(a1)
-; LIBCALLS-NEXT:    mv a1, a0
-; LIBCALLS-NEXT:    sc ca3, 16(sp)
-; LIBCALLS-NEXT:    sc ca2, 0(sp)
-; LIBCALLS-NEXT:    addi a0, zero, 16
-; LIBCALLS-NEXT:    addi a2, sp, 16
-; LIBCALLS-NEXT:    mv a3, sp
+; LIBCALLS-NEXT:    lc ca1, 0(a1)
+; LIBCALLS-NEXT:    sc ca1, 0(sp)
+; LIBCALLS-NEXT:    mv a1, sp
+; LIBCALLS-NEXT:    mv a3, zero
 ; LIBCALLS-NEXT:    mv a4, zero
-; LIBCALLS-NEXT:    mv a5, zero
-; LIBCALLS-NEXT:    call __atomic_compare_exchange
+; LIBCALLS-NEXT:    call __atomic_compare_exchange_cap
 ; LIBCALLS-NEXT:    bnez a0, .LBB5_2
 ; LIBCALLS-NEXT:  # %bb.1: # %cmpxchg.store_expected
-; LIBCALLS-NEXT:    lc ca1, 16(sp)
+; LIBCALLS-NEXT:    lc ca1, 0(sp)
 ; LIBCALLS-NEXT:    sc ca1, 0(s0)
 ; LIBCALLS-NEXT:  .LBB5_2: # %cmpxchg.continue
-; LIBCALLS-NEXT:    ld s0, 32(sp)
-; LIBCALLS-NEXT:    ld ra, 40(sp)
-; LIBCALLS-NEXT:    addi sp, sp, 48
+; LIBCALLS-NEXT:    ld s0, 16(sp)
+; LIBCALLS-NEXT:    ld ra, 24(sp)
+; LIBCALLS-NEXT:    addi sp, sp, 32
 ; LIBCALLS-NEXT:    ret
 entry:
   %0 = load i8 addrspace(200)*, i8 addrspace(200)** %exp, align 16
@@ -225,31 +198,27 @@ define zeroext i1 @test_cmpxchg_strong(i8 addrspace(200)** nocapture %f, i8 addr
 ;
 ; LIBCALLS-LABEL: test_cmpxchg_strong:
 ; LIBCALLS:       # %bb.0: # %entry
-; LIBCALLS-NEXT:    addi sp, sp, -48
-; LIBCALLS-NEXT:    .cfi_def_cfa_offset 48
-; LIBCALLS-NEXT:    sd ra, 40(sp)
-; LIBCALLS-NEXT:    sd s0, 32(sp)
+; LIBCALLS-NEXT:    addi sp, sp, -32
+; LIBCALLS-NEXT:    .cfi_def_cfa_offset 32
+; LIBCALLS-NEXT:    sd ra, 24(sp)
+; LIBCALLS-NEXT:    sd s0, 16(sp)
 ; LIBCALLS-NEXT:    .cfi_offset ra, -8
 ; LIBCALLS-NEXT:    .cfi_offset s0, -16
 ; LIBCALLS-NEXT:    mv s0, a1
-; LIBCALLS-NEXT:    lc ca3, 0(a1)
-; LIBCALLS-NEXT:    mv a1, a0
-; LIBCALLS-NEXT:    sc ca3, 16(sp)
-; LIBCALLS-NEXT:    sc ca2, 0(sp)
-; LIBCALLS-NEXT:    addi a0, zero, 16
-; LIBCALLS-NEXT:    addi a2, sp, 16
-; LIBCALLS-NEXT:    mv a3, sp
+; LIBCALLS-NEXT:    lc ca1, 0(a1)
+; LIBCALLS-NEXT:    sc ca1, 0(sp)
+; LIBCALLS-NEXT:    mv a1, sp
+; LIBCALLS-NEXT:    mv a3, zero
 ; LIBCALLS-NEXT:    mv a4, zero
-; LIBCALLS-NEXT:    mv a5, zero
-; LIBCALLS-NEXT:    call __atomic_compare_exchange
+; LIBCALLS-NEXT:    call __atomic_compare_exchange_cap
 ; LIBCALLS-NEXT:    bnez a0, .LBB6_2
 ; LIBCALLS-NEXT:  # %bb.1: # %cmpxchg.store_expected
-; LIBCALLS-NEXT:    lc ca1, 16(sp)
+; LIBCALLS-NEXT:    lc ca1, 0(sp)
 ; LIBCALLS-NEXT:    sc ca1, 0(s0)
 ; LIBCALLS-NEXT:  .LBB6_2: # %cmpxchg.continue
-; LIBCALLS-NEXT:    ld s0, 32(sp)
-; LIBCALLS-NEXT:    ld ra, 40(sp)
-; LIBCALLS-NEXT:    addi sp, sp, 48
+; LIBCALLS-NEXT:    ld s0, 16(sp)
+; LIBCALLS-NEXT:    ld ra, 24(sp)
+; LIBCALLS-NEXT:    addi sp, sp, 32
 ; LIBCALLS-NEXT:    ret
 entry:
   %0 = load i8 addrspace(200)*, i8 addrspace(200)** %exp, align 16

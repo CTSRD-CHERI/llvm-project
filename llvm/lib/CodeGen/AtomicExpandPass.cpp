@@ -105,12 +105,12 @@ namespace {
     bool isIdempotentRMW(AtomicRMWInst *RMWI);
     bool simplifyIdempotentRMW(AtomicRMWInst *RMWI);
 
-    bool expandAtomicOpToLibcall(Instruction *I, unsigned Size, Align Alignment,
-                                 Value *PointerOperand, Value *ValueOperand,
-                                 Value *CASExpected, AtomicOrdering Ordering,
+    bool expandAtomicOpToLibcall(Instruction *I, unsigned Size, Type *ValTy,
+                                 Align Alignment, Value *PointerOperand,
+                                 Value *ValueOperand, Value *CASExpected,
+                                 AtomicOrdering Ordering,
                                  AtomicOrdering Ordering2,
-                                 ArrayRef<RTLIB::Libcall> Libcalls,
-                                 bool IsCap);
+                                 ArrayRef<RTLIB::Libcall> Libcalls, bool IsCap);
     void expandAtomicLoadToLibcall(LoadInst *LI);
     void expandAtomicStoreToLibcall(StoreInst *LI);
     void expandAtomicRMWToLibcall(AtomicRMWInst *I);
@@ -155,22 +155,22 @@ static unsigned getAtomicOpSize(AtomicCmpXchgInst *CASI) {
 
 // Helper functions to retrieve whether an atomic instruction is operating on a
 // capability value.
-static unsigned getAtomicOpIsCap(LoadInst *LI) {
+static unsigned getAtomicOpValIsCap(LoadInst *LI) {
   const DataLayout &DL = LI->getModule()->getDataLayout();
   return DL.isFatPointer(LI->getType());
 }
 
-static unsigned getAtomicOpIsCap(StoreInst *SI) {
+static unsigned getAtomicOpValIsCap(StoreInst *SI) {
   const DataLayout &DL = SI->getModule()->getDataLayout();
   return DL.isFatPointer(SI->getValueOperand()->getType());
 }
 
-static unsigned getAtomicOpIsCap(AtomicRMWInst *RMWI) {
+static unsigned getAtomicOpValIsCap(AtomicRMWInst *RMWI) {
   const DataLayout &DL = RMWI->getModule()->getDataLayout();
   return DL.isFatPointer(RMWI->getValOperand()->getType());
 }
 
-static unsigned getAtomicOpIsCap(AtomicCmpXchgInst *CASI) {
+static unsigned getAtomicOpValIsCap(AtomicCmpXchgInst *CASI) {
   const DataLayout &DL = CASI->getModule()->getDataLayout();
   return DL.isFatPointer(CASI->getCompareOperand()->getType());
 }
@@ -180,7 +180,7 @@ static unsigned getAtomicOpIsCap(AtomicCmpXchgInst *CASI) {
 // lowering. (Versus turning into a __atomic libcall)
 template <typename Inst>
 static bool atomicSizeSupported(const TargetLowering *TLI, Inst *I) {
-  if (getAtomicOpIsCap(I))
+  if (getAtomicOpValIsCap(I))
     return TLI->supportsAtomicCapabilityOperations();
 
   unsigned Size = getAtomicOpSize(I);
@@ -1531,11 +1531,11 @@ void AtomicExpand::expandAtomicLoadToLibcall(LoadInst *I) {
       RTLIB::ATOMIC_LOAD,   RTLIB::ATOMIC_LOAD_1, RTLIB::ATOMIC_LOAD_2,
       RTLIB::ATOMIC_LOAD_4, RTLIB::ATOMIC_LOAD_8, RTLIB::ATOMIC_LOAD_16};
   unsigned Size = getAtomicOpSize(I);
-  bool IsCap = getAtomicOpIsCap(I);
+  bool IsCap = getAtomicOpValIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
-      I, Size, I->getAlign(), I->getPointerOperand(), nullptr, nullptr,
-      I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
+      I, Size, I->getType(), I->getAlign(), I->getPointerOperand(), nullptr,
+      nullptr, I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
   if (!expanded)
     report_fatal_error("expandAtomicOpToLibcall shouldn't fail for Load");
 }
@@ -1545,11 +1545,12 @@ void AtomicExpand::expandAtomicStoreToLibcall(StoreInst *I) {
       RTLIB::ATOMIC_STORE,   RTLIB::ATOMIC_STORE_1, RTLIB::ATOMIC_STORE_2,
       RTLIB::ATOMIC_STORE_4, RTLIB::ATOMIC_STORE_8, RTLIB::ATOMIC_STORE_16};
   unsigned Size = getAtomicOpSize(I);
-  bool IsCap = getAtomicOpIsCap(I);
+  bool IsCap = getAtomicOpValIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
-      I, Size, I->getAlign(), I->getPointerOperand(), I->getValueOperand(), nullptr,
-      I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
+      I, Size, I->getValueOperand()->getType(), I->getAlign(),
+      I->getPointerOperand(), I->getValueOperand(), nullptr, I->getOrdering(),
+      AtomicOrdering::NotAtomic, Libcalls, IsCap);
   if (!expanded)
     report_fatal_error("expandAtomicOpToLibcall shouldn't fail for Store");
 }
@@ -1560,12 +1561,12 @@ void AtomicExpand::expandAtomicCASToLibcall(AtomicCmpXchgInst *I) {
       RTLIB::ATOMIC_COMPARE_EXCHANGE_2, RTLIB::ATOMIC_COMPARE_EXCHANGE_4,
       RTLIB::ATOMIC_COMPARE_EXCHANGE_8, RTLIB::ATOMIC_COMPARE_EXCHANGE_16};
   unsigned Size = getAtomicOpSize(I);
-  bool IsCap = getAtomicOpIsCap(I);
+  bool IsCap = getAtomicOpValIsCap(I);
 
   bool expanded = expandAtomicOpToLibcall(
-      I, Size, I->getAlign(), I->getPointerOperand(), I->getNewValOperand(),
-      I->getCompareOperand(), I->getSuccessOrdering(), I->getFailureOrdering(),
-      Libcalls, IsCap);
+      I, Size, I->getCompareOperand()->getType(), I->getAlign(),
+      I->getPointerOperand(), I->getNewValOperand(), I->getCompareOperand(),
+      I->getSuccessOrdering(), I->getFailureOrdering(), Libcalls, IsCap);
   if (!expanded)
     report_fatal_error("expandAtomicOpToLibcall shouldn't fail for CAS");
 }
@@ -1633,13 +1634,14 @@ void AtomicExpand::expandAtomicRMWToLibcall(AtomicRMWInst *I) {
   ArrayRef<RTLIB::Libcall> Libcalls = GetRMWLibcall(I->getOperation());
 
   unsigned Size = getAtomicOpSize(I);
-  bool IsCap = getAtomicOpIsCap(I);
+  bool IsCap = getAtomicOpValIsCap(I);
 
   bool Success = false;
   if (!Libcalls.empty())
     Success = expandAtomicOpToLibcall(
-        I, Size, I->getAlign(), I->getPointerOperand(), I->getValOperand(), nullptr,
-        I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
+        I, Size, I->getValOperand()->getType(), I->getAlign(),
+        I->getPointerOperand(), I->getValOperand(), nullptr, I->getOrdering(),
+        AtomicOrdering::NotAtomic, Libcalls, IsCap);
 
   // The expansion failed: either there were no libcalls at all for
   // the operation (min/max), or there were only size-specialized
@@ -1670,9 +1672,10 @@ void AtomicExpand::expandAtomicRMWToLibcall(AtomicRMWInst *I) {
 // 'I' are extracted from the Instruction subclass by the
 // caller. Depending on the particular call, some will be null.
 bool AtomicExpand::expandAtomicOpToLibcall(
-    Instruction *I, unsigned Size, Align Alignment, Value *PointerOperand,
-    Value *ValueOperand, Value *CASExpected, AtomicOrdering Ordering,
-    AtomicOrdering Ordering2, ArrayRef<RTLIB::Libcall> Libcalls, bool IsCap) {
+    Instruction *I, unsigned Size, Type *ValTy, Align Alignment,
+    Value *PointerOperand, Value *ValueOperand, Value *CASExpected,
+    AtomicOrdering Ordering, AtomicOrdering Ordering2,
+    ArrayRef<RTLIB::Libcall> Libcalls, bool IsCap) {
   assert(Libcalls.size() == 6);
 
   LLVMContext &Ctx = I->getContext();
@@ -1681,10 +1684,25 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   IRBuilder<> Builder(I);
   IRBuilder<> AllocaBuilder(&I->getFunction()->getEntryBlock().front());
 
-  bool UseSizedLibcall = !IsCap && canUseSizedAtomicCall(Size, Alignment, DL);
-  Type *SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
-
-  const Align AllocaAlignment = DL.getPrefTypeAlign(SizedIntTy);
+  bool UseSizedLibcall = IsCap || canUseSizedAtomicCall(Size, Alignment, DL);
+  if (DL.isFatPointer(PointerOperand->getType()) &&
+      !DL.isFatPointer(DL.getGlobalsAddressSpace())) {
+    LLVM_DEBUG(dbgs() << "Cannot expand atomic operation using capability "
+                         "pointer in hybrid mode";
+               I->dump(););
+    return false;
+  }
+  // Assign null in the capability case to ensure we crash if it's used.
+  Type *SizedIntTy = nullptr;
+  Type *I8CapTy = nullptr;
+  if (IsCap) {
+    assert(DL.isFatPointer(ValTy));
+    I8CapTy = Type::getInt8PtrTy(Ctx, ValTy->getPointerAddressSpace());
+  } else {
+    SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
+  }
+  const Align AllocaAlignment =
+      DL.getPrefTypeAlign(IsCap ? I8CapTy : SizedIntTy);
 
   // TODO: the "order" argument type is "int", not int32. So
   // getInt32Ty may be wrong if the arch uses e.g. 16-bit ints.
@@ -1701,7 +1719,10 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   bool HasResult = I->getType() != Type::getVoidTy(Ctx);
 
   RTLIB::Libcall RTLibType;
-  if (UseSizedLibcall) {
+  if (IsCap) {
+    assert(UseSizedLibcall && "Must use specialized libcall for capabilities");
+    RTLibType = Libcalls[0]; // Ugly workaround, see below
+  } else if (UseSizedLibcall) {
     switch (Size) {
     case 1: RTLibType = Libcalls[1]; break;
     case 2: RTLibType = Libcalls[2]; break;
@@ -1794,7 +1815,9 @@ bool AtomicExpand::expandAtomicOpToLibcall(
 
   // 'val' argument ('desired' for cas), if present.
   if (ValueOperand) {
-    if (UseSizedLibcall) {
+    if (IsCap) {
+      Args.push_back(Builder.CreateBitCast(ValueOperand, I8CapTy));
+    } else if (UseSizedLibcall) {
       Value *IntValue =
           Builder.CreateBitOrPointerCast(ValueOperand, SizedIntTy);
       Args.push_back(IntValue);
@@ -1832,9 +1855,9 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   if (CASExpected) {
     ResultTy = Type::getInt1Ty(Ctx);
     Attr = Attr.addAttribute(Ctx, AttributeList::ReturnIndex, Attribute::ZExt);
-  } else if (HasResult && UseSizedLibcall)
-    ResultTy = SizedIntTy;
-  else
+  } else if (HasResult && UseSizedLibcall) {
+    ResultTy = IsCap ? I8CapTy : SizedIntTy;
+  } else
     ResultTy = Type::getVoidTy(Ctx);
 
   // Done with setting up arguments and return types, create the call:
@@ -1842,8 +1865,14 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   for (Value *Arg : Args)
     ArgTys.push_back(Arg->getType());
   FunctionType *FnType = FunctionType::get(ResultTy, ArgTys, false);
-  FunctionCallee LibcallFn =
-      M->getOrInsertFunction(TLI->getLibcallName(RTLibType), FnType, Attr);
+  // XXXAR: ugly hack to reduce size of the diff: for capability types we set
+  // RTLibType to the generic one and then manually append _cap instead of
+  // adding the 20+ new entries to RuntimeLibcalls.def
+  std::string LibcallName = TLI->getLibcallName(RTLibType);
+  if (IsCap) {
+    LibcallName += "_cap";
+  }
+  FunctionCallee LibcallFn = M->getOrInsertFunction(LibcallName, FnType, Attr);
   CallInst *Call = Builder.CreateCall(LibcallFn, Args);
   Call->setAttributes(Attr);
   Value *Result = Call;
