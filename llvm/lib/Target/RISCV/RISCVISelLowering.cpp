@@ -3440,14 +3440,6 @@ Value *RISCVTargetLowering::emitMaskedAtomicCmpXchgIntrinsic(
   return Result;
 }
 
-bool RISCVTargetLowering::canLowerPointerTypeCmpXchg(
-    const llvm::DataLayout &DL, llvm::AtomicCmpXchgInst *AI) const {
-  if (Subtarget.hasStdExtA() && Subtarget.hasCheri() &&
-      DL.isFatPointer(AI->getCompareOperand()->getType()))
-    return true;
-  return TargetLowering::canLowerPointerTypeCmpXchg(DL, AI);
-}
-
 Register RISCVTargetLowering::getExceptionPointerRegister(
     const Constant *PersonalityFn) const {
   return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())

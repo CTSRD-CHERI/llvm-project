@@ -261,9 +261,6 @@ private:
       CCState &CCInfo, CallLoweringInfo &CLI, MachineFunction &MF,
       const SmallVector<CCValAssign, 16> &ArgLocs) const;
 
-  virtual bool canLowerPointerTypeCmpXchg(
-      const DataLayout &DL, AtomicCmpXchgInst *AI) const override;
-
   /// Generate error diagnostics if any register used by CC has been marked
   /// reserved.
   void validateCCReservedRegs(
