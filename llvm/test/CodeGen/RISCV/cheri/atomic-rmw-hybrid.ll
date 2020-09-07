@@ -15,9 +15,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)** %a, 
 ; RV32IXCHERI-NEXT:    sw ra, 28(sp)
 ; RV32IXCHERI-NEXT:    mv a4, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    mv a1, a4
 ; RV32IXCHERI-NEXT:    mv a4, zero
 ; RV32IXCHERI-NEXT:    call __atomic_exchange
@@ -37,9 +37,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)** %a, 
 ; RV64IXCHERI-NEXT:    sd ra, 40(sp)
 ; RV64IXCHERI-NEXT:    mv a4, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    mv a1, a4
 ; RV64IXCHERI-NEXT:    mv a4, zero
 ; RV64IXCHERI-NEXT:    call __atomic_exchange
@@ -63,9 +63,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    sw ra, 28(sp)
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    call __atomic_exchange
@@ -85,9 +85,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    sd ra, 40(sp)
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    call __atomic_exchange
@@ -111,9 +111,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    sw ra, 28(sp)
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 3
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    call __atomic_exchange
@@ -133,9 +133,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    sd ra, 40(sp)
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 3
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    call __atomic_exchange
@@ -159,9 +159,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    sw ra, 28(sp)
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 4
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    call __atomic_exchange
@@ -181,9 +181,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    sd ra, 40(sp)
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 4
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    call __atomic_exchange
@@ -207,9 +207,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    sw ra, 28(sp)
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    call __atomic_exchange
@@ -229,9 +229,9 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    sd ra, 40(sp)
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    call __atomic_exchange

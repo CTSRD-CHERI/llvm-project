@@ -16,9 +16,9 @@ define void @cmpxchg_cap_monotonic_monotonic(i8 addrspace(200)** %ptr, i8 addrsp
 ; RV32IXCHERI-NEXT:    mv a4, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    mv a1, a4
 ; RV32IXCHERI-NEXT:    mv a4, zero
 ; RV32IXCHERI-NEXT:    mv a5, zero
@@ -45,9 +45,9 @@ define void @cmpxchg_cap_monotonic_monotonic(i8 addrspace(200)** %ptr, i8 addrsp
 ; RV64IXCHERI-NEXT:    mv a4, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    mv a1, a4
 ; RV64IXCHERI-NEXT:    mv a4, zero
 ; RV64IXCHERI-NEXT:    mv a5, zero
@@ -78,9 +78,9 @@ define void @cmpxchg_cap_acquire_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    mv a5, zero
@@ -107,9 +107,9 @@ define void @cmpxchg_cap_acquire_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    mv a5, zero
@@ -140,9 +140,9 @@ define void @cmpxchg_cap_acquire_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a6, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    mv a1, a6
@@ -169,9 +169,9 @@ define void @cmpxchg_cap_acquire_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a6, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
 ; RV64IXCHERI-NEXT:    addi a5, zero, 2
 ; RV64IXCHERI-NEXT:    mv a1, a6
@@ -202,9 +202,9 @@ define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 3
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    mv a5, zero
@@ -231,9 +231,9 @@ define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 3
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    mv a5, zero
@@ -264,9 +264,9 @@ define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a6, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 3
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    mv a1, a6
@@ -293,9 +293,9 @@ define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a6, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 3
 ; RV64IXCHERI-NEXT:    addi a5, zero, 2
 ; RV64IXCHERI-NEXT:    mv a1, a6
@@ -326,9 +326,9 @@ define void @cmpxchg_cap_acq_rel_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 4
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    mv a5, zero
@@ -355,9 +355,9 @@ define void @cmpxchg_cap_acq_rel_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 4
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    mv a5, zero
@@ -388,9 +388,9 @@ define void @cmpxchg_cap_acq_rel_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a6, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 4
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    mv a1, a6
@@ -417,9 +417,9 @@ define void @cmpxchg_cap_acq_rel_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a6, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 4
 ; RV64IXCHERI-NEXT:    addi a5, zero, 2
 ; RV64IXCHERI-NEXT:    mv a1, a6
@@ -450,9 +450,9 @@ define void @cmpxchg_cap_seq_cst_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a5, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    mv a1, a5
 ; RV32IXCHERI-NEXT:    mv a5, zero
@@ -479,9 +479,9 @@ define void @cmpxchg_cap_seq_cst_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a5, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    mv a1, a5
 ; RV64IXCHERI-NEXT:    mv a5, zero
@@ -512,9 +512,9 @@ define void @cmpxchg_cap_seq_cst_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a6, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    addi a5, zero, 2
 ; RV32IXCHERI-NEXT:    mv a1, a6
@@ -541,9 +541,9 @@ define void @cmpxchg_cap_seq_cst_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a6, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    addi a5, zero, 2
 ; RV64IXCHERI-NEXT:    mv a1, a6
@@ -574,9 +574,9 @@ define void @cmpxchg_cap_seq_cst_seq_cst(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a6, a0
 ; RV32IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV32IXCHERI-NEXT:    sc ca2, 8(sp)
+; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a2, sp, 16
 ; RV32IXCHERI-NEXT:    addi a3, sp, 8
-; RV32IXCHERI-NEXT:    addi a0, zero, 8
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
 ; RV32IXCHERI-NEXT:    addi a5, zero, 5
 ; RV32IXCHERI-NEXT:    mv a1, a6
@@ -603,9 +603,9 @@ define void @cmpxchg_cap_seq_cst_seq_cst(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a6, a0
 ; RV64IXCHERI-NEXT:    sc ca1, 16(sp)
 ; RV64IXCHERI-NEXT:    sc ca2, 0(sp)
+; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a2, sp, 16
 ; RV64IXCHERI-NEXT:    mv a3, sp
-; RV64IXCHERI-NEXT:    addi a0, zero, 16
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
 ; RV64IXCHERI-NEXT:    addi a5, zero, 5
 ; RV64IXCHERI-NEXT:    mv a1, a6
