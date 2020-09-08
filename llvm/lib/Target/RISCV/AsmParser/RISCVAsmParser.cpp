@@ -1155,6 +1155,15 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     }
     return Error(ErrorLoc, "invalid operand for instruction");
   }
+  case Match_InvalidTiedOperand: {
+    SMLoc ErrorLoc = IDLoc;
+    if (ErrorInfo != ~0U) {
+      ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
+      if (ErrorLoc == SMLoc())
+        ErrorLoc = IDLoc;
+    }
+    return Error(ErrorLoc, "invalid tied operand for instruction");
+  }
   }
 
   // Handle the case when the error message is of specific type
