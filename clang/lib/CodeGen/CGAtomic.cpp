@@ -1442,6 +1442,10 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
     // libcalls (i.e. always use optimized ones) since this is required to
     // support the RMW operations and special-casing the load/store/xchg to
     // use the generic libcalls (with mutex+memcpy) adds unncessary complexity.
+    if (!UseLibcall) {
+      // If we aren't using a libcall there is no need to cast to i8*
+      return CGF.Builder.CreateBitCast(addr, getAtomicPointer()->getType());
+    }
     ty = CGF.CGM.Int8CheriCapTy;
   } else {
     ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
