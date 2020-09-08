@@ -256,6 +256,7 @@ void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
     return;
   }
 
+  assert(!Desc.isPseudo() && "Unhandled pseudo instruction!");
   switch (Size) {
   default:
     llvm_unreachable("Unhandled encodeInstruction length!");
