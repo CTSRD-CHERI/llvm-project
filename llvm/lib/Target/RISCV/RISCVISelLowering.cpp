@@ -3249,9 +3249,9 @@ void RISCVTargetLowering::LowerAsmOperandForConstraint(
 Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilder<> &Builder,
                                                    Instruction *Inst,
                                                    AtomicOrdering Ord) const {
-  if (isa<LoadInst>(Inst) && Ord == AtomicOrdering::SequentiallyConsistent)
+  if (Inst->hasAtomicLoad() && Ord == AtomicOrdering::SequentiallyConsistent)
     return Builder.CreateFence(Ord);
-  if (isa<StoreInst>(Inst) && isReleaseOrStronger(Ord))
+  if (Inst->hasAtomicStore() && isReleaseOrStronger(Ord))
     return Builder.CreateFence(AtomicOrdering::Release);
   return nullptr;
 }
@@ -3259,7 +3259,7 @@ Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilder<> &Builder,
 Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilder<> &Builder,
                                                     Instruction *Inst,
                                                     AtomicOrdering Ord) const {
-  if (isa<LoadInst>(Inst) && isAcquireOrStronger(Ord))
+  if (Inst->hasAtomicLoad() && isAcquireOrStronger(Ord))
     return Builder.CreateFence(AtomicOrdering::Acquire);
   return nullptr;
 }
@@ -3297,6 +3297,30 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
   return TargetLowering::getOptimalMemOpType(Op, FuncAttributes);
 }
 
+template <typename Instr>
+static bool
+needsExplicitAddressingModeAtomics(const Instr *I,
+                                   const RISCVSubtarget &Subtarget) {
+  // We have to fall back to the explicit addressing mode atomics when we can't
+  // use the more powerful mode-dependent econdings. This happens when using
+  // capability pointers in non-capability mode and integer pointers in capmode.
+  const DataLayout &DL = I->getModule()->getDataLayout();
+  bool IsCheriPurecap = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
+  return DL.isFatPointer(I->getPointerOperand()->getType()) != IsCheriPurecap;
+}
+
+bool RISCVTargetLowering::shouldInsertFencesForAtomic(
+    const Instruction *I) const {
+  // The CHERI instructions with explicit addressing mode are always relaxed
+  // so we need to insert fences when using them.
+  if (const auto *RMWI = dyn_cast<AtomicRMWInst>(I)) {
+    return needsExplicitAddressingModeAtomics(RMWI, Subtarget);
+  } else if (const auto *CASI = dyn_cast<AtomicCmpXchgInst>(I)) {
+    return needsExplicitAddressingModeAtomics(CASI, Subtarget);
+  }
+  return isa<LoadInst>(I) || isa<StoreInst>(I);
+}
+
 TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // atomicrmw {fadd,fsub} must be expanded to use compare-exchange, as floating
@@ -3305,8 +3329,6 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   if (AI->isFloatingPointOperation())
     return AtomicExpansionKind::CmpXChg;
 
-  const DataLayout &DL = AI->getModule()->getDataLayout();
-  bool IsCheriPurecap = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
   // The atomic RMW instructions are only available in capmode, so for the
   // hybrid ABI we have expand these operations to use compare-exchange (which
   // is expanded to a LR/SC sequence when not in capmode).
@@ -3314,11 +3336,12 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // guarantee, we could generate slightly more efficient code by using
   // AtomicExpansionKind::LLSC. However, the required TLI hooks for are not
   // implemented so we use CmpXChg.
-  if (DL.isFatPointer(AI->getPointerOperand()->getType()) && !IsCheriPurecap)
+  if (needsExplicitAddressingModeAtomics(AI, Subtarget))
     return AtomicExpansionKind::CmpXChg;
 
   unsigned Size = AI->getType()->getPrimitiveSizeInBits();
-  if ((Size == 8 || Size == 16) && !IsCheriPurecap)
+  if ((Size == 8 || Size == 16) &&
+      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }

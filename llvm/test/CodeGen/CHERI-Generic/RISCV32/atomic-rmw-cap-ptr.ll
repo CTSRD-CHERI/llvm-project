@@ -30,6 +30,7 @@ define dso_local void @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) n
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:  .LBB0_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
@@ -50,6 +51,7 @@ define dso_local void @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-NEXT:    # in Loop: Header=BB0_1 Depth=1
 ; HYBRID-NEXT:    bne a2, a3, .LBB0_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -78,6 +80,7 @@ define dso_local void @atomic_cap_ptr_add(i32 addrspace(200)* %ptr, i32 %val) no
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_add:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:  .LBB1_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
@@ -98,6 +101,7 @@ define dso_local void @atomic_cap_ptr_add(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-NEXT:    # in Loop: Header=BB1_1 Depth=1
 ; HYBRID-NEXT:    bne a2, a3, .LBB1_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw add i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -127,6 +131,7 @@ define dso_local void @atomic_cap_ptr_sub(i32 addrspace(200)* %ptr, i32 %val) no
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_sub:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:  .LBB2_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
@@ -147,6 +152,7 @@ define dso_local void @atomic_cap_ptr_sub(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-NEXT:    # in Loop: Header=BB2_1 Depth=1
 ; HYBRID-NEXT:    bne a2, a3, .LBB2_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw sub i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -175,6 +181,7 @@ define dso_local void @atomic_cap_ptr_and(i32 addrspace(200)* %ptr, i32 %val) no
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_and:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:  .LBB3_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
@@ -195,6 +202,7 @@ define dso_local void @atomic_cap_ptr_and(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-NEXT:    # in Loop: Header=BB3_1 Depth=1
 ; HYBRID-NEXT:    bne a2, a3, .LBB3_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw and i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -230,6 +238,7 @@ define dso_local void @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) n
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_nand:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:  .LBB4_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
@@ -251,6 +260,7 @@ define dso_local void @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-NEXT:    # in Loop: Header=BB4_1 Depth=1
 ; HYBRID-NEXT:    bne a2, a3, .LBB4_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw nand i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -279,6 +289,7 @@ define dso_local void @atomic_cap_ptr_or(i32 addrspace(200)* %ptr, i32 %val) nou
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_or:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:  .LBB5_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
@@ -299,6 +310,7 @@ define dso_local void @atomic_cap_ptr_or(i32 addrspace(200)* %ptr, i32 %val) nou
 ; HYBRID-NEXT:    # in Loop: Header=BB5_1 Depth=1
 ; HYBRID-NEXT:    bne a2, a3, .LBB5_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw or i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -327,6 +339,7 @@ define dso_local void @atomic_cap_ptr_xor(i32 addrspace(200)* %ptr, i32 %val) no
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xor:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:  .LBB6_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
@@ -347,6 +360,7 @@ define dso_local void @atomic_cap_ptr_xor(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-NEXT:    # in Loop: Header=BB6_1 Depth=1
 ; HYBRID-NEXT:    bne a2, a3, .LBB6_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw xor i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -406,6 +420,7 @@ define dso_local void @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) no
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_max:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:    j .LBB7_2
 ; HYBRID-NEXT:  .LBB7_1: # %atomicrmw.start
@@ -433,6 +448,7 @@ define dso_local void @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-NEXT:    mv a2, a1
 ; HYBRID-NEXT:    j .LBB7_1
 ; HYBRID-NEXT:  .LBB7_4: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw max i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -492,6 +508,7 @@ define dso_local void @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) no
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_min:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:    j .LBB8_2
 ; HYBRID-NEXT:  .LBB8_1: # %atomicrmw.start
@@ -519,6 +536,7 @@ define dso_local void @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-NEXT:    mv a2, a1
 ; HYBRID-NEXT:    j .LBB8_1
 ; HYBRID-NEXT:  .LBB8_4: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw min i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -578,6 +596,7 @@ define dso_local void @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) n
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_umax:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:    j .LBB9_2
 ; HYBRID-NEXT:  .LBB9_1: # %atomicrmw.start
@@ -605,6 +624,7 @@ define dso_local void @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-NEXT:    mv a2, a1
 ; HYBRID-NEXT:    j .LBB9_1
 ; HYBRID-NEXT:  .LBB9_4: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw umax i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -664,6 +684,7 @@ define dso_local void @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) n
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_umin:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:    j .LBB10_2
 ; HYBRID-NEXT:  .LBB10_1: # %atomicrmw.start
@@ -691,6 +712,7 @@ define dso_local void @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-NEXT:    mv a2, a1
 ; HYBRID-NEXT:    j .LBB10_1
 ; HYBRID-NEXT:  .LBB10_4: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw umin i32 addrspace(200)* %ptr, i32 %val seq_cst
@@ -764,6 +786,7 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fadd:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:    fmv.w.x ft0, a1
 ; HYBRID-NEXT:    fmv.w.x ft1, a2
@@ -788,6 +811,7 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ; HYBRID-NEXT:    fmv.w.x ft1, a1
 ; HYBRID-NEXT:    bne a1, a2, .LBB11_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw fadd float addrspace(200)* %ptr, float %val seq_cst
@@ -861,6 +885,7 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fsub:
 ; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    fence rw, rw
 ; HYBRID-NEXT:    lw.cap a2, (ca0)
 ; HYBRID-NEXT:    fmv.w.x ft0, a1
 ; HYBRID-NEXT:    fmv.w.x ft1, a2
@@ -885,6 +910,7 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ; HYBRID-NEXT:    fmv.w.x ft1, a1
 ; HYBRID-NEXT:    bne a1, a2, .LBB12_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    fence r, rw
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw fsub float addrspace(200)* %ptr, float %val seq_cst

@@ -133,9 +133,7 @@ public:
   }
   bool convertSelectOfConstantsToMath(EVT VT) const override { return true; }
 
-  bool shouldInsertFencesForAtomic(const Instruction *I) const override {
-    return isa<LoadInst>(I) || isa<StoreInst>(I);
-  }
+  bool shouldInsertFencesForAtomic(const Instruction *I) const override;
   Instruction *emitLeadingFence(IRBuilder<> &Builder, Instruction *Inst,
                                 AtomicOrdering Ord) const override;
   Instruction *emitTrailingFence(IRBuilder<> &Builder, Instruction *Inst,
