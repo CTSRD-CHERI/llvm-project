@@ -83,20 +83,14 @@ __uintcap_t test_xchg(_Atomic(__uintcap_t) *f, __uintcap_t value) {
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg_long_ptr
 // PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[F]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* [[VALUE]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw xchg i8 addrspace(200)* addrspace(200)* [[TMP0]], i8 addrspace(200)* [[TMP1]] seq_cst
-// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)* addrspace(200)* [[F]], i64 addrspace(200)* [[VALUE]] seq_cst
+// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP0]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg_long_ptr
 // HYBRID-SAME: (i64 addrspace(200)** nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)** [[F]] to i8 addrspace(200)**
-// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* [[VALUE]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw xchg i8 addrspace(200)** [[TMP0]], i8 addrspace(200)* [[TMP1]] seq_cst
-// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)** [[F]], i64 addrspace(200)* [[VALUE]] seq_cst
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP0]]
 //
 long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__capability value) {
   return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
