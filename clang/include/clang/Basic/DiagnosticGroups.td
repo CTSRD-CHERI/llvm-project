@@ -1264,5 +1264,3 @@ in addition with the pragmas or -fmax-tokens flag to get any warnings.
 }
 
 def WebAssemblyExceptionSpec : DiagGroup<"wasm-exception-spec">;
-
-def RTTI : DiagGroup<"rtti">;
