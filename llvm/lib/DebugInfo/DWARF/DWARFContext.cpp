@@ -1037,7 +1037,9 @@ DWARFContext::DIEsForAddress DWARFContext::getDIEsForAddress(uint64_t Address) {
 static bool getFunctionNameAndStartLineForAddress(DWARFCompileUnit *CU,
                                                   uint64_t Address,
                                                   FunctionNameKind Kind,
+                                                  DILineInfoSpecifier::FileLineInfoKind FileNameKind,
                                                   std::string &FunctionName,
+                                                  std::string &StartFile,
                                                   uint32_t &StartLine) {
   // The address may correspond to instruction in some inlined function,
   // so we have to build the chain of inlined functions and take the
@@ -1052,6 +1054,11 @@ static bool getFunctionNameAndStartLineForAddress(DWARFCompileUnit *CU,
   const char *Name = nullptr;
   if (Kind != FunctionNameKind::None && (Name = DIE.getSubroutineName(Kind))) {
     FunctionName = Name;
+    FoundResult = true;
+  }
+  std::string DeclFile = DIE.getDeclFile(FileNameKind);
+  if (!DeclFile.empty()) {
+    StartFile = DeclFile;
     FoundResult = true;
   }
   if (auto DeclLineResult = DIE.getDeclLine()) {
@@ -1225,8 +1232,9 @@ DILineInfo DWARFContext::getLineInfoForAddress(object::SectionedAddress Address,
   if (!CU)
     return Result;
 
-  getFunctionNameAndStartLineForAddress(CU, Address.Address, Spec.FNKind,
-                                        Result.FunctionName, Result.StartLine);
+  getFunctionNameAndStartLineForAddress(CU, Address.Address, Spec.FNKind, Spec.FLIKind,
+                                        Result.FunctionName,
+                                        Result.StartFileName, Result.StartLine);
   if (Spec.FLIKind != FileLineInfoKind::None) {
     if (const DWARFLineTable *LineTable = getLineTableForUnit(CU)) {
       LineTable->getFileLineInfoForAddress(
@@ -1245,15 +1253,17 @@ DILineInfoTable DWARFContext::getLineInfoForAddressRange(
     return Lines;
 
   uint32_t StartLine = 0;
+  std::string StartFileName;
   std::string FunctionName(DILineInfo::BadString);
-  getFunctionNameAndStartLineForAddress(CU, Address.Address, Spec.FNKind,
-                                        FunctionName, StartLine);
+  getFunctionNameAndStartLineForAddress(CU, Address.Address, Spec.FNKind, Spec.FLIKind,
+                                        FunctionName, StartFileName, StartLine);
 
   // If the Specifier says we don't need FileLineInfo, just
   // return the top-most function at the starting address.
   if (Spec.FLIKind == FileLineInfoKind::None) {
     DILineInfo Result;
     Result.FunctionName = FunctionName;
+    Result.StartFileName = StartFileName;
     Result.StartLine = StartLine;
     Lines.push_back(std::make_pair(Address.Address, Result));
     return Lines;
@@ -1277,6 +1287,7 @@ DILineInfoTable DWARFContext::getLineInfoForAddressRange(
     Result.FunctionName = FunctionName;
     Result.Line = Row.Line;
     Result.Column = Row.Column;
+    Result.StartFileName = StartFileName;
     Result.StartLine = StartLine;
     Lines.push_back(std::make_pair(Row.Address.Address, Result));
   }
@@ -1319,6 +1330,7 @@ DWARFContext::getInliningInfoForAddress(object::SectionedAddress Address,
       Frame.FunctionName = Name;
     if (auto DeclLineResult = FunctionDIE.getDeclLine())
       Frame.StartLine = DeclLineResult;
+    Frame.StartFileName = FunctionDIE.getDeclFile(Spec.FLIKind);
     if (Spec.FLIKind != FileLineInfoKind::None) {
       if (i == 0) {
         // For the topmost frame, initialize the line table of this
