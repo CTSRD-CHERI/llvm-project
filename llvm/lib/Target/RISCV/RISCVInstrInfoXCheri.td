@@ -1043,10 +1043,6 @@ def : PatGpr<int_cheri_representable_alignment_mask, CRAM>;
 
 /// Memory-Access with Explicit Address Type Instructions
 
-// TODO: Need int<->float patterns for pointers in capabilty mode and
-// capabilities without capability mode (which requires BuildPairF64 and
-// SplitF64 for doubles on RV32I).
-
 multiclass CheriExplicitLdPat<PatFrag LoadOp, RVInst Inst,
                               RegisterClass AddrTy> {
   let AddedComplexity = -10 in
@@ -1548,6 +1544,12 @@ defm : CheriStPat<store, CFSW, FPR32>;
 
 } // Predicates = [HasCheri, HasStdExtF, IsCapMode]
 
+let Predicates = [HasCheri, HasStdExtF, NotCapMode] in {
+def : Pat<(load GPCR:$rs1), (FMV_W_X (LW_CAP GPCR:$rs1))>;
+def : Pat<(store FPR32:$rs2, GPCR:$rs1), (SW_CAP (FMV_X_W FPR32:$rs2), GPCR:$rs1)>;
+} // Predicates = [HasCheri, HasStdExtF, NotCapMode]
+
+
 /// 'D' (Single-Precision Floating-Point) extension
 
 let Predicates = [HasCheri, HasStdExtD, IsCapMode] in {
@@ -1561,6 +1563,13 @@ defm : CheriLdPat<load, CFLD>;
 defm : CheriStPat<store, CFSD, FPR64>;
 
 } // Predicates = [HasCheri, HasStdExtD, IsCapMode]
+
+let Predicates = [HasCheri, HasStdExtF, IsRV64, NotCapMode] in {
+// TODO: double patterns for RV32 (which requires BuildPairF64 and SplitF64)
+// TODO: We may want to add int<->float patterns for pointers in capability mode.
+def : Pat<(load GPCR:$rs1), (FMV_D_X (LD_CAP GPCR:$rs1))>;
+def : Pat<(store FPR64:$rs2, GPCR:$rs1), (SD_CAP (FMV_X_D FPR64:$rs2), GPCR:$rs1)>;
+}
 
 /// 'XCheri' extension
 

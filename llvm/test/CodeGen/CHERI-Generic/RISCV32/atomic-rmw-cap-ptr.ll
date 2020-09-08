@@ -5,8 +5,7 @@
 ; RUN: %riscv32_cheri_purecap_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
 ; RUN: %riscv32_cheri_purecap_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
 ; Missing pattern for floating-point load via capability breaks -mattr=+f hybrid
-; RUN: %riscv32_cheri_llc %s -o - -mattr=-f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-; RUN_FIXME_THIS_CRASHES: %riscv32_cheri_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
+; RUN: %riscv32_cheri_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
 ; RUN_FIXME_THIS_CRASHES: %riscv32_cheri_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 
 define dso_local void @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) nounwind {
@@ -765,38 +764,30 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fadd:
 ; HYBRID:       # %bb.0: # %bb
-; HYBRID-NEXT:    addi sp, sp, -32
-; HYBRID-NEXT:    sw ra, 28(sp)
-; HYBRID-NEXT:    sw s0, 24(sp)
-; HYBRID-NEXT:    sw s1, 20(sp)
-; HYBRID-NEXT:    sc ca0, 8(sp)
-; HYBRID-NEXT:    lw.cap a0, (ca0)
-; HYBRID-NEXT:    mv s0, a1
+; HYBRID-NEXT:    lw.cap a2, (ca0)
+; HYBRID-NEXT:    fmv.w.x ft0, a1
+; HYBRID-NEXT:    fmv.w.x ft1, a2
 ; HYBRID-NEXT:  .LBB11_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
 ; HYBRID-NEXT:    # Child Loop BB11_3 Depth 2
-; HYBRID-NEXT:    mv s1, a0
-; HYBRID-NEXT:    mv a1, s0
-; HYBRID-NEXT:    call __addsf3
-; HYBRID-NEXT:    lc ca2, 8(sp)
+; HYBRID-NEXT:    fadd.s ft2, ft1, ft0
+; HYBRID-NEXT:    fmv.x.w a1, ft2
+; HYBRID-NEXT:    fmv.x.w a2, ft1
 ; HYBRID-NEXT:  .LBB11_3: # %atomicrmw.start
 ; HYBRID-NEXT:    # Parent Loop BB11_1 Depth=1
 ; HYBRID-NEXT:    # => This Inner Loop Header: Depth=2
-; HYBRID-NEXT:    lr.w.cap a0, (ca2)
-; HYBRID-NEXT:    bne a0, s1, .LBB11_5
+; HYBRID-NEXT:    lr.w.cap a1, (ca0)
+; HYBRID-NEXT:    bne a1, a2, .LBB11_5
 ; HYBRID-NEXT:  # %bb.4: # %atomicrmw.start
 ; HYBRID-NEXT:    # in Loop: Header=BB11_3 Depth=2
-; HYBRID-NEXT:    mv a1, a0
-; HYBRID-NEXT:    sc.w.cap a1, (ca2)
-; HYBRID-NEXT:    bnez a1, .LBB11_3
+; HYBRID-NEXT:    mv a3, a1
+; HYBRID-NEXT:    sc.w.cap a3, (ca0)
+; HYBRID-NEXT:    bnez a3, .LBB11_3
 ; HYBRID-NEXT:  .LBB11_5: # %atomicrmw.start
 ; HYBRID-NEXT:    # in Loop: Header=BB11_1 Depth=1
-; HYBRID-NEXT:    bne a0, s1, .LBB11_1
+; HYBRID-NEXT:    fmv.w.x ft1, a1
+; HYBRID-NEXT:    bne a1, a2, .LBB11_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
-; HYBRID-NEXT:    lw s1, 20(sp)
-; HYBRID-NEXT:    lw s0, 24(sp)
-; HYBRID-NEXT:    lw ra, 28(sp)
-; HYBRID-NEXT:    addi sp, sp, 32
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw fadd float addrspace(200)* %ptr, float %val seq_cst
@@ -870,38 +861,30 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fsub:
 ; HYBRID:       # %bb.0: # %bb
-; HYBRID-NEXT:    addi sp, sp, -32
-; HYBRID-NEXT:    sw ra, 28(sp)
-; HYBRID-NEXT:    sw s0, 24(sp)
-; HYBRID-NEXT:    sw s1, 20(sp)
-; HYBRID-NEXT:    sc ca0, 8(sp)
-; HYBRID-NEXT:    lw.cap a0, (ca0)
-; HYBRID-NEXT:    mv s0, a1
+; HYBRID-NEXT:    lw.cap a2, (ca0)
+; HYBRID-NEXT:    fmv.w.x ft0, a1
+; HYBRID-NEXT:    fmv.w.x ft1, a2
 ; HYBRID-NEXT:  .LBB12_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Loop Header: Depth=1
 ; HYBRID-NEXT:    # Child Loop BB12_3 Depth 2
-; HYBRID-NEXT:    mv s1, a0
-; HYBRID-NEXT:    mv a1, s0
-; HYBRID-NEXT:    call __subsf3
-; HYBRID-NEXT:    lc ca2, 8(sp)
+; HYBRID-NEXT:    fsub.s ft2, ft1, ft0
+; HYBRID-NEXT:    fmv.x.w a1, ft2
+; HYBRID-NEXT:    fmv.x.w a2, ft1
 ; HYBRID-NEXT:  .LBB12_3: # %atomicrmw.start
 ; HYBRID-NEXT:    # Parent Loop BB12_1 Depth=1
 ; HYBRID-NEXT:    # => This Inner Loop Header: Depth=2
-; HYBRID-NEXT:    lr.w.cap a0, (ca2)
-; HYBRID-NEXT:    bne a0, s1, .LBB12_5
+; HYBRID-NEXT:    lr.w.cap a1, (ca0)
+; HYBRID-NEXT:    bne a1, a2, .LBB12_5
 ; HYBRID-NEXT:  # %bb.4: # %atomicrmw.start
 ; HYBRID-NEXT:    # in Loop: Header=BB12_3 Depth=2
-; HYBRID-NEXT:    mv a1, a0
-; HYBRID-NEXT:    sc.w.cap a1, (ca2)
-; HYBRID-NEXT:    bnez a1, .LBB12_3
+; HYBRID-NEXT:    mv a3, a1
+; HYBRID-NEXT:    sc.w.cap a3, (ca0)
+; HYBRID-NEXT:    bnez a3, .LBB12_3
 ; HYBRID-NEXT:  .LBB12_5: # %atomicrmw.start
 ; HYBRID-NEXT:    # in Loop: Header=BB12_1 Depth=1
-; HYBRID-NEXT:    bne a0, s1, .LBB12_1
+; HYBRID-NEXT:    fmv.w.x ft1, a1
+; HYBRID-NEXT:    bne a1, a2, .LBB12_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
-; HYBRID-NEXT:    lw s1, 20(sp)
-; HYBRID-NEXT:    lw s0, 24(sp)
-; HYBRID-NEXT:    lw ra, 28(sp)
-; HYBRID-NEXT:    addi sp, sp, 32
 ; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw fsub float addrspace(200)* %ptr, float %val seq_cst
