@@ -5758,7 +5758,7 @@ ABIArgInfo AArch64ABIInfo::coerceIllegalVector(QualType Ty) const {
       ResType = llvm::ScalableVectorType::get(
           llvm::Type::getInt64Ty(getVMContext()), 2);
       break;
-    case BuiltinType::Float16:
+    case BuiltinType::Half:
       ResType = llvm::ScalableVectorType::get(
           llvm::Type::getHalfTy(getVMContext()), 8);
       break;
