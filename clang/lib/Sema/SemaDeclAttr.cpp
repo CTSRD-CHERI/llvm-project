@@ -7725,6 +7725,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_SwiftError:
     handleSwiftError(S, D, AL);
     break;
+  case ParsedAttr::AT_SwiftObjCMembers:
+    handleSimpleAttribute<SwiftObjCMembersAttr>(S, D, AL);
+    break;
 
   // XRay attributes.
   case ParsedAttr::AT_XRayLogArgs:
