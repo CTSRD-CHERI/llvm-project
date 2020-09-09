@@ -1284,9 +1284,11 @@ class PseudoCheriCmpXchg<RegisterClass ValTy=GPR>
   let mayStore = 1;
   let hasSideEffects = 0;
 }
-class PseudoCheriCmpXchgExplicitAddrMode<RegisterClass ValTy=GPR>
-    : Pseudo<(outs ValTy:$res, GPR:$scratch),
-             (ins GPCR:$addr, ValTy:$cmpval, ValTy:$newval, ixlenimm:$ordering), []> {
+class PseudoCheriCmpXchgExplicitAddrMode<RegisterClass PtrTy,
+                                         RegisterClass ValTy=GPR,
+                                         RegisterClass ScratchTy=GPR>
+    : Pseudo<(outs ValTy:$res, ScratchTy:$scratch),
+             (ins PtrTy:$addr, ValTy:$cmpval, ValTy:$newval, ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch,$res = $newval";
   let mayLoad = 1;
   let mayStore = 1;
@@ -1340,7 +1342,7 @@ def PseudoCheriAtomicLoadUMax8 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMin8 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadNand8 : PseudoCheriAMO;
 def PseudoCheriCmpXchg8 : PseudoCheriCmpXchg;
-def PseudoCheriCmpXchg8ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode;
+def PseudoCheriCmpXchg8ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicSwap16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadAdd16 : PseudoCheriAMO;
@@ -1354,20 +1356,20 @@ def PseudoCheriAtomicLoadUMax16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMin16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadNand16 : PseudoCheriAMO;
 def PseudoCheriCmpXchg16 : PseudoCheriCmpXchg;
-def PseudoCheriCmpXchg16ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode;
+def PseudoCheriCmpXchg16ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicLoadNand32 : PseudoCheriAMO;
 def PseudoCheriCmpXchg32 : PseudoCheriCmpXchg;
-def PseudoCheriCmpXchg32ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode;
+def PseudoCheriCmpXchg32ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR>;
-def PseudoCheriCmpXchgCapExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
+def PseudoCheriCmpXchgCapExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR, GPCR, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in {
 def PseudoCheriAtomicLoadNand64 : PseudoCheriAMO;
 def PseudoCheriCmpXchg64 : PseudoCheriCmpXchg;
-def PseudoCheriCmpXchg64ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode;
+def PseudoCheriCmpXchg64ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64]
 
 /// 'I' (Integer) base

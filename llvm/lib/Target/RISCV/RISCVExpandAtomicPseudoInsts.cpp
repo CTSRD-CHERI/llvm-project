@@ -1037,7 +1037,6 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchgCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI, bool PtrIsCap,
     MachineBasicBlock::iterator &NextMBBI, bool ExplicitAddrMode) {
   MachineInstr &MI = *MBBI;
-  assert(!ExplicitAddrMode && "Expansion for explicit mode not implemented");
   DebugLoc DL = MI.getDebugLoc();
   MachineFunction *MF = MBB.getParent();
   const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
@@ -1082,13 +1081,34 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchgCap(
   // .looptail:
   //   sc.c scratch, newval, (addr)
   //   bnez scratch, loophead
-  BuildMI(LoopTailMBB, DL,
-          TII->get(getSCForRMWCap(PtrIsCap, ExplicitAddrMode, Ordering, CLen)),
-          ScratchReg)
-      .addReg(AddrReg)
-      .addReg(NewValReg);
+  const MCInstrDesc &SCInst =
+      TII->get(getSCForRMWCap(PtrIsCap, ExplicitAddrMode, Ordering, CLen));
+  Register SCResultReg = ScratchReg;
+  if (ExplicitAddrMode) {
+    assert(RISCV::GPCRRegClass.contains(ScratchReg));
+    // With an explicit cap/ddc-relative SC, the register stored is also the
+    // success/failure writeback register.
+    // .looptail:
+    //   mv scratch, newval
+    //   sc.cap.c scratch, (addr)  (implicit rd=scratch)
+    //   bnez scratch, loophead
+    BuildMI(LoopTailMBB, DL, TII->get(RISCV::CMove), ScratchReg)
+        .addReg(NewValReg);
+    // Note: SC_C_CAP has the address register as the second argument not the
+    // first even though it is called rs1 in tablegen.
+    BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
+        .addReg(ScratchReg)
+        .addReg(AddrReg);
+    // In the explicit case the output register of SC_C_CAP/DDC is a capability
+    // register so we have to extract the GPR register.
+    SCResultReg = TRI->getSubReg(ScratchReg, RISCV::sub_cap_addr);
+  } else {
+    BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
+        .addReg(AddrReg)
+        .addReg(NewValReg);
+  }
   BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
-      .addReg(ScratchReg)
+      .addReg(SCResultReg)
       .addReg(RISCV::X0)
       .addMBB(LoopHeadMBB);
 
