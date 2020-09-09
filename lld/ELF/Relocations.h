@@ -143,7 +143,7 @@ bool hexagonNeedsTLSSymbol(ArrayRef<OutputSection *> outputSections);
 
 class ThunkSection;
 class Thunk;
-struct InputSectionDescription;
+class InputSectionDescription;
 
 class ThunkCreator {
 public:
