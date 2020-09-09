@@ -6,7 +6,7 @@
 @IF-RISCV@; RUN: %generic_cheri_purecap_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
 @IFNOT-RISCV@; RUN: %generic_cheri_purecap_llc %s -o - | FileCheck %s --check-prefix=PURECAP
 @IF-RISCV@; RUN: %generic_cheri_hybrid_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-@IF-RISCV@; RUN_FIXME_THIS_CRASHES: %generic_cheri_hybrid_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+@IF-RISCV@; RUN: %generic_cheri_hybrid_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 @IFNOT-RISCV@; RUN: %generic_cheri_hybrid_llc %s -o - | FileCheck %s --check-prefix=HYBRID
 
 define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {

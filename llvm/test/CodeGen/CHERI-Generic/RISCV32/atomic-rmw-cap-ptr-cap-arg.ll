@@ -7,7 +7,7 @@
 ; RUN: %riscv32_cheri_purecap_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
 ; RUN: %riscv32_cheri_purecap_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
 ; RUN: %riscv32_cheri_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-; RUN_FIXME_THIS_CRASHES: %riscv32_cheri_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+; RUN: %riscv32_cheri_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 
 define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg:
@@ -29,32 +29,42 @@ define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %p
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: atomic_cap_ptr_xchg:
-; HYBRID:       # %bb.0: # %bb
-; HYBRID-NEXT:    fence rw, rw
-; HYBRID-NEXT:    lc.cap ca2, (ca0)
-; HYBRID-NEXT:  .LBB0_1: # %atomicrmw.start
-; HYBRID-NEXT:    # =>This Loop Header: Depth=1
-; HYBRID-NEXT:    # Child Loop BB0_3 Depth 2
-; HYBRID-NEXT:    cmove ca3, ca1
-; HYBRID-NEXT:  .LBB0_3: # %atomicrmw.start
-; HYBRID-NEXT:    # Parent Loop BB0_1 Depth=1
-; HYBRID-NEXT:    # => This Inner Loop Header: Depth=2
-; HYBRID-NEXT:    lr.c.cap ca3, (ca0)
-; HYBRID-NEXT:    bne a3, a2, .LBB0_5
-; HYBRID-NEXT:  # %bb.4: # %atomicrmw.start
-; HYBRID-NEXT:    # in Loop: Header=BB0_3 Depth=2
-; HYBRID-NEXT:    cmove ca4, ca3
-; HYBRID-NEXT:    sc.c.cap ca4, (ca0)
-; HYBRID-NEXT:    bnez a4, .LBB0_3
-; HYBRID-NEXT:  .LBB0_5: # %atomicrmw.start
-; HYBRID-NEXT:    # in Loop: Header=BB0_1 Depth=1
-; HYBRID-NEXT:    mv a4, a2
-; HYBRID-NEXT:    cmove ca2, ca3
-; HYBRID-NEXT:    bne a3, a4, .LBB0_1
-; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
-; HYBRID-NEXT:    fence r, rw
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg:
+; HYBRID-ATOMICS:       # %bb.0: # %bb
+; HYBRID-ATOMICS-NEXT:    fence rw, rw
+; HYBRID-ATOMICS-NEXT:    lc.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:  .LBB0_1: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    # Child Loop BB0_3 Depth 2
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
+; HYBRID-ATOMICS-NEXT:  .LBB0_3: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # Parent Loop BB0_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a3, a2, .LBB0_5
+; HYBRID-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_3 Depth=2
+; HYBRID-ATOMICS-NEXT:    cmove ca4, ca3
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca4, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB0_3
+; HYBRID-ATOMICS-NEXT:  .LBB0_5: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a4, a2
+; HYBRID-ATOMICS-NEXT:    cmove ca2, ca3
+; HYBRID-ATOMICS-NEXT:    bne a3, a4, .LBB0_1
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg:
+; HYBRID-LIBCALLS:       # %bb.0: # %bb
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
+; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_exchange_cap
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val seq_cst
   ret void

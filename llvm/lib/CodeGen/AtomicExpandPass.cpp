@@ -1676,7 +1676,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
     Instruction *I, unsigned Size, Type *ValTy, Align Alignment,
     Value *PointerOperand, Value *ValueOperand, Value *CASExpected,
     AtomicOrdering Ordering, AtomicOrdering Ordering2,
-    ArrayRef<RTLIB::Libcall> Libcalls, bool IsCap) {
+    ArrayRef<RTLIB::Libcall> Libcalls, bool IsCapValue) {
   assert(Libcalls.size() == 6);
 
   LLVMContext &Ctx = I->getContext();
@@ -1685,24 +1685,19 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   IRBuilder<> Builder(I);
   IRBuilder<> AllocaBuilder(&I->getFunction()->getEntryBlock().front());
 
-  bool UseSizedLibcall = IsCap || canUseSizedAtomicCall(Size, Alignment, DL);
-  if (DL.isFatPointer(PointerOperand->getType()) &&
-      !DL.isFatPointer(DL.getGlobalsAddressSpace())) {
-    LLVM_DEBUG(dbgs() << "Cannot expand atomic operation using capability "
-                         "pointer in hybrid mode";
-               I->dump(););
-    return false;
-  }
+  bool UseSizedLibcall =
+      IsCapValue || canUseSizedAtomicCall(Size, Alignment, DL);
+  bool PointerOperandIsCap = DL.isFatPointer(PointerOperand->getType());
   Type *SizedIntTy = nullptr;
   Type *I8CapTy = nullptr;
-  if (IsCap) {
+  if (IsCapValue) {
     assert(DL.isFatPointer(ValTy));
     I8CapTy = Type::getInt8PtrTy(Ctx, ValTy->getPointerAddressSpace());
   } else {
     SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
   }
   const Align AllocaAlignment =
-      DL.getPrefTypeAlign(IsCap ? I8CapTy : SizedIntTy);
+      DL.getPrefTypeAlign(IsCapValue ? I8CapTy : SizedIntTy);
 
   // TODO: the "order" argument type is "int", not int32. So
   // getInt32Ty may be wrong if the arch uses e.g. 16-bit ints.
@@ -1719,7 +1714,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   bool HasResult = I->getType() != Type::getVoidTy(Ctx);
 
   RTLIB::Libcall RTLibType;
-  if (IsCap) {
+  if (IsCapValue) {
     assert(UseSizedLibcall && "Must use specialized libcall for capabilities");
     RTLibType = Libcalls[0]; // Ugly workaround, see below
   } else if (UseSizedLibcall) {
@@ -1752,6 +1747,16 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   //  bool  __atomic_compare_exchange_N(iN *ptr, iN *expected, iN desired,
   //                                    int success_order, int failure_order)
   //
+  // If the value argument is a capability we use _cap as a suffix and pass
+  // uintcap_t arguments:
+  //  uintcap_t    __atomic_load_cap(uintcap_t *ptr, int ordering)
+  //  void  __atomic_store_cap(uintcap_t *ptr, uintcap_t val, int ordering)
+  //  uintcap_t __atomic_{exchange|fetch_*}_cap(uintcap_t *ptr, uintcap_t val,
+  //                                            int ordering)
+  //  bool __atomic_compare_exchange_cap(uintcap_t *ptr, uintcap_t *expected,
+  //                                     uintcap_t desired, int success_order,
+  //                                     int failure_order)
+  //
   // Note that these functions can be used for non-integer atomic
   // operations, the values just need to be bitcast to integers on the
   // way in and out.
@@ -1768,6 +1773,9 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   // The different signatures are built up depending on the
   // 'UseSizedLibcall', 'CASExpected', 'ValueOperand', and 'HasResult'
   // variables.
+  //
+  // Note: For CHERI hybrid mode we use __cap_atomic_* to handle cases where
+  // the pointer is a capability type.
 
   AllocaInst *AllocaCASExpected = nullptr;
   Value *AllocaCASExpected_i8 = nullptr;
@@ -1794,7 +1802,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   auto PtrTypeAS = PointerOperand->getType()->getPointerAddressSpace();
   Value *PtrVal = Builder.CreateBitCast(PointerOperand,
                                         Type::getInt8PtrTy(Ctx, PtrTypeAS));
-  unsigned PtrValAS = DL.getAllocaAddrSpace();
+  auto PtrValAS = PointerOperandIsCap ? PtrTypeAS : DL.getAllocaAddrSpace();
   PtrVal = Builder.CreateAddrSpaceCast(PtrVal,
                                        Type::getInt8PtrTy(Ctx, PtrValAS));
   Args.push_back(PtrVal);
@@ -1815,7 +1823,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
 
   // 'val' argument ('desired' for cas), if present.
   if (ValueOperand) {
-    if (IsCap) {
+    if (IsCapValue) {
       Args.push_back(Builder.CreateBitCast(ValueOperand, I8CapTy));
     } else if (UseSizedLibcall) {
       Value *IntValue =
@@ -1856,7 +1864,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
     ResultTy = Type::getInt1Ty(Ctx);
     Attr = Attr.addAttribute(Ctx, AttributeList::ReturnIndex, Attribute::ZExt);
   } else if (HasResult && UseSizedLibcall) {
-    ResultTy = IsCap ? I8CapTy : SizedIntTy;
+    ResultTy = IsCapValue ? I8CapTy : SizedIntTy;
   } else
     ResultTy = Type::getVoidTy(Ctx);
 
@@ -1867,9 +1875,19 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   FunctionType *FnType = FunctionType::get(ResultTy, ArgTys, false);
   // XXXAR: ugly hack to reduce size of the diff: for capability types we set
   // RTLibType to the generic one and then manually append _cap instead of
-  // adding the 20+ new entries to RuntimeLibcalls.def
+  // adding the 20+ new entries to RuntimeLibcalls.def. We also prefix with
+  // __cap for capability pointer arguments in hybrid mode.
+  assert(TLI->getLibcallName(RTLibType));
   std::string LibcallName = TLI->getLibcallName(RTLibType);
-  if (IsCap) {
+  // We are compiling for CHERI purecap mode if the default globals address
+  // space is a capability type.
+  bool IsCheriPurecap = DL.isFatPointer(DL.getGlobalsAddressSpace());
+  if (PointerOperandIsCap && !IsCheriPurecap) {
+    // We prefix the atomic functions using capabilities with __cap in hybrid
+    assert(StringRef(LibcallName).startswith("__atomic"));
+    LibcallName = "__cap_" + LibcallName.substr(2);
+  }
+  if (IsCapValue) {
     LibcallName += "_cap";
   }
   FunctionCallee LibcallFn = M->getOrInsertFunction(LibcallName, FnType, Attr);
