@@ -111,8 +111,8 @@ RISCV::RISCV() {
 
 static uint32_t getEFlags(InputFile *f) {
   if (config->is64)
-    return cast<ObjFile<ELF64LE>>(f)->getObj().getHeader()->e_flags;
-  return cast<ObjFile<ELF32LE>>(f)->getObj().getHeader()->e_flags;
+    return cast<ObjFile<ELF64LE>>(f)->getObj().getHeader().e_flags;
+  return cast<ObjFile<ELF32LE>>(f)->getObj().getHeader().e_flags;
 }
 
 int RISCV::getCapabilitySize() const {
