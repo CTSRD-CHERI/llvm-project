@@ -1441,7 +1441,8 @@ Value *AtomicExpand::insertRMWCmpXchgLoop(
   Builder.SetInsertPoint(BB);
   LoadInst *InitLoaded = Builder.CreateLoad(ResultTy, Addr);
   // Atomics require at least natural alignment.
-  InitLoaded->setAlignment(Align(ResultTy->getPrimitiveSizeInBits() / 8));
+  auto TypeSize = F->getParent()->getDataLayout().getTypeSizeInBits(ResultTy);
+  InitLoaded->setAlignment(Align(TypeSize.getFixedSize() / 8));
   Builder.CreateBr(LoopBB);
 
   // Start the main loop block now that we've taken care of the preliminaries.
