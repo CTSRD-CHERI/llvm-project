@@ -2019,6 +2019,10 @@ static void computeKnownBitsFromOperator(const Operator *I,
       }
     }
     break;
+  case Instruction::Freeze:
+    if (isGuaranteedNotToBePoison(I->getOperand(0), Q.CxtI, Q.DT, Depth + 1))
+      computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
+    break;
   }
 }
 
@@ -2729,6 +2733,13 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
         DemandedVecElts = APInt::getOneBitSet(NumElts, CIdx->getZExtValue());
       return isKnownNonZero(Vec, DemandedVecElts, Depth, Q);
     }
+  }
+  // Freeze
+  else if (const FreezeInst *FI = dyn_cast<FreezeInst>(V)) {
+    auto *Op = FI->getOperand(0);
+    if (isKnownNonZero(Op, Depth, Q) &&
+        isGuaranteedNotToBePoison(Op, Q.CxtI, Q.DT, Depth))
+      return true;
   }
 
   KnownBits Known(BitWidth);
