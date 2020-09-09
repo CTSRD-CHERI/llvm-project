@@ -208,6 +208,10 @@ public:
   bool decomposeMulByConstant(LLVMContext &Context, EVT VT,
                               SDValue C) const override;
 
+  bool supportsAtomicOperation(const DataLayout &DL, const Instruction *AI,
+                               Type *ValueTy, Type *PointerTy,
+                               Align Alignment) const override;
+
   TargetLowering::AtomicExpansionKind
   shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;
   Value *emitMaskedAtomicRMWIntrinsic(IRBuilder<> &Builder, AtomicRMWInst *AI,
