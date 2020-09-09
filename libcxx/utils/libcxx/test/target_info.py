@@ -76,7 +76,7 @@ class DarwinLocalTI(DefaultTargetInfo):
 
         return re.sub(r'.*/[^0-9]+([0-9.]+)\.sdk', r'\1', out)
 
-    def add_cxx_flags(self, flags):
+    def add_cxx_compile_flags(self, flags):
         out, err, exit_code = executeCommand(['xcrun', '--show-sdk-path'])
         if exit_code != 0:
             self.full_config.lit_config.warning("Could not determine macOS SDK path! stderr was " + err)
