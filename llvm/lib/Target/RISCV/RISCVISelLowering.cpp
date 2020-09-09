@@ -3440,6 +3440,22 @@ Value *RISCVTargetLowering::emitMaskedAtomicCmpXchgIntrinsic(
   return Result;
 }
 
+bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
+                                                  const Instruction *AI,
+                                                  Type *ValueTy,
+                                                  Type *PointerTy,
+                                                  Align Alignment) const {
+  // FIXME: we current have to expand CMPXCHG/RMW to libcalls since we are
+  // missing the SelectionDAG nodes+expansions to use the explicit addressing
+  // mode instructions.
+  if (DL.isFatPointer(PointerTy) &&
+      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+      (isa<AtomicRMWInst>(AI) || isa<AtomicCmpXchgInst>(AI)))
+    return false;
+  return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
+                                                 Alignment);
+}
+
 Register RISCVTargetLowering::getExceptionPointerRegister(
     const Constant *PersonalityFn) const {
   return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())

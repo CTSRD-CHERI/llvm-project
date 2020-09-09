@@ -4,8 +4,8 @@
 ; https://github.com/CTSRD-CHERI/llvm-project/issues/470
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
-; RUN_FIXME_THIS_CRASHES: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-; RUN_FIXME_THIS_CRASHES: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
+; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 
 define i32 @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg:
@@ -26,6 +26,16 @@ define i32 @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_xchg:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -16
+; HYBRID-NEXT:    sw ra, 12(sp)
+; HYBRID-NEXT:    addi a2, zero, 5
+; HYBRID-NEXT:    call __atomic_exchange_4_c@plt
+; HYBRID-NEXT:    lw ra, 12(sp)
+; HYBRID-NEXT:    addi sp, sp, 16
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -50,6 +60,16 @@ define i32 @atomic_cap_ptr_add(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_add:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -16
+; HYBRID-NEXT:    sw ra, 12(sp)
+; HYBRID-NEXT:    addi a2, zero, 5
+; HYBRID-NEXT:    call __atomic_fetch_add_4_c@plt
+; HYBRID-NEXT:    lw ra, 12(sp)
+; HYBRID-NEXT:    addi sp, sp, 16
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw add i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -75,6 +95,16 @@ define i32 @atomic_cap_ptr_sub(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_sub:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -16
+; HYBRID-NEXT:    sw ra, 12(sp)
+; HYBRID-NEXT:    addi a2, zero, 5
+; HYBRID-NEXT:    call __atomic_fetch_sub_4_c@plt
+; HYBRID-NEXT:    lw ra, 12(sp)
+; HYBRID-NEXT:    addi sp, sp, 16
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw sub i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -99,6 +129,16 @@ define i32 @atomic_cap_ptr_and(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_and:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -16
+; HYBRID-NEXT:    sw ra, 12(sp)
+; HYBRID-NEXT:    addi a2, zero, 5
+; HYBRID-NEXT:    call __atomic_fetch_and_4_c@plt
+; HYBRID-NEXT:    lw ra, 12(sp)
+; HYBRID-NEXT:    addi sp, sp, 16
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw and i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -131,6 +171,16 @@ define i32 @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_nand:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -16
+; HYBRID-NEXT:    sw ra, 12(sp)
+; HYBRID-NEXT:    addi a2, zero, 5
+; HYBRID-NEXT:    call __atomic_fetch_nand_4_c@plt
+; HYBRID-NEXT:    lw ra, 12(sp)
+; HYBRID-NEXT:    addi sp, sp, 16
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw nand i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -155,6 +205,16 @@ define i32 @atomic_cap_ptr_or(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_or:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -16
+; HYBRID-NEXT:    sw ra, 12(sp)
+; HYBRID-NEXT:    addi a2, zero, 5
+; HYBRID-NEXT:    call __atomic_fetch_or_4_c@plt
+; HYBRID-NEXT:    lw ra, 12(sp)
+; HYBRID-NEXT:    addi sp, sp, 16
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw or i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -179,6 +239,16 @@ define i32 @atomic_cap_ptr_xor(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_xor:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -16
+; HYBRID-NEXT:    sw ra, 12(sp)
+; HYBRID-NEXT:    addi a2, zero, 5
+; HYBRID-NEXT:    call __atomic_fetch_xor_4_c@plt
+; HYBRID-NEXT:    lw ra, 12(sp)
+; HYBRID-NEXT:    addi sp, sp, 16
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw xor i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -235,6 +305,40 @@ define i32 @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 40(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 48
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_max:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -32
+; HYBRID-NEXT:    sw ra, 28(sp)
+; HYBRID-NEXT:    sw s0, 24(sp)
+; HYBRID-NEXT:    sc ca0, 8(sp)
+; HYBRID-NEXT:    lw.cap a3, (ca0)
+; HYBRID-NEXT:    mv s0, a1
+; HYBRID-NEXT:    j .LBB7_2
+; HYBRID-NEXT:  .LBB7_1: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB7_2 Depth=1
+; HYBRID-NEXT:    sw a3, 20(sp)
+; HYBRID-NEXT:    addi a1, sp, 20
+; HYBRID-NEXT:    addi a3, zero, 5
+; HYBRID-NEXT:    addi a4, zero, 5
+; HYBRID-NEXT:    lc ca0, 8(sp)
+; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-NEXT:    lw a3, 20(sp)
+; HYBRID-NEXT:    bnez a0, .LBB7_4
+; HYBRID-NEXT:  .LBB7_2: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    mv a2, a3
+; HYBRID-NEXT:    blt s0, a3, .LBB7_1
+; HYBRID-NEXT:  # %bb.3: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB7_2 Depth=1
+; HYBRID-NEXT:    mv a2, s0
+; HYBRID-NEXT:    j .LBB7_1
+; HYBRID-NEXT:  .LBB7_4: # %atomicrmw.end
+; HYBRID-NEXT:    mv a0, a3
+; HYBRID-NEXT:    lw s0, 24(sp)
+; HYBRID-NEXT:    lw ra, 28(sp)
+; HYBRID-NEXT:    addi sp, sp, 32
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw max i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -291,6 +395,40 @@ define i32 @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 40(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 48
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_min:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -32
+; HYBRID-NEXT:    sw ra, 28(sp)
+; HYBRID-NEXT:    sw s0, 24(sp)
+; HYBRID-NEXT:    sc ca0, 8(sp)
+; HYBRID-NEXT:    lw.cap a3, (ca0)
+; HYBRID-NEXT:    mv s0, a1
+; HYBRID-NEXT:    j .LBB8_2
+; HYBRID-NEXT:  .LBB8_1: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB8_2 Depth=1
+; HYBRID-NEXT:    sw a3, 20(sp)
+; HYBRID-NEXT:    addi a1, sp, 20
+; HYBRID-NEXT:    addi a3, zero, 5
+; HYBRID-NEXT:    addi a4, zero, 5
+; HYBRID-NEXT:    lc ca0, 8(sp)
+; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-NEXT:    lw a3, 20(sp)
+; HYBRID-NEXT:    bnez a0, .LBB8_4
+; HYBRID-NEXT:  .LBB8_2: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    mv a2, a3
+; HYBRID-NEXT:    bge s0, a3, .LBB8_1
+; HYBRID-NEXT:  # %bb.3: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB8_2 Depth=1
+; HYBRID-NEXT:    mv a2, s0
+; HYBRID-NEXT:    j .LBB8_1
+; HYBRID-NEXT:  .LBB8_4: # %atomicrmw.end
+; HYBRID-NEXT:    mv a0, a3
+; HYBRID-NEXT:    lw s0, 24(sp)
+; HYBRID-NEXT:    lw ra, 28(sp)
+; HYBRID-NEXT:    addi sp, sp, 32
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw min i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -347,6 +485,40 @@ define i32 @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 40(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 48
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_umax:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -32
+; HYBRID-NEXT:    sw ra, 28(sp)
+; HYBRID-NEXT:    sw s0, 24(sp)
+; HYBRID-NEXT:    sc ca0, 8(sp)
+; HYBRID-NEXT:    lw.cap a3, (ca0)
+; HYBRID-NEXT:    mv s0, a1
+; HYBRID-NEXT:    j .LBB9_2
+; HYBRID-NEXT:  .LBB9_1: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB9_2 Depth=1
+; HYBRID-NEXT:    sw a3, 20(sp)
+; HYBRID-NEXT:    addi a1, sp, 20
+; HYBRID-NEXT:    addi a3, zero, 5
+; HYBRID-NEXT:    addi a4, zero, 5
+; HYBRID-NEXT:    lc ca0, 8(sp)
+; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-NEXT:    lw a3, 20(sp)
+; HYBRID-NEXT:    bnez a0, .LBB9_4
+; HYBRID-NEXT:  .LBB9_2: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    mv a2, a3
+; HYBRID-NEXT:    bltu s0, a3, .LBB9_1
+; HYBRID-NEXT:  # %bb.3: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB9_2 Depth=1
+; HYBRID-NEXT:    mv a2, s0
+; HYBRID-NEXT:    j .LBB9_1
+; HYBRID-NEXT:  .LBB9_4: # %atomicrmw.end
+; HYBRID-NEXT:    mv a0, a3
+; HYBRID-NEXT:    lw s0, 24(sp)
+; HYBRID-NEXT:    lw ra, 28(sp)
+; HYBRID-NEXT:    addi sp, sp, 32
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw umax i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -403,6 +575,40 @@ define i32 @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 40(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 48
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_umin:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -32
+; HYBRID-NEXT:    sw ra, 28(sp)
+; HYBRID-NEXT:    sw s0, 24(sp)
+; HYBRID-NEXT:    sc ca0, 8(sp)
+; HYBRID-NEXT:    lw.cap a3, (ca0)
+; HYBRID-NEXT:    mv s0, a1
+; HYBRID-NEXT:    j .LBB10_2
+; HYBRID-NEXT:  .LBB10_1: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB10_2 Depth=1
+; HYBRID-NEXT:    sw a3, 20(sp)
+; HYBRID-NEXT:    addi a1, sp, 20
+; HYBRID-NEXT:    addi a3, zero, 5
+; HYBRID-NEXT:    addi a4, zero, 5
+; HYBRID-NEXT:    lc ca0, 8(sp)
+; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-NEXT:    lw a3, 20(sp)
+; HYBRID-NEXT:    bnez a0, .LBB10_4
+; HYBRID-NEXT:  .LBB10_2: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    mv a2, a3
+; HYBRID-NEXT:    bgeu s0, a3, .LBB10_1
+; HYBRID-NEXT:  # %bb.3: # %atomicrmw.start
+; HYBRID-NEXT:    # in Loop: Header=BB10_2 Depth=1
+; HYBRID-NEXT:    mv a2, s0
+; HYBRID-NEXT:    j .LBB10_1
+; HYBRID-NEXT:  .LBB10_4: # %atomicrmw.end
+; HYBRID-NEXT:    mv a0, a3
+; HYBRID-NEXT:    lw s0, 24(sp)
+; HYBRID-NEXT:    lw ra, 28(sp)
+; HYBRID-NEXT:    addi sp, sp, 32
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw umin i32 addrspace(200)* %ptr, i32 %val seq_cst
   ret i32 %tmp
@@ -472,6 +678,33 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 24(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_fadd:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -32
+; HYBRID-NEXT:    sw ra, 28(sp)
+; HYBRID-NEXT:    fsw fs0, 24(sp)
+; HYBRID-NEXT:    sc ca0, 8(sp)
+; HYBRID-NEXT:    lw.cap a0, (ca0)
+; HYBRID-NEXT:    fmv.s fs0, fa0
+; HYBRID-NEXT:    fmv.w.x fa0, a0
+; HYBRID-NEXT:  .LBB11_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    fadd.s ft0, fa0, fs0
+; HYBRID-NEXT:    fsw fa0, 20(sp)
+; HYBRID-NEXT:    fmv.x.w a2, ft0
+; HYBRID-NEXT:    addi a1, sp, 20
+; HYBRID-NEXT:    addi a3, zero, 5
+; HYBRID-NEXT:    addi a4, zero, 5
+; HYBRID-NEXT:    lc ca0, 8(sp)
+; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-NEXT:    flw fa0, 20(sp)
+; HYBRID-NEXT:    beqz a0, .LBB11_1
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    flw fs0, 24(sp)
+; HYBRID-NEXT:    lw ra, 28(sp)
+; HYBRID-NEXT:    addi sp, sp, 32
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw fadd float addrspace(200)* %ptr, float %val seq_cst
   ret float %tmp
@@ -541,6 +774,33 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 24(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-LABEL: atomic_cap_ptr_fsub:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    addi sp, sp, -32
+; HYBRID-NEXT:    sw ra, 28(sp)
+; HYBRID-NEXT:    fsw fs0, 24(sp)
+; HYBRID-NEXT:    sc ca0, 8(sp)
+; HYBRID-NEXT:    lw.cap a0, (ca0)
+; HYBRID-NEXT:    fmv.s fs0, fa0
+; HYBRID-NEXT:    fmv.w.x fa0, a0
+; HYBRID-NEXT:  .LBB12_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    fsub.s ft0, fa0, fs0
+; HYBRID-NEXT:    fsw fa0, 20(sp)
+; HYBRID-NEXT:    fmv.x.w a2, ft0
+; HYBRID-NEXT:    addi a1, sp, 20
+; HYBRID-NEXT:    addi a3, zero, 5
+; HYBRID-NEXT:    addi a4, zero, 5
+; HYBRID-NEXT:    lc ca0, 8(sp)
+; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-NEXT:    flw fa0, 20(sp)
+; HYBRID-NEXT:    beqz a0, .LBB12_1
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    flw fs0, 24(sp)
+; HYBRID-NEXT:    lw ra, 28(sp)
+; HYBRID-NEXT:    addi sp, sp, 32
+; HYBRID-NEXT:    ret
 bb:
   %tmp = atomicrmw fsub float addrspace(200)* %ptr, float %val seq_cst
   ret float %tmp
