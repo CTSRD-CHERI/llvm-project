@@ -99,6 +99,15 @@ isSimpleEnoughValueToCommitHelper(Constant *C,
   case Instruction::PtrToInt:
     // int <=> ptr is fine if the int type is the same size as the
     // pointer type.
+    if (DL.isFatPointer(CE->getType()) ||
+        DL.isFatPointer(CE->getOperand(0)->getType())) {
+#ifdef LLVM_DEBUG
+      CE->dump();
+      // Add an assertion here to see if this case is triggered.
+      report_fatal_error("inttoptr/ptrtoint in globals unsupported for CHERI");
+#endif
+      return false;
+    }
     if (DL.getTypeSizeInBits(CE->getType()) !=
         DL.getTypeSizeInBits(CE->getOperand(0)->getType()))
       return false;
