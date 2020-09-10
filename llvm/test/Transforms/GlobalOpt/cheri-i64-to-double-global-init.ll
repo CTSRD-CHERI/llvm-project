@@ -1,5 +1,4 @@
-; REQUIRES: asserts
-; RUN: not --crash opt -globalopt -S -o - < %s
+; RUN: opt -globalopt -S -o - < %s | FileCheck %s
 ; This triggers an assertion in llvm::optimizeGlobalCtorsList()
 ; due to using getPointerAddressSpace() on a non-pointer type.
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
