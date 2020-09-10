@@ -13,18 +13,21 @@ target triple = "riscv64-unknown-freebsd"
 ]
 
 @global_i64 = addrspace(200) global i64 0
+
 @global_double = addrspace(200) global double undef
 ; CHECK: @global_double = local_unnamed_addr addrspace(200) global double 2.470330e-323
+
 @global_double2 = addrspace(200) global double undef
 ; CHECK: @global_double2 = local_unnamed_addr addrspace(200) global double 2.964390e-323
+
 @global_double_cap = addrspace(200) global double addrspace(200)* undef
 ; CHECK: @global_double_cap = local_unnamed_addr addrspace(200) global double addrspace(200)* bitcast (i64 addrspace(200)* @global_i64 to double addrspace(200)*)
 
-; These two can't be evaluated yet:
 @global_double_ptr1 = addrspace(200) global double addrspace(0)* undef
-; CHECK: @global_double_ptr1 = local_unnamed_addr addrspace(200) global double* undef
+; CHECK: @global_double_ptr1 = local_unnamed_addr addrspace(200) global double* addrspacecast (double addrspace(200)* bitcast (i64 addrspace(200)* @global_i64 to double addrspace(200)*) to double*)
+
 @global_double_ptr2 = addrspace(200) global double addrspace(0)* undef
-; CHECK: @global_double_ptr2 = local_unnamed_addr addrspace(200) global double* undef
+; CHECK: @global_double_ptr2 = local_unnamed_addr addrspace(200) global double* addrspacecast (double addrspace(200)* null to double*)
 
 define internal void @__cxx_global_var_init.1() addrspace(200) nounwind {
 entry:

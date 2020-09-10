@@ -82,6 +82,15 @@ isSimpleEnoughValueToCommitHelper(Constant *C,
   // across targets.
   ConstantExpr *CE = cast<ConstantExpr>(C);
   switch (CE->getOpcode()) {
+  case Instruction::AddrSpaceCast:
+    // AddrSpaceCast should be fine if the casted value is fine.
+    // However, we restrict this to casts that include capability types to
+    // avoid breaking other backends that can't handle addrspacecast constant
+    // expressions for globals.
+    if (!DL.isFatPointer(CE->getType()) &&
+        !DL.isFatPointer(CE->getOperand(0)->getType()))
+      return false;
+    return isSimpleEnoughValueToCommit(CE->getOperand(0), SimpleConstants, DL);
   case Instruction::BitCast:
     // Bitcast is fine if the casted value is fine.
     return isSimpleEnoughValueToCommit(CE->getOperand(0), SimpleConstants, DL);
