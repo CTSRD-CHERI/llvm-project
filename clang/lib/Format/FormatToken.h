@@ -811,9 +811,6 @@ struct AdditionalKeywords {
     kw___has_include = &IdentTable.get("__has_include");
     kw___has_include_next = &IdentTable.get("__has_include_next");
 
-    // CHERI keywords
-    kw___capability = &IdentTable.get("__capability");
-
     kw_mark = &IdentTable.get("mark");
 
     kw_extend = &IdentTable.get("extend");
@@ -897,9 +894,6 @@ struct AdditionalKeywords {
   IdentifierInfo *kw___except;
   IdentifierInfo *kw___has_include;
   IdentifierInfo *kw___has_include_next;
-
-  // CHERI keywords
-  IdentifierInfo *kw___capability;
 
   // JavaScript keywords.
   IdentifierInfo *kw_as;
