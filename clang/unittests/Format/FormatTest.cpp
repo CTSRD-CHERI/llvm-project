@@ -8210,6 +8210,18 @@ TEST_F(FormatTest, UnderstandsAttributes) {
   verifyFormat("SomeType *__capability s{InitValue};", CustomAttrs);
 }
 
+TEST_F(FormatTest, UnderstandsCheriCasts) {
+  // Check that CHERI casts are not parsed as binary operator arguments
+  verifyFormat("x = (__cheri_addr IntType)*v;");
+  verifyFormat("x = (__cheri_offset IntType)*v;");
+  verifyFormat("x = (__cheri_fromcap IntegerPointerType)*v;");
+  verifyFormat("x = (__cheri_tocap CapabilityPointerType)*v;");
+  verifyFormat("x = (__cheri_addr IntType)&v;");
+  verifyFormat("x = (__cheri_offset IntType)&v;");
+  verifyFormat("x = (__cheri_fromcap IntegerPointerType)&v;");
+  verifyFormat("x = (__cheri_tocap CapabilityPointerType)&v;");
+}
+
 TEST_F(FormatTest, UnderstandsPointerQualifiersInCast) {
   // Check that qualifiers on pointers don't break parsing of casts.
   verifyFormat("x = (foo *const)*v;");
