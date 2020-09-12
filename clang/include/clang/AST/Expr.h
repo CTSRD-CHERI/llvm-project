@@ -3508,9 +3508,12 @@ class CastExpr : public Expr {
   }
   CXXBaseSpecifier **path_buffer();
 
+  friend class ASTStmtReader;
+
 protected:
   CastExpr(StmtClass SC, QualType ty, ExprValueKind VK, const CastKind kind,
-           Expr *op, unsigned BasePathSize, const ASTContext &Ctx)
+           Expr *op, unsigned BasePathSize, bool HasFPFeatures,
+           const ASTContext &Ctx)
       : Expr(SC, provenanceCheckedTy(ty, Ctx, op), VK, OK_Ordinary), Op(op) {
     CastExprBits.Kind = kind;
     CastExprBits.PartOfExplicitCast = false;
@@ -3519,15 +3522,25 @@ protected:
            "BasePathSize overflow!");
     setDependence(computeDependence(this));
     assert(CastConsistency(Ctx));
+    CastExprBits.HasFPFeatures = HasFPFeatures;
   }
 
   /// Construct an empty cast.
-  CastExpr(StmtClass SC, EmptyShell Empty, unsigned BasePathSize)
-    : Expr(SC, Empty) {
+  CastExpr(StmtClass SC, EmptyShell Empty, unsigned BasePathSize,
+           bool HasFPFeatures)
+      : Expr(SC, Empty) {
     CastExprBits.PartOfExplicitCast = false;
     CastExprBits.BasePathSize = BasePathSize;
+    CastExprBits.HasFPFeatures = HasFPFeatures;
     assert((CastExprBits.BasePathSize == BasePathSize) &&
            "BasePathSize overflow!");
+  }
+
+  /// Return a pointer to the trailing FPOptions.
+  /// \pre hasStoredFPFeatures() == true
+  FPOptionsOverride *getTrailingFPFeatures();
+  const FPOptionsOverride *getTrailingFPFeatures() const {
+    return const_cast<CastExpr *>(this)->getTrailingFPFeatures();
   }
 
 public:
@@ -3572,6 +3585,28 @@ public:
   const FieldDecl *getTargetUnionField() const {
     assert(getCastKind() == CK_ToUnion);
     return getTargetFieldForToUnionCast(getType(), getSubExpr()->getType());
+  }
+
+  bool hasStoredFPFeatures() const { return CastExprBits.HasFPFeatures; }
+
+  /// Get FPOptionsOverride from trailing storage.
+  FPOptionsOverride getStoredFPFeatures() const {
+    assert(hasStoredFPFeatures());
+    return *getTrailingFPFeatures();
+  }
+
+  // Get the FP features status of this operation. Only meaningful for
+  // operations on floating point types.
+  FPOptions getFPFeaturesInEffect(const LangOptions &LO) const {
+    if (hasStoredFPFeatures())
+      return getStoredFPFeatures().applyOverrides(LO);
+    return FPOptions::defaultWithoutTrailingStorage(LO);
+  }
+
+  FPOptionsOverride getFPFeatures() const {
+    if (hasStoredFPFeatures())
+      return getStoredFPFeatures();
+    return FPOptionsOverride();
   }
 
   static const FieldDecl *getTargetFieldForToUnionCast(QualType unionType,
@@ -3632,23 +3667,36 @@ public:
 /// @endcode
 class ImplicitCastExpr final
     : public CastExpr,
-      private llvm::TrailingObjects<ImplicitCastExpr, CXXBaseSpecifier *> {
+      private llvm::TrailingObjects<ImplicitCastExpr, CXXBaseSpecifier *,
+                                    FPOptionsOverride> {
 
   ImplicitCastExpr(QualType ty, CastKind kind, Expr *op,
-                   unsigned BasePathLength, ExprValueKind VK,
-                   const ASTContext &Ctx)
-      : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, BasePathLength, Ctx) {
+                   unsigned BasePathLength, FPOptionsOverride FPO,
+                   ExprValueKind VK, const ASTContext &Ctx)
+      : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, BasePathLength,
+                 FPO.requiresTrailingStorage(), Ctx) {
+    if (hasStoredFPFeatures())
+      *getTrailingFPFeatures() = FPO;
   }
 
   /// Construct an empty implicit cast.
-  explicit ImplicitCastExpr(EmptyShell Shell, unsigned PathSize)
-    : CastExpr(ImplicitCastExprClass, Shell, PathSize) { }
+  explicit ImplicitCastExpr(EmptyShell Shell, unsigned PathSize,
+                            bool HasFPFeatures)
+      : CastExpr(ImplicitCastExprClass, Shell, PathSize, HasFPFeatures) {}
+
+  unsigned numTrailingObjects(OverloadToken<CXXBaseSpecifier *>) const {
+    return path_size();
+  }
 
 public:
   enum OnStack_t { OnStack };
   ImplicitCastExpr(OnStack_t _, QualType ty, CastKind kind, Expr *op,
-                   ExprValueKind VK, const ASTContext &Ctx)
-      : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, 0, Ctx) {}
+                   ExprValueKind VK, FPOptionsOverride FPO, const ASTContext &Ctx)
+      : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, 0,
+                 FPO.requiresTrailingStorage(), Ctx) {
+    if (hasStoredFPFeatures())
+      *getTrailingFPFeatures() = FPO;
+  }
 
   bool isPartOfExplicitCast() const { return CastExprBits.PartOfExplicitCast; }
   void setIsPartOfExplicitCast(bool PartOfExplicitCast) {
@@ -3658,10 +3706,10 @@ public:
   static ImplicitCastExpr *Create(const ASTContext &Context, QualType T,
                                   CastKind Kind, Expr *Operand,
                                   const CXXCastPath *BasePath,
-                                  ExprValueKind Cat);
+                                  ExprValueKind Cat, FPOptionsOverride FPO);
 
   static ImplicitCastExpr *CreateEmpty(const ASTContext &Context,
-                                       unsigned PathSize);
+                                       unsigned PathSize, bool HasFPFeatures);
 
   SourceLocation getBeginLoc() const LLVM_READONLY {
     return getSubExpr()->getBeginLoc();
@@ -3702,12 +3750,15 @@ class ExplicitCastExpr : public CastExpr {
 protected:
   ExplicitCastExpr(StmtClass SC, QualType exprTy, ExprValueKind VK,
                    CastKind kind, Expr *op, unsigned PathSize,
-                   TypeSourceInfo *writtenTy, const ASTContext &Ctx)
-      : CastExpr(SC, exprTy, VK, kind, op, PathSize, Ctx), TInfo(writtenTy) {}
+                   bool HasFPFeatures, TypeSourceInfo *writtenTy,
+                   const ASTContext &Ctx)
+      : CastExpr(SC, exprTy, VK, kind, op, PathSize, HasFPFeatures, Ctx),
+        TInfo(writtenTy) {}
 
   /// Construct an empty explicit cast.
-  ExplicitCastExpr(StmtClass SC, EmptyShell Shell, unsigned PathSize)
-    : CastExpr(SC, Shell, PathSize) { }
+  ExplicitCastExpr(StmtClass SC, EmptyShell Shell, unsigned PathSize,
+                   bool HasFPFeatures)
+      : CastExpr(SC, Shell, PathSize, HasFPFeatures) {}
 
 public:
   /// getTypeInfoAsWritten - Returns the type source info for the type
@@ -3730,32 +3781,41 @@ public:
 /// (Type)expr. For example: @c (int)f.
 class CStyleCastExpr final
     : public ExplicitCastExpr,
-      private llvm::TrailingObjects<CStyleCastExpr, CXXBaseSpecifier *> {
+      private llvm::TrailingObjects<CStyleCastExpr, CXXBaseSpecifier *,
+                                    FPOptionsOverride> {
   SourceLocation LPLoc; // the location of the left paren
   SourceLocation RPLoc; // the location of the right paren
   // To indicate __cheri_foo casts in dependent contexts
   CastKind DependentCastKind = CK_Dependent;
 
   CStyleCastExpr(QualType exprTy, ExprValueKind vk, CastKind kind, Expr *op,
-                 unsigned PathSize, TypeSourceInfo *writtenTy, SourceLocation l,
-                 SourceLocation r, const ASTContext &Ctx)
+                 unsigned PathSize, FPOptionsOverride FPO,
+                 TypeSourceInfo *writtenTy, SourceLocation l, SourceLocation r,
+                 const ASTContext &Ctx)
       : ExplicitCastExpr(CStyleCastExprClass, exprTy, vk, kind, op, PathSize,
-                         writtenTy, Ctx),
-        LPLoc(l), RPLoc(r) {}
+                         FPO.requiresTrailingStorage(), writtenTy, Ctx),
+        LPLoc(l), RPLoc(r) {
+    if (hasStoredFPFeatures())
+      *getTrailingFPFeatures() = FPO;
+  }
 
   /// Construct an empty C-style explicit cast.
-  explicit CStyleCastExpr(EmptyShell Shell, unsigned PathSize)
-    : ExplicitCastExpr(CStyleCastExprClass, Shell, PathSize) { }
+  explicit CStyleCastExpr(EmptyShell Shell, unsigned PathSize,
+                          bool HasFPFeatures)
+      : ExplicitCastExpr(CStyleCastExprClass, Shell, PathSize, HasFPFeatures) {}
+
+  unsigned numTrailingObjects(OverloadToken<CXXBaseSpecifier *>) const {
+    return path_size();
+  }
 
 public:
-  static CStyleCastExpr *Create(const ASTContext &Context, QualType T,
-                                ExprValueKind VK, CastKind K,
-                                Expr *Op, const CXXCastPath *BasePath,
-                                TypeSourceInfo *WrittenTy, SourceLocation L,
-                                SourceLocation R);
+  static CStyleCastExpr *
+  Create(const ASTContext &Context, QualType T, ExprValueKind VK, CastKind K,
+         Expr *Op, const CXXCastPath *BasePath, FPOptionsOverride FPO,
+         TypeSourceInfo *WrittenTy, SourceLocation L, SourceLocation R);
 
   static CStyleCastExpr *CreateEmpty(const ASTContext &Context,
-                                     unsigned PathSize);
+                                     unsigned PathSize, bool HasFPFeatures);
 
   SourceLocation getLParenLoc() const { return LPLoc; }
   void setLParenLoc(SourceLocation L) { LPLoc = L; }

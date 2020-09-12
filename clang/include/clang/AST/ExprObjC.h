@@ -1640,12 +1640,12 @@ public:
                       TypeSourceInfo *TSInfo, Expr *Operand,
                       const ASTContext &Ctx)
       : ExplicitCastExpr(ObjCBridgedCastExprClass, TSInfo->getType(), VK_RValue,
-                         CK, Operand, 0, TSInfo, Ctx),
+                         CK, Operand, 0, false, TSInfo, Ctx),
         LParenLoc(LParenLoc), BridgeKeywordLoc(BridgeKeywordLoc), Kind(Kind) {}
 
   /// Construct an empty Objective-C bridged cast.
   explicit ObjCBridgedCastExpr(EmptyShell Shell)
-      : ExplicitCastExpr(ObjCBridgedCastExprClass, Shell, 0) {}
+      : ExplicitCastExpr(ObjCBridgedCastExprClass, Shell, 0, false) {}
 
   SourceLocation getLParenLoc() const { return LParenLoc; }
 

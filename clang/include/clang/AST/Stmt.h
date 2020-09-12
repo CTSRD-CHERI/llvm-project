@@ -522,6 +522,9 @@ protected:
     unsigned Kind : CAST_KIND_BITS;
     unsigned PartOfExplicitCast : 1; // Only set for ImplicitCastExpr.
 
+    /// True if the call expression has some floating-point features.
+    unsigned HasFPFeatures : 1;
+
     /// The number of CXXBaseSpecifiers in the cast. 14 bits would be enough
     /// here. ([implimits] Direct and indirect base classes [16384]).
     unsigned BasePathSize;
