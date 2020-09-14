@@ -41,9 +41,7 @@ void check_alignment_memcpy_inc_offset(void *tmpbuffer, struct AlignedAsCap *a) 
 // CHECK-NEXT:    [[TMP2:%.*]] = load i64, i64 addrspace(200)* [[NEW_OFFSET_ADDR]], align 8
 // CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP3]], i64 [[TMP2]])
-// CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to [[STRUCT_ALIGNEDASCAP]] addrspace(200)*
-// CHECK-NEXT:    [[TMP6:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP5]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 16 [[TMP6]], i64 16, i1 false) #3
+// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 1 [[TMP4]], i64 16, i1 false)
 // CHECK-NEXT:    ret void
 //
 void check_alignment_memcpy_set_offset(void *tmpbuffer, struct AlignedAsCap *a, long new_offset) {
@@ -64,9 +62,7 @@ void check_alignment_memcpy_set_offset(void *tmpbuffer, struct AlignedAsCap *a, 
 // CHECK-NEXT:    [[TMP2:%.*]] = load i64, i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
 // CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP3]], i64 [[TMP2]])
-// CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to [[STRUCT_ALIGNEDASCAP]] addrspace(200)*
-// CHECK-NEXT:    [[TMP6:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP5]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 16 [[TMP6]], i64 16, i1 false) #3
+// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 1 [[TMP4]], i64 16, i1 false)
 // CHECK-NEXT:    ret void
 //
 void check_alignment_memcpy_set_address(void *tmpbuffer, struct AlignedAsCap *a, long new_addr) {
@@ -101,9 +97,7 @@ void *check_return_inc_offset(struct AlignedAsCap *a) {
 // CHECK-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* [[NEW_OFFSET_ADDR]], align 8
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP2]], i64 [[TMP1]])
-// CHECK-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to [[STRUCT_ALIGNEDASCAP]] addrspace(200)*
-// CHECK-NEXT:    [[TMP5:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP4]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
 void *check_return_set_offset(struct AlignedAsCap *a, long new_offset) {
   return __builtin_cheri_offset_set(a, new_offset);
@@ -120,9 +114,7 @@ void *check_return_set_offset(struct AlignedAsCap *a, long new_offset) {
 // CHECK-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP2]], i64 [[TMP1]])
-// CHECK-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to [[STRUCT_ALIGNEDASCAP]] addrspace(200)*
-// CHECK-NEXT:    [[TMP5:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP4]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
 void *check_return_set_addr(struct AlignedAsCap *a, long new_addr) {
   return __builtin_cheri_address_set(a, new_addr);

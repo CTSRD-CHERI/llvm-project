@@ -1937,9 +1937,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_bounds_set:
   case Builtin::BI__builtin_cheri_bounds_set_exact:
   case Builtin::BI__builtin_cheri_perms_and:
-  case Builtin::BI__builtin_cheri_flags_set:
-  case Builtin::BI__builtin_cheri_offset_set:
-  case Builtin::BI__builtin_cheri_address_set: {
+  case Builtin::BI__builtin_cheri_flags_set: {
     // The CHERI mutators should accept capability pointer types and
     // uintcap_t and have the same (const-preserving) result type.
     // First argument must be a capability, type-check second argument normally.
@@ -1951,10 +1949,12 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     TheCall->setType(SrcTy);
     break;
   }
+  case Builtin::BI__builtin_cheri_offset_set:
+  case Builtin::BI__builtin_cheri_address_set:
   case Builtin::BI__builtin_cheri_offset_increment: {
-    // For __builtin_cheri_offset_increment we can't preserve the type of the
+    // For the address-mutating builtins we can't preserve the type of the
     // input argument since the resulting value could be less aligned than the
-    // input argument.
+    // natural alignment of the input argument pointee type.
     QualType SrcTy;
     if (checkArgCount(*this, TheCall, 2) ||
         checkCapArg(*this, TheCall, 0, &SrcTy) ||
