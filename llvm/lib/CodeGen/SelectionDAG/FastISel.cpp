@@ -692,6 +692,12 @@ bool FastISel::selectGetElementPtr(const User *I) {
     return false;
   if (I->getOperand(0)->getType()->getPointerAddressSpace() != 0)
     return false;
+
+  // FIXME: The code below does not handle vector GEPs. Halt "fast" selection
+  // and bail.
+  if (isa<VectorType>(I->getType()))
+    return false;
+
   bool NIsKill = hasTrivialKill(I->getOperand(0));
 
   // Keep a running tab of the total offset to coalesce multiple N = N + Offset
