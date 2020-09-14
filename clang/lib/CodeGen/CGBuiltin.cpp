@@ -4030,10 +4030,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_offset_increment: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Increment = EmitScalarExpr(E->getArg(1));
-    return RValue::get(Builder.CreateBitCast(
-        Builder.CreateGEP(EmitCastToVoidPtr(Cap), Increment,
-                          "__builtin_cheri_offset_increment"),
-        Cap->getType()));
+    return RValue::get(Builder.CreateGEP(EmitCastToVoidPtr(Cap), Increment,
+                                         "__builtin_cheri_offset_increment"));
   }
   case Builtin::BI__builtin_cheri_offset_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));

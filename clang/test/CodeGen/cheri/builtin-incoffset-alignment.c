@@ -8,7 +8,6 @@ struct AlignedAsCap {
   __uintcap_t cap;
 };
 
-// FIXME: incorrect align 16 on the second @llvm.memcpy.p200i8.p200i8.i64 argument:
 // CHECK-LABEL: define {{[^@]+}}@check_alignment_memcpy
 // CHECK-SAME: (i8 addrspace(200)* [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* [[A:%.*]]) addrspace(200) #0
 // CHECK-NEXT:  entry:
@@ -20,11 +19,21 @@ struct AlignedAsCap {
 // CHECK-NEXT:    [[TMP1:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i64 4
-// CHECK-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[__BUILTIN_CHERI_OFFSET_INCREMENT]] to [[STRUCT_ALIGNEDASCAP]] addrspace(200)*
-// CHECK-NEXT:    [[TMP4:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP3]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 16 [[TMP4]], i64 16, i1 false) #2
+// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 1 [[__BUILTIN_CHERI_OFFSET_INCREMENT]], i64 16, i1 false)
 // CHECK-NEXT:    ret void
-//
 void check_alignment_memcpy(void *tmpbuffer, struct AlignedAsCap *a) {
   __builtin_memcpy(tmpbuffer, __builtin_cheri_offset_increment(a, 4), sizeof(__uintcap_t));
+}
+
+// CHECK-LABEL: define {{[^@]+}}@check_return
+// CHECK-SAME: (%struct.AlignedAsCap addrspace(200)* [[A:%.*]]) addrspace(200) #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
+// CHECK-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP1]], i64 4
+// CHECK-NEXT:    ret i8 addrspace(200)* [[__BUILTIN_CHERI_OFFSET_INCREMENT]]
+void *check_return(struct AlignedAsCap *a) {
+  return __builtin_cheri_offset_increment(a, 4);
 }

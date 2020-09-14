@@ -1938,7 +1938,6 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_bounds_set_exact:
   case Builtin::BI__builtin_cheri_perms_and:
   case Builtin::BI__builtin_cheri_flags_set:
-  case Builtin::BI__builtin_cheri_offset_increment:
   case Builtin::BI__builtin_cheri_offset_set:
   case Builtin::BI__builtin_cheri_address_set: {
     // The CHERI mutators should accept capability pointer types and
@@ -1950,6 +1949,33 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
         checkBuiltinArgument(*this, TheCall, 1))
       return ExprError();
     TheCall->setType(SrcTy);
+    break;
+  }
+  case Builtin::BI__builtin_cheri_offset_increment: {
+    // For __builtin_cheri_offset_increment we can't preserve the type of the
+    // input argument since the resulting value could be less aligned than the
+    // input argument.
+    QualType SrcTy;
+    if (checkArgCount(*this, TheCall, 2) ||
+        checkCapArg(*this, TheCall, 0, &SrcTy) ||
+        checkBuiltinArgument(*this, TheCall, 1))
+      return ExprError();
+
+    if (SrcTy->isIntCapType()) {
+      TheCall->setType(SrcTy);
+    } else {
+      assert(SrcTy->isCapabilityPointerType());
+      // For pointer types the result is always void* (so that we don't end up
+      // with underaligned types), but we copy the const and volatile qualifier.
+      // TODO: should we also copy restrict+extended qualifiers?
+      QualType ResultPointeeTy = Context.VoidTy;
+      if (SrcTy->getPointeeType().isVolatileQualified())
+        ResultPointeeTy.addVolatile();
+      if (SrcTy->getPointeeType().isConstQualified())
+        ResultPointeeTy.addConst();
+      TheCall->setType(
+          Context.getPointerType(ResultPointeeTy, ASTContext::PIK_Capability));
+    }
     break;
   }
   case Builtin::BI__builtin_cheri_seal:

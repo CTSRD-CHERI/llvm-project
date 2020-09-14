@@ -26,7 +26,6 @@ void test_good(Cap x) {
   static_assert(__is_same(decltype(__builtin_cheri_flags_get(x)), size_t), "");
   static_assert(__is_same(decltype(__builtin_cheri_length_get(x)), size_t), "");
   static_assert(__is_same(decltype(__builtin_cheri_offset_get(x)), size_t), "");
-  static_assert(__is_same(decltype(__builtin_cheri_offset_increment(x, 1)), T), "");
   static_assert(__is_same(decltype(__builtin_cheri_offset_set(x, 1)), T), "");
   static_assert(__is_same(decltype(__builtin_cheri_perms_and(x, 1)), T), "");
   static_assert(__is_same(decltype(__builtin_cheri_perms_get(x)), size_t), "");
@@ -113,6 +112,25 @@ void test_buildcap(struct Incomplete *__capability authcap, __uintcap_t ubits, _
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, charpbits)), void *__capability), "");
   // purecap-error@-1{{used type 'char *' where integer is required}}
   // hybrid-error@-2{{used type 'char * __capability' where integer is required}}
+}
+
+void test_incoffset(long *__capability lcap, volatile int *__capability vicap, float *fptr) {
+#ifdef __cplusplus
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment("abc", 1)), const void *__capability), "");
+  // hybrid-error@-1{{operand of type 'const char *' where capability is required}}
+#else
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment("abc", 1)), void *__capability), "");
+  // hybrid-error@-1{{operand of type 'char *' where capability is required}}
+#endif
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(lcap, 1)), void *__capability), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(vicap, 1)), volatile void *__capability), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(fptr, 1)), void *__capability), "");
+  // hybrid-error@-1{{operand of type 'float *' where capability is required}}
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment((__intcap_t)2, 1)), __intcap_t), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment((__uintcap_t)3, 1)), __uintcap_t), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(3, 1)), __uintcap_t), "");
+  // expected-error@-1{{operand of type 'int' where capability is required}}
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(0, 1)), void *__capability), ""); // NULL literal
 }
 
 void cap_to_pointer(struct Incomplete *__capability authcap, void *integerptr, void *__capability capptr, __uintcap_t ui, __intcap_t si) {
