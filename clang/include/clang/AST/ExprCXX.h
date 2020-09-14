@@ -4240,8 +4240,10 @@ class SubstNonTypeTemplateParmExpr : public Expr {
   friend class ASTReader;
   friend class ASTStmtReader;
 
-  /// The replaced parameter.
-  NonTypeTemplateParmDecl *Param;
+  /// The replaced parameter and a flag indicating if it was a reference
+  /// parameter. For class NTTPs, we can't determine that based on the value
+  /// category alone.
+  llvm::PointerIntPair<NonTypeTemplateParmDecl*, 1, bool> ParamAndRef;
 
   /// The replacement expression.
   Stmt *Replacement;
@@ -4252,10 +4254,10 @@ class SubstNonTypeTemplateParmExpr : public Expr {
 public:
   SubstNonTypeTemplateParmExpr(QualType Ty, ExprValueKind ValueKind,
                                SourceLocation Loc,
-                               NonTypeTemplateParmDecl *Param,
+                               NonTypeTemplateParmDecl *Param, bool RefParam,
                                Expr *Replacement)
       : Expr(SubstNonTypeTemplateParmExprClass, Ty, ValueKind, OK_Ordinary),
-        Param(Param), Replacement(Replacement) {
+        ParamAndRef(Param, RefParam), Replacement(Replacement) {
     SubstNonTypeTemplateParmExprBits.NameLoc = Loc;
     setDependence(computeDependence(this));
   }
@@ -4268,7 +4270,14 @@ public:
 
   Expr *getReplacement() const { return cast<Expr>(Replacement); }
 
-  NonTypeTemplateParmDecl *getParameter() const { return Param; }
+  NonTypeTemplateParmDecl *getParameter() const {
+    return ParamAndRef.getPointer();
+  }
+
+  bool isReferenceParameter() const { return ParamAndRef.getInt(); }
+
+  /// Determine the substituted type of the template parameter.
+  QualType getParameterType(const ASTContext &Ctx) const;
 
   static bool classof(const Stmt *s) {
     return s->getStmtClass() == SubstNonTypeTemplateParmExprClass;
