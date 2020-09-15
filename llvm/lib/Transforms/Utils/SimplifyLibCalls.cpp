@@ -1780,6 +1780,8 @@ Value *LibCallSimplifier::optimizePow(CallInst *Pow, IRBuilderBase &B) {
 
         Sqrt = getSqrtCall(Base, Pow->getCalledFunction()->getAttributes(),
                            Pow->doesNotAccessMemory(), M, B, TLI);
+        if (!Sqrt)
+          return nullptr;
       }
 
       // We will memoize intermediate products of the Addition Chain.
