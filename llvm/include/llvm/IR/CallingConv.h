@@ -241,13 +241,16 @@ namespace CallingConv {
     /// The remainder matches the regular calling convention.
     WASM_EmscriptenInvoke = 99,
 
+    /// Calling convention used for AMD graphics targets.
+    AMDGPU_Gfx = 100,
+
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_CCall = 100,
+    CHERI_CCall = 101,
     /// CHERI_CCallee - Calling convention used for the callee of CHERI_CCall.
     /// Ignores the first two capability arguments and the first integer
     /// argument, zeroes all unused return registers on return.
-    CHERI_CCallee = 101,
+    CHERI_CCallee = 102,
 
     /// The highest possible calling convention ID. Must be some 2^k - 1.
     MaxID = 1023
