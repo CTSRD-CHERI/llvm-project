@@ -55,6 +55,7 @@ add_llvm_component_library(LLVMAnalysis
   GlobalsModRef.cpp
   GuardUtils.cpp
   HeatUtils.cpp
+  IRSimilarityIdentifier.cpp
   IVDescriptors.cpp
   IVUsers.cpp
   IndirectCallPromotionAnalysis.cpp
