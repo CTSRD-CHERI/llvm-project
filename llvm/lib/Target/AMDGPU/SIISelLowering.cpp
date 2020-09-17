@@ -11535,6 +11535,7 @@ static void lowerSGPRToVGPRCopy(MachineFunction &MF, MachineRegisterInfo &MRI,
       auto DstReg = MI.getOperand(0).getReg();
       auto MIB = BuildMI(MBB, MI, MI.getDebugLoc(), TII.get(Opcode), DstReg)
                      .add(MI.getOperand(1));
+      (void)MIB;
       LLVM_DEBUG(dbgs() << "        to: " << *MIB.getInstr());
       MI.eraseFromParent();
     }
