@@ -5803,8 +5803,10 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
 
     // If we already have the use of the negated floating constant, it is free
     // to negate it even it has multiple uses.
-    if (!Op.hasOneUse() && CFP.use_empty())
+    if (!Op.hasOneUse() && CFP.use_empty()) {
+      RemoveDeadNode(CFP);
       break;
+    }
     Cost = NegatibleCost::Neutral;
     return CFP;
   }
@@ -5862,7 +5864,8 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
     if (NegX && (CostX <= CostY)) {
       Cost = CostX;
       SDValue N = DAG.getNode(ISD::FSUB, DL, VT, NegX, Y, Flags);
-      RemoveDeadNode(NegY);
+      if (NegY != N)
+        RemoveDeadNode(NegY);
       return N;
     }
 
@@ -5870,7 +5873,8 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
     if (NegY) {
       Cost = CostY;
       SDValue N = DAG.getNode(ISD::FSUB, DL, VT, NegY, X, Flags);
-      RemoveDeadNode(NegX);
+      if (NegX != N)
+        RemoveDeadNode(NegX);
       return N;
     }
     break;
@@ -5909,7 +5913,8 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
     if (NegX && (CostX <= CostY)) {
       Cost = CostX;
       SDValue N = DAG.getNode(Opcode, DL, VT, NegX, Y, Flags);
-      RemoveDeadNode(NegY);
+      if (NegY != N)
+        RemoveDeadNode(NegY);
       return N;
     }
 
@@ -5922,7 +5927,8 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
     if (NegY) {
       Cost = CostY;
       SDValue N = DAG.getNode(Opcode, DL, VT, X, NegY, Flags);
-      RemoveDeadNode(NegX);
+      if (NegX != N)
+        RemoveDeadNode(NegX);
       return N;
     }
     break;
@@ -5953,7 +5959,8 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
     if (NegX && (CostX <= CostY)) {
       Cost = std::min(CostX, CostZ);
       SDValue N = DAG.getNode(Opcode, DL, VT, NegX, Y, NegZ, Flags);
-      RemoveDeadNode(NegY);
+      if (NegY != N)
+        RemoveDeadNode(NegY);
       return N;
     }
 
@@ -5961,7 +5968,8 @@ SDValue TargetLowering::getNegatedExpression(SDValue Op, SelectionDAG &DAG,
     if (NegY) {
       Cost = std::min(CostY, CostZ);
       SDValue N = DAG.getNode(Opcode, DL, VT, X, NegY, NegZ, Flags);
-      RemoveDeadNode(NegX);
+      if (NegX != N)
+        RemoveDeadNode(NegX);
       return N;
     }
     break;
