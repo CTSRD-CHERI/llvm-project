@@ -192,21 +192,17 @@ void BareMetal::AddCXXStdlibLibArgs(const ArgList &Args,
 
 void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
                                   ArgStringList &CmdArgs) const {
-  SmallString<32> LibName("-lclang_rt.builtins-");
-  if (Target == BaremetalTarget::ARM) {
-    LibName += getTriple().getArchName();
-  } else {
-    assert(Target == BaremetalTarget::MIPS);
-    if (getTriple().getArch() == llvm::Triple::mips64 && !IsCheriPurecap) {
-      LibName += "mips64";
-    } else if (getTriple().isMIPS() && IsCheriPurecap) {
-      LibName += "cheri"; // TODO: would be nice to have CHERI size here
-    } else {
-      LibName += getTriple().getArchName();
-    }
+  ToolChain::RuntimeLibType RLT = GetRuntimeLibType(Args);
+  switch (RLT) {
+  case ToolChain::RLT_CompilerRT:
+    CmdArgs.push_back(
+        Args.MakeArgString("-lclang_rt.builtins-" + getTriple().getArchName()));
+    return;
+  case ToolChain::RLT_Libgcc:
+    CmdArgs.push_back("-lgcc");
+    return;
   }
-  CmdArgs.push_back(
-      Args.MakeArgString(LibName));
+  llvm_unreachable("Unhandled RuntimeLibType.");
 }
 
 void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
