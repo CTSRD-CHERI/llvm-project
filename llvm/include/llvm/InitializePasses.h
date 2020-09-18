@@ -124,7 +124,6 @@ void initializeDAHPass(PassRegistry&);
 void initializeDCELegacyPassPass(PassRegistry&);
 void initializeDSELegacyPassPass(PassRegistry&);
 void initializeDataFlowSanitizerLegacyPassPass(PassRegistry &);
-void initializeDeadInstEliminationPass(PassRegistry&);
 void initializeDeadMachineInstructionElimPass(PassRegistry&);
 void initializeDebugifyMachineModulePass(PassRegistry &);
 void initializeDelinearizationPass(PassRegistry&);
