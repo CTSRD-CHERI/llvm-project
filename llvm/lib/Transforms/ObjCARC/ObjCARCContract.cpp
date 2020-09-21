@@ -575,6 +575,7 @@ bool ObjCARCContract::run(Function &F, AAResults *A, DominatorTree *D) {
   if (!Run)
     return false;
 
+  Changed = false;
   AA = A;
   DT = D;
   PA.setAA(A);
