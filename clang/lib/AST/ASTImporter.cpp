@@ -883,11 +883,9 @@ ASTNodeImporter::import(const TemplateArgumentLoc &TALoc) {
         import(FromInfo.getTemplateEllipsisLoc());
     if (!ToTemplateEllipsisLocOrErr)
       return ToTemplateEllipsisLocOrErr.takeError();
-
     ToInfo = TemplateArgumentLocInfo(
-          *ToTemplateQualifierLocOrErr,
-          *ToTemplateNameLocOrErr,
-          *ToTemplateEllipsisLocOrErr);
+        Importer.getToContext(), *ToTemplateQualifierLocOrErr,
+        *ToTemplateNameLocOrErr, *ToTemplateEllipsisLocOrErr);
   }
 
   return TemplateArgumentLoc(Arg, ToInfo);
