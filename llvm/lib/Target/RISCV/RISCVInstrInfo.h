@@ -96,6 +96,9 @@ public:
   getAsIntImmediate(const MachineOperand &Op,
                     const MachineRegisterInfo &MRI) const override;
 
+  Optional<DestSourcePair>
+  isCopyInstrImpl(const MachineInstr &MI) const override;
+
   bool verifyInstruction(const MachineInstr &MI,
                          StringRef &ErrInfo) const override;
 
