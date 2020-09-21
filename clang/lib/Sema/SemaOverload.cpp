@@ -5573,7 +5573,8 @@ static bool CheckConvertedConstantConversions(Sema &S,
 static ExprResult CheckConvertedConstantExpression(Sema &S, Expr *From,
                                                    QualType T, APValue &Value,
                                                    Sema::CCEKind CCE,
-                                                   bool RequireInt) {
+                                                   bool RequireInt,
+                                                   NamedDecl *Dest) {
   assert(S.getLangOpts().CPlusPlus11 &&
          "converted constant expression outside C++11");
 
@@ -5603,9 +5604,10 @@ static ExprResult CheckConvertedConstantExpression(Sema &S, Expr *From,
     SCS = &ICS.Standard;
     break;
   case ImplicitConversionSequence::UserDefinedConversion:
-    // We are converting to a non-class type, so the Before sequence
-    // must be trivial.
-    SCS = &ICS.UserDefined.After;
+    if (T->isRecordType())
+      SCS = &ICS.UserDefined.Before;
+    else
+      SCS = &ICS.UserDefined.After;
     break;
   case ImplicitConversionSequence::AmbiguousConversion:
   case ImplicitConversionSequence::BadConversion:
@@ -5632,8 +5634,20 @@ static ExprResult CheckConvertedConstantExpression(Sema &S, Expr *From,
            << From->getType() << From->getSourceRange() << T;
   }
 
-  ExprResult Result =
-      S.PerformImplicitConversion(From, T, ICS, Sema::AA_Converting);
+  // Usually we can simply apply the ImplicitConversionSequence we formed
+  // earlier, but that's not guaranteed to work when initializing an object of
+  // class type.
+  ExprResult Result;
+  if (T->isRecordType()) {
+    assert(CCE == Sema::CCEK_TemplateArg &&
+           "unexpected class type converted constant expr");
+    Result = S.PerformCopyInitialization(
+        InitializedEntity::InitializeTemplateParameter(
+            T, cast<NonTypeTemplateParmDecl>(Dest)),
+        SourceLocation(), From);
+  } else {
+    Result = S.PerformImplicitConversion(From, T, ICS, Sema::AA_Converting);
+  }
   if (Result.isInvalid())
     return Result;
 
@@ -5726,8 +5740,10 @@ static ExprResult CheckConvertedConstantExpression(Sema &S, Expr *From,
 }
 
 ExprResult Sema::CheckConvertedConstantExpression(Expr *From, QualType T,
-                                                  APValue &Value, CCEKind CCE) {
-  return ::CheckConvertedConstantExpression(*this, From, T, Value, CCE, false);
+                                                  APValue &Value, CCEKind CCE,
+                                                  NamedDecl *Dest) {
+  return ::CheckConvertedConstantExpression(*this, From, T, Value, CCE, false,
+                                            Dest);
 }
 
 ExprResult Sema::CheckConvertedConstantExpression(Expr *From, QualType T,
@@ -5736,7 +5752,8 @@ ExprResult Sema::CheckConvertedConstantExpression(Expr *From, QualType T,
   assert(T->isIntegralOrEnumerationType() && "unexpected converted const type");
 
   APValue V;
-  auto R = ::CheckConvertedConstantExpression(*this, From, T, V, CCE, true);
+  auto R = ::CheckConvertedConstantExpression(*this, From, T, V, CCE, true,
+                                              /*Dest=*/nullptr);
   if (!R.isInvalid() && !R.get()->isValueDependent())
     Value = V.getInt();
   return R;

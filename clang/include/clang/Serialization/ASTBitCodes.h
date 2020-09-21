@@ -1287,6 +1287,9 @@ public:
       /// A MSGuidDecl record.
       DECL_MS_GUID,
 
+      /// A TemplateParamObjectDecl record.
+      DECL_TEMPLATE_PARAM_OBJECT,
+
       /// A VarDecl record.
       DECL_VAR,
 

@@ -3752,6 +3752,10 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
     return MakeAddrLValue(CGM.GetAddrOfMSGuidDecl(GD), T,
                           AlignmentSource::Decl);
 
+  if (const auto *TPO = dyn_cast<TemplateParamObjectDecl>(ND))
+    return MakeAddrLValue(CGM.GetAddrOfTemplateParamObject(TPO), T,
+                          AlignmentSource::Decl);
+
   llvm_unreachable("Unhandled DeclRefExpr");
 }
 

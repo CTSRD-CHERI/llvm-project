@@ -1949,6 +1949,9 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
     if (auto *GD = dyn_cast<MSGuidDecl>(D))
       return CGM.GetAddrOfMSGuidDecl(GD);
 
+    if (auto *TPO = dyn_cast<TemplateParamObjectDecl>(D))
+      return CGM.GetAddrOfTemplateParamObject(TPO);
+
     return nullptr;
   }
 
