@@ -94,7 +94,7 @@ void f2() {
 struct C {
   C();
   ~C();
-  
+
   C f();
 };
 
@@ -109,7 +109,7 @@ void f3() {
 struct D {
   D();
   ~D();
-  
+
   D operator()();
 };
 
@@ -135,7 +135,7 @@ void f5() {
   // CHECK: call void @_ZN1ED1Ev
   // CHECK: call void @_ZN1ED1Ev
   E() + E();
-  
+
   // CHECK: call void @_ZN1EC1Ev
   // CHECK: call void @_ZN1ED1Ev
   // CHECK: call void @_ZN1ED1Ev
@@ -168,7 +168,7 @@ void f7() {
   // CHECK: call void @_Z1aRK1A
   // CHECK: call void @_ZN1AD1Ev
   a(A());
-  
+
   // CHECK: call void @_ZN1GC1Ev
   // CHECK: call void @_ZN1Gcv1AEv
   // CHECK: call void @_Z1aRK1A
@@ -208,7 +208,7 @@ B::B()
   // CHECK: call void @_ZN6PR50771fEv
   f();
 }
-  
+
 }
 
 A f8() {
@@ -229,7 +229,7 @@ void f9(H h) {
   // CHECK: call void @_Z2f91H
   // CHECK: call void @_ZN1HD1Ev
   f9(H());
-  
+
   // CHECK: call void @_ZN1HC1ERKS_
   // CHECK: call void @_Z2f91H
   // CHECK: call void @_ZN1HD1Ev
@@ -243,7 +243,7 @@ void f11(H h) {
   // CHECK: call void @_Z3f10RK1H
   // CHECK: call void @_ZN1HD1Ev
   f10(H());
-  
+
   // CHECK: call void @_Z3f10RK1H
   // CHECK-NOT: call void @_ZN1HD1Ev
   // CHECK: ret void
@@ -312,13 +312,13 @@ namespace PR6199 {
   }
 
   template A f2<int>(int);
-  
+
 }
 
 namespace T12 {
 
-struct A { 
-  A(); 
+struct A {
+  A();
   ~A();
   int f();
 };
@@ -359,7 +359,7 @@ namespace UserConvertToValue {
 
   void f(X);
 
-  // CHECK: void @_ZN18UserConvertToValue1gEv() 
+  // CHECK: void @_ZN18UserConvertToValue1gEv()
   void g() {
     // CHECK: call void @_ZN18UserConvertToValue1XC1Ei
     // CHECK: call void @_ZN18UserConvertToValue1fENS_1XE
@@ -372,13 +372,13 @@ namespace UserConvertToValue {
 #ifndef __CHERI_PURE_CAPABILITY__
 // XXXAR: TODO: fix pointers to members so we no longer invoke @llvm.memcpy.p200i8.p0i8.i64
 namespace PR7556 {
-  struct A { ~A(); }; 
-  struct B { int i; ~B(); }; 
-  struct C { int C::*pm; ~C(); }; 
+  struct A { ~A(); };
+  struct B { int i; ~B(); };
+  struct C { int C::*pm; ~C(); };
   // CHECK-LABEL: define void @_ZN6PR75563fooEv()
-  void foo() { 
+  void foo() {
     // CHECK: call void @_ZN6PR75561AD1Ev
-    A(); 
+    A();
     // CHECK: call void @llvm.memset.p0i8.i64
     // CHECK: call void @_ZN6PR75561BD1Ev
     B();
@@ -413,13 +413,13 @@ namespace Elision {
     // CHECK-NEXT: call void @_ZN7Elision1AC1Ev([[A]]* [[I]])
     A i = (foo(), A());
 
-    // CHECK-NEXT: call void @_ZN7Elision4fooAEv([[A]]* sret align 8 [[T0]])
+    // CHECK-NEXT: call void @_ZN7Elision4fooAEv([[A]]* sret([[A]]) align 8 [[T0]])
     // CHECK-NEXT: call void @_ZN7Elision1AC1Ev([[A]]* [[J]])
     // CHECK-NEXT: call void @_ZN7Elision1AD1Ev([[A]]* [[T0]])
     A j = (fooA(), A());
 
     // CHECK-NEXT: call void @_ZN7Elision1AC1Ev([[A]]* [[T1]])
-    // CHECK-NEXT: call void @_ZN7Elision4fooAEv([[A]]* sret align 8 [[K]])
+    // CHECK-NEXT: call void @_ZN7Elision4fooAEv([[A]]* sret([[A]]) align 8 [[K]])
     // CHECK-NEXT: call void @_ZN7Elision1AD1Ev([[A]]* [[T1]])
     A k = (A(), fooA());
 
@@ -446,7 +446,7 @@ namespace Elision {
     // CHECK-NEXT: call void @_ZN7Elision1AD1Ev([[A]]* [[I]])
   }
 
-  // CHECK: define void @_ZN7Elision5test2Ev([[A]]* noalias sret align 8
+  // CHECK: define void @_ZN7Elision5test2Ev([[A]]* noalias sret([[A]]) align 8
   A test2() {
     // CHECK:      call void @_ZN7Elision3fooEv()
     // CHECK-NEXT: call void @_ZN7Elision1AC1Ev([[A]]* [[RET:%.*]])
@@ -454,7 +454,7 @@ namespace Elision {
     return (foo(), A());
   }
 
-  // CHECK: define void @_ZN7Elision5test3EiNS_1AE([[A]]* noalias sret align 8
+  // CHECK: define void @_ZN7Elision5test3EiNS_1AE([[A]]* noalias sret([[A]]) align 8
   A test3(int v, A x) {
     if (v < 5)
     // CHECK:      call void @_ZN7Elision1AC1Ev([[A]]* [[RET:%.*]])
@@ -495,7 +495,7 @@ namespace Elision {
   }
 
   // rdar://problem/8433352
-  // CHECK: define void @_ZN7Elision5test5Ev([[A]]* noalias sret align 8
+  // CHECK: define void @_ZN7Elision5test5Ev([[A]]* noalias sret([[A]]) align 8
   struct B { A a; B(); };
   A test5() {
     // CHECK:      [[AT0:%.*]] = alloca [[A]], align 8
@@ -533,7 +533,7 @@ namespace Elision {
   void test6(const C *x) {
     // CHECK:      [[T0:%.*]] = alloca [[A]], align 8
     // CHECK:      [[X:%.*]] = load [[C]]*, [[C]]** {{%.*}}, align 8
-    // CHECK-NEXT: call void @_ZNK7Elision1CcvNS_1AEEv([[A]]* sret align 8 [[T0]], [[C]]* [[X]])
+    // CHECK-NEXT: call void @_ZNK7Elision1CcvNS_1AEEv([[A]]* sret([[A]]) align 8 [[T0]], [[C]]* [[X]])
     // CHECK-NEXT: call void @_ZNK7Elision1A3fooEv([[A]]* [[T0]])
     // CHECK-NEXT: call void @_ZN7Elision1AD1Ev([[A]]* [[T0]])
     // CHECK-NEXT: ret void
