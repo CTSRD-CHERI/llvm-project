@@ -764,8 +764,6 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
     return false;
   }
 #endif
-  bool found_text = false;
-  bool found_unwind = false;
   CHERI_DBG("Checking %s for target 0x%jx (%#p). Base=%#p\n", pinfo->dlpi_name,
             (uintmax_t)cbdata->targetAddr.address(),
             (void *)cbdata->targetAddr.get(), (void *)image_base);
@@ -775,33 +773,47 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
     _LIBUNWIND_ABORT("image_base was untagged. CheriBSD needs to be updated!");
   }
 #endif
+
+  // Most shared objects seen in this callback function likely don't contain the
+  // target address, so optimize for that. Scan for a matching PT_LOAD segment
+  // first and bail when it isn't found.
+  bool found_text = false;
   // Third phdr is usually the executable phdr.
   if (pinfo->dlpi_phnum > 2)
     found_text = checkAddrInSegment(&pinfo->dlpi_phdr[2], image_base, cbdata);
-
-  // PT_GNU_EH_FRAME and PT_ARM_EXIDX are usually near the end. Iterate
-  // backward. We already know that there is one or more phdrs.
-  for (Elf_Half i = pinfo->dlpi_phnum; i > 0; i--) {
-    const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i - 1];
-    if (!found_unwind && checkForUnwindInfoSegment(phdr, image_base, cbdata))
-      found_unwind = true;
-    else if (!found_text && checkAddrInSegment(phdr, image_base, cbdata))
+  for (Elf_Half i = 0; i < pinfo->dlpi_phnum; ++i) {
+    if (checkAddrInSegment(&pinfo->dlpi_phdr[i], image_base, cbdata)) {
       found_text = true;
-    if (found_text && found_unwind) {
-      CHERI_DBG("found_obj && found_hdr in %s\n", pinfo->dlpi_name);
-      // Find the PT_LOAD containing .eh_frame.
-      if (!boundEhFrameFromPhdr(pinfo, image_base, cbdata)) {
-        return 0;
-      }
-#if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
-      TheFrameHeaderCache.add(cbdata->sects);
-#endif
-      return 1;
-    } else {
-      CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
+      break;
     }
   }
-  return 0;
+  if (!found_text)
+    return 0;
+
+  // PT_GNU_EH_FRAME and PT_ARM_EXIDX are usually near the end. Iterate
+  // backward.
+  bool found_unwind = false;
+  for (Elf_Half i = pinfo->dlpi_phnum; i > 0; i--) {
+    const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i - 1];
+    if (checkForUnwindInfoSegment(phdr, image_base, cbdata)) {
+      found_unwind = true;
+      break;
+    }
+  }
+  if (!found_unwind) {
+    CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
+    return 0;
+  }
+
+  CHERI_DBG("found_text && found_unwind in %s\n", pinfo->dlpi_name);
+  // Find the PT_LOAD containing .eh_frame.
+  if (!boundEhFrameFromPhdr(pinfo, image_base, cbdata)) {
+    return 0;
+  }
+#if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
+  TheFrameHeaderCache.add(cbdata->sects);
+#endif
+  return 1;
 }
 
 #endif  // defined(_LIBUNWIND_USE_DL_ITERATE_PHDR)
