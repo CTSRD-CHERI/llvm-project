@@ -915,7 +915,7 @@ private:
     if (!canRangeContainCapabilities(CapSize, Offset, Offset + Size))
       return false;
 
-    if (II.hasFnAttr("must-preserve-cheri-tags"))
+    if (II.hasFnAttr(Attribute::MustPreserveCheriTags))
       return true;
 
     if (Offset % CapSize != 0)

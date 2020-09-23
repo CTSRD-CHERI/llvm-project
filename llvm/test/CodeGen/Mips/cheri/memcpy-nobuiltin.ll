@@ -1,4 +1,4 @@
-; Check that llvm.memcpy() and llvm.memmove() intrinisics with "must-preserve-cheri-tags"
+; Check that llvm.memcpy() and llvm.memmove() intrinisics with must_preserve_cheri_tags
 ; attribute are always lowered to libcalls
 ; RUN: %cheri128_purecap_llc %s -o - | FileCheck %s -check-prefixes=CHECK,PURECAP
 ; RUN: %cheri128_llc %s -o - | FileCheck %s -check-prefixes=CHECK,HYBRID
@@ -103,4 +103,4 @@ entry:
 attributes #0 = { noinline nounwind }
 attributes #1 = { nounwind readnone }
 attributes #2 = { argmemonly nounwind }
-attributes #3 = { "must-preserve-cheri-tags" }
+attributes #3 = { must_preserve_cheri_tags }

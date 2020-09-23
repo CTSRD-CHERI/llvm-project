@@ -322,6 +322,6 @@ void test_builtin_assume_aligned_memmove_intermediate_var(char *align1, char *al
   // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
 }
 
-// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_A]] = { "frontend-memtransfer-type"="'a' (aka '__uintcap_t')" "must-preserve-cheri-tags" }
-// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]] = { "frontend-memtransfer-type"="'__uintcap_t'" "must-preserve-cheri-tags" }
-// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_STRUCT_WITH_CAP]] = { "frontend-memtransfer-type"="'struct with_cap'" "must-preserve-cheri-tags" }
+// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_A]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'a' (aka '__uintcap_t')" }
+// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'__uintcap_t'" }
+// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_STRUCT_WITH_CAP]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'struct with_cap'" }

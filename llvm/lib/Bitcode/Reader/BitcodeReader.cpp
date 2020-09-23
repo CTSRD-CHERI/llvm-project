@@ -1426,6 +1426,8 @@ static Attribute::AttrKind getAttrFromCode(uint64_t Code) {
     return Attribute::JumpTable;
   case bitc::ATTR_KIND_MIN_SIZE:
     return Attribute::MinSize;
+  case bitc::ATTR_KIND_MUST_PRESERVE_CHERI_TAGS:
+    return Attribute::MustPreserveCheriTags;
   case bitc::ATTR_KIND_NAKED:
     return Attribute::Naked;
   case bitc::ATTR_KIND_NEST:

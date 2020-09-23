@@ -31,9 +31,9 @@ entry:
 
 define void @memcpy_aligned_nobuiltin(i8* %dst, i8* %src) #0 {
 entry:
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %dst, i8* align 16 %src, i64 16, i1 false) #3
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 8 %dst, i8* align 8 %src, i64 16, i1 false) #3
   ret void
-  ; The memcpy could be inlined but was tagged with nobuiltin -> should call memcpy()
+  ; The memcpy could be inlined but was tagged with must_preserve_cheri_tags -> should call memcpy()
   ; CHECK-LABEL: memcpy_aligned_nobuiltin:
   ; CHECK: jal memcpy
 }
@@ -72,4 +72,4 @@ entry:
 attributes #0 = { noinline nounwind }
 attributes #1 = { nounwind readnone }
 attributes #2 = { argmemonly nounwind }
-attributes #3 = { "must-preserve-cheri-tags" }
+attributes #3 = { must_preserve_cheri_tags }

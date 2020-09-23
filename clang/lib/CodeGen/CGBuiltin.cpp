@@ -1668,7 +1668,7 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   if (!Ctx.containsCapabilities(UnderlyingSrcTy))
     return;
 
-  // Add a "must-preserve-cheri-tags" attribute to the memcpy/memmove
+  // Add a must_preserve_cheri_tags attribute to the memcpy/memmove
   // intrinsic to ensure that the backend will not lower it to an inlined
   // sequence of 1/2/4/8 byte loads and stores which would strip the tag bits.
   // TODO: a clc/csc that works on unaligned data but traps for a csc
@@ -1677,9 +1677,8 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   if (MemInst) {
     // If we have a memory intrinsic let the backend diagnose this issue:
     // First, tell the backend that this copy must preserve tags
-    MemInst->addAttribute(
-        llvm::AttributeList::FunctionIndex,
-        llvm::Attribute::get(CGF.getLLVMContext(), "must-preserve-cheri-tags"));
+    MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
+                          llvm::Attribute::MustPreserveCheriTags);
     // And also tell it what the underlying type was for improved diagnostics.
     std::string TypeName = UnderlyingSrcTy.getAsString();
     std::string CanonicalStr = UnderlyingSrcTy.getCanonicalType().getAsString();

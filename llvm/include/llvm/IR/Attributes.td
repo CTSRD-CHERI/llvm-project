@@ -235,6 +235,9 @@ def WriteOnly : EnumAttr<"writeonly">;
 /// Zero extended before/after call.
 def ZExt : EnumAttr<"zeroext">;
 
+// This MemTransferInst may transfer capabilities and must not be
+// split into smaller loads/stores that would break this property
+def MustPreserveCheriTags : EnumAttr<"must_preserve_cheri_tags">;
 /// Target-independent string attributes.
 def LessPreciseFPMAD : StrBoolAttr<"less-precise-fpmad">;
 def NoInfsFPMath : StrBoolAttr<"no-infs-fp-math">;

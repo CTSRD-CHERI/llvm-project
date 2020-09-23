@@ -448,6 +448,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
   if (hasAttribute(Attribute::NoUndef))
     return "noundef";
 
+  if (hasAttribute(Attribute::MustPreserveCheriTags))
+    return "must_preserve_cheri_tags";
   if (hasAttribute(Attribute::ByVal)) {
     std::string Result;
     Result += "byval";

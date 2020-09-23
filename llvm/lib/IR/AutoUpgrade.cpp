@@ -4379,6 +4379,9 @@ void llvm::UpgradeAttributes(AttrBuilder &B) {
   if (!FramePointer.empty())
     B.addAttribute("frame-pointer", FramePointer);
 
+  if (B.contains("must-preserve-cheri-tags"))
+    B.addAttribute(Attribute::MustPreserveCheriTags);
+
   if (B.contains("null-pointer-is-valid")) {
     // The value can be "true" or "false".
     bool NullPointerIsValid = false;

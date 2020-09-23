@@ -645,6 +645,7 @@ enum AttributeKindCodes {
   ATTR_KIND_NULL_POINTER_IS_VALID = 67,
   ATTR_KIND_NOUNDEF = 68,
   ATTR_KIND_HAS_SIDE_EFFECTS = 69,
+  ATTR_KIND_MUST_PRESERVE_CHERI_TAGS = 70,
 };
 
 enum ComdatSelectionKindCodes {
