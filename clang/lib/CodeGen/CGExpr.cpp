@@ -3182,13 +3182,17 @@ void CodeGenFunction::EmitStoreThroughGlobalRegLValue(RValue Src, LValue Dst) {
   // We accept integer and pointer types only
   llvm::Type *OrigTy = CGM.getTypes().ConvertType(Dst.getType());
   llvm::Type *Ty = OrigTy;
-  if (OrigTy->isPointerTy())
+  if (CGM.getDataLayout().isFatPointer(OrigTy))
+    Ty = CGM.Int8Ty->getPointerTo(OrigTy->getPointerAddressSpace());
+  else if (OrigTy->isPointerTy())
     Ty = CGM.getTypes().getDataLayout().getIntPtrType(OrigTy);
   llvm::Type *Types[] = { Ty };
 
   llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::write_register, Types);
   llvm::Value *Value = Src.getScalarVal();
-  if (OrigTy->isPointerTy())
+  if (CGM.getDataLayout().isFatPointer(OrigTy))
+    Value = Builder.CreateBitCast(Value, Ty);
+  else if (OrigTy->isPointerTy())
     Value = Builder.CreatePtrToInt(Value, Ty);
   Builder.CreateCall(
       F, {llvm::MetadataAsValue::get(Ty->getContext(), RegName), Value});

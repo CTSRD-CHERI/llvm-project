@@ -2,11 +2,12 @@
 // Some projects (e.g. Linux kernel) like to use global register variables, check
 // that we can handle the naive port from "tp" -> "ctp"
 // See e.g. https://elixir.bootlin.com/linux/v5.8.10/source/arch/riscv/include/asm/current.h
+// RUN: %riscv64_cheri_purecap_cc1 -fsyntax-only %s -o - -verify -DCHECK_BAD
 // RUN: %riscv64_cheri_purecap_cc1 -emit-llvm %s -o - | FileCheck %s
 // RUN: %riscv64_cheri_cc1 -emit-llvm %s -o -  | FileCheck %s
-// RUN: %riscv64_cheri_purecap_cc1 -emit-llvm %s -o -
-// RUN: %riscv64_cheri_purecap_cc1 -S %s -o - | FileCheck %s  --check-prefixes ASM,PURECAP-ASM
-// RUN: %riscv64_cheri_cc1 -S %s -o - | FileCheck %s --check-prefixes ASM,HYBRID-ASM
+// RUN: %riscv64_cheri_cc1 -S %s -o - -O1
+// RUN: %riscv64_cheri_purecap_cc1 -S %s -o - -O1 | FileCheck %s  --check-prefixes ASM,PURECAP-ASM
+// RUN: %riscv64_cheri_cc1 -S %s -o - -O1 | FileCheck %s --check-prefixes ASM,HYBRID-ASM
 
 register long int_tp __asm__("tp");
 // CHECK-LABEL: define {{[^@]+}}@get_tp()
@@ -33,6 +34,32 @@ register __uintcap_t cap_tp __asm__("ctp");
 __uintcap_t get_ctp(void) {
   return cap_tp;
 }
+// CHECK-LABEL: define {{[^@]+}}@set_ctp
+// CHECK-SAME: (i8 addrspace(200)* [[VALUE:%[a-z0-9]+]])
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[VALUE_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
+// CHECK-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)*{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)*{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 16
+// CHECK-NEXT:    call void @llvm.write_register.p200i8(metadata !1, i8 addrspace(200)* [[TMP0]])
+// CHECK-NEXT:    ret void
+//
+// FIXME: This looks wrong, it does not actually set ctp
+// ASM-LABEL:        set_ctp:
+// PURECAP-ASM:      cincoffset	csp, csp, -16
+// PURECAP-ASM-NEXT: csc	ctp, 0(csp)
+// PURECAP-ASM-NEXT: cmove	ctp, ca0
+// PURECAP-ASM-NEXT: clc	ctp, 0(csp)
+// PURECAP-ASM-NEXT: cincoffset	csp, csp, 16
+// PURECAP-ASM-NEXT: cret
+// HYBRID-ASM:       addi sp, sp, -16
+// HYBRID-ASM-NEXT:  sd tp, 8(sp)
+// HYBRID-ASM-NEXT:  cmove ctp, ca0
+// HYBRID-ASM-NEXT:  ld tp, 8(sp)
+// HYBRID-ASM-NEXT:  addi sp, sp, 16
+// HYBRID-ASM-NEXT:  ret
+void set_ctp(__uintcap_t value) {
+  cap_tp = value;
+}
 
 // Check that we handle casts to other pointer types correctly
 struct StackPtr;
@@ -49,6 +76,23 @@ register struct StackPtr *__capability cap_sp __asm__("csp");
 struct StackPtr *__capability get_csp(void) {
   return cap_sp;
 }
+// CHECK-LABEL: define {{[^@]+}}@set_csp
+// CHECK-SAME: (%struct.StackPtr addrspace(200)* [[VALUE:%[a-z0-9]+]])
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[VALUE_ADDR:%.*]] = alloca [[STRUCT_STACKPTR:%.*]] addrspace(200)*, align 16
+// CHECK-NEXT:    store [[STRUCT_STACKPTR]] addrspace(200)* [[VALUE]], [[STRUCT_STACKPTR]] addrspace(200)*{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_STACKPTR]] addrspace(200)*, [[STRUCT_STACKPTR]] addrspace(200)*{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_STACKPTR]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
+// CHECK-NEXT:    call void @llvm.write_register.p200i8(metadata !2, i8 addrspace(200)* [[TMP1]])
+// CHECK-NEXT:    ret void
+//
+// ASM-LABEL:        set_csp:
+// ASM:              cmove csp, ca0
+// PURECAP-ASM-NEXT: cret
+// HYBRID-ASM-NEXT:  ret
+void set_csp(struct StackPtr *__capability value) {
+  cap_sp = value;
+}
 
 // Also check conversions to integral types
 register __uintcap_t cap_gp __asm__("cgp");
@@ -58,14 +102,52 @@ register __uintcap_t cap_gp __asm__("cgp");
 // CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // CHECK-NEXT:    ret i64 [[TMP1]]
 // ASM-LABEL:        get_gp_addr:
-// ASM:              cmove ca0, cgp
-// ASM-NEXT:         cgetaddr a0, ca0
+// ASM:              cgetaddr a0, cgp
 // PURECAP-ASM-NEXT: cret
 // HYBRID-ASM-NEXT:  ret
 long get_gp_addr(void) {
   return cap_gp;
 }
 
+// CHECK-LABEL: define {{[^@]+}}@set_gp_addr
+// CHECK-SAME: (i64 [[VALUE:%[a-z0-9]+]])
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[VALUE_ADDR:%.*]] = alloca i64, align 8
+// CHECK-NEXT:    store i64 [[VALUE]], i64{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load i64, i64{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// CHECK-NEXT:    call void @llvm.write_register.p200i8(metadata !3, i8 addrspace(200)* [[TMP1]])
+// CHECK-NEXT:    ret void
+//
+// FIXME: This looks wrong, it does not actually set cgp
+// ASM-LABEL:        set_gp_addr:
+// PURECAP-ASM:      cincoffset	csp, csp, -16
+// PURECAP-ASM-NEXT: csc	cgp, 0(csp)
+// PURECAP-ASM-NEXT: cincoffset cgp, cnull, a0
+// PURECAP-ASM-NEXT: clc	cgp, 0(csp)
+// PURECAP-ASM-NEXT: cincoffset	csp, csp, 16
+// PURECAP-ASM-NEXT: cret
+// HYBRID-ASM:       addi sp, sp, -16
+// HYBRID-ASM-NEXT:  sd gp, 8(sp)
+// HYBRID-ASM-NEXT:  cincoffset cgp, cnull, a0
+// HYBRID-ASM-NEXT:  ld gp, 8(sp)
+// HYBRID-ASM-NEXT:  addi sp, sp, 16
+// HYBRID-ASM-NEXT:  ret
+void set_gp_addr(long value) {
+  cap_gp = value;
+}
+
+#ifdef CHECK_BAD
+register int cnull_bad1 __asm__("cnull");
+int get_cnull_bad1(void) { return cnull_bad1; }
+register long cnull_bad2 __asm__("cnull");
+long get_cnull_bad2(void) { return cnull_bad2; }
+register float cnull_bad3 __asm__("cnull"); // expected-error{{bad type for named register variable}}
+float get_cnull_bad3(void) { return cnull_bad3; }
+// FIXME: Should warn about this and suggest using ctp/emit an error
+register __uintcap_t bad_tp __asm__("tp");
+__uintcap_t get_tp_bad(void) { return bad_tp; }
+#endif
 // CHECK: !llvm.named.register.tp = !{!0}
 // CHECK: !llvm.named.register.ctp = !{!1}
 // CHECK: !llvm.named.register.csp = !{!2}
