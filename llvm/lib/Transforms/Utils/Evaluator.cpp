@@ -101,11 +101,11 @@ isSimpleEnoughValueToCommitHelper(Constant *C,
     // pointer type.
     if (DL.isFatPointer(CE->getType()) ||
         DL.isFatPointer(CE->getOperand(0)->getType())) {
-#ifdef LLVM_DEBUG
-      CE->dump();
-      // Add an assertion here to see if this case is triggered.
-      report_fatal_error("inttoptr/ptrtoint in globals unsupported for CHERI");
-#endif
+      LLVM_DEBUG({
+        CE->dump();
+        // Add an assertion here to see if this case is triggered.
+        report_fatal_error("inttoptr/ptrtoint in globals unsupported for CHERI");
+      });
       return false;
     }
     if (DL.getTypeSizeInBits(CE->getType()) !=
