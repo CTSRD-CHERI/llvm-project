@@ -312,9 +312,9 @@ def CJALR : RVInstCheriSrcDst<0x7f, 0xc, 0, OPC_CHERI, (outs GPCR:$rd),
                               (ins GPCR:$rs1), "cjalr", "$rd, $rs1">;
 
 let isCall = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def CCall : RVInstCheriTwoSrc<0x7e, 0x1, 0, OPC_CHERI, (outs),
-                              (ins GPCR:$rs1, GPCR:$rs2),
-                              "ccall", "$rs1, $rs2">;
+def CInvoke : RVInstCheriTwoSrc<0x7e, 0x1, 0, OPC_CHERI, (outs),
+                                (ins GPCR:$rs1, GPCR:$rs2),
+                                "cinvoke", "$rs1, $rs2">;
 
 def : InstAlias<"cjalr $cs1", (CJALR C1, GPCR:$cs1), 1>;
 def : InstAlias<"cjr $cs1", (CJALR C0, GPCR:$cs1), 1>;

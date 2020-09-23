@@ -126,9 +126,9 @@ cjr c1
 # CHECK-INST: cjalr cnull, cra
 # CHECK: encoding: [0x5b,0x80,0xc0,0xfe]
 cret
-# CHECK-INST: ccall cra, csp
+# CHECK-INST: cinvoke cra, csp
 # CHECK: encoding: [0xdb,0x80,0x20,0xfc]
-ccall c1, c2
+cinvoke c1, c2
 
 # CHECK-INST: ctestsubset ra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x40]
