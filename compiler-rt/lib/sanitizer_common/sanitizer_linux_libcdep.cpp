@@ -263,8 +263,7 @@ void InitTlsSize() {
 }
 #else
 void InitTlsSize() { }
-#endif  // !SANITIZER_FREEBSD && !SANITIZER_ANDROID && !SANITIZER_GO &&
-// !SANITIZER_NETBSD && !SANITIZER_SOLARIS
+#endif
 
 #if (defined(__x86_64__) || defined(__i386__) || defined(__mips__) ||       \
      defined(__aarch64__) || defined(__powerpc64__) || defined(__s390__) || \
@@ -326,7 +325,7 @@ const usize kThreadSelfOffset = FIRST_32_SECOND_64(8, 16);
 
 usize ThreadSelfOffset() { return kThreadSelfOffset; }
 
-#if defined(__mips__) || defined(__powerpc64__)
+#if defined(__mips__) || defined(__powerpc64__) || SANITIZER_RISCV64
 // TlsPreTcbSize includes size of struct pthread_descr and size of tcb
 // head structure. It lies before the static tls blocks.
 static usize TlsPreTcbSize() {
@@ -334,6 +333,8 @@ static usize TlsPreTcbSize() {
   const usize kTcbHead = 16; // sizeof (tcbhead_t)
 #elif defined(__powerpc64__)
   const usize kTcbHead = 88; // sizeof (tcbhead_t)
+#elif SANITIZER_RISCV64
+  const usize kTcbHead = 16;  // sizeof (tcbhead_t)
 #endif
   const usize kTlsAlign = 16;
   const usize kTlsPreTcbSize =
@@ -363,6 +364,13 @@ uptr ThreadSelf() {
 #elif defined(__aarch64__) || defined(__arm__)
   descr_addr = reinterpret_cast<uptr>(__builtin_thread_pointer()) -
                                       ThreadDescriptorSize();
+#elif SANITIZER_RISCV64
+  uptr tcb_end;
+  asm volatile("mv %0, tp;\n" : "=r"(tcb_end));
+  // https://github.com/riscv/riscv-elf-psabi-doc/issues/53
+  const uptr kTlsTcbOffset = 0x800;
+  descr_addr =
+      reinterpret_cast<uptr>(tcb_end - kTlsTcbOffset - TlsPreTcbSize());
 #elif defined(__s390__)
   descr_addr = reinterpret_cast<uptr>(__builtin_thread_pointer());
 #elif defined(__powerpc64__)
