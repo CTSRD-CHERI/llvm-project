@@ -466,7 +466,7 @@ def int_addressofreturnaddress : Intrinsic<[llvm_anyptr_ty], [], [IntrNoMem]>;
 def int_frameaddress : Intrinsic<[llvm_anyptr_ty], [llvm_i32_ty],
                                  [IntrNoMem, ImmArg<ArgIndex<0>>]>;
 def int_sponentry  : Intrinsic<[llvm_anyptr_ty], [], [IntrNoMem]>;
-def int_read_register  : Intrinsic<[llvm_anyint_ty], [llvm_metadata_ty],
+def int_read_register  : Intrinsic<[llvm_any_ty], [llvm_metadata_ty],
                                    [IntrReadMem], "llvm.read_register">;
 def int_write_register : Intrinsic<[], [llvm_metadata_ty, llvm_anyint_ty],
                                    [], "llvm.write_register">;
