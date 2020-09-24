@@ -44,7 +44,6 @@ entry:
 }
 
 ; We should be able to inline the call memcpy/memmove if the intrinsic has no_preserve_cheri_tags:
-; TODO: we should be able to elide this memcpy call
 define void @memcpy_no_preserve(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
 entry:
   %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*

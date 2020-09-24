@@ -20,16 +20,19 @@ declare i8 addrspace(200)* @stpncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64)
 define void @test_strcpy_to_memcpy(i8 addrspace(200)* align 4 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    cincoffset csp, csp, -16
-; CHECK-ASM-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-ASM-NEXT:  .LBB0_1: # %entry
-; CHECK-ASM-NEXT:    # Label of block must be emitted
-; CHECK-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(.Lstr)
-; CHECK-ASM-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
-; CHECK-ASM-NEXT:    addi a2, zero, 17
-; CHECK-ASM-NEXT:    ccall memcpy
-; CHECK-ASM-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; CHECK-ASM-NEXT:    cincoffset csp, csp, 16
+; CHECK-ASM-NEXT:    csb zero, 16(ca0)
+; CHECK-ASM-NEXT:    lui a1, 472870
+; CHECK-ASM-NEXT:    addi a1, a1, 360
+; CHECK-ASM-NEXT:    csw a1, 12(ca0)
+; CHECK-ASM-NEXT:    lui a1, 406019
+; CHECK-ASM-NEXT:    addi a1, a1, 1585
+; CHECK-ASM-NEXT:    csw a1, 8(ca0)
+; CHECK-ASM-NEXT:    lui a1, 133015
+; CHECK-ASM-NEXT:    addi a1, a1, -908
+; CHECK-ASM-NEXT:    csw a1, 4(ca0)
+; CHECK-ASM-NEXT:    lui a1, 407064
+; CHECK-ASM-NEXT:    addi a1, a1, -1947
+; CHECK-ASM-NEXT:    csw a1, 0(ca0)
 ; CHECK-ASM-NEXT:    cret
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strcpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 4 [[DST:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
@@ -45,16 +48,19 @@ entry:
 define void @test_stpcpy_to_memcpy(i8 addrspace(200)* align 4 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_stpcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    cincoffset csp, csp, -16
-; CHECK-ASM-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-ASM-NEXT:  .LBB1_1: # %entry
-; CHECK-ASM-NEXT:    # Label of block must be emitted
-; CHECK-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(.Lstr)
-; CHECK-ASM-NEXT:    clc ca1, %pcrel_lo(.LBB1_1)(ca1)
-; CHECK-ASM-NEXT:    addi a2, zero, 17
-; CHECK-ASM-NEXT:    ccall memcpy
-; CHECK-ASM-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; CHECK-ASM-NEXT:    cincoffset csp, csp, 16
+; CHECK-ASM-NEXT:    csb zero, 16(ca0)
+; CHECK-ASM-NEXT:    lui a1, 472870
+; CHECK-ASM-NEXT:    addi a1, a1, 360
+; CHECK-ASM-NEXT:    csw a1, 12(ca0)
+; CHECK-ASM-NEXT:    lui a1, 406019
+; CHECK-ASM-NEXT:    addi a1, a1, 1585
+; CHECK-ASM-NEXT:    csw a1, 8(ca0)
+; CHECK-ASM-NEXT:    lui a1, 133015
+; CHECK-ASM-NEXT:    addi a1, a1, -908
+; CHECK-ASM-NEXT:    csw a1, 4(ca0)
+; CHECK-ASM-NEXT:    lui a1, 407064
+; CHECK-ASM-NEXT:    addi a1, a1, -1947
+; CHECK-ASM-NEXT:    csw a1, 0(ca0)
 ; CHECK-ASM-NEXT:    cret
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_stpcpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 4 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {

@@ -9295,7 +9295,10 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
         // memcpy/memmove call (by returning MVT::isVoid), since it could still
         // contain a capability if sufficiently aligned at runtime. Zeroing
         // memsets can fall back on non-capability loads/stores.
-        return MVT::isVoid;
+        // Note: We can still inline the memcpy if the frontend has marked the
+        // copy as not requiring tag preserving behaviour.
+        if (Op.PreserveTags != PreserveCheriTags::Unnecessary)
+          return MVT::isVoid;
       }
     }
   }
