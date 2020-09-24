@@ -4,7 +4,6 @@
 // that we can handle the naive port from "tp" -> "ctp"
 // See e.g. https://elixir.bootlin.com/linux/v5.8.10/source/arch/riscv/include/asm/current.h
 // RUN: %riscv64_cheri_purecap_cc1 -fsyntax-only %s -o - -verify -DCHECK_BAD
-// RUN: %riscv64_cheri_cc1 -emit-llvm %s -o %s.ll -O2
 // RUN: %riscv64_cheri_purecap_cc1 -emit-llvm %s -o - | FileCheck %s
 // RUN: %riscv64_cheri_cc1 -emit-llvm %s -o -  | FileCheck %s
 
