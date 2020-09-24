@@ -2185,8 +2185,7 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
   case APValue::Union:
     return ConstStructBuilder::BuildStruct(*this, Value, DestType);
   case APValue::Array: {
-    const ConstantArrayType *CAT =
-        CGM.getContext().getAsConstantArrayType(DestType);
+    const ArrayType *ArrayTy = CGM.getContext().getAsArrayType(DestType);
     unsigned NumElements = Value.getArraySize();
     unsigned NumInitElts = Value.getArrayInitializedElts();
 
@@ -2194,7 +2193,7 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     llvm::Constant *Filler = nullptr;
     if (Value.hasArrayFiller()) {
       Filler = tryEmitAbstractForMemory(Value.getArrayFiller(),
-                                        CAT->getElementType());
+                                        ArrayTy->getElementType());
       if (!Filler)
         return nullptr;
     }
@@ -2209,7 +2208,7 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     llvm::Type *CommonElementType = nullptr;
     for (unsigned I = 0; I < NumInitElts; ++I) {
       llvm::Constant *C = tryEmitPrivateForMemory(
-          Value.getArrayInitializedElt(I), CAT->getElementType());
+          Value.getArrayInitializedElt(I), ArrayTy->getElementType());
       if (!C) return nullptr;
 
       if (I == 0)
@@ -2221,11 +2220,10 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
 
     // This means that the array type is probably "IncompleteType" or some
     // type that is not ConstantArray.
-    if (CAT == nullptr && CommonElementType == nullptr && !NumInitElts) {
-      const ArrayType *AT = CGM.getContext().getAsArrayType(DestType);
-      CommonElementType = CGM.getTypes().ConvertType(AT->getElementType());
-      llvm::ArrayType *AType = llvm::ArrayType::get(CommonElementType,
-                                                    NumElements);
+    if (!Filler && !NumInitElts) {
+      CommonElementType = CGM.getTypes().ConvertType(ArrayTy->getElementType());
+      llvm::ArrayType *AType =
+          llvm::ArrayType::get(CommonElementType, NumElements);
       return llvm::ConstantAggregateZero::get(AType);
     }
 
