@@ -20,18 +20,17 @@ declare i8 addrspace(200)* @stpncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64)
 define void @test_strcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-ASM-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-ASM-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-ASM-NEXT:    clcbi $c4, %captab20(.Lstr)($c1)
-; CHECK-ASM-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; CHECK-ASM-NEXT:    cjalr $c12, $c17
-; CHECK-ASM-NEXT:    daddiu $4, $zero, 17
-; CHECK-ASM-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-ASM-NEXT:    clcbi $c1, %captab20(.Lstr)($c1)
+; CHECK-ASM-NEXT:    cld $1, $zero, 0($c1)
+; CHECK-ASM-NEXT:    clb $2, $zero, 16($c1)
+; CHECK-ASM-NEXT:    cld $3, $zero, 8($c1)
+; CHECK-ASM-NEXT:    csd $1, $zero, 0($c3)
+; CHECK-ASM-NEXT:    csb $2, $zero, 16($c3)
 ; CHECK-ASM-NEXT:    cjr $c17
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-ASM-NEXT:    csd $3, $zero, 8($c3)
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strcpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-IR-NEXT:  entry:
@@ -46,18 +45,17 @@ entry:
 define void @test_stpcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_stpcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-ASM-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-ASM-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-ASM-NEXT:    clcbi $c4, %captab20(.Lstr)($c1)
-; CHECK-ASM-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; CHECK-ASM-NEXT:    cjalr $c12, $c17
-; CHECK-ASM-NEXT:    daddiu $4, $zero, 17
-; CHECK-ASM-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-ASM-NEXT:    clcbi $c1, %captab20(.Lstr)($c1)
+; CHECK-ASM-NEXT:    cld $1, $zero, 0($c1)
+; CHECK-ASM-NEXT:    clb $2, $zero, 16($c1)
+; CHECK-ASM-NEXT:    cld $3, $zero, 8($c1)
+; CHECK-ASM-NEXT:    csd $1, $zero, 0($c3)
+; CHECK-ASM-NEXT:    csb $2, $zero, 16($c3)
 ; CHECK-ASM-NEXT:    cjr $c17
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-ASM-NEXT:    csd $3, $zero, 8($c3)
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_stpcpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:
@@ -109,18 +107,17 @@ entry:
 define void @test_strncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strncpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-ASM-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-ASM-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-ASM-NEXT:    clcbi $c4, %captab20(.Lstr)($c1)
-; CHECK-ASM-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; CHECK-ASM-NEXT:    cjalr $c12, $c17
-; CHECK-ASM-NEXT:    daddiu $4, $zero, 17
-; CHECK-ASM-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-ASM-NEXT:    clcbi $c1, %captab20(.Lstr)($c1)
+; CHECK-ASM-NEXT:    cld $1, $zero, 0($c1)
+; CHECK-ASM-NEXT:    clb $2, $zero, 16($c1)
+; CHECK-ASM-NEXT:    cld $3, $zero, 8($c1)
+; CHECK-ASM-NEXT:    csd $1, $zero, 0($c3)
+; CHECK-ASM-NEXT:    csb $2, $zero, 16($c3)
 ; CHECK-ASM-NEXT:    cjr $c17
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-ASM-NEXT:    csd $3, $zero, 8($c3)
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strncpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:

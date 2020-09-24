@@ -98,21 +98,14 @@ entry:
 }
 
 ; We should be able to inline the call memcpy/memmove if the intrinsic has no_preserve_cheri_tags:
-; TODO: we should be able to elide this memcpy call
 define void @memcpy_no_preserve(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memcpy_no_preserve:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
-; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, 16
-; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cld $1, $zero, 0($c4)
+; CHECK-NEXT:    csd $1, $zero, 0($c3)
+; CHECK-NEXT:    cld $1, $zero, 8($c4)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-NEXT:    csd $1, $zero, 8($c3)
 entry:
   %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
   %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
@@ -123,17 +116,11 @@ entry:
 define void @memmove_no_preserve(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memmove_no_preserve:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
-; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    clcbi $c12, %capcall20(memmove)($c1)
-; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, 16
-; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cld $1, $zero, 8($c4)
+; CHECK-NEXT:    cld $2, $zero, 0($c4)
+; CHECK-NEXT:    csd $1, $zero, 8($c3)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-NEXT:    csd $2, $zero, 0($c3)
 entry:
   %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
   %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
