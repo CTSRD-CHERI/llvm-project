@@ -54,6 +54,15 @@ class ConstantInt;
 class DataLayout;
 class LLVMContext;
 
+enum class PreserveCheriTags {
+  Unknown,
+  Required,
+  Unnecessary,
+  // FIXME: this enumerator should be removed once all uses of
+  // PreserveCheriTags::TODO have been audited
+  TODO = Unknown
+};
+
 //===----------------------------------------------------------------------===//
 //                                AllocaInst Class
 //===----------------------------------------------------------------------===//
