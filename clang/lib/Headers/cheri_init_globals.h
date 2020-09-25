@@ -152,9 +152,11 @@ __attribute__((weak)) extern void *__capability __cap_table_end;
 #endif
 
 static __attribute__((always_inline)) void
-cheri_init_globals_impl(const struct capreloc *start_relocs,
-                        const struct capreloc *stop_relocs, void *data_cap,
-                        const void *code_cap, const void *rodata_cap,
+cheri_init_globals_impl(const struct capreloc *__capability start_relocs,
+                        const struct capreloc *__capability stop_relocs,
+                        void *__capability data_cap,
+                        const void *__capability code_cap,
+                        const void *__capability rodata_cap,
                         bool tight_code_bounds, __SIZE_TYPE__ base_addr) {
   data_cap =
       __builtin_cheri_perms_and(data_cap, global_pointer_permissions_mask);
@@ -162,17 +164,18 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
       __builtin_cheri_perms_and(code_cap, function_pointer_permissions_mask);
   rodata_cap =
       __builtin_cheri_perms_and(rodata_cap, constant_pointer_permissions_mask);
-  for (const struct capreloc *reloc = start_relocs; reloc < stop_relocs;
-       reloc++) {
-    const void **dest = (const void **)cheri_address_or_offset_set(
-        data_cap, reloc->capability_location + base_addr);
+  for (const struct capreloc *__capability reloc = start_relocs;
+       reloc < stop_relocs; reloc++) {
+    const void *__capability *__capability dest =
+        (const void *__capability *__capability)cheri_address_or_offset_set(
+            data_cap, reloc->capability_location + base_addr);
     if (reloc->object == 0) {
       /* XXXAR: clang fills uninitialized capabilities with 0xcacaca..., so we
        * we need to explicitly write NULL here */
-      *dest = (void *)0;
+      *dest = (void *__capability)0;
       continue;
     }
-    const void *base_cap;
+    const void *__capability base_cap;
     bool can_set_bounds = true;
     if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
       base_cap = code_cap; /* code pointer */
@@ -184,7 +187,7 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
     } else {
       base_cap = data_cap; /* read-write data */
     }
-    const void *src =
+    const void *__capability src =
         cheri_address_or_offset_set(base_cap, reloc->object + base_addr);
     if (can_set_bounds && (reloc->size != 0)) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
@@ -199,10 +202,11 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
 }
 
 static __attribute__((always_inline)) void
-cheri_init_globals_3(void *data_cap, const void *code_cap,
-                     const void *rodata_cap) {
-  const struct capreloc *start_relocs;
-  const struct capreloc *stop_relocs;
+cheri_init_globals_3(void *__capability data_cap,
+                     const void *__capability code_cap,
+                     const void *__capability rodata_cap) {
+  const struct capreloc *__capability start_relocs;
+  const struct capreloc *__capability stop_relocs;
   __SIZE_TYPE__ start_addr, end_addr;
 #if defined(__mips__)
   __asm__ (".option pic0\n\t"
@@ -228,17 +232,17 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    * rodata and rw data, too so we can access __cap_relocs, no matter where it
    * was placed.
    */
-  start_relocs = (const struct capreloc *)cheri_address_or_offset_set(
-      __builtin_cheri_program_counter_get(), start_addr);
+  start_relocs =
+      (const struct capreloc *__capability)cheri_address_or_offset_set(
+          __builtin_cheri_program_counter_get(), start_addr);
   start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
   /*
    * Note: with imprecise capabilities start_relocs could have a non-zero offset
    * so we must not use setoffset!
    * TODO: use csetboundsexact and teach the linker to align __cap_relocs.
    */
-  stop_relocs =
-      (const struct capreloc *)(const void *)((const char *)start_relocs +
-                                              relocs_size);
+  stop_relocs = (const struct capreloc *__capability)(const void *__capability)(
+      (const char *__capability)start_relocs + relocs_size);
 
 #if __CHERI_CAPABILITY_TABLE__ == 3
   /* pc-relative ABI -> need large bounds on $pcc */
@@ -256,7 +260,7 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
 }
 
 static __attribute__((always_inline, unused)) void
-cheri_init_globals_gdc(void *gdc) {
+cheri_init_globals_gdc(void *__capability gdc) {
   cheri_init_globals_3(gdc, __builtin_cheri_program_counter_get(), gdc);
 }
 
