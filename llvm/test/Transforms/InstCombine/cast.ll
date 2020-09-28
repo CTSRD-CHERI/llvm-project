@@ -997,7 +997,7 @@ define %s @test68(%s *%p, i64 %i) {
 ; ALL-LABEL: @test68(
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr [[S:%.*]], %s* [[P:%.*]], i64 [[I:%.*]]
 ; ALL-NEXT:    [[L:%.*]] = load [[S]], %s* [[PP1]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %o = mul i64 %i, 12
   %q = bitcast %s* %p to i8*
@@ -1012,7 +1012,7 @@ define %s @test68_addrspacecast(%s* %p, i64 %i) {
 ; ALL-LABEL: @test68_addrspacecast(
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr [[S:%.*]], %s* [[P:%.*]], i64 [[I:%.*]]
 ; ALL-NEXT:    [[L:%.*]] = load [[S]], %s* [[PP1]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %o = mul i64 %i, 12
   %q = addrspacecast %s* %p to i8 addrspace(2)*
@@ -1027,7 +1027,7 @@ define %s @test68_addrspacecast_2(%s* %p, i64 %i) {
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr [[S:%.*]], %s* [[P:%.*]], i64 [[I:%.*]]
 ; ALL-NEXT:    [[R:%.*]] = addrspacecast %s* [[PP1]] to [[S]] addrspace(1)*
 ; ALL-NEXT:    [[L:%.*]] = load [[S]], [[S]] addrspace(1)* [[R]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %o = mul i64 %i, 12
   %q = addrspacecast %s* %p to i8 addrspace(2)*
@@ -1041,7 +1041,7 @@ define %s @test68_as1(%s addrspace(1)* %p, i32 %i) {
 ; ALL-LABEL: @test68_as1(
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr [[S:%.*]], [[S]] addrspace(1)* [[P:%.*]], i32 [[I:%.*]]
 ; ALL-NEXT:    [[L:%.*]] = load [[S]], [[S]] addrspace(1)* [[PP1]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %o = mul i32 %i, 12
   %q = bitcast %s addrspace(1)* %p to i8 addrspace(1)*
@@ -1070,7 +1070,7 @@ define %s @test70(%s *%p, i64 %i) {
 ; ALL-NEXT:    [[O:%.*]] = mul nsw i64 [[I:%.*]], 3
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr inbounds [[S:%.*]], %s* [[P:%.*]], i64 [[O]]
 ; ALL-NEXT:    [[L:%.*]] = load [[S]], %s* [[PP1]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %o = mul nsw i64 %i, 36
   %q = bitcast %s* %p to i8*
@@ -1162,7 +1162,7 @@ define %s @test76(%s *%p, i64 %i, i64 %j) {
 ; ALL-NEXT:    [[O2:%.*]] = mul i64 [[I:%.*]], [[J:%.*]]
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr [[S:%.*]], %s* [[P:%.*]], i64 [[O2]]
 ; ALL-NEXT:    [[L:%.*]] = load [[S]], %s* [[PP1]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %o = mul i64 %i, 12
   %o2 = mul nsw i64 %o, %j
@@ -1179,7 +1179,7 @@ define %s @test77(%s *%p, i64 %i, i64 %j) {
 ; ALL-NEXT:    [[O2:%.*]] = mul nsw i64 [[O]], [[J:%.*]]
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr inbounds [[S:%.*]], %s* [[P:%.*]], i64 [[O2]]
 ; ALL-NEXT:    [[L:%.*]] = load [[S]], %s* [[PP1]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %o = mul nsw i64 %i, 36
   %o2 = mul nsw i64 %o, %j
@@ -1202,7 +1202,7 @@ define %s @test78(%s *%p, i64 %i, i64 %j, i32 %k, i32 %l, i128 %m, i128 %n) {
 ; ALL-NEXT:    [[H:%.*]] = mul i64 [[G]], [[J:%.*]]
 ; ALL-NEXT:    [[PP1:%.*]] = getelementptr [[S:%.*]], %s* [[P:%.*]], i64 [[H]]
 ; ALL-NEXT:    [[LOAD:%.*]] = load [[S]], %s* [[PP1]], align 4
-; ALL-NEXT:    ret [[S]] %load
+; ALL-NEXT:    ret [[S]] [[LOAD]]
 ;
   %a = mul nsw i32 %k, 36
   %b = mul nsw i32 %a, %l
@@ -1229,7 +1229,7 @@ define %s @test79(%s *%p, i64 %i, i32 %j) {
 ; ALL-NEXT:    [[PP:%.*]] = getelementptr inbounds i8, i8* [[Q]], i64 [[TMP2]]
 ; ALL-NEXT:    [[R:%.*]] = bitcast i8* [[PP]] to %s*
 ; ALL-NEXT:    [[L:%.*]] = load [[S:%.*]], %s* [[R]], align 4
-; ALL-NEXT:    ret [[S]] %l
+; ALL-NEXT:    ret [[S]] [[L]]
 ;
   %a = mul nsw i64 %i, 36
   %b = trunc i64 %a to i32
