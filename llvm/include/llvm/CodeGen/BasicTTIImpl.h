@@ -1123,9 +1123,12 @@ public:
   /// Get intrinsic cost based on arguments.
   unsigned getIntrinsicInstrCost(const IntrinsicCostAttributes &ICA,
                                  TTI::TargetCostKind CostKind) {
-    Intrinsic::ID IID = ICA.getID();
+    // Check for generically free intrinsics.
+    if (BaseT::getIntrinsicInstrCost(ICA, CostKind) == 0)
+      return 0;
 
     // Special case some scalar intrinsics.
+    Intrinsic::ID IID = ICA.getID();
     if (CostKind != TTI::TCK_RecipThroughput) {
       switch (IID) {
       default:
@@ -1144,9 +1147,6 @@ public:
       }
       return BaseT::getIntrinsicInstrCost(ICA, CostKind);
     }
-
-    if (BaseT::getIntrinsicInstrCost(ICA, CostKind) == 0)
-      return 0;
 
     // TODO: Combine these two logic paths.
     if (ICA.isTypeBasedOnly())
