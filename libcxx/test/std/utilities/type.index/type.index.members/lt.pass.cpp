@@ -17,7 +17,7 @@
 // bool operator> (const type_index& rhs) const;
 // bool operator>=(const type_index& rhs) const;
 
-// UNSUPPORTED: -fno-rtti
+// UNSUPPORTED: no-rtti
 
 #include <typeindex>
 #include <cassert>

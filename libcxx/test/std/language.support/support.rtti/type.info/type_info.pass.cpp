@@ -9,7 +9,7 @@
 // test type_info
 // UNSUPPORTED: libcpp-no-rtti
 
-// UNSUPPORTED: -fno-rtti
+// UNSUPPORTED: no-rtti
 
 #include <typeinfo>
 #include <string>
