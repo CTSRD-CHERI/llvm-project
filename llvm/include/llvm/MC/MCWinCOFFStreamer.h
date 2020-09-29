@@ -59,6 +59,7 @@ public:
   void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                              unsigned ByteAlignment,
                              TailPaddingAmount TailPadding) override;
+  void emitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override;
   void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                     unsigned ByteAlignment, TailPaddingAmount TailPadding,
                     SMLoc Loc = SMLoc()) override;
