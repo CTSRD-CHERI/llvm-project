@@ -247,11 +247,12 @@ enum IIT_Info {
   IIT_VEC_OF_BITCASTS_TO_INT = 46,
   IIT_V128 = 47,
   IIT_BF16 = 48,
-  IIT_IFATPTR64 = 49,
-  IIT_IFATPTR128 = 50,
-  IIT_IFATPTR256 = 51,
-  IIT_IFATPTR512 = 52,
-  IIT_IFATPTRAny = 53,
+  IIT_STRUCT9 = 49,
+  IIT_IFATPTR64 = 50,
+  IIT_IFATPTR128 = 51,
+  IIT_IFATPTR256 = 52,
+  IIT_IFATPTR512 = 53,
+  IIT_IFATPTRAny = 54,
 };
 
 static void EncodeFixedValueType(MVT::SimpleValueType VT,
@@ -496,6 +497,7 @@ static void ComputeFixedEncoding(const CodeGenIntrinsic &Int,
       case 6: TypeSig.push_back(IIT_STRUCT6); break;
       case 7: TypeSig.push_back(IIT_STRUCT7); break;
       case 8: TypeSig.push_back(IIT_STRUCT8); break;
+      case 9: TypeSig.push_back(IIT_STRUCT9); break;
       default: llvm_unreachable("Unhandled case in struct");
     }
 
