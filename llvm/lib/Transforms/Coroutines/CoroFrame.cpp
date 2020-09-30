@@ -2162,6 +2162,7 @@ void coro::salvageDebugInfo(
   // function argument and convert into a DIExpression.
   bool OutermostLoad = true;
   Value *Storage = DDI->getAddress();
+  Value *OriginalStorage = Storage;
   while (Storage) {
     if (auto *LdInst = dyn_cast<LoadInst>(Storage)) {
       Storage = LdInst->getOperand(0);
@@ -2212,10 +2213,8 @@ void coro::salvageDebugInfo(
     if (Expr && Expr->isComplex())
       Expr = DIExpression::prepend(Expr, DIExpression::DerefBefore);
   }
-  auto &VMContext = DDI->getFunction()->getContext();
-  DDI->setOperand(
-      0, MetadataAsValue::get(VMContext, ValueAsMetadata::get(Storage)));
-  DDI->setOperand(2, MetadataAsValue::get(VMContext, Expr));
+  DDI->replaceVariableLocationOp(OriginalStorage, Storage);
+  DDI->setExpression(Expr);
   if (auto *InsertPt = dyn_cast_or_null<Instruction>(Storage))
     DDI->moveAfter(InsertPt);
 }
