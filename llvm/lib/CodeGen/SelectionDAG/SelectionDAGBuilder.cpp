@@ -1255,7 +1255,8 @@ void SelectionDAGBuilder::salvageUnresolvedDbgValue(DanglingDebugInfo &DDI) {
   // variable. FIXME: Further work could recover those too.
   while (isa<Instruction>(V)) {
     Instruction &VAsInst = *cast<Instruction>(V);
-    DIExpression *NewExpr = salvageDebugInfoImpl(VAsInst, Expr, StackValue);
+    // Temporary "0", awaiting real implementation.
+    DIExpression *NewExpr = salvageDebugInfoImpl(VAsInst, Expr, StackValue, 0);
 
     // If we cannot salvage any further, and haven't yet found a suitable debug
     // expression, bail out.
@@ -6100,7 +6101,7 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     DILocalVariable *Variable = DI.getVariable();
     DIExpression *Expression = DI.getExpression();
     dropDanglingDebugInfo(Variable, Expression);
-    SmallVector<Value *> Values(DI.getValues());
+    SmallVector<Value *, 4> Values(DI.getValues());
     if (Values.empty())
       return;
 
