@@ -6480,14 +6480,16 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
     /// The class for a pointer-to-member; a constant array type with a bound
     /// (if any) for an array.
     const Type *ClassOrBound;
+    ASTContext::PointerInterpretationKind PIK;
 
-    Step(Kind K, const Type *ClassOrBound = nullptr)
-        : K(K), Quals(), ClassOrBound(ClassOrBound) {}
+    Step(Kind K, const Type *ClassOrBound = nullptr,
+         ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default)
+        : K(K), Quals(), ClassOrBound(ClassOrBound), PIK(PIK) {}
     QualType rebuild(ASTContext &Ctx, QualType T) const {
       T = Ctx.getQualifiedType(T, Quals);
       switch (K) {
       case Pointer:
-        return Ctx.getPointerType(T);
+        return Ctx.getPointerType(T, PIK);
       case MemberPointer:
         return Ctx.getMemberPointerType(T, ClassOrBound);
       case ObjCPointer:
@@ -6574,7 +6576,11 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
         (Ptr2 = Composite2->getAs<PointerType>())) {
       Composite1 = Ptr1->getPointeeType();
       Composite2 = Ptr2->getPointeeType();
-      Steps.emplace_back(Step::Pointer);
+      if (Ptr1->isCHERICapability() != Ptr2->isCHERICapability())
+        return QualType();
+      Steps.emplace_back(Step::Pointer, nullptr,
+                         Ptr1->isCHERICapability() ? ASTContext::PIK_Capability
+                                                   : ASTContext::PIK_Integer);
       continue;
     }
 
