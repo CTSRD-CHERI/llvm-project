@@ -101,8 +101,8 @@ __attribute__((weak)) extern void *__capability __cap_table_end;
 
 #if defined(__mips__)
 
-#if __CHERI_CAPABILITY_TABLE__ == 3
-/* No need to setup $cgp for pc-relative ABI: */
+#if !defined(__CHERI_PURE_CAPABILITY__) || __CHERI_CAPABILITY_TABLE__ == 3
+/* No need to setup $cgp for pc-relative or hybrid ABI: */
 #define INIT_CGP_REGISTER_ASM
 #else
 #define INIT_CGP_REGISTER_ASM                                                  \
@@ -209,11 +209,16 @@ cheri_init_globals_3(void *__capability data_cap,
   const struct capreloc *__capability stop_relocs;
   __SIZE_TYPE__ start_addr, end_addr;
 #if defined(__mips__)
-  __asm__ (".option pic0\n\t"
-       "dla %0, __start___cap_relocs\n\t"
-       "dla %1, __stop___cap_relocs\n\t"
-       :"=r"(start_addr), "=r"(end_addr));
+  __asm__(".option pic0\n\t"
+          "dla %0, __start___cap_relocs\n\t"
+          "dla %1, __stop___cap_relocs\n\t"
+          : "=r"(start_addr), "=r"(end_addr));
 #elif defined(__riscv)
+#if !defined(__CHERI_PURE_CAPABILITY__)
+  __asm__("lla %0, __start___cap_relocs\n\t"
+          "lla %1, __stop___cap_relocs\n\t"
+          : "=r"(start_addr), "=r"(end_addr));
+#else
   void *__capability tmp;
   __asm__ (
        "1: auipcc %2, %%pcrel_hi(__start___cap_relocs)\n\t"
@@ -223,6 +228,7 @@ cheri_init_globals_3(void *__capability data_cap,
        "cincoffset %2, %2, %%pcrel_lo(2b)\n\t"
        cgetaddr_or_offset " %1, %2\n\t"
        :"=r"(start_addr), "=r"(end_addr), "=&C"(tmp));
+#endif
 #else
 #error Unknown architecture
 #endif
@@ -244,8 +250,8 @@ cheri_init_globals_3(void *__capability data_cap,
   stop_relocs = (const struct capreloc *__capability)(const void *__capability)(
       (const char *__capability)start_relocs + relocs_size);
 
-#if __CHERI_CAPABILITY_TABLE__ == 3
-  /* pc-relative ABI -> need large bounds on $pcc */
+#if !defined(__CHERI_PURE_CAPABILITY__) || __CHERI_CAPABILITY_TABLE__ == 3
+  /* pc-relative or hybrid ABI -> need large bounds on $pcc */
   bool can_set_code_bounds = false;
 #else
   bool can_set_code_bounds = true; /* fn-desc/plt ABI -> tight bounds okay */

@@ -2,13 +2,20 @@
 // REQUIRES: mips-registered-target, riscv-registered-target
 /// Check that cheri_init_globals.h can be compiled without warnings as C++ (MIPS&RISC-V)
 /// We turn on -Wsystem-headers for this check but disable warnings that would be annoying to fix
-// RUN: %cheri_purecap_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj
-// RUN: %riscv64_cheri_purecap_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj
-// RUN: %riscv32_cheri_purecap_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj
+// RUN: %cheri_purecap_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv64_cheri_purecap_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv32_cheri_purecap_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
 /// Check that C also doesn't emit any warnings (and generates the same code as C++)
-// RUN: %cheri_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj
-// RUN: %riscv64_cheri_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj
-// RUN: %riscv32_cheri_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj
+// RUN: %cheri_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv64_cheri_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv32_cheri_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+/// Also check that it compiles wihtout warnings in hybrid mode:
+// RUN: %cheri_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv64_cheri_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv32_cheri_cc1 %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %cheri_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv64_cheri_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv32_cheri_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
 
 // expected-no-diagnostics
 #include <cheri_init_globals.h>
