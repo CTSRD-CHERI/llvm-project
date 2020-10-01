@@ -8121,10 +8121,6 @@ def err_atomic_builtin_pointer_size : Error<
 def err_sync_atomic_builtin_with_capability : Error<
   "the __sync_* atomic builtins only work with integers and not capability "
   "type %0. Use the __c11_atomic_ builtins instead.">;
-def warn_capabilities_broken_in_hybrid_varargs : Warning<
-  "It is not possible to pass capabilities to variadic functions in the hybrid "
-  "ABI due to limitations in the MIPS ABI (all arguments are expected in integer "
-  "registers)">, InGroup<MIPSCHERIBugs>, DefaultError;
 def err_atomic_exclusive_builtin_pointer_size : Error<
   "address argument to load or store exclusive builtin must be a pointer to"
   " 1,2,4 or 8 byte type (%0 invalid)">;

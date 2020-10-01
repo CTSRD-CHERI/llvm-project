@@ -7720,8 +7720,8 @@ public:
   }
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
-  ABIArgInfo classifyArgumentType(QualType RetTy, uint64_t &Offset,
-                                  bool &HasV0) const;
+  ABIArgInfo classifyArgumentType(QualType RetTy, bool IsFixed,
+                                  uint64_t &Offset, bool &HasV0) const;
   void computeInfo(CGFunctionInfo &FI) const override;
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override;
@@ -8021,8 +8021,8 @@ llvm::Type *MipsABIInfo::getPaddingType(uint64_t OrigOffset,
 }
 
 ABIArgInfo
-MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset,
-                                  bool &HasV0) const {
+MipsABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
+                                  uint64_t &Offset, bool &HasV0) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
 
   uint64_t OrigOffset = Offset;
@@ -8048,11 +8048,16 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset,
     // passing arguments according to the ABI
     unsigned Threshold = IsO32 ? 16 : 64;
     const TargetInfo &Target = getContext().getTargetInfo();
+    bool PassIndirect = false;
     if (Target.areAllPointersCapabilities()) {
       // assume we can pass structs up to 8 capabilities in size directly
       Threshold = 8 * (Target.getCHERICapabilityWidth() / 8);
+    } else if (const auto *RT = Ty->getAs<RecordType>()) {
+      // Aggregates containing capabilities are passed indirectly for hybrid
+      // varargs.
+      if (!IsFixed && getContext().containsCapabilities(RT->getDecl()))
+        PassIndirect = true;
     }
-    bool PassIndirect = false;
     if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
       PassIndirect = true;
     if (PassIndirect)
@@ -8102,8 +8107,13 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset,
     return extendType(Ty);
   }
 
-  if (Ty->isCHERICapabilityType(getContext()))
-    return ABIArgInfo::getDirect(CGT.ConvertType(Ty));
+  if (Ty->isCHERICapabilityType(getContext())) {
+    // Capabilities are passed indirectly for hybrid varargs.
+    if (!IsFixed && !getContext().getTargetInfo().areAllPointersCapabilities())
+      return getNaturalAlignIndirect(Ty);
+    else
+      return ABIArgInfo::getDirect(CGT.ConvertType(Ty));
+  }
 
   return ABIArgInfo::getDirect(
       nullptr, 0, IsO32 ? nullptr : getPaddingType(OrigOffset, CurrOffset));
@@ -8290,9 +8300,14 @@ void MipsABIInfo::computeInfo(CGFunctionInfo &FI) const {
   // Check if a pointer to an aggregate is passed as a hidden argument.
   uint64_t Offset = RetInfo.isIndirect() ? MinABIStackAlignInBytes : 0;
   bool HasV0 = FI.getCallingConvention() == llvm::CallingConv::CHERI_CCall;
+  int NumFixedArgs = FI.getNumRequiredArgs();
 
-  for (auto &I : FI.arguments())
-    I.info = classifyArgumentType(I.type, Offset, HasV0);
+  int ArgNum = 0;
+  for (auto &I : FI.arguments()) {
+    bool IsFixed = ArgNum < NumFixedArgs;
+    I.info = classifyArgumentType(I.type, IsFixed, Offset, HasV0);
+    ArgNum++;
+  }
 }
 
 Address MipsABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
@@ -8323,7 +8338,18 @@ Address MipsABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   // MinABIStackAlignInBytes is the size of argument slots on the stack.
   CharUnits ArgSlotSize = CharUnits::fromQuantity(MinABIStackAlignInBytes);
 
-  Address Addr = emitVoidPtrVAArg(CGF, VAListAddr, Ty, /*indirect*/ false,
+  // Arguments containing capabilities are passed indirectly in the hybrid ABI.
+  bool IsIndirect = false;
+  if (!getContext().getTargetInfo().areAllPointersCapabilities()) {
+    if (Ty->isCHERICapabilityType(getContext()))
+      IsIndirect = true;
+    else if (const auto *RT = Ty->getAs<RecordType>()) {
+      if (getContext().containsCapabilities(RT->getDecl()))
+        IsIndirect = true;
+    }
+  }
+
+  Address Addr = emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect,
                           TyInfo, ArgSlotSize, /*AllowHigherAlign*/ true);
 
 
@@ -10965,6 +10991,25 @@ ABIArgInfo RISCVABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
 
   uint64_t Size = getContext().getTypeSize(Ty);
 
+  bool IsSingleCapRecord = false;
+  if (auto *RT = Ty->getAs<RecordType>())
+    IsSingleCapRecord = Size == getTarget().getCHERICapabilityWidth() &&
+                        getContext().containsCapabilities(RT->getDecl());
+
+  bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
+                      IsSingleCapRecord;
+
+  // Capabilities (including single-capability records, which are treated the
+  // same as a single capability) are passed indirectly for hybrid varargs.
+  // Anything larger is bigger than 2*XLEN and thus automatically passed
+  // indirectly anyway.
+  if (!IsFixed && IsCapability &&
+      !getContext().getTargetInfo().areAllPointersCapabilities()) {
+    if (ArgGPRsLeft)
+      ArgGPRsLeft -= 1;
+    return getNaturalAlignIndirect(Ty, /*ByVal=*/false);
+  }
+
   // Pass floating point values via FPRs if possible.
   if (IsFixed && Ty->isFloatingType() && !Ty->isComplexType() &&
       FLen >= Size && ArgFPRsLeft) {
@@ -11001,22 +11046,16 @@ ABIArgInfo RISCVABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
     }
   }
 
-  // Structs with a single capability will be passed unpacked.
-  // TODO: Pairs involving capabilities should be passed in registers too like
-  // int/fp pairs (requires thought for fp+cap when out of FPRs).
-  bool IsSingleCapStruct = false;
-  if (auto *RT = Ty->getAs<RecordType>())
-    IsSingleCapStruct = Size == getTarget().getCHERICapabilityWidth() &&
-                        getContext().containsCapabilities(RT->getDecl());
-
   uint64_t NeededAlign = getContext().getTypeAlign(Ty);
   bool MustUseStack = false;
   // Determine the number of GPRs needed to pass the current argument
   // according to the ABI. 2*XLen-aligned varargs are passed in "aligned"
   // register pairs, so may consume 3 registers.
+  //
+  // Structs with a single capability will be passed unpacked.
+  // TODO: Pairs involving capabilities should be passed in registers too like
+  // int/fp pairs (requires thought for fp+cap when out of FPRs).
   int NeededArgGPRs = 1;
-  bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
-                      IsSingleCapStruct;
   if (!IsCapability && !IsFixed && NeededAlign == 2 * XLen)
     NeededArgGPRs = 2 + (ArgGPRsLeft % 2);
   else if (!IsCapability && Size > XLen && Size <= 2 * XLen)
@@ -11052,7 +11091,7 @@ ABIArgInfo RISCVABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
     return ABIArgInfo::getDirect();
   }
 
-  if (IsSingleCapStruct)
+  if (IsSingleCapRecord)
     return ABIArgInfo::getDirect();
 
   // Aggregates which are <= 2*XLen will be passed in registers if possible,
@@ -11103,8 +11142,21 @@ Address RISCVABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   std::pair<CharUnits, CharUnits> SizeAndAlign =
       getContext().getTypeInfoInChars(Ty);
 
-  // Arguments bigger than 2*Xlen bytes are passed indirectly.
-  bool IsIndirect = SizeAndAlign.first > 2 * SlotSize;
+  bool IsSingleCapRecord = false;
+  CharUnits CapabilityWidth =
+    CharUnits::fromQuantity(getTarget().getCHERICapabilityWidth() / 8);
+  if (const auto *RT = Ty->getAs<RecordType>())
+    IsSingleCapRecord = SizeAndAlign.first == CapabilityWidth &&
+                        getContext().containsCapabilities(RT->getDecl());
+
+  bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
+                      IsSingleCapRecord;
+
+  // Arguments bigger than 2*Xlen bytes are passed indirectly, as are
+  // capabilities for the hybrid ABI.
+  bool IsIndirect = SizeAndAlign.first > 2 * SlotSize ||
+    (!getContext().getTargetInfo().areAllPointersCapabilities() &&
+     IsCapability);
 
   return emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect, SizeAndAlign,
                           SlotSize, /*AllowHigherAlign=*/true);
