@@ -662,8 +662,11 @@ ArgType PrintfSpecifier::getScalarArgType(ASTContext &Ctx,
         return Ctx.IntTy;
       return ArgType(Ctx.WideCharTy, "wchar_t");
     case ConversionSpecifier::pArg:
-    case ConversionSpecifier::CHERIpArg:
     case ConversionSpecifier::PArg:
+      return ArgType::CPointerTy;
+    case ConversionSpecifier::CHERIpArg:
+      if (LM.getKind() == LengthModifier::AsLong)
+        return ArgType::CCapabilityTy;
       return ArgType::CPointerTy;
     case ConversionSpecifier::ObjCObjArg:
       return ArgType::ObjCPointerTy;
