@@ -7307,7 +7307,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
          "Unaligned store of unknown type.");
   // Get the half-size VT
   EVT NewStoredVT = StoreMemVT.getHalfSizedIntegerVT(*DAG.getContext());
-  unsigned NumBits = NewStoredVT.getSizeInBits().getFixedSize();
+  unsigned NumBits = NewStoredVT.getFixedSizeInBits();
   unsigned IncrementSize = NumBits / 8;
 
   // Divide the stored value in two parts.
@@ -7365,7 +7365,7 @@ TargetLowering::IncrementMemoryAddress(SDValue Addr, SDValue Mask,
     Increment = DAG.getNode(ISD::MUL, DL, AddrVT, Increment, Scale);
   } else if (DataVT.isScalableVector()) {
     Increment = DAG.getVScale(DL, AddrVT,
-                              APInt(AddrVT.getSizeInBits().getFixedSize(),
+                              APInt(AddrVT.getFixedSizeInBits(),
                                     DataVT.getStoreSize().getKnownMinSize()));
   } else
     Increment = DAG.getConstant(DataVT.getStoreSize(), DL, AddrVT);
@@ -7384,7 +7384,7 @@ static SDValue clampDynamicVectorIndex(SelectionDAG &DAG,
   unsigned NElts = VecVT.getVectorMinNumElements();
   if (VecVT.isScalableVector()) {
     SDValue VS = DAG.getVScale(dl, IdxVT,
-                               APInt(IdxVT.getSizeInBits().getFixedSize(),
+                               APInt(IdxVT.getFixedSizeInBits(),
                                      NElts));
     SDValue Sub = DAG.getNode(ISD::SUB, dl, IdxVT, VS,
                               DAG.getConstant(1, dl, IdxVT));
@@ -7413,8 +7413,8 @@ SDValue TargetLowering::getVectorElementPointer(SelectionDAG &DAG,
   EVT EltVT = VecVT.getVectorElementType();
 
   // Calculate the element offset and add it to the pointer.
-  unsigned EltSize = EltVT.getSizeInBits().getFixedSize() / 8; // FIXME: should be ABI size.
-  assert(EltSize * 8 == EltVT.getSizeInBits().getFixedSize() &&
+  unsigned EltSize = EltVT.getFixedSizeInBits() / 8; // FIXME: should be ABI size.
+  assert(EltSize * 8 == EltVT.getFixedSizeInBits() &&
          "Converting bits to bytes lost precision");
 
   Index = clampDynamicVectorIndex(DAG, Index, VecVT, dl);
