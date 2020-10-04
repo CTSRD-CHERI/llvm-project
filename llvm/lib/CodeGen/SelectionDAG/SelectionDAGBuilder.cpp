@@ -9057,7 +9057,7 @@ void SelectionDAGBuilder::visitVectorReduce(const CallInst &I,
                         DAG.getNode(ISD::VECREDUCE_FADD, dl, VT, Op2, SDFlags),
                         SDFlags);
     else
-      Res = DAG.getNode(ISD::VECREDUCE_STRICT_FADD, dl, VT, Op1, Op2, SDFlags);
+      Res = DAG.getNode(ISD::VECREDUCE_SEQ_FADD, dl, VT, Op1, Op2, SDFlags);
     break;
   case Intrinsic::vector_reduce_fmul:
     if (SDFlags.hasAllowReassociation())
@@ -9065,7 +9065,7 @@ void SelectionDAGBuilder::visitVectorReduce(const CallInst &I,
                         DAG.getNode(ISD::VECREDUCE_FMUL, dl, VT, Op2, SDFlags),
                         SDFlags);
     else
-      Res = DAG.getNode(ISD::VECREDUCE_STRICT_FMUL, dl, VT, Op1, Op2, SDFlags);
+      Res = DAG.getNode(ISD::VECREDUCE_SEQ_FMUL, dl, VT, Op1, Op2, SDFlags);
     break;
   case Intrinsic::vector_reduce_add:
     Res = DAG.getNode(ISD::VECREDUCE_ADD, dl, VT, Op1);
