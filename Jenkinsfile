@@ -111,7 +111,8 @@ if (archiveArtifacts) {
                     // Set the status message on the current commit of the LLVM repo
                     gitHubStatusArgs: result.gitInfo,
                     uniqueId: "llvm-libraries/${env.JOB_BASE_NAME}/${nodeLabel}/",
-                    runTests: true, junitXmlFiles: "llvm-libs-build/llvm-libs-test-results.xml")
+                    // Libc++ tests are currently broken on FreeBSD. Skip them until we have added the required XFAIL annotations.
+                    runTests: nodeLabel != "freebsd", junitXmlFiles: "llvm-libs-build/llvm-libs-test-results.xml")
         }
     }, "Build LTO": {
         // Build for archiving (with LTO, only toolchain binaries)
