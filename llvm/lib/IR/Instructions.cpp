@@ -2663,6 +2663,7 @@ bool CastInst::isNoopCast(Instruction::CastOps Opcode,
                           Type *SrcTy,
                           Type *DestTy,
                           const DataLayout &DL) {
+  assert(castIsValid(Opcode, SrcTy, DestTy) && "method precondition");
   auto isNoopPtrIntCast = [](Type *PtrOpTy, const DataLayout &DL) {
     if (DL.getPointerSize(PtrOpTy->getPointerAddressSpace()) !=
         DL.getPointerBaseSize(PtrOpTy->getPointerAddressSpace()))
@@ -3397,10 +3398,7 @@ CastInst::getCastOpcode(
 /// it in one place and to eliminate the redundant code for getting the sizes
 /// of the types involved.
 bool
-CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
-  // Check for type sanity on the arguments
-  Type *SrcTy = S->getType();
-
+CastInst::castIsValid(Instruction::CastOps op, Type *SrcTy, Type *DstTy) {
   if (!SrcTy->isFirstClassType() || !DstTy->isFirstClassType() ||
       SrcTy->isAggregateType() || DstTy->isAggregateType())
     return false;
