@@ -21,7 +21,7 @@ using namespace libunwind;
 
 using pc_t = LocalAddressSpace::LocalProgramCounter;
 
-int main() {
+int main(int, char**) {
   FrameHeaderCache FHC;
   struct dl_phdr_info PInfo;
   memset(&PInfo, 0, sizeof(PInfo));
@@ -70,5 +70,5 @@ int main() {
 }
 
 #else
-int main() { return 0;}
+int main(int, char**) { return 0;}
 #endif
