@@ -136,4 +136,11 @@ add_llvm_component_library(LLVMAnalysis
 
   LINK_LIBS
   ${MLLinkDeps}
+
+  LINK_COMPONENTS
+  BinaryFormat
+  Core
+  Object
+  ProfileData
+  Support
   )

@@ -81,6 +81,11 @@ add_llvm_component_library(LLVMTransformUtils
 
   DEPENDS
   intrinsics_gen
+
+  LINK_COMPONENTS
+  Analysis
+  Core
+  Support
   )
 
 add_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)
