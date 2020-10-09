@@ -1,7 +1,7 @@
 // Check that we only set bounds on union member expressions in very-aggressive mode
 // FIXME: or should it be aggressive vs safe behave instead (i.e. set bounds in aggressive mode)?
-// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=aggressive,expected
-// RUN: %cheri_purecap_cc1 -cheri-bounds=very-aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=very-aggressive,expected
+// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Rcheri-subobject-bounds -verify=aggressive,expected
+// RUN: %cheri_purecap_cc1 -cheri-bounds=very-aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Rcheri-subobject-bounds -verify=very-aggressive,expected
 
 struct sockaddr {
   char data[16];

@@ -1,8 +1,8 @@
 // Check that we only set bounds on variable length array member expressions in very-aggressive mode
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm -xc %s -o /dev/null \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=expected,aggressive
+// RUN:   -Rcheri-subobject-bounds -verify=expected,aggressive
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c++11 -emit-llvm -xc++ %s -o /dev/null \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=expected,aggressive
+// RUN:   -Rcheri-subobject-bounds -verify=expected,aggressive
 
 struct WithVLA {
   float x;

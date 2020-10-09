@@ -3,9 +3,9 @@
 // no-r-flag-no-diagnostics
 
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O0 -std=c11 -emit-llvm -xc %s -o /dev/null \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=default
+// RUN:   -Rcheri-subobject-bounds -verify=default
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O0 -std=c11 -emit-llvm -xc %s -o /dev/null \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=opt-out -DOPTOUT=1
+// RUN:   -Rcheri-subobject-bounds -verify=opt-out -DOPTOUT=1
 
 #ifdef OPTOUT
 #define NO_SUBOBJECT_BOUNDS __attribute__((cheri_no_subobject_bounds))

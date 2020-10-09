@@ -244,20 +244,20 @@ def select_subobject_bounds_kind : TextSubstitution<
 
 def remark_setting_cheri_subobject_bounds :
   Remark<"setting %select{|sub-object }0bounds for %sub{select_subobject_bounds_kind}1 %2 to %3 bytes%4">,
-  InGroup<CheriSubobjectBounds>;
+  InGroup<CheriSubobjectBoundsRemarks>;
 def remark_setting_cheri_subobject_bounds_field :
   Remark<"setting sub-object bounds for field %0 (%sub{select_subobject_bounds_kind}1 %2) to %3 bytes%4">,
-  InGroup<CheriSubobjectBounds>;
+  InGroup<CheriSubobjectBoundsRemarks>;
 def remark_subobject_using_container_size :
   Remark<"using size of containing type %0 instead of object type %1 for "
-         "subobject bounds on %2">, InGroup<CheriSubobjectBounds>;
+         "subobject bounds on %2">, InGroup<CheriSubobjectBoundsRemarks>;
 def remark_no_cheri_subobject_bounds :
   Remark<"not setting bounds for %sub{select_subobject_bounds_kind}0 %1 (%2)">,
-  InGroup<CheriSubobjectBounds>;
+  InGroup<CheriSubobjectBoundsRemarks>;
 
 def warn_subobject_bounds_addressof_subscript :
   Warning<"pointer created from reference returned by %0 will be bounded to a single element">,
-  InGroup<CheriSubobjectBounds>, DefaultWarnNoWerror;
+  InGroup<CheriSubobjectBoundsSuspicous>, DefaultWarnNoWerror;
 // TODO: add a better suggestion for known classes such as std::string/std::vector
 def note_subobject_bounds_addressof_subscript_fixit :
   Note<"add an explicit cast to %0 to silence this warning or if you intended to "
@@ -266,7 +266,7 @@ def note_subobject_bounds_addressof_subscript_fixit :
 
 def warn_subobject_bounds_unknown_type :
   Warning<"unhandled type %0 in CHERI bounds setting">,
-  InGroup<CheriSubobjectBounds>, DefaultWarnNoWerror;
+  InGroup<CheriSubobjectBoundsSuspicous>, DefaultWarnNoWerror;
 
 def warn_cheri_memintrin_misaligned_inefficient : Warning<
   "%0 operation with capability argument %2 and underaligned destination"

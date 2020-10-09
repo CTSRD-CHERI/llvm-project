@@ -133,12 +133,12 @@ def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplici
 def CHERIPrototypes: DiagGroup<"cheri-prototypes">;
 def CHERIPrototypesStrict: DiagGroup<"cheri-prototypes-strict">;
 // Remarks about setting/not setting subobject bounds
-def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
+def CheriSubobjectBoundsSuspicous : DiagGroup<"cheri-subobject-bounds-suspicous">;
+def CheriSubobjectBoundsRemarks : DiagGroup<"cheri-subobject-bounds">;
 
 def CheriAll : DiagGroup<"cheri",
-     [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion, CheriSubobjectBounds,
-      CHERIIntCapArithmetic, CHERIProvenance,
-      CHERIImplicitConversionSign, CHERIPrototypes]>;
+     [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion, CheriSubobjectBoundsSuspicous,
+      CHERIIntCapArithmetic, CHERIProvenance, CHERIImplicitConversionSign, CHERIPrototypes]>;
 // CHERI warnings that are too noisy to turn on by default
 def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
 def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, CHERIPrototypesStrict]>;

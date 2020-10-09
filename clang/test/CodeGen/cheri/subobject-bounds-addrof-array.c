@@ -4,19 +4,19 @@
 
 // RUN: %cheri_purecap_cc1 -cheri-bounds=subobject-safe -O0 -std=c11 -emit-llvm %s -o %t.ll \
 // RUN:   -mllvm -debug-only=cheri-bounds -mllvm -stats -Wno-array-bounds \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=subobject-safe,common,aggressive-or-less 2>%t-s.dbg
+// RUN:   -Rcheri-subobject-bounds -verify=subobject-safe,common,aggressive-or-less 2>%t-s.dbg
 // RUN: FileCheck %s -input-file %t.ll  -check-prefixes CHECK,SUBOBJECT-SAFE
 // RUN: FileCheck %s -input-file %t-s.dbg -check-prefixes DBG,DBG-SUBOBJECT-SAFE
 
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O0 -std=c11 -emit-llvm %s -o %t.ll \
 // RUN:   -mllvm -debug-only=cheri-bounds -mllvm -stats -Wno-array-bounds \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=aggressive,common,aggressive-or-less 2>%t-a.dbg
+// RUN:   -Rcheri-subobject-bounds -verify=aggressive,common,aggressive-or-less 2>%t-a.dbg
 // RUN: FileCheck %s -input-file %t.ll  -check-prefixes CHECK,AGGRESSIVE
 // RUN: FileCheck %s -input-file %t-a.dbg -check-prefixes DBG,DBG-AGGRESSIVE
 
 // RUN: %cheri_purecap_cc1 -cheri-bounds=very-aggressive -O0 -std=c11 -emit-llvm %s -o %t.ll \
 // RUN:   -mllvm -debug-only=cheri-bounds -mllvm -stats -Wno-array-bounds \
-// RUN:   -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=very-aggressive,common 2>%t-v.dbg
+// RUN:   -Rcheri-subobject-bounds -verify=very-aggressive,common 2>%t-v.dbg
 // RUN: FileCheck %s -input-file %t.ll  -check-prefixes CHECK,VERY-AGGRESSIVE
 // RUN: FileCheck %s -input-file %t-v.dbg -check-prefixes DBG,DBG-VERY-AGGRESSIVE
 

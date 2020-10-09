@@ -2,7 +2,7 @@
 // REQUIRES: asserts
 // RUN: rm -f %t.stats
 // RUN: %cheri_purecap_cc1 -cheri-bounds=references-only -O2 -std=c++17 -emit-llvm %s -o /dev/null \
-// RUN:    -Wno-array-bounds -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify \
+// RUN:    -Wno-array-bounds -Rcheri-subobject-bounds -verify \
 // RUN:    -stats-file=%t.stats -mllvm -stats
 // RUN: FileCheck -input-file=%t.stats %s
 

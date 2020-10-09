@@ -1,6 +1,6 @@
 // Check that we can set bounds on addrof expressions
 // REQUIRES: asserts
-// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify
+// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Rcheri-subobject-bounds -verify
 // RUN: %cheri_FileCheck %s -check-prefixes CHECK,AGGRESSIVE -input-file=%t.ll
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -DUSE_BUITLTIN_ADDROF -O2 -std=c11 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds -mllvm -stats 2>%t.dbg | %cheri_FileCheck %s -check-prefixes CHECK,AGGRESSIVE
 // RUN: %cheri_FileCheck -input-file %t.dbg %s -check-prefix DBG -implicit-check-not cheri-bounds

@@ -29,7 +29,7 @@
 #endif
 
 #ifdef __CHERI_PURE_CAPABILITY__
-#define TEST_CHERI_NO_SUBOBJECT_WARNING _Pragma("clang diagnostic ignored \"-Wcheri-subobject-bounds\"")
+#define TEST_CHERI_NO_SUBOBJECT_WARNING _Pragma("clang diagnostic ignored \"-Wcheri-subobject-bounds-suspicious\"")
 #else
 #define TEST_CHERI_NO_SUBOBJECT_WARNING
 #endif
