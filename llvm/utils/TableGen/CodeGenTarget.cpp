@@ -797,9 +797,6 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R,
     IS.ParamTypeDefs.push_back(TyEl);
   }
 
-  // Set default properties to true.
-  setDefaultProperties(R, DefaultProperties);
-
   // Parse the intrinsic properties.
   ListInit *PropList = R->getValueAsListInit("IntrProperties");
   for (unsigned i = 0, e = PropList->size(); i != e; ++i) {
@@ -809,6 +806,9 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R,
 
     setProperty(Property);
   }
+
+  // Set default properties to true.
+  setDefaultProperties(R, DefaultProperties);
 
   // Also record the SDPatternOperator Properties.
   Properties = parseSDPatternOperatorProperties(R);
@@ -856,7 +856,7 @@ void CodeGenIntrinsic::setProperty(Record *R) {
   else if (R->getName() == "IntrNoFree")
     isNoFree = true;
   else if (R->getName() == "IntrWillReturn")
-    isWillReturn = true;
+    isWillReturn = !isNoReturn;
   else if (R->getName() == "IntrCold")
     isCold = true;
   else if (R->getName() == "IntrSpeculatable")
