@@ -1948,7 +1948,8 @@ static void computeKnownBitsFromOperator(const Operator *I,
     }
     break;
   case Instruction::Freeze:
-    if (isGuaranteedNotToBePoison(I->getOperand(0), Q.CxtI, Q.DT, Depth + 1))
+    if (isGuaranteedNotToBePoison(I->getOperand(0), Q.AC, Q.CxtI, Q.DT,
+                                  Depth + 1))
       computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
     break;
   }
@@ -2669,7 +2670,7 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
   else if (const FreezeInst *FI = dyn_cast<FreezeInst>(V)) {
     auto *Op = FI->getOperand(0);
     if (isKnownNonZero(Op, Depth, Q) &&
-        isGuaranteedNotToBePoison(Op, Q.CxtI, Q.DT, Depth))
+        isGuaranteedNotToBePoison(Op, Q.AC, Q.CxtI, Q.DT, Depth))
       return true;
   }
 
@@ -4976,6 +4977,7 @@ static bool programUndefinedIfUndefOrPoison(const Value *V,
                                             bool PoisonOnly);
 
 static bool isGuaranteedNotToBeUndefOrPoison(const Value *V,
+                                             AssumptionCache *AC,
                                              const Instruction *CtxI,
                                              const DominatorTree *DT,
                                              unsigned Depth, bool PoisonOnly) {
@@ -5017,7 +5019,8 @@ static bool isGuaranteedNotToBeUndefOrPoison(const Value *V,
     return true;
 
   auto OpCheck = [&](const Value *V) {
-    return isGuaranteedNotToBeUndefOrPoison(V, CtxI, DT, Depth + 1, PoisonOnly);
+    return isGuaranteedNotToBeUndefOrPoison(V, AC, CtxI, DT, Depth + 1,
+                                            PoisonOnly);
   };
 
   if (auto *Opr = dyn_cast<Operator>(V)) {
@@ -5036,8 +5039,8 @@ static bool isGuaranteedNotToBeUndefOrPoison(const Value *V,
       bool IsWellDefined = true;
       for (unsigned i = 0; i < Num; ++i) {
         auto *TI = PN->getIncomingBlock(i)->getTerminator();
-        if (!isGuaranteedNotToBeUndefOrPoison(PN->getIncomingValue(i), TI, DT,
-                                              Depth + 1, PoisonOnly)) {
+        if (!isGuaranteedNotToBeUndefOrPoison(PN->getIncomingValue(i), AC, TI,
+                                              DT, Depth + 1, PoisonOnly)) {
           IsWellDefined = false;
           break;
         }
@@ -5092,19 +5095,24 @@ static bool isGuaranteedNotToBeUndefOrPoison(const Value *V,
     Dominator = Dominator->getIDom();
   }
 
+  SmallVector<Attribute::AttrKind, 2> AttrKinds{Attribute::NoUndef};
+  if (getKnowledgeValidInContext(V, AttrKinds, CtxI, DT, AC))
+    return true;
+
   return false;
 }
 
-bool llvm::isGuaranteedNotToBeUndefOrPoison(const Value *V,
+bool llvm::isGuaranteedNotToBeUndefOrPoison(const Value *V, AssumptionCache *AC,
                                             const Instruction *CtxI,
                                             const DominatorTree *DT,
                                             unsigned Depth) {
-  return ::isGuaranteedNotToBeUndefOrPoison(V, CtxI, DT, Depth, false);
+  return ::isGuaranteedNotToBeUndefOrPoison(V, AC, CtxI, DT, Depth, false);
 }
 
-bool llvm::isGuaranteedNotToBePoison(const Value *V, const Instruction *CtxI,
+bool llvm::isGuaranteedNotToBePoison(const Value *V, AssumptionCache *AC,
+                                     const Instruction *CtxI,
                                      const DominatorTree *DT, unsigned Depth) {
-  return ::isGuaranteedNotToBeUndefOrPoison(V, CtxI, DT, Depth, true);
+  return ::isGuaranteedNotToBeUndefOrPoison(V, AC, CtxI, DT, Depth, true);
 }
 
 OverflowResult llvm::computeOverflowForSignedAdd(const AddOperator *Add,
