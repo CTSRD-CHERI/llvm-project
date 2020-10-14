@@ -28,6 +28,14 @@ using namespace clang::driver;
 using namespace clang::driver::tools;
 using namespace clang::driver::toolchains;
 
+BareMetal::BareMetal(const Driver &D, const llvm::Triple &Triple,
+                           const ArgList &Args)
+    : ToolChain(D, Triple, Args) {
+  getProgramPaths().push_back(getDriver().getInstalledDir());
+  if (getDriver().getInstalledDir() != getDriver().Dir)
+    getProgramPaths().push_back(getDriver().Dir);
+}
+
 /// Is the triple {arm,thumb}-none-none-{eabi,eabihf} ?
 static bool isARMBareMetal(const llvm::Triple &Triple) {
   if (Triple.getArch() != llvm::Triple::arm &&
@@ -87,6 +95,13 @@ bool BareMetal::handlesTarget(const llvm::Triple &Triple) {
 
 Tool *BareMetal::buildLinker() const {
   return new tools::baremetal::Linker(*this);
+}
+
+std::string BareMetal::getCompilerRTPath() const { return getRuntimesDir(); }
+
+std::string BareMetal::getCompilerRTBasename(const llvm::opt::ArgList &,
+                                             StringRef, FileType, bool) const {
+  return ("libclang_rt.builtins-" + getTriple().getArchName() + ".a").str();
 }
 
 std::string BareMetal::getRuntimesDir() const {
