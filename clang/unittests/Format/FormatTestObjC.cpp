@@ -327,6 +327,18 @@ TEST_F(FormatTestObjC, FormatObjCInterface) {
                "+ (id)init;\n"
                "@end");
 
+  verifyFormat("@interface Foo<Bar : Baz <Blech>> : Xyzzy <Corge> <Quux> {\n"
+               "  int _i;\n"
+               "}\n"
+               "+ (id)init;\n"
+               "@end");
+
+  verifyFormat("@interface Foo : Bar <Baz> <Blech>\n"
+               "@end");
+
+  verifyFormat("@interface Foo : Bar <Baz> <Blech, Xyzzy, Corge>\n"
+               "@end");
+
   verifyFormat("@interface Foo (HackStuff) {\n"
                "  int _i;\n"
                "}\n"
@@ -412,6 +424,10 @@ TEST_F(FormatTestObjC, FormatObjCInterface) {
                "    fffffffffffff,\n"
                "    fffffffffffff> {\n"
                "}");
+  verifyFormat("@interface ggggggggggggg\n"
+               "    : ggggggggggggg <ggggggggggggg>\n"
+               "      <ggggggggggggg>\n"
+               "@end");
 }
 
 TEST_F(FormatTestObjC, FormatObjCImplementation) {
