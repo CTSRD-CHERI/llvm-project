@@ -1473,7 +1473,7 @@ void ASTWriter::WriteInputFiles(SourceManager &SourceMgr,
     if (PP->getHeaderSearchInfo()
             .getHeaderSearchOpts()
             .ValidateASTInputFilesContent) {
-      auto *MemBuff = Cache->getRawBuffer();
+      auto MemBuff = Cache->getBufferIfLoaded();
       if (MemBuff)
         ContentHash = hash_value(MemBuff->getBuffer());
       else
