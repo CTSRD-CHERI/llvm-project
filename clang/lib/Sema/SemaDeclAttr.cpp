@@ -3788,10 +3788,8 @@ void Sema::AddAlignValueAttr(Decl *D, const AttributeCommonInfo &CI, Expr *E) {
 
   if (!E->isValueDependent()) {
     llvm::APSInt Alignment;
-    ExprResult ICE
-      = VerifyIntegerConstantExpression(E, &Alignment,
-          diag::err_align_value_attribute_argument_not_int,
-            /*AllowFold*/ false);
+    ExprResult ICE = VerifyIntegerConstantExpression(
+        E, &Alignment, diag::err_align_value_attribute_argument_not_int);
     if (ICE.isInvalid())
       return;
 
@@ -3897,10 +3895,8 @@ void Sema::AddAlignedAttr(Decl *D, const AttributeCommonInfo &CI, Expr *E,
 
   // FIXME: Cache the number on the AL object?
   llvm::APSInt Alignment;
-  ExprResult ICE
-    = VerifyIntegerConstantExpression(E, &Alignment,
-        diag::err_aligned_attribute_argument_not_int,
-        /*AllowFold*/ false);
+  ExprResult ICE = VerifyIntegerConstantExpression(
+      E, &Alignment, diag::err_aligned_attribute_argument_not_int);
   if (ICE.isInvalid())
     return;
 
