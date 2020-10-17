@@ -2235,8 +2235,6 @@ void CheckMPROTECT() {
 #endif
 }
 
-void PrintModuleMap() { }
-
 void CheckNoDeepBind(const char *filename, int flag) {
 #ifdef RTLD_DEEPBIND
   if (flag & RTLD_DEEPBIND) {
