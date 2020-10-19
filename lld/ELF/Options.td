@@ -185,6 +185,9 @@ defm warning_limit:
 def error_unresolved_symbols: F<"error-unresolved-symbols">,
   HelpText<"Report unresolved symbols as errors">;
 
+defm error_handling_script: EEq<"error-handling-script",
+    "Specify an error handling script">;
+
 defm exclude_libs: Eq<"exclude-libs", "Exclude static libraries from automatic export">;
 
 defm execute_only: BB<"execute-only",
