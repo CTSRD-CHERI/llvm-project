@@ -983,7 +983,7 @@ static void reportUndefinedSymbol(const UndefinedDiag &undef,
   if (undef.isWarning)
     warn(msg);
   else
-    error(msg);
+    error(msg, ErrorTag::SymbolNotFound, {sym.getName()});
 }
 
 template <class ELFT> void elf::reportUndefinedSymbols() {
