@@ -455,6 +455,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "must_preserve_cheri_tags";
   if (hasAttribute(Attribute::NoUndef))
     return "noundef";
+  if (hasAttribute(Attribute::MustProgress))
+    return "mustprogress";
 
   const bool IsByVal = hasAttribute(Attribute::ByVal);
   if (IsByVal || hasAttribute(Attribute::StructRet)) {
