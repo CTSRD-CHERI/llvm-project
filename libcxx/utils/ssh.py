@@ -51,7 +51,7 @@ def createTempdir(args):
         debug(args, "Created local tmp dir:", localTmp)
         debug(args, "Assuming remote path is:", remoteTmp)
         return localTmp, remoteTmp
-    remoteTmp = subprocess.check_output(ssh(args, 'mktemp -d /tmp/libcxx.XXXXXXXXXX'),
+    remoteTmp = subprocess.check_output(ssh(args, 'mktemp -d {}/libcxx.XXXXXXXXXX'.format(args.tempdir)),
                                         universal_newlines=True).strip()
     debug(args, "Create remote tmp dir:", remoteTmp)
     return None, remoteTmp
@@ -89,6 +89,7 @@ def main():
     parser.add_argument('--host', type=str, required=True)
     parser.add_argument('--execdir', type=str, required=True)
     parser.add_argument('--debug', action="store_true", required=False)
+    parser.add_argument('--tempdir', type=str, required=False, default='/tmp')
     parser.add_argument('--extra-ssh-args', type=str, required=False)
     parser.add_argument('--extra-scp-args', type=str, required=False)
     parser.add_argument('--shared-mount-local-path', type=str, required=False,
