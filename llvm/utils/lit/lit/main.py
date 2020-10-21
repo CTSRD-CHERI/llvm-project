@@ -43,7 +43,8 @@ def main(builtin_params={}):
     lit_config.cheri_test_mode = opts.cheri_tests_filter
     lit_config.run_with_debugger = opts.run_with_debugger
 
-    discovered_tests = lit.discovery.find_tests_for_inputs(lit_config, opts.test_paths)
+    discovered_tests = lit.discovery.find_tests_for_inputs(lit_config, opts.test_paths,
+                                                           opts.indirectlyRunCheck)
     if not discovered_tests:
         sys.stderr.write('error: did not discover any tests for provided path(s)\n')
         sys.exit(2)
