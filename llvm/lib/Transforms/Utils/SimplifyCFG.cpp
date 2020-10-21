@@ -2423,6 +2423,9 @@ static bool FoldTwoEntryPHINode(PHINode *PN, const TargetTransformInfo &TTI,
   // dependence information for this check, but simplifycfg can't keep it up
   // to date, and this catches most of the cases we care about anyway.
   BasicBlock *BB = PN->getParent();
+  const Function *Fn = BB->getParent();
+  if (Fn && Fn->hasFnAttribute(Attribute::OptForFuzzing))
+    return false;
 
   BasicBlock *IfTrue, *IfFalse;
   Value *IfCond = GetIfCondition(BB, IfTrue, IfFalse);
@@ -6090,7 +6093,8 @@ static BasicBlock *allPredecessorsComeFromSameSource(BasicBlock *BB) {
 
 bool SimplifyCFGOpt::simplifyCondBranch(BranchInst *BI, IRBuilder<> &Builder) {
   BasicBlock *BB = BI->getParent();
-  if (!Options.SimplifyCondBranch)
+  const Function *Fn = BB->getParent();
+  if (Fn && Fn->hasFnAttribute(Attribute::OptForFuzzing))
     return false;
 
   // Conditional branch
@@ -6305,13 +6309,11 @@ bool SimplifyCFGOpt::simplifyOnce(BasicBlock *BB) {
 
   IRBuilder<> Builder(BB);
 
-  if (Options.FoldTwoEntryPHINode) {
-    // If there is a trivial two-entry PHI node in this basic block, and we can
-    // eliminate it, do so now.
-    if (auto *PN = dyn_cast<PHINode>(BB->begin()))
-      if (PN->getNumIncomingValues() == 2)
-        Changed |= FoldTwoEntryPHINode(PN, TTI, DL);
-  }
+  // If there is a trivial two-entry PHI node in this basic block, and we can
+  // eliminate it, do so now.
+  if (auto *PN = dyn_cast<PHINode>(BB->begin()))
+    if (PN->getNumIncomingValues() == 2)
+      Changed |= FoldTwoEntryPHINode(PN, TTI, DL);
 
   Instruction *Terminator = BB->getTerminator();
   Builder.SetInsertPoint(Terminator);
