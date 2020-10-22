@@ -28,6 +28,9 @@ class DefaultTargetInfo(object):
     def is_windows(self):
         return self.platform() == 'win32'
 
+    def is_mingw(self):
+        return False
+
     def is_darwin(self):
         return self.platform() == 'darwin'
 
@@ -271,6 +274,13 @@ class BaremetalNewlibTI(DefaultTargetInfo):
         if use_libatomic:
             flags += ['-latomic']
 
+
+class MingwLocalTI(WindowsLocalTI):
+    def __init__(self, full_config):
+        super(MingwLocalTI, self).__init__(full_config)
+
+    def is_mingw(self):
+        return True
 
 def make_target_info(full_config):
     default = "libcxx.test.target_info.LocalTI"
