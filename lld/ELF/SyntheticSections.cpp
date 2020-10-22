@@ -1726,20 +1726,26 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->link = 0;
 
-  if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
-    assert(in.cheriCapTable->getParent()->sectionIndex != UINT32_MAX);
+  if (in.relaPlt == this) {
+    getParent()->flags |= ELF::SHF_INFO_LINK;
     // For MIPS CheriABI we use the captable as the sh_info value
-    if (in.relaPlt == this)
+    if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
+      assert(in.cheriCapTable->getParent()->sectionIndex != UINT32_MAX);
       getParent()->info = in.cheriCapTable->getParent()->sectionIndex;
-    if (in.relaIplt == this)
-      getParent()->info = in.cheriCapTable->getParent()->sectionIndex;
-  } else {
-    if (in.relaPlt == this)
+    } else {
       getParent()->info = in.gotPlt->getParent()->sectionIndex;
-    if (in.relaIplt == this)
-      getParent()->info = in.igotPlt->getParent()->sectionIndex;
+    }
   }
-  assert(getParent()->info != UINT32_MAX);
+  if (in.relaIplt == this) {
+    getParent()->flags |= ELF::SHF_INFO_LINK;
+    // For MIPS CheriABI we use the captable as the sh_info value
+    if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
+      assert(in.cheriCapTable->getParent()->sectionIndex != UINT32_MAX);
+      getParent()->info = in.cheriCapTable->getParent()->sectionIndex;
+    } else {
+      getParent()->info = in.igotPlt->getParent()->sectionIndex;
+    }
+  }
 }
 
 RelrBaseSection::RelrBaseSection()
