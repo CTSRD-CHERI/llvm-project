@@ -6862,12 +6862,13 @@ ScalarEvolution::BackedgeTakenInfo::getConstantMax(ScalarEvolution *SE) const {
     return !ENT.hasAlwaysTruePredicate();
   };
 
-  if (any_of(ExitNotTaken, PredicateNotAlwaysTrue) || !getMax())
+  if (any_of(ExitNotTaken, PredicateNotAlwaysTrue) || !getConstantMax())
     return SE->getCouldNotCompute();
 
-  assert((isa<SCEVCouldNotCompute>(getMax()) || isa<SCEVConstant>(getMax())) &&
+  assert((isa<SCEVCouldNotCompute>(getConstantMax()) ||
+          isa<SCEVConstant>(getConstantMax())) &&
          "No point in having a non-constant max backedge taken count!");
-  return getMax();
+  return getConstantMax();
 }
 
 bool ScalarEvolution::BackedgeTakenInfo::isConstantMaxOrZero(
@@ -6880,8 +6881,8 @@ bool ScalarEvolution::BackedgeTakenInfo::isConstantMaxOrZero(
 
 bool ScalarEvolution::BackedgeTakenInfo::hasOperand(const SCEV *S,
                                                     ScalarEvolution *SE) const {
-  if (getMax() && getMax() != SE->getCouldNotCompute() &&
-      SE->hasOperand(getMax(), S))
+  if (getConstantMax() && getConstantMax() != SE->getCouldNotCompute() &&
+      SE->hasOperand(getConstantMax(), S))
     return true;
 
   for (auto &ENT : ExitNotTaken)
@@ -6937,7 +6938,7 @@ ScalarEvolution::BackedgeTakenInfo::BackedgeTakenInfo(
     ArrayRef<ScalarEvolution::BackedgeTakenInfo::EdgeExitInfo>
         ExitCounts,
     bool Complete, const SCEV *MaxCount, bool MaxOrZero)
-    : MaxAndComplete(MaxCount, Complete), MaxOrZero(MaxOrZero) {
+    : ConstantMaxAndComplete(MaxCount, Complete), MaxOrZero(MaxOrZero) {
   using EdgeExitInfo = ScalarEvolution::BackedgeTakenInfo::EdgeExitInfo;
 
   ExitNotTaken.reserve(ExitCounts.size());
