@@ -1220,6 +1220,11 @@ void AggExprEmitter::VisitBinAssign(const BinaryOperator *E) {
 
   // Copy into the destination if the assignment isn't ignored.
   EmitFinalDestCopy(E->getType(), LHS);
+
+  if (!Dest.isIgnored() && !Dest.isExternallyDestructed() &&
+      E->getType().isDestructedType() == QualType::DK_nontrivial_c_struct)
+    CGF.pushDestroy(QualType::DK_nontrivial_c_struct, Dest.getAddress(),
+                    E->getType());
 }
 
 void AggExprEmitter::
@@ -1237,6 +1242,11 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
 
   // Save whether the destination's lifetime is externally managed.
   bool isExternallyDestructed = Dest.isExternallyDestructed();
+  bool destructNonTrivialCStruct =
+      !isExternallyDestructed &&
+      E->getType().isDestructedType() == QualType::DK_nontrivial_c_struct;
+  isExternallyDestructed |= destructNonTrivialCStruct;
+  Dest.setExternallyDestructed(isExternallyDestructed);
 
   eval.begin(CGF);
   CGF.EmitBlock(LHSBlock);
@@ -1257,6 +1267,10 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   CGF.EmitBlock(RHSBlock);
   Visit(E->getFalseExpr());
   eval.end(CGF);
+
+  if (destructNonTrivialCStruct)
+    CGF.pushDestroy(QualType::DK_nontrivial_c_struct, Dest.getAddress(),
+                    E->getType());
 
   CGF.EmitBlock(ContBlock);
 }
