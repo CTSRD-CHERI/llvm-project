@@ -6513,6 +6513,7 @@ const SCEV *ScalarEvolution::getExitCount(const Loop *L,
                                           ExitCountKind Kind) {
   switch (Kind) {
   case Exact:
+  case SymbolicMaximum:
     return getBackedgeTakenInfo(L).getExact(ExitingBlock, this);
   case ConstantMaximum:
     return getBackedgeTakenInfo(L).getConstantMax(ExitingBlock, this);
@@ -6533,6 +6534,8 @@ const SCEV *ScalarEvolution::getBackedgeTakenCount(const Loop *L,
     return getBackedgeTakenInfo(L).getExact(L, this);
   case ConstantMaximum:
     return getBackedgeTakenInfo(L).getConstantMax(this);
+  case SymbolicMaximum:
+    return getBackedgeTakenInfo(L).getSymbolicMax(L, this);
   };
   llvm_unreachable("Invalid ExitCountKind!");
 }
@@ -6568,7 +6571,7 @@ ScalarEvolution::getPredicatedBackedgeTakenInfo(const Loop *L) {
   return PredicatedBackedgeTakenCounts.find(L)->second = std::move(Result);
 }
 
-const ScalarEvolution::BackedgeTakenInfo &
+ScalarEvolution::BackedgeTakenInfo &
 ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
   // Initially insert an invalid entry for this loop. If the insertion
   // succeeds, proceed to actually compute a backedge-taken count and
@@ -6855,7 +6858,7 @@ const SCEV *ScalarEvolution::BackedgeTakenInfo::getConstantMax(
   return SE->getCouldNotCompute();
 }
 
-/// getMax - Get the max backedge taken count for the loop.
+/// getConstantMax - Get the constant max backedge taken count for the loop.
 const SCEV *
 ScalarEvolution::BackedgeTakenInfo::getConstantMax(ScalarEvolution *SE) const {
   auto PredicateNotAlwaysTrue = [](const ExitNotTakenInfo &ENT) {
@@ -6869,6 +6872,14 @@ ScalarEvolution::BackedgeTakenInfo::getConstantMax(ScalarEvolution *SE) const {
           isa<SCEVConstant>(getConstantMax())) &&
          "No point in having a non-constant max backedge taken count!");
   return getConstantMax();
+}
+
+const SCEV *
+ScalarEvolution::BackedgeTakenInfo::getSymbolicMax(const Loop *L,
+                                                   ScalarEvolution *SE) {
+  if (!SymbolicMax)
+    SymbolicMax = SE->computeSymbolicMaxBackedgeTakenCount(L);
+  return SymbolicMax;
 }
 
 bool ScalarEvolution::BackedgeTakenInfo::isConstantMaxOrZero(
@@ -12719,7 +12730,8 @@ bool ScalarEvolution::matchURem(const SCEV *Expr, const SCEV *&LHS,
   return false;
 }
 
-const SCEV* ScalarEvolution::computeMaxBackedgeTakenCount(const Loop *L) {
+const SCEV *
+ScalarEvolution::computeSymbolicMaxBackedgeTakenCount(const Loop *L) {
   SmallVector<BasicBlock*, 16> ExitingBlocks;
   L->getExitingBlocks(ExitingBlocks);
 
