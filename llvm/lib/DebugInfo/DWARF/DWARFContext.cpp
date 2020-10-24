@@ -458,7 +458,7 @@ void DWARFContext::dump(
           shouldDump(Explicit, ".debug_frame", DIDT_ID_DebugFrame,
                      DObj->getFrameSection().Data)) {
     if (Expected<const DWARFDebugFrame *> DF = getDebugFrame())
-      (*DF)->dump(OS, getRegisterInfo(), *Off);
+      (*DF)->dump(OS, DumpOpts, getRegisterInfo(), *Off);
     else
       RecoverableErrorHandler(DF.takeError());
   }
@@ -467,7 +467,7 @@ void DWARFContext::dump(
           shouldDump(Explicit, ".eh_frame", DIDT_ID_DebugFrame,
                      DObj->getEHFrameSection().Data)) {
     if (Expected<const DWARFDebugFrame *> DF = getEHFrame())
-      (*DF)->dump(OS, getRegisterInfo(), *Off);
+      (*DF)->dump(OS, DumpOpts, getRegisterInfo(), *Off);
     else
       RecoverableErrorHandler(DF.takeError());
   }
