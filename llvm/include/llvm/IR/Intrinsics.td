@@ -965,11 +965,11 @@ def int_eh_sjlj_setup_dispatch  : Intrinsic<[], []>;
 //
 def int_var_annotation : DefaultAttrsIntrinsic<[],
                                    [llvm_anyptr_ty, LLVMMatchType<0>,
-                                    LLVMMatchType<0>, llvm_i32_ty],
+                                    LLVMMatchType<0>, llvm_i32_ty, LLVMMatchType<0>],
                                    [IntrWillReturn], "llvm.var.annotation">;
 def int_ptr_annotation : DefaultAttrsIntrinsic<[LLVMAnyPointerType<llvm_anyint_ty>],
                                    [LLVMMatchType<0>, llvm_anyptr_ty, LLVMMatchType<1>,
-                                    llvm_i32_ty],
+                                    llvm_i32_ty, LLVMMatchType<1>],
                                    [IntrWillReturn], "llvm.ptr.annotation">;
 def int_annotation : DefaultAttrsIntrinsic<[llvm_anyint_ty],
                                [LLVMMatchType<0>, llvm_anyptr_ty,
