@@ -62,6 +62,17 @@
 _LIBCPP_BEGIN_NAMESPACE_FILESYSTEM
 
 namespace {
+
+bool isSeparator(path::value_type C) {
+  if (C == '/')
+    return true;
+#if defined(_LIBCPP_WIN32API)
+  if (C == '\\')
+    return true;
+#endif
+  return false;
+}
+
 namespace parser {
 
 using string_view_t = path::__string_view;
@@ -282,21 +293,21 @@ private:
   }
 
   PosPtr consumeSeparator(PosPtr P, PosPtr End) const noexcept {
-    if (P == End || *P != '/')
+    if (P == End || !isSeparator(*P))
       return nullptr;
     const int Inc = P < End ? 1 : -1;
     P += Inc;
-    while (P != End && *P == '/')
+    while (P != End && isSeparator(*P))
       P += Inc;
     return P;
   }
 
   PosPtr consumeName(PosPtr P, PosPtr End) const noexcept {
-    if (P == End || *P == '/')
+    if (P == End || isSeparator(*P))
       return nullptr;
     const int Inc = P < End ? 1 : -1;
     P += Inc;
-    while (P != End && *P != '/')
+    while (P != End && !isSeparator(*P))
       P += Inc;
     return P;
   }
@@ -1404,7 +1415,7 @@ string_view_t path::__root_path_raw() const {
   auto PP = PathParser::CreateBegin(__pn_);
   if (PP.State == PathParser::PS_InRootName) {
     auto NextCh = PP.peek();
-    if (NextCh && *NextCh == '/') {
+    if (NextCh && isSeparator(*NextCh)) {
       ++PP;
       return createView(__pn_.data(), std::prev(PP.RawEntry.end()));
     }
@@ -1502,6 +1513,10 @@ static PathPartKind ClassifyPathPart(string_view_t Part) {
     return PK_DotDot;
   if (Part == PS("/"))
     return PK_RootSep;
+#if defined(_LIBCPP_WIN32API)
+  if (Part == PS("\\"))
+    return PK_RootSep;
+#endif
   return PK_Filename;
 }
 
