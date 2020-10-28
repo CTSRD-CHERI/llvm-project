@@ -1371,6 +1371,10 @@ struct DeclaratorChunk {
     /// type specified.
     UnionParsedType TrailingReturnType;
 
+    /// If HasTrailingReturnType is true, this is the location of the trailing
+    /// return type.
+    unsigned TrailingReturnTypeLoc;
+
     /// Reset the parameter list to having zero parameters.
     ///
     /// This is used in various places for error recovery.
@@ -1507,6 +1511,11 @@ struct DeclaratorChunk {
 
     /// Get the trailing-return-type for this function declarator.
     ParsedType getTrailingReturnType() const { return TrailingReturnType; }
+
+    /// Get the trailing-return-type location for this function declarator.
+    SourceLocation getTrailingReturnTypeLoc() const {
+      return SourceLocation::getFromRawEncoding(TrailingReturnTypeLoc);
+    }
   };
 
   struct BlockPointerTypeInfo {
@@ -1641,6 +1650,8 @@ struct DeclaratorChunk {
                                      Declarator &TheDeclarator,
                                      TypeResult TrailingReturnType =
                                                     TypeResult(),
+                                     SourceLocation TrailingReturnTypeLoc =
+                                                    SourceLocation(),
                                      DeclSpec *MethodQualifiers = nullptr);
 
   /// Return a DeclaratorChunk for a block.
