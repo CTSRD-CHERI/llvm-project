@@ -1510,10 +1510,14 @@ struct DeclaratorChunk {
     bool hasTrailingReturnType() const { return HasTrailingReturnType; }
 
     /// Get the trailing-return-type for this function declarator.
-    ParsedType getTrailingReturnType() const { return TrailingReturnType; }
+    ParsedType getTrailingReturnType() const {
+      assert(HasTrailingReturnType);
+      return TrailingReturnType;
+    }
 
     /// Get the trailing-return-type location for this function declarator.
     SourceLocation getTrailingReturnTypeLoc() const {
+      assert(HasTrailingReturnType);
       return SourceLocation::getFromRawEncoding(TrailingReturnTypeLoc);
     }
   };
