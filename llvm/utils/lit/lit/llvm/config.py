@@ -445,13 +445,6 @@ class LLVMConfig(object):
 
         self.with_environment('LD_LIBRARY_PATH', paths, append_path=True)
 
-        # Discover the 'clang' and 'clangcc' to use.
-
-        self.config.clang = self.use_llvm_tool(
-            'clang', search_env='CLANG', required=required)
-        if not self.config.clang:
-            return
-
         shl = getattr(self.config, 'llvm_shlib_dir', None)
         pext = getattr(self.config, 'llvm_plugin_ext', None)
         if shl:
@@ -459,59 +452,62 @@ class LLVMConfig(object):
         if pext:
             self.config.substitutions.append(('%pluginext', pext))
 
-        builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
-        clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-        cheri128_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
-                '-target-cpu', 'cheri128', '-cheri-size', '128', '-mllvm', '-verify-machineinstrs']
-        riscv32_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
-                '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
-        riscv64_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
-                '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
+        # Discover the 'clang' and 'clangcc' to use.
+        self.config.clang = self.use_llvm_tool(
+            'clang', search_env='CLANG', required=required)
+        if self.config.clang:
+            builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
+            clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
+            cheri128_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
+                    '-target-cpu', 'cheri128', '-cheri-size', '128', '-mllvm', '-verify-machineinstrs']
+            riscv32_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
+                    '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
+            riscv64_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
+                    '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
 
-        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
-        assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
-        cheri_cc1_args = cheri128_cc1_args
-        default_cheri_cpu = 'cheri128'
-        cheri_clang_args = ['-target', 'mips64-unknown-freebsd', '-nostdinc',
-                            '-mcpu=' + default_cheri_cpu, '-msoft-float']
-        riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
-        riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
+            default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
+            assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
+            cheri_cc1_args = cheri128_cc1_args
+            default_cheri_cpu = 'cheri128'
+            cheri_clang_args = ['-target', 'mips64-unknown-freebsd', '-nostdinc',
+                                '-mcpu=' + default_cheri_cpu, '-msoft-float']
+            riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
+            riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
 
-        tool_substitutions = [
-            # CHERI substitutions (order is important due to repeated substitutions!)
-            ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']+additional_flags),
-            ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']+additional_flags),
-            ToolSubst('%cheri_cc1',    command=self.config.clang, extra_args=cheri_cc1_args+additional_flags),
-            ToolSubst('%cheri128_cc1', command=self.config.clang, extra_args=cheri128_cc1_args+additional_flags),
-            ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args+additional_flags),
-            ToolSubst('%cheri_purecap_clang', command=self.config.clang,
-                      extra_args=cheri_clang_args + ['-mabi=purecap']+additional_flags),
-            ToolSubst('%riscv32_cheri_purecap_cc1', command='%riscv32_cheri_cc1', extra_args=['-target-abi', 'il32pc64', '-target-feature', '+cap-mode']+additional_flags),
-            ToolSubst('%riscv64_cheri_purecap_cc1', command='%riscv64_cheri_cc1', extra_args=['-target-abi', 'l64pc128', '-target-feature', '+cap-mode']+additional_flags),
-            ToolSubst('%riscv32_cheri_purecap_clang', command='%riscv32_cheri_clang', extra_args=['-mabi=il32pc64']+additional_flags),
-            ToolSubst('%riscv64_cheri_purecap_clang', command='%riscv64_cheri_clang', extra_args=['-mabi=l64pc128']+additional_flags),
-            ToolSubst('%riscv32_cheri_cc1', command=self.config.clang, extra_args=riscv32_cheri_cc1_args+additional_flags),
-            ToolSubst('%riscv64_cheri_cc1', command=self.config.clang, extra_args=riscv64_cheri_cc1_args+additional_flags),
-            ToolSubst('%riscv32_cheri_clang', command=self.config.clang, extra_args=riscv32_cheri_clang_args+additional_flags),
-            ToolSubst('%riscv64_cheri_clang', command=self.config.clang, extra_args=riscv64_cheri_clang_args+additional_flags),
-            # For the tests in Driver that don't depend on the capability size
-            ToolSubst('%plain_clang_cheri_triple_allowed', command=self.config.clang, extra_args=additional_flags),
+            tool_substitutions = [
+                # CHERI substitutions (order is important due to repeated substitutions!)
+                ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']+additional_flags),
+                ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']+additional_flags),
+                ToolSubst('%cheri_cc1',    command=self.config.clang, extra_args=cheri_cc1_args+additional_flags),
+                ToolSubst('%cheri128_cc1', command=self.config.clang, extra_args=cheri128_cc1_args+additional_flags),
+                ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args+additional_flags),
+                ToolSubst('%cheri_purecap_clang', command=self.config.clang,
+                          extra_args=cheri_clang_args + ['-mabi=purecap']+additional_flags),
+                ToolSubst('%riscv32_cheri_purecap_cc1', command='%riscv32_cheri_cc1', extra_args=['-target-abi', 'il32pc64', '-target-feature', '+cap-mode']+additional_flags),
+                ToolSubst('%riscv64_cheri_purecap_cc1', command='%riscv64_cheri_cc1', extra_args=['-target-abi', 'l64pc128', '-target-feature', '+cap-mode']+additional_flags),
+                ToolSubst('%riscv32_cheri_purecap_clang', command='%riscv32_cheri_clang', extra_args=['-mabi=il32pc64']+additional_flags),
+                ToolSubst('%riscv64_cheri_purecap_clang', command='%riscv64_cheri_clang', extra_args=['-mabi=l64pc128']+additional_flags),
+                ToolSubst('%riscv32_cheri_cc1', command=self.config.clang, extra_args=riscv32_cheri_cc1_args+additional_flags),
+                ToolSubst('%riscv64_cheri_cc1', command=self.config.clang, extra_args=riscv64_cheri_cc1_args+additional_flags),
+                ToolSubst('%riscv32_cheri_clang', command=self.config.clang, extra_args=riscv32_cheri_clang_args+additional_flags),
+                ToolSubst('%riscv64_cheri_clang', command=self.config.clang, extra_args=riscv64_cheri_clang_args+additional_flags),
+                # For the tests in Driver that don't depend on the capability size
+                ToolSubst('%plain_clang_cheri_triple_allowed', command=self.config.clang, extra_args=additional_flags),
 
-            ToolSubst('%clang', command=self.config.clang, extra_args=additional_flags),
-            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze', '-setup-static-analyzer']+additional_flags),
-            ToolSubst('%clang_cc1', command=self.config.clang, extra_args=clang_cc1_args+additional_flags),
-            ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']+additional_flags),
-            ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']+additional_flags),
-            ToolSubst('%clangxx', command=self.config.clang, extra_args=['--driver-mode=g++']+additional_flags),
-            ]
-        self.add_tool_substitutions(tool_substitutions)
-
+                ToolSubst('%clang', command=self.config.clang, extra_args=additional_flags),
+                ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze', '-setup-static-analyzer']+additional_flags),
+                ToolSubst('%clang_cc1', command=self.config.clang, extra_args=clang_cc1_args+additional_flags),
+                ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']+additional_flags),
+                ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']+additional_flags),
+                ToolSubst('%clangxx', command=self.config.clang, extra_args=['--driver-mode=g++']+additional_flags),
+                ]
+            self.add_tool_substitutions(tool_substitutions)
+            self.config.substitutions.append(
+                ('%resource_dir', builtin_include_dir))
         self.config.substitutions.append(('%itanium_abi_triple',
                                           self.make_itanium_abi_triple(self.config.target_triple)))
         self.config.substitutions.append(('%ms_abi_triple',
                                           self.make_msabi_triple(self.config.target_triple)))
-        self.config.substitutions.append(
-            ('%resource_dir', builtin_include_dir))
 
         # The host triple might not be set, at least if we're compiling clang from
         # an already installed llvm.
