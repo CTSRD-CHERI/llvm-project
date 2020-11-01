@@ -3269,21 +3269,44 @@ void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
                                            PragmaIntroducer Introducer,
                                            Token &Tok) {
   PP.Lex(Tok);
+  if (Tok.is(tok::eod)) {
+    PP.Diag(Tok.getLocation(), diag::err_pragma_missing_argument)
+        << "pointer_interpretation" << /*Expected=*/true
+        << "'push', 'pop', 'default', 'integer' or 'capability'";
+    return;
+  }
+  if (Tok.isNot(tok::identifier) && Tok.isNot(tok::kw_default)) {
+    PP.Diag(Tok.getLocation(),
+            diag::err_pragma_pointer_interpretation_invalid_argument)
+        << PP.getSpelling(Tok);
+    return;
+  }
+
   IdentifierInfo *Interpretation = Tok.getIdentifierInfo();
   if (Interpretation->getName() == "push")
     Actions.ActOnPragmaPointerInterpretationPush();
   else if (Interpretation->getName() == "pop")
     Actions.ActOnPragmaPointerInterpretationPop();
   else {
-    ASTContext::PointerInterpretationKind Mode =
+    ASTContext::PointerInterpretationKind PIK =
       llvm::StringSwitch<ASTContext::PointerInterpretationKind>(Interpretation->getName())
         .Case("capability", ASTContext::PointerInterpretationKind::PIK_Capability)
         .Case("integer", ASTContext::PointerInterpretationKind::PIK_Integer)
         .Case("default", ASTContext::PointerInterpretationKind::PIK_Default)
-        .Default(ASTContext::PointerInterpretationKind::PIK_Invalid);
-    // FIXME: Error handling!
-    Actions.ActOnPragmaPointerInterpretation(Mode);
+        .Default((ASTContext::PointerInterpretationKind)-1);
+    if (PIK == (ASTContext::PointerInterpretationKind)-1) {
+      PP.Diag(Tok.getLocation(),
+              diag::err_pragma_pointer_interpretation_invalid_argument)
+          << PP.getSpelling(Tok);
+      return;
+    }
+    Actions.ActOnPragmaPointerInterpretation(PIK);
   }
+
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::eod))
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_extra_tokens_at_eol)
+        << "pointer_interpretation";
 }
 
 /// Handle the Microsoft \#pragma intrinsic extension.
