@@ -1033,6 +1033,11 @@ def warn_pragma_invalid_argument : Warning<
 
 def err_pragma_misplaced_in_decl : Error<"this pragma cannot appear in %0 declaration">;
 
+// CHERI C support.
+def err_pragma_pointer_interpretation_invalid_argument : Error<
+  "unexpected argument '%0' to '#pragma pointer_interpretation'; "
+  "expected 'push', 'pop', 'default', 'integer' or 'capability'">;
+
 // '#pragma clang section' related errors
 def err_pragma_expected_clang_section_name : Error<
   "expected one of [bss|data|rodata|text|relro] section kind in '#pragma %0'">;
