@@ -1783,18 +1783,25 @@ bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
     assert(getSubExpr()->getType()->isFunctionType());
     goto CheckNoBasePath;
 
-  case CK_CHERICapabilityToPointer:
+  case CK_CHERICapabilityToPointer: {
     assert(getType()->isPointerType());
     assert(!getType()->getAs<PointerType>()->isCHERICapability());
-    assert(getSubExpr()->getType()->isCapabilityPointerType() ||
-           getSubExpr()->getType()->isIntCapType());
+    QualType SubType = getSubExpr()->getType();
+    if (!SubType->isDependentType()) {
+      assert(SubType->isCapabilityPointerType() || SubType->isIntCapType());
+    }
     goto CheckNoBasePath;
+  }
 
-  case CK_PointerToCHERICapability:
+  case CK_PointerToCHERICapability: {
     assert(getType()->isCapabilityPointerType() || getType()->isIntCapType());
-    assert(getSubExpr()->getType()->isPointerType());
-    assert(!getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
+    QualType SubType = getSubExpr()->getType();
+    if (!SubType->isDependentType()) {
+      assert(SubType->isPointerType());
+      assert(!SubType->getAs<PointerType>()->isCHERICapability());
+    }
     goto CheckNoBasePath;
+  }
 
   case CK_AddressSpaceConversion: {
     auto Ty = getType();

@@ -669,6 +669,10 @@ bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
   if (From->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull)) {
     return true; // NULL constants are always fine
   }
+  // Don't perform any checking for dependent types
+  if (FromTy->isDependentType()) {
+    return true;
+  }
   bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
   bool AddrOf = false;
   bool Decayed = false;
