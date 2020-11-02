@@ -145,9 +145,7 @@ void OcamlGCMetadataPrinter::finishAssembly(Module &M, GCModuleInfo &Info,
       report_fatal_error("Function '" + FI.getFunction().getName() +
                          "' is too large for the ocaml GC! "
                          "Frame size " +
-                         Twine(FrameSize) + ">= 65536.\n"
-                                            "(" +
-                         Twine(uintptr_t(&FI)) + ")");
+                         Twine(FrameSize) + ">= 65536.");
     }
 
     AP.OutStreamer->AddComment("live roots for " +
