@@ -87,7 +87,7 @@ public:
 
 template <class T>
 using SmallVectorSizeType =
-    typename std::conditional<sizeof(T) < 4 && sizeof(void *) >= 8, uint64_t,
+    typename std::conditional<sizeof(T) < 4 && sizeof(size_t) >= 8, uint64_t,
                               uint32_t>::type;
 
 /// Figure out the offset of the first element.
