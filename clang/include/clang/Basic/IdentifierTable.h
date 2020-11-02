@@ -46,7 +46,7 @@ using IdentifierLocPair = std::pair<IdentifierInfo *, SourceLocation>;
 /// IdentifierInfo and other related classes are aligned to
 /// 8 bytes so that DeclarationName can use the lower 3 bits
 /// of a pointer to one of these classes.
-enum { IdentifierInfoAlignment = 8 };
+enum { IdentifierInfoAlignment = llvm::alignTo<alignof(void *)>(8) };
 
 static constexpr int ObjCOrBuiltinIDBits = 15;
 
