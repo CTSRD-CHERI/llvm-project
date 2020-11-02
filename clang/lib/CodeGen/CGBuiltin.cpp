@@ -4067,11 +4067,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         {EmitScalarExpr(E->getArg(0))}));
 
   case Builtin::BI__builtin_cheri_callback_create: {
-    StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
+    std::string ClassName =
+        cast<StringLiteral>(E->getArg(0))->getString().str();
     auto Fn = cast<DeclRefExpr>(E->getArg(2));
-    StringRef FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
-    auto *MethodNumVar =
-      CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
+    std::string FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
+    auto *MethodNumVar = CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
     // Load the global and use it in the call
     // FIXME: EmitSandboxRequiredMethod should return an Address so that we
     // don't have to know the alignment here.
