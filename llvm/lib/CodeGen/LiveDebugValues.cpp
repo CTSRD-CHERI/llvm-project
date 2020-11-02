@@ -318,32 +318,42 @@ private:
     union {
       uint64_t RegNo;
       SpillLoc SpillLocation;
-      uint64_t Hash;
       int64_t Immediate;
+      uint64_t IntHash;
       const ConstantFP *FPImm;
       const ConstantInt *CImm;
+      uintptr_t PointerHash;
     } Loc;
+
+    bool LocHasPointer;
 
     VarLoc(const MachineInstr &MI, LexicalScopes &LS)
         : Var(MI.getDebugVariable(), MI.getDebugExpression(),
               MI.getDebugLoc()->getInlinedAt()),
           Expr(MI.getDebugExpression()), MI(MI) {
-      static_assert((sizeof(Loc) == sizeof(uint64_t)),
+      static_assert((sizeof(SpillLoc) == sizeof(uint64_t)),
+                    "hash does not cover all members of SpillLoc");
+      static_assert((sizeof(Loc) ==
+                         std::max(sizeof(uint64_t), sizeof(uintptr_t))),
                     "hash does not cover all members of Loc");
       assert(MI.isDebugValue() && "not a DBG_VALUE");
       assert(MI.getNumOperands() == 4 && "malformed DBG_VALUE");
       if (int RegNo = isDbgValueDescribedByReg(MI)) {
         Kind = RegisterKind;
         Loc.RegNo = RegNo;
+        LocHasPointer = false;
       } else if (MI.getDebugOperand(0).isImm()) {
         Kind = ImmediateKind;
         Loc.Immediate = MI.getDebugOperand(0).getImm();
+        LocHasPointer = false;
       } else if (MI.getDebugOperand(0).isFPImm()) {
         Kind = ImmediateKind;
         Loc.FPImm = MI.getDebugOperand(0).getFPImm();
+        LocHasPointer = true;
       } else if (MI.getDebugOperand(0).isCImm()) {
         Kind = ImmediateKind;
         Loc.CImm = MI.getDebugOperand(0).getCImm();
+        LocHasPointer = true;
       }
 
       // We create the debug entry values from the factory functions rather than
@@ -360,6 +370,7 @@ private:
       VL.Kind = EntryValueKind;
       VL.Expr = EntryExpr;
       VL.Loc.RegNo = Reg;
+      VL.LocHasPointer = false;
       return VL;
     }
 
@@ -389,6 +400,7 @@ private:
       VL.Kind = EntryValueCopyBackupKind;
       VL.Expr = EntryExpr;
       VL.Loc.RegNo = NewReg;
+      VL.LocHasPointer = false;
       return VL;
     }
 
@@ -399,6 +411,7 @@ private:
       VarLoc VL(MI, LS);
       assert(VL.Kind == RegisterKind);
       VL.Loc.RegNo = NewReg;
+      VL.LocHasPointer = false;
       return VL;
     }
 
@@ -410,6 +423,7 @@ private:
       assert(VL.Kind == RegisterKind);
       VL.Kind = SpillLocKind;
       VL.Loc.SpillLocation = {SpillBase, SpillOffset};
+      VL.LocHasPointer = false;
       return VL;
     }
 
@@ -533,15 +547,21 @@ private:
     }
 #endif
 
+    uint64_t getHash() const {
+      return LocHasPointer ? (uint64_t)Loc.PointerHash : Loc.IntHash;
+    }
+
     bool operator==(const VarLoc &Other) const {
       return Kind == Other.Kind && Var == Other.Var &&
-             Loc.Hash == Other.Loc.Hash && Expr == Other.Expr;
+             getHash() == Other.getHash() && Expr == Other.Expr;
     }
 
     /// This operator guarantees that VarLocs are sorted by Variable first.
     bool operator<(const VarLoc &Other) const {
-      return std::tie(Var, Kind, Loc.Hash, Expr) <
-             std::tie(Other.Var, Other.Kind, Other.Loc.Hash, Other.Expr);
+      uint64_t Hash = getHash();
+      uint64_t OtherHash = Other.getHash();
+      return std::tie(Var, Kind, Hash, Expr) <
+             std::tie(Other.Var, Other.Kind, OtherHash, Other.Expr);
     }
   };
 
