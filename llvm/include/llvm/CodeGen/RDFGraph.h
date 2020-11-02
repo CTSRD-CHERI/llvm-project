@@ -372,7 +372,7 @@ namespace rdf {
   // (std::unordered_map or DenseMap) to translate between pointers and ids.
   struct NodeAllocator {
     // Amount of storage for a single node.
-    enum { NodeMemSize = 32 };
+    enum { NodeMemSize = sizeof(void *) <= 8 ? 32 : 48 };
 
     NodeAllocator(uint32_t NPB = 4096)
         : NodesPerBlock(NPB), BitsPerIndex(Log2_32(NPB)),
@@ -503,8 +503,8 @@ namespace rdf {
       Code_struct Code;
     };
   };
-  // The allocator allocates chunks of 32 bytes for each node. The fact that
-  // each node takes 32 bytes in memory is used for fast translation between
+  // The allocator allocates chunks of 3/482 bytes for each node. The fact that
+  // each node takes 32/48 bytes in memory is used for fast translation between
   // the node id and the node address.
   static_assert(sizeof(NodeBase) <= NodeAllocator::NodeMemSize,
         "NodeBase must be at most NodeAllocator::NodeMemSize bytes");
