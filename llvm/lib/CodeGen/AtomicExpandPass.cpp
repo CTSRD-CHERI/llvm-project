@@ -1708,6 +1708,11 @@ bool AtomicExpand::expandAtomicOpToLibcall(
     return false;
   }
 
+  if (!TLI->getLibcallName(RTLibType)) {
+    // This target does not implement the requested atomic libcall so give up.
+    return false;
+  }
+
   // Build up the function call. There's two kinds. First, the sized
   // variants.  These calls are going to be one of the following (with
   // N=1,2,4,8,16):
