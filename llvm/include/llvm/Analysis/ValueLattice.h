@@ -477,8 +477,13 @@ public:
   void setNumRangeExtensions(unsigned N) { NumRangeExtensions = N; }
 };
 
-static_assert(sizeof(ValueLatticeElement) <= 40,
+namespace {
+constexpr size_t MaxAlign = std::max(alignof(uint64_t), alignof(void *));
+static_assert(sizeof(ValueLatticeElement) <=
+                  alignTo<MaxAlign>(2) +
+                  2 * alignTo<MaxAlign>(sizeof(void *) + sizeof(unsigned)),
               "size of ValueLatticeElement changed unexpectedly");
+}
 
 raw_ostream &operator<<(raw_ostream &OS, const ValueLatticeElement &Val);
 } // end namespace llvm
