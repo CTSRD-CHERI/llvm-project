@@ -6,11 +6,16 @@ optimizers, and run-time environments, extended to support
 [CHERI](http://cheri-cpu.org).
 
 The README briefly describes how to get started with building LLVM.
-For more information on how to contribute to the LLVM project, please
-take a look at the
-[Contributing to LLVM](https://llvm.org/docs/Contributing.html) guide.
+Please file issues and submit pull requests against the
+[GitHub project](https://github.com/CTSRD-CHERI/llvm-project).
 
-## Getting Started with the LLVM System
+## Getting Started with the LLVM System (Recommended)
+
+The recommended way to get started with LLVM is by using
+[cheribuild](https://github.com/CTSRD-CHERI/cheribuild), which will
+build a working toolchain with a single ``cheribuild.py llvm``.
+
+## Getting Started with the LLVM System (Manual)
 
 Taken from https://llvm.org/docs/GettingStarted.html.
 
