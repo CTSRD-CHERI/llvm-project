@@ -945,7 +945,7 @@ template <> struct DenseMapInfo<BitVector> {
     return V;
   }
   static unsigned getHashValue(const BitVector &V) {
-    return DenseMapInfo<std::pair<unsigned, ArrayRef<uintptr_t>>>::getHashValue(
+    return DenseMapInfo<std::pair<unsigned, ArrayRef<size_t>>>::getHashValue(
         std::make_pair(V.size(), V.getData()));
   }
   static bool isEqual(const BitVector &LHS, const BitVector &RHS) {
