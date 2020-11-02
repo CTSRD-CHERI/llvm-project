@@ -18,6 +18,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/LowLevelTypeImpl.h"
+#include <algorithm>
 #include <cassert>
 
 namespace llvm {
@@ -200,13 +201,14 @@ private:
   explicit MachineOperand(MachineOperandType K)
     : OpKind(K), SubReg_TargetFlags(0), ParentMI(nullptr) {
     // Assert that the layout is what we expect. It's easy to grow this object.
-    static_assert(alignof(MachineOperand) <= alignof(int64_t),
-                  "MachineOperand shouldn't be more than 8 byte aligned");
+    constexpr size_t ContentsAlign = std::max(alignof(int64_t), alignof(void *));
+    static_assert(alignof(MachineOperand) <= ContentsAlign,
+                  "MachineOperand should be at most 8 byte and pointer aligned");
     static_assert(sizeof(Contents) <= 2 * sizeof(void *),
                   "Contents should be at most two pointers");
     static_assert(sizeof(MachineOperand) <=
-                      alignTo<alignof(int64_t)>(2 * sizeof(unsigned) +
-                                                3 * sizeof(void *)),
+                      alignTo<ContentsAlign>(2 * sizeof(unsigned)) +
+                      alignTo<alignof(int64_t)>(3 * sizeof(void *)),
                   "MachineOperand too big. Should be Kind, SmallContents, "
                   "ParentMI, and Contents");
   }
