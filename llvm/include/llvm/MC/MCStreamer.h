@@ -217,6 +217,10 @@ class MCStreamer {
   /// PushSection.
   SmallVector<std::pair<MCSectionSubPair, MCSectionSubPair>, 4> SectionStack;
 
+  /// Pointer to the parser's SMLoc if available. This is used to provide
+  /// locations for diagnostics.
+  const SMLoc *StartTokLocPtr = nullptr;
+
   /// Array of locations that contain fat pointers and the expressions used to
   /// initialise them.
   SmallVector<std::tuple<MCSymbol*, const MCExpr*, StringRef>, 32> FatRelocs;
@@ -263,6 +267,11 @@ public:
 
   void setTargetStreamer(MCTargetStreamer *TS) {
     TargetStreamer.reset(TS);
+  }
+
+  void setStartTokLocPtr(const SMLoc *Loc) { StartTokLocPtr = Loc; }
+  SMLoc getStartTokLoc() const {
+    return StartTokLocPtr ? *StartTokLocPtr : SMLoc();
   }
 
   /// State management
@@ -514,8 +523,8 @@ public:
   virtual void emitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol);
 
   /// Add the given \p Attribute to \p Symbol.
-  virtual bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute,
-                                   SMLoc Loc = SMLoc()) = 0;
+  virtual bool emitSymbolAttribute(MCSymbol *Symbol,
+                                   MCSymbolAttr Attribute) = 0;
 
   /// Set the \p DescValue for the \p Symbol.
   ///
