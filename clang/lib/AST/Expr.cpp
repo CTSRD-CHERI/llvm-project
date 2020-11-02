@@ -5137,8 +5137,7 @@ QualType Expr::getRealReferenceType(ASTContext &Ctx,
     bool HasCap = Ctx.getTargetInfo().areAllPointersCapabilities() ||
                   E->hasUnderlyingCapability();
     return Ctx.getLValueReferenceType(E->getType(), true,
-                                      HasCap ? ASTContext::PIK_Capability
-                                             : ASTContext::PIK_Integer);
+                                      HasCap ? PIK_Capability : PIK_Integer);
   }
   return E->getType();
 }

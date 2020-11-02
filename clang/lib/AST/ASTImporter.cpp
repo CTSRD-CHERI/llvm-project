@@ -1097,7 +1097,7 @@ ExpectedType ASTNodeImporter::VisitPointerType(const PointerType *T) {
   if (!ToPointeeTypeOrErr)
     return ToPointeeTypeOrErr.takeError();
 
-  return Importer.getToContext().getPointerType(*ToPointeeTypeOrErr, T->isCHERICapability() ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
+  return Importer.getToContext().getPointerType(*ToPointeeTypeOrErr, T->isCHERICapability() ? PIK_Capability : PIK_Integer);
 }
 
 ExpectedType ASTNodeImporter::VisitBlockPointerType(const BlockPointerType *T) {
@@ -1116,7 +1116,7 @@ ASTNodeImporter::VisitLValueReferenceType(const LValueReferenceType *T) {
   if (!ToPointeeTypeOrErr)
     return ToPointeeTypeOrErr.takeError();
 
-  return Importer.getToContext().getLValueReferenceType(*ToPointeeTypeOrErr, T->isSpelledAsLValue(), T->isCHERICapability() ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
+  return Importer.getToContext().getLValueReferenceType(*ToPointeeTypeOrErr, T->isSpelledAsLValue(), T->isCHERICapability() ? PIK_Capability : PIK_Integer);
 }
 
 ExpectedType
@@ -1126,7 +1126,7 @@ ASTNodeImporter::VisitRValueReferenceType(const RValueReferenceType *T) {
   if (!ToPointeeTypeOrErr)
     return ToPointeeTypeOrErr.takeError();
 
-  return Importer.getToContext().getRValueReferenceType(*ToPointeeTypeOrErr, T->isCHERICapability() ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
+  return Importer.getToContext().getRValueReferenceType(*ToPointeeTypeOrErr, T->isCHERICapability() ? PIK_Capability : PIK_Integer);
 }
 
 ExpectedType

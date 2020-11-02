@@ -978,8 +978,8 @@ public:
       return QualType(T, 0);
 
     return Ctx.getPointerType(pointeeType, T->isCHERICapability()
-                                               ? ASTContext::PIK_Capability
-                                               : ASTContext::PIK_Integer);
+                                               ? PIK_Capability
+                                               : PIK_Integer);
   }
 
   QualType VisitBlockPointerType(const BlockPointerType *T) {
@@ -1004,8 +1004,8 @@ public:
 
     return Ctx.getLValueReferenceType(pointeeType, T->isSpelledAsLValue(),
                                       T->isCHERICapability()
-                                          ? ASTContext::PIK_Capability
-                                          : ASTContext::PIK_Integer);
+                                          ? PIK_Capability
+                                          : PIK_Integer);
   }
 
   QualType VisitRValueReferenceType(const RValueReferenceType *T) {
@@ -1018,8 +1018,8 @@ public:
       return QualType(T, 0);
 
     return Ctx.getRValueReferenceType(
-        pointeeType, T->isCHERICapability() ? ASTContext::PIK_Capability
-                                            : ASTContext::PIK_Integer);
+        pointeeType, T->isCHERICapability() ? PIK_Capability
+                                            : PIK_Integer);
   }
 
   QualType VisitMemberPointerType(const MemberPointerType *T) {

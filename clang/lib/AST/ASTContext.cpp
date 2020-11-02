@@ -4391,7 +4391,7 @@ ASTContext::getTypedefType(const TypedefNameDecl *Decl,
       // Create a copy of the typedef whose name is prefixed by "__chericap_"
       // and whose underlying type is the cheri_capability qualified version of
       // the pointer type
-      Canonical = getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
+      Canonical = getPointerType(PT->getPointeeType(), PIK_Capability);
       TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getBeginLoc());
       DeclContext *DC = const_cast<DeclContext *>(Decl->getDeclContext());
       std::string typedefName = "__chericap_" + Decl->getNameAsString();
@@ -7806,7 +7806,7 @@ RecordDecl *ASTContext::getCHERIClassDecl() const {
     RD = buildImplicitRecord("cheri_object");
     RD->startDefinition();
 
-    QualType CapTy = getPointerType(VoidTy, ASTContext::PIK_Capability);
+    QualType CapTy = getPointerType(VoidTy, PIK_Capability);
 
     QualType FieldTypes[] = { CapTy, CapTy };
     static const char *const FieldNames[] = { "co_codecap", "co_datacap" };
@@ -10341,9 +10341,9 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
         Str = End;
       }
       if (c == '*') {
-        ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
+        PointerInterpretationKind PIK = PIK_Default;
         if (*Str == 'm') {
-          PIK = ASTContext::PIK_Capability;
+          PIK = PIK_Capability;
           Str++;
         }
         Type = Context.getPointerType(Type, PIK);
