@@ -331,14 +331,14 @@ void TypePrinter::printBefore(const Type *T,Qualifiers Quals, raw_ostream &OS) {
   // Print __capability
   if (!Policy.SuppressCapabilityQualifier) {
     if (const PointerType *PTy = dyn_cast<PointerType>(T)) {
-      if (PTy->isCHERICapability()) {
+      if (PTy->getPointerInterpretation() == PIK_Capability) {
         OS << " __capability";
         if (hasAfterQuals || !PrevPHIsEmpty.get())
           OS << " ";
       }
     }
     else if (const ReferenceType *RTy = dyn_cast<ReferenceType>(T)) {
-      if (RTy->isCHERICapability()) {
+      if (RTy->getPointerInterpretation() == PIK_Capability) {
         OS << " __capability";
         if (hasAfterQuals || !PrevPHIsEmpty.get())
           OS << " ";

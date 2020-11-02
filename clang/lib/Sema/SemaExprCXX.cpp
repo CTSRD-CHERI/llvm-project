@@ -6480,16 +6480,18 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
     /// The class for a pointer-to-member; a constant array type with a bound
     /// (if any) for an array.
     const Type *ClassOrBound;
-    PointerInterpretationKind PIK;
+    llvm::Optional<PointerInterpretationKind> PIK;
 
     Step(Kind K, const Type *ClassOrBound = nullptr,
-         PointerInterpretationKind PIK = PIK_Default)
+         llvm::Optional<PointerInterpretationKind> PIK = llvm::None)
         : K(K), Quals(), ClassOrBound(ClassOrBound), PIK(PIK) {}
     QualType rebuild(ASTContext &Ctx, QualType T) const {
       T = Ctx.getQualifiedType(T, Quals);
+      PointerInterpretationKind DefaultPIK =
+          Ctx.getDefaultPointerInterpretation();
       switch (K) {
       case Pointer:
-        return Ctx.getPointerType(T, PIK);
+        return Ctx.getPointerType(T, PIK.getValueOr(DefaultPIK));
       case MemberPointer:
         return Ctx.getMemberPointerType(T, ClassOrBound);
       case ObjCPointer:
@@ -6576,11 +6578,10 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
         (Ptr2 = Composite2->getAs<PointerType>())) {
       Composite1 = Ptr1->getPointeeType();
       Composite2 = Ptr2->getPointeeType();
-      if (Ptr1->isCHERICapability() != Ptr2->isCHERICapability())
+      if (Ptr1->getPointerInterpretation() != Ptr2->getPointerInterpretation())
         return QualType();
       Steps.emplace_back(Step::Pointer, nullptr,
-                         Ptr1->isCHERICapability() ? PIK_Capability
-                                                   : PIK_Integer);
+                         Ptr1->getPointerInterpretation());
       continue;
     }
 

@@ -3292,7 +3292,7 @@ void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
       llvm::StringSwitch<PointerInterpretationKind>(Interpretation->getName())
         .Case("capability", PointerInterpretationKind::PIK_Capability)
         .Case("integer", PointerInterpretationKind::PIK_Integer)
-        .Case("default", PointerInterpretationKind::PIK_Default)
+        .Case("default", Actions.Context.getDefaultPointerInterpretation())
         .Default((PointerInterpretationKind)-1);
     if (PIK == (PointerInterpretationKind)-1) {
       PP.Diag(Tok.getLocation(),

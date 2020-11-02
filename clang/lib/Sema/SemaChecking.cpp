@@ -173,7 +173,7 @@ static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
   auto BaseFnTy = cast<FunctionProtoType>(FnAttrType->getModifiedType());
   auto ReturnFnTy = C.adjustFunctionType(BaseFnTy,
       BaseFnTy->getExtInfo().withCallingConv(CC_CHERICCallback));
-  auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0), PIK_Default);
+  auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0));
 
   TheCall->setType(ReturnTy);
   return false;

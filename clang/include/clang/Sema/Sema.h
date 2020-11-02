@@ -9607,7 +9607,7 @@ public:
   void ActOnPragmaOptionsAlign(PragmaOptionsAlignKind Kind,
                                SourceLocation PragmaLoc);
 
-  PointerInterpretationKind PointerInterpretation = PIK_Default;
+  PointerInterpretationKind PointerInterpretation;
   llvm::SmallVector<PointerInterpretationKind, 4> PointerInterpretationStack;
 
   /// ActOnPragmaPack - Called on well formed \#pragma pack(...).

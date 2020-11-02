@@ -180,23 +180,20 @@ break; \
   // If we have a pointer-like type, desugar the pointee as well.
   // FIXME: Handle other pointer-like types.
   if (const PointerType *Ty = QT->getAs<PointerType>()) {
-    PointerInterpretationKind PIK =
-        Ty->isCHERICapability() ? PIK_Capability : PIK_Integer;
     QT = Context.getPointerType(Desugar(Context, Ty->getPointeeType(),
-                                        ShouldAKA), PIK);
+                                        ShouldAKA),
+                                Ty->getPointerInterpretation());
   } else if (const auto *Ty = QT->getAs<ObjCObjectPointerType>()) {
     QT = Context.getObjCObjectPointerType(Desugar(Context, Ty->getPointeeType(),
                                                   ShouldAKA));
   } else if (const LValueReferenceType *Ty = QT->getAs<LValueReferenceType>()) {
-    PointerInterpretationKind PIK =
-        Ty->isCHERICapability() ? PIK_Capability : PIK_Integer;
     QT = Context.getLValueReferenceType(Desugar(Context, Ty->getPointeeType(),
-                                                ShouldAKA), true, PIK);
+                                                ShouldAKA), true,
+                                        Ty->getPointerInterpretation());
   } else if (const RValueReferenceType *Ty = QT->getAs<RValueReferenceType>()) {
-    PointerInterpretationKind PIK =
-        Ty->isCHERICapability() ? PIK_Capability : PIK_Integer;
     QT = Context.getRValueReferenceType(Desugar(Context, Ty->getPointeeType(),
-                                                ShouldAKA), PIK);
+                                                ShouldAKA),
+                                        Ty->getPointerInterpretation());
   } else if (const auto *Ty = QT->getAs<ObjCObjectType>()) {
     if (Ty->getBaseType().getTypePtr() != Ty && !ShouldAKA) {
       QualType BaseType = Desugar(Context, Ty->getBaseType(), ShouldAKA);
