@@ -469,19 +469,24 @@ StringRef MDString::getString() const {
 // MDNode implementation.
 //
 
+union MDNodeMaxAlign {
+  uint64_t Integer;
+  uintptr_t Pointer;
+};
+
 // Assert that the MDNode types will not be unaligned by the objects
 // prepended to them.
 #define HANDLE_MDNODE_LEAF(CLASS)                                              \
   static_assert(                                                               \
-      alignof(uint64_t) >= alignof(CLASS),                                     \
+      alignof(MDNodeMaxAlign) >= alignof(CLASS),                               \
       "Alignment is insufficient after objects prepended to " #CLASS);
 #include "llvm/IR/Metadata.def"
 
 void *MDNode::operator new(size_t Size, unsigned NumOps) {
   size_t OpSize = NumOps * sizeof(MDOperand);
-  // uint64_t is the most aligned type we need support (ensured by static_assert
-  // above)
-  OpSize = alignTo(OpSize, alignof(uint64_t));
+  // MDNodeMaxAlign is the most aligned type we need support (ensured by
+  // static_assert above)
+  OpSize = alignTo(OpSize, alignof(MDNodeMaxAlign));
   void *Ptr = reinterpret_cast<char *>(::operator new(OpSize + Size)) + OpSize;
   MDOperand *O = static_cast<MDOperand *>(Ptr);
   for (MDOperand *E = O - NumOps; O != E; --O)
@@ -494,7 +499,7 @@ void *MDNode::operator new(size_t Size, unsigned NumOps) {
 LLVM_NO_SANITIZE_MEMORY_ATTRIBUTE void MDNode::operator delete(void *Mem) {
   MDNode *N = static_cast<MDNode *>(Mem);
   size_t OpSize = N->NumOperands * sizeof(MDOperand);
-  OpSize = alignTo(OpSize, alignof(uint64_t));
+  OpSize = alignTo(OpSize, alignof(MDNodeMaxAlign));
 
   MDOperand *O = static_cast<MDOperand *>(Mem);
   for (MDOperand *E = O - N->NumOperands; O != E; --O)
