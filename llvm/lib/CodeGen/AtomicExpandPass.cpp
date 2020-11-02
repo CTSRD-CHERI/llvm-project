@@ -1533,8 +1533,8 @@ void AtomicExpand::expandAtomicLoadToLibcall(LoadInst *I) {
   bool expanded = expandAtomicOpToLibcall(
       I, Size, I->getAlign(), I->getPointerOperand(), nullptr, nullptr,
       I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
-  (void)expanded;
-  assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor Load");
+  if (!expanded)
+    report_fatal_error("expandAtomicOpToLibcall shouldn't fail for Load");
 }
 
 void AtomicExpand::expandAtomicStoreToLibcall(StoreInst *I) {
@@ -1547,8 +1547,8 @@ void AtomicExpand::expandAtomicStoreToLibcall(StoreInst *I) {
   bool expanded = expandAtomicOpToLibcall(
       I, Size, I->getAlign(), I->getPointerOperand(), I->getValueOperand(), nullptr,
       I->getOrdering(), AtomicOrdering::NotAtomic, Libcalls, IsCap);
-  (void)expanded;
-  assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor Store");
+  if (!expanded)
+    report_fatal_error("expandAtomicOpToLibcall shouldn't fail for Store");
 }
 
 void AtomicExpand::expandAtomicCASToLibcall(AtomicCmpXchgInst *I) {
@@ -1563,8 +1563,8 @@ void AtomicExpand::expandAtomicCASToLibcall(AtomicCmpXchgInst *I) {
       I, Size, I->getAlign(), I->getPointerOperand(), I->getNewValOperand(),
       I->getCompareOperand(), I->getSuccessOrdering(), I->getFailureOrdering(),
       Libcalls, IsCap);
-  (void)expanded;
-  assert(expanded && "expandAtomicOpToLibcall shouldn't fail tor CAS");
+  if (!expanded)
+    report_fatal_error("expandAtomicOpToLibcall shouldn't fail for CAS");
 }
 
 static ArrayRef<RTLIB::Libcall> GetRMWLibcall(AtomicRMWInst::BinOp Op) {
@@ -1711,6 +1711,11 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   } else {
     // Can't use sized function, and there's no generic for this
     // operation, so give up.
+    return false;
+  }
+
+  if (!TLI->getLibcallName(RTLibType)) {
+    // This target does not implement the requested atomic libcall so give up.
     return false;
   }
 
