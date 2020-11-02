@@ -34,7 +34,8 @@ using namespace llvm;
 // intrinsic ID. Add an assert to prevent people from accidentally growing
 // GlobalValue while adding flags.
 static_assert(sizeof(GlobalValue) ==
-                  sizeof(Constant) + 2 * sizeof(void *) + 2 * sizeof(unsigned),
+                  sizeof(Constant) + 2 * sizeof(void *) +
+                  alignTo<alignof(void *)>(2 * sizeof(unsigned)),
               "unexpected GlobalValue size growth");
 
 // GlobalObject adds a comdat.
