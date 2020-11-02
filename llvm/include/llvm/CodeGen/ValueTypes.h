@@ -424,11 +424,11 @@ namespace llvm {
     /// types are returned as Other, otherwise they are invalid.
     static EVT getEVT(Type *Ty, bool HandleUnknown = false);
 
-    intptr_t getRawBits() const {
+    size_t getRawBits() const {
       if (isSimple())
         return V.SimpleTy;
       else
-        return (intptr_t)(LLVMTy);
+        return (size_t)(intptr_t)(LLVMTy);
     }
 
     /// A meaningless but well-behaved order, useful for constructing
