@@ -251,7 +251,7 @@ public:
   /// \note This is specifically for DenseMapInfo - do not use this!
   static ModelledPHI createDummy(size_t ID) {
     ModelledPHI M;
-    M.Values.push_back(reinterpret_cast<Value*>(ID));
+    M.Values.push_back(reinterpret_cast<Value*>(uintptr_t(ID)));
     return M;
   }
 
