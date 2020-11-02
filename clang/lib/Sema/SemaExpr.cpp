@@ -2836,8 +2836,7 @@ Sema::PerformObjectMemberConversion(Expr *From,
 
     if (FromPtrType) {
       DestType = Context.getPointerType(DestRecordType,
-                                        FromPtrType->isCHERICapability()
-                                            ? PIK_Capability : PIK_Integer);
+                                        FromPtrType->getPointerInterpretation());
       FromRecordType = FromPtrType->getPointeeType();
       PointerConversions = true;
     } else {
@@ -7798,7 +7797,8 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   if (IsBlockPointer)
     ResultTy = S.Context.getBlockPointerType(ResultTy);
   else {
-    PointerInterpretationKind PIK = PIK_Default;
+    PointerInterpretationKind PIK =
+        S.Context.getDefaultPointerInterpretation();
     if (LHSTy->isCHERICapabilityType(S.Context, false) ||
         RHSTy->isCHERICapabilityType(S.Context, false)) {
       PIK = PIK_Capability;
@@ -7855,8 +7855,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(
-        destPointee, RHSTy->isCHERICapabilityType(S.Context, false)
-                         ? PIK_Capability : PIK_Default);
+        destPointee, RHSTy->castAs<PointerType>()->getPointerInterpretation());
     // Add qualifiers if necessary.
     LHS = S.ImpCastExprToType(LHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -7867,8 +7866,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(
-        destPointee, LHSTy->isCHERICapabilityType(S.Context, false)
-                         ? PIK_Capability : PIK_Default);
+        destPointee, LHSTy->castAs<PointerType>()->getPointerInterpretation());
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -13363,12 +13361,12 @@ pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base, bool WasMemb
   // void * __capability b;
   // void *__capability *__capability c = &b;
   if (!WasMemberExpr)
-    return PIK_Default;
+    return Context.getDefaultPointerInterpretation();
   // If the basetype is __uintcap_t we don't want to treat the result as a
   // capability (such as in uintcap_t foo; return &foo;)
   if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
     return PIK_Capability;
-  return PIK_Default;
+  return Context.getDefaultPointerInterpretation();
 }
 
 /// CheckAddressOfOperand - The operand of & must be either a function

@@ -1455,14 +1455,11 @@ enum class AutoTypeKeyword {
 
 /// The interpretation to use for a given pointer.
 enum PointerInterpretationKind {
-  /// The default interpretation for the current ABI.
-  PIK_Default,
-
   /// The pointer should always be interpreted as a capability.
   PIK_Capability,
 
   /// The pointer should always be interpreted as an integer.
-  PIK_Integer
+  PIK_Integer,
 };
 
 /// The base class of the type hierarchy.
@@ -2686,32 +2683,55 @@ public:
   static bool classof(const Type *T) { return T->getTypeClass() == Paren; }
 };
 
+/// This class augments a type with a pointer interpretation.
+template <class T>
+class PointerInterpretationTrait {
+protected:
+  PointerInterpretationTrait() = default;
+
+public:
+  bool isCHERICapability() const {
+    return getPointerInterpretation() == PIK_Capability;
+  }
+
+  PointerInterpretationKind getPointerInterpretation() const {
+    return static_cast<const T *>(this)->getPointerInterpretationImpl();
+  }
+};
+
 /// PointerType - C99 6.7.5.1 - Pointer Declarators.
-class PointerType : public Type, public llvm::FoldingSetNode {
+class PointerType : public Type,
+                    public PointerInterpretationTrait<PointerType>,
+                    public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these.
+  friend class PointerInterpretationTrait<PointerType>;
 
   QualType PointeeType;
-  bool IsCHERICapability : 1;
+  PointerInterpretationKind PIK;
 
-  PointerType(QualType Pointee, QualType CanonicalPtr, bool IsCHERICap = false)
+  PointerType(QualType Pointee, QualType CanonicalPtr,
+              PointerInterpretationKind PIK)
       : Type(Pointer, CanonicalPtr, Pointee->getDependence()),
-        PointeeType(Pointee), IsCHERICapability(IsCHERICap) {}
+        PointeeType(Pointee), PIK(PIK) {}
+
+  PointerInterpretationKind getPointerInterpretationImpl() const {
+    return PIK;
+  }
 
 public:
   QualType getPointeeType() const { return PointeeType; }
-
-  bool isCHERICapability() const { return IsCHERICapability; }
 
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, getPointeeType(), isCHERICapability());
+    Profile(ID, getPointeeType(), PIK);
   }
 
-  static void Profile(llvm::FoldingSetNodeID &ID, QualType Pointee, bool IsCHERICap) {
+  static void Profile(llvm::FoldingSetNodeID &ID, QualType Pointee,
+                      PointerInterpretationKind PIK) {
     ID.AddPointer(Pointee.getAsOpaquePtr());
-    ID.AddBoolean(IsCHERICap);
+    ID.AddInteger(PIK);
   }
 
   static bool classof(const Type *T) { return T->getTypeClass() == Pointer; }
@@ -2802,15 +2822,23 @@ public:
 };
 
 /// Base for LValueReferenceType and RValueReferenceType
-class ReferenceType : public Type, public llvm::FoldingSetNode {
+class ReferenceType : public Type,
+                      public PointerInterpretationTrait<ReferenceType>,
+                      public llvm::FoldingSetNode {
+  friend class PointerInterpretationTrait<ReferenceType>;
+
   QualType PointeeType;
-  bool IsCHERICapability : 1;
+  PointerInterpretationKind PIK;
+
+  PointerInterpretationKind getPointerInterpretationImpl() const {
+    return PIK;
+  }
 
 protected:
   ReferenceType(TypeClass tc, QualType Referencee, QualType CanonicalRef,
-                bool SpelledAsLValue, bool IsCHERICap = false)
+                bool SpelledAsLValue, PointerInterpretationKind PIK)
       : Type(tc, CanonicalRef, Referencee->getDependence()),
-        PointeeType(Referencee), IsCHERICapability(IsCHERICap) {
+        PointeeType(Referencee), PIK(PIK) {
     ReferenceTypeBits.SpelledAsLValue = SpelledAsLValue;
     ReferenceTypeBits.InnerRef = Referencee->isReferenceType();
   }
@@ -2829,19 +2857,17 @@ public:
     return T->PointeeType;
   }
 
-  bool isCHERICapability() const { return IsCHERICapability; }
-
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, PointeeType, isSpelledAsLValue(), isCHERICapability());
+    Profile(ID, PointeeType, isSpelledAsLValue(), PIK);
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID,
                       QualType Referencee,
                       bool SpelledAsLValue,
-                      bool IsCHERICap) {
+                      PointerInterpretationKind PIK) {
     ID.AddPointer(Referencee.getAsOpaquePtr());
     ID.AddBoolean(SpelledAsLValue);
-    ID.AddBoolean(IsCHERICap);
+    ID.AddInteger(PIK);
   }
 
   static bool classof(const Type *T) {
@@ -2855,9 +2881,9 @@ class LValueReferenceType : public ReferenceType {
   friend class ASTContext; // ASTContext creates these
 
   LValueReferenceType(QualType Referencee, QualType CanonicalRef,
-                      bool SpelledAsLValue, bool IsCHERICap = false)
+                      bool SpelledAsLValue, PointerInterpretationKind PIK)
       : ReferenceType(LValueReference, Referencee, CanonicalRef,
-                      SpelledAsLValue, IsCHERICap) {}
+                      SpelledAsLValue, PIK) {}
 
 public:
   bool isSugared() const { return false; }
@@ -2872,8 +2898,10 @@ public:
 class RValueReferenceType : public ReferenceType {
   friend class ASTContext; // ASTContext creates these
 
-  RValueReferenceType(QualType Referencee, QualType CanonicalRef, bool IsCHERICap = false)
-       : ReferenceType(RValueReference, Referencee, CanonicalRef, false, IsCHERICap) {}
+  RValueReferenceType(QualType Referencee, QualType CanonicalRef,
+                      PointerInterpretationKind PIK)
+       : ReferenceType(RValueReference, Referencee, CanonicalRef, false,
+                       PIK) {}
 
 public:
   bool isSugared() const { return false; }
