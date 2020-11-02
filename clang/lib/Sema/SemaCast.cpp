@@ -3573,7 +3573,7 @@ bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS,
         bool RHSIsCap = RHS->isCHERICapabilityType(Context, false);
         QualType BitCastTy = Context.getPointerType(
             LHS->getAs<PointerType>()->getPointeeType(),
-            RHSIsCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
+            RHSIsCap ? PIK_Capability : PIK_Integer);
         RHSExpr = ImplicitCastExpr::Create(Context, BitCastTy, CK_BitCast,
                                            RHSExpr, nullptr, VK_RValue);
       }

@@ -3288,13 +3288,13 @@ void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
   else if (Interpretation->getName() == "pop")
     Actions.ActOnPragmaPointerInterpretationPop();
   else {
-    ASTContext::PointerInterpretationKind PIK =
-      llvm::StringSwitch<ASTContext::PointerInterpretationKind>(Interpretation->getName())
-        .Case("capability", ASTContext::PointerInterpretationKind::PIK_Capability)
-        .Case("integer", ASTContext::PointerInterpretationKind::PIK_Integer)
-        .Case("default", ASTContext::PointerInterpretationKind::PIK_Default)
-        .Default((ASTContext::PointerInterpretationKind)-1);
-    if (PIK == (ASTContext::PointerInterpretationKind)-1) {
+    PointerInterpretationKind PIK =
+      llvm::StringSwitch<PointerInterpretationKind>(Interpretation->getName())
+        .Case("capability", PointerInterpretationKind::PIK_Capability)
+        .Case("integer", PointerInterpretationKind::PIK_Integer)
+        .Case("default", PointerInterpretationKind::PIK_Default)
+        .Default((PointerInterpretationKind)-1);
+    if (PIK == (PointerInterpretationKind)-1) {
       PP.Diag(Tok.getLocation(),
               diag::err_pragma_pointer_interpretation_invalid_argument)
           << PP.getSpelling(Tok);

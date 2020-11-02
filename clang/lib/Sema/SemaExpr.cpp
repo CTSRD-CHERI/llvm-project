@@ -2837,8 +2837,7 @@ Sema::PerformObjectMemberConversion(Expr *From,
     if (FromPtrType) {
       DestType = Context.getPointerType(DestRecordType,
                                         FromPtrType->isCHERICapability()
-                                            ? ASTContext::PIK_Capability
-                                            : ASTContext::PIK_Integer);
+                                            ? PIK_Capability : PIK_Integer);
       FromRecordType = FromPtrType->getPointeeType();
       PointerConversions = true;
     } else {
@@ -2926,8 +2925,7 @@ Sema::PerformObjectMemberConversion(Expr *From,
       if (PointerConversions)
         QType = Context.getPointerType(QType,
                                        FromType->isCHERICapabilityType(Context)
-                                           ? ASTContext::PIK_Capability
-                                           : ASTContext::PIK_Integer);
+                                           ? PIK_Capability : PIK_Integer);
       From = ImpCastExprToType(From, QType, CK_UncheckedDerivedToBase,
                                VK, &BasePath).get();
 
@@ -2966,8 +2964,7 @@ Sema::PerformObjectMemberConversion(Expr *From,
       if (PointerConversions)
         UType = Context.getPointerType(UType,
                                        FromType->isCHERICapabilityType(Context)
-                                           ? ASTContext::PIK_Capability
-                                           : ASTContext::PIK_Integer);
+                                           ? PIK_Capability : PIK_Integer);
       From = ImpCastExprToType(From, UType, CK_UncheckedDerivedToBase,
                                VK, &BasePath).get();
       FromType = UType;
@@ -7801,10 +7798,10 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   if (IsBlockPointer)
     ResultTy = S.Context.getBlockPointerType(ResultTy);
   else {
-    ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
+    PointerInterpretationKind PIK = PIK_Default;
     if (LHSTy->isCHERICapabilityType(S.Context, false) ||
         RHSTy->isCHERICapabilityType(S.Context, false)) {
-      PIK = ASTContext::PIK_Capability;
+      PIK = PIK_Capability;
     }
     ResultTy = S.Context.getPointerType(ResultTy, PIK);
   }
@@ -7859,8 +7856,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(
         destPointee, RHSTy->isCHERICapabilityType(S.Context, false)
-                         ? ASTContext::PIK_Capability
-                         : ASTContext::PIK_Default);
+                         ? PIK_Capability : PIK_Default);
     // Add qualifiers if necessary.
     LHS = S.ImpCastExprToType(LHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -7872,8 +7868,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(
         destPointee, LHSTy->isCHERICapabilityType(S.Context, false)
-                         ? ASTContext::PIK_Capability
-                         : ASTContext::PIK_Default);
+                         ? PIK_Capability : PIK_Default);
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -13353,7 +13348,7 @@ static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
   S.Diag(Loc, diag::err_typecheck_address_of) << Type << E->getSourceRange();
 }
 
-static ASTContext::PointerInterpretationKind
+static PointerInterpretationKind
 pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base, bool WasMemberExpr = false) {
   if (auto *mr = dyn_cast<MemberExpr>(Base))
     return pointerKindForBaseExpr(Context, mr->getBase(), true);
@@ -13368,12 +13363,12 @@ pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base, bool WasMemb
   // void * __capability b;
   // void *__capability *__capability c = &b;
   if (!WasMemberExpr)
-    return ASTContext::PIK_Default;
+    return PIK_Default;
   // If the basetype is __uintcap_t we don't want to treat the result as a
   // capability (such as in uintcap_t foo; return &foo;)
   if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
-    return ASTContext::PIK_Capability;
-  return ASTContext::PIK_Default;
+    return PIK_Capability;
+  return PIK_Default;
 }
 
 /// CheckAddressOfOperand - The operand of & must be either a function
@@ -13599,8 +13594,7 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
 
   CheckAddressOfPackedMember(op);
 
-  ASTContext::PointerInterpretationKind PIK =
-      pointerKindForBaseExpr(Context, op);
+  PointerInterpretationKind PIK = pointerKindForBaseExpr(Context, op);
   return Context.getPointerType(op->getType(), PIK);
 }
 

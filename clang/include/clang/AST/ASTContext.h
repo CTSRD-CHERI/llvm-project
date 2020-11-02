@@ -1185,12 +1185,6 @@ public:
     return CanQualType::CreateUnsafe(getComplexType((QualType) T));
   }
 
-  enum PointerInterpretationKind {
-    PIK_Capability,
-    PIK_Integer,
-    PIK_Default
-  };
-
   /// Return the uniqued reference to the type for a pointer to
   /// the specified type.
   QualType getPointerType(QualType T,

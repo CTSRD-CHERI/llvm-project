@@ -1453,6 +1453,18 @@ enum class AutoTypeKeyword {
   GNUAutoType
 };
 
+/// The interpretation to use for a given pointer.
+enum PointerInterpretationKind {
+  /// The default interpretation for the current ABI.
+  PIK_Default,
+
+  /// The pointer should always be interpreted as a capability.
+  PIK_Capability,
+
+  /// The pointer should always be interpreted as an integer.
+  PIK_Integer
+};
+
 /// The base class of the type hierarchy.
 ///
 /// A central concept with types is that each type always has a canonical

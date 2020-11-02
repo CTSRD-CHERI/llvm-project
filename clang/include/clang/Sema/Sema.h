@@ -9607,14 +9607,14 @@ public:
   void ActOnPragmaOptionsAlign(PragmaOptionsAlignKind Kind,
                                SourceLocation PragmaLoc);
 
-  ASTContext::PointerInterpretationKind PointerInterpretation = ASTContext::PIK_Default;
-  llvm::SmallVector<ASTContext::PointerInterpretationKind, 4> PointerInterpretationStack;
+  PointerInterpretationKind PointerInterpretation = PIK_Default;
+  llvm::SmallVector<PointerInterpretationKind, 4> PointerInterpretationStack;
 
   /// ActOnPragmaPack - Called on well formed \#pragma pack(...).
   void ActOnPragmaPack(SourceLocation PragmaLoc, PragmaMsStackAction Action,
                        StringRef SlotLabel, Expr *Alignment);
 
-  void ActOnPragmaPointerInterpretation(ASTContext::PointerInterpretationKind K);
+  void ActOnPragmaPointerInterpretation(PointerInterpretationKind K);
   void ActOnPragmaPointerInterpretationPush() {
     PointerInterpretationStack.push_back(PointerInterpretation);
   }

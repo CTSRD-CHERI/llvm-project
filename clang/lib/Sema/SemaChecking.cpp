@@ -173,7 +173,7 @@ static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
   auto BaseFnTy = cast<FunctionProtoType>(FnAttrType->getModifiedType());
   auto ReturnFnTy = C.adjustFunctionType(BaseFnTy,
       BaseFnTy->getExtInfo().withCallingConv(CC_CHERICCallback));
-  auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0), ASTContext::PIK_Default);
+  auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0), PIK_Default);
 
   TheCall->setType(ReturnTy);
   return false;
@@ -195,7 +195,7 @@ static bool checkCapArg(Sema &S, CallExpr *TheCall, unsigned ArgIndex,
       Source->isNullPointerConstant(Ctx, Expr::NPC_ValueDependentIsNull))
     SrcTy = Ctx.getPointerType(SrcTy->isPointerType() ? SrcTy->getPointeeType()
                                                       : Ctx.VoidTy,
-                               ASTContext::PIK_Capability);
+                               PIK_Capability);
   if (ResultingSrcTy)
     *ResultingSrcTy = SrcTy;
   if (!SrcTy->isCapabilityPointerType() && !SrcTy->isIntCapType()) {
@@ -1974,7 +1974,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       if (SrcTy->getPointeeType().isConstQualified())
         ResultPointeeTy.addConst();
       TheCall->setType(
-          Context.getPointerType(ResultPointeeTy, ASTContext::PIK_Capability));
+          Context.getPointerType(ResultPointeeTy, PIK_Capability));
     }
     break;
   }
@@ -2011,7 +2011,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     }
     // Result is always void * __capability
     TheCall->setType(
-        Context.getPointerType(Context.VoidTy, ASTContext::PIK_Capability));
+        Context.getPointerType(Context.VoidTy, PIK_Capability));
     break;
   }
   case Builtin::BI__builtin_cheri_tag_clear:
@@ -2065,7 +2065,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     if (SrcTy->isPointerType()) {
       TheCall->setType(Context.getPointerType(SrcTy->getPointeeType(),
-                                              ASTContext::PIK_Integer));
+                                              PIK_Integer));
     } else {
       assert(SrcTy->isIntCapType());
       TheCall->setType(SrcTy->isSignedIntegerType() ? Context.getIntPtrType()
@@ -2100,7 +2100,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       }
     }
     TheCall->setType(
-        Context.getPointerType(ResultPointee, ASTContext::PIK_Capability));
+        Context.getPointerType(ResultPointee, PIK_Capability));
     break;
   }
   case Builtin::BI__builtin_cheri_perms_check:

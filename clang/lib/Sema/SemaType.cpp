@@ -2104,7 +2104,7 @@ QualType Sema::BuildPointerType(QualType T,
 
   // If we are in purecap ABI turn pointers marked as using an integer
   // representation into a plain pointer-range-sized integer
-  if (PointerInterpretation == ASTContext::PIK_Integer
+  if (PointerInterpretation == PIK_Integer
       && Context.getTargetInfo().areAllPointersCapabilities()) {
     // This is not a real pointer type in the purecap ABI
     // ptrdiff_t will be the same size as a plain mips pointer
@@ -7968,11 +7968,11 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
     Qualifiers Qs = CurType.getQualifiers();
 
     if (const PointerType *PT = CurType->getAs<PointerType>())
-      CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
+      CurType = S.Context.getPointerType(PT->getPointeeType(), PIK_Capability);
     else if (const LValueReferenceType *LRT = CurType->getAs<LValueReferenceType>())
-      CurType = S.Context.getLValueReferenceType(LRT->getPointeeType(), true, ASTContext::PIK_Capability);
+      CurType = S.Context.getLValueReferenceType(LRT->getPointeeType(), true, PIK_Capability);
     else if (const RValueReferenceType *RRT = CurType->getAs<RValueReferenceType>())
-      CurType = S.Context.getRValueReferenceType(RRT->getPointeeType(), ASTContext::PIK_Capability);
+      CurType = S.Context.getRValueReferenceType(RRT->getPointeeType(), PIK_Capability);
     else
       llvm_unreachable("Don't know how to turn CurType into a capability");
 
