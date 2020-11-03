@@ -1,11 +1,8 @@
-// REQUIRES: mips-registered-target
-
 // RUN: %cheri_cc1 %s -emit-llvm -o - -verify | %cheri_FileCheck %s -check-prefixes CHECK,HYBRID
 // RUN: %riscv64_cheri_cc1 %s -target-feature +a -emit-llvm -o - -verify | %cheri_FileCheck %s -check-prefixes CHECK,HYBRID
 // RUN: %cheri_purecap_cc1 %s -emit-llvm -o - -verify | %cheri_FileCheck %s -check-prefixes CHECK,PURECAP
 // RUN: %riscv64_cheri_purecap_cc1 -target-feature +a %s -emit-llvm -o - -verify | %cheri_FileCheck %s -check-prefixes CHECK,PURECAP
-// The new warning "misaligned or large atomic operation" was causing -Werror failures for CheriBSD
-// We used to require libcalls for CHERI cap (cmp)xchg but this has since been fixed for
+// We used to require libcalls for CHERI cap (cmp)xchg. This has since been fixed for
 // load/store/xchg/cmpxchg, but we should still warn for fetch_add.
 
 void func1(void **p) {
