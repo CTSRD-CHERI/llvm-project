@@ -968,11 +968,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
       BuildMI(LoopTailMBB, DL, TII->get(RISCV::ADDI), ScratchReg)
           .addReg(NewValReg)
           .addImm(0);
-      // Note: SC_*_CAP has the address register as the second argument not the
-      // first even though it is called rs1 in tablegen.
       BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
-          .addReg(ScratchReg)
-          .addReg(AddrReg);
+          .addReg(AddrReg)
+          .addReg(ScratchReg);
     } else {
       BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
           .addReg(AddrReg)
@@ -1094,11 +1092,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchgCap(
     //   bnez scratch, loophead
     BuildMI(LoopTailMBB, DL, TII->get(RISCV::CMove), ScratchReg)
         .addReg(NewValReg);
-    // Note: SC_C_CAP has the address register as the second argument not the
-    // first even though it is called rs1 in tablegen.
     BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
-        .addReg(ScratchReg)
-        .addReg(AddrReg);
+        .addReg(AddrReg)
+        .addReg(ScratchReg);
     // In the explicit case the output register of SC_C_CAP/DDC is a capability
     // register so we have to extract the GPR register.
     SCResultReg = TRI->getSubReg(ScratchReg, RISCV::sub_cap_addr);
