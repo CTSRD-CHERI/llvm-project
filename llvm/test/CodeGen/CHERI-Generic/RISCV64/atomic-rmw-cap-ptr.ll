@@ -59,7 +59,7 @@ define dso_local void @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) n
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_exchange_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_exchange_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
@@ -119,7 +119,7 @@ define dso_local void @atomic_cap_ptr_add(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_fetch_add_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_fetch_add_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
@@ -180,7 +180,7 @@ define dso_local void @atomic_cap_ptr_sub(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_fetch_sub_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_fetch_sub_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
@@ -240,7 +240,7 @@ define dso_local void @atomic_cap_ptr_and(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_fetch_and_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_fetch_and_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
@@ -308,7 +308,7 @@ define dso_local void @atomic_cap_ptr_nand(i64 addrspace(200)* %ptr, i64 %val) n
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_fetch_nand_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_fetch_nand_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
@@ -368,7 +368,7 @@ define dso_local void @atomic_cap_ptr_or(i64 addrspace(200)* %ptr, i64 %val) nou
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_fetch_or_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_fetch_or_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
@@ -428,7 +428,7 @@ define dso_local void @atomic_cap_ptr_xor(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_fetch_xor_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_fetch_xor_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
@@ -537,7 +537,7 @@ define dso_local void @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    lc ca0, 0(sp)
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_compare_exchange_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld a3, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    bnez a0, .LBB7_4
 ; HYBRID-LIBCALLS-NEXT:  .LBB7_2: # %atomicrmw.start
@@ -658,7 +658,7 @@ define dso_local void @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    lc ca0, 0(sp)
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_compare_exchange_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld a3, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    bnez a0, .LBB8_4
 ; HYBRID-LIBCALLS-NEXT:  .LBB8_2: # %atomicrmw.start
@@ -779,7 +779,7 @@ define dso_local void @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) n
 ; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    lc ca0, 0(sp)
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_compare_exchange_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld a3, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    bnez a0, .LBB9_4
 ; HYBRID-LIBCALLS-NEXT:  .LBB9_2: # %atomicrmw.start
@@ -900,7 +900,7 @@ define dso_local void @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) n
 ; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    lc ca0, 0(sp)
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_compare_exchange_8
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_8_c
 ; HYBRID-LIBCALLS-NEXT:    ld a3, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    bnez a0, .LBB10_4
 ; HYBRID-LIBCALLS-NEXT:  .LBB10_2: # %atomicrmw.start
@@ -1035,7 +1035,7 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    lc ca0, 16(sp)
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_compare_exchange_4
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_4_c
 ; HYBRID-LIBCALLS-NEXT:    flw ft0, 36(sp)
 ; HYBRID-LIBCALLS-NEXT:    beqz a0, .LBB11_1
 ; HYBRID-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
@@ -1161,7 +1161,7 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 5
 ; HYBRID-LIBCALLS-NEXT:    lc ca0, 16(sp)
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_compare_exchange_4
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_4_c
 ; HYBRID-LIBCALLS-NEXT:    flw ft0, 36(sp)
 ; HYBRID-LIBCALLS-NEXT:    beqz a0, .LBB12_1
 ; HYBRID-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end

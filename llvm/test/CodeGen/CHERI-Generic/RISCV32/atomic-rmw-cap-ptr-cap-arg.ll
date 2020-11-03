@@ -61,7 +61,7 @@ define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %p
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 5
-; HYBRID-LIBCALLS-NEXT:    call __cap_atomic_exchange_cap
+; HYBRID-LIBCALLS-NEXT:    call __atomic_exchange_cap_c
 ; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret

@@ -1774,8 +1774,8 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   // 'UseSizedLibcall', 'CASExpected', 'ValueOperand', and 'HasResult'
   // variables.
   //
-  // Note: For CHERI hybrid mode we use __cap_atomic_* to handle cases where
-  // the pointer is a capability type.
+  // Note: For CHERI hybrid mode we add another _c suffix (this match memcpy_c,
+  // etc.) to handle cases where the pointer is a capability type.
 
   AllocaInst *AllocaCASExpected = nullptr;
   Value *AllocaCASExpected_i8 = nullptr;
@@ -1875,20 +1875,21 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   FunctionType *FnType = FunctionType::get(ResultTy, ArgTys, false);
   // XXXAR: ugly hack to reduce size of the diff: for capability types we set
   // RTLibType to the generic one and then manually append _cap instead of
-  // adding the 20+ new entries to RuntimeLibcalls.def. We also prefix with
-  // __cap for capability pointer arguments in hybrid mode.
+  // adding the 20+ new entries to RuntimeLibcalls.def. We also suffix with
+  // _c for capability pointer arguments in hybrid mode.
   assert(TLI->getLibcallName(RTLibType));
   std::string LibcallName = TLI->getLibcallName(RTLibType);
   // We are compiling for CHERI purecap mode if the default globals address
   // space is a capability type.
   bool IsCheriPurecap = DL.isFatPointer(DL.getGlobalsAddressSpace());
-  if (PointerOperandIsCap && !IsCheriPurecap) {
-    // We prefix the atomic functions using capabilities with __cap in hybrid
-    assert(StringRef(LibcallName).startswith("__atomic"));
-    LibcallName = "__cap_" + LibcallName.substr(2);
-  }
   if (IsCapValue) {
     LibcallName += "_cap";
+  }
+  if (PointerOperandIsCap && !IsCheriPurecap) {
+    // Add a _c suffix if the function uses capability pointer operands in
+    // hybrid mode.
+    assert(StringRef(LibcallName).startswith("__atomic"));
+    LibcallName += "_c";
   }
   FunctionCallee LibcallFn = M->getOrInsertFunction(LibcallName, FnType, Attr);
   CallInst *Call = Builder.CreateCall(LibcallFn, Args);
