@@ -120,7 +120,7 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 1, Constraints = "$rd = $rs2" in
 class CheriStoreCond_r<bits<5> op, string opcodestr, RegisterClass rs2Class,
                        RegisterOperand rs1Operand>
     : RVInstCheriTwoSrc<0x7c, op, 0, OPC_CHERI, (outs rs2Class:$rd),
-                        (ins rs2Class:$rs2, rs1Operand:$rs1),
+                        (ins rs1Operand:$rs1, rs2Class:$rs2),
                         opcodestr, "$rs2, $rs1">;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
