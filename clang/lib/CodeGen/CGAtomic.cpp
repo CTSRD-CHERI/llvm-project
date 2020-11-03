@@ -1076,7 +1076,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     std::string LibCallName;
     QualType LoweredMemTy =
         IsCheriCap
-            ? getContext().UnsignedIntCapTy
+            ? getContext().IntCapTy
             : (MemTy->isPointerType() ? getContext().getIntPtrType() : MemTy);
     QualType RetTy;
     bool HaveRetTy = false;
