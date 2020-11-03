@@ -1041,7 +1041,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     case AtomicExpr::AO__atomic_compare_exchange_n:
       // Only use optimized library calls for sizes for which they exist.
       // FIXME: Size == 16 optimized library functions exist too.
-      if (!IsCheriCap && (Size == 1 || Size == 2 || Size == 4 || Size == 8))
+      if (IsCheriCap || (Size == 1 || Size == 2 || Size == 4 || Size == 8))
         UseOptimizedLibcall = true;
       break;
     }
@@ -1075,7 +1075,9 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
     std::string LibCallName;
     QualType LoweredMemTy =
-      MemTy->isPointerType() ? getContext().getIntPtrType() : MemTy;
+        IsCheriCap
+            ? getContext().UnsignedIntCapTy
+            : (MemTy->isPointerType() ? getContext().getIntPtrType() : MemTy);
     QualType RetTy;
     bool HaveRetTy = false;
     llvm::Instruction::BinaryOps PostOp = (llvm::Instruction::BinaryOps)0;
