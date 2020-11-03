@@ -7,8 +7,8 @@
 ; RUN: %cheri128_purecap_llc %s -o - | FileCheck %s --check-prefix=PURECAP
 ; RUN: %cheri128_llc %s -o - | FileCheck %s --check-prefix=HYBRID
 
-define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
-; PURECAP-LABEL: atomic_cap_ptr_xchg:
+define dso_local void @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_xchg_sc:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:  .LBB0_1: # %bb
@@ -22,7 +22,7 @@ define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %p
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
-; HYBRID-LABEL: atomic_cap_ptr_xchg:
+; HYBRID-LABEL: atomic_cap_ptr_xchg_sc:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:  .LBB0_1: # %bb
@@ -37,6 +37,134 @@ define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %p
 ; HYBRID-NEXT:    nop
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val seq_cst
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_relaxed(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_xchg_relaxed:
+; PURECAP:       # %bb.0: # %bb
+; PURECAP-NEXT:    .insn
+; PURECAP-NEXT:  .LBB1_1: # %bb
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cllc $c1, $c3
+; PURECAP-NEXT:    cscc $1, $c4, $c3
+; PURECAP-NEXT:    beqz $1, .LBB1_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: atomic_cap_ptr_xchg_relaxed:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    .insn
+; HYBRID-NEXT:  .LBB1_1: # %bb
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cllc $c1, $c3
+; HYBRID-NEXT:    cscc $1, $c4, $c3
+; HYBRID-NEXT:    beqz $1, .LBB1_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val monotonic
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_acquire(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_xchg_acquire:
+; PURECAP:       # %bb.0: # %bb
+; PURECAP-NEXT:    .insn
+; PURECAP-NEXT:  .LBB2_1: # %bb
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cllc $c1, $c3
+; PURECAP-NEXT:    cscc $1, $c4, $c3
+; PURECAP-NEXT:    beqz $1, .LBB2_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: atomic_cap_ptr_xchg_acquire:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    .insn
+; HYBRID-NEXT:  .LBB2_1: # %bb
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cllc $c1, $c3
+; HYBRID-NEXT:    cscc $1, $c4, $c3
+; HYBRID-NEXT:    beqz $1, .LBB2_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acquire
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_xchg_rel:
+; PURECAP:       # %bb.0: # %bb
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB3_1: # %bb
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cllc $c1, $c3
+; PURECAP-NEXT:    cscc $1, $c4, $c3
+; PURECAP-NEXT:    beqz $1, .LBB3_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: atomic_cap_ptr_xchg_rel:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB3_1: # %bb
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cllc $c1, $c3
+; HYBRID-NEXT:    cscc $1, $c4, $c3
+; HYBRID-NEXT:    beqz $1, .LBB3_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val release
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_xchg_acq_rel:
+; PURECAP:       # %bb.0: # %bb
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB4_1: # %bb
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cllc $c1, $c3
+; PURECAP-NEXT:    cscc $1, $c4, $c3
+; PURECAP-NEXT:    beqz $1, .LBB4_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: atomic_cap_ptr_xchg_acq_rel:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB4_1: # %bb
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cllc $c1, $c3
+; HYBRID-NEXT:    cscc $1, $c4, $c3
+; HYBRID-NEXT:    beqz $1, .LBB4_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acq_rel
   ret void
 }
 

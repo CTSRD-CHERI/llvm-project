@@ -9,9 +9,33 @@
 @IF-RISCV@; RUN: %generic_cheri_hybrid_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 @IFNOT-RISCV@; RUN: %generic_cheri_hybrid_llc %s -o - | FileCheck %s --check-prefix=HYBRID
 
-define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+define dso_local void @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val seq_cst
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_relaxed(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val monotonic
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_acquire(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acquire
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val release
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acq_rel
   ret void
 }
 

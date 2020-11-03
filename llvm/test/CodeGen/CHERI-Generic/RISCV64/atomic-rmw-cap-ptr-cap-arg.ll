@@ -9,13 +9,13 @@
 ; RUN: %riscv64_cheri_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
 ; RUN: %riscv64_cheri_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 
-define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
-; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg:
+define dso_local void @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg_sc:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camoswap.c.aqrl ca0, ca1, (ca0)
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
-; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg:
+; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg_sc:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
@@ -29,7 +29,7 @@ define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %p
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg:
+; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg_sc:
 ; HYBRID-ATOMICS:       # %bb.0: # %bb
 ; HYBRID-ATOMICS-NEXT:    fence rw, rw
 ; HYBRID-ATOMICS-NEXT:    lc.cap ca2, (ca0)
@@ -56,7 +56,7 @@ define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %p
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
-; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg:
+; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg_sc:
 ; HYBRID-LIBCALLS:       # %bb.0: # %bb
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
 ; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
@@ -67,6 +67,246 @@ define dso_local void @atomic_cap_ptr_xchg(i8 addrspace(200)* addrspace(200)* %p
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val seq_cst
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_relaxed(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg_relaxed:
+; PURECAP-ATOMICS:       # %bb.0: # %bb
+; PURECAP-ATOMICS-NEXT:    camoswap.c ca0, ca1, (ca0)
+; PURECAP-ATOMICS-NEXT:    cret
+;
+; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg_relaxed:
+; PURECAP-LIBCALLS:       # %bb.0: # %bb
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:  .LBB1_1: # %bb
+; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
+; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB1_1)(ca3)
+; PURECAP-LIBCALLS-NEXT:    mv a2, zero
+; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
+; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg_relaxed:
+; HYBRID-ATOMICS:       # %bb.0: # %bb
+; HYBRID-ATOMICS-NEXT:    lc.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:  .LBB1_1: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    # Child Loop BB1_3 Depth 2
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
+; HYBRID-ATOMICS-NEXT:  .LBB1_3: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # Parent Loop BB1_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a3, a2, .LBB1_5
+; HYBRID-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_3 Depth=2
+; HYBRID-ATOMICS-NEXT:    cmove ca4, ca3
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca4, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB1_3
+; HYBRID-ATOMICS-NEXT:  .LBB1_5: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a4, a2
+; HYBRID-ATOMICS-NEXT:    cmove ca2, ca3
+; HYBRID-ATOMICS-NEXT:    bne a3, a4, .LBB1_1
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg_relaxed:
+; HYBRID-LIBCALLS:       # %bb.0: # %bb
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, zero
+; HYBRID-LIBCALLS-NEXT:    call __atomic_exchange_cap_c
+; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val monotonic
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_acquire(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg_acquire:
+; PURECAP-ATOMICS:       # %bb.0: # %bb
+; PURECAP-ATOMICS-NEXT:    camoswap.c.aq ca0, ca1, (ca0)
+; PURECAP-ATOMICS-NEXT:    cret
+;
+; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg_acquire:
+; PURECAP-LIBCALLS:       # %bb.0: # %bb
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:  .LBB2_1: # %bb
+; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
+; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB2_1)(ca3)
+; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 2
+; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
+; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg_acquire:
+; HYBRID-ATOMICS:       # %bb.0: # %bb
+; HYBRID-ATOMICS-NEXT:    lc.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:  .LBB2_1: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    # Child Loop BB2_3 Depth 2
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
+; HYBRID-ATOMICS-NEXT:  .LBB2_3: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # Parent Loop BB2_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a3, a2, .LBB2_5
+; HYBRID-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB2_3 Depth=2
+; HYBRID-ATOMICS-NEXT:    cmove ca4, ca3
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca4, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB2_3
+; HYBRID-ATOMICS-NEXT:  .LBB2_5: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB2_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a4, a2
+; HYBRID-ATOMICS-NEXT:    cmove ca2, ca3
+; HYBRID-ATOMICS-NEXT:    bne a3, a4, .LBB2_1
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg_acquire:
+; HYBRID-LIBCALLS:       # %bb.0: # %bb
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_exchange_cap_c
+; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acquire
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg_rel:
+; PURECAP-ATOMICS:       # %bb.0: # %bb
+; PURECAP-ATOMICS-NEXT:    camoswap.c.rl ca0, ca1, (ca0)
+; PURECAP-ATOMICS-NEXT:    cret
+;
+; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg_rel:
+; PURECAP-LIBCALLS:       # %bb.0: # %bb
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:  .LBB3_1: # %bb
+; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
+; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB3_1)(ca3)
+; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 3
+; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
+; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg_rel:
+; HYBRID-ATOMICS:       # %bb.0: # %bb
+; HYBRID-ATOMICS-NEXT:    fence rw, w
+; HYBRID-ATOMICS-NEXT:    lc.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:  .LBB3_1: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    # Child Loop BB3_3 Depth 2
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
+; HYBRID-ATOMICS-NEXT:  .LBB3_3: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # Parent Loop BB3_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a3, a2, .LBB3_5
+; HYBRID-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB3_3 Depth=2
+; HYBRID-ATOMICS-NEXT:    cmove ca4, ca3
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca4, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB3_3
+; HYBRID-ATOMICS-NEXT:  .LBB3_5: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB3_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a4, a2
+; HYBRID-ATOMICS-NEXT:    cmove ca2, ca3
+; HYBRID-ATOMICS-NEXT:    bne a3, a4, .LBB3_1
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg_rel:
+; HYBRID-LIBCALLS:       # %bb.0: # %bb
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 3
+; HYBRID-LIBCALLS-NEXT:    call __atomic_exchange_cap_c
+; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val release
+  ret void
+}
+
+define dso_local void @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg_acq_rel:
+; PURECAP-ATOMICS:       # %bb.0: # %bb
+; PURECAP-ATOMICS-NEXT:    camoswap.c.aqrl ca0, ca1, (ca0)
+; PURECAP-ATOMICS-NEXT:    cret
+;
+; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg_acq_rel:
+; PURECAP-LIBCALLS:       # %bb.0: # %bb
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:  .LBB4_1: # %bb
+; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
+; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB4_1)(ca3)
+; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 4
+; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
+; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg_acq_rel:
+; HYBRID-ATOMICS:       # %bb.0: # %bb
+; HYBRID-ATOMICS-NEXT:    fence rw, w
+; HYBRID-ATOMICS-NEXT:    lc.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:  .LBB4_1: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    # Child Loop BB4_3 Depth 2
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
+; HYBRID-ATOMICS-NEXT:  .LBB4_3: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # Parent Loop BB4_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a3, a2, .LBB4_5
+; HYBRID-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB4_3 Depth=2
+; HYBRID-ATOMICS-NEXT:    cmove ca4, ca3
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca4, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB4_3
+; HYBRID-ATOMICS-NEXT:  .LBB4_5: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB4_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a4, a2
+; HYBRID-ATOMICS-NEXT:    cmove ca2, ca3
+; HYBRID-ATOMICS-NEXT:    bne a3, a4, .LBB4_1
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg_acq_rel:
+; HYBRID-LIBCALLS:       # %bb.0: # %bb
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 4
+; HYBRID-LIBCALLS-NEXT:    call __atomic_exchange_cap_c
+; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
+bb:
+  %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acq_rel
   ret void
 }
 
