@@ -7811,12 +7811,6 @@ public:
   }
 
   bool cheriCapabilityAtomicNeedsLibcall(AtomicExpr::AtomicOp Op) const override {
-    // XXXAR: currently always use libcalls in hybrid since we generate
-    // invalid code and assert otherwise.
-    const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
-    if (!Target.areAllPointersCapabilities())
-      return true;
-
     switch (Op) {
     case AtomicExpr::AO__c11_atomic_init:
     case AtomicExpr::AO__atomic_load:
