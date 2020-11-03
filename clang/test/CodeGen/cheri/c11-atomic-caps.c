@@ -2,8 +2,7 @@
 // RUN: %cheri_purecap_cc1 -std=c11 -o - -emit-llvm -O1 %s -verify=expected,purecap | FileCheck %s --check-prefixes=PURECAP,PURECAP-MIPS64
 // RUN: %riscv64_cheri_purecap_cc1 -std=c11 -o - -emit-llvm -O1 %s -verify=expected,purecap | FileCheck %s --check-prefixes=PURECAP,PURECAP-RISCV64
 // RUN: %cheri_cc1 -std=c11 -o - -emit-llvm -O1 %s -verify=expected,hybrid | FileCheck %s --check-prefixes=HYBRID,HYBRID-MIPS64
-// FIXME: -verify=expected,hybrid for RISCV64
-// RUN: %riscv64_cheri_cc1 -std=c11 -o - -emit-llvm -O1 -verify=expected %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-RISCV64
+// RUN: %riscv64_cheri_cc1 -std=c11 -o - -emit-llvm -O1 -verify=expected,hybrid %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-RISCV64
 
 // PURECAP-LABEL: define {{[^@]+}}@test_load
 // PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture readonly [[F:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
@@ -11,21 +10,14 @@
 // PURECAP-NEXT:    [[TMP0:%.*]] = load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[F]] seq_cst, align 16
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_load
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[F:%.*]]) local_unnamed_addr [[ATTR0:#.*]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_load_cap(i8* [[TMP0]], i32 signext 5) [[ATTR3:#.*]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_load
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture readonly [[F:%.*]]) local_unnamed_addr [[ATTR0:#.*]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = load atomic i8 addrspace(200)*, i8 addrspace(200)** [[F]] seq_cst, align 16
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-LABEL: define {{[^@]+}}@test_load
+// HYBRID-SAME: (i8 addrspace(200)** nocapture readonly [[F:%.*]]) local_unnamed_addr [[ATTR0:#.*]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = load atomic i8 addrspace(200)*, i8 addrspace(200)** [[F]] seq_cst, align 16
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
 __uintcap_t test_load(_Atomic(__uintcap_t) *f) {
-  return __c11_atomic_load(f, __ATOMIC_SEQ_CST);  // hybrid-warning{{unsupported}}
+  return __c11_atomic_load(f, __ATOMIC_SEQ_CST);
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_store
@@ -34,21 +26,14 @@ __uintcap_t test_load(_Atomic(__uintcap_t) *f) {
 // PURECAP-NEXT:    store atomic i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]] seq_cst, align 16
 // PURECAP-NEXT:    ret void
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_store
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-MIPS64-NEXT:    call void @__atomic_store_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret void
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_store
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    store atomic i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]] seq_cst, align 16
-// HYBRID-RISCV64-NEXT:    ret void
+// HYBRID-LABEL: define {{[^@]+}}@test_store
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    store atomic i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]] seq_cst, align 16
+// HYBRID-NEXT:    ret void
 //
 void test_store(_Atomic(__uintcap_t) *f, __uintcap_t value) {
-  __c11_atomic_store(f, value, __ATOMIC_SEQ_CST); // hybrid-warning{{unsupported}}
+  __c11_atomic_store(f, value, __ATOMIC_SEQ_CST);
 }
 
 // PURECAP-MIPS64-LABEL: define {{[^@]+}}@test_init
@@ -85,21 +70,14 @@ void test_init(_Atomic(__uintcap_t) *f, __uintcap_t value) {
 // PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[VALUE]] seq_cst
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_xchg
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_exchange_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_xchg
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[VALUE]] seq_cst
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-LABEL: define {{[^@]+}}@test_xchg
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[VALUE]] seq_cst
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
 __uintcap_t test_xchg(_Atomic(__uintcap_t) *f, __uintcap_t value) {
-  return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST); // hybrid-warning{{unsupported}}
+  return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg_long_ptr
@@ -111,26 +89,17 @@ __uintcap_t test_xchg(_Atomic(__uintcap_t) *f, __uintcap_t value) {
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// HYBRID-MIPS64-SAME: (i64 addrspace(200)** [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)** [[F]] to i8*
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* [[VALUE]] to i8 addrspace(200)*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_exchange_cap(i8* [[TMP0]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-MIPS64-NEXT:    ret i64 addrspace(200)* [[TMP2]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// HYBRID-RISCV64-SAME: (i64 addrspace(200)** nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)** [[F]] to i8 addrspace(200)**
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* [[VALUE]] to i8 addrspace(200)*
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = atomicrmw xchg i8 addrspace(200)** [[TMP0]], i8 addrspace(200)* [[TMP1]] seq_cst
-// HYBRID-RISCV64-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// HYBRID-RISCV64-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// HYBRID-LABEL: define {{[^@]+}}@test_xchg_long_ptr
+// HYBRID-SAME: (i64 addrspace(200)** nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)** [[F]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* [[VALUE]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw xchg i8 addrspace(200)** [[TMP0]], i8 addrspace(200)* [[TMP1]] seq_cst
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
 long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__capability value) {
-  return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST); // hybrid-warning{{unsupported}}
+  return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_weak
@@ -147,30 +116,22 @@ long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__ca
 // PURECAP:       cmpxchg.continue:
 // PURECAP-NEXT:    ret i1 [[TMP2]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[F:%.*]], i8 addrspace(200)** [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[EXP]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(i8* [[TMP0]], i8* [[TMP1]], i8 addrspace(200)* [[NEW]], i32 signext 0, i32 signext 0) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i1 [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
-// HYBRID-RISCV64-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
-// HYBRID-RISCV64:       cmpxchg.store_expected:
-// HYBRID-RISCV64-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
-// HYBRID-RISCV64-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-RISCV64-NEXT:    br label [[CMPXCHG_CONTINUE]]
-// HYBRID-RISCV64:       cmpxchg.continue:
-// HYBRID-RISCV64-NEXT:    ret i1 [[TMP2]]
+// HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_weak
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
+// HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
+// HYBRID-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
+// HYBRID:       cmpxchg.store_expected:
+// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[EXP]], align 16
+// HYBRID-NEXT:    br label [[CMPXCHG_CONTINUE]]
+// HYBRID:       cmpxchg.continue:
+// HYBRID-NEXT:    ret i1 [[TMP2]]
 //
 _Bool test_cmpxchg_weak(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t new) {
-  return __c11_atomic_compare_exchange_weak(f, exp, new, __ATOMIC_RELAXED, __ATOMIC_RELAXED); // hybrid-warning{{unsupported}}
+  return __c11_atomic_compare_exchange_weak(f, exp, new, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_strong
 // PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* addrspace(200)* nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
@@ -186,30 +147,22 @@ _Bool test_cmpxchg_weak(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t n
 // PURECAP:       cmpxchg.continue:
 // PURECAP-NEXT:    ret i1 [[TMP2]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[F:%.*]], i8 addrspace(200)** [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[EXP]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(i8* [[TMP0]], i8* [[TMP1]], i8 addrspace(200)* [[NEW]], i32 signext 0, i32 signext 0) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i1 [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
-// HYBRID-RISCV64-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
-// HYBRID-RISCV64:       cmpxchg.store_expected:
-// HYBRID-RISCV64-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
-// HYBRID-RISCV64-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-RISCV64-NEXT:    br label [[CMPXCHG_CONTINUE]]
-// HYBRID-RISCV64:       cmpxchg.continue:
-// HYBRID-RISCV64-NEXT:    ret i1 [[TMP2]]
+// HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_strong
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
+// HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
+// HYBRID-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
+// HYBRID:       cmpxchg.store_expected:
+// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[EXP]], align 16
+// HYBRID-NEXT:    br label [[CMPXCHG_CONTINUE]]
+// HYBRID:       cmpxchg.continue:
+// HYBRID-NEXT:    ret i1 [[TMP2]]
 //
 _Bool test_cmpxchg_strong(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t new) {
-  return __c11_atomic_compare_exchange_strong(f, exp, new, __ATOMIC_RELAXED, __ATOMIC_RELAXED); // hybrid-warning{{unsupported}}
+  return __c11_atomic_compare_exchange_strong(f, exp, new, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 
 // Most are only supported for __uintcap_t, but fetch_add/fetch_sub also work
@@ -222,19 +175,12 @@ _Bool test_cmpxchg_strong(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4:#.*]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2:#.*]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4:#.*]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2:#.*]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4:#.*]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 __uintcap_t test_fetch_add_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
@@ -252,27 +198,16 @@ __uintcap_t test_fetch_add_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
 // PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP4]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// HYBRID-MIPS64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
-// HYBRID-MIPS64-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-MIPS64-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP2]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-MIPS64-NEXT:    ret i64 addrspace(200)* [[TMP4]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// HYBRID-RISCV64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-RISCV64-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP2]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-RISCV64-NEXT:    ret i64 addrspace(200)* [[TMP4]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP2]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP4]]
 //
 long *__capability test_fetch_add_longptr(_Atomic(long *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
@@ -290,27 +225,16 @@ long *__capability test_fetch_add_longptr(_Atomic(long *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// HYBRID-MIPS64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-MIPS64-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-MIPS64-NEXT:    ret i64 addrspace(200)* [[TMP3]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// HYBRID-RISCV64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-RISCV64-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
 long *__capability test_fetch_add_longptr_and_short(_Atomic(long *__capability) *ptr, short value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
@@ -326,23 +250,14 @@ long *__capability test_fetch_add_longptr_and_short(_Atomic(long *__capability) 
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-MIPS64-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 char *__capability test_fetch_add_charptr(_Atomic(char *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
@@ -358,23 +273,14 @@ char *__capability test_fetch_add_charptr(_Atomic(char *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 char *__capability test_fetch_add_charptr_and_short(_Atomic(char *__capability) *ptr, short value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
@@ -388,19 +294,12 @@ char *__capability test_fetch_add_charptr_and_short(_Atomic(char *__capability) 
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 __uintcap_t test_fetch_sub_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
@@ -418,27 +317,16 @@ __uintcap_t test_fetch_sub_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
 // PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP4]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// HYBRID-MIPS64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
-// HYBRID-MIPS64-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-MIPS64-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP2]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-MIPS64-NEXT:    ret i64 addrspace(200)* [[TMP4]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// HYBRID-RISCV64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-RISCV64-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP2]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-RISCV64-NEXT:    ret i64 addrspace(200)* [[TMP4]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP2]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP4]]
 //
 long *__capability test_fetch_sub_longptr(_Atomic(long *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
@@ -456,27 +344,16 @@ long *__capability test_fetch_sub_longptr(_Atomic(long *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// HYBRID-MIPS64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-MIPS64-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-MIPS64-NEXT:    ret i64 addrspace(200)* [[TMP3]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// HYBRID-RISCV64-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
-// HYBRID-RISCV64-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
 long *__capability test_fetch_sub_longptr_and_short(_Atomic(long *__capability) *ptr, short value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
@@ -492,23 +369,14 @@ long *__capability test_fetch_sub_longptr_and_short(_Atomic(long *__capability) 
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-MIPS64-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-RISCV64-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 char *__capability test_fetch_sub_charptr(_Atomic(char *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
@@ -524,23 +392,14 @@ char *__capability test_fetch_sub_charptr(_Atomic(char *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// HYBRID-MIPS64-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// HYBRID-RISCV64-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 char *__capability test_fetch_sub_charptr_and_short(_Atomic(char *__capability) *ptr, short value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
@@ -554,19 +413,12 @@ char *__capability test_fetch_sub_charptr_and_short(_Atomic(char *__capability) 
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 __uintcap_t test_fetch_and_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_and(ptr, value, __ATOMIC_SEQ_CST);
@@ -580,19 +432,12 @@ __uintcap_t test_fetch_and_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 __uintcap_t test_fetch_or_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_or(ptr, value, __ATOMIC_SEQ_CST);
@@ -606,19 +451,12 @@ __uintcap_t test_fetch_or_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) 
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 __uintcap_t test_fetch_xor_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_xor(ptr, value, __ATOMIC_SEQ_CST);
@@ -632,19 +470,12 @@ __uintcap_t test_fetch_xor_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 __uintcap_t test_fetch_max_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_max(ptr, value, __ATOMIC_SEQ_CST);
@@ -658,19 +489,12 @@ __uintcap_t test_fetch_max_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
-// HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-MIPS64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR3]]
-// HYBRID-MIPS64-NEXT:    ret i8 addrspace(200)* [[CALL]]
-//
-// HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
-// HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-RISCV64-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
-// HYBRID-RISCV64-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5) [[ATTR4]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 __uintcap_t test_fetch_min_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_min(ptr, value, __ATOMIC_SEQ_CST);
