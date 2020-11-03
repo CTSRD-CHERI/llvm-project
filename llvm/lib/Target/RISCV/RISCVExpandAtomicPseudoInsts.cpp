@@ -222,19 +222,19 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
     return expandAtomicCmpXchgCap(MBB, MBBI, true, NextMBBI);
   case RISCV::PseudoCheriCmpXchg8ExplicitCap:
     return expandAtomicCmpXchg(MBB, MBBI, false, 8, true, NextMBBI,
-                               /* ExplicitAddrMode=*/true);
+                               /*ExplicitAddrMode=*/true);
   case RISCV::PseudoCheriCmpXchg16ExplicitCap:
     return expandAtomicCmpXchg(MBB, MBBI, false, 16, true, NextMBBI,
-                               /* ExplicitAddrMode=*/true);
+                               /*ExplicitAddrMode=*/true);
   case RISCV::PseudoCheriCmpXchg32ExplicitCap:
     return expandAtomicCmpXchg(MBB, MBBI, false, 32, true, NextMBBI,
-                               /* ExplicitAddrMode=*/true);
+                               /*ExplicitAddrMode=*/true);
   case RISCV::PseudoCheriCmpXchg64ExplicitCap:
     return expandAtomicCmpXchg(MBB, MBBI, false, 64, true, NextMBBI,
-                               /* ExplicitAddrMode=*/true);
+                               /*ExplicitAddrMode=*/true);
   case RISCV::PseudoCheriCmpXchgCapExplicitCap:
     return expandAtomicCmpXchgCap(MBB, MBBI, true, NextMBBI,
-                                  /* ExplicitAddrMode=*/true);
+                                  /*ExplicitAddrMode=*/true);
   }
 
   return false;
@@ -954,30 +954,27 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     // .looptail:
     //   sc.[w|d] scratch, newval, (addr)
     //   bnez scratch, loophead
+    //
+    // With an explicit cap/ddc-relative SC, the register stored is also the
+    // success/failure writeback register:
+    // .looptail:
+    //   mv scratch, newval
+    //   sc.[b|h|w|d].[cap|ddc] scratch, (addr)  (implicit rd=scratch)
+    //   bnez scratch, loophead
 
+    const MCInstrDesc &SCInst =
+        TII->get(getSCForRMW(PtrIsCap, ExplicitAddrMode, Ordering, Width));
     if (ExplicitAddrMode) {
-      // With an explicit cap/ddc-relative SC, the register stored is also the
-      // success/failure writeback register.
-      // .looptail:
-      //   mv scratch, newval
-      //   sc.cap.[b|h|w|d] scratch, (addr)  (implicit rd=scratch)
-      //   bnez scratch, loophead
       BuildMI(LoopTailMBB, DL, TII->get(RISCV::ADDI), ScratchReg)
           .addReg(NewValReg)
           .addImm(0);
       // Note: SC_*_CAP has the address register as the second argument not the
       // first even though it is called rs1 in tablegen.
-      BuildMI(
-          LoopTailMBB, DL,
-          TII->get(getSCForRMW(PtrIsCap, ExplicitAddrMode, Ordering, Width)),
-          ScratchReg)
+      BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
           .addReg(ScratchReg)
           .addReg(AddrReg);
     } else {
-      BuildMI(
-          LoopTailMBB, DL,
-          TII->get(getSCForRMW(PtrIsCap, ExplicitAddrMode, Ordering, Width)),
-          ScratchReg)
+      BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
           .addReg(AddrReg)
           .addReg(NewValReg);
     }
