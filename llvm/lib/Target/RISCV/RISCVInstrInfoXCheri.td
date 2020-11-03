@@ -1549,7 +1549,6 @@ def : Pat<(load GPCR:$rs1), (FMV_W_X (LW_CAP GPCR:$rs1))>;
 def : Pat<(store FPR32:$rs2, GPCR:$rs1), (SW_CAP (FMV_X_W FPR32:$rs2), GPCR:$rs1)>;
 } // Predicates = [HasCheri, HasStdExtF, NotCapMode]
 
-
 /// 'D' (Single-Precision Floating-Point) extension
 
 let Predicates = [HasCheri, HasStdExtD, IsCapMode] in {
