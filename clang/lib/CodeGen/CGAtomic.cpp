@@ -1436,9 +1436,10 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   llvm::Type *ty;
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
     // If capability atomics are natively supported the instruction expects
-    // a capability type. We also pass capabilities to the atomic libcalls
-    // (i.e. always use the optimized ones) since there is no way for the
-    // generic libcall to maintain tags.
+    // a capability type. We also pass capabilities directly to the atomic
+    // libcalls (i.e. always use optimized ones) since this is required to
+    // support the RMW operations and special-casing the load/store/xchg to
+    // use the generic libcalls (with mutex+memcpy) adds unncessary complexity.
     ty = CGF.CGM.Int8CheriCapTy;
   } else {
     ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
