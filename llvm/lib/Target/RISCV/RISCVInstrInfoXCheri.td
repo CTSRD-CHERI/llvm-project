@@ -1564,11 +1564,11 @@ defm : CheriStPat<store, CFSD, FPR64>;
 
 } // Predicates = [HasCheri, HasStdExtD, IsCapMode]
 
-let Predicates = [HasCheri, HasStdExtF, IsRV64, NotCapMode] in {
+let Predicates = [HasCheri, HasStdExtD, IsRV64, NotCapMode] in {
 // TODO: double patterns for RV32 (which requires BuildPairF64 and SplitF64)
 def : Pat<(load GPCR:$rs1), (FMV_D_X (LD_CAP GPCR:$rs1))>;
 def : Pat<(store FPR64:$rs2, GPCR:$rs1), (SD_CAP (FMV_X_D FPR64:$rs2), GPCR:$rs1)>;
-}
+} // Predicates = [HasCheri, HasStdExtD, IsRV64, NotCapMode]
 
 /// 'XCheri' extension
 
