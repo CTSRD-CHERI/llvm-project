@@ -1692,7 +1692,6 @@ bool AtomicExpand::expandAtomicOpToLibcall(
                I->dump(););
     return false;
   }
-  // Assign null in the capability case to ensure we crash if it's used.
   Type *SizedIntTy = nullptr;
   Type *I8CapTy = nullptr;
   if (IsCap) {
