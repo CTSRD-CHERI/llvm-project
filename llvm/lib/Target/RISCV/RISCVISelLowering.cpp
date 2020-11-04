@@ -3373,12 +3373,10 @@ Value *RISCVTargetLowering::emitStoreConditional(IRBuilder<> &Builder,
   // using shouldInsertFencesForAtomic().
   // The SC intrinsic return type is also overloaded since only XLEN-size
   // integers are legal.
-  auto *SC = Builder.CreateIntrinsic(
+  return Builder.CreateIntrinsic(
       Intrinsic::riscv_cheri_explict_mode_sc,
       {Builder.getIntNTy(Subtarget.getXLen()), Addr->getType(), Val->getType()},
       {Addr, Val});
-  // AtomicExpandPass expects an i32 value.
-  return Builder.CreateTrunc(SC, Builder.getInt32Ty());
 }
 
 TargetLowering::AtomicExpansionKind

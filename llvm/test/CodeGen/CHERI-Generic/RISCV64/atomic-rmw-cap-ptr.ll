@@ -36,8 +36,6 @@ define dso_local i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-ATOMICS-NEXT:    lr.d.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    mv a3, a1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB0_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -86,8 +84,6 @@ define dso_local i64 @atomic_cap_ptr_add(i64 addrspace(200)* %ptr, i64 %val) nou
 ; HYBRID-ATOMICS-NEXT:    lr.d.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    add a3, a2, a1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB1_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -137,8 +133,6 @@ define dso_local i64 @atomic_cap_ptr_sub(i64 addrspace(200)* %ptr, i64 %val) nou
 ; HYBRID-ATOMICS-NEXT:    lr.d.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    sub a3, a2, a1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB2_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -187,8 +181,6 @@ define dso_local i64 @atomic_cap_ptr_and(i64 addrspace(200)* %ptr, i64 %val) nou
 ; HYBRID-ATOMICS-NEXT:    lr.d.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    and a3, a2, a1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB3_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -246,8 +238,6 @@ define dso_local i64 @atomic_cap_ptr_nand(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-ATOMICS-NEXT:    and a3, a2, a1
 ; HYBRID-ATOMICS-NEXT:    not a3, a3
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB4_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -296,8 +286,6 @@ define dso_local i64 @atomic_cap_ptr_or(i64 addrspace(200)* %ptr, i64 %val) noun
 ; HYBRID-ATOMICS-NEXT:    lr.d.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    or a3, a2, a1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB5_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -346,8 +334,6 @@ define dso_local i64 @atomic_cap_ptr_xor(i64 addrspace(200)* %ptr, i64 %val) nou
 ; HYBRID-ATOMICS-NEXT:    lr.d.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    xor a3, a2, a1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB6_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -427,8 +413,6 @@ define dso_local i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nou
 ; HYBRID-ATOMICS-NEXT:  .LBB7_1: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB7_2 Depth=1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    beqz a3, .LBB7_4
 ; HYBRID-ATOMICS-NEXT:  .LBB7_2: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -541,8 +525,6 @@ define dso_local i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nou
 ; HYBRID-ATOMICS-NEXT:  .LBB8_1: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB8_2 Depth=1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    beqz a3, .LBB8_4
 ; HYBRID-ATOMICS-NEXT:  .LBB8_2: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -655,8 +637,6 @@ define dso_local i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-ATOMICS-NEXT:  .LBB9_1: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB9_2 Depth=1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    beqz a3, .LBB9_4
 ; HYBRID-ATOMICS-NEXT:  .LBB9_2: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -769,8 +749,6 @@ define dso_local i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) no
 ; HYBRID-ATOMICS-NEXT:  .LBB10_1: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB10_2 Depth=1
 ; HYBRID-ATOMICS-NEXT:    sc.d.cap a3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    beqz a3, .LBB10_4
 ; HYBRID-ATOMICS-NEXT:  .LBB10_2: # %atomicrmw.start
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1

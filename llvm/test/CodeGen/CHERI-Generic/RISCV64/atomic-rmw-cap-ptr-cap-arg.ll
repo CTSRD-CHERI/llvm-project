@@ -37,8 +37,6 @@ define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* a
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
 ; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB0_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -86,8 +84,6 @@ define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_relaxed(i8 addrspace(20
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
 ; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB1_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
@@ -135,8 +131,6 @@ define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_acquire(i8 addrspace(20
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca0, (ca2)
 ; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
 ; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca2)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB2_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
@@ -184,8 +178,6 @@ define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* 
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
 ; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB3_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
@@ -233,8 +225,6 @@ define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(20
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
 ; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
-; HYBRID-ATOMICS-NEXT:    slli a3, a3, 32
-; HYBRID-ATOMICS-NEXT:    srli a3, a3, 32
 ; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB4_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
