@@ -1432,9 +1432,8 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 }
 
 Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
-  Address Result = Address::invalid();
-  auto *addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
-  unsigned addrspace = addrTy->getAddressSpace();
+  unsigned addrspace =
+      cast<llvm::PointerType>(addr.getPointer()->getType())->getAddressSpace();
   llvm::Type *ty;
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
     // If capability atomics are natively supported the instruction expects
@@ -1442,16 +1441,14 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
     // libcalls (i.e. always use optimized ones) since this is required to
     // support the RMW operations and special-casing the load/store/xchg to
     // use the generic libcalls (with mutex+memcpy) adds unncessary complexity.
-    if (!UseLibcall) {
-      // If we aren't using a libcall there is no need to cast to i8*
-      return CGF.Builder.CreateBitCast(addr, getAtomicPointer()->getType());
-    }
-    ty = CGF.CGM.Int8CheriCapTy;
+    // If we aren't using a libcall there is no need to cast to i8*.
+    ty = UseLibcall ? CGF.CGM.Int8CheriCapTy->getPointerTo(addrspace)
+                    : getAtomicPointer()->getType();
   } else {
-    ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
+    ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits)
+             ->getPointerTo(addrspace);
   }
-  Result = CGF.Builder.CreateBitCast(addr, ty->getPointerTo(addrspace));
-  return Result;
+  return CGF.Builder.CreateBitCast(addr, ty);
 }
 
 Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
