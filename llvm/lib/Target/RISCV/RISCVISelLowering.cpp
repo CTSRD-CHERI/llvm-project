@@ -314,7 +314,7 @@ bool RISCVTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   case Intrinsic::riscv_masked_atomicrmw_min_i32:
   case Intrinsic::riscv_masked_atomicrmw_umax_i32:
   case Intrinsic::riscv_masked_atomicrmw_umin_i32:
-  case Intrinsic::riscv_masked_cmpxchg_i32:
+  case Intrinsic::riscv_masked_cmpxchg_i32: {
     PointerType *PtrTy = cast<PointerType>(I.getArgOperand(0)->getType());
     Info.opc = ISD::INTRINSIC_W_CHAIN;
     Info.memVT = MVT::getVT(PtrTy->getElementType());
@@ -324,6 +324,41 @@ bool RISCVTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
     Info.flags = MachineMemOperand::MOLoad | MachineMemOperand::MOStore |
                  MachineMemOperand::MOVolatile;
     return true;
+  }
+  case Intrinsic::riscv_cheri_explict_mode_lr: {
+    const DataLayout &DL = I.getModule()->getDataLayout();
+    Type *ValTy = I.getType();
+    Info.opc = ISD::INTRINSIC_W_CHAIN;
+    if (DL.isFatPointer(ValTy)) {
+      Info.memVT = CapType;
+    } else {
+      assert(!ValTy->isPointerTy() && "Should have been converted to integer");
+      Info.memVT = MVT::getVT(ValTy);
+    }
+    assert(!Info.memVT.isOverloaded());
+    Info.ptrVal = I.getArgOperand(0);
+    Info.offset = 0;
+    Info.align = DL.getABITypeAlign(ValTy);
+    Info.flags = MachineMemOperand::MOLoad | MachineMemOperand::MOVolatile;
+    return true;
+  }
+  case Intrinsic::riscv_cheri_explict_mode_sc: {
+    const DataLayout &DL = I.getModule()->getDataLayout();
+    Type *ValTy = I.getArgOperand(0)->getType();
+    Info.opc = ISD::INTRINSIC_W_CHAIN;
+    if (DL.isFatPointer(ValTy)) {
+      Info.memVT = CapType;
+    } else {
+      assert(!ValTy->isPointerTy() && "Should have been converted to integer");
+      Info.memVT = MVT::getVT(ValTy);
+    }
+    assert(!Info.memVT.isOverloaded());
+    Info.ptrVal = I.getArgOperand(0);
+    Info.offset = 0;
+    Info.align = DL.getABITypeAlign(ValTy);
+    Info.flags = MachineMemOperand::MOStore | MachineMemOperand::MOVolatile;
+    return true;
+  }
   }
 }
 
@@ -3321,6 +3356,31 @@ bool RISCVTargetLowering::shouldInsertFencesForAtomic(
   return isa<LoadInst>(I) || isa<StoreInst>(I);
 }
 
+Value *RISCVTargetLowering::emitLoadLinked(IRBuilder<> &Builder, Value *Addr,
+                                           AtomicOrdering Ord) const {
+  // Note: The explicit mode atomics are always relaxed. We get the ordering
+  // using shouldInsertFencesForAtomic().
+  return Builder.CreateIntrinsic(
+      Intrinsic::riscv_cheri_explict_mode_lr,
+      {cast<PointerType>(Addr->getType())->getElementType(), Addr->getType()},
+      {Addr});
+}
+
+Value *RISCVTargetLowering::emitStoreConditional(IRBuilder<> &Builder,
+                                                 Value *Val, Value *Addr,
+                                                 AtomicOrdering Ord) const {
+  // Note: The explicit mode atomics are always relaxed. We get the ordering
+  // using shouldInsertFencesForAtomic().
+  // The SC intrinsic return type is also overloaded since only XLEN-size
+  // integers are legal.
+  auto *SC = Builder.CreateIntrinsic(
+      Intrinsic::riscv_cheri_explict_mode_sc,
+      {Builder.getIntNTy(Subtarget.getXLen()), Addr->getType(), Val->getType()},
+      {Addr, Val});
+  // AtomicExpandPass expects an i32 value.
+  return Builder.CreateTrunc(SC, Builder.getInt32Ty());
+}
+
 TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // atomicrmw {fadd,fsub} must be expanded to use compare-exchange, as floating
@@ -3330,14 +3390,9 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
     return AtomicExpansionKind::CmpXChg;
 
   // The atomic RMW instructions are only available in capmode, so for the
-  // hybrid ABI we have expand these operations to use compare-exchange (which
-  // is expanded to a LR/SC sequence when not in capmode).
-  // Note: Since the operations between LR/SC don't break the forward progress
-  // guarantee, we could generate slightly more efficient code by using
-  // AtomicExpansionKind::LLSC. However, the required TLI hooks for are not
-  // implemented so we use CmpXChg.
+  // hybrid ABI we have expand these operations using a LR/SC sequence.
   if (needsExplicitAddressingModeAtomics(AI, Subtarget))
-    return AtomicExpansionKind::CmpXChg;
+    return AtomicExpansionKind::LLSC;
 
   unsigned Size = AI->getType()->getPrimitiveSizeInBits();
   if ((Size == 8 || Size == 16) &&

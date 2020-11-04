@@ -65,4 +65,12 @@ let TargetPrefix = "riscv" in {
   // @llvm.riscv.masked.cmpxchg.{i32,i64}.<p>(...)
   defm int_riscv_masked_cmpxchg : MaskedAtomicRMWFiveArgIntrinsics;
 
+  def int_riscv_cheri_explict_mode_lr
+      : Intrinsic<[llvm_any_ty], [llvm_anyptr_ty],
+                  [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
+  // Note: insertRMWLLSCLoop expects i32 and not i1 as the return type.
+  def int_riscv_cheri_explict_mode_sc
+      : Intrinsic<[llvm_anyint_ty], [llvm_anyptr_ty, llvm_any_ty],
+                  [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
+
 } // TargetPrefix = "riscv"

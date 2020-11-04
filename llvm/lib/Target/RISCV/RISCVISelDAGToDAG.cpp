@@ -14,6 +14,7 @@
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "Utils/RISCVMatInt.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/IR/IntrinsicsRISCV.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
@@ -122,6 +123,93 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     unsigned Opc = VT.isFatPointer() ? RISCV::CIncOffsetImm : RISCV::ADDI;
     ReplaceNode(Node, CurDAG->getMachineNode(Opc, DL, VT, TFI, Imm));
     return;
+  }
+  case ISD::INTRINSIC_W_CHAIN: {
+    unsigned IntNo = cast<ConstantSDNode>(Node->getOperand(1))->getZExtValue();
+    switch (IntNo) {
+    default:
+      break;
+    case Intrinsic::riscv_cheri_explict_mode_lr: {
+      SDLoc DL(Node);
+      SDValue Chain = Node->getOperand(0);
+      SDValue MemAddr = Node->getOperand(2);
+      unsigned Opcode = [](MVT VT, bool PtrIsCap) {
+        switch (VT.SimpleTy) {
+        default:
+          llvm_unreachable("Invalid type for explict LR intrinsic");
+        case MVT::i8:
+          return PtrIsCap ? RISCV::LR_B_CAP : RISCV::LR_B_DDC;
+        case MVT::i16:
+          return PtrIsCap ? RISCV::LR_H_CAP : RISCV::LR_H_DDC;
+        case MVT::i32:
+          return PtrIsCap ? RISCV::LR_W_CAP : RISCV::LR_W_DDC;
+        case MVT::i64:
+          return PtrIsCap ? RISCV::LR_D_CAP : RISCV::LR_D_DDC;
+        case MVT::iFATPTR64:
+          return PtrIsCap ? RISCV::LR_C_CAP_64 : RISCV::LR_C_DDC_64;
+        case MVT::iFATPTR128:
+          return PtrIsCap ? RISCV::LR_C_CAP_128 : RISCV::LR_C_DDC_128;
+        }
+      }(Node->getSimpleValueType(0), MemAddr.getValueType().isFatPointer());
+
+      SDNode *Ld = CurDAG->getMachineNode(
+          Opcode, DL, Node->getSimpleValueType(0), MVT::Other, MemAddr, Chain);
+      MachineMemOperand *MemOp =
+          cast<MemIntrinsicSDNode>(Node)->getMemOperand();
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(Ld), {MemOp});
+      ReplaceNode(Node, Ld);
+      return;
+    }
+    case Intrinsic::riscv_cheri_explict_mode_sc: {
+      SDLoc DL(Node);
+      SDValue Chain = Node->getOperand(0);
+      SDValue MemAddr = Node->getOperand(2);
+      SDValue Val = Node->getOperand(3);
+      MVT ValVT = Val.getSimpleValueType();
+
+      unsigned Opcode = [](MVT VT, bool PtrIsCap) {
+        switch (VT.SimpleTy) {
+        default:
+          llvm_unreachable("Invalid type for explict LR intrinsic");
+        case MVT::i8:
+          return PtrIsCap ? RISCV::SC_B_CAP : RISCV::SC_B_DDC;
+        case MVT::i16:
+          return PtrIsCap ? RISCV::SC_H_CAP : RISCV::SC_H_DDC;
+        case MVT::i32:
+          return PtrIsCap ? RISCV::SC_W_CAP : RISCV::SC_W_DDC;
+        case MVT::i64:
+          return PtrIsCap ? RISCV::SC_D_CAP : RISCV::SC_D_DDC;
+        case MVT::iFATPTR64:
+          return PtrIsCap ? RISCV::SC_C_CAP_64 : RISCV::SC_C_DDC_64;
+        case MVT::iFATPTR128:
+          return PtrIsCap ? RISCV::SC_C_CAP_128 : RISCV::SC_C_DDC_128;
+        }
+      }(ValVT, MemAddr.getValueType().isFatPointer());
+      MVT ResultTy = ValVT.isFatPointer() ? ValVT : XLenVT;
+      assert(Node->getSimpleValueType(0) == XLenVT);
+      // Place arguments in the right order.
+      SDValue Ops[] = {MemAddr, Val, Chain};
+      SDNode *St =
+          CurDAG->getMachineNode(Opcode, DL, ResultTy, MVT::Other, Ops);
+      MachineMemOperand *MemOp =
+          cast<MemIntrinsicSDNode>(Node)->getMemOperand();
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(St), {MemOp});
+
+      // The explicit SC instructions use the same register for input and output
+      // but if it's a capability we have to add an EXTRACT_SUBREG to get the
+      // integer part of the capability register.
+      if (ValVT.isFatPointer()) {
+        St = CurDAG->getMachineNode(
+            TargetOpcode::EXTRACT_SUBREG, DL, XLenVT, MVT::Other,
+            SDValue(St, 0),
+            CurDAG->getTargetConstant(RISCV::sub_cap_addr, DL, MVT::i32),
+            Chain);
+      }
+      ReplaceNode(Node, St);
+      return;
+    }
+    }
+    break;
   }
   case ISD::SRL: {
     if (!Subtarget->is64Bit())

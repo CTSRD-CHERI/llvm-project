@@ -133,6 +133,10 @@ public:
   }
   bool convertSelectOfConstantsToMath(EVT VT) const override { return true; }
 
+  Value *emitLoadLinked(IRBuilder<> &Builder, Value *Addr,
+                        AtomicOrdering Ord) const override;
+  Value *emitStoreConditional(IRBuilder<> &Builder, Value *Val, Value *Addr,
+                              AtomicOrdering Ord) const override;
   bool shouldInsertFencesForAtomic(const Instruction *I) const override;
   Instruction *emitLeadingFence(IRBuilder<> &Builder, Instruction *Inst,
                                 AtomicOrdering Ord) const override;
