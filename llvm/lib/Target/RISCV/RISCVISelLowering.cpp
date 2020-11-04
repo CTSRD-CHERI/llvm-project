@@ -3498,8 +3498,12 @@ TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicCmpXchgInIR(
     AtomicCmpXchgInst *CI) const {
   unsigned Size = CI->getCompareOperand()->getType()->getPrimitiveSizeInBits();
-  if ((Size == 8 || Size == 16) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+  // For capability pointers we must always use the smallest possible type
+  // instead of promoting to i32/i64 to ensure we don't trigger bounds errors.
+  const DataLayout &DL = CI->getModule()->getDataLayout();
+  if (DL.isFatPointer(CI->getPointerOperand()->getType()))
+    return AtomicExpansionKind::None;
+  if (Size == 8 || Size == 16)
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }
