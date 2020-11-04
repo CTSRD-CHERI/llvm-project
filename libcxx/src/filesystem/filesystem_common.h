@@ -449,7 +449,11 @@ public:
   }
 };
 
+#if defined(_LIBCPP_WIN32API)
+using fs_time = time_util<file_time_type, int64_t, TimeSpec>;
+#else
 using fs_time = time_util<file_time_type, time_t, TimeSpec>;
+#endif
 
 #if defined(__APPLE__)
 inline TimeSpec extract_mtime(StatT const& st) { return st.st_mtimespec; }
@@ -468,6 +472,7 @@ inline TimeSpec extract_mtime(StatT const& st) { return st.st_mtim; }
 inline TimeSpec extract_atime(StatT const& st) { return st.st_atim; }
 #endif
 
+#if !defined(_LIBCPP_WIN32API)
 inline TimeVal make_timeval(TimeSpec const& ts) {
   using namespace chrono;
   auto Convert = [](long nsec) {
@@ -510,6 +515,7 @@ bool set_file_times(const path& p, std::array<TimeSpec, 2> const& TS,
   return posix_utimensat(p, TS, ec);
 #endif
 }
+#endif /* !_LIBCPP_WIN32API */
 
 } // namespace
 } // end namespace detail
