@@ -245,6 +245,55 @@ bb:
   ret i8 addrspace(200)* %tmp
 }
 
+; Also check non-i8* xchg:
+define dso_local i32 addrspace(200)* @atomic_cap_ptr_xchg_i32ptr(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg_i32ptr:
+; PURECAP-ATOMICS:       # %bb.0: # %bb
+; PURECAP-ATOMICS-NEXT:    camoswap.c.aqrl ca0, ca1, (ca0)
+; PURECAP-ATOMICS-NEXT:    cret
+;
+; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg_i32ptr:
+; PURECAP-LIBCALLS:       # %bb.0: # %bb
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:  .LBB5_1: # %bb
+; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
+; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
+; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB5_1)(ca3)
+; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 4
+; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
+; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-ATOMICS-LABEL: atomic_cap_ptr_xchg_i32ptr:
+; HYBRID-ATOMICS:       # %bb.0: # %bb
+; HYBRID-ATOMICS-NEXT:    fence rw, w
+; HYBRID-ATOMICS-NEXT:  .LBB5_1: # %atomicrmw.start
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca1
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB5_1
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg_i32ptr:
+; HYBRID-LIBCALLS:       # %bb.0: # %bb
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a2, zero, 4
+; HYBRID-LIBCALLS-NEXT:    call __atomic_exchange_cap_c
+; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
+bb:
+  %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val acq_rel
+  ret i32 addrspace(200)* %tmp
+}
+
 ; TODO: support all these:
 ; define dso_local i8 addrspace(200)* @atomic_cap_ptr_add(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:

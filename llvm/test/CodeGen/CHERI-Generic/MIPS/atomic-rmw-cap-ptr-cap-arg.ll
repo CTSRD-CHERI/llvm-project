@@ -168,6 +168,40 @@ bb:
   ret i8 addrspace(200)* %tmp
 }
 
+; Also check non-i8* xchg:
+define dso_local i32 addrspace(200)* @atomic_cap_ptr_xchg_i32ptr(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_xchg_i32ptr:
+; PURECAP:       # %bb.0: # %bb
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB5_1: # %bb
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cllc $c1, $c3
+; PURECAP-NEXT:    cscc $1, $c4, $c3
+; PURECAP-NEXT:    beqz $1, .LBB5_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cmove $c3, $c1
+;
+; HYBRID-LABEL: atomic_cap_ptr_xchg_i32ptr:
+; HYBRID:       # %bb.0: # %bb
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB5_1: # %bb
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cllc $c1, $c3
+; HYBRID-NEXT:    cscc $1, $c4, $c3
+; HYBRID-NEXT:    beqz $1, .LBB5_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    cmove $c3, $c1
+bb:
+  %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val acq_rel
+  ret i32 addrspace(200)* %tmp
+}
+
 ; TODO: support all these:
 ; define dso_local i8 addrspace(200)* @atomic_cap_ptr_add(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:

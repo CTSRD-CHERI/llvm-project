@@ -39,6 +39,13 @@ bb:
   ret i8 addrspace(200)* %tmp
 }
 
+; Also check non-i8* xchg:
+define dso_local i32 addrspace(200)* @atomic_cap_ptr_xchg_i32ptr(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+bb:
+  %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val acq_rel
+  ret i32 addrspace(200)* %tmp
+}
+
 ; TODO: support all these:
 ; define dso_local i8 addrspace(200)* @atomic_cap_ptr_add(i8 addrspace(200)* addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
 ; bb:
