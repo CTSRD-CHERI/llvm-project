@@ -9374,9 +9374,13 @@ Value *RISCVTargetLowering::emitMaskedAtomicRMWIntrinsic(
 TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicCmpXchgInIR(
     AtomicCmpXchgInst *CI) const {
-  unsigned Size = CI->getCompareOperand()->getType()->getPrimitiveSizeInBits();
+  // For capability pointers we must always use the smallest possible type
+  // instead of promoting to i32/i64 to ensure we don't trigger bounds errors.
+  const DataLayout &DL = CI->getModule()->getDataLayout();
+  uint64_t Size =
+      DL.getTypeSizeInBits(CI->getCompareOperand()->getType()).getFixedSize();
   if ((Size == 8 || Size == 16) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+      !DL.isFatPointer(CI->getPointerOperand()->getType()))
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }
