@@ -7,7 +7,7 @@
 ; RUN: %cheri128_purecap_llc %s -o - | FileCheck %s --check-prefix=PURECAP
 ; RUN: %cheri128_llc %s -o - | FileCheck %s --check-prefix=HYBRID
 
-define dso_local void @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_sc:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    sync
@@ -20,7 +20,7 @@ define dso_local void @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* addrspace(200)*
 ; PURECAP-NEXT:  # %bb.2: # %bb
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
-; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_sc:
 ; HYBRID:       # %bb.0: # %bb
@@ -34,13 +34,13 @@ define dso_local void @atomic_cap_ptr_xchg_sc(i8 addrspace(200)* addrspace(200)*
 ; HYBRID-NEXT:  # %bb.2: # %bb
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
-; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    cmove $c3, $c1
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val seq_cst
-  ret void
+  ret i8 addrspace(200)* %tmp
 }
 
-define dso_local void @atomic_cap_ptr_xchg_relaxed(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_relaxed(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_relaxed:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    .insn
@@ -52,7 +52,7 @@ define dso_local void @atomic_cap_ptr_xchg_relaxed(i8 addrspace(200)* addrspace(
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.2: # %bb
 ; PURECAP-NEXT:    cjr $c17
-; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_relaxed:
 ; HYBRID:       # %bb.0: # %bb
@@ -65,13 +65,13 @@ define dso_local void @atomic_cap_ptr_xchg_relaxed(i8 addrspace(200)* addrspace(
 ; HYBRID-NEXT:    nop
 ; HYBRID-NEXT:  # %bb.2: # %bb
 ; HYBRID-NEXT:    jr $ra
-; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    cmove $c3, $c1
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val monotonic
-  ret void
+  ret i8 addrspace(200)* %tmp
 }
 
-define dso_local void @atomic_cap_ptr_xchg_acquire(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_acquire(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_acquire:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    .insn
@@ -84,7 +84,7 @@ define dso_local void @atomic_cap_ptr_xchg_acquire(i8 addrspace(200)* addrspace(
 ; PURECAP-NEXT:  # %bb.2: # %bb
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
-; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_acquire:
 ; HYBRID:       # %bb.0: # %bb
@@ -98,13 +98,13 @@ define dso_local void @atomic_cap_ptr_xchg_acquire(i8 addrspace(200)* addrspace(
 ; HYBRID-NEXT:  # %bb.2: # %bb
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
-; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    cmove $c3, $c1
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acquire
-  ret void
+  ret i8 addrspace(200)* %tmp
 }
 
-define dso_local void @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_rel:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    sync
@@ -116,7 +116,7 @@ define dso_local void @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* addrspace(200)
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.2: # %bb
 ; PURECAP-NEXT:    cjr $c17
-; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_rel:
 ; HYBRID:       # %bb.0: # %bb
@@ -129,13 +129,13 @@ define dso_local void @atomic_cap_ptr_xchg_rel(i8 addrspace(200)* addrspace(200)
 ; HYBRID-NEXT:    nop
 ; HYBRID-NEXT:  # %bb.2: # %bb
 ; HYBRID-NEXT:    jr $ra
-; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    cmove $c3, $c1
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val release
-  ret void
+  ret i8 addrspace(200)* %tmp
 }
 
-define dso_local void @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
+define dso_local i8 addrspace(200)* @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_acq_rel:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    sync
@@ -148,7 +148,7 @@ define dso_local void @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(200)* addrspace(
 ; PURECAP-NEXT:  # %bb.2: # %bb
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
-; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_acq_rel:
 ; HYBRID:       # %bb.0: # %bb
@@ -162,69 +162,69 @@ define dso_local void @atomic_cap_ptr_xchg_acq_rel(i8 addrspace(200)* addrspace(
 ; HYBRID-NEXT:  # %bb.2: # %bb
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
-; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    cmove $c3, $c1
 bb:
   %tmp = atomicrmw xchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %val acq_rel
-  ret void
+  ret i8 addrspace(200)* %tmp
 }
 
 ; TODO: support all these:
-; define dso_local void @atomic_cap_ptr_add(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_add(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw add i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_sub(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_sub(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw sub i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_and(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_and(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw and i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_nand(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_nand(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw nand i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_or(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_or(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw or i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_xor(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_xor(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw xor i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_max(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_max(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw max i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_min(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_min(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw min i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_umax(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_umax(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw umax i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }
 ;
-; define dso_local void @atomic_cap_ptr_umin(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
+; define dso_local i8 addrspace(200)* @atomic_cap_ptr_umin(i8 addrspace(200)* addrspace(200)* %ptr, i64 %val) nounwind {
 ; bb:
 ;   %tmp = atomicrmw umin i8 addrspace(200)* addrspace(200)* %ptr, i64 %val seq_cst
-;   ret void
+;   ret i8 addrspace(200)* %tmp
 ; }

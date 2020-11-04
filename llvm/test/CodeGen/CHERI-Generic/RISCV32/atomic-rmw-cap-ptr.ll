@@ -8,7 +8,7 @@
 ; RUN: %riscv32_cheri_llc %s -o - -mattr=+f,+a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
 ; RUN: %riscv32_cheri_llc %s -o - -mattr=+f,-a -verify-machineinstrs | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 
-define dso_local void @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camoswap.w.aqrl a0, a1, (ca0)
@@ -52,6 +52,7 @@ define dso_local void @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-ATOMICS-NEXT:    bne a2, a3, .LBB0_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xchg:
@@ -65,10 +66,10 @@ define dso_local void @atomic_cap_ptr_xchg(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_add(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_add(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_add:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camoadd.w.aqrl a0, a1, (ca0)
@@ -112,6 +113,7 @@ define dso_local void @atomic_cap_ptr_add(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-ATOMICS-NEXT:    bne a2, a3, .LBB1_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_add:
@@ -125,10 +127,10 @@ define dso_local void @atomic_cap_ptr_add(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw add i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_sub(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_sub(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_sub:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    neg a1, a1
@@ -173,6 +175,7 @@ define dso_local void @atomic_cap_ptr_sub(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-ATOMICS-NEXT:    bne a2, a3, .LBB2_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_sub:
@@ -186,10 +189,10 @@ define dso_local void @atomic_cap_ptr_sub(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw sub i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_and(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_and(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_and:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camoand.w.aqrl a0, a1, (ca0)
@@ -233,6 +236,7 @@ define dso_local void @atomic_cap_ptr_and(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-ATOMICS-NEXT:    bne a2, a3, .LBB3_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_and:
@@ -246,10 +250,10 @@ define dso_local void @atomic_cap_ptr_and(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw and i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_nand:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:  .LBB4_1: # %bb
@@ -260,6 +264,7 @@ define dso_local void @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) n
 ; PURECAP-ATOMICS-NEXT:    csc.w.aqrl a3, a3, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a3, .LBB4_1
 ; PURECAP-ATOMICS-NEXT:  # %bb.2: # %bb
+; PURECAP-ATOMICS-NEXT:    mv a0, a2
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_nand:
@@ -301,6 +306,7 @@ define dso_local void @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-ATOMICS-NEXT:    bne a2, a3, .LBB4_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_nand:
@@ -314,10 +320,10 @@ define dso_local void @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw nand i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_or(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_or(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_or:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camoor.w.aqrl a0, a1, (ca0)
@@ -361,6 +367,7 @@ define dso_local void @atomic_cap_ptr_or(i32 addrspace(200)* %ptr, i32 %val) nou
 ; HYBRID-ATOMICS-NEXT:    bne a2, a3, .LBB5_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_or:
@@ -374,10 +381,10 @@ define dso_local void @atomic_cap_ptr_or(i32 addrspace(200)* %ptr, i32 %val) nou
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw or i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_xor(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_xor(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xor:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camoxor.w.aqrl a0, a1, (ca0)
@@ -421,6 +428,7 @@ define dso_local void @atomic_cap_ptr_xor(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-ATOMICS-NEXT:    bne a2, a3, .LBB6_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_xor:
@@ -434,10 +442,10 @@ define dso_local void @atomic_cap_ptr_xor(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw xor i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_max:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camomax.w.aqrl a0, a1, (ca0)
@@ -481,6 +489,7 @@ define dso_local void @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) no
 ; PURECAP-LIBCALLS-NEXT:    mv a2, s0
 ; PURECAP-LIBCALLS-NEXT:    j .LBB7_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB7_4: # %atomicrmw.end
+; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 24(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
@@ -519,6 +528,7 @@ define dso_local void @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-ATOMICS-NEXT:    j .LBB7_1
 ; HYBRID-ATOMICS-NEXT:  .LBB7_4: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_max:
@@ -549,16 +559,17 @@ define dso_local void @atomic_cap_ptr_max(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-LIBCALLS-NEXT:    mv a2, s0
 ; HYBRID-LIBCALLS-NEXT:    j .LBB7_1
 ; HYBRID-LIBCALLS-NEXT:  .LBB7_4: # %atomicrmw.end
+; HYBRID-LIBCALLS-NEXT:    mv a0, a3
 ; HYBRID-LIBCALLS-NEXT:    lw s0, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    lw ra, 28(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 32
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw max i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_min:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camomin.w.aqrl a0, a1, (ca0)
@@ -602,6 +613,7 @@ define dso_local void @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) no
 ; PURECAP-LIBCALLS-NEXT:    mv a2, s0
 ; PURECAP-LIBCALLS-NEXT:    j .LBB8_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB8_4: # %atomicrmw.end
+; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 24(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
@@ -640,6 +652,7 @@ define dso_local void @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-ATOMICS-NEXT:    j .LBB8_1
 ; HYBRID-ATOMICS-NEXT:  .LBB8_4: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_min:
@@ -670,16 +683,17 @@ define dso_local void @atomic_cap_ptr_min(i32 addrspace(200)* %ptr, i32 %val) no
 ; HYBRID-LIBCALLS-NEXT:    mv a2, s0
 ; HYBRID-LIBCALLS-NEXT:    j .LBB8_1
 ; HYBRID-LIBCALLS-NEXT:  .LBB8_4: # %atomicrmw.end
+; HYBRID-LIBCALLS-NEXT:    mv a0, a3
 ; HYBRID-LIBCALLS-NEXT:    lw s0, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    lw ra, 28(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 32
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw min i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_umax:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camomaxu.w.aqrl a0, a1, (ca0)
@@ -723,6 +737,7 @@ define dso_local void @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) n
 ; PURECAP-LIBCALLS-NEXT:    mv a2, s0
 ; PURECAP-LIBCALLS-NEXT:    j .LBB9_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB9_4: # %atomicrmw.end
+; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 24(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
@@ -761,6 +776,7 @@ define dso_local void @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-ATOMICS-NEXT:    j .LBB9_1
 ; HYBRID-ATOMICS-NEXT:  .LBB9_4: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_umax:
@@ -791,16 +807,17 @@ define dso_local void @atomic_cap_ptr_umax(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-LIBCALLS-NEXT:    mv a2, s0
 ; HYBRID-LIBCALLS-NEXT:    j .LBB9_1
 ; HYBRID-LIBCALLS-NEXT:  .LBB9_4: # %atomicrmw.end
+; HYBRID-LIBCALLS-NEXT:    mv a0, a3
 ; HYBRID-LIBCALLS-NEXT:    lw s0, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    lw ra, 28(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 32
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw umax i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) nounwind {
+define dso_local i32 @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_umin:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    camominu.w.aqrl a0, a1, (ca0)
@@ -844,6 +861,7 @@ define dso_local void @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) n
 ; PURECAP-LIBCALLS-NEXT:    mv a2, s0
 ; PURECAP-LIBCALLS-NEXT:    j .LBB10_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB10_4: # %atomicrmw.end
+; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 24(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
@@ -882,6 +900,7 @@ define dso_local void @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-ATOMICS-NEXT:    j .LBB10_1
 ; HYBRID-ATOMICS-NEXT:  .LBB10_4: # %atomicrmw.end
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_cap_ptr_umin:
@@ -912,16 +931,17 @@ define dso_local void @atomic_cap_ptr_umin(i32 addrspace(200)* %ptr, i32 %val) n
 ; HYBRID-LIBCALLS-NEXT:    mv a2, s0
 ; HYBRID-LIBCALLS-NEXT:    j .LBB10_1
 ; HYBRID-LIBCALLS-NEXT:  .LBB10_4: # %atomicrmw.end
+; HYBRID-LIBCALLS-NEXT:    mv a0, a3
 ; HYBRID-LIBCALLS-NEXT:    lw s0, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    lw ra, 28(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 32
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw umin i32 addrspace(200)* %ptr, i32 %val seq_cst
-  ret void
+  ret i32 %tmp
 }
 
-define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwind {
+define dso_local float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_fadd:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    cflw ft1, 0(ca0)
@@ -946,6 +966,7 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ; PURECAP-ATOMICS-NEXT:    fmv.w.x ft1, a3
 ; PURECAP-ATOMICS-NEXT:    bne a3, a2, .LBB11_1
 ; PURECAP-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-ATOMICS-NEXT:    fmv.x.w a0, ft1
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_fadd:
@@ -980,6 +1001,7 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ; PURECAP-LIBCALLS-NEXT:    cflw ft0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB11_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-LIBCALLS-NEXT:    fmv.x.w a0, ft0
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 24(csp)
@@ -1013,6 +1035,7 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ; HYBRID-ATOMICS-NEXT:    fmv.w.x ft1, a1
 ; HYBRID-ATOMICS-NEXT:    bne a1, a2, .LBB11_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    fmv.x.w a0, ft1
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1039,15 +1062,16 @@ define dso_local void @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %va
 ; HYBRID-LIBCALLS-NEXT:    flw ft0, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    beqz a0, .LBB11_1
 ; HYBRID-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-LIBCALLS-NEXT:    fmv.x.w a0, ft0
 ; HYBRID-LIBCALLS-NEXT:    lw ra, 28(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 32
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw fadd float addrspace(200)* %ptr, float %val seq_cst
-  ret void
+  ret float %tmp
 }
 
-define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwind {
+define dso_local float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_fsub:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
 ; PURECAP-ATOMICS-NEXT:    cflw ft1, 0(ca0)
@@ -1072,6 +1096,7 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ; PURECAP-ATOMICS-NEXT:    fmv.w.x ft1, a3
 ; PURECAP-ATOMICS-NEXT:    bne a3, a2, .LBB12_1
 ; PURECAP-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-ATOMICS-NEXT:    fmv.x.w a0, ft1
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_fsub:
@@ -1106,6 +1131,7 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ; PURECAP-LIBCALLS-NEXT:    cflw ft0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB12_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-LIBCALLS-NEXT:    fmv.x.w a0, ft0
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 24(csp)
@@ -1139,6 +1165,7 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ; HYBRID-ATOMICS-NEXT:    fmv.w.x ft1, a1
 ; HYBRID-ATOMICS-NEXT:    bne a1, a2, .LBB12_1
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-ATOMICS-NEXT:    fmv.x.w a0, ft1
 ; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1165,10 +1192,11 @@ define dso_local void @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %va
 ; HYBRID-LIBCALLS-NEXT:    flw ft0, 24(sp)
 ; HYBRID-LIBCALLS-NEXT:    beqz a0, .LBB12_1
 ; HYBRID-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-LIBCALLS-NEXT:    fmv.x.w a0, ft0
 ; HYBRID-LIBCALLS-NEXT:    lw ra, 28(sp)
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 32
 ; HYBRID-LIBCALLS-NEXT:    ret
 bb:
   %tmp = atomicrmw fsub float addrspace(200)* %ptr, float %val seq_cst
-  ret void
+  ret float %tmp
 }
