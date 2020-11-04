@@ -1080,8 +1080,9 @@ Value *AtomicExpand::insertRMWLLSCLoop(
 
   Value *StoreSuccess =
       TLI->emitStoreConditional(Builder, NewVal, Addr, MemOpOrder);
+  assert(StoreSuccess->getType()->isIntegerTy());
   Value *TryAgain = Builder.CreateICmpNE(
-      StoreSuccess, ConstantInt::get(IntegerType::get(Ctx, 32), 0), "tryagain");
+      StoreSuccess, ConstantInt::get(StoreSuccess->getType(), 0), "tryagain");
   Builder.CreateCondBr(TryAgain, LoopBB, ExitBB);
 
   Builder.SetInsertPoint(ExitBB, ExitBB->begin());
@@ -1269,8 +1270,9 @@ bool AtomicExpand::expandAtomicCmpXchg(AtomicCmpXchgInst *CI) {
       insertMaskedValue(Builder, LoadedTryStore, CI->getNewValOperand(), PMV);
   Value *StoreSuccess =
       TLI->emitStoreConditional(Builder, NewValueInsert, Addr, MemOpOrder);
+  assert(StoreSuccess->getType()->isIntegerTy());
   StoreSuccess = Builder.CreateICmpEQ(
-      StoreSuccess, ConstantInt::get(Type::getInt32Ty(Ctx), 0), "success");
+      StoreSuccess, ConstantInt::get(StoreSuccess->getType(), 0), "success");
   BasicBlock *RetryBB = HasReleasedLoadBB ? ReleasedLoadBB : StartBB;
   Builder.CreateCondBr(StoreSuccess, SuccessBB,
                        CI->isWeak() ? FailureBB : RetryBB);
