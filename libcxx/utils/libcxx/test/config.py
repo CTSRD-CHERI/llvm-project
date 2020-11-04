@@ -82,7 +82,6 @@ class Configuration(object):
         # increase timeouts when running on a slow test host (such as QEMU full
         # sytem emulation for a different architecture)
         self.slow_test_host = self.get_lit_bool('slow_test_host', default=False)
-        self.use_system_cxx_lib = self.get_lit_bool('use_system_cxx_lib', False)
         self.use_clang_verify = False
         self.default_cxx_abi_library = None
 
