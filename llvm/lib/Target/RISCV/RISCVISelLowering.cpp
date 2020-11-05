@@ -2000,9 +2000,9 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
   if (IsPureCapVarArgs)
     Reg = 0;
   else if (ValVT == MVT::f32 && !UseGPRForF32)
-    Reg = State.AllocateReg(ArgFPR32s, ArgFPR64s);
+    Reg = State.AllocateReg(ArgFPR32s);
   else if (ValVT == MVT::f64 && !UseGPRForF64)
-    Reg = State.AllocateReg(ArgFPR64s, ArgFPR32s);
+    Reg = State.AllocateReg(ArgFPR64s);
   else if (ValVT == CLenVT)
     Reg = State.AllocateReg(ArgGPCRs);
   else
