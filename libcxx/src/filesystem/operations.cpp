@@ -1728,6 +1728,7 @@ path path::lexically_normal() const {
   if (NeedTrailingSep)
     Result /= PS("");
 
+  Result.make_preferred();
   return Result;
 }
 
