@@ -1049,6 +1049,13 @@ bool MachineLICMBase::IsLICMCandidate(MachineInstr &I) {
       !IsGuaranteedToExecute(I.getParent()))
     return false;
 
+  // Convergent attribute has been used on operations that involve inter-thread
+  // communication which results are implicitly affected by the enclosing
+  // control flows. It is not safe to hoist or sink such operations across
+  // control flow.
+  if (I.isConvergent())
+    return false;
+
   if (I.mayTrap()) {
     if (!IsGuaranteedToExecute(I.getParent()))
       return false;
