@@ -52,6 +52,12 @@ extern union int_or_cap int_or_cap;
 // MIPS-NEXT:    [[INDIRECT_ARG_TEMP1:%.*]] = alloca i8 addrspace(200)*, align 16
 // MIPS-NEXT:    [[INDIRECT_ARG_TEMP2:%.*]] = alloca i8 addrspace(200)*, align 16
 // MIPS-NEXT:    [[INDIRECT_ARG_TEMP3:%.*]] = alloca i8 addrspace(200)*, align 16
+// MIPS-NEXT:    [[BYVAL_TEMP:%.*]] = alloca [[STRUCT_SINGLE_CAP:%.*]], align 16
+// MIPS-NEXT:    [[BYVAL_TEMP4:%.*]] = alloca [[STRUCT_DOUBLE_CAP:%.*]], align 16
+// MIPS-NEXT:    [[BYVAL_TEMP5:%.*]] = alloca [[STRUCT_SINGLE_CAP_ARRAY:%.*]], align 16
+// MIPS-NEXT:    [[BYVAL_TEMP6:%.*]] = alloca [[STRUCT_DOUBLE_CAP_ARRAY:%.*]], align 16
+// MIPS-NEXT:    [[BYVAL_TEMP7:%.*]] = alloca [[STRUCT_MIXED:%.*]], align 16
+// MIPS-NEXT:    [[BYVAL_TEMP8:%.*]] = alloca [[UNION_INT_OR_CAP:%.*]], align 16
 // MIPS-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_CAP]], align 16
 // MIPS-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_UINTCAP]], align 16
 // MIPS-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[NULL_CAP]], align 16
@@ -62,13 +68,25 @@ extern union int_or_cap int_or_cap;
 // MIPS-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], align 16
 // MIPS-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], align 16
 // MIPS-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]], align 16
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 0, i8 addrspace(200)** byval(i8 addrspace(200)*) align 16 [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** byval(i8 addrspace(200)*) align 16 [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** byval(i8 addrspace(200)*) align 16 [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** byval(i8 addrspace(200)*) align 16 [[INDIRECT_ARG_TEMP3]])
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 1, %struct.single_cap* byval(%struct.single_cap) align 16 @single_cap)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 2, %struct.double_cap* byval(%struct.double_cap) align 16 @double_cap)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 3, %struct.single_cap_array* byval(%struct.single_cap_array) align 16 @single_cap_array)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 4, %struct.double_cap_array* byval(%struct.double_cap_array) align 16 @double_cap_array)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 5, %struct.mixed* byval(%struct.mixed) align 16 @mixed)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 6, %union.int_or_cap* byval(%union.int_or_cap) align 16 @int_or_cap)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 0, i8 addrspace(200)** [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]])
+// MIPS-NEXT:    [[TMP4:%.*]] = bitcast %struct.single_cap* [[BYVAL_TEMP]] to i8*
+// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP4]], i8* align 16 bitcast (%struct.single_cap* @single_cap to i8*), i64 16, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 1, %struct.single_cap* [[BYVAL_TEMP]])
+// MIPS-NEXT:    [[TMP5:%.*]] = bitcast %struct.double_cap* [[BYVAL_TEMP4]] to i8*
+// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP5]], i8* align 16 bitcast (%struct.double_cap* @double_cap to i8*), i64 32, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 2, %struct.double_cap* [[BYVAL_TEMP4]])
+// MIPS-NEXT:    [[TMP6:%.*]] = bitcast %struct.single_cap_array* [[BYVAL_TEMP5]] to i8*
+// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP6]], i8* align 16 bitcast (%struct.single_cap_array* @single_cap_array to i8*), i64 16, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 3, %struct.single_cap_array* [[BYVAL_TEMP5]])
+// MIPS-NEXT:    [[TMP7:%.*]] = bitcast %struct.double_cap_array* [[BYVAL_TEMP6]] to i8*
+// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP7]], i8* align 16 bitcast (%struct.double_cap_array* @double_cap_array to i8*), i64 32, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 4, %struct.double_cap_array* [[BYVAL_TEMP6]])
+// MIPS-NEXT:    [[TMP8:%.*]] = bitcast %struct.mixed* [[BYVAL_TEMP7]] to i8*
+// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP8]], i8* align 16 bitcast (%struct.mixed* @mixed to i8*), i64 32, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 5, %struct.mixed* [[BYVAL_TEMP7]])
+// MIPS-NEXT:    [[TMP9:%.*]] = bitcast %union.int_or_cap* [[BYVAL_TEMP8]] to i8*
+// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP9]], i8* align 16 bitcast (%union.int_or_cap* @int_or_cap to i8*), i64 16, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 6, %union.int_or_cap* [[BYVAL_TEMP8]])
 // MIPS-NEXT:    ret void
 //
 // RV32IXCHERI-LABEL: define {{[^@]+}}@caller() #0
