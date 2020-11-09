@@ -10,52 +10,60 @@
 ; RUN: %riscv64_cheri_llc -mattr=+f -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IFXCHERI %s
 
+; RUN: %riscv32_cheri_purecap_llc -mattr=-f -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=PURECAP-RV32IXCHERI %s
+; RUN: %riscv32_cheri_purecap_llc -mattr=+f -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=PURECAP-RV32IFXCHERI %s
+; RUN: %riscv64_cheri_purecap_llc -mattr=-f -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=PURECAP-RV64IXCHERI %s
+; RUN: %riscv64_cheri_purecap_llc -mattr=+f -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=PURECAP-RV64IFXCHERI %s
+
 define float @load_float_via_cap(float addrspace(200)* %a) nounwind {
 ; RV32IXCHERI-LABEL: load_float_via_cap:
 ; RV32IXCHERI:       # %bb.0:
-; RV32IXCHERI-NEXT:    addi sp, sp, -16
-; RV32IXCHERI-NEXT:    sw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    lw.cap a0, (ca0)
-; RV32IXCHERI-NEXT:    lui a1, 260096
-; RV32IXCHERI-NEXT:    call __addsf3
-; RV32IXCHERI-NEXT:    lw ra, 12(sp)
-; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
 ;
 ; RV32IFXCHERI-LABEL: load_float_via_cap:
 ; RV32IFXCHERI:       # %bb.0:
 ; RV32IFXCHERI-NEXT:    lw.cap a0, (ca0)
-; RV32IFXCHERI-NEXT:    lui a1, %hi(.LCPI0_0)
-; RV32IFXCHERI-NEXT:    flw ft0, %lo(.LCPI0_0)(a1)
-; RV32IFXCHERI-NEXT:    fmv.w.x ft1, a0
-; RV32IFXCHERI-NEXT:    fadd.s ft0, ft1, ft0
-; RV32IFXCHERI-NEXT:    fmv.x.w a0, ft0
 ; RV32IFXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: load_float_via_cap:
 ; RV64IXCHERI:       # %bb.0:
-; RV64IXCHERI-NEXT:    addi sp, sp, -16
-; RV64IXCHERI-NEXT:    sd ra, 8(sp)
 ; RV64IXCHERI-NEXT:    lw.cap a0, (ca0)
-; RV64IXCHERI-NEXT:    lui a1, 260096
-; RV64IXCHERI-NEXT:    call __addsf3
-; RV64IXCHERI-NEXT:    ld ra, 8(sp)
-; RV64IXCHERI-NEXT:    addi sp, sp, 16
 ; RV64IXCHERI-NEXT:    ret
 ;
 ; RV64IFXCHERI-LABEL: load_float_via_cap:
 ; RV64IFXCHERI:       # %bb.0:
 ; RV64IFXCHERI-NEXT:    lw.cap a0, (ca0)
-; RV64IFXCHERI-NEXT:    lui a1, %hi(.LCPI0_0)
-; RV64IFXCHERI-NEXT:    flw ft0, %lo(.LCPI0_0)(a1)
-; RV64IFXCHERI-NEXT:    fmv.w.x ft1, a0
-; RV64IFXCHERI-NEXT:    fadd.s ft0, ft1, ft0
+; RV64IFXCHERI-NEXT:    fmv.w.x ft0, a0
 ; RV64IFXCHERI-NEXT:    fmv.x.w a0, ft0
 ; RV64IFXCHERI-NEXT:    ret
+;
+; PURECAP-RV32IXCHERI-LABEL: load_float_via_cap:
+; PURECAP-RV32IXCHERI:       # %bb.0:
+; PURECAP-RV32IXCHERI-NEXT:    clw a0, 0(ca0)
+; PURECAP-RV32IXCHERI-NEXT:    cret
+;
+; PURECAP-RV32IFXCHERI-LABEL: load_float_via_cap:
+; PURECAP-RV32IFXCHERI:       # %bb.0:
+; PURECAP-RV32IFXCHERI-NEXT:    clw a0, 0(ca0)
+; PURECAP-RV32IFXCHERI-NEXT:    cret
+;
+; PURECAP-RV64IXCHERI-LABEL: load_float_via_cap:
+; PURECAP-RV64IXCHERI:       # %bb.0:
+; PURECAP-RV64IXCHERI-NEXT:    clw a0, 0(ca0)
+; PURECAP-RV64IXCHERI-NEXT:    cret
+;
+; PURECAP-RV64IFXCHERI-LABEL: load_float_via_cap:
+; PURECAP-RV64IFXCHERI:       # %bb.0:
+; PURECAP-RV64IFXCHERI-NEXT:    cflw ft0, 0(ca0)
+; PURECAP-RV64IFXCHERI-NEXT:    fmv.x.w a0, ft0
+; PURECAP-RV64IFXCHERI-NEXT:    cret
   %loaded = load float, float addrspace(200)* %a, align 4
-  ; Use the loaded value to check that it's moved to the right registers
-  %added = fadd float %loaded, 1.0
-  ret float %added
+  ret float %loaded
 }
 
 define void @store_float_via_cap(float addrspace(200)* %a, float %value) nounwind {
@@ -80,6 +88,27 @@ define void @store_float_via_cap(float addrspace(200)* %a, float %value) nounwin
 ; RV64IFXCHERI-NEXT:    fmv.x.w a1, ft0
 ; RV64IFXCHERI-NEXT:    sw.cap a1, (ca0)
 ; RV64IFXCHERI-NEXT:    ret
+;
+; PURECAP-RV32IXCHERI-LABEL: store_float_via_cap:
+; PURECAP-RV32IXCHERI:       # %bb.0:
+; PURECAP-RV32IXCHERI-NEXT:    csw a1, 0(ca0)
+; PURECAP-RV32IXCHERI-NEXT:    cret
+;
+; PURECAP-RV32IFXCHERI-LABEL: store_float_via_cap:
+; PURECAP-RV32IFXCHERI:       # %bb.0:
+; PURECAP-RV32IFXCHERI-NEXT:    csw a1, 0(ca0)
+; PURECAP-RV32IFXCHERI-NEXT:    cret
+;
+; PURECAP-RV64IXCHERI-LABEL: store_float_via_cap:
+; PURECAP-RV64IXCHERI:       # %bb.0:
+; PURECAP-RV64IXCHERI-NEXT:    csw a1, 0(ca0)
+; PURECAP-RV64IXCHERI-NEXT:    cret
+;
+; PURECAP-RV64IFXCHERI-LABEL: store_float_via_cap:
+; PURECAP-RV64IFXCHERI:       # %bb.0:
+; PURECAP-RV64IFXCHERI-NEXT:    fmv.w.x ft0, a1
+; PURECAP-RV64IFXCHERI-NEXT:    cfsw ft0, 0(ca0)
+; PURECAP-RV64IFXCHERI-NEXT:    cret
   store float %value, float addrspace(200)* %a, align 4
   ret void
 }
