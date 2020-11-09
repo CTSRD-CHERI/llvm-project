@@ -2492,7 +2492,6 @@ llvm::Constant *CodeGenModule::EmitAnnotationLineNo(SourceLocation L) {
 
 llvm::Constant *CodeGenModule::EmitAnnotationArgs(const AnnotateAttr *Attr) {
   ArrayRef<Expr *> Exprs = {Attr->args_begin(), Attr->args_size()};
-  Exprs = Exprs.drop_front();
   if (Exprs.empty())
     return llvm::ConstantPointerNull::get(Int8PtrTy);
 
