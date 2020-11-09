@@ -442,8 +442,8 @@ static unsigned getLRForRMWCap(bool PtrIsCap, bool ExplicitAddrMode,
                                AtomicOrdering Ordering, int CLen) {
   // The explicit addressing mode atomics are always relaxed.
   if (ExplicitAddrMode)
-    return CLen == 64 ? (PtrIsCap ? RISCV::LR_C_CAP_128 : RISCV::LR_C_DDC_128)
-                      : (PtrIsCap ? RISCV::LR_C_CAP_64 : RISCV::LR_C_DDC_64);
+    return CLen == 64 ? (PtrIsCap ? RISCV::LR_C_CAP_64 : RISCV::LR_C_DDC_64)
+                      : (PtrIsCap ? RISCV::LR_C_CAP_128 : RISCV::LR_C_DDC_128);
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
