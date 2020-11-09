@@ -3501,9 +3501,8 @@ RISCVTargetLowering::shouldExpandAtomicCmpXchgInIR(
   // For capability pointers we must always use the smallest possible type
   // instead of promoting to i32/i64 to ensure we don't trigger bounds errors.
   const DataLayout &DL = CI->getModule()->getDataLayout();
-  if (DL.isFatPointer(CI->getPointerOperand()->getType()))
-    return AtomicExpansionKind::None;
-  if (Size == 8 || Size == 16)
+  if ((Size == 8 || Size == 16) &&
+      !DL.isFatPointer(CI->getPointerOperand()->getType()))
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }
