@@ -447,7 +447,7 @@ static CodeGenFileType getCodeGenFileType(BackendAction Action) {
   }
 }
 
-static void initTargetOptions(DiagnosticsEngine &Diags,
+static bool initTargetOptions(DiagnosticsEngine &Diags,
                               llvm::TargetOptions &Options,
                               const CodeGenOptions &CodeGenOpts,
                               const clang::TargetOptions &TargetOpts,
@@ -518,11 +518,12 @@ static void initTargetOptions(DiagnosticsEngine &Diags,
   if (Options.BBSections == llvm::BasicBlockSection::List) {
     ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr =
         MemoryBuffer::getFile(CodeGenOpts.BBSections.substr(5));
-    if (!MBOrErr)
+    if (!MBOrErr) {
       Diags.Report(diag::err_fe_unable_to_load_basic_block_sections_file)
           << MBOrErr.getError().message();
-    else
-      Options.BBSectionsFuncListBuf = std::move(*MBOrErr);
+      return false;
+    }
+    Options.BBSectionsFuncListBuf = std::move(*MBOrErr);
   }
 
   Options.EnableMachineFunctionSplitter = CodeGenOpts.SplitMachineFunctions;
@@ -573,6 +574,8 @@ static void initTargetOptions(DiagnosticsEngine &Diags,
           Entry.IgnoreSysRoot ? Entry.Path : HSOpts.Sysroot + Entry.Path);
   Options.MCOptions.Argv0 = CodeGenOpts.Argv0;
   Options.MCOptions.CommandLineArgs = CodeGenOpts.CommandLineArgs;
+
+  return true;
 }
 
 static Optional<GCOVOptions> getGCOVOptions(const CodeGenOptions &CodeGenOpts,
@@ -864,7 +867,9 @@ void EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
   CodeGenOpt::Level OptLevel = getCGOptLevel(CodeGenOpts);
 
   llvm::TargetOptions Options;
-  initTargetOptions(Diags, Options, CodeGenOpts, TargetOpts, LangOpts, HSOpts);
+  if (!initTargetOptions(Diags, Options, CodeGenOpts, TargetOpts, LangOpts,
+                         HSOpts))
+    return;
   TM.reset(TheTarget->createTargetMachine(Triple, TargetOpts.CPU, FeaturesStr,
                                           Options, RM, CM, OptLevel));
 }
