@@ -1883,6 +1883,8 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MSCATTER(MaskedScatterSDNode *N,
     else
       NewOps[OpNo] = ZExtPromotedInteger(N->getOperand(OpNo));
 
+    N->setIndexType(TLI.getCanonicalIndexType(N->getIndexType(),
+                                              N->getMemoryVT(), NewOps[OpNo]));
   } else {
     NewOps[OpNo] = GetPromotedInteger(N->getOperand(OpNo));
     TruncateStore = true;
