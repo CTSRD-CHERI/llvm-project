@@ -62,8 +62,18 @@ enum NodeType : unsigned {
   CAP_SUBSET_TEST,
   /// Legalised int_cheri_cap_equal_exact
   CAP_EQUAL_EXACT,
+  // Generalized Reverse and Generalized Or-Combine - directly matching the
+  // semantics of the named RISC-V instructions. Lowered as custom nodes as
+  // TableGen chokes when faced with commutative permutations in deeply-nested
+  // DAGs. Each node takes an input operand and a TargetConstant immediate
+  // shift amount, and outputs a bit-manipulated version of input. All operands
+  // are of type XLenVT.
+  GREVI,
+  GREVIW,
+  GORCI,
+  GORCIW,
 };
-}
+} // namespace RISCVISD
 
 class RISCVTargetLowering : public TargetLowering {
   const RISCVSubtarget &Subtarget;
