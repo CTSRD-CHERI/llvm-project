@@ -3063,16 +3063,14 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
       break;
     // We fall back to use stack operation when the FP_ROUND operation
     // isn't available.
-    Tmp1 = EmitStackConvert(Node->getOperand(1),
-                            Node->getValueType(0),
+    Tmp1 = EmitStackConvert(Node->getOperand(1), Node->getValueType(0),
                             Node->getValueType(0), dl, Node->getOperand(0));
     ReplaceNode(Node, Tmp1.getNode());
     LLVM_DEBUG(dbgs() << "Successfully expanded STRICT_FP_ROUND node\n");
     return true;
   case ISD::FP_ROUND:
   case ISD::BITCAST:
-    Tmp1 = EmitStackConvert(Node->getOperand(0),
-                            Node->getValueType(0),
+    Tmp1 = EmitStackConvert(Node->getOperand(0), Node->getValueType(0),
                             Node->getValueType(0), dl);
     Results.push_back(Tmp1);
     break;

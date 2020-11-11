@@ -585,8 +585,8 @@ SDValue DAGTypeLegalizer::PromoteIntRes_FP_TO_XINT(SDNode *N) {
 
   SDValue Res;
   if (N->isStrictFPOpcode()) {
-    Res = DAG.getNode(NewOpc, dl, { NVT, MVT::Other },
-                      { N->getOperand(0), N->getOperand(1) });
+    Res = DAG.getNode(NewOpc, dl, {NVT, MVT::Other},
+                      {N->getOperand(0), N->getOperand(1)});
     // Legalize the chain result - switch anything that used the old chain to
     // use the new one.
     ReplaceValueWith(SDValue(N, 1), Res.getValue(1));
