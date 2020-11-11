@@ -1871,9 +1871,6 @@ llvm::Constant *ConstantLValueEmitter::tryEmit() {
     assert(isa<llvm::PointerType>(destTy));
     assert(isa<llvm::PointerType>(value->getType()));
     // Emit a GEP on NULL instead to ensure the result is always untagged.
-    // Before we had this check, cases such as
-    // `(char *__capability)(__cheri_addr __intcap_t)&extern_data` were
-    // incorrectly emitted as a tagged value rather than an integer constant.
     return CGM.getNullDerivedConstantCapability(
         destTy, llvm::ConstantExpr::getPtrToInt(value, CGM.PtrDiffTy));
   }

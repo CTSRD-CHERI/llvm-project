@@ -3670,6 +3670,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
          diag::warn_cheri_offset_addr_smaller_target_type)
         << DestTy << minTy << IsOffsetCast;
   }
+
   return Op.complete(CStyleCastExpr::Create(
       Context, Op.ResultType, Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
       &Op.BasePath, TSInfo, LParenLoc, RParenLoc));

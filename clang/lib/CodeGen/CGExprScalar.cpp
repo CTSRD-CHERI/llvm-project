@@ -2449,13 +2449,24 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
     llvm::Value *Src = Visit(E); // The default case
     llvm::Type *ResultType = ConvertType(DestTy);
-    Src = Kind == CK_CHERICapabilityToOffset
-            ? CGF.getPointerOffset(Src)
-            : CGF.getPointerAddress(Src);
     if (CGF.CGM.PointerCastStats) {
       CGF.CGM.PointerCastStats->PointerToInt.push_back(
           {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
     }
+    // In case destination is __(u)intcap_t, address cast becomes a bitcast
+    // offset casts result in a null-derived capability
+    if (DestTy->isIntCapType()) {
+      if (Kind == CK_CHERICapabilityToAddress)
+	return Builder.CreateBitCast(Src, ResultType);
+      else
+	return CGF.setCapabilityIntegerValue(
+	    llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)),
+	    CGF.getPointerOffset(Src));
+    }
+
+    Src = Kind == CK_CHERICapabilityToOffset
+        ? CGF.getPointerOffset(Src)
+        : CGF.getPointerAddress(Src);
     bool DestSigned = DestTy->isSignedIntegerOrEnumerationType();
     // Insert int cast in case size of result type and capability offset field
     // are not the same. This will be a no-op if the sizes are the same.

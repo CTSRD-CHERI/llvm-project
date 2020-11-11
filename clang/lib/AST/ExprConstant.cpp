@@ -12871,13 +12871,13 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
       return false;
 
     // Check if the resulting value must be an untagged __intcap_t constant.
-    // This is important for global expressions that should be untagged such as
-    // `__intcap_t x = (__cheri_addr __intcap_t)&foo;` that previously would be
-    // emitted as a tagged capability pointing to foo.
     bool MustBeNullDerived = true; // can only be false for __(u)intcap_t
     if (E->getType()->isIntCapType()) {
       bool IsPurecap = Info.Ctx.getTargetInfo().areAllPointersCapabilities();
-      if (E->getCastKind() == CK_PointerToCHERICapability) {
+      if (E->getCastKind() == CK_CHERICapabilityToAddress) {
+	// T* -> __cheri_addr __(u)intcap_t
+	MustBeNullDerived = false;
+      } else if (E->getCastKind() == CK_PointerToCHERICapability) {
         // T* -> __(u)intcap_t
         assert(E->getType()->isIntCapType());
         assert(!IsPurecap && "Should not be generated for purecap");
