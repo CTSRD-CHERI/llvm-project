@@ -9413,12 +9413,10 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
                                                   Type *ValueTy,
                                                   Type *PointerTy,
                                                   Align Alignment) const {
-  // FIXME: we current have to expand CMPXCHG/RMW to libcalls since we are
-  // missing the SelectionDAG nodes+expansions to use the explicit addressing
-  // mode instructions.
-  if (DL.isFatPointer(PointerTy) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-      (isa<AtomicRMWInst>(AI) || isa<AtomicCmpXchgInst>(AI)))
+  // FIXME: we current have to expand RMW to libcalls since we are missing
+  //  the SelectionDAG nodes+expansions to use the explicit addressing mode.
+  if (DL.isFatPointer(PointerTy) && isa<AtomicRMWInst>(AI) &&
+      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return false;
   return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
                                                  Alignment);

@@ -1607,6 +1607,16 @@ class PseudoCheriCmpXchg<RegisterClass ValTy=GPR>
   let hasSideEffects = 0;
 }
 
+class PseudoCheriCmpXchgExplicitAddrMode<RegisterClass PtrTy,
+                                         RegisterClass ValTy=GPR>
+    : Pseudo<(outs ValTy:$res, ValTy:$scratch),
+             (ins PtrTy:$addr, ValTy:$cmpval, ValTy:$newval, ixlenimm:$ordering), []> {
+  let Constraints = "@earlyclobber $res,@earlyclobber $scratch,$res = $newval";
+  let mayLoad = 1;
+  let mayStore = 1;
+  let hasSideEffects = 0;
+}
+
 multiclass PseudoCheriCmpXchgPat<string Op, Pseudo CmpXchgInst,
                                  RegisterClass ValTy=GPR> {
   def : Pat<(!cast<PatFrag>(Op#"_monotonic") GPCR:$addr, ValTy:$cmp, ValTy:$new),
@@ -1647,6 +1657,7 @@ def PseudoCheriAtomicLoadUMax8 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMin8 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadNand8 : PseudoCheriAMO;
 def PseudoCheriCmpXchg8 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg8ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicSwap16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadAdd16 : PseudoCheriAMO;
@@ -1660,9 +1671,11 @@ def PseudoCheriAtomicLoadUMax16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMin16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadNand16 : PseudoCheriAMO;
 def PseudoCheriCmpXchg16 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg16ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicLoadNand32 : PseudoCheriAMO;
 def PseudoCheriCmpXchg32 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg32ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicLoadAddCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriAtomicLoadSubCap : PseudoCheriAMO<GPCR>;
@@ -1675,11 +1688,13 @@ def PseudoCheriAtomicLoadUMaxCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriAtomicLoadUMinCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriAtomicLoadNandCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR>;
+def PseudoCheriCmpXchgCapExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in {
 def PseudoCheriAtomicLoadNand64 : PseudoCheriAMO;
 def PseudoCheriCmpXchg64 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg64ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64]
 
 /// 'I' (Integer) base
@@ -1920,6 +1935,18 @@ defm : CheriLdPat<atomic_load_cap, CLC_128>;
 defm : CheriAtomicStPat<atomic_store_cap, CSC_128, GPCR>;
 defm : CheriAMOCapPat<"128", "atomic_swap_cap", "CAMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode]
+
+/// Patterns for atomics with explicit capability base register
+/// Only atomic_cmp_swap is supported since all other operations are expanded.
+
+let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_8", PseudoCheriCmpXchg8ExplicitCap>;
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_16", PseudoCheriCmpXchg16ExplicitCap>;
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_32", PseudoCheriCmpXchg32ExplicitCap>;
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap", PseudoCheriCmpXchgCapExplicitCap, GPCR>;
+} // Predicates = [HasCheri, HasStdExtA, NotCapMode]
+let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_64", PseudoCheriCmpXchg64ExplicitCap>;
 
 /// 'F' (Single-Precision Floating-Point) extension
 

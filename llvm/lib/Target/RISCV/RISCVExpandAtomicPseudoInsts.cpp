@@ -50,16 +50,19 @@ private:
   bool expandAtomicBinOp(MachineBasicBlock &MBB,
                          MachineBasicBlock::iterator MBBI, AtomicRMWInst::BinOp,
                          bool IsMasked, MVT VT, bool PtrIsCap,
-                         MachineBasicBlock::iterator &NextMBBI);
+                         MachineBasicBlock::iterator &NextMBBI,
+                         bool ExplicitAddrMode = false);
   bool expandAtomicMinMaxOp(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MBBI,
                             AtomicRMWInst::BinOp, bool IsMasked, MVT VT,
                             bool PtrIsCap,
-                            MachineBasicBlock::iterator &NextMBBI);
+                            MachineBasicBlock::iterator &NextMBBI,
+                            bool ExplicitAddrMode = false);
   bool expandAtomicCmpXchg(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MBBI, bool IsMasked,
                            MVT VT, bool PtrIsCap,
-                           MachineBasicBlock::iterator &NextMBBI);
+                           MachineBasicBlock::iterator &NextMBBI,
+                           bool ExplicitAddrMode = false);
 };
 
 char RISCVExpandAtomicPseudo::ID = 0;
@@ -274,13 +277,32 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
                                 true, NextMBBI);
   case RISCV::PseudoCheriCmpXchgCap:
     return expandAtomicCmpXchg(MBB, MBBI, false, CLenVT, true, NextMBBI);
+  case RISCV::PseudoCheriCmpXchg8ExplicitCap:
+    return expandAtomicCmpXchg(MBB, MBBI, false, MVT::i8, true, NextMBBI,
+                               /*ExplicitAddrMode=*/true);
+  case RISCV::PseudoCheriCmpXchg16ExplicitCap:
+    return expandAtomicCmpXchg(MBB, MBBI, false, MVT::i16, true, NextMBBI,
+                               /*ExplicitAddrMode=*/true);
+  case RISCV::PseudoCheriCmpXchg32ExplicitCap:
+    return expandAtomicCmpXchg(MBB, MBBI, false, MVT::i32, true, NextMBBI,
+                               /*ExplicitAddrMode=*/true);
+  case RISCV::PseudoCheriCmpXchg64ExplicitCap:
+    return expandAtomicCmpXchg(MBB, MBBI, false, MVT::i64, true, NextMBBI,
+                               /*ExplicitAddrMode=*/true);
+  case RISCV::PseudoCheriCmpXchgCapExplicitCap:
+    return expandAtomicCmpXchg(MBB, MBBI, false, CLenVT, true, NextMBBI,
+                                  /*ExplicitAddrMode=*/true);
   }
 
   return false;
 }
 
-static unsigned getLRForRMW8(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getLRForRMW8(bool PtrIsCap, AtomicOrdering Ordering,
+                             bool ExplicitAddrMode) {
   assert(PtrIsCap);
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::LR_B_CAP : RISCV::LR_B_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -297,8 +319,12 @@ static unsigned getLRForRMW8(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getSCForRMW8(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getSCForRMW8(bool PtrIsCap, AtomicOrdering Ordering,
+                             bool ExplicitAddrMode) {
   assert(PtrIsCap);
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::SC_B_CAP : RISCV::SC_B_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -315,8 +341,12 @@ static unsigned getSCForRMW8(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getLRForRMW16(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getLRForRMW16(bool PtrIsCap, AtomicOrdering Ordering,
+                              bool ExplicitAddrMode) {
   assert(PtrIsCap);
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::LR_H_CAP : RISCV::LR_H_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -333,8 +363,12 @@ static unsigned getLRForRMW16(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getSCForRMW16(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getSCForRMW16(bool PtrIsCap,AtomicOrdering Ordering,
+                              bool ExplicitAddrMode) {
   assert(PtrIsCap);
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::SC_H_CAP : RISCV::SC_H_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -351,7 +385,11 @@ static unsigned getSCForRMW16(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getLRForRMW32(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getLRForRMW32(bool PtrIsCap, AtomicOrdering Ordering,
+                              bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::LR_W_CAP : RISCV::LR_W_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -368,7 +406,11 @@ static unsigned getLRForRMW32(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getSCForRMW32(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getSCForRMW32(bool PtrIsCap, AtomicOrdering Ordering,
+                              bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::SC_W_CAP : RISCV::SC_W_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -385,7 +427,11 @@ static unsigned getSCForRMW32(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getLRForRMW64(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getLRForRMW64(bool PtrIsCap, AtomicOrdering Ordering,
+                              bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::LR_D_CAP : RISCV::LR_D_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -402,7 +448,11 @@ static unsigned getLRForRMW64(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getSCForRMW64(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getSCForRMW64(bool PtrIsCap, AtomicOrdering Ordering,
+                              bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::SC_D_CAP : RISCV::SC_D_DDC;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -419,7 +469,11 @@ static unsigned getSCForRMW64(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getLRForRMWCap64(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getLRForRMWCap64(bool PtrIsCap, AtomicOrdering Ordering,
+                                 bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::LR_C_CAP_64 : RISCV::LR_C_DDC_64;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -436,7 +490,11 @@ static unsigned getLRForRMWCap64(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getSCForRMWCap64(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getSCForRMWCap64(bool PtrIsCap, AtomicOrdering Ordering,
+                                 bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::SC_C_CAP_64 : RISCV::SC_C_DDC_64;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -453,7 +511,11 @@ static unsigned getSCForRMWCap64(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getLRForRMWCap128(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getLRForRMWCap128(bool PtrIsCap, AtomicOrdering Ordering,
+                                  bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::LR_C_CAP_128 : RISCV::LR_C_DDC_128;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -470,7 +532,11 @@ static unsigned getLRForRMWCap128(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getSCForRMWCap128(bool PtrIsCap, AtomicOrdering Ordering) {
+static unsigned getSCForRMWCap128(bool PtrIsCap, AtomicOrdering Ordering,
+                                  bool ExplicitAddrMode) {
+  // The explicit addressing mode atomics are always relaxed.
+  if (ExplicitAddrMode)
+    return PtrIsCap ? RISCV::SC_C_CAP_128 : RISCV::SC_C_DDC_128;
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
@@ -487,35 +553,37 @@ static unsigned getSCForRMWCap128(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getLRForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT) {
+static unsigned getLRForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT,
+                            bool ExplicitAddrMode) {
   if (VT == MVT::i8)
-    return getLRForRMW8(PtrIsCap, Ordering);
+    return getLRForRMW8(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::i16)
-    return getLRForRMW16(PtrIsCap, Ordering);
+    return getLRForRMW16(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::i32)
-    return getLRForRMW32(PtrIsCap, Ordering);
+    return getLRForRMW32(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::i64)
-    return getLRForRMW64(PtrIsCap, Ordering);
+    return getLRForRMW64(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::iFATPTR64)
-    return getLRForRMWCap64(PtrIsCap, Ordering);
+    return getLRForRMWCap64(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::iFATPTR128)
-    return getLRForRMWCap128(PtrIsCap, Ordering);
+    return getLRForRMWCap128(PtrIsCap, Ordering, ExplicitAddrMode);
   llvm_unreachable("Unexpected LR type\n");
 }
 
-static unsigned getSCForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT) {
+static unsigned getSCForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT,
+                            bool ExplicitAddrMode) {
   if (VT == MVT::i8)
-    return getSCForRMW8(PtrIsCap, Ordering);
+    return getSCForRMW8(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::i16)
-    return getSCForRMW16(PtrIsCap, Ordering);
+    return getSCForRMW16(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::i32)
-    return getSCForRMW32(PtrIsCap, Ordering);
+    return getSCForRMW32(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::i64)
-    return getSCForRMW64(PtrIsCap, Ordering);
+    return getSCForRMW64(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::iFATPTR64)
-    return getSCForRMWCap64(PtrIsCap, Ordering);
+    return getSCForRMWCap64(PtrIsCap, Ordering, ExplicitAddrMode);
   if (VT == MVT::iFATPTR128)
-    return getSCForRMWCap128(PtrIsCap, Ordering);
+    return getSCForRMWCap128(PtrIsCap, Ordering, ExplicitAddrMode);
   llvm_unreachable("Unexpected SC type\n");
 }
 
@@ -524,7 +592,7 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
                                    MachineBasicBlock *LoopMBB,
                                    MachineBasicBlock *DoneMBB,
                                    AtomicRMWInst::BinOp BinOp, MVT VT,
-                                   bool PtrIsCap) {
+                                   bool PtrIsCap, bool ExplicitAddrMode) {
   Register DestReg = MI.getOperand(0).getReg();
   Register ScratchReg = MI.getOperand(1).getReg();
   Register AddrReg = MI.getOperand(2).getReg();
@@ -550,7 +618,9 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
   //   binop scratch, dest, val
   //   sc.[w|d] scratch, scratch, (addr)
   //   bnez scratch, loop
-  BuildMI(LoopMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)), DestReg)
+  BuildMI(LoopMBB, DL,
+          TII->get(getLRForRMW(PtrIsCap, Ordering, VT, ExplicitAddrMode)),
+          DestReg)
       .addReg(AddrReg);
   switch (BinOp) {
   default:
@@ -609,7 +679,7 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
     BuildMI(LoopMBB, DL, TII->get(RISCV::CSetAddr), ScratchReg)
         .addReg(DestReg)
         .addReg(ScratchIntReg);
-  BuildMI(LoopMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT)),
+  BuildMI(LoopMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT, ExplicitAddrMode)),
           ScratchIntReg)
       .addReg(AddrReg)
       .addReg(ScratchReg);
@@ -663,7 +733,9 @@ static void doMaskedAtomicBinOpExpansion(
   //   xor scratch, destreg, scratch
   //   sc.w scratch, scratch, (alignedaddr)
   //   bnez scratch, loop
-  BuildMI(LoopMBB, DL, TII->get(getLRForRMW32(false, Ordering)), DestReg)
+  BuildMI(LoopMBB, DL,
+          TII->get(getLRForRMW32(false, Ordering, /*ExplicitAddrMode=*/false)),
+          DestReg)
       .addReg(AddrReg);
   switch (BinOp) {
   default:
@@ -696,7 +768,9 @@ static void doMaskedAtomicBinOpExpansion(
   insertMaskedMerge(TII, DL, LoopMBB, ScratchReg, DestReg, ScratchReg, MaskReg,
                     ScratchReg);
 
-  BuildMI(LoopMBB, DL, TII->get(getSCForRMW32(false, Ordering)), ScratchReg)
+  BuildMI(LoopMBB, DL,
+          TII->get(getSCForRMW32(false, Ordering, /*ExplicitAddrMode=*/false)),
+          ScratchReg)
       .addReg(AddrReg)
       .addReg(ScratchReg);
   BuildMI(LoopMBB, DL, TII->get(RISCV::BNE))
@@ -708,7 +782,7 @@ static void doMaskedAtomicBinOpExpansion(
 bool RISCVExpandAtomicPseudo::expandAtomicBinOp(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     AtomicRMWInst::BinOp BinOp, bool IsMasked, MVT VT, bool PtrIsCap,
-    MachineBasicBlock::iterator &NextMBBI) {
+    MachineBasicBlock::iterator &NextMBBI, bool ExplicitAddrMode) {
   assert(!(IsMasked && PtrIsCap) &&
          "Should never used masked operations with capabilities");
 
@@ -732,7 +806,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicBinOp(
 
   if (!IsMasked)
     doAtomicBinOpExpansion(TII, MI, DL, &MBB, LoopMBB, DoneMBB, BinOp, VT,
-                           PtrIsCap);
+                           PtrIsCap, ExplicitAddrMode);
   else
     doMaskedAtomicBinOpExpansion(TII, MI, DL, &MBB, LoopMBB, DoneMBB, BinOp,
                                  VT);
@@ -761,7 +835,7 @@ static void insertSext(const RISCVInstrInfo *TII, DebugLoc DL,
 bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     AtomicRMWInst::BinOp BinOp, bool IsMasked, MVT VT, bool PtrIsCap,
-    MachineBasicBlock::iterator &NextMBBI) {
+    MachineBasicBlock::iterator &NextMBBI, bool ExplicitAddrMode) {
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MI.getDebugLoc();
   MachineFunction *MF = MBB.getParent();
@@ -809,7 +883,8 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     //   mv scratch1, destreg
     //   [sext scratch2 if signed min/max]
     //   ifnochangeneeded scratch2, incr, .looptail
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW32(PtrIsCap, Ordering)),
+    BuildMI(LoopHeadMBB, DL,
+            TII->get(getLRForRMW32(PtrIsCap, Ordering, ExplicitAddrMode)),
             DestReg)
         .addReg(AddrReg);
     BuildMI(LoopHeadMBB, DL, TII->get(RISCV::AND), Scratch2Reg)
@@ -862,7 +937,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     // .looptail:
     //   sc.w scratch1, scratch1, (addr)
     //   bnez scratch1, loop
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW32(PtrIsCap, Ordering)), Scratch1Reg)
+    BuildMI(LoopTailMBB, DL,
+            TII->get(getSCForRMW32(PtrIsCap, Ordering, ExplicitAddrMode)),
+            Scratch1Reg)
         .addReg(AddrReg)
         .addReg(Scratch1Reg);
     BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
@@ -893,7 +970,8 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     //   lr.[b|h] dest, (addr)
     //   mv scratch, dest
     //   ifnochangeneeded scratch, incr, .looptail
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
+    BuildMI(LoopHeadMBB, DL,
+            TII->get(getLRForRMW(PtrIsCap, Ordering, VT, ExplicitAddrMode)),
             DestReg)
         .addReg(AddrReg);
     if (VT.isFatPointer())
@@ -948,7 +1026,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     // .looptail:
     //   sc.[b|h] scratch, scratch, (addr)
     //   bnez scratch, loop
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT)),
+    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT, ExplicitAddrMode)),
             ScratchIntReg)
         .addReg(AddrReg)
         .addReg(ScratchReg);
@@ -972,7 +1050,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
 
 bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI, bool IsMasked,
-    MVT VT, bool PtrIsCap, MachineBasicBlock::iterator &NextMBBI) {
+    MVT VT, bool PtrIsCap, MachineBasicBlock::iterator &NextMBBI, bool ExplicitAddrMode) {
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MI.getDebugLoc();
   MachineFunction *MF = MBB.getParent();
@@ -1001,6 +1079,8 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
   Register NewValReg = MI.getOperand(4).getReg();
   AtomicOrdering Ordering =
       static_cast<AtomicOrdering>(MI.getOperand(IsMasked ? 6 : 5).getImm());
+  if (ExplicitAddrMode)
+    assert(DestReg == NewValReg && "Required for explicit SC encoding");
 
   if (!IsMasked) {
     Register DestIntReg;
@@ -1017,7 +1097,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     // .loophead:
     //   lr.[w|d] dest, (addr)
     //   bne dest, cmpval, done
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
+    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT, ExplicitAddrMode)),
             DestReg)
         .addReg(AddrReg);
     BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
@@ -1027,12 +1107,41 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     // .looptail:
     //   sc.[w|d] scratch, newval, (addr)
     //   bnez scratch, loophead
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT)),
-            ScratchReg)
-        .addReg(AddrReg)
+    //
+    // With an explicit cap/ddc-relative SC, the register stored is also the
+    // success/failure writeback register:
+    // .looptail:
+    //   mv/cmove scratch, newval
+    //   sc.[b|h|w|d|c].[cap|ddc] scratch, (addr)  (implicit rd=scratch)
+    //   bnez scratch, loophead
+    const MCInstrDesc &SCInst =
+        TII->get(getSCForRMW(PtrIsCap, Ordering, VT, ExplicitAddrMode));
+    Register SCResultReg = ScratchReg;
+    const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+    if (ExplicitAddrMode) {
+      if (VT.isFatPointer()) {
+            assert(RISCV::GPCRRegClass.contains(ScratchReg));
+
+              BuildMI(LoopTailMBB, DL, TII->get(RISCV::CMove), ScratchReg)
         .addReg(NewValReg);
+                  // In the explicit case the output register of SC_C_CAP/DDC is a capability
+    // register so we have to extract the GPR register.
+    SCResultReg = TRI->getSubReg(ScratchReg, RISCV::sub_cap_addr);
+      } else {
+        BuildMI(LoopTailMBB, DL, TII->get(RISCV::ADDI), ScratchReg)
+            .addReg(NewValReg)
+            .addImm(0);
+      }
+      BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
+          .addReg(AddrReg)
+          .addReg(ScratchReg);
+    } else {
+      BuildMI(LoopTailMBB, DL, SCInst, ScratchReg)
+          .addReg(AddrReg)
+          .addReg(NewValReg);
+    }
     BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
-        .addReg(ScratchReg)
+        .addReg(SCResultReg)
         .addReg(RISCV::X0)
         .addMBB(LoopHeadMBB);
   } else {
@@ -1044,7 +1153,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     //   and scratch, dest, mask
     //   bne scratch, cmpval, done
     Register MaskReg = MI.getOperand(5).getReg();
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(false, Ordering, VT)),
+    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(false, Ordering, VT, ExplicitAddrMode)),
             DestReg)
         .addReg(AddrReg);
     BuildMI(LoopHeadMBB, DL, TII->get(RISCV::AND), ScratchReg)
@@ -1063,7 +1172,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     //   bnez scratch, loophead
     insertMaskedMerge(TII, DL, LoopTailMBB, ScratchReg, DestReg, NewValReg,
                       MaskReg, ScratchReg);
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(false, Ordering, VT)),
+    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(false, Ordering, VT, ExplicitAddrMode)),
             ScratchReg)
         .addReg(AddrReg)
         .addReg(ScratchReg);
