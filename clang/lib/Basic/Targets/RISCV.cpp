@@ -185,6 +185,9 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__riscv_clen", Twine(getCHERICapabilityWidth()));
     // TODO: _MIPS_CAP_ALIGN_MASK equivalent?
   }
+
+  if (HasZfh)
+    Builder.defineMacro("__riscv_zfh");
 }
 
 /// Return true if has this feature, need to sync with handleTargetFeatures.
@@ -199,8 +202,9 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
       .Case("f", HasF)
       .Case("d", HasD)
       .Case("c", HasC)
-      .Case("experimental-b", HasB)
       .Case("xcheri", HasCheri)
+      .Case("experimental-b", HasB)
+      .Case("experimental-zfh", HasZfh)
       .Default(false);
 }
 
@@ -218,12 +222,13 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       HasD = true;
     else if (Feature == "+c")
       HasC = true;
-    else if (Feature == "+experimental-b")
-      HasB = true;
     else if (Feature == "+xcheri") {
       HasCheri = true;
       CapSize = PointerWidth * 2;
-    }
+    } else if (Feature == "+experimental-b")
+      HasB = true;
+    else if (Feature == "+experimental-zfh")
+      HasZfh = true;
   }
 
   setDataLayout();
