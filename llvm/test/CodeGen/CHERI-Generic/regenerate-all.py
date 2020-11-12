@@ -107,7 +107,7 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                 for prefix in ALL_ARCHITECTURE_IFNOT_STRS:
                     if line.startswith(prefix):
                         print("Removing @IFNOT- directive for other architecture: ", line)
-                        line = line[len(current_arch_if):]
+                        line = line[len(prefix):]
                         valid_directive = True
                         break
                 if not valid_directive:
