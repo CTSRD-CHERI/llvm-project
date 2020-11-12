@@ -2124,6 +2124,19 @@ TargetLoweringBase::getAtomicMemOperandFlags(const Instruction &AI,
   return Flags;
 }
 
+bool TargetLoweringBase::supportsAtomicOperation(const DataLayout &DL,
+                                                 const Instruction *AI,
+                                                 Type *ValueTy, Type *PointerTy,
+                                                 Align Alignment) const {
+  unsigned Size = DL.getTypeStoreSize(ValueTy);
+  if (DL.isFatPointer(ValueTy)) {
+    assert(Alignment >= Size && "Unexpcted unaligned capability atomic op");
+    return supportsAtomicCapabilityOperations();
+  }
+  return Size <= getMaxAtomicSizeInBitsSupported() / 8 &&
+         (supportsUnalignedAtomics() || Alignment >= Size);
+}
+
 //===----------------------------------------------------------------------===//
 //  GlobalISel Hooks
 //===----------------------------------------------------------------------===//

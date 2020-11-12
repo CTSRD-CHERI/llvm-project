@@ -153,42 +153,6 @@ static unsigned getAtomicOpSize(AtomicCmpXchgInst *CASI) {
   return DL.getTypeStoreSize(CASI->getCompareOperand()->getType());
 }
 
-// Helper functions to retrieve whether an atomic instruction is operating on a
-// capability value.
-static unsigned getAtomicOpValIsCap(LoadInst *LI) {
-  const DataLayout &DL = LI->getModule()->getDataLayout();
-  return DL.isFatPointer(LI->getType());
-}
-
-static unsigned getAtomicOpValIsCap(StoreInst *SI) {
-  const DataLayout &DL = SI->getModule()->getDataLayout();
-  return DL.isFatPointer(SI->getValueOperand()->getType());
-}
-
-static unsigned getAtomicOpValIsCap(AtomicRMWInst *RMWI) {
-  const DataLayout &DL = RMWI->getModule()->getDataLayout();
-  return DL.isFatPointer(RMWI->getValOperand()->getType());
-}
-
-static unsigned getAtomicOpValIsCap(AtomicCmpXchgInst *CASI) {
-  const DataLayout &DL = CASI->getModule()->getDataLayout();
-  return DL.isFatPointer(CASI->getCompareOperand()->getType());
-}
-
-// Determine if a particular atomic operation has a supported size,
-// and is of appropriate alignment, to be passed through for target
-// lowering. (Versus turning into a __atomic libcall)
-template <typename Inst>
-static bool atomicSizeSupported(const TargetLowering *TLI, Inst *I) {
-  if (getAtomicOpValIsCap(I))
-    return TLI->supportsAtomicCapabilityOperations();
-
-  unsigned Size = getAtomicOpSize(I);
-  Align Alignment = I->getAlign();
-  return Alignment >= Size &&
-         Size <= TLI->getMaxAtomicSizeInBitsSupported() / 8;
-}
-
 bool AtomicExpand::runOnFunction(Function &F) {
   auto *TPC = getAnalysisIfAvailable<TargetPassConfig>();
   if (!TPC)
@@ -210,6 +174,7 @@ bool AtomicExpand::runOnFunction(Function &F) {
   }
 
   bool MadeChange = false;
+  const DataLayout &DL = F.getParent()->getDataLayout();
   for (auto I : AtomicInsts) {
     auto LI = dyn_cast<LoadInst>(I);
     auto SI = dyn_cast<StoreInst>(I);
@@ -219,25 +184,33 @@ bool AtomicExpand::runOnFunction(Function &F) {
 
     // If the Size/Alignment is not supported, replace with a libcall.
     if (LI) {
-      if (!atomicSizeSupported(TLI, LI)) {
+      if (!TLI->supportsAtomicOperation(DL, LI, LI->getType(),
+                                        LI->getPointerOperand()->getType(),
+                                        LI->getAlign())) {
         expandAtomicLoadToLibcall(LI);
         MadeChange = true;
         continue;
       }
     } else if (SI) {
-      if (!atomicSizeSupported(TLI, SI)) {
+      if (!TLI->supportsAtomicOperation(
+              DL, SI, SI->getValueOperand()->getType(),
+              SI->getPointerOperand()->getType(), SI->getAlign())) {
         expandAtomicStoreToLibcall(SI);
         MadeChange = true;
         continue;
       }
     } else if (RMWI) {
-      if (!atomicSizeSupported(TLI, RMWI)) {
+      if (!TLI->supportsAtomicOperation(
+              DL, RMWI, RMWI->getValOperand()->getType(),
+              RMWI->getPointerOperand()->getType(), RMWI->getAlign())) {
         expandAtomicRMWToLibcall(RMWI);
         MadeChange = true;
         continue;
       }
     } else if (CASI) {
-      if (!atomicSizeSupported(TLI, CASI)) {
+      if (!TLI->supportsAtomicOperation(
+              DL, CASI, CASI->getCompareOperand()->getType(),
+              CASI->getPointerOperand()->getType(), CASI->getAlign())) {
         expandAtomicCASToLibcall(CASI);
         MadeChange = true;
         continue;

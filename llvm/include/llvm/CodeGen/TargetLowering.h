@@ -1859,6 +1859,13 @@ public:
     return false;
   }
 
+  /// Whether the atomic operation \p AI with type \p ValueTy and alignment
+  /// \p Alignment via \p PointerTy is natively supported or requires an
+  /// __atomic_* libcall.
+  virtual bool supportsAtomicOperation(const DataLayout &DL,
+                                       const Instruction *AI, Type *ValueTy,
+                                       Type *PointerTy, Align Alignment) const;
+
   /// Perform a load-linked operation on Addr, returning a "Value *" with the
   /// corresponding pointee type. This may entail some non-trivial operations to
   /// truncate or reconstruct types that will be illegal in the backend. See
