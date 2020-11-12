@@ -7,6 +7,14 @@
 ; RUN:   | FileCheck -check-prefix=RV64IXCHERI-LP64 %s
 ; RUN: llc -mtriple=riscv64 -target-abi lp64d -mattr=+xcheri,-cap-mode,+f,+d -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IXCHERI-LP64D %s
+; RUN: llc -mtriple=riscv32 -target-abi il32pc64 -mattr=+xcheri,+cap-mode,-f,-d -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=RV32IXCHERI-IL32PC64 %s
+; RUN: llc -mtriple=riscv32 -target-abi il32pc64d -mattr=+xcheri,+cap-mode,+f,+d -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=RV32IXCHERI-IL32PC64D %s
+; RUN: llc -mtriple=riscv64 -target-abi l64pc128 -mattr=+xcheri,+cap-mode,-f,-d -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=RV64IXCHERI-L64PC128 %s
+; RUN: llc -mtriple=riscv64 -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=RV64IXCHERI-L64PC128D %s
 
 define float @load_float_via_cap(float addrspace(200)* %a) nounwind {
 ; RV32IXCHERI-ILP32-LABEL: load_float_via_cap:
@@ -30,6 +38,26 @@ define float @load_float_via_cap(float addrspace(200)* %a) nounwind {
 ; RV64IXCHERI-LP64D-NEXT:    lw.cap a0, (ca0)
 ; RV64IXCHERI-LP64D-NEXT:    fmv.w.x fa0, a0
 ; RV64IXCHERI-LP64D-NEXT:    ret
+;
+; RV32IXCHERI-IL32PC64-LABEL: load_float_via_cap:
+; RV32IXCHERI-IL32PC64:       # %bb.0:
+; RV32IXCHERI-IL32PC64-NEXT:    clw a0, 0(ca0)
+; RV32IXCHERI-IL32PC64-NEXT:    cret
+;
+; RV32IXCHERI-IL32PC64D-LABEL: load_float_via_cap:
+; RV32IXCHERI-IL32PC64D:       # %bb.0:
+; RV32IXCHERI-IL32PC64D-NEXT:    cflw fa0, 0(ca0)
+; RV32IXCHERI-IL32PC64D-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128-LABEL: load_float_via_cap:
+; RV64IXCHERI-L64PC128:       # %bb.0:
+; RV64IXCHERI-L64PC128-NEXT:    clw a0, 0(ca0)
+; RV64IXCHERI-L64PC128-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128D-LABEL: load_float_via_cap:
+; RV64IXCHERI-L64PC128D:       # %bb.0:
+; RV64IXCHERI-L64PC128D-NEXT:    cflw fa0, 0(ca0)
+; RV64IXCHERI-L64PC128D-NEXT:    cret
   %loaded = load float, float addrspace(200)* %a, align 4
   ret float %loaded
 }
@@ -56,6 +84,26 @@ define void @store_float_via_cap(float addrspace(200)* %a, float %value) nounwin
 ; RV64IXCHERI-LP64D-NEXT:    fmv.x.w a1, fa0
 ; RV64IXCHERI-LP64D-NEXT:    sw.cap a1, (ca0)
 ; RV64IXCHERI-LP64D-NEXT:    ret
+;
+; RV32IXCHERI-IL32PC64-LABEL: store_float_via_cap:
+; RV32IXCHERI-IL32PC64:       # %bb.0:
+; RV32IXCHERI-IL32PC64-NEXT:    csw a1, 0(ca0)
+; RV32IXCHERI-IL32PC64-NEXT:    cret
+;
+; RV32IXCHERI-IL32PC64D-LABEL: store_float_via_cap:
+; RV32IXCHERI-IL32PC64D:       # %bb.0:
+; RV32IXCHERI-IL32PC64D-NEXT:    cfsw fa0, 0(ca0)
+; RV32IXCHERI-IL32PC64D-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128-LABEL: store_float_via_cap:
+; RV64IXCHERI-L64PC128:       # %bb.0:
+; RV64IXCHERI-L64PC128-NEXT:    csw a1, 0(ca0)
+; RV64IXCHERI-L64PC128-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128D-LABEL: store_float_via_cap:
+; RV64IXCHERI-L64PC128D:       # %bb.0:
+; RV64IXCHERI-L64PC128D-NEXT:    cfsw fa0, 0(ca0)
+; RV64IXCHERI-L64PC128D-NEXT:    cret
   store float %value, float addrspace(200)* %a, align 4
   ret void
 }
