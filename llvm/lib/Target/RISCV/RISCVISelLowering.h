@@ -211,6 +211,8 @@ public:
   bool supportsAtomicOperation(const DataLayout &DL, const Instruction *AI,
                                Type *ValueTy, Type *PointerTy,
                                Align Alignment) const override;
+  unsigned getMinCmpXchgSizeInBits(const Instruction *I,
+                                   const Value *Ptr) const override;
 
   TargetLowering::AtomicExpansionKind
   shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;

@@ -52,47 +52,21 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_i8:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
-; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
-; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
-; HYBRID-ATOMICS-NEXT:    cfromptr ca7, ddc, a3
-; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
-; HYBRID-ATOMICS-NEXT:    slli a6, a0, 3
-; HYBRID-ATOMICS-NEXT:    addi a0, zero, 255
-; HYBRID-ATOMICS-NEXT:    sll a0, a0, a6
-; HYBRID-ATOMICS-NEXT:    not t0, a0
-; HYBRID-ATOMICS-NEXT:    andi a0, a2, 255
-; HYBRID-ATOMICS-NEXT:    lw.cap a3, (ca7)
-; HYBRID-ATOMICS-NEXT:    sll a2, a0, a6
-; HYBRID-ATOMICS-NEXT:    andi a0, a1, 255
-; HYBRID-ATOMICS-NEXT:    sll a1, a0, a6
-; HYBRID-ATOMICS-NEXT:    and a4, a3, t0
-; HYBRID-ATOMICS-NEXT:  .LBB0_1: # %partword.cmpxchg.loop
-; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
-; HYBRID-ATOMICS-NEXT:    # Child Loop BB0_4 Depth 2
-; HYBRID-ATOMICS-NEXT:    mv a3, a4
-; HYBRID-ATOMICS-NEXT:    or a5, a4, a2
-; HYBRID-ATOMICS-NEXT:    or a0, a4, a1
-; HYBRID-ATOMICS-NEXT:  .LBB0_4: # %partword.cmpxchg.loop
-; HYBRID-ATOMICS-NEXT:    # Parent Loop BB0_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
-; HYBRID-ATOMICS-NEXT:    lr.w.cap a5, (ca7)
-; HYBRID-ATOMICS-NEXT:    bne a5, a0, .LBB0_6
-; HYBRID-ATOMICS-NEXT:  # %bb.5: # %partword.cmpxchg.loop
-; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_4 Depth=2
-; HYBRID-ATOMICS-NEXT:    mv a4, a5
-; HYBRID-ATOMICS-NEXT:    sc.w.cap a4, (ca7)
-; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB0_4
-; HYBRID-ATOMICS-NEXT:  .LBB0_6: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    slli a1, a1, 24
+; HYBRID-ATOMICS-NEXT:    srai a1, a1, 24
+; HYBRID-ATOMICS-NEXT:  .LBB0_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.b.cap a2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB0_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
 ; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    beq a5, a0, .LBB0_3
-; HYBRID-ATOMICS-NEXT:  # %bb.2: # %partword.cmpxchg.failure
-; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    and a4, a5, t0
-; HYBRID-ATOMICS-NEXT:    bne a3, a4, .LBB0_1
-; HYBRID-ATOMICS-NEXT:  .LBB0_3: # %partword.cmpxchg.end
-; HYBRID-ATOMICS-NEXT:    xor a0, a5, a0
+; HYBRID-ATOMICS-NEXT:    mv a3, a2
+; HYBRID-ATOMICS-NEXT:    sc.b.cap a3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB0_1
+; HYBRID-ATOMICS-NEXT:  .LBB0_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
-; HYBRID-ATOMICS-NEXT:    srl a0, a5, a6
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: test_cmpxchg_strong_i8:
@@ -161,48 +135,21 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_i16:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
-; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
-; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
-; HYBRID-ATOMICS-NEXT:    cfromptr ca7, ddc, a3
-; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
-; HYBRID-ATOMICS-NEXT:    slli a6, a0, 3
-; HYBRID-ATOMICS-NEXT:    lui a0, 16
-; HYBRID-ATOMICS-NEXT:    addi a0, a0, -1
-; HYBRID-ATOMICS-NEXT:    sll a3, a0, a6
-; HYBRID-ATOMICS-NEXT:    and a2, a2, a0
-; HYBRID-ATOMICS-NEXT:    and a0, a1, a0
-; HYBRID-ATOMICS-NEXT:    lw.cap a5, (ca7)
-; HYBRID-ATOMICS-NEXT:    not a1, a3
-; HYBRID-ATOMICS-NEXT:    sll t0, a2, a6
-; HYBRID-ATOMICS-NEXT:    sll a4, a0, a6
-; HYBRID-ATOMICS-NEXT:    and a2, a5, a1
-; HYBRID-ATOMICS-NEXT:  .LBB1_1: # %partword.cmpxchg.loop
-; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
-; HYBRID-ATOMICS-NEXT:    # Child Loop BB1_4 Depth 2
+; HYBRID-ATOMICS-NEXT:    slli a1, a1, 16
+; HYBRID-ATOMICS-NEXT:    srai a1, a1, 16
+; HYBRID-ATOMICS-NEXT:  .LBB1_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.h.cap a2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB1_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_1 Depth=1
 ; HYBRID-ATOMICS-NEXT:    mv a3, a2
-; HYBRID-ATOMICS-NEXT:    or a5, a2, t0
-; HYBRID-ATOMICS-NEXT:    or a0, a2, a4
-; HYBRID-ATOMICS-NEXT:  .LBB1_4: # %partword.cmpxchg.loop
-; HYBRID-ATOMICS-NEXT:    # Parent Loop BB1_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
-; HYBRID-ATOMICS-NEXT:    lr.w.cap a5, (ca7)
-; HYBRID-ATOMICS-NEXT:    bne a5, a0, .LBB1_6
-; HYBRID-ATOMICS-NEXT:  # %bb.5: # %partword.cmpxchg.loop
-; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_4 Depth=2
-; HYBRID-ATOMICS-NEXT:    mv a2, a5
-; HYBRID-ATOMICS-NEXT:    sc.w.cap a2, (ca7)
-; HYBRID-ATOMICS-NEXT:    bnez a2, .LBB1_4
-; HYBRID-ATOMICS-NEXT:  .LBB1_6: # %partword.cmpxchg.loop
-; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    beq a5, a0, .LBB1_3
-; HYBRID-ATOMICS-NEXT:  # %bb.2: # %partword.cmpxchg.failure
-; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    and a2, a5, a1
-; HYBRID-ATOMICS-NEXT:    bne a3, a2, .LBB1_1
-; HYBRID-ATOMICS-NEXT:  .LBB1_3: # %partword.cmpxchg.end
-; HYBRID-ATOMICS-NEXT:    xor a0, a5, a0
+; HYBRID-ATOMICS-NEXT:    sc.h.cap a3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB1_1
+; HYBRID-ATOMICS-NEXT:  .LBB1_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
-; HYBRID-ATOMICS-NEXT:    srl a0, a5, a6
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: test_cmpxchg_strong_i16:
@@ -575,35 +522,21 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_i8:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
-; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
-; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
-; HYBRID-ATOMICS-NEXT:    cfromptr ca3, ddc, a3
-; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
-; HYBRID-ATOMICS-NEXT:    slli a0, a0, 3
-; HYBRID-ATOMICS-NEXT:    addi a4, zero, 255
-; HYBRID-ATOMICS-NEXT:    sll a4, a4, a0
-; HYBRID-ATOMICS-NEXT:    not a4, a4
-; HYBRID-ATOMICS-NEXT:    andi a2, a2, 255
-; HYBRID-ATOMICS-NEXT:    lw.cap a5, (ca3)
-; HYBRID-ATOMICS-NEXT:    sll a2, a2, a0
-; HYBRID-ATOMICS-NEXT:    andi a1, a1, 255
-; HYBRID-ATOMICS-NEXT:    sll a1, a1, a0
-; HYBRID-ATOMICS-NEXT:    and a4, a5, a4
-; HYBRID-ATOMICS-NEXT:    or a2, a4, a2
-; HYBRID-ATOMICS-NEXT:    or a1, a4, a1
+; HYBRID-ATOMICS-NEXT:    slli a1, a1, 24
+; HYBRID-ATOMICS-NEXT:    srai a1, a1, 24
 ; HYBRID-ATOMICS-NEXT:  .LBB6_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca3)
+; HYBRID-ATOMICS-NEXT:    lr.b.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB6_3
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
 ; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB6_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    mv a4, a2
-; HYBRID-ATOMICS-NEXT:    sc.w.cap a4, (ca3)
-; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB6_1
+; HYBRID-ATOMICS-NEXT:    mv a3, a2
+; HYBRID-ATOMICS-NEXT:    sc.b.cap a3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB6_1
 ; HYBRID-ATOMICS-NEXT:  .LBB6_3: # %entry
-; HYBRID-ATOMICS-NEXT:    xor a1, a2, a1
-; HYBRID-ATOMICS-NEXT:    seqz a1, a1
-; HYBRID-ATOMICS-NEXT:    srl a0, a2, a0
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: test_cmpxchg_weak_i8:
@@ -672,36 +605,21 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_i16:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
-; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
-; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
-; HYBRID-ATOMICS-NEXT:    cfromptr ca3, ddc, a3
-; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
-; HYBRID-ATOMICS-NEXT:    slli a0, a0, 3
-; HYBRID-ATOMICS-NEXT:    lui a4, 16
-; HYBRID-ATOMICS-NEXT:    addi a4, a4, -1
-; HYBRID-ATOMICS-NEXT:    sll a5, a4, a0
-; HYBRID-ATOMICS-NEXT:    and a2, a2, a4
-; HYBRID-ATOMICS-NEXT:    and a1, a1, a4
-; HYBRID-ATOMICS-NEXT:    lw.cap a4, (ca3)
-; HYBRID-ATOMICS-NEXT:    not a5, a5
-; HYBRID-ATOMICS-NEXT:    sll a2, a2, a0
-; HYBRID-ATOMICS-NEXT:    sll a1, a1, a0
-; HYBRID-ATOMICS-NEXT:    and a4, a4, a5
-; HYBRID-ATOMICS-NEXT:    or a2, a4, a2
-; HYBRID-ATOMICS-NEXT:    or a1, a4, a1
+; HYBRID-ATOMICS-NEXT:    slli a1, a1, 16
+; HYBRID-ATOMICS-NEXT:    srai a1, a1, 16
 ; HYBRID-ATOMICS-NEXT:  .LBB7_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca3)
+; HYBRID-ATOMICS-NEXT:    lr.h.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB7_3
 ; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
 ; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB7_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    mv a4, a2
-; HYBRID-ATOMICS-NEXT:    sc.w.cap a4, (ca3)
-; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB7_1
+; HYBRID-ATOMICS-NEXT:    mv a3, a2
+; HYBRID-ATOMICS-NEXT:    sc.h.cap a3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB7_1
 ; HYBRID-ATOMICS-NEXT:  .LBB7_3: # %entry
-; HYBRID-ATOMICS-NEXT:    xor a1, a2, a1
-; HYBRID-ATOMICS-NEXT:    seqz a1, a1
-; HYBRID-ATOMICS-NEXT:    srl a0, a2, a0
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: test_cmpxchg_weak_i16:

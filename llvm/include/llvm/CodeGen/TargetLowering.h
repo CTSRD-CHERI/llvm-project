@@ -1847,7 +1847,10 @@ public:
   /// Note that *unlike* operations above the maximum size, atomic ops
   /// are still natively supported below the minimum; they just
   /// require a more complex expansion.
-  unsigned getMinCmpXchgSizeInBits() const { return MinCmpXchgSizeInBits; }
+  virtual unsigned getMinCmpXchgSizeInBits(const Instruction *I,
+                                           const Value *Ptr) const {
+    return MinCmpXchgSizeInBits;
+  }
 
   /// Whether the target supports unaligned atomic operations.
   bool supportsUnalignedAtomics() const { return SupportsUnalignedAtomics; }

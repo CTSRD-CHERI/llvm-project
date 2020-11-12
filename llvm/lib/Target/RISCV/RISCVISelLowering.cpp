@@ -3468,6 +3468,13 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
                                                  Alignment);
 }
 
+unsigned RISCVTargetLowering::getMinCmpXchgSizeInBits(const Instruction *I,
+                                                      const Value *Ptr) const {
+  if (I->getModule()->getDataLayout().isFatPointer(Ptr->getType()))
+    return 8; // All sizes are supported via capabilities
+  return TargetLowering::getMinCmpXchgSizeInBits(I, Ptr);
+}
+
 Register RISCVTargetLowering::getExceptionPointerRegister(
     const Constant *PersonalityFn) const {
   return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
