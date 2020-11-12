@@ -614,6 +614,13 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCheriCmpXchg32:
   case RISCV::PseudoCheriCmpXchg64:
     return 16;
+  case RISCV::PseudoCheriCmpXchg8ExplicitCap:
+  case RISCV::PseudoCheriCmpXchg16ExplicitCap:
+  case RISCV::PseudoCheriCmpXchg32ExplicitCap:
+  case RISCV::PseudoCheriCmpXchg64ExplicitCap:
+  case RISCV::PseudoCheriCmpXchgCapExplicitCap:
+    // This is almost the same as PseudoCheriCmpXchg but with an extra move.
+    return 20;
   case TargetOpcode::INLINEASM:
   case TargetOpcode::INLINEASM_BR: {
     const MachineFunction &MF = *MI.getParent()->getParent();

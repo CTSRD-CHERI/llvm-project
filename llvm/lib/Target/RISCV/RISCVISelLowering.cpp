@@ -3305,9 +3305,20 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   if (AI->isFloatingPointOperation())
     return AtomicExpansionKind::CmpXChg;
 
+  const DataLayout &DL = AI->getModule()->getDataLayout();
+  bool IsCheriPurecap = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
+  // The atomic RMW instructions are only available in capmode, so for the
+  // hybrid ABI we have expand these operations to use compare-exchange (which
+  // is expanded to a LR/SC sequence when not in capmode).
+  // Note: Since the operations between LR/SC don't break the forward progress
+  // guarantee, we could generate slightly more efficient code by using
+  // AtomicExpansionKind::LLSC. However, the required TLI hooks for are not
+  // implemented so we use CmpXChg.
+  if (DL.isFatPointer(AI->getPointerOperand()->getType()) && !IsCheriPurecap)
+    return AtomicExpansionKind::CmpXChg;
+
   unsigned Size = AI->getType()->getPrimitiveSizeInBits();
-  if ((Size == 8 || Size == 16) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+  if ((Size == 8 || Size == 16) && !IsCheriPurecap)
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }
@@ -3448,12 +3459,10 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
                                                   Type *ValueTy,
                                                   Type *PointerTy,
                                                   Align Alignment) const {
-  // FIXME: we current have to expand CMPXCHG/RMW to libcalls since we are
-  // missing the SelectionDAG nodes+expansions to use the explicit addressing
-  // mode instructions.
-  if (DL.isFatPointer(PointerTy) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-      (isa<AtomicRMWInst>(AI) || isa<AtomicCmpXchgInst>(AI)))
+  // FIXME: we current have to expand RMW to libcalls since we are missing
+  //  the SelectionDAG nodes+expansions to use the explicit addressing mode.
+  if (DL.isFatPointer(PointerTy) && isa<AtomicRMWInst>(AI) &&
+      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return false;
   return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
                                                  Alignment);

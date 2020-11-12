@@ -6,7 +6,7 @@
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 
 define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_i8:
@@ -50,22 +50,67 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_strong_i8:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sb a1, 11(sp)
-; HYBRID-NEXT:    addi a1, sp, 11
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_1_c@plt
-; HYBRID-NEXT:    lb a1, 11(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    mv a0, a1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_i8:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
+; HYBRID-ATOMICS-NEXT:    cfromptr ca7, ddc, a3
+; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
+; HYBRID-ATOMICS-NEXT:    slli a6, a0, 3
+; HYBRID-ATOMICS-NEXT:    addi a0, zero, 255
+; HYBRID-ATOMICS-NEXT:    sll a0, a0, a6
+; HYBRID-ATOMICS-NEXT:    not t0, a0
+; HYBRID-ATOMICS-NEXT:    andi a0, a2, 255
+; HYBRID-ATOMICS-NEXT:    lw.cap a3, (ca7)
+; HYBRID-ATOMICS-NEXT:    sll a2, a0, a6
+; HYBRID-ATOMICS-NEXT:    andi a0, a1, 255
+; HYBRID-ATOMICS-NEXT:    sll a1, a0, a6
+; HYBRID-ATOMICS-NEXT:    and a4, a3, t0
+; HYBRID-ATOMICS-NEXT:  .LBB0_1: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    # Child Loop BB0_4 Depth 2
+; HYBRID-ATOMICS-NEXT:    mv a3, a4
+; HYBRID-ATOMICS-NEXT:    or a5, a4, a2
+; HYBRID-ATOMICS-NEXT:    or a0, a4, a1
+; HYBRID-ATOMICS-NEXT:  .LBB0_4: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # Parent Loop BB0_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
+; HYBRID-ATOMICS-NEXT:    lr.w.cap a5, (ca7)
+; HYBRID-ATOMICS-NEXT:    bne a5, a0, .LBB0_6
+; HYBRID-ATOMICS-NEXT:  # %bb.5: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_4 Depth=2
+; HYBRID-ATOMICS-NEXT:    mv a4, a5
+; HYBRID-ATOMICS-NEXT:    sc.w.cap a4, (ca7)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB0_4
+; HYBRID-ATOMICS-NEXT:  .LBB0_6: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    beq a5, a0, .LBB0_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %partword.cmpxchg.failure
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB0_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    and a4, a5, t0
+; HYBRID-ATOMICS-NEXT:    bne a3, a4, .LBB0_1
+; HYBRID-ATOMICS-NEXT:  .LBB0_3: # %partword.cmpxchg.end
+; HYBRID-ATOMICS-NEXT:    xor a0, a5, a0
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    srl a0, a5, a6
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_strong_i8:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sb a1, 11(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a1, sp, 11
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_1_c@plt
+; HYBRID-LIBCALLS-NEXT:    lb a1, 11(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    mv a0, a1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg i8 addrspace(200)* %ptr, i8 %exp, i8 %new acq_rel acquire
   ret { i8, i1 } %0
@@ -114,22 +159,68 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_strong_i16:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sh a1, 10(sp)
-; HYBRID-NEXT:    addi a1, sp, 10
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_2_c@plt
-; HYBRID-NEXT:    lh a1, 10(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    mv a0, a1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_i16:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
+; HYBRID-ATOMICS-NEXT:    cfromptr ca7, ddc, a3
+; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
+; HYBRID-ATOMICS-NEXT:    slli a6, a0, 3
+; HYBRID-ATOMICS-NEXT:    lui a0, 16
+; HYBRID-ATOMICS-NEXT:    addi a0, a0, -1
+; HYBRID-ATOMICS-NEXT:    sll a3, a0, a6
+; HYBRID-ATOMICS-NEXT:    and a2, a2, a0
+; HYBRID-ATOMICS-NEXT:    and a0, a1, a0
+; HYBRID-ATOMICS-NEXT:    lw.cap a5, (ca7)
+; HYBRID-ATOMICS-NEXT:    not a1, a3
+; HYBRID-ATOMICS-NEXT:    sll t0, a2, a6
+; HYBRID-ATOMICS-NEXT:    sll a4, a0, a6
+; HYBRID-ATOMICS-NEXT:    and a2, a5, a1
+; HYBRID-ATOMICS-NEXT:  .LBB1_1: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    # Child Loop BB1_4 Depth 2
+; HYBRID-ATOMICS-NEXT:    mv a3, a2
+; HYBRID-ATOMICS-NEXT:    or a5, a2, t0
+; HYBRID-ATOMICS-NEXT:    or a0, a2, a4
+; HYBRID-ATOMICS-NEXT:  .LBB1_4: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # Parent Loop BB1_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
+; HYBRID-ATOMICS-NEXT:    lr.w.cap a5, (ca7)
+; HYBRID-ATOMICS-NEXT:    bne a5, a0, .LBB1_6
+; HYBRID-ATOMICS-NEXT:  # %bb.5: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_4 Depth=2
+; HYBRID-ATOMICS-NEXT:    mv a2, a5
+; HYBRID-ATOMICS-NEXT:    sc.w.cap a2, (ca7)
+; HYBRID-ATOMICS-NEXT:    bnez a2, .LBB1_4
+; HYBRID-ATOMICS-NEXT:  .LBB1_6: # %partword.cmpxchg.loop
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    beq a5, a0, .LBB1_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %partword.cmpxchg.failure
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB1_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    and a2, a5, a1
+; HYBRID-ATOMICS-NEXT:    bne a3, a2, .LBB1_1
+; HYBRID-ATOMICS-NEXT:  .LBB1_3: # %partword.cmpxchg.end
+; HYBRID-ATOMICS-NEXT:    xor a0, a5, a0
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    srl a0, a5, a6
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_strong_i16:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sh a1, 10(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a1, sp, 10
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_2_c@plt
+; HYBRID-LIBCALLS-NEXT:    lh a1, 10(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    mv a0, a1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg i16 addrspace(200)* %ptr, i16 %exp, i16 %new acq_rel acquire
   ret { i16, i1 } %0
@@ -176,22 +267,39 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_strong_i32:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sw a1, 8(sp)
-; HYBRID-NEXT:    addi a1, sp, 8
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
-; HYBRID-NEXT:    lw a1, 8(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    mv a0, a1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_i32:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:  .LBB2_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB2_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB2_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a3, a2
+; HYBRID-ATOMICS-NEXT:    sc.w.cap a3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB2_1
+; HYBRID-ATOMICS-NEXT:  .LBB2_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_strong_i32:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sw a1, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a1, sp, 8
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-LIBCALLS-NEXT:    lw a1, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    mv a0, a1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg i32 addrspace(200)* %ptr, i32 %exp, i32 %new acq_rel acquire
   ret { i32, i1 } %0
@@ -305,22 +413,39 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_strong_cap:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sc ca1, 0(sp)
-; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
-; HYBRID-NEXT:    lc ca1, 0(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    cmove ca0, ca1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_cap:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:  .LBB4_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB4_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB4_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca2
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB4_1
+; HYBRID-ATOMICS-NEXT:  .LBB4_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_strong_cap:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a1, sp
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_cap_c@plt
+; HYBRID-LIBCALLS-NEXT:    lc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    cmove ca0, ca1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new acq_rel acquire
   ret { i8 addrspace(200)*, i1 } %0
@@ -367,22 +492,39 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_strong_cap_i32:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sc ca1, 0(sp)
-; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
-; HYBRID-NEXT:    lc ca1, 0(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    cmove ca0, ca1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_cap_i32:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:  .LBB5_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB5_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB5_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca2
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB5_1
+; HYBRID-ATOMICS-NEXT:  .LBB5_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_strong_cap_i32:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a1, sp
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_cap_c@plt
+; HYBRID-LIBCALLS-NEXT:    lc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    cmove ca0, ca1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
   ret { i32 addrspace(200)*, i1 } %0
@@ -431,22 +573,55 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_weak_i8:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sb a1, 11(sp)
-; HYBRID-NEXT:    addi a1, sp, 11
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_1_c@plt
-; HYBRID-NEXT:    lb a1, 11(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    mv a0, a1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_i8:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
+; HYBRID-ATOMICS-NEXT:    cfromptr ca3, ddc, a3
+; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
+; HYBRID-ATOMICS-NEXT:    slli a0, a0, 3
+; HYBRID-ATOMICS-NEXT:    addi a4, zero, 255
+; HYBRID-ATOMICS-NEXT:    sll a4, a4, a0
+; HYBRID-ATOMICS-NEXT:    not a4, a4
+; HYBRID-ATOMICS-NEXT:    andi a2, a2, 255
+; HYBRID-ATOMICS-NEXT:    lw.cap a5, (ca3)
+; HYBRID-ATOMICS-NEXT:    sll a2, a2, a0
+; HYBRID-ATOMICS-NEXT:    andi a1, a1, 255
+; HYBRID-ATOMICS-NEXT:    sll a1, a1, a0
+; HYBRID-ATOMICS-NEXT:    and a4, a5, a4
+; HYBRID-ATOMICS-NEXT:    or a2, a4, a2
+; HYBRID-ATOMICS-NEXT:    or a1, a4, a1
+; HYBRID-ATOMICS-NEXT:  .LBB6_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca3)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB6_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB6_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a4, a2
+; HYBRID-ATOMICS-NEXT:    sc.w.cap a4, (ca3)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB6_1
+; HYBRID-ATOMICS-NEXT:  .LBB6_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a1, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a1
+; HYBRID-ATOMICS-NEXT:    srl a0, a2, a0
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_weak_i8:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sb a1, 11(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a1, sp, 11
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_1_c@plt
+; HYBRID-LIBCALLS-NEXT:    lb a1, 11(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    mv a0, a1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg weak i8 addrspace(200)* %ptr, i8 %exp, i8 %new acq_rel acquire
   ret { i8, i1 } %0
@@ -495,22 +670,56 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_weak_i16:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sh a1, 10(sp)
-; HYBRID-NEXT:    addi a1, sp, 10
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_2_c@plt
-; HYBRID-NEXT:    lh a1, 10(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    mv a0, a1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_i16:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-ATOMICS-NEXT:    andi a3, a0, -4
+; HYBRID-ATOMICS-NEXT:    cfromptr ca3, ddc, a3
+; HYBRID-ATOMICS-NEXT:    andi a0, a0, 3
+; HYBRID-ATOMICS-NEXT:    slli a0, a0, 3
+; HYBRID-ATOMICS-NEXT:    lui a4, 16
+; HYBRID-ATOMICS-NEXT:    addi a4, a4, -1
+; HYBRID-ATOMICS-NEXT:    sll a5, a4, a0
+; HYBRID-ATOMICS-NEXT:    and a2, a2, a4
+; HYBRID-ATOMICS-NEXT:    and a1, a1, a4
+; HYBRID-ATOMICS-NEXT:    lw.cap a4, (ca3)
+; HYBRID-ATOMICS-NEXT:    not a5, a5
+; HYBRID-ATOMICS-NEXT:    sll a2, a2, a0
+; HYBRID-ATOMICS-NEXT:    sll a1, a1, a0
+; HYBRID-ATOMICS-NEXT:    and a4, a4, a5
+; HYBRID-ATOMICS-NEXT:    or a2, a4, a2
+; HYBRID-ATOMICS-NEXT:    or a1, a4, a1
+; HYBRID-ATOMICS-NEXT:  .LBB7_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca3)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB7_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB7_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a4, a2
+; HYBRID-ATOMICS-NEXT:    sc.w.cap a4, (ca3)
+; HYBRID-ATOMICS-NEXT:    bnez a4, .LBB7_1
+; HYBRID-ATOMICS-NEXT:  .LBB7_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a1, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a1
+; HYBRID-ATOMICS-NEXT:    srl a0, a2, a0
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_weak_i16:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sh a1, 10(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a1, sp, 10
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_2_c@plt
+; HYBRID-LIBCALLS-NEXT:    lh a1, 10(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    mv a0, a1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg weak i16 addrspace(200)* %ptr, i16 %exp, i16 %new acq_rel acquire
   ret { i16, i1 } %0
@@ -557,22 +766,39 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_weak_i32:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sw a1, 8(sp)
-; HYBRID-NEXT:    addi a1, sp, 8
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
-; HYBRID-NEXT:    lw a1, 8(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    mv a0, a1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_i32:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:  .LBB8_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB8_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB8_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    mv a3, a2
+; HYBRID-ATOMICS-NEXT:    sc.w.cap a3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB8_1
+; HYBRID-ATOMICS-NEXT:  .LBB8_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    mv a0, a2
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_weak_i32:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sw a1, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    addi a1, sp, 8
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_4_c@plt
+; HYBRID-LIBCALLS-NEXT:    lw a1, 8(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    mv a0, a1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg weak i32 addrspace(200)* %ptr, i32 %exp, i32 %new acq_rel acquire
   ret { i32, i1 } %0
@@ -686,22 +912,39 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_weak_cap:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sc ca1, 0(sp)
-; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
-; HYBRID-NEXT:    lc ca1, 0(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    cmove ca0, ca1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_cap:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:  .LBB10_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB10_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB10_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca2
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB10_1
+; HYBRID-ATOMICS-NEXT:  .LBB10_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_weak_cap:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a1, sp
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_cap_c@plt
+; HYBRID-LIBCALLS-NEXT:    lc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    cmove ca0, ca1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg weak i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new acq_rel acquire
   ret { i8 addrspace(200)*, i1 } %0
@@ -748,22 +991,39 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
-; HYBRID-LABEL: test_cmpxchg_weak_cap_i32:
-; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sw ra, 12(sp)
-; HYBRID-NEXT:    sc ca1, 0(sp)
-; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
-; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
-; HYBRID-NEXT:    lc ca1, 0(sp)
-; HYBRID-NEXT:    mv a2, a0
-; HYBRID-NEXT:    cmove ca0, ca1
-; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    lw ra, 12(sp)
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_cap_i32:
+; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:  .LBB11_1: # %entry
+; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
+; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB11_3
+; HYBRID-ATOMICS-NEXT:  # %bb.2: # %entry
+; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB11_1 Depth=1
+; HYBRID-ATOMICS-NEXT:    cmove ca3, ca2
+; HYBRID-ATOMICS-NEXT:    sc.c.cap ca3, (ca0)
+; HYBRID-ATOMICS-NEXT:    bnez a3, .LBB11_1
+; HYBRID-ATOMICS-NEXT:  .LBB11_3: # %entry
+; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
+; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: test_cmpxchg_weak_cap_i32:
+; HYBRID-LIBCALLS:       # %bb.0: # %entry
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    sc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a1, sp
+; HYBRID-LIBCALLS-NEXT:    addi a3, zero, 4
+; HYBRID-LIBCALLS-NEXT:    addi a4, zero, 2
+; HYBRID-LIBCALLS-NEXT:    call __atomic_compare_exchange_cap_c@plt
+; HYBRID-LIBCALLS-NEXT:    lc ca1, 0(sp)
+; HYBRID-LIBCALLS-NEXT:    mv a2, a0
+; HYBRID-LIBCALLS-NEXT:    cmove ca0, ca1
+; HYBRID-LIBCALLS-NEXT:    mv a1, a2
+; HYBRID-LIBCALLS-NEXT:    lw ra, 12(sp)
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 entry:
   %0 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
   ret { i32 addrspace(200)*, i1 } %0
