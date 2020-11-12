@@ -18,7 +18,6 @@
 #include "TargetInfo/RISCVTargetInfo.h"
 #include "Utils/RISCVBaseInfo.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/CodeGen/Register.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -66,13 +65,13 @@ static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
   RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.getABIName());
   MCAsmInfo *MAI = new RISCVMCAsmInfo(TT, ABI);
 
-  Register SPReg;
+  MCRegister SPReg;
   if (ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI))
     SPReg = RISCV::C2;
   else
     SPReg = RISCV::X2;
 
-  Register SP = MRI.getDwarfRegNum(SPReg, true);
+  MCRegister SP = MRI.getDwarfRegNum(SPReg, true);
   MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, SP, 0);
   MAI->addInitialFrameState(Inst);
 
