@@ -8,6 +8,14 @@
 ; RUN:   | FileCheck -check-prefix=RV64IXCHERI-LP64 %s
 ; RUN: llc -mtriple=riscv64 -target-abi lp64d -mattr=+xcheri,-cap-mode,+f,+d -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IXCHERI-LP64D %s
+; RUN: llc -mtriple=riscv32 -target-abi il32pc64 -mattr=+xcheri,+cap-mode,-f,-d -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=RV32IXCHERI-IL32PC64 %s
+; RUNTODO: llc -mtriple=riscv32 -target-abi il32pc64d -mattr=+xcheri,+cap-mode,+f,+d -verify-machineinstrs < %s \
+; RUNTODO:   | FileCheck -check-prefix=RV32IXCHERI-IL32PC64D %s
+; RUN: llc -mtriple=riscv64 -target-abi l64pc128 -mattr=+xcheri,+cap-mode,-f,-d -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=RV64IXCHERI-L64PC128 %s
+; RUN: llc -mtriple=riscv64 -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -verify-machineinstrs < %s \
+; RUN:   | FileCheck -check-prefix=RV64IXCHERI-L64PC128D %s
 
 define double @load_double_via_cap(double addrspace(200)* %a) nounwind {
 ; RV32IXCHERI-ILP32-LABEL: load_double_via_cap:
@@ -28,6 +36,23 @@ define double @load_double_via_cap(double addrspace(200)* %a) nounwind {
 ; RV64IXCHERI-LP64D-NEXT:    ld.cap a0, (ca0)
 ; RV64IXCHERI-LP64D-NEXT:    fmv.d.x fa0, a0
 ; RV64IXCHERI-LP64D-NEXT:    ret
+;
+; RV32IXCHERI-IL32PC64-LABEL: load_double_via_cap:
+; RV32IXCHERI-IL32PC64:       # %bb.0:
+; RV32IXCHERI-IL32PC64-NEXT:    clw a2, 0(ca0)
+; RV32IXCHERI-IL32PC64-NEXT:    clw a1, 4(ca0)
+; RV32IXCHERI-IL32PC64-NEXT:    mv a0, a2
+; RV32IXCHERI-IL32PC64-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128-LABEL: load_double_via_cap:
+; RV64IXCHERI-L64PC128:       # %bb.0:
+; RV64IXCHERI-L64PC128-NEXT:    cld a0, 0(ca0)
+; RV64IXCHERI-L64PC128-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128D-LABEL: load_double_via_cap:
+; RV64IXCHERI-L64PC128D:       # %bb.0:
+; RV64IXCHERI-L64PC128D-NEXT:    cfld fa0, 0(ca0)
+; RV64IXCHERI-L64PC128D-NEXT:    cret
   %loaded = load double, double addrspace(200)* %a, align 8
   ret double %loaded
 }
@@ -50,6 +75,22 @@ define void @store_double_via_cap(double addrspace(200)* %a, double %value) noun
 ; RV64IXCHERI-LP64D-NEXT:    fmv.x.d a1, fa0
 ; RV64IXCHERI-LP64D-NEXT:    sd.cap a1, (ca0)
 ; RV64IXCHERI-LP64D-NEXT:    ret
+;
+; RV32IXCHERI-IL32PC64-LABEL: store_double_via_cap:
+; RV32IXCHERI-IL32PC64:       # %bb.0:
+; RV32IXCHERI-IL32PC64-NEXT:    csw a2, 4(ca0)
+; RV32IXCHERI-IL32PC64-NEXT:    csw a1, 0(ca0)
+; RV32IXCHERI-IL32PC64-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128-LABEL: store_double_via_cap:
+; RV64IXCHERI-L64PC128:       # %bb.0:
+; RV64IXCHERI-L64PC128-NEXT:    csd a1, 0(ca0)
+; RV64IXCHERI-L64PC128-NEXT:    cret
+;
+; RV64IXCHERI-L64PC128D-LABEL: store_double_via_cap:
+; RV64IXCHERI-L64PC128D:       # %bb.0:
+; RV64IXCHERI-L64PC128D-NEXT:    cfsd fa0, 0(ca0)
+; RV64IXCHERI-L64PC128D-NEXT:    cret
   store double %value, double addrspace(200)* %a, align 8
   ret void
 }
