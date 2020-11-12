@@ -86,6 +86,7 @@ struct FuzzingOptions {
   bool HandleUsr2 = false;
   bool HandleTrap = false;
   bool HandleProt = false;
+  bool HandleWinExcept = false;
 };
 
 }  // namespace fuzzer
