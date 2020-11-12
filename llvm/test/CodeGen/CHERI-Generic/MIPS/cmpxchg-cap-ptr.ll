@@ -586,3 +586,443 @@ entry:
   %0 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
   ret { i32 addrspace(200)*, i1 } %0
 }
+
+; Test various success/failure memory orders
+
+define { i64, i1 } @test_cmpxchg_weak_sc_sc(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_sc_sc:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB12_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB12_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB12_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB12_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB12_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    sltiu $3, $1, 1
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: test_cmpxchg_weak_sc_sc:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB12_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB12_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB12_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB12_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB12_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    sltiu $3, $1, 1
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new seq_cst seq_cst
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_sc_acquire(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_sc_acquire:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB13_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB13_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB13_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB13_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB13_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    sltiu $3, $1, 1
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: test_cmpxchg_weak_sc_acquire:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB13_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB13_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB13_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB13_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB13_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    sltiu $3, $1, 1
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new seq_cst acquire
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_sc_relaxed(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_sc_relaxed:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB14_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB14_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB14_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB14_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB14_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    sltiu $3, $1, 1
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: test_cmpxchg_weak_sc_relaxed:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB14_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB14_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB14_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB14_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB14_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    sltiu $3, $1, 1
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new seq_cst monotonic
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_acqrel_acquire(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_acqrel_acquire:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB15_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB15_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB15_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB15_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB15_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    sltiu $3, $1, 1
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: test_cmpxchg_weak_acqrel_acquire:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB15_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB15_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB15_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB15_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB15_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    sltiu $3, $1, 1
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel acquire
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_acqrel_relaxed(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_acqrel_relaxed:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB16_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB16_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB16_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB16_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB16_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    sltiu $3, $1, 1
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: test_cmpxchg_weak_acqrel_relaxed:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB16_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB16_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB16_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB16_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB16_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    sltiu $3, $1, 1
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel monotonic
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_release_acquire(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_release_acquire:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB17_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB17_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB17_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB17_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB17_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    sltiu $3, $1, 1
+;
+; HYBRID-LABEL: test_cmpxchg_weak_release_acquire:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB17_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB17_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB17_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB17_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB17_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    sltiu $3, $1, 1
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new release acquire
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_release_relaxed(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_release_relaxed:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB18_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB18_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB18_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB18_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB18_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    sltiu $3, $1, 1
+;
+; HYBRID-LABEL: test_cmpxchg_weak_release_relaxed:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB18_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB18_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB18_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB18_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB18_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    sltiu $3, $1, 1
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new release monotonic
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_acquire_acquire(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_acquire_acquire:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    .insn
+; PURECAP-NEXT:  .LBB19_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB19_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB19_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB19_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB19_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    sltiu $3, $1, 1
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: test_cmpxchg_weak_acquire_acquire:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    .insn
+; HYBRID-NEXT:  .LBB19_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB19_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB19_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB19_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB19_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    sltiu $3, $1, 1
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new acquire acquire
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_acquire_relaxed(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_acquire_relaxed:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    .insn
+; PURECAP-NEXT:  .LBB20_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB20_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB20_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB20_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB20_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    sltiu $3, $1, 1
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    nop
+;
+; HYBRID-LABEL: test_cmpxchg_weak_acquire_relaxed:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    .insn
+; HYBRID-NEXT:  .LBB20_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB20_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB20_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB20_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB20_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    sltiu $3, $1, 1
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    nop
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new acquire monotonic
+  ret { i64, i1 } %0
+}
+
+define { i64, i1 } @test_cmpxchg_weak_relaxed_relaxed(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_relaxed_relaxed:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    .insn
+; PURECAP-NEXT:  .LBB21_1: # %entry
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clld $2, $c3
+; PURECAP-NEXT:    bne $2, $4, .LBB21_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # %entry
+; PURECAP-NEXT:    # in Loop: Header=BB21_1 Depth=1
+; PURECAP-NEXT:    cscd $1, $5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB21_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB21_3: # %entry
+; PURECAP-NEXT:    xor $1, $2, $4
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    sltiu $3, $1, 1
+;
+; HYBRID-LABEL: test_cmpxchg_weak_relaxed_relaxed:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    .insn
+; HYBRID-NEXT:  .LBB21_1: # %entry
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clld $2, $c3
+; HYBRID-NEXT:    bne $2, $4, .LBB21_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # %entry
+; HYBRID-NEXT:    # in Loop: Header=BB21_1 Depth=1
+; HYBRID-NEXT:    cscd $1, $5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB21_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB21_3: # %entry
+; HYBRID-NEXT:    xor $1, $2, $4
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    sltiu $3, $1, 1
+entry:
+  %0 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new monotonic monotonic
+  ret { i64, i1 } %0
+}

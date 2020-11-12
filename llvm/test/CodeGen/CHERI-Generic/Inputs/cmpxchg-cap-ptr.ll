@@ -80,3 +80,65 @@ entry:
   %0 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
   ret { i32 addrspace(200)*, i1 } %0
 }
+
+; Test various success/failure memory orders
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_sc_sc(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new seq_cst seq_cst
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_sc_acquire(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new seq_cst acquire
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_sc_relaxed(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new seq_cst monotonic
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_acqrel_acquire(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new acq_rel acquire
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_acqrel_relaxed(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new acq_rel monotonic
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_release_acquire(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new release acquire
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_release_relaxed(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new release monotonic
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_acquire_acquire(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new acquire acquire
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_acquire_relaxed(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new acquire monotonic
+  ret { iCAPRANGE, i1 } %0
+}
+
+define { iCAPRANGE, i1 } @test_cmpxchg_weak_relaxed_relaxed(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new) nounwind {
+entry:
+  %0 = cmpxchg weak iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %exp, iCAPRANGE %new monotonic monotonic
+  ret { iCAPRANGE, i1 } %0
+}
