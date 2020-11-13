@@ -2224,10 +2224,9 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
     auto KnownAlign = llvm::getKnownAlignment(
         MemInst->getRawDest(), CGF.CGM.getDataLayout(), MemInst, &AC, &DT);
     if (KnownAlign > DstAlign) {
-      // Check if we are still underaligned with __builtin_assume_aligned()
-      // and update the memcpy/memmove src alignment. This will be done later
-      // in LLVM anyway but since we have already computed we may as well set
-      // it.
+      // Check if we are still underaligned with __builtin_assume_aligned().
+      // and update the memcpy/memmove src alignment. This will be done later in
+      // LLVM anyway but since we have already computed we may as well set it.
       DstAlign = KnownAlign;
       UnderAligned = DstAlign < CapSizeBytes;
       MemInst->setDestAlignment(DstAlign);
