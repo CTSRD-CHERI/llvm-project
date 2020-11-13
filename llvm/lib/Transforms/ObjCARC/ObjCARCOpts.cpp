@@ -2359,8 +2359,11 @@ void ObjCARCOpt::OptimizeReturns(Function &F) {
     if (HasSafePathToCall &&
         GetBasicARCInstKind(Retain) == ARCInstKind::RetainRV &&
         GetBasicARCInstKind(Autorelease) == ARCInstKind::AutoreleaseRV &&
-        !cast<CallInst>(*DependingInstructions.begin())->isTailCall())
+        !cast<CallInst>(*DependingInstructions.begin())->isTailCall()) {
+      DependingInstructions.clear();
+      Visited.clear();
       continue;
+    }
 
     DependingInstructions.clear();
     Visited.clear();
