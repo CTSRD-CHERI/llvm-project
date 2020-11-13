@@ -93,7 +93,7 @@ void MCTargetStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
 
 MCStreamer::MCStreamer(MCContext &Ctx)
     : Context(Ctx), CurrentWinFrameInfo(nullptr),
-      UseAssemblerInfoForParsing(false) {
+      CurrentProcWinFrameInfoStartIndex(0), UseAssemblerInfoForParsing(false) {
   SectionStack.push_back(std::pair<MCSectionSubPair, MCSectionSubPair>());
 }
 
@@ -743,6 +743,7 @@ void MCStreamer::EmitWinCFIStartProc(const MCSymbol *Symbol, SMLoc Loc) {
 
   MCSymbol *StartProc = emitCFILabel();
 
+  CurrentProcWinFrameInfoStartIndex = WinFrameInfos.size();
   WinFrameInfos.emplace_back(
       std::make_unique<WinEH::FrameInfo>(Symbol, StartProc));
   CurrentWinFrameInfo = WinFrameInfos.back().get();
@@ -760,6 +761,11 @@ void MCStreamer::EmitWinCFIEndProc(SMLoc Loc) {
   CurFrame->End = Label;
   if (!CurFrame->FuncletOrFuncEnd)
     CurFrame->FuncletOrFuncEnd = CurFrame->End;
+
+  for (size_t I = CurrentProcWinFrameInfoStartIndex, E = WinFrameInfos.size();
+       I != E; ++I)
+    EmitWindowsUnwindTables(WinFrameInfos[I].get());
+  SwitchSection(CurFrame->TextSection);
 }
 
 void MCStreamer::EmitWinCFIFuncletOrFuncEnd(SMLoc Loc) {
@@ -1016,6 +1022,9 @@ void MCStreamer::emitRawText(const Twine &T) {
 }
 
 void MCStreamer::EmitWindowsUnwindTables() {
+}
+
+void MCStreamer::EmitWindowsUnwindTables(WinEH::FrameInfo *Frame) {
 }
 
 void MCStreamer::Finish(SMLoc EndLoc) {
