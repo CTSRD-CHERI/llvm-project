@@ -138,6 +138,13 @@ protected:
     this->Size = this->Capacity = 0; // FIXME: Setting Capacity to 0 is suspect.
   }
 
+  void assertSafeToPush(const void *Elt) {
+    assert(
+        (Elt < begin() || Elt >= end() || this->size() < this->capacity()) &&
+        "Attempting to push_back to the vector an element of the vector without"
+        " enough space reserved");
+  }
+
 public:
   using size_type = size_t;
   using difference_type = ptrdiff_t;
@@ -253,6 +260,7 @@ protected:
 
 public:
   void push_back(const T &Elt) {
+    this->assertSafeToPush(&Elt);
     if (LLVM_UNLIKELY(this->size() >= this->capacity()))
       this->grow();
     ::new ((void*) this->end()) T(Elt);
@@ -260,6 +268,7 @@ public:
   }
 
   void push_back(T &&Elt) {
+    this->assertSafeToPush(&Elt);
     if (LLVM_UNLIKELY(this->size() >= this->capacity()))
       this->grow();
     ::new ((void*) this->end()) T(::std::move(Elt));
@@ -355,6 +364,7 @@ protected:
 
 public:
   void push_back(const T &Elt) {
+    this->assertSafeToPush(&Elt);
     if (LLVM_UNLIKELY(this->size() >= this->capacity()))
       this->grow();
     memcpy(reinterpret_cast<void *>(this->end()), &Elt, sizeof(T));
