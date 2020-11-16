@@ -918,14 +918,17 @@ static bool canEmitInitWithFewStoresAfterBZero(llvm::Constant *Init,
 /// the scalar stores that would be required.
 static void emitStoresForInitAfterBZero(CodeGenModule &CGM,
                                         llvm::Constant *Init, Address Loc,
-                                        bool isVolatile, CGBuilderTy &Builder) {
+                                        bool isVolatile, CGBuilderTy &Builder,
+                                        bool IsAutoInit) {
   assert(!Init->isNullValue() && !isa<llvm::UndefValue>(Init) &&
          "called emitStoresForInitAfterBZero for zero or undef value.");
 
   if (isa<llvm::ConstantInt>(Init) || isa<llvm::ConstantFP>(Init) ||
       isa<llvm::ConstantVector>(Init) || isa<llvm::BlockAddress>(Init) ||
       isa<llvm::ConstantExpr>(Init)) {
-    Builder.CreateStore(Init, Loc, isVolatile);
+    auto *I = Builder.CreateStore(Init, Loc, isVolatile);
+    if (IsAutoInit)
+      I->addAnnotationMetadata("auto-init");
     return;
   }
 
@@ -938,7 +941,7 @@ static void emitStoresForInitAfterBZero(CodeGenModule &CGM,
       if (!Elt->isNullValue() && !isa<llvm::UndefValue>(Elt))
         emitStoresForInitAfterBZero(
             CGM, Elt, Builder.CreateConstInBoundsGEP2_32(Loc, 0, i), isVolatile,
-            Builder);
+            Builder, IsAutoInit);
     }
     return;
   }
@@ -953,7 +956,7 @@ static void emitStoresForInitAfterBZero(CodeGenModule &CGM,
     if (!Elt->isNullValue() && !isa<llvm::UndefValue>(Elt))
       emitStoresForInitAfterBZero(CGM, Elt,
                                   Builder.CreateConstInBoundsGEP2_32(Loc, 0, i),
-                                  isVolatile, Builder);
+                                  isVolatile, Builder, IsAutoInit);
   }
 }
 
@@ -1165,7 +1168,8 @@ static Address createUnnamedGlobalForMemcpyFrom(CodeGenModule &CGM,
 static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
                                   Address Loc, bool isVolatile,
                                   CGBuilderTy &Builder,
-                                  llvm::Constant *constant, bool ContainsCaps) {
+                                  llvm::Constant *constant, bool ContainsCaps,
+                                  bool IsAutoInit) {
   auto *Ty = constant->getType();
   uint64_t ConstantSize = CGM.getDataLayout().getTypeAllocSize(Ty);
   if (!ConstantSize)
@@ -1174,7 +1178,9 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
   bool canDoSingleStore = Ty->isIntOrIntVectorTy() ||
                           Ty->isPtrOrPtrVectorTy() || Ty->isFPOrFPVectorTy();
   if (canDoSingleStore) {
-    Builder.CreateStore(constant, Loc, isVolatile);
+    auto *I = Builder.CreateStore(constant, Loc, isVolatile);
+    if (IsAutoInit)
+      I->addAnnotationMetadata("auto-init");
     return;
   }
 
@@ -1189,14 +1195,17 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
     AddedThreshold = CGM.getTarget().getCHERICapabilityWidth() / 8;
 
   if (shouldUseBZeroPlusStoresToInitialize(constant, ConstantSize, AddedThreshold)) {
-    Builder.CreateMemSet(Loc, llvm::ConstantInt::get(CGM.Int8Ty, 0), SizeVal,
-                         isVolatile);
+    auto *I = Builder.CreateMemSet(Loc, llvm::ConstantInt::get(CGM.Int8Ty, 0),
+                                   SizeVal, isVolatile);
+    if (IsAutoInit)
+      I->addAnnotationMetadata("auto-init");
 
     bool valueAlreadyCorrect =
         constant->isNullValue() || isa<llvm::UndefValue>(constant);
     if (!valueAlreadyCorrect) {
       Loc = Builder.CreateBitCast(Loc, Ty->getPointerTo(Loc.getAddressSpace()));
-      emitStoresForInitAfterBZero(CGM, constant, Loc, isVolatile, Builder);
+      emitStoresForInitAfterBZero(CGM, constant, Loc, isVolatile, Builder,
+                                  IsAutoInit);
     }
     return;
   }
@@ -1212,8 +1221,10 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
       assert(AP.getBitWidth() <= 8);
       Value = AP.getLimitedValue();
     }
-    Builder.CreateMemSet(Loc, llvm::ConstantInt::get(CGM.Int8Ty, Value), SizeVal,
-                         isVolatile);
+    auto *I = Builder.CreateMemSet(
+        Loc, llvm::ConstantInt::get(CGM.Int8Ty, Value), SizeVal, isVolatile);
+    if (IsAutoInit)
+      I->addAnnotationMetadata("auto-init");
     return;
   }
 
@@ -1227,7 +1238,7 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
           emitStoresForConstant(
               CGM, D, EltPtr, isVolatile, Builder,
               cast<llvm::Constant>(Builder.CreateExtractValue(constant, i)),
-	      ContainsCaps);
+	      ContainsCaps, IsAutoInit);
         }
         return;
       }
@@ -1239,7 +1250,7 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
           emitStoresForConstant(
               CGM, D, EltPtr, isVolatile, Builder,
               cast<llvm::Constant>(Builder.CreateExtractValue(constant, i)),
-	      ContainsCaps);
+	      ContainsCaps, IsAutoInit);
         }
         return;
       }
@@ -1247,10 +1258,13 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
   }
 
   // Copy from a global.
-  Builder.CreateMemCpy(Loc,
-                       createUnnamedGlobalForMemcpyFrom(
-                           CGM, D, Builder, constant, Loc.getAlignment()),
-                       SizeVal, isVolatile);
+  auto *I =
+      Builder.CreateMemCpy(Loc,
+                           createUnnamedGlobalForMemcpyFrom(
+                               CGM, D, Builder, constant, Loc.getAlignment()),
+                           SizeVal, isVolatile);
+  if (IsAutoInit)
+    I->addAnnotationMetadata("auto-init");
 }
 
 static void emitStoresForZeroInit(CodeGenModule &CGM, const VarDecl &D,
@@ -1259,7 +1273,8 @@ static void emitStoresForZeroInit(CodeGenModule &CGM, const VarDecl &D,
   llvm::Type *ElTy = Loc.getElementType();
   llvm::Constant *constant =
       constWithPadding(CGM, IsPattern::No, llvm::Constant::getNullValue(ElTy));
-  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false);
+  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false,
+                        /*IsAutoInit=*/true);
 }
 
 static void emitStoresForPatternInit(CodeGenModule &CGM, const VarDecl &D,
@@ -1269,7 +1284,8 @@ static void emitStoresForPatternInit(CodeGenModule &CGM, const VarDecl &D,
   llvm::Constant *constant = constWithPadding(
       CGM, IsPattern::Yes, initializationPatternFor(CGM, ElTy));
   assert(!isa<llvm::UndefValue>(constant));
-  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false);
+  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false,
+                        /*IsAutoInit=*/true);
 }
 
 static bool containsUndef(llvm::Constant *constant) {
@@ -1739,14 +1755,16 @@ void CodeGenFunction::emitZeroOrPatternForAutoVarInit(QualType type,
   case LangOptions::TrivialAutoVarInitKind::Uninitialized:
     llvm_unreachable("Uninitialized handled by caller");
 
-  case LangOptions::TrivialAutoVarInitKind::Zero:
+  case LangOptions::TrivialAutoVarInitKind::Zero: {
     if (CGM.stopAutoInit())
       return;
     if (!EltSize.isOne())
       SizeVal = Builder.CreateNUWMul(SizeVal, CGM.getSize(EltSize));
-    Builder.CreateMemSet(Loc, llvm::ConstantInt::get(Int8Ty, 0), SizeVal,
-                         isVolatile);
+    auto *I = Builder.CreateMemSet(Loc, llvm::ConstantInt::get(Int8Ty, 0),
+                                   SizeVal, isVolatile);
+    I->addAnnotationMetadata("auto-init");
     break;
+  }
 
   case LangOptions::TrivialAutoVarInitKind::Pattern: {
     if (CGM.stopAutoInit())
@@ -1775,10 +1793,12 @@ void CodeGenFunction::emitZeroOrPatternForAutoVarInit(QualType type,
     llvm::PHINode *Cur = Builder.CreatePHI(Begin.getType(), 2, "vla.cur");
     Cur->addIncoming(Begin.getPointer(), OriginBB);
     CharUnits CurAlign = Loc.getAlignment().alignmentOfArrayElement(EltSize);
-    Builder.CreateMemCpy(Address(Cur, CurAlign),
-                         createUnnamedGlobalForMemcpyFrom(
-                             CGM, D, Builder, Constant, ConstantAlign),
-                         BaseSizeInChars, isVolatile);
+    auto *I =
+        Builder.CreateMemCpy(Address(Cur, CurAlign),
+                             createUnnamedGlobalForMemcpyFrom(
+                                 CGM, D, Builder, Constant, ConstantAlign),
+                             BaseSizeInChars, isVolatile);
+    I->addAnnotationMetadata("auto-init");
     llvm::Value *Next =
         Builder.CreateInBoundsGEP(Int8Ty, Cur, BaseSizeInChars, "vla.next");
     llvm::Value *Done = Builder.CreateICmpEQ(Next, End, "vla-init.isdone");
@@ -1906,7 +1926,8 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
 
   emitStoresForConstant(
       CGM, D, (Loc.getType() == BP) ? Loc : Builder.CreateBitCast(Loc, BP),
-      type.isVolatileQualified(), Builder, constant, ContainsCapabilities);
+      type.isVolatileQualified(), Builder, constant, ContainsCapabilities,
+      /*IsAutoInit=*/false);
 }
 
 /// Emit an expression as an initializer for an object (variable, field, etc.)
