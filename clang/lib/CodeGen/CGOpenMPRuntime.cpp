@@ -7133,6 +7133,7 @@ public:
     std::pair<unsigned /*FieldIndex*/, Address /*Pointer*/> HighestElem = {
         0, Address::invalid()};
     Address Base = Address::invalid();
+    bool IsArraySection = false;
   };
 
 private:
@@ -7792,7 +7793,8 @@ private:
           break;
         }
         llvm::Value *Size = getExprTypeSize(I->getAssociatedExpression());
-        if (!IsMemberPointerOrAddr) {
+        if (!IsMemberPointerOrAddr ||
+            (Next == CE && MapType != OMPC_MAP_unknown)) {
           CombinedInfo.BasePointers.push_back(BP.getPointer());
           CombinedInfo.Pointers.push_back(LB.getPointer());
           CombinedInfo.Sizes.push_back(
@@ -7859,6 +7861,10 @@ private:
             PartialStruct.HighestElem = {FieldIndex, LB};
           }
         }
+
+        // Need to emit combined struct for array sections.
+        if (IsFinalArraySection || IsNonContiguous)
+          PartialStruct.IsArraySection = true;
 
         // If we have a final array section, we are done with this expression.
         if (IsFinalArraySection)
@@ -8195,6 +8201,10 @@ public:
                          MapFlagsArrayTy &CurTypes,
                          const StructRangeInfoTy &PartialStruct,
                          bool NotTargetParams = false) const {
+    if (CurTypes.size() == 1 &&
+        ((CurTypes.back() & OMP_MAP_MEMBER_OF) != OMP_MAP_MEMBER_OF) &&
+        !PartialStruct.IsArraySection)
+      return;
     // Base is the base of the struct
     CombinedInfo.BasePointers.push_back(PartialStruct.Base.getPointer());
     // Pointer is the address of the lowest element
@@ -9946,7 +9956,7 @@ void CGOpenMPRuntime::emitTargetCall(
           MappedVarSet.insert(CI->getCapturedVar());
         else
           MappedVarSet.insert(nullptr);
-        if (CurInfo.BasePointers.empty())
+        if (CurInfo.BasePointers.empty() && !PartialStruct.Base.isValid())
           MEHandler.generateDefaultMapInfo(*CI, **RI, *CV, CurInfo);
         // Generate correct mapping for variables captured by reference in
         // lambdas.
@@ -9955,7 +9965,7 @@ void CGOpenMPRuntime::emitTargetCall(
                                                   CurInfo, LambdaPointers);
       }
       // We expect to have at least an element of information for this capture.
-      assert(!CurInfo.BasePointers.empty() &&
+      assert((!CurInfo.BasePointers.empty() || PartialStruct.Base.isValid()) &&
              "Non-existing map pointer for capture!");
       assert(CurInfo.BasePointers.size() == CurInfo.Pointers.size() &&
              CurInfo.BasePointers.size() == CurInfo.Sizes.size() &&
