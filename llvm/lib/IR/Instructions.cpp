@@ -2234,6 +2234,12 @@ bool ShuffleVectorInst::isExtractSubvectorMask(ArrayRef<int> Mask,
 bool ShuffleVectorInst::isIdentityWithPadding() const {
   if (isa<UndefValue>(Op<2>()))
     return false;
+
+  // FIXME: Not currently possible to express a shuffle mask for a scalable
+  // vector for this case.
+  if (isa<ScalableVectorType>(getType()))
+    return false;
+
   int NumOpElts = cast<FixedVectorType>(Op<0>()->getType())->getNumElements();
   int NumMaskElts = cast<FixedVectorType>(getType())->getNumElements();
   if (NumMaskElts <= NumOpElts)
@@ -2257,7 +2263,7 @@ bool ShuffleVectorInst::isIdentityWithExtract() const {
     return false;
 
   // FIXME: Not currently possible to express a shuffle mask for a scalable
-  // vector for this case
+  // vector for this case.
   if (isa<ScalableVectorType>(getType()))
     return false;
 
