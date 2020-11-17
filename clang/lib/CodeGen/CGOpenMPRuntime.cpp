@@ -7877,6 +7877,10 @@ private:
         IsExpressionFirstInfo = false;
         IsCaptureFirstInfo = false;
         FirstPointerInComplexData = false;
+      } else if (FirstPointerInComplexData) {
+        BP = CGF.EmitOMPSharedLValue(I->getAssociatedExpression())
+                 .getAddress(CGF);
+        FirstPointerInComplexData = false;
       }
     }
 
