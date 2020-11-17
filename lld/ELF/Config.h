@@ -142,7 +142,6 @@ struct Configuration {
                   uint64_t>
       callGraphProfile;
   bool allowMultipleDefinition;
-  bool allowShlibUndefined;
   bool allowUndefinedCapRelocs = false;
   bool androidPackDynRelocs;
   bool armHasBlx = false;
@@ -261,6 +260,7 @@ struct Configuration {
   SortSectionPolicy sortSection;
   StripPolicy strip;
   UnresolvedPolicy unresolvedSymbols;
+  UnresolvedPolicy unresolvedSymbolsInShlib;
   Target2Policy target2;
   // Method used for capability relocations for preemptible symbols
   CapRelocsMode preemptibleCapRelocsMode;
