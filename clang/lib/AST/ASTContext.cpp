@@ -10238,6 +10238,11 @@ QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
     return UnsignedInt128Ty;
   case BuiltinType::IntCap:
     return UnsignedIntCapTy;
+  // wchar_t is special. It is either signed or not, but when it's signed,
+  // there's no matching "unsigned wchar_t". Therefore we return the unsigned
+  // version of it's underlying type instead.
+  case BuiltinType::WChar_S:
+    return getUnsignedWCharType();
 
   case BuiltinType::ShortAccum:
     return UnsignedShortAccumTy;
