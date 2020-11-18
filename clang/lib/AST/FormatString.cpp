@@ -486,20 +486,8 @@ ArgType::matchesType(ASTContext &C, QualType argTy) const {
 
     case CCapabilityTy:
       if (const PointerType *PT = argTy->getAs<PointerType>()) {
-        if (!PT->isCHERICapability()) {
-          // XXX: CheriBSD manually passes capabilities indirectly for hybrid
-          // printf, so permit pointers to capabilities for now, especially
-          // until the Morello toolchain catches up.
-          if (!C.getTargetInfo().areAllPointersCapabilities()) {
-            const QualType PointeeTy = PT->getPointeeType();
-            const PointerType *PointeePT = PointeeTy->getAs<PointerType>();
-            if (!PointeePT || !PointeePT->isCHERICapability())
-              return NoMatch;
-            argTy = PointeeTy;
-          } else {
-            return NoMatch;
-          }
-        }
+        if (!PT->isCHERICapability())
+          return NoMatch;
       } else if (!C.getTargetInfo().areAllPointersCapabilities()) {
         // Hybrid requires explicit casts for capabilities so everything should
         // be a PointerType.

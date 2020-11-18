@@ -14,7 +14,7 @@ void test_long_pointer(void * __capability p) {
   printf("%#lp", p);
   printf("%.4lp", p); // expected-warning{{precision used with 'p' conversion specifier, resulting in undefined behavior}}
   printf("%#.4lp", p);
-  printf("%lp", &p); // XXX: Currently accepted for CheriBSD compatibility
+  printf("%lp", &p); // hybrid-warning{{format specifies type 'void * __capability' but the argument has type 'void * __capability *'}}
   printf("%lp", (void *)0); // hybrid-warning{{format specifies type 'void * __capability' but the argument has type 'void *'}}
   printf("%lp", (void **)(void *)0); // hybrid-warning{{format specifies type 'void * __capability' but the argument has type 'void **'}}
   printf("%lp", (int *)(void *)0); // hybrid-warning{{format specifies type 'void * __capability' but the argument has type 'int *'}}
