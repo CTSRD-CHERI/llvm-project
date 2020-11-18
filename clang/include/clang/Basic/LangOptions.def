@@ -342,6 +342,7 @@ ENUM_LANGOPT(CheriBounds, CheriBoundsMode, 3, CBM_Conservative,
 // See test/CodeGen/CHERI/bitwise-and-in-conditional.c for the motivating use case (deadlocks in mutex code)
 LANGOPT(CheriDataDependentProvenance, 1, 0, "Derive pointer provenance for bitwise-and operations depending on value of the RHS")
 
+ENUM_LANGOPT(ThreadModel  , ThreadModelKind, 2, ThreadModelKind::POSIX, "Thread Model")
 
 BENIGN_LANGOPT(ArrowDepth, 32, 256,
                "maximum number of operator->s to follow")

@@ -285,6 +285,13 @@ public:
     BKey
   };
 
+  enum class ThreadModelKind {
+    /// POSIX Threads.
+    POSIX,
+    /// Single Threaded Environment.
+    Single
+  };
+
 public:
   /// Set of enabled sanitizers.
   SanitizerSet Sanitize;
