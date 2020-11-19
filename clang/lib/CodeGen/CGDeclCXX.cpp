@@ -282,8 +282,10 @@ void CodeGenFunction::registerGlobalDtorWithAtExit(const VarDecl &VD,
 
 void CodeGenFunction::registerGlobalDtorWithAtExit(llvm::Constant *dtorStub) {
   // extern "C" int atexit(void (*f)(void));
-  assert(cast<llvm::Function>(dtorStub)->getFunctionType() ==
-             llvm::FunctionType::get(CGM.VoidTy, false) &&
+  assert(dtorStub->getType() ==
+             llvm::PointerType::get(
+                 llvm::FunctionType::get(CGM.VoidTy, false),
+                 dtorStub->getType()->getPointerAddressSpace()) &&
          "Argument to atexit has a wrong type.");
 
   llvm::FunctionType *atexitTy =
@@ -299,7 +301,7 @@ void CodeGenFunction::registerGlobalDtorWithAtExit(llvm::Constant *dtorStub) {
 }
 
 llvm::Value *
-CodeGenFunction::unregisterGlobalDtorWithUnAtExit(llvm::Function *dtorStub) {
+CodeGenFunction::unregisterGlobalDtorWithUnAtExit(llvm::Constant *dtorStub) {
   // The unatexit subroutine unregisters __dtor functions that were previously
   // registered by the atexit subroutine. If the referenced function is found,
   // it is removed from the list of functions that are called at normal program
@@ -307,8 +309,10 @@ CodeGenFunction::unregisterGlobalDtorWithUnAtExit(llvm::Function *dtorStub) {
   // value is returned.
   //
   // extern "C" int unatexit(void (*f)(void));
-  assert(dtorStub->getFunctionType() ==
-             llvm::FunctionType::get(CGM.VoidTy, false) &&
+  assert(dtorStub->getType() ==
+             llvm::PointerType::get(
+                 llvm::FunctionType::get(CGM.VoidTy, false),
+                 dtorStub->getType()->getPointerAddressSpace()) &&
          "Argument to unatexit has a wrong type.");
 
   llvm::FunctionType *unatexitTy =
