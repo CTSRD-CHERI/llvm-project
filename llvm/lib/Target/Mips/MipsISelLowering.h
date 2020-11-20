@@ -342,10 +342,6 @@ extern bool LargeCapTable;
       return ISD::SIGN_EXTEND;
     }
 
-    void LowerOperationWrapper(SDNode *N,
-                               SmallVectorImpl<SDValue> &Results,
-                               SelectionDAG &DAG) const override;
-
     /// LowerOperation - Provide custom lowering hooks for some operations.
     SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
