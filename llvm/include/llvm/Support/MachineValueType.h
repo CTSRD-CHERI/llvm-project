@@ -248,18 +248,18 @@ namespace llvm {
       exnref         = 161,   // WebAssembly's exnref type
       funcref        = 162,   // WebAssembly's funcref type
       externref      = 163,   // WebAssembly's externref type
-
-      iFATPTR64      =  164,   // 64-bit fat pointer type
-      iFATPTR128     =  165,   // 128-bit fat pointer type
-      iFATPTR256     =  166,   // 256-bit fat pointer type
-      iFATPTR512     =  167,   // 512-bit fat pointer type
-      iFATPTRAny     =  168,   // Generic fat pointer type (must be legalised
+      x86amx         = 164,   // This is an X86 AMX value
+      iFATPTR64      =  165,   // 64-bit fat pointer type
+      iFATPTR128     =  166,   // 128-bit fat pointer type
+      iFATPTR256     =  167,   // 256-bit fat pointer type
+      iFATPTR512     =  168,   // 512-bit fat pointer type
+      iFATPTRAny     =  169,   // Generic fat pointer type (must be legalised
                                // to a sized  version)
       FIRST_FAT_POINTER = iFATPTR64,
       LAST_FAT_POINTER = iFATPTRAny,
 
       FIRST_VALUETYPE =  1,   // This is always the beginning of the list.
-      LAST_VALUETYPE = 169,   // This always remains at the end of the list.
+      LAST_VALUETYPE = 170,   // This always remains at the end of the list.
 
       // This is the current maximum for LAST_VALUETYPE.
       // MVT::MAX_ALLOWED_VALUETYPE is used for asserts and to size bit vectors
@@ -987,6 +987,7 @@ namespace llvm {
       case v256i32:
       case v128i64:
       case v256f32:
+      case x86amx:
       case v128f64:  return TypeSize::Fixed(8192);
       case v512i32:
       case v256i64:

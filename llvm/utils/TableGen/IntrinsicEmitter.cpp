@@ -249,11 +249,12 @@ enum IIT_Info {
   IIT_BF16 = 48,
   IIT_STRUCT9 = 49,
   IIT_V256 = 50,
-  IIT_IFATPTR64 = 51,
-  IIT_IFATPTR128 = 52,
-  IIT_IFATPTR256 = 53,
-  IIT_IFATPTR512 = 54,
-  IIT_IFATPTRAny = 55,
+  IIT_AMX  = 51,
+  IIT_IFATPTR64 = 52,
+  IIT_IFATPTR128 = 53,
+  IIT_IFATPTR256 = 54,
+  IIT_IFATPTR512 = 55,
+  IIT_IFATPTRAny = 56,
 };
 
 static void EncodeFixedValueType(MVT::SimpleValueType VT,
@@ -286,6 +287,7 @@ static void EncodeFixedValueType(MVT::SimpleValueType VT,
   case MVT::token: return Sig.push_back(IIT_TOKEN);
   case MVT::Metadata: return Sig.push_back(IIT_METADATA);
   case MVT::x86mmx: return Sig.push_back(IIT_MMX);
+  case MVT::x86amx: return Sig.push_back(IIT_AMX);
   // MVT::OtherVT is used to mean the empty struct type here.
   case MVT::Other: return Sig.push_back(IIT_EMPTYSTRUCT);
   // MVT::isVoid is used to represent varargs here.

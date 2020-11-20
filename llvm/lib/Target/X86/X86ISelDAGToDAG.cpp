@@ -4617,7 +4617,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
                        Segment,
                        CFG,
                        Chain};
-      CNode = CurDAG->getMachineNode(Opc, dl, {MVT::v256i32, MVT::Other}, Ops);
+      CNode = CurDAG->getMachineNode(Opc, dl, {MVT::x86amx, MVT::Other}, Ops);
       ReplaceNode(Node, CNode);
       return;
     }
@@ -4636,7 +4636,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
                        CFG,
                        Chain};
       MachineSDNode *CNode =
-          CurDAG->getMachineNode(Opc, dl, {MVT::v256i32, MVT::Other}, Ops);
+          CurDAG->getMachineNode(Opc, dl, {MVT::x86amx, MVT::Other}, Ops);
       ReplaceNode(Node, CNode);
       return;
     }

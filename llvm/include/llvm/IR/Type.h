@@ -71,6 +71,7 @@ public:
     LabelTyID,     ///< Labels
     MetadataTyID,  ///< Metadata
     X86_MMXTyID,   ///< MMX vectors (64 bits, X86 specific)
+    X86_AMXTyID,   ///< AMX vectors (8192 bits, X86 specific)
     TokenTyID,     ///< Tokens
 
     // Derived types... see DerivedTypes.h file.
@@ -188,6 +189,9 @@ public:
   /// Return true if this is X86 MMX.
   bool isX86_MMXTy() const { return getTypeID() == X86_MMXTyID; }
 
+  /// Return true if this is X86 AMX.
+  bool isX86_AMXTy() const { return getTypeID() == X86_AMXTyID; }
+
   /// Return true if this is a FP type or a vector of FP.
   bool isFPOrFPVectorTy() const { return getScalarType()->isFloatingPointTy(); }
 
@@ -258,7 +262,7 @@ public:
   /// includes all first-class types except struct and array types.
   bool isSingleValueType() const {
     return isFloatingPointTy() || isX86_MMXTy() || isIntegerTy() ||
-           isPointerTy() || isVectorTy();
+           isPointerTy() || isVectorTy() || isX86_AMXTy();
   }
 
   /// Return true if the type is an aggregate type. This means it is valid as
@@ -274,8 +278,8 @@ public:
   bool isSized(SmallPtrSetImpl<Type*> *Visited = nullptr) const {
     // If it's a primitive, it is always sized.
     if (getTypeID() == IntegerTyID || isFloatingPointTy() ||
-        getTypeID() == PointerTyID ||
-        getTypeID() == X86_MMXTyID)
+        getTypeID() == PointerTyID || getTypeID() == X86_MMXTyID ||
+        getTypeID() == X86_AMXTyID)
       return true;
     // If it is not something that can have a size (e.g. a function or label),
     // it doesn't have a size.
@@ -411,6 +415,7 @@ public:
   static Type *getFP128Ty(LLVMContext &C);
   static Type *getPPC_FP128Ty(LLVMContext &C);
   static Type *getX86_MMXTy(LLVMContext &C);
+  static Type *getX86_AMXTy(LLVMContext &C);
   static Type *getTokenTy(LLVMContext &C);
   static IntegerType *getIntNTy(LLVMContext &C, unsigned N);
   static IntegerType *getInt1Ty(LLVMContext &C);
@@ -466,6 +471,7 @@ public:
   static PointerType *getFP128PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
   static PointerType *getPPC_FP128PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
   static PointerType *getX86_MMXPtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getX86_AMXPtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
   static PointerType *getIntNPtrTy(LLVMContext &C, unsigned N, LLVM_DEFAULT_AS_PARAM(AS));
   static PointerType *getInt1PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
   static PointerType *getInt8PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
