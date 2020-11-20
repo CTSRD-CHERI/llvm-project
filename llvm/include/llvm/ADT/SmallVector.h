@@ -225,8 +225,9 @@ protected:
   /// Reserve enough space to add one element, and return the updated element
   /// pointer in case it was a reference to the storage.
   template <class U>
-  static const T *reserveForAndGetAddressImpl(U *This, const T &Elt) {
-    if (LLVM_LIKELY(This->size() < This->capacity()))
+  static const T *reserveForAndGetAddressImpl(U *This, const T &Elt, size_t N) {
+    size_t NewSize = This->size() + N;
+    if (LLVM_LIKELY(NewSize <= This->capacity()))
       return &Elt;
 
     bool ReferencesStorage = false;
@@ -235,7 +236,7 @@ protected:
       ReferencesStorage = true;
       Index = &Elt - This->begin();
     }
-    This->grow();
+    This->grow(NewSize);
     return ReferencesStorage ? This->begin() + Index : &Elt;
   }
 
@@ -359,14 +360,14 @@ protected:
 
   /// Reserve enough space to add one element, and return the updated element
   /// pointer in case it was a reference to the storage.
-  const T *reserveForAndGetAddress(const T &Elt) {
-    return this->reserveForAndGetAddressImpl(this, Elt);
+  const T *reserveForAndGetAddress(const T &Elt, size_t N = 1) {
+    return this->reserveForAndGetAddressImpl(this, Elt, N);
   }
 
   /// Reserve enough space to add one element, and return the updated element
   /// pointer in case it was a reference to the storage.
-  T *reserveForAndGetAddress(T &Elt) {
-    return const_cast<T *>(this->reserveForAndGetAddressImpl(this, Elt));
+  T *reserveForAndGetAddress(T &Elt, size_t N = 1) {
+    return const_cast<T *>(this->reserveForAndGetAddressImpl(this, Elt, N));
   }
 
   static T &&forward_value_param(T &&V) { return std::move(V); }
@@ -485,14 +486,14 @@ protected:
 
   /// Reserve enough space to add one element, and return the updated element
   /// pointer in case it was a reference to the storage.
-  const T *reserveForAndGetAddress(const T &Elt) {
-    return this->reserveForAndGetAddressImpl(this, Elt);
+  const T *reserveForAndGetAddress(const T &Elt, size_t N = 1) {
+    return this->reserveForAndGetAddressImpl(this, Elt, N);
   }
 
   /// Reserve enough space to add one element, and return the updated element
   /// pointer in case it was a reference to the storage.
-  T *reserveForAndGetAddress(T &Elt) {
-    return const_cast<T *>(this->reserveForAndGetAddressImpl(this, Elt));
+  T *reserveForAndGetAddress(T &Elt, size_t N = 1) {
+    return const_cast<T *>(this->reserveForAndGetAddressImpl(this, Elt, N));
   }
 
   /// Copy \p V or return a reference, depending on \a ValueParamT.
@@ -618,12 +619,9 @@ public:
   }
 
   /// Append \p NumInputs copies of \p Elt to the end.
-  void append(size_type NumInputs, const T &Elt) {
-    this->assertSafeToAdd(&Elt, NumInputs);
-    if (NumInputs > this->capacity() - this->size())
-      this->grow(this->size()+NumInputs);
-
-    std::uninitialized_fill_n(this->end(), NumInputs, Elt);
+  void append(size_type NumInputs, ValueParamT Elt) {
+    const T *EltPtr = this->reserveForAndGetAddress(Elt, NumInputs);
+    std::uninitialized_fill_n(this->end(), NumInputs, *EltPtr);
     this->set_size(this->size() + NumInputs);
   }
 
@@ -734,7 +732,7 @@ public:
     return insert_one_impl(I, this->forward_value_param(Elt));
   }
 
-  iterator insert(iterator I, size_type NumToInsert, const T &Elt) {
+  iterator insert(iterator I, size_type NumToInsert, ValueParamT Elt) {
     // Convert iterator to elt# to avoid invalidating iterator when we reserve()
     size_t InsertElt = I - this->begin();
 
@@ -745,11 +743,9 @@ public:
 
     assert(this->isReferenceToStorage(I) && "Insertion iterator is out of bounds.");
 
-    // Check that adding NumToInsert elements won't invalidate Elt.
-    this->assertSafeToAdd(&Elt, NumToInsert);
-
-    // Ensure there is enough space.
-    reserve(this->size() + NumToInsert);
+    // Ensure there is enough space, and get the (maybe updated) address of
+    // Elt.
+    const T *EltPtr = this->reserveForAndGetAddress(Elt, NumToInsert);
 
     // Uninvalidate the iterator.
     I = this->begin()+InsertElt;
@@ -766,7 +762,12 @@ public:
       // Copy the existing elements that get replaced.
       std::move_backward(I, OldEnd-NumToInsert, OldEnd);
 
-      std::fill_n(I, NumToInsert, Elt);
+      // If we just moved the element we're inserting, be sure to update
+      // the reference (never happens if TakesParamByValue).
+      if (!TakesParamByValue && I <= EltPtr && EltPtr < this->end())
+        EltPtr += NumToInsert;
+
+      std::fill_n(I, NumToInsert, *EltPtr);
       return I;
     }
 
@@ -779,11 +780,16 @@ public:
     size_t NumOverwritten = OldEnd-I;
     this->uninitialized_move(I, OldEnd, this->end()-NumOverwritten);
 
+    // If we just moved the element we're inserting, be sure to update
+    // the reference (never happens if TakesParamByValue).
+    if (!TakesParamByValue && I <= EltPtr && EltPtr < this->end())
+      EltPtr += NumToInsert;
+
     // Replace the overwritten part.
-    std::fill_n(I, NumOverwritten, Elt);
+    std::fill_n(I, NumOverwritten, *EltPtr);
 
     // Insert the non-overwritten middle part.
-    std::uninitialized_fill_n(OldEnd, NumToInsert-NumOverwritten, Elt);
+    std::uninitialized_fill_n(OldEnd, NumToInsert - NumOverwritten, *EltPtr);
     return I;
   }
 
