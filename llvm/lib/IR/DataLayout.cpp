@@ -182,7 +182,7 @@ void DataLayout::reset(StringRef Desc) {
   AllocaAddrSpace = 0;
   StackNaturalAlign.reset();
   ProgramAddrSpace = 0;
-  GlobalsAddrSpace = 0;
+  DefaultGlobalsAddrSpace = 0;
   FunctionPtrAlign.reset();
   TheFunctionPtrAlignType = FunctionPtrAlignType::Independent;
   ManglingMode = MM_None;
@@ -492,7 +492,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       break;
     }
     case 'G': { // Default address space for global variables.
-      if (Error Err = getAddrSpace(Tok, GlobalsAddrSpace))
+      if (Error Err = getAddrSpace(Tok, DefaultGlobalsAddrSpace))
         return Err;
       break;
     }
@@ -547,6 +547,7 @@ bool DataLayout::operator==(const DataLayout &Other) const {
              AllocaAddrSpace == Other.AllocaAddrSpace &&
              StackNaturalAlign == Other.StackNaturalAlign &&
              ProgramAddrSpace == Other.ProgramAddrSpace &&
+             DefaultGlobalsAddrSpace == Other.DefaultGlobalsAddrSpace &&
              FunctionPtrAlign == Other.FunctionPtrAlign &&
              TheFunctionPtrAlignType == Other.TheFunctionPtrAlignType &&
              ManglingMode == Other.ManglingMode &&

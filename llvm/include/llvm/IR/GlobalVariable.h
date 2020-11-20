@@ -68,7 +68,7 @@ public:
                  Constant *Initializer, const Twine &Name = "",
                  GlobalVariable *InsertBefore = nullptr,
                  ThreadLocalMode = NotThreadLocal,
-                 unsigned AddressSpace = UINT_MAX,
+                 Optional<unsigned> AddressSpace = None,
                  bool isExternallyInitialized = false);
   GlobalVariable(const GlobalVariable &) = delete;
   GlobalVariable &operator=(const GlobalVariable &) = delete;
