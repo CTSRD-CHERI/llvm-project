@@ -251,8 +251,6 @@ namespace {
 
     void HoistOutOfLoop(MachineDomTreeNode *HeaderN);
 
-    void HoistRegion(MachineDomTreeNode *N, bool IsHeader);
-
     void SinkIntoLoop();
 
     void InitRegPressure(MachineBasicBlock *BB);
