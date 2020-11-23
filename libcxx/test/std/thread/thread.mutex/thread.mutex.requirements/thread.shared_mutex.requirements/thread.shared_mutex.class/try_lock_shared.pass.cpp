@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <cassert>
 
+#include "make_test_thread.h"
 #include "test_macros.h"
 
 std::shared_mutex m;
@@ -67,7 +68,7 @@ int main(int, char**)
     m.lock();
     std::vector<std::thread> v;
     for (int i = 0; i < 5; ++i)
-        v.push_back(std::thread(f));
+        v.push_back(support::make_test_thread(f));
     std::this_thread::sleep_for(main_thread_sleep_duration);
     m.unlock();
     for (auto& t : v)
