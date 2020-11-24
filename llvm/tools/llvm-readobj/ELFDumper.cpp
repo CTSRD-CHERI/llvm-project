@@ -5965,7 +5965,10 @@ static void printNotesHelper(
       for (const typename ELFT::Note &Note : Obj.notes(S, Err))
         ProcessNoteFn(Note);
       if (Err)
-        reportError(std::move(Err), Dumper.getElfObject().getFileName());
+        reportError(createError("unable to read notes from the " +
+                                describe(Obj, S) + ": " +
+                                toString(std::move(Err))),
+                    Dumper.getElfObject().getFileName());
       FinishNotesFn();
     }
     return;
@@ -5987,7 +5990,10 @@ static void printNotesHelper(
     for (const typename ELFT::Note Note : Obj.notes(P, Err))
       ProcessNoteFn(Note);
     if (Err)
-      reportError(std::move(Err), Dumper.getElfObject().getFileName());
+      reportError(
+          createError("unable to read notes from the PT_NOTE segment: " +
+                      toString(std::move(Err))),
+          Dumper.getElfObject().getFileName());
     FinishNotesFn();
   }
 }
