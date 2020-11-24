@@ -501,7 +501,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   mfvrsave    %r0
   std   %r0,  PPC64_OFFS_VRSAVE(%r3)
 
-#ifdef PPC64_HAS_VMX
+#if defined(__VSX__)
   // save VS registers
   // (note that this also saves floating point registers and V registers,
   // because part of VS is mapped to these registers)
@@ -618,6 +618,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   PPC64_STF(30)
   PPC64_STF(31)
 
+#if defined(__ALTIVEC__)
   // save vector registers
 
   // Use 16-bytes below the stack pointer as an
@@ -665,6 +666,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   PPC64_STV_UNALIGNED(30)
   PPC64_STV_UNALIGNED(31)
 
+#endif
 #endif
 
   li    %r3,  0   // return UNW_ESUCCESS
@@ -725,6 +727,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   mfctr   %r0
   stw     %r0, 148(%r3)
 
+#if !defined(__NO_FPRS__)
   // save float registers
   stfd    %f0, 160(%r3)
   stfd    %f1, 168(%r3)
@@ -758,8 +761,9 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   stfd    %f29,392(%r3)
   stfd    %f30,400(%r3)
   stfd    %f31,408(%r3)
+#endif
 
-
+#if defined(__ALTIVEC__)
   // save vector registers
 
   subi    %r4, %r1, 16
@@ -809,6 +813,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   SAVE_VECTOR_UNALIGNED(%v29, 424+0x1D0)
   SAVE_VECTOR_UNALIGNED(%v30, 424+0x1E0)
   SAVE_VECTOR_UNALIGNED(%v31, 424+0x1F0)
+#endif
 
   li      %r3, 0  // return UNW_ESUCCESS
   blr
