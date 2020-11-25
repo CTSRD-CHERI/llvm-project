@@ -2101,6 +2101,7 @@ public:
   bool isMatrixType() const;                    // Matrix type.
   bool isConstantMatrixType() const;            // Constant matrix type.
   bool isDependentAddressSpaceType() const;     // value-dependent address space qualifier
+  bool isDependentPointerType() const;          // Dependent type with PIK qualifier
   bool isObjCObjectPointerType() const;         // pointer to ObjC object
   bool isObjCRetainableType() const;            // ObjC object or block pointer
   bool isObjCLifetimeType() const;              // (array of)* retainable type
@@ -3261,6 +3262,44 @@ public:
 
   static void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Context,
                       QualType PointeeType, Expr *AddrSpaceExpr);
+};
+
+class DependentPointerType : public Type,
+                             public PointerInterpretationTrait<DependentPointerType>,
+                             public llvm::FoldingSetNode {
+  friend class ASTContext;
+  friend class PointerInterpretationTrait<DependentPointerType>;
+
+  const ASTContext &Context;
+  QualType PointerType;
+  PointerInterpretationKind PIK;
+  SourceLocation Loc;
+
+  DependentPointerType(const ASTContext &Context, QualType PointerType,
+                       QualType Canonical, PointerInterpretationKind PIK,
+                       SourceLocation Loc);
+
+  PointerInterpretationKind getPointerInterpretationImpl() const {
+    return PIK;
+  }
+
+public:
+  QualType getPointerType() const { return PointerType; }
+  SourceLocation getQualifierLoc() const { return Loc; }
+
+  bool isSugared() const { return false; }
+  QualType desugar() const { return QualType(this, 0); }
+
+  static bool classof(const Type *T) {
+    return T->getTypeClass() == DependentPointer;
+  }
+
+  void Profile(llvm::FoldingSetNodeID &ID) {
+    Profile(ID, Context, getPointerType(), getPointerInterpretation());
+  }
+
+  static void Profile(llvm::FoldingSetNodeID &Id, const ASTContext &Context,
+                      QualType PointerType, PointerInterpretationKind PIK);
 };
 
 /// Represents an extended vector type where either the type or size is
@@ -6849,6 +6888,10 @@ inline bool Type::isConstantMatrixType() const {
 
 inline bool Type::isDependentAddressSpaceType() const {
   return isa<DependentAddressSpaceType>(CanonicalType);
+}
+
+inline bool Type::isDependentPointerType() const {
+  return isa<DependentPointerType>(CanonicalType);
 }
 
 inline bool Type::isObjCObjectPointerType() const {

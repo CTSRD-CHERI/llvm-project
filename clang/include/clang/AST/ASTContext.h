@@ -192,6 +192,7 @@ class ASTContext : public RefCountedBase<ASTContext> {
     DependentSizedExtVectorTypes;
   mutable llvm::FoldingSet<DependentAddressSpaceType>
       DependentAddressSpaceTypes;
+  mutable llvm::FoldingSet<DependentPointerType> DependentPointerTypes;
   mutable llvm::FoldingSet<VectorType> VectorTypes;
   mutable llvm::FoldingSet<DependentVectorType> DependentVectorTypes;
   mutable llvm::FoldingSet<ConstantMatrixType> MatrixTypes;
@@ -1383,6 +1384,10 @@ public:
   QualType getDependentAddressSpaceType(QualType PointeeType,
                                         Expr *AddrSpaceExpr,
                                         SourceLocation AttrLoc) const;
+
+  QualType getDependentPointerType(QualType PointerType,
+                                   PointerInterpretationKind PIK,
+                                   SourceLocation QualifierLoc) const;
 
   /// Return a K&R style C function type like 'int()'.
   QualType getFunctionNoProtoType(QualType ResultTy,

@@ -5913,6 +5913,11 @@ bool UnnamedLocalNoLinkageFinder::VisitDependentAddressSpaceType(
   return Visit(T->getPointeeType());
 }
 
+bool UnnamedLocalNoLinkageFinder::VisitDependentPointerType(
+    const DependentPointerType *T) {
+  return Visit(T->getPointeeType());
+}
+
 bool UnnamedLocalNoLinkageFinder::VisitVectorType(const VectorType* T) {
   return Visit(T->getElementType());
 }

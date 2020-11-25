@@ -252,6 +252,7 @@ bool TypePrinter::canPrefixQualifiers(const Type *T,
     case Type::RValueReference:
     case Type::MemberPointer:
     case Type::DependentAddressSpace:
+    case Type::DependentPointer:
     case Type::DependentVector:
     case Type::DependentSizedExtVector:
     case Type::Vector:
@@ -622,6 +623,21 @@ void TypePrinter::printDependentAddressSpaceAfter(
     T->getAddrSpaceExpr()->printPretty(OS, nullptr, Policy);
   OS << ")))";
   printAfter(T->getPointeeType(), OS);
+}
+
+void TypePrinter::printDependentPointerBefore(
+    const DependentPointerType *T, raw_ostream &OS) {
+  printBefore(T->getPointerType(), OS);
+}
+
+void TypePrinter::printDependentPointerAfter(
+    const DependentPointerType *T, raw_ostream &OS) {
+  if (!Policy.SuppressCapabilityQualifier) {
+    if (T->getPointerInterpretation() == PIK_Capability) {
+      OS << " __capability";
+    }
+  }
+  printAfter(T->getPointerType(), OS);
 }
 
 void TypePrinter::printDependentSizedExtVectorBefore(

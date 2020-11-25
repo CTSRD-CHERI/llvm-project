@@ -627,6 +627,23 @@ let Class = DependentAddressSpaceType in {
   }]>;
 }
 
+let Class = DependentPointerType in {
+  def : Property<"pointerType", QualType> {
+    let Read = [{ node->getPointerType() }];
+  }
+  def : Property<"pointerInterpretation", PointerInterpretationKind> {
+    let Read = [{ node->getPointerInterpretation() }];
+  }
+  def : Property<"qualifierLoc", SourceLocation> {
+    let Read = [{ node->getQualifierLoc() }];
+  }
+
+  def : Creator<[{
+    return ctx.getDependentPointerType(pointerType, pointerInterpretation,
+                                       qualifierLoc);
+  }]>;
+}
+
 let Class = TemplateSpecializationType in {
   def : Property<"dependent", Bool> {
     let Read = [{ node->isDependentType() }];
