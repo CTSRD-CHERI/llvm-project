@@ -1,10 +1,10 @@
 ; Check that we can generate sensible code for atomic operations using capability pointers
 ; https://github.com/CTSRD-CHERI/llvm-project/issues/470
-@IF-RISCV@; RUN: %generic_cheri_purecap_llc %s -o - -mattr=+f,+a | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
-@IF-RISCV@; RUN: %generic_cheri_purecap_llc %s -o - -mattr=+f,-a | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
+@IF-RISCV@; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
+@IF-RISCV@; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
 @IFNOT-RISCV@; RUN: %generic_cheri_purecap_llc %s -o - | FileCheck %s --check-prefix=PURECAP
-@IF-RISCV@; RUN_FIXME_THIS_CRASHES: %generic_cheri_hybrid_llc %s -o - -mattr=+f,+a | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-@IF-RISCV@; RUN_FIXME_THIS_CRASHES: %generic_cheri_hybrid_llc %s -o - -mattr=+f,-a | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+@IF-RISCV@; RUN_FIXME_THIS_CRASHES: llc @HYBRID_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
+@IF-RISCV@; RUN_FIXME_THIS_CRASHES: llc @HYBRID_HARDFLOAT_ARGS@ -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 @IFNOT-RISCV@; RUN: %generic_cheri_hybrid_llc %s -o - | FileCheck %s --check-prefix=HYBRID
 
 define iCAPRANGE @atomic_cap_ptr_xchg(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {

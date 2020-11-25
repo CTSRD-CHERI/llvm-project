@@ -2,8 +2,8 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/atomic-rmw-cap-ptr.ll
 ; Check that we can generate sensible code for atomic operations using capability pointers
 ; https://github.com/CTSRD-CHERI/llvm-project/issues/470
-; RUN: %cheri128_purecap_llc %s -o - | FileCheck %s --check-prefix=PURECAP
-; RUN: %cheri128_llc %s -o - | FileCheck %s --check-prefix=HYBRID
+; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap %s -o - | FileCheck %s --check-prefix=PURECAP
+; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi n64 %s -o - | FileCheck %s --check-prefix=HYBRID
 
 define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg:
