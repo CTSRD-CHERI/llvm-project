@@ -128,7 +128,7 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                 if not valid_directive:
                     sys.exit("Invalid @IF- directive: " + line.decode("utf-8"))
 
-            converted_line = converted_line.replace(b"iCAPRANGE", b"i" + str(
+            converted_line = line.replace(b"iCAPRANGE", b"i" + str(
                 arch_def.cap_range).encode("utf-8"))
             converted_line = converted_line.replace(b"iCAPWIDTH", b"i" + str(
                 arch_def.cap_width).encode("utf-8"))
