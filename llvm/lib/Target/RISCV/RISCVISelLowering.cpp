@@ -3857,6 +3857,25 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
                                                  Alignment);
 }
 
+bool RISCVTargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
+                                                     EVT VT) const {
+  VT = VT.getScalarType();
+
+  if (!VT.isSimple())
+    return false;
+
+  switch (VT.getSimpleVT().SimpleTy) {
+  case MVT::f32:
+    return Subtarget.hasStdExtF();
+  case MVT::f64:
+    return Subtarget.hasStdExtD();
+  default:
+    break;
+  }
+
+  return false;
+}
+
 Register RISCVTargetLowering::getExceptionPointerRegister(
     const Constant *PersonalityFn) const {
   return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())

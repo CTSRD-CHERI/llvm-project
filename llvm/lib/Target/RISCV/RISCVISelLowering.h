@@ -161,6 +161,9 @@ public:
   Instruction *emitTrailingFence(IRBuilder<> &Builder, Instruction *Inst,
                                  AtomicOrdering Ord) const override;
 
+  bool isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
+                                  EVT VT) const override;
+
   ISD::NodeType getExtendForAtomicOps() const override {
     return ISD::SIGN_EXTEND;
   }
