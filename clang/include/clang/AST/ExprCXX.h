@@ -4871,7 +4871,7 @@ class BuiltinBitCastExpr final
       private llvm::TrailingObjects<BuiltinBitCastExpr, CXXBaseSpecifier *> {
   friend class ASTStmtReader;
   friend class CastExpr;
-  friend class TrailingObjects;
+  friend TrailingObjects;
 
   SourceLocation KWLoc;
   SourceLocation RParenLoc;
