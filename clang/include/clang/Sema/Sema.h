@@ -1685,6 +1685,10 @@ public:
   QualType BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
                                  SourceLocation AttrLoc);
 
+  QualType BuildPointerInterpretationAttr(QualType T,
+                                          PointerInterpretationKind PIK,
+                                          SourceLocation QualifierLoc);
+
   bool CheckQualifiedFunctionForTypeId(QualType T, SourceLocation Loc);
 
   bool CheckFunctionReturnType(QualType T, SourceLocation Loc);

@@ -283,6 +283,25 @@ void DependentAddressSpaceType::Profile(llvm::FoldingSetNodeID &ID,
   AddrSpaceExpr->Profile(ID, Context, true);
 }
 
+DependentPointerType::DependentPointerType(const ASTContext &Context,
+                                           QualType PointerType,
+                                           QualType Canonical,
+                                           PointerInterpretationKind PIK,
+                                           SourceLocation Loc)
+    : Type(DependentPointer, Canonical,
+           TypeDependence::DependentInstantiation |
+               PointerType->getDependence()),
+      Context(Context), PointerType(PointerType), PIK(PIK),
+      Loc(Loc) {}
+
+void DependentPointerType::Profile(llvm::FoldingSetNodeID &ID,
+                                   const ASTContext &Context,
+                                   QualType PointerType,
+                                   PointerInterpretationKind PIK) {
+  ID.AddPointer(PointerType.getAsOpaquePtr());
+  ID.AddInteger(PIK);
+}
+
 MatrixType::MatrixType(TypeClass tc, QualType matrixType, QualType canonType,
                        const Expr *RowExpr, const Expr *ColumnExpr)
     : Type(tc, canonType,
@@ -4169,6 +4188,7 @@ bool Type::canHaveNullability(bool ResultIfUnknown) const {
   case Type::ConstantMatrix:
   case Type::DependentSizedMatrix:
   case Type::DependentAddressSpace:
+  case Type::DependentPointer:
   case Type::FunctionProto:
   case Type::FunctionNoProto:
   case Type::Record:

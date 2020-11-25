@@ -916,6 +916,15 @@ public:
                                             Expr *AddrSpaceExpr,
                                             SourceLocation AttributeLoc);
 
+  /// Build a new potentially dependently-typed pointer type with the given
+  /// pointer interpretation.
+  ///
+  /// By default, performs semantic analysis when building the pointer type.
+  /// Subclasses may override this routine to provide different behavior.
+  QualType RebuildDependentPointerType(QualType PointerType,
+                                       PointerInterpretationKind PIK,
+                                       SourceLocation QualifierLoc);
+
   /// Build a new function type.
   ///
   /// By default, performs semantic analysis when building the function type.
@@ -5379,6 +5388,38 @@ QualType TreeTransform<Derived>::TransformDependentAddressSpaceType(
     NewTL.setAttrExprOperand(TL.getAttrExprOperand());
     NewTL.setAttrNameLoc(TL.getAttrNameLoc());
 
+  } else {
+    TypeSourceInfo *DI = getSema().Context.getTrivialTypeSourceInfo(
+        Result, getDerived().getBaseLocation());
+    TransformType(TLB, DI->getTypeLoc());
+  }
+
+  return Result;
+}
+
+template <typename Derived>
+QualType TreeTransform<Derived>::TransformDependentPointerType(
+    TypeLocBuilder &TLB, DependentPointerTypeLoc TL) {
+  const DependentPointerType *T = TL.getTypePtr();
+
+  QualType PointerType = getDerived().TransformType(T->getPointerType());
+
+  if (PointerType.isNull())
+    return QualType();
+
+  QualType Result = TL.getType();
+  if (getDerived().AlwaysRebuild() || PointerType != T->getPointerType()) {
+    Result = getDerived().RebuildDependentPointerType(
+        PointerType, T->getPointerInterpretation(), T->getQualifierLoc());
+    if (Result.isNull())
+      return QualType();
+  }
+
+  // Result might be dependent or not.
+  if (isa<DependentPointerType>(Result)) {
+    DependentPointerTypeLoc NewTL =
+        TLB.push<DependentPointerTypeLoc>(Result);
+    NewTL.setQualifierLoc(TL.getQualifierLoc());
   } else {
     TypeSourceInfo *DI = getSema().Context.getTrivialTypeSourceInfo(
         Result, getDerived().getBaseLocation());
@@ -13977,6 +14018,14 @@ QualType TreeTransform<Derived>::RebuildDependentAddressSpaceType(
     QualType PointeeType, Expr *AddrSpaceExpr, SourceLocation AttributeLoc) {
   return SemaRef.BuildAddressSpaceAttr(PointeeType, AddrSpaceExpr,
                                           AttributeLoc);
+}
+
+template <typename Derived>
+QualType TreeTransform<Derived>::RebuildDependentPointerType(
+    QualType PointerType, PointerInterpretationKind PIK,
+    SourceLocation QualifierLoc) {
+  return SemaRef.BuildPointerInterpretationAttr(PointerType, PIK,
+                                                QualifierLoc);
 }
 
 template <typename Derived>

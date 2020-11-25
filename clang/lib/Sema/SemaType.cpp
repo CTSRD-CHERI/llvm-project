@@ -6142,6 +6142,20 @@ fillDependentAddressSpaceTypeLoc(DependentAddressSpaceTypeLoc DASTL,
       "no address_space attribute found at the expected location!");
 }
 
+static void
+fillDependentPointerTypeLoc(DependentPointerTypeLoc DPTL,
+                            const ParsedAttributesView &Attrs) {
+  for (const ParsedAttr &AL : Attrs) {
+    if (AL.getKind() == ParsedAttr::AT_CHERICapability) {
+      DPTL.setQualifierLoc(AL.getLoc());
+      return;
+    }
+  }
+
+  llvm_unreachable(
+      "no cheri_capability attribute found at the expected location!");
+}
+
 static void fillMatrixTypeLoc(MatrixTypeLoc MTL,
                               const ParsedAttributesView &Attrs) {
   for (const ParsedAttr &AL : Attrs) {
@@ -6203,6 +6217,12 @@ GetTypeSourceInfoForDeclarator(TypeProcessingState &State,
                CurrTL.getAs<DependentAddressSpaceTypeLoc>()) {
       fillDependentAddressSpaceTypeLoc(TL, D.getTypeObject(i).getAttrs());
       CurrTL = TL.getPointeeTypeLoc().getUnqualifiedLoc();
+    }
+
+    while (DependentPointerTypeLoc TL =
+               CurrTL.getAs<DependentPointerTypeLoc>()) {
+      fillDependentPointerTypeLoc(TL, D.getTypeObject(i).getAttrs());
+      CurrTL = TL.getPointerTypeLoc().getUnqualifiedLoc();
     }
 
     if (MatrixTypeLoc TL = CurrTL.getAs<MatrixTypeLoc>())
@@ -7864,6 +7884,34 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const ParsedAttr &Attr,
   }
 }
 
+QualType Sema::BuildPointerInterpretationAttr(QualType T,
+                                              PointerInterpretationKind PIK,
+                                              SourceLocation QualifierLoc) {
+  if (T->isPointerType() || T->isReferenceType()) {
+    // preserve existing qualifiers on T
+    Qualifiers Qs = T.getQualifiers();
+
+    if (const PointerType *PT = T->getAs<PointerType>())
+      T = Context.getPointerType(PT->getPointeeType(), PIK);
+    else if (const LValueReferenceType *LRT = T->getAs<LValueReferenceType>())
+      T = Context.getLValueReferenceType(LRT->getPointeeType(), true, PIK);
+    else if (const RValueReferenceType *RRT = T->getAs<RValueReferenceType>())
+      T = Context.getRValueReferenceType(RRT->getPointeeType(), PIK);
+    else
+      llvm_unreachable("Don't know how to set the interpretation for T");
+
+    if (Qs.hasQualifiers())
+      T = Context.getQualifiedType(T, Qs);
+  } else if (T->isDependentType()) {
+    T = Context.getDependentPointerType(T, PIK, QualifierLoc);
+  } else {
+    Diag(QualifierLoc, diag::err_cheri_capability_attribute_pointers_only)
+        << T;
+  }
+
+  return T;
+}
+
 /// HandleCHERICapabilityAttr - Process the cheri_capability attribute. It is
 /// only applicable to pointer and reference types and specifies that this
 /// pointer/reference should be treated as a capability.
@@ -7963,26 +8011,8 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
     }
   }
 
-  if (CurType->isPointerType() || CurType->isReferenceType()) {
-    // preserve existing qualifiers on CurType
-    Qualifiers Qs = CurType.getQualifiers();
-
-    if (const PointerType *PT = CurType->getAs<PointerType>())
-      CurType = S.Context.getPointerType(PT->getPointeeType(), PIK_Capability);
-    else if (const LValueReferenceType *LRT = CurType->getAs<LValueReferenceType>())
-      CurType = S.Context.getLValueReferenceType(LRT->getPointeeType(), true, PIK_Capability);
-    else if (const RValueReferenceType *RRT = CurType->getAs<RValueReferenceType>())
-      CurType = S.Context.getRValueReferenceType(RRT->getPointeeType(), PIK_Capability);
-    else
-      llvm_unreachable("Don't know how to turn CurType into a capability");
-
-    if (Qs.hasQualifiers())
-      CurType = S.Context.getQualifiedType(CurType, Qs);
-
-    return;
-  }
-
-  S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
+  CurType = S.BuildPointerInterpretationAttr(CurType, PIK_Capability,
+                                             attr.getLoc());
 }
 
 static void handleCheriNoProvenanceAttr(QualType &T, TypeProcessingState &State,

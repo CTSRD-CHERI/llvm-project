@@ -2082,6 +2082,7 @@ bool CXXNameMangler::mangleUnresolvedTypeOrSimpleId(QualType Ty,
   case Type::VariableArray:
   case Type::DependentSizedArray:
   case Type::DependentAddressSpace:
+  case Type::DependentPointer:
   case Type::DependentVector:
   case Type::DependentSizedExtVector:
   case Type::Vector:
@@ -3413,6 +3414,12 @@ void CXXNameMangler::mangleType(const DependentAddressSpaceType *T) {
   SplitQualType split = T->getPointeeType().split();
   mangleQualifiers(split.Quals, T);
   mangleType(QualType(split.Ty, 0));
+}
+
+void CXXNameMangler::mangleType(const DependentPointerType *T) {
+  if (Context.shouldMangleCapabilityQualifier() && T->isCHERICapability())
+    Out << "U12__capability";
+  mangleType(T->getPointerType());
 }
 
 void CXXNameMangler::mangleType(const PackExpansionType *T) {

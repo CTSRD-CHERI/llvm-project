@@ -924,6 +924,10 @@ DEF_TRAVERSE_TYPE(DependentAddressSpaceType, {
   TRY_TO(TraverseType(T->getPointeeType()));
 })
 
+DEF_TRAVERSE_TYPE(DependentPointerType, {
+  TRY_TO(TraverseType(T->getPointerType()));
+})
+
 DEF_TRAVERSE_TYPE(DependentVectorType, {
   if (T->getSizeExpr())
     TRY_TO(TraverseStmt(T->getSizeExpr()));
@@ -1176,6 +1180,10 @@ DEF_TRAVERSE_TYPELOC(DependentSizedArrayType, {
 DEF_TRAVERSE_TYPELOC(DependentAddressSpaceType, {
   TRY_TO(TraverseStmt(TL.getTypePtr()->getAddrSpaceExpr()));
   TRY_TO(TraverseType(TL.getTypePtr()->getPointeeType()));
+})
+
+DEF_TRAVERSE_TYPELOC(DependentPointerType, {
+  TRY_TO(TraverseType(TL.getTypePtr()->getPointerType()));
 })
 
 // FIXME: order? why not size expr first?

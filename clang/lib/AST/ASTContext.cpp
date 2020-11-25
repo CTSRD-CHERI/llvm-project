@@ -3474,6 +3474,7 @@ QualType ASTContext::getVariableArrayDecayedType(QualType type) const {
   case Type::ConstantMatrix:
   case Type::DependentSizedMatrix:
   case Type::DependentAddressSpace:
+  case Type::DependentPointer:
   case Type::ObjCObject:
   case Type::ObjCInterface:
   case Type::ObjCObjectPointer:
@@ -3996,6 +3997,36 @@ QualType ASTContext::getDependentAddressSpaceType(QualType PointeeType,
                                   AddrSpaceExpr, AttrLoc);
   Types.push_back(sugaredType);
   return QualType(sugaredType, 0);
+}
+
+QualType ASTContext::getDependentPointerType(QualType PointerType,
+                                             PointerInterpretationKind PIK,
+                                             SourceLocation QualifierLoc) const {
+  QualType CanonPointerType = getCanonicalType(PointerType);
+
+  void *InsertPos = nullptr;
+  llvm::FoldingSetNodeID ID;
+  DependentPointerType::Profile(ID, *this, CanonPointerType, PIK);
+
+  DependentPointerType *Canon =
+    DependentPointerTypes.FindNodeOrInsertPos(ID, InsertPos);
+
+  if (!Canon) {
+    Canon = new (*this, TypeAlignment) DependentPointerType(
+        *this, CanonPointerType, QualType(), PIK, QualifierLoc);
+    DependentPointerTypes.InsertNode(Canon, InsertPos);
+    Types.push_back(Canon);
+  }
+
+  if (CanonPointerType == PointerType &&
+      Canon->getPointerInterpretation() == PIK)
+    return QualType(Canon, 0);
+
+  DependentPointerType *New = new (*this, TypeAlignment)
+      DependentPointerType(*this, PointerType, QualType(Canon, 0), PIK,
+                           QualifierLoc);
+  Types.push_back(New);
+  return QualType(New, 0);
 }
 
 /// Determine whether \p T is canonical as the result type of a function.
