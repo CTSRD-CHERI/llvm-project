@@ -320,6 +320,9 @@ public:
       case MachineOperand::MO_MachineBasicBlock:
         assert(off == 0 && "cannot create offset into MBB");
         return addMBB(Disp.getMBB(), TargetFlags);
+      case MachineOperand::MO_JumpTableIndex:
+        assert(off == 0 && "cannot create offset into jump tables");
+        return addJumpTableIndex(Disp.getIndex(), TargetFlags);
     }
   }
 
