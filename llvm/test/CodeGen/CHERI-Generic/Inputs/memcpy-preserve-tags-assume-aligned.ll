@@ -1,6 +1,6 @@
 ; Check that __builtin_assume_aligned does the right thing and allows us to elide the memcpy
 ; call even with must_preserve_cheri_tags attribute (run instcombine to propagate assume information)
-; RUN: %generic_cheri_purecap_opt -S -instcombine < %s | %generic_cheri_purecap_llc -O2 -o - | FileCheck %s
+; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -instcombine < %s | llc @PURECAP_HARDFLOAT_ARGS@ -O2 -o - | FileCheck %s
 target datalayout = "@PURECAP_DATALAYOUT@"
 
 ; Function Attrs: argmemonly nounwind

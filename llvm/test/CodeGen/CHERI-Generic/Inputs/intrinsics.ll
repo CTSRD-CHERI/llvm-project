@@ -1,5 +1,5 @@
-; RUN: %generic_cheri_purecap_llc %s -o - < %s | FileCheck %s --check-prefix=PURECAP
-; RUN: %generic_cheri_hybrid_llc -o - < %s | FileCheck %s --check-prefix=HYBRID
+; RUN: llc @PURECAP_HARDFLOAT_ARGS@ %s -o - < %s | FileCheck %s --check-prefix=PURECAP
+; RUN: llc @HYBRID_HARDFLOAT_ARGS@ -o - < %s | FileCheck %s --check-prefix=HYBRID
 ; Check that the target-independent CHERI intrinsics are support for all architectures
 ; The grouping/ordering in this test is based on the RISC-V instruction listing
 ; in the CHERI ISA specification (Appendix C.1 in ISAv7).

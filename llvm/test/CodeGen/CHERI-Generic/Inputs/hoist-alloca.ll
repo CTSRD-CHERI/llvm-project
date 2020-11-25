@@ -27,8 +27,8 @@
 ;   }
 ; }
 
-; RUN: %generic_cheri_purecap_llc -o %t.mir -stop-before=early-machinelicm < %s
-; RUN: echo "DONOTAUTOGEN" | %generic_cheri_purecap_llc -run-pass=early-machinelicm \
+; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -o %t.mir -stop-before=early-machinelicm < %s
+; RUN: echo "DONOTAUTOGEN" | llc @PURECAP_HARDFLOAT_ARGS@ -run-pass=early-machinelicm \
 ; RUN:    -debug-only=machinelicm %t.mir -o /dev/null 2>&1 | FileCheck --check-prefix=MACHINELICM-DBG %s
 ; Check that MachineLICM hoists the CheriBoundedStackPseudoImm (MIPS) / IncOffset+SetBounds (RISCV) instructions
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_uncond
@@ -54,7 +54,7 @@
 @IF-RISCV@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 
-; RUN: %generic_cheri_purecap_llc -O1 -o - < %s | FileCheck %s
+; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -O1 -o - < %s | FileCheck %s
 
 define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 entry:

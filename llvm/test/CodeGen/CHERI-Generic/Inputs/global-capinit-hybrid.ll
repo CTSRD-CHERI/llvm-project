@@ -1,9 +1,9 @@
 ; !DO NOT AUTOGEN!
-; RUN: %generic_cheri_hybrid_llc %s -o - | \
+; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -o - | \
 @IF-MIPS@; RUN: FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.8byte
 @IF-RISCV64@; RUN: FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.quad
 @IF-RISCV32@; RUN: FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.word
-; RUN: %generic_cheri_hybrid_llc %s -filetype=obj -o - | llvm-objdump -r -t -
+; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -filetype=obj -o - | llvm-objdump -r -t -
 
 target datalayout = "@HYBRID_DATALAYOUT@"
 

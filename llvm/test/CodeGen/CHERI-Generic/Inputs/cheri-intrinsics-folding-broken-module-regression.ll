@@ -2,8 +2,8 @@
 ; This used to create a broken function.
 ; FIXME: the getoffset+add sequence should be folded to an increment
 ; REQUIRES: mips-registered-target
-; RUN: %generic_cheri_purecap_opt -S -instcombine -O3 %s -o - | FileCheck %s
-; RUN: %generic_cheri_purecap_opt -S -O3 %s | %generic_cheri_purecap_llc -O3 -o - | FileCheck %s --check-prefix ASM
+; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -instcombine -O3 %s -o - | FileCheck %s
+; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -O3 %s | llc @PURECAP_HARDFLOAT_ARGS@ -O3 -o - | FileCheck %s --check-prefix ASM
 target datalayout = "@PURECAP_DATALAYOUT@"
 
 @d = common addrspace(200) global iCAPRANGE 0, align 4

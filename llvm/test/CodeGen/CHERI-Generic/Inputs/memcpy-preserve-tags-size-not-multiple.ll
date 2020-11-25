@@ -1,4 +1,4 @@
-; RUN: %generic_cheri_purecap_llc -o - -O0 -verify-machineinstrs %s | FileCheck %s -check-prefixes CHECK
+; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -o - -O0 -verify-machineinstrs %s | FileCheck %s -check-prefixes CHECK
 ; Check that we can inline memmove/memcpy despite having the must_preserve_cheri_tags property and the size not
 ; being a multiple of CAP_SIZE. Since the pointers are aligned we can start with capability copies and use
 ; word/byte copies for the trailing bytes.
