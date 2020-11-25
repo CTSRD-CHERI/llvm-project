@@ -199,8 +199,14 @@ def main():
     if options.args.tests:
         options.args.tests = [Path(x) for x in options.args.tests]
     else:
-        options.args.tests = (Path(__file__).parent / "Inputs").glob("*.ll")
-    for test in options.args.tests:
+        options.args.tests = Path(__file__).parent / "Inputs"
+    all_input_files = []
+    for t in options.args.tests:
+        if t.is_dir():
+            all_input_files.extend(t.glob("*.ll"))
+        else:
+            all_input_files.append(t)
+    for test in all_input_files:
         for arch_def in architectures:
             with test.open("rb") as input_file:
                 update_one_test(test.name, input_file, arch_def, options)

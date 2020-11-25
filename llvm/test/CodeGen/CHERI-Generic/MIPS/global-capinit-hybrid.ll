@@ -1,7 +1,7 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/global-capinit-hybrid.ll
-; RUN: %cheri128_llc %s -o - | \
+; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi n64 %s -o - | \
 ; RUN: FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.8byte
-; RUN: %cheri128_llc %s -filetype=obj -o - | llvm-objdump -r -t -
+; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi n64 %s -filetype=obj -o - | llvm-objdump -r -t -
 
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 

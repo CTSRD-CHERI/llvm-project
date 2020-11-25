@@ -29,8 +29,8 @@
 ;   }
 ; }
 
-; RUN: %cheri128_purecap_llc -o %t.mir -stop-before=early-machinelicm < %s
-; RUN: echo "DONOTAUTOGEN" | %cheri128_purecap_llc -run-pass=early-machinelicm \
+; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -o %t.mir -stop-before=early-machinelicm < %s
+; RUN: echo "DONOTAUTOGEN" | llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -run-pass=early-machinelicm \
 ; RUN:    -debug-only=machinelicm %t.mir -o /dev/null 2>&1 | FileCheck --check-prefix=MACHINELICM-DBG %s
 ; Check that MachineLICM hoists the CheriBoundedStackPseudoImm (MIPS) / IncOffset+SetBounds (RISCV) instructions
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_uncond
@@ -44,7 +44,7 @@
 ; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.1.buf2, 0, 88
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 
-; RUN: %cheri128_purecap_llc -O1 -o - < %s | FileCheck %s
+; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -O1 -o - < %s | FileCheck %s
 
 define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: hoist_alloca_uncond:

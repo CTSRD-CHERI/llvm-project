@@ -2,7 +2,7 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/memcpy-preserve-tags-assume-aligned.ll
 ; Check that __builtin_assume_aligned does the right thing and allows us to elide the memcpy
 ; call even with must_preserve_cheri_tags attribute (run instcombine to propagate assume information)
-; RUN: %cheri128_purecap_opt -S -instcombine < %s | %cheri128_purecap_llc -O2 -o - | FileCheck %s
+; RUN: opt -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -S -instcombine < %s | llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -O2 -o - | FileCheck %s
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 
 ; Function Attrs: argmemonly nounwind

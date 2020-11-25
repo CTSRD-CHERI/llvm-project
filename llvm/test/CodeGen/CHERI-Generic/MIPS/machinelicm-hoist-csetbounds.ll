@@ -6,8 +6,8 @@
 
 ; Note: Opt correctly hoists the condition+csetbounds into a preheader, and LLC
 ; used to unconditionally hoist the csetbounds.
-; RUN: %cheri128_purecap_opt -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
-; RUN: %cheri128_purecap_llc -O3 < %s | FileCheck %s
+; RUN: opt -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
+; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -O3 < %s | FileCheck %s
 
 ; Generated from the following C code (with subobject bounds):
 ; struct foo {
@@ -72,7 +72,7 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, 80
 ; HOIST-OPT-LABEL: define {{[^@]+}}@hoist_csetbounds
-; HOIST-OPT-SAME: (i32 signext [[COND:%.*]], [[STRUCT_FOO:%.*]] addrspace(200)* [[F:%.*]]) local_unnamed_addr addrspace(200)
+; HOIST-OPT-SAME: (i32 signext [[COND:%.*]], [[STRUCT_FOO:%.*]] addrspace(200)* [[F:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
 ; HOIST-OPT-NEXT:  entry:
 ; HOIST-OPT-NEXT:    [[TOBOOL:%.*]] = icmp eq [[STRUCT_FOO]] addrspace(200)* [[F]], null
 ; HOIST-OPT-NEXT:    br i1 [[TOBOOL]], label [[FOR_COND_CLEANUP:%.*]], label [[FOR_BODY_PREHEADER:%.*]]
