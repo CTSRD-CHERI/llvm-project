@@ -2,10 +2,10 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/atomic-rmw-cap-ptr.ll
 ; Check that we can generate sensible code for atomic operations using capability pointers
 ; https://github.com/CTSRD-CHERI/llvm-project/issues/470
-; RUN: %riscv64_cheri_purecap_llc %s -o - -mattr=+f,+a | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
-; RUN: %riscv64_cheri_purecap_llc %s -o - -mattr=+f,-a | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
-; RUN_FIXME_THIS_CRASHES: %riscv64_cheri_llc %s -o - -mattr=+f,+a | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-; RUN_FIXME_THIS_CRASHES: %riscv64_cheri_llc %s -o - -mattr=+f,-a | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
+; RUN_FIXME_THIS_CRASHES: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
+; RUN_FIXME_THIS_CRASHES: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
 
 define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg:
@@ -411,14 +411,13 @@ bb:
 define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_fadd:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
-; PURECAP-ATOMICS-NEXT:    cflw ft1, 0(ca0)
-; PURECAP-ATOMICS-NEXT:    fmv.w.x ft0, a1
+; PURECAP-ATOMICS-NEXT:    cflw ft0, 0(ca0)
 ; PURECAP-ATOMICS-NEXT:  .LBB11_1: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
 ; PURECAP-ATOMICS-NEXT:    # Child Loop BB11_3 Depth 2
-; PURECAP-ATOMICS-NEXT:    fadd.s ft2, ft1, ft0
-; PURECAP-ATOMICS-NEXT:    fmv.x.w a1, ft2
-; PURECAP-ATOMICS-NEXT:    fmv.x.w a2, ft1
+; PURECAP-ATOMICS-NEXT:    fadd.s ft1, ft0, fa0
+; PURECAP-ATOMICS-NEXT:    fmv.x.w a1, ft1
+; PURECAP-ATOMICS-NEXT:    fmv.x.w a2, ft0
 ; PURECAP-ATOMICS-NEXT:  .LBB11_3: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # Parent Loop BB11_1 Depth=1
 ; PURECAP-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
@@ -430,10 +429,10 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB11_3
 ; PURECAP-ATOMICS-NEXT:  .LBB11_5: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB11_1 Depth=1
-; PURECAP-ATOMICS-NEXT:    fmv.w.x ft1, a3
+; PURECAP-ATOMICS-NEXT:    fmv.w.x ft0, a3
 ; PURECAP-ATOMICS-NEXT:    bne a3, a2, .LBB11_1
 ; PURECAP-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
-; PURECAP-ATOMICS-NEXT:    fmv.x.w a0, ft1
+; PURECAP-ATOMICS-NEXT:    fmv.s fa0, ft0
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_fadd:
@@ -442,19 +441,18 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp)
 ; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp)
 ; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp)
+; PURECAP-LIBCALLS-NEXT:    fmv.s fs0, fa0
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
-; PURECAP-LIBCALLS-NEXT:    fmv.w.x ft0, a1
-; PURECAP-LIBCALLS-NEXT:    cfsw ft0, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    cflw ft0, 0(ca0)
+; PURECAP-LIBCALLS-NEXT:    cflw fa0, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    addi a0, zero, 4
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 12
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 4
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca1, a0
 ; PURECAP-LIBCALLS-NEXT:  .LBB11_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cflw ft1, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    fadd.s ft1, ft0, ft1
-; PURECAP-LIBCALLS-NEXT:    cfsw ft0, 12(csp)
-; PURECAP-LIBCALLS-NEXT:    fmv.x.w a2, ft1
+; PURECAP-LIBCALLS-NEXT:    fadd.s ft0, fa0, fs0
+; PURECAP-LIBCALLS-NEXT:    cfsw fa0, 4(csp)
+; PURECAP-LIBCALLS-NEXT:    fmv.x.w a2, ft0
 ; PURECAP-LIBCALLS-NEXT:  .LBB11_3: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB11_1 Depth=1
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -465,10 +463,10 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs1
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca5
-; PURECAP-LIBCALLS-NEXT:    cflw ft0, 12(csp)
+; PURECAP-LIBCALLS-NEXT:    cflw fa0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB11_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
-; PURECAP-LIBCALLS-NEXT:    fmv.x.w a0, ft0
+; PURECAP-LIBCALLS-NEXT:    cfld fs0, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 48(csp)
@@ -482,14 +480,13 @@ bb:
 define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_fsub:
 ; PURECAP-ATOMICS:       # %bb.0: # %bb
-; PURECAP-ATOMICS-NEXT:    cflw ft1, 0(ca0)
-; PURECAP-ATOMICS-NEXT:    fmv.w.x ft0, a1
+; PURECAP-ATOMICS-NEXT:    cflw ft0, 0(ca0)
 ; PURECAP-ATOMICS-NEXT:  .LBB12_1: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
 ; PURECAP-ATOMICS-NEXT:    # Child Loop BB12_3 Depth 2
-; PURECAP-ATOMICS-NEXT:    fsub.s ft2, ft1, ft0
-; PURECAP-ATOMICS-NEXT:    fmv.x.w a1, ft2
-; PURECAP-ATOMICS-NEXT:    fmv.x.w a2, ft1
+; PURECAP-ATOMICS-NEXT:    fsub.s ft1, ft0, fa0
+; PURECAP-ATOMICS-NEXT:    fmv.x.w a1, ft1
+; PURECAP-ATOMICS-NEXT:    fmv.x.w a2, ft0
 ; PURECAP-ATOMICS-NEXT:  .LBB12_3: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # Parent Loop BB12_1 Depth=1
 ; PURECAP-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
@@ -501,10 +498,10 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB12_3
 ; PURECAP-ATOMICS-NEXT:  .LBB12_5: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB12_1 Depth=1
-; PURECAP-ATOMICS-NEXT:    fmv.w.x ft1, a3
+; PURECAP-ATOMICS-NEXT:    fmv.w.x ft0, a3
 ; PURECAP-ATOMICS-NEXT:    bne a3, a2, .LBB12_1
 ; PURECAP-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
-; PURECAP-ATOMICS-NEXT:    fmv.x.w a0, ft1
+; PURECAP-ATOMICS-NEXT:    fmv.s fa0, ft0
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_fsub:
@@ -513,19 +510,18 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp)
 ; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp)
 ; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp)
+; PURECAP-LIBCALLS-NEXT:    fmv.s fs0, fa0
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
-; PURECAP-LIBCALLS-NEXT:    fmv.w.x ft0, a1
-; PURECAP-LIBCALLS-NEXT:    cfsw ft0, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    cflw ft0, 0(ca0)
+; PURECAP-LIBCALLS-NEXT:    cflw fa0, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    addi a0, zero, 4
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 12
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 4
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca1, a0
 ; PURECAP-LIBCALLS-NEXT:  .LBB12_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cflw ft1, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    fsub.s ft1, ft0, ft1
-; PURECAP-LIBCALLS-NEXT:    cfsw ft0, 12(csp)
-; PURECAP-LIBCALLS-NEXT:    fmv.x.w a2, ft1
+; PURECAP-LIBCALLS-NEXT:    fsub.s ft0, fa0, fs0
+; PURECAP-LIBCALLS-NEXT:    cfsw fa0, 4(csp)
+; PURECAP-LIBCALLS-NEXT:    fmv.x.w a2, ft0
 ; PURECAP-LIBCALLS-NEXT:  .LBB12_3: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB12_1 Depth=1
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -536,10 +532,10 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs1
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca5
-; PURECAP-LIBCALLS-NEXT:    cflw ft0, 12(csp)
+; PURECAP-LIBCALLS-NEXT:    cflw fa0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB12_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
-; PURECAP-LIBCALLS-NEXT:    fmv.x.w a0, ft0
+; PURECAP-LIBCALLS-NEXT:    cfld fs0, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs1, 16(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 48(csp)
