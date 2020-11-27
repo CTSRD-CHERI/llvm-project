@@ -65,7 +65,6 @@
 #include <string>
 #include <system_error>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 using namespace llvm;
@@ -359,8 +358,6 @@ private:
   };
   mutable SmallVector<Optional<VersionEntry>, 16> VersionMap;
 
-  std::unordered_set<std::string> Warnings;
-
   std::string describe(const Elf_Shdr &Sec) const;
 
 public:
@@ -440,9 +437,6 @@ public:
 
   Expected<RelSymbol<ELFT>> getRelocationTarget(const Relocation<ELFT> &R,
                                                 const Elf_Shdr *SymTab) const;
-
-  std::function<Error(const Twine &Msg)> WarningHandler;
-  void reportUniqueWarning(Error Err) const;
 };
 
 template <class ELFT>
@@ -960,14 +954,6 @@ private:
   void printGNUVersionSectionProlog(const typename ELFT::Shdr &Sec,
                                     const Twine &Label, unsigned EntriesNum);
 };
-
-template <class ELFT>
-void ELFDumper<ELFT>::reportUniqueWarning(Error Err) const {
-  handleAllErrors(std::move(Err), [&](const ErrorInfoBase &EI) {
-    cantFail(WarningHandler(EI.message()),
-             "WarningHandler should always return ErrorSuccess");
-  });
-}
 
 template <class ELFT>
 void DumpStyle<ELFT>::reportUniqueWarning(Error Err) const {
@@ -2031,16 +2017,9 @@ void ELFDumper<ELFT>::loadDynamicTable() {
 template <typename ELFT>
 ELFDumper<ELFT>::ELFDumper(const object::ELFObjectFile<ELFT> &O,
                            ScopedPrinter &Writer)
-    : ObjDumper(Writer), ObjF(O), Obj(*O.getELFFile()), DynRelRegion(O),
-      DynRelaRegion(O), DynRelrRegion(O), DynPLTRelRegion(O), DynamicTable(O) {
-  // Dumper reports all non-critical errors as warnings.
-  // It does not print the same warning more than once.
-  WarningHandler = [this](const Twine &Msg) {
-    if (Warnings.insert(Msg.str()).second)
-      reportWarning(createError(Msg), ObjF.getFileName());
-    return Error::success();
-  };
-
+    : ObjDumper(Writer, O.getFileName()), ObjF(O), Obj(*O.getELFFile()),
+      DynRelRegion(O), DynRelaRegion(O), DynRelrRegion(O), DynPLTRelRegion(O),
+      DynamicTable(O) {
   if (opts::Output == opts::GNU)
     ELFDumperStyle.reset(new GNUStyle<ELFT>(Writer, *this));
   else
