@@ -160,6 +160,8 @@ STATISTIC(
     NumLookupTablesHoles,
     "Number of switch instructions turned into lookup tables (holes checked)");
 STATISTIC(NumTableCmpReuses, "Number of reused switch table lookup compares");
+STATISTIC(NumFoldValueComparisonIntoPredecessors,
+          "Number of value comparisons folded into predecessor basic blocks");
 STATISTIC(NumFoldBranchToCommonDest,
           "Number of branches folded into predecessor basic block");
 STATISTIC(
@@ -1055,6 +1057,11 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(Instruction *TI,
   }
 
   bool Changed = false;
+
+  auto _ = make_scope_exit([&]() {
+    if (Changed)
+      ++NumFoldValueComparisonIntoPredecessors;
+  });
 
   SmallVector<BasicBlock *, 16> Preds(pred_begin(BB), pred_end(BB));
   while (!Preds.empty()) {
