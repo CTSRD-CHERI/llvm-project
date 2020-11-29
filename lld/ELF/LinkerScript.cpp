@@ -805,6 +805,8 @@ void LinkerScript::addOrphanSections() {
 
 void LinkerScript::diagnoseOrphanHandling() const {
   llvm::TimeTraceScope timeScope("Diagnose orphan sections");
+  if (config->orphanHandling == OrphanHandlingPolicy::Place)
+    return;
   for (const InputSectionBase *sec : orphanSections) {
     // Input SHT_REL[A] retained by --emit-relocs are ignored by
     // computeInputSections(). Don't warn/error.
@@ -815,7 +817,7 @@ void LinkerScript::diagnoseOrphanHandling() const {
     StringRef name = getOutputSectionName(sec);
     if (config->orphanHandling == OrphanHandlingPolicy::Error)
       error(toString(sec) + " is being placed in '" + name + "'");
-    else if (config->orphanHandling == OrphanHandlingPolicy::Warn)
+    else
       warn(toString(sec) + " is being placed in '" + name + "'");
   }
 }
