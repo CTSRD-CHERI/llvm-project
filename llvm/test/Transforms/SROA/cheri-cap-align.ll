@@ -19,10 +19,10 @@ define void @foo_struct(%struct* %px) {
 ; CHECK-NEXT:    [[PY_SROA_6_0_PX_CAST_SROA_IDX6:%.*]] = getelementptr inbounds [[STRUCT:%.*]], %struct* [[PX]], i64 0, i32 4
 ; CHECK-NEXT:    [[PY_SROA_6_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[PY_SROA_6_0_PX_CAST_SROA_IDX6]], align 16
 ; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_SROA_IDX11:%.*]] = getelementptr inbounds { i32, i32, i32, i32 }, { i32, i32, i32, i32 }* [[PY_SROA_0]], i64 0, i32 1
-; CHECK-NEXT:    [[PY_SROA_0_4_PY_SROA_0_4_Y_1:%.*]] = load i32, i32* [[PY_SROA_0_4_PY_1_SROA_IDX11]]
+; CHECK-NEXT:    [[PY_SROA_0_4_PY_SROA_0_4_Y_1:%.*]] = load i32, i32* [[PY_SROA_0_4_PY_1_SROA_IDX11]], align 4
 ; CHECK-NEXT:    [[Y_1_NEW:%.*]] = call i32 @bar(i32 [[PY_SROA_0_4_PY_SROA_0_4_Y_1]])
 ; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_SROA_IDX12:%.*]] = getelementptr inbounds { i32, i32, i32, i32 }, { i32, i32, i32, i32 }* [[PY_SROA_0]], i64 0, i32 1
-; CHECK-NEXT:    store i32 [[Y_1_NEW]], i32* [[PY_SROA_0_4_PY_1_SROA_IDX12]]
+; CHECK-NEXT:    store i32 [[Y_1_NEW]], i32* [[PY_SROA_0_4_PY_1_SROA_IDX12]], align 4
 ; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_CAST3:%.*]] = bitcast %struct* [[PX]] to i8*
 ; CHECK-NEXT:    [[PY_SROA_0_0_PY_CAST_SROA_CAST10:%.*]] = bitcast { i32, i32, i32, i32 }* [[PY_SROA_0]] to i8*
 ; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_0_0_PX_CAST_SROA_CAST3]], i8* align 16 [[PY_SROA_0_0_PY_CAST_SROA_CAST10]], i64 16, i1 false)
@@ -62,11 +62,11 @@ define void @foo_buf(%struct* %px) {
 ; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_6_0_PY_CAST_SROA_IDX11]], i8* align 16 [[PY_SROA_6_0_PX_CAST_SROA_CAST]], i64 16, i1 false)
 ; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_CAST_SROA_IDX14:%.*]] = getelementptr inbounds [16 x i8], [16 x i8]* [[PY_SROA_0]], i64 0, i64 4
 ; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_CAST_SROA_CAST15:%.*]] = bitcast i8* [[PY_SROA_0_4_PY_1_CAST_SROA_IDX14]] to i32*
-; CHECK-NEXT:    [[PY_SROA_0_4_PY_SROA_0_4_Y_1:%.*]] = load i32, i32* [[PY_SROA_0_4_PY_1_CAST_SROA_CAST15]]
+; CHECK-NEXT:    [[PY_SROA_0_4_PY_SROA_0_4_Y_1:%.*]] = load i32, i32* [[PY_SROA_0_4_PY_1_CAST_SROA_CAST15]], align 4
 ; CHECK-NEXT:    [[Y_1_NEW:%.*]] = call i32 @bar(i32 [[PY_SROA_0_4_PY_SROA_0_4_Y_1]])
 ; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_CAST_SROA_IDX16:%.*]] = getelementptr inbounds [16 x i8], [16 x i8]* [[PY_SROA_0]], i64 0, i64 4
 ; CHECK-NEXT:    [[PY_SROA_0_4_PY_1_CAST_SROA_CAST17:%.*]] = bitcast i8* [[PY_SROA_0_4_PY_1_CAST_SROA_IDX16]] to i32*
-; CHECK-NEXT:    store i32 [[Y_1_NEW]], i32* [[PY_SROA_0_4_PY_1_CAST_SROA_CAST17]]
+; CHECK-NEXT:    store i32 [[Y_1_NEW]], i32* [[PY_SROA_0_4_PY_1_CAST_SROA_CAST17]], align 4
 ; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_CAST3:%.*]] = bitcast %struct* [[PX]] to i8*
 ; CHECK-NEXT:    [[PY_SROA_0_0_PY_CAST_SROA_IDX13:%.*]] = getelementptr inbounds [16 x i8], [16 x i8]* [[PY_SROA_0]], i64 0, i64 0
 ; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PY_SROA_0_0_PX_CAST_SROA_CAST3]], i8* align 16 [[PY_SROA_0_0_PY_CAST_SROA_IDX13]], i64 16, i1 false)
