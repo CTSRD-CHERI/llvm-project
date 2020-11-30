@@ -91,6 +91,83 @@ entry:
   ret void
 }
 
+; This is similar to @foo_struct, but with a memcpy at an unaligned offset that
+; still covers an aligned region of the struct that can contain capabilities.
+; FIXME: SROA allocates an unaligned buffer that can cause tags to be stripped.
+define void @unaligned_copy_struct(%struct* %px) {
+; CHECK-LABEL: @unaligned_copy_struct(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[PY_SROA_2:%.*]] = alloca [28 x i8], align 4
+; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT:%.*]], %struct* [[PX:%.*]], i64 0, i32 0
+; CHECK-NEXT:    [[PY_SROA_0_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_0_0_PX_CAST_SROA_IDX]], align 16
+; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_CAST:%.*]] = bitcast i32* [[PY_SROA_2_0_PX_CAST_SROA_IDX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_2_0_PY_CAST_SROA_IDX:%.*]] = getelementptr inbounds [28 x i8], [28 x i8]* [[PY_SROA_2]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 [[PY_SROA_2_0_PY_CAST_SROA_IDX]], i8* align 4 [[PY_SROA_2_0_PX_CAST_SROA_CAST]], i64 28, i1 false)
+; CHECK-NEXT:    [[PX_0:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 0
+; CHECK-NEXT:    [[X_0:%.*]] = load i32, i32* [[PX_0]], align 4
+; CHECK-NEXT:    [[Y_0:%.*]] = call i32 @bar(i32 [[X_0]])
+; CHECK-NEXT:    [[PY_SROA_2_4_PX_TAIL_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_2_4_PX_TAIL_SROA_CAST:%.*]] = bitcast i32* [[PY_SROA_2_4_PX_TAIL_SROA_IDX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_2_4_PY_TAIL_SROA_IDX:%.*]] = getelementptr inbounds [28 x i8], [28 x i8]* [[PY_SROA_2]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 [[PY_SROA_2_4_PX_TAIL_SROA_CAST]], i8* align 4 [[PY_SROA_2_4_PY_TAIL_SROA_IDX]], i64 28, i1 false)
+; CHECK-NEXT:    ret void
+;
+entry:
+  %py = alloca %struct, align 16
+  %px.cast = bitcast %struct* %px to i8*
+  %py.cast = bitcast %struct* %py to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %py.cast, i8* align 16 %px.cast, i64 32, i1 false)
+  %px.0 = getelementptr inbounds %struct, %struct* %px, i64 0, i32 0
+  %py.0 = getelementptr inbounds %struct, %struct* %py, i64 0, i32 0
+  %x.0 = load i32, i32* %px.0, align 4
+  %y.0 = call i32 @bar(i32 %x.0)
+  store i32 %y.0, i32* %py.0, align 4
+  %px.tail = getelementptr inbounds i8, i8* %px.cast, i64 4
+  %py.tail = getelementptr inbounds i8, i8* %py.cast, i64 4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %px.tail, i8* align 4 %py.tail, i64 28, i1 false)
+  ret void
+}
+
+; This is the same as @unaligned_copy_struct but with an opaque aligned byte
+; buffer instead of a struct, like @foo_buf is to @foo_struct. We have to
+; assume the aligned slices of the struct could contain a capability, but the
+; first 16 bytes can be broken up still due to seeing the store of an i32.
+; FIXME: SROA allocates an unaligned buffer that can cause tags to be stripped.
+define void @unaligned_copy_buf(%struct* %px) {
+; CHECK-LABEL: @unaligned_copy_buf(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[PY_SROA_2:%.*]] = alloca [28 x i8], align 4
+; CHECK-NEXT:    [[PY_SROA_0_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT:%.*]], %struct* [[PX:%.*]], i64 0, i32 0
+; CHECK-NEXT:    [[PY_SROA_0_0_COPYLOAD:%.*]] = load i32, i32* [[PY_SROA_0_0_PX_CAST_SROA_IDX]], align 16
+; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_2_0_PX_CAST_SROA_CAST:%.*]] = bitcast i32* [[PY_SROA_2_0_PX_CAST_SROA_IDX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_2_0_PY_CAST_SROA_IDX:%.*]] = getelementptr inbounds [28 x i8], [28 x i8]* [[PY_SROA_2]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 [[PY_SROA_2_0_PY_CAST_SROA_IDX]], i8* align 4 [[PY_SROA_2_0_PX_CAST_SROA_CAST]], i64 28, i1 false)
+; CHECK-NEXT:    [[PX_0:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 0
+; CHECK-NEXT:    [[X_0:%.*]] = load i32, i32* [[PX_0]], align 4
+; CHECK-NEXT:    [[Y_0:%.*]] = call i32 @bar(i32 [[X_0]])
+; CHECK-NEXT:    [[PY_SROA_2_4_PX_TAIL_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT]], %struct* [[PX]], i64 0, i32 1
+; CHECK-NEXT:    [[PY_SROA_2_4_PX_TAIL_SROA_CAST:%.*]] = bitcast i32* [[PY_SROA_2_4_PX_TAIL_SROA_IDX]] to i8*
+; CHECK-NEXT:    [[PY_SROA_2_4_PY_TAIL_SROA_IDX:%.*]] = getelementptr inbounds [28 x i8], [28 x i8]* [[PY_SROA_2]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 [[PY_SROA_2_4_PX_TAIL_SROA_CAST]], i8* align 4 [[PY_SROA_2_4_PY_TAIL_SROA_IDX]], i64 28, i1 false)
+; CHECK-NEXT:    ret void
+;
+entry:
+  %py = alloca [32 x i8], align 16
+  %px.cast = bitcast %struct* %px to i8*
+  %py.cast = bitcast [32 x i8]* %py to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %py.cast, i8* align 16 %px.cast, i64 32, i1 false)
+  %px.0 = getelementptr inbounds %struct, %struct* %px, i64 0, i32 0
+  %py.0 = bitcast [32 x i8]* %py to i32*
+  %x.0 = load i32, i32* %px.0, align 4
+  %y.0 = call i32 @bar(i32 %x.0)
+  store i32 %y.0, i32* %py.0, align 4
+  %px.tail = getelementptr inbounds i8, i8* %px.cast, i64 4
+  %py.tail = getelementptr inbounds i8, i8* %py.cast, i64 4
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %px.tail, i8* align 4 %py.tail, i64 28, i1 false)
+  ret void
+}
 
 define void @baz(%struct* %px) {
 ; CHECK-LABEL: @baz(
