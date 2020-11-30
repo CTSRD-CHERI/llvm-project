@@ -915,19 +915,6 @@ private:
     if (!canRangeContainCapabilities(CapSize, Offset, Offset + Size))
       return false;
 
-    if (II.hasFnAttr(Attribute::MustPreserveCheriTags))
-      return true;
-
-    if (Offset % CapSize != 0)
-      return false;
-
-    auto SrcAlign = II.getSourceAlign();
-    auto DstAlign = II.getDestAlign();
-    if (SrcAlign && *SrcAlign < CapAlign)
-      return false;
-    if (DstAlign && *DstAlign < CapAlign)
-      return false;
-
     return true;
   }
 
