@@ -753,7 +753,7 @@ private:
     Align MinAlign = {};
     const DataLayout &DL = AS.AI.getModule()->getDataLayout();
     if ((ReadsTags || WritesTags) && !IsSplittable)
-      MinAlign = Align(getCapabilitySize(DL));
+      MinAlign = commonAlignment(Align(getCapabilitySize(DL)), BeginOffset);
 
     AS.Slices.push_back(Slice(BeginOffset, EndOffset, MinAlign, ReadsTags,
                               WritesTags, U, IsSplittable));
