@@ -56,7 +56,7 @@ int main() {
   typedef char *CAP char_capptr;
   char *cp = nullptr;
   DO_CASTS(char_capptr, cp);
-  // hybrid-error@-1    {{static_cast from 'char *' to 'char_capptr' (aka 'char * __capability') is not allowed}}
+  // hybrid-error@-1 {{static_cast from 'char *' to 'char_capptr' (aka 'char * __capability') changes capability qualifier}}
 
   typedef char *char_ptr;
   char *CAP cc = nullptr;

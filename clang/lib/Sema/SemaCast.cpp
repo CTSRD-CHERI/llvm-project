@@ -1349,8 +1349,8 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
   // just the usual constness stuff.
   if (const PointerType *SrcPointer = SrcType->getAs<PointerType>()) {
     QualType SrcPointee = SrcPointer->getPointeeType();
-    if (SrcPointer->isCHERICapability() &&
-        !DestType->isCHERICapabilityType(Self.Context)) {
+    if (SrcPointer->isCHERICapability() !=
+        DestType->isCHERICapabilityType(Self.Context)) {
       // Changing the capability qualifier is not possible with static_cast.
       // Return a more specific message than "is not allowed" for pointer casts.
       if (DestType->isAnyPointerType())
@@ -2966,6 +2966,8 @@ void CastOperation::CheckCapabilityConversions() {
       break;
     default:
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+      llvm::errs() << "Invalid cast kind: " << CastExpr::getCastKindName(Kind)
+                   << "\n";
       SrcExpr.get()->dump();
       SrcExpr.get()->getSourceRange().dump(Self.getSourceManager());
       DestType->dump();

@@ -1,13 +1,26 @@
-// RUN: %cheri_cc1 %s -DALIGN=1 -verify
-// RUN: %cheri_cc1 %s -fsyntax-only -ast-dump 2>/dev/null  | FileCheck %s -check-prefixes AST,HYBRID-AST
-// RUN: %cheri_purecap_cc1 %s -fsyntax-only -ast-dump 2>/dev/null | FileCheck %s -check-prefixes AST,PURECAP-AST
+// RUN: %cheri_cc1 %s -verify=expected,hybrid,hybrid-c -ast-dump | FileCheck %s -check-prefixes AST,HYBRID-AST
+// RUN: %cheri_cc1 -x c++ %s -verify=expected,hybrid,hybrid-cxx -ast-dump | FileCheck %s -check-prefixes AST,HYBRID-AST
+// RUN: %cheri_purecap_cc1 %s -verify=expected,purecap -ast-dump | FileCheck %s -check-prefixes AST,PURECAP-AST
+// RUN: %cheri_purecap_cc1 -x c++ %s -verify=expected,purecap -ast-dump | FileCheck %s -check-prefixes AST,PURECAP-AST
 
-#ifdef ALIGN
+// XXX: Currently we only get diagnostics for hybrid as DiagnoseCHERIPtr only
+// looks through integer pointers, and is only called for C, not C++. This
+// should also not be a CHERI-specific error, rather just another -Wcast-align
+// warning given faulting on unaligned accesses is nothing new to CHERI (this
+// isn't a warning about tag loss).
+// purecap-no-diagnostics
+// hybrid-cxx-no-diagnostics
 void a() {
+  // AST-LABEL: FunctionDecl
+  // AST-SAME: a 'void ()'
   unsigned long foo[8];
-  ((int * __capability *)foo)[0] = 0; // expected-error-re {{cast from 'unsigned long *' to 'int * __capability *' increases required alignment from 8 to {{16|32}}}} expected-note{{use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know that the source type is sufficiently aligned}}
+  ((int * __capability *)foo)[0] = 0;
+  // hybrid-c-error-re@-1 {{cast from 'unsigned long *' to 'int * __capability *' increases required alignment from 8 to {{16|32}}}}
+  // hybrid-c-note@-2 {{use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know that the source type is sufficiently aligned}}
+  // HYBRID-AST:  CStyleCastExpr {{.*}} {{.*}} 'int * __capability *' <BitCast>{{$}}
+  // PURECAP-AST: CStyleCastExpr {{.*}} {{.*}} 'int **' <BitCast>{{$}}
+  // AST-NEXT:    ImplicitCastExpr {{.*}} {{.*}} 'unsigned long *' <ArrayToPointerDecay> part_of_explicit_cast{{$}}
 }
-#endif
 
 void f() {
   // AST-LABEL: FunctionDecl
