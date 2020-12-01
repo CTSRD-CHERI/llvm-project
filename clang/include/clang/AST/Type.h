@@ -1637,10 +1637,32 @@ protected:
     unsigned IsKindOf : 1;
   };
 
+  class PointerTypeBitfields {
+    friend class PointerType;
+
+    unsigned : NumTypeBits;
+
+    /// The interpretation (PointerInterpretationKind) to use for this pointer.
+    unsigned PIK : 1;
+  };
+
+  class DependentPointerTypeBitfields {
+    friend class DependentPointerType;
+
+    unsigned : NumTypeBits;
+
+    /// The interpretation (PointerInterpretationKind) to use for this pointer.
+    unsigned PIK : 1;
+  };
+
   class ReferenceTypeBitfields {
     friend class ReferenceType;
 
     unsigned : NumTypeBits;
+
+    /// The interpretation (PointerInterpretationKind) to use for the pointer
+    /// backing this reference type.
+    unsigned PIK : 1;
 
     /// True if the type was originally spelled with an lvalue sigil.
     /// This is never true of rvalue references but can also be false
@@ -1812,6 +1834,8 @@ protected:
     BuiltinTypeBitfields BuiltinTypeBits;
     FunctionTypeBitfields FunctionTypeBits;
     ObjCObjectTypeBitfields ObjCObjectTypeBits;
+    PointerTypeBitfields PointerTypeBits;
+    DependentPointerTypeBitfields DependentPointerTypeBits;
     ReferenceTypeBitfields ReferenceTypeBits;
     TypeWithKeywordBitfields TypeWithKeywordBits;
     ElaboratedTypeBitfields ElaboratedTypeBits;
@@ -1837,6 +1861,10 @@ protected:
                   "FunctionTypeBitfields is larger than 8 bytes!");
     static_assert(sizeof(ObjCObjectTypeBitfields) <= 8,
                   "ObjCObjectTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(PointerTypeBitfields) <= 8,
+                  "PointerTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(DependentPointerTypeBitfields) <= 8,
+                  "DependentPointerTypeBitfields is larger than 8 bytes!");
     static_assert(sizeof(ReferenceTypeBitfields) <= 8,
                   "ReferenceTypeBitfields is larger than 8 bytes!");
     static_assert(sizeof(TypeWithKeywordBitfields) <= 8,
@@ -2708,15 +2736,16 @@ class PointerType : public Type,
   friend class PointerInterpretationTrait<PointerType>;
 
   QualType PointeeType;
-  PointerInterpretationKind PIK;
 
   PointerType(QualType Pointee, QualType CanonicalPtr,
               PointerInterpretationKind PIK)
       : Type(Pointer, CanonicalPtr, Pointee->getDependence()),
-        PointeeType(Pointee), PIK(PIK) {}
+        PointeeType(Pointee) {
+    PointerTypeBits.PIK = PIK;
+  }
 
   PointerInterpretationKind getPointerInterpretationImpl() const {
-    return PIK;
+    return static_cast<PointerInterpretationKind>(PointerTypeBits.PIK);
   }
 
 public:
@@ -2726,7 +2755,7 @@ public:
   QualType desugar() const { return QualType(this, 0); }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, getPointeeType(), PIK);
+    Profile(ID, getPointeeType(), getPointerInterpretation());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID, QualType Pointee,
@@ -2829,17 +2858,17 @@ class ReferenceType : public Type,
   friend class PointerInterpretationTrait<ReferenceType>;
 
   QualType PointeeType;
-  PointerInterpretationKind PIK;
 
   PointerInterpretationKind getPointerInterpretationImpl() const {
-    return PIK;
+    return static_cast<PointerInterpretationKind>(ReferenceTypeBits.PIK);
   }
 
 protected:
   ReferenceType(TypeClass tc, QualType Referencee, QualType CanonicalRef,
                 bool SpelledAsLValue, PointerInterpretationKind PIK)
       : Type(tc, CanonicalRef, Referencee->getDependence()),
-        PointeeType(Referencee), PIK(PIK) {
+        PointeeType(Referencee) {
+    ReferenceTypeBits.PIK = PIK;
     ReferenceTypeBits.SpelledAsLValue = SpelledAsLValue;
     ReferenceTypeBits.InnerRef = Referencee->isReferenceType();
   }
@@ -2859,7 +2888,7 @@ public:
   }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, PointeeType, isSpelledAsLValue(), PIK);
+    Profile(ID, PointeeType, isSpelledAsLValue(), getPointerInterpretation());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID,
@@ -3272,7 +3301,6 @@ class DependentPointerType : public Type,
 
   const ASTContext &Context;
   QualType PointerType;
-  PointerInterpretationKind PIK;
   SourceLocation Loc;
 
   DependentPointerType(const ASTContext &Context, QualType PointerType,
@@ -3280,7 +3308,8 @@ class DependentPointerType : public Type,
                        SourceLocation Loc);
 
   PointerInterpretationKind getPointerInterpretationImpl() const {
-    return PIK;
+    return static_cast<PointerInterpretationKind>(
+        DependentPointerTypeBits.PIK);
   }
 
 public:
