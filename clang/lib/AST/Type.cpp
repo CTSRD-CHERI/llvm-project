@@ -291,8 +291,9 @@ DependentPointerType::DependentPointerType(const ASTContext &Context,
     : Type(DependentPointer, Canonical,
            TypeDependence::DependentInstantiation |
                PointerType->getDependence()),
-      Context(Context), PointerType(PointerType), PIK(PIK),
-      Loc(Loc) {}
+      Context(Context), PointerType(PointerType), Loc(Loc) {
+  DependentPointerTypeBits.PIK = PIK;
+}
 
 void DependentPointerType::Profile(llvm::FoldingSetNodeID &ID,
                                    const ASTContext &Context,
