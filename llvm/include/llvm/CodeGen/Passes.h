@@ -481,6 +481,9 @@ namespace llvm {
   /// Create CHERI pass to bound alloca.s
   ModulePass *createCheriBoundAllocasPass();
 
+  /// This pass inserts pseudo probe annotation for callsite profiling.
+  FunctionPass *createPseudoProbeInserter();
+
   /// Create IR Type Promotion pass. \see TypePromotion.cpp
   FunctionPass *createTypePromotionPass();
 
