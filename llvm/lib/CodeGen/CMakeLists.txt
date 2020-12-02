@@ -149,7 +149,6 @@ add_llvm_component_library(LLVMCodeGen
   ResetMachineFunctionPass.cpp
   SafeStack.cpp
   SafeStackLayout.cpp
-  ScalarizeMaskedMemIntrin.cpp
   ScheduleDAG.cpp
   ScheduleDAGInstrs.cpp
   ScheduleDAGPrinter.cpp
