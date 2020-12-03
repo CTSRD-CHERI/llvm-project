@@ -202,5 +202,6 @@ void RISCVPassConfig::addPreEmitPass2() {
 }
 
 void RISCVPassConfig::addPreRegAlloc() {
-  addPass(createRISCVMergeBaseOffsetOptPass());
+  if (TM->getOptLevel() != CodeGenOpt::None)
+    addPass(createRISCVMergeBaseOffsetOptPass());
 }
