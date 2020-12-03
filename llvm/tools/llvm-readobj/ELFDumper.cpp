@@ -4957,16 +4957,14 @@ template <class ELFT> void GNUStyle<ELFT>::printSectionMapping() {
 namespace {
 
 template <class ELFT>
-RelSymbol<ELFT> getSymbolForReloc(const ELFFile<ELFT> &Obj, StringRef FileName,
-                                  const ELFDumper<ELFT> &Dumper,
+RelSymbol<ELFT> getSymbolForReloc(const ELFDumper<ELFT> &Dumper,
                                   const Relocation<ELFT> &Reloc) {
   using Elf_Sym = typename ELFT::Sym;
   auto WarnAndReturn = [&](const Elf_Sym *Sym,
                            const Twine &Reason) -> RelSymbol<ELFT> {
-    reportWarning(
-        createError("unable to get name of the dynamic symbol with index " +
-                    Twine(Reloc.Symbol) + ": " + Reason),
-        FileName);
+    Dumper.reportUniqueWarning(
+        "unable to get name of the dynamic symbol with index " +
+        Twine(Reloc.Symbol) + ": " + Reason);
     return {Sym, "<corrupt>"};
   };
 
@@ -4984,6 +4982,7 @@ RelSymbol<ELFT> getSymbolForReloc(const ELFFile<ELFT> &Obj, StringRef FileName,
         "index is greater than or equal to the number of dynamic symbols (" +
             Twine(Symbols.size()) + ")");
 
+  const ELFFile<ELFT> &Obj = *Dumper.getElfObject().getELFFile();
   const uint64_t FileSize = Obj.getBufSize();
   const uint64_t SymOffset = ((const uint8_t *)FirstSym - Obj.base()) +
                              (uint64_t)Reloc.Symbol * sizeof(Elf_Sym);
@@ -5003,8 +5002,7 @@ RelSymbol<ELFT> getSymbolForReloc(const ELFFile<ELFT> &Obj, StringRef FileName,
 
 template <class ELFT>
 void GNUStyle<ELFT>::printDynamicReloc(const Relocation<ELFT> &R) {
-  printRelRelaReloc(
-      R, getSymbolForReloc(this->Obj, this->FileName, this->dumper(), R));
+  printRelRelaReloc(R, getSymbolForReloc(this->dumper(), R));
 }
 
 template <class ELFT>
@@ -7007,8 +7005,7 @@ template <class ELFT> void LLVMStyle<ELFT>::printDynamicRelocations() {
 
 template <class ELFT>
 void LLVMStyle<ELFT>::printDynamicReloc(const Relocation<ELFT> &R) {
-  RelSymbol<ELFT> S =
-      getSymbolForReloc(this->Obj, this->FileName, this->dumper(), R);
+  RelSymbol<ELFT> S = getSymbolForReloc(this->dumper(), R);
   printRelRelaReloc(R, S.Name);
 }
 
