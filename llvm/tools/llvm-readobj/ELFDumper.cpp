@@ -4527,10 +4527,9 @@ void GNUStyle<ELFT>::printHashTableSymbols(const Elf_Hash &SysVHash) {
         break;
 
       if (Visited[Ch]) {
-        reportWarning(createError(".hash section is invalid: bucket " +
+        this->reportUniqueWarning(".hash section is invalid: bucket " +
                                   Twine(Ch) +
-                                  ": a cycle was detected in the linked chain"),
-                      this->FileName);
+                                  ": a cycle was detected in the linked chain");
         break;
       }
 
@@ -5271,10 +5270,9 @@ void GNUStyle<ELFT>::printHashHistogram(const Elf_Hash &HashTable) {
       if (C == ELF::STN_UNDEF)
         break;
       if (Visited[C]) {
-        reportWarning(createError(".hash section is invalid: bucket " +
+        this->reportUniqueWarning(".hash section is invalid: bucket " +
                                   Twine(C) +
-                                  ": a cycle was detected in the linked chain"),
-                      this->FileName);
+                                  ": a cycle was detected in the linked chain");
         break;
       }
       Visited[C] = true;
