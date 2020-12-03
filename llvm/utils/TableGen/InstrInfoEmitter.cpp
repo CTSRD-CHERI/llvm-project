@@ -535,6 +535,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   unsigned ListNumber = 0;
 
   // Emit all of the instruction's implicit uses and defs.
+  Records.startTimer("Emit uses/defs");
   for (const CodeGenInstruction *II : Target.getInstructionsByEnumValue()) {
     Record *Inst = II->TheDef;
     std::vector<Record*> Uses = Inst->getValueAsListOfDefs("Uses");
@@ -552,10 +553,12 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   OperandInfoMapTy OperandInfoIDs;
 
   // Emit all of the operand info records.
+  Records.startTimer("Emit operand info");
   EmitOperandInfo(OS, OperandInfoIDs);
 
   // Emit all of the MCInstrDesc records in their ENUM ordering.
   //
+  Records.startTimer("Emit InstrDesc records");
   OS << "\nextern const MCInstrDesc " << TargetName << "Insts[] = {\n";
   ArrayRef<const CodeGenInstruction*> NumberedInstructions =
     Target.getInstructionsByEnumValue();
@@ -571,6 +574,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   OS << "};\n\n";
 
   // Emit the array of instruction names.
+  Records.startTimer("Emit instruction names");
   InstrNames.layout();
   InstrNames.emitStringLiteralDef(OS, Twine("extern const char ") + TargetName +
                                           "InstrNameData[]");
@@ -631,6 +635,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   }
 
   // MCInstrInfo initialization routine.
+  Records.startTimer("Emit initialization routine");
   OS << "static inline void Init" << TargetName
      << "MCInstrInfo(MCInstrInfo *II) {\n";
   OS << "  II->InitMCInstrInfo(" << TargetName << "Insts, " << TargetName
@@ -709,10 +714,13 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
 
   OS << "#endif // GET_INSTRINFO_CTOR_DTOR\n\n";
 
+  Records.startTimer("Emit operand name mappings");
   emitOperandNameMappings(OS, Target, NumberedInstructions);
 
+  Records.startTimer("Emit operand type mappings");
   emitOperandTypeMappings(OS, Target, NumberedInstructions);
 
+  Records.startTimer("Emit helper methods");
   emitMCIIHelperMethods(OS, TargetName);
 }
 
@@ -868,7 +876,9 @@ void InstrInfoEmitter::emitEnums(raw_ostream &OS) {
 namespace llvm {
 
 void EmitInstrInfo(RecordKeeper &RK, raw_ostream &OS) {
+  RK.startTimer("Analyze DAG patterns");
   InstrInfoEmitter(RK).run(OS);
+  RK.startTimer("Emit map table");
   EmitMapTable(RK, OS);
 }
 
