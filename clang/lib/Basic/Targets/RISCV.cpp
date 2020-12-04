@@ -186,6 +186,9 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     // TODO: _MIPS_CAP_ALIGN_MASK equivalent?
   }
 
+  if (HasV)
+    Builder.defineMacro("__riscv_vector");
+
   if (HasZfh)
     Builder.defineMacro("__riscv_zfh");
 }
@@ -204,6 +207,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
       .Case("c", HasC)
       .Case("xcheri", HasCheri)
       .Case("experimental-b", HasB)
+      .Case("experimental-v", HasV)
       .Case("experimental-zfh", HasZfh)
       .Default(false);
 }
@@ -227,6 +231,8 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       CapSize = PointerWidth * 2;
     } else if (Feature == "+experimental-b")
       HasB = true;
+    else if (Feature == "+experimental-v")
+      HasV = true;
     else if (Feature == "+experimental-zfh")
       HasZfh = true;
   }
