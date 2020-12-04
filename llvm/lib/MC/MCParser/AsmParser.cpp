@@ -4099,6 +4099,9 @@ bool AsmParser::parseDirectiveCFISections() {
       Debug = true;
   }
 
+  if (parseToken(AsmToken::EndOfStatement))
+    return addErrorSuffix(" in '.cfi_sections' directive");
+
   getStreamer().emitCFISections(EH, Debug);
   return false;
 }
@@ -4126,6 +4129,8 @@ bool AsmParser::parseDirectiveCFIStartProc() {
 /// parseDirectiveCFIEndProc
 /// ::= .cfi_endproc
 bool AsmParser::parseDirectiveCFIEndProc() {
+  if (parseToken(AsmToken::EndOfStatement))
+    return addErrorSuffix(" in '.cfi_endproc' directive");
   getStreamer().emitCFIEndProc();
   return false;
 }
