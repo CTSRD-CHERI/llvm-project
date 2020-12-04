@@ -8191,12 +8191,16 @@ class BuiltinOperatorOverloadBuilder {
     ArithmeticTypes.push_back(S.Context.IntTy);
     ArithmeticTypes.push_back(S.Context.LongTy);
     ArithmeticTypes.push_back(S.Context.LongLongTy);
-    if (S.Context.getTargetInfo().hasInt128Type())
+    if (S.Context.getTargetInfo().hasInt128Type() ||
+        (S.Context.getAuxTargetInfo() &&
+         S.Context.getAuxTargetInfo()->hasInt128Type()))
       ArithmeticTypes.push_back(S.Context.Int128Ty);
     ArithmeticTypes.push_back(S.Context.UnsignedIntTy);
     ArithmeticTypes.push_back(S.Context.UnsignedLongTy);
     ArithmeticTypes.push_back(S.Context.UnsignedLongLongTy);
-    if (S.Context.getTargetInfo().hasInt128Type())
+    if (S.Context.getTargetInfo().hasInt128Type() ||
+        (S.Context.getAuxTargetInfo() &&
+         S.Context.getAuxTargetInfo()->hasInt128Type()))
       ArithmeticTypes.push_back(S.Context.UnsignedInt128Ty);
 
     // Capability types
