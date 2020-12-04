@@ -177,6 +177,8 @@ void __clear_cache(void *start, void *end) {
 #if __APPLE__
   // On Darwin, sys_icache_invalidate() provides this functionality
   sys_icache_invalidate(start, end - start);
+#elif defined(__ve__)
+  __asm__ volatile("fencec 2");
 #else
   compilerrt_abort();
 #endif
