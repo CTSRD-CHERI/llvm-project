@@ -724,9 +724,7 @@ public:
   // When generating a branch to a BB, we don't in general know enough
   // to provide debug info for the BB at that time, so keep this one around.
   SDValue getBasicBlock(MachineBasicBlock *MBB);
-  SDValue getBasicBlock(MachineBasicBlock *MBB, SDLoc dl);
   SDValue getExternalSymbol(const char *Sym, EVT VT);
-  SDValue getExternalSymbol(const char *Sym, const SDLoc &dl, EVT VT);
   SDValue getTargetExternalSymbol(const char *Sym, EVT VT,
                                   unsigned TargetFlags = 0);
   SDValue getExternalFunctionSymbol(const char *Sym);
@@ -1495,8 +1493,6 @@ public:
                        EVT VT2, ArrayRef<SDValue> Ops);
   SDNode *SelectNodeTo(SDNode *N, unsigned MachineOpc, EVT VT1,
                        EVT VT2, EVT VT3, ArrayRef<SDValue> Ops);
-  SDNode *SelectNodeTo(SDNode *N, unsigned TargetOpc, EVT VT1,
-                       EVT VT2, SDValue Op1);
   SDNode *SelectNodeTo(SDNode *N, unsigned MachineOpc, EVT VT1,
                        EVT VT2, SDValue Op1, SDValue Op2);
   SDNode *SelectNodeTo(SDNode *N, unsigned MachineOpc, SDVTList VTs,
