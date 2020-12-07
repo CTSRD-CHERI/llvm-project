@@ -191,7 +191,7 @@ def main():
     if options.args.tests:
         options.args.tests = [Path(x) for x in options.args.tests]
     else:
-        options.args.tests = Path(__file__).parent / "Inputs"
+        options.args.tests = [Path(__file__).parent / "Inputs"]
     all_input_files = []
     for t in options.args.tests:
         if t.is_dir():
