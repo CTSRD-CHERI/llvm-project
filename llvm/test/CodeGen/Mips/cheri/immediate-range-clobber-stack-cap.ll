@@ -13,25 +13,24 @@ declare void @_BAR(%"class.Webcore::Settings" addrspace(200)*, %"class.Webcore::
 define hidden void @_ZN19QWebSettingsPrivate5applyEv() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: _ZN19QWebSettingsPrivate5applyEv:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE)]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -416
+; CHECK-NEXT:    csc $c17, $zero, 400($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    daddiu $1, $zero, 0
-; CHECK-NEXT:    daddiu $2, $zero, {{396|444}}
+; CHECK-NEXT:    daddiu $2, $zero, 396
 ; CHECK-NEXT:    csb $zero, $2, 0($c11)
-; CHECK-NEXT:    csd $1, $zero, {{40|88}}($c11)
-; CHECK-NEXT:    csc $c1, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    csd $1, $zero, 40($c11) # 8-byte Folded Spill
+; CHECK-NEXT:    csc $c1, $zero, 16($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    b .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_1: # %_FOOOO.exit
-; CHECK-NEXT:    cincoffset $c4, $c11, [[#CAP_SIZE * 3]]
+; CHECK-NEXT:    cincoffset $c4, $c11, 48
 ; CHECK-NEXT:    csetbounds $c4, $c4, 348
-; CHECK-NEXT:    clc $c1, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c1, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    clcbi $c12, %capcall20(_BAR)($c1)
 ; CHECK-NEXT:    # implicit-def: $c3
-; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
   %ref.tmp38 = alloca i8, align 4, addrspace(200)

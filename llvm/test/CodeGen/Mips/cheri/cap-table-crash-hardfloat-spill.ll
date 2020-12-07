@@ -63,7 +63,7 @@ entry:
 define void @b() nounwind {
 ; N64-LABEL: b:
 ; N64:       # %bb.0:
-; N64-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; N64-NEXT:    daddiu $sp, $sp, -16
 ; N64-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
 ; N64-NEXT:    sd $gp, 0($sp) # 8-byte Folded Spill
 ; N64-NEXT:    lui $1, %hi(%neg(%gp_rel(b)))
@@ -82,8 +82,8 @@ define void @b() nounwind {
 ;
 ; PURECAP-LABEL: b:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; PURECAP-NEXT:    csc $c17, $zero, 0($c11)
+; PURECAP-NEXT:    cincoffset $c11, $c11, -16
+; PURECAP-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $1
@@ -92,7 +92,6 @@ define void @b() nounwind {
 ; PURECAP-NEXT:    # implicit-def: $c4
 ; PURECAP-NEXT:    # implicit-def: $a0_64
 ; PURECAP-NEXT:    # implicit-def: $d13_64
-; PURECAP-NEXT:    cgetnull $c13
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
   %c = fmul double undef, undef

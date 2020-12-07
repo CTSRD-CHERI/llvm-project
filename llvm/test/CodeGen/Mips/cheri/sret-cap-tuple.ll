@@ -17,28 +17,26 @@ declare dso_local i1024 @get_huge_type(i8 addrspace(200)*) unnamed_addr addrspac
 define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind #0 {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -112
+; CHECK-NEXT:    csc $c17, $zero, 96($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_cap)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 32
-; CHECK-NEXT:    csc $c3, $zero, [[#STACKFRAME_SIZE - (6 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c3, $zero, 16($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cmove $c3, $c2
-; CHECK-NEXT:    clc $c4, $zero, [[#STACKFRAME_SIZE - (6 * CAP_SIZE)]]($c11)
-; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c1, $zero, 0($c11)
+; CHECK-NEXT:    clc $c4, $zero, 16($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    csc $c1, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c3, $zero, 80($c11)
-; CHECK-NEXT:    clc $c1, $zero, 0($c11)
+; CHECK-NEXT:    clc $c1, $zero, 0($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use_tuple_cap)($c1)
-; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, 96($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset $c11, $c11, 112
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
@@ -51,28 +49,26 @@ start:
 define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test2:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -80
+; CHECK-NEXT:    csc $c17, $zero, 64($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_i64)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 32
-; CHECK-NEXT:    csc $c3, $zero, [[#STACKFRAME_SIZE - (4 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c3, $zero, 16($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cmove $c3, $c2
-; CHECK-NEXT:    clc $c4, $zero, [[#STACKFRAME_SIZE - (4 * CAP_SIZE)]]($c11)
-; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c1, $zero, 0($c11)
+; CHECK-NEXT:    clc $c4, $zero, 16($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    csc $c1, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    cld $4, $zero, 56($c11)
-; CHECK-NEXT:    clc $c1, $zero, 0($c11)
+; CHECK-NEXT:    clc $c1, $zero, 0($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use_tuple_i64)($c1)
-; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, 64($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset $c11, $c11, 80
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
@@ -85,18 +81,17 @@ start:
 define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test3:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -256
+; CHECK-NEXT:    csc $c17, $zero, 240($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(get_huge_type)($c1)
 ; CHECK-NEXT:    cincoffset $c2, $c11, 112
-; CHECK-NEXT:    csc $c3, $zero, [[#STACKFRAME_SIZE - (10 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    csc $c3, $zero, 96($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cmove $c3, $c2
-; CHECK-NEXT:    clc $c4, $zero, [[#STACKFRAME_SIZE - (10 * CAP_SIZE)]]($c11)
-; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c1, $zero, [[#STACKFRAME_SIZE - (11 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    clc $c4, $zero, 96($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    csc $c1, $zero, 80($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    cld $11, $zero, 168($c11)
@@ -127,13 +122,13 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    csetbounds $c1, $c1, 64
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    candperm $c13, $c1, $1
-; CHECK-NEXT:    clc $c1, $zero, [[#STACKFRAME_SIZE - (11 * CAP_SIZE)]]($c11)
+; CHECK-NEXT:    clc $c1, $zero, 80($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use_huge_value)($c1)
 ; CHECK-NEXT:    move $4, $24
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, 240($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset $c11, $c11, 256
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:

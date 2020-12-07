@@ -6,9 +6,9 @@
 // DISAS-NEXT:     clcbi	$c12, 0($c1)
 // DISAS-NEXT: 0000000000000020:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE	use_callback
 // DISAS:          clcbi	$c12, 0($c1)
-// DISAS-NEXT: 000000000000003c:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE	use_callback
+// DISAS-NEXT: 0000000000000038:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE	use_callback
 // DISAS-NEXT:     clcbi	$c3, 0($c1)
-// DISAS-NEXT: 0000000000000040:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE	global_return2
+// DISAS-NEXT: 000000000000003c:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE	global_return2
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t-shlib.o -DSHLIB %s
 // Build a shared library that uses the function pointer:
@@ -119,7 +119,7 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x0303d0 (return1@CAPTABLE.0) Base: 0x20370 (return1+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x0303d0 (return1@CAPTABLE.0) Base: 0x20368 (return1+0) Length: 12 Perms: Function
 // STATIC-NEXT:     0x0303e0 (use_callback@CAPTABLE) Base: 0x20380 (use_callback+0) Length: {{[0-9]+}} Perms: Function
 // STATIC-NEXT:     0x0303f0 (global_return2@CAPTABLE) Base: 0x202f0 (global_return2+0) Length: 12 Perms: Function
 // STATIC-NEXT:  ]

@@ -21,9 +21,8 @@ define void @infer_values_from_null_set_offset() addrspace(200) nounwind {
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
 ; ASM-NEXT:    clcbi $c12, %capcall20(check_fold)($c1)
 ; ASM-NEXT:    lui $1, 1
-; ASM-NEXT:    ori $4, $1, 57920
 ; ASM-NEXT:    cjalr $c12, $c17
-; ASM-NEXT:    cgetnull $c13
+; ASM-NEXT:    ori $4, $1, 57920
 ; ASM-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    cincoffset $c11, $c11, 16
@@ -52,17 +51,14 @@ define void @multiple_uses_big_constant() addrspace(200) nounwind {
 ; ASM-NEXT:    clcbi $c12, %capcall20(check_fold_i8ptr)($c19)
 ; ASM-NEXT:    ori $1, $1, 57920
 ; ASM-NEXT:    cincoffset $c18, $cnull, $1
-; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    cjalr $c12, $c17
-; ASM-NEXT:    cgetnull $c13
+; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    clcbi $c12, %capcall20(check_fold_i8ptr)($c19)
-; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    cjalr $c12, $c17
-; ASM-NEXT:    cgetnull $c13
+; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    clcbi $c12, %capcall20(check_fold_i8ptr)($c19)
-; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    cjalr $c12, $c17
-; ASM-NEXT:    cgetnull $c13
+; ASM-NEXT:    cmove $c3, $c18
 ; ASM-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; ASM-NEXT:    clc $c18, $zero, 16($c11) # 16-byte Folded Reload
 ; ASM-NEXT:    clc $c19, $zero, 32($c11) # 16-byte Folded Reload
@@ -93,17 +89,14 @@ define void @multiple_uses_small_constant() addrspace(200) nounwind {
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c18, $1
 ; ASM-NEXT:    clcbi $c12, %capcall20(check_fold_i8ptr)($c18)
-; ASM-NEXT:    cincoffset $c3, $cnull, 123
 ; ASM-NEXT:    cjalr $c12, $c17
-; ASM-NEXT:    cgetnull $c13
+; ASM-NEXT:    cincoffset $c3, $cnull, 123
 ; ASM-NEXT:    clcbi $c12, %capcall20(check_fold_i8ptr)($c18)
-; ASM-NEXT:    cincoffset $c3, $cnull, 123
 ; ASM-NEXT:    cjalr $c12, $c17
-; ASM-NEXT:    cgetnull $c13
+; ASM-NEXT:    cincoffset $c3, $cnull, 123
 ; ASM-NEXT:    clcbi $c12, %capcall20(check_fold_i8ptr)($c18)
-; ASM-NEXT:    cincoffset $c3, $cnull, 123
 ; ASM-NEXT:    cjalr $c12, $c17
-; ASM-NEXT:    cgetnull $c13
+; ASM-NEXT:    cincoffset $c3, $cnull, 123
 ; ASM-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; ASM-NEXT:    clc $c18, $zero, 16($c11) # 16-byte Folded Reload
 ; ASM-NEXT:    cjr $c17

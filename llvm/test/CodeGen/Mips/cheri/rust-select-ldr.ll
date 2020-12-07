@@ -11,7 +11,7 @@ declare dso_local { i64, i128 } @"_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..
 define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace(200) nounwind {
 ; MIPS-LABEL: _ZN4main4main17hfe98083a4c87500fE:
 ; MIPS:       # %bb.0: # %start
-; MIPS-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; MIPS-NEXT:    daddiu $sp, $sp, -64
 ; MIPS-NEXT:    sd $ra, 56($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    daddiu $4, $sp, 8
 ; MIPS-NEXT:    daddiu $5, $sp, 32
@@ -23,14 +23,14 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; MIPS-NEXT:    jal _ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E
 ; MIPS-NEXT:    nop
 ; MIPS-NEXT:    ld $ra, 56($sp) # 8-byte Folded Reload
-; MIPS-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; MIPS-NEXT:    daddiu $sp, $sp, 64
 ; MIPS-NEXT:    jr $ra
 ; MIPS-NEXT:    nop
 ;
 ; PURECAP-LABEL: _ZN4main4main17hfe98083a4c87500fE:
 ; PURECAP:       # %bb.0: # %start
-; PURECAP-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; PURECAP-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c17, $zero, 64($c11) # 16-byte Folded Spill
 ; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $1
@@ -38,20 +38,18 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP-NEXT:    csetbounds $c4, $c4, 16
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E)($c1)
 ; PURECAP-NEXT:    cincoffset $c3, $c11, 24
-; PURECAP-NEXT:    cgetnull $c13
-; PURECAP-NEXT:    csc $c1, $zero, 0($c11)
+; PURECAP-NEXT:    csc $c1, $zero, 0($c11) # 16-byte Folded Spill
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:    cld $6, $zero, 40($c11)
 ; PURECAP-NEXT:    cld $5, $zero, 32($c11)
 ; PURECAP-NEXT:    cld $4, $zero, 24($c11)
-; PURECAP-NEXT:    clc $c1, $zero, 0($c11)
+; PURECAP-NEXT:    clc $c1, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E)($c1)
-; PURECAP-NEXT:    cgetnull $c13
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
-; PURECAP-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; PURECAP-NEXT:    clc $c17, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 

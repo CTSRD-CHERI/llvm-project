@@ -3,16 +3,16 @@
 // Should have a R_MIPS_CHERI_CAPTAB20 relocation against the function pointer and a R_MIPS_CHERI_CAPCALL20 against use_callback
 // DISAS: 000000000000001c: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE default_callback
 // DISAS: 0000000000000020: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
-// DISAS: 0000000000000064: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
-// DISAS: 0000000000000068: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
-// DISAS: 00000000000000b4: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
-// DISAS: 00000000000000b8: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
-// DISAS: 00000000000000f4: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
-// DISAS: 00000000000000f8: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
-// DISAS: 0000000000000130: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
-// DISAS: 0000000000000134: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
-// DISAS: 00000000000001d8: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE callbacks
-// DISAS: 00000000000001e0: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
+// DISAS: 000000000000005c: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
+// DISAS: 0000000000000060: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
+// DISAS: 00000000000000a4: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
+// DISAS: 00000000000000a8: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
+// DISAS: 00000000000000dc: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
+// DISAS: 00000000000000e0: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
+// DISAS: 0000000000000114: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
+// DISAS: 0000000000000118: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
+// DISAS: 00000000000001b8: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE callbacks
+// DISAS: 00000000000001c0: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t2.o -DOTHER_FILE %s
 // RUN: llvm-objdump --syms %t2.o | FileCheck %s --check-prefix OTHER_FILE-SYMS
@@ -141,14 +141,14 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x030660 (callbacks)     Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030670 Base: 0x20458 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030680 Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030690 Base: 0x20458 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x0306a0 (default_callback@CAPTABLE) Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x0306b0 (check_if_default@CAPTABLE) Base: 0x20630 (check_if_default+0) Length: {{.+}} Perms: Function
-// STATIC-NEXT:     0x0306c0 (static_callback@CAPTABLE.2) Base: 0x20458 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x0306d0 (callbacks@CAPTABLE.3) Base: 0x30660 (callbacks+0) Length: 64 Perms: Constant
+// STATIC-NEXT:     0x030640 (callbacks)     Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030650 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030660 Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030670 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030680 (default_callback@CAPTABLE) Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030690 (check_if_default@CAPTABLE) Base: 0x20610 (check_if_default+0) Length: {{.+}} Perms: Function
+// STATIC-NEXT:     0x0306a0 (static_callback@CAPTABLE.2) Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x0306b0 (callbacks@CAPTABLE.3) Base: 0x30640 (callbacks+0) Length: 64 Perms: Constant
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      default_callback@CAPTABLE

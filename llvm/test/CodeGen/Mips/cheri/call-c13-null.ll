@@ -1,6 +1,6 @@
 ; REQUIRES: asserts
-; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel %s | %cheri_FileCheck %s -check-prefixes CHECK,OPT
-; RUN: %cheri_purecap_llc -o - -O1 -cheri-cap-table-abi=pcrel %s | %cheri_FileCheck %s -check-prefixes CHECK,NOOPT
+; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel %s | %cheri_FileCheck %s -check-prefix CHECK
+; RUN: %cheri_purecap_llc -o - -O1 -cheri-cap-table-abi=pcrel %s | %cheri_FileCheck %s -check-prefix CHECK
 ; RUN: %cheri_purecap_llc -o /dev/null -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | FileCheck %s -check-prefix DEBUG-OUTPUT-CHECK
 
 @fn = common local_unnamed_addr addrspace(200) global void () addrspace(200)* null, align 32
@@ -61,9 +61,7 @@ entry:
 define void @call_variadic_no_onstack(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_variadic_no_onstack:
 ; No need for a cgenull here since it is already null
-; OPT-NOT:   $c13
-; but at -01 we still clear just in case
-; NOOPT:    cgetnull $c13
+; CHECK-NOT:   $c13
 ; CHECK:      .end call_variadic_no_onstack
 entry:
   ; increment by a number the compiler will never emit for anything else (77) to be able to see which registers are used:
@@ -76,9 +74,7 @@ entry:
 define void @call_nonvariadic_one_arg(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_nonvariadic_one_arg:
 ; $c13 should remain unchanged since we don't have on-stack args
-; OPT-NOT:   $c13
-; but at -01 we still clear just in case
-; NOOPT:    cgetnull $c13
+; CHECK-NOT:   $c13
 ; CHECK: .end call_nonvariadic_one_arg
 entry:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
@@ -89,9 +85,7 @@ entry:
 define void @call_one_arg_from_two_arg(i8 addrspace(200)* %in_arg1, i8 addrspace(200)* %in_arg2) {
 ; CHECK-LABEL: call_one_arg_from_two_arg:
 ; $c13 should remain unchanged since we don't have on-stack args
-; OPT-NOT:   $c13
-; but at -01 we still clear just in case
-; NOOPT:    cgetnull $c13
+; CHECK-NOT:   $c13
 ; CHECK: .end call_one_arg_from_two_arg
 entry:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
@@ -257,9 +251,9 @@ define void @call_variadic_onstack_and_no_stack_fn_from_nostack_fn(i8 addrspace(
 ; CHECK:       cincoffset	$c3, $c3, 77
 ; CHECK:       candperm        $c13, $c1, $1
 ; Since the variadic fn clears $c13 on return we should not have another cgetnull here!
-; OPT-NOT:   $c13
+; CHECK-NOT:   $c13
 ; CHECK:       cincoffset      $c3, $c18, 97
-; OPT-NOT:   $c13
+; CHECK-NOT:   $c13
 ; CHECK:       .end	call_variadic_onstack_and_no_stack_fn_from_nostack_fn
 entry:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)

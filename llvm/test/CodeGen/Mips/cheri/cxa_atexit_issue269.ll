@@ -6,8 +6,8 @@
 define void @store() nounwind {
 ; CHECK-LABEL: store:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -16
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -16,13 +16,12 @@ define void @store() nounwind {
 ; CHECK-NEXT:    cincoffset $c2, $c1, $1
 ; CHECK-NEXT:    csetbounds $c3, $c2, 16
 ; CHECK-NEXT:    clcbi $c12, %capcall20(__tls_get_addr)($c1)
-; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    daddiu $1, $zero, 1
 ; CHECK-NEXT:    csb $1, $zero, 0($c3)
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset $c11, $c11, 16
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
   store i1 true, i1 addrspace(200)* @__tls_guard
@@ -32,8 +31,8 @@ define void @store() nounwind {
 define i1 @load() nounwind {
 ; CHECK-LABEL: load:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -16
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -42,12 +41,11 @@ define i1 @load() nounwind {
 ; CHECK-NEXT:    cincoffset $c2, $c1, $1
 ; CHECK-NEXT:    csetbounds $c3, $c2, 16
 ; CHECK-NEXT:    clcbi $c12, %capcall20(__tls_get_addr)($c1)
-; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clb $2, $zero, 0($c3)
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset $c11, $c11, 16
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
   %arg = load i1, i1 addrspace(200)* @__tls_guard

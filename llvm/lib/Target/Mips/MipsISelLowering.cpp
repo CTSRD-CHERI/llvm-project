@@ -4449,13 +4449,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                           << "(is varargs: " << MF.getFunction().isVarArg()
                           << ") callee = ");
         LLVM_DEBUG(Callee.dump(&DAG););
-      }
-      // We always clear $c13 if we are compiling at -O0 or -O1 since this helps
-      // us catch errors with calling convention mismatches.
-      if (getTargetMachine().getOptLevel() < CodeGenOpt::Default)
-        ShouldClearC13 = true;
-      if (ShouldClearC13)
         RegsToPass.push_back(std::make_pair(Mips::C13, DAG.getNullCapability(DL)));
+      }
     }
   }
   // If we're doing a CCall then any unused arg registers should be zero.

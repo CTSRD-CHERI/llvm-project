@@ -31,6 +31,8 @@ for.body:                                         ; preds = %for.body, %for.body
   ; CHECK-NEXT: csetaddr	$c[[TMPSP:[0-9]+]], $c11, $[[NEWSPADDR]]
   ; CHECK-NEXT: csetbounds [[BOUNDED_ALLOCA:\$c[0-9]+]], $c[[TMPSP]], $[[SIZE]]
   ; CHECK-NEXT: cmove	$c11, $c[[TMPSP]]
+  ; CHECK-NEXT: clcbi $c12, %capcall20(use_arg)($c18)
+  ; CHECK-NEXT: cjalr $c12, $c17
   ; TODO: this is not needed
   ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, [[BOUNDED_ALLOCA]], ${{[0-9]+}}
 

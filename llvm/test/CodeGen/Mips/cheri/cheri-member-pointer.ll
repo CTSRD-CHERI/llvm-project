@@ -70,7 +70,6 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: .LBB0_4:                                # %memptr.end
   ; CHECK: clc     $c1, [[STACK_TARGET_FN_PTR]]
   ; CHECK: clc     $c3, [[STACK_THIS_ADJ]]
-  ; CHECK: cgetnull $c13
   ; CHECK: cmove   $c12, $c1
   ; CHECK: cjalr   $c12, $c17
   ; CHECK: nop
