@@ -19,7 +19,7 @@ define i32 @a() {
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn1)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    move $16, $2
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn2)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
