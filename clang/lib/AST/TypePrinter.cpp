@@ -1623,6 +1623,8 @@ void TypePrinter::printAttributedBefore(const AttributedType *T,
       OS << " _Nullable";
     else if (T->getAttrKind() == attr::TypeNullUnspecified)
       OS << " _Null_unspecified";
+    else if (T->getAttrKind() == attr::TypeNullableResult)
+      OS << " _Nullable_result";
     else
       llvm_unreachable("unhandled nullability");
     spaceBeforePlaceHolder(OS);
@@ -1694,6 +1696,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::LifetimeBound:
   case attr::TypeNonNull:
   case attr::TypeNullable:
+  case attr::TypeNullableResult:
   case attr::TypeNullUnspecified:
   case attr::ObjCGC:
   case attr::ObjCInertUnsafeUnretained:
