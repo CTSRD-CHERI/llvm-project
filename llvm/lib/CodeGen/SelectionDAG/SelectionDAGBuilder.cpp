@@ -4451,9 +4451,8 @@ void SelectionDAGBuilder::visitMaskedGather(const CallInst &I) {
   if (!UniformBase) {
     Base = DAG.getConstant(0, sdl, TLI.getPointerRangeTy(DAG.getDataLayout()));
     Index = getValue(Ptr);
-    IndexType = ISD::SIGNED_SCALED;
-    Scale = DAG.getTargetConstant(1, sdl,
-                                  TLI.getPointerRangeTy(DAG.getDataLayout()));
+    IndexType = ISD::SIGNED_UNSCALED;
+    Scale = DAG.getTargetConstant(1, sdl, TLI.getPointerRangeTy(DAG.getDataLayout()));
   }
   SDValue Ops[] = { Root, Src0, Mask, Base, Index, Scale };
   SDValue Gather = DAG.getMaskedGather(DAG.getVTList(VT, MVT::Other), VT, sdl,
