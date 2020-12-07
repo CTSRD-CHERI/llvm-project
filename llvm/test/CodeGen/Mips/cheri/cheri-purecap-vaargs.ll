@@ -161,4 +161,25 @@ define void @check_bounded(i32 addrspace(200)* %x, i32 addrspace(200)* %y) nounw
   ret void
 }
 
+; When calling a variadic function without any arguments, we should set it to
+; null rather than leave it uninitialised due to having no on-stack arguments.
+; FIXME: This is currently not done.
+define void @check_empty(i8 addrspace(200)* %x) nounwind {
+; CHECK-LABEL: check_empty:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    cincoffset $c11, $c11, -16
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
+; CHECK-NEXT:    clcbi $c12, %capcall20(g)($c1)
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    cincoffset $c11, $c11, 16
+  call void (i8 addrspace(200)*, ...) @g(i8 addrspace(200)* %x)
+  ret void
+}
+
 declare void @g(i8 addrspace(200)*, ...)
