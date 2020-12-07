@@ -4444,6 +4444,10 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       // Also clear $c13 if it was marked as live-in due to having
       if (MF.getRegInfo().isLiveIn(Mips::C13))
         ShouldClearC13 = true;
+      // Also clear $c13 if the the callee is a variadic function but we're not
+      // passing any variadic arguments.
+      if (IsVarArg)
+        ShouldClearC13 = true;
       if (ShouldClearC13) {
         LLVM_DEBUG(dbgs() << "Clearing $c13 in " << MF.getName()
                           << "(is varargs: " << MF.getFunction().isVarArg()

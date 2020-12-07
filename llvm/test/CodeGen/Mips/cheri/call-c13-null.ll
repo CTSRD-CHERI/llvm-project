@@ -60,9 +60,9 @@ entry:
 ; Function Attrs: nounwind
 define void @call_variadic_no_onstack(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_variadic_no_onstack:
-; No need for a cgenull here since it is already null
-; CHECK-NOT:   $c13
-; CHECK:      .end call_variadic_no_onstack
+; $c13 should be set to null to ensure no accidental leakage
+; CHECK: cgetnull $c13
+; CHECK: .end call_variadic_no_onstack
 entry:
   ; increment by a number the compiler will never emit for anything else (77) to be able to see which registers are used:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)

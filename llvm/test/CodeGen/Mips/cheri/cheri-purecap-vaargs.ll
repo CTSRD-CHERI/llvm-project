@@ -174,7 +174,7 @@ define void @check_empty(i8 addrspace(200)* %x) nounwind {
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(g)($c1)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, 16
