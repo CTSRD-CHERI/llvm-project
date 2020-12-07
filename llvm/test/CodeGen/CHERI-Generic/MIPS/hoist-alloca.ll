@@ -63,9 +63,8 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    cincoffset $c3, $c11, 100
 ; CHECK-NEXT:    csetbounds $c3, $c3, 492
 ; CHECK-NEXT:    cincoffset $c4, $c11, 12
-; CHECK-NEXT:    csetbounds $c4, $c4, 88
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cgetnull $c13
+; CHECK-NEXT:    csetbounds $c4, $c4, 88
 ; CHECK-NEXT:    addiu $16, $16, -1
 ; CHECK-NEXT:    bnez $16, .LBB0_1
 ; CHECK-NEXT:    nop
@@ -124,9 +123,8 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    cincoffset $c3, $c11, 100
 ; CHECK-NEXT:    csetbounds $c3, $c3, 492
 ; CHECK-NEXT:    cincoffset $c4, $c11, 12
-; CHECK-NEXT:    csetbounds $c4, $c4, 88
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cgetnull $c13
+; CHECK-NEXT:    csetbounds $c4, $c4, 88
 ; CHECK-NEXT:    b .LBB1_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup

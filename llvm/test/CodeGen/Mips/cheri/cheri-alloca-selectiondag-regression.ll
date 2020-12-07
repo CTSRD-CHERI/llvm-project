@@ -10,9 +10,9 @@ declare i32 @a(i32 addrspace(200)*)
 define i32 @d(i64 %i) nounwind {
 ; C128-LABEL: d:
 ; C128:       # %bb.0: # %entry
-; C128-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; C128-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
-; C128-NEXT:    csc $c17, $zero, 0($c11)
+; C128-NEXT:    cincoffset $c11, $c11, -32
+; C128-NEXT:    csc $c24, $zero, 16($c11) # 16-byte Folded Spill
+; C128-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; C128-NEXT:    cincoffset $c24, $c11, $zero
 ; C128-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; C128-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
@@ -32,21 +32,20 @@ define i32 @d(i64 %i) nounwind {
 ; C128-NEXT:    cmove $c11, $c2
 ; C128-NEXT:    csetbounds $c3, $c3, $1
 ; C128-NEXT:    clcbi $c12, %capcall20(a)($c1)
-; C128-NEXT:    cgetnull $c13
 ; C128-NEXT:    cjalr $c12, $c17
 ; C128-NEXT:    nop
 ; C128-NEXT:    cincoffset $c11, $c24, $zero
-; C128-NEXT:    clc $c17, $zero, 0($c11)
-; C128-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
-; C128-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; C128-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; C128-NEXT:    clc $c24, $zero, 16($c11) # 16-byte Folded Reload
+; C128-NEXT:    cincoffset $c11, $c11, 32
 ; C128-NEXT:    cjr $c17
 ; C128-NEXT:    nop
 ;
 ; C256-LABEL: d:
 ; C256:       # %bb.0: # %entry
-; C256-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; C256-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
-; C256-NEXT:    csc $c17, $zero, 0($c11)
+; C256-NEXT:    cincoffset $c11, $c11, -64
+; C256-NEXT:    csc $c24, $zero, 32($c11) # 32-byte Folded Spill
+; C256-NEXT:    csc $c17, $zero, 0($c11) # 32-byte Folded Spill
 ; C256-NEXT:    cincoffset $c24, $c11, $zero
 ; C256-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; C256-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
@@ -63,13 +62,12 @@ define i32 @d(i64 %i) nounwind {
 ; C256-NEXT:    cmove $c11, $c2
 ; C256-NEXT:    csetbounds $c3, $c3, $1
 ; C256-NEXT:    clcbi $c12, %capcall20(a)($c1)
-; C256-NEXT:    cgetnull $c13
 ; C256-NEXT:    cjalr $c12, $c17
 ; C256-NEXT:    nop
 ; C256-NEXT:    cincoffset $c11, $c24, $zero
-; C256-NEXT:    clc $c17, $zero, 0($c11)
-; C256-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 1]]($c11)
-; C256-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; C256-NEXT:    clc $c17, $zero, 0($c11) # 32-byte Folded Reload
+; C256-NEXT:    clc $c24, $zero, 32($c11) # 32-byte Folded Reload
+; C256-NEXT:    cincoffset $c11, $c11, 64
 ; C256-NEXT:    cjr $c17
 ; C256-NEXT:    nop
 entry:

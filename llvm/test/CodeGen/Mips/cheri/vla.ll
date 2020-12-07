@@ -16,28 +16,27 @@
 define void @foo(i8 addrspace(200)* %arg) nounwind {
 ; N64-LABEL: foo:
 ; N64:       # %bb.0: # %entry
-; N64-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
-; N64-NEXT:    sd $ra, [[# STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Spill
+; N64-NEXT:    daddiu $sp, $sp, -16
+; N64-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
 ; N64-NEXT:    jal test
 ; N64-NEXT:    nop
-; N64-NEXT:    ld $ra, [[# STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Reload
-; N64-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; N64-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; N64-NEXT:    daddiu $sp, $sp, 16
 ; N64-NEXT:    jr $ra
 ; N64-NEXT:    nop
 ;
 ; CAPTABLE-LABEL: foo:
 ; CAPTABLE:       # %bb.0: # %entry
-; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11)
+; CAPTABLE-NEXT:    cincoffset $c11, $c11, -16
+; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CAPTABLE-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CAPTABLE-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CAPTABLE-NEXT:    cgetpccincoffset $c1, $1
 ; CAPTABLE-NEXT:    clcbi $c12, %capcall20(test)($c1)
-; CAPTABLE-NEXT:    cgetnull $c13
 ; CAPTABLE-NEXT:    cjalr $c12, $c17
 ; CAPTABLE-NEXT:    nop
-; CAPTABLE-NEXT:    clc $c17, $zero, 0($c11)
-; CAPTABLE-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CAPTABLE-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CAPTABLE-NEXT:    cincoffset $c11, $c11, 16
 ; CAPTABLE-NEXT:    cjr $c17
 ; CAPTABLE-NEXT:    nop
 entry:
