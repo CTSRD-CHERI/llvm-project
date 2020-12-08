@@ -1105,7 +1105,8 @@ CanonicalLoopInfo *OpenMPIRBuilder::createStaticWorkshareLoop(
 
   // Add the barrier if requested.
   if (NeedsBarrier)
-    createBarrier(Loc, omp::Directive::OMPD_for, /* ForceSimpleCall */ false,
+    createBarrier(LocationDescription(Builder.saveIP(), Loc.DL),
+                  omp::Directive::OMPD_for, /* ForceSimpleCall */ false,
                   /* CheckCancelFlag */ false);
 
   CLI->assertOK();
