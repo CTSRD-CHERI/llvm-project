@@ -1240,7 +1240,6 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 #else
   ld    x1, (8 * 0)(a0) // restore pc into ra
 #endif
-  restore_gpr 1
   restore_gpr 2
   restore_gpr 3
   restore_gpr 4
