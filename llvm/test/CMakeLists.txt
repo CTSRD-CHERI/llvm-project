@@ -100,6 +100,7 @@ set(LLVM_TEST_DEPENDS
           llvm-opt-report
           llvm-pdbutil
           llvm-profdata
+          llvm-profgen
           llvm-ranlib
           llvm-readobj
           llvm-readelf
