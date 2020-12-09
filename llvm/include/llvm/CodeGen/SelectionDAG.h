@@ -1401,7 +1401,7 @@ public:
                                 ISD::MemIndexedMode AM);
   SDValue getMaskedGather(SDVTList VTs, EVT VT, const SDLoc &dl,
                           ArrayRef<SDValue> Ops, MachineMemOperand *MMO,
-                          ISD::MemIndexType IndexType);
+                          ISD::MemIndexType IndexType, ISD::LoadExtType ExtTy);
   SDValue getMaskedScatter(SDVTList VTs, EVT VT, const SDLoc &dl,
                            ArrayRef<SDValue> Ops, MachineMemOperand *MMO,
                            ISD::MemIndexType IndexType,
