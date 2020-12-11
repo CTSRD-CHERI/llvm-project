@@ -1124,7 +1124,9 @@ ELFDumper<ELFT>::getRelocationTarget(const Relocation<ELFT> &R,
   Expected<const Elf_Sym *> SymOrErr =
       Obj.template getEntry<Elf_Sym>(*SymTab, R.Symbol);
   if (!SymOrErr)
-    return SymOrErr.takeError();
+    return createError("unable to read an entry with index " + Twine(R.Symbol) +
+                       " from " + describe(*SymTab) + ": " +
+                       toString(SymOrErr.takeError()));
   const Elf_Sym *Sym = *SymOrErr;
   if (!Sym)
     return RelSymbol<ELFT>(nullptr, "");
@@ -6636,9 +6638,8 @@ void GNUStyle<ELFT>::printMipsPLT(const MipsGOTParser<ELFT> &Parser) {
     OS << "   Address  Initial Sym.Val. Type    Ndx Name\n";
     for (auto &E : Parser.getPltEntries()) {
       const Elf_Sym &Sym = *Parser.getPltSym(&E);
-      const Elf_Sym &FirstSym =
-          *cantFail(this->Obj.template getEntry<const Elf_Sym>(
-              *Parser.getPltSymTable(), 0));
+      const Elf_Sym &FirstSym = *cantFail(
+          this->Obj.template getEntry<Elf_Sym>(*Parser.getPltSymTable(), 0));
       std::string SymName = this->dumper().getFullSymbolName(
           Sym, &Sym - &FirstSym, this->dumper().getDynamicStringTable(), false);
 
@@ -7507,9 +7508,8 @@ void LLVMStyle<ELFT>::printMipsPLT(const MipsGOTParser<ELFT> &Parser) {
       W.printEnum("Type", Sym.getType(), makeArrayRef(ElfSymbolTypes));
       printSymbolSection(Sym, &Sym - this->dumper().dynamic_symbols().begin());
 
-      const Elf_Sym *FirstSym =
-          cantFail(this->Obj.template getEntry<const Elf_Sym>(
-              *Parser.getPltSymTable(), 0));
+      const Elf_Sym *FirstSym = cantFail(
+          this->Obj.template getEntry<Elf_Sym>(*Parser.getPltSymTable(), 0));
       std::string SymName = this->dumper().getFullSymbolName(
           Sym, &Sym - FirstSym, Parser.getPltStrTable(), true);
       W.printNumber("Name", SymName, Sym.st_name);
