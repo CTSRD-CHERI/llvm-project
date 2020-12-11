@@ -3963,7 +3963,8 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
         if (!IA)
           return error("Invalid record");
       }
-      LastLoc = DebugLoc::get(Line, Col, Scope, IA, isImplicitCode);
+      LastLoc = DILocation::get(Scope->getContext(), Line, Col, Scope, IA,
+                                isImplicitCode);
       I->setDebugLoc(LastLoc);
       I = nullptr;
       continue;

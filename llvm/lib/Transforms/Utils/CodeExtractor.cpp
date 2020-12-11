@@ -1555,7 +1555,7 @@ static void fixupDebugInfoPostExtraction(Function &OldFunc, Function &NewFunc,
   // function.
   for (Instruction &I : instructions(NewFunc)) {
     if (const DebugLoc &DL = I.getDebugLoc())
-      I.setDebugLoc(DebugLoc::get(DL.getLine(), DL.getCol(), NewSP));
+      I.setDebugLoc(DILocation::get(Ctx, DL.getLine(), DL.getCol(), NewSP));
 
     // Loop info metadata may contain line locations. Fix them up.
     auto updateLoopInfoLoc = [&Ctx,
@@ -1566,7 +1566,7 @@ static void fixupDebugInfoPostExtraction(Function &OldFunc, Function &NewFunc,
     updateLoopMetadataDebugLocations(I, updateLoopInfoLoc);
   }
   if (!TheCall.getDebugLoc())
-    TheCall.setDebugLoc(DebugLoc::get(0, 0, OldSP));
+    TheCall.setDebugLoc(DILocation::get(Ctx, 0, 0, OldSP));
 
   eraseDebugIntrinsicsWithNonLocalRefs(NewFunc);
 }
