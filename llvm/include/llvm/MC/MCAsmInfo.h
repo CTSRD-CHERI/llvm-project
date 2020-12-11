@@ -643,10 +643,6 @@ public:
 
   bool doesSupportDebugInformation() const { return SupportsDebugInformation; }
 
-  bool doesSupportExceptionHandling() const {
-    return ExceptionsType != ExceptionHandling::None;
-  }
-
   ExceptionHandling getExceptionHandlingType() const { return ExceptionsType; }
   WinEH::EncodingType getWinEHEncodingType() const { return WinEHEncodingType; }
 
