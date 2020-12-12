@@ -4635,8 +4635,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
           Int32Ty, llvm::ArrayRef<llvm::Type *>(ArgTys), false);
       Value *BCast = Builder.CreatePointerCast(Arg1, I8PTy);
       return RValue::get(
-          Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name),
-                             {Arg0, BCast, PacketSize, PacketAlign}));
+          EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name),
+                          {Arg0, BCast, PacketSize, PacketAlign}));
     } else {
       assert(4 == E->getNumArgs() &&
              "Illegal number of parameters to pipe function");
@@ -4654,9 +4654,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       // it to i32.
       if (Arg2->getType() != Int32Ty)
         Arg2 = Builder.CreateZExtOrTrunc(Arg2, Int32Ty);
-      return RValue::get(Builder.CreateCall(
-          CGM.CreateRuntimeFunction(FTy, Name),
-          {Arg0, Arg1, Arg2, BCast, PacketSize, PacketAlign}));
+      return RValue::get(
+          EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name),
+                          {Arg0, Arg1, Arg2, BCast, PacketSize, PacketAlign}));
     }
   }
   // OpenCL v2.0 s6.13.16 ,s9.17.3.5 - Built-in pipe reserve read and write
@@ -4697,9 +4697,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     // it to i32.
     if (Arg1->getType() != Int32Ty)
       Arg1 = Builder.CreateZExtOrTrunc(Arg1, Int32Ty);
-    return RValue::get(
-        Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name),
-                           {Arg0, Arg1, PacketSize, PacketAlign}));
+    return RValue::get(EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name),
+                                       {Arg0, Arg1, PacketSize, PacketAlign}));
   }
   // OpenCL v2.0 s6.13.16, s9.17.3.5 - Built-in pipe commit read and write
   // functions
@@ -4735,9 +4734,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         llvm::FunctionType::get(llvm::Type::getVoidTy(getLLVMContext()),
                                 llvm::ArrayRef<llvm::Type *>(ArgTys), false);
 
-    return RValue::get(
-        Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name),
-                           {Arg0, Arg1, PacketSize, PacketAlign}));
+    return RValue::get(EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name),
+                                       {Arg0, Arg1, PacketSize, PacketAlign}));
   }
   // OpenCL v2.0 s6.13.16.4 Built-in pipe query functions
   case Builtin::BIget_pipe_num_packets:
@@ -4760,8 +4758,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     llvm::FunctionType *FTy = llvm::FunctionType::get(
         Int32Ty, llvm::ArrayRef<llvm::Type *>(ArgTys), false);
 
-    return RValue::get(Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name),
-                                          {Arg0, PacketSize, PacketAlign}));
+    return RValue::get(EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name),
+                                       {Arg0, PacketSize, PacketAlign}));
   }
 
   // OpenCL v2.0 s6.13.9 - Address space qualifier functions.
@@ -4782,7 +4780,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       NewArg = Builder.CreateBitOrPointerCast(Arg0, NewArgT);
     auto NewName = std::string("__") + E->getDirectCallee()->getName().str();
     auto NewCall =
-        Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, NewName), {NewArg});
+        EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, NewName), {NewArg});
     return RValue::get(Builder.CreateBitOrPointerCast(NewCall,
       ConvertType(E->getType())));
   }
@@ -4825,8 +4823,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
           llvm::AttributeList::get(CGM.getModule().getContext(), 3U, B);
 
       auto RTCall =
-          Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name, ByValAttrSet),
-                             {Queue, Flags, Range, Kernel, Block});
+          EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name, ByValAttrSet),
+                          {Queue, Flags, Range, Kernel, Block});
       RTCall->setAttributes(ByValAttrSet);
       return RValue::get(RTCall);
     }
@@ -4885,7 +4883,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
       llvm::FunctionType *FTy = llvm::FunctionType::get(Int32Ty, ArgTys, false);
       auto Call = RValue::get(
-          Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name), Args));
+          EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name), Args));
       if (TmpSize)
         EmitLifetimeEnd(TmpSize, TmpPtr);
       return Call;
@@ -4943,8 +4941,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         llvm::FunctionType *FTy = llvm::FunctionType::get(
             Int32Ty, llvm::ArrayRef<llvm::Type *>(ArgTys), false);
         return RValue::get(
-            Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name),
-                               llvm::ArrayRef<llvm::Value *>(Args)));
+            EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name),
+                            llvm::ArrayRef<llvm::Value *>(Args)));
       }
       // Has event info and variadics
       // Pass the number of variadics to the runtime function too.
@@ -4960,8 +4958,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       llvm::FunctionType *FTy = llvm::FunctionType::get(
           Int32Ty, llvm::ArrayRef<llvm::Type *>(ArgTys), false);
       auto Call =
-          RValue::get(Builder.CreateCall(CGM.CreateRuntimeFunction(FTy, Name),
-                                         llvm::ArrayRef<llvm::Value *>(Args)));
+          RValue::get(EmitRuntimeCall(CGM.CreateRuntimeFunction(FTy, Name),
+                                      llvm::ArrayRef<llvm::Value *>(Args)));
       if (TmpSize)
         EmitLifetimeEnd(TmpSize, TmpPtr);
       return Call;
@@ -4977,7 +4975,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         CGM.getOpenCLRuntime().emitOpenCLEnqueuedBlock(*this, E->getArg(0));
     Value *Kernel = Builder.CreatePointerCast(Info.Kernel, GenericVoidPtrTy);
     Value *Arg = Builder.CreatePointerCast(Info.BlockArg, GenericVoidPtrTy);
-    return RValue::get(Builder.CreateCall(
+    return RValue::get(EmitRuntimeCall(
         CGM.CreateRuntimeFunction(
             llvm::FunctionType::get(IntTy, {GenericVoidPtrTy, GenericVoidPtrTy},
                                     false),
@@ -4991,7 +4989,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         CGM.getOpenCLRuntime().emitOpenCLEnqueuedBlock(*this, E->getArg(0));
     Value *Kernel = Builder.CreatePointerCast(Info.Kernel, GenericVoidPtrTy);
     Value *Arg = Builder.CreatePointerCast(Info.BlockArg, GenericVoidPtrTy);
-    return RValue::get(Builder.CreateCall(
+    return RValue::get(EmitRuntimeCall(
         CGM.CreateRuntimeFunction(
             llvm::FunctionType::get(IntTy, {GenericVoidPtrTy, GenericVoidPtrTy},
                                     false),
@@ -5012,7 +5010,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         BuiltinID == Builtin::BIget_kernel_max_sub_group_size_for_ndrange
             ? "__get_kernel_max_sub_group_size_for_ndrange_impl"
             : "__get_kernel_sub_group_count_for_ndrange_impl";
-    return RValue::get(Builder.CreateCall(
+    return RValue::get(EmitRuntimeCall(
         CGM.CreateRuntimeFunction(
             llvm::FunctionType::get(
                 IntTy, {NDRange->getType(), GenericVoidPtrTy, GenericVoidPtrTy},
