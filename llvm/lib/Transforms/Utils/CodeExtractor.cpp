@@ -954,6 +954,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
       case Attribute::NoRecurse:
       case Attribute::InlineHint:
       case Attribute::MinSize:
+      case Attribute::NoCallback:
       case Attribute::NoDuplicate:
       case Attribute::NoFree:
       case Attribute::NoImplicitFloat:

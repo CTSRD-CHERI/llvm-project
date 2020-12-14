@@ -650,6 +650,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_NO_ALIAS;
   case Attribute::NoBuiltin:
     return bitc::ATTR_KIND_NO_BUILTIN;
+  case Attribute::NoCallback:
+    return bitc::ATTR_KIND_NO_CALLBACK;
   case Attribute::NoCapture:
     return bitc::ATTR_KIND_NO_CAPTURE;
   case Attribute::NoDuplicate:

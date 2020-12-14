@@ -204,6 +204,7 @@ enum Kind {
   kw_noalias,
   kw_noundef,
   kw_nobuiltin,
+  kw_nocallback,
   kw_nocapture,
   kw_noduplicate,
   kw_nofree,
