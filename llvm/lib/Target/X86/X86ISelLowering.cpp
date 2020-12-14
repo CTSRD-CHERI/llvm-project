@@ -7983,7 +7983,7 @@ static SDValue getShuffleScalarElt(SDValue Op, unsigned Index,
 }
 
 // Use PINSRB/PINSRW/PINSRD to create a build vector.
-static SDValue LowerBuildVectorAsInsert(SDValue Op, unsigned NonZeros,
+static SDValue LowerBuildVectorAsInsert(SDValue Op, const APInt &NonZeroMask,
                                         unsigned NumNonZero, unsigned NumZero,
                                         SelectionDAG &DAG,
                                         const X86Subtarget &Subtarget) {
@@ -7998,7 +7998,7 @@ static SDValue LowerBuildVectorAsInsert(SDValue Op, unsigned NonZeros,
   bool First = true;
 
   for (unsigned i = 0; i < NumElts; ++i) {
-    bool IsNonZero = (NonZeros & (1 << i)) != 0;
+    bool IsNonZero = NonZeroMask[i];
     if (!IsNonZero)
       continue;
 
@@ -8025,7 +8025,7 @@ static SDValue LowerBuildVectorAsInsert(SDValue Op, unsigned NonZeros,
 }
 
 /// Custom lower build_vector of v16i8.
-static SDValue LowerBuildVectorv16i8(SDValue Op, unsigned NonZeros,
+static SDValue LowerBuildVectorv16i8(SDValue Op, const APInt &NonZeroMask,
                                      unsigned NumNonZero, unsigned NumZero,
                                      SelectionDAG &DAG,
                                      const X86Subtarget &Subtarget) {
@@ -8034,7 +8034,7 @@ static SDValue LowerBuildVectorv16i8(SDValue Op, unsigned NonZeros,
 
   // SSE4.1 - use PINSRB to insert each byte directly.
   if (Subtarget.hasSSE41())
-    return LowerBuildVectorAsInsert(Op, NonZeros, NumNonZero, NumZero, DAG,
+    return LowerBuildVectorAsInsert(Op, NonZeroMask, NumNonZero, NumZero, DAG,
                                     Subtarget);
 
   SDLoc dl(Op);
@@ -8042,8 +8042,8 @@ static SDValue LowerBuildVectorv16i8(SDValue Op, unsigned NonZeros,
 
   // Pre-SSE4.1 - merge byte pairs and insert with PINSRW.
   for (unsigned i = 0; i < 16; i += 2) {
-    bool ThisIsNonZero = (NonZeros & (1 << i)) != 0;
-    bool NextIsNonZero = (NonZeros & (1 << (i + 1))) != 0;
+    bool ThisIsNonZero = NonZeroMask[i];
+    bool NextIsNonZero = NonZeroMask[i + 1];
     if (!ThisIsNonZero && !NextIsNonZero)
       continue;
 
@@ -8091,7 +8091,7 @@ static SDValue LowerBuildVectorv16i8(SDValue Op, unsigned NonZeros,
 }
 
 /// Custom lower build_vector of v8i16.
-static SDValue LowerBuildVectorv8i16(SDValue Op, unsigned NonZeros,
+static SDValue LowerBuildVectorv8i16(SDValue Op, const APInt &NonZeroMask,
                                      unsigned NumNonZero, unsigned NumZero,
                                      SelectionDAG &DAG,
                                      const X86Subtarget &Subtarget) {
@@ -8099,7 +8099,7 @@ static SDValue LowerBuildVectorv8i16(SDValue Op, unsigned NonZeros,
     return SDValue();
 
   // Use PINSRW to insert each byte directly.
-  return LowerBuildVectorAsInsert(Op, NonZeros, NumNonZero, NumZero, DAG,
+  return LowerBuildVectorAsInsert(Op, NonZeroMask, NumNonZero, NumZero, DAG,
                                   Subtarget);
 }
 
@@ -10177,10 +10177,8 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
     return BitOp;
 
   unsigned EVTBits = EltVT.getSizeInBits();
-
-  unsigned NumZero  = 0;
-  unsigned NumNonZero = 0;
-  uint64_t NonZeros = 0;
+  APInt ZeroMask = APInt::getNullValue(NumElems);
+  APInt NonZeroMask = APInt::getNullValue(NumElems);
   bool IsAllConstants = true;
   SmallSet<SDValue, 8> Values;
   unsigned NumConstants = NumElems;
@@ -10193,14 +10191,15 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
       IsAllConstants = false;
       NumConstants--;
     }
-    if (X86::isZeroNode(Elt))
-      NumZero++;
-    else {
-      assert(i < sizeof(NonZeros) * 8); // Make sure the shift is within range.
-      NonZeros |= ((uint64_t)1 << i);
-      NumNonZero++;
+    if (X86::isZeroNode(Elt)) {
+      ZeroMask.setBit(i);
+    } else {
+      NonZeroMask.setBit(i);
     }
   }
+
+  unsigned NumZero = ZeroMask.countPopulation();
+  unsigned NumNonZero = NonZeroMask.countPopulation();
 
   // All undef vector. Return an UNDEF.  All zero vectors were handled above.
   if (NumNonZero == 0)
@@ -10268,7 +10267,7 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
 
   // Special case for single non-zero, non-undef, element.
   if (NumNonZero == 1) {
-    unsigned Idx = countTrailingZeros(NonZeros);
+    unsigned Idx = NonZeroMask.countTrailingZeros();
     SDValue Item = Op.getOperand(Idx);
 
     // If we have a constant or non-constant insertion into the low element of
@@ -10332,7 +10331,7 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
       // shuffle (scalar_to_vector (load (ptr + 4))), undef, <0, 0, 0, 0>
       // Check if it's possible to issue this instead.
       // shuffle (vload ptr)), undef, <1, 1, 1, 1>
-      unsigned Idx = countTrailingZeros(NonZeros);
+      unsigned Idx = NonZeroMask.countTrailingZeros();
       SDValue Item = Op.getOperand(Idx);
       if (Op.getNode()->isOnlyUserOf(Item.getNode()))
         return LowerAsSplatVectorLoad(Item, VT, dl, DAG);
@@ -10401,7 +10400,7 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
   if (EVTBits == 64) {
     if (NumNonZero == 1) {
       // One half is zero or undef.
-      unsigned Idx = countTrailingZeros(NonZeros);
+      unsigned Idx = NonZeroMask.countTrailingZeros();
       SDValue V2 = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, VT,
                                Op.getOperand(Idx));
       return getShuffleVectorZeroOrUndef(V2, Idx, true, Subtarget, DAG);
@@ -10411,12 +10410,12 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
 
   // If element VT is < 32 bits, convert it to inserts into a zero vector.
   if (EVTBits == 8 && NumElems == 16)
-    if (SDValue V = LowerBuildVectorv16i8(Op, NonZeros, NumNonZero, NumZero,
+    if (SDValue V = LowerBuildVectorv16i8(Op, NonZeroMask, NumNonZero, NumZero,
                                           DAG, Subtarget))
       return V;
 
   if (EVTBits == 16 && NumElems == 8)
-    if (SDValue V = LowerBuildVectorv8i16(Op, NonZeros, NumNonZero, NumZero,
+    if (SDValue V = LowerBuildVectorv8i16(Op, NonZeroMask, NumNonZero, NumZero,
                                           DAG, Subtarget))
       return V;
 
@@ -10429,7 +10428,7 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
   if (NumElems == 4 && NumZero > 0) {
     SmallVector<SDValue, 8> Ops(NumElems);
     for (unsigned i = 0; i < 4; ++i) {
-      bool isZero = !(NonZeros & (1ULL << i));
+      bool isZero = !NonZeroMask[i];
       if (isZero)
         Ops[i] = getZeroVector(VT, Subtarget, DAG, dl);
       else
@@ -10437,7 +10436,7 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
     }
 
     for (unsigned i = 0; i < 2; ++i) {
-      switch ((NonZeros >> (i*2)) & 0x3) {
+      switch (NonZeroMask.extractBitsAsZExtValue(2, i * 2)) {
         default: llvm_unreachable("Unexpected NonZero count");
         case 0:
           Ops[i] = Ops[i*2];  // Must be a zero vector.
@@ -10454,8 +10453,8 @@ X86TargetLowering::LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
       }
     }
 
-    bool Reverse1 = (NonZeros & 0x3) == 2;
-    bool Reverse2 = ((NonZeros & (0x3 << 2)) >> 2) == 2;
+    bool Reverse1 = NonZeroMask.extractBitsAsZExtValue(2, 0) == 2;
+    bool Reverse2 = NonZeroMask.extractBitsAsZExtValue(2, 2) == 2;
     int MaskVec[] = {
       Reverse1 ? 1 : 0,
       Reverse1 ? 0 : 1,
