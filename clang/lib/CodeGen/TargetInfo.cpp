@@ -2228,6 +2228,23 @@ bool X86_32TargetCodeGenInfo::isStructReturnInRegABI(
   }
 }
 
+static void addX86InterruptAttrs(const FunctionDecl *FD, llvm::GlobalValue *GV,
+                                 CodeGen::CodeGenModule &CGM) {
+  if (!FD->hasAttr<AnyX86InterruptAttr>())
+    return;
+
+  llvm::Function *Fn = cast<llvm::Function>(GV);
+  Fn->setCallingConv(llvm::CallingConv::X86_INTR);
+  if (FD->getNumParams() == 0)
+    return;
+
+  auto PtrTy = cast<PointerType>(FD->getParamDecl(0)->getType());
+  llvm::Type *ByValTy = CGM.getTypes().ConvertType(PtrTy->getPointeeType());
+  llvm::Attribute NewAttr = llvm::Attribute::getWithByValType(
+    Fn->getContext(), ByValTy);
+  Fn->addParamAttr(0, NewAttr);
+}
+
 void X86_32TargetCodeGenInfo::setTargetAttributes(
     const Decl *D, llvm::GlobalValue *GV, CodeGen::CodeGenModule &CGM) const {
   if (GV->isDeclaration())
@@ -2237,10 +2254,8 @@ void X86_32TargetCodeGenInfo::setTargetAttributes(
       llvm::Function *Fn = cast<llvm::Function>(GV);
       Fn->addFnAttr("stackrealign");
     }
-    if (FD->hasAttr<AnyX86InterruptAttr>()) {
-      llvm::Function *Fn = cast<llvm::Function>(GV);
-      Fn->setCallingConv(llvm::CallingConv::X86_INTR);
-    }
+
+    addX86InterruptAttrs(FD, GV, CGM);
   }
 }
 
@@ -2607,10 +2622,8 @@ public:
         llvm::Function *Fn = cast<llvm::Function>(GV);
         Fn->addFnAttr("stackrealign");
       }
-      if (FD->hasAttr<AnyX86InterruptAttr>()) {
-        llvm::Function *Fn = cast<llvm::Function>(GV);
-        Fn->setCallingConv(llvm::CallingConv::X86_INTR);
-      }
+
+      addX86InterruptAttrs(FD, GV, CGM);
     }
   }
 
@@ -2820,10 +2833,8 @@ void WinX86_64TargetCodeGenInfo::setTargetAttributes(
       llvm::Function *Fn = cast<llvm::Function>(GV);
       Fn->addFnAttr("stackrealign");
     }
-    if (FD->hasAttr<AnyX86InterruptAttr>()) {
-      llvm::Function *Fn = cast<llvm::Function>(GV);
-      Fn->setCallingConv(llvm::CallingConv::X86_INTR);
-    }
+
+    addX86InterruptAttrs(FD, GV, CGM);
   }
 
   addStackProbeTargetAttributes(D, GV, CGM);
