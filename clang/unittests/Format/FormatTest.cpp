@@ -12105,6 +12105,17 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeColon) {
                "case 1:\n"
                "default:\n"
                "}");
+  verifyFormat("switch (allBraces) {\n"
+               "case 1: {\n"
+               "  break;\n"
+               "}\n"
+               "case 2: {\n"
+               "  [[fallthrough]];\n"
+               "}\n"
+               "default: {\n"
+               "  break;\n"
+               "}\n"
+               "}");
 
   FormatStyle CtorInitializerStyle = getLLVMStyleWithColumns(30);
   CtorInitializerStyle.SpaceBeforeCtorInitializerColon = false;
@@ -12120,6 +12131,18 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeColon) {
   verifyFormat("switch (x) {\n"
                "case 1:\n"
                "default:\n"
+               "}",
+               CtorInitializerStyle);
+  verifyFormat("switch (allBraces) {\n"
+               "case 1: {\n"
+               "  break;\n"
+               "}\n"
+               "case 2: {\n"
+               "  [[fallthrough]];\n"
+               "}\n"
+               "default: {\n"
+               "  break;\n"
+               "}\n"
                "}",
                CtorInitializerStyle);
   CtorInitializerStyle.BreakConstructorInitializers =
@@ -12162,6 +12185,18 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeColon) {
                "default:\n"
                "}",
                InheritanceStyle);
+  verifyFormat("switch (allBraces) {\n"
+               "case 1: {\n"
+               "  break;\n"
+               "}\n"
+               "case 2: {\n"
+               "  [[fallthrough]];\n"
+               "}\n"
+               "default: {\n"
+               "  break;\n"
+               "}\n"
+               "}",
+               InheritanceStyle);
   InheritanceStyle.BreakInheritanceList = FormatStyle::BILS_AfterColon;
   verifyFormat("class Foooooooooooooooooooooo:\n"
                "    public aaaaaaaaaaaaaaaaaa,\n"
@@ -12202,8 +12237,45 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeColon) {
                "default:\n"
                "}",
                ForLoopStyle);
+  verifyFormat("switch (allBraces) {\n"
+               "case 1: {\n"
+               "  break;\n"
+               "}\n"
+               "case 2: {\n"
+               "  [[fallthrough]];\n"
+               "}\n"
+               "default: {\n"
+               "  break;\n"
+               "}\n"
+               "}",
+               ForLoopStyle);
+
+  FormatStyle CaseStyle = getLLVMStyle();
+  CaseStyle.SpaceBeforeCaseColon = true;
+  verifyFormat("class Foo : public Bar {};", CaseStyle);
+  verifyFormat("Foo::Foo() : foo(1) {}", CaseStyle);
+  verifyFormat("for (auto a : b) {\n}", CaseStyle);
+  verifyFormat("int x = a ? b : c;", CaseStyle);
+  verifyFormat("switch (x) {\n"
+               "case 1 :\n"
+               "default :\n"
+               "}",
+               CaseStyle);
+  verifyFormat("switch (allBraces) {\n"
+               "case 1 : {\n"
+               "  break;\n"
+               "}\n"
+               "case 2 : {\n"
+               "  [[fallthrough]];\n"
+               "}\n"
+               "default : {\n"
+               "  break;\n"
+               "}\n"
+               "}",
+               CaseStyle);
 
   FormatStyle NoSpaceStyle = getLLVMStyle();
+  EXPECT_EQ(NoSpaceStyle.SpaceBeforeCaseColon, false);
   NoSpaceStyle.SpaceBeforeCtorInitializerColon = false;
   NoSpaceStyle.SpaceBeforeInheritanceColon = false;
   NoSpaceStyle.SpaceBeforeRangeBasedForLoopColon = false;
@@ -12221,6 +12293,54 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeColon) {
                "default:\n"
                "}",
                NoSpaceStyle);
+  verifyFormat("switch (allBraces) {\n"
+               "case 1: {\n"
+               "  break;\n"
+               "}\n"
+               "case 2: {\n"
+               "  [[fallthrough]];\n"
+               "}\n"
+               "default: {\n"
+               "  break;\n"
+               "}\n"
+               "}",
+               NoSpaceStyle);
+
+  FormatStyle InvertedSpaceStyle = getLLVMStyle();
+  InvertedSpaceStyle.SpaceBeforeCaseColon = true;
+  InvertedSpaceStyle.SpaceBeforeCtorInitializerColon = false;
+  InvertedSpaceStyle.SpaceBeforeInheritanceColon = false;
+  InvertedSpaceStyle.SpaceBeforeRangeBasedForLoopColon = false;
+  verifyFormat("class Foo: public Bar {};", InvertedSpaceStyle);
+  verifyFormat("Foo::Foo(): foo(1) {}", InvertedSpaceStyle);
+  verifyFormat("for (auto a: b) {\n}", InvertedSpaceStyle);
+  verifyFormat("int x = a ? b : c;", InvertedSpaceStyle);
+  verifyFormat("{\n"
+               "label3:\n"
+               "  int x = 0;\n"
+               "}",
+               InvertedSpaceStyle);
+  verifyFormat("switch (x) {\n"
+               "case 1 :\n"
+               "case 2 : {\n"
+               "  break;\n"
+               "}\n"
+               "default :\n"
+               "  break;\n"
+               "}",
+               InvertedSpaceStyle);
+  verifyFormat("switch (allBraces) {\n"
+               "case 1 : {\n"
+               "  break;\n"
+               "}\n"
+               "case 2 : {\n"
+               "  [[fallthrough]];\n"
+               "}\n"
+               "default : {\n"
+               "  break;\n"
+               "}\n"
+               "}",
+               InvertedSpaceStyle);
 }
 
 TEST_F(FormatTest, ConfigurableSpaceAroundPointerQualifiers) {
@@ -14198,6 +14318,7 @@ TEST_F(FormatTest, ParsesConfigurationBools) {
   CHECK_PARSE_BOOL(SpaceAfterTemplateKeyword);
   CHECK_PARSE_BOOL(SpaceAfterLogicalNot);
   CHECK_PARSE_BOOL(SpaceBeforeAssignmentOperators);
+  CHECK_PARSE_BOOL(SpaceBeforeCaseColon);
   CHECK_PARSE_BOOL(SpaceBeforeCpp11BracedList);
   CHECK_PARSE_BOOL(SpaceBeforeCtorInitializerColon);
   CHECK_PARSE_BOOL(SpaceBeforeInheritanceColon);
