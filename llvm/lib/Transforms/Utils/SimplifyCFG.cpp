@@ -215,6 +215,7 @@ struct ValueEqualityComparisonCase {
 
 class SimplifyCFGOpt {
   const TargetTransformInfo &TTI;
+  DomTreeUpdater *DTU;
   const DataLayout &DL;
   SmallPtrSetImpl<BasicBlock *> *LoopHeaders;
   const SimplifyCFGOptions &Options;
@@ -258,10 +259,11 @@ class SimplifyCFGOpt {
   bool TurnSwitchRangeIntoICmp(SwitchInst *SI, IRBuilder<> &Builder);
 
 public:
-  SimplifyCFGOpt(const TargetTransformInfo &TTI, const DataLayout &DL,
+  SimplifyCFGOpt(const TargetTransformInfo &TTI, DomTreeUpdater *DTU,
+                 const DataLayout &DL,
                  SmallPtrSetImpl<BasicBlock *> *LoopHeaders,
                  const SimplifyCFGOptions &Opts)
-      : TTI(TTI), DL(DL), LoopHeaders(LoopHeaders), Options(Opts) {}
+      : TTI(TTI), DTU(DTU), DL(DL), LoopHeaders(LoopHeaders), Options(Opts) {}
 
   bool run(BasicBlock *BB);
   bool simplifyOnce(BasicBlock *BB);
@@ -6360,7 +6362,7 @@ bool SimplifyCFGOpt::simplifyOnce(BasicBlock *BB) {
   // Merge basic blocks into their predecessor if there is only one distinct
   // pred, and if there is only one distinct successor of the predecessor, and
   // if there are no PHI nodes.
-  if (MergeBlockIntoPredecessor(BB))
+  if (MergeBlockIntoPredecessor(BB, DTU))
     return true;
 
   if (SinkCommon && Options.SinkCommonInsts)
@@ -6421,9 +6423,9 @@ bool SimplifyCFGOpt::run(BasicBlock *BB) {
 }
 
 bool llvm::simplifyCFG(BasicBlock *BB, const TargetTransformInfo &TTI,
-                       const SimplifyCFGOptions &Options,
+                       DomTreeUpdater *DTU, const SimplifyCFGOptions &Options,
                        SmallPtrSetImpl<BasicBlock *> *LoopHeaders) {
-  return SimplifyCFGOpt(TTI, BB->getModule()->getDataLayout(), LoopHeaders,
+  return SimplifyCFGOpt(TTI, DTU, BB->getModule()->getDataLayout(), LoopHeaders,
                         Options)
       .run(BB);
 }
