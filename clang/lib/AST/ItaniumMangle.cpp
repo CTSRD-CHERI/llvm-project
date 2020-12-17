@@ -2585,6 +2585,11 @@ void CXXNameMangler::mangleType(QualType T) {
         if (!TST->isTypeAlias())
           break;
 
+      // Don't desugar instantiation-dependent decltype / typeof types. We need
+      // to mangle the expression as written.
+      if (isa<DecltypeType, TypeOfType>(T))
+        break;
+
       QualType Desugared
         = T.getSingleStepDesugaredType(Context.getASTContext());
       if (Desugared == T)
@@ -5597,12 +5602,11 @@ static bool hasMangledSubstitutionQualifiers(QualType T) {
 
 bool CXXNameMangler::mangleSubstitution(QualType T) {
   if (!hasMangledSubstitutionQualifiers(T)) {
-    if (const RecordType *RT = T->getAs<RecordType>())
+    if (const RecordType *RT = dyn_cast<RecordType>(T))
       return mangleSubstitution(RT->getDecl());
   }
 
   uintptr_t TypePtr = reinterpret_cast<uintptr_t>(T.getAsOpaquePtr());
-
   return mangleSubstitution(TypePtr);
 }
 
@@ -5761,7 +5765,7 @@ bool CXXNameMangler::mangleStandardSubstitution(const NamedDecl *ND) {
 
 void CXXNameMangler::addSubstitution(QualType T) {
   if (!hasMangledSubstitutionQualifiers(T)) {
-    if (const RecordType *RT = T->getAs<RecordType>()) {
+    if (const RecordType *RT = dyn_cast<RecordType>(T)) {
       addSubstitution(RT->getDecl());
       return;
     }
