@@ -573,6 +573,8 @@ public:
 
   unsigned getRegisterBitWidth(bool Vector) const { return 32; }
 
+  Optional<unsigned> getMaxVScale() const { return None; }
+
   /// Estimate the overhead of scalarizing an instruction. Insert and Extract
   /// are set if the demanded result elements need to be inserted and/or
   /// extracted from vectors.
@@ -1241,8 +1243,6 @@ public:
       return thisT()->getMemcpyCost(ICA.getInst());
 
     case Intrinsic::masked_scatter: {
-      if (isa<ScalableVectorType>(RetTy))
-        return BaseT::getIntrinsicInstrCost(ICA, CostKind);
       assert(VF.isScalar() && "Can't vectorize types here.");
       const Value *Mask = Args[3];
       bool VarMask = !isa<Constant>(Mask);
@@ -1252,8 +1252,6 @@ public:
                                              VarMask, Alignment, CostKind, I);
     }
     case Intrinsic::masked_gather: {
-      if (isa<ScalableVectorType>(RetTy))
-        return BaseT::getIntrinsicInstrCost(ICA, CostKind);
       assert(VF.isScalar() && "Can't vectorize types here.");
       const Value *Mask = Args[2];
       bool VarMask = !isa<Constant>(Mask);
