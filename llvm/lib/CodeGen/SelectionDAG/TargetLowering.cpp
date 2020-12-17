@@ -6507,6 +6507,11 @@ bool TargetLowering::expandFP_TO_UINT(SDNode *Node, SDValue &Result,
     return true;
   }
 
+  // Don't expand it if there isn't cheap fsub instruction.
+  if (!isOperationLegalOrCustom(
+          Node->isStrictFPOpcode() ? ISD::STRICT_FSUB : ISD::FSUB, SrcVT))
+    return false;
+
   SDValue Cst = DAG.getConstantFP(APF, dl, SrcVT);
   SDValue Sel;
 
