@@ -3687,7 +3687,8 @@ bool InstCombinerImpl::run() {
 
     // Now that we have an instruction, try combining it to simplify it.
     Builder.SetInsertPoint(I);
-    Builder.CollectMetadataToCopy(I, {LLVMContext::MD_dbg});
+    Builder.CollectMetadataToCopy(
+        I, {LLVMContext::MD_dbg, LLVMContext::MD_annotation});
 
 #ifndef NDEBUG
     std::string OrigI;
