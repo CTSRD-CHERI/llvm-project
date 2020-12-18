@@ -451,6 +451,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "zeroext";
   if (hasAttribute(Attribute::Cold))
     return "cold";
+  if (hasAttribute(Attribute::Hot))
+    return "hot";
   if (hasAttribute(Attribute::ImmArg))
     return "immarg";
   if (hasAttribute(Attribute::MustPreserveCheriTags))
