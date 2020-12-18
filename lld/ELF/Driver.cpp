@@ -123,7 +123,7 @@ bool elf::link(ArrayRef<const char *> args, bool canExitEarly,
 
   config->progName = args[0];
 
-  driver->main(args);
+  driver->linkerMain(args);
 
   // Exit immediately if we don't need to return to the caller.
   // This saves time because the overhead of calling destructors
@@ -491,7 +491,7 @@ static void checkZOptions(opt::InputArgList &args) {
       error("unknown -z value: " + StringRef(arg->getValue()));
 }
 
-void LinkerDriver::main(ArrayRef<const char *> argsArr) {
+void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
   ELFOptTable parser;
   opt::InputArgList args = parser.parse(argsArr.slice(1));
 
