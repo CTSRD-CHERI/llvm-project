@@ -36,7 +36,7 @@ using namespace llvm;
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   RegisterTargetMachine<RISCVTargetMachine> X(getTheRISCV32Target());
   RegisterTargetMachine<RISCVTargetMachine> Y(getTheRISCV64Target());
-  auto PR = PassRegistry::getPassRegistry();
+  auto *PR = PassRegistry::getPassRegistry();
   initializeGlobalISel(*PR);
   initializeRISCVMergeBaseOffsetOptPass(*PR);
   initializeRISCVExpandPseudoPass(*PR);
@@ -49,10 +49,11 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
          "only RV32 and RV64 are currently supported");
 
   StringRef IntegerTypes;
-  if (TT.isArch64Bit())
+  if (TT.isArch64Bit()) {
     IntegerTypes = "-p:64:64-i64:64-i128:128-n64";
-  else
+  } else {
     IntegerTypes = "-p:32:32-i64:64-n32";
+  }
 
   StringRef CapTypes = "";
   StringRef PurecapOptions = "";
@@ -167,7 +168,7 @@ public:
   void addPreSched2() override;
   void addPreRegAlloc() override;
 };
-}
+} // namespace
 
 TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new RISCVPassConfig(*this, PM);
