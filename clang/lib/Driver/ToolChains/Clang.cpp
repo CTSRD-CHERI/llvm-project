@@ -1738,14 +1738,8 @@ static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
       ChosenCapTableABI = A->getValue();
       A->claim();
     }
-    CmdArgs.push_back("-mllvm");
     CmdArgs.push_back(
         Args.MakeArgString("-cheri-cap-table-abi=" + ChosenCapTableABI));
-    bool MxCapTable =
-        Args.hasFlag(options::OPT_cheri_large_cap_table,
-                     options::OPT_no_cheri_large_cap_table, false);
-    CmdArgs.push_back("-mllvm");
-    CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
   }
 }
 
@@ -2006,6 +2000,21 @@ void Clang::AddRISCVTargetArgs(const ArgList &Args,
 
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName.data());
+
+  StringRef DefaultCapTableABI = "pcrel";
+  StringRef ChosenCapTableABI = DefaultCapTableABI;
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
+    ChosenCapTableABI = A->getValue();
+    A->claim();
+  }
+  CmdArgs.push_back("-mllvm");
+  CmdArgs.push_back(
+      Args.MakeArgString("-cheri-cap-table-abi=" + ChosenCapTableABI));
+  bool MxCapTable =
+      Args.hasFlag(options::OPT_cheri_large_cap_table,
+                   options::OPT_no_cheri_large_cap_table, false);
+  CmdArgs.push_back("-mllvm");
+  CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
 
   SetRISCVSmallDataLimit(getToolChain(), Args, CmdArgs);
 }

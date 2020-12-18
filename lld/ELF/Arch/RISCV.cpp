@@ -396,6 +396,7 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   }
 
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
+  case R_RISCV_CHERI_CAPTAB_GPREL_HI20:
   case R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20:
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
   case R_RISCV_GOT_HI20:
