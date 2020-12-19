@@ -265,8 +265,9 @@ public:
                  const SimplifyCFGOptions &Opts)
       : TTI(TTI), DTU(DTU), DL(DL), LoopHeaders(LoopHeaders), Options(Opts) {}
 
-  bool run(BasicBlock *BB);
   bool simplifyOnce(BasicBlock *BB);
+  bool simplifyOnceImpl(BasicBlock *BB);
+  bool run(BasicBlock *BB);
 
   // Helper to set Resimplify and return change indication.
   bool requestResimplify() {
@@ -6372,7 +6373,7 @@ static bool removeUndefIntroducingPredecessor(BasicBlock *BB) {
   return false;
 }
 
-bool SimplifyCFGOpt::simplifyOnce(BasicBlock *BB) {
+bool SimplifyCFGOpt::simplifyOnceImpl(BasicBlock *BB) {
   bool Changed = false;
 
   assert(BB && BB->getParent() && "Block not embedded in function!");
@@ -6442,6 +6443,22 @@ bool SimplifyCFGOpt::simplifyOnce(BasicBlock *BB) {
     Changed |= simplifyIndirectBr(cast<IndirectBrInst>(Terminator));
     break;
   }
+
+  return Changed;
+}
+
+bool SimplifyCFGOpt::simplifyOnce(BasicBlock *BB) {
+  assert((!RequireAndPreserveDomTree ||
+          (DTU &&
+           DTU->getDomTree().verify(DominatorTree::VerificationLevel::Full))) &&
+         "Original domtree is invalid?");
+
+  bool Changed = simplifyOnceImpl(BB);
+
+  assert((!RequireAndPreserveDomTree ||
+          (DTU &&
+           DTU->getDomTree().verify(DominatorTree::VerificationLevel::Full))) &&
+         "Failed to maintain validity of domtree!");
 
   return Changed;
 }
