@@ -2638,6 +2638,10 @@ bool SimplifyCFGOpt::SimplifyCondBranchToTwoReturns(BranchInst *BI,
     FalseSucc->removePredecessor(BB);
     Builder.CreateRetVoid();
     EraseTerminatorAndDCECond(BI);
+    if (DTU) {
+      DTU->applyUpdatesPermissive({{DominatorTree::Delete, BB, TrueSucc},
+                                   {DominatorTree::Delete, BB, FalseSucc}});
+    }
     return true;
   }
 
