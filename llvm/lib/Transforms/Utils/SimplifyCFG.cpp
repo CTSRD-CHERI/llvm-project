@@ -6116,7 +6116,7 @@ bool SimplifyCFGOpt::simplifyIndirectBr(IndirectBrInst *IBI) {
 /// block when the inputs in the phi are the same for the two blocks being
 /// merged.  In some cases, this could result in removal of the PHI entirely.
 static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
-                                 BasicBlock *BB) {
+                                 BasicBlock *BB, DomTreeUpdater *DTU) {
   auto Succ = BB->getUniqueSuccessor();
   assert(Succ);
   // If there's a phi in the successor block, we'd likely have to introduce
@@ -6137,6 +6137,8 @@ static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
     if (!BI2 || !BI2->isIdenticalTo(BI))
       continue;
 
+    std::vector<DominatorTree::UpdateType> Updates;
+
     // We've found an identical block.  Update our predecessors to take that
     // path instead and make ourselves dead.
     SmallPtrSet<BasicBlock *, 16> Preds;
@@ -6146,6 +6148,8 @@ static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
       assert(II->getNormalDest() != BB && II->getUnwindDest() == BB &&
              "unexpected successor");
       II->setUnwindDest(OtherPred);
+      Updates.push_back({DominatorTree::Delete, Pred, BB});
+      Updates.push_back({DominatorTree::Insert, Pred, OtherPred});
     }
 
     // The debug info in OtherPred doesn't cover the merged control flow that
@@ -6161,11 +6165,14 @@ static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
     Succs.insert(succ_begin(BB), succ_end(BB));
     for (BasicBlock *Succ : Succs) {
       Succ->removePredecessor(BB);
+      Updates.push_back({DominatorTree::Delete, BB, Succ});
     }
 
     IRBuilder<> Builder(BI);
     Builder.CreateUnreachable();
     BI->eraseFromParent();
+    if (DTU)
+      DTU->applyUpdatesPermissive(Updates);
     return true;
   }
   return false;
@@ -6213,7 +6220,7 @@ bool SimplifyCFGOpt::simplifyUncondBranch(BranchInst *BI,
   if (LandingPadInst *LPad = dyn_cast<LandingPadInst>(I)) {
     for (++I; isa<DbgInfoIntrinsic>(I); ++I)
       ;
-    if (I->isTerminator() && TryToMergeLandingPad(LPad, BI, BB))
+    if (I->isTerminator() && TryToMergeLandingPad(LPad, BI, BB, DTU))
       return true;
   }
 
