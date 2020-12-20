@@ -7646,6 +7646,7 @@ static Expr *BuildExpressionFromNonTypeTemplateArgumentValue(
     auto *OVE = new (S.Context) OpaqueValueExpr(Loc, T, VK);
     return ConstantExpr::Create(S.Context, OVE, Val);
   }
+  llvm_unreachable("Unhandled APValue::ValueKind enum");
 }
 
 ExprResult
@@ -7675,6 +7676,7 @@ Sema::BuildExpressionFromNonTypeTemplateArgument(const TemplateArgument &Arg,
     return BuildExpressionFromNonTypeTemplateArgumentValue(
         *this, Arg.getUncommonValueType(), Arg.getAsUncommonValue(), Loc);
   }
+  llvm_unreachable("Unhandled TemplateArgument::ArgKind enum");
 }
 
 /// Match two template parameters within template parameter lists.
