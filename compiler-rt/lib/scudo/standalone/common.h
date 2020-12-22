@@ -165,6 +165,9 @@ void *map(void *Addr, usize Size, const char *Name, usize Flags = 0,
 void unmap(void *Addr, usize Size, usize Flags = 0,
            MapPlatformData *Data = nullptr);
 
+void setMemoryPermission(uptr Addr, uptr Size, uptr Flags,
+                         MapPlatformData *Data = nullptr);
+
 void releasePagesToOS(uptr BaseAddress, uptr Offset, uptr Size,
                       MapPlatformData *Data = nullptr);
 
