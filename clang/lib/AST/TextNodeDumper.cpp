@@ -1591,7 +1591,7 @@ void TextNodeDumper::VisitFunctionDecl(const FunctionDecl *D) {
   dumpType(D->getType());
 
   StorageClass SC = D->getStorageClass();
-  if (SC != SC_None)
+  if (SC != StorageClass::None)
     OS << ' ' << VarDecl::getStorageClassSpecifierString(SC);
   if (D->isInlineSpecified())
     OS << " inline";
@@ -1680,7 +1680,7 @@ void TextNodeDumper::VisitVarDecl(const VarDecl *D) {
   dumpName(D);
   dumpType(D->getType());
   StorageClass SC = D->getStorageClass();
-  if (SC != SC_None)
+  if (SC != StorageClass::None)
     OS << ' ' << VarDecl::getStorageClassSpecifierString(SC);
   switch (D->getTLSKind()) {
   case VarDecl::TLS_None:
