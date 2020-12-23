@@ -236,6 +236,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
     CI->setCallingConv(TLI->getLibcallCallingConv(RTLIB::UNWIND_RESUME));
 
     // We never expect _Unwind_Resume to return.
+    CI->setDoesNotReturn();
     new UnreachableInst(Ctx, UnwindBB);
     return true;
   }
@@ -261,6 +262,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
   CI->setCallingConv(TLI->getLibcallCallingConv(RTLIB::UNWIND_RESUME));
 
   // We never expect _Unwind_Resume to return.
+  CI->setDoesNotReturn();
   new UnreachableInst(Ctx, UnwindBB);
   return true;
 }
