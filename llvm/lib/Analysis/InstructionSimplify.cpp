@@ -4273,9 +4273,7 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
       // doesn't truncate the pointers.
       if (Ops[1]->getType()->getScalarSizeInBits() ==
           Q.DL.getPointerSizeInBits(AS)) {
-        auto PtrToIntOrZero = [GEPTy](Value *P) -> Value * {
-          if (match(P, m_Zero()))
-            return Constant::getNullValue(GEPTy);
+        auto PtrToInt = [GEPTy](Value *P) -> Value * {
           Value *Temp;
           if (match(P, m_PtrToInt(m_Value(Temp))))
             if (Temp->getType() == GEPTy)
@@ -4283,10 +4281,14 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
           return nullptr;
         };
 
+        // FIXME: The following transforms are only legal if P and V have the
+        // same provenance (PR44403). Check whether getUnderlyingObject() is
+        // the same?
+
         // getelementptr V, (sub P, V) -> P if P points to a type of size 1.
         if (TyAllocSize == 1 &&
             match(Ops[1], m_Sub(m_Value(P), m_PtrToInt(m_Specific(Ops[0])))))
-          if (Value *R = PtrToIntOrZero(P))
+          if (Value *R = PtrToInt(P))
             return R;
 
         // getelementptr V, (ashr (sub P, V), C) -> Q
@@ -4295,7 +4297,7 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
                   m_AShr(m_Sub(m_Value(P), m_PtrToInt(m_Specific(Ops[0]))),
                          m_ConstantInt(C))) &&
             TyAllocSize == 1ULL << C)
-          if (Value *R = PtrToIntOrZero(P))
+          if (Value *R = PtrToInt(P))
             return R;
 
         // getelementptr V, (sdiv (sub P, V), C) -> Q
@@ -4303,7 +4305,7 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
         if (match(Ops[1],
                   m_SDiv(m_Sub(m_Value(P), m_PtrToInt(m_Specific(Ops[0]))),
                          m_SpecificInt(TyAllocSize))))
-          if (Value *R = PtrToIntOrZero(P))
+          if (Value *R = PtrToInt(P))
             return R;
       }
     }
@@ -4320,15 +4322,21 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
           Ops[0]->stripAndAccumulateInBoundsConstantOffsets(Q.DL,
                                                             BasePtrOffset);
 
+      // Avoid creating inttoptr of zero here: While LLVMs treatment of
+      // inttoptr is generally conservative, this particular case is folded to
+      // a null pointer, which will have incorrect provenance.
+
       // gep (gep V, C), (sub 0, V) -> C
       if (match(Ops.back(),
-                m_Sub(m_Zero(), m_PtrToInt(m_Specific(StrippedBasePtr))))) {
+                m_Sub(m_Zero(), m_PtrToInt(m_Specific(StrippedBasePtr)))) &&
+          !BasePtrOffset.isNullValue()) {
         auto *CI = ConstantInt::get(GEPTy->getContext(), BasePtrOffset);
         return ConstantExpr::getIntToPtr(CI, GEPTy);
       }
       // gep (gep V, C), (xor V, -1) -> C-1
       if (match(Ops.back(),
-                m_Xor(m_PtrToInt(m_Specific(StrippedBasePtr)), m_AllOnes()))) {
+                m_Xor(m_PtrToInt(m_Specific(StrippedBasePtr)), m_AllOnes())) &&
+          !BasePtrOffset.isOneValue()) {
         auto *CI = ConstantInt::get(GEPTy->getContext(), BasePtrOffset - 1);
         return ConstantExpr::getIntToPtr(CI, GEPTy);
       }
