@@ -231,7 +231,6 @@ StringRef llvm::getEnumName(MVT::SimpleValueType T) {
   case MVT::iFATPTR512:return "MVT::iFATPTR512";
   case MVT::iFATPTRAny:return "MVT::iFATPTRAny";
   case MVT::Untyped:   return "MVT::Untyped";
-  case MVT::exnref:    return "MVT::exnref";
   case MVT::funcref:   return "MVT::funcref";
   case MVT::externref: return "MVT::externref";
   default: llvm_unreachable("ILLEGAL VALUE TYPE!");

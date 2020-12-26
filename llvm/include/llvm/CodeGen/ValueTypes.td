@@ -193,16 +193,14 @@ def x86mmx : ValueType<64 , 157>;   // X86 MMX value
 def FlagVT : ValueType<0  , 158>;   // Pre-RA sched glue
 def isVoid : ValueType<0  , 159>;   // Produces no value
 def untyped: ValueType<8  , 160>;   // Produces an untyped value
-def exnref : ValueType<0  , 161>;   // WebAssembly's exnref type
-def funcref : ValueType<0  , 162>;   // WebAssembly's funcref type
-def externref : ValueType<0  , 163>;   // WebAssembly's externref type
-def x86amx : ValueType<8192, 164>;   // X86 AMX value
-def iFATPTR64: ValueType<64, 165>;   // 64-bit fat pointer.
-def iFATPTR128: ValueType<128, 166>; // 128-bit fat pointer.
-def iFATPTR256: ValueType<256, 167>; // 256-bit fat pointer.
-def iFATPTR512: ValueType<512, 168>; // 512-bit fat pointer.
-def iFATPTRAny: ValueType<0, 169>;   // Any fat pointer.
-
+def funcref : ValueType<0  , 161>;   // WebAssembly's funcref type
+def externref : ValueType<0  , 162>;   // WebAssembly's externref type
+def x86amx : ValueType<8192, 163>;   // X86 AMX value
+def iFATPTR64: ValueType<64, 164>;   // 64-bit fat pointer.
+def iFATPTR128: ValueType<128, 165>; // 128-bit fat pointer.
+def iFATPTR256: ValueType<256, 166>; // 256-bit fat pointer.
+def iFATPTR512: ValueType<512, 167>; // 512-bit fat pointer.
+def iFATPTRAny: ValueType<0, 168>;   // Any fat pointer.
 
 def token  : ValueType<0  , 248>;   // TokenTy
 def MetadataVT: ValueType<0, 249>;  // Metadata

@@ -245,21 +245,20 @@ namespace llvm {
                               // unspecified type.  The register class
                               // will be determined by the opcode.
 
-      exnref         = 161,   // WebAssembly's exnref type
-      funcref        = 162,   // WebAssembly's funcref type
-      externref      = 163,   // WebAssembly's externref type
-      x86amx         = 164,   // This is an X86 AMX value
-      iFATPTR64      =  165,   // 64-bit fat pointer type
-      iFATPTR128     =  166,   // 128-bit fat pointer type
-      iFATPTR256     =  167,   // 256-bit fat pointer type
-      iFATPTR512     =  168,   // 512-bit fat pointer type
-      iFATPTRAny     =  169,   // Generic fat pointer type (must be legalised
+      funcref        = 161,   // WebAssembly's funcref type
+      externref      = 162,   // WebAssembly's externref type
+      x86amx         = 163,   // This is an X86 AMX value
+      iFATPTR64      = 164,   // 64-bit fat pointer type
+      iFATPTR128     = 165,   // 128-bit fat pointer type
+      iFATPTR256     = 166,   // 256-bit fat pointer type
+      iFATPTR512     = 167,   // 512-bit fat pointer type
+      iFATPTRAny     = 168,   // Generic fat pointer type (must be legalised
                                // to a sized  version)
       FIRST_FAT_POINTER = iFATPTR64,
       LAST_FAT_POINTER = iFATPTRAny,
 
       FIRST_VALUETYPE =  1,   // This is always the beginning of the list.
-      LAST_VALUETYPE = 170,   // This always remains at the end of the list.
+      LAST_VALUETYPE = 169,   // This always remains at the end of the list.
 
       // This is the current maximum for LAST_VALUETYPE.
       // MVT::MAX_ALLOWED_VALUETYPE is used for asserts and to size bit vectors
@@ -997,7 +996,6 @@ namespace llvm {
       case v1024f32:  return TypeSize::Fixed(32768);
       case v2048i32:
       case v2048f32:  return TypeSize::Fixed(65536);
-      case exnref:
       case funcref:
       case externref: return TypeSize::Fixed(0); // opaque type
       }
