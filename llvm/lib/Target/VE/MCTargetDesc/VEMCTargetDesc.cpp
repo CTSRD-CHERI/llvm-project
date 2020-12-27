@@ -57,7 +57,7 @@ createVEMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
 static MCSubtargetInfo *createVEMCSubtargetInfo(const Triple &TT, StringRef CPU,
                                                 StringRef FS) {
   if (CPU.empty())
-    CPU = "ve";
+    CPU = "generic";
   return createVEMCSubtargetInfoImpl(TT, CPU, /*TuneCPU=*/CPU, FS);
 }
 
