@@ -421,6 +421,7 @@ struct PseudoInfo {
   uint8_t MergeOpIndex;
   uint8_t VLMul;
   bool HasDummyMask;
+  bool WritesElement0;
 
   int getVLIndex() const { return static_cast<int8_t>(VLIndex); }
 
@@ -429,6 +430,8 @@ struct PseudoInfo {
   int getMergeOpIndex() const { return static_cast<int8_t>(MergeOpIndex); }
 
   bool hasDummyMask() const { return HasDummyMask; }
+
+  bool writesElement0() const { return WritesElement0; }
 };
 
 using namespace RISCV;
