@@ -2824,19 +2824,14 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
 }
 
 template <typename ArgTy>
-static void preAssignMask(const ArgTy &Args,
-                          Optional<unsigned> &FirstMaskArgument,
-                          CCState &CCInfo) {
-  unsigned NumArgs = Args.size();
-  for (unsigned I = 0; I != NumArgs; ++I) {
-    MVT ArgVT = Args[I].VT;
-    if (!ArgVT.isScalableVector() ||
-        ArgVT.getVectorElementType().SimpleTy != MVT::i1)
-      continue;
-
-    FirstMaskArgument = I;
-    break;
+static Optional<unsigned> preAssignMask(const ArgTy &Args) {
+  for (const auto &ArgIdx : enumerate(Args)) {
+    MVT ArgVT = ArgIdx.value().VT;
+    if (ArgVT.isScalableVector() &&
+        ArgVT.getVectorElementType().SimpleTy == MVT::i1)
+      return ArgIdx.index();
   }
+  return None;
 }
 
 void RISCVTargetLowering::analyzeInputArgs(
@@ -2847,7 +2842,7 @@ void RISCVTargetLowering::analyzeInputArgs(
 
   Optional<unsigned> FirstMaskArgument;
   if (Subtarget.hasStdExtV())
-    preAssignMask(Ins, FirstMaskArgument, CCInfo);
+    FirstMaskArgument = preAssignMask(Ins);
 
   for (unsigned i = 0; i != NumArgs; ++i) {
     MVT ArgVT = Ins[i].VT;
@@ -2877,7 +2872,7 @@ void RISCVTargetLowering::analyzeOutputArgs(
 
   Optional<unsigned> FirstMaskArgument;
   if (Subtarget.hasStdExtV())
-    preAssignMask(Outs, FirstMaskArgument, CCInfo);
+    FirstMaskArgument = preAssignMask(Outs);
 
   for (unsigned i = 0; i != NumArgs; i++) {
     MVT ArgVT = Outs[i].VT;
@@ -3696,7 +3691,7 @@ bool RISCVTargetLowering::CanLowerReturn(
 
   Optional<unsigned> FirstMaskArgument;
   if (Subtarget.hasStdExtV())
-    preAssignMask(Outs, FirstMaskArgument, CCInfo);
+    FirstMaskArgument = preAssignMask(Outs);
 
   for (unsigned i = 0, e = Outs.size(); i != e; ++i) {
     MVT VT = Outs[i].VT;
