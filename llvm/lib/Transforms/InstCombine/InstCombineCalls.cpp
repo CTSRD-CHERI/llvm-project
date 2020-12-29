@@ -1992,8 +1992,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
       for (; i != VecNumElts; ++i)
         WidenMask.push_back(UndefMaskElem);
 
-      Value *WidenShuffle = Builder.CreateShuffleVector(
-          SubVec, llvm::UndefValue::get(SubVecTy), WidenMask);
+      Value *WidenShuffle = Builder.CreateShuffleVector(SubVec, WidenMask);
 
       SmallVector<int, 8> Mask;
       for (unsigned i = 0; i != IdxN; ++i)

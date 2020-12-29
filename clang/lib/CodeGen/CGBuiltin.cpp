@@ -8063,8 +8063,7 @@ static llvm::Value *VectorUnzip(CGBuilderTy &Builder, llvm::Value *V, bool Odd) 
       cast<llvm::FixedVectorType>(V->getType())->getNumElements();
   for (unsigned i = 0; i < InputElements; i += 2)
     Indices.push_back(i + Odd);
-  return Builder.CreateShuffleVector(V, llvm::UndefValue::get(V->getType()),
-                                     Indices);
+  return Builder.CreateShuffleVector(V, Indices);
 }
 
 static llvm::Value *VectorZip(CGBuilderTy &Builder, llvm::Value *V0,
@@ -8105,8 +8104,7 @@ static llvm::Value *ARMMVEVectorElementReverse(CGBuilderTy &Builder,
   unsigned Mask = ReverseWidth / LaneSize - 1;
   for (unsigned i = 0; i < Elements; i++)
     Indices.push_back(i ^ Mask);
-  return Builder.CreateShuffleVector(V, llvm::UndefValue::get(V->getType()),
-                                     Indices);
+  return Builder.CreateShuffleVector(V, Indices);
 }
 
 Value *CodeGenFunction::EmitARMMVEBuiltinExpr(unsigned BuiltinID,
@@ -12140,8 +12138,7 @@ static Value *EmitX86CvtF16ToFloatExpr(CodeGenFunction &CGF,
   if (NumDstElts !=
       cast<llvm::FixedVectorType>(Src->getType())->getNumElements()) {
     assert(NumDstElts == 4 && "Unexpected vector size");
-    Src = CGF.Builder.CreateShuffleVector(Src, UndefValue::get(Src->getType()),
-                                          ArrayRef<int>{0, 1, 2, 3});
+    Src = CGF.Builder.CreateShuffleVector(Src, ArrayRef<int>{0, 1, 2, 3});
   }
 
   // Bitcast from vXi16 to vXf16.
@@ -13032,7 +13029,6 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       Indices[i] = i + Index;
 
     Value *Res = Builder.CreateShuffleVector(Ops[0],
-                                             UndefValue::get(Ops[0]->getType()),
                                              makeArrayRef(Indices, NumElts),
                                              "extract");
 
@@ -13072,7 +13068,6 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       Indices[i] = (i >= SrcNumElts) ? SrcNumElts + (i % SrcNumElts) : i;
 
     Value *Op1 = Builder.CreateShuffleVector(Ops[1],
-                                             UndefValue::get(Ops[1]->getType()),
                                              makeArrayRef(Indices, DstNumElts),
                                              "widen");
 
@@ -13158,8 +13153,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
         Indices[l + i] = l + i;
     }
 
-    return Builder.CreateShuffleVector(Ops[0], UndefValue::get(Ty),
-                                       makeArrayRef(Indices, NumElts),
+    return Builder.CreateShuffleVector(Ops[0], makeArrayRef(Indices, NumElts),
                                        "pshuflw");
   }
   case X86::BI__builtin_ia32_pshufhw:
@@ -13182,8 +13176,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       }
     }
 
-    return Builder.CreateShuffleVector(Ops[0], UndefValue::get(Ty),
-                                       makeArrayRef(Indices, NumElts),
+    return Builder.CreateShuffleVector(Ops[0], makeArrayRef(Indices, NumElts),
                                        "pshufhw");
   }
   case X86::BI__builtin_ia32_pshufd:
@@ -13212,8 +13205,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       }
     }
 
-    return Builder.CreateShuffleVector(Ops[0], UndefValue::get(Ty),
-                                       makeArrayRef(Indices, NumElts),
+    return Builder.CreateShuffleVector(Ops[0], makeArrayRef(Indices, NumElts),
                                        "permil");
   }
   case X86::BI__builtin_ia32_shufpd:
@@ -13260,8 +13252,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       for (unsigned i = 0; i != 4; ++i)
         Indices[l + i] = l + ((Imm >> (2 * i)) & 0x3);
 
-    return Builder.CreateShuffleVector(Ops[0], UndefValue::get(Ty),
-                                       makeArrayRef(Indices, NumElts),
+    return Builder.CreateShuffleVector(Ops[0], makeArrayRef(Indices, NumElts),
                                        "perm");
   }
   case X86::BI__builtin_ia32_palignr128:
