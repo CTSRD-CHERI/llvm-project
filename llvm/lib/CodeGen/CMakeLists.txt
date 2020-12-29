@@ -15,7 +15,6 @@ add_llvm_component_library(LLVMCodeGen
   CFIInstrInserter.cpp
   CheriBoundAllocas.cpp
   CodeGen.cpp
-  CodeGenPassBuilder.cpp
   CodeGenPrepare.cpp
   CommandFlags.cpp
   CriticalAntiDepBreaker.cpp
