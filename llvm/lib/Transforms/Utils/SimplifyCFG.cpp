@@ -971,12 +971,15 @@ bool SimplifyCFGOpt::SimplifyEqualityComparisonWithOnlyPredecessor(
   if (!TheRealDest)
     TheRealDest = ThisDef;
 
+  SmallVector<DominatorTree::UpdateType, 2> Updates;
+
   // Remove PHI node entries for dead edges.
   BasicBlock *CheckEdge = TheRealDest;
   for (BasicBlock *Succ : successors(TIBB))
-    if (Succ != CheckEdge)
+    if (Succ != CheckEdge) {
       Succ->removePredecessor(TIBB);
-    else
+      Updates.push_back({DominatorTree::Delete, TIBB, Succ});
+    } else
       CheckEdge = nullptr;
 
   // Insert the new branch.
@@ -988,6 +991,8 @@ bool SimplifyCFGOpt::SimplifyEqualityComparisonWithOnlyPredecessor(
                     << "\n");
 
   EraseTerminatorAndDCECond(TI);
+  if (DTU)
+    DTU->applyUpdatesPermissive(Updates);
   return true;
 }
 
