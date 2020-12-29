@@ -3710,7 +3710,7 @@ private:
                       << "\n              " << GEPI);
 
     IRBuilderTy Builder(&GEPI);
-    SmallVector<Value *, 4> Index(GEPI.idx_begin(), GEPI.idx_end());
+    SmallVector<Value *, 4> Index(GEPI.indices());
     bool IsInBounds = GEPI.isInBounds();
 
     Value *True = Sel->getTrueValue();
@@ -3764,7 +3764,7 @@ private:
                       << "\n              " << GEPI
                       << "\n          to: ");
 
-    SmallVector<Value *, 4> Index(GEPI.idx_begin(), GEPI.idx_end());
+    SmallVector<Value *, 4> Index(GEPI.indices());
     bool IsInBounds = GEPI.isInBounds();
     IRBuilderTy PHIBuilder(GEPI.getParent()->getFirstNonPHI());
     PHINode *NewPN = PHIBuilder.CreatePHI(GEPI.getType(),
