@@ -8567,10 +8567,9 @@ void SelectionDAGBuilder::visitInlineAsm(const CallBase &Call) {
         // Add information to the INLINEASM node to know about this input.
         unsigned ResOpType =
           InlineAsm::getFlagWord(InlineAsm::Kind_Imm, Ops.size());
-        AsmNodeOperands.push_back(
-            DAG.getTargetConstant(ResOpType, getCurSDLoc(),
-                                  TLI.getPointerRangeTy(DAG.getDataLayout())));
-        AsmNodeOperands.insert(AsmNodeOperands.end(), Ops.begin(), Ops.end());
+        AsmNodeOperands.push_back(DAG.getTargetConstant(
+            ResOpType, getCurSDLoc(), TLI.getPointerRangeTy(DAG.getDataLayout())));
+        llvm::append_range(AsmNodeOperands, Ops);
         break;
       }
 
