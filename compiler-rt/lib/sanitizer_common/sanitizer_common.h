@@ -531,6 +531,7 @@ inline int ToLower(int c) {
 template<typename T>
 class InternalMmapVectorNoCtor {
  public:
+  using value_type = T;
   void Initialize(usize initial_capacity) {
     capacity_bytes_ = 0;
     size_ = 0;
@@ -715,9 +716,13 @@ void Sort(T *v, usize size, Compare comp = {}) {
 
 // Works like std::lower_bound: finds the first element that is not less
 // than the val.
-template <class Container, class Value, class Compare>
-usize InternalLowerBound(const Container &v, usize first, usize last,
-                        const Value &val, Compare comp) {
+template <class Container,
+          class Compare = CompareLess<typename Container::value_type>>
+usize InternalLowerBound(const Container &v,
+                        const typename Container::value_type &val,
+                        Compare comp = {}) {
+  usize first = 0;
+  usize last = v.size();
   while (last > first) {
     usize mid = (first + last) / 2;
     if (comp(v[mid], val))
