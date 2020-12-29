@@ -1819,7 +1819,8 @@ namespace {
 /// true, sink any common code from the predecessors to BB.
 /// We also allow one predecessor to end with conditional branch (but no more
 /// than one).
-static bool SinkCommonCodeFromPredecessors(BasicBlock *BB) {
+static bool SinkCommonCodeFromPredecessors(BasicBlock *BB,
+                                           DomTreeUpdater *DTU) {
   // We support two situations:
   //   (1) all incoming arcs are unconditional
   //   (2) one incoming arc is conditional
@@ -1937,7 +1938,8 @@ static bool SinkCommonCodeFromPredecessors(BasicBlock *BB) {
     LLVM_DEBUG(dbgs() << "SINK: Splitting edge\n");
     // We have a conditional edge and we're going to sink some instructions.
     // Insert a new block postdominating all blocks we're going to sink from.
-    if (!SplitBlockPredecessors(BB, UnconditionalPreds, ".sink.split"))
+    if (!SplitBlockPredecessors(BB, UnconditionalPreds, ".sink.split",
+                                DTU ? &DTU->getDomTree() : nullptr))
       // Edges couldn't be split.
       return false;
     Changed = true;
@@ -6495,7 +6497,7 @@ bool SimplifyCFGOpt::simplifyOnceImpl(BasicBlock *BB) {
     return true;
 
   if (SinkCommon && Options.SinkCommonInsts)
-    Changed |= SinkCommonCodeFromPredecessors(BB);
+    Changed |= SinkCommonCodeFromPredecessors(BB, DTU);
 
   IRBuilder<> Builder(BB);
 
