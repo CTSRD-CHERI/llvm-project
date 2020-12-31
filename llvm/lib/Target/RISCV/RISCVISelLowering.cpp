@@ -4760,4 +4760,11 @@ namespace RISCVVIntrinsicsTable {
 #include "RISCVGenSearchableTables.inc"
 
 } // namespace RISCVVIntrinsicsTable
+
+namespace RISCVZvlssegTable {
+
+#define GET_RISCVZvlssegTable_IMPL
+#include "RISCVGenSearchableTables.inc"
+
+} // namespace RISCVZvlssegTable
 } // namespace llvm
