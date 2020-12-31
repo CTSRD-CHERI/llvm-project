@@ -313,17 +313,6 @@ bool replaceAndRecursivelySimplify(
     const DominatorTree *DT = nullptr, AssumptionCache *AC = nullptr,
     SmallSetVector<Instruction *, 8> *UnsimplifiedUsers = nullptr);
 
-/// Recursively attempt to simplify an instruction.
-///
-/// This routine uses SimplifyInstruction to simplify 'I', and if successful
-/// replaces uses of 'I' with the simplified value. It then recurses on each
-/// of the users impacted. It returns true if any simplifications were
-/// performed.
-bool recursivelySimplifyInstruction(Instruction *I,
-                                    const TargetLibraryInfo *TLI = nullptr,
-                                    const DominatorTree *DT = nullptr,
-                                    AssumptionCache *AC = nullptr);
-
 /// Return the underlying Value*, stripping all GEP, pointer cast and
 /// setoffset/setaddr intrinsics (i.e. everything that keeps the non-address
 /// bits of CHERI capabilities the same)
