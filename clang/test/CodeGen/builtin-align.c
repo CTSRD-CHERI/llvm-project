@@ -47,19 +47,19 @@
 // UTC_ARGS: --disable
 /// Check that constant initializers work and are correct
 _Bool aligned_true = __builtin_is_aligned(1024, 512);
-// CHECK: @aligned_true = global i8 1, align 1
+// CHECK: @aligned_true ={{.*}} global i8 1, align 1
 _Bool aligned_false = __builtin_is_aligned(123, 512);
-// CHECK: @aligned_false = global i8 0, align 1
+// CHECK: @aligned_false ={{.*}} global i8 0, align 1
 
 int down_1 = __builtin_align_down(1023, 32);
-// CHECK: @down_1 = global i32 992, align 4
+// CHECK: @down_1 ={{.*}} global i32 992, align 4
 int down_2 = __builtin_align_down(256, 32);
-// CHECK: @down_2 = global i32 256, align 4
+// CHECK: @down_2 ={{.*}} global i32 256, align 4
 
 int up_1 = __builtin_align_up(1023, 32);
-// CHECK: @up_1 = global i32 1024, align 4
+// CHECK: @up_1 ={{.*}} global i32 1024, align 4
 int up_2 = __builtin_align_up(256, 32);
-// CHECK: @up_2 = global i32 256, align 4
+// CHECK: @up_2 ={{.*}} global i32 256, align 4
 // UTC_ARGS: --enable
 
 /// Capture the IR type here to use in the remaining FileCheck captures:
