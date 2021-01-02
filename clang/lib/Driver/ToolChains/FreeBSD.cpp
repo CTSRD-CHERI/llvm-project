@@ -42,6 +42,7 @@ void freebsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("--32");
     break;
   case llvm::Triple::ppc:
+  case llvm::Triple::ppcle:
     CmdArgs.push_back("-a32");
     break;
   case llvm::Triple::mips:
@@ -223,6 +224,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::ppc:
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf32ppc_fbsd");
+    break;
+  case llvm::Triple::ppcle:
+    CmdArgs.push_back("-m");
+    // Use generic -- only usage is for freestanding.
+    CmdArgs.push_back("elf32lppc");
     break;
   case llvm::Triple::mips:
     CmdArgs.push_back("-m");
