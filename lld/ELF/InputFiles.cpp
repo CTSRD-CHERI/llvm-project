@@ -1631,6 +1631,7 @@ static uint16_t getBitcodeMachineKind(StringRef path, const Triple &t) {
   case Triple::msp430:
     return EM_MSP430;
   case Triple::ppc:
+  case Triple::ppcle:
     return EM_PPC;
   case Triple::ppc64:
   case Triple::ppc64le:
