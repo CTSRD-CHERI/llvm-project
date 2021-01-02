@@ -184,7 +184,8 @@ __attribute__((unused)) static bool GetLibcVersion(int *major, int *minor,
 #endif
 }
 
-#if SANITIZER_GLIBC && !SANITIZER_GO
+#if !SANITIZER_FREEBSD && !SANITIZER_ANDROID && !SANITIZER_GO && \
+    !SANITIZER_NETBSD && !SANITIZER_SOLARIS
 static usize g_tls_size;
 
 #ifdef __i386__
@@ -256,7 +257,7 @@ void InitTlsSize() {
 }
 #else
 void InitTlsSize() { }
-#endif  // SANITIZER_GLIBC && !SANITIZER_GO
+#endif
 
 #if (defined(__x86_64__) || defined(__i386__) || defined(__mips__) ||       \
      defined(__aarch64__) || defined(__powerpc64__) || defined(__s390__) || \
@@ -560,14 +561,10 @@ usize GetTlsSize() {
   usize size;
   GetTls(&addr, &size);
   return size;
-#elif SANITIZER_GLIBC
-#if defined(__mips__) || defined(__powerpc64__) || SANITIZER_RISCV64
+#elif defined(__mips__) || defined(__powerpc64__) || SANITIZER_RISCV64
   return RoundUpTo(g_tls_size + TlsPreTcbSize(), 16);
 #else
   return g_tls_size;
-#endif
-#else
-  return 0;
 #endif
 }
 #endif
