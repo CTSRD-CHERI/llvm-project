@@ -153,7 +153,7 @@ size_t DwarfEHPrepare::pruneUnreachableResumes(
       BasicBlock *BB = RI->getParent();
       new UnreachableInst(Ctx, RI);
       RI->eraseFromParent();
-      simplifyCFG(BB, *TTI, DTU);
+      simplifyCFG(BB, *TTI, RequireAndPreserveDomTree ? DTU : nullptr);
     }
   }
   Resumes.resize(ResumesLeft);
@@ -250,7 +250,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls() {
 }
 
 bool DwarfEHPrepare::run() {
-  assert(((OptLevel == CodeGenOpt::None) ||
+  assert(((OptLevel == CodeGenOpt::None || !RequireAndPreserveDomTree) ||
           (DTU &&
            DTU->getDomTree().verify(DominatorTree::VerificationLevel::Full))) &&
          "Original domtree is invalid?");
