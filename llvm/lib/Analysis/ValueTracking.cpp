@@ -5032,7 +5032,8 @@ static bool isGuaranteedNotToBeUndefOrPoison(const Value *V,
       return true;
 
     if (C->getType()->isVectorTy() && !isa<ConstantExpr>(C))
-      return (PoisonOnly || !C->containsUndefElement()) &&
+      return (PoisonOnly ? !C->containsPoisonElement()
+                         : !C->containsUndefOrPoisonElement()) &&
              !C->containsConstantExpression();
   }
 
@@ -5773,10 +5774,10 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
     // elements because those can not be back-propagated for analysis.
     Value *OutputZeroVal = nullptr;
     if (match(TrueVal, m_AnyZeroFP()) && !match(FalseVal, m_AnyZeroFP()) &&
-        !cast<Constant>(TrueVal)->containsUndefElement())
+        !cast<Constant>(TrueVal)->containsUndefOrPoisonElement())
       OutputZeroVal = TrueVal;
     else if (match(FalseVal, m_AnyZeroFP()) && !match(TrueVal, m_AnyZeroFP()) &&
-             !cast<Constant>(FalseVal)->containsUndefElement())
+             !cast<Constant>(FalseVal)->containsUndefOrPoisonElement())
       OutputZeroVal = FalseVal;
 
     if (OutputZeroVal) {
