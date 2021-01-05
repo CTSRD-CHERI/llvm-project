@@ -2003,8 +2003,7 @@ void AsmPrinter::emitConstantPool() {
       unsigned NewOffset = alignTo(Offset, CPE.getAlign());
       OutStreamer->emitZeros(NewOffset - Offset);
 
-      Type *Ty = CPE.getType();
-      const auto Size = getDataLayout().getTypeAllocSize(Ty);
+      const auto Size = CPE.getSizeInBytes(getDataLayout());
       Offset = NewOffset + Size;
 
       OutStreamer->emitLabel(Sym);
