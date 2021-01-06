@@ -403,6 +403,7 @@ public:
   }
 
   unsigned getInliningThresholdMultiplier() { return 1; }
+  unsigned adjustInliningThreshold(const CallBase *CB) { return 0; }
 
   int getInlinerVectorBonusPercent() { return 150; }
 
