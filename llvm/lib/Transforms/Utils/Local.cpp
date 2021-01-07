@@ -2259,8 +2259,7 @@ static bool markAliveBlocks(Function &F,
           UnwindDestBB->removePredecessor(II->getParent());
           II->eraseFromParent();
           if (DTU)
-            DTU->applyUpdatesPermissive(
-                {{DominatorTree::Delete, BB, UnwindDestBB}});
+            DTU->applyUpdates({{DominatorTree::Delete, BB, UnwindDestBB}});
         } else
           changeToCall(II, DTU);
         Changed = true;
