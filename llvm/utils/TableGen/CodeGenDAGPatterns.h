@@ -1163,7 +1163,7 @@ class CodeGenDAGPatterns {
 
   /// Flag indicating whether fat pointers should be supported.
   bool FatPointers;
-  
+
   TypeSetByHwMode LegalVTS;
 
   using PatternRewriterFn = std::function<void (TreePattern *)>;
@@ -1181,7 +1181,7 @@ public:
 
   bool enableFatPointers() { return FatPointers; }
 
-  Record *getSDNodeNamed(const std::string &Name) const;
+  Record *getSDNodeNamed(StringRef Name) const;
 
   const SDNodeInfo &getSDNodeInfo(Record *R) const {
     auto F = SDNodes.find(R);
