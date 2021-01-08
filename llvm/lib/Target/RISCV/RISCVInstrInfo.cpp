@@ -13,10 +13,12 @@
 #include "RISCVInstrInfo.h"
 #include "MCTargetDesc/RISCVMatInt.h"
 #include "RISCV.h"
+#include "RISCVMachineFunctionInfo.h"
 #include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -187,13 +189,10 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     DL = I->getDebugLoc();
 
   MachineFunction *MF = MBB.getParent();
-  const MachineFrameInfo &MFI = MF->getFrameInfo();
-  MachineMemOperand *MMO = MF->getMachineMemOperand(
-      MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
-      MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+  MachineFrameInfo &MFI = MF->getFrameInfo();
 
   unsigned Opcode;
-
+  bool IsScalableVector = false;
   if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
     if (RISCV::GPRRegClass.hasSubClassEq(RC))
       Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
@@ -211,26 +210,54 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
       llvm_unreachable("Can't store this register to stack slot");
   } else {
     if (RISCV::GPRRegClass.hasSubClassEq(RC))
-      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
-               RISCV::SW : RISCV::SD;
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ? RISCV::SW
+                                                               : RISCV::SD;
     else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
-      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
-               RISCV::SC_64 : RISCV::SC_128;
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ? RISCV::SC_64
+                                                                : RISCV::SC_128;
     else if (RISCV::FPR16RegClass.hasSubClassEq(RC))
       Opcode = RISCV::FSH;
     else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
       Opcode = RISCV::FSW;
     else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
       Opcode = RISCV::FSD;
-    else
+    else if (RISCV::VRRegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVSPILL_M1;
+      IsScalableVector = true;
+    } else if (RISCV::VRM2RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVSPILL_M2;
+      IsScalableVector = true;
+    } else if (RISCV::VRM4RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVSPILL_M4;
+      IsScalableVector = true;
+    } else if (RISCV::VRM8RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVSPILL_M8;
+      IsScalableVector = true;
+    } else
       llvm_unreachable("Can't store this register to stack slot");
   }
 
-  BuildMI(MBB, I, DL, get(Opcode))
-      .addReg(SrcReg, getKillRegState(IsKill))
-      .addFrameIndex(FI)
-      .addImm(0)
-      .addMemOperand(MMO);
+  if (IsScalableVector) {
+    MachineMemOperand *MMO = MF->getMachineMemOperand(
+        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
+        MemoryLocation::UnknownSize, MFI.getObjectAlign(FI));
+
+    MFI.setStackID(FI, TargetStackID::ScalableVector);
+    BuildMI(MBB, I, DL, get(Opcode))
+        .addReg(SrcReg, getKillRegState(IsKill))
+        .addFrameIndex(FI)
+        .addMemOperand(MMO);
+  } else {
+    MachineMemOperand *MMO = MF->getMachineMemOperand(
+        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
+        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+
+    BuildMI(MBB, I, DL, get(Opcode))
+        .addReg(SrcReg, getKillRegState(IsKill))
+        .addFrameIndex(FI)
+        .addImm(0)
+        .addMemOperand(MMO);
+  }
 }
 
 void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
@@ -244,13 +271,10 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     DL = I->getDebugLoc();
 
   MachineFunction *MF = MBB.getParent();
-  const MachineFrameInfo &MFI = MF->getFrameInfo();
-  MachineMemOperand *MMO = MF->getMachineMemOperand(
-      MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
-      MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+  MachineFrameInfo &MFI = MF->getFrameInfo();
 
   unsigned Opcode;
-
+  bool IsScalableVector = false;
   if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
     if (RISCV::GPRRegClass.hasSubClassEq(RC))
       Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
@@ -279,14 +303,41 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
       Opcode = RISCV::FLW;
     else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
       Opcode = RISCV::FLD;
-    else
+    else if (RISCV::VRRegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVRELOAD_M1;
+      IsScalableVector = true;
+    } else if (RISCV::VRM2RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVRELOAD_M2;
+      IsScalableVector = true;
+    } else if (RISCV::VRM4RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVRELOAD_M4;
+      IsScalableVector = true;
+    } else if (RISCV::VRM8RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoVRELOAD_M8;
+      IsScalableVector = true;
+    } else
       llvm_unreachable("Can't load this register from stack slot");
   }
 
-  BuildMI(MBB, I, DL, get(Opcode), DstReg)
-    .addFrameIndex(FI)
-    .addImm(0)
-    .addMemOperand(MMO);
+  if (IsScalableVector) {
+    MachineMemOperand *MMO = MF->getMachineMemOperand(
+        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
+        MemoryLocation::UnknownSize, MFI.getObjectAlign(FI));
+
+    MFI.setStackID(FI, TargetStackID::ScalableVector);
+    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+        .addFrameIndex(FI)
+        .addMemOperand(MMO);
+  } else {
+    MachineMemOperand *MMO = MF->getMachineMemOperand(
+        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
+        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+
+    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+        .addFrameIndex(FI)
+        .addImm(0)
+        .addMemOperand(MMO);
+  }
 }
 
 void RISCVInstrInfo::movImm(MachineBasicBlock &MBB,
