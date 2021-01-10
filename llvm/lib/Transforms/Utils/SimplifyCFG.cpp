@@ -2502,8 +2502,8 @@ static bool FoldCondBranchOnPHI(BranchInst *BI, DomTreeUpdater *DTU,
         PredBBTI->setSuccessor(i, EdgeBB);
       }
 
-    Updates.push_back({DominatorTree::Delete, PredBB, BB});
     Updates.push_back({DominatorTree::Insert, PredBB, EdgeBB});
+    Updates.push_back({DominatorTree::Delete, PredBB, BB});
 
     if (DTU)
       DTU->applyUpdates(Updates);
@@ -2671,9 +2671,9 @@ static bool FoldTwoEntryPHINode(PHINode *PN, const TargetTransformInfo &TTI,
 
   SmallVector<DominatorTree::UpdateType, 3> Updates;
   if (DTU) {
+    Updates.push_back({DominatorTree::Insert, DomBlock, BB});
     for (auto *Successor : successors(DomBlock))
       Updates.push_back({DominatorTree::Delete, DomBlock, Successor});
-    Updates.push_back({DominatorTree::Insert, DomBlock, BB});
   }
 
   OldTI->eraseFromParent();
@@ -3156,8 +3156,8 @@ bool llvm::FoldBranchToCommonDest(BranchInst *BI, DomTreeUpdater *DTU,
       } else
         PBI->setMetadata(LLVMContext::MD_prof, nullptr);
 
-      Updates.push_back({DominatorTree::Delete, PredBlock, BB});
       Updates.push_back({DominatorTree::Insert, PredBlock, UniqueSucc});
+      Updates.push_back({DominatorTree::Delete, PredBlock, BB});
     } else {
       // Update PHI nodes in the common successors.
       for (unsigned i = 0, e = PHIs.size(); i != e; ++i) {
@@ -3588,8 +3588,9 @@ static bool tryWidenCondBranchToCondBranch(BranchInst *PBI, BranchInst *BI,
     OldSuccessor->removePredecessor(BI->getParent());
     BI->setSuccessor(1, IfFalseBB);
     if (DTU)
-      DTU->applyUpdates({{DominatorTree::Delete, BI->getParent(), OldSuccessor},
-                         {DominatorTree::Insert, BI->getParent(), IfFalseBB}});
+      DTU->applyUpdates(
+          {{DominatorTree::Insert, BI->getParent(), IfFalseBB},
+           {DominatorTree::Delete, BI->getParent(), OldSuccessor}});
     return true;
   }
   if (BI->getSuccessor(0) != IfFalseBB && // no inf looping
@@ -3599,8 +3600,9 @@ static bool tryWidenCondBranchToCondBranch(BranchInst *PBI, BranchInst *BI,
     OldSuccessor->removePredecessor(BI->getParent());
     BI->setSuccessor(0, IfFalseBB);
     if (DTU)
-      DTU->applyUpdates({{DominatorTree::Delete, BI->getParent(), OldSuccessor},
-                         {DominatorTree::Insert, BI->getParent(), IfFalseBB}});
+      DTU->applyUpdates(
+          {{DominatorTree::Insert, BI->getParent(), IfFalseBB},
+           {DominatorTree::Delete, BI->getParent(), OldSuccessor}});
     return true;
   }
   return false;
@@ -3718,6 +3720,7 @@ static bool SimplifyCondBranchToCondBranch(BranchInst *PBI, BranchInst *BI,
   // case, it would be unsafe to hoist the operation into a select instruction.
 
   BasicBlock *CommonDest = PBI->getSuccessor(PBIOp);
+  BasicBlock *RemovedDest = PBI->getSuccessor(PBIOp ^ 1);
   unsigned NumPhis = 0;
   for (BasicBlock::iterator II = CommonDest->begin(); isa<PHINode>(II);
        ++II, ++NumPhis) {
@@ -3780,16 +3783,13 @@ static bool SimplifyCondBranchToCondBranch(BranchInst *PBI, BranchInst *BI,
   // Merge the conditions.
   Value *Cond = Builder.CreateOr(PBICond, BICond, "brmerge");
 
-  for (auto *Successor : successors(PBI->getParent()))
-    Updates.push_back({DominatorTree::Delete, PBI->getParent(), Successor});
-
   // Modify PBI to branch on the new condition to the new dests.
   PBI->setCondition(Cond);
   PBI->setSuccessor(0, CommonDest);
   PBI->setSuccessor(1, OtherDest);
 
-  for (auto *Successor : successors(PBI->getParent()))
-    Updates.push_back({DominatorTree::Insert, PBI->getParent(), Successor});
+  Updates.push_back({DominatorTree::Insert, PBI->getParent(), OtherDest});
+  Updates.push_back({DominatorTree::Delete, PBI->getParent(), RemovedDest});
 
   if (DTU)
     DTU->applyUpdates(Updates);
@@ -4527,8 +4527,8 @@ static bool removeEmptyCleanup(CleanupReturnInst *RI, DomTreeUpdater *DTU) {
     } else {
       Instruction *TI = PredBB->getTerminator();
       TI->replaceUsesOfWith(BB, UnwindDest);
-      Updates.push_back({DominatorTree::Delete, PredBB, BB});
       Updates.push_back({DominatorTree::Insert, PredBB, UnwindDest});
+      Updates.push_back({DominatorTree::Delete, PredBB, BB});
     }
   }
 
@@ -4788,10 +4788,10 @@ bool SimplifyCFGOpt::simplifyUnreachable(UnreachableInst *UI) {
           // Redirect all predecessors of the block containing CatchSwitchInst
           // to instead branch to the CatchSwitchInst's unwind destination.
           for (auto *PredecessorOfPredecessor : predecessors(Predecessor)) {
-            Updates.push_back(
-                {DominatorTree::Delete, PredecessorOfPredecessor, Predecessor});
             Updates.push_back({DominatorTree::Insert, PredecessorOfPredecessor,
                                CSI->getUnwindDest()});
+            Updates.push_back(
+                {DominatorTree::Delete, PredecessorOfPredecessor, Predecessor});
           }
           Predecessor->replaceAllUsesWith(CSI->getUnwindDest());
         } else {
@@ -4858,8 +4858,8 @@ static void createUnreachableSwitchDefault(SwitchInst *Switch,
   auto *OrigDefaultBlock = Switch->getDefaultDest();
   Switch->setDefaultDest(&*NewDefaultBlock);
   if (DTU)
-    DTU->applyUpdates({{DominatorTree::Delete, BB, OrigDefaultBlock},
-                       {DominatorTree::Insert, BB, &*NewDefaultBlock}});
+    DTU->applyUpdates({{DominatorTree::Insert, BB, &*NewDefaultBlock},
+                       {DominatorTree::Delete, BB, OrigDefaultBlock}});
   SplitBlock(&*NewDefaultBlock, &NewDefaultBlock->front(),
              DTU ? &DTU->getDomTree() : nullptr);
   SmallVector<DominatorTree::UpdateType, 2> Updates;
@@ -6378,8 +6378,8 @@ static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
       assert(II->getNormalDest() != BB && II->getUnwindDest() == BB &&
              "unexpected successor");
       II->setUnwindDest(OtherPred);
-      Updates.push_back({DominatorTree::Delete, Pred, BB});
       Updates.push_back({DominatorTree::Insert, Pred, OtherPred});
+      Updates.push_back({DominatorTree::Delete, Pred, BB});
     }
 
     // The debug info in OtherPred doesn't cover the merged control flow that
