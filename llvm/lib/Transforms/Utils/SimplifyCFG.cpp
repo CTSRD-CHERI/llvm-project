@@ -6007,7 +6007,6 @@ static bool SwitchToLookupTable(SwitchInst *SI, IRBuilder<> &Builder,
     RangeCheckBranch =
         Builder.CreateCondBr(Cmp, LookupBB, SI->getDefaultDest());
     Updates.push_back({DominatorTree::Insert, BB, LookupBB});
-    Updates.push_back({DominatorTree::Insert, BB, SI->getDefaultDest()});
   }
 
   // Populate the BB that does the lookups.
