@@ -14011,7 +14011,7 @@ SDValue DAGCombiner::visitFSQRT(SDNode *N) {
 
   // Require 'ninf' flag since sqrt(+Inf) = +Inf, but the estimation goes as:
   // sqrt(+Inf) == rsqrt(+Inf) * +Inf = 0 * +Inf = NaN
-  if ((!Options.UnsafeFPMath && !Flags.hasApproximateFuncs()) ||
+  if (!Flags.hasApproximateFuncs() ||
       (!Options.NoInfsFPMath && !Flags.hasNoInfs()))
     return SDValue();
 
