@@ -248,6 +248,7 @@ const char *StripModuleName(const char *module);
 // OS
 usize ReadBinaryName(/*out*/char *buf, usize buf_len);
 usize ReadBinaryNameCached(/*out*/char *buf, usize buf_len);
+usize ReadBinaryDir(/*out*/ char *buf, usize buf_len);
 usize ReadLongProcessName(/*out*/ char *buf, usize buf_len);
 const char *GetProcessName();
 void UpdateProcessName();
