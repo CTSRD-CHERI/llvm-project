@@ -879,7 +879,7 @@ bool TreePredicateFn::hasPredCode() const {
 }
 
 std::string TreePredicateFn::getPredCode() const {
-  std::string Code = "";
+  std::string Code;
 
   if (!isLoad() && !isStore() && !isAtomic()) {
     Record *MemoryVT = getMemoryVT();
