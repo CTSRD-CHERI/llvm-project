@@ -9,7 +9,7 @@
 
 #include "RISCVSelectionDAGInfo.h"
 #include "RISCVSubtarget.h"
-#include "Utils/RISCVBaseInfo.h"
+#include "MCTargetDesc/RISCVBaseInfo.h"
 
 using namespace llvm;
 

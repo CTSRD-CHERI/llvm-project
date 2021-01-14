@@ -8,7 +8,7 @@
 
 #include "RISCVTargetObjectFile.h"
 #include "RISCVTargetMachine.h"
-#include "Utils/RISCVCompressedCap.h"
+#include "MCTargetDesc/RISCVCompressedCap.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"

@@ -13,7 +13,7 @@
 #ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCASMINFO_H
 #define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCASMINFO_H
 
-#include "Utils/RISCVBaseInfo.h"
+#include "RISCVBaseInfo.h"
 #include "llvm/MC/MCAsmInfoELF.h"
 
 namespace llvm {
