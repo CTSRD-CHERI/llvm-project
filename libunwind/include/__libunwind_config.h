@@ -36,6 +36,9 @@
 #endif
 
 #if defined(_LIBUNWIND_IS_NATIVE_ONLY)
+# if defined(__linux__)
+#  define _LIBUNWIND_TARGET_LINUX 1
+# endif
 # if defined(__i386__)
 #  define _LIBUNWIND_TARGET_I386
 #  define _LIBUNWIND_CONTEXT_SIZE 8
