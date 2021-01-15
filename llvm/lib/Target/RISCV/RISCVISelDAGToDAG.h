@@ -56,8 +56,8 @@ public:
   bool selectVSplatSimm5(SDValue N, SDValue &SplatVal);
   bool selectVSplatUimm5(SDValue N, SDValue &SplatVal);
 
-  void selectVLSEG(SDNode *Node, unsigned IntNo);
-  void selectVLSEGMask(SDNode *Node, unsigned IntNo);
+  void selectVLSEG(SDNode *Node, unsigned IntNo, bool IsStrided);
+  void selectVLSEGMask(SDNode *Node, unsigned IntNo, bool IsStrided);
   void selectVSSEG(SDNode *Node, unsigned IntNo);
   void selectVSSEGMask(SDNode *Node, unsigned IntNo);
 
