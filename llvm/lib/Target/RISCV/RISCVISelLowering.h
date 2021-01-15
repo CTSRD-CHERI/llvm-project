@@ -141,6 +141,10 @@ public:
 
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
+  bool targetShrinkDemandedConstant(SDValue Op, const APInt &DemandedBits,
+                                    const APInt &DemandedElts,
+                                    TargetLoweringOpt &TLO) const override;
+
   void computeKnownBitsForTargetNode(const SDValue Op,
                                      KnownBits &Known,
                                      const APInt &DemandedElts,
