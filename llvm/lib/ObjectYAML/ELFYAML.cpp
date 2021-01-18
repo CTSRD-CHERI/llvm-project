@@ -1223,7 +1223,7 @@ static void sectionMapping(IO &IO, ELFYAML::NoBitsSection &Section) {
 
 static void sectionMapping(IO &IO, ELFYAML::VerdefSection &Section) {
   commonSectionMapping(IO, Section);
-  IO.mapRequired("Info", Section.Info);
+  IO.mapOptional("Info", Section.Info);
   IO.mapOptional("Entries", Section.Entries);
 }
 
@@ -1234,7 +1234,7 @@ static void sectionMapping(IO &IO, ELFYAML::SymverSection &Section) {
 
 static void sectionMapping(IO &IO, ELFYAML::VerneedSection &Section) {
   commonSectionMapping(IO, Section);
-  IO.mapRequired("Info", Section.Info);
+  IO.mapOptional("Info", Section.Info);
   IO.mapOptional("Dependencies", Section.VerneedV);
 }
 
