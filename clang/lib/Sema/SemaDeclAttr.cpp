@@ -4052,9 +4052,10 @@ bool Sema::checkMSInheritanceAttrOnDefinition(
 /// parseModeAttrArg - Parses attribute mode string and returns parsed type
 /// attribute.
 static void parseModeAttrArg(Sema &S, StringRef Str, unsigned &DestWidth,
-                             bool &IntegerMode, bool &ComplexMode,
-                             bool &ExplicitIEEE) {
+                             bool &IntegerMode, bool &CapabilityMode,
+                             bool &ComplexMode, bool &ExplicitIEEE) {
   IntegerMode = true;
+  CapabilityMode = false;
   ComplexMode = false;
   switch (Str.size()) {
   case 2:
@@ -4101,12 +4102,29 @@ static void parseModeAttrArg(Sema &S, StringRef Str, unsigned &DestWidth,
       DestWidth = S.Context.getTargetInfo().getCharWidth();
     break;
   case 7:
-    if (Str == "pointer")
+    if (Str == "pointer") {
       DestWidth = S.Context.getTargetInfo().getPointerWidth(0);
+      if (S.Context.getTargetInfo().areAllPointersCapabilities()) {
+        IntegerMode = false;
+        CapabilityMode = true;
+      }
+    }
+    break;
+  case 10:
+    if (Str == "capability") {
+      DestWidth = S.Context.getTargetInfo().getCHERICapabilityWidth();
+      IntegerMode = false;
+      CapabilityMode = true;
+    }
     break;
   case 11:
-    if (Str == "unwind_word")
+    if (Str == "unwind_word") {
       DestWidth = S.Context.getTargetInfo().getUnwindWordWidth();
+      if (S.Context.getTargetInfo().areAllPointersCapabilities()) {
+        IntegerMode = false;
+        CapabilityMode = true;
+      }
+    }
     break;
   }
 }
@@ -4139,6 +4157,7 @@ void Sema::AddModeAttr(Decl *D, const AttributeCommonInfo &CI,
 
   unsigned DestWidth = 0;
   bool IntegerMode = true;
+  bool CapabilityMode = false;
   bool ComplexMode = false;
   bool ExplicitIEEE = false;
   llvm::APInt VectorSize(64, 0);
@@ -4153,7 +4172,7 @@ void Sema::AddModeAttr(Decl *D, const AttributeCommonInfo &CI,
         !Str.substr(1, VectorStringLength).getAsInteger(10, VectorSize) &&
         VectorSize.isPowerOf2()) {
       parseModeAttrArg(*this, Str.substr(VectorStringLength + 1), DestWidth,
-                       IntegerMode, ComplexMode, ExplicitIEEE);
+                       IntegerMode, CapabilityMode, ComplexMode, ExplicitIEEE);
       // Avoid duplicate warning from template instantiation.
       if (!InInstantiation)
         Diag(AttrLoc, diag::warn_vector_mode_deprecated);
@@ -4163,8 +4182,8 @@ void Sema::AddModeAttr(Decl *D, const AttributeCommonInfo &CI,
   }
 
   if (!VectorSize)
-    parseModeAttrArg(*this, Str, DestWidth, IntegerMode, ComplexMode,
-                     ExplicitIEEE);
+    parseModeAttrArg(*this, Str, DestWidth, IntegerMode, CapabilityMode,
+                     ComplexMode, ExplicitIEEE);
 
   // FIXME: Sync this with InitializePredefinedMacros; we need to match int8_t
   // and friends, at least with glibc.
@@ -4207,14 +4226,18 @@ void Sema::AddModeAttr(Decl *D, const AttributeCommonInfo &CI,
     return;
   }
   bool IntegralOrAnyEnumType = (OldElemTy->isIntegralOrEnumerationType() &&
-                                !OldElemTy->isExtIntType()) ||
+                                !OldElemTy->isExtIntType() &&
+                                !OldElemTy->isCHERICapabilityType(Context)) ||
                                OldElemTy->getAs<EnumType>();
 
   if (!OldElemTy->getAs<BuiltinType>() && !OldElemTy->isComplexType() &&
-      !IntegralOrAnyEnumType)
+      !IntegralOrAnyEnumType && !OldElemTy->isCHERICapabilityType(Context))
     Diag(AttrLoc, diag::err_mode_not_primitive);
   else if (IntegerMode) {
     if (!IntegralOrAnyEnumType)
+      Diag(AttrLoc, diag::err_mode_wrong_type);
+  } else if (CapabilityMode) {
+    if (!OldElemTy->isCHERICapabilityType(Context))
       Diag(AttrLoc, diag::err_mode_wrong_type);
   } else if (ComplexMode) {
     if (!OldElemTy->isComplexType())
@@ -4229,6 +4252,8 @@ void Sema::AddModeAttr(Decl *D, const AttributeCommonInfo &CI,
   if (IntegerMode)
     NewElemTy = Context.getIntTypeForBitwidth(DestWidth,
                                               OldElemTy->isSignedIntegerType());
+  else if (CapabilityMode)
+    NewElemTy = OldElemTy;
   else
     NewElemTy = Context.getRealTypeForBitwidth(DestWidth, ExplicitIEEE);
 

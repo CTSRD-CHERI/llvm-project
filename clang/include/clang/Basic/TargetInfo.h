@@ -768,10 +768,10 @@ public:
 
   /// Return the "preferred" register width on this target.
   virtual unsigned getRegisterWidth() const {
-    // Currently we assume the register width on the target matches the pointer
+    // Currently we assume the register width on the target matches the size
     // width, we can introduce a new variable for this if/when some target wants
     // it.
-    return PointerWidth;
+    return getTypeWidth(SizeType);
   }
 
   /// Returns the name of the mcount instrumentation function.
