@@ -29,7 +29,7 @@ void test_tme_funcs() {
 // CHECK: call void @llvm.aarch64.tcancel(i64 65535)
 
 // CHECK: declare i64 @llvm.aarch64.tstart() #1
-// CHECK: declare i64 @llvm.aarch64.ttest() #2
+// CHECK: declare i64 @llvm.aarch64.ttest() #1
 // CHECK: declare void @llvm.aarch64.tcommit() #1
 // CHECK: declare void @llvm.aarch64.tcancel(i64 immarg) #1
 
@@ -38,6 +38,5 @@ extern "C" void arm_feature_tme_defined() {}
 #endif
 // CHECK: define{{.*}} void @arm_feature_tme_defined()
 
-// CHECK: attributes #1 = { nounwind }
-// CHECK: attributes #2 = { hassideeffects nounwind }
+// CHECK: attributes #1 = { nounwind willreturn }
 
