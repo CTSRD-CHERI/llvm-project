@@ -63,6 +63,19 @@ char *__capability test_ptr_to_capptr_default(char *p) {
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 
+// CHECK-LABEL: define {{[^@]+}}@test_signed_literal_to_capptr_default
+// CHECK-SAME: () #0
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    ret i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*)
+//
+char *__capability test_signed_literal_to_capptr_default(void) {
+  return (char *__capability)1;
+  // address-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
+  // address-note@-2{{use an explicit capability conversion or insert a cast to intcap_t if this is intended}}
+  // AST-LABEL: FunctionDecl {{.+}} test_signed_literal_to_capptr_default
+  // AST:       CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <IntegralToPointer>
+}
+
 #ifdef __cplusplus
 // CXX-CHECK-LABEL: define {{[^@]+}}@test_ptr_to_capptr_reinterpret_cast
 // CXX-CHECK-SAME: (i8* [[P:%.*]]) #0

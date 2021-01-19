@@ -2237,7 +2237,7 @@ void checkNonCapToCapCast(const SourceRange &OpRange, const Expr *SrcExpr,
       // fixed differently.
       if (IsIntConstant)
         Self.Diag(OpRange.getBegin(), diag::note_capability_no_provenance_fixit)
-            << !IsPurecap;
+            << !IsPurecap << SrcType->isSignedIntegerType();
     }
   }
 }
