@@ -46,8 +46,8 @@ void do_test() {
   test_good<const char * __capability>(nullptr);
   test_good<volatile int * __capability>(nullptr);
   test_good<Incomplete * __capability>(nullptr);
-  test_good<__intcap_t>(1);
-  test_good<__uintcap_t>(1);
+  test_good<__intcap>(1);
+  test_good<unsigned __intcap>(1);
   // This should decay to const char*:
   test_good<const char(&)[4], const char *>("foo"); // hybrid-note{{in instantiation of function template specialization 'test_good<char const (&)[4], const char *>' requested here}}
   // passing function pointers should also be allowed
@@ -62,7 +62,7 @@ void do_test() {
 #endif // __cplusplus
 
 // Check handling of NULL pointer arguments:
-void test_nullptr(__uintcap_t caparg) {
+void test_nullptr(unsigned __intcap caparg) {
 #ifdef __cplusplus
   // nullptr should be fine:
   static_assert(__is_same(__typeof__(__builtin_cheri_flags_set(nullptr, 1)), void *__capability), "");
@@ -83,10 +83,10 @@ void test_nullptr(__uintcap_t caparg) {
   // hybrid-error@-1{{operand of type 'const char *' where capability is required}}
 
   // Literal zero is a null pointer constant in both C and C++ and therefore maps to void* __capability
-  // This could result in accidentally swapping arguments for the __uintcap_t overloads
+  // This could result in accidentally swapping arguments for the unsigned __intcap overloads
   // of e.g. __builtin_cheri_flags_set(), but those problems should be caught by the return
-  // type being void* __capability instead of __uintcap_t.
-  static_assert(__is_same(__typeof__(__builtin_cheri_flags_set(caparg, 0)), __uintcap_t), "");
+  // type being void* __capability instead of unsigned __intcap.
+  static_assert(__is_same(__typeof__(__builtin_cheri_flags_set(caparg, 0)), unsigned __intcap), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_flags_set((void *__capability)0, caparg)), void *__capability), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_flags_set((const int *__capability)0, caparg)), const int *__capability), "");
 
@@ -102,7 +102,7 @@ void test_nullptr(__uintcap_t caparg) {
   static_assert(__is_same(__typeof__(__builtin_cheri_flags_set((int *__capability)0, caparg)), int *__capability), "");
 }
 
-void test_buildcap(struct Incomplete *__capability authcap, __uintcap_t ubits, __intcap_t sbits, char *__capability charpbits) {
+void test_buildcap(struct Incomplete *__capability authcap, unsigned __intcap ubits, __intcap sbits, char *__capability charpbits) {
   // void * __capability __builtin_cheri_cap_build(<anycap> auth, __(u)intcap_t bits)
   // Note: we may want to allow any capability type as the second argument if this restriction becomes annoying
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, ubits)), void *__capability), ""); // okay
@@ -124,9 +124,9 @@ void test_incoffset(long *__capability lcap, volatile int *__capability vicap, f
   static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(vicap, 1)), volatile void *__capability), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(fptr, 1)), void *__capability), "");
   // hybrid-error@-1{{operand of type 'float *' where capability is required}}
-  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment((__intcap_t)2, 1)), __intcap_t), "");
-  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment((__uintcap_t)3, 1)), __uintcap_t), "");
-  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(3, 1)), __uintcap_t), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment((__intcap)2, 1)), __intcap), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment((unsigned __intcap)3, 1)), unsigned __intcap), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(3, 1)), unsigned __intcap), "");
   // expected-error@-1{{operand of type 'int' where capability is required}}
   static_assert(__is_same(__typeof__(__builtin_cheri_offset_increment(0, 1)), void *__capability), ""); // NULL literal
 }
@@ -143,9 +143,9 @@ void test_setoffset(long *__capability lcap, volatile int *__capability vicap, f
   static_assert(__is_same(__typeof__(__builtin_cheri_offset_set(vicap, 1)), volatile void *__capability), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_offset_set(fptr, 1)), void *__capability), "");
   // hybrid-error@-1{{operand of type 'float *' where capability is required}}
-  static_assert(__is_same(__typeof__(__builtin_cheri_offset_set((__intcap_t)2, 1)), __intcap_t), "");
-  static_assert(__is_same(__typeof__(__builtin_cheri_offset_set((__uintcap_t)3, 1)), __uintcap_t), "");
-  static_assert(__is_same(__typeof__(__builtin_cheri_offset_set(3, 1)), __uintcap_t), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_set((__intcap)2, 1)), __intcap), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_set((unsigned __intcap)3, 1)), unsigned __intcap), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_offset_set(3, 1)), unsigned __intcap), "");
   // expected-error@-1{{operand of type 'int' where capability is required}}
   static_assert(__is_same(__typeof__(__builtin_cheri_offset_set(0, 1)), void *__capability), ""); // NULL literal
 }
@@ -162,14 +162,14 @@ void test_setaddr(long *__capability lcap, volatile int *__capability vicap, flo
   static_assert(__is_same(__typeof__(__builtin_cheri_address_set(vicap, 1)), volatile void *__capability), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_address_set(fptr, 1)), void *__capability), "");
   // hybrid-error@-1{{operand of type 'float *' where capability is required}}
-  static_assert(__is_same(__typeof__(__builtin_cheri_address_set((__intcap_t)2, 1)), __intcap_t), "");
-  static_assert(__is_same(__typeof__(__builtin_cheri_address_set((__uintcap_t)3, 1)), __uintcap_t), "");
-  static_assert(__is_same(__typeof__(__builtin_cheri_address_set(3, 1)), __uintcap_t), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_address_set((__intcap)2, 1)), __intcap), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_address_set((unsigned __intcap)3, 1)), unsigned __intcap), "");
+  static_assert(__is_same(__typeof__(__builtin_cheri_address_set(3, 1)), unsigned __intcap), "");
   // expected-error@-1{{operand of type 'int' where capability is required}}
   static_assert(__is_same(__typeof__(__builtin_cheri_address_set(0, 1)), void *__capability), ""); // NULL literal
 }
 
-void cap_to_pointer(struct Incomplete *__capability authcap, void *integerptr, void *__capability capptr, __uintcap_t ui, __intcap_t si) {
+void cap_to_pointer(struct Incomplete *__capability authcap, void *integerptr, void *__capability capptr, unsigned __intcap ui, __intcap si) {
 #ifdef __CHERI_PURE_CAPABILITY__
   // not available in purecap
   (void)__builtin_cheri_cap_to_pointer(authcap, capptr); // purecap-error{{builtin is not supported on this target}}
@@ -187,13 +187,13 @@ void cap_to_pointer(struct Incomplete *__capability authcap, void *integerptr, v
 #endif
 }
 
-void cap_from_pointer(struct Incomplete *__capability authcap, const int *integerptr, const int *__capability capptr, __uintcap_t ui, __intcap_t si, long l, int i) {
+void cap_from_pointer(struct Incomplete *__capability authcap, const int *integerptr, const int *__capability capptr, unsigned __intcap ui, __intcap si, long l, int i) {
   // Using an integer type results in a void * __capability return value
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, i)), void *__capability), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, l)), void *__capability), "");
   // However, we reject __(u)intcap_t since that is a capability type:
-  (void)__builtin_cheri_cap_from_pointer(authcap, ui); // expected-error-re{{type '__uintcap_t' where {{(arithmetic or pointer type)|integer}} is required}}
-  (void)__builtin_cheri_cap_from_pointer(authcap, si); // expected-error-re{{type '__intcap_t' where {{(arithmetic or pointer type)|integer}} is required}}
+  (void)__builtin_cheri_cap_from_pointer(authcap, ui); // expected-error-re{{type 'unsigned __intcap' where {{(arithmetic or pointer type)|integer}} is required}}
+  (void)__builtin_cheri_cap_from_pointer(authcap, si); // expected-error-re{{type '__intcap' where {{(arithmetic or pointer type)|integer}} is required}}
 
   // NULL is error in C++ (hybrid+purecap) since the operand is nullptr_t, and in
   // purecap C it's also an error since NULL is defined as (void*)0.
@@ -236,7 +236,7 @@ void test_decay() {
   // hybrid-error@-1{{operand of type 'void (*)()' where capability is required}}
 }
 
-void check_perms_type_check_builtins(const int *__capability capptr, __uintcap_t uintcap, long l) {
+void check_perms_type_check_builtins(const int *__capability capptr, unsigned __intcap uintcap, long l) {
   static_assert(__is_same(__typeof__(__builtin_cheri_perms_check(capptr, 1)), void), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_perms_check(uintcap, 1)), void), "");
   static_assert(__is_same(__typeof__(__builtin_cheri_perms_check(l, 1)), void), "");

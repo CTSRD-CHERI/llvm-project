@@ -1,14 +1,14 @@
-/// Check that we can handle __intcap_t in C++ constexpr functions
+/// Check that we can handle __intcap in C++ constexpr functions
 /// Also check that we get the same errors as we would when using long
 // RUN: %cheri_cc1 -DSIGNED=1 -fsyntax-only %s -verify=expected,hybrid,signed-long "-DINTTYPE=long" -Wpedantic
 // RUN: %cheri_cc1 -DSIGNED=0 -fsyntax-only %s -verify=expected,hybrid,unsigned-long "-DINTTYPE=unsigned long" -Wpedantic
-// RUN: %cheri_cc1 -DSIGNED=1 -fsyntax-only %s -verify=expected,hybrid,signed-intcap -DINTTYPE=__intcap_t -Wpedantic
-// RUN: %cheri_cc1 -DSIGNED=0 -fsyntax-only %s -verify=expected,hybrid,unsigned-intcap -DINTTYPE=__uintcap_t -Wpedantic
-// RUN: %cheri_purecap_cc1 -DSIGNED=1 -fsyntax-only %s -verify=expected,purecap,signed-intcap -DINTTYPE=__intcap_t -Wpedantic
-// RUN: %cheri_purecap_cc1 -DSIGNED=0 -fsyntax-only %s -verify=expected,purecap,unsigned-intcap -DINTTYPE=__uintcap_t -Wpedantic
+// RUN: %cheri_cc1 -DSIGNED=1 -fsyntax-only %s -verify=expected,hybrid,signed-intcap "-DINTTYPE=__intcap" -Wpedantic
+// RUN: %cheri_cc1 -DSIGNED=0 -fsyntax-only %s -verify=expected,hybrid,unsigned-intcap "-DINTTYPE=unsigned __intcap" -Wpedantic
+// RUN: %cheri_purecap_cc1 -DSIGNED=1 -fsyntax-only %s -verify=expected,purecap,signed-intcap "-DINTTYPE=__intcap" -Wpedantic
+// RUN: %cheri_purecap_cc1 -DSIGNED=0 -fsyntax-only %s -verify=expected,purecap,unsigned-intcap "-DINTTYPE=unsigned __intcap" -Wpedantic
 
 // Basic addition should work:
-// constexpr __intcap_t x1 = __intcap_t{3} + __intcap_t{1};
+// constexpr __intcap x1 = __intcap{3} + __intcap{1};
 // static_assert(x1 == 4, "");
 // Check that it also works if we wrap the addition in a constexpr function
 
@@ -66,13 +66,13 @@ constexpr INTTYPE check_overflow1 = static_cast<INTTYPE>(__INT64_MAX__) + 1;
 // signed-long-error@-1{{must be initialized by a constant expression}}
 // signed-long-note@-2{{value 9223372036854775808 is outside the range of representable values of type 'long'}}
 // signed-intcap-error@-3{{must be initialized by a constant expression}}
-// signed-intcap-note@-4{{value 9223372036854775808 is outside the range of representable values of type '__intcap_t'}}
+// signed-intcap-note@-4{{value 9223372036854775808 is outside the range of representable values of type '__intcap'}}
 constexpr INTTYPE check_overflow2 = static_cast<INTTYPE>(__INT64_MIN__);
 constexpr INTTYPE check_overflow3 = static_cast<INTTYPE>(__INT64_MIN__) -1;
 // signed-long-error@-1{{must be initialized by a constant expression}}
 // signed-long-note@-2{{value -9223372036854775809 is outside the range of representable values of type 'long'}}
 // signed-intcap-error@-3{{must be initialized by a constant expression}}
-// signed-intcap-note@-4{{value -9223372036854775809 is outside the range of representable values of type '__intcap_t'}}
+// signed-intcap-note@-4{{value -9223372036854775809 is outside the range of representable values of type '__intcap'}}
 
 // No warnings for unsigned since it wraps around
 constexpr INTTYPE check_overflow4 = static_cast<__UINT64_TYPE__>(0);

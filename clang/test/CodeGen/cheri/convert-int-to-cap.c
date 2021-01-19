@@ -41,11 +41,11 @@ char *__capability test_long_to_capptr(long l) {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    ret i8 addrspace(200)* [[L]]
 //
-char *__capability test_intcap_to_capptr(__intcap_t l) {
+char *__capability test_intcap_to_capptr(__intcap l) {
   return (char *__capability)l;
   // AST-LABEL: FunctionDecl {{.+}} test_intcap_to_capptr
   // AST:       CStyleCastExpr {{.+}} 'char * __capability' <IntegralToPointer>
-  // AST-NEXT:  ImplicitCastExpr {{.+}} '__intcap_t':'__intcap_t' <LValueToRValue> part_of_explicit_cast
+  // AST-NEXT:  ImplicitCastExpr {{.+}} '__intcap' <LValueToRValue> part_of_explicit_cast
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_capptr_default
@@ -101,10 +101,10 @@ char *__capability test_ptr_to_capptr_tocap(char *p) {
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 char *__capability test_ptr_to_capptr_via_addr_intcap(char *p) {
-  return (char *__capability)(__cheri_addr __intcap_t)p;
+  return (char *__capability)(__cheri_addr __intcap)p;
   // AST-LABEL: FunctionDecl {{.+}} test_ptr_to_capptr_via_addr_intcap
   // AST:       CStyleCastExpr {{.+}} 'char * __capability' <IntegralToPointer>
-  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap_t':'__intcap_t' <PointerToIntegral>
+  // AST-NEXT:  CStyleCastExpr {{.+}} '__intcap' <PointerToIntegral>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 
@@ -115,10 +115,10 @@ char *__capability test_ptr_to_capptr_via_addr_intcap(char *p) {
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
-__intcap_t test_ptr_to_intcap_default(char *p) {
-  return (__intcap_t)p;
+__intcap test_ptr_to_intcap_default(char *p) {
+  return (__intcap)p;
   // AST-LABEL: FunctionDecl {{.+}} test_ptr_to_intcap_default
-  // AST:       CStyleCastExpr {{.+}} '__intcap_t':'__intcap_t' <PointerToIntegral>
+  // AST:       CStyleCastExpr {{.+}} '__intcap' <PointerToIntegral>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 
@@ -128,10 +128,10 @@ __intcap_t test_ptr_to_intcap_default(char *p) {
 // CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i8* [[P]] to i8 addrspace(200)*
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
-__intcap_t test_ptr_to_intcap_tocap(char *p) {
-  return (__cheri_tocap __intcap_t)p;
+__intcap test_ptr_to_intcap_tocap(char *p) {
+  return (__cheri_tocap __intcap)p;
   // AST-LABEL: FunctionDecl {{.+}} test_ptr_to_intcap_tocap
-  // AST:       CStyleCastExpr {{.+}} '__intcap_t':'__intcap_t' <PointerToCHERICapability>
+  // AST:       CStyleCastExpr {{.+}} '__intcap' <PointerToCHERICapability>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 
@@ -142,10 +142,10 @@ __intcap_t test_ptr_to_intcap_tocap(char *p) {
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
 // CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
-__intcap_t test_ptr_to_intcap_addr(char *p) {
-  return (__cheri_addr __intcap_t)p;
+__intcap test_ptr_to_intcap_addr(char *p) {
+  return (__cheri_addr __intcap)p;
   // AST-LABEL: FunctionDecl {{.+}} test_ptr_to_intcap_addr
-  // AST:       CStyleCastExpr {{.+}} '__intcap_t':'__intcap_t' <PointerToIntegral>
+  // AST:       CStyleCastExpr {{.+}} '__intcap' <PointerToIntegral>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 

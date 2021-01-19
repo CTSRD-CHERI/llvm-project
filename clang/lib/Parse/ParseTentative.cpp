@@ -1636,6 +1636,7 @@ Parser::isCXXDeclarationSpecifier(Parser::TPResult BracedCastResult,
   case tok::kw_long:
   case tok::kw___int64:
   case tok::kw___int128:
+  case tok::kw___intcap:
   case tok::kw_signed:
   case tok::kw_unsigned:
   case tok::kw_half:
@@ -1750,6 +1751,7 @@ bool Parser::isCXXDeclarationSpecifierAType() {
   case tok::kw_long:
   case tok::kw___int64:
   case tok::kw___int128:
+  case tok::kw___intcap:
   case tok::kw_signed:
   case tok::kw_unsigned:
   case tok::kw_half:

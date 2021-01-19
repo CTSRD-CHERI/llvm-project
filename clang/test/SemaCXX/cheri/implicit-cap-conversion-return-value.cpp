@@ -7,8 +7,10 @@
 // RUN: %cheri_cc1 -Wall -Wcheri-pointer-conversion -verify=c,expected,hybrid,hybrid-c -x c -fsyntax-only %s
 // RUN: %cheri_purecap_cc1 -Wall -Wcheri-pointer-conversion -verify=c,expected,purecap,purecap-c -x c -fsyntax-only %s
 
-#if !__has_feature(capabilities)
-typedef unsigned long __uintcap_t;
+#if __has_feature(capabilities)
+typedef unsigned __intcap uintcap_t;
+#else
+typedef unsigned long uintcap_t;
 #define __capability
 #endif
 
@@ -27,18 +29,18 @@ void *__capability cast_long_to_capptr_implicit(unsigned long l) {
   // FIXME: should warn in purecap mode about lack of provenance
 }
 
-void *cast_uintcap_to_intptr_implicit(__uintcap_t cap) {
+void *cast_uintcap_to_intptr_implicit(uintcap_t cap) {
   return cap;
-  // cxx-error@-1{{cannot initialize return object of type 'void *' with an lvalue of type '__uintcap_t'}}
+  // cxx-error@-1{{cannot initialize return object of type 'void *' with an lvalue of type 'uintcap_t'}}
   // C allows this behaviour, but warns by default
-  // c-warning-re@-3{{incompatible integer to pointer conversion returning '__uintcap_t'{{( \(aka 'unsigned long'\))?}} from a function with result type 'void *'}}
+  // c-warning-re@-3{{incompatible integer to pointer conversion returning 'uintcap_t' (aka 'unsigned {{(long|__intcap)}}') from a function with result type 'void *'}}
 }
 
-void *__capability cast_uintcap_to_capptr_implicit(__uintcap_t cap) {
+void *__capability cast_uintcap_to_capptr_implicit(uintcap_t cap) {
   return cap;
-  // cxx-error-re@-1{{cannot initialize return object of type 'void *{{( __capability)?}}' with an lvalue of type '__uintcap_t'}}
+  // cxx-error-re@-1{{cannot initialize return object of type 'void *{{( __capability)?}}' with an lvalue of type 'uintcap_t'}}
   // C allows this behaviour, but warns by default
-  // c-warning-re@-3{{incompatible integer to pointer conversion returning '__uintcap_t'{{( \(aka 'unsigned long'\))?}} from a function with result type 'void *{{( __capability)?}}'}}
+  // c-warning-re@-3{{incompatible integer to pointer conversion returning 'uintcap_t' (aka 'unsigned {{(long|__intcap)}}') from a function with result type 'void *{{( __capability)?}}'}}
 }
 
 void *cast_capptr_to_intptr_implicit(void *__capability cap) {

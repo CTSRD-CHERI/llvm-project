@@ -29,9 +29,9 @@
 
 // non-commutative-no-diagnostics
 
-typedef __uintcap_t uintptr_t;
+typedef unsigned __intcap uintptr_t;
 #define __no_provenance __attribute__((cheri_no_provenance))
-typedef __no_provenance __uintcap_t no_provenance_uintptr_t;
+typedef __no_provenance unsigned __intcap no_provenance_uintptr_t;
 typedef unsigned int uint;
 typedef unsigned long ulong;
 
@@ -95,8 +95,8 @@ void test_op_flag_constant(void *arg) {
 
   uintptr_t flag_prov = FLAG_INT;
   // These cases currently warn since we don't walk the CFG, but that is probably reasonable
-  check(flag_prov ARITH_OP(uintptr_t) arg); // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance;}}
-  check((uintptr_t)arg ARITH_OP flag_prov); // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance;}}
+  check(flag_prov ARITH_OP(uintptr_t) arg); // expected-warning{{binary expression on capability types 'uintptr_t' (aka 'unsigned __intcap') and 'uintptr_t'; it is not clear which should be used as the source of provenance;}}
+  check((uintptr_t)arg ARITH_OP flag_prov); // expected-warning{{binary expression on capability types 'uintptr_t' (aka 'unsigned __intcap') and 'uintptr_t'; it is not clear which should be used as the source of provenance;}}
 
   // but casting to the no-provenance type should work
   check((no_provenance_uintptr_t)flag_prov ARITH_OP(uintptr_t) arg);
@@ -105,7 +105,7 @@ void test_op_flag_constant(void *arg) {
   check((uintptr_t)arg ARITH_OP(__no_provenance uintptr_t) flag_prov);
 }
 void test_ambiguous(uintptr_t a, uintptr_t b) {
-  check(a ARITH_OP b); // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
+  check(a ARITH_OP b); // expected-warning{{binary expression on capability types 'uintptr_t' (aka 'unsigned __intcap') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
   // Casting one of the operands should silence the warning
   check(a ARITH_OP(__no_provenance uintptr_t) b);                            // no warning
   check((__no_provenance uintptr_t)a ARITH_OP b);                            // no warning
@@ -121,8 +121,8 @@ void cast_noprov_via_ptr(uintptr_t arg, no_provenance_uintptr_t noprov, uintptr_
   check(noprov ARITH_OP(uintptr_t)(void *) arg); // no warning
 
   // casting to pointer and back retains ambiguity
-  check((uintptr_t)(void *)prov ARITH_OP arg); // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
-  check(arg ARITH_OP(uintptr_t)(void *) prov); // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
+  check((uintptr_t)(void *)prov ARITH_OP arg); // expected-warning{{binary expression on capability types 'uintptr_t' (aka 'unsigned __intcap') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
+  check(arg ARITH_OP(uintptr_t)(void *) prov); // expected-warning{{binary expression on capability types 'uintptr_t' (aka 'unsigned __intcap') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
   // And casting to a noprov type clears it:
   check((no_provenance_uintptr_t)(void *)prov ARITH_OP arg);
   check(arg ARITH_OP(no_provenance_uintptr_t)(void *) prov);

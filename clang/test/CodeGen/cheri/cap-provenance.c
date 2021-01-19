@@ -83,7 +83,7 @@ void test_cg_prov_rhs(uintptr_t lhs, uintptr_t rhs) {
 //
 void test_cg_prov_ambiguous(uintptr_t lhs, uintptr_t rhs) {
   // LHS provenance is chosen when ambiguous
-  check(lhs ARITH_OP rhs); // expected-warning{{binary expression on capability types 'uintptr_t' (aka '__uintcap_t') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
+  check(lhs ARITH_OP rhs); // expected-warning{{binary expression on capability types 'uintptr_t' (aka 'unsigned __intcap') and 'uintptr_t'; it is not clear which should be used as the source of provenance}}
 }
 
 /// Compound assignment should always use LHS provenance:

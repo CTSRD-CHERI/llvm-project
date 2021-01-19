@@ -1235,30 +1235,14 @@ TypedefDecl *ASTContext::buildImplicitTypedef(QualType T,
 }
 
 TypedefDecl *ASTContext::getIntCapDecl() const {
-  if (!IntCapDecl) {
-    TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(IntCapTy);
-    IntCapDecl = TypedefDecl::Create(const_cast<ASTContext &>(*this),
-                                     getTranslationUnitDecl(),
-                                     SourceLocation(),
-                                     SourceLocation(),
-                                     &Idents.get("__intcap_t"),
-                                     TInfo);
-  }
-
+  if (!IntCapDecl)
+    IntCapDecl = buildImplicitTypedef(IntCapTy, "__intcap_t");
   return IntCapDecl;
 }
 
 TypedefDecl *ASTContext::getUIntCapDecl() const {
-  if (!UIntCapDecl) {
-    TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(UnsignedIntCapTy);
-    UIntCapDecl = TypedefDecl::Create(const_cast<ASTContext &>(*this),
-                                     getTranslationUnitDecl(),
-                                     SourceLocation(),
-                                     SourceLocation(),
-                                     &Idents.get("__uintcap_t"),
-                                     TInfo);
-  }
-
+  if (!UIntCapDecl)
+    UIntCapDecl = buildImplicitTypedef(UnsignedIntCapTy, "__uintcap_t");
   return UIntCapDecl;
 }
 
