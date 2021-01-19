@@ -22,25 +22,27 @@ void test_capptr_to_int(void* __capability a) {
   // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
   // purecap-error@-2 {{type 'void *' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
 
-  __uintcap_t uc{a};
-  // hybrid-error@-1 {{cannot initialize a variable of type '__uintcap_t' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a variable of type '__uintcap_t' with an lvalue of type 'void *'}}
-  uc = __uintcap_t{a};
-  // hybrid-error@-1 {{cannot initialize a value of type '__uintcap_t' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__uintcap_t' with an lvalue of type 'void *'}}
-  __uintcap_t uc2 = 0; uc2 = {a};
-  // hybrid-error@-1 {{cannot initialize a value of type '__uintcap_t' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__uintcap_t' with an lvalue of type 'void *'}}
+  // NB: Compound literals are a GNU C++ extension so we need a single word alias
+  using __uintcap = unsigned __intcap;
+  __uintcap uc{a};
+  // hybrid-error@-1 {{cannot initialize a variable of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a variable of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void *'}}
+  uc = __uintcap{a};
+  // hybrid-error@-1 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void *'}}
+  __uintcap uc2 = 0; uc2 = {a};
+  // hybrid-error@-1 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void *'}}
 
-  __intcap_t ic{a};
-  // hybrid-error@-1 {{cannot initialize a variable of type '__intcap_t' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a variable of type '__intcap_t' with an lvalue of type 'void *'}}
-  ic = __intcap_t{a};
-  // hybrid-error@-1 {{cannot initialize a value of type '__intcap_t' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__intcap_t' with an lvalue of type 'void *'}}
-  __intcap_t ic2 = 0; ic2 = {a};
-  // hybrid-error@-1 {{cannot initialize a value of type '__intcap_t' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__intcap_t' with an lvalue of type 'void *'}}
+  __intcap ic{a};
+  // hybrid-error@-1 {{cannot initialize a variable of type '__intcap' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a variable of type '__intcap' with an lvalue of type 'void *'}}
+  ic = __intcap{a};
+  // hybrid-error@-1 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void *'}}
+  __intcap ic2 = 0; ic2 = {a};
+  // hybrid-error@-1 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void *'}}
 
   long l{a};
   // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'long' in initializer list}}
@@ -63,35 +65,36 @@ void test_capptr_to_int(void* __capability a) {
   // purecap-error@-2 {{type 'void *' cannot be narrowed to 'int' in initializer list}}
 }
 
-void test_uintcap_to_int(__uintcap_t a) {
-  vaddr_t v{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}} \
+void test_uintcap_to_int(unsigned __intcap a) {
+  vaddr_t v{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'vaddr_t'}} \
                 // expected-note {{insert an explicit cast to silence this issue}}
-  v = vaddr_t{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}} \
+  v = vaddr_t{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'vaddr_t'}} \
                   // expected-note {{insert an explicit cast to silence this issue}}
-  vaddr_t v2 = 0; v2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}} \
+  vaddr_t v2 = 0; v2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'vaddr_t'}} \
                             // expected-note {{insert an explicit cast to silence this issue}}
 
-  long l{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}} \
+  long l{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'long'}} \
              // expected-note {{insert an explicit cast to silence this issue}}
-  l = long{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}} \
+  l = long{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'long'}} \
                // expected-note {{insert an explicit cast to silence this issue}}
-  long l2 = 0; l2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}} \
+  long l2 = 0; l2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'long'}} \
                          // expected-note {{insert an explicit cast to silence this issue}}
 
-  int i{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}} \
+  int i{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'int'}} \
             // expected-note {{insert an explicit cast to silence this issue}}
-  i = int{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}} \
+  i = int{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'int'}} \
               // expected-note {{insert an explicit cast to silence this issue}}
-  int i2 = 0; i2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}} \
+  int i2 = 0; i2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'int'}} \
                         // expected-note {{insert an explicit cast to silence this issue}}
 
-  __uintcap_t uc{a};
-  uc = __uintcap_t{a};
-  __uintcap_t uc2 = 0; uc2 = {a};
+  using __uintcap = unsigned __intcap;
+  __uintcap uc{a};
+  uc = __uintcap{a};
+  __uintcap uc2 = 0; uc2 = {a};
 
-  __intcap_t ic{a}; // expected-error {{non-constant-expression cannot be narrowed from type '__uintcap_t' to '__intcap_t'}} expected-note {{insert an explicit cast to silence this issue}}
-  ic = __intcap_t{a}; // expected-error {{non-constant-expression cannot be narrowed from type '__uintcap_t' to '__intcap_t'}} expected-note {{insert an explicit cast to silence this issue}}
-  __intcap_t ic2 = 0; ic2 = {a}; // expected-error {{non-constant-expression cannot be narrowed from type '__uintcap_t' to '__intcap_t'}} expected-note {{insert an explicit cast to silence this issue}}
+  __intcap ic{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to '__intcap'}} expected-note {{insert an explicit cast to silence this issue}}
+  ic = __intcap{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to '__intcap'}} expected-note {{insert an explicit cast to silence this issue}}
+  __intcap ic2 = 0; ic2 = {a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to '__intcap'}} expected-note {{insert an explicit cast to silence this issue}}
 
 }
 

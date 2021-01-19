@@ -55,22 +55,22 @@ int foo(int *__capability cap_arg_int, void *__capability cap_arg_void, int *ptr
   void *__capability vcap2 = cap_arg_int; // casting to void* should work without a cast
   void *vptr2 = ptr_arg_int;              // casting to void* should work without a cast
 
-  // cap/pointer -> __uintcap_t needs a cast
-  __uintcap_t uintcap1 = cap_arg_int;
-  __uintcap_t uintcap2 = cap_arg_void;
-  __uintcap_t uintcap3 = ptr_arg_int;
-  __uintcap_t uintcap4 = ptr_arg_void;
+  // cap/pointer -> unsigned __intcap needs a cast
+  unsigned __intcap uintcap1 = cap_arg_int;
+  unsigned __intcap uintcap2 = cap_arg_void;
+  unsigned __intcap uintcap3 = ptr_arg_int;
+  unsigned __intcap uintcap4 = ptr_arg_void;
 // TODO: the C error message is better we should be able to produce something like that
 #ifdef __cplusplus
-  // expected-error@-6 {{cannot initialize a variable of type '__uintcap_t' with an lvalue of type 'int * __capability'}}
-  // expected-error@-6 {{cannot initialize a variable of type '__uintcap_t' with an lvalue of type 'void * __capability'}}
-  // expected-error@-6 {{cannot initialize a variable of type '__uintcap_t' with an lvalue of type 'int *'}}
-  // expected-error@-6 {{cannot initialize a variable of type '__uintcap_t' with an lvalue of type 'void *'}}
+  // expected-error@-6 {{cannot initialize a variable of type 'unsigned __intcap' with an lvalue of type 'int * __capability'}}
+  // expected-error@-6 {{cannot initialize a variable of type 'unsigned __intcap' with an lvalue of type 'void * __capability'}}
+  // expected-error@-6 {{cannot initialize a variable of type 'unsigned __intcap' with an lvalue of type 'int *'}}
+  // expected-error@-6 {{cannot initialize a variable of type 'unsigned __intcap' with an lvalue of type 'void *'}}
 #else
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing '__uintcap_t' with an expression of type 'int * __capability'}}
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing '__uintcap_t' with an expression of type 'void * __capability'}}
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing '__uintcap_t' with an expression of type 'int *'}}
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing '__uintcap_t' with an expression of type 'void *'}}
+  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'int * __capability'}}
+  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'void * __capability'}}
+  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'int *'}}
+  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'void *'}}
 #endif
 
   struct test_struct s;

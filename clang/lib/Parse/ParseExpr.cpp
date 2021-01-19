@@ -1524,6 +1524,7 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
   case tok::kw_long:
   case tok::kw___int64:
   case tok::kw___int128:
+  case tok::kw___intcap:
   case tok::kw__ExtInt:
   case tok::kw_signed:
   case tok::kw_unsigned:

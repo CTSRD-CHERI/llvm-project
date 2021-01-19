@@ -15,13 +15,13 @@ struct {
 } b2;
 
 struct {
-  __intcap_t a __attribute__((packed, __aligned__(2))); // expected-warning{{alignment (2) of '__intcap_t' is less than the required capability alignment}}
+  __intcap a __attribute__((packed, __aligned__(2))); // expected-warning{{alignment (2) of '__intcap' is less than the required capability alignment}}
   // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 } c1;
 
 // no warning without packed
 struct {
-  __intcap_t a __attribute__((__aligned__(2)));
+  __intcap a __attribute__((__aligned__(2)));
 } c2;
 
 // without packed it can only increase alignment, but with packed it also decreases it:

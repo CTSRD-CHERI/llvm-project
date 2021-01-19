@@ -17,7 +17,7 @@
 void* __capability a;
 typedef __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__ vaddr_t;
 typedef __attribute__((memory_address)) vaddr_t double_attribute;  // expected-warning {{attribute 'memory_address' is already applied}}
-typedef __attribute__((memory_address)) __intcap_t err_cap_type;  // expected-error {{'memory_address' attribute only applies to integer types that can store addresses ('__intcap_t' is invalid)}}
+typedef __attribute__((memory_address)) __intcap err_cap_type;  // expected-error {{'memory_address' attribute only applies to integer types that can store addresses ('__intcap' is invalid)}}
 typedef __attribute__((memory_address)) struct foo err_struct_type; // expected-error {{'memory_address' attribute only applies to integer types that can store addresses ('struct foo' is invalid)}}
 typedef int* __attribute__((memory_address)) err_pointer_type; // expected-error {{'memory_address' attribute only applies to integer types that can store addresses}}
 
@@ -69,8 +69,8 @@ Program received signal SIGABRT, Aborted.
 */
 typedef const vaddr_t other_addr_t;
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
-typedef __uintcap_t uintptr_t;
-typedef __intcap_t intptr_t;
+typedef unsigned __intcap uintptr_t;
+typedef __intcap intptr_t;
 typedef uintptr_t word;
 struct test {
   int x;
@@ -101,13 +101,13 @@ void foo(void) {
 
   // These are okay
   uintptr_t x5 = (uintptr_t)a;
-  // AST: CStyleCastExpr {{.+}} 'uintptr_t':'__uintcap_t' <PointerToIntegral>
+  // AST: CStyleCastExpr {{.+}} 'uintptr_t':'unsigned __intcap' <PointerToIntegral>
   intptr_t x6 = (intptr_t)a;
-  // AST: CStyleCastExpr {{.+}} 'intptr_t':'__intcap_t' <PointerToIntegral>
-  __uintcap_t x7 = (__uintcap_t)a;
-  // AST: CStyleCastExpr {{.+}} '__uintcap_t':'__uintcap_t' <PointerToIntegral>
-  __intcap_t x8 = (__intcap_t)a; 
-  // AST: CStyleCastExpr {{.+}} '__intcap_t':'__intcap_t' <PointerToIntegral>
+  // AST: CStyleCastExpr {{.+}} 'intptr_t':'__intcap' <PointerToIntegral>
+  unsigned __intcap x7 = (unsigned __intcap)a;
+  // AST: CStyleCastExpr {{.+}} 'unsigned __intcap' <PointerToIntegral>
+  __intcap x8 = (__intcap)a; 
+  // AST: CStyleCastExpr {{.+}} '__intcap' <PointerToIntegral>
 
   vaddr_t x10 = (vaddr_t)a;
   // AST: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
@@ -117,7 +117,7 @@ void foo(void) {
   // AST: CStyleCastExpr {{.+}} 'void * __capability' <NoOp>
   int x13 = (int)(uintptr_t)a;  // TODO: later on this should probably also be an error
   // AST: CStyleCastExpr {{.+}} 'int' <IntegralCast>
-  // AST-NEXT: CStyleCastExpr {{.+}} 'uintptr_t':'__uintcap_t' <PointerToIntegral>
+  // AST-NEXT: CStyleCastExpr {{.+}} 'uintptr_t':'unsigned __intcap' <PointerToIntegral>
   int x14 = (int)(vaddr_t)a;
   // AST: CStyleCastExpr {{.+}} 'int' <IntegralCast>
   // AST-NEXT: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
@@ -127,7 +127,7 @@ void foo(void) {
   // AST: CStyleCastExpr {{.+}} 'long __attribute__((memory_address))':'long' <PointerToIntegral>
 
 #ifndef __CHERI_PURE_CAPABILITY__
-  word* x17 = (word*)a; // expected-error {{cast from capability type 'void * __capability' to non-capability type 'word *' (aka '__uintcap_t *') is most likely an error}}
+  word* x17 = (word*)a; // expected-error {{cast from capability type 'void * __capability' to non-capability type 'word *' (aka 'unsigned __intcap *') is most likely an error}}
   // AST: CStyleCastExpr {{.+}} 'word *' <CHERICapabilityToPointer>
 #endif
 }

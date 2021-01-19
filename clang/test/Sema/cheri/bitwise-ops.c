@@ -15,21 +15,21 @@
 // RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -cheri-data-dependent-provenance -xc++ -verify=expected -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 
 // See https://github.com/CTSRD-CHERI/clang/issues/189
-typedef __uintcap_t uintptr_t;
+typedef unsigned __intcap uintptr_t;
 
 void check_xor(void *ptr, uintptr_t cap, int i) {
 
   // TODO: should storing intcap_t in a smaller type such as int without a cast cause a warning?
 
   uintptr_t int_and_int = i ^ i; // fine
-  // i is promoted to __intcap_t here so the warning triggers:
+  // i is promoted to __intcap here so the warning triggers:
   uintptr_t int_and_cap = i ^ cap;   // offset-warning{{using xor on a capability type only operates on the offset}}
   uintptr_t cap_and_int = cap ^ i;   // offset-warning{{using xor on a capability type only operates on the offset; consider using vaddr_t if this is used for pointer hashing or explicitly get the offset with __builtin_cheri_offset_get().}}
   uintptr_t cap_and_cap = cap ^ cap; // offset-warning{{using xor on a capability type only operates on the offset}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
 
   int int_and_int_2 = i ^ i; // fine
-  // i is promoted to __intcap_t here so the warning triggers:
+  // i is promoted to __intcap here so the warning triggers:
   int int_and_cap_2 = i ^ cap;         // offset-warning{{using xor on a capability type only operates on the offset}}
   uintptr_t cap_and_int_2 = cap ^ i;   // offset-warning{{using xor on a capability type only operates on the offset}}
   uintptr_t cap_and_cap_2 = cap ^ cap; // offset-warning{{using xor on a capability type only operates on the offset}}
@@ -41,19 +41,19 @@ void check_xor(void *ptr, uintptr_t cap, int i) {
   cap ^= cap; // offset-warning{{using xor on a capability type only operates on the offset}}
 
   uintptr_t hash = ptr ^ 0x1234567;                                  // expected-error{{invalid operands to binary expression ('void *' and 'int')}}
-  uintptr_t hash2 = (__intcap_t)ptr ^ 0x1234567;                     // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t hash2 = (__intcap)ptr ^ 0x1234567;                     // offset-warning{{using xor on a capability type only operates on the offset}}
   uintptr_t hash3 = cap ^ 0x1234567;                                 // offset-warning{{using xor on a capability type only operates on the offset}}
-  uintptr_t nonsense = (__intcap_t)ptr ^ cap;                        // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t nonsense = (__intcap)ptr ^ cap;                        // offset-warning{{using xor on a capability type only operates on the offset}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
-  uintptr_t is_this_really_zero = (__intcap_t)ptr ^ (__intcap_t)ptr; // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t is_this_really_zero = (__intcap)ptr ^ (__intcap)ptr; // offset-warning{{using xor on a capability type only operates on the offset}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
-  uintptr_t is_this_really_zero2 = (__intcap_t)ptr ^ cap;            // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t is_this_really_zero2 = (__intcap)ptr ^ cap;            // offset-warning{{using xor on a capability type only operates on the offset}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
 }
 
 void check_shift_left(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i << i; // fine
-  // i is promoted to __intcap_t here so the warning triggers:
+  // i is promoted to __intcap here so the warning triggers:
   uintptr_t int_and_cap = i << cap;   // offset-warning{{using shifts on a capability type only operates on the offset}}
   uintptr_t cap_and_int = cap << i;   // offset-warning{{using shifts on a capability type only operates on the offset}}
   uintptr_t cap_and_cap = cap << cap; // offset-warning{{using shifts on a capability type only operates on the offset}}
@@ -66,7 +66,7 @@ void check_shift_left(void *ptr, uintptr_t cap, int i) {
 
 void check_shift_right(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i >> i; // fine
-  // i is promoted to __intcap_t here so the warning triggers:
+  // i is promoted to __intcap here so the warning triggers:
   uintptr_t int_and_cap = i >> cap;   // offset-warning{{using shifts on a capability type only operates on the offset}}
   uintptr_t cap_and_int = cap >> i;   // offset-warning{{using shifts on a capability type only operates on the offset}}
   uintptr_t cap_and_cap = cap >> cap; // offset-warning{{using shifts on a capability type only operates on the offset}}
@@ -79,7 +79,7 @@ void check_shift_right(void *ptr, uintptr_t cap, int i) {
 
 void check_modulo(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i % i; // fine
-  // i is promoted to __intcap_t here so the warning triggers:
+  // i is promoted to __intcap here so the warning triggers:
   uintptr_t int_and_cap = i % cap;   // offset-warning{{using remainder on a capability type only operates on the offset}}
   uintptr_t cap_and_int = cap % i;   // offset-warning{{using remainder on a capability type only operates on the offset}}
   uintptr_t cap_and_cap = cap % cap; // offset-warning{{using remainder on a capability type only operates on the offset}}
@@ -93,7 +93,7 @@ void check_modulo(void *ptr, uintptr_t cap, int i) {
 
 void check_and(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i & i; // fine
-  // i is promoted to __intcap_t here so the warning triggers:
+  // i is promoted to __intcap here so the warning triggers:
   uintptr_t int_and_cap = i & cap;   // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   // Verify the full message once:
   uintptr_t cap_and_int = cap & i;   // bitand-warning{{using bitwise and on a capability type may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/vaddr_t; if you are attempting to store data in the low pointer bits use the cheri_low_bits_{get,set,clear}() macros.}}
@@ -143,10 +143,10 @@ void set_low_pointer_bits(void *ptr, uintptr_t cap) {
   ptr &= ~3; // expected-error{{invalid operands to binary expression ('void *' and 'int')}}
   cap &= ~3; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
-  ptr &= cap; // expected-error{{invalid operands to binary expression ('void *' and 'uintptr_t' (aka '__uintcap_t'))}}
+  ptr &= cap; // expected-error{{invalid operands to binary expression ('void *' and 'uintptr_t' (aka 'unsigned __intcap'))}}
   cap &= cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 
-  ptr &= ~cap; // expected-error{{invalid operands to binary expression ('void *' and 'uintptr_t' (aka '__uintcap_t'))}}
+  ptr &= ~cap; // expected-error{{invalid operands to binary expression ('void *' and 'uintptr_t' (aka 'unsigned __intcap'))}}
   cap &= ~cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
 }
 
@@ -165,7 +165,7 @@ extern void __assert(int);
 #include <cheri.h>
 
 void check_without_macros(void *mtx) {
-  __uintcap_t u = (__uintcap_t)mtx;
+  unsigned __intcap u = (unsigned __intcap)mtx;
   u |= 1;
   // Bug: will always be false
   // TODO: we should also warn about always false here
@@ -178,7 +178,7 @@ void check_without_macros(void *mtx) {
 
 void check_with_macros(void *mtx) {
   // This should not trigger any warnings
-  __uintcap_t u = (__uintcap_t)mtx;
+  unsigned __intcap u = (unsigned __intcap)mtx;
   u = cheri_low_bits_set(u, 31, 1);
   if (cheri_low_bits_get(u, 3) == 1) {
     do_unlock();
@@ -187,7 +187,7 @@ void check_with_macros(void *mtx) {
 }
 
 void check_bad_macro_values(void *mtx) {
-  __uintcap_t u = (__uintcap_t)mtx;
+  unsigned __intcap u = (unsigned __intcap)mtx;
   // Bad replacement of u &= ~3: should trigger unused result warning
   cheri_low_bits_clear(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
   // Bad replacement of u | 3: should trigger unused result warning
@@ -217,7 +217,7 @@ void check_bad_macro_values(void *mtx) {
 }
 
 
-int check_without_runtime_behaviour(__uintcap_t cap1, __uintcap_t cap2) {
+int check_without_runtime_behaviour(unsigned __intcap cap1, unsigned __intcap cap2) {
   int x1 = (cap1 ^ cap2);  // offset-warning{{using xor on a capability type}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
   x1 = (cap1 & cap2); // bitand-warning{{using bitwise and on a capability type}}

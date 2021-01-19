@@ -3007,7 +3007,7 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
   case Int128:
     return "__int128";
   case IntCap:
-    return "__intcap_t";
+    return "__intcap";
   case UChar:
     return "unsigned char";
   case UShort:
@@ -3018,10 +3018,10 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
     return "unsigned long";
   case ULongLong:
     return "unsigned long long";
-  case UIntCap:
-    return "__uintcap_t";
   case UInt128:
     return "unsigned __int128";
+  case UIntCap:
+    return "unsigned __intcap";
   case Half:
     return Policy.Half ? "half" : "__fp16";
   case BFloat16:
