@@ -624,6 +624,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
     case CK_ArrayToPointerDecay:    // Checked in CastConsistency()
     case CK_BuiltinFnToFnPtr:       // Checked in CastConsistency()
     case CK_IntegralToPointer:      // Checked later
+    case CK_Dependent:              // Checked later
       return false;
     default:
       return true;
@@ -664,16 +665,20 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
 
 bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy,
                                            Expr *&From, bool Diagnose) {
+  // We should not be performing these checks for dependent or placeholder
+  // types (e.g. overloaded function references) since they will be done again
+  // once the actual type has been resolved.
+  assert(!(FromTy->isDependentType() || FromTy->isPlaceholderType()) &&
+         "Should not be used for dependent source types or placeholders!");
+  assert(!(ToTy->isDependentType() || ToTy->isPlaceholderType()) &&
+         "Should not be used for dependent target types or placeholders!");
   assert(ToTy->isPointerType() && "Target types should be PointerType");
   assert(ToTy->getAs<PointerType>()->isCHERICapability() &&
          "Target type must be a capability pointer");
   if (From->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull)) {
     return true; // NULL constants are always fine
   }
-  // Don't perform any checking for dependent types
-  if (FromTy->isDependentType()) {
-    return true;
-  }
+
   bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
   bool AddrOf = false;
   bool Decayed = false;
