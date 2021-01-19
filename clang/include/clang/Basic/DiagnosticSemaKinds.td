@@ -6699,7 +6699,7 @@ def warn_capability_no_provenance : Warning<
 def err_capability_no_provenance : Error<warn_capability_no_provenance.Text>;
 def note_capability_no_provenance_fixit : Note<
   "use an explicit capability conversion or insert a cast to "
-  "%select{u|}1int%select{ptr|cap}0_t if this is intended">;
+  "%select{u|}1int%select{cap|ptr}0_t if this is intended">;
 def warn_capability_integer_cast : Warning<
   "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,
   // XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
