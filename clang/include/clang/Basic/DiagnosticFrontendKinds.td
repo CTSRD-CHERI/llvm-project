@@ -275,7 +275,7 @@ def warn_cheri_memintrin_misaligned_inefficient : Warning<
 def warn_fe_backend_cheri_inefficient : Warning<"%0">, BackendInfo,
     InGroup<BackendCheriInefficient>, DefaultWarn, DefaultWarnNoWerror;
 def note_cheri_memintrin_misaligned_fixit : Note<
-  "use __builtin_assume_aligned() or cast to (u)intcap_t* if you know that the"
+  "use __builtin_assume_aligned() or cast to (u)int%select{cap|ptr}1_t* if you know that the"
   " pointer is actually aligned to capability size; this will allow the %0"
   " call to be inlined if the size is constant (otherwise a library call must"
   " be used to maintain tag bits). For more information see"
