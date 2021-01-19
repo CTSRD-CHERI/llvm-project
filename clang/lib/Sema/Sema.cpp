@@ -260,7 +260,6 @@ void Sema::Initialize() {
     if (IdResolver.begin(UIntCap) == IdResolver.end())
       PushOnScopeChains(Context.getUIntCapDecl(), TUScope);
   }
-  
 
   // Initialize predefined Objective-C types:
   if (getLangOpts().ObjC) {
