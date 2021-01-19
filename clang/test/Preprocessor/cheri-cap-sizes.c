@@ -42,8 +42,6 @@
 // Note: 64-bit range for intcap makes more sense than the full range for pointers
 // CHECK: #define __INTCAP_MAX__ 9223372036854775807L
 
-// CHERI128: #define __INTCAP_WIDTH__ 128
-
 // Using the 128/256-bit integer type for __INTPTR_MAX__ does not make sense
 // See https://github.com/CTSRD-CHERI/llvm-project/issues/316
 // CHECK:     #define __INTPTR_MAX__ 9223372036854775807L
@@ -57,7 +55,6 @@
 
 // CHERI128: #define __SIZEOF_UINTCAP__ 16
 // CHECK:    #define __UINTCAP_MAX__ 18446744073709551615UL
-// CHERI128: #define __UINTCAP_WIDTH__ 128
 
 // MIPS:        #define __UINTPTR_MAX__ 18446744073709551615UL
 // Using the 128/256-bit integer type for __UINTPTR_MAX__ does not make sense
