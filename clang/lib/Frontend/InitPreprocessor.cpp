@@ -816,16 +816,14 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     DefineTypeSizeof("__SIZEOF_CHERI_CAPABILITY__", CapWidth, TI, Builder);
     Builder.defineMacro("__CHERI_ADDRESS_BITS__", Twine(CapRange));
 
-    // For completeness also define UINTCAP/INTCAP sizeof and width macros
+    // Since these are always the same primitive types (unlike uintptr_t which
+    // varies), we follow the same convention as those, namely only define the
+    // sizeof and max macros, and not the type and width ones.
     DefineTypeSizeof("__SIZEOF_UINTCAP__", CapWidth, TI, Builder);
     DefineTypeSizeof("__SIZEOF_INTCAP__", CapWidth, TI, Builder);
-    Builder.defineMacro("__INTCAP_WIDTH__", Twine(CapWidth));
-    Builder.defineMacro("__UINTCAP_WIDTH__", Twine(CapWidth));
     // For the range we use the underlying ptrdiff_t/vaddr_t type
     DefineTypeSize("__INTCAP_MAX__", TI.getIntTypeByWidth(CapRange, true), TI, Builder);
     DefineTypeSize("__UINTCAP_MAX__", TI.getIntTypeByWidth(CapRange, false), TI, Builder);
-    // DefineTypeSizeof("__SIZEOF_CHERICAP__", CapWidth, TI, Builder);
-    // Builder.defineMacro("__CHERICAP_WIDTH__", Twine(CapWidth));
 
     if (TI.areAllPointersCapabilities()) {
       // XXXAR is there a reason we use two instead of just defining it?
