@@ -888,11 +888,13 @@ void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
     bool BadDebugInfo = false;
     FullSourceLoc Loc =
         getBestLocationFromDebugLoc(DICI, BadDebugInfo, Filename, Line, Column);
+    const auto &DL = DICI.getFunction().getParent()->getDataLayout();
+    bool IsPurecap = DL.isFatPointer(DL.getGlobalsAddressSpace());
 
     Diags.Report(Loc, diag::warn_fe_backend_cheri_inefficient)
         << DICI.getMessage();
     Diags.Report(Loc, diag::note_cheri_memintrin_misaligned_fixit)
-        << "memcpy() or memmove()";
+        << "memcpy() or memmove()" << IsPurecap;
     if (BadDebugInfo)
       // If we were not able to translate the file:line:col information
       // back to a SourceLocation, at least emit a note stating that

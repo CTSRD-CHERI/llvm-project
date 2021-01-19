@@ -1733,7 +1733,7 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
     // TODO: add a fixit?
     CGF.CGM.getDiags().Report(Src->getExprLoc(),
                               diag::note_cheri_memintrin_misaligned_fixit)
-        << Function;
+        << Function << Ctx.getTargetInfo().areAllPointersCapabilities();
   }
 }
 
