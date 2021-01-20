@@ -184,6 +184,7 @@ struct Configuration {
   bool ltoDebugPassManager;
   bool ltoEmitAsm;
   bool ltoNewPassManager;
+  bool ltoPseudoProbeForProfiling;
   bool ltoUniqueBasicBlockSectionNames;
   bool ltoWholeProgramVisibility;
   bool mergeArmExidx;
