@@ -1104,7 +1104,6 @@ Sema::getTemplateArgumentPackExpansionPattern(
   case TemplateArgument::NullPtr:
   case TemplateArgument::Template:
   case TemplateArgument::Integral:
-  case TemplateArgument::UncommonValue:
   case TemplateArgument::Pack:
   case TemplateArgument::Null:
     return TemplateArgumentLoc();
@@ -1155,7 +1154,6 @@ Optional<unsigned> Sema::getFullyPackExpandedSize(TemplateArgument Arg) {
   case TemplateArgument::NullPtr:
   case TemplateArgument::TemplateExpansion:
   case TemplateArgument::Integral:
-  case TemplateArgument::UncommonValue:
   case TemplateArgument::Pack:
   case TemplateArgument::Null:
     return None;
