@@ -6229,13 +6229,15 @@ unsigned ASTContext::getIntegerRank(const Type *T) const {
   case BuiltinType::LongLong:
   case BuiltinType::ULongLong:
     return 6 + (getIntWidth(LongLongTy) << 3);
-  // Does this make sense?
-  case BuiltinType::IntCap:
-  case BuiltinType::UIntCap:
-    return 6 + (getIntWidth(IntCapTy) << 3);
   case BuiltinType::Int128:
   case BuiltinType::UInt128:
     return 7 + (getIntWidth(Int128Ty) << 3);
+  // __intcap types are special and get a rank above all other integer types.
+  // This mirrors normal pointer arithmetic and ensures tags and metadata don't
+  // get lost.
+  case BuiltinType::IntCap:
+  case BuiltinType::UIntCap:
+    return UINT_MAX;
   }
 }
 
