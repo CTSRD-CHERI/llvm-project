@@ -212,6 +212,7 @@ public:
     GNUEABI,
     GNUEABIHF,
     GNUX32,
+    GNUILP32,
     CODE16,
     EABI,
     EABIHF,
@@ -733,7 +734,10 @@ public:
     assert(PointerWidth == 64 || PointerWidth == 32);
     if (!isAArch64())
       return false;
-    return isArch64Bit() ? PointerWidth == 64 : PointerWidth == 32;
+    return getArch() == Triple::aarch64_32 ||
+                   getEnvironment() == Triple::GNUILP32
+               ? PointerWidth == 32
+               : PointerWidth == 64;
   }
 
   /// Tests whether the target is MIPS 32-bit (little and big endian).
