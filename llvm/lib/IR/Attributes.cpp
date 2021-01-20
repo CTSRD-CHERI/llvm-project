@@ -384,6 +384,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "swifterror";
   if (hasAttribute(Attribute::SwiftSelf))
     return "swiftself";
+  if (hasAttribute(Attribute::SwiftAsync))
+    return "swiftasync";
   if (hasAttribute(Attribute::HasSideEffects))
     return "hassideeffects";
   if (hasAttribute(Attribute::InaccessibleMemOnly))
