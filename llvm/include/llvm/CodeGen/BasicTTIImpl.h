@@ -767,10 +767,10 @@ public:
     llvm_unreachable("Unknown TTI::ShuffleKind");
   }
 
-  unsigned getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src,
-                            TTI::CastContextHint CCH,
-                            TTI::TargetCostKind CostKind,
-                            const Instruction *I = nullptr) {
+  InstructionCost getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src,
+                                   TTI::CastContextHint CCH,
+                                   TTI::TargetCostKind CostKind,
+                                   const Instruction *I = nullptr) {
     if (BaseT::getCastInstrCost(Opcode, Dst, Src, CCH, CostKind, I) == 0)
       return 0;
 
@@ -886,7 +886,7 @@ public:
         Type *SplitSrcTy = VectorType::getHalfElementsVectorType(SrcVTy);
         T *TTI = static_cast<T *>(this);
         // If both types need to be split then the split is free.
-        unsigned SplitCost =
+        InstructionCost SplitCost =
             (!SplitSrc || !SplitDst) ? TTI->getVectorSplitCost() : 0;
         return SplitCost +
                (2 * TTI->getCastInstrCost(Opcode, SplitDstTy, SplitSrcTy, CCH,
@@ -896,7 +896,7 @@ public:
       // In other cases where the source or destination are illegal, assume
       // the operation will get scalarized.
       unsigned Num = cast<FixedVectorType>(DstVTy)->getNumElements();
-      unsigned Cost = thisT()->getCastInstrCost(
+      InstructionCost Cost = thisT()->getCastInstrCost(
           Opcode, Dst->getScalarType(), Src->getScalarType(), CCH, CostKind, I);
 
       // Return the cost of multiple scalar invocation plus the cost of
@@ -917,8 +917,8 @@ public:
     llvm_unreachable("Unhandled cast");
   }
 
-  unsigned getExtractWithExtendCost(unsigned Opcode, Type *Dst,
-                                    VectorType *VecTy, unsigned Index) {
+  InstructionCost getExtractWithExtendCost(unsigned Opcode, Type *Dst,
+                                           VectorType *VecTy, unsigned Index) {
     return thisT()->getVectorInstrCost(Instruction::ExtractElement, VecTy,
                                        Index) +
            thisT()->getCastInstrCost(Opcode, Dst, VecTy->getElementType(),
@@ -1953,8 +1953,10 @@ public:
       // %val = bitcast <ReduxWidth x i1> to iReduxWidth
       // %res = cmp eq iReduxWidth %val, 11111
       Type *ValTy = IntegerType::get(Ty->getContext(), NumVecElts);
-      return thisT()->getCastInstrCost(Instruction::BitCast, ValTy, Ty,
-                                       TTI::CastContextHint::None, CostKind) +
+      return *thisT()
+                  ->getCastInstrCost(Instruction::BitCast, ValTy, Ty,
+                                     TTI::CastContextHint::None, CostKind)
+                  .getValue() +
              thisT()->getCmpSelInstrCost(Instruction::ICmp, ValTy,
                                          CmpInst::makeCmpResultType(ValTy),
                                          CmpInst::BAD_ICMP_PREDICATE, CostKind);
@@ -2076,8 +2078,8 @@ public:
     VectorType *ExtTy = VectorType::get(ResTy, Ty);
     unsigned RedCost = thisT()->getArithmeticReductionCost(
         Instruction::Add, ExtTy, false, CostKind);
-    unsigned MulCost = 0;
-    unsigned ExtCost = thisT()->getCastInstrCost(
+    InstructionCost MulCost = 0;
+    InstructionCost ExtCost = thisT()->getCastInstrCost(
         IsUnsigned ? Instruction::ZExt : Instruction::SExt, ExtTy, Ty,
         TTI::CastContextHint::None, CostKind);
     if (IsMLA) {
