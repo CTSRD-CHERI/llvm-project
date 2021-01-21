@@ -2198,7 +2198,7 @@ Instruction *InstCombinerImpl::visitGetElementPtrInst(GetElementPtrInst &GEP) {
           if (StrippedPtrTy->getAddressSpace() != GEP.getAddressSpace())
             return nullptr;
           // -> GEP i8* X, ...
-          SmallVector<Value*, 8> Idx(GEP.idx_begin()+1, GEP.idx_end());
+          SmallVector<Value *, 8> Idx(drop_begin(GEP.indices()));
           GetElementPtrInst *Res = GetElementPtrInst::Create(
               StrippedPtrEltTy, StrippedPtr, Idx, GEP.getName());
           Res->setIsInBounds(GEP.isInBounds());
