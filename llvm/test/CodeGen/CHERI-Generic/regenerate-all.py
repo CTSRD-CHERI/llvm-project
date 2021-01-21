@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import argparse
-import math
 import subprocess
 import sys
 import typing
 from pathlib import Path
 
+import math
 
 LLVM_SRC_PATH = Path(__file__).parent.parent.parent.parent
 
@@ -91,6 +91,8 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     current_arch_base_if = b"@IF-" + arch_def.base_name.encode() + b"@"
     current_arch_ifnot = b"@IFNOT-" + arch_def.name.encode() + b"@"
     current_arch_base_ifnot = b"@IFNOT-" + arch_def.base_name.encode() + b"@"
+    update_llc_args = []
+    update_opt_args = ["--function-signature", "--scrub-attributes"]
     with output_path.open("wb") as output_file:
         output_file.write(b"; DO NOT EDIT -- This file was generated from " + str(
             Path(input_file.name).relative_to(LLVM_SRC_PATH)).encode("utf-8") + b"\n")
@@ -111,7 +113,7 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                     continue
                 else:
                     sys.exit("Invalid @IF- directive: " + line.decode("utf-8"))
-            if line.startswith(b"@IFNOT-"):
+            elif line.startswith(b"@IFNOT-"):
                 if line.startswith(current_arch_ifnot):
                     print("Skipping", current_arch_ifnot, "line: ", line)
                     continue
@@ -127,6 +129,16 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                         break
                 if not valid_directive:
                     sys.exit("Invalid @IF- directive: " + line.decode("utf-8"))
+            elif line.startswith(b"; UPDATE_OPT_ARGS:"):
+                argstr = line[len(b"; UPDATE_OPT_ARGS:"):].decode("utf-8")
+                update_opt_args = [x.strip() for x in argstr.split()]
+                print("Set update_test_checks.py args to: ", update_opt_args)
+                continue
+            elif line.startswith(b"; UPDATE_LLC_ARGS:"):
+                argstr = line[len(b"; UPDATE_LLC_ARGS:"):].decode("utf-8")
+                update_llc_args = [x.strip() for x in argstr.split()]
+                print("Set update_llc_test_checks.py args to: ", update_llc_args)
+                continue
 
             converted_line = line.replace(b"iCAPRANGE", b"i" + str(
                 arch_def.cap_range).encode("utf-8"))
@@ -166,21 +178,16 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     # Generate the check lines using update_*_test_checks.py
     update_scripts_dir = LLVM_SRC_PATH / "utils"
     llc_checks_cmd = [sys.executable, str(update_scripts_dir / "update_llc_test_checks.py"),
-                      "--force-update",
                       "--llc-binary", str(args.llc_cmd),
                       "--opt-binary", str(args.opt_cmd),
-                      str(output_path)]
+                      "--force-update"] + update_llc_args + [str(output_path)]
     opt_checks_cmd = [sys.executable, str(update_scripts_dir / "update_test_checks.py"),
-                      "--function-signature", "--scrub-attributes", "--force-update",
                       "--opt-binary", str(args.opt_cmd),
-                      str(output_path)]
+                      "--force-update"] + update_opt_args + [str(output_path)]
     for update_cmd in (llc_checks_cmd, opt_checks_cmd):
         # if args.verbose:
         print("Running", " ".join(update_cmd))
         subprocess.check_call(update_cmd)
-    #/Users/alex/cheri/llvm-project/llvm/utils/update_llc_test_checks.py --verbose --llc-binary /Users/alex/cheri/llvm-project/cmake-build-debug/bin/llc /Users/alex/cheri/llvm-project/llvm/test/CodeGen/CHERI-Generic/MIPS/cheri-csub.ll
-
-    # TODO: run update_test_checks.py
 
 
 def main():
