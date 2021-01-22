@@ -1086,7 +1086,7 @@ public:
     auto *SubVT = FixedVectorType::get(VT->getElementType(), NumSubElts);
 
     // Firstly, the cost of load/store operation.
-    unsigned Cost;
+    InstructionCost Cost;
     if (UseMaskForCond || UseMaskForGaps)
       Cost = thisT()->getMaskedMemoryOpCost(Opcode, VecTy, Alignment,
                                             AddressSpace, CostKind);
@@ -1188,7 +1188,7 @@ public:
     }
 
     if (!UseMaskForCond)
-      return Cost;
+      return *Cost.getValue();
 
     Type *I8Type = Type::getInt8Ty(VT->getContext());
     auto *MaskVT = FixedVectorType::get(I8Type, NumElts);
@@ -1221,7 +1221,7 @@ public:
       Cost += thisT()->getArithmeticInstrCost(BinaryOperator::And, MaskVT,
                                               CostKind);
 
-    return Cost;
+    return *Cost.getValue();
   }
 
   /// Get intrinsic cost based on arguments.
