@@ -347,7 +347,6 @@ class LLVMConfig(object):
         riscv64_cheri_purecap_args = ['-target-abi', 'l64pc128', '-mattr=+cap-mode'] + riscv64_cheri_args
 
         assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
-        self.config.substitutions.append(('%cheri_type', 'CHERI128'))
         default_args = cheri128_args
         self.config.substitutions.append(('%cheri_cap_bytes', default_cheri_size))
         tool_patterns = [

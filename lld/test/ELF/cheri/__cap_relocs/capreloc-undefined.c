@@ -20,11 +20,10 @@
 // SHLIB-RELOCS-NEXT:    0x204A8 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
-// RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s --check-prefixes CHECK,%cheri_type
+// RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s --check-prefixes CHECK
 // CHECK-LABEL: Sections:
 // CHECK:     __cap_relocs  00000028 0000000000020490 DATA
-// CHERI128:  .data         00000010 00000000000304c0 DATA
-// CHERI256:  .data         00000020 00000000000304c0 DATA
+// CHECK:  .data         00000010 00000000000304c0 DATA
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK: 0000000000000000         *UND*		 0000000000000000 foo
 // CHECK: 00000000000304c0 g     O .data		 00000000000000{{1|2}}0 foo_ptr

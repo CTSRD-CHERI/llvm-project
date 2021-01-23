@@ -1,8 +1,8 @@
-# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+%cheri_type,+chericap -filetype=obj %s -o - \
+# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+cheri128,+chericap -filetype=obj %s -o - \
 # RUN:     | llvm-readobj -r - -s -section-data
-# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+%cheri_type,+chericap -filetype=obj %s -o - \
-# RUN:     | llvm-readobj -r - -s -section-data | %cheri_FileCheck %s -check-prefixes CHECK,%cheri_type
-# RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o - | llvm-readobj -r - -s -section-data | %cheri_FileCheck %s -check-prefixes CHECK,%cheri_type
+# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+cheri128,+chericap -filetype=obj %s -o - \
+# RUN:     | llvm-readobj -r - -s -section-data | %cheri_FileCheck %s -check-prefixes CHECK
+# RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o - | llvm-readobj -r - -s -section-data | %cheri_FileCheck %s -check-prefixes CHECK
 
 .extern foo
 .data
@@ -29,16 +29,8 @@
 # CHECK-NEXT:    SectionData (
 # CHECK-NEXT:      0000: CACACACA CACACACA CACACACA CACACACA |
 # CHECK-NEXT:      0010: CACACACA CACACACA CACACACA CACACACA |
-
-# CHERI128-NEXT:   0020: 01000000 00000000 00000000 00000000 |
-# CHERI128-NEXT:   0030: CACACACA CACACACA CACACACA CACACACA |
-
-# CHERI256-NEXT:   0020: CACACACA CACACACA CACACACA CACACACA |
-# CHERI256-NEXT:   0030: CACACACA CACACACA CACACACA CACACACA |
-# CHERI256-NEXT:   0040: 01000000 00000000 00000000 00000000 |
-# CHERI256-NEXT:   0050: 00000000 00000000 00000000 00000000 |
-# CHERI256-NEXT:   0060: CACACACA CACACACA CACACACA CACACACA |
-# CHERI256-NEXT:   0070: CACACACA CACACACA CACACACA CACACACA |
+# CHECK-NEXT:      0020: 01000000 00000000 00000000 00000000 |
+# CHECK-NEXT:      0030: CACACACA CACACACA CACACACA CACACACA |
 # CHECK-NEXT:    )
 
 .rodata
@@ -60,16 +52,9 @@
 # CHECK-NEXT:    AddressAlignment: [[#CAP_SIZE]]
 # CHECK-NEXT:    EntrySize: 0
 # CHECK-NEXT:    SectionData (
-# CHERI128-NEXT:      0000: 00000000 00000000 00000000 00000000  |
-# CHERI128-NEXT:      0010: AA000000 00000000 00000000 00000000  |
-# CHERI128-NEXT:      0020: 00000000 00000000 12345678 ABCDEF00  |
-
-# CHERI256-NEXT:      0000: 00000000 00000000 00000000 00000000  |
-# CHERI256-NEXT:      0010: 00000000 00000000 00000000 00000000  |
-# CHERI256-NEXT:      0020: AA000000 00000000 00000000 00000000  |
-# CHERI256-NEXT:      0030: 00000000 00000000 00000000 00000000  |
-# CHERI256-NEXT:      0040: 00000000 00000000 12345678 ABCDEF00  |
-# CHERI256-NEXT:      0050: 00000000 00000000 00000000 00000000  |
+# CHECK-NEXT:      0000: 00000000 00000000 00000000 00000000  |
+# CHECK-NEXT:      0010: AA000000 00000000 00000000 00000000  |
+# CHECK-NEXT:      0020: 00000000 00000000 12345678 ABCDEF00  |
 # CHECK-NEXT:    )
 
 # CHECK-LABEL: Relocations [

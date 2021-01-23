@@ -2,7 +2,7 @@
 // REQUIRES: mips-registered-target
 
 // RUN: %cheri_purecap_cc1 -std=c11 -O2 -emit-llvm -o - %s | %cheri_FileCheck %s
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -check-prefixes=ASM,%cheri_type-ASM %s
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -check-prefixes=ASM,CHERI128-ASM %s
 int global;
 
 
@@ -144,18 +144,11 @@ ThreeLongs three_longs() {
   ThreeLongs t = { 1, 2, 3 };
   return t;
   // ASM-LABEL: three_longs
-  // Clang now uses a memcpy from a global for cheri128
+  // Clang uses a memcpy from a global for cheri128.
+  // For cheri256 it inlined the memcpy from a global (since it is smaller than 1 cap)
   // CHERI128-ASM: clcbi $c4, %captab20(.L__const.three_longs.t)($c{{.+}})
   // CHERI128-ASM: clcbi   $c12, %capcall20(memcpy)($c{{.+}})
-  // For cheri256 clang will inline the memcpy from a global (since it is smaller than 1 cap)
-  // CHERI256-ASM:      clcbi $c1, %captab20(.L__const.three_longs.t)($c{{.+}})
-  // CHERI256-ASM-NEXT: cld	$1, $zero, 16($c1)
-  // CHERI256-ASM-NEXT: cld	$2, $zero, 8($c1)
-  // CHERI256-ASM-NEXT: cld	$3, $zero, 0($c1)
-  // CHERI256-ASM-NEXT: csd	$1, $zero, 16($c3)
-  // CHERI256-ASM-NEXT: csd	$2, $zero, 8($c3)
-  // CHERI256-ASM-NEXT: cjr	$c17
-  // CHERI256-ASM-NEXT: csd	$3, $zero, 0($c3)
+
 }
 
 typedef struct {
