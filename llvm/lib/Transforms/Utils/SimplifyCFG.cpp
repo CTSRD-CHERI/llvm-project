@@ -62,6 +62,7 @@
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/ValueHandle.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -219,7 +220,7 @@ class SimplifyCFGOpt {
   const TargetTransformInfo &TTI;
   DomTreeUpdater *DTU;
   const DataLayout &DL;
-  SmallPtrSetImpl<BasicBlock *> *LoopHeaders;
+  ArrayRef<WeakVH> LoopHeaders;
   const SimplifyCFGOptions &Options;
   bool Resimplify;
 
@@ -262,8 +263,7 @@ class SimplifyCFGOpt {
 
 public:
   SimplifyCFGOpt(const TargetTransformInfo &TTI, DomTreeUpdater *DTU,
-                 const DataLayout &DL,
-                 SmallPtrSetImpl<BasicBlock *> *LoopHeaders,
+                 const DataLayout &DL, ArrayRef<WeakVH> LoopHeaders,
                  const SimplifyCFGOptions &Opts)
       : TTI(TTI), DTU(DTU), DL(DL), LoopHeaders(LoopHeaders), Options(Opts) {
     assert((!DTU || !DTU->hasPostDomTree()) &&
@@ -4216,8 +4216,6 @@ bool SimplifyCFGOpt::simplifySingleResume(ResumeInst *RI) {
   }
 
   // The landingpad is now unreachable.  Zap it.
-  if (LoopHeaders)
-    LoopHeaders->erase(BB);
   if (DTU)
     DTU->deleteBB(BB);
   else
@@ -4441,8 +4439,6 @@ bool SimplifyCFGOpt::simplifyReturn(ReturnInst *RI, IRBuilder<> &Builder) {
     // If we eliminated all predecessors of the block, delete the block now.
     if (pred_empty(BB)) {
       // We know there are no successors, so just nuke the block.
-      if (LoopHeaders)
-        LoopHeaders->erase(BB);
       if (DTU)
         DTU->deleteBB(BB);
       else
@@ -4644,8 +4640,6 @@ bool SimplifyCFGOpt::simplifyUnreachable(UnreachableInst *UI) {
   // If this block is now dead, remove it.
   if (pred_empty(BB) && BB != &BB->getParent()->getEntryBlock()) {
     // We know there are no successors, so just nuke the block.
-    if (LoopHeaders)
-      LoopHeaders->erase(BB);
     if (DTU)
       DTU->deleteBB(BB);
     else
@@ -6248,8 +6242,8 @@ bool SimplifyCFGOpt::simplifyUncondBranch(BranchInst *BI,
   // backedge, so we can eliminate BB.
   bool NeedCanonicalLoop =
       Options.NeedCanonicalLoop &&
-      (LoopHeaders && BB->hasNPredecessorsOrMore(2) &&
-       (LoopHeaders->count(BB) || LoopHeaders->count(Succ)));
+      (!LoopHeaders.empty() && BB->hasNPredecessorsOrMore(2) &&
+       (is_contained(LoopHeaders, BB) || is_contained(LoopHeaders, Succ)));
   BasicBlock::iterator I = BB->getFirstNonPHIOrDbg()->getIterator();
   if (I->isTerminator() && BB != &BB->getParent()->getEntryBlock() &&
       !NeedCanonicalLoop && TryToSimplifyUncondBranchFromEmptyBlock(BB, DTU))
@@ -6617,7 +6611,7 @@ bool SimplifyCFGOpt::run(BasicBlock *BB) {
 
 bool llvm::simplifyCFG(BasicBlock *BB, const TargetTransformInfo &TTI,
                        DomTreeUpdater *DTU, const SimplifyCFGOptions &Options,
-                       SmallPtrSetImpl<BasicBlock *> *LoopHeaders) {
+                       ArrayRef<WeakVH> LoopHeaders) {
   return SimplifyCFGOpt(TTI, RequireAndPreserveDomTree ? DTU : nullptr,
                         BB->getModule()->getDataLayout(), LoopHeaders, Options)
       .run(BB);
