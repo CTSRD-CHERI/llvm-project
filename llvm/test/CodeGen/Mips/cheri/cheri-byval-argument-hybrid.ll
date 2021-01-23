@@ -1,12 +1,6 @@
 ; This test caused assertion failures in MIPS DAG->DAG Pattern Instruction Selection
 ; REQUIRES: asserts
 ; RUN: %cheri128_llc -target-abi n64 %s -o - | FileCheck %s
-; RUN: %cheri256_llc -target-abi n64 %s -o - | FileCheck %s
-; ModuleID = '/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGen/cheri-byval-varargs.c'
-source_filename = "/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGen/cheri-byval-varargs.c"
-target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128"
-target triple = "cheri-unknown-freebsd"
-
 %struct.arg_1000_long = type { [1000 x i64] }
 %struct.arg_1000___intcap_t = type { [1000 x i8 addrspace(200)*] }
 
@@ -40,7 +34,3 @@ declare void @take_1000___intcap_t_byval(%struct.arg_1000___intcap_t* byval alig
 attributes #0 = { nounwind }
 attributes #1 = { nounwind }
 attributes #2 = { nounwind }
-
-!llvm.ident = !{!0}
-
-!0 = !{!"clang version 5.0.0 (https://github.com/llvm-mirror/clang.git 0f369215db6346fa6dda050cdef195c0faa9f4bd) (https://github.com/llvm-mirror/llvm.git 812bcb83ff25c43c3fe03d26e341eecb5ff5f544)"}
