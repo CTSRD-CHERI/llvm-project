@@ -1,5 +1,5 @@
 ; RUN: sed 's/align 16 %%src, i64 16/align %cheri_cap_bytes %%src, i64 %cheri_cap_bytes/g' %s > %t.ll
-; RUN: %cheri_purecap_llc %t.ll -o - -O2 -verify-machineinstrs | FileCheck %s -check-prefixes CHECK,%cheri_type
+; RUN: %cheri_purecap_llc %t.ll -o - -O2 -verify-machineinstrs | FileCheck %s -check-prefixes CHECK,CHERI128
 
 declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) #1
 declare void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) #1

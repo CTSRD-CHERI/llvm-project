@@ -3,19 +3,16 @@
 # REQUIRES: mips
 # RUN: %cheri_llvm-mc -filetype=obj %s -o %t.o
 # RUN: llvm-objdump -d -r -t %t.o > /dev/null
-# RUN: not ld.lld %t.o -o %t.exe 2>&1 | FileCheck %s -check-prefixes CHECK,%cheri_type
+# RUN: not ld.lld %t.o -o %t.exe 2>&1 | FileCheck %s -check-prefixes CHECK
 
 # TODO: 2000 symbols should be okay once we point to the middle of the captable
 # CHECK:      out-of-bounds-captable-reloc.s.tmp.o:(.text+0x{{.+}}): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1024 is not in [-1024, 1023]
 # CHECK-NEXT: >>> defined in
 # CHECK-EMPTY:
 # For CHERI256 we have to skip every second entry so it can is 1026 instead of 1025
-# CHERI128-NEXT: out-of-bounds-captable-reloc.s.tmp.o:(.text+0x{{.+}}): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1025 is not in [-1024, 1023]
-# CHERI128-NEXT: >>> defined in
-# CHERI128-EMPTY:
-# CHERI256-NEXT: out-of-bounds-captable-reloc.s.tmp.o:(.text+0x{{.+}}): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1026 is not in [-1024, 1023]
-# CHERI256-NEXT: >>> defined in
-# CHERI256-EMPTY:
+# CHECK-NEXT: out-of-bounds-captable-reloc.s.tmp.o:(.text+0x{{.+}}): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1025 is not in [-1024, 1023]
+# CHECK-NEXT: >>> defined in
+# CHECK-EMPTY:
 # CHECK:      error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
 
 .macro generate_values
