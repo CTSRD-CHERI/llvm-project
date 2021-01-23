@@ -1,4 +1,4 @@
-// REQUIRES: clang, cheri_is_128
+// REQUIRES: clang
 // TODO: convert to IR test (but that requires filling in the full @llvm.used array which is annoying
 // RUN: %cheri_purecap_clang -ffunction-sections -fdata-sections %s -S -o - -emit-llvm | FileCheck %s -check-prefix IR
 // FIXME: update test for -fno-common

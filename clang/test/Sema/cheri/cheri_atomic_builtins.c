@@ -7,9 +7,6 @@
 // Check that we can emit assembly without crashing
 // RUN: %cheri_cc1 "-target-abi" "n64" -S -o /dev/null %s -verify=expected,hybrid
 // RUN: %cheri_purecap_cc1 -S -o /dev/null %s -verify=expected,purecap
-// XFAIL: cheri_is_256
-// CHERI256 doesn't support the __sync_* builtins yet
-
 
 #define do_atomic_ops(ptr, result, newval) do { \
   result = __sync_fetch_and_add(ptr, 0); \

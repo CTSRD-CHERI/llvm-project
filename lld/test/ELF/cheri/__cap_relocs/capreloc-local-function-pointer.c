@@ -1,4 +1,4 @@
-// REQUIRES: clang, cheri_is_128
+// REQUIRES: clang
 
 // RUN: %cheri_purecap_cc1 -emit-obj -mllvm -cheri-cap-table-abi=pcrel %s -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck --check-prefix OBJ-CAPRELOCS %s

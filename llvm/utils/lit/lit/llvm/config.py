@@ -354,15 +354,9 @@ class LLVMConfig(object):
         riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64', '-mattr=+cap-mode'] + riscv32_cheri_args
         riscv64_cheri_purecap_args = ['-target-abi', 'l64pc128', '-mattr=+cap-mode'] + riscv64_cheri_args
 
-        if default_cheri_size == '16':
-            self.config.available_features.add("cheri_is_128")
-            self.config.substitutions.append(('%cheri_type', 'CHERI128'))
-            default_args = cheri128_args
-        else:
-            assert default_cheri_size == '32', "Invalid -DCHERI_CAP_SIZE=" + default_cheri_size
-            self.config.substitutions.append(('%cheri_type', 'CHERI256'))
-            self.config.available_features.add("cheri_is_256")
-            default_args = cheri256_args
+        assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
+        self.config.substitutions.append(('%cheri_type', 'CHERI128'))
+        default_args = cheri128_args
         self.config.substitutions.append(('%cheri_cap_bytes', default_cheri_size))
         tool_patterns = [
             ToolSubst('%cheri_' + tool, FindTool(tool), extra_args=default_args),
@@ -487,17 +481,9 @@ class LLVMConfig(object):
                 '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
 
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
-        if default_cheri_size == '16':
-            self.config.available_features.add("cheri_is_128")
-            cheri_cc1_args = cheri128_cc1_args
-            default_cheri_cpu = 'cheri128'
-
-        else:
-            assert default_cheri_size == '32', "Invalid -DCHERI_CAP_SIZE=" + default_cheri_size
-            self.config.available_features.add("cheri_is_256")
-            default_cheri_cpu = 'cheri256'
-            cheri_cc1_args = cheri256_cc1_args
-
+        assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
+        cheri_cc1_args = cheri128_cc1_args
+        default_cheri_cpu = 'cheri128'
         cheri_clang_args = ['-target', 'mips64-unknown-freebsd', '-nostdinc',
                             '-mcpu=' + default_cheri_cpu, '-msoft-float']
         riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
