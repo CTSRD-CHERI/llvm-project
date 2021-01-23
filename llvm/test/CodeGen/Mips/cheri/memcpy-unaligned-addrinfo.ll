@@ -5,7 +5,6 @@
 ; RUN: FileCheck %s -check-prefix SROA -input-file=%t.ll
 ; RUN: %cheri_purecap_llc -O2 %t.ll -o - | FileCheck %s -check-prefixes=CHECK,WITH-SROA
 ; RUN: %cheri_purecap_llc -O2 %s -o - | FileCheck %s  -check-prefixes=CHECK,WITHOUT-SROA
-; REQUIRES: cheri_is_128
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 target triple = "cheri-unknown-freebsd"
 

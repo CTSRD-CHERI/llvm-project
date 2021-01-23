@@ -2,7 +2,6 @@
 ; RUN: %cheri_purecap_llc -O1 %s -o - | FileCheck %s
 ; ModuleID = 'cmpcap.c'
 ; This test assumes cheri128, since on 256 a 16 byte aligned pointer won't be expanded
-; REQUIRES: cheri_is_128
 source_filename = "cmpcap.c"
 
 %struct.bigbuf = type { [5 x i8 addrspace(200)*] }

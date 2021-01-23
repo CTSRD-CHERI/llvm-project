@@ -4,9 +4,6 @@
 ; callee-save register even for the if (x == NULL) return 0 case
 ; RUN: %cheri_purecap_llc %s -o - | %cheri_FileCheck %s
 
-; REQUIRES: cheri_is_128
-; CHERI256 calls memcpy here so the code is very different...
-
 %struct.tree = type { i32, %struct.tree addrspace(200)*, %struct.tree addrspace(200)* }
 
 ; Function Attrs: nounwind readonly
