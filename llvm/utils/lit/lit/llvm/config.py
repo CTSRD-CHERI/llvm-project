@@ -331,13 +331,6 @@ class LLVMConfig(object):
     def _add_cheri_tool_substitution(self, tool):
         assert tool in ('llc', 'opt', 'llvm-mc'), 'Invalid tool: ' + tool
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
-        self.config.substitutions.append((r"\b{tool}\b.+\-target-abi\s+purecap\b",
-              "\"---Don't use {tool} -target-abi purecap, "
-              "use %cheri[128/256]_purecap_{tool} instead ---\"".format(tool=tool)))
-        self.config.substitutions.append((r"\b{tool}\b.+\-mcpu=cheri.+",
-              "\"---Don't use {tool} -mcpu=cheri, "
-              "use %cheri[128/256]_{tool} instead ---\"".format(tool=tool)))
-
         if tool == 'llvm-mc':
             triple_opt = '-triple'
             purecap_args = ['-target-abi', 'purecap', '-position-independent']
@@ -348,7 +341,6 @@ class LLVMConfig(object):
         if tool == "llc":  # TODO: add this to clang as well?
             extra_args = ["-verify-machineinstrs"]
         cheri128_args = [triple_opt + '=mips64-unknown-freebsd', '-mcpu=cheri128', '-mattr=+cheri128'] + extra_args
-        cheri256_args = [triple_opt + '=mips64-unknown-freebsd', '-mcpu=cheri256', '-mattr=+cheri256'] + extra_args
         riscv32_cheri_args = [triple_opt + '=riscv32-unknown-freebsd', '-mattr=+xcheri'] + extra_args
         riscv64_cheri_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+xcheri'] + extra_args
         riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64', '-mattr=+cap-mode'] + riscv32_cheri_args
@@ -361,13 +353,10 @@ class LLVMConfig(object):
         tool_patterns = [
             ToolSubst('%cheri_' + tool, FindTool(tool), extra_args=default_args),
             ToolSubst('%cheri128_' + tool, FindTool(tool), extra_args=cheri128_args),
-            ToolSubst('%cheri256_' + tool, FindTool(tool), extra_args=cheri256_args),
             ToolSubst('%cheri_purecap_' + tool, FindTool(tool),
                       extra_args=default_args + purecap_args),
             ToolSubst('%cheri128_purecap_' + tool, FindTool(tool),
                       extra_args=cheri128_args + purecap_args),
-            ToolSubst('%cheri256_purecap_' + tool, FindTool(tool),
-                      extra_args=cheri256_args + purecap_args),
             ToolSubst('%riscv32_cheri_' + tool, FindTool(tool), extra_args=riscv32_cheri_args),
             ToolSubst('%riscv64_cheri_' + tool, FindTool(tool), extra_args=riscv64_cheri_args),
             ToolSubst('%riscv32_cheri_purecap_' + tool, FindTool(tool), extra_args=riscv32_cheri_purecap_args),
@@ -473,8 +462,6 @@ class LLVMConfig(object):
         clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
         cheri128_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
                 '-target-cpu', 'cheri128', '-cheri-size', '128', '-mllvm', '-verify-machineinstrs']
-        cheri256_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
-                '-target-cpu', 'cheri256', '-cheri-size', '256', '-mllvm', '-verify-machineinstrs']
         riscv32_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
                 '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
         riscv64_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
@@ -493,10 +480,8 @@ class LLVMConfig(object):
             # CHERI substitutions (order is important due to repeated substitutions!)
             ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']+additional_flags),
             ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']+additional_flags),
-            ToolSubst('%cheri256_purecap_cc1', command='%cheri256_cc1', extra_args=['-target-abi', 'purecap']+additional_flags),
             ToolSubst('%cheri_cc1',    command=self.config.clang, extra_args=cheri_cc1_args+additional_flags),
             ToolSubst('%cheri128_cc1', command=self.config.clang, extra_args=cheri128_cc1_args+additional_flags),
-            ToolSubst('%cheri256_cc1', command=self.config.clang, extra_args=cheri256_cc1_args+additional_flags),
             ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args+additional_flags),
             ToolSubst('%cheri_purecap_clang', command=self.config.clang,
                       extra_args=cheri_clang_args + ['-mabi=purecap']+additional_flags),

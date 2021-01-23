@@ -68,10 +68,8 @@ def main():
         if first_command.startswith("%"):
           first_command = first_command.replace("%cheri_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
           first_command = first_command.replace("%cheri128_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
-          first_command = first_command.replace("%cheri256_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
           first_command = first_command.replace("%cheri_opt", "opt -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
           first_command = first_command.replace("%cheri128_opt", "opt -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
-          first_command = first_command.replace("%cheri256_opt", "opt -mtriple=mips64-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
           first_command = first_command.replace("%riscv32_cheri_purecap_opt", "opt -mtriple=riscv32-unknown-freebsd -target-abi il32pc64 -mattr=+xcheri,+cap-mode")
           first_command = first_command.replace("%riscv64_cheri_purecap_opt", "opt -mtriple=riscv64-unknown-freebsd -target-abi l64pc128 -mattr=+xcheri,+cap-mode")
           first_command = first_command.replace("%riscv32_cheri_opt", "opt -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
@@ -95,10 +93,8 @@ def main():
       if llc_cmd.startswith("%"):
         llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
         llc_cmd = llc_cmd.replace("%cheri128_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
-        llc_cmd = llc_cmd.replace("%cheri256_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
         llc_cmd = llc_cmd.replace("%cheri_llc", "llc -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         llc_cmd = llc_cmd.replace("%cheri128_llc", "llc -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
-        llc_cmd = llc_cmd.replace("%cheri256_llc", "llc -mtriple=mips64-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
         llc_cmd = llc_cmd.replace("%riscv32_cheri_purecap_llc", "llc -mtriple=riscv32-unknown-freebsd -target-abi il32pc64 -mattr=+xcheri,+cap-mode")
         llc_cmd = llc_cmd.replace("%riscv64_cheri_purecap_llc", "llc -mtriple=riscv64-unknown-freebsd -target-abi l64pc128 -mattr=+xcheri,+cap-mode")
         llc_cmd = llc_cmd.replace("%riscv32_cheri_llc", "llc -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
