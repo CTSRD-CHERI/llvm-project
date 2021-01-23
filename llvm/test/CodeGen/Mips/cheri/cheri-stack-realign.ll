@@ -1,11 +1,7 @@
-; RUN: %cheri256_purecap_llc -O0 %s -o - | FileCheck %s
-; ModuleID = 'cheri-stack.c'
-source_filename = "cheri-stack.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
+; RUN: %cheri_purecap_llc -O0 %s -o - | FileCheck %s
 
-; Function Attrs: nounwind
-define void @dynamic_alloca(i32 signext %x) local_unnamed_addr #0 {
+
+define void @dynamic_alloca(i32 signext %x) local_unnamed_addr nounwind {
 entry:
   ; CHECK: cgetaddr	$[[SPOFFSET:([0-9]+|sp)]], $c11
   ; CHECK: daddiu	$[[MASK:([0-9]+|sp)]], $zero, -64
@@ -14,19 +10,8 @@ entry:
 
   %0 = zext i32 %x to i64
   %vla = alloca i32, i64 %0, align 64, addrspace(200)
-  call void @use_arg(i32 addrspace(200)* nonnull %vla) #2
+  call void @use_arg(i32 addrspace(200)* nonnull %vla) nounwind
   ret void
 }
 
-declare void @use_arg(i32 addrspace(200)*) #1
-
-attributes #0 = { nounwind  }
-attributes #1 = { nounwind }
-attributes #2 = { nounwind }
-
-!llvm.module.flags = !{!0, !1}
-!llvm.ident = !{!2}
-
-!0 = !{i32 1, !"wchar_size", i32 4}
-!1 = !{i32 7, !"PIC Level", i32 2}
-!2 = !{!"clang version 5.0.0 "}
+declare void @use_arg(i32 addrspace(200)*) nounwind

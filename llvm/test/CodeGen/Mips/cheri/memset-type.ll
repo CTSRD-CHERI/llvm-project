@@ -1,5 +1,5 @@
-; RUN: %cheri128_purecap_llc -O1 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI128
-; RUN: %cheri256_purecap_llc -O1 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI256
+; RUN: %cheri_purecap_llc -O1 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI128
+; RUN: llc -mtriple=mips64-unknown-freebsd -mattr=+cheri256 -mcpu=cheri256 -target-abi purecap -O1 %s -o - | FileCheck %s -check-prefixes CHECK,CHERI256
 
 declare void @llvm.memset.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8, i64, i1) addrspace(200)
 
