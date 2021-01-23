@@ -1,8 +1,7 @@
 // REQUIRES: mips-registered-target
 
 // RUN: %cheri128_cc1 -o - -O0 -emit-llvm %s | FileCheck %s --check-prefixes=CHECK
-// RUN: %cheri128_cc1 -o - -O0 -S %s | FileCheck %s -check-prefixes=ASM,ASM128
-// RUN: %cheri256_cc1 -o - -O0 -S %s | FileCheck %s -check-prefixes=ASM,ASM256
+// RUN: %cheri128_cc1 -o - -O0 -S %s | FileCheck %s -check-prefixes=ASM
 void * __capability results[12];
 
 long long testDeprecated(void * __capability foo)
@@ -101,9 +100,6 @@ int crap_cram(int len) {
   return __builtin_cheri_round_representable_length(len) & __builtin_cheri_representable_alignment_mask(len);
   // CHECK: call i64 @llvm.cheri.round.representable.length.i64(
   // CHECK: call i64 @llvm.cheri.representable.alignment.mask.i64(
-  // ASM128: croundrepresentablelength	${{[0-9]+}}, ${{[0-9]+}}
-  // ASM128: crepresentablealignmentmask	${{[0-9]+}}, ${{[0-9]+}}
-  // These are no-ops for 256 and should not be emitted:
-  // ASM256-NOT: croundrepresentablelength
-  // ASM256-NOT: crepresentablealignmentmask
+  // ASM: croundrepresentablelength	${{[0-9]+}}, ${{[0-9]+}}
+  // ASM: crepresentablealignmentmask	${{[0-9]+}}, ${{[0-9]+}}
 }

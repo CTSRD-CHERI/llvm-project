@@ -1,9 +1,6 @@
 // RUN: %cheri_cc1 -target-abi n64 -emit-llvm -o - %s -DDATA_SIZE=64 | FileCheck %s -check-prefix N64-EXPANDED
 // RUN: %cheri_cc1 -target-abi n64 -emit-llvm -o - %s -DDATA_SIZE=72 | FileCheck %s -check-prefix N64-MEMCPY
-// CHERI 256 expands up to 256 bytes
-// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=256 | FileCheck %s -check-prefix EXPANDED
-// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=264 | FileCheck %s -check-prefix MEMCPY
-// 128 only expands up to 128 bytes:
+// CHERI-MIPS-256 used to expand up to 256 bytes, but CHERI-MIPS-128 should only expand up to 128 bytes:
 // RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=128 | FileCheck %s -check-prefix EXPANDED
 // RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=136 | FileCheck %s -check-prefix MEMCPY
 

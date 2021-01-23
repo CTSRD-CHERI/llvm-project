@@ -4,14 +4,10 @@
 // This previously triggered an assert in SROA and instcombine. Now it generates
 // sub-optimal code for CHERI128 but at least it doesn't crash
 
-// RUN: %cheri256_cc1 -O2 -std=c++11 -o - -emit-llvm %s | FileCheck %s -check-prefix N64-CHERI256-IR
 // RUN: %cheri128_cc1 -O2 -std=c++11 -o - -emit-llvm %s | FileCheck %s -check-prefix N64-CHERI128-IR
-// RUN: %cheri256_purecap_cc1 -O2 -std=c++11 -o - -emit-llvm %s | FileCheck %s -check-prefix PURECAP-CHERI256-IR
 // RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o - -emit-llvm %s | FileCheck %s -check-prefix PURECAP-CHERI128-IR
 
-// RUN: %cheri256_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,N64-ASM
 // RUN: %cheri128_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,N64-CHERI128-BAD-CODE
-// RUN: %cheri256_purecap_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,PURECAP-ASM
 // RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,PURECAP-CHERI128-BAD-CODE
 
 // sstd::chrono duration with __int128_t (which is what filesystem uses) was
@@ -29,23 +25,11 @@ public:
 // IR: [[CLASS_DURATION:%class.duration]] = type { i32 }
 // IR: [[CLASS_DURATION_0:%class.duration.0]] = type { i128 }
 
-// N64-CHERI256-IR-LABEL: @test1(
-// N64-CHERI256-IR-NEXT:  entry:
-// N64-CHERI256-IR-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[CLASS_DURATION:%.*]], %class.duration* [[E:%.*]], i64 0, i32 0
-// N64-CHERI256-IR-NEXT:    [[TMP1:%.*]] = load i32, i32* [[TMP0]], align 4, !tbaa !2
-// N64-CHERI256-IR-NEXT:    ret i32 [[TMP1]]
-//
 // N64-CHERI128-IR-LABEL: @test1(
 // N64-CHERI128-IR-NEXT:  entry:
 // N64-CHERI128-IR-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[CLASS_DURATION:%.*]], %class.duration* [[E:%.*]], i64 0, i32 0
 // N64-CHERI128-IR-NEXT:    [[TMP1:%.*]] = load i32, i32* [[TMP0]], align 4, !tbaa !2
 // N64-CHERI128-IR-NEXT:    ret i32 [[TMP1]]
-//
-// PURECAP-CHERI256-IR-LABEL: @test1(
-// PURECAP-CHERI256-IR-NEXT:  entry:
-// PURECAP-CHERI256-IR-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[CLASS_DURATION:%.*]], [[CLASS_DURATION]] addrspace(200)* [[E:%.*]], i64 0, i32 0
-// PURECAP-CHERI256-IR-NEXT:    [[TMP1:%.*]] = load i32, i32 addrspace(200)* [[TMP0]], align 4, !tbaa !2
-// PURECAP-CHERI256-IR-NEXT:    ret i32 [[TMP1]]
 //
 // PURECAP-CHERI128-IR-LABEL: @test1(
 // PURECAP-CHERI128-IR-NEXT:  entry:
@@ -68,12 +52,6 @@ extern "C" int test1(duration<int> &e) {
 // For CHERI128 some optimization attempts to replace the memcpy with an i8 addrspace(200) load/store
 // While this often can make sense, it causes errors here.
 
-// N64-CHERI256-IR-LABEL: @test2(
-// N64-CHERI256-IR-NEXT:  entry:
-// N64-CHERI256-IR-NEXT:    [[REF_TMP_SROA_0_0__SROA_IDX:%.*]] = getelementptr inbounds [[CLASS_DURATION_0:%.*]], %class.duration.0* [[E:%.*]], i64 0, i32 0
-// N64-CHERI256-IR-NEXT:    [[REF_TMP_SROA_0_0_COPYLOAD:%.*]] = load i128, i128* [[REF_TMP_SROA_0_0__SROA_IDX]], align 16
-// N64-CHERI256-IR-NEXT:    ret i128 [[REF_TMP_SROA_0_0_COPYLOAD]]
-//
 // N64-CHERI128-IR-LABEL: @test2(
 // N64-CHERI128-IR-NEXT:  entry:
 // N64-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0:%.*]] = alloca i8 addrspace(200)*, align 16
@@ -86,12 +64,6 @@ extern "C" int test1(duration<int> &e) {
 // N64-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_:%.*]] = load i128, i128* [[TMPCAST]], align 16, !tbaa !8
 // N64-CHERI128-IR-NEXT:    call void @llvm.lifetime.end.p0i8(i64 16, i8* nonnull [[REF_TMP_SROA_0_0__SROA_CAST4]])
 // N64-CHERI128-IR-NEXT:    ret i128 [[REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_]]
-//
-// PURECAP-CHERI256-IR-LABEL: @test2(
-// PURECAP-CHERI256-IR-NEXT:  entry:
-// PURECAP-CHERI256-IR-NEXT:    [[REF_TMP_SROA_0_0__SROA_IDX:%.*]] = getelementptr inbounds [[CLASS_DURATION_0:%.*]], [[CLASS_DURATION_0]] addrspace(200)* [[E:%.*]], i64 0, i32 0
-// PURECAP-CHERI256-IR-NEXT:    [[REF_TMP_SROA_0_0_COPYLOAD:%.*]] = load i128, i128 addrspace(200)* [[REF_TMP_SROA_0_0__SROA_IDX]], align 16
-// PURECAP-CHERI256-IR-NEXT:    ret i128 [[REF_TMP_SROA_0_0_COPYLOAD]]
 //
 // PURECAP-CHERI128-IR-LABEL: @test2(
 // PURECAP-CHERI128-IR-NEXT:  entry:

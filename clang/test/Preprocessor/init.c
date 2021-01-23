@@ -3400,7 +3400,7 @@
 // MIPS64EL:#define mips 1
 //
 
-// RUN: %cheri256_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=mips64c256-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI256 %s
+// RUN: %cheri_cc1 -cheri-size 256 -target-cpu cheri256 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=mips64c256-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI256 %s
 // RUN: %cheri128_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding -triple=mips64c128-none-none < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI128 %s
 
 // CHERI-COMMON: #define MIPSEB 1
