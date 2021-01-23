@@ -1,13 +1,13 @@
 
-# RUN: %cheri256_purecap_llvm-mc -filetype=obj %s -o %t-cheri256-main.o
-# RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t-cheri128-main.o
-# RUN: %cheri256_llvm-mc -filetype=obj -target-abi n64 %s -o %t-cheri256-hybrid-main.o
-# RUN: %cheri128_llvm-mc -filetype=obj -target-abi n64 %s -o %t-cheri128-hybrid-main.o
-# RUN: llvm-mc -triple=mips64-unknown-freebsd -filetype=obj -target-abi n64 -mcpu=beri %s -o %t-beri-main.o
-# RUN: %cheri256_purecap_llvm-mc -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri256-lib.o
-# RUN: %cheri128_purecap_llvm-mc -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
-# RUN: %cheri256_llvm-mc -filetype=obj -target-abi n64 %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
-# RUN: %cheri128_llvm-mc -filetype=obj -target-abi n64 %S/../Inputs/mips-dynamic.s -o %t-cheri128-hybrid-lib.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi purecap -position-independent -filetype=obj %s -o %t-cheri256-main.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri128 -target-abi purecap -position-independent -filetype=obj %s -o %t-cheri128-main.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi n64 -position-independent -filetype=obj %s -o %t-cheri256-hybrid-main.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri128 -target-abi n64 -position-independent -filetype=obj %s -o %t-cheri128-hybrid-main.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=beri     -target-abi n64 -position-independent -filetype=obj %s -o %t-beri-main.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi purecap -position-independent -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri256-lib.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri128 -target-abi purecap -position-independent -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi n64 -position-independent -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri128 -target-abi n64 -position-independent -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri128-hybrid-lib.o
 # RUN: llvm-readobj -h %t-cheri128-main.o | FileCheck --check-prefix=CHERI128-FLAGS %s
 # RUN: llvm-readobj -h %t-cheri256-main.o | FileCheck --check-prefix=CHERI256-FLAGS %s
 # RUN: llvm-readobj -h %t-cheri128-hybrid-main.o | FileCheck --check-prefix=CHERI128-HYBRID-FLAGS %s
