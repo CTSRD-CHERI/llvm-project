@@ -1,5 +1,5 @@
-// RUN: %cheri128_purecap_cc1 -emit-llvm -o - %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI128
-// RUN: %cheri256_purecap_cc1 -emit-llvm -o - %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI256
+// RUN: %clang_cc1 -triple mips64-unnkown-freebsd -target-cpu cheri128 -target-abi purecap -emit-llvm -o - %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI128
+// RUN: %clang_cc1 -triple mips64-unnkown-freebsd -target-cpu cheri256 -target-abi purecap -emit-llvm -o - %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI256
 struct thingy {
 	unsigned long a;
 	unsigned int b[5];
