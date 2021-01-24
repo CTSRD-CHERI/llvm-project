@@ -934,6 +934,8 @@ private:
     uint64_t CapSize = getCapabilitySize(II.getModule()->getDataLayout());
     if (CapSize == 0)
       return false;
+    if (II.shouldPreserveCheriTags() == PreserveCheriTags::Unnecessary)
+      return false;
     Align CapAlign(CapSize);
     if (AS.AI.getAlign() < CapAlign)
       return false;
