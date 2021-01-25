@@ -53,6 +53,12 @@ class RISCVTargetInfo : public TargetInfo {
 
 protected:
   std::string ABI, CPU;
+  int CapSize = -1;
+
+  void setCapabilityABITypes() {
+    IntPtrType = TargetInfo::SignedIntCap;
+  }
+
   bool HasM = false;
   bool HasA = false;
   bool HasF = false;
@@ -61,12 +67,20 @@ protected:
   bool HasCheri = false;
   bool HasB = false;
   bool HasV = false;
+  bool HasZba = false;
+  bool HasZbb = false;
+  bool HasZbc = false;
+  bool HasZbe = false;
+  bool HasZbf = false;
+  bool HasZbm = false;
+  bool HasZbp = false;
+  bool HasZbproposedc = false;
+  bool HasZbr = false;
+  bool HasZbs = false;
+  bool HasZbt = false;
   bool HasZfh = false;
-  int CapSize = -1;
-
-  void setCapabilityABITypes() {
-    IntPtrType = TargetInfo::SignedIntCap;
-  }
+  bool HasZvamo = false;
+  bool HasZvlsseg = false;
 
 public:
   RISCVTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
