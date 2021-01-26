@@ -920,8 +920,8 @@ public:
                                      TTI::CastContextHint::None, TTI::TCK_RecipThroughput);
   }
 
-  unsigned getCFInstrCost(unsigned Opcode, TTI::TargetCostKind CostKind,
-                          const Instruction *I = nullptr) {
+  InstructionCost getCFInstrCost(unsigned Opcode, TTI::TargetCostKind CostKind,
+                                 const Instruction *I = nullptr) {
     return BaseT::getCFInstrCost(Opcode, CostKind, I);
   }
 
@@ -1046,7 +1046,7 @@ public:
     int PackingCost = getScalarizationOverhead(VT, Opcode != Instruction::Store,
                                                Opcode == Instruction::Store);
 
-    int ConditionalCost = 0;
+    InstructionCost ConditionalCost = 0;
     if (VariableMask) {
       // Compute the cost of conditionally executing the memory operations with
       // variable masks. This includes extracting the individual conditions, a
