@@ -143,6 +143,7 @@ public:
     assert(HasCheri && "Cannot get capability type for non-CHERI");
     return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
   }
+  unsigned getMaxVectorSizeInBits() const;
 
 protected:
   // GlobalISel related APIs.
