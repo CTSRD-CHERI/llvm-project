@@ -1900,8 +1900,8 @@ public:
     return LT.first;
   }
 
-  unsigned getAddressComputationCost(Type *Ty, ScalarEvolution *,
-                                     const SCEV *) {
+  InstructionCost getAddressComputationCost(Type *Ty, ScalarEvolution *,
+                                            const SCEV *) {
     return 0;
   }
 
