@@ -11753,9 +11753,8 @@ bool AArch64TargetLowering::shouldConsiderGEPOffsetSplit() const {
   return true;
 }
 
-int AArch64TargetLowering::getScalingFactorCost(const DataLayout &DL,
-                                                const AddrMode &AM, Type *Ty,
-                                                unsigned AS) const {
+InstructionCost AArch64TargetLowering::getScalingFactorCost(
+    const DataLayout &DL, const AddrMode &AM, Type *Ty, unsigned AS) const {
   // Scaling factors are not free at all.
   // Operands                     | Rt Latency
   // -------------------------------------------
