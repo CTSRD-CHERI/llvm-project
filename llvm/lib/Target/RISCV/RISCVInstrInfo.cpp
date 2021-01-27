@@ -32,6 +32,17 @@ using namespace llvm;
 #define GET_INSTRINFO_CTOR_DTOR
 #include "RISCVGenInstrInfo.inc"
 
+namespace llvm {
+namespace RISCVVPseudosTable {
+
+using namespace RISCV;
+
+#define GET_RISCVVPseudosTable_IMPL
+#include "RISCVGenSearchableTables.inc"
+
+} // namespace RISCVVPseudosTable
+} // namespace llvm
+
 #define DEBUG_TYPE "riscv-isntrinfo"
 
 RISCVInstrInfo::RISCVInstrInfo(RISCVSubtarget &STI)
