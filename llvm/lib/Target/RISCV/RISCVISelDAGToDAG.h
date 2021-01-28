@@ -46,6 +46,8 @@ public:
   bool SelectAddrFI(SDValue Addr, SDValue &Base);
   bool SelectCapFI(SDValue Cap, SDValue &Base);
 
+  bool isUnneededShiftMask(SDNode *N, unsigned Width) const;
+
   bool MatchSRLIW(SDNode *N) const;
   bool MatchSLOI(SDNode *N) const;
   bool MatchSROI(SDNode *N) const;
