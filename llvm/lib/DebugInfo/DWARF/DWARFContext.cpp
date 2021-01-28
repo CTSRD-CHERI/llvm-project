@@ -1023,8 +1023,7 @@ DWARFContext::DIEsForAddress DWARFContext::getDIEsForAddress(uint64_t Address) {
       break;
     }
 
-    for (auto Child : DIE)
-      Worklist.push_back(Child);
+    append_range(Worklist, DIE);
   }
 
   return Result;
