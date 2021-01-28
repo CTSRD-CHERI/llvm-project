@@ -3175,6 +3175,7 @@ static const char *getVisibilityName(GlobalValue::VisibilityTypes Vis) {
   case GlobalValue::ProtectedVisibility:
     return "protected";
   }
+  llvm_unreachable("invalid visibility");
 }
 
 void AssemblyWriter::printFunctionSummary(const FunctionSummary *FS) {
