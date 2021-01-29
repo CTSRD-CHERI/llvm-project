@@ -57,13 +57,13 @@ define signext i32 @stack_array() local_unnamed_addr addrspace(200) #1 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[ARRAY:%.*]] = alloca [10 x i32], align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x i32] addrspace(200)* [[ARRAY]] to i8 addrspace(200)*
-; CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 40, i8 addrspace(200)* nonnull [[TMP0]]) #6
+; CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 40, i8 addrspace(200)* nonnull [[TMP0]]) [[ATTR6:#.*]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 40)
-; CHECK-NEXT:    call void @use(i8 addrspace(200)* [[TMP1]]) #6
+; CHECK-NEXT:    call void @use(i8 addrspace(200)* [[TMP1]]) [[ATTR6]]
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 20
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[ARRAYIDX]] to i32 addrspace(200)*
 ; CHECK-NEXT:    [[TMP3:%.*]] = load i32, i32 addrspace(200)* [[TMP2]], align 4
-; CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 40, i8 addrspace(200)* nonnull [[TMP0]]) #6
+; CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 40, i8 addrspace(200)* nonnull [[TMP0]]) [[ATTR6]]
 ; CHECK-NEXT:    ret i32 [[TMP3]]
 ;
 ; ASM-LABEL: stack_array:
@@ -124,12 +124,12 @@ define signext i32 @stack_int() local_unnamed_addr addrspace(200) #1 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[VALUE:%.*]] = alloca i32, align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[VALUE]] to i8 addrspace(200)*
-; CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) #6
+; CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) [[ATTR6]]
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 4)
-; CHECK-NEXT:    call void @use(i8 addrspace(200)* [[TMP1]]) #6
+; CHECK-NEXT:    call void @use(i8 addrspace(200)* [[TMP1]]) [[ATTR6]]
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
-; CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) #6
+; CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) [[ATTR6]]
 ; CHECK-NEXT:    ret i32 [[TMP2]]
 ;
 ; ASM-LABEL: stack_int:
@@ -184,13 +184,13 @@ define signext i32 @stack_int_inlined() local_unnamed_addr addrspace(200) #5 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[VALUE:%.*]] = alloca i32, align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[VALUE]] to i8 addrspace(200)*
-; CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) #6
+; CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) [[ATTR6]]
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[VALUE]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 4)
 ; CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[VALUE]], align 4
-; CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) #6
+; CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull [[TMP0]]) [[ATTR6]]
 ; CHECK-NEXT:    ret i32 [[TMP2]]
 ;
 ; ASM-LABEL: stack_int_inlined:
