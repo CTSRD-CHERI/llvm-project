@@ -85,6 +85,10 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
       DBG_INDENTED("No need for stack bounds for dbg_{declare,value,label}: ";
                    I->dump());
       return false;
+    case Intrinsic::assume:
+      DBG_INDENTED("No need for stack bounds for assume: ";
+                   I->dump());
+      return false;
     case Intrinsic::memset:
     case Intrinsic::memset_element_unordered_atomic:
     case Intrinsic::memcpy:

@@ -339,12 +339,9 @@ define void @assume_aligned() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: @assume_aligned(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TMP0:%.*]] = alloca [4 x i8], align 4, addrspace(200)
-; CHECK-NEXT:    [[TMP1:%.*]] = bitcast [4 x i8] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP1]], i64 4)
-; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [4 x i8] addrspace(200)*
-; CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* [[TMP3]], i64 4) ]
-; CHECK-NEXT:    [[TMP4:%.*]] = bitcast [4 x i8] addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[TMP4]], align 4
+; CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* [[TMP0]], i64 4) ]
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast [4 x i8] addrspace(200)* [[TMP0]] to i32 addrspace(200)*
+; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[TMP1]], align 4
 ; CHECK-NEXT:    ret void
 ;
 entry:
@@ -361,10 +358,9 @@ entry:
 ; DBG-NEXT: cheri-bound-allocas:    -Load/store size=4, alloca size=4, current GEP offset=0 for i32
 ; DBG-NEXT: cheri-bound-allocas:    -Load/store is in bounds -> can reuse $csp for   store i32 1, i32 addrspace(200)* %1, align 4
 ; DBG-NEXT: cheri-bound-allocas:  -no bitcast users need bounds:   %1 = bitcast [4 x i8] addrspace(200)* %0 to i32 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas: Don't know how to handle intrinsic. Assuming bounds needed  call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* %0, i64 4) ]cheri-bound-allocas:  -Adding stack bounds for unknown intrinsic call:   call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* %0, i64 4) ]
-; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* %0, i64 4) ]
-; DBG-NEXT: cheri-bound-allocas: assume_aligned: 1 of 2 users need bounds for   %0 = alloca [4 x i8], align 4, addrspace(200)
-; DBG-NEXT: assume_aligned: setting bounds on stack alloca to 4  %0 = alloca [4 x i8], align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for assume:   call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* %0, i64 4) ]
+; DBG-NEXT: cheri-bound-allocas: assume_aligned: 0 of 2 users need bounds for   %0 = alloca [4 x i8], align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %0 = alloca [4 x i8], align 4, addrspace(200)
 ; DBG-EMPTY:
 
 declare void @llvm.assume(i1) addrspace(200) #1
