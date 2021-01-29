@@ -1557,7 +1557,7 @@ defm : CheriStPat<store, CSC_128, GPCR>;
 
 
 /// CHERI memory colouring extensions
-let Predicates = [HasCheri, IsRV64] in {
+let Predicates = [HasCheri, HasCheriMemVersion] in {
 def CGetVersion   : Cheri_r<0x13, "cgetversion">;
 def CSetVersion   : Cheri_rr<0x2, "csetversion">;
 let mayLoad = 1 in
