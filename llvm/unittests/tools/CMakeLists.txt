@@ -7,4 +7,4 @@ endif()
 if (TARGET llvm-exegesis)
   add_subdirectory(llvm-exegesis)
 endif()
-
+add_subdirectory(llvm-profgen)
