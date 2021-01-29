@@ -213,6 +213,14 @@ def HasCheri : Predicate<"Subtarget->hasCheri()">,
                          AssemblerPredicate<(all_of FeatureCheri),
                          "CHERI Extension">;
 
+def FeatureCheriMemVersion
+    : SubtargetFeature<"xcherimemversion", "HasCheriMemVersion", "true",
+           "Implements the CHERI extension with support for memory versioning">;
+def HasCheriMemVersion
+    : Predicate<"Subtarget->hasCheriMemVersion()">,
+               AssemblerPredicate<(all_of FeatureCheriMemVersion),
+               "CHERI Extension with memory versioning">;
+
 def FeatureCapMode
     : SubtargetFeature<"cap-mode", "IsCapMode", "true",
                        "Capability mode">;
