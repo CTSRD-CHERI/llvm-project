@@ -20,6 +20,8 @@
 
 namespace llvm {
 
+class formatted_raw_ostream;
+
 // TODO: move this somewhere common
 llvm::Optional<unsigned> getCheriCapabilitySize(FeatureBitset Features);
 
