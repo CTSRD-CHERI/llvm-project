@@ -128,6 +128,7 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case RISCV::PseudoCLC_TLS_GD:
     return expandCapLoadTLSGDCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoVSETVLI:
+  case RISCV::PseudoVSETIVLI:
     return expandVSetVL(MBB, MBBI);
   case RISCV::PseudoVMCLR_M_B1:
   case RISCV::PseudoVMCLR_M_B2:
@@ -323,9 +324,15 @@ bool RISCVExpandPseudo::expandVSetVL(MachineBasicBlock &MBB,
 
   DebugLoc DL = MBBI->getDebugLoc();
 
-  assert(MBBI->getOpcode() == RISCV::PseudoVSETVLI &&
+  assert((MBBI->getOpcode() == RISCV::PseudoVSETVLI ||
+          MBBI->getOpcode() == RISCV::PseudoVSETIVLI) &&
          "Unexpected pseudo instruction");
-  const MCInstrDesc &Desc = TII->get(RISCV::VSETVLI);
+  unsigned Opcode;
+  if (MBBI->getOpcode() == RISCV::PseudoVSETVLI)
+    Opcode = RISCV::VSETVLI;
+  else
+    Opcode = RISCV::VSETIVLI;
+  const MCInstrDesc &Desc = TII->get(Opcode);
   assert(Desc.getNumOperands() == 3 && "Unexpected instruction format");
 
   Register DstReg = MBBI->getOperand(0).getReg();
