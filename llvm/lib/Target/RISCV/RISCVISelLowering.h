@@ -141,6 +141,8 @@ enum NodeType : unsigned {
   VECREDUCE_AND,
   VECREDUCE_OR,
   VECREDUCE_XOR,
+  VECREDUCE_FADD,
+  VECREDUCE_SEQ_FADD,
 };
 } // namespace RISCVISD
 
@@ -354,6 +356,7 @@ private:
   SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerVECREDUCE(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerFPVECREDUCE(SDValue Op, SelectionDAG &DAG) const;
 
   bool hasCapabilitySetAddress() const override { return true; }
 
