@@ -156,7 +156,7 @@ public:
       return true;
     }
 
-    if (Inst.getOpcode() == RISCV::JAL) {
+    if (Inst.getOpcode() == RISCV::JAL || Inst.getOpcode() == RISCV::CJAL) {
       Target = Addr + Inst.getOperand(1).getImm();
       return true;
     }

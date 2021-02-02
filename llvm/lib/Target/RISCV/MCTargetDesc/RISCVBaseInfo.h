@@ -104,6 +104,7 @@ enum {
   MO_TPREL_CINCOFFSET = 14,
   MO_TLS_IE_CAPTAB_PCREL_HI = 15,
   MO_TLS_GD_CAPTAB_PCREL_HI = 16,
+  MO_CCALL = 17,
 
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have

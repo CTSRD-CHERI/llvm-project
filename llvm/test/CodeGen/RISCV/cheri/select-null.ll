@@ -44,12 +44,8 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-NEXT:  # %bb.1: # %bb
 ; PURECAP-NEXT:    cincoffset cs0, cnull, 32
 ; PURECAP-NEXT:  .LBB0_2: # %bb
-; PURECAP-NEXT:  .LBB0_3: # %bb
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca1, %captab_pcrel_hi(barney)
-; PURECAP-NEXT:    clc ca1, %pcrel_lo(.LBB0_3)(ca1)
 ; PURECAP-NEXT:    cmove ca0, cnull
-; PURECAP-NEXT:    cjalr ca1
+; PURECAP-NEXT:    ccall barney
 ; PURECAP-NEXT:    cmove ca0, cs0
 ; PURECAP-NEXT:    clc cs0, 0(csp)
 ; PURECAP-NEXT:    clc cra, 16(csp)

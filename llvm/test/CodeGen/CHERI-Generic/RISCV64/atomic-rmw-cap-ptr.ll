@@ -17,12 +17,8 @@ define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB0_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB0_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_exchange_8
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -51,12 +47,8 @@ define i64 @atomic_cap_ptr_add(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB1_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB1_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_fetch_add_8
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -86,12 +78,8 @@ define i64 @atomic_cap_ptr_sub(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB2_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB2_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_fetch_sub_8
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -120,12 +108,8 @@ define i64 @atomic_cap_ptr_and(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB3_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB3_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_fetch_and_8
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -162,12 +146,8 @@ define i64 @atomic_cap_ptr_nand(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB4_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB4_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_fetch_nand_8
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -196,12 +176,8 @@ define i64 @atomic_cap_ptr_or(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB5_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB5_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_fetch_or_8
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -230,12 +206,8 @@ define i64 @atomic_cap_ptr_xor(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB6_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB6_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_fetch_xor_8
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -276,16 +248,11 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:  .LBB7_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB7_2 Depth=1
 ; PURECAP-LIBCALLS-NEXT:    csd a3, 8(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB7_5: # %atomicrmw.start
-; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB7_2 Depth=1
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB7_5)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs0
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    bnez a0, .LBB7_4
 ; PURECAP-LIBCALLS-NEXT:  .LBB7_2: # %atomicrmw.start
@@ -365,16 +332,11 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:  .LBB8_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB8_2 Depth=1
 ; PURECAP-LIBCALLS-NEXT:    csd a3, 8(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB8_5: # %atomicrmw.start
-; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB8_2 Depth=1
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB8_5)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs0
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    bnez a0, .LBB8_4
 ; PURECAP-LIBCALLS-NEXT:  .LBB8_2: # %atomicrmw.start
@@ -454,16 +416,11 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:  .LBB9_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB9_2 Depth=1
 ; PURECAP-LIBCALLS-NEXT:    csd a3, 8(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB9_5: # %atomicrmw.start
-; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB9_2 Depth=1
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB9_5)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs0
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    bnez a0, .LBB9_4
 ; PURECAP-LIBCALLS-NEXT:  .LBB9_2: # %atomicrmw.start
@@ -543,16 +500,11 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:  .LBB10_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB10_2 Depth=1
 ; PURECAP-LIBCALLS-NEXT:    csd a3, 8(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB10_5: # %atomicrmw.start
-; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB10_2 Depth=1
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_8)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB10_5)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs0
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    bnez a0, .LBB10_4
 ; PURECAP-LIBCALLS-NEXT:  .LBB10_2: # %atomicrmw.start
@@ -654,16 +606,11 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    fadd.s ft1, ft0, fs0
 ; PURECAP-LIBCALLS-NEXT:    cfsw ft0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    fmv.x.w a2, ft1
-; PURECAP-LIBCALLS-NEXT:  .LBB11_3: # %atomicrmw.start
-; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB11_1 Depth=1
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_4)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB11_3)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs1
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_4
 ; PURECAP-LIBCALLS-NEXT:    cflw ft0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB11_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
@@ -750,16 +697,11 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    fsub.s ft1, ft0, fs0
 ; PURECAP-LIBCALLS-NEXT:    cfsw ft0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    fmv.x.w a2, ft1
-; PURECAP-LIBCALLS-NEXT:  .LBB12_3: # %atomicrmw.start
-; PURECAP-LIBCALLS-NEXT:    # in Loop: Header=BB12_1 Depth=1
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_4)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB12_3)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, cs0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, cs1
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_4
 ; PURECAP-LIBCALLS-NEXT:    cflw ft0, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB12_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end

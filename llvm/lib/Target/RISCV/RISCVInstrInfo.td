@@ -418,7 +418,7 @@ let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def LUI : RVInstU<OPC_LUI, (outs GPR:$rd), (ins uimm20_lui:$imm20),
                   "lui", "$rd, $imm20">, Sched<[WriteIALU]>;
 
-let Predicates = [NotCapMode] in
+let Predicates = [NotCapMode] in {
 def AUIPC : RVInstU<OPC_AUIPC, (outs GPR:$rd), (ins uimm20_auipc:$imm20),
                     "auipc", "$rd, $imm20">, Sched<[WriteIALU]>;
 
@@ -431,6 +431,7 @@ def JALR : RVInstI<0b000, OPC_JALR, (outs GPR:$rd),
                    (ins GPR:$rs1, simm12:$imm12),
                    "jalr", "$rd, ${imm12}(${rs1})">,
            Sched<[WriteJalr, ReadJalr]>;
+} // Predicates = [NotCapMode]
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
 def BEQ  : BranchCC_rri<0b000, "beq">;
@@ -697,6 +698,7 @@ def : InstAlias<"bgtu $rs, $rt, $offset",
 def : InstAlias<"bleu $rs, $rt, $offset",
                 (BGEU GPR:$rt, GPR:$rs, simm13_lsb0:$offset), 0>;
 
+let Predicates = [NotCapMode] in {
 def : InstAlias<"j $offset",   (JAL X0, simm21_lsb0_jal:$offset)>;
 def : InstAlias<"jal $offset", (JAL X1, simm21_lsb0_jal:$offset)>;
 
@@ -713,6 +715,7 @@ def : InstAlias<"ret",                   (JALR      X0,      X1, 0), 4>;
 def : InstAlias<"jr $rs, $offset",        (JALR      X0, GPR:$rs, simm12:$offset), 0>;
 def : InstAlias<"jalr $rs, $offset",      (JALR      X1, GPR:$rs, simm12:$offset), 0>;
 def : InstAlias<"jalr $rd, $rs, $offset", (JALR GPR:$rd, GPR:$rs, simm12:$offset), 0>;
+} // Predicates = [NotCapMode]
 
 def : InstAlias<"fence", (FENCE 0xF, 0xF)>; // 0xF == iorw
 
@@ -957,6 +960,7 @@ def : BccPat<SETGE, BGE>;
 def : BccPat<SETULT, BLTU>;
 def : BccPat<SETUGE, BGEU>;
 
+let Predicates = [NotCapMode] in {
 let isBarrier = 1, isBranch = 1, isTerminator = 1 in
 def PseudoBR : Pseudo<(outs), (ins simm21_lsb0_jal:$imm20), [(br bb:$imm20)]>,
                PseudoInstExpansion<(JAL X0, simm21_lsb0_jal:$imm20)>;
@@ -968,6 +972,7 @@ def PseudoBRIND : Pseudo<(outs), (ins GPR:$rs1, simm12:$imm12), []>,
 def : Pat<(brind GPR:$rs1), (PseudoBRIND GPR:$rs1, 0)>;
 def : Pat<(brind (add GPR:$rs1, simm12:$imm12)),
           (PseudoBRIND GPR:$rs1, simm12:$imm12)>;
+} // Predicates = [NotCapMode]
 
 // PseudoCALLReg is a generic pseudo instruction for calls which will eventually
 // expand to auipc and jalr while encoding, with any given register used as the
@@ -1002,13 +1007,13 @@ def : Pat<(riscv_uret_flag), (URET X0, X0)>;
 def : Pat<(riscv_sret_flag), (SRET X0, X0)>;
 def : Pat<(riscv_mret_flag), (MRET X0, X0)>;
 
-let Predicates = [NotPureCapABI],
+let Predicates = [NotCapMode, NotPureCapABI],
     isCall = 1, Defs = [X1] in
 def PseudoCALLIndirect : Pseudo<(outs), (ins GPR:$rs1),
                                 [(riscv_call GPR:$rs1)]>,
                          PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
 
-let Predicates = [NotPureCapABI],
+let Predicates = [NotCapMode, NotPureCapABI],
     isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), [(riscv_ret_flag)]>,
                 PseudoInstExpansion<(JALR X0, X1, 0)>;
@@ -1023,7 +1028,7 @@ def PseudoTAIL : Pseudo<(outs), (ins call_symbol:$dst), []> {
   let AsmString = "tail\t$dst";
 }
 
-let Predicates = [NotPureCapABI],
+let Predicates = [NotCapMode, NotPureCapABI],
     isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in
 def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1),
                                 [(riscv_tail GPRTC:$rs1)]>,
@@ -1036,7 +1041,7 @@ def : Pat<(riscv_tail (iPTR texternalsym:$dst)),
           (PseudoTAIL texternalsym:$dst)>;
 } // Predicates = [NotCapMode, NotPureCapABI]
 
-let Predicates = [NotCapMode] in {
+let Predicates = [NotCapMode, NotPureCapABI] in {
 let isCall = 0, isBarrier = 1, isBranch = 1, isTerminator = 1,
     isCodeGenOnly = 0, hasSideEffects = 0, mayStore = 0, mayLoad = 0 in
 def PseudoJump : Pseudo<(outs GPR:$rd), (ins pseudo_jump_symbol:$target), []> {

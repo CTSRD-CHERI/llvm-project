@@ -169,50 +169,32 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ;
 ; PURECAP-RV64-LABEL: clang_purecap_byval_args:
 ; PURECAP-RV64:       # %bb.0: # %entry
-; PURECAP-RV64-NEXT:    cincoffset csp, csp, -1088
-; PURECAP-RV64-NEXT:    csc cra, 1072(csp)
-; PURECAP-RV64-NEXT:    csc cs0, 1056(csp)
-; PURECAP-RV64-NEXT:    csc cs1, 1040(csp)
+; PURECAP-RV64-NEXT:    cincoffset csp, csp, -1072
+; PURECAP-RV64-NEXT:    csc cra, 1056(csp)
+; PURECAP-RV64-NEXT:    csc cs0, 1040(csp)
 ; PURECAP-RV64-NEXT:  .LBB0_1: # %entry
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
 ; PURECAP-RV64-NEXT:    auipcc cs0, %captab_pcrel_hi(global_foo)
 ; PURECAP-RV64-NEXT:    clc cs0, %pcrel_lo(.LBB0_1)(cs0)
-; PURECAP-RV64-NEXT:  .LBB0_2: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memset)
-; PURECAP-RV64-NEXT:    clc ca3, %pcrel_lo(.LBB0_2)(ca3)
 ; PURECAP-RV64-NEXT:    addi a2, zero, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    mv a1, zero
-; PURECAP-RV64-NEXT:    cjalr ca3
+; PURECAP-RV64-NEXT:    ccall memset
 ; PURECAP-RV64-NEXT:    clb a0, 0(cs0)
-; PURECAP-RV64-NEXT:  .LBB0_3: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc cs1, %captab_pcrel_hi(assert_eq)
-; PURECAP-RV64-NEXT:    clc cs1, %pcrel_lo(.LBB0_3)(cs1)
 ; PURECAP-RV64-NEXT:    mv a1, zero
-; PURECAP-RV64-NEXT:    cjalr cs1
-; PURECAP-RV64-NEXT:  .LBB0_4: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memcpy)
-; PURECAP-RV64-NEXT:    clc ca3, %pcrel_lo(.LBB0_4)(ca3)
+; PURECAP-RV64-NEXT:    ccall assert_eq
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 16
 ; PURECAP-RV64-NEXT:    addi a2, zero, 1024
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
-; PURECAP-RV64-NEXT:    cjalr ca3
-; PURECAP-RV64-NEXT:  .LBB0_5: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca1, %captab_pcrel_hi(foo_byval)
-; PURECAP-RV64-NEXT:    clc ca1, %pcrel_lo(.LBB0_5)(ca1)
+; PURECAP-RV64-NEXT:    ccall memcpy
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 16
-; PURECAP-RV64-NEXT:    cjalr ca1
+; PURECAP-RV64-NEXT:    ccall foo_byval
 ; PURECAP-RV64-NEXT:    clb a0, 0(cs0)
 ; PURECAP-RV64-NEXT:    mv a1, zero
-; PURECAP-RV64-NEXT:    cjalr cs1
-; PURECAP-RV64-NEXT:    clc cs1, 1040(csp)
-; PURECAP-RV64-NEXT:    clc cs0, 1056(csp)
-; PURECAP-RV64-NEXT:    clc cra, 1072(csp)
-; PURECAP-RV64-NEXT:    cincoffset csp, csp, 1088
+; PURECAP-RV64-NEXT:    ccall assert_eq
+; PURECAP-RV64-NEXT:    clc cs0, 1040(csp)
+; PURECAP-RV64-NEXT:    clc cra, 1056(csp)
+; PURECAP-RV64-NEXT:    cincoffset csp, csp, 1072
 ; PURECAP-RV64-NEXT:    cret
 ;
 ; PURECAP-MIPS-LABEL: clang_purecap_byval_args:

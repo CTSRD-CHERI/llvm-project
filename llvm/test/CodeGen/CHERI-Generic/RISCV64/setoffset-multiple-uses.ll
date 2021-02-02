@@ -16,12 +16,9 @@ define void @infer_values_from_null_set_offset() addrspace(200) nounwind {
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
 ; ASM-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; ASM-NEXT:  .LBB0_1: # Label of block must be emitted
-; ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(check_fold)
-; ASM-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
 ; ASM-NEXT:    lui a0, 30
 ; ASM-NEXT:    addiw a0, a0, 576
-; ASM-NEXT:    cjalr ca1
+; ASM-NEXT:    ccall check_fold
 ; ASM-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 16
 ; ASM-NEXT:    cret
@@ -39,26 +36,21 @@ define void @infer_values_from_null_set_offset() addrspace(200) nounwind {
 define void @multiple_uses_big_constant() addrspace(200) nounwind {
 ; ASM-LABEL: multiple_uses_big_constant:
 ; ASM:       # %bb.0:
-; ASM-NEXT:    cincoffset csp, csp, -48
-; ASM-NEXT:    csc cra, 32(csp) # 16-byte Folded Spill
-; ASM-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
-; ASM-NEXT:    csc cs1, 0(csp) # 16-byte Folded Spill
+; ASM-NEXT:    cincoffset csp, csp, -32
+; ASM-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; ASM-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    lui a0, 30
 ; ASM-NEXT:    addiw a0, a0, 576
 ; ASM-NEXT:    cincoffset cs0, cnull, a0
-; ASM-NEXT:  .LBB1_1: # Label of block must be emitted
-; ASM-NEXT:    auipcc cs1, %captab_pcrel_hi(check_fold_i8ptr)
-; ASM-NEXT:    clc cs1, %pcrel_lo(.LBB1_1)(cs1)
 ; ASM-NEXT:    cmove ca0, cs0
-; ASM-NEXT:    cjalr cs1
+; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cmove ca0, cs0
-; ASM-NEXT:    cjalr cs1
+; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cmove ca0, cs0
-; ASM-NEXT:    cjalr cs1
-; ASM-NEXT:    clc cs1, 0(csp) # 16-byte Folded Reload
-; ASM-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
-; ASM-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
-; ASM-NEXT:    cincoffset csp, csp, 48
+; ASM-NEXT:    ccall check_fold_i8ptr
+; ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; ASM-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; ASM-NEXT:    cincoffset csp, csp, 32
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@multiple_uses_big_constant
 ; CHECK-SAME: () addrspace(200) #[[ATTR1]] {
@@ -78,21 +70,16 @@ define void @multiple_uses_big_constant() addrspace(200) nounwind {
 define void @multiple_uses_small_constant() addrspace(200) nounwind {
 ; ASM-LABEL: multiple_uses_small_constant:
 ; ASM:       # %bb.0:
-; ASM-NEXT:    cincoffset csp, csp, -32
-; ASM-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
-; ASM-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
-; ASM-NEXT:  .LBB2_1: # Label of block must be emitted
-; ASM-NEXT:    auipcc cs0, %captab_pcrel_hi(check_fold_i8ptr)
-; ASM-NEXT:    clc cs0, %pcrel_lo(.LBB2_1)(cs0)
+; ASM-NEXT:    cincoffset csp, csp, -16
+; ASM-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    cincoffset ca0, cnull, 123
-; ASM-NEXT:    cjalr cs0
+; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cincoffset ca0, cnull, 123
-; ASM-NEXT:    cjalr cs0
+; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cincoffset ca0, cnull, 123
-; ASM-NEXT:    cjalr cs0
-; ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
-; ASM-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
-; ASM-NEXT:    cincoffset csp, csp, 32
+; ASM-NEXT:    ccall check_fold_i8ptr
+; ASM-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; ASM-NEXT:    cincoffset csp, csp, 16
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@multiple_uses_small_constant
 ; CHECK-SAME: () addrspace(200) #[[ATTR1]] {

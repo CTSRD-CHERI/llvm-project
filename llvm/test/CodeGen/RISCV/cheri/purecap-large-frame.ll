@@ -19,18 +19,10 @@ define void @just_below_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset csp, csp, -32
 ; CHECK-NEXT:    cincoffset ca0, csp, 2032
 ; CHECK-NEXT:    csetbounds ca0, ca0, 16
-; CHECK-NEXT:  .LBB0_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(use_i128)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
-; CHECK-NEXT:    cjalr ca1
+; CHECK-NEXT:    ccall use_i128
 ; CHECK-NEXT:    cincoffset ca0, csp, 16
 ; CHECK-NEXT:    csetbounds ca0, ca0, 2014
-; CHECK-NEXT:  .LBB0_2: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(use_large)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB0_2)(ca1)
-; CHECK-NEXT:    cjalr ca1
+; CHECK-NEXT:    ccall use_large
 ; CHECK-NEXT:    cincoffset csp, csp, 32
 ; CHECK-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 2032
@@ -53,18 +45,10 @@ define void @just_above_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    addiw a0, a0, -2048
 ; CHECK-NEXT:    cincoffset ca0, csp, a0
 ; CHECK-NEXT:    csetbounds ca0, ca0, 16
-; CHECK-NEXT:  .LBB1_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(use_i128)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB1_1)(ca1)
-; CHECK-NEXT:    cjalr ca1
+; CHECK-NEXT:    ccall use_i128
 ; CHECK-NEXT:    cincoffset ca0, csp, 24
 ; CHECK-NEXT:    csetbounds ca0, ca0, 2018
-; CHECK-NEXT:  .LBB1_2: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(use_too_large)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB1_2)(ca1)
-; CHECK-NEXT:    cjalr ca1
+; CHECK-NEXT:    ccall use_too_large
 ; CHECK-NEXT:    cincoffset csp, csp, 48
 ; CHECK-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 2032

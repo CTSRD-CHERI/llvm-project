@@ -78,6 +78,8 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
        MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_riscv_tls_gd_captab_pcrel_hi20", 12, 20,
        MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_riscv_cjal", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_riscv_ccall", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
   };
   static_assert((array_lengthof(Infos)) == RISCV::NumTargetFixupKinds,
                 "Not all fixup kinds added to Infos array");
@@ -261,7 +263,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case RISCV::fixup_riscv_tprel_hi20:
     // Add 1 if bit 11 is 1, to compensate for low 12 bits being negative.
     return ((Value + 0x800) >> 12) & 0xfffff;
-  case RISCV::fixup_riscv_jal: {
+  case RISCV::fixup_riscv_jal:
+  case RISCV::fixup_riscv_cjal: {
     if (!isInt<21>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     if (Value & 0x1)
@@ -297,7 +300,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     return Value;
   }
   case RISCV::fixup_riscv_call:
-  case RISCV::fixup_riscv_call_plt: {
+  case RISCV::fixup_riscv_call_plt:
+  case RISCV::fixup_riscv_ccall: {
     // Jalr will add UpperImm with the sign-extended 12-bit LowerImm,
     // we need to add 0x800ULL before extract upper bits to reflect the
     // effect of the sign extension.

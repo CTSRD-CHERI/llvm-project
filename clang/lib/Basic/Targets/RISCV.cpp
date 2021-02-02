@@ -226,6 +226,11 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
 
     Builder.defineMacro("__riscv_clen", Twine(getCHERICapabilityWidth()));
     // TODO: _MIPS_CAP_ALIGN_MASK equivalent?
+    // XXX: Temporary to allow software to keep supporting old ISAv8 toolchains
+    // where what is now JALR.CAP was called CJALR (which is now the mnemonic
+    // for the capability-mode JALR with immediate). Remove after the next
+    // CHERI-LLVM "release".
+    Builder.defineMacro("__riscv_xcheri_mode_dependent_jumps");
   }
 
   if (HasV) {

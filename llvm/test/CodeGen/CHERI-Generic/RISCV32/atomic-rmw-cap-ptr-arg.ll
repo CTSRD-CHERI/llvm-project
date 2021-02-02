@@ -17,12 +17,8 @@ define i32 addrspace(200)* @atomic_cap_ptr_xchg_sc(i32 addrspace(200)* addrspace
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB0_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB0_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -51,12 +47,8 @@ define i32 addrspace(200)* @atomic_cap_ptr_xchg_relaxed(i32 addrspace(200)* addr
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB1_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB1_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, zero
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -85,12 +77,8 @@ define i32 addrspace(200)* @atomic_cap_ptr_xchg_acquire(i32 addrspace(200)* addr
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB2_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB2_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -119,12 +107,8 @@ define i32 addrspace(200)* @atomic_cap_ptr_xchg_rel(i32 addrspace(200)* addrspac
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB3_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB3_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 3
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -153,12 +137,8 @@ define i32 addrspace(200)* @atomic_cap_ptr_xchg_acq_rel(i32 addrspace(200)* addr
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB4_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB4_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 4
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
@@ -188,12 +168,8 @@ define i32 addrspace(200)* @atomic_cap_ptr_xchg_i32ptr(i32 addrspace(200)* addrs
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:  .LBB5_1: # %bb
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB5_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 4
-; PURECAP-LIBCALLS-NEXT:    cjalr ca3
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret

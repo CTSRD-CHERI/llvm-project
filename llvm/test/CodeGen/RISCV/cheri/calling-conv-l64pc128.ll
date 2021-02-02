@@ -110,13 +110,9 @@ define void @test_varargs_odd_cap_reg() nounwind {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -32
 ; CHECK-NEXT:    csc cra, 16(csp)
-; CHECK-NEXT:    csc cnull, 0(csp)
-; CHECK-NEXT:  .LBB2_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(varargs)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB2_1)(ca1)
 ; CHECK-NEXT:    addi a0, zero, 1
-; CHECK-NEXT:    cjalr ca1
+; CHECK-NEXT:    csc cnull, 0(csp)
+; CHECK-NEXT:    ccall varargs
 ; CHECK-NEXT:    clc cra, 16(csp)
 ; CHECK-NEXT:    cincoffset csp, csp, 32
 ; CHECK-NEXT:    cret

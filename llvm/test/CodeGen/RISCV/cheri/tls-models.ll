@@ -29,11 +29,7 @@ define i32 addrspace(200)* @f1() nounwind {
 ; IL32PC64-PIC-NEXT:    # Label of block must be emitted
 ; IL32PC64-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(unspecified)
 ; IL32PC64-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB0_1)
-; IL32PC64-PIC-NEXT:  .LBB0_2: # %entry
-; IL32PC64-PIC-NEXT:    # Label of block must be emitted
-; IL32PC64-PIC-NEXT:    auipcc ca1, %captab_pcrel_hi(__tls_get_addr)
-; IL32PC64-PIC-NEXT:    clc ca1, %pcrel_lo(.LBB0_2)(ca1)
-; IL32PC64-PIC-NEXT:    cjalr ca1
+; IL32PC64-PIC-NEXT:    ccall __tls_get_addr
 ; IL32PC64-PIC-NEXT:    clc cra, 8(csp)
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, 16
 ; IL32PC64-PIC-NEXT:    cret
@@ -46,11 +42,7 @@ define i32 addrspace(200)* @f1() nounwind {
 ; L64PC128-PIC-NEXT:    # Label of block must be emitted
 ; L64PC128-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(unspecified)
 ; L64PC128-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB0_1)
-; L64PC128-PIC-NEXT:  .LBB0_2: # %entry
-; L64PC128-PIC-NEXT:    # Label of block must be emitted
-; L64PC128-PIC-NEXT:    auipcc ca1, %captab_pcrel_hi(__tls_get_addr)
-; L64PC128-PIC-NEXT:    clc ca1, %pcrel_lo(.LBB0_2)(ca1)
-; L64PC128-PIC-NEXT:    cjalr ca1
+; L64PC128-PIC-NEXT:    ccall __tls_get_addr
 ; L64PC128-PIC-NEXT:    clc cra, 0(csp)
 ; L64PC128-PIC-NEXT:    cincoffset csp, csp, 16
 ; L64PC128-PIC-NEXT:    cret
@@ -88,11 +80,7 @@ define i32 addrspace(200)* @f2() nounwind {
 ; IL32PC64-PIC-NEXT:    # Label of block must be emitted
 ; IL32PC64-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(ld)
 ; IL32PC64-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB1_1)
-; IL32PC64-PIC-NEXT:  .LBB1_2: # %entry
-; IL32PC64-PIC-NEXT:    # Label of block must be emitted
-; IL32PC64-PIC-NEXT:    auipcc ca1, %captab_pcrel_hi(__tls_get_addr)
-; IL32PC64-PIC-NEXT:    clc ca1, %pcrel_lo(.LBB1_2)(ca1)
-; IL32PC64-PIC-NEXT:    cjalr ca1
+; IL32PC64-PIC-NEXT:    ccall __tls_get_addr
 ; IL32PC64-PIC-NEXT:    clc cra, 8(csp)
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, 16
 ; IL32PC64-PIC-NEXT:    cret
@@ -105,11 +93,7 @@ define i32 addrspace(200)* @f2() nounwind {
 ; L64PC128-PIC-NEXT:    # Label of block must be emitted
 ; L64PC128-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(ld)
 ; L64PC128-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB1_1)
-; L64PC128-PIC-NEXT:  .LBB1_2: # %entry
-; L64PC128-PIC-NEXT:    # Label of block must be emitted
-; L64PC128-PIC-NEXT:    auipcc ca1, %captab_pcrel_hi(__tls_get_addr)
-; L64PC128-PIC-NEXT:    clc ca1, %pcrel_lo(.LBB1_2)(ca1)
-; L64PC128-PIC-NEXT:    cjalr ca1
+; L64PC128-PIC-NEXT:    ccall __tls_get_addr
 ; L64PC128-PIC-NEXT:    clc cra, 0(csp)
 ; L64PC128-PIC-NEXT:    cincoffset csp, csp, 16
 ; L64PC128-PIC-NEXT:    cret

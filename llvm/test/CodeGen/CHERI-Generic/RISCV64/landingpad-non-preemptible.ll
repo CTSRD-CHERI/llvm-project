@@ -30,11 +30,7 @@ define dso_local i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) uwtable p
 ; CHECK-NEXT:    .cfi_offset s0, -32
 ; CHECK-NEXT:    .cfi_offset s1, -48
 ; CHECK-NEXT:  .Ltmp0:
-; CHECK-NEXT:  .LBB0_6: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca0, %captab_pcrel_hi(_Z3foov)
-; CHECK-NEXT:    clc ca0, %pcrel_lo(.LBB0_6)(ca0)
-; CHECK-NEXT:    cjalr ca0
+; CHECK-NEXT:    ccall _Z3foov
 ; CHECK-NEXT:  .Ltmp1:
 ; CHECK-NEXT:  # %bb.1:
 ; CHECK-NEXT:    mv s0, a0
@@ -48,27 +44,15 @@ define dso_local i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) uwtable p
 ; CHECK-NEXT:  .LBB0_3: # %lpad
 ; CHECK-NEXT:  .Ltmp2:
 ; CHECK-NEXT:    sext.w s1, a1
-; CHECK-NEXT:  .LBB0_7: # %lpad
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(__cxa_begin_catch)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB0_7)(ca1)
-; CHECK-NEXT:    cjalr ca1
+; CHECK-NEXT:    ccall __cxa_begin_catch
 ; CHECK-NEXT:    addi s0, zero, 2
 ; CHECK-NEXT:    bne s1, s0, .LBB0_5
 ; CHECK-NEXT:  # %bb.4: # %catch1
-; CHECK-NEXT:  .LBB0_8: # %catch1
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca0, %captab_pcrel_hi(__cxa_end_catch)
-; CHECK-NEXT:    clc ca0, %pcrel_lo(.LBB0_8)(ca0)
-; CHECK-NEXT:    cjalr ca0
+; CHECK-NEXT:    ccall __cxa_end_catch
 ; CHECK-NEXT:    addi s0, zero, 1
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_5: # %catch
-; CHECK-NEXT:  .LBB0_9: # %catch
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca0, %captab_pcrel_hi(__cxa_end_catch)
-; CHECK-NEXT:    clc ca0, %pcrel_lo(.LBB0_9)(ca0)
-; CHECK-NEXT:    cjalr ca0
+; CHECK-NEXT:    ccall __cxa_end_catch
 ; CHECK-NEXT:    j .LBB0_2
 entry:
   %call = invoke i32 @_Z3foov() to label %return unwind label %lpad
@@ -155,7 +139,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 
 
 ; RELOCS-LABEL:  Section ({{.+}}) .rela.gcc_except_table {
-; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .L_Z8do_catchv$eh_alias 0x38
+; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .L_Z8do_catchv$eh_alias 0x34
 ; RELOCS-NEXT:   R_RISCV_32_PCREL .L_ZTIi.DW.stub 0x0
 ; RELOCS-NEXT:  }
 

@@ -57,12 +57,7 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
 ; CHECK-NEXT:    csetbounds ca0, cs2, 4
 ; CHECK-NEXT:    csetbounds ca1, cs3, 4
-; CHECK-NEXT:  .LBB0_5: # %if.then
-; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca2, %captab_pcrel_hi(call)
-; CHECK-NEXT:    clc ca2, %pcrel_lo(.LBB0_5)(ca2)
-; CHECK-NEXT:    cjalr ca2
+; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup
 ; CHECK-NEXT:    clc cs4, 0(csp) # 16-byte Folded Reload

@@ -104,37 +104,21 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
-; PURECAP-RV64-NEXT:  .LBB0_1: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memset)
-; PURECAP-RV64-NEXT:    clc ca3, %pcrel_lo(.LBB0_1)(ca3)
 ; PURECAP-RV64-NEXT:    addi a2, zero, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    mv a1, zero
-; PURECAP-RV64-NEXT:    cjalr ca3
-; PURECAP-RV64-NEXT:  .LBB0_2: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca1, %captab_pcrel_hi(byref)
-; PURECAP-RV64-NEXT:    clc ca1, %pcrel_lo(.LBB0_2)(ca1)
+; PURECAP-RV64-NEXT:    ccall memset
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
-; PURECAP-RV64-NEXT:    cjalr ca1
+; PURECAP-RV64-NEXT:    ccall byref
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
 ; PURECAP-RV64-NEXT:    csetbounds cs1, ca0, 1024
-; PURECAP-RV64-NEXT:  .LBB0_3: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memcpy)
-; PURECAP-RV64-NEXT:    clc ca3, %pcrel_lo(.LBB0_3)(ca3)
 ; PURECAP-RV64-NEXT:    addi a2, zero, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs1
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
-; PURECAP-RV64-NEXT:    cjalr ca3
-; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
-; PURECAP-RV64-NEXT:  .LBB0_4: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca1, %captab_pcrel_hi(varargs)
-; PURECAP-RV64-NEXT:    clc ca1, %pcrel_lo(.LBB0_4)(ca1)
+; PURECAP-RV64-NEXT:    ccall memcpy
 ; PURECAP-RV64-NEXT:    addi a0, zero, 1024
-; PURECAP-RV64-NEXT:    cjalr ca1
+; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
+; PURECAP-RV64-NEXT:    ccall varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
 ; PURECAP-RV64-NEXT:    clc cs1, 1984(csp)
 ; PURECAP-RV64-NEXT:    clc cs0, 2000(csp)
@@ -299,38 +283,22 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
-; PURECAP-RV64-NEXT:  .LBB1_1: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memset)
-; PURECAP-RV64-NEXT:    clc ca3, %pcrel_lo(.LBB1_1)(ca3)
 ; PURECAP-RV64-NEXT:    addi a2, zero, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    mv a1, zero
-; PURECAP-RV64-NEXT:    cjalr ca3
-; PURECAP-RV64-NEXT:  .LBB1_2: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca1, %captab_pcrel_hi(byref)
-; PURECAP-RV64-NEXT:    clc ca1, %pcrel_lo(.LBB1_2)(ca1)
+; PURECAP-RV64-NEXT:    ccall memset
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
-; PURECAP-RV64-NEXT:    cjalr ca1
-; PURECAP-RV64-NEXT:  .LBB1_3: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memcpy)
-; PURECAP-RV64-NEXT:    clc ca3, %pcrel_lo(.LBB1_3)(ca3)
+; PURECAP-RV64-NEXT:    ccall byref
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
 ; PURECAP-RV64-NEXT:    addi a2, zero, 1024
 ; PURECAP-RV64-NEXT:    cincoffset cs1, csp, 32
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
 ; Note: no bounds for implicit byval arg memcpy()
 ; TODO: should we add the csetbounds here? Not really necessary if we trust memcpy().
-; PURECAP-RV64-NEXT:    cjalr ca3
-; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
-; PURECAP-RV64-NEXT:  .LBB1_4: # %entry
-; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc ca1, %captab_pcrel_hi(varargs)
-; PURECAP-RV64-NEXT:    clc ca1, %pcrel_lo(.LBB1_4)(ca1)
+; PURECAP-RV64-NEXT:    ccall memcpy
 ; PURECAP-RV64-NEXT:    addi a0, zero, 1024
-; PURECAP-RV64-NEXT:    cjalr ca1
+; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
+; PURECAP-RV64-NEXT:    ccall varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
 ; PURECAP-RV64-NEXT:    clc cs1, 1984(csp)
 ; PURECAP-RV64-NEXT:    clc cs0, 2000(csp)

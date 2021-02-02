@@ -221,17 +221,9 @@ define i32 @branch_lt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    bnez a0, .LBB8_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
-; PURECAP-NEXT:  .LBB8_3: # %if.then
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB8_3)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func1
 ; PURECAP-NEXT:  .LBB8_2: # %if.end
-; PURECAP-NEXT:  .LBB8_4: # %if.end
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB8_4)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func2
 entry:
   %cmp = icmp ult i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
@@ -258,17 +250,9 @@ define i32 @branch_le(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    sltu a0, a1, a0
 ; PURECAP-NEXT:    bnez a0, .LBB9_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
-; PURECAP-NEXT:  .LBB9_3: # %if.then
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB9_3)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func1
 ; PURECAP-NEXT:  .LBB9_2: # %if.end
-; PURECAP-NEXT:  .LBB9_4: # %if.end
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB9_4)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func2
 entry:
   %cmp = icmp ule i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
@@ -297,17 +281,9 @@ define i32 @branch_gt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    bnez a0, .LBB10_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
-; PURECAP-NEXT:  .LBB10_3: # %if.then
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB10_3)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func1
 ; PURECAP-NEXT:  .LBB10_2: # %if.end
-; PURECAP-NEXT:  .LBB10_4: # %if.end
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB10_4)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func2
 entry:
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
@@ -334,17 +310,9 @@ define i32 @branch_ge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    sltu a0, a0, a1
 ; PURECAP-NEXT:    bnez a0, .LBB11_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
-; PURECAP-NEXT:  .LBB11_3: # %if.then
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB11_3)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func1
 ; PURECAP-NEXT:  .LBB11_2: # %if.end
-; PURECAP-NEXT:  .LBB11_4: # %if.end
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB11_4)(ca5)
-; PURECAP-NEXT:    cjr ca5
+; PURECAP-NEXT:    ctail func2
 entry:
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end

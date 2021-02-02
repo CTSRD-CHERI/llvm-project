@@ -116,18 +116,39 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI, raw_ostream &OS,
   MCInst TmpInst;
   MCOperand Func;
   MCRegister Ra;
+  bool IsCap;
   if (MI.getOpcode() == RISCV::PseudoTAIL) {
     Func = MI.getOperand(0);
     Ra = RISCV::X6;
+    IsCap = false;
   } else if (MI.getOpcode() == RISCV::PseudoCALLReg) {
     Func = MI.getOperand(1);
     Ra = MI.getOperand(0).getReg();
+    IsCap = false;
   } else if (MI.getOpcode() == RISCV::PseudoCALL) {
     Func = MI.getOperand(0);
     Ra = RISCV::X1;
+    IsCap = false;
   } else if (MI.getOpcode() == RISCV::PseudoJump) {
     Func = MI.getOperand(1);
     Ra = MI.getOperand(0).getReg();
+    IsCap = false;
+  } else if (MI.getOpcode() == RISCV::PseudoCTAIL) {
+    Func = MI.getOperand(0);
+    Ra = RISCV::C6;
+    IsCap = true;
+  } else if (MI.getOpcode() == RISCV::PseudoCCALLReg) {
+    Func = MI.getOperand(1);
+    Ra = MI.getOperand(0).getReg();
+    IsCap = true;
+  } else if (MI.getOpcode() == RISCV::PseudoCCALL) {
+    Func = MI.getOperand(0);
+    Ra = RISCV::C1;
+    IsCap = true;
+  } else if (MI.getOpcode() == RISCV::PseudoCJump) {
+    Func = MI.getOperand(1);
+    Ra = MI.getOperand(0).getReg();
+    IsCap = true;
   }
   uint32_t Binary;
 
@@ -135,20 +156,28 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI, raw_ostream &OS,
 
   const MCExpr *CallExpr = Func.getExpr();
 
-  // Emit AUIPC Ra, Func with R_RISCV_CALL relocation type.
-  TmpInst = MCInstBuilder(RISCV::AUIPC)
+  // Emit AUIPC[C] Ra, Func with R_RISCV_[CHERI_]CALL relocation type.
+  TmpInst = MCInstBuilder(IsCap ? RISCV::AUIPCC : RISCV::AUIPC)
                 .addReg(Ra)
                 .addOperand(MCOperand::createExpr(CallExpr));
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
   support::endian::write(OS, Binary, support::little);
 
   if (MI.getOpcode() == RISCV::PseudoTAIL ||
-      MI.getOpcode() == RISCV::PseudoJump)
-    // Emit JALR X0, Ra, 0
-    TmpInst = MCInstBuilder(RISCV::JALR).addReg(RISCV::X0).addReg(Ra).addImm(0);
+      MI.getOpcode() == RISCV::PseudoJump ||
+      MI.getOpcode() == RISCV::PseudoCTAIL ||
+      MI.getOpcode() == RISCV::PseudoCJump)
+    // Emit [C]JALR [XC]0, Ra, 0
+    TmpInst = MCInstBuilder(IsCap ? RISCV::CJALR : RISCV::JALR)
+                  .addReg(IsCap ? RISCV::C0 : RISCV::X0)
+                  .addReg(Ra)
+                  .addImm(0);
   else
-    // Emit JALR Ra, Ra, 0
-    TmpInst = MCInstBuilder(RISCV::JALR).addReg(Ra).addReg(Ra).addImm(0);
+    // Emit [C]JALR Ra, Ra, 0
+    TmpInst = MCInstBuilder(IsCap ? RISCV::CJALR : RISCV::JALR)
+                  .addReg(Ra)
+                  .addReg(Ra)
+                  .addImm(0);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
   support::endian::write(OS, Binary, support::little);
 }
@@ -246,7 +275,11 @@ void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
   if (MI.getOpcode() == RISCV::PseudoCALLReg ||
       MI.getOpcode() == RISCV::PseudoCALL ||
       MI.getOpcode() == RISCV::PseudoTAIL ||
-      MI.getOpcode() == RISCV::PseudoJump) {
+      MI.getOpcode() == RISCV::PseudoJump ||
+      MI.getOpcode() == RISCV::PseudoCCALLReg ||
+      MI.getOpcode() == RISCV::PseudoCCALL ||
+      MI.getOpcode() == RISCV::PseudoCTAIL ||
+      MI.getOpcode() == RISCV::PseudoCJump) {
     expandFunctionCall(MI, OS, Fixups, STI);
     MCNumEmitted += 2;
     return;
@@ -417,11 +450,17 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
     case RISCVMCExpr::VK_RISCV_TLS_GD_CAPTAB_PCREL_HI:
       FixupKind = RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20;
       break;
+    case RISCVMCExpr::VK_RISCV_CCALL:
+      FixupKind = RISCV::fixup_riscv_ccall;
+      RelaxCandidate = true;
+      break;
     }
   } else if (Kind == MCExpr::SymbolRef &&
              cast<MCSymbolRefExpr>(Expr)->getKind() == MCSymbolRefExpr::VK_None) {
     if (Desc.getOpcode() == RISCV::JAL) {
       FixupKind = RISCV::fixup_riscv_jal;
+    } else if (Desc.getOpcode() == RISCV::CJAL) {
+      FixupKind = RISCV::fixup_riscv_cjal;
     } else if (MIFrm == RISCVII::InstFormatB) {
       FixupKind = RISCV::fixup_riscv_branch;
     } else if (MIFrm == RISCVII::InstFormatCJ) {

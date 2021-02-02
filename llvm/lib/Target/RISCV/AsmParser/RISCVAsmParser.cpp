@@ -195,7 +195,9 @@ class RISCVAsmParser : public MCTargetAsmParser {
   OperandMatchResultTy parseAtomicMemOp(OperandVector &Operands);
   OperandMatchResultTy parseOperandWithModifier(OperandVector &Operands);
   OperandMatchResultTy parseBareSymbol(OperandVector &Operands);
+  template <bool IsCap = false>
   OperandMatchResultTy parseCallSymbol(OperandVector &Operands);
+  template <bool IsCap = false>
   OperandMatchResultTy parsePseudoJumpSymbol(OperandVector &Operands);
   OperandMatchResultTy parseJALOffset(OperandVector &Operands);
   OperandMatchResultTy parseVTypeI(OperandVector &Operands);
@@ -445,6 +447,16 @@ public:
             VK == RISCVMCExpr::VK_RISCV_CALL_PLT);
   }
 
+  bool isCCallSymbol() const {
+    int64_t Imm;
+    RISCVMCExpr::VariantKind VK = RISCVMCExpr::VK_RISCV_None;
+    // Must be of 'immediate' type but not a constant.
+    if (!isImm() || evaluateConstantImm(getImm(), Imm, VK))
+      return false;
+    return RISCVAsmParser::classifySymbolRef(getImm(), VK) &&
+           VK == RISCVMCExpr::VK_RISCV_CCALL;
+  }
+
   bool isPseudoJumpSymbol() const {
     int64_t Imm;
     RISCVMCExpr::VariantKind VK = RISCVMCExpr::VK_RISCV_None;
@@ -453,6 +465,16 @@ public:
       return false;
     return RISCVAsmParser::classifySymbolRef(getImm(), VK) &&
            VK == RISCVMCExpr::VK_RISCV_CALL;
+  }
+
+  bool isPseudoCJumpSymbol() const {
+    int64_t Imm;
+    RISCVMCExpr::VariantKind VK = RISCVMCExpr::VK_RISCV_None;
+    // Must be of 'immediate' type but not a constant.
+    if (!isImm() || evaluateConstantImm(getImm(), Imm, VK))
+      return false;
+    return RISCVAsmParser::classifySymbolRef(getImm(), VK) &&
+           VK == RISCVMCExpr::VK_RISCV_CCALL;
   }
 
   bool isTPRelAddSymbol() const {
@@ -1269,11 +1291,13 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
     return Error(ErrorLoc, "operand must be a bare symbol name");
   }
-  case Match_InvalidPseudoJumpSymbol: {
+  case Match_InvalidPseudoJumpSymbol:
+  case Match_InvalidPseudoCJumpSymbol: {
     SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
     return Error(ErrorLoc, "operand must be a valid jump target");
   }
-  case Match_InvalidCallSymbol: {
+  case Match_InvalidCallSymbol:
+  case Match_InvalidCCallSymbol: {
     SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
     return Error(ErrorLoc, "operand must be a bare symbol name");
   }
@@ -1650,6 +1674,7 @@ OperandMatchResultTy RISCVAsmParser::parseBareSymbol(OperandVector &Operands) {
   return MatchOperand_Success;
 }
 
+template <bool IsCap>
 OperandMatchResultTy RISCVAsmParser::parseCallSymbol(OperandVector &Operands) {
   SMLoc S = getLoc();
   SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
@@ -1666,9 +1691,17 @@ OperandMatchResultTy RISCVAsmParser::parseCallSymbol(OperandVector &Operands) {
   if (getParser().parseIdentifier(Identifier))
     return MatchOperand_ParseFail;
 
-  RISCVMCExpr::VariantKind Kind = RISCVMCExpr::VK_RISCV_CALL;
-  if (Identifier.consume_back("@plt"))
-    Kind = RISCVMCExpr::VK_RISCV_CALL_PLT;
+  RISCVMCExpr::VariantKind Kind;
+  if (IsCap) {
+    Kind = RISCVMCExpr::VK_RISCV_CCALL;
+    // Both relocations are the same for RISC-V, so CHERI-RISC-V only provides
+    // a single relocation, but be friendly and permit the redundant suffix.
+    Identifier.consume_back("@plt");
+  } else {
+    Kind = RISCVMCExpr::VK_RISCV_CALL;
+    if (Identifier.consume_back("@plt"))
+      Kind = RISCVMCExpr::VK_RISCV_CALL_PLT;
+  }
 
   MCSymbol *Sym = getContext().getOrCreateSymbol(Identifier);
   Res = MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, getContext());
@@ -1677,6 +1710,7 @@ OperandMatchResultTy RISCVAsmParser::parseCallSymbol(OperandVector &Operands) {
   return MatchOperand_Success;
 }
 
+template <bool IsCap>
 OperandMatchResultTy
 RISCVAsmParser::parsePseudoJumpSymbol(OperandVector &Operands) {
   SMLoc S = getLoc();
@@ -1693,7 +1727,9 @@ RISCVAsmParser::parsePseudoJumpSymbol(OperandVector &Operands) {
     return MatchOperand_ParseFail;
   }
 
-  Res = RISCVMCExpr::create(Res, RISCVMCExpr::VK_RISCV_CALL, getContext());
+  RISCVMCExpr::VariantKind Kind =
+      IsCap ? RISCVMCExpr::VK_RISCV_CCALL : RISCVMCExpr::VK_RISCV_CALL;
+  Res = RISCVMCExpr::create(Res, Kind, getContext());
   Operands.push_back(RISCVOperand::createImm(Res, S, E, isRV64()));
   return MatchOperand_Success;
 }

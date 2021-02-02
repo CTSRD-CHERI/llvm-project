@@ -7,6 +7,8 @@
 ; RUN: %riscv32_cheri_purecap_llc -relocation-model=pic -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s
 
+; Looks identical to the plain RISC-V version, but the j here is the alias for
+; CJAL (and -verify-machineinstrs will verify it's that and not JAL).
 define void @relax_bcc(i1 %a) nounwind {
 ; CHECK-LABEL: relax_bcc:
 ; CHECK:       # %bb.0:
@@ -29,16 +31,13 @@ tail:
   ret void
 }
 
-define i32 @relax_jal(i1 %a) nounwind {
-; CHECK-LABEL: relax_jal:
+define i32 @relax_cjal(i1 %a) nounwind {
+; CHECK-LABEL: relax_cjal:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    andi a0, a0, 1
 ; CHECK-NEXT:    bnez a0, .LBB1_1
 ; CHECK-NEXT:  # %bb.3:
-; CHECK-NEXT:  .LBB1_4: # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca0, %pcrel_hi(.LBB1_2)
-; CHECK-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB1_4)
-; CHECK-NEXT:    cjr ca0
+; CHECK-NEXT:    cjump .LBB1_2, ca0
 ; CHECK-NEXT:  .LBB1_1: # %iftrue
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP

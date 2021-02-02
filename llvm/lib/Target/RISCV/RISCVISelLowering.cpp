@@ -43,6 +43,12 @@ using namespace llvm;
 
 STATISTIC(NumTailCalls, "Number of tail calls");
 
+static cl::opt<bool>
+    UseLegacyIndirectPurecapCalls("riscv-legacy-indirect-purecap-calls",
+                 cl::desc("Use the legacy indirect call lowering for "
+                          "pure-capability function calls"),
+                 cl::init(false), cl::Hidden);
+
 RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
                                          const RISCVSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI) {
@@ -6895,32 +6901,45 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // If the callee is a GlobalAddress/ExternalSymbol node, turn it into a
   // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
   // split it and then direct call can be matched by PseudoCALL.
-  // TODO: Support purecap PLT
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = S->getGlobal();
-    bool IsLocal =
-        getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
+
+    unsigned OpFlags;
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
-      // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
-      IsLocal = false;
-      Callee = getAddr(S, Callee.getValueType(), DAG, IsLocal,
-                       /*CanDeriveFromPcc=*/true);
+      OpFlags = RISCVII::MO_CCALL;
     } else {
-      unsigned OpFlags = IsLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
+      OpFlags = RISCVII::MO_CALL;
+      if (!getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV))
+        OpFlags = RISCVII::MO_PLT;
+    }
+
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+        UseLegacyIndirectPurecapCalls)
+      Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
+                       /*CanDeriveFromPcc=*/true);
+    else
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
-    }
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    bool IsLocal = getTargetMachine().shouldAssumeDSOLocal(
-        *MF.getFunction().getParent(), nullptr);
+    unsigned OpFlags;
+
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
-      // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
-      IsLocal = false;
-      Callee = getAddr(S, Callee.getValueType(), DAG, IsLocal,
-                       /*CanDeriveFromPcc=*/true);
+      OpFlags = RISCVII::MO_CCALL;
     } else {
-      unsigned OpFlags = IsLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
-      Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
+      OpFlags = RISCVII::MO_CALL;
+      if (!getTargetMachine().shouldAssumeDSOLocal(*MF.getFunction().getParent(),
+                                                   nullptr))
+        OpFlags = RISCVII::MO_PLT;
     }
+
+    // Legacy behaviour always used indirect calls even for static functions.
+    // This could be optimised, but shouldAssumeDSOLocal is too weak, since
+    // extern functions are marked dso_local for position-dependent code.
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+        UseLegacyIndirectPurecapCalls)
+      Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
+                       /*CanDeriveFromPcc=*/true);
+    else
+      Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
   }
 
   // The first call operand is the chain and the second is the target address.
