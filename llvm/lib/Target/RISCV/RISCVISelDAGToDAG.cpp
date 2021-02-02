@@ -847,7 +847,7 @@ bool RISCVDAGToDAGISel::SelectInlineAsmMemoryOperand(
 }
 
 bool RISCVDAGToDAGISel::SelectAddrFI(SDValue Addr, SDValue &Base) {
-  if (auto FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
+  if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
     if (Addr.getValueType().isScalarInteger()) {
       Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
       return true;
@@ -865,6 +865,16 @@ bool RISCVDAGToDAGISel::SelectCapFI(SDValue Cap, SDValue &Base) {
     }
   }
   return false;
+}
+
+bool RISCVDAGToDAGISel::SelectRVVBaseAddr(SDValue Addr, SDValue &Base) {
+  // If this is FrameIndex, select it directly. Otherwise just let it get
+  // selected to a register independently.
+  if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr))
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
+  else
+    Base = Addr;
+  return true;
 }
 
 // Helper to detect unneeded and instructions on shift amounts. Called
