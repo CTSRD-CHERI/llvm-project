@@ -128,7 +128,7 @@ body:             |
   ; CHECK-NEXT:   PseudoBR %bb.2
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1.for.cond.cleanup:
-  ; CHECK-NEXT:   PseudoCapRET
+  ; CHECK-NEXT:   PseudoCRET
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.2.for.body:
   ; CHECK-NEXT:   successors: %bb.4(0x30000000), %bb.3(0x50000000)
@@ -160,7 +160,7 @@ body:             |
     PseudoBR %bb.2
 
   bb.1.for.cond.cleanup:
-    PseudoCapRET
+    PseudoCRET
 
   bb.2.for.body:
     successors: %bb.4(0x30000000), %bb.3(0x50000000)

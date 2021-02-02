@@ -19,31 +19,19 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV32IXCHERI:       # %bb.0: # %entry
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
 ; RV32IXCHERI-NEXT:    .cfi_def_cfa_offset 16
-; RV32IXCHERI-NEXT:    csc cra, 8(csp)
+; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    .cfi_offset ra, -8
 ; RV32IXCHERI-NEXT:  .Ltmp0:
-; RV32IXCHERI-NEXT:  .LBB0_3: # %entry
-; RV32IXCHERI-NEXT:    # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca2, %captab_pcrel_hi(throw_exception)
-; RV32IXCHERI-NEXT:    clc ca2, %pcrel_lo(.LBB0_3)(ca2)
-; RV32IXCHERI-NEXT:    cjalr ca2
+; RV32IXCHERI-NEXT:    ccall throw_exception
 ; RV32IXCHERI-NEXT:  .Ltmp1:
 ; RV32IXCHERI-NEXT:    j .LBB0_2
 ; RV32IXCHERI-NEXT:  .LBB0_1: # %lpad
 ; RV32IXCHERI-NEXT:  .Ltmp2:
-; RV32IXCHERI-NEXT:  .LBB0_4: # %lpad
-; RV32IXCHERI-NEXT:    # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(__cxa_begin_catch)
-; RV32IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB0_4)(ca1)
-; RV32IXCHERI-NEXT:    cjalr ca1
-; RV32IXCHERI-NEXT:  .LBB0_5: # %lpad
-; RV32IXCHERI-NEXT:    # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(__cxa_end_catch)
-; RV32IXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB0_5)(ca0)
-; RV32IXCHERI-NEXT:    cjalr ca0
+; RV32IXCHERI-NEXT:    ccall __cxa_begin_catch
+; RV32IXCHERI-NEXT:    ccall __cxa_end_catch
 ; RV32IXCHERI-NEXT:    j .LBB0_2
 ; RV32IXCHERI-NEXT:  .LBB0_2: # %try.cont
-; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
@@ -51,31 +39,19 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV64IXCHERI:       # %bb.0: # %entry
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
 ; RV64IXCHERI-NEXT:    .cfi_def_cfa_offset 16
-; RV64IXCHERI-NEXT:    csc cra, 0(csp)
+; RV64IXCHERI-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    .cfi_offset ra, -16
 ; RV64IXCHERI-NEXT:  .Ltmp0:
-; RV64IXCHERI-NEXT:  .LBB0_3: # %entry
-; RV64IXCHERI-NEXT:    # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca2, %captab_pcrel_hi(throw_exception)
-; RV64IXCHERI-NEXT:    clc ca2, %pcrel_lo(.LBB0_3)(ca2)
-; RV64IXCHERI-NEXT:    cjalr ca2
+; RV64IXCHERI-NEXT:    ccall throw_exception
 ; RV64IXCHERI-NEXT:  .Ltmp1:
 ; RV64IXCHERI-NEXT:    j .LBB0_2
 ; RV64IXCHERI-NEXT:  .LBB0_1: # %lpad
 ; RV64IXCHERI-NEXT:  .Ltmp2:
-; RV64IXCHERI-NEXT:  .LBB0_4: # %lpad
-; RV64IXCHERI-NEXT:    # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(__cxa_begin_catch)
-; RV64IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB0_4)(ca1)
-; RV64IXCHERI-NEXT:    cjalr ca1
-; RV64IXCHERI-NEXT:  .LBB0_5: # %lpad
-; RV64IXCHERI-NEXT:    # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(__cxa_end_catch)
-; RV64IXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB0_5)(ca0)
-; RV64IXCHERI-NEXT:    cjalr ca0
+; RV64IXCHERI-NEXT:    ccall __cxa_begin_catch
+; RV64IXCHERI-NEXT:    ccall __cxa_end_catch
 ; RV64IXCHERI-NEXT:    j .LBB0_2
 ; RV64IXCHERI-NEXT:  .LBB0_2: # %try.cont
-; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
 entry:

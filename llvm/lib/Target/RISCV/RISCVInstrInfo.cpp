@@ -612,9 +612,18 @@ unsigned RISCVInstrInfo::insertBranch(
   assert((Cond.size() == 3 || Cond.size() == 0) &&
          "RISCV branch conditions have two components!");
 
+  MachineFunction *MF = MBB.getParent();
+  const RISCVSubtarget &ST = MF->getSubtarget<RISCVSubtarget>();
+
+  unsigned PseudoOpcode;
+  if (RISCVABI::isCheriPureCapABI(ST.getTargetABI()))
+    PseudoOpcode = RISCV::PseudoCBR;
+  else
+    PseudoOpcode = RISCV::PseudoBR;
+
   // Unconditional branch.
   if (Cond.empty()) {
-    MachineInstr &MI = *BuildMI(&MBB, DL, get(RISCV::PseudoBR)).addMBB(TBB);
+    MachineInstr &MI = *BuildMI(&MBB, DL, get(PseudoOpcode)).addMBB(TBB);
     if (BytesAdded)
       *BytesAdded += getInstSizeInBytes(MI);
     return 1;
@@ -632,7 +641,7 @@ unsigned RISCVInstrInfo::insertBranch(
     return 1;
 
   // Two-way conditional branch.
-  MachineInstr &MI = *BuildMI(&MBB, DL, get(RISCV::PseudoBR)).addMBB(FBB);
+  MachineInstr &MI = *BuildMI(&MBB, DL, get(PseudoOpcode)).addMBB(FBB);
   if (BytesAdded)
     *BytesAdded += getInstSizeInBytes(MI);
   return 2;
@@ -657,10 +666,13 @@ unsigned RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
         "Branch offsets outside of the signed 32-bit range not supported");
 
   const TargetRegisterClass *RC;
+  unsigned PseudoOpcode;
   if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
     RC = &RISCV::GPCRRegClass;
+    PseudoOpcode = RISCV::PseudoCJump;
   } else {
     RC = &RISCV::GPRRegClass;
+    PseudoOpcode = RISCV::PseudoJump;
   }
 
   // FIXME: A virtual register must be used initially, as the register
@@ -669,29 +681,17 @@ unsigned RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
   Register ScratchReg = MRI.createVirtualRegister(RC);
   auto II = MBB.end();
 
-  MachineInstr *MI;
-  unsigned InstBytes;
-  if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
-    MI = BuildMI(MBB, II, DL, get(RISCV::PseudoCLLC))
-             .addReg(ScratchReg, RegState::Define)
-             .addMBB(&DestBB);
-    BuildMI(MBB, II, DL, get(RISCV::PseudoCapBRIND))
-        .addReg(ScratchReg);
-    InstBytes = 12;
-  } else {
-    MI = BuildMI(MBB, II, DL, get(RISCV::PseudoJump))
-             .addReg(ScratchReg, RegState::Define | RegState::Dead)
-             .addMBB(&DestBB, RISCVII::MO_CALL);
-    InstBytes = 8;
-  }
+  MachineInstr &MI = *BuildMI(MBB, II, DL, get(PseudoOpcode))
+                          .addReg(ScratchReg, RegState::Define | RegState::Dead)
+                          .addMBB(&DestBB, RISCVII::MO_CALL);
 
   RS->enterBasicBlockEnd(MBB);
   unsigned Scav = RS->scavengeRegisterBackwards(*RC,
-                                                MI->getIterator(), false, 0);
+                                                MI.getIterator(), false, 0);
   MRI.replaceRegWith(ScratchReg, Scav);
   MRI.clearVirtRegs();
   RS->setRegUsed(Scav);
-  return InstBytes;
+  return 8;
 }
 
 bool RISCVInstrInfo::reverseBranchCondition(
@@ -726,9 +726,12 @@ bool RISCVInstrInfo::isBranchOffsetInRange(unsigned BranchOp,
   case RISCV::BGEU:
     return isIntN(13, BrOffset);
   case RISCV::JAL:
+  case RISCV::CJAL:
   case RISCV::PseudoBR:
+  case RISCV::PseudoCBR:
     return isIntN(21, BrOffset);
   case RISCV::PseudoJump:
+  case RISCV::PseudoCJump:
     return isIntN(32, SignExtend64(BrOffset + 0x800, XLen));
   }
 }
@@ -765,6 +768,10 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoLA:
   case RISCV::PseudoLA_TLS_IE:
   case RISCV::PseudoLA_TLS_GD:
+  case RISCV::PseudoCCALLReg:
+  case RISCV::PseudoCCALL:
+  case RISCV::PseudoCJump:
+  case RISCV::PseudoCTAIL:
   case RISCV::PseudoCLLC:
   case RISCV::PseudoCLGC:
   case RISCV::PseudoCLA_TLS_IE:
@@ -1084,7 +1091,8 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_CAPTAB_PCREL_HI, "riscv-captab-pcrel-hi"},
       {MO_TPREL_CINCOFFSET, "riscv-tprel-cincoffset"},
       {MO_TLS_IE_CAPTAB_PCREL_HI, "riscv-tls-ie-captab-pcrel-hi"},
-      {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"}};
+      {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"},
+      {MO_CCALL, "riscv-ccall"}};
   return makeArrayRef(TargetFlags);
 }
 bool RISCVInstrInfo::isFunctionSafeToOutlineFrom(

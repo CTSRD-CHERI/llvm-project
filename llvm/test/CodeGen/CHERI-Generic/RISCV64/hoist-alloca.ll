@@ -71,14 +71,9 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    addi s3, zero, 100
 ; CHECK-NEXT:  .LBB0_1: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:  .LBB0_3: # %for.body
-; CHECK-NEXT:    # in Loop: Header=BB0_1 Depth=1
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca2, %captab_pcrel_hi(call)
-; CHECK-NEXT:    clc ca2, %pcrel_lo(.LBB0_3)(ca2)
 ; CHECK-NEXT:    cmove ca0, cs2
 ; CHECK-NEXT:    cmove ca1, cs1
-; CHECK-NEXT:    cjalr ca2
+; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    addiw a0, s0, 1
 ; CHECK-NEXT:    addi s0, s0, 1
 ; CHECK-NEXT:    bne a0, s3, .LBB0_1
@@ -138,14 +133,9 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    bnez s0, .LBB1_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:  .LBB1_5: # %if.then
-; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca2, %captab_pcrel_hi(call)
-; CHECK-NEXT:    clc ca2, %pcrel_lo(.LBB1_5)(ca2)
 ; CHECK-NEXT:    cmove ca0, cs2
 ; CHECK-NEXT:    cmove ca1, cs4
-; CHECK-NEXT:    cjalr ca2
+; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
 ; CHECK-NEXT:    clc cs4, 592(csp) # 16-byte Folded Reload

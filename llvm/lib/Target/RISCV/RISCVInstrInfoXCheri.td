@@ -41,6 +41,28 @@ def riscv_cap_equal_exact : SDNode<"RISCVISD::CAP_EQUAL_EXACT",
 // Operand and SDNode transformation definitions.
 //===----------------------------------------------------------------------===//
 
+def CCallSymbol : AsmOperandClass {
+  let Name = "CCallSymbol";
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = "InvalidCCallSymbol";
+  let ParserMethod = "parseCallSymbol<true>";
+}
+
+def cap_call_symbol : Operand<CLenVT> {
+  let ParserMatchClass = CCallSymbol;
+}
+
+def PseudoCJumpSymbol : AsmOperandClass {
+  let Name = "PseudoCJumpSymbol";
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = "InvalidPseudoCJumpSymbol";
+  let ParserMethod = "parsePseudoJumpSymbol<true>";
+}
+
+def pseudo_cap_jump_symbol : Operand<CLenVT> {
+  let ParserMatchClass = PseudoCJumpSymbol;
+}
+
 def TPRelCIncOffsetSymbol : AsmOperandClass {
   let Name = "TPRelCIncOffsetSymbol";
   let RenderMethod = "addImmOperands";
@@ -308,35 +330,26 @@ def CMove       : Cheri_r<0xa, "cmove", GPCR>;
 
 let Predicates = [HasCheri] in {
 let isCall = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def CJALR : RVInstCheriSrcDst<0x7f, 0xc, 0, OPC_CHERI, (outs GPCR:$rd),
-                              (ins GPCR:$rs1), "cjalr", "$rd, $rs1">;
+def JALR_CAP : RVInstCheriSrcDst<0x7f, 0xc, 0, OPC_CHERI, (outs GPCR:$rd),
+                                 (ins GPCR:$rs1), "jalr.cap", "$rd, $rs1">;
+
+let isCall = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def JALR_PCC : RVInstCheriSrcDst<0x7f, 0x14, 0, OPC_CHERI, (outs GPR:$rd),
+                                 (ins GPR:$rs1), "jalr.pcc", "$rd, $rs1">;
 
 let isCall = 1, hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def CInvoke : RVInstCheriTwoSrc<0x7e, 0x1, 0, OPC_CHERI, (outs),
                                 (ins GPCR:$rs1, GPCR:$rs2),
                                 "cinvoke", "$rs1, $rs2">;
 
-def : InstAlias<"cjalr $cs1", (CJALR C1, GPCR:$cs1), 1>;
-def : InstAlias<"cjr $cs1", (CJALR C0, GPCR:$cs1), 1>;
-def : InstAlias<"cret", (CJALR C0, C1), 2>;
+def : InstAlias<"jalr.cap $cs1", (JALR_CAP C1, GPCR:$cs1), 1>;
+def : InstAlias<"jr.cap $cs1",   (JALR_CAP C0, GPCR:$cs1), 1>;
+def : InstAlias<"ret.cap",       (JALR_CAP C0,        C1), 2>;
+
+def : InstAlias<"jalr.pcc $cs1", (JALR_PCC X1, GPR:$cs1), 1>;
+def : InstAlias<"jr.pcc $cs1",   (JALR_PCC X0, GPR:$cs1), 1>;
+def : InstAlias<"ret.pcc",       (JALR_PCC X0,       X1), 2>;
 }
-
-let Predicates = [HasCheri, IsPureCapABI],
-    isCall = 1, Defs = [C1] in
-def PseudoCapCALLIndirect : Pseudo<(outs), (ins GPCR:$rs1),
-                                   [(riscv_cap_call GPCR:$rs1)]>,
-                            PseudoInstExpansion<(CJALR C1, GPCR:$rs1)>;
-
-let Predicates = [HasCheri, IsPureCapABI],
-    isBarrier = 1, isReturn = 1, isTerminator = 1 in
-def PseudoCapRET : Pseudo<(outs), (ins), [(riscv_ret_flag)]>,
-                   PseudoInstExpansion<(CJALR C0, C1)>;
-
-let Predicates = [HasCheri, IsPureCapABI],
-    isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [C2] in
-def PseudoCapTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
-                                   [(riscv_cap_tail GPCRTC:$rs1)]>,
-                            PseudoInstExpansion<(CJALR C0, GPCR:$rs1)>;
 
 //===----------------------------------------------------------------------===//
 // Assertion Instructions
@@ -601,11 +614,46 @@ defm AMOSWAP_C  : AMO_C_rr_aq_rl<"128", 0b00001, 0b100, "amoswap.c", GPCR>;
 
 let DecoderNamespace = "CapModeOnly_" in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-let Predicates = [HasCheri, IsCapMode] in
+let Predicates = [HasCheri, IsCapMode] in {
 def AUIPCC : RVInstU<OPC_AUIPC, (outs GPCR:$rd), (ins uimm20_auipc:$imm20),
                      "auipcc", "$rd, $imm20">;
-} // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
+let isCall = 1 in
+def CJAL : RVInstJ<OPC_JAL, (outs GPCR:$rd), (ins simm21_lsb0_jal:$imm20),
+                   "cjal", "$rd, $imm20">;
+
+let isCall = 1 in
+def CJALR : RVInstI<0b000, OPC_JALR, (outs GPCR:$rd),
+                    (ins GPCR:$rs1, simm12:$imm12),
+                    "cjalr", "$rd, ${imm12}(${rs1})">;
+} // Predicates = [HasCheri, IsCapMode]
+} // hasSideEffects = 0, mayLoad = 0, mayStore = 0
+} // DecoderNameSpace = "CapModeOnly_"
+
+let Predicates = [HasCheri, IsCapMode] in {
+def : InstAlias<"j $offset",    (CJAL C0, simm21_lsb0_jal:$offset)>;
+def : InstAlias<"cjal $offset", (CJAL C1, simm21_lsb0_jal:$offset)>;
+
+// Non-canonical form; JAL X0 and CJAL X0 are semantically identical so "j" is
+// the canonical form, but we provide this for completeness.
+def : InstAlias<"cj $offset",   (CJAL C0, simm21_lsb0_jal:$offset), 0>;
+
+// Non-zero offset aliases of "cjalr" are the lowest weight, followed by the
+// two-register form, then the one-register forms and finally "cret".
+def : InstAlias<"cjr $rs",                (CJALR       C0, GPCR:$rs, 0), 3>;
+def : InstAlias<"cjr ${offset}(${rs})",   (CJALR       C0, GPCR:$rs, simm12:$offset)>;
+def : InstAlias<"cjalr $rs",              (CJALR       C1, GPCR:$rs, 0), 3>;
+def : InstAlias<"cjalr ${offset}(${rs})", (CJALR       C1, GPCR:$rs, simm12:$offset)>;
+def : InstAlias<"cjalr $rd, $rs",         (CJALR GPCR:$rd, GPCR:$rs, 0), 2>;
+def : InstAlias<"cret",                   (CJALR       C0,       C1, 0), 4>;
+
+// Non-canonical forms for jump targets also accepted by the assembler.
+def : InstAlias<"cjr $rs, $offset",        (CJALR       C0, GPCR:$rs, simm12:$offset), 0>;
+def : InstAlias<"cjalr $rs, $offset",      (CJALR       C1, GPCR:$rs, simm12:$offset), 0>;
+def : InstAlias<"cjalr $rd, $rs, $offset", (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
+} // Predicates = [HasCheri, IsCapMode]
+
+let DecoderNamespace = "CapModeOnly_" in {
 let Predicates = [HasCheri, IsCapMode] in {
 def CLB  : CheriLoad_ri<0b000, "clb">;
 def CLH  : CheriLoad_ri<0b001, "clh">;
@@ -1014,15 +1062,6 @@ def : CheriBccSwapPat<setle, BGE>;
 def : CheriBccSwapPat<setugt, BLTU>;
 def : CheriBccSwapPat<setule, BGEU>;
 
-let Predicates = [HasCheri, IsPureCapABI] in {
-let isCall = 1, Defs = [C1] in
-let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
-def PseudoCapBRIND : Pseudo<(outs), (ins GPCR:$rs1), []>,
-                     PseudoInstExpansion<(CJALR C0, GPCR:$rs1)>;
-
-def : Pat<(brind GPCR:$rs1), (PseudoCapBRIND GPCR:$rs1)>;
-} // Predicates = [HasCheri, IsPureCapABI]
-
 /// Assertion Instructions
 
 def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
@@ -1361,6 +1400,81 @@ def PseudoCheriCmpXchg64 : PseudoCheriCmpXchg;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64]
 
 /// 'I' (Integer) base
+
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI] in {
+let isBarrier = 1, isBranch = 1, isTerminator = 1 in
+def PseudoCBR : Pseudo<(outs), (ins simm21_lsb0_jal:$imm20), [(br bb:$imm20)]>,
+                PseudoInstExpansion<(CJAL C0, simm21_lsb0_jal:$imm20)>;
+
+let isCall = 1, Defs = [C1] in
+let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
+def PseudoCBRIND : Pseudo<(outs), (ins GPCR:$rs1, simm12:$imm12), []>,
+                   PseudoInstExpansion<(CJALR C0, GPCR:$rs1, simm12:$imm12)>;
+
+def : Pat<(brind GPCR:$rs1), (PseudoCBRIND GPCR:$rs1, 0)>;
+def : Pat<(brind (ptradd GPCR:$rs1, simm12:$imm12)),
+          (PseudoCBRIND GPCR:$rs1, simm12:$imm12)>;
+} // Predicates = [HasCheri, IsCapMode, IsPureCapABI]
+
+let Predicates = [HasCheri, IsCapMode],
+    isCall = 1, isBarrier = 1, isCodeGenOnly = 0, hasSideEffects = 0,
+    mayStore = 0, mayLoad = 0 in
+def PseudoCCALLReg : Pseudo<(outs GPCR:$rd),
+                            (ins cap_call_symbol:$func), []> {
+  let AsmString = "ccall\t$rd, $func";
+}
+
+let Predicates = [HasCheri, IsCapMode],
+    isCall = 1, Defs = [C1], isCodeGenOnly = 0 in
+def PseudoCCALL : Pseudo<(outs), (ins cap_call_symbol:$func), []> {
+  let AsmString = "ccall\t$func";
+}
+
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI] in {
+def : Pat<(riscv_cap_call tglobaladdr:$func),
+          (PseudoCCALL tglobaladdr:$func)>;
+def : Pat<(riscv_cap_call texternalsym:$func),
+          (PseudoCCALL texternalsym:$func)>;
+} // Predicates = [HasCheri, IsCapMode, IsPureCapABI]
+
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI],
+    isCall = 1, Defs = [C1] in
+def PseudoCCALLIndirect : Pseudo<(outs), (ins GPCR:$rs1),
+                                 [(riscv_cap_call GPCR:$rs1)]>,
+                          PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
+
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI],
+    isBarrier = 1, isReturn = 1, isTerminator = 1 in
+def PseudoCRET : Pseudo<(outs), (ins), [(riscv_ret_flag)]>,
+                 PseudoInstExpansion<(CJALR C0, C1, 0)>;
+
+let Predicates = [HasCheri, IsCapMode],
+    isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [C2],
+    isCodeGenOnly = 0 in
+def PseudoCTAIL : Pseudo<(outs), (ins cap_call_symbol:$dst), []> {
+  let AsmString = "ctail\t$dst";
+}
+
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI],
+    isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [C2] in
+def PseudoCTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
+                                 [(riscv_cap_tail GPCRTC:$rs1)]>,
+                          PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
+
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI] in {
+def : Pat<(riscv_cap_tail tglobaladdr:$dst),
+          (PseudoCTAIL texternalsym:$dst)>;
+def : Pat<(riscv_cap_tail texternalsym:$dst),
+          (PseudoCTAIL texternalsym:$dst)>;
+} // Predicates = [HasCheri, IsCapMode, IsPureCapABI]
+
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI] in
+let isCall = 0, isBarrier = 1, isBranch = 1, isTerminator = 1,
+    isCodeGenOnly = 0, hasSideEffects = 0, mayStore = 0, mayLoad = 0 in
+def PseudoCJump : Pseudo<(outs GPCR:$rd),
+                         (ins pseudo_cap_jump_symbol:$target), []> {
+  let AsmString = "cjump\t$target, $rd";
+}
 
 defm : CheriLdPat<sextloadi8, CLB>, Requires<[HasCheri, IsCapMode]>;
 defm : CheriLdPat<extloadi8, CLB>, Requires<[HasCheri, IsCapMode]>;

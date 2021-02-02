@@ -97,6 +97,12 @@ enum Fixups {
   // fixup_riscv_tls_gd_captab_pcrel_hi20 - 20-bit fixup corresponding to
   // tls_gd_captab_pcrel_hi(foo) for instructions like auipcc
   fixup_riscv_tls_gd_captab_pcrel_hi20,
+  // fixup_riscv_cjal - 20-bit fixup for symbol references in the cjal
+  // instruction
+  fixup_riscv_cjal,
+  // fixup_riscv_call - A fixup representing a ccall attached to the auipcc
+  // instruction in a pair composed of adjacent auipcc+cjalr instructions.
+  fixup_riscv_ccall,
 
   // fixup_riscv_invalid - used as a sentinel and a marker, must be last fixup
   fixup_riscv_invalid,
