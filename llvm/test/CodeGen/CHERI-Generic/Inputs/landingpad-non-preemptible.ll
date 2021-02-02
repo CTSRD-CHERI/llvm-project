@@ -105,7 +105,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; RELOCS-LABEL:  Section ({{.+}}) .rela.gcc_except_table {
 @IF-MIPS@; RELOCS-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE  .L_Z8do_catchv$eh_alias 0x4C
 @IF-MIPS@; RELOCS-NEXT:    R_MIPS_PC32/R_MIPS_NONE/R_MIPS_NONE .L_ZTIi.DW.stub 0x0
-@IF-RISCV@; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .L_Z8do_catchv$eh_alias 0x38
+@IF-RISCV@; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .L_Z8do_catchv$eh_alias 0x34
 @IF-RISCV@; RELOCS-NEXT:   R_RISCV_32_PCREL .L_ZTIi.DW.stub 0x0
 ; RELOCS-NEXT:  }
 

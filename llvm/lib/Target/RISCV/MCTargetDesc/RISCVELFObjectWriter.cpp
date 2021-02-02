@@ -92,6 +92,10 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
       return ELF::R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20;
     case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
       return ELF::R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20;
+    case RISCV::fixup_riscv_cjal:
+      return ELF::R_RISCV_CHERI_CJAL;
+    case RISCV::fixup_riscv_ccall:
+      return ELF::R_RISCV_CHERI_CCALL;
     }
   }
 

@@ -34,13 +34,9 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 7
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
-; PURECAP-LIBCALLS-NEXT:  .LBB0_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_1)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB0_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_1
 ; PURECAP-LIBCALLS-NEXT:    clb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
@@ -94,16 +90,12 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 6
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 2
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 6(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB1_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_2)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB1_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_2
 ; PURECAP-LIBCALLS-NEXT:    clh a1, 6(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
@@ -155,16 +147,12 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 4
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 4
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 4(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB2_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_4)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB2_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_4
 ; PURECAP-LIBCALLS-NEXT:    clw a1, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
@@ -208,16 +196,12 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-NEXT:    csetbounds ca1, ca0, 8
 ; PURECAP-NEXT:    csw a3, 12(csp)
 ; PURECAP-NEXT:    csw a2, 8(csp)
-; PURECAP-NEXT:  .LBB3_1: # %entry
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ct1, %captab_pcrel_hi(__atomic_compare_exchange_8)
-; PURECAP-NEXT:    clc ct1, %pcrel_lo(.LBB3_1)(ct1)
 ; PURECAP-NEXT:    addi a4, zero, 4
 ; PURECAP-NEXT:    addi a5, zero, 2
 ; PURECAP-NEXT:    cmove ca0, ct0
 ; PURECAP-NEXT:    mv a2, a7
 ; PURECAP-NEXT:    mv a3, a6
-; PURECAP-NEXT:    cjalr ct1
+; PURECAP-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-NEXT:    clw a1, 12(csp)
 ; PURECAP-NEXT:    clw a2, 8(csp)
 ; PURECAP-NEXT:    csb a0, 8(cs0)
@@ -282,16 +266,12 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB4_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB4_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1
@@ -343,16 +323,12 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB5_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB5_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1
@@ -409,13 +385,9 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 7
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
-; PURECAP-LIBCALLS-NEXT:  .LBB6_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_1)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB6_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_1
 ; PURECAP-LIBCALLS-NEXT:    clb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
@@ -469,16 +441,12 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 6
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 2
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 6(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB7_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_2)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB7_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_2
 ; PURECAP-LIBCALLS-NEXT:    clh a1, 6(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
@@ -530,16 +498,12 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 4
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 4
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 4(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB8_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_4)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB8_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_4
 ; PURECAP-LIBCALLS-NEXT:    clw a1, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
@@ -583,16 +547,12 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-NEXT:    csetbounds ca1, ca0, 8
 ; PURECAP-NEXT:    csw a3, 12(csp)
 ; PURECAP-NEXT:    csw a2, 8(csp)
-; PURECAP-NEXT:  .LBB9_1: # %entry
-; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ct1, %captab_pcrel_hi(__atomic_compare_exchange_8)
-; PURECAP-NEXT:    clc ct1, %pcrel_lo(.LBB9_1)(ct1)
 ; PURECAP-NEXT:    addi a4, zero, 4
 ; PURECAP-NEXT:    addi a5, zero, 2
 ; PURECAP-NEXT:    cmove ca0, ct0
 ; PURECAP-NEXT:    mv a2, a7
 ; PURECAP-NEXT:    mv a3, a6
-; PURECAP-NEXT:    cjalr ct1
+; PURECAP-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-NEXT:    clw a1, 12(csp)
 ; PURECAP-NEXT:    clw a2, 8(csp)
 ; PURECAP-NEXT:    csb a0, 8(cs0)
@@ -657,16 +617,12 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB10_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB10_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1
@@ -718,16 +674,12 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:  .LBB11_1: # %entry
-; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
-; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_cap)
-; PURECAP-LIBCALLS-NEXT:    clc ca5, %pcrel_lo(.LBB11_1)(ca5)
 ; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
 ; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca6
-; PURECAP-LIBCALLS-NEXT:    cjalr ca5
+; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1

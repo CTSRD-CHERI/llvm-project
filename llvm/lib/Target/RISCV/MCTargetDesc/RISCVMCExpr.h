@@ -41,6 +41,7 @@ public:
     VK_RISCV_TPREL_CINCOFFSET,
     VK_RISCV_TLS_IE_CAPTAB_PCREL_HI,
     VK_RISCV_TLS_GD_CAPTAB_PCREL_HI,
+    VK_RISCV_CCALL,
     VK_RISCV_Invalid // Must be the last item
   };
 

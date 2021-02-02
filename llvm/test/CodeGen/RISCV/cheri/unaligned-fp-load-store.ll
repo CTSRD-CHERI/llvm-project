@@ -28,18 +28,10 @@ define i32 @unaligned_float(float addrspace(200)* nocapture readonly %arg, float
 ; RV32IFXCHERI-NEXT:    slli a1, a1, 16
 ; RV32IFXCHERI-NEXT:    or a0, a1, a0
 ; RV32IFXCHERI-NEXT:    fmv.w.x fa0, a0
-; RV32IFXCHERI-NEXT:  .LBB0_1: # %bb
-; RV32IFXCHERI-NEXT:    # Label of block must be emitted
-; RV32IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(__extendsfdf2)
-; RV32IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB0_1)(ca0)
-; RV32IFXCHERI-NEXT:    cjalr ca0
+; RV32IFXCHERI-NEXT:    ccall __extendsfdf2
 ; RV32IFXCHERI-NEXT:    csw a1, 4(csp)
 ; RV32IFXCHERI-NEXT:    csw a0, 0(csp)
-; RV32IFXCHERI-NEXT:  .LBB0_2: # %bb
-; RV32IFXCHERI-NEXT:    # Label of block must be emitted
-; RV32IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV32IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB0_2)(ca0)
-; RV32IFXCHERI-NEXT:    cjalr ca0
+; RV32IFXCHERI-NEXT:    ccall printf
 ; RV32IFXCHERI-NEXT:    fmv.x.w a1, fs0
 ; RV32IFXCHERI-NEXT:    srli a2, a1, 24
 ; RV32IFXCHERI-NEXT:    csb a2, 3(cs0)
@@ -74,17 +66,9 @@ define i32 @unaligned_float(float addrspace(200)* nocapture readonly %arg, float
 ; RV64IFXCHERI-NEXT:    or a0, a1, a0
 ; RV64IFXCHERI-NEXT:    csw a0, 8(csp)
 ; RV64IFXCHERI-NEXT:    cflw fa0, 8(csp)
-; RV64IFXCHERI-NEXT:  .LBB0_1: # %bb
-; RV64IFXCHERI-NEXT:    # Label of block must be emitted
-; RV64IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(__extendsfdf2)
-; RV64IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB0_1)(ca0)
-; RV64IFXCHERI-NEXT:    cjalr ca0
+; RV64IFXCHERI-NEXT:    ccall __extendsfdf2
 ; RV64IFXCHERI-NEXT:    csd a0, 0(csp)
-; RV64IFXCHERI-NEXT:  .LBB0_2: # %bb
-; RV64IFXCHERI-NEXT:    # Label of block must be emitted
-; RV64IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV64IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB0_2)(ca0)
-; RV64IFXCHERI-NEXT:    cjalr ca0
+; RV64IFXCHERI-NEXT:    ccall printf
 ; RV64IFXCHERI-NEXT:    cfsw fs0, 16(csp)
 ; RV64IFXCHERI-NEXT:    clw a1, 16(csp)
 ; RV64IFXCHERI-NEXT:    csb a1, 0(cs0)
@@ -128,11 +112,7 @@ define i32 @unaligned_double(double addrspace(200)* nocapture readonly %arg, dou
 ; RV32IFXCHERI-NEXT:    or a1, a1, a3
 ; RV32IFXCHERI-NEXT:    csw a1, 4(csp)
 ; RV32IFXCHERI-NEXT:    csw a0, 0(csp)
-; RV32IFXCHERI-NEXT:  .LBB1_1: # %bb
-; RV32IFXCHERI-NEXT:    # Label of block must be emitted
-; RV32IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV32IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB1_1)(ca0)
-; RV32IFXCHERI-NEXT:    cjalr ca0
+; RV32IFXCHERI-NEXT:    ccall printf
 ; RV32IFXCHERI-NEXT:    srli a1, s0, 16
 ; RV32IFXCHERI-NEXT:    csh a1, 6(cs1)
 ; RV32IFXCHERI-NEXT:    csh s0, 4(cs1)
@@ -165,11 +145,7 @@ define i32 @unaligned_double(double addrspace(200)* nocapture readonly %arg, dou
 ; RV64IFXCHERI-NEXT:    slli a1, a1, 32
 ; RV64IFXCHERI-NEXT:    or a0, a1, a0
 ; RV64IFXCHERI-NEXT:    csd a0, 0(csp)
-; RV64IFXCHERI-NEXT:  .LBB1_1: # %bb
-; RV64IFXCHERI-NEXT:    # Label of block must be emitted
-; RV64IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV64IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB1_1)(ca0)
-; RV64IFXCHERI-NEXT:    cjalr ca0
+; RV64IFXCHERI-NEXT:    ccall printf
 ; RV64IFXCHERI-NEXT:    srli a1, s0, 48
 ; RV64IFXCHERI-NEXT:    csh a1, 6(cs1)
 ; RV64IFXCHERI-NEXT:    srli a1, s0, 32
@@ -204,27 +180,19 @@ define i32 @unaligned_fp128(fp128 addrspace(200)* nocapture readonly %arg, fp128
 ; RV32IFXCHERI-NEXT:    clw s3, 4(ca1)
 ; RV32IFXCHERI-NEXT:    clw s4, 8(ca1)
 ; RV32IFXCHERI-NEXT:    clw s1, 12(ca1)
-; RV32IFXCHERI-NEXT:    clw a0, 0(ca0)
-; RV32IFXCHERI-NEXT:    clw a1, 4(cs0)
+; RV32IFXCHERI-NEXT:    clw a1, 0(ca0)
+; RV32IFXCHERI-NEXT:    clw a0, 4(ca0)
 ; RV32IFXCHERI-NEXT:    clw a2, 8(cs0)
 ; RV32IFXCHERI-NEXT:    clw a3, 12(cs0)
 ; RV32IFXCHERI-NEXT:    csw a3, 28(csp)
 ; RV32IFXCHERI-NEXT:    csw a2, 24(csp)
-; RV32IFXCHERI-NEXT:    csw a1, 20(csp)
-; RV32IFXCHERI-NEXT:    csw a0, 16(csp)
-; RV32IFXCHERI-NEXT:  .LBB2_1: # %bb
-; RV32IFXCHERI-NEXT:    # Label of block must be emitted
-; RV32IFXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(__trunctfdf2)
-; RV32IFXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB2_1)(ca1)
+; RV32IFXCHERI-NEXT:    csw a0, 20(csp)
 ; RV32IFXCHERI-NEXT:    cincoffset ca0, csp, 16
-; RV32IFXCHERI-NEXT:    cjalr ca1
+; RV32IFXCHERI-NEXT:    csw a1, 16(csp)
+; RV32IFXCHERI-NEXT:    ccall __trunctfdf2
 ; RV32IFXCHERI-NEXT:    csw a1, 4(csp)
 ; RV32IFXCHERI-NEXT:    csw a0, 0(csp)
-; RV32IFXCHERI-NEXT:  .LBB2_2: # %bb
-; RV32IFXCHERI-NEXT:    # Label of block must be emitted
-; RV32IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV32IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB2_2)(ca0)
-; RV32IFXCHERI-NEXT:    cjalr ca0
+; RV32IFXCHERI-NEXT:    ccall printf
 ; RV32IFXCHERI-NEXT:    csw s1, 12(cs0)
 ; RV32IFXCHERI-NEXT:    csw s4, 8(cs0)
 ; RV32IFXCHERI-NEXT:    csw s3, 4(cs0)
@@ -256,17 +224,9 @@ define i32 @unaligned_fp128(fp128 addrspace(200)* nocapture readonly %arg, fp128
 ; RV64IFXCHERI-NEXT:    or a0, a0, a1
 ; RV64IFXCHERI-NEXT:    slli a1, a2, 32
 ; RV64IFXCHERI-NEXT:    or a1, a1, a3
-; RV64IFXCHERI-NEXT:  .LBB2_1: # %bb
-; RV64IFXCHERI-NEXT:    # Label of block must be emitted
-; RV64IFXCHERI-NEXT:    auipcc ca2, %captab_pcrel_hi(__trunctfdf2)
-; RV64IFXCHERI-NEXT:    clc ca2, %pcrel_lo(.LBB2_1)(ca2)
-; RV64IFXCHERI-NEXT:    cjalr ca2
+; RV64IFXCHERI-NEXT:    ccall __trunctfdf2
 ; RV64IFXCHERI-NEXT:    csd a0, 0(csp)
-; RV64IFXCHERI-NEXT:  .LBB2_2: # %bb
-; RV64IFXCHERI-NEXT:    # Label of block must be emitted
-; RV64IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV64IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB2_2)(ca0)
-; RV64IFXCHERI-NEXT:    cjalr ca0
+; RV64IFXCHERI-NEXT:    ccall printf
 ; RV64IFXCHERI-NEXT:    srli a1, s0, 32
 ; RV64IFXCHERI-NEXT:    csw a1, 12(cs1)
 ; RV64IFXCHERI-NEXT:    csw s0, 8(cs1)
@@ -305,11 +265,7 @@ define i32 @unaligned_int(i32 addrspace(200)* nocapture readonly %arg) unnamed_a
 ; RV32IFXCHERI-NEXT:    slli a1, a1, 16
 ; RV32IFXCHERI-NEXT:    or a0, a1, a0
 ; RV32IFXCHERI-NEXT:    csw a0, 0(csp)
-; RV32IFXCHERI-NEXT:  .LBB3_1: # %bb
-; RV32IFXCHERI-NEXT:    # Label of block must be emitted
-; RV32IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV32IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB3_1)(ca0)
-; RV32IFXCHERI-NEXT:    cjalr ca0
+; RV32IFXCHERI-NEXT:    ccall printf
 ; RV32IFXCHERI-NEXT:    csb zero, 3(cs0)
 ; RV32IFXCHERI-NEXT:    csb zero, 2(cs0)
 ; RV32IFXCHERI-NEXT:    csb zero, 1(cs0)
@@ -337,11 +293,7 @@ define i32 @unaligned_int(i32 addrspace(200)* nocapture readonly %arg) unnamed_a
 ; RV64IFXCHERI-NEXT:    slli a1, a1, 16
 ; RV64IFXCHERI-NEXT:    or a0, a1, a0
 ; RV64IFXCHERI-NEXT:    csd a0, 0(csp)
-; RV64IFXCHERI-NEXT:  .LBB3_1: # %bb
-; RV64IFXCHERI-NEXT:    # Label of block must be emitted
-; RV64IFXCHERI-NEXT:    auipcc ca0, %captab_pcrel_hi(printf)
-; RV64IFXCHERI-NEXT:    clc ca0, %pcrel_lo(.LBB3_1)(ca0)
-; RV64IFXCHERI-NEXT:    cjalr ca0
+; RV64IFXCHERI-NEXT:    ccall printf
 ; RV64IFXCHERI-NEXT:    csb zero, 3(cs0)
 ; RV64IFXCHERI-NEXT:    csb zero, 2(cs0)
 ; RV64IFXCHERI-NEXT:    csb zero, 1(cs0)

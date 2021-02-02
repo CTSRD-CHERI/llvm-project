@@ -31,10 +31,7 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV32IXCHERI-NEXT:    csetbounds ca1, ca0, s2
 ; RV32IXCHERI-NEXT:    cincoffset ca0, cs1, 0
 ; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 1
-; RV32IXCHERI-NEXT:  .LBB0_1: # Label of block must be emitted
-; RV32IXCHERI-NEXT:    auipcc ca2, %captab_pcrel_hi(callee)
-; RV32IXCHERI-NEXT:    clc ca2, %pcrel_lo(.LBB0_1)(ca2)
-; RV32IXCHERI-NEXT:    cjalr ca2
+; RV32IXCHERI-NEXT:    ccall callee
 ; RV32IXCHERI-NEXT:    mv a0, s2
 ; RV32IXCHERI-NEXT:    cincoffset csp, cs0, -64
 ; RV32IXCHERI-NEXT:    clc cs2, 32(csp) # 8-byte Folded Reload
@@ -70,10 +67,7 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV64IXCHERI-NEXT:    csetbounds ca1, ca1, s2
 ; RV64IXCHERI-NEXT:    cincoffset ca0, cs1, 0
 ; RV64IXCHERI-NEXT:    csetbounds ca0, ca0, 1
-; RV64IXCHERI-NEXT:  .LBB0_1: # Label of block must be emitted
-; RV64IXCHERI-NEXT:    auipcc ca2, %captab_pcrel_hi(callee)
-; RV64IXCHERI-NEXT:    clc ca2, %pcrel_lo(.LBB0_1)(ca2)
-; RV64IXCHERI-NEXT:    cjalr ca2
+; RV64IXCHERI-NEXT:    ccall callee
 ; RV64IXCHERI-NEXT:    mv a0, s2
 ; RV64IXCHERI-NEXT:    cincoffset csp, cs0, -128
 ; RV64IXCHERI-NEXT:    clc cs2, 64(csp) # 16-byte Folded Reload

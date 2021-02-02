@@ -35,7 +35,7 @@ const RISCVMCExpr *RISCVMCExpr::create(const MCExpr *Expr, VariantKind Kind,
 void RISCVMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   VariantKind Kind = getKind();
   bool HasVariant = ((Kind != VK_RISCV_None) && (Kind != VK_RISCV_CALL) &&
-                     (Kind != VK_RISCV_CALL_PLT));
+                     (Kind != VK_RISCV_CALL_PLT) && (Kind != VK_RISCV_CCALL));
 
   if (HasVariant)
     OS << '%' << getVariantKindName(getKind()) << '(';
@@ -184,6 +184,8 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "call";
   case VK_RISCV_CALL_PLT:
     return "call_plt";
+  case VK_RISCV_CCALL:
+    return "ccall";
   case VK_RISCV_32_PCREL:
     return "32_pcrel";
   }
@@ -245,7 +247,8 @@ bool RISCVMCExpr::evaluateAsConstant(int64_t &Res) const {
       Kind == VK_RISCV_CAPTAB_PCREL_HI ||
       Kind == VK_RISCV_TPREL_CINCOFFSET ||
       Kind == VK_RISCV_TLS_IE_CAPTAB_PCREL_HI ||
-      Kind == VK_RISCV_TLS_GD_CAPTAB_PCREL_HI)
+      Kind == VK_RISCV_TLS_GD_CAPTAB_PCREL_HI ||
+      Kind == VK_RISCV_CCALL)
     return false;
 
   if (!getSubExpr()->evaluateAsRelocatable(Value, nullptr, nullptr))
