@@ -11,6 +11,7 @@
 #include "ProfileGenerator.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Demangle/Demangle.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -394,7 +395,8 @@ FrameLocationStack ProfiledBinary::symbolize(const InstructionPointer &IP,
     if (UseCanonicalFnName)
       FunctionName = FunctionSamples::getCanonicalFnName(FunctionName);
     LineLocation Line(CallerFrame.Line - CallerFrame.StartLine,
-                      CallerFrame.Discriminator);
+                      DILocation::getBaseDiscriminatorFromDiscriminator(
+                          CallerFrame.Discriminator));
     FrameLocation Callsite(FunctionName.str(), Line);
     CallStack.push_back(Callsite);
   }
