@@ -717,6 +717,13 @@ public:
   virtual void HandleObjCFlagsWithNonObjCConversion(const char *flagsStart,
                                             const char *flagsEnd,
                                             const char *conversionPosition) {}
+
+  virtual void HandlePlusWithoutAltForP(const char *startSpecifier,
+                                        unsigned specifierLen) {}
+
+  virtual void HandlePosittionalArgWithPlusForP(const char *startSpecifier,
+                                                unsigned specifierLen) {}
+
   // Printf-specific handlers.
 
   virtual bool HandleInvalidPrintfConversionSpecifier(

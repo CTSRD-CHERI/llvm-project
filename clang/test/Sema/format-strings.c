@@ -385,6 +385,7 @@ void bug7377_bad_length_mod_usage() {
 
   // Bad flag usage
   printf("%#p", (void *) 0); // expected-warning{{flag '#' results in undefined behavior with 'p' conversion specifier}}
+  printf("%+p", (void *) 0); // expected-warning{{flag '+' results in undefined behavior with 'p' conversion specifier}}
   printf("%0d", -1); // no-warning
   printf("%#n", (int *) 0); // expected-warning{{flag '#' results in undefined behavior with 'n' conversion specifier}}
   printf("%-n", (int *) 0); // expected-warning{{flag '-' results in undefined behavior with 'n' conversion specifier}}

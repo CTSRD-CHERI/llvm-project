@@ -9077,6 +9077,12 @@ def warn_format_P_no_precision : Warning<
 def warn_printf_ignored_flag: Warning<
   "flag '%0' is ignored when flag '%1' is present">,
   InGroup<Format>;
+def warn_plus_without_altform_for_p: Warning<
+  "flag '+' is not allowed without '#' for '%%p'">,
+  InGroup<Format>;
+def warn_positional_arg_with_plus_for_p_is_undefined: Warning<
+  "use of positional arguments with '%%+#p' format specifier has undefined behavior">,
+  InGroup<Format>;
 def warn_printf_empty_objc_flag: Warning<
   "missing object format flag">,
   InGroup<Format>;

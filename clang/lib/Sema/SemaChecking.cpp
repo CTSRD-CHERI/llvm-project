@@ -7992,6 +7992,13 @@ public:
                                            const char *flagsEnd,
                                            const char *conversionPosition)
                                              override;
+
+  void HandlePlusWithoutAltForP(const char *startSpecifier,
+                                unsigned specifierLen) override;
+
+  void HandlePosittionalArgWithPlusForP(const char *startSpecifier,
+                                        unsigned specifierLen) override;
+
 };
 
 } // namespace
@@ -8147,6 +8154,23 @@ void CheckPrintfHandler::HandleObjCFlagsWithNonObjCConversion(
                          Range, FixItHint::CreateRemoval(Range));
 }
 
+void CheckPrintfHandler::HandlePlusWithoutAltForP(const char *startSpecifier,
+    unsigned specifierLen) {
+  EmitFormatDiagnostic(S.PDiag(diag::warn_plus_without_altform_for_p),
+                       getLocationOfByte(startSpecifier),
+                       /*IsStringLocation*/true,
+                       getSpecifierRange(startSpecifier, specifierLen));
+}
+
+void CheckPrintfHandler::HandlePosittionalArgWithPlusForP(
+    const char *startSpecifier, unsigned specifierLen) {
+  EmitFormatDiagnostic(
+      S.PDiag(diag::warn_positional_arg_with_plus_for_p_is_undefined),
+      getLocationOfByte(startSpecifier),
+      /*IsStringLocation*/true,
+      getSpecifierRange(startSpecifier, specifierLen));
+}
+
 // Determines if the specified is a C++ class or struct containing
 // a member with the specified name and kind (e.g. a CXXMethodDecl named
 // "c_str()").
@@ -8266,6 +8290,31 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
     // We set the bit here because we may exit early from this
     // function if we encounter some other error.
     CoveredArgs.set(argIndex);
+  }
+
+  // CHERI %+#p takes a void * and an int
+  if (CS.getKind() == ConversionSpecifier::CHERIpArg && FS.hasPlusPrefix()) {
+    // We need at least two arguments.
+    if (!CheckNumArgs(FS, CS, startSpecifier, specifierLen, argIndex + 1))
+      return false;
+
+    // Claim the second argument.
+    CoveredArgs.set(argIndex + 1);
+
+    // XXX is first arg checked elsewhere?
+
+    // Type check the second argument (int)
+    const Expr *Ex = getDataArg(argIndex + 1);
+    const analyze_printf::ArgType &AT = ArgType(S.Context.IntTy);
+    if (AT.isValid() && !AT.matchesType(S.Context, Ex->getType()))
+      EmitFormatDiagnostic(
+          S.PDiag(diag::warn_format_conversion_argument_type_mismatch)
+              << AT.getRepresentativeTypeName(S.Context) << Ex->getType()
+              << false << Ex->getSourceRange(),
+          Ex->getBeginLoc(), /*IsStringLocation*/ false,
+          getSpecifierRange(startSpecifier, specifierLen));
+
+     return true;
   }
 
   // FreeBSD kernel extensions.

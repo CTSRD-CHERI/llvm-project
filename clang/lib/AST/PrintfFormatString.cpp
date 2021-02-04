@@ -396,6 +396,18 @@ static PrintfSpecifierResult ParsePrintfSpecifier(FormatStringHandler &H,
   if (k == ConversionSpecifier::FreeBSDbArg ||
       k == ConversionSpecifier::FreeBSDDArg)
     argIndex++;
+  if (k == ConversionSpecifier::CHERIpArg && FS.hasPlusPrefix()) {
+    if (!FS.hasAlternativeForm()) {
+      H.HandlePlusWithoutAltForP(Start, E - Start);
+      return true;
+    }
+    if (FS.usesPositionalArg()) {
+      H.HandlePosittionalArgWithPlusForP(Start, E - Start);
+      return true;
+    }
+
+    argIndex++;
+  }
 
   if (k == ConversionSpecifier::InvalidSpecifier) {
     unsigned Len = I - Start;
