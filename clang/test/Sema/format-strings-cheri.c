@@ -7,6 +7,12 @@ void test_plain_pointer(void *p) {
   printf("%#p", p);
   printf("%.4p", p); // expected-warning{{precision used with 'p' conversion specifier, resulting in undefined behavior}}
   printf("%#.4p", p);
+  printf("%+#p", p, 0);
+  printf("%+#p", p); // expected-warning{{more '%' conversions than data arguments}}
+  printf("%+#p", p, (long)0); // expected-warning{{format specifies type 'int' but the argument has type 'long'}}
+  printf("%+p", p); // expected-warning{{flag '+' is not allowed without '#' for '%p'}}
+  printf("%+p", p, 0); // expected-warning{{flag '+' is not allowed without '#' for '%p'}}
+  printf("%2$+#p %1$d", 1, p, 0); // expected-warning{{use of positional arguments with '%+#p' format specifier has undefined behavior}}
 }
 
 void test_long_pointer(void * __capability p) {
@@ -18,6 +24,11 @@ void test_long_pointer(void * __capability p) {
   printf("%lp", (void *)0); // hybrid-warning{{format specifies type 'void * __capability' but the argument has type 'void *'}}
   printf("%lp", (void **)(void *)0); // hybrid-warning{{format specifies type 'void * __capability' but the argument has type 'void **'}}
   printf("%lp", (int *)(void *)0); // hybrid-warning{{format specifies type 'void * __capability' but the argument has type 'int *'}}
+  printf("%+#lp", p, 0);
+  printf("%+#lp", p); // expected-warning{{more '%' conversions than data arguments}}
+  printf("%+#lp", p, (long)0); // expected-warning{{format specifies type 'int' but the argument has type 'long'}}
+  printf("%+lp", p); // expected-warning{{flag '+' is not allowed without '#' for '%p'}}
+  printf("%+lp", p, 0); // expected-warning{{flag '+' is not allowed without '#' for '%p'}}
 }
 
 void test_invalid_length_modifiers(void *p) {
