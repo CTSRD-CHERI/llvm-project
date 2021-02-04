@@ -91,6 +91,7 @@ public:
     SuitableAlign = 128;
     WCharType = SignedInt;
     WIntType = UnsignedInt;
+    HasRISCVVTypes = true;
   }
 
   bool setCPU(const std::string &Name) override {
