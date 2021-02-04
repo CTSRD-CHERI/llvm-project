@@ -451,6 +451,8 @@ public:
   static MVT getContainerForFixedLengthVector(SelectionDAG &DAG, MVT VT,
                                               const RISCVSubtarget &Subtarget);
 
+  bool shouldRemoveExtendFromGSIndex(EVT VT) const override;
+
 private:
   void analyzeInputArgs(MachineFunction &MF, CCState &CCInfo,
                         const SmallVectorImpl<ISD::InputArg> &Ins,
@@ -496,6 +498,7 @@ private:
   SDValue lowerABS(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFixedLengthVectorFCOPYSIGNToRVV(SDValue Op,
                                                SelectionDAG &DAG) const;
+  SDValue lowerMGATHER(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFixedLengthVectorLoadToRVV(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFixedLengthVectorStoreToRVV(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFixedLengthVectorMaskedLoadToRVV(SDValue Op,
