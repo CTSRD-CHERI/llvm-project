@@ -574,7 +574,6 @@ int main(int argc, char **argv) {
   initializeWriteBitcodePassPass(Registry);
   initializeHardwareLoopsPass(Registry);
   initializeTypePromotionPass(Registry);
-  initializeReplaceWithVeclibLegacyPass(Registry);
 
   // Add the Cheri IR -> IR passes
   initializeCheriBoundAllocasPass(Registry);
