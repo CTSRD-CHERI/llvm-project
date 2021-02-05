@@ -452,7 +452,7 @@ SDValue MipsSETargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
 }
 
 bool MipsSETargetLowering::allowsMisalignedMemoryAccesses(
-    EVT VT, unsigned AS, unsigned, MachineMemOperand::Flags, bool *Fast) const {
+    EVT VT, unsigned AS, Align, MachineMemOperand::Flags, bool *Fast) const {
   // capabilities must be aligned
   if (VT.isFatPointer())
     return false;

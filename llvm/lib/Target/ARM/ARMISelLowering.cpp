@@ -16591,7 +16591,7 @@ bool ARMTargetLowering::isDesirableToTransformToIntegerOp(unsigned Opc,
 }
 
 bool ARMTargetLowering::allowsMisalignedMemoryAccesses(EVT VT, unsigned,
-                                                       unsigned Alignment,
+                                                       Align Alignment,
                                                        MachineMemOperand::Flags,
                                                        bool *Fast) const {
   // Depends what it gets converted into if the type is weird.
@@ -16670,14 +16670,14 @@ EVT ARMTargetLowering::getOptimalMemOpType(
     bool Fast;
     if (Op.size() >= 16 &&
         (Op.isAligned(Align(16)) ||
-         (allowsMisalignedMemoryAccesses(MVT::v2f64, 0, 1,
+         (allowsMisalignedMemoryAccesses(MVT::v2f64, 0, Align(1),
                                          MachineMemOperand::MONone, &Fast) &&
           Fast))) {
       return MVT::v2f64;
     } else if (Op.size() >= 8 &&
                (Op.isAligned(Align(8)) ||
                 (allowsMisalignedMemoryAccesses(
-                     MVT::f64, 0, 1, MachineMemOperand::MONone, &Fast) &&
+                     MVT::f64, 0, Align(1), MachineMemOperand::MONone, &Fast) &&
                  Fast))) {
       return MVT::f64;
     }
