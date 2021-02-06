@@ -114,6 +114,10 @@ void StackDepotUnlockAll() {
   theDepot.UnlockAll();
 }
 
+void StackDepotFree() {
+  theDepot.Free();
+}
+
 void StackDepotPrintAll() {
 #if !SANITIZER_GO
   theDepot.PrintAll();
