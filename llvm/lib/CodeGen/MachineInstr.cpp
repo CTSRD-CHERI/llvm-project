@@ -1506,7 +1506,8 @@ bool MachineInstr::mayTrap() const {
 }
 
 bool MachineInstr::isLoadFoldBarrier() const {
-  return mayStore() || isCall() || hasUnmodeledSideEffects();
+  return mayStore() || isCall() ||
+         (hasUnmodeledSideEffects() && !isPseudoProbe());
 }
 
 /// allDefsAreDead - Return true if all the defs of this instruction are dead.
