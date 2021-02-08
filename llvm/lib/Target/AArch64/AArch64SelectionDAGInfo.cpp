@@ -50,10 +50,6 @@ SDValue AArch64SelectionDAGInfo::EmitTargetCodeForMemset(
   }
   return SDValue();
 }
-bool AArch64SelectionDAGInfo::generateFMAsInMachineCombiner(
-    CodeGenOpt::Level OptLevel) const {
-  return OptLevel >= CodeGenOpt::Aggressive;
-}
 
 static const int kSetTagLoopThreshold = 176;
 
