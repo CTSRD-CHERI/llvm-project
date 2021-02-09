@@ -143,7 +143,6 @@ public:
     assert(HasCheri && "Cannot get capability type for non-CHERI");
     return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
   }
-  unsigned getMaxVectorSizeInBits() const;
 
 protected:
   // GlobalISel related APIs.
@@ -161,6 +160,7 @@ public:
   // Return the known range for the bit length of RVV data registers. A value
   // of 0 means nothing is known about that particular limit beyond what's
   // implied by the architecture.
+  unsigned getMaxRVVVectorSizeInBits() const;
   unsigned getMinRVVVectorSizeInBits() const;
   unsigned getLMULForFixedLengthVector(MVT VT) const;
   unsigned getMaxLMULForFixedLengthVectors() const;
