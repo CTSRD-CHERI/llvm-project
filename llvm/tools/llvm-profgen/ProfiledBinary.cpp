@@ -23,16 +23,15 @@
 using namespace llvm;
 using namespace sampleprof;
 
-static cl::opt<bool> ShowDisassembly("show-disassembly", cl::ReallyHidden,
-                                     cl::init(false), cl::ZeroOrMore,
-                                     cl::desc("Print disassembled code."));
+cl::opt<bool> ShowDisassemblyOnly("show-disassembly-only", cl::ReallyHidden,
+                                  cl::init(false), cl::ZeroOrMore,
+                                  cl::desc("Print disassembled code."));
 
-static cl::opt<bool> ShowSourceLocations("show-source-locations",
-                                         cl::ReallyHidden, cl::init(false),
-                                         cl::ZeroOrMore,
-                                         cl::desc("Print source locations."));
+cl::opt<bool> ShowSourceLocations("show-source-locations", cl::ReallyHidden,
+                                  cl::init(false), cl::ZeroOrMore,
+                                  cl::desc("Print source locations."));
 
-static cl::opt<bool> ShowPseudoProbe(
+cl::opt<bool> ShowPseudoProbe(
     "show-pseudo-probe", cl::ReallyHidden, cl::init(false), cl::ZeroOrMore,
     cl::desc("Print pseudo probe section and disassembled info."));
 
@@ -200,7 +199,6 @@ void ProfiledBinary::decodePseudoProbe(const ELFObjectFileBase *Obj) {
 bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
                                         SectionSymbolsTy &Symbols,
                                         const SectionRef &Section) {
-
   std::size_t SE = Symbols.size();
   uint64_t SectionOffset = Section.getAddress() - PreferredBaseAddress;
   uint64_t SectSize = Section.getSize();
@@ -212,7 +210,7 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
     return true;
 
   std::string &&SymbolName = Symbols[SI].Name.str();
-  if (ShowDisassembly)
+  if (ShowDisassemblyOnly)
     outs() << '<' << SymbolName << ">:\n";
 
   uint64_t Offset = StartOffset;
@@ -224,7 +222,7 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
                                 Offset + PreferredBaseAddress, nulls()))
       return false;
 
-    if (ShowDisassembly) {
+    if (ShowDisassemblyOnly) {
       if (ShowPseudoProbe) {
         ProbeDecoder.printProbeForAddress(outs(),
                                           Offset + PreferredBaseAddress);
@@ -258,7 +256,7 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
     Offset += Size;
   }
 
-  if (ShowDisassembly)
+  if (ShowDisassemblyOnly)
     outs() << "\n";
 
   FuncStartAddrMap[StartOffset] = Symbols[SI].Name.str();
@@ -324,7 +322,7 @@ void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
   for (std::pair<const SectionRef, SectionSymbolsTy> &SecSyms : AllSymbols)
     stable_sort(SecSyms.second);
 
-  if (ShowDisassembly)
+  if (ShowDisassemblyOnly)
     outs() << "\nDisassembly of " << FileName << ":\n";
 
   // Dissassemble a text section.
@@ -343,7 +341,7 @@ void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
     // Register the text section.
     TextSections.insert({SectionOffset, SectSize});
 
-    if (ShowDisassembly) {
+    if (ShowDisassemblyOnly) {
       StringRef SectionName = unwrapOrError(Section.getName(), FileName);
       outs() << "\nDisassembly of section " << SectionName;
       outs() << " [" << format("0x%" PRIx64, SectionOffset) << ", "
