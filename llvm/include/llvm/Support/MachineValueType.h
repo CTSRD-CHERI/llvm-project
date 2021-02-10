@@ -213,18 +213,19 @@ namespace llvm {
       nxv8f16        = 142,  // n x  8 x f16
       nxv16f16       = 143,   // n x  16 x f16
       nxv32f16       = 144,   // n x  32 x f16
-      nxv2bf16       = 145,  // n x  2 x bf16
-      nxv4bf16       = 146,  // n x  4 x bf16
-      nxv8bf16       = 147,  // n x  8 x bf16
-      nxv1f32        = 148,  // n x  1 x f32
-      nxv2f32        = 149,  // n x  2 x f32
-      nxv4f32        = 150,  // n x  4 x f32
-      nxv8f32        = 151,  // n x  8 x f32
-      nxv16f32       = 152,  // n x 16 x f32
-      nxv1f64        = 153,  // n x  1 x f64
-      nxv2f64        = 154,  // n x  2 x f64
-      nxv4f64        = 155,  // n x  4 x f64
-      nxv8f64        = 156,  // n x  8 x f64
+      nxv1bf16       = 145,  // n x  1 x bf16
+      nxv2bf16       = 146,  // n x  2 x bf16
+      nxv4bf16       = 147,  // n x  4 x bf16
+      nxv8bf16       = 148,  // n x  8 x bf16
+      nxv1f32        = 149,  // n x  1 x f32
+      nxv2f32        = 150,  // n x  2 x f32
+      nxv4f32        = 151,  // n x  4 x f32
+      nxv8f32        = 152,  // n x  8 x f32
+      nxv16f32       = 153,  // n x 16 x f32
+      nxv1f64        = 154,  // n x  1 x f64
+      nxv2f64        = 155,  // n x  2 x f64
+      nxv4f64        = 156,  // n x  4 x f64
+      nxv8f64        = 157,  // n x  8 x f64
 
       FIRST_FP_SCALABLE_VECTOR_VALUETYPE = nxv1f16,
       LAST_FP_SCALABLE_VECTOR_VALUETYPE = nxv8f64,
@@ -235,30 +236,27 @@ namespace llvm {
       FIRST_VECTOR_VALUETYPE = v1i1,
       LAST_VECTOR_VALUETYPE  = nxv8f64,
 
-      x86mmx         = 157,   // This is an X86 MMX value
+      x86mmx         = 158,   // This is an X86 MMX value
 
-      Glue           = 158,   // This glues nodes together during pre-RA sched
+      Glue           = 159,   // This glues nodes together during pre-RA sched
 
-      isVoid         = 159,   // This has no value
+      isVoid         = 160,   // This has no value
 
-      Untyped        = 160,   // This value takes a register, but has
+      Untyped        = 161,   // This value takes a register, but has
                               // unspecified type.  The register class
                               // will be determined by the opcode.
 
-      funcref        = 161,   // WebAssembly's funcref type
-      externref      = 162,   // WebAssembly's externref type
-      x86amx         = 163,   // This is an X86 AMX value
-      iFATPTR64      = 164,   // 64-bit fat pointer type
-      iFATPTR128     = 165,   // 128-bit fat pointer type
-      iFATPTR256     = 166,   // 256-bit fat pointer type
-      iFATPTR512     = 167,   // 512-bit fat pointer type
-      iFATPTRAny     = 168,   // Generic fat pointer type (must be legalised
-                               // to a sized  version)
-      FIRST_FAT_POINTER = iFATPTR64,
-      LAST_FAT_POINTER = iFATPTRAny,
-
+      funcref        = 162,   // WebAssembly's funcref type
+      externref      = 163,   // WebAssembly's externref type
+      x86amx         = 164,   // This is an X86 AMX value
+      iFATPTR64 = 165,  // 64-bit fat pointer type
+      iFATPTR128 = 166, // 128-bit fat pointer type
+      iFATPTR256 = 167, // 256-bit fat pointer type
+      iFATPTR512 = 168, // 512-bit fat pointer type
+      iFATPTRAny = 169, // Generic fat pointer type (must be legalised
+      // to a sized  version)
       FIRST_VALUETYPE =  1,   // This is always the beginning of the list.
-      LAST_VALUETYPE = 169,   // This always remains at the end of the list.
+      LAST_VALUETYPE = 170,   // This always remains at the end of the list.
 
       // This is the current maximum for LAST_VALUETYPE.
       // MVT::MAX_ALLOWED_VALUETYPE is used for asserts and to size bit vectors
@@ -614,6 +612,7 @@ namespace llvm {
       case v32bf16:
       case v64bf16:
       case v128bf16:
+      case nxv1bf16:
       case nxv2bf16:
       case nxv4bf16:
       case nxv8bf16: return bf16;
@@ -796,6 +795,7 @@ namespace llvm {
       case nxv1i32:
       case nxv1i64:
       case nxv1f16:
+      case nxv1bf16:
       case nxv1f32:
       case nxv1f64: return 1;
       }
@@ -860,6 +860,7 @@ namespace llvm {
       case nxv16i1:
       case nxv2i8:
       case nxv1i16:
+      case nxv1bf16:
       case nxv1f16: return TypeSize::Scalable(16);
       case f32 :
       case i32 :
@@ -1312,6 +1313,7 @@ namespace llvm {
           if (NumElements == 32)  return MVT::nxv32f16;
           break;
         case MVT::bf16:
+          if (NumElements == 1)  return MVT::nxv1bf16;
           if (NumElements == 2)  return MVT::nxv2bf16;
           if (NumElements == 4)  return MVT::nxv4bf16;
           if (NumElements == 8)  return MVT::nxv8bf16;

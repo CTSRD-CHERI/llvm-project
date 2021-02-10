@@ -170,40 +170,41 @@ def nxv8i64 : ValueType<512, 136>; // n x  8 x i64 vector value
 def nxv16i64: ValueType<1024,137>; // n x 16 x i64 vector value
 def nxv32i64: ValueType<2048,138>; // n x 32 x i64 vector value
 
-def nxv1f16   : ValueType<16, 139>; // n x   1 x f16 vector value
-def nxv2f16  : ValueType<32 , 140>; // n x  2 x f16 vector value
-def nxv4f16  : ValueType<64 , 141>; // n x  4 x f16 vector value
-def nxv8f16  : ValueType<128, 142>; // n x  8 x f16 vector value
-def nxv16f16  : ValueType<256,143>; // n x  16 x f16 vector value
-def nxv32f16  : ValueType<512,144>; // n x  32 x f16 vector value
-def nxv2bf16 : ValueType<32 , 145>; // n x  2 x bf16 vector value
-def nxv4bf16 : ValueType<64 , 146>; // n x  4 x bf16 vector value
-def nxv8bf16 : ValueType<128, 147>; // n x  8 x bf16 vector value
-def nxv1f32  : ValueType<32 , 148>; // n x  1 x f32 vector value
-def nxv2f32  : ValueType<64 , 149>; // n x  2 x f32 vector value
-def nxv4f32  : ValueType<128, 150>; // n x  4 x f32 vector value
-def nxv8f32  : ValueType<256, 151>; // n x  8 x f32 vector value
-def nxv16f32 : ValueType<512, 152>; // n x 16 x f32 vector value
-def nxv1f64  : ValueType<64,  153>; // n x  1 x f64 vector value
-def nxv2f64  : ValueType<128, 154>; // n x  2 x f64 vector value
-def nxv4f64  : ValueType<256, 155>; // n x  4 x f64 vector value
-def nxv8f64  : ValueType<512, 156>; // n x  8 x f64 vector value
+def nxv1f16  : ValueType<16, 139>; // n x  1 x  f16 vector value
+def nxv2f16  : ValueType<32, 140>; // n x  2 x  f16 vector value
+def nxv4f16  : ValueType<64, 141>; // n x  4 x  f16 vector value
+def nxv8f16  : ValueType<128,142>; // n x  8 x  f16 vector value
+def nxv16f16 : ValueType<256,143>; // n x 16 x  f16 vector value
+def nxv32f16 : ValueType<512,144>; // n x 32 x  f16 vector value
+def nxv1bf16 : ValueType<16, 145>; // n x  1 x bf16 vector value
+def nxv2bf16 : ValueType<32, 146>; // n x  2 x bf16 vector value
+def nxv4bf16 : ValueType<64, 147>; // n x  4 x bf16 vector value
+def nxv8bf16 : ValueType<128,148>; // n x  8 x bf16 vector value
+def nxv1f32  : ValueType<32, 149>; // n x  1 x  f32 vector value
+def nxv2f32  : ValueType<64, 150>; // n x  2 x  f32 vector value
+def nxv4f32  : ValueType<128,151>; // n x  4 x  f32 vector value
+def nxv8f32  : ValueType<256,152>; // n x  8 x  f32 vector value
+def nxv16f32 : ValueType<512,153>; // n x 16 x  f32 vector value
+def nxv1f64  : ValueType<64, 154>; // n x  1 x  f64 vector value
+def nxv2f64  : ValueType<128,155>; // n x  2 x  f64 vector value
+def nxv4f64  : ValueType<256,156>; // n x  4 x  f64 vector value
+def nxv8f64  : ValueType<512,157>; // n x  8 x  f64 vector value
 
-def x86mmx : ValueType<64 , 157>;   // X86 MMX value
-def FlagVT : ValueType<0  , 158>;   // Pre-RA sched glue
-def isVoid : ValueType<0  , 159>;   // Produces no value
-def untyped: ValueType<8  , 160>;   // Produces an untyped value
-def funcref : ValueType<0  , 161>;   // WebAssembly's funcref type
-def externref : ValueType<0  , 162>;   // WebAssembly's externref type
-def x86amx : ValueType<8192, 163>;   // X86 AMX value
-def iFATPTR64: ValueType<64, 164>;   // 64-bit fat pointer.
-def iFATPTR128: ValueType<128, 165>; // 128-bit fat pointer.
-def iFATPTR256: ValueType<256, 166>; // 256-bit fat pointer.
-def iFATPTR512: ValueType<512, 167>; // 512-bit fat pointer.
-def iFATPTRAny: ValueType<0, 168>;   // Any fat pointer.
+def x86mmx : ValueType<64,   158>; // X86 MMX value
+def FlagVT : ValueType<0,    159>; // Pre-RA sched glue
+def isVoid : ValueType<0,    160>; // Produces no value
+def untyped: ValueType<8,    161>; // Produces an untyped value
+def funcref : ValueType<0,   162>; // WebAssembly's funcref type
+def externref : ValueType<0, 163>; // WebAssembly's externref type
+def x86amx : ValueType<8192, 164>; // X86 AMX value
+def iFATPTR64: ValueType<64, 165>;   // 64-bit fat pointer.
+def iFATPTR128: ValueType<128, 166>; // 128-bit fat pointer.
+def iFATPTR256: ValueType<256, 167>; // 256-bit fat pointer.
+def iFATPTR512: ValueType<512, 168>; // 512-bit fat pointer.
+def iFATPTRAny: ValueType<0, 169>;   // Any fat pointer.
 
 def token  : ValueType<0  , 248>;   // TokenTy
-def MetadataVT: ValueType<0, 249>;  // Metadata
+def MetadataVT: ValueType<0,249>;   // Metadata
 
 // Pseudo valuetype mapped to the current pointer size to any address space.
 // Should only be used in TableGen.
