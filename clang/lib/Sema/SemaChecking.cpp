@@ -7996,8 +7996,8 @@ public:
   void HandlePlusWithoutAltForP(const char *startSpecifier,
                                 unsigned specifierLen) override;
 
-  void HandlePosittionalArgWithPlusForP(const char *startSpecifier,
-                                        unsigned specifierLen) override;
+  void HandlePositionalArgWithPlusForP(const char *startSpecifier,
+                                       unsigned specifierLen) override;
 
 };
 
@@ -8162,7 +8162,7 @@ void CheckPrintfHandler::HandlePlusWithoutAltForP(const char *startSpecifier,
                        getSpecifierRange(startSpecifier, specifierLen));
 }
 
-void CheckPrintfHandler::HandlePosittionalArgWithPlusForP(
+void CheckPrintfHandler::HandlePositionalArgWithPlusForP(
     const char *startSpecifier, unsigned specifierLen) {
   EmitFormatDiagnostic(
       S.PDiag(diag::warn_positional_arg_with_plus_for_p_is_undefined),

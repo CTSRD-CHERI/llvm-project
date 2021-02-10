@@ -721,8 +721,8 @@ public:
   virtual void HandlePlusWithoutAltForP(const char *startSpecifier,
                                         unsigned specifierLen) {}
 
-  virtual void HandlePosittionalArgWithPlusForP(const char *startSpecifier,
-                                                unsigned specifierLen) {}
+  virtual void HandlePositionalArgWithPlusForP(const char *startSpecifier,
+                                               unsigned specifierLen) {}
 
   // Printf-specific handlers.
 
