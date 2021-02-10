@@ -664,6 +664,53 @@ Lnovec:
 //
   .p2align 2
 DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_arm646jumptoEv)
+#ifdef __CHERI_PURE_CAPABILITY__
+  // skip restore of c0,c1 for now
+  ldp    c2, c3,  [c0, #0x020]
+  ldp    c4, c5,  [c0, #0x040]
+  ldp    c6, c7,  [c0, #0x060]
+  ldp    c8, c9,  [c0, #0x080]
+  ldp    c10,c11, [c0, #0x0a0]
+  ldp    c12,c13, [c0, #0x0c0]
+  ldp    c14,c15, [c0, #0x0e0]
+  // c16 and c17 were clobbered by the call into the unwinder, so no point in
+  // restoring them.
+  ldp    c18,c19, [c0, #0x120]
+  ldp    c20,c21, [c0, #0x140]
+  ldp    c22,c23, [c0, #0x160]
+  ldp    c24,c25, [c0, #0x180]
+  ldp    c26,c27, [c0, #0x1a0]
+  ldp    c28,c29, [c0, #0x1c0]
+  ldr    c30,     [c0, #0x200]  // restore pcc into clr
+
+  add    c16,c0, #0x220
+  ldp    d0, d1,  [c16, #0x000]
+  ldp    d2, d3,  [c16, #0x010]
+  ldp    d4, d5,  [c16, #0x020]
+  ldp    d6, d7,  [c16, #0x030]
+  ldp    d8, d9,  [c16, #0x040]
+  ldp    d10,d11, [c16, #0x050]
+  ldp    d12,d13, [c16, #0x060]
+  ldp    d14,d15, [c16, #0x070]
+  ldp    d16,d17, [c16, #0x080]
+  ldp    d18,d19, [c16, #0x090]
+  ldp    d20,d21, [c16, #0x0a0]
+  ldp    d22,d23, [c16, #0x0b0]
+  ldp    d24,d25, [c16, #0x0c0]
+  ldp    d26,d27, [c16, #0x0d0]
+  ldp    d28,d29, [c16, #0x0e0]
+  ldr    d30,     [c16, #0x0f0]
+  ldr    d31,     [c16, #0x0f8]
+
+  // Finally, restore csp. This must be done after the the last read from the
+  // context struct, because it is allocated on the stack, and an exception
+  // could clobber the de-allocated portion of the stack after csp has been
+  // restored.
+  ldr    c16,     [c0, #0x1f0]
+  ldp    c0, c1,  [c0, #0x000]  // restore c0,c1
+  mov    csp,c16                // restore csp
+  ret                           // jump to pcc
+#else
   // skip restore of x0,x1 for now
   ldp    x2, x3,  [x0, #0x010]
   ldp    x4, x5,  [x0, #0x020]
@@ -708,6 +755,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_arm646jumptoEv)
   ldp    x0, x1,  [x0, #0x000]  // restore x0,x1
   mov    sp,x16                 // restore sp
   ret    x30                    // jump to pc
+#endif
 
 #elif defined(__arm__) && !defined(__APPLE__)
 

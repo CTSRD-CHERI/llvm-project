@@ -824,6 +824,48 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 //
   .p2align 2
 DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
+#ifdef __CHERI_PURE_CAPABILITY__
+  stp    c0, c1,  [c0, #0x000]
+  stp    c2, c3,  [c0, #0x020]
+  stp    c4, c5,  [c0, #0x040]
+  stp    c6, c7,  [c0, #0x060]
+  stp    c8, c9,  [c0, #0x080]
+  stp    c10,c11, [c0, #0x0a0]
+  stp    c12,c13, [c0, #0x0c0]
+  stp    c14,c15, [c0, #0x0e0]
+  stp    c16,c17, [c0, #0x100]
+  stp    c18,c19, [c0, #0x120]
+  stp    c20,c21, [c0, #0x140]
+  stp    c22,c23, [c0, #0x160]
+  stp    c24,c25, [c0, #0x180]
+  stp    c26,c27, [c0, #0x1a0]
+  stp    c28,c29, [c0, #0x1c0]
+  str    c30,     [c0, #0x1e0]
+  mov    c1,csp
+  str    c1,      [c0, #0x1f0]
+  str    c30,     [c0, #0x200]    // store return address as pcc
+  // skip cpsr
+  add    c0, c0, #0x220
+  stp    d0, d1,  [c0, #0x000]
+  stp    d2, d3,  [c0, #0x010]
+  stp    d4, d5,  [c0, #0x020]
+  stp    d6, d7,  [c0, #0x030]
+  stp    d8, d9,  [c0, #0x040]
+  stp    d10,d11, [c0, #0x050]
+  stp    d12,d13, [c0, #0x060]
+  stp    d14,d15, [c0, #0x070]
+  stp    d16,d17, [c0, #0x080]
+  stp    d18,d19, [c0, #0x090]
+  stp    d20,d21, [c0, #0x0a0]
+  stp    d22,d23, [c0, #0x0b0]
+  stp    d24,d25, [c0, #0x0c0]
+  stp    d26,d27, [c0, #0x0d0]
+  stp    d28,d29, [c0, #0x0e0]
+  str    d30,     [c0, #0x0f0]
+  str    d31,     [c0, #0x0f8]
+  mov    x0, #0                   // return UNW_ESUCCESS
+  ret
+#else
   stp    x0, x1,  [x0, #0x000]
   stp    x2, x3,  [x0, #0x010]
   stp    x4, x5,  [x0, #0x020]
@@ -863,6 +905,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   str    d31,     [x0, #0x208]
   mov    x0, #0                   // return UNW_ESUCCESS
   ret
+#endif
 
 #elif defined(__arm__) && !defined(__APPLE__)
 
