@@ -255,8 +255,8 @@ static CGCallee BuildAppleKextVirtualCall(CodeGenFunction &CGF,
   CodeGenModule &CGM = CGF.CGM;
   llvm::Value *VTable = CGM.getCXXABI().getAddrOfVTable(RD, CharUnits());
   const unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-  Ty = Ty->getPointerTo(DefaultAS)->getPointerTo(DefaultAS);
-  VTable = CGF.Builder.CreateBitCast(VTable, Ty);
+  Ty = Ty->getPointerTo(DefaultAS);
+  VTable = CGF.Builder.CreateBitCast(VTable, Ty->getPointerTo(DefaultAS));
   assert(VTable && "BuildVirtualCall = kext vtbl pointer is null");
   uint64_t VTableIndex = CGM.getItaniumVTableContext().getMethodVTableIndex(GD);
   const VTableLayout &VTLayout = CGM.getItaniumVTableContext().getVTableLayout(RD);
@@ -267,7 +267,7 @@ static CGCallee BuildAppleKextVirtualCall(CodeGenFunction &CGF,
   llvm::Value *VFuncPtr =
     CGF.Builder.CreateConstInBoundsGEP1_64(VTable, VTableIndex, "vfnkxt");
   llvm::Value *VFunc = CGF.Builder.CreateAlignedLoad(
-      VFuncPtr, llvm::Align(CGF.PointerAlignInBytes));
+      Ty, VFuncPtr, llvm::Align(CGF.PointerAlignInBytes));
   CGCallee Callee(GD, VFunc);
   return Callee;
 }
