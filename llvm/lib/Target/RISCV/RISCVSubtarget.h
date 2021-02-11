@@ -62,6 +62,7 @@ class RISCVSubtarget : public RISCVGenSubtargetInfo {
   bool IsCapMode = false;
   bool EnableLinkerRelax = false;
   bool EnableRVCHintInstrs = true;
+  bool EnableCheriRVCInstrs = false;
   bool EnableSaveRestore = false;
   unsigned XLen = 32;
   MVT XLenVT = MVT::i32;
@@ -131,6 +132,7 @@ public:
   bool isCapMode() const { return IsCapMode; }
   bool enableLinkerRelax() const { return EnableLinkerRelax; }
   bool enableRVCHintInstrs() const { return EnableRVCHintInstrs; }
+  bool enableCheriRVCInstrs() const { return EnableCheriRVCInstrs; }
   bool enableSaveRestore() const { return EnableSaveRestore; }
   MVT getXLenVT() const { return XLenVT; }
   unsigned getXLen() const { return XLen; }

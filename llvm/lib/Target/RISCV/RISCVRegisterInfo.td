@@ -269,6 +269,13 @@ def GPRC : RegisterClass<"RISCV", [XLenVT], 32, (add
   let RegInfos = XLenRI;
 }
 
+def GPCRC : RegisterClass<"RISCV", [CLenVT], 64, (add
+    (sequence "C%u", 10, 15),
+    (sequence "C%u", 8, 9)
+  )> {
+  let RegInfos = CLenRI;
+}
+
 // For indirect tail calls, we can't use callee-saved registers, as they are
 // restored to the saved value before the tail call, which would clobber a call
 // address.
@@ -290,6 +297,10 @@ def GPCRTC : RegisterClass<"RISCV", [CLenVT], 64, (add
 
 def SP : RegisterClass<"RISCV", [XLenVT], 32, (add X2)> {
   let RegInfos = XLenRI;
+}
+
+def CSP : RegisterClass<"RISCV", [CLenVT], 64, (add C2)> {
+  let RegInfos = CLenRI;
 }
 
 // Floating point registers
