@@ -7521,6 +7521,7 @@ int LLParser::parseAtomicRMW(Instruction *&Inst, PerFunctionState &PFS) {
   bool isVolatile = false;
   bool IsFP = false;
   AtomicRMWInst::BinOp Operation;
+  MaybeAlign Alignment;
 
   if (EatIfPresent(lltok::kw_volatile))
     isVolatile = true;
@@ -7553,7 +7554,8 @@ int LLParser::parseAtomicRMW(Instruction *&Inst, PerFunctionState &PFS) {
   if (parseTypeAndValue(Ptr, PtrLoc, PFS) ||
       parseToken(lltok::comma, "expected ',' after atomicrmw address") ||
       parseTypeAndValue(Val, ValLoc, PFS) ||
-      parseScopeAndOrdering(true /*Always atomic*/, SSID, Ordering))
+      parseScopeAndOrdering(true /*Always atomic*/, SSID, Ordering) ||
+      parseOptionalCommaAlign(Alignment, AteExtraComma))
     return true;
 
   if (Ordering == AtomicOrdering::Unordered)
@@ -7591,11 +7593,12 @@ int LLParser::parseAtomicRMW(Instruction *&Inst, PerFunctionState &PFS) {
       return error(ValLoc, "atomicrmw operand must be power-of-two byte-sized"
                            " integer");
   }
-  Align Alignment(
+  const Align DefaultAlignment(
       PFS.getFunction().getParent()->getDataLayout().getTypeStoreSize(
           Val->getType()));
   AtomicRMWInst *RMWI =
-      new AtomicRMWInst(Operation, Ptr, Val, Alignment, Ordering, SSID);
+      new AtomicRMWInst(Operation, Ptr, Val,
+                        Alignment.getValueOr(DefaultAlignment), Ordering, SSID);
   RMWI->setVolatile(isVolatile);
   Inst = RMWI;
   return AteExtraComma ? InstExtraComma : InstNormal;
