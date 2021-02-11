@@ -103,6 +103,9 @@ enum Fixups {
   // fixup_riscv_call - A fixup representing a ccall attached to the auipcc
   // instruction in a pair composed of adjacent auipcc+cjalr instructions.
   fixup_riscv_ccall,
+  // fixup_riscv_rvc_cjump - 11-bit fixup for symbol references in the
+  // compressed capability jump instruction
+  fixup_riscv_rvc_cjump,
 
   // fixup_riscv_invalid - used as a sentinel and a marker, must be last fixup
   fixup_riscv_invalid,

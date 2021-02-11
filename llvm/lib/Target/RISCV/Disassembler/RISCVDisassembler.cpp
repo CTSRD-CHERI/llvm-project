@@ -168,6 +168,16 @@ static DecodeStatus DecodeGPRNoX0RegisterClass(MCInst &Inst, uint64_t RegNo,
   return DecodeGPRRegisterClass(Inst, RegNo, Address, Decoder);
 }
 
+static DecodeStatus DecodeGPCRNoC0RegisterClass(MCInst &Inst, uint64_t RegNo,
+                                                uint64_t Address,
+                                                const void *Decoder) {
+  if (RegNo == 0) {
+    return MCDisassembler::Fail;
+  }
+
+  return DecodeGPCRRegisterClass(Inst, RegNo, Address, Decoder);
+}
+
 static DecodeStatus DecodeGPRNoX0X2RegisterClass(MCInst &Inst, uint64_t RegNo,
                                                  uint64_t Address,
                                                  const void *Decoder) {
@@ -185,6 +195,17 @@ static DecodeStatus DecodeGPRCRegisterClass(MCInst &Inst, uint64_t RegNo,
     return MCDisassembler::Fail;
 
   MCRegister Reg = RISCV::X8 + RegNo;
+  Inst.addOperand(MCOperand::createReg(Reg));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodeGPCRCRegisterClass(MCInst &Inst, uint64_t RegNo,
+                                             uint64_t Address,
+                                             const void *Decoder) {
+  if (RegNo >= 8)
+    return MCDisassembler::Fail;
+
+  MCRegister Reg = RISCV::C8 + RegNo;
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
 }
@@ -291,6 +312,21 @@ static void addImplySP(MCInst &Inst, int64_t Address, const void *Decoder) {
   if (Inst.getOpcode() == RISCV::C_ADDI16SP) {
     DecodeGPRRegisterClass(Inst, 2, Address, Decoder);
     DecodeGPRRegisterClass(Inst, 2, Address, Decoder);
+  }
+  if (Inst.getOpcode() == RISCV::C_CLWCSP || Inst.getOpcode() == RISCV::C_CSWCSP ||
+      Inst.getOpcode() == RISCV::C_CLDCSP || Inst.getOpcode() == RISCV::C_CSDCSP ||
+      Inst.getOpcode() == RISCV::C_CLCCSP_64 ||
+      Inst.getOpcode() == RISCV::C_CSCCSP_64 ||
+      Inst.getOpcode() == RISCV::C_CLCCSP_128 ||
+      Inst.getOpcode() == RISCV::C_CSCCSP_128 ||
+      Inst.getOpcode() == RISCV::C_CFLDCSP ||
+      Inst.getOpcode() == RISCV::C_CFSDCSP ||
+      Inst.getOpcode() == RISCV::C_CIncOffsetImm4CSPN) {
+    DecodeGPCRRegisterClass(Inst, 2, Address, Decoder);
+  }
+  if (Inst.getOpcode() == RISCV::C_CIncOffsetImm16CSP) {
+    DecodeGPCRRegisterClass(Inst, 2, Address, Decoder);
+    DecodeGPCRRegisterClass(Inst, 2, Address, Decoder);
   }
 }
 
@@ -497,11 +533,32 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
     }
     Insn = support::endian::read16le(Bytes.data());
 
+    if (!STI.getFeatureBits()[RISCV::Feature64Bit] &&
+        STI.getFeatureBits()[RISCV::FeatureCapMode]) {
+      LLVM_DEBUG(dbgs() << "Trying RISCV32CapModeOnly_16 table:\n");
+      Result = decodeInstruction(DecoderTableRISCV32CapModeOnly_16, MI, Insn,
+                                 Address, this, STI);
+      if (Result != MCDisassembler::Fail) {
+        Size = 2;
+        return Result;
+      }
+    }
+
     if (!STI.getFeatureBits()[RISCV::Feature64Bit]) {
       LLVM_DEBUG(
           dbgs() << "Trying RISCV32Only_16 table (16-bit Instruction):\n");
       // Calling the auto-generated decoder function.
       Result = decodeInstruction(DecoderTableRISCV32Only_16, MI, Insn, Address,
+                                 this, STI);
+      if (Result != MCDisassembler::Fail) {
+        Size = 2;
+        return Result;
+      }
+    }
+
+    if (STI.getFeatureBits()[RISCV::FeatureCapMode]) {
+      LLVM_DEBUG(dbgs() << "Trying CapModeOnly_16 table:\n");
+      Result = decodeInstruction(DecoderTableCapModeOnly_16, MI, Insn, Address,
                                  this, STI);
       if (Result != MCDisassembler::Fail) {
         Size = 2;

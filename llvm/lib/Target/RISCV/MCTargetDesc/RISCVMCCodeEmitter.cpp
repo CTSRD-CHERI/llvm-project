@@ -464,7 +464,10 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
     } else if (MIFrm == RISCVII::InstFormatB) {
       FixupKind = RISCV::fixup_riscv_branch;
     } else if (MIFrm == RISCVII::InstFormatCJ) {
-      FixupKind = RISCV::fixup_riscv_rvc_jump;
+      if (Desc.getOpcode() == RISCV::C_CJAL)
+        FixupKind = RISCV::fixup_riscv_rvc_cjump;
+      else
+        FixupKind = RISCV::fixup_riscv_rvc_jump;
     } else if (MIFrm == RISCVII::InstFormatCB) {
       FixupKind = RISCV::fixup_riscv_rvc_branch;
     }
