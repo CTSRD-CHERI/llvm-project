@@ -80,6 +80,7 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
        MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_riscv_cjal", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_riscv_ccall", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_riscv_rvc_cjump", 2, 11, MCFixupKindInfo::FKF_IsPCRel},
   };
   static_assert((array_lengthof(Infos)) == RISCV::NumTargetFixupKinds,
                 "Not all fixup kinds added to Infos array");
@@ -149,6 +150,7 @@ bool RISCVAsmBackend::fixupNeedsRelaxationAdvanced(const MCFixup &Fixup,
     // in the range [-256, 254].
     return Offset > 254 || Offset < -256;
   case RISCV::fixup_riscv_rvc_jump:
+  case RISCV::fixup_riscv_rvc_cjump:
     // For compressed jump instructions the immediate must be
     // in the range [-2048, 2046].
     return Offset > 2046 || Offset < -2048;
@@ -159,6 +161,8 @@ void RISCVAsmBackend::relaxInstruction(MCInst &Inst,
                                        const MCSubtargetInfo &STI) const {
   // TODO: replace this with call to auto generated uncompressinstr() function.
   MCInst Res;
+  bool IsCapMode = STI.getFeatureBits()[RISCV::FeatureCapMode];
+
   switch (Inst.getOpcode()) {
   default:
     llvm_unreachable("Opcode not expected!");
@@ -177,15 +181,21 @@ void RISCVAsmBackend::relaxInstruction(MCInst &Inst,
     Res.addOperand(Inst.getOperand(1));
     break;
   case RISCV::C_J:
-    // c.j $imm -> jal X0, $imm.
-    Res.setOpcode(RISCV::JAL);
-    Res.addOperand(MCOperand::createReg(RISCV::X0));
+    // c.j $imm -> (c)jal [XC]0, $imm.
+    Res.setOpcode(IsCapMode ? RISCV::CJAL : RISCV::JAL);
+    Res.addOperand(MCOperand::createReg(IsCapMode ? RISCV::C0 : RISCV::X0));
     Res.addOperand(Inst.getOperand(0));
     break;
   case RISCV::C_JAL:
     // c.jal $imm -> jal X1, $imm.
     Res.setOpcode(RISCV::JAL);
     Res.addOperand(MCOperand::createReg(RISCV::X1));
+    Res.addOperand(Inst.getOperand(0));
+    break;
+  case RISCV::C_CJAL:
+    // c.cjal $imm -> cjal C1, $imm.
+    Res.setOpcode(RISCV::CJAL);
+    Res.addOperand(MCOperand::createReg(RISCV::C1));
     Res.addOperand(Inst.getOperand(0));
     break;
   }
@@ -195,6 +205,8 @@ void RISCVAsmBackend::relaxInstruction(MCInst &Inst,
 // Given a compressed control flow instruction this function returns
 // the expanded instruction.
 unsigned RISCVAsmBackend::getRelaxedOpcode(unsigned Op) const {
+  bool IsCapMode = STI.getFeatureBits()[RISCV::FeatureCapMode];
+
   switch (Op) {
   default:
     return Op;
@@ -203,8 +215,11 @@ unsigned RISCVAsmBackend::getRelaxedOpcode(unsigned Op) const {
   case RISCV::C_BNEZ:
     return RISCV::BNE;
   case RISCV::C_J:
-  case RISCV::C_JAL: // fall through.
+    return IsCapMode ? RISCV::CJAL : RISCV::JAL;
+  case RISCV::C_JAL:
     return RISCV::JAL;
+  case RISCV::C_CJAL:
+    return RISCV::CJAL;
   }
 }
 
@@ -309,7 +324,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     uint64_t LowerImm = Value & 0xfffULL;
     return UpperImm | ((LowerImm << 20) << 32);
   }
-  case RISCV::fixup_riscv_rvc_jump: {
+  case RISCV::fixup_riscv_rvc_jump:
+  case RISCV::fixup_riscv_rvc_cjump: {
     // Need to produce offset[11|4|9:8|10|6|7|3:1|5] from the 11-bit Value.
     unsigned Bit11  = (Value >> 11) & 0x1;
     unsigned Bit4   = (Value >> 4) & 0x1;
