@@ -69,8 +69,8 @@
 // RUN: ld.lld -shared %t-riscv64.o -o %t.so
 // RUN: llvm-readelf -r --cap-relocs %t.so | FileCheck %s --check-prefixes=RV64-RELOCS
 // RV64-RELOCS: CHERI __cap_relocs [
-// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+112) Length: 144 Perms: Function
-// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+80) Length: 144 Perms: Function
+// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+96) Length: 120 Perms: Function
+// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+72) Length: 120 Perms: Function
 // RV64-RELOCS-NEXT: ]
 
 long external_fn(long arg);
