@@ -1349,7 +1349,8 @@ namespace {
         CGF.EmitBlock(RethrowBB);
         if (SavedExnVar) {
           CGF.EmitRuntimeCallOrInvoke(RethrowFn,
-            CGF.Builder.CreateAlignedLoad(SavedExnVar, CGF.getPointerAlign()));
+            CGF.Builder.CreateAlignedLoad(CGF.Int8PtrTy, SavedExnVar,
+                                          CGF.getPointerAlign()));
         } else {
           CGF.EmitRuntimeCallOrInvoke(RethrowFn);
         }
@@ -2047,8 +2048,8 @@ void CodeGenFunction::EmitSEHExceptionCodeSave(CodeGenFunction &ParentCGF,
   llvm::Value *Ptrs = Builder.CreateBitCast(SEHInfo,
                                             PtrsTy->getPointerTo(DefaultAS));
   llvm::Value *Rec = Builder.CreateStructGEP(PtrsTy, Ptrs, 0);
-  Rec = Builder.CreateAlignedLoad(Rec, getPointerAlign());
-  llvm::Value *Code = Builder.CreateAlignedLoad(Rec, getIntAlign());
+  Rec = Builder.CreateAlignedLoad(RecordTy, Rec, getPointerAlign());
+  llvm::Value *Code = Builder.CreateAlignedLoad(Int32Ty, Rec, getIntAlign());
   assert(!SEHCodeSlotStack.empty() && "emitting EH code outside of __except");
   Builder.CreateStore(Code, SEHCodeSlotStack.back());
 }

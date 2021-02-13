@@ -781,7 +781,8 @@ class CGObjCGNUstep : public CGObjCGNU {
 
       // Load the imp from the slot
       llvm::Value *imp = Builder.CreateAlignedLoad(
-          Builder.CreateStructGEP(nullptr, slot, 4), CGF.getPointerAlign());
+          IMPTy, Builder.CreateStructGEP(nullptr, slot, 4),
+          CGF.getPointerAlign());
 
       // The lookup function may have changed the receiver, so make sure we use
       // the new one.
@@ -799,8 +800,9 @@ class CGObjCGNUstep : public CGObjCGNU {
         CGF.EmitNounwindRuntimeCall(SlotLookupSuperFn, lookupArgs);
       slot->setOnlyReadsMemory();
 
-      return Builder.CreateAlignedLoad(Builder.CreateStructGEP(nullptr, slot, 4),
-                                       CGF.getPointerAlign());
+      return Builder.CreateAlignedLoad(
+          IMPTy, Builder.CreateStructGEP(nullptr, slot, 4),
+          CGF.getPointerAlign());
     }
 
   public:
@@ -1330,7 +1332,8 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
       Ref = GV;
     }
     EmittedProtocolRef = true;
-    return CGF.Builder.CreateAlignedLoad(Ref, CGM.getPointerAlign());
+    return CGF.Builder.CreateAlignedLoad(ProtocolPtrTy, Ref,
+                                         CGM.getPointerAlign());
   }
 
   llvm::Constant *GenerateProtocolList(ArrayRef<llvm::Constant*> Protocols) {
@@ -1691,7 +1694,8 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
       IvarOffsetPointer = new llvm::GlobalVariable(TheModule, IntTy, false,
               llvm::GlobalValue::ExternalLinkage, nullptr, Name);
     CharUnits Align = CGM.getIntAlign();
-    llvm::Value *Offset = CGF.Builder.CreateAlignedLoad(IvarOffsetPointer, Align);
+    llvm::Value *Offset =
+        CGF.Builder.CreateAlignedLoad(IntTy, IvarOffsetPointer, Align);
     if (Offset->getType() != PtrDiffTy)
       Offset = CGF.Builder.CreateZExtOrBitCast(Offset, PtrDiffTy);
     return Offset;
@@ -2564,7 +2568,7 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
       ReceiverClass = Builder.CreateBitCast(
           ReceiverClass, CGF.CGM.getPointerInDefaultAS(IdTy));
       ReceiverClass =
-        Builder.CreateAlignedLoad(ReceiverClass, CGF.getPointerAlign());
+        Builder.CreateAlignedLoad(IdTy, ReceiverClass, CGF.getPointerAlign());
     }
     ReceiverClass = EnforceType(Builder, ReceiverClass, IdTy);
   } else {
@@ -2609,7 +2613,7 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
     ReceiverClass = Builder.CreateStructGEP(CastTy, ReceiverClass, 1);
     // Load the superclass pointer
     ReceiverClass =
-      Builder.CreateAlignedLoad(ReceiverClass, CGF.getPointerAlign());
+      Builder.CreateAlignedLoad(IdTy, ReceiverClass, CGF.getPointerAlign());
   }
   // Construct the structure used to look up the IMP
   llvm::StructType *ObjCSuperTy =
@@ -4126,6 +4130,7 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
       return CGF.Builder.CreateZExtOrBitCast(
           CGF.Builder.CreateAlignedLoad(
               Int32Ty, CGF.Builder.CreateAlignedLoad(
+                           llvm::Type::getInt32PtrTy(VMContext),
                            ObjCIvarOffsetVariable(Interface, Ivar),
                            CGF.getPointerAlign(), "ivar"),
               CharUnits::fromQuantity(4)),
@@ -4143,7 +4148,7 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
       GV->setAlignment(Align.getAsAlign());
       Offset = GV;
     }
-    Offset = CGF.Builder.CreateAlignedLoad(Offset, Align);
+    Offset = CGF.Builder.CreateAlignedLoad(IntTy, Offset, Align);
     if (Offset->getType() != PtrDiffTy)
       Offset = CGF.Builder.CreateZExtOrBitCast(Offset, PtrDiffTy);
     return Offset;

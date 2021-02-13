@@ -1921,12 +1921,13 @@ CGCallee MicrosoftCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
   CGBuilderTy &Builder = CGF.Builder;
 
   unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-  Ty = Ty->getPointerTo(DefaultAS)->getPointerTo(DefaultAS);
+  Ty = Ty->getPointerTo(DefaultAS);
   Address VPtr =
       adjustThisArgumentForVirtualFunctionCall(CGF, GD, This, true);
 
   auto *MethodDecl = cast<CXXMethodDecl>(GD.getDecl());
-  llvm::Value *VTable = CGF.GetVTablePtr(VPtr, Ty, MethodDecl->getParent());
+  llvm::Value *VTable = CGF.GetVTablePtr(VPtr, Ty->getPointerTo(DefaultAS),
+                                         MethodDecl->getParent());
 
   MicrosoftVTableContext &VFTContext = CGM.getMicrosoftVTableContext();
   MethodVFTableLocation ML = VFTContext.getMethodVFTableLocation(GD);
@@ -1954,7 +1955,7 @@ CGCallee MicrosoftCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
 
     llvm::Value *VFuncPtr =
         Builder.CreateConstInBoundsGEP1_64(VTable, ML.Index, "vfn");
-    VFunc = Builder.CreateAlignedLoad(VFuncPtr, CGF.getPointerAlign());
+    VFunc = Builder.CreateAlignedLoad(Ty, VFuncPtr, CGF.getPointerAlign());
   }
 
   CGCallee Callee(GD, VFunc);
@@ -2089,7 +2090,8 @@ MicrosoftCXXABI::EmitVirtualMemPtrThunk(const CXXMethodDecl *MD,
   llvm::Value *VFuncPtr =
       CGF.Builder.CreateConstInBoundsGEP1_64(VTable, ML.Index, "vfn");
   llvm::Value *Callee =
-    CGF.Builder.CreateAlignedLoad(VFuncPtr, CGF.getPointerAlign());
+    CGF.Builder.CreateAlignedLoad(ThunkTy->getPointerTo(), VFuncPtr,
+                                  CGF.getPointerAlign());
 
   CGF.EmitMustTailThunk(MD, getThisValue(CGF), {ThunkTy, Callee});
 
@@ -3036,7 +3038,8 @@ MicrosoftCXXABI::GetVBaseOffsetFromVBPtr(CodeGenFunction &CGF,
     VBPtrAlign = CGF.getPointerAlign();
   }
 
-  llvm::Value *VBTable = Builder.CreateAlignedLoad(VBPtr, VBPtrAlign, "vbtable");
+  llvm::Value *VBTable = Builder.CreateAlignedLoad(
+      CGM.Int32Ty->getPointerTo(0), VBPtr, VBPtrAlign, "vbtable");
 
   // Translate from byte offset to table index. It improves analyzability.
   llvm::Value *VBTableIndex = Builder.CreateAShr(
@@ -3046,8 +3049,8 @@ MicrosoftCXXABI::GetVBaseOffsetFromVBPtr(CodeGenFunction &CGF,
   // Load an i32 offset from the vb-table.
   llvm::Value *VBaseOffs = Builder.CreateInBoundsGEP(VBTable, VBTableIndex);
   VBaseOffs = Builder.CreateBitCast(VBaseOffs, CGM.Int32Ty->getPointerTo(0));
-  return Builder.CreateAlignedLoad(VBaseOffs, CharUnits::fromQuantity(4),
-                                   "vbase_offs");
+  return Builder.CreateAlignedLoad(CGM.Int32Ty, VBaseOffs,
+                                   CharUnits::fromQuantity(4), "vbase_offs");
 }
 
 // Returns an adjusted base cast to i8*, since we do more address arithmetic on
@@ -3309,7 +3312,8 @@ llvm::Value *MicrosoftCXXABI::EmitNonNullMemberPointerConversion(
       } else {
         llvm::Value *Idxs[] = {getZeroInt(), VBIndex};
         VirtualBaseAdjustmentOffset =
-            Builder.CreateAlignedLoad(Builder.CreateInBoundsGEP(VDispMap, Idxs),
+            Builder.CreateAlignedLoad(CGM.IntTy,
+                                      Builder.CreateInBoundsGEP(VDispMap, Idxs),
                                       CharUnits::fromQuantity(4));
       }
 
