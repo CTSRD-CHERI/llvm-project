@@ -2037,7 +2037,7 @@ bool TargetLowering::SimplifyDemandedBits(
 
         const APInt *ShAmtC =
             TLO.DAG.getValidShiftAmountConstant(Src, DemandedElts);
-        if (!ShAmtC)
+        if (!ShAmtC || ShAmtC->uge(BitWidth))
           break;
         uint64_t ShVal = ShAmtC->getZExtValue();
 
