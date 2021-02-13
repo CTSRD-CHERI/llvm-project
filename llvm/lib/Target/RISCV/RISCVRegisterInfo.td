@@ -280,7 +280,7 @@ def GPRTC : RegisterClass<"RISCV", [XLenVT], 32, (add
   let RegInfos = XLenRI;
 }
 
-def GPCRTC : RegisterClass<"RISCV", [CLenVT], 32, (add
+def GPCRTC : RegisterClass<"RISCV", [CLenVT], 64, (add
     (sequence "C%u", 5, 7),
     (sequence "C%u", 10, 17),
     (sequence "C%u", 28, 31)
