@@ -45,7 +45,7 @@ public:
 
   bool SelectAddrFI(SDValue Addr, SDValue &Base);
   bool SelectCapFI(SDValue Cap, SDValue &Base);
-  bool SelectRVVBaseAddr(SDValue Addr, SDValue &Base);
+  bool SelectBaseAddr(SDValue Addr, SDValue &Base);
 
   bool selectShiftMask(SDValue N, unsigned ShiftWidth, SDValue &ShAmt);
   bool selectShiftMaskXLen(SDValue N, SDValue &ShAmt) {

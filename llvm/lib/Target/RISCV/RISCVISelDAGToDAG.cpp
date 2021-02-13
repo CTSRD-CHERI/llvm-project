@@ -929,7 +929,7 @@ bool RISCVDAGToDAGISel::SelectCapFI(SDValue Cap, SDValue &Base) {
   return false;
 }
 
-bool RISCVDAGToDAGISel::SelectRVVBaseAddr(SDValue Addr, SDValue &Base) {
+bool RISCVDAGToDAGISel::SelectBaseAddr(SDValue Addr, SDValue &Base) {
   // If this is FrameIndex, select it directly. Otherwise just let it get
   // selected to a register independently.
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr))
