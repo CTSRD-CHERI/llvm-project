@@ -1482,7 +1482,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       Src = EmitScalarConversion(Src, SrcType, ConvertedType, Loc, Opts);
       SrcType = ConvertedType;
     }
-    assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
+    assert(SrcType->isIntegralOrEnumerationType() &&
+           "Not ptr->ptr or int->ptr conversion?");
 
     // First, convert to the correct width so that we control the kind of
     // extension.
