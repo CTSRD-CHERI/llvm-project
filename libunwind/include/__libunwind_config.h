@@ -169,8 +169,8 @@
 #  if __riscv_xlen == 64
 #    define _LIBUNWIND_TARGET_RISCV 1
 #    ifdef __CHERI_PURE_CAPABILITY__
-#      define _LIBUNWIND_CONTEXT_SIZE 98
-#      define _LIBUNWIND_CURSOR_SIZE 121
+#      define _LIBUNWIND_CONTEXT_SIZE 96
+#      define _LIBUNWIND_CURSOR_SIZE 120
 #    else
 #      define _LIBUNWIND_CONTEXT_SIZE 64
 #      define _LIBUNWIND_CURSOR_SIZE 76

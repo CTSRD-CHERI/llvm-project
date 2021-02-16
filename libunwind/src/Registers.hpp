@@ -4256,9 +4256,6 @@ private:
   // _registers[0] holds the pc
   uintptr_t _registers[32];
   double   _floats[32];
-#ifdef __CHERI_PURE_CAPABILITY__
-  uintcap_t _ddc;
-#endif
 };
 
 inline Registers_riscv::Registers_riscv(const void *registers) {
@@ -4275,21 +4272,11 @@ inline Registers_riscv::Registers_riscv(const void *registers) {
   memcpy(&_floats,
          static_cast<const uint8_t *>(registers) + sizeof(_registers),
          sizeof(_floats));
-#ifdef __CHERI_PURE_CAPABILITY__
-  static_assert(sizeof(_registers) + sizeof(_floats) == 0x300,
-                "expected float registers to be at offset 768");
-  memcpy(&_ddc,
-         static_cast<const uint8_t *>(registers) + sizeof(_registers) + sizeof(_floats),
-         sizeof(_ddc));
-#endif
 }
 
 inline Registers_riscv::Registers_riscv() {
   memset(&_registers, 0, sizeof(_registers));
   memset(&_floats, 0, sizeof(_floats));
-#ifdef __CHERI_PURE_CAPABILITY__
-  memset(&_ddc, 0, sizeof(_ddc));
-#endif
 }
 
 inline bool Registers_riscv::validRegister(int regNum) const {
@@ -4299,10 +4286,6 @@ inline bool Registers_riscv::validRegister(int regNum) const {
     return true;
   if (regNum < 0)
     return false;
-#ifdef __CHERI_PURE_CAPABILITY__
-  if (regNum == UNW_RISCV_DDC)
-    return true;
-#endif
   if (regNum > UNW_RISCV_F31)
     return false;
   return true;
@@ -4317,10 +4300,6 @@ inline uintptr_t Registers_riscv::getRegister(int regNum) const {
     return 0;
   if ((regNum > 0) && (regNum < 32))
     return _registers[regNum];
-#ifdef __CHERI_PURE_CAPABILITY__
-  if (regNum == UNW_RISCV_DDC)
-    return _ddc;
-#endif
   _LIBUNWIND_ABORT("unsupported riscv register");
 }
 
@@ -4332,10 +4311,6 @@ inline void Registers_riscv::setRegister(int regNum, uintptr_t value) {
   else if (regNum == UNW_RISCV_X0)
     /* x0 is hardwired to zero */
     return;
-#ifdef __CHERI_PURE_CAPABILITY__
-  else if (regNum == UNW_RISCV_DDC)
-    _ddc = value;
-#endif
   else if ((regNum > 0) && (regNum < 32))
     _registers[regNum] = value;
   else
@@ -4350,8 +4325,6 @@ inline bool Registers_riscv::validCapabilityRegister(int regNum) const {
     return true;
   if (regNum < 0)
     return false;
-  if (regNum == UNW_RISCV_DDC)
-    return true;
   if (regNum > UNW_RISCV_X31)
     return false;
   return true;
@@ -4502,10 +4475,6 @@ inline const char *Registers_riscv::getRegisterName(int regNum) {
     return "ft10";
   case UNW_RISCV_F31:
     return "ft11";
-#ifdef __CHERI_PURE_CAPABILITY__
-  case UNW_RISCV_DDC:
-    return "ddc";
-#endif
   default:
     return "unknown register";
   }
