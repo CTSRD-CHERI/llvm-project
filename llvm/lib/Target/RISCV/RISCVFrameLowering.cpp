@@ -546,13 +546,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
       // track the current stack after allocating variable sized objects.
       if (hasBP(MF)) {
         // move BP, SP
-        if (RISCVABI::isCheriPureCapABI(STI.getTargetABI()))
-          BuildMI(MBB, MBBI, DL, TII->get(RISCV::CMove), BPReg)
-              .addReg(SPReg);
-        else
-          BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), BPReg)
-              .addReg(SPReg)
-              .addImm(0);
+        TII->copyPhysReg(MBB, MBBI, DL, BPReg, SPReg, false);
       }
     }
   }
