@@ -201,6 +201,10 @@ enum NodeType : unsigned {
   // Matches the semantics of vrgather.vx with an extra operand for VL.
   VRGATHER_VX_VL,
 
+  // Vector sign/zero extend with additional mask & VL operands.
+  VSEXT_VL,
+  VZEXT_VL,
+
   // Memory opcodes start here.
   VLE_VL = ISD::FIRST_TARGET_MEMORY_OPCODE,
   VSE_VL,
@@ -452,6 +456,8 @@ private:
                                             SelectionDAG &DAG) const;
   SDValue lowerToScalableOp(SDValue Op, SelectionDAG &DAG, unsigned NewOpc,
                             bool HasMask = true) const;
+  SDValue lowerFixedLengthVectorExtendToRVV(SDValue Op, SelectionDAG &DAG,
+                                            unsigned ExtendOpc) const;
 
   bool hasCapabilitySetAddress() const override { return true; }
 
