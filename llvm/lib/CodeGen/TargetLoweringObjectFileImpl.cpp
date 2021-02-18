@@ -2162,8 +2162,9 @@ MCSection *TargetLoweringObjectFileXCOFF::getExplicitSectionGlobal(
   else
     report_fatal_error("XCOFF other section types not yet implemented.");
 
-  return getContext().getXCOFFSection(SectionName, MappingClass, XCOFF::XTY_SD,
-                                      Kind, /* MultiSymbolsAllowed*/ true);
+  return getContext().getXCOFFSection(
+      SectionName, Kind, XCOFF::CsectProperties(MappingClass, XCOFF::XTY_SD),
+      /* MultiSymbolsAllowed*/ true);
 }
 
 MCSection *TargetLoweringObjectFileXCOFF::getSectionForExternalReference(
@@ -2176,8 +2177,9 @@ MCSection *TargetLoweringObjectFileXCOFF::getSectionForExternalReference(
 
   // Externals go into a csect of type ER.
   return getContext().getXCOFFSection(
-      Name, isa<Function>(GO) ? XCOFF::XMC_DS : XCOFF::XMC_UA, XCOFF::XTY_ER,
-      SectionKind::getMetadata());
+      Name, SectionKind::getMetadata(),
+      XCOFF::CsectProperties(isa<Function>(GO) ? XCOFF::XMC_DS : XCOFF::XMC_UA,
+                             XCOFF::XTY_ER));
 }
 
 MCSection *TargetLoweringObjectFileXCOFF::SelectSectionForGlobal(
@@ -2188,8 +2190,9 @@ MCSection *TargetLoweringObjectFileXCOFF::SelectSectionForGlobal(
     SmallString<128> Name;
     getNameWithPrefix(Name, GO, TM);
     return getContext().getXCOFFSection(
-        Name, Kind.isBSSLocal() ? XCOFF::XMC_BS : XCOFF::XMC_RW, XCOFF::XTY_CM,
-        Kind);
+        Name, Kind,
+        XCOFF::CsectProperties(
+            Kind.isBSSLocal() ? XCOFF::XMC_BS : XCOFF::XMC_RW, XCOFF::XTY_CM));
   }
 
   if (Kind.isMergeableCString()) {
@@ -2205,7 +2208,7 @@ MCSection *TargetLoweringObjectFileXCOFF::SelectSectionForGlobal(
       getNameWithPrefix(Name, GO, TM);
 
     return getContext().getXCOFFSection(
-        Name, XCOFF::XMC_RO, XCOFF::XTY_SD, Kind,
+        Name, Kind, XCOFF::CsectProperties(XCOFF::XMC_RO, XCOFF::XTY_SD),
         /* MultiSymbolsAllowed*/ !TM.getDataSections());
   }
 
@@ -2228,8 +2231,9 @@ MCSection *TargetLoweringObjectFileXCOFF::SelectSectionForGlobal(
     if (TM.getDataSections()) {
       SmallString<128> Name;
       getNameWithPrefix(Name, GO, TM);
-      return getContext().getXCOFFSection(Name, XCOFF::XMC_RW, XCOFF::XTY_SD,
-                                          SectionKind::getData());
+      return getContext().getXCOFFSection(
+          Name, SectionKind::getData(),
+          XCOFF::CsectProperties(XCOFF::XMC_RW, XCOFF::XTY_SD));
     }
     return DataSection;
   }
@@ -2238,8 +2242,9 @@ MCSection *TargetLoweringObjectFileXCOFF::SelectSectionForGlobal(
     if (TM.getDataSections()) {
       SmallString<128> Name;
       getNameWithPrefix(Name, GO, TM);
-      return getContext().getXCOFFSection(Name, XCOFF::XMC_RO, XCOFF::XTY_SD,
-                                          SectionKind::getReadOnly());
+      return getContext().getXCOFFSection(
+          Name, SectionKind::getReadOnly(),
+          XCOFF::CsectProperties(XCOFF::XMC_RO, XCOFF::XTY_SD));
     }
     return ReadOnlySection;
   }
@@ -2258,8 +2263,9 @@ MCSection *TargetLoweringObjectFileXCOFF::getSectionForJumpTable(
   // the table doesn't prevent the removal.
   SmallString<128> NameStr(".rodata.jmp..");
   getNameWithPrefix(NameStr, &F, TM);
-  return getContext().getXCOFFSection(NameStr, XCOFF::XMC_RO, XCOFF::XTY_SD,
-                                      SectionKind::getReadOnly());
+  return getContext().getXCOFFSection(
+      NameStr, SectionKind::getReadOnly(),
+      XCOFF::CsectProperties(XCOFF::XMC_RO, XCOFF::XTY_SD));
 }
 
 bool TargetLoweringObjectFileXCOFF::shouldPutJumpTableInFunctionSection(
@@ -2350,9 +2356,11 @@ MCSymbol *TargetLoweringObjectFileXCOFF::getFunctionEntryPointSymbol(
        Func->isDeclaration()) &&
       isa<Function>(Func)) {
     return getContext()
-        .getXCOFFSection(NameStr, XCOFF::XMC_PR,
-                         Func->isDeclaration() ? XCOFF::XTY_ER : XCOFF::XTY_SD,
-                         SectionKind::getText())
+        .getXCOFFSection(
+            NameStr, SectionKind::getText(),
+            XCOFF::CsectProperties(XCOFF::XMC_PR, Func->isDeclaration()
+                                                      ? XCOFF::XTY_ER
+                                                      : XCOFF::XTY_SD))
         ->getQualNameSymbol();
   }
 
@@ -2363,8 +2371,9 @@ MCSection *TargetLoweringObjectFileXCOFF::getSectionForFunctionDescriptor(
     const Function *F, const TargetMachine &TM) const {
   SmallString<128> NameStr;
   getNameWithPrefix(NameStr, F, TM);
-  return getContext().getXCOFFSection(NameStr, XCOFF::XMC_DS, XCOFF::XTY_SD,
-                                      SectionKind::getData());
+  return getContext().getXCOFFSection(
+      NameStr, SectionKind::getData(),
+      XCOFF::CsectProperties(XCOFF::XMC_DS, XCOFF::XTY_SD));
 }
 
 MCSection *TargetLoweringObjectFileXCOFF::getSectionForTOCEntry(
@@ -2372,7 +2381,8 @@ MCSection *TargetLoweringObjectFileXCOFF::getSectionForTOCEntry(
   // Use TE storage-mapping class when large code model is enabled so that
   // the chance of needing -bbigtoc is decreased.
   return getContext().getXCOFFSection(
-      cast<MCSymbolXCOFF>(Sym)->getSymbolTableName(),
-      TM.getCodeModel() == CodeModel::Large ? XCOFF::XMC_TE : XCOFF::XMC_TC,
-      XCOFF::XTY_SD, SectionKind::getData());
+      cast<MCSymbolXCOFF>(Sym)->getSymbolTableName(), SectionKind::getData(),
+      XCOFF::CsectProperties(
+          TM.getCodeModel() == CodeModel::Large ? XCOFF::XMC_TE : XCOFF::XMC_TC,
+          XCOFF::XTY_SD));
 }
