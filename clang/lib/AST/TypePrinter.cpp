@@ -1348,10 +1348,8 @@ void TypePrinter::printTag(TagDecl *D, raw_ostream &OS) {
     if (isa<CXXRecordDecl>(D) && cast<CXXRecordDecl>(D)->isLambda()) {
       OS << "lambda";
       HasKindDecoration = true;
-    } else if ((isa<RecordDecl>(D) && cast<RecordDecl>(D)->isAnonymousStructOrUnion())) {
-      OS << "anonymous";
     } else {
-      OS << "unnamed";
+      OS << "anonymous";
     }
 
     if (Policy.AnonymousTagLocations) {
