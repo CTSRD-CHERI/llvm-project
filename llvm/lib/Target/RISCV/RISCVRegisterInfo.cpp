@@ -341,3 +341,11 @@ RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
     return CSR_IL32PC64D_L64PC128D_RegMask;
   }
 }
+
+const TargetRegisterClass *
+RISCVRegisterInfo::getLargestLegalSuperClass(const TargetRegisterClass *RC,
+                                             const MachineFunction &) const {
+  if (RC == &RISCV::VMV0RegClass)
+    return &RISCV::VRRegClass;
+  return RC;
+}
