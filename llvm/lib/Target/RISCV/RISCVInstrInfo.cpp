@@ -456,28 +456,48 @@ unsigned RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
 
   MachineFunction *MF = MBB.getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
+  const RISCVSubtarget &ST = MF->getSubtarget<RISCVSubtarget>();
 
   if (!isInt<32>(BrOffset))
     report_fatal_error(
         "Branch offsets outside of the signed 32-bit range not supported");
 
+  const TargetRegisterClass *RC;
+  if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
+    RC = &RISCV::GPCRRegClass;
+  } else {
+    RC = &RISCV::GPRRegClass;
+  }
+
   // FIXME: A virtual register must be used initially, as the register
   // scavenger won't work with empty blocks (SIInstrInfo::insertIndirectBranch
   // uses the same workaround).
-  Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  Register ScratchReg = MRI.createVirtualRegister(RC);
   auto II = MBB.end();
 
-  MachineInstr &MI = *BuildMI(MBB, II, DL, get(RISCV::PseudoJump))
-                          .addReg(ScratchReg, RegState::Define | RegState::Dead)
-                          .addMBB(&DestBB, RISCVII::MO_CALL);
+  MachineInstr *MI;
+  unsigned InstBytes;
+  if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
+    MI = BuildMI(MBB, II, DL, get(RISCV::PseudoCLLC))
+             .addReg(ScratchReg, RegState::Define)
+             .addMBB(&DestBB);
+    BuildMI(MBB, II, DL, get(RISCV::PseudoCapBRIND))
+        .addReg(ScratchReg);
+    InstBytes = 12;
+  } else {
+    MI = BuildMI(MBB, II, DL, get(RISCV::PseudoJump))
+             .addReg(ScratchReg, RegState::Define | RegState::Dead)
+             .addMBB(&DestBB, RISCVII::MO_CALL);
+    InstBytes = 8;
+  }
 
   RS->enterBasicBlockEnd(MBB);
-  unsigned Scav = RS->scavengeRegisterBackwards(RISCV::GPRRegClass,
-                                                MI.getIterator(), false, 0);
+  unsigned Scav = RS->scavengeRegisterBackwards(*RC,
+                                                MI->getIterator(), false, 0);
   MRI.replaceRegWith(ScratchReg, Scav);
   MRI.clearVirtRegs();
   RS->setRegUsed(Scav);
-  return 8;
+  return InstBytes;
 }
 
 bool RISCVInstrInfo::reverseBranchCondition(

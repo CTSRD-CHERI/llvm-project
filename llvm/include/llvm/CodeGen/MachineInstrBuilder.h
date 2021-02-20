@@ -307,6 +307,9 @@ public:
       case MachineOperand::MO_BlockAddress:
         return addBlockAddress(Disp.getBlockAddress(), Disp.getOffset() + off,
                                TargetFlags);
+      case MachineOperand::MO_MachineBasicBlock:
+        assert(off == 0 && "cannot create offset into MBB");
+        return addMBB(Disp.getMBB(), TargetFlags);
     }
   }
 
