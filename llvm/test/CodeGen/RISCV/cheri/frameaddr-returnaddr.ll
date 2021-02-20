@@ -43,9 +43,8 @@ define i8 addrspace(200)* @test_frameaddress_0_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp)
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 128
-; RV32IXCHERI-NEXT:    addi a0, zero, 100
-; RV32IXCHERI-NEXT:    cincoffset ca1, cs0, -116
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -116
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV32IXCHERI-NEXT:  .LBB1_1: # Label of block must be emitted
 ; RV32IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV32IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB1_1)(ca1)
@@ -62,9 +61,8 @@ define i8 addrspace(200)* @test_frameaddress_0_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    csc cra, 128(csp)
 ; RV64IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV64IXCHERI-NEXT:    cincoffset cs0, csp, 144
-; RV64IXCHERI-NEXT:    addi a0, zero, 100
-; RV64IXCHERI-NEXT:    cincoffset ca1, cs0, -132
-; RV64IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset ca0, cs0, -132
+; RV64IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV64IXCHERI-NEXT:  .LBB1_1: # Label of block must be emitted
 ; RV64IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV64IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB1_1)(ca1)
@@ -118,9 +116,8 @@ define i8 addrspace(200)* @test_frameaddress_3_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp)
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 128
-; RV32IXCHERI-NEXT:    addi a0, zero, 100
-; RV32IXCHERI-NEXT:    cincoffset ca1, cs0, -116
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -116
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV32IXCHERI-NEXT:  .LBB3_1: # Label of block must be emitted
 ; RV32IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV32IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB3_1)(ca1)
@@ -139,9 +136,8 @@ define i8 addrspace(200)* @test_frameaddress_3_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    csc cra, 128(csp)
 ; RV64IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV64IXCHERI-NEXT:    cincoffset cs0, csp, 144
-; RV64IXCHERI-NEXT:    addi a0, zero, 100
-; RV64IXCHERI-NEXT:    cincoffset ca1, cs0, -132
-; RV64IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset ca0, cs0, -132
+; RV64IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV64IXCHERI-NEXT:  .LBB3_1: # Label of block must be emitted
 ; RV64IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV64IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB3_1)(ca1)
@@ -181,9 +177,8 @@ define i8 addrspace(200)* @test_returnaddress_0_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp)
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV32IXCHERI-NEXT:    cmove cs0, cra
-; RV32IXCHERI-NEXT:    addi a0, zero, 100
-; RV32IXCHERI-NEXT:    cincoffset ca1, csp, 12
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset ca0, csp, 12
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV32IXCHERI-NEXT:  .LBB5_1: # Label of block must be emitted
 ; RV32IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV32IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB5_1)(ca1)
@@ -200,9 +195,8 @@ define i8 addrspace(200)* @test_returnaddress_0_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    csc cra, 128(csp)
 ; RV64IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV64IXCHERI-NEXT:    cmove cs0, cra
-; RV64IXCHERI-NEXT:    addi a0, zero, 100
-; RV64IXCHERI-NEXT:    cincoffset ca1, csp, 12
-; RV64IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset ca0, csp, 12
+; RV64IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV64IXCHERI-NEXT:  .LBB5_1: # Label of block must be emitted
 ; RV64IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV64IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB5_1)(ca1)
@@ -258,9 +252,8 @@ define i8 addrspace(200)* @test_returnaddress_3_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp)
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 128
-; RV32IXCHERI-NEXT:    addi a0, zero, 100
-; RV32IXCHERI-NEXT:    cincoffset ca1, cs0, -116
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -116
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV32IXCHERI-NEXT:  .LBB7_1: # Label of block must be emitted
 ; RV32IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV32IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB7_1)(ca1)
@@ -280,9 +273,8 @@ define i8 addrspace(200)* @test_returnaddress_3_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    csc cra, 128(csp)
 ; RV64IXCHERI-NEXT:    csc cs0, 112(csp)
 ; RV64IXCHERI-NEXT:    cincoffset cs0, csp, 144
-; RV64IXCHERI-NEXT:    addi a0, zero, 100
-; RV64IXCHERI-NEXT:    cincoffset ca1, cs0, -132
-; RV64IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset ca0, cs0, -132
+; RV64IXCHERI-NEXT:    csetbounds ca0, ca0, 100
 ; RV64IXCHERI-NEXT:  .LBB7_1: # Label of block must be emitted
 ; RV64IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(notdead)
 ; RV64IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB7_1)(ca1)

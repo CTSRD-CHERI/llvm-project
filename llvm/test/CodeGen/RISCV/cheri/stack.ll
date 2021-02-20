@@ -11,9 +11,8 @@ define i32 @static_alloca() nounwind {
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
 ; RV32IXCHERI-NEXT:    csc cra, 8(csp)
-; RV32IXCHERI-NEXT:    addi a0, zero, 4
-; RV32IXCHERI-NEXT:    cincoffset ca1, csp, 4
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV32IXCHERI-NEXT:    cincoffset ca0, csp, 4
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 4
 ; RV32IXCHERI-NEXT:  .LBB0_1: # Label of block must be emitted
 ; RV32IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(use_arg)
 ; RV32IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
@@ -26,9 +25,8 @@ define i32 @static_alloca() nounwind {
 ; RV64IXCHERI:       # %bb.0:
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, -32
 ; RV64IXCHERI-NEXT:    csc cra, 16(csp)
-; RV64IXCHERI-NEXT:    addi a0, zero, 4
-; RV64IXCHERI-NEXT:    cincoffset ca1, csp, 12
-; RV64IXCHERI-NEXT:    csetbounds ca0, ca1, a0
+; RV64IXCHERI-NEXT:    cincoffset ca0, csp, 12
+; RV64IXCHERI-NEXT:    csetbounds ca0, ca0, 4
 ; RV64IXCHERI-NEXT:  .LBB0_1: # Label of block must be emitted
 ; RV64IXCHERI-NEXT:    auipcc ca1, %captab_pcrel_hi(use_arg)
 ; RV64IXCHERI-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
