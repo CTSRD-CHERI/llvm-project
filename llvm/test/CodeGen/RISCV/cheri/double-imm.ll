@@ -14,16 +14,16 @@
 ; CHECK-NEXT:  .text
 
 define double @double_add_const(double %a) nounwind {
-; L64PC128-LABEL: double_add_const:
-; L64PC128:       # %bb.0:
-; L64PC128-NEXT:  .LBB0_1: # Label of block must be emitted
-; L64PC128-NEXT:    auipcc ca1, %pcrel_hi(.LCPI0_0)
-; L64PC128-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB0_1)
-; L64PC128-NEXT:    cfld ft0, 0(ca1)
-; L64PC128-NEXT:    fmv.d.x ft1, a0
-; L64PC128-NEXT:    fadd.d ft0, ft1, ft0
-; L64PC128-NEXT:    fmv.x.d a0, ft0
-; L64PC128-NEXT:    cret
+; CHECK-LABEL: double_add_const:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB0_1: # Label of block must be emitted
+; CHECK-NEXT:    auipcc ca1, %pcrel_hi(.LCPI0_0)
+; CHECK-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB0_1)
+; CHECK-NEXT:    cfld ft0, 0(ca1)
+; CHECK-NEXT:    fmv.d.x ft1, a0
+; CHECK-NEXT:    fadd.d ft0, ft1, ft0
+; CHECK-NEXT:    fmv.x.d a0, ft0
+; CHECK-NEXT:    cret
   %1 = fadd double %a, 1.0
   ret double %1
 }
@@ -36,16 +36,16 @@ define double @double_add_const(double %a) nounwind {
 ; CHECK-NEXT:  .text
 
 define float @float_add_const(float %a) nounwind {
-; L64PC128-LABEL: float_add_const:
-; L64PC128:       # %bb.0:
-; L64PC128-NEXT:  .LBB1_1: # Label of block must be emitted
-; L64PC128-NEXT:    auipcc ca1, %pcrel_hi(.LCPI1_0)
-; L64PC128-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB1_1)
-; L64PC128-NEXT:    cflw ft0, 0(ca1)
-; L64PC128-NEXT:    fmv.w.x ft1, a0
-; L64PC128-NEXT:    fadd.s ft0, ft1, ft0
-; L64PC128-NEXT:    fmv.x.w a0, ft0
-; L64PC128-NEXT:    cret
+; CHECK-LABEL: float_add_const:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB1_1: # Label of block must be emitted
+; CHECK-NEXT:    auipcc ca1, %pcrel_hi(.LCPI1_0)
+; CHECK-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB1_1)
+; CHECK-NEXT:    cflw ft0, 0(ca1)
+; CHECK-NEXT:    fmv.w.x ft1, a0
+; CHECK-NEXT:    fadd.s ft0, ft1, ft0
+; CHECK-NEXT:    fmv.x.w a0, ft0
+; CHECK-NEXT:    cret
   %1 = fadd float %a, 1.0
   ret float %1
 }

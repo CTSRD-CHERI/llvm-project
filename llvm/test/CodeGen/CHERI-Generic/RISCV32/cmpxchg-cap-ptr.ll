@@ -32,9 +32,8 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 7(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a1, zero, 1
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 7
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca3, a1
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 7
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
 ; PURECAP-LIBCALLS-NEXT:  .LBB0_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_1)
@@ -94,9 +93,8 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 6
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 6
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 6(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB1_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -156,9 +154,8 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 4
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 4
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB2_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -207,9 +204,8 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-NEXT:    mv a7, a4
 ; PURECAP-NEXT:    cmove ct0, ca1
 ; PURECAP-NEXT:    cmove cs0, ca0
-; PURECAP-NEXT:    addi a0, zero, 8
-; PURECAP-NEXT:    cincoffset ca1, csp, 8
-; PURECAP-NEXT:    csetbounds ca1, ca1, a0
+; PURECAP-NEXT:    cincoffset ca0, csp, 8
+; PURECAP-NEXT:    csetbounds ca1, ca0, 8
 ; PURECAP-NEXT:    csw a3, 12(csp)
 ; PURECAP-NEXT:    csw a2, 8(csp)
 ; PURECAP-NEXT:  .LBB3_1: # %entry
@@ -285,9 +281,8 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 8
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB4_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -347,9 +342,8 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 8
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB5_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -413,9 +407,8 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 7(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a1, zero, 1
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 7
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca3, a1
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 7
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
 ; PURECAP-LIBCALLS-NEXT:  .LBB6_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca5, %captab_pcrel_hi(__atomic_compare_exchange_1)
@@ -475,9 +468,8 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 2
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 6
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 6
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 6(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB7_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -537,9 +529,8 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 4
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 4
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 4(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB8_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -588,9 +579,8 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-NEXT:    mv a7, a4
 ; PURECAP-NEXT:    cmove ct0, ca1
 ; PURECAP-NEXT:    cmove cs0, ca0
-; PURECAP-NEXT:    addi a0, zero, 8
-; PURECAP-NEXT:    cincoffset ca1, csp, 8
-; PURECAP-NEXT:    csetbounds ca1, ca1, a0
+; PURECAP-NEXT:    cincoffset ca0, csp, 8
+; PURECAP-NEXT:    csetbounds ca1, ca0, 8
 ; PURECAP-NEXT:    csw a3, 12(csp)
 ; PURECAP-NEXT:    csw a2, 8(csp)
 ; PURECAP-NEXT:  .LBB9_1: # %entry
@@ -666,9 +656,8 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 8
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB10_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
@@ -728,9 +717,8 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 8
-; PURECAP-LIBCALLS-NEXT:    cincoffset ca4, csp, 0
-; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca4, a3
+; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
+; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
 ; PURECAP-LIBCALLS-NEXT:  .LBB11_1: # %entry
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted

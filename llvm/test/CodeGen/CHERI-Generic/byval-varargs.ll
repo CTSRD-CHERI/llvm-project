@@ -102,9 +102,8 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-RV64-NEXT:    csc cs0, 2000(csp)
 ; PURECAP-RV64-NEXT:    csc cs1, 1984(csp)
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
-; PURECAP-RV64-NEXT:    addi s1, zero, 1024
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
-; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, s1
+; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
 ; PURECAP-RV64-NEXT:  .LBB0_1: # %entry
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
 ; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memset)
@@ -120,7 +119,7 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    cjalr ca1
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
-; PURECAP-RV64-NEXT:    csetbounds cs1, ca0, s1
+; PURECAP-RV64-NEXT:    csetbounds cs1, ca0, 1024
 ; PURECAP-RV64-NEXT:  .LBB0_3: # %entry
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
 ; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memcpy)
@@ -298,9 +297,8 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-RV64-NEXT:    csc cs0, 2000(csp)
 ; PURECAP-RV64-NEXT:    csc cs1, 1984(csp)
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
-; PURECAP-RV64-NEXT:    addi a0, zero, 1024
-; PURECAP-RV64-NEXT:    cincoffset ca1, csp, 1056
-; PURECAP-RV64-NEXT:    csetbounds cs0, ca1, a0
+; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
+; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
 ; PURECAP-RV64-NEXT:  .LBB1_1: # %entry
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
 ; PURECAP-RV64-NEXT:    auipcc ca3, %captab_pcrel_hi(memset)

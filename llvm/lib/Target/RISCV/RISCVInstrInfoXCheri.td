@@ -872,6 +872,7 @@ def : PatGpcr<int_cheri_cap_seal_entry, CSealEntry>;
 
 // TODO: Make this rematerialisable like MIPS
 def : PatGpcrGpr<int_cheri_bounded_stack_cap, CSetBounds>;
+def : PatGpcrUimm12<int_cheri_bounded_stack_cap, CSetBoundsImm>;
 
 /// Pointer-Arithmetic Instructions
 
@@ -1039,7 +1040,7 @@ def : Pat<(int_cheri_pcc_get), (CSpecialRW SCR_PCC.Encoding, C0)>;
 def : PatGpr<int_cheri_round_representable_length, CRRL>;
 def : PatGpr<int_cheri_representable_alignment_mask, CRAM>;
 
-// TODO: int_cheri_cap_load_tags, int_cheri_bounded_stack_cap
+// TODO: int_cheri_cap_load_tags
 
 /// Memory-Access with Explicit Address Type Instructions
 

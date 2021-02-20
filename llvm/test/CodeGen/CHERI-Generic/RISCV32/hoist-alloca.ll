@@ -32,24 +32,24 @@
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -o %t.mir -stop-before=early-machinelicm < %s
 ; RUN: echo "DONOTAUTOGEN" | llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -run-pass=early-machinelicm \
 ; RUN:    -debug-only=machinelicm %t.mir -o /dev/null 2>&1 | FileCheck --check-prefix=MACHINELICM-DBG %s
-; Check that MachineLICM hoists the CheriBoundedStackPseudoImm (MIPS) / IncOffset+SetBounds (RISCV) instructions
+; Check that MachineLICM hoists the CheriBoundedStackPseudoImm (MIPS) / IncOffset+SetBoundsImm (RISCV) instructions
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_uncond
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 492
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_cond
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 492
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBounds [[INC]]:gpcr, %{{[0-9]+}}:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O1 -o - < %s | FileCheck %s
@@ -63,12 +63,10 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    csc cs1, 600(csp)
 ; CHECK-NEXT:    csc cs2, 592(csp)
 ; CHECK-NEXT:    addi s0, zero, 100
-; CHECK-NEXT:    addi a0, zero, 492
-; CHECK-NEXT:    cincoffset ca1, csp, 100
-; CHECK-NEXT:    csetbounds cs2, ca1, a0
-; CHECK-NEXT:    addi a0, zero, 88
-; CHECK-NEXT:    cincoffset ca1, csp, 12
-; CHECK-NEXT:    csetbounds cs1, ca1, a0
+; CHECK-NEXT:    cincoffset ca0, csp, 100
+; CHECK-NEXT:    csetbounds cs2, ca0, 492
+; CHECK-NEXT:    cincoffset ca0, csp, 12
+; CHECK-NEXT:    csetbounds cs1, ca0, 88
 ; CHECK-NEXT:  .LBB0_1: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:  .LBB0_3: # %for.body
@@ -119,12 +117,10 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    csc cs3, 584(csp)
 ; CHECK-NEXT:    seqz s0, a0
 ; CHECK-NEXT:    addi s1, zero, 100
-; CHECK-NEXT:    addi a0, zero, 492
-; CHECK-NEXT:    cincoffset ca1, csp, 92
-; CHECK-NEXT:    csetbounds cs2, ca1, a0
-; CHECK-NEXT:    addi a0, zero, 88
-; CHECK-NEXT:    cincoffset ca1, csp, 4
-; CHECK-NEXT:    csetbounds cs3, ca1, a0
+; CHECK-NEXT:    cincoffset ca0, csp, 92
+; CHECK-NEXT:    csetbounds cs2, ca0, 492
+; CHECK-NEXT:    cincoffset ca0, csp, 4
+; CHECK-NEXT:    csetbounds cs3, ca0, 88
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
