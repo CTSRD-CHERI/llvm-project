@@ -211,7 +211,7 @@ entry:
 
 ; Function Attrs: nounwind
 define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
-; The RV64 Stack frame size should be > 2048 (for some reason it's split into two addi instructions)
+; The RV64 Stack frame size should be > 2048 (split into two instructions)
 ; RV64-LABEL: test_byval:
 ; RV64:       # %bb.0: # %entry
 ; RV64-NEXT:    addi sp, sp, -2032
@@ -290,7 +290,7 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 ; MIPS-NEXT:    daddiu $sp, $sp, 2032
 ;
 ; PURECAP-RV64-LABEL: test_byval:
-; Stack frame size should be > 2048 (for some reason it's split into two cincoffset instructions)
+; Stack frame size should be > 2048 (split into two instructions)
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -2032
 ; PURECAP-RV64-NEXT:    csc cra, 2016(csp)
