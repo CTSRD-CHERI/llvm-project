@@ -618,6 +618,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
         setOperationAction(ISD::ANY_EXTEND, VT, Custom);
         setOperationAction(ISD::SIGN_EXTEND, VT, Custom);
         setOperationAction(ISD::ZERO_EXTEND, VT, Custom);
+
+        setOperationAction(ISD::BITCAST, VT, Custom);
       }
 
       for (MVT VT : MVT::fp_fixedlen_vector_valuetypes()) {
@@ -649,6 +651,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
           setCondCodeAction(CC, VT, Expand);
 
         setOperationAction(ISD::VSELECT, VT, Custom);
+
+        setOperationAction(ISD::BITCAST, VT, Custom);
       }
     }
   }
@@ -1146,11 +1150,18 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   case ISD::SRL_PARTS:
     return lowerShiftRightParts(Op, DAG, false);
   case ISD::BITCAST: {
+    SDValue Op0 = Op.getOperand(0);
+    // We can handle fixed length vector bitcasts with a simple replacement
+    // in isel.
+    if (Op.getValueType().isFixedLengthVector()) {
+      if (Op0.getValueType().isFixedLengthVector())
+        return Op;
+      return SDValue();
+    }
     assert(((Subtarget.is64Bit() && Subtarget.hasStdExtF()) ||
             Subtarget.hasStdExtZfh()) &&
            "Unexpected custom legalisation");
     SDLoc DL(Op);
-    SDValue Op0 = Op.getOperand(0);
     if (Op.getValueType() == MVT::f16 && Subtarget.hasStdExtZfh()) {
       if (Op0.getValueType() != MVT::i16)
         return SDValue();
