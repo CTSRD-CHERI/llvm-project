@@ -399,6 +399,8 @@ public:
   decomposeSubvectorInsertExtractToSubRegs(MVT VecVT, MVT SubVecVT,
                                            unsigned InsertExtractIdx,
                                            const RISCVRegisterInfo *TRI);
+  static MVT getContainerForFixedLengthVector(SelectionDAG &DAG, MVT VT,
+                                              const RISCVSubtarget &Subtarget);
 
 private:
   void analyzeInputArgs(MachineFunction &MF, CCState &CCInfo,
