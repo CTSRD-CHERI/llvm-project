@@ -137,7 +137,7 @@ if (NOT LIBUNWIND_ENABLE_SHARED AND NOT LIBUNWIND_ENABLE_STATIC)
   message(FATAL_ERROR "libunwind must be built as either a shared or static library.")
 endif()
 
-option(LIBUNWIND_HERMETIC_STATIC_LIBRARY
+option(LIBUNWIND_HIDE_SYMBOLS
   "Do not export any symbols from the static library." OFF)
 
 set(LIBUNWIND_TEST_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/test/lit.site.cfg.in" CACHE STRING
@@ -369,7 +369,7 @@ endif()
 
 # Disable DLL annotations on Windows for static builds.
 if (WIN32 AND LIBUNWIND_ENABLE_STATIC AND NOT LIBUNWIND_ENABLE_SHARED)
-  add_definitions(-D_LIBUNWIND_DISABLE_VISIBILITY_ANNOTATIONS)
+  add_definitions(-D_LIBUNWIND_HIDE_SYMBOLS)
 endif()
 
 if (LIBUNWIND_HAS_COMMENT_LIB_PRAGMA)
