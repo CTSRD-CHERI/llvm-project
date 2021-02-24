@@ -40,7 +40,7 @@ typedef __uintcap_t fake_capability_t;
     _LIBUNWIND_ABORT("no CHERI capability registers");                         \
   }                                                                            \
   inline void setCapabilityRegister(int, fake_capability_t) {                    \
-    _LIBUNWIND_ABORT("no x86 vector registers");                               \
+    _LIBUNWIND_ABORT("no CHERI capability registers");                         \
   }
 
 enum {
