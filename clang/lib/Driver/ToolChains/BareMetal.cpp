@@ -179,8 +179,9 @@ Tool *BareMetal::buildLinker() const {
 
 std::string BareMetal::getCompilerRTPath() const { return getRuntimesDir(); }
 
-std::string BareMetal::getCompilerRTBasename(const llvm::opt::ArgList &,
-                                             StringRef, FileType, bool) const {
+std::string BareMetal::buildCompilerRTBasename(const llvm::opt::ArgList &,
+                                               StringRef, FileType,
+                                               bool) const {
   return ("libclang_rt.builtins-" + getTriple().getArchName() + ".a").str();
 }
 
