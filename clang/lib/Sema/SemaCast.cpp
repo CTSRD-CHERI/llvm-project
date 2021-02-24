@@ -2961,6 +2961,7 @@ void CastOperation::CheckCapabilityConversions() {
     case CK_CHERICapabilityToOffset:
     case CK_IntegralToPointer:
     case CK_PointerToIntegral:
+    case CK_PointerToBoolean:
     case CK_NullToPointer:
     case CK_NullToMemberPointer:
       break;
