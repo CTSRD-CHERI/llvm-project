@@ -4364,7 +4364,7 @@ inline uintcap_t Registers_riscv::getCapabilityRegister(int regNum) const {
 
 inline void Registers_riscv::setCapabilityRegister(int regNum, uintcap_t value) {
   assert(validCapabilityRegister(regNum));
-  return setRegister(regNum, value);
+  setRegister(regNum, value);
 }
 #endif
 
