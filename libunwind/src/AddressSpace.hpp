@@ -364,7 +364,7 @@ public:
 
   pint_t getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
                      pint_t datarelBase = 0);
-  bool findFunctionName(pc_t addr, char *buf, size_t bufLen, size_t *offset);
+  bool findFunctionName(pc_t ip, char *buf, size_t bufLen, size_t *offset);
   bool findUnwindSections(pc_t targetAddr, UnwindInfoSections &info);
   bool findOtherFDE(addr_t targetAddr, pint_t &fde);
 
@@ -995,7 +995,7 @@ inline bool LocalAddressSpace::findFunctionName(pc_t ip, char *buf,
     }
   }
 #else
-  (void)addr;
+  (void)ip;
   (void)buf;
   (void)bufLen;
   (void)offset;
