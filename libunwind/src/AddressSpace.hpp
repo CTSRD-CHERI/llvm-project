@@ -273,7 +273,8 @@ public:
       if (isImmutable()) {
         // For sentries we have to modify the addend instead of creating a new
         // capability from value.
-        return LocalProgramCounter(value, addr - address());
+        return LocalProgramCounter(value,
+                                   addr - __builtin_cheri_address_get(value));
       } else {
         return LocalProgramCounter(__builtin_cheri_address_set(value, addr), 0);
       }
