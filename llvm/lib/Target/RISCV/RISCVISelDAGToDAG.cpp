@@ -436,7 +436,6 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
         uint64_t Mask = N0.getConstantOperandVal(1);
         Mask |= maskTrailingOnes<uint64_t>(ShAmt);
         if (Mask == 0xffff) {
-          SDLoc DL(Node);
           unsigned SLLOpc = Subtarget->is64Bit() ? RISCV::SLLIW : RISCV::SLLI;
           unsigned SRLOpc = Subtarget->is64Bit() ? RISCV::SRLIW : RISCV::SRLI;
           SDNode *SLLI =
@@ -610,7 +609,6 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
       bool IsOrdered = IntNo == Intrinsic::riscv_vloxei ||
                        IntNo == Intrinsic::riscv_vloxei_mask;
 
-      SDLoc DL(Node);
       MVT VT = Node->getSimpleValueType(0);
       unsigned ScalarSize = VT.getScalarSizeInBits();
       MVT XLenVT = Subtarget->getXLenVT();
@@ -659,7 +657,6 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
       bool IsStrided =
           IntNo == Intrinsic::riscv_vlse || IntNo == Intrinsic::riscv_vlse_mask;
 
-      SDLoc DL(Node);
       MVT VT = Node->getSimpleValueType(0);
       unsigned ScalarSize = VT.getScalarSizeInBits();
       MVT XLenVT = Subtarget->getXLenVT();
@@ -699,7 +696,6 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     case Intrinsic::riscv_vleff_mask: {
       bool IsMasked = IntNo == Intrinsic::riscv_vleff_mask;
 
-      SDLoc DL(Node);
       MVT VT = Node->getSimpleValueType(0);
       unsigned ScalarSize = VT.getScalarSizeInBits();
       MVT XLenVT = Subtarget->getXLenVT();
@@ -828,7 +824,6 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
       bool IsOrdered = IntNo == Intrinsic::riscv_vsoxei ||
                        IntNo == Intrinsic::riscv_vsoxei_mask;
 
-      SDLoc DL(Node);
       MVT VT = Node->getOperand(2)->getSimpleValueType(0);
       unsigned ScalarSize = VT.getScalarSizeInBits();
       MVT XLenVT = Subtarget->getXLenVT();
@@ -876,7 +871,6 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
       bool IsStrided =
           IntNo == Intrinsic::riscv_vsse || IntNo == Intrinsic::riscv_vsse_mask;
 
-      SDLoc DL(Node);
       MVT VT = Node->getOperand(2)->getSimpleValueType(0);
       unsigned ScalarSize = VT.getScalarSizeInBits();
       MVT XLenVT = Subtarget->getXLenVT();
@@ -930,8 +924,7 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     SDValue SubV = Node->getOperand(1);
     SDLoc DL(SubV);
     auto Idx = Node->getConstantOperandVal(2);
-    MVT XLenVT = Subtarget->getXLenVT();
-    MVT SubVecVT = Node->getOperand(1).getSimpleValueType();
+    MVT SubVecVT = SubV.getSimpleValueType();
 
     // TODO: This method of selecting INSERT_SUBVECTOR should work
     // with any type of insertion (fixed <-> scalable) but we don't yet
@@ -999,7 +992,7 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
   case ISD::EXTRACT_SUBVECTOR: {
     SDValue V = Node->getOperand(0);
     auto Idx = Node->getConstantOperandVal(1);
-    MVT InVT = Node->getOperand(0).getSimpleValueType();
+    MVT InVT = V.getSimpleValueType();
     SDLoc DL(V);
 
     // TODO: This method of selecting EXTRACT_SUBVECTOR should work
@@ -1029,14 +1022,14 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
                InRegClassID == RISCV::VRRegClassID &&
                "Unexpected subvector extraction");
         SDValue RC =
-            CurDAG->getTargetConstant(InRegClassID, DL, Subtarget->getXLenVT());
+            CurDAG->getTargetConstant(InRegClassID, DL, XLenVT);
         SDNode *NewNode = CurDAG->getMachineNode(TargetOpcode::COPY_TO_REGCLASS,
                                                  DL, VT, V, RC);
         return ReplaceNode(Node, NewNode);
       }
       SDNode *NewNode = CurDAG->getMachineNode(
           TargetOpcode::EXTRACT_SUBREG, DL, VT, V,
-          CurDAG->getTargetConstant(SubRegIdx, DL, Subtarget->getXLenVT()));
+          CurDAG->getTargetConstant(SubRegIdx, DL, XLenVT));
       return ReplaceNode(Node, NewNode);
     }
 
