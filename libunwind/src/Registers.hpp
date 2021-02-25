@@ -4247,10 +4247,10 @@ public:
   CAPABILITIES_NOT_SUPPORTED
 #endif
 
-  uintptr_t  getSP() const         { return _registers[2]; }
-  void      setSP(uintptr_t value) { _registers[2] = value; }
-  uintptr_t  getIP() const         { return _registers[0]; }
-  void      setIP(uintptr_t value) { _registers[0] = value; }
+  uintptr_t  getSP() const          { return _registers[2]; }
+  void       setSP(uintptr_t value) { _registers[2] = value; }
+  uintptr_t  getIP() const          { return _registers[0]; }
+  void       setIP(uintptr_t value) { _registers[0] = value; }
 
 private:
   // _registers[0] holds the pc
