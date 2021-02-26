@@ -1120,9 +1120,9 @@ public:
 
   /// Emit a unit length field. The actual format, DWARF32 or DWARF64, is chosen
   /// according to the settings.
-  virtual void emitDwarfUnitLength(const MCSymbol *Hi, const MCSymbol *Lo,
-                                   const Twine &Comment);
-
+  /// Return the end symbol generated inside, the caller needs to emit it.
+  virtual MCSymbol *emitDwarfUnitLength(const Twine &Prefix,
+                                        const Twine &Comment);
 protected:
   virtual void EmitCheriCapabilityImpl(const MCSymbol *Value,
                                        const MCExpr *Addend, unsigned CapSize,
