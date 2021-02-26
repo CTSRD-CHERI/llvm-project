@@ -1033,7 +1033,8 @@ Value *AtomicExpand::insertRMWLLSCLoop(
   BasicBlock *BB = Builder.GetInsertBlock();
   Function *F = BB->getParent();
 
-  assert(AddrAlign >= ResultTy->getPrimitiveSizeInBits() / 8 &&
+  assert(AddrAlign >=
+             F->getParent()->getDataLayout().getTypeStoreSize(ResultTy) &&
          "Expected at least natural alignment at this point.");
 
   // Given: atomicrmw some_op iN* %addr, iN %incr ordering
