@@ -48,7 +48,7 @@ TEST(LegacyRTDyldObjectLinkingLayerTest, TestSetProcessAllSections) {
   class MemoryManagerWrapper : public SectionMemoryManager {
   public:
     MemoryManagerWrapper(bool &DebugSeen) : DebugSeen(DebugSeen) {}
-    uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  StringRef SectionName,
                                  bool IsReadOnly) override {

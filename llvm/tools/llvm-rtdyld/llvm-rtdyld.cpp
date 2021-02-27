@@ -198,10 +198,10 @@ public:
   SmallVector<SectionInfo, 16> FunctionMemory;
   SmallVector<SectionInfo, 16> DataMemory;
 
-  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                unsigned SectionID,
                                StringRef SectionName) override;
-  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                unsigned SectionID, StringRef SectionName,
                                bool IsReadOnly) override;
 
@@ -257,7 +257,7 @@ public:
     SlabSize = Size;
   }
 
-  uint8_t *allocateFromSlab(uintptr_t Size, unsigned Alignment, bool isCode,
+  uint8_t *allocateFromSlab(size_t Size, unsigned Alignment, bool isCode,
                             StringRef SectionName, unsigned SectionID) {
     Size = alignTo(Size, Alignment);
     if (CurrentSlabOffset + Size > SlabSize)
@@ -277,12 +277,12 @@ private:
   std::map<std::string, uint64_t> DummyExterns;
   sys::MemoryBlock PreallocSlab;
   bool UsePreallocation = false;
-  uintptr_t SlabSize = 0;
+  size_t SlabSize = 0;
   uintptr_t CurrentSlabOffset = 0;
   SectionIDMap *SecIDMap = nullptr;
 };
 
-uint8_t *TrivialMemoryManager::allocateCodeSection(uintptr_t Size,
+uint8_t *TrivialMemoryManager::allocateCodeSection(size_t Size,
                                                    unsigned Alignment,
                                                    unsigned SectionID,
                                                    StringRef SectionName) {
@@ -309,7 +309,7 @@ uint8_t *TrivialMemoryManager::allocateCodeSection(uintptr_t Size,
   return (uint8_t*)MB.base();
 }
 
-uint8_t *TrivialMemoryManager::allocateDataSection(uintptr_t Size,
+uint8_t *TrivialMemoryManager::allocateDataSection(size_t Size,
                                                    unsigned Alignment,
                                                    unsigned SectionID,
                                                    StringRef SectionName,

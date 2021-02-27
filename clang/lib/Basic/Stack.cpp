@@ -52,7 +52,7 @@ bool clang::isStackNearlyExhausted() {
   if (!BottomOfStack)
     return false;
 
-  intptr_t StackDiff = (intptr_t)getStackPointer() - (intptr_t)BottomOfStack;
+  ptrdiff_t StackDiff = (char *)getStackPointer() - (char *)BottomOfStack;
   size_t StackUsage = (size_t)std::abs(StackDiff);
 
   // If the stack pointer has a surprising value, we do not understand this

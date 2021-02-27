@@ -910,7 +910,7 @@ def ptr_refs(debugger, command, result, dict):
         expr_prefix = '''
 struct $malloc_match {
     void *addr;
-    uintptr_t size;
+    size_t size;
     uintptr_t offset;
     uintptr_t type;
 };
@@ -1018,7 +1018,7 @@ def cstr_refs(debugger, command, result, dict):
         expr_prefix = '''
 struct $malloc_match {
     void *addr;
-    uintptr_t size;
+    size_t size;
     uintptr_t offset;
     uintptr_t type;
 };
@@ -1121,7 +1121,7 @@ def malloc_info_impl(debugger, result, options, args):
     expr_prefix = '''
 struct $malloc_match {
     void *addr;
-    uintptr_t size;
+    size_t size;
     uintptr_t offset;
     uintptr_t type;
 };
@@ -1370,7 +1370,7 @@ def objc_refs(debugger, command, result, dict):
         expr_prefix = '''
 struct $malloc_match {
     void *addr;
-    uintptr_t size;
+    size_t size;
     uintptr_t offset;
     uintptr_t type;
 };

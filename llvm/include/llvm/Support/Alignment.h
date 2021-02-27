@@ -195,10 +195,12 @@ inline uint64_t alignTo(uint64_t Size, MaybeAlign A) {
 /// Aligns `Addr` to `Alignment` bytes, rounding up.
 inline uintptr_t alignAddr(const void *Addr, Align Alignment) {
   uintptr_t ArithAddr = reinterpret_cast<uintptr_t>(Addr);
-  assert(static_cast<uintptr_t>(ArithAddr + Alignment.value() - 1) >=
+  const size_t AlignmentValue = static_cast<size_t>(Alignment.value());
+  assert(AlignmentValue == Alignment.value() && "Overflow");
+  assert(static_cast<uintptr_t>(ArithAddr + AlignmentValue - 1) >=
              ArithAddr &&
          "Overflow");
-  return alignTo(ArithAddr, Alignment);
+  return (ArithAddr + AlignmentValue - 1) & ~(AlignmentValue - 1U);
 }
 
 /// Returns the offset to the next integer (mod 2**64) that is greater than

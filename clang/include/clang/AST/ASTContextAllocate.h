@@ -14,19 +14,24 @@
 #ifndef LLVM_CLANG_AST_ASTCONTEXTALLOCATE_H
 #define LLVM_CLANG_AST_ASTCONTEXTALLOCATE_H
 
+#include "llvm/Support/MathExtras.h"
 #include <cstddef>
 
 namespace clang {
 
 class ASTContext;
 
+enum { ASTContextAllocateDefaultAlignment = llvm::alignTo<alignof(void *)>(8) };
+
 } // namespace clang
 
 // Defined in ASTContext.h
-void *operator new(size_t Bytes, const clang::ASTContext &C,
-                   size_t Alignment = 8);
-void *operator new[](size_t Bytes, const clang::ASTContext &C,
-                     size_t Alignment = 8);
+void *
+operator new(size_t Bytes, const clang::ASTContext &C,
+             size_t Alignment = clang::ASTContextAllocateDefaultAlignment);
+void *
+operator new[](size_t Bytes, const clang::ASTContext &C,
+               size_t Alignment = clang::ASTContextAllocateDefaultAlignment);
 
 // It is good practice to pair new/delete operators.  Also, MSVC gives many
 // warnings if a matching delete overload is not declared, even though the

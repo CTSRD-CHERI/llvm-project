@@ -89,7 +89,7 @@ static void insertSignalHandler(sys::SignalHandlerCallback FnPtr,
 }
 
 static bool findModulesAndOffsets(void **StackTrace, int Depth,
-                                  const char **Modules, intptr_t *Offsets,
+                                  const char **Modules, size_t *Offsets,
                                   const char *MainExecutableName,
                                   StringSaver &StrPool);
 
@@ -136,7 +136,7 @@ static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
   BumpPtrAllocator Allocator;
   StringSaver StrPool(Allocator);
   std::vector<const char *> Modules(Depth, nullptr);
-  std::vector<intptr_t> Offsets(Depth, 0);
+  std::vector<size_t> Offsets(Depth, 0);
   if (!findModulesAndOffsets(StackTrace, Depth, Modules.data(), Offsets.data(),
                              MainExecutableName.c_str(), StrPool))
     return false;
@@ -151,7 +151,7 @@ static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
     raw_fd_ostream Input(InputFD, true);
     for (int i = 0; i < Depth; i++) {
       if (Modules[i])
-        Input << Modules[i] << " " << (void*)Offsets[i] << "\n";
+        Input << Modules[i] << " " << (void*)(uintptr_t)Offsets[i] << "\n";
     }
   }
 

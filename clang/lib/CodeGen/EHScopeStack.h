@@ -93,8 +93,7 @@ enum CleanupKind : unsigned {
 /// and catch blocks.
 class EHScopeStack {
 public:
-  /* Should switch to alignof(uint64_t) instead of 8, when EHCleanupScope can */
-  enum { ScopeStackAlignment = 8 };
+  enum { ScopeStackAlignment = llvm::alignTo<alignof(void *)>(8) };
 
   /// A saved depth on the scope stack.  This is necessary because
   /// pushing scopes onto the stack invalidates iterators.

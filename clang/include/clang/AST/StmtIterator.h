@@ -63,7 +63,7 @@ protected:
 
   void setVAPtr(const VariableArrayType *P) {
     assert(inDeclGroup() || inSizeOfTypeVA());
-    RawVAPtr = reinterpret_cast<uintptr_t>(P) | (RawVAPtr & Flags);
+    RawVAPtr = reinterpret_cast<uintptr_t>(P) | ((size_t)RawVAPtr & Flags);
   }
 
   void NextDecl(bool ImmediateAdvance = true);

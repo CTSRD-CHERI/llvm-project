@@ -23,7 +23,11 @@ using namespace lld::coff;
 
 namespace lld {
 
-static_assert(sizeof(SymbolUnion) <= 48,
+// The largest member is DefinedCommon. We expect two lots of 8 bytes padded to
+// pointer alignment and 4 pointers, giving 48 bytes on a 64-bit system when
+// including padding.
+static_assert(sizeof(SymbolUnion) <= 2 * llvm::alignTo<alignof(void *)>(8) +
+                4 * sizeof(void *),
               "symbols should be optimized for memory usage");
 
 // Returns a symbol name for an error message.

@@ -45,7 +45,7 @@ class ObjCMethodDecl;
 class Sema;
 
 /// Describes an entity that is being initialized.
-class alignas(8) InitializedEntity {
+class alignas(8) alignas(void *) InitializedEntity {
 public:
   /// Specifies the kind of entity being initialized.
   enum EntityKind {

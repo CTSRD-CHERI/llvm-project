@@ -101,14 +101,14 @@ public:
     /// executable code. The SectionID is a unique identifier assigned by the
     /// RuntimeDyld instance, and optionally recorded by the memory manager to
     /// access a loaded section.
-    virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+    virtual uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                          unsigned SectionID,
                                          StringRef SectionName) = 0;
 
     /// Allocate a memory block of (at least) the given size suitable for data.
     /// The SectionID is a unique identifier assigned by the JIT engine, and
     /// optionally recorded by the memory manager to access a loaded section.
-    virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+    virtual uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                          unsigned SectionID,
                                          StringRef SectionName,
                                          bool IsReadOnly) = 0;
@@ -121,10 +121,10 @@ public:
     ///
     /// Note that by default the callback is disabled. To enable it
     /// redefine the method needsToReserveAllocationSpace to return true.
-    virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-                                        uintptr_t RODataSize,
+    virtual void reserveAllocationSpace(size_t CodeSize, uint32_t CodeAlign,
+                                        size_t RODataSize,
                                         uint32_t RODataAlign,
-                                        uintptr_t RWDataSize,
+                                        size_t RWDataSize,
                                         uint32_t RWDataAlign) {}
 
     /// Override to return true to enable the reserveAllocationSpace callback.

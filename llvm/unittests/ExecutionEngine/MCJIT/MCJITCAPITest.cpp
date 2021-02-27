@@ -29,7 +29,7 @@ static bool didCallAllocateCodeSection;
 static bool didAllocateCompactUnwindSection;
 static bool didCallYield;
 
-static uint8_t *roundTripAllocateCodeSection(void *object, uintptr_t size,
+static uint8_t *roundTripAllocateCodeSection(void *object, size_t size,
                                              unsigned alignment,
                                              unsigned sectionID,
                                              const char *sectionName) {
@@ -38,7 +38,7 @@ static uint8_t *roundTripAllocateCodeSection(void *object, uintptr_t size,
     size, alignment, sectionID, sectionName);
 }
 
-static uint8_t *roundTripAllocateDataSection(void *object, uintptr_t size,
+static uint8_t *roundTripAllocateDataSection(void *object, size_t size,
                                              unsigned alignment,
                                              unsigned sectionID,
                                              const char *sectionName,
@@ -73,12 +73,12 @@ namespace {
 // memory manager to test reserve allocation space callback
 class TestReserveAllocationSpaceMemoryManager: public SectionMemoryManager {
 public:
-  uintptr_t ReservedCodeSize;
-  uintptr_t UsedCodeSize;
-  uintptr_t ReservedDataSizeRO;
-  uintptr_t UsedDataSizeRO;
-  uintptr_t ReservedDataSizeRW;
-  uintptr_t UsedDataSizeRW;
+  size_t ReservedCodeSize;
+  size_t UsedCodeSize;
+  size_t ReservedDataSizeRO;
+  size_t UsedDataSizeRO;
+  size_t ReservedDataSizeRW;
+  size_t UsedDataSizeRW;
   
   TestReserveAllocationSpaceMemoryManager() : 
     ReservedCodeSize(0), UsedCodeSize(0), ReservedDataSizeRO(0), 
@@ -87,22 +87,22 @@ public:
 
   bool needsToReserveAllocationSpace() override { return true; }
 
-  void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-                              uintptr_t DataSizeRO, uint32_t RODataAlign,
-                              uintptr_t DataSizeRW,
+  void reserveAllocationSpace(size_t CodeSize, uint32_t CodeAlign,
+                              size_t DataSizeRO, uint32_t RODataAlign,
+                              size_t DataSizeRW,
                               uint32_t RWDataAlign) override {
     ReservedCodeSize = CodeSize;
     ReservedDataSizeRO = DataSizeRO;
     ReservedDataSizeRW = DataSizeRW;
   }
 
-  void useSpace(uintptr_t* UsedSize, uintptr_t Size, unsigned Alignment) {
-    uintptr_t AlignedSize = (Size + Alignment - 1) / Alignment * Alignment;
+  void useSpace(uintptr_t* UsedSize, size_t Size, unsigned Alignment) {
+    size_t AlignedSize = (Size + Alignment - 1) / Alignment * Alignment;
     uintptr_t AlignedBegin = (*UsedSize + Alignment - 1) / Alignment * Alignment;
     *UsedSize = AlignedBegin + AlignedSize;
   }
 
-  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                unsigned SectionID, StringRef SectionName,
                                bool IsReadOnly) override {
     useSpace(IsReadOnly ? &UsedDataSizeRO : &UsedDataSizeRW, Size, Alignment);
@@ -110,7 +110,7 @@ public:
       SectionID, SectionName, IsReadOnly);
   }
 
-  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                unsigned SectionID,
                                StringRef SectionName) override {
     useSpace(&UsedCodeSize, Size, Alignment);

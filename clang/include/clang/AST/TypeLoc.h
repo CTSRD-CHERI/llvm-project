@@ -65,9 +65,21 @@ protected:
 public:
   TypeLoc() = default;
   TypeLoc(QualType ty, void *opaqueData)
-      : Ty(ty.getAsOpaquePtr()), Data(opaqueData) {}
+      : Ty(ty.getAsOpaquePtr()), Data(opaqueData) {
+    // XXX
+    if ((uintptr_t)opaqueData > 0x40000000 &&
+        (uintptr_t)opaqueData < 0x60000000 &&
+        !__builtin_cheri_tag_get(opaqueData))
+      __builtin_trap();
+  }
   TypeLoc(const Type *ty, void *opaqueData)
-      : Ty(ty), Data(opaqueData) {}
+      : Ty(ty), Data(opaqueData) {
+    // XXX
+    if ((uintptr_t)opaqueData > 0x40000000 &&
+        (uintptr_t)opaqueData < 0x60000000 &&
+        !__builtin_cheri_tag_get(opaqueData))
+      __builtin_trap();
+  }
 
   /// Convert to the specified TypeLoc type, asserting that this TypeLoc
   /// is of the desired type.
@@ -282,7 +294,7 @@ public:
     unsigned align =
         TypeLoc::getLocalAlignmentForType(QualType(getTypePtr(), 0));
     auto dataInt = reinterpret_cast<uintptr_t>(Data);
-    dataInt = llvm::alignTo(dataInt, align);
+    dataInt = llvm::alignAddr(dataInt, align);
     return UnqualTypeLoc(getTypePtr(), reinterpret_cast<void*>(dataInt));
   }
 
@@ -436,7 +448,7 @@ protected:
   void *getNonLocalData() const {
     auto data = reinterpret_cast<uintptr_t>(Base::Data);
     data += asDerived()->getLocalDataSize();
-    data = llvm::alignTo(data, getNextTypeAlign());
+    data = llvm::alignAddr(data, getNextTypeAlign());
     return reinterpret_cast<void*>(data);
   }
 

@@ -468,7 +468,7 @@ struct DlIteratePhdrData {
   int depth;
   bool first;
   const char **modules;
-  intptr_t *offsets;
+  size_t *offsets;
   const char *main_exec_name;
 };
 
@@ -480,15 +480,16 @@ static int dl_iterate_phdr_cb(dl_phdr_info *info, size_t size, void *arg) {
     const auto *phdr = &info->dlpi_phdr[i];
     if (phdr->p_type != PT_LOAD)
       continue;
-    intptr_t beg = info->dlpi_addr + phdr->p_vaddr;
-    intptr_t end = beg + phdr->p_memsz;
+    uintptr_t modbeg = info->dlpi_addr;
+    uintptr_t beg = modbeg + phdr->p_vaddr;
+    uintptr_t end = beg + phdr->p_memsz;
     for (int j = 0; j < data->depth; j++) {
       if (data->modules[j])
         continue;
-      intptr_t addr = (intptr_t)data->StackTrace[j];
+      uintptr_t addr = (uintptr_t)data->StackTrace[j];
       if (beg <= addr && addr < end) {
         data->modules[j] = name;
-        data->offsets[j] = addr - info->dlpi_addr;
+        data->offsets[j] = (size_t)addr - (size_t)modbeg;
       }
     }
   }
@@ -498,7 +499,7 @@ static int dl_iterate_phdr_cb(dl_phdr_info *info, size_t size, void *arg) {
 /// If this is an ELF platform, we can find all loaded modules and their virtual
 /// addresses with dl_iterate_phdr.
 static bool findModulesAndOffsets(void **StackTrace, int Depth,
-                                  const char **Modules, intptr_t *Offsets,
+                                  const char **Modules, size_t *Offsets,
                                   const char *MainExecutableName,
                                   StringSaver &StrPool) {
   DlIteratePhdrData data = {StackTrace, Depth,   true,
@@ -510,7 +511,7 @@ static bool findModulesAndOffsets(void **StackTrace, int Depth,
 /// This platform does not have dl_iterate_phdr, so we do not yet know how to
 /// find all loaded DSOs.
 static bool findModulesAndOffsets(void **StackTrace, int Depth,
-                                  const char **Modules, intptr_t *Offsets,
+                                  const char **Modules, size_t *Offsets,
                                   const char *MainExecutableName,
                                   StringSaver &StrPool) {
   return false;

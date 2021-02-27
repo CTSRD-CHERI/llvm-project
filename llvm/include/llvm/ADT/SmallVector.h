@@ -861,17 +861,28 @@ SmallVectorImpl<T> &SmallVectorImpl<T>::operator=(SmallVectorImpl<T> &&RHS) {
   return *this;
 }
 
+/// SmallVectorBase is not standard layout, so any tail padding can be used for
+/// SmallVectorStorage, breaking \a SmallVectorTemplateCommon::getFirstEl().
+/// Therefore make the storage as aligned as SmallVectorBase to ensure any tail
+/// padding can never be used.
+template <typename T>
+struct SmallVectorStorageAlign {
+  SmallVectorBase<SmallVectorSizeType<T>> b;
+  T t;
+};
+
 /// Storage for the SmallVector elements.  This is specialized for the N=0 case
 /// to avoid allocating unnecessary storage.
 template <typename T, unsigned N>
-struct SmallVectorStorage {
+struct alignas(SmallVectorStorageAlign<T>) SmallVectorStorage {
   AlignedCharArrayUnion<T> InlineElts[N];
 };
 
 /// We need the storage to be properly aligned even for small-size of 0 so that
 /// the pointer math in \a SmallVectorTemplateCommon::getFirstEl() is
 /// well-defined.
-template <typename T> struct alignas(alignof(T)) SmallVectorStorage<T, 0> {};
+template <typename T>
+struct alignas(SmallVectorStorageAlign<T>) SmallVectorStorage<T, 0> {};
 
 /// This is a 'vector' (really, a variable-sized array), optimized
 /// for the case when the array is small.  It contains some number of elements

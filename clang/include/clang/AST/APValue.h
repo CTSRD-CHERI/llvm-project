@@ -193,9 +193,13 @@ public:
 
   /// A non-discriminated union of a base, field, or array index.
   class LValuePathEntry {
-    static_assert(sizeof(uintptr_t) <= sizeof(uint64_t),
-                  "pointer doesn't fit in 64 bits?");
-    uint64_t Value;
+    // Prefer uintptr_t if it can store any uint64_t value in order to support
+    // architectures with strict pointer provenance like CHERI.
+    using ValueType =
+      std::conditional_t<std::numeric_limits<uint64_t>::max() <=
+                         std::numeric_limits<uintptr_t>::max(),
+                         uintptr_t, uint64_t>;
+    ValueType Value;
 
   public:
     LValuePathEntry() : Value() {}
@@ -211,7 +215,7 @@ public:
       return BaseOrMemberType::getFromOpaqueValue(
           reinterpret_cast<void *>(Value));
     }
-    uint64_t getAsArrayIndex() const { return Value; }
+    uint64_t getAsArrayIndex() const { return (uint64_t)Value; }
 
     friend bool operator==(LValuePathEntry A, LValuePathEntry B) {
       return A.Value == B.Value;
@@ -220,7 +224,7 @@ public:
       return A.Value != B.Value;
     }
     friend llvm::hash_code hash_value(LValuePathEntry A) {
-      return llvm::hash_value(A.Value);
+      return llvm::hash_value((uint64_t)A.Value);
     }
   };
   struct NoLValuePath {};

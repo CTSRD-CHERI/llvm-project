@@ -94,7 +94,8 @@ public:
     ER.V1.setPointer(V);
     ER.V1.setInt(Scalar);
     ER.V2.setPointer(
-        reinterpret_cast<llvm::Value *>(Alignment << AggAlignShift));
+        reinterpret_cast<llvm::Value *>(
+            static_cast<uintptr_t>(Alignment) << AggAlignShift));
     ER.V2.setInt(false);
     return ER;
   }

@@ -138,7 +138,8 @@ struct BulkPublic {
   StringRef getName() const { return StringRef(Name, NameLen); }
 };
 
-static_assert(sizeof(BulkPublic) <= 24, "unexpected size increase");
+static_assert(sizeof(BulkPublic) == sizeof(void *) + 16,
+              "unexpected size change");
 static_assert(std::is_trivially_copyable<BulkPublic>::value,
               "should be trivial");
 

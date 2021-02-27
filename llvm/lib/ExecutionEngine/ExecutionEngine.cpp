@@ -289,8 +289,8 @@ uint64_t ExecutionEngine::getAddressToGlobalIfAvailable(StringRef S) {
 
 void *ExecutionEngine::getPointerToGlobalIfAvailable(StringRef S) {
   std::lock_guard<sys::Mutex> locked(lock);
-  if (void* Address = (void *) getAddressToGlobalIfAvailable(S))
-    return Address;
+  if (uint64_t Address = getAddressToGlobalIfAvailable(S))
+    return (void *)(uintptr_t)Address;
   return nullptr;
 }
 

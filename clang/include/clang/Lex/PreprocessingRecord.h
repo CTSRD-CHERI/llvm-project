@@ -37,11 +37,18 @@ namespace clang {
 
 class PreprocessingRecord;
 
+enum {
+  PreprocessingRecordAllocateDefaultAlignment =
+      llvm::alignTo<alignof(void *)>(8)
+};
+
 } // namespace clang
 
 /// Allocates memory within a Clang preprocessing record.
-void *operator new(size_t bytes, clang::PreprocessingRecord &PR,
-                   unsigned alignment = 8) noexcept;
+void *
+operator new(size_t bytes, clang::PreprocessingRecord &PR,
+             unsigned alignment =
+                 clang::PreprocessingRecordAllocateDefaultAlignment) noexcept;
 
 /// Frees memory allocated in a Clang preprocessing record.
 void operator delete(void *ptr, clang::PreprocessingRecord &PR,
@@ -110,8 +117,10 @@ class Token;
 
     // Only allow allocation of preprocessed entities using the allocator
     // in PreprocessingRecord or by doing a placement new.
-    void *operator new(size_t bytes, PreprocessingRecord &PR,
-                       unsigned alignment = 8) noexcept {
+    void *
+    operator new(size_t bytes, PreprocessingRecord &PR,
+                 unsigned alignment =
+                     PreprocessingRecordAllocateDefaultAlignment) noexcept {
       return ::operator new(bytes, PR, alignment);
     }
 
@@ -400,7 +409,9 @@ class Token;
     explicit PreprocessingRecord(SourceManager &SM);
 
     /// Allocate memory in the preprocessing record.
-    void *Allocate(unsigned Size, unsigned Align = 8) {
+    void *
+    Allocate(unsigned Size,
+             unsigned Align = PreprocessingRecordAllocateDefaultAlignment) {
       return BumpAlloc.Allocate(Size, Align);
     }
 

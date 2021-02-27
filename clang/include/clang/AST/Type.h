@@ -1488,7 +1488,7 @@ enum PointerInterpretationKind {
 ///
 /// Types, once created, are immutable.
 ///
-class alignas(8) Type : public ExtQualsTypeCommonBase {
+class alignas(8) alignas(void *) Type : public ExtQualsTypeCommonBase {
 public:
   enum TypeClass {
 #define TYPE(Class, Base) Class,
@@ -5128,7 +5128,9 @@ public:
 
 /// Represents a C++11 auto or C++14 decltype(auto) type, possibly constrained
 /// by a type-constraint.
-class alignas(8) AutoType : public DeducedType, public llvm::FoldingSetNode {
+class alignas(8) alignas(void *) AutoType
+    : public DeducedType,
+      public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these
 
   ConceptDecl *TypeConstraintConcept;
@@ -5251,7 +5253,7 @@ public:
 /// TemplateArguments, followed by a QualType representing the
 /// non-canonical aliased type when the template is a type alias
 /// template.
-class alignas(8) TemplateSpecializationType
+class alignas(8) alignas(void *) TemplateSpecializationType
     : public Type,
       public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these
@@ -5666,7 +5668,7 @@ public:
 /// Represents a template specialization type whose template cannot be
 /// resolved, e.g.
 ///   A<T>::template B<T>
-class alignas(8) DependentTemplateSpecializationType
+class alignas(8) alignas(void *) DependentTemplateSpecializationType
     : public TypeWithKeyword,
       public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these
@@ -6520,7 +6522,7 @@ public:
 /// TypeLoc TL = TypeSourceInfo->getTypeLoc();
 /// TL.getBeginLoc().print(OS, SrcMgr);
 /// @endcode
-class alignas(8) TypeSourceInfo {
+class alignas(8) alignas(void *) TypeSourceInfo {
   // Contains a memory block after the class, used for type source information,
   // allocated by ASTContext.
   friend class ASTContext;

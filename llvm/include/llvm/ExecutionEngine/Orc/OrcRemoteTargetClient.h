@@ -71,7 +71,7 @@ public:
     RemoteRTDyldMemoryManager(RemoteRTDyldMemoryManager &&) = default;
     RemoteRTDyldMemoryManager &operator=(RemoteRTDyldMemoryManager &&) = delete;
 
-    uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  StringRef SectionName) override {
       Unmapped.back().CodeAllocs.emplace_back(Size, Alignment);
@@ -83,7 +83,7 @@ public:
       return Alloc;
     }
 
-    uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                  unsigned SectionID, StringRef SectionName,
                                  bool IsReadOnly) override {
       if (IsReadOnly) {
@@ -105,9 +105,9 @@ public:
       return Alloc;
     }
 
-    void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-                                uintptr_t RODataSize, uint32_t RODataAlign,
-                                uintptr_t RWDataSize,
+    void reserveAllocationSpace(size_t CodeSize, uint32_t CodeAlign,
+                                size_t RODataSize, uint32_t RODataAlign,
+                                size_t RWDataSize,
                                 uint32_t RWDataAlign) override {
       Unmapped.push_back(ObjectAllocs());
 

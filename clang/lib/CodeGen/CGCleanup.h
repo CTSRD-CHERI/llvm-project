@@ -229,7 +229,7 @@ public:
 };
 
 /// A cleanup scope which generates the cleanup blocks lazily.
-class alignas(8) EHCleanupScope : public EHScope {
+class alignas(8) alignas(void *) EHCleanupScope : public EHScope {
   /// The nearest normal cleanup scope enclosing this one.
   EHScopeStack::stable_iterator EnclosingNormal;
 

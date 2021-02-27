@@ -82,8 +82,8 @@ void User::growHungoffUses(unsigned NewNumUses, bool IsPhi) {
 
 // This is a private struct used by `User` to track the co-allocated descriptor
 // section.
-struct DescriptorInfo {
-  intptr_t SizeInBytes;
+struct alignas(void *) DescriptorInfo {
+  size_t SizeInBytes;
 };
 
 ArrayRef<const uint8_t> User::getDescriptor() const {

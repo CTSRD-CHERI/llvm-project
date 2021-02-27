@@ -7722,8 +7722,7 @@ bool LLParser::ParseTypeIdSummary(TypeIdSummary &TIS) {
   return false;
 }
 
-static ValueInfo EmptyVI =
-    ValueInfo(false, (GlobalValueSummaryMapTy::value_type *)-8);
+static ValueInfo EmptyVI = DenseMapInfo<ValueInfo>::getEmptyKey();
 
 /// TypeIdCompatibleVtableEntry
 ///   ::= 'typeidCompatibleVTable' ':' '(' 'name' ':' STRINGCONSTANT ','
@@ -8081,7 +8080,7 @@ bool LLParser::ParseArgs(std::vector<uint64_t> &Args) {
   return false;
 }
 
-static const auto FwdVIRef = (GlobalValueSummaryMapTy::value_type *)-8;
+static const auto FwdVIRef = EmptyVI.getRef();
 
 static void resolveFwdRef(ValueInfo *Fwd, ValueInfo &Resolved) {
   bool ReadOnly = Fwd->isReadOnly();

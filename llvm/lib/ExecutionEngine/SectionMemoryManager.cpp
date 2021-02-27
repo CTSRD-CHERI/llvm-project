@@ -18,7 +18,7 @@
 
 namespace llvm {
 
-uint8_t *SectionMemoryManager::allocateDataSection(uintptr_t Size,
+uint8_t *SectionMemoryManager::allocateDataSection(size_t Size,
                                                    unsigned Alignment,
                                                    unsigned SectionID,
                                                    StringRef SectionName,
@@ -30,7 +30,7 @@ uint8_t *SectionMemoryManager::allocateDataSection(uintptr_t Size,
                          Alignment);
 }
 
-uint8_t *SectionMemoryManager::allocateCodeSection(uintptr_t Size,
+uint8_t *SectionMemoryManager::allocateCodeSection(size_t Size,
                                                    unsigned Alignment,
                                                    unsigned SectionID,
                                                    StringRef SectionName) {
@@ -39,14 +39,14 @@ uint8_t *SectionMemoryManager::allocateCodeSection(uintptr_t Size,
 }
 
 uint8_t *SectionMemoryManager::allocateSection(
-    SectionMemoryManager::AllocationPurpose Purpose, uintptr_t Size,
+    SectionMemoryManager::AllocationPurpose Purpose, size_t Size,
     unsigned Alignment) {
   if (!Alignment)
     Alignment = 16;
 
   assert(!(Alignment & (Alignment - 1)) && "Alignment must be a power of two.");
 
-  uintptr_t RequiredSize = Alignment * ((Size + Alignment - 1) / Alignment + 1);
+  size_t RequiredSize = Alignment * ((Size + Alignment - 1) / Alignment + 1);
   uintptr_t Addr = 0;
 
   MemoryGroup &MemGroup = [&]() -> MemoryGroup & {

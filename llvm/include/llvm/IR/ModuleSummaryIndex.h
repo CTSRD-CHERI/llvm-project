@@ -256,11 +256,13 @@ inline bool operator<(const ValueInfo &A, const ValueInfo &B) {
 
 template <> struct DenseMapInfo<ValueInfo> {
   static inline ValueInfo getEmptyKey() {
-    return ValueInfo(false, (GlobalValueSummaryMapTy::value_type *)-8);
+    intptr_t Val = -1 * (intptr_t)alignof(GlobalValueSummaryMapTy::value_type);
+    return ValueInfo(false, (GlobalValueSummaryMapTy::value_type *)Val);
   }
 
   static inline ValueInfo getTombstoneKey() {
-    return ValueInfo(false, (GlobalValueSummaryMapTy::value_type *)-16);
+    intptr_t Val = -2 * (intptr_t)alignof(GlobalValueSummaryMapTy::value_type);
+    return ValueInfo(false, (GlobalValueSummaryMapTy::value_type *)Val);
   }
 
   static inline bool isSpecialKey(ValueInfo V) {

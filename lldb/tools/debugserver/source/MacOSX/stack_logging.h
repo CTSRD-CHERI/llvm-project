@@ -63,7 +63,7 @@ extern "C" void stack_logging_log_stack(unsigned type, unsigned arg1,
 
 extern "C" void
 __disk_stack_logging_log_stack(uint32_t type_flags, uintptr_t zone_ptr,
-                               uintptr_t size, uintptr_t ptr_arg,
+                               size_t size, uintptr_t ptr_arg,
                                uintptr_t return_val, uint32_t num_hot_to_skip);
 /* Fits as the malloc_logger; logs malloc/free/realloc events and can log custom
  * events if called directly */

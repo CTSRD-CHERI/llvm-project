@@ -72,12 +72,12 @@ void Decl::updateOutOfDate(IdentifierInfo &II) const {
 
 void *Decl::operator new(std::size_t Size, const ASTContext &Context,
                          unsigned ID, std::size_t Extra) {
-  // Allocate an extra 8 bytes worth of storage, which ensures that the
-  // resulting pointer will still be 8-byte aligned.
-  static_assert(sizeof(unsigned) * 2 >= alignof(Decl),
-                "Decl won't be misaligned");
-  void *Start = Context.Allocate(Size + Extra + 8);
-  void *Result = (char*)Start + 8;
+  // We allocate an extra 8 bytes, but may need additional padding to ensure
+  // Decl remains aligned if more than 8 byte alignment is required.
+  // NB: The padding comes first so the prefix and Decl are contiguous.
+  size_t ExtraAlign = llvm::offsetToAlignment(8, llvm::Align(alignof(Decl)));
+  void *Start = Context.Allocate(Size + Extra + 8 + ExtraAlign);
+  void *Result = (char*)Start + 8 + ExtraAlign;
 
   unsigned *PrefixPtr = (unsigned *)Result - 2;
 

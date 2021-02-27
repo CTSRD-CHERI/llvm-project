@@ -20,6 +20,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/ELF.h"
+#include <algorithm>
 
 namespace lld {
 // Returns a string representation for a symbol for diagnostics.
@@ -265,10 +266,12 @@ public:
   // which are referenced by relocations when -r or --emit-relocs is given.
   uint8_t used : 1;
 
+  // XXX: Superseded by upstream exportDynamic?
   // True if a symbol is referenced by a dynamic relocation and therefore needs
   // to be included in the dynamic symbol table.
   unsigned usedByDynReloc : 1;
 
+  // XXX: Unused?
   // True if the linker should set the size of this symbol to be the size of the
   // section it references. For compatibility reason this is only used when
   // building for CHERI
@@ -485,10 +488,23 @@ union SymbolUnion {
   alignas(LazyObject) char f[sizeof(LazyObject)];
 };
 
+// 2 ptrs
+// 6 uint32
+// 1 uint16
+// 1 uint8
+// 1 uint8
+
+// 2 ptrs
+// 3 uint64
+// 1 uint64
+
 // It is important to keep the size of SymbolUnion small for performance and
-// memory usage reasons. 80 bytes is a soft limit based on the size of Defined
-// on a 64-bit system.
-static_assert(sizeof(SymbolUnion) <= 80, "SymbolUnion too large");
+// memory usage reasons. We expect 49 bytes and 3 pointers in Defined, the
+// largest type, giving 72 bytes on a 64-bit system when including padding.
+static_assert(sizeof(SymbolUnion) <=
+                llvm::alignTo<std::max(alignof(void *), size_t(8))>(49) +
+                4 * sizeof(void *),
+              "SymbolUnion too large");
 
 template <typename T> struct AssertSymbol {
   static_assert(std::is_trivially_destructible<T>(),

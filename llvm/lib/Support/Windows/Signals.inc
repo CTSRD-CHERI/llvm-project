@@ -254,7 +254,7 @@ struct FindModuleData {
   void **StackTrace;
   int Depth;
   const char **Modules;
-  intptr_t *Offsets;
+  size_t *Offsets;
   StringSaver *StrPool;
 };
 }
@@ -263,22 +263,22 @@ static BOOL CALLBACK findModuleCallback(PCSTR ModuleName,
                                         DWORD64 ModuleBase, ULONG ModuleSize,
                                         void *VoidData) {
   FindModuleData *Data = (FindModuleData*)VoidData;
-  intptr_t Beg = ModuleBase;
-  intptr_t End = Beg + ModuleSize;
+  uintptr_t Beg = ModuleBase;
+  uintptr_t End = Beg + ModuleSize;
   for (int I = 0; I < Data->Depth; I++) {
     if (Data->Modules[I])
       continue;
-    intptr_t Addr = (intptr_t)Data->StackTrace[I];
+    uintptr_t Addr = (uintptr_t)Data->StackTrace[I];
     if (Beg <= Addr && Addr < End) {
       Data->Modules[I] = Data->StrPool->save(ModuleName).data();
-      Data->Offsets[I] = Addr - Beg;
+      Data->Offsets[I] = (size_t)Addr - (size_t)Beg;
     }
   }
   return TRUE;
 }
 
 static bool findModulesAndOffsets(void **StackTrace, int Depth,
-                                  const char **Modules, intptr_t *Offsets,
+                                  const char **Modules, size_t *Offsets,
                                   const char *MainExecutableName,
                                   StringSaver &StrPool) {
   if (!fEnumerateLoadedModules)

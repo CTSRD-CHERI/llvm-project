@@ -172,7 +172,7 @@ struct range_contains_data_callback_info_t {
 
 struct malloc_match {
   void *addr;
-  intptr_t size;
+  size_t size;
   intptr_t offset;
   uintptr_t type;
 };

@@ -631,7 +631,8 @@ public:
     return BumpAlloc;
   }
 
-  void *Allocate(size_t Size, unsigned Align = 8) const {
+  void *Allocate(size_t Size,
+                 unsigned Align = ASTContextAllocateDefaultAlignment) const {
     return BumpAlloc.Allocate(Size, Align);
   }
   template <typename T> T *Allocate(size_t Num = 1) const {

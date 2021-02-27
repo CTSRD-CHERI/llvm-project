@@ -298,15 +298,6 @@ public:
   static SectionChunk *findByName(ArrayRef<SectionChunk *> sections,
                                   StringRef name);
 
-  // The file that this chunk was created from.
-  ObjFile *file;
-
-  // Pointer to the COFF section header in the input file.
-  const coff_section *header;
-
-  // The COMDAT leader symbol if this is a COMDAT chunk.
-  DefinedRegular *sym = nullptr;
-
   // The CRC of the contents as described in the COFF spec 4.5.5.
   // Auxiliary Format 5: Section Definitions. Used for ICF.
   uint32_t checksum = 0;
@@ -321,6 +312,15 @@ public:
   // The COMDAT selection if this is a COMDAT chunk.
   llvm::COFF::COMDATType selection = (llvm::COFF::COMDATType)0;
 
+  // The file that this chunk was created from.
+  ObjFile *file;
+
+  // Pointer to the COFF section header in the input file.
+  const coff_section *header;
+
+  // The COMDAT leader symbol if this is a COMDAT chunk.
+  DefinedRegular *sym = nullptr;
+
   // A pointer pointing to a replacement for this chunk.
   // Initially it points to "this" object. If this chunk is merged
   // with other chunk by ICF, it points to another chunk,
@@ -330,15 +330,15 @@ public:
 private:
   SectionChunk *assocChildren = nullptr;
 
-  // Used for ICF (Identical COMDAT Folding)
-  void replace(SectionChunk *other);
-  uint32_t eqClass[2] = {0, 0};
-
   // Relocations for this section. Size is stored below.
   const coff_relocation *relocsData;
 
   // Section name string. Size is stored below.
   const char *sectionNameData;
+
+  // Used for ICF (Identical COMDAT Folding)
+  void replace(SectionChunk *other);
+  uint32_t eqClass[2] = {0, 0};
 
   uint32_t relocsSize = 0;
   uint32_t sectionNameSize = 0;

@@ -53,9 +53,10 @@ SectionChunk::SectionChunk(ObjFile *f, const coff_section *h)
 }
 
 // SectionChunk is one of the most frequently allocated classes, so it is
-// important to keep it as compact as possible. As of this writing, the number
-// below is the size of this class on x64 platforms.
-static_assert(sizeof(SectionChunk) <= 88, "SectionChunk grew unexpectedly");
+// important to keep it as compact as possible. We expect 32 bytes and 7
+// pointers, giving 88 bytes on a 64-bit system.
+static_assert(sizeof(SectionChunk) <= 32 + 7 * sizeof(void *),
+              "SectionChunk grew unexpectedly");
 
 static void add16(uint8_t *p, int16_t v) { write16le(p, read16le(p) + v); }
 static void add32(uint8_t *p, int32_t v) { write32le(p, read32le(p) + v); }

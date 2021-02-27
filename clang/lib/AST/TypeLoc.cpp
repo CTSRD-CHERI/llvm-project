@@ -171,11 +171,11 @@ void TypeLoc::copy(TypeLoc other) {
   // can memcpy because getFullDataSize() accurately reflects the
   // layout of the data.
   if (reinterpret_cast<uintptr_t>(Data) ==
-          llvm::alignTo(reinterpret_cast<uintptr_t>(Data),
-                        TypeLocMaxDataAlign) &&
+          llvm::alignAddr(reinterpret_cast<uintptr_t>(Data),
+                          TypeLocMaxDataAlign) &&
       reinterpret_cast<uintptr_t>(other.Data) ==
-          llvm::alignTo(reinterpret_cast<uintptr_t>(other.Data),
-                        TypeLocMaxDataAlign)) {
+          llvm::alignAddr(reinterpret_cast<uintptr_t>(other.Data),
+                          TypeLocMaxDataAlign)) {
     memcpy(Data, other.Data, getFullDataSize());
     return;
   }

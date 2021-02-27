@@ -535,7 +535,7 @@ public:
   };
 
   /// Header for data within LifetimeExtendedCleanupStack.
-  struct LifetimeExtendedCleanupHeader {
+  struct alignas(void *) LifetimeExtendedCleanupHeader {
     /// The size of the following cleanup object.
     unsigned Size;
     /// The kind of cleanup to push: a value from the CleanupKind enumeration.

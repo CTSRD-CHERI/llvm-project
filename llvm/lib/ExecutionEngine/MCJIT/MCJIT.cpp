@@ -442,7 +442,7 @@ void *MCJIT::getPointerToFunction(Function *F) {
   //
   // This is the accessor for the target address, so make sure to check the
   // load address of the symbol, not the local address.
-  return (void*)Dyld.getSymbol(Name).getAddress();
+  return (void *)(uintptr_t)Dyld.getSymbol(Name).getAddress();
 }
 
 void MCJIT::runStaticConstructorsDestructorsInModulePtrSet(

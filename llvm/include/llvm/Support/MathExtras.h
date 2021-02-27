@@ -739,6 +739,13 @@ template <uint64_t Align> constexpr inline uint64_t alignTo(uint64_t Value) {
   return (Value + Align - 1) / Align * Align;
 }
 
+/// Aligns `Addr` to `Align` bytes, rounding up.
+inline uintptr_t alignAddr(uintptr_t Addr, uint64_t Align) {
+  assert(static_cast<uintptr_t>(Addr + Align - 1) >= Addr && "Overflow");
+  assert(llvm::isPowerOf2_64(Align) && "Alignment is not a power of 2");
+  return (Addr + Align - 1) & ~(Align - 1U);
+}
+
 /// Returns the integer ceil(Numerator / Denominator).
 inline uint64_t divideCeil(uint64_t Numerator, uint64_t Denominator) {
   return alignTo(Numerator, Denominator) / Denominator;

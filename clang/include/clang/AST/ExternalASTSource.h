@@ -327,16 +327,22 @@ protected:
 /// external AST source itself.
 template<typename T, typename OffsT, T* (ExternalASTSource::*Get)(OffsT Offset)>
 struct LazyOffsetPtr {
+  // Prefer uintptr_t if it can store any uint64_t value in order to support
+  // architectures with strict pointer provenance like CHERI.
+  using PtrType =
+    std::conditional_t<std::numeric_limits<uint64_t>::max() <=
+                       std::numeric_limits<uintptr_t>::max(),
+                       uintptr_t, uint64_t>;
   /// Either a pointer to an AST node or the offset within the
   /// external AST source where the AST node can be found.
   ///
   /// If the low bit is clear, a pointer to the AST node. If the low
   /// bit is set, the upper 63 bits are the offset.
-  mutable uint64_t Ptr = 0;
+  mutable PtrType Ptr = 0;
 
 public:
   LazyOffsetPtr() = default;
-  explicit LazyOffsetPtr(T *Ptr) : Ptr(reinterpret_cast<uint64_t>(Ptr)) {}
+  explicit LazyOffsetPtr(T *Ptr) : Ptr(reinterpret_cast<PtrType>(Ptr)) {}
 
   explicit LazyOffsetPtr(uint64_t Offset) : Ptr((Offset << 1) | 0x01) {
     assert((Offset << 1 >> 1) == Offset && "Offsets must require < 63 bits");
@@ -345,7 +351,7 @@ public:
   }
 
   LazyOffsetPtr &operator=(T *Ptr) {
-    this->Ptr = reinterpret_cast<uint64_t>(Ptr);
+    this->Ptr = reinterpret_cast<PtrType>(Ptr);
     return *this;
   }
 

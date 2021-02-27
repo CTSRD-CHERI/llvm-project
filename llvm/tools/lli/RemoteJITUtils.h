@@ -87,22 +87,22 @@ public:
     this->Resolver = std::move(Resolver);
   }
 
-  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                unsigned SectionID,
                                StringRef SectionName) override {
     return MemMgr->allocateCodeSection(Size, Alignment, SectionID, SectionName);
   }
 
-  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                unsigned SectionID, StringRef SectionName,
                                bool IsReadOnly) override {
     return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName,
                                        IsReadOnly);
   }
 
-  void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-                              uintptr_t RODataSize, uint32_t RODataAlign,
-                              uintptr_t RWDataSize,
+  void reserveAllocationSpace(size_t CodeSize, uint32_t CodeAlign,
+                              size_t RODataSize, uint32_t RODataAlign,
+                              size_t RWDataSize,
                               uint32_t RWDataAlign) override {
     MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign,
                                    RWDataSize, RWDataAlign);

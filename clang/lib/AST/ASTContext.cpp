@@ -2855,7 +2855,8 @@ TypeSourceInfo *ASTContext::CreateTypeSourceInfo(QualType T,
            "incorrect data size provided to CreateTypeSourceInfo!");
 
   auto *TInfo =
-    (TypeSourceInfo*)BumpAlloc.Allocate(sizeof(TypeSourceInfo) + DataSize, 8);
+    (TypeSourceInfo*)BumpAlloc.Allocate(sizeof(TypeSourceInfo) + DataSize,
+                                        ASTContextAllocateDefaultAlignment);
   new (TInfo) TypeSourceInfo(T);
   return TInfo;
 }

@@ -2059,12 +2059,12 @@ public:
       using NameKind = unsigned;
 
       NameKind Kind = 0;
-      uint64_t Data = 0;
+      uintptr_t Data = 0;
 
     public:
       DeclarationNameKey() = default;
       DeclarationNameKey(DeclarationName Name);
-      DeclarationNameKey(NameKind Kind, uint64_t Data)
+      DeclarationNameKey(NameKind Kind, uintptr_t Data)
           : Kind(Kind), Data(Data) {}
 
       NameKind getKind() const { return Kind; }

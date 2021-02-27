@@ -258,7 +258,7 @@ private:
     ///
     /// \return
     ///     Allocated space.
-    uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  llvm::StringRef SectionName) override;
 
@@ -278,7 +278,7 @@ private:
     ///
     /// \return
     ///     Allocated space.
-    uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  llvm::StringRef SectionName,
                                  bool IsReadOnly) override;

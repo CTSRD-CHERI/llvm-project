@@ -581,7 +581,7 @@ lldb::SectionType IRExecutionUnit::GetSectionTypeFromSectionName(
 }
 
 uint8_t *IRExecutionUnit::MemoryManager::allocateCodeSection(
-    uintptr_t Size, unsigned Alignment, unsigned SectionID,
+    size_t Size, unsigned Alignment, unsigned SectionID,
     llvm::StringRef SectionName) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EXPRESSIONS));
 
@@ -611,7 +611,7 @@ uint8_t *IRExecutionUnit::MemoryManager::allocateCodeSection(
 }
 
 uint8_t *IRExecutionUnit::MemoryManager::allocateDataSection(
-    uintptr_t Size, unsigned Alignment, unsigned SectionID,
+    size_t Size, unsigned Alignment, unsigned SectionID,
     llvm::StringRef SectionName, bool IsReadOnly) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EXPRESSIONS));
 

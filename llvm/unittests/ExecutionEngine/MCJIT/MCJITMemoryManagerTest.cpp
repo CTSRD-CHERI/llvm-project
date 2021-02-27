@@ -121,8 +121,8 @@ TEST(MCJITMemoryManagerTest, ManyVariedAllocations) {
   uint8_t* data[10000];
 
   for (unsigned i = 0; i < 10000; ++i) {
-    uintptr_t CodeSize = i % 16 + 1;
-    uintptr_t DataSize = i % 8 + 1;
+    size_t CodeSize = i % 16 + 1;
+    size_t DataSize = i % 8 + 1;
 
     bool isReadOnly = i % 3 == 0;
     unsigned Align = 8 << (i % 4);
@@ -150,8 +150,8 @@ TEST(MCJITMemoryManagerTest, ManyVariedAllocations) {
   }
 
   for (unsigned i = 0; i < 10000; ++i) {
-    uintptr_t CodeSize = i % 16 + 1;
-    uintptr_t DataSize = i % 8 + 1;
+    size_t CodeSize = i % 16 + 1;
+    size_t DataSize = i % 8 + 1;
 
     for (unsigned j = 0; j < CodeSize; j++) {
       uint8_t ExpectedCode = 1 + (i % 254);

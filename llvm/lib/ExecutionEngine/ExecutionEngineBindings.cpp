@@ -337,11 +337,11 @@ public:
                              void *Opaque);
   ~SimpleBindingMemoryManager() override;
 
-  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                unsigned SectionID,
                                StringRef SectionName) override;
 
-  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                unsigned SectionID, StringRef SectionName,
                                bool isReadOnly) override;
 
@@ -371,14 +371,14 @@ SimpleBindingMemoryManager::~SimpleBindingMemoryManager() {
 }
 
 uint8_t *SimpleBindingMemoryManager::allocateCodeSection(
-  uintptr_t Size, unsigned Alignment, unsigned SectionID,
+  size_t Size, unsigned Alignment, unsigned SectionID,
   StringRef SectionName) {
   return Functions.AllocateCodeSection(Opaque, Size, Alignment, SectionID,
                                        SectionName.str().c_str());
 }
 
 uint8_t *SimpleBindingMemoryManager::allocateDataSection(
-  uintptr_t Size, unsigned Alignment, unsigned SectionID,
+  size_t Size, unsigned Alignment, unsigned SectionID,
   StringRef SectionName, bool isReadOnly) {
   return Functions.AllocateDataSection(Opaque, Size, Alignment, SectionID,
                                        SectionName.str().c_str(),

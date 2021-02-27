@@ -13,6 +13,7 @@
 #ifndef LLVM_CLANG_AST_STMT_H
 #define LLVM_CLANG_AST_STMT_H
 
+#include "clang/AST/ASTContextAllocate.h"
 #include "clang/AST/DeclGroup.h"
 #include "clang/AST/DependenceFlags.h"
 #include "clang/AST/StmtIterator.h"
@@ -1076,10 +1077,10 @@ public:
   // Only allow allocation of Stmts using the allocator in ASTContext
   // or by doing a placement new.
   void* operator new(size_t bytes, const ASTContext& C,
-                     unsigned alignment = 8);
+                     unsigned alignment = ASTContextAllocateDefaultAlignment);
 
   void* operator new(size_t bytes, const ASTContext* C,
-                     unsigned alignment = 8) {
+                     unsigned alignment = ASTContextAllocateDefaultAlignment) {
     return operator new(bytes, *C, alignment);
   }
 
@@ -1138,7 +1139,7 @@ public:
   Stmt &operator=(Stmt &&) = delete;
 
   Stmt(StmtClass SC) {
-    static_assert(sizeof(*this) <= 8,
+    static_assert(sizeof(*this) <= llvm::alignTo<alignof(void *)>(8),
                   "changing bitfields changed sizeof(Stmt)");
     static_assert(sizeof(*this) % alignof(void *) == 0,
                   "Insufficient alignment!");

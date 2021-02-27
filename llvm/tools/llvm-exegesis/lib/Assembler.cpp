@@ -271,7 +271,7 @@ public:
   explicit TrackingSectionMemoryManager(uintptr_t *CodeSize)
       : CodeSize(CodeSize) {}
 
-  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                unsigned SectionID,
                                StringRef SectionName) override {
     *CodeSize = Size;
@@ -293,7 +293,7 @@ ExecutableFunction::ExecutableFunction(
   // Initializing the execution engine.
   // We need to use the JIT EngineKind to be able to add an object file.
   LLVMLinkInMCJIT();
-  uintptr_t CodeSize = 0;
+  size_t CodeSize = 0;
   std::string Error;
   ExecEngine.reset(
       EngineBuilder(createModule(Context, TM->createDataLayout()))

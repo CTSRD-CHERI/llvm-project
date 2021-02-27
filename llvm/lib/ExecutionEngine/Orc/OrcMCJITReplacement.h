@@ -64,7 +64,7 @@ class OrcMCJITReplacement : public ExecutionEngine {
                            std::shared_ptr<MCJITMemoryManager> ClientMM)
       : M(M), ClientMM(std::move(ClientMM)) {}
 
-    uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  StringRef SectionName) override {
       uint8_t *Addr =
@@ -74,7 +74,7 @@ class OrcMCJITReplacement : public ExecutionEngine {
       return Addr;
     }
 
-    uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                  unsigned SectionID, StringRef SectionName,
                                  bool IsReadOnly) override {
       uint8_t *Addr = ClientMM->allocateDataSection(Size, Alignment, SectionID,
@@ -83,9 +83,9 @@ class OrcMCJITReplacement : public ExecutionEngine {
       return Addr;
     }
 
-    void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-                                uintptr_t RODataSize, uint32_t RODataAlign,
-                                uintptr_t RWDataSize,
+    void reserveAllocationSpace(size_t CodeSize, uint32_t CodeAlign,
+                                size_t RODataSize, uint32_t RODataAlign,
+                                size_t RWDataSize,
                                 uint32_t RWDataAlign) override {
       return ClientMM->reserveAllocationSpace(CodeSize, CodeAlign,
                                               RODataSize, RODataAlign,

@@ -1028,21 +1028,21 @@ DeclarationNameKey::DeclarationNameKey(DeclarationName Name)
     : Kind(Name.getNameKind()) {
   switch (Kind) {
   case DeclarationName::Identifier:
-    Data = (uint64_t)Name.getAsIdentifierInfo();
+    Data = (uintptr_t)Name.getAsIdentifierInfo();
     break;
   case DeclarationName::ObjCZeroArgSelector:
   case DeclarationName::ObjCOneArgSelector:
   case DeclarationName::ObjCMultiArgSelector:
-    Data = (uint64_t)Name.getObjCSelector().getAsOpaquePtr();
+    Data = (uintptr_t)Name.getObjCSelector().getAsOpaquePtr();
     break;
   case DeclarationName::CXXOperatorName:
     Data = Name.getCXXOverloadedOperator();
     break;
   case DeclarationName::CXXLiteralOperatorName:
-    Data = (uint64_t)Name.getCXXLiteralIdentifier();
+    Data = (uintptr_t)Name.getCXXLiteralIdentifier();
     break;
   case DeclarationName::CXXDeductionGuideName:
-    Data = (uint64_t)Name.getCXXDeductionGuideTemplate()
+    Data = (uintptr_t)Name.getCXXDeductionGuideTemplate()
                ->getDeclName().getAsIdentifierInfo();
     break;
   case DeclarationName::CXXConstructorName:
@@ -1104,19 +1104,19 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned) {
   using namespace llvm::support;
 
   auto Kind = (DeclarationName::NameKind)*d++;
-  uint64_t Data;
+  uintptr_t Data;
   switch (Kind) {
   case DeclarationName::Identifier:
   case DeclarationName::CXXLiteralOperatorName:
   case DeclarationName::CXXDeductionGuideName:
-    Data = (uint64_t)Reader.getLocalIdentifier(
+    Data = (uintptr_t)Reader.getLocalIdentifier(
         F, endian::readNext<uint32_t, little, unaligned>(d));
     break;
   case DeclarationName::ObjCZeroArgSelector:
   case DeclarationName::ObjCOneArgSelector:
   case DeclarationName::ObjCMultiArgSelector:
     Data =
-        (uint64_t)Reader.getLocalSelector(
+        (uintptr_t)Reader.getLocalSelector(
                              F, endian::readNext<uint32_t, little, unaligned>(
                                     d)).getAsOpaquePtr();
     break;

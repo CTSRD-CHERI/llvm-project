@@ -872,7 +872,7 @@ RuntimeDyldImpl::emitSection(const ObjectFile &Obj,
                       << Name << " obj addr: " << format("%p", pData)
                       << " new addr: " << format("%p", Addr) << " DataSize: "
                       << DataSize << " StubBufSize: " << StubBufSize
-                      << " Allocate: " << Allocate << "\n");
+                      << " Allocate: " << (void *)Allocate << "\n");
   } else {
     // Even if we didn't load the section, we need to record an entry for it
     // to handle later processing (and by 'handle' I mean don't do anything
@@ -883,7 +883,7 @@ RuntimeDyldImpl::emitSection(const ObjectFile &Obj,
         dbgs() << "emitSection SectionID: " << SectionID << " Name: " << Name
                << " obj addr: " << format("%p", data.data()) << " new addr: 0"
                << " DataSize: " << DataSize << " StubBufSize: " << StubBufSize
-               << " Allocate: " << Allocate << "\n");
+               << " Allocate: " << (void *)Allocate << "\n");
   }
 
   Sections.push_back(

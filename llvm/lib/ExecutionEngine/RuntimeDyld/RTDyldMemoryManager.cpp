@@ -295,7 +295,7 @@ void *RTDyldMemoryManager::getPointerToNamedFunction(const std::string &Name,
     report_fatal_error("Program used external function '" + Name +
                        "' which could not be resolved!");
 
-  return (void*)Addr;
+  return (void *)(uintptr_t)Addr;
 }
 
 void RTDyldMemoryManager::anchor() {}

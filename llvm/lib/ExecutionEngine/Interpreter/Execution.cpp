@@ -1033,7 +1033,7 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
 
   LLVM_DEBUG(dbgs() << "Allocated Type: " << *Ty << " (" << TypeSize
                     << " bytes) x " << NumElements << " (Total: " << MemToAlloc
-                    << ") at " << uintptr_t(Memory) << '\n');
+                    << ") at " << Memory << '\n');
 
   GenericValue Result = PTOGV(Memory);
   assert(Result.PointerVal && "Null pointer returned by malloc!");

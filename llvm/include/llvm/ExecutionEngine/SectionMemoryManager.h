@@ -114,7 +114,7 @@ public:
   ///
   /// The value of \p Alignment must be a power of two.  If \p Alignment is zero
   /// a default alignment of 16 will be used.
-  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
                                unsigned SectionID,
                                StringRef SectionName) override;
 
@@ -123,7 +123,7 @@ public:
   ///
   /// The value of \p Alignment must be a power of two.  If \p Alignment is zero
   /// a default alignment of 16 will be used.
-  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+  uint8_t *allocateDataSection(size_t Size, unsigned Alignment,
                                unsigned SectionID, StringRef SectionName,
                                bool isReadOnly) override;
 
@@ -174,7 +174,7 @@ private:
     sys::MemoryBlock Near;
   };
 
-  uint8_t *allocateSection(AllocationPurpose Purpose, uintptr_t Size,
+  uint8_t *allocateSection(AllocationPurpose Purpose, size_t Size,
                            unsigned Alignment);
 
   std::error_code applyMemoryGroupPermissions(MemoryGroup &MemGroup,

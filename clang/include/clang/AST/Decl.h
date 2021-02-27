@@ -3095,7 +3095,7 @@ class TypedefNameDecl : public TypeDecl, public Redeclarable<TypedefNameDecl> {
   mutable const Type *CHERICapTypeForDecl = nullptr;
   friend class ASTContext;
 
-  struct alignas(8) ModedTInfo {
+  struct alignas(8) alignas(void *) ModedTInfo {
     TypeSourceInfo *first;
     QualType second;
   };
