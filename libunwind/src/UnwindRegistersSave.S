@@ -1186,13 +1186,13 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   jmp %o7
    clr %o0                   // return UNW_ESUCCESS
 
-#elif defined(__riscv) && __riscv_xlen == 64
+#elif defined(__riscv)
 
 .macro save_fpr num
 #ifdef __CHERI_PURE_CAPABILITY__
   cfsd   f\num, (__SIZEOF_CHERI_CAPABILITY__ * 32 + 8 * \num)(ca0)
 #else
-  fsd    f\num, (8 * 32 + 8 * \num)(a0)
+  FSTORE f\num, (8 * 32 + 8 * \num)(a0)
 #endif
 .endm
 
@@ -1200,7 +1200,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #ifdef __CHERI_PURE_CAPABILITY__
   csc   c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(ca0)
 #else
-  sd    x\num, (8 * \num)(a0)
+  ISTORE x\num, (8 * \num)(a0)
 #endif
 .endm
 
@@ -1215,7 +1215,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #ifdef __CHERI_PURE_CAPABILITY__
   csc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // store ra as pc
 #else
-  sd    x1, (8 * 0)(a0) // store ra as pc
+  ISTORE    x1, (8 * 0)(a0) // store ra as pc
 #endif
   save_gpr 1
   save_gpr 2
@@ -1249,7 +1249,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   save_gpr 30
   save_gpr 31
 
-#if defined(__riscv_flen) && __riscv_flen == 64
+# if defined(__riscv_flen)
   save_fpr 0
   save_fpr 1
   save_fpr 2

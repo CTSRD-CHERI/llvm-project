@@ -1217,13 +1217,13 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_sparc6jumptoEv)
   jmp %o7
    nop
 
-#elif defined(__riscv) && __riscv_xlen == 64
+#elif defined(__riscv)
 
 .macro restore_fpr num
 #ifdef __CHERI_PURE_CAPABILITY__
   cfld   f\num, (__SIZEOF_CHERI_CAPABILITY__ * 32 + 8 * \num)(ca0)
 #else
-  fld    f\num, (8 * 32 + 8 * \num)(a0)
+  FLOAD  f\num, (8 * 32 + 8 * \num)(a0)
 #endif
 .endm
 
@@ -1231,7 +1231,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_sparc6jumptoEv)
 #ifdef __CHERI_PURE_CAPABILITY__
   clc   c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(ca0)
 #else
-  ld    x\num, (8 * \num)(a0)
+  ILOAD x\num, (8 * \num)(a0)
 #endif
 .endm
 
@@ -1248,7 +1248,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
   cspecialw ddc, ct0
 #endif
 
-#if defined(__riscv_flen) && __riscv_flen == 64
+#if defined(__riscv_flen)
    restore_fpr 0
    restore_fpr 1
    restore_fpr 2
@@ -1287,7 +1287,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 #ifdef __CHERI_PURE_CAPABILITY__
   clc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // restore pc into ra
 #else
-  ld    x1, (8 * 0)(a0) // restore pc into ra
+  ILOAD    x1, (8 * 0)(a0) // restore pc into ra
 #endif
   restore_gpr 2
   restore_gpr 3
