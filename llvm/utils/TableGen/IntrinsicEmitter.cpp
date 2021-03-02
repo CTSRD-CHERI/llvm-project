@@ -611,6 +611,9 @@ struct AttributeComparator {
     if (L->isNoDuplicate != R->isNoDuplicate)
       return R->isNoDuplicate;
 
+    if (L->isNoMerge != R->isNoMerge)
+      return R->isNoMerge;
+
     if (L->isNoReturn != R->isNoReturn)
       return R->isNoReturn;
 
@@ -766,7 +769,8 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
          !intrinsic.hasSideEffects) ||
         intrinsic.isNoReturn || intrinsic.isNoSync || intrinsic.isNoFree ||
         intrinsic.isWillReturn || intrinsic.isCold || intrinsic.isNoDuplicate ||
-        intrinsic.isConvergent || intrinsic.isSpeculatable || intrinsic.hasSideEffects) {
+        intrinsic.isNoMerge || intrinsic.isConvergent || intrinsic.hasSideEffects ||
+        intrinsic.isSpeculatable) {
       OS << "      const Attribute::AttrKind Atts[] = {";
       ListSeparator LS(",");
       if (!intrinsic.canThrow)
@@ -783,6 +787,8 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         OS << LS << "Attribute::Cold";
       if (intrinsic.isNoDuplicate)
         OS << LS << "Attribute::NoDuplicate";
+      if (intrinsic.isNoMerge)
+        OS << LS << "Attribute::NoMerge";
       if (intrinsic.isConvergent)
         OS << LS << "Attribute::Convergent";
       if (intrinsic.isSpeculatable)
