@@ -161,7 +161,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
       auto addRegClassForFixedVectors = [this](MVT VT) {
         unsigned LMul = Subtarget.getLMULForFixedLengthVector(VT);
         const TargetRegisterClass *RC;
-        if (LMul == 1)
+        if (LMul == 1 || VT.getVectorElementType() == MVT::i1)
           RC = &RISCV::VRRegClass;
         else if (LMul == 2)
           RC = &RISCV::VRM2RegClass;
@@ -5247,8 +5247,8 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
   bool IsPureCapVarArgs = !IsFixed && RISCVABI::isCheriPureCapABI(ABI);
 
   // Any return value split in to more than two values can't be returned
-  // directly.
-  if (IsRet && ValNo > 1)
+  // directly. Vectors are returned via the available vector registers.
+  if (!LocVT.isVector() && IsRet && ValNo > 1)
     return true;
 
   // UseGPRForF16_F32 if targeting one of the soft-float ABIs, if passing a
@@ -5347,9 +5347,15 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
     return false;
   }
 
+  // Fixed-length vectors are located in the corresponding scalable-vector
+  // container types.
+  if (ValVT.isFixedLengthVector())
+    LocVT = TLI.getContainerForFixedLengthVector(LocVT);
+
   // Split arguments might be passed indirectly, so keep track of the pending
-  // values.
-  if (ArgFlags.isSplit() || !PendingLocs.empty()) {
+  // values. Split vectors are passed via a mix of registers and indirectly, so
+  // treat them as we would any other argument.
+  if (!LocVT.isVector() && (ArgFlags.isSplit() || !PendingLocs.empty())) {
     LocVT = XLenVT;
     LocInfo = CCValAssign::Indirect;
     PendingLocs.push_back(
@@ -5362,7 +5368,7 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
 
   // If the split argument only had two elements, it should be passed directly
   // in registers or on the stack.
-  if (ArgFlags.isSplitEnd() && PendingLocs.size() <= 2) {
+  if (!LocVT.isVector() && ArgFlags.isSplitEnd() && PendingLocs.size() <= 2) {
     assert(PendingLocs.size() == 2 && "Unexpected PendingLocs.size()");
     // Apply the normal calling convention rules to the first half of the
     // split argument.
@@ -5393,7 +5399,7 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
     Reg = State.AllocateReg(ArgFPR64s);
   else if (ValVT == CLenVT)
     Reg = State.AllocateReg(ArgGPCRs);
-  else if (ValVT.isScalableVector()) {
+  else if (ValVT.isVector()) {
     const TargetRegisterClass *RC = TLI.getRegClassFor(ValVT);
     if (RC == &RISCV::VRRegClass) {
       // Assign the first mask argument to V0.
@@ -5415,6 +5421,12 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
       llvm_unreachable("Unhandled class register for ValueType");
     }
     if (!Reg) {
+      // For return values, the vector must be passed fully via registers or
+      // via the stack.
+      // FIXME: The proposed vector ABI only mandates v8-v15 for return values,
+      // but we're using all of them.
+      if (IsRet)
+        return true;
       LocInfo = CCValAssign::Indirect;
       // Try using a GPR to pass the address
       Reg = State.AllocateReg(ArgGPRs);
@@ -5447,8 +5459,8 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
 
   assert((!UseGPRForF16_F32 || !UseGPRForF64 || LocVT == XLenVT ||
           LocVT == CLenVT ||
-          (TLI.getSubtarget().hasStdExtV() && ValVT.isScalableVector())) &&
-         "Expected an XLenVT or CLenVT or scalable vector types at this stage");
+          (TLI.getSubtarget().hasStdExtV() && ValVT.isVector())) &&
+         "Expected an XLenVT or CLenVT or vector types at this stage");
 
   if (Reg) {
     State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
@@ -5469,8 +5481,7 @@ template <typename ArgTy>
 static Optional<unsigned> preAssignMask(const ArgTy &Args) {
   for (const auto &ArgIdx : enumerate(Args)) {
     MVT ArgVT = ArgIdx.value().VT;
-    if (ArgVT.isScalableVector() &&
-        ArgVT.getVectorElementType().SimpleTy == MVT::i1)
+    if (ArgVT.isVector() && ArgVT.getVectorElementType() == MVT::i1)
       return ArgIdx.index();
   }
   return None;
@@ -5534,11 +5545,14 @@ void RISCVTargetLowering::analyzeOutputArgs(
 // Convert Val to a ValVT. Should not be called for CCValAssign::Indirect
 // values.
 static SDValue convertLocVTToValVT(SelectionDAG &DAG, SDValue Val,
-                                   const CCValAssign &VA, const SDLoc &DL) {
+                                   const CCValAssign &VA, const SDLoc &DL,
+                                   const RISCVSubtarget &Subtarget) {
   switch (VA.getLocInfo()) {
   default:
     llvm_unreachable("Unexpected CCValAssign::LocInfo");
   case CCValAssign::Full:
+    if (VA.getValVT().isFixedLengthVector() && VA.getLocVT().isScalableVector())
+      Val = convertFromScalableVector(VA.getValVT(), Val, DAG, Subtarget);
     break;
   case CCValAssign::BCvt:
     if (VA.getLocVT().isInteger() && VA.getValVT() == MVT::f16)
@@ -5569,17 +5583,20 @@ static SDValue unpackFromRegLoc(SelectionDAG &DAG, SDValue Chain,
   if (VA.getLocInfo() == CCValAssign::Indirect)
     return Val;
 
-  return convertLocVTToValVT(DAG, Val, VA, DL);
+  return convertLocVTToValVT(DAG, Val, VA, DL, TLI.getSubtarget());
 }
 
 static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDValue Val,
-                                   const CCValAssign &VA, const SDLoc &DL) {
+                                   const CCValAssign &VA, const SDLoc &DL,
+                                   const RISCVSubtarget &Subtarget) {
   EVT LocVT = VA.getLocVT();
 
   switch (VA.getLocInfo()) {
   default:
     llvm_unreachable("Unexpected CCValAssign::LocInfo");
   case CCValAssign::Full:
+    if (VA.getValVT().isFixedLengthVector() && LocVT.isScalableVector())
+      Val = convertToScalableVector(LocVT, Val, DAG, Subtarget);
     break;
   case CCValAssign::BCvt:
     if (VA.getLocVT().isInteger() && VA.getValVT() == MVT::f16)
@@ -5859,14 +5876,17 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     if (VA.getLocInfo() == CCValAssign::Indirect) {
       // If the original argument was split and passed by reference (e.g. i128
       // on RV32), we need to load all parts of it here (using the same
-      // address).
+      // address). Vectors may be partly split to registers and partly to the
+      // stack, in which case the base address is partly offset and subsequent
+      // stores are relative to that.
       InVals.push_back(DAG.getLoad(VA.getValVT(), DL, Chain, ArgValue,
                                    MachinePointerInfo()));
       unsigned ArgIndex = Ins[i].OrigArgIndex;
-      assert(Ins[i].PartOffset == 0);
+      unsigned ArgPartOffset = Ins[i].PartOffset;
+      assert(VA.getValVT().isVector() || ArgPartOffset == 0);
       while (i + 1 != e && Ins[i + 1].OrigArgIndex == ArgIndex) {
         CCValAssign &PartVA = ArgLocs[i + 1];
-        unsigned PartOffset = Ins[i + 1].PartOffset;
+        unsigned PartOffset = Ins[i + 1].PartOffset - ArgPartOffset;
         SDValue Address = DAG.getPointerAdd(DL, ArgValue, PartOffset);
         InVals.push_back(DAG.getLoad(PartVA.getValVT(), DL, Chain, Address,
                                      MachinePointerInfo()));
@@ -6148,12 +6168,16 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
           DAG.getStore(Chain, DL, ArgValue, SpillSlot,
                        MachinePointerInfo::getFixedStack(MF, FI)));
       // If the original argument was split (e.g. i128), we need
-      // to store all parts of it here (and pass just one address).
+      // to store the required parts of it here (and pass just one address).
+      // Vectors may be partly split to registers and partly to the stack, in
+      // which case the base address is partly offset and subsequent stores are
+      // relative to that.
       unsigned ArgIndex = Outs[i].OrigArgIndex;
-      assert(Outs[i].PartOffset == 0);
+      unsigned ArgPartOffset = Outs[i].PartOffset;
+      assert(VA.getValVT().isVector() || ArgPartOffset == 0);
       while (i + 1 != e && Outs[i + 1].OrigArgIndex == ArgIndex) {
         SDValue PartValue = OutVals[i + 1];
-        unsigned PartOffset = Outs[i + 1].PartOffset;
+        unsigned PartOffset = Outs[i + 1].PartOffset - ArgPartOffset;
         SDValue Address = DAG.getPointerAdd(DL, SpillSlot, PartOffset);
         MemOpChains.push_back(
             DAG.getStore(Chain, DL, PartValue, Address,
@@ -6162,7 +6186,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       }
       ArgValue = SpillSlot;
     } else {
-      ArgValue = convertValVTToLocVT(DAG, ArgValue, VA, DL);
+      ArgValue = convertValVTToLocVT(DAG, ArgValue, VA, DL, Subtarget);
     }
 
     // Use local copy if it is a byval arg.
@@ -6317,7 +6341,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
                              RetValue2);
     }
 
-    RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL);
+    RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL, Subtarget);
 
     InVals.push_back(RetValue);
   }
@@ -6402,7 +6426,7 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
       RetOps.push_back(DAG.getRegister(RegHi, MVT::i32));
     } else {
       // Handle a 'normal' return.
-      Val = convertValVTToLocVT(DAG, Val, VA, DL);
+      Val = convertValVTToLocVT(DAG, Val, VA, DL, Subtarget);
       Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), Val, Glue);
 
       if (STI.isRegisterReservedByUser(VA.getLocReg()))
