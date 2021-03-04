@@ -274,6 +274,7 @@ struct Configuration {
   CapTableScopePolicy capTableScope;
   bool relativeCapRelocsOnly;
 
+  bool Power10Stub;
   ARMVFPArgKind armVFPArgs = ARMVFPArgKind::Default;
   BuildIdKind buildId = BuildIdKind::None;
   SeparateSegmentKind zSeparate;
