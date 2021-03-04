@@ -31,6 +31,10 @@ cl::opt<bool> ShowSourceLocations("show-source-locations", cl::ReallyHidden,
                                   cl::init(false), cl::ZeroOrMore,
                                   cl::desc("Print source locations."));
 
+cl::opt<bool> ShowCanonicalFnName("show-canonical-fname", cl::ReallyHidden,
+                                  cl::init(false), cl::ZeroOrMore,
+                                  cl::desc("Print canonical function name."));
+
 cl::opt<bool> ShowPseudoProbe(
     "show-pseudo-probe", cl::ReallyHidden, cl::init(false), cl::ZeroOrMore,
     cl::desc("Print pseudo probe section and disassembled info."));
@@ -214,7 +218,10 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
   if (StartOffset >= EndOffset)
     return true;
 
-  std::string &&SymbolName = Symbols[SI].Name.str();
+  StringRef SymbolName =
+      ShowCanonicalFnName
+          ? FunctionSamples::getCanonicalFnName(Symbols[SI].Name)
+          : Symbols[SI].Name;
   if (ShowDisassemblyOnly)
     outs() << '<' << SymbolName << ">:\n";
 
@@ -254,7 +261,7 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
         if (Cur < 40)
           outs().indent(40 - Cur);
         InstructionPointer IP(this, Offset);
-        outs() << getReversedLocWithContext(symbolize(IP));
+        outs() << getReversedLocWithContext(symbolize(IP, ShowCanonicalFnName));
       }
       outs() << "\n";
     }
