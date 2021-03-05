@@ -1106,6 +1106,11 @@ MCSymbol *MCStreamer::emitDwarfUnitLength(const Twine &Prefix,
   return Hi;
 }
 
+void MCStreamer::emitDwarfLineStartLabel(MCSymbol *StartSym) {
+  // Set the value of the symbol, as we are at the start of the line table.
+  emitLabel(StartSym);
+}
+
 void MCStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
   visitUsedExpr(*Value);
   Symbol->setVariableValue(Value);

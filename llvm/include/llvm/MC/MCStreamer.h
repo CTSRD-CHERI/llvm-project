@@ -1131,6 +1131,23 @@ protected:
   /// Target-independent untagged CHERI capability
   virtual void emitCheriIntcapGeneric(const MCExpr *Expr, unsigned CapSize,
                                       SMLoc Loc);
+public:
+  /// Emit the debug line start label.
+  virtual void emitDwarfLineStartLabel(MCSymbol *StartSym);
+
+  /// Emit the debug line end entry.
+  virtual void emitDwarfLineEndEntry(MCSection *Section, MCSymbol *LastLabel) {}
+
+  /// If targets does not support representing debug line section by .loc/.file
+  /// directives in assembly output, we need to populate debug line section with
+  /// raw debug line contents.
+  virtual void emitDwarfAdvanceLineAddr(int64_t LineDelta,
+                                        const MCSymbol *LastLabel,
+                                        const MCSymbol *Label,
+                                        unsigned PointerSize) {}
+
+  /// Do finalization for the streamer at the end of a section.
+  virtual void doFinalizationAtSectionEnd(MCSection *Section) {}
 };
 
 /// Create a dummy machine code streamer, which does nothing. This is useful for
