@@ -2102,7 +2102,7 @@ void ObjCARCOpt::OptimizeWeakCalls(Function &F) {
         Value *Arg = Call->getArgOperand(0);
         Value *EarlierArg = EarlierCall->getArgOperand(0);
         switch (PA.getAA()->alias(Arg, EarlierArg)) {
-        case MustAlias:
+        case AliasResult::MustAlias:
           Changed = true;
           // If the load has a builtin retain, insert a plain retain for it.
           if (Class == ARCInstKind::LoadWeakRetained) {
@@ -2114,10 +2114,10 @@ void ObjCARCOpt::OptimizeWeakCalls(Function &F) {
           Call->replaceAllUsesWith(EarlierCall);
           Call->eraseFromParent();
           goto clobbered;
-        case MayAlias:
-        case PartialAlias:
+        case AliasResult::MayAlias:
+        case AliasResult::PartialAlias:
           goto clobbered;
-        case NoAlias:
+        case AliasResult::NoAlias:
           break;
         }
         break;
@@ -2131,7 +2131,7 @@ void ObjCARCOpt::OptimizeWeakCalls(Function &F) {
         Value *Arg = Call->getArgOperand(0);
         Value *EarlierArg = EarlierCall->getArgOperand(0);
         switch (PA.getAA()->alias(Arg, EarlierArg)) {
-        case MustAlias:
+        case AliasResult::MustAlias:
           Changed = true;
           // If the load has a builtin retain, insert a plain retain for it.
           if (Class == ARCInstKind::LoadWeakRetained) {
@@ -2143,10 +2143,10 @@ void ObjCARCOpt::OptimizeWeakCalls(Function &F) {
           Call->replaceAllUsesWith(EarlierCall->getArgOperand(1));
           Call->eraseFromParent();
           goto clobbered;
-        case MayAlias:
-        case PartialAlias:
+        case AliasResult::MayAlias:
+        case AliasResult::PartialAlias:
           goto clobbered;
-        case NoAlias:
+        case AliasResult::NoAlias:
           break;
         }
         break;
