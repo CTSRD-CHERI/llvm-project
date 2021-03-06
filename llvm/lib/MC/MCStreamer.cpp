@@ -1247,8 +1247,8 @@ void MCStreamer::emitXCOFFRenameDirective(const MCSymbol *Name,
 }
 
 void MCStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {}
-void MCStreamer::emitELFSymverDirective(StringRef AliasName,
-                                        const MCSymbol *Aliasee) {}
+void MCStreamer::emitELFSymverDirective(const MCSymbol *OriginalSym,
+                                        StringRef Name, bool KeepOriginalSym) {}
 void MCStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                        unsigned ByteAlignment,
                                        TailPaddingAmount TailPadding) {}
