@@ -50,8 +50,7 @@ public:
 #include "RISCVGenDAGISel.inc"
 
 private:
-  void doPeepholeLoadStoreADDI();
-  void doPeepholeLoadStoreCIncOffsetImm();
+  void doPeepholeLoadStoreOffset();
 };
 }
 
