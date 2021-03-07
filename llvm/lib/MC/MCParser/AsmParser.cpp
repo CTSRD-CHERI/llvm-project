@@ -4165,7 +4165,7 @@ bool AsmParser::parseDirectiveCFIDefCfa(SMLoc DirectiveLoc) {
   int64_t Register = 0, Offset = 0;
   if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
       parseToken(AsmToken::Comma, "unexpected token in directive") ||
-      parseAbsoluteExpression(Offset))
+      parseAbsoluteExpression(Offset) || parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIDefCfa(Register, Offset);
@@ -4176,7 +4176,7 @@ bool AsmParser::parseDirectiveCFIDefCfa(SMLoc DirectiveLoc) {
 /// ::= .cfi_def_cfa_offset offset
 bool AsmParser::parseDirectiveCFIDefCfaOffset() {
   int64_t Offset = 0;
-  if (parseAbsoluteExpression(Offset))
+  if (parseAbsoluteExpression(Offset) || parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIDefCfaOffset(Offset);
@@ -4189,7 +4189,8 @@ bool AsmParser::parseDirectiveCFIRegister(SMLoc DirectiveLoc) {
   int64_t Register1 = 0, Register2 = 0;
   if (parseRegisterOrRegisterNumber(Register1, DirectiveLoc) ||
       parseToken(AsmToken::Comma, "unexpected token in directive") ||
-      parseRegisterOrRegisterNumber(Register2, DirectiveLoc))
+      parseRegisterOrRegisterNumber(Register2, DirectiveLoc) ||
+      parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIRegister(Register1, Register2);
@@ -4199,6 +4200,8 @@ bool AsmParser::parseDirectiveCFIRegister(SMLoc DirectiveLoc) {
 /// parseDirectiveCFIWindowSave
 /// ::= .cfi_window_save
 bool AsmParser::parseDirectiveCFIWindowSave() {
+  if (parseToken(AsmToken::EndOfStatement))
+    return true;
   getStreamer().emitCFIWindowSave();
   return false;
 }
@@ -4207,7 +4210,8 @@ bool AsmParser::parseDirectiveCFIWindowSave() {
 /// ::= .cfi_adjust_cfa_offset adjustment
 bool AsmParser::parseDirectiveCFIAdjustCfaOffset() {
   int64_t Adjustment = 0;
-  if (parseAbsoluteExpression(Adjustment))
+  if (parseAbsoluteExpression(Adjustment) ||
+      parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIAdjustCfaOffset(Adjustment);
@@ -4218,7 +4222,8 @@ bool AsmParser::parseDirectiveCFIAdjustCfaOffset() {
 /// ::= .cfi_def_cfa_register register
 bool AsmParser::parseDirectiveCFIDefCfaRegister(SMLoc DirectiveLoc) {
   int64_t Register = 0;
-  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc))
+  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
+      parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIDefCfaRegister(Register);
@@ -4233,7 +4238,7 @@ bool AsmParser::parseDirectiveCFIOffset(SMLoc DirectiveLoc) {
 
   if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
       parseToken(AsmToken::Comma, "unexpected token in directive") ||
-      parseAbsoluteExpression(Offset))
+      parseAbsoluteExpression(Offset) || parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIOffset(Register, Offset);
@@ -4247,7 +4252,7 @@ bool AsmParser::parseDirectiveCFIRelOffset(SMLoc DirectiveLoc) {
 
   if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
       parseToken(AsmToken::Comma, "unexpected token in directive") ||
-      parseAbsoluteExpression(Offset))
+      parseAbsoluteExpression(Offset) || parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIRelOffset(Register, Offset);
@@ -4290,7 +4295,8 @@ bool AsmParser::parseDirectiveCFIPersonalityOrLsda(bool IsPersonality) {
   StringRef Name;
   if (check(!isValidEncoding(Encoding), "unsupported encoding.") ||
       parseToken(AsmToken::Comma, "unexpected token in directive") ||
-      check(parseIdentifier(Name), "expected identifier in directive"))
+      check(parseIdentifier(Name), "expected identifier in directive") ||
+      parseToken(AsmToken::EndOfStatement))
     return true;
 
   MCSymbol *Sym = getContext().getOrCreateSymbol(Name);
@@ -4305,6 +4311,8 @@ bool AsmParser::parseDirectiveCFIPersonalityOrLsda(bool IsPersonality) {
 /// parseDirectiveCFIRememberState
 /// ::= .cfi_remember_state
 bool AsmParser::parseDirectiveCFIRememberState() {
+  if (parseToken(AsmToken::EndOfStatement))
+    return true;
   getStreamer().emitCFIRememberState();
   return false;
 }
@@ -4312,6 +4320,8 @@ bool AsmParser::parseDirectiveCFIRememberState() {
 /// parseDirectiveCFIRestoreState
 /// ::= .cfi_remember_state
 bool AsmParser::parseDirectiveCFIRestoreState() {
+  if (parseToken(AsmToken::EndOfStatement))
+    return true;
   getStreamer().emitCFIRestoreState();
   return false;
 }
@@ -4321,7 +4331,8 @@ bool AsmParser::parseDirectiveCFIRestoreState() {
 bool AsmParser::parseDirectiveCFISameValue(SMLoc DirectiveLoc) {
   int64_t Register = 0;
 
-  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc))
+  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
+      parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFISameValue(Register);
@@ -4332,7 +4343,8 @@ bool AsmParser::parseDirectiveCFISameValue(SMLoc DirectiveLoc) {
 /// ::= .cfi_restore register
 bool AsmParser::parseDirectiveCFIRestore(SMLoc DirectiveLoc) {
   int64_t Register = 0;
-  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc)) {
+  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
+      parseToken(AsmToken::EndOfStatement)) {
     Warning(DirectiveLoc, "Failed to parse .cfi_restore register");
     return true;
   }
@@ -4372,7 +4384,8 @@ bool AsmParser::parseDirectiveCFIEscape() {
 /// ::= .cfi_return_column register
 bool AsmParser::parseDirectiveCFIReturnColumn(SMLoc DirectiveLoc) {
   int64_t Register = 0;
-  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc))
+  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
+      parseToken(AsmToken::EndOfStatement))
     return true;
   getStreamer().emitCFIReturnColumn(Register);
   return false;
@@ -4394,7 +4407,8 @@ bool AsmParser::parseDirectiveCFISignalFrame() {
 bool AsmParser::parseDirectiveCFIUndefined(SMLoc DirectiveLoc) {
   int64_t Register = 0;
 
-  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc))
+  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) ||
+      parseToken(AsmToken::EndOfStatement))
     return true;
 
   getStreamer().emitCFIUndefined(Register);
