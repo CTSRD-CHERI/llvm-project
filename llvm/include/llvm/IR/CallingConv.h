@@ -244,13 +244,16 @@ namespace CallingConv {
     /// Calling convention used for AMD graphics targets.
     AMDGPU_Gfx = 100,
 
+    /// M68k_INTR - Calling convention used for M68k interrupt routines.
+    M68k_INTR = 101,
+
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_CCall = 101,
+    CHERI_CCall = 102,
     /// CHERI_CCallee - Calling convention used for the callee of CHERI_CCall.
     /// Ignores the first two capability arguments and the first integer
     /// argument, zeroes all unused return registers on return.
-    CHERI_CCallee = 102,
+    CHERI_CCallee = 103,
 
     /// The highest possible calling convention ID. Must be some 2^k - 1.
     MaxID = 1023
