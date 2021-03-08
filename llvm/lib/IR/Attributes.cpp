@@ -1628,7 +1628,7 @@ AttrBuilder &AttrBuilder::addAttribute(Attribute Attr) {
 }
 
 AttrBuilder &AttrBuilder::addAttribute(StringRef A, StringRef V) {
-  TargetDepAttrs[std::string(A)] = std::string(V);
+  TargetDepAttrs[A] = V;
   return *this;
 }
 
