@@ -51,6 +51,12 @@ ASM_FUNCTION_HEXAGON_RE = re.compile(
     r'.Lfunc_end[0-9]+:\n',
     flags=(re.M | re.S))
 
+ASM_FUNCTION_M68K_RE = re.compile(
+    r'^_?(?P<func>[^:]+):[ \t]*;[ \t]*@"?(?P=func)"?\n'
+    r'(?P<body>.*?)\s*' # (body of the function)
+    r'.Lfunc_end[0-9]+:\n',
+    flags=(re.M | re.S))
+
 ASM_FUNCTION_MIPS_RE = re.compile(
     r'^_?(?P<func>[^:]+):[ \t]*#+[ \t]*@"?(?P=func)"?\n[^:]*?' # f: (name of func)
     r'(?:^[ \t]+\.(frame|f?mask|set).*?\n)+'  # Mips+LLVM standard asm prologue
@@ -245,6 +251,16 @@ def scrub_asm_powerpc(asm, args):
   asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r'', asm)
   # Strip the tailing token '#', except the line only has token '#'.
   asm = common.SCRUB_TAILING_COMMENT_TOKEN_RE.sub(r'', asm)
+  return asm
+
+def scrub_asm_m68k(asm, args):
+  # Scrub runs of whitespace out of the assembly, but leave the leading
+  # whitespace in place.
+  asm = common.SCRUB_WHITESPACE_RE.sub(r' ', asm)
+  # Expand the tabs used for indentation.
+  asm = string.expandtabs(asm, 2)
+  # Strip trailing whitespace.
+  asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r'', asm)
   return asm
 
 
@@ -474,6 +490,7 @@ def get_run_handler(triple):
       'thumb-macho': (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_MACHO_RE),
       'thumbv5-macho': (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_MACHO_RE),
       'thumbv7-apple-ios' : (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_IOS_RE),
+      'm68k': (scrub_asm_m68k, ASM_FUNCTION_M68K_RE),
       'mips': (scrub_asm_mips, ASM_FUNCTION_MIPS_RE),
       'cheri': (scrub_asm_mips, ASM_FUNCTION_MIPS_RE),
       'msp430': (scrub_asm_msp430, ASM_FUNCTION_MSP430_RE),
