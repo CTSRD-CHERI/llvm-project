@@ -642,6 +642,17 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
         setOperationAction(ISD::ZERO_EXTEND, VT, Custom);
 
         setOperationAction(ISD::BITCAST, VT, Custom);
+
+        // Custom-lower reduction operations to set up the corresponding custom
+        // nodes' operands.
+        setOperationAction(ISD::VECREDUCE_ADD, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_AND, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_OR, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_XOR, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_SMAX, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_SMIN, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_UMAX, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_UMIN, VT, Custom);
       }
 
       for (MVT VT : MVT::fp_fixedlen_vector_valuetypes()) {
@@ -685,6 +696,9 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
         setOperationAction(ISD::VSELECT, VT, Custom);
 
         setOperationAction(ISD::BITCAST, VT, Custom);
+
+        setOperationAction(ISD::VECREDUCE_FADD, VT, Custom);
+        setOperationAction(ISD::VECREDUCE_SEQ_FADD, VT, Custom);
       }
     }
   }
@@ -2532,21 +2546,21 @@ static unsigned getRVVReductionOp(unsigned ISDOpcode) {
   default:
     llvm_unreachable("Unhandled reduction");
   case ISD::VECREDUCE_ADD:
-    return RISCVISD::VECREDUCE_ADD;
+    return RISCVISD::VECREDUCE_ADD_VL;
   case ISD::VECREDUCE_UMAX:
-    return RISCVISD::VECREDUCE_UMAX;
+    return RISCVISD::VECREDUCE_UMAX_VL;
   case ISD::VECREDUCE_SMAX:
-    return RISCVISD::VECREDUCE_SMAX;
+    return RISCVISD::VECREDUCE_SMAX_VL;
   case ISD::VECREDUCE_UMIN:
-    return RISCVISD::VECREDUCE_UMIN;
+    return RISCVISD::VECREDUCE_UMIN_VL;
   case ISD::VECREDUCE_SMIN:
-    return RISCVISD::VECREDUCE_SMIN;
+    return RISCVISD::VECREDUCE_SMIN_VL;
   case ISD::VECREDUCE_AND:
-    return RISCVISD::VECREDUCE_AND;
+    return RISCVISD::VECREDUCE_AND_VL;
   case ISD::VECREDUCE_OR:
-    return RISCVISD::VECREDUCE_OR;
+    return RISCVISD::VECREDUCE_OR_VL;
   case ISD::VECREDUCE_XOR:
-    return RISCVISD::VECREDUCE_XOR;
+    return RISCVISD::VECREDUCE_XOR_VL;
   }
 }
 
@@ -2556,18 +2570,35 @@ static unsigned getRVVReductionOp(unsigned ISDOpcode) {
 SDValue RISCVTargetLowering::lowerVECREDUCE(SDValue Op,
                                             SelectionDAG &DAG) const {
   SDLoc DL(Op);
-  assert(Op.getValueType().isSimple() &&
-         Op.getOperand(0).getValueType().isSimple() &&
-         "Unexpected vector-reduce lowering");
   MVT VecVT = Op.getOperand(0).getSimpleValueType();
   MVT VecEltVT = VecVT.getVectorElementType();
+
+  // Avoid creating vectors with illegal type.
+  if (!isTypeLegal(VecVT))
+    return SDValue();
+
   unsigned RVVOpcode = getRVVReductionOp(Op.getOpcode());
-  MVT M1VT = getLMUL1VT(VecVT);
+
+  SDValue Vec = Op.getOperand(0);
+
+  MVT ContainerVT = VecVT;
+  if (VecVT.isFixedLengthVector()) {
+    ContainerVT = getContainerForFixedLengthVector(VecVT);
+    Vec = convertToScalableVector(ContainerVT, Vec, DAG, Subtarget);
+  }
+
+  MVT M1VT = getLMUL1VT(ContainerVT);
+
+  SDValue Mask, VL;
+  std::tie(Mask, VL) = getDefaultVLOps(VecVT, ContainerVT, DL, DAG, Subtarget);
+
+  // FIXME: This is a VLMAX splat which might be too large and can prevent
+  // vsetvli removal.
   SDValue NeutralElem = DAG.getNeutralElement(
       ISD::getVecReduceBaseOpcode(Op.getOpcode()), DL, VecEltVT, SDNodeFlags());
   SDValue IdentitySplat = DAG.getSplatVector(M1VT, DL, NeutralElem);
   SDValue Reduction =
-      DAG.getNode(RVVOpcode, DL, M1VT, Op.getOperand(0), IdentitySplat);
+      DAG.getNode(RVVOpcode, DL, M1VT, Vec, IdentitySplat, Mask, VL);
   SDValue Elt0 = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, VecEltVT, Reduction,
                              DAG.getConstant(0, DL, Subtarget.getXLenVT()));
   return DAG.getSExtOrTrunc(Elt0, DL, Op.getValueType());
@@ -2583,10 +2614,10 @@ getRVVFPReductionOpAndOperands(SDValue Op, SelectionDAG &DAG, EVT EltVT) {
   default:
     llvm_unreachable("Unhandled reduction");
   case ISD::VECREDUCE_FADD:
-    return std::make_tuple(RISCVISD::VECREDUCE_FADD, Op.getOperand(0),
+    return std::make_tuple(RISCVISD::VECREDUCE_FADD_VL, Op.getOperand(0),
                            DAG.getConstantFP(0.0, DL, EltVT));
   case ISD::VECREDUCE_SEQ_FADD:
-    return std::make_tuple(RISCVISD::VECREDUCE_SEQ_FADD, Op.getOperand(1),
+    return std::make_tuple(RISCVISD::VECREDUCE_SEQ_FADD_VL, Op.getOperand(1),
                            Op.getOperand(0));
   }
 }
@@ -2600,10 +2631,24 @@ SDValue RISCVTargetLowering::lowerFPVECREDUCE(SDValue Op,
   SDValue VectorVal, ScalarVal;
   std::tie(RVVOpcode, VectorVal, ScalarVal) =
       getRVVFPReductionOpAndOperands(Op, DAG, VecEltVT);
+  MVT VecVT = VectorVal.getSimpleValueType();
+
+  MVT ContainerVT = VecVT;
+  if (VecVT.isFixedLengthVector()) {
+    ContainerVT = getContainerForFixedLengthVector(VecVT);
+    VectorVal = convertToScalableVector(ContainerVT, VectorVal, DAG, Subtarget);
+  }
 
   MVT M1VT = getLMUL1VT(VectorVal.getSimpleValueType());
+
+  SDValue Mask, VL;
+  std::tie(Mask, VL) = getDefaultVLOps(VecVT, ContainerVT, DL, DAG, Subtarget);
+
+  // FIXME: This is a VLMAX splat which might be too large and can prevent
+  // vsetvli removal.
   SDValue ScalarSplat = DAG.getSplatVector(M1VT, DL, ScalarVal);
-  SDValue Reduction = DAG.getNode(RVVOpcode, DL, M1VT, VectorVal, ScalarSplat);
+  SDValue Reduction =
+      DAG.getNode(RVVOpcode, DL, M1VT, VectorVal, ScalarSplat, Mask, VL);
   return DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, VecEltVT, Reduction,
                      DAG.getConstant(0, DL, Subtarget.getXLenVT()));
 }
@@ -3472,7 +3517,8 @@ void RISCVTargetLowering::ReplaceNodeResults(SDNode *N,
     // The custom-lowering for these nodes returns a vector whose first element
     // is the result of the reduction. Extract its first element and let the
     // legalization for EXTRACT_VECTOR_ELT do the rest of the job.
-    Results.push_back(lowerVECREDUCE(SDValue(N, 0), DAG));
+    if (SDValue V = lowerVECREDUCE(SDValue(N, 0), DAG))
+      Results.push_back(V);
     break;
   }
 }
@@ -6192,16 +6238,16 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(VSLIDEDOWN_VL)
   NODE_NAME_CASE(VID_VL)
   NODE_NAME_CASE(VFNCVT_ROD_VL)
-  NODE_NAME_CASE(VECREDUCE_ADD)
-  NODE_NAME_CASE(VECREDUCE_UMAX)
-  NODE_NAME_CASE(VECREDUCE_SMAX)
-  NODE_NAME_CASE(VECREDUCE_UMIN)
-  NODE_NAME_CASE(VECREDUCE_SMIN)
-  NODE_NAME_CASE(VECREDUCE_AND)
-  NODE_NAME_CASE(VECREDUCE_OR)
-  NODE_NAME_CASE(VECREDUCE_XOR)
-  NODE_NAME_CASE(VECREDUCE_FADD)
-  NODE_NAME_CASE(VECREDUCE_SEQ_FADD)
+  NODE_NAME_CASE(VECREDUCE_ADD_VL)
+  NODE_NAME_CASE(VECREDUCE_UMAX_VL)
+  NODE_NAME_CASE(VECREDUCE_SMAX_VL)
+  NODE_NAME_CASE(VECREDUCE_UMIN_VL)
+  NODE_NAME_CASE(VECREDUCE_SMIN_VL)
+  NODE_NAME_CASE(VECREDUCE_AND_VL)
+  NODE_NAME_CASE(VECREDUCE_OR_VL)
+  NODE_NAME_CASE(VECREDUCE_XOR_VL)
+  NODE_NAME_CASE(VECREDUCE_FADD_VL)
+  NODE_NAME_CASE(VECREDUCE_SEQ_FADD_VL)
   NODE_NAME_CASE(ADD_VL)
   NODE_NAME_CASE(AND_VL)
   NODE_NAME_CASE(MUL_VL)
