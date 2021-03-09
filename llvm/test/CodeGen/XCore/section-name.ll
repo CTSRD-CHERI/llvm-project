@@ -6,4 +6,4 @@ define void @".dp.bss"() {
   ret void
 }
 
-; CHECK: <unknown>:0: error: invalid symbol redefinition of .dp.bss
+; CHECK: <unknown>:0: error: symbol '.dp.bss' is already defined
