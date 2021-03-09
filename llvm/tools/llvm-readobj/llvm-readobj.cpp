@@ -376,6 +376,10 @@ namespace opts {
   cl::alias ELFCGProfile("elf-cg-profile", cl::desc("Alias for --cg-profile"),
                          cl::aliasopt(CGProfile));
 
+  // --bb-addr-map
+  cl::opt<bool> BBAddrMap("bb-addr-map",
+                          cl::desc("Display the BB address map section"));
+
   // -addrsig
   cl::opt<bool> Addrsig("addrsig",
                         cl::desc("Display address-significance table"));
@@ -557,6 +561,8 @@ static void dumpObject(ObjectFile &Obj, ScopedPrinter &Writer,
       Dumper->printHashHistograms();
     if (opts::CGProfile)
       Dumper->printCGProfile();
+    if (opts::BBAddrMap)
+      Dumper->printBBAddrMaps();
     if (opts::Addrsig)
       Dumper->printAddrsig();
     if (opts::Notes)
