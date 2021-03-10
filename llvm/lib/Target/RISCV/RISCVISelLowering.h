@@ -513,7 +513,7 @@ namespace RISCVVIntrinsicsTable {
 
 struct RISCVVIntrinsicInfo {
   unsigned IntrinsicID;
-  uint8_t ExtendedOperand;
+  uint8_t SplatOperand;
 };
 
 using namespace RISCV;
