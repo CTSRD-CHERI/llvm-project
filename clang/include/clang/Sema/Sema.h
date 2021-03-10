@@ -2595,6 +2595,9 @@ public:
 
   NamedDecl *HandleDeclarator(Scope *S, Declarator &D,
                               MultiTemplateParamsArg TemplateParameterLists);
+  bool tryToFixVariablyModifiedVarType(TypeSourceInfo *&TInfo,
+                                       QualType &T, SourceLocation Loc,
+                                       unsigned FailedFoldDiagID);
   void RegisterLocallyScopedExternCDecl(NamedDecl *ND, Scope *S);
   bool DiagnoseClassNameShadow(DeclContext *DC, DeclarationNameInfo Info);
   bool diagnoseQualifiedDeclaration(CXXScopeSpec &SS, DeclContext *DC,
