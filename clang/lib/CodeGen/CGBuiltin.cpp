@@ -3380,7 +3380,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     diagnoseMisalignedCapabiliyCopyDest(*this, "memcpy", E->getArg(1), CI);
     if (BuiltinID == Builtin::BImempcpy ||
         BuiltinID == Builtin::BI__builtin_mempcpy)
-      return RValue::get(Builder.CreateInBoundsGEP(Dest.getPointer(), SizeVal),
+      return RValue::get(Builder.CreateInBoundsGEP(Dest.getElementType(),
+                                                   Dest.getPointer(), SizeVal),
                          Dest.getAlignment().getQuantity());
     else
       return RValue::get(Dest.getPointer(), Dest.getAlignment().getQuantity());
@@ -5003,7 +5004,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       auto *Zero = llvm::ConstantInt::get(IntTy, 0);
       for (unsigned I = First; I < NumArgs; ++I) {
         auto *Index = llvm::ConstantInt::get(IntTy, I - First);
-        auto *GEP = Builder.CreateGEP(TmpPtr, {Zero, Index});
+        auto *GEP = Builder.CreateGEP(Tmp.getElementType(), TmpPtr,
+                                      {Zero, Index});
         if (I == First)
           ElemPtr = GEP;
         auto *V =
@@ -9314,7 +9316,7 @@ Value *CodeGenFunction::EmitAArch64SVEBuiltinExpr(unsigned BuiltinID,
     for (unsigned I = 0; I < NumOpnds; ++I)
       Builder.CreateDefaultAlignedStore(
           IsBoolTy ? Builder.CreateZExt(Ops[I], EltTy) : Ops[I],
-          Builder.CreateGEP(Alloca.getPointer(),
+          Builder.CreateGEP(Alloca.getElementType(), Alloca.getPointer(),
                             {Builder.getInt64(0), Builder.getInt64(I)}));
 
     SVETypeFlags TypeFlags(Builtin->TypeModifier);
@@ -9323,7 +9325,8 @@ Value *CodeGenFunction::EmitAArch64SVEBuiltinExpr(unsigned BuiltinID,
     llvm::Type *OverloadedTy = getSVEVectorForElementType(EltTy);
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_sve_ld1rq, OverloadedTy);
     Value *Alloca0 = Builder.CreateGEP(
-        Alloca.getPointer(), {Builder.getInt64(0), Builder.getInt64(0)});
+        Alloca.getElementType(), Alloca.getPointer(),
+        {Builder.getInt64(0), Builder.getInt64(0)});
     Value *LD1RQ = Builder.CreateCall(F, {Pred, Alloca0});
 
     if (!IsBoolTy)
@@ -15573,7 +15576,7 @@ Value *CodeGenFunction::EmitPPCBuiltinExpr(unsigned BuiltinID,
       for (unsigned i=0; i<NumVecs; i++) {
         Value *Vec = Builder.CreateExtractValue(Call, i);
         llvm::ConstantInt* Index = llvm::ConstantInt::get(IntTy, i);
-        Value *GEP = Builder.CreateInBoundsGEP(Ptr, Index);
+        Value *GEP = Builder.CreateInBoundsGEP(VTy, Ptr, Index);
         Builder.CreateAlignedStore(Vec, GEP, MaybeAlign(16));
       }
       return Call;
