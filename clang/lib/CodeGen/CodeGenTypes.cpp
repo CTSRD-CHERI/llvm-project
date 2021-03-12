@@ -1172,6 +1172,14 @@ llvm::PreserveCheriTags CodeGenTypes::copyShouldPreserveTagsForPointee(
   } else if (Pointee->isIncompleteType()) {
     // We don't know if incomplete types contain capabilities, so be
     // conservative and assume that they might.
+    // The only exception here are incomplete array types (e.g. extern int x[])
+    // since we don't care about the size of the type, just whether it can
+    // contain capabilities.
+    if (Pointee->isIncompleteArrayType()) {
+      return copyShouldPreserveTagsForPointee(
+          Context.getBaseElementType(Pointee), EffectiveTypeKnown, Size,
+          CopyOffsetInBits);
+    }
     return llvm::PreserveCheriTags::Unknown;
   }
 
