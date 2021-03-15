@@ -1391,8 +1391,7 @@ void AsmPrinter::emitFunctionBody() {
   const Triple &TT = TM.getTargetTriple();
   if (!HasAnyRealCode && (MAI->hasSubsectionsViaSymbols() ||
                           (TT.isOSWindows() && TT.isOSBinFormatCOFF()))) {
-    MCInst Noop;
-    MF->getSubtarget().getInstrInfo()->getNoop(Noop);
+    MCInst Noop = MF->getSubtarget().getInstrInfo()->getNop();
 
     // Targets can opt-out of emitting the noop here by leaving the opcode
     // unspecified.
@@ -3129,8 +3128,7 @@ void AsmPrinter::printOffset(int64_t Offset, raw_ostream &OS) const {
 }
 
 void AsmPrinter::emitNops(unsigned N) {
-  MCInst Nop;
-  MF->getSubtarget().getInstrInfo()->getNoop(Nop);
+  MCInst Nop = MF->getSubtarget().getInstrInfo()->getNop();
   for (; N; --N)
     EmitToStreamer(*OutStreamer, Nop);
 }
