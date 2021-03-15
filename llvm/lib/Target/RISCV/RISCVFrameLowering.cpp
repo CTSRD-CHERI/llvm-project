@@ -221,7 +221,7 @@ bool RISCVFrameLowering::hasFP(const MachineFunction &MF) const {
 
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-         RegInfo->needsStackRealignment(MF) || MFI.hasVarSizedObjects() ||
+         RegInfo->hasStackRealignment(MF) || MFI.hasVarSizedObjects() ||
          MFI.isFrameAddressTaken();
 }
 
@@ -229,7 +229,7 @@ bool RISCVFrameLowering::hasBP(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
 
-  return MFI.hasVarSizedObjects() && TRI->needsStackRealignment(MF);
+  return MFI.hasVarSizedObjects() && TRI->hasStackRealignment(MF);
 }
 
 // Determines the size of the frame and maximum call frame size.
@@ -507,7 +507,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   if (hasFP(MF)) {
     // Realign Stack
     const RISCVRegisterInfo *RI = STI.getRegisterInfo();
-    if (RI->needsStackRealignment(MF)) {
+    if (RI->hasStackRealignment(MF)) {
       Align MaxAlignment = MFI.getMaxAlign();
       unsigned SPAddrReg;
       if (RISCVABI::isCheriPureCapABI(STI.getTargetABI())) {
@@ -607,7 +607,7 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
   // Restore the stack pointer using the value of the frame pointer. Only
   // necessary if the stack pointer was modified, meaning the stack size is
   // unknown.
-  if (RI->needsStackRealignment(MF) || MFI.hasVarSizedObjects()) {
+  if (RI->hasStackRealignment(MF) || MFI.hasVarSizedObjects()) {
     assert(hasFP(MF) && "frame pointer should not have been eliminated");
     adjustReg(MBB, LastFrameDestroy, DL, SPReg, FPReg, -FPOffset,
               MachineInstr::FrameDestroy);
@@ -678,7 +678,7 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     else
       Offset +=
           StackOffset::getFixed(MFI.getStackSize() + RVFI->getRVVPadding());
-  } else if (RI->needsStackRealignment(MF) && !MFI.isFixedObjectIndex(FI)) {
+  } else if (RI->hasStackRealignment(MF) && !MFI.isFixedObjectIndex(FI)) {
     // If the stack was realigned, the frame pointer is set in order to allow
     // SP to be restored, so we need another base register to record the stack
     // after realignment.
