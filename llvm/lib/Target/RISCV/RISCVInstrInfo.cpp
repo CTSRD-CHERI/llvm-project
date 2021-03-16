@@ -23,6 +23,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/MC/MCInstBuilder.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TargetRegistry.h"
 
@@ -55,6 +56,15 @@ RISCVInstrInfo::RISCVInstrInfo(RISCVSubtarget &STI)
                             ? RISCV::ADJCALLSTACKUPCAP
                             : RISCV::ADJCALLSTACKUP),
       STI(STI) {}
+
+MCInst RISCVInstrInfo::getNop() const {
+  if (STI.getFeatureBits()[RISCV::FeatureStdExtC])
+    return MCInstBuilder(RISCV::C_NOP);
+  return MCInstBuilder(RISCV::ADDI)
+      .addReg(RISCV::X0)
+      .addReg(RISCV::X0)
+      .addImm(0);
+}
 
 unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
