@@ -1934,7 +1934,7 @@ inline bool Registers_arm64::validCapabilityRegister(int regNum) const {
     return true;
   if (regNum == UNW_REG_SP)
     return true;
-  if (regNum >= UNW_ARM64_C0 && regNum <= UNW_ARM64_C31)
+  if ((regNum >= UNW_ARM64_C0) && (regNum <= UNW_ARM64_C31))
     return true;
   return false;
 }
