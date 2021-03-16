@@ -662,17 +662,13 @@ class InternalScopedString {
       : buffer_(max_length), length_(0) {
     buffer_[0] = '\0';
   }
-  usize size() const { return buffer_.size(); }
   usize length() const { return length_; }
   void clear() {
-    (*this)[0] = '\0';
+    buffer_[0] = '\0';
     length_ = 0;
   }
   void append(const char *format, ...);
-  char *data() { return buffer_.data(); }
   const char *data() const { return buffer_.data(); }
-  char &operator[](uptr i) { return buffer_[i]; }
-  const char &operator[](uptr i) const { return buffer_[i]; }
 
  private:
   InternalMmapVector<char> buffer_;
