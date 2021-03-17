@@ -1567,8 +1567,8 @@ def CLoadVersions : Cheri_r<0x15, "cloadversions">;
 }
 let mayStore = 1, mayLoad = 0, hasSideEffects = 0 in
 def CStoreVersion : RVInstCheriTwoSrc<0x7e, 0x2, 0, OPC_CHERI, (outs),
-                                (ins GPR:$rs1, GPCR:$rs2),
-                                "cstoreversion", "$rs1, $rs2">;
+                                (ins GPCR:$rs1, GPR:$rs2),
+                                "cstoreversion", "$rs2, $rs1">;
 let mayLoad = 1, mayStore = 1 in
-def CAmoCDecVersion : Cheri_rr<0x3, "camocdecversion", GPR>;
+def CAmoCDecVersion : Cheri_rr<0x3, "camocdecversion", GPR, GPCR, GPCR>;
 }
