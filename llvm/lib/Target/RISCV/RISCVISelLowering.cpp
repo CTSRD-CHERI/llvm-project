@@ -605,6 +605,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
         setOperationAction(ISD::TRUNCATE, VT, Custom);
 
+        setOperationAction(ISD::BITCAST, VT, Custom);
+
         // Operations below are different for between masks and other vectors.
         if (VT.getVectorElementType() == MVT::i1) {
           setOperationAction(ISD::AND, VT, Custom);
@@ -651,8 +653,6 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
         setOperationAction(ISD::ANY_EXTEND, VT, Custom);
         setOperationAction(ISD::SIGN_EXTEND, VT, Custom);
         setOperationAction(ISD::ZERO_EXTEND, VT, Custom);
-
-        setOperationAction(ISD::BITCAST, VT, Custom);
 
         // Custom-lower reduction operations to set up the corresponding custom
         // nodes' operands.
