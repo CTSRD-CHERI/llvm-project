@@ -1560,15 +1560,14 @@ defm : CheriStPat<store, CSC_128, GPCR>;
 let Predicates = [HasCheri, HasCheriMemVersion] in {
 def CGetVersion   : Cheri_r<0x13, "cgetversion">;
 def CSetVersion   : Cheri_rr<0x2, "csetversion">;
-let mayLoad = 1 in
-{
+let mayLoad = 1 in {
 def CLoadVersion  : Cheri_r<0x14, "cloadversion">;
 def CLoadVersions : Cheri_r<0x15, "cloadversions">;
 }
 let mayStore = 1, mayLoad = 0, hasSideEffects = 0 in
 def CStoreVersion : RVInstCheriTwoSrc<0x7e, 0x2, 0, OPC_CHERI, (outs),
-                                (ins GPCR:$rs1, GPR:$rs2),
-                                "cstoreversion", "$rs2, $rs1">;
+                                      (ins GPCR:$rs1, GPR:$rs2),
+                                      "cstoreversion", "$rs2, $rs1">;
 let mayLoad = 1, mayStore = 1 in
 def CAmoCDecVersion : Cheri_rr<0x3, "camocdecversion", GPR, GPCR, GPCR>;
 }
