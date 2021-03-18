@@ -463,6 +463,7 @@ void ScalarBitSetTraits<ELFYAML::ELF_EF>::bitset(IO &IO,
     BCase(EF_HEXAGON_MACH_V66);
     BCase(EF_HEXAGON_MACH_V67);
     BCase(EF_HEXAGON_MACH_V67T);
+    BCase(EF_HEXAGON_MACH_V68);
     BCase(EF_HEXAGON_ISA_V2);
     BCase(EF_HEXAGON_ISA_V3);
     BCase(EF_HEXAGON_ISA_V4);
@@ -473,6 +474,7 @@ void ScalarBitSetTraits<ELFYAML::ELF_EF>::bitset(IO &IO,
     BCase(EF_HEXAGON_ISA_V65);
     BCase(EF_HEXAGON_ISA_V66);
     BCase(EF_HEXAGON_ISA_V67);
+    BCase(EF_HEXAGON_ISA_V68);
     break;
   case ELF::EM_AVR:
     BCase(EF_AVR_ARCH_AVR1);
