@@ -71,9 +71,6 @@ public:
   bool isSupportedStackID(TargetStackID::Value ID) const override;
   TargetStackID::Value getStackIDForScalableVectors() const override;
 
-  void processFunctionBeforeFrameIndicesReplaced(
-      MachineFunction &MF, RegScavenger *RS = nullptr) const override;
-
 protected:
   const RISCVSubtarget &STI;
 
