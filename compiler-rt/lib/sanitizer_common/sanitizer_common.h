@@ -656,7 +656,7 @@ class InternalMmapVector : public InternalMmapVectorNoCtor<T> {
 
 class InternalScopedString {
  public:
-  explicit InternalScopedString() : buffer_(1) { buffer_[0] = '\0'; }
+  InternalScopedString() : buffer_(1) { buffer_[0] = '\0'; }
 
   usize length() const { return buffer_.size() - 1; }
   void clear() {
