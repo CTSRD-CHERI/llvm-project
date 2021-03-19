@@ -238,17 +238,27 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     // The offset won't fit in an immediate, so use a scratch register instead
     // Modify Offset and FrameReg appropriately
     unsigned Opc;
+    unsigned ImmOpc;
     Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
     Register DestReg;
     if (RISCVABI::isCheriPureCapABI(STI.getTargetABI())) {
       Opc = RISCV::CIncOffset;
+      ImmOpc = RISCV::CIncOffsetImm;
       DestReg = MRI.createVirtualRegister(&RISCV::GPCRRegClass);
     } else {
       Opc = RISCV::ADD;
+      ImmOpc = RISCV::ADDI;
       DestReg = ScratchReg;
     }
 
     TII->movImm(MBB, II, DL, ScratchReg, Offset.getFixed());
+    if (MI.getOpcode() == ImmOpc) {
+      BuildMI(MBB, II, DL, TII->get(Opc), MI.getOperand(0).getReg())
+        .addReg(FrameReg)
+        .addReg(DestReg, RegState::Kill);
+      MI.eraseFromParent();
+      return;
+    }
     BuildMI(MBB, II, DL, TII->get(Opc), DestReg)
         .addReg(FrameReg)
         .addReg(ScratchReg, RegState::Kill);
