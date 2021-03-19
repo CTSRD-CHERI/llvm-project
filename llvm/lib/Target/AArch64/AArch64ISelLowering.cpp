@@ -4117,7 +4117,7 @@ SDValue AArch64TargetLowering::LowerMGATHER(SDValue Op,
 
   if (VT.isFloatingPoint()) {
     SDValue Cast = getSVESafeBitCast(VT, Gather, DAG);
-    return DAG.getMergeValues({Cast, Gather}, DL);
+    return DAG.getMergeValues({Cast, Gather.getValue(1)}, DL);
   }
 
   return Gather;
