@@ -553,10 +553,10 @@ def int_pcmarker      : DefaultAttrsIntrinsic<[], [llvm_i32_ty]>;
 
 def int_readcyclecounter : DefaultAttrsIntrinsic<[llvm_i64_ty]>;
 
-// The assume intrinsic is marked as arbitrarily writing so that proper
-// control dependencies will be maintained.
-def int_assume        : DefaultAttrsIntrinsic<[], [llvm_i1_ty], [IntrWillReturn,
-                                                     NoUndef<ArgIndex<0>>]>;
+// The assume intrinsic is marked InaccessibleMemOnly so that proper control
+// dependencies will be maintained.
+def int_assume : DefaultAttrsIntrinsic<
+    [], [llvm_i1_ty], [IntrInaccessibleMemOnly, NoUndef<ArgIndex<0>>]>;
 
 // 'llvm.experimental.noalias.scope.decl' intrinsic: Inserted at the location of
 // noalias scope declaration. Makes it possible to identify that a noalias scope
@@ -987,15 +987,15 @@ def int_eh_sjlj_setup_dispatch  : Intrinsic<[], []>;
 def int_var_annotation : DefaultAttrsIntrinsic<[],
                                    [llvm_anyptr_ty, LLVMMatchType<0>,
                                     LLVMMatchType<0>, llvm_i32_ty, LLVMMatchType<0>],
-                                   [IntrWillReturn], "llvm.var.annotation">;
+                                   [IntrInaccessibleMemOnly], "llvm.var.annotation">;
 def int_ptr_annotation : DefaultAttrsIntrinsic<[LLVMAnyPointerType<llvm_anyint_ty>],
                                    [LLVMMatchType<0>, llvm_anyptr_ty, LLVMMatchType<1>,
                                     llvm_i32_ty, LLVMMatchType<1>],
-                                   [IntrWillReturn], "llvm.ptr.annotation">;
+                                   [IntrInaccessibleMemOnly], "llvm.ptr.annotation">;
 def int_annotation : DefaultAttrsIntrinsic<[llvm_anyint_ty],
                                [LLVMMatchType<0>, llvm_anyptr_ty,
                                 LLVMMatchType<1>, llvm_i32_ty],
-                               [IntrWillReturn], "llvm.annotation">;
+                               [IntrInaccessibleMemOnly], "llvm.annotation">;
 
 // Annotates the current program point with metadata strings which are emitted
 // as CodeView debug info records. This is expensive, as it disables inlining
