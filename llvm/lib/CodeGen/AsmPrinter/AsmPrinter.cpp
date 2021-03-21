@@ -59,6 +59,7 @@
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Comdat.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
@@ -2346,6 +2347,10 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
     unsigned SrcAS = Op->getType()->getPointerAddressSpace();
     if (TM.isNoopAddrSpaceCast(SrcAS, DstAS))
       return lowerConstant(Op);
+    // We can also lower a global addrspacecast from CHERI cap -> non-cap:
+    if (isCheriPointer(DstAS, &getDataLayout()) ||
+        isCheriPointer(SrcAS, &getDataLayout()))
+      return lowerConstant(Op);
 
     // Fallthrough to error.
     LLVM_FALLTHROUGH;
@@ -2366,11 +2371,6 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
                    !MF ? nullptr : MF->getFunction().getParent());
     report_fatal_error(OS.str());
   }
-
-  case Instruction::AddrSpaceCast: {
-    return lowerConstant(CE->getOperand(0));
-  }
-
   case Instruction::GetElementPtr: {
     // Generate a symbolic expression for the byte address
     APInt OffsetAI(getDataLayout().getPointerAddrSizeInBits(CE->getType()), 0);
