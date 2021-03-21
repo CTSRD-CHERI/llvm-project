@@ -254,16 +254,11 @@ bool StackProtector::HasAddressTaken(const Instruction *AI,
 /// Search for the first call to the llvm.stackprotector intrinsic and return it
 /// if present.
 static const CallInst *findStackProtectorIntrinsic(Function &F) {
-  unsigned AllocaAS = F.getParent()->getDataLayout().getAllocaAddrSpace();
-  PointerType *SlotPtrTy =
-    Type::getInt8PtrTy(F.getContext())->getPointerTo(AllocaAS);
   for (const BasicBlock &BB : F)
     for (const Instruction &I : BB)
-      if (const CallInst *CI = dyn_cast<CallInst>(&I))
-        if (CI->getCalledFunction() ==
-            Intrinsic::getDeclaration(F.getParent(), Intrinsic::stackprotector,
-                                      SlotPtrTy))
-          return CI;
+      if (const auto *II = dyn_cast<IntrinsicInst>(&I))
+        if (II->getIntrinsicID() == Intrinsic::stackprotector)
+          return II;
   return nullptr;
 }
 
