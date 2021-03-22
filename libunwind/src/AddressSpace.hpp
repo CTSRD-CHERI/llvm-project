@@ -718,6 +718,7 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
               (uintmax_t)cbdata->targetAddr.address(), (void *)pinfo->dlpi_addr,
               pinfo->dlpi_name);
     return 0;
+  }
 #if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
   if (TheFrameHeaderCache.find(pinfo, pinfo_size, data))
     return 1;
