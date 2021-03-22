@@ -156,7 +156,6 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	char65537
 // ASM-NEXT: 	.p2align	7
 // ASM-NEXT: char65537:
-// ASM-NEXT: .Lchar65537$local:
 // ASM-NEXT: 	.byte	4                       # 0x4
 // ASM-NEXT: 	.space	65536
 // ASM-NEXT: 	.space	127                     # Tail padding to ensure precise bounds
@@ -166,7 +165,6 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	char139267
 // ASM-NEXT: 	.p2align	8
 // ASM-NEXT: char139267:
-// ASM-NEXT: .Lchar139267$local:
 // ASM-NEXT: 	.byte	5                       # 0x5
 // ASM-NEXT: 	.space	139266
 // ASM-NEXT: 	.space	253                     # Tail padding to ensure precise bounds
@@ -203,7 +201,6 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_char65537
 // ASM-NEXT: 	.p2align	7
 // ASM-NEXT: thread_char65537:
-// ASM-NEXT: .Lthread_char65537$local:
 // ASM-NEXT: 	.byte	4                       # 0x4
 // ASM-NEXT: 	.space	65536
 // ASM-NEXT: 	.space	127                     # Tail padding to ensure precise bounds
@@ -215,7 +212,6 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_char139267
 // ASM-NEXT: 	.p2align	8
 // ASM-NEXT: thread_char139267:
-// ASM-NEXT: .Lthread_char139267$local:
 // ASM-NEXT: 	.byte	5                       # 0x5
 // ASM-NEXT: 	.space	139266
 // ASM-NEXT: 	.space	253                     # Tail padding to ensure precise bounds
@@ -303,7 +299,6 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_zero65537
 // ASM-NEXT: 	.p2align	7
 // ASM-NEXT: thread_zero65537:
-// ASM-NEXT: .Lthread_zero65537$local:
 // ASM-NEXT: 	.space	65537
 // ASM-NEXT: 	.space	127                     # Tail padding to ensure precise bounds
 // ASM-NEXT: 	.size	thread_zero65537, 65537
@@ -314,7 +309,6 @@ __attribute__((visibility("protected"))) __thread char thread_zero139267[139267]
 // ASM-NEXT: 	.globl	thread_zero139267
 // ASM-NEXT: 	.p2align	8
 // ASM-NEXT: thread_zero139267:
-// ASM-NEXT: .Lthread_zero139267$local:
 // ASM-NEXT: 	.space	139267
 // ASM-NEXT: 	.space	253                     # Tail padding to ensure precise bounds
 // ASM-NEXT: 	.size	thread_zero139267, 139267
