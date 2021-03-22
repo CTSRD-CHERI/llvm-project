@@ -135,7 +135,8 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
           for (uint64_t i = 0; i < (SizeVal / CLenInBytes); i++) {
             uint64_t DstOff = i * CLenInBytes;
             SDValue Store = DAG.getStore(
-                Chain, dl, ZeroCap, DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+                Chain, dl, ZeroCap,
+                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
                 DstPtrInfo.getWithOffset(DstOff), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);
@@ -149,7 +150,8 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
           // Write zero or one XLen words.
           while (Remainder >= XLenInBytes) {
             SDValue Store = DAG.getStore(
-                Chain, dl, ZeroXLen, DAG.getMemBasePlusOffset(Dst, Done, dl),
+                Chain, dl, ZeroXLen,
+                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(Done), dl),
                 DstPtrInfo.getWithOffset(Done), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);
@@ -193,7 +195,8 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
               break;
             }
             SDValue Store = DAG.getStore(
-                Chain, dl, Zero, DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+                Chain, dl, Zero,
+                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
                 DstPtrInfo.getWithOffset(DstOff), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);

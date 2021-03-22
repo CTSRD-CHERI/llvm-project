@@ -7015,8 +7015,9 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
       // Increment the pointers.
       Offset += RegBytes;
 
-      Ptr = DAG.getObjectPtrOffset(dl, Ptr, RegBytes);
-      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, RegBytes);
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, TypeSize::Fixed(RegBytes));
+      StackPtr =
+          DAG.getObjectPtrOffset(dl, StackPtr, TypeSize::Fixed(RegBytes));
     }
 
     // The last copy may be partial.  Do an extending load.
@@ -7198,8 +7199,9 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                     ST->getMemOperand()->getFlags()));
       // Increment the pointers.
       Offset += RegBytes;
-      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, RegBytes);
-      Ptr = DAG.getObjectPtrOffset(dl, Ptr, RegBytes);
+      StackPtr =
+          DAG.getObjectPtrOffset(dl, StackPtr, TypeSize::Fixed(RegBytes));
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, TypeSize::Fixed(RegBytes));
     }
 
     // The last store may be partial.  Do a truncating store.  On big-endian

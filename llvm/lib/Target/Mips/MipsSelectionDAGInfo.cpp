@@ -137,10 +137,12 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
           SDValue ZeroCap = DAG.getNullCapability(dl);
           for (uint64_t i = 0; i < (SizeVal / CapSize); i++) {
             uint64_t DstOff = i * CapSize;
-            SDValue Store = DAG.getStore(Chain, dl, ZeroCap,
-                DAG.getMemBasePlusOffset(Dst, DstOff, dl),
-                DstPtrInfo.getWithOffset(DstOff), Alignment, isVolatile ?
-                MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
+            SDValue Store = DAG.getStore(
+                Chain, dl, ZeroCap,
+                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
+                DstPtrInfo.getWithOffset(DstOff), Alignment,
+                isVolatile ? MachineMemOperand::MOVolatile
+                           : MachineMemOperand::MONone);
             OutChains.push_back(Store);
           }
           uint64_t Remainder = SizeVal % CapSize;
@@ -148,10 +150,12 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
           uint64_t Done = (SizeVal / CapSize) * CapSize;
           // Write zero, one or two doubles.
           while (Remainder >= 8) {
-            SDValue Store = DAG.getStore(Chain, dl, Zero64,
-                DAG.getMemBasePlusOffset(Dst, Done, dl),
-                DstPtrInfo.getWithOffset(Done), Alignment, isVolatile ?
-                MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
+            SDValue Store = DAG.getStore(
+                Chain, dl, Zero64,
+                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(Done), dl),
+                DstPtrInfo.getWithOffset(Done), Alignment,
+                isVolatile ? MachineMemOperand::MOVolatile
+                           : MachineMemOperand::MONone);
             OutChains.push_back(Store);
             Done += 8;
             Remainder -= 8;
@@ -188,10 +192,12 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
                 Remainder -= 1;
                 break;
             }
-            SDValue Store = DAG.getStore(Chain, dl, Zero,
-                DAG.getMemBasePlusOffset(Dst, DstOff, dl),
-                DstPtrInfo.getWithOffset(DstOff), Alignment, isVolatile ?
-                MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
+            SDValue Store = DAG.getStore(
+                Chain, dl, Zero,
+                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
+                DstPtrInfo.getWithOffset(DstOff), Alignment,
+                isVolatile ? MachineMemOperand::MOVolatile
+                           : MachineMemOperand::MONone);
             OutChains.push_back(Store);
           }
           return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
