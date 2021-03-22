@@ -161,14 +161,14 @@ except_table:
 
 # CHECK-LABEL:  Relocations [
 # CHECK-NEXT:    Section ({{.+}}) .rel.dyn {
-# CHECK-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-# CHECK-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE exported_local_func 0x0 (real addend unknown)
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func 0x0 (real addend unknown)
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func 0x0 (real addend unknown)
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func 0x0 (real addend unknown)
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func 0x0 (real addend unknown)
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE weak_exported_local_func 0x0 (real addend unknown)
+# CHECK-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
+# CHECK-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
+# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE exported_local_func 0x0
+# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func 0x0
+# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func 0x0
+# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func 0x0
+# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func 0x0
+# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE weak_exported_local_func 0x0
 # CHECK-NEXT:    }
 # CHECK-NEXT:  ]
 
