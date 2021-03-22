@@ -838,18 +838,28 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
       !IsCheriCap && getContext().toBits(sizeChars) > MaxInlineWidthInBits;
   bool Misaligned = (Ptr.getAlignment() % sizeChars) != 0;
   bool UseLibcall = Misaligned | Oversized;
+  CharUnits MaxInlineWidth =
+      getContext().toCharUnitsFromBits(MaxInlineWidthInBits);
 
-  bool UnsupportedOp = false;
+  DiagnosticsEngine &Diags = CGM.getDiags();
+
   if (IsCheriCap &&
       CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
           E->getOp())) {
-    UnsupportedOp = true;
+    Diags.Report(E->getBeginLoc(), diag::warn_atomic_op_unsupported)
+        << (int)sizeChars.getQuantity() << (int)MaxInlineWidth.getQuantity();
     UseLibcall = true;
   }
-  if (UseLibcall) {
-    int ErrType = UnsupportedOp ? 2 : (Oversized ? 0 : 1);
-    CGM.getDiags().Report(E->getBeginLoc(), diag::warn_atomic_op_misaligned)
-        << ErrType;
+
+  if (Misaligned) {
+    Diags.Report(E->getBeginLoc(), diag::warn_atomic_op_misaligned)
+        << (int)sizeChars.getQuantity()
+        << (int)Ptr.getAlignment().getQuantity();
+  }
+
+  if (Oversized) {
+    Diags.Report(E->getBeginLoc(), diag::warn_atomic_op_oversized)
+        << (int)sizeChars.getQuantity() << (int)MaxInlineWidth.getQuantity();
   }
 
   llvm::Value *Order = EmitScalarExpr(E->getOrder());
