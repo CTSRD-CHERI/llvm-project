@@ -344,7 +344,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       // The parameter is optional. By default it is equal to size of pointer.
       // XXXAR: For compatibility make isFat default to index width = 64 bits so
       // we don't have to add the index width to the datalayout immediately
-      unsigned IndexSize = isFat ? inBytes(64) : PointerMemSize;
+      unsigned IndexSize = isFat ? 8 : PointerMemSize;
 
       // Preferred alignment.
       unsigned PointerPrefAlign = PointerABIAlign;
@@ -492,7 +492,8 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       break;
     }
     case 'G': { // Default address space for global variables.
-      GlobalsAddrSpace = getAddrSpace(Tok);
+      if (Error Err = getAddrSpace(Tok, GlobalsAddrSpace))
+        return Err;
       break;
     }
     case 'm':

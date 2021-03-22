@@ -372,7 +372,7 @@ static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
                                       const DataLayout *DL) {
   assert(V && "No Value?");
   assert(isCheriPointer(V->getType(), DL));
-  if (Depth >= MaxDepth) {
+  if (Depth >= MaxAnalysisRecursionDepth) {
     DEBUG_TAG("reached max depth -> false");
     return false;
   }
