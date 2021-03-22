@@ -221,11 +221,9 @@ cheri_init_globals_3(void *__capability data_cap,
 #else
   void *__capability tmp;
   __asm__ (
-       "1: auipcc %2, %%pcrel_hi(__start___cap_relocs)\n\t"
-       "cincoffset %2, %2, %%pcrel_lo(1b)\n\t"
+       "cllc %2, __start___cap_relocs\n\t"
        cgetaddr_or_offset " %0, %2\n\t"
-       "2: auipcc %2, %%pcrel_hi(__stop___cap_relocs)\n\t"
-       "cincoffset %2, %2, %%pcrel_lo(2b)\n\t"
+       "cllc %2, __stop___cap_relocs\n\t"
        cgetaddr_or_offset " %1, %2\n\t"
        :"=r"(start_addr), "=r"(stop_addr), "=&C"(tmp));
 #endif
