@@ -232,8 +232,8 @@ cheri_init_globals_3(void *__capability data_cap,
 #endif
 
 #if !defined(__CHERI_PURE_CAPABILITY__)
-  start_relocs = (const struct capreloc *)(uintptr_t)start_addr;
-  stop_relocs = (const struct capreloc *)(uintptr_t)stop_addr;
+  start_relocs = (const struct capreloc *)(__UINTPTR_TYPE__)start_addr;
+  stop_relocs = (const struct capreloc *)(__UINTPTR_TYPE__)stop_addr;
 #else
   __SIZE_TYPE__ relocs_size = stop_addr - start_addr;
   /*
