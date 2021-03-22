@@ -36,7 +36,7 @@ extern "C" {
 #endif
 
 /* Bump this on every incompatible change */
-#define CHERI_INIT_GLOBALS_VERSION 4
+#define CHERI_INIT_GLOBALS_VERSION 5
 #define CHERI_INIT_GLOBALS_NUM_ARGS 7
 #define CHERI_INIT_GLOBALS_SUPPORTS_CONSTANT_FLAG 1
 
