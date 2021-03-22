@@ -2540,9 +2540,8 @@ Value *LibCallSimplifier::optimizeSPrintFString(CallInst *CI,
 
     uint64_t SrcLen = GetStringLength(CI->getArgOperand(2));
     if (SrcLen) {
-      B.CreateMemCpy(
-          CI->getArgOperand(0), Align(1), CI->getArgOperand(2), Align(1),
-          ConstantInt::get(DL.getIntPtrType(CI->getContext()), SrcLen));
+      B.CreateMemCpy(CI->getArgOperand(0), Align(1), CI->getArgOperand(2),
+                     Align(1), SrcLen);
       // Returns total number of characters written without null-character.
       return ConstantInt::get(CI->getType(), SrcLen - 1);
     } else if (Value *V = emitStpCpy(CI->getArgOperand(0), CI->getArgOperand(2),

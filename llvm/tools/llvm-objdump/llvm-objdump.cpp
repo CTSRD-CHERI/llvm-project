@@ -1632,7 +1632,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
       if (NType & MachO::N_STAB)
         continue;
     }
-    if (Name == "_CHERI_CAPABILITY_TABLE_") {
+    if (*NameOrErr == "_CHERI_CAPABILITY_TABLE_") {
       // errs() << "FOUND CHERI CAP TABLE @" << utohexstr(Address);
       CheriCapTableAddress = unwrapOrError(Symbol.getAddress(), FileName);
     }
