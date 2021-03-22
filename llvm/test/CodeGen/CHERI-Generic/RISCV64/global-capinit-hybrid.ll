@@ -1,8 +1,8 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/global-capinit-hybrid.ll
 ; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d %s -o - | \
-; RUN: FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.quad
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d %s -filetype=obj -o - | llvm-objdump -r -t -
-
+; RUN:   FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.quad
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d %s -filetype=obj -o - | llvm-objdump -r -t - | \
+; RUN:   FileCheck %s --check-prefix=RELOCS -DINTEGER_RELOC=R_RISCV_64 '-DCAPABILITY_RELOC=R_RISCV_CHERI_CAPABILITY'
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128"
 
 declare void @extern_fn() #0
@@ -138,3 +138,26 @@ declare void @extern_fn() #0
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_fn+2
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] 0
 ; ASM-NEXT:  .size global_fncap_nullgep_plus_two, 16
+
+
+; RELOCS-LABEL: RELOCATION RECORDS FOR [.{{s?}}data]:
+; RELOCS-NEXT:   OFFSET   TYPE       VALUE
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_data
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_data+0x1
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_data+0x2
+; RELOCS-NEXT:  [[CAPABILITY_RELOC]] extern_data
+; RELOCS-NEXT:  [[CAPABILITY_RELOC]] extern_data+0x1
+; RELOCS-NEXT:  [[CAPABILITY_RELOC]] extern_data+0x2
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_data
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_data+0x1
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_data+0x2
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_fn
+; RELOCS-NEXT:  [[CAPABILITY_RELOC]] extern_fn
+; RELOCS-NEXT:  [[CAPABILITY_RELOC]] extern_fn
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_fn
+; RELOCS-NEXT:  [[CAPABILITY_RELOC]] extern_fn+0x2
+; RELOCS-NEXT:  [[INTEGER_RELOC]]    extern_fn+0x2
+
+; Don't use .sdata for RISC-V, to allow re-using the same RELOCS lines.
+!llvm.module.flags = !{!0}
+!0 = !{i32 1, !"SmallDataLimit", i32 0}
