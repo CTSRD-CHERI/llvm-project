@@ -33,6 +33,7 @@
 #include "llvm/IR/IntrinsicsRISCV.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
