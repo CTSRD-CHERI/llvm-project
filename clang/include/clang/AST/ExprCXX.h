@@ -558,9 +558,11 @@ class CXXConstCastExpr final
                    TypeSourceInfo *writtenTy, SourceLocation l,
                    SourceLocation RParenLoc, SourceRange AngleBrackets,
                    const ASTContext &Ctx)
-      : CXXNamedCastExpr(CXXConstCastExprClass, ty, VK, CK_NoOp, op, 0,
+      : CXXNamedCastExpr(CXXConstCastExprClass, ty, VK, CK, op, 0,
                          /*HasFPFeatures*/ false, writtenTy, l, RParenLoc,
-                         AngleBrackets, Ctx) {}
+                         AngleBrackets, Ctx) {
+    assert(CK == CK_NoOp || CK == CK_Dependent);
+  }
 
   explicit CXXConstCastExpr(EmptyShell Empty)
       : CXXNamedCastExpr(CXXConstCastExprClass, Empty, 0,
