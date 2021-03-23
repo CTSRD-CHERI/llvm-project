@@ -252,13 +252,6 @@ namespace opts {
   cl::opt<bool>
       CheriCapRelocs("cap-relocs",
                      cl::desc("Display the CHERI __cap_relocs section"));
-  cl::alias CheriCapRelocsShort("c",
-    cl::desc("Alias for --cap-relocs"),
-    cl::aliasopt(CheriCapRelocs));
-  cl::alias CheriCapRelocsOld("cheri-caprelocs",
-    cl::desc("Alias for --cap-relocs"),
-    cl::aliasopt(CheriCapRelocs));
-
   cl::opt<bool> CheriCapTable("cap-table",
                               cl::desc("Display the CHERI .captable section"));
   cl::opt<bool> CheriCapTableMapping(
@@ -741,9 +734,9 @@ int main(int argc, const char *argv[]) {
     opts::UnwindInfo = true;
     opts::SectionGroups = true;
     opts::HashHistogram = true;
-    opts::CheriCapRelocs = true;
-    opts::CheriCapTable = true;
     if (opts::Output == opts::LLVM) {
+      opts::CheriCapRelocs = true;
+      opts::CheriCapTable = true;
       opts::Addrsig = true;
       opts::PrintStackSizes = true;
     }

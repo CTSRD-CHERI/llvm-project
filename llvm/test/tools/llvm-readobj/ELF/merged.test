@@ -11,14 +11,14 @@
 ## to verify that each of the options is handled, and not just the first
 ## one nor just -a, which triggers all other options.
 # RUN: llvm-readelf -eWhSrnudlVgIs %t.o > %t.merged.no.a
-# RUN: cmp %t.merged %t.merged.no.a
+# RUN: diff -u %t.merged %t.merged.no.a
 
 ## -e (--headers) is equivalent to setting --file-headers (-h),
 ## --program-headers (-l) and --section-headers (-S).
 ## Check that the output without -e is equal to the output with it.
 ## We do not use -a in this test either.
 # RUN: llvm-readelf -WhSrnudlVgIs %t.o > %t.merged.no.ae
-# RUN: cmp %t.merged %t.merged.no.ae
+# RUN: diff -u %t.merged %t.merged.no.ae
 
 ## An arbitrary YAML description that triggers an output for each of
 ## the short option from the test sequence.

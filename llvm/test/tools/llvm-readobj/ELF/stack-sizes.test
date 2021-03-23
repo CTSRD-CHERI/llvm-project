@@ -732,7 +732,7 @@ Symbols:
 # RUN: llvm-readelf --stack-sizes %t17 2>&1 | FileCheck %s -DFILE=%t17 --check-prefix=UNSUPPRELOC2
 # RUN: llvm-readobj --stack-sizes %t17 2>&1 | FileCheck %s -DFILE=%t17 --check-prefix=UNSUPPRELOC2
 
-# UNSUPPRELOC2: warning: '[[FILE]]': SHT_RELA section with index 2 contains an unsupported relocation with index 1: R_X86_64_64
+# UNSUPPRELOC2: warning: '[[FILE]]': SHT_RELA section with index 2 contains an unsupported relocation with index 1: Unknown
 
 --- !ELF
 FileHeader:
@@ -749,7 +749,7 @@ Sections:
     Info: .stack_sizes
     Relocations:
       - Offset: 0
-        Type:   R_X86_64_64
+        Type:   123
 
 ## Check we report a warning when dumping stack sizes if the relocated section
 ## identified by the sh_info field is invalid. Here the sh_info value is larger than
