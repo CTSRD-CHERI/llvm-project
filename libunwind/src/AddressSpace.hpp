@@ -770,7 +770,7 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
         // .eh_frame_hdr records the start of .eh_frame, but not its size.
         // Rely on a zero terminator to find the end of the section.
         cbdata->sects->set_dwarf_section(hdrInfo.eh_frame_ptr);
-        cbdata->sects->dwarf_section_length = UINTPTR_MAX;
+        cbdata->sects->dwarf_section_length = __SIZE_MAX__;
       }
     } else if (!found_obj) {
       found_obj = checkAddrInSegment(phdr, image_base, cbdata);

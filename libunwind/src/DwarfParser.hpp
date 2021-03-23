@@ -142,7 +142,7 @@ public:
   };
 
   static bool findFDE(A &addressSpace, pc_t pc, pint_t ehSectionStart,
-                      uintptr_t sectionLength, pint_t fdeHint, FDE_Info *fdeInfo,
+                      size_t sectionLength, pint_t fdeHint, FDE_Info *fdeInfo,
                       CIE_Info *cieInfo);
   static const char *decodeFDE(A &addressSpace, pc_t pc, pint_t fdeStart,
                                FDE_Info *fdeInfo, CIE_Info *cieInfo);
@@ -249,13 +249,13 @@ const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pc_t pc, pint_t fdeStart,
 /// Scan an eh_frame section to find an FDE for a pc
 template <typename A>
 bool CFI_Parser<A>::findFDE(A &addressSpace, pc_t pc, pint_t ehSectionStart,
-                            uintptr_t sectionLength, pint_t fdeHint,
+                            size_t sectionLength, pint_t fdeHint,
                             FDE_Info *fdeInfo, CIE_Info *cieInfo) {
   // fprintf(stderr, "findFDE(%#p)\n", (void*)pc);
   // fprintf(stderr, "findFDE(ehSectionStart=%#p, sectionLengt=%u, fdeHint=%#p)\n", (void*)ehSectionStart, sectionLength, (void*)fdeHint);
   pint_t p = (fdeHint != 0) ? fdeHint : ehSectionStart;
   const pint_t ehSectionEnd =
-      (sectionLength == UINTPTR_MAX)
+      (sectionLength == __SIZE_MAX__)
           ? static_cast<pint_t>(-1)
           : assert_pointer_in_bounds(ehSectionStart + sectionLength);
   // fprintf(stderr, "findFDE(ehSectionEnd=%#p, p=%#p)\n", (void*)ehSectionEnd,
