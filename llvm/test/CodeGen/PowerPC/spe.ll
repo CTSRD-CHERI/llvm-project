@@ -1388,23 +1388,19 @@ define void @d(%struct.a* %e, %struct.a* %f) {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mflr 0
 ; CHECK-NEXT:    stw 0, 4(1)
-; CHECK-NEXT:    stwu 1, -48(1)
-; CHECK-NEXT:    .cfi_def_cfa_offset 48
+; CHECK-NEXT:    stwu 1, -32(1)
+; CHECK-NEXT:    .cfi_def_cfa_offset 32
 ; CHECK-NEXT:    .cfi_offset lr, 4
-; CHECK-NEXT:    .cfi_offset r29, -12
-; CHECK-NEXT:    .cfi_offset r30, -8
-; CHECK-NEXT:    .cfi_offset r29, -40
-; CHECK-NEXT:    .cfi_offset r30, -32
+; CHECK-NEXT:    .cfi_offset r29, -24
+; CHECK-NEXT:    .cfi_offset r30, -16
 ; CHECK-NEXT:    lwz 4, 0(4)
 ; CHECK-NEXT:    lwz 3, 0(3)
-; CHECK-NEXT:    stw 29, 36(1) # 4-byte Folded Spill
 ; CHECK-NEXT:    evstdd 29, 8(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    efdcfs 29, 4
-; CHECK-NEXT:    stw 30, 40(1) # 4-byte Folded Spill
-; CHECK-NEXT:    mr 4, 29
 ; CHECK-NEXT:    evstdd 30, 16(1) # 8-byte Folded Spill
 ; CHECK-NEXT:    efdcfs 30, 3
 ; CHECK-NEXT:    evmergehi 3, 29, 29
+; CHECK-NEXT:    mr 4, 29
 ; CHECK-NEXT:    mtctr 3
 ; CHECK-NEXT:    # kill: def $r3 killed $r3 killed $s3
 ; CHECK-NEXT:    bctrl
@@ -1421,10 +1417,8 @@ define void @d(%struct.a* %e, %struct.a* %f) {
 ; CHECK-NEXT:    evldd 29, 8(1) # 8-byte Folded Reload
 ; CHECK-NEXT:    efscfd 3, 3
 ; CHECK-NEXT:    stw 3, 0(3)
-; CHECK-NEXT:    lwz 30, 40(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 29, 36(1) # 4-byte Folded Reload
-; CHECK-NEXT:    lwz 0, 52(1)
-; CHECK-NEXT:    addi 1, 1, 48
+; CHECK-NEXT:    lwz 0, 36(1)
+; CHECK-NEXT:    addi 1, 1, 32
 ; CHECK-NEXT:    mtlr 0
 ; CHECK-NEXT:    blr
 entry:
