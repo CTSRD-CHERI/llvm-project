@@ -28,6 +28,13 @@
 
 using namespace llvm;
 
+cl::opt<bool>
+    ZeroReturnSlotAfterRestore("zero-return-slot-after-restore",
+                               cl::desc("Zero the return address stack slot "
+                                        "after restore (on supported targets)"),
+                               cl::ReallyHidden, cl::ZeroOrMore,
+                               cl::init(false));
+
 TargetFrameLowering::~TargetFrameLowering() = default;
 
 bool TargetFrameLowering::enableCalleeSaveSkip(const MachineFunction &MF) const {
