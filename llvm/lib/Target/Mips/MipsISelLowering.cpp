@@ -4036,10 +4036,10 @@ SDValue MipsTargetLowering::passArgOnStack(SDValue StackPtr, unsigned Offset,
 
   MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
   int FI = MFI.CreateFixedObject(Arg.getValueSizeInBits() / 8, Offset, false);
-  SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
-              ABI.StackAddrSpace()));
-  return DAG.getStore(Chain, DL, Arg, FIN, MachinePointerInfo(),
-                      /* Alignment = */ 0, MachineMemOperand::MOVolatile);
+  SDValue FIN = DAG.getFrameIndex(
+      FI, getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace()));
+  return DAG.getStore(Chain, DL, Arg, FIN, MachinePointerInfo(), MaybeAlign(),
+                      MachineMemOperand::MOVolatile);
 }
 
 void MipsTargetLowering::
@@ -5778,7 +5778,7 @@ void MipsTargetLowering::passByValArg(
     for (; I < NumRegs - LeftoverBytes; ++I, OffsetInBytes += RegSizeInBytes) {
       SDValue LoadPtr = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
       SDValue LoadVal = DAG.getLoad(RegTy, DL, Chain, LoadPtr,
-                                    MachinePointerInfo(), Alignment.value());
+                                    MachinePointerInfo(), Alignment);
       MemOpChains.push_back(LoadVal.getValue(1));
       unsigned ArgReg = ArgRegs[FirstReg + I];
       RegsToPass.push_back(std::make_pair(ArgReg, LoadVal));
@@ -5805,7 +5805,7 @@ void MipsTargetLowering::passByValArg(
                                                       PtrTy));
         SDValue LoadVal = DAG.getExtLoad(
             ISD::ZEXTLOAD, DL, RegTy, Chain, LoadPtr, MachinePointerInfo(),
-            MVT::getIntegerVT(LoadSizeInBytes * 8), Alignment.value());
+            MVT::getIntegerVT(LoadSizeInBytes * 8), Alignment);
         MemOpChains.push_back(LoadVal.getValue(1));
 
         // Shift the loaded value.
