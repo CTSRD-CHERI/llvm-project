@@ -690,7 +690,7 @@ bool FastISel::selectGetElementPtr(const User *I) {
   Register N = getRegForValue(I->getOperand(0));
   if (!N) // Unhandled operand. Halt "fast" selection and bail.
     return false;
-  if (I->getOperand(0)->getType()->getPointerAddressSpace() != 0)
+  if (DL.isFatPointer(I->getOperand(0)->getType()))
     return false;
 
   // FIXME: The code below does not handle vector GEPs. Halt "fast" selection
