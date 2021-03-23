@@ -305,7 +305,9 @@ APValue::APValue(const APValue &RHS) : Kind(None) {
   MustBeNullDerivedCap = RHS.MustBeNullDerivedCap;
 }
 
-APValue::APValue(APValue &&RHS) : Kind(RHS.Kind), Data(RHS.Data) {
+APValue::APValue(APValue &&RHS)
+    : Kind(RHS.Kind), MustBeNullDerivedCap(RHS.MustBeNullDerivedCap),
+      Data(RHS.Data) {
   RHS.Kind = None;
 }
 
@@ -319,6 +321,7 @@ APValue &APValue::operator=(APValue &&RHS) {
   if (Kind != None && Kind != Indeterminate)
     DestroyDataAndMakeUninit();
   Kind = RHS.Kind;
+  MustBeNullDerivedCap = RHS.MustBeNullDerivedCap;
   Data = RHS.Data;
   RHS.Kind = None;
   return *this;
