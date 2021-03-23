@@ -94,6 +94,7 @@ public:
     WCharType = SignedInt;
     WIntType = UnsignedInt;
     HasRISCVVTypes = true;
+    MCountName = "_mcount";
   }
 
   bool setCPU(const std::string &Name) override {
