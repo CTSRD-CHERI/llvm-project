@@ -402,7 +402,7 @@ static PrintfSpecifierResult ParsePrintfSpecifier(FormatStringHandler &H,
       return true;
     }
     if (FS.usesPositionalArg()) {
-      H.HandlePositionalArgWithPlusForP(Start, E - Start);
+      H.HandlePosittionalArgWithPlusForP(Start, E - Start);
       return true;
     }
 
