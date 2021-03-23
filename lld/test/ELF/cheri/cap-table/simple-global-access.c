@@ -1,4 +1,5 @@
 // REQUIRES: clang
+// FIXME: why is this not an assembly test...
 
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix OBJECT
@@ -19,12 +20,11 @@
 // EXE-NEXT: 0x[[GLOBAL_CAPTAB]]      Base: global (0x00000000000403{{3|6}}0)       Offset: 0x0000000000000000      Length: 0x0000000000000004    Permissions: 0x00000000
 // EXE-NEXT: 0x[[GLOBAL2_CAPTAB]]      Base: global2 (0x00000000000403{{3|6}}8)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
 
-
 // EXE:          3c 01 00 00 	lui	$1, 0
 // EXE-NEXT:     64 21 00 00 	daddiu	$1, $1, 0
-// EXE:          3c 01 00 00   lui $1, 0 <simple-global-access.c>
+// EXE:          3c 03 00 00  	lui	$3, 0 <simple-global-access.c>
 // This is the second entry into the cap table so it should be 16 bytes
-// EXE-NEXT:  64 21 00 10   daddiu  $1, $1, 16 <simple-global-access.c+0x10>
+// EXE-NEXT:  64 63 00 10  	daddiu	$3, $3, 16 <simple-global-access.c+0x10>
 
 int global = 1;
 long global2 = 3;
