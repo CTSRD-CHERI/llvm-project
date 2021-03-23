@@ -3354,7 +3354,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   }
   // TODO: get symbol name for __cap_reloc
   ArrayRef<uint8_t> Data =
-      unwrapOrError(ObjF->getFileName(), Obj->getSectionContents(Shdr));
+      unwrapOrError(ObjF->getFileName(), Obj->getSectionContents(*Shdr));
   const uint64_t CapRelocsStartVaddr = Shdr->sh_addr;
   const uint64_t CapRelocsEndVaddr = Shdr->sh_addr + Shdr->sh_size;
   const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
@@ -3451,8 +3451,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       auto it = CapRelocsDynRels.find(CapRelocsStartVaddr + CurrentOffset + 8);
       if (it != CapRelocsDynRels.end()) {
         Elf_Rel R = it->second;
-        const Elf_Sym *Sym = unwrapOrError(
-            ObjF->getFileName(), Obj->getRelocationSymbol(&R, SymTab));
+        const Elf_Sym *Sym = unwrapOrError(ObjF->getFileName(),
+                                           Obj->getRelocationSymbol(R, SymTab));
         // Since we are looking up dynamic relocations, we have to look for the
         // symbol name in the .dynstrtab section.
         BaseSymbol = getFullSymbolName(Sym, DynamicStringTable, true);
@@ -3508,13 +3508,13 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
   }
   ListScope L(W, "CHERI .captable");
 
-  const Elf_Ehdr *e = Obj->getHeader();
+  const Elf_Ehdr &e = Obj->getHeader();
   unsigned CapSize;
-  switch (e->e_machine) {
+  switch (e.e_machine) {
   case EM_MIPS:
-    if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256) {
+    if ((e.e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256) {
       CapSize = 32;
-    } else if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128) {
+    } else if ((e.e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128) {
       CapSize = 16;
     } else {
       W.startLine() << "Invalid ELF header (no EF_MIPS_MACH_CHERI128/256 flag)\n";
@@ -3522,7 +3522,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
     }
     break;
   case EM_RISCV:
-    CapSize = e->getFileClass() == ELF::ELFCLASS64 ? 16 : 8;
+    CapSize = e.getFileClass() == ELF::ELFCLASS64 ? 16 : 8;
     break;
   default:
     W.startLine() << "Unknown machine type\n";
@@ -3618,8 +3618,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
       StringRef TargetName;
       Obj->getRelocationTypeName(R.getType(Obj->isMips64EL()), RelocName);
 
-      const Elf_Sym *Sym = unwrapOrError(
-          ObjF->getFileName(), Obj->getRelocationSymbol(&R, SymTab));
+      const Elf_Sym *Sym = unwrapOrError(ObjF->getFileName(),
+                                         Obj->getRelocationSymbol(R, SymTab));
       if (Sym) {
         TargetName = unwrapOrError(
             ObjF->getFileName(), Sym->getName(getDynamicStringTable()));
@@ -3639,7 +3639,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTableMapping() {
     return;
   }
   ArrayRef<uint8_t> Data =
-      unwrapOrError(ObjF->getFileName(), Obj->getSectionContents(Shdr));
+      unwrapOrError(ObjF->getFileName(), Obj->getSectionContents(*Shdr));
   const size_t EntrySize = 24;
 
   typename ELFT::SymRange Syms;
