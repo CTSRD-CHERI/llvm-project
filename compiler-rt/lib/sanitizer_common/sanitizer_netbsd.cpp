@@ -105,7 +105,13 @@ uptr internal_munmap(void *addr, usize length) {
   return _REAL(munmap, addr, length);
 }
 
-int internal_mprotect(void *addr, usize length, int prot) {
+uptr internal_mremap(void *old_address, usize old_size, usize new_size, int flags,
+                     void *new_address) {
+  CHECK(false && "internal_mremap is unimplemented on NetBSD");
+  return 0;
+}
+
+int internal_mprotect(void *addr, uptr length, int prot) {
   DEFINE__REAL(int, mprotect, void *a, uptr b, int c);
   return _REAL(mprotect, addr, length, prot);
 }
