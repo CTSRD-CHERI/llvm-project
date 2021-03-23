@@ -48,7 +48,7 @@ extern int fail2(void);
 // UTC_ARGS: --enable
 
 // MIPS-LABEL: define {{[^@]+}}@main
-// MIPS-SAME: () local_unnamed_addr [[ATTR0:#.*]] comdat
+// MIPS-SAME: () local_unnamed_addr [[ATTR0:#.*]] comdat {
 // MIPS-NEXT:  entry:
 // MIPS-NEXT:    [[FOO:%.*]] = alloca [10 x i8], align 1
 // MIPS-NEXT:    [[TMP0:%.*]] = load i8, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @__sancov_gen_, i64 0, i64 0), align 1, !nosanitize !5
@@ -62,7 +62,7 @@ extern int fail2(void);
 // MIPS-NEXT:    ret i32 0
 //
 // PURECAP-LABEL: define {{[^@]+}}@main
-// PURECAP-SAME: () local_unnamed_addr addrspace(200) [[ATTR0:#.*]] comdat
+// PURECAP-SAME: () local_unnamed_addr addrspace(200) [[ATTR0:#.*]] comdat {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[FOO:%.*]] = alloca [10 x i8], align 1, addrspace(200)
 // PURECAP-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* getelementptr inbounds ([1 x i8], [1 x i8] addrspace(200)* @__sancov_gen_, i64 0, i64 0), align 1, !nosanitize !5
@@ -82,7 +82,7 @@ int main(void) {
 }
 
 // MIPS-LABEL: define {{[^@]+}}@func2
-// MIPS-SAME: (i32 signext [[I:%.*]]) local_unnamed_addr [[ATTR0]] comdat
+// MIPS-SAME: (i32 signext [[I:%.*]]) local_unnamed_addr [[ATTR0]] comdat {
 // MIPS-NEXT:  entry:
 // MIPS-NEXT:    [[TMP0:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 0), align 1, !nosanitize !5
 // MIPS-NEXT:    [[TMP1:%.*]] = add i8 [[TMP0]], 1
@@ -117,7 +117,7 @@ int main(void) {
 // MIPS-NEXT:    ret i32 [[RETVAL_0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@func2
-// PURECAP-SAME: (i32 signext [[I:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] comdat
+// PURECAP-SAME: (i32 signext [[I:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] comdat {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @__sancov_gen_.2, i64 0, i64 0), align 1, !nosanitize !5
 // PURECAP-NEXT:    [[TMP1:%.*]] = add i8 [[TMP0]], 1
