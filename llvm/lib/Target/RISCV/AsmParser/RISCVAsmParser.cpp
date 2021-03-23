@@ -2683,9 +2683,9 @@ void RISCVAsmParser::emitCapLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc,
   MCOperand TmpReg = Inst.getOperand(1);
   const MCExpr *Symbol = Inst.getOperand(2).getExpr();
   unsigned SecondOpcode = isRV64() ? RISCV::CLD : RISCV::CLW;
-  emitAuipcInstPair(DestReg, TmpReg, Symbol,
-                    RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI,
-                    SecondOpcode, IDLoc, Out);
+  emitAuipccInstPair(DestReg, TmpReg, Symbol,
+                     RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI, SecondOpcode,
+                     IDLoc, Out);
 }
 
 void RISCVAsmParser::emitCapLoadTLSGDCap(MCInst &Inst, SMLoc IDLoc,
@@ -2698,9 +2698,9 @@ void RISCVAsmParser::emitCapLoadTLSGDCap(MCInst &Inst, SMLoc IDLoc,
   //             CINCOFFSET rdest, rdest, %pcrel_lo(TmpLabel)
   MCOperand DestReg = Inst.getOperand(0);
   const MCExpr *Symbol = Inst.getOperand(1).getExpr();
-  emitAuipcInstPair(DestReg, DestReg, Symbol,
-                    RISCVMCExpr::VK_RISCV_TLS_GD_CAPTAB_PCREL_HI,
-                    RISCV::CIncOffsetImm, IDLoc, Out);
+  emitAuipccInstPair(DestReg, DestReg, Symbol,
+                     RISCVMCExpr::VK_RISCV_TLS_GD_CAPTAB_PCREL_HI,
+                     RISCV::CIncOffsetImm, IDLoc, Out);
 }
 
 bool RISCVAsmParser::checkPseudoCIncOffsetTPRel(MCInst &Inst,
