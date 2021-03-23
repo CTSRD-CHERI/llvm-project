@@ -3428,7 +3428,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
       return ExprError();
     auto CE = CStyleCastExpr::Create(
         Context, Op.ResultType, Op.ValueKind, CK_Dependent, Op.SrcExpr.get(),
-        &Op.BasePath, TSInfo, LParenLoc, RParenLoc);
+        &Op.BasePath, CurFPFeatureOverrides(), TSInfo, LParenLoc, RParenLoc);
     // We need to set the dependent cast kind to allow reassembly in the
     // template instantiation in TreeTransform.h
     CE->setDependentCastKind(IsToCap ? CK_PointerToCHERICapability
@@ -3539,7 +3539,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   assert(Op.DestType == DestTy);
   return Op.complete(CStyleCastExpr::Create(
       Context, Op.DestType, Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
-      &Op.BasePath, TSInfo, LParenLoc, RParenLoc));
+      &Op.BasePath, CurFPFeatureOverrides(), TSInfo, LParenLoc, RParenLoc));
 }
 
 // Check if LHS and RHS are assign compatible for CHERI (ignoring capability
@@ -3583,7 +3583,8 @@ bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS,
             LHS->getAs<PointerType>()->getPointeeType(),
             RHSIsCap ? PIK_Capability : PIK_Integer);
         RHSExpr = ImplicitCastExpr::Create(Context, BitCastTy, CK_BitCast,
-                                           RHSExpr, nullptr, VK_RValue);
+                                           RHSExpr, nullptr, VK_RValue,
+                                           CurFPFeatureOverrides());
       }
       return true;
     }
@@ -3619,7 +3620,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
       return ExprError();
     auto CE = CStyleCastExpr::Create(
         Context, Op.ResultType, Op.ValueKind, CK_Dependent, Op.SrcExpr.get(),
-        &Op.BasePath, TSInfo, LParenLoc, RParenLoc);
+        &Op.BasePath, CurFPFeatureOverrides(), TSInfo, LParenLoc, RParenLoc);
     // We need to set the dependent cast kind to allow reassembly in the
     // template instantiation in TreeTransform.h
     CE->setDependentCastKind(Op.Kind);
@@ -3680,7 +3681,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
   }
   return Op.complete(CStyleCastExpr::Create(
       Context, Op.ResultType, Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
-      &Op.BasePath, TSInfo, LParenLoc, RParenLoc));
+      &Op.BasePath, CurFPFeatureOverrides(), TSInfo, LParenLoc, RParenLoc));
 }
 
 ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
