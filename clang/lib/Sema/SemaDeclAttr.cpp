@@ -2183,7 +2183,7 @@ static void handleCHERIMethodClass(Sema &S, Decl *D, const ParsedAttr &Attr) {
   if (const RecordType *RT = dyn_cast<RecordType>(ClsTy))
     if (const RecordDecl *RD = RT->getDecl()) {
       unsigned Caps = 0;
-      for (const auto &F : RD->fields()) {
+      for (const auto *F : RD->fields()) {
         isValid = false;
         if (F->getType()->isCHERICapabilityType(S.Context)) {
           Caps++;
