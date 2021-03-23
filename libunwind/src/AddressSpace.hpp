@@ -454,7 +454,7 @@ constexpr int check_same_type() {
 }
 
 #ifdef __CHERI_PURE_CAPABILITY__
-__attribute__((weak)) extern "C" ElfW(Dyn) _DYNAMIC[];
+__attribute__((weak)) extern "C" Elf_Dyn _DYNAMIC[];
 // #pragma weak _DYNAMIC
 #endif
 
