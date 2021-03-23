@@ -116,7 +116,7 @@ define i32 @test_simplify7(i8* %dst, i8* %str) {
 ; Check sprintf(dst, "%s", str) -> llvm.memcpy(dest, str, strlen(str) + 1, 1).
 define i32 @test_simplify8(i8* %dst) {
 ; CHECK-LABEL: @test_simplify8(
-; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* nonnull align 1 dereferenceable(13) [[DST:%.*]], i8* nonnull align 1 dereferenceable(13) getelementptr inbounds ([13 x i8], [13 x i8]* @hello_world, i32 0, i32 0), i32 13, i1 false)
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* nonnull align 1 dereferenceable(13) [[DST:%.*]], i8* nonnull align 1 dereferenceable(13) getelementptr inbounds ([13 x i8], [13 x i8]* @hello_world, i32 0, i32 0), i64 13, i1 false)
 ; CHECK-NEXT:    ret i32 12
 ;
   %fmt = getelementptr [3 x i8], [3 x i8]* @percent_s, i32 0, i32 0
