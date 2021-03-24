@@ -14380,7 +14380,9 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       Value *Extract = Builder.CreateExtractValue(Call, i + 1);
       Value *Ptr = Builder.CreateConstGEP1_32(Ops[2], i * 16);
       Ptr = Builder.CreateBitCast(
-          Ptr, llvm::PointerType::getUnqual(Extract->getType()));
+          Ptr,
+          llvm::PointerType::get(Extract->getType(),
+                                 Ptr->getType()->getPointerAddressSpace()));
       Builder.CreateAlignedStore(Extract, Ptr, Align(1));
     }
 
@@ -14396,7 +14398,9 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
       Value *Extract = Builder.CreateExtractValue(Call, i + 1);
       Value *Ptr = Builder.CreateConstGEP1_32(Ops[3], i * 16);
       Ptr = Builder.CreateBitCast(
-          Ptr, llvm::PointerType::getUnqual(Extract->getType()));
+          Ptr,
+          llvm::PointerType::get(Extract->getType(),
+                                 Ptr->getType()->getPointerAddressSpace()));
       Builder.CreateAlignedStore(Extract, Ptr, Align(1));
     }
 
