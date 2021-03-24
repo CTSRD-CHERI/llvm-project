@@ -35,7 +35,7 @@ if (NOT _cxx_abi_link_flag)
   set(LIBUNWIND_TEST_ENABLE_EXCEPTIONS OFF)
 endif()
 
-set(_LIBUNWIND_TESTS alignment libunwind_01 libunwind_02 libunwind_size unw_getcontext libunwind_get_registers frameheadercache_test)
+set(_LIBUNWIND_TESTS alignment.compile libunwind_01 libunwind_02 libunwind_size unw_getcontext libunwind_get_registers frameheadercache_test)
 if (LIBUNWIND_TEST_CXX_ABI_LIB)
   list(APPEND _LIBUNWIND_TESTS thread_unwind simple_exceptions simple_exceptions2)
 endif()
