@@ -23,7 +23,6 @@ else()
 endif()
 
 message(STATUS "Configuring for standalone build.")
-set(${_proj_upper}_STANDALONE_BUILD 1)
 
 # Add LLVM Functions --------------------------------------------------------
 if (WIN32)
@@ -46,11 +45,6 @@ endif()
 if (NOT DEFINED LLVM_ENABLE_SPHINX)
   set(LLVM_ENABLE_SPHINX OFF)
 endif()
-
-# In a standalone build, we don't have llvm to automatically generate the
-# llvm-lit script for us.  So we need to provide an explicit directory that
-# the configurator should write the script into.
-set(LLVM_LIT_OUTPUT_DIR "${PROJECT_BINARY_DIR}/bin")
 
 if (LLVM_INCLUDE_TESTS)
   # Required LIT Configuration ------------------------------------------------
