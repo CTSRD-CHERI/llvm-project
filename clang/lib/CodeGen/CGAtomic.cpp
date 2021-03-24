@@ -851,8 +851,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   if (IsCheriCap &&
       CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
           E->getOp())) {
-    Diags.Report(E->getBeginLoc(), diag::warn_atomic_op_unsupported)
-        << (int)sizeChars.getQuantity() << (int)MaxInlineWidth.getQuantity();
+    Diags.Report(E->getBeginLoc(), diag::warn_atomic_op_unsupported);
     UseLibcall = true;
   }
 
