@@ -1938,7 +1938,7 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
     // If there is a compact unwind encoding table, look there first.
     if (sects.compact_unwind_section != 0) {
       if (this->getInfoFromCompactEncodingSection(pc, sects)) {
-  #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
+#if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
         // Found info in table, done unless encoding says to use dwarf.
         uint32_t dwarfOffset;
         if ((sects.dwarf_section() != 0) && compactSaysUseDwarf(&dwarfOffset)) {
@@ -1947,7 +1947,7 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
             return;
           }
         }
-  #endif
+#endif
         // If unwind table has entry, but entry says there is no unwind info,
         // record that we have no unwind info.
         if (_info.format == 0) {
