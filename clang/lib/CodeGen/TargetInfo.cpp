@@ -11233,7 +11233,7 @@ Address RISCVABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   CharUnits CapabilityWidth =
     CharUnits::fromQuantity(getTarget().getCHERICapabilityWidth() / 8);
   if (const auto *RT = Ty->getAs<RecordType>())
-    IsSingleCapRecord = SizeAndAlign.Width == CapabilityWidth &&
+    IsSingleCapRecord = TInfo.Width == CapabilityWidth &&
                         getContext().containsCapabilities(RT->getDecl());
 
   bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
@@ -11241,7 +11241,7 @@ Address RISCVABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // Arguments bigger than 2*Xlen bytes are passed indirectly, as are
   // capabilities for the hybrid ABI.
-  bool IsIndirect = SizeAndAlign.Width > 2 * SlotSize ||
+  bool IsIndirect = TInfo.Width > 2 * SlotSize ||
     (!getContext().getTargetInfo().areAllPointersCapabilities() &&
      IsCapability);
 

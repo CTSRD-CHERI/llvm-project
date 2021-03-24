@@ -28,12 +28,22 @@ using namespace clang::driver;
 using namespace clang::driver::tools;
 using namespace clang::driver::toolchains;
 
+static bool isARMBareMetal(const llvm::Triple &Triple);
+static bool isMIPSBareMetal(const llvm::Triple &Triple);
+
 BareMetal::BareMetal(const Driver &D, const llvm::Triple &Triple,
                            const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   getProgramPaths().push_back(getDriver().getInstalledDir());
   if (getDriver().getInstalledDir() != getDriver().Dir)
     getProgramPaths().push_back(getDriver().Dir);
+  if (isARMBareMetal(Triple))
+    Target = BaremetalTarget::ARM;
+  else if (isMIPSBareMetal(Triple)) {
+    Target = BaremetalTarget::MIPS;
+    if (tools::mips::hasMipsAbiArg(Args, "purecap"))
+      IsCheriPurecap = true;
+  }
 }
 
 /// Is the triple {arm,thumb}-none-none-{eabi,eabihf} ?
@@ -71,23 +81,6 @@ static bool isMIPSBareMetal(const llvm::Triple& Triple) {
     return false;
   }
 }
-
-BareMetal::BareMetal(const Driver &D, const llvm::Triple &Triple,
-                           const ArgList &Args)
-    : ToolChain(D, Triple, Args) {
-  getProgramPaths().push_back(getDriver().getInstalledDir());
-  if (getDriver().getInstalledDir() != getDriver().Dir)
-    getProgramPaths().push_back(getDriver().Dir);
-  if (isARMBareMetal(Triple))
-    Target = BaremetalTarget::ARM;
-  else if (isMIPSBareMetal(Triple)) {
-    Target = BaremetalTarget::MIPS;
-    if (tools::mips::hasMipsAbiArg(Args, "purecap"))
-      IsCheriPurecap = true;
-  }
-}
-
-BareMetal::~BareMetal() {}
 
 bool BareMetal::handlesTarget(const llvm::Triple &Triple) {
   return isARMBareMetal(Triple) || isMIPSBareMetal(Triple);
