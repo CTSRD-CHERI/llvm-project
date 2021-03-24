@@ -707,7 +707,7 @@ static bool checkForUnwindInfoSegment(const Elf_Phdr *phdr, uintptr_t image_base
             hdrInfo)) {
       // .eh_frame_hdr records the start of .eh_frame, but not its size.
       // Rely on a zero terminator to find the end of the section.
-      cbdata->sects->set_dwarf_index_section(hdrInfo.eh_frame_ptr);
+      cbdata->sects->set_dwarf_section(hdrInfo.eh_frame_ptr);
       cbdata->sects->dwarf_section_length = __SIZE_MAX__;
       return true;
     }
@@ -778,9 +778,6 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
   // target address, so optimize for that. Scan for a matching PT_LOAD segment
   // first and bail when it isn't found.
   bool found_text = false;
-  // Third phdr is usually the executable phdr.
-  if (pinfo->dlpi_phnum > 2)
-    found_text = checkAddrInSegment(&pinfo->dlpi_phdr[2], image_base, cbdata);
   for (Elf_Half i = 0; i < pinfo->dlpi_phnum; ++i) {
     if (checkAddrInSegment(&pinfo->dlpi_phdr[i], image_base, cbdata)) {
       found_text = true;
