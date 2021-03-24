@@ -87,8 +87,8 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
           continue;
         auto *Idx = GEP.getOperand(1);
         auto *S = SE.getSCEV(Idx);
-        if (isa<SCEVCastExpr>(S))
-          S = cast<SCEVCastExpr>(S)->getOperand();
+        if (isa<SCEVIntegralCastExpr>(S))
+          S = cast<SCEVIntegralCastExpr>(S)->getOperand();
         if (auto *SA = dyn_cast<SCEVAddRecExpr>(S)) {
           auto *Start = SA->getStart();
           if (!Start)
