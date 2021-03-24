@@ -15,19 +15,19 @@ define void @frob() {
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 0, i32 0, i64 1), align 4
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 0, i32 0, i64 2), align 8
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 0, i32 1, i64 0), align 4
-; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 0, i32 1, i64 1), align 4
+; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 0, i32 1, i64 1), align 16
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 0, i32 1, i64 2), align 4
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 0, i64 0), align 8
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 0, i64 1), align 4
-; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 0, i64 2), align 8
+; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 0, i64 2), align 16
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 1, i64 0), align 4
-; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 1, i64 1), align 4
+; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 1, i64 1), align 8
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 1, i32 1, i64 2), align 4
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 2, i32 0, i64 0), align 16
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 2, i32 0, i64 1), align 4
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 2, i32 0, i64 2), align 8
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 2, i32 1, i64 0), align 8
-; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 2, i32 1, i64 1), align 8
+; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 2, i32 1, i64 1), align 16
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 0, i64 2, i32 1, i64 2), align 8
 ; CHECK-NEXT:    store i32 1, i32* getelementptr inbounds ([3 x %struct.X], [3 x %struct.X]* @Y, i64 1, i64 0, i32 0, i64 0), align 8
 ; CHECK-NEXT:    store i32 1, i32* getelementptr ([3 x %struct.X], [3 x %struct.X]* @Y, i64 2, i64 0, i32 0, i64 0), align 16
