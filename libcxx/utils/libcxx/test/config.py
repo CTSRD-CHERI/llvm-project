@@ -507,8 +507,10 @@ class Configuration(object):
             self.cxx.link_libcxxabi_flag = '-lcxxrt'
         elif cxx_abi == 'vcruntime':
             debug_suffix = 'd' if self.debug_build else ''
+            # This matches the set of libraries linked in the toplevel
+            # libcxx CMakeLists.txt if building targeting msvc.
             vcrt_linker_flags = ['-l%s%s' % (lib, debug_suffix) for lib in
-                                 ['vcruntime', 'ucrt', 'msvcrt']]
+                                 ['vcruntime', 'ucrt', 'msvcrt', 'msvcprt']]
             link_flags += vcrt_linker_flags
             self.cxx.link_libcxxabi_flag = ' '.join(vcrt_linker_flags)
         elif cxx_abi == 'none' or cxx_abi == 'default':
