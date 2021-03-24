@@ -22,9 +22,9 @@
 
 // EXE:          3c 01 00 00 	lui	$1, 0
 // EXE-NEXT:     64 21 00 00 	daddiu	$1, $1, 0
-// EXE:          3c 03 00 00  	lui	$3, 0 <simple-global-access.c>
+// EXE:          3c 02 00 00  	lui	$2, 0 <simple-global-access.c>
 // This is the second entry into the cap table so it should be 16 bytes
-// EXE-NEXT:  64 63 00 10  	daddiu	$3, $3, 16 <simple-global-access.c+0x10>
+// EXE-NEXT:  64 42 00 10  	daddiu	$2, $2, 16 <simple-global-access.c+0x10>
 
 int global = 1;
 long global2 = 3;

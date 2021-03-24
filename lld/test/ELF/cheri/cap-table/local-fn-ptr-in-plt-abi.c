@@ -2,13 +2,13 @@
 // RUN: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix DISAS
 // Should have a R_MIPS_CHERI_CAPTAB20 relocation against the function pointer and a R_MIPS_CHERI_CAPCALL20 against use_callback
 // DISAS:          clcbi	$c3, 0($c1)
-// DISAS-NEXT: 000000000000001c:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE	return1
+// DISAS-NEXT: 0000000000000020:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE	return1
 // DISAS-NEXT:     clcbi	$c12, 0($c1)
-// DISAS-NEXT: 0000000000000020:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE	use_callback
+// DISAS-NEXT: 0000000000000024:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE	use_callback
 // DISAS:          clcbi	$c12, 0($c1)
-// DISAS-NEXT: 0000000000000038:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE	use_callback
+// DISAS-NEXT: 000000000000003c:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE	use_callback
 // DISAS-NEXT:     clcbi	$c3, 0($c1)
-// DISAS-NEXT: 000000000000003c:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE	global_return2
+// DISAS-NEXT: 0000000000000040:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE	global_return2
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t-shlib.o -DSHLIB %s
 // Build a shared library that uses the function pointer:

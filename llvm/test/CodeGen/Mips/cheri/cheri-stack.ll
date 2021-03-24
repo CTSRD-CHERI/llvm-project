@@ -48,8 +48,8 @@ entry:
 ;
 ; CHECK: cincoffset	$c11, $c11, -[[#FRAMESIZE:]]
 ; CHECK: csc	$c17, $zero, [[C17OFFSET:([0-9]+|sp)]]($c11)
-; CHECK: clcbi $c12, %capcall20(use_arg)
 ; CHECK: csw    ${{([0-9]+)}}, $zero, [[#CAP_SIZE - 8]]($c11)
+; CHECK: clcbi $c12, %capcall20(use_arg)
 ; CHECK: cjalr	$c12, $c17
 ; CHECK: clw	${{([0-9]+)}}, $zero, [[#CAP_SIZE - 8]]($c11)
 ; CHECK: clc	$c17, $zero, [[C17OFFSET]]($c11)

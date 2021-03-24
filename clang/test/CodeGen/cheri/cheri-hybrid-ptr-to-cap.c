@@ -65,8 +65,8 @@ void *__capability fn_ptr_to_cap(void (*fn_ptr)(void)) {
   // ASM-LABEL: fn_ptr_to_cap:
   // ASM-MIPS:      cgetpcc $c1
   // ASM-MIPS-NEXT: cfromptr $c3, $c1, $1
-  // ASM-RISCV:      cspecialr ca1, pcc
-  // ASM-RISCV-NEXT: cfromptr ca0, ca1, a0
+  // ASM-RISCV:      cspecialr ca0, pcc
+  // ASM-RISCV-NEXT: cfromptr ca0, ca0, a1
   return (__cheri_tocap void *__capability)fn_ptr;
 }
 

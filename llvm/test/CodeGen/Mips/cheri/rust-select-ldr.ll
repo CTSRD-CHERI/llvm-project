@@ -33,17 +33,17 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $1
+; PURECAP-NEXT:    csc $c1, $zero, 0($c11) # 16-byte Folded Spill
 ; PURECAP-NEXT:    cincoffset $c4, $c11, 48
 ; PURECAP-NEXT:    csetbounds $c4, $c4, 16
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E)($c1)
 ; PURECAP-NEXT:    cincoffset $c3, $c11, 24
-; PURECAP-NEXT:    csc $c1, $zero, 0($c11) # 16-byte Folded Spill
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c1, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cld $6, $zero, 40($c11)
 ; PURECAP-NEXT:    cld $5, $zero, 32($c11)
 ; PURECAP-NEXT:    cld $4, $zero, 24($c11)
-; PURECAP-NEXT:    clc $c1, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop

@@ -3,10 +3,6 @@
 ; ModuleID = '***/build/init-a31849-bugpoint-reduce.ll-reduced-simplified.bc'
 ; See https://github.com/CTSRD-CHERI/llvm/issues/275
 
-source_filename = "/tmp/init-a31849.c"
-target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
-target triple = "cheri-unknown-rtems5"
-
 @tls_item = external dso_local thread_local(initialexec) addrspace(200) global i8, align 1
 @.str.6 = external dso_local unnamed_addr addrspace(200) constant [15 x i8], align 1
 
@@ -20,8 +16,9 @@ entry:
   ret void
 
   ; CHECK:      lui	$1, %captab_tprel_hi(tls_item)
-  ; CHECk-NEXT: daddiu	$1, $1, %captab_tprel_lo(tls_item)
-  ; CHECK:      creadhwr	$c2, $chwr_userlocal
+  ; CHECK-NEXT: daddiu	$1, $1, %captab_tprel_lo(tls_item)
+  ; CHECK-NEXT: cld $1, $1, 0($c1)
+  ; CHECK-NEXT: creadhwr	$c1, $chwr_userlocal
 }
 
 attributes #0 = { noinline nounwind optnone uwtable }

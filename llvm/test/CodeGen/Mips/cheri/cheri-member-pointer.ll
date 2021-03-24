@@ -1,3 +1,4 @@
+; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O0
 ; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | %cheri_FileCheck %s
 ; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | %cheri_FileCheck %s -check-prefix OPT
 ; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | %cheri_FileCheck %s -check-prefix OPT
@@ -40,25 +41,24 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ret i32 %call
   ; CHECK: cincoffset      $c11, $c11, -[[STACK_ADJ:(([0-9]+))]]
   ; CHECK: csc     $c17, [[STACK_RETURN_ADDR:\$zero, (([0-9]+))\(\$c11\)]]
+  ; CHECK: csc     $c4, [[STACK_MEMPTR_PTR:\$zero, (([0-9]+))\(\$c11\)]]
   ; get adj in $2
   ; CHECK: dsra    $[[memptradjshifted:([0-9]+)]], $4, 1
   ; adjust this:
   ; CHECK: cincoffset      $c[[THIS_ADJUSTED:([0-9]+)]], $c3, $[[memptradjshifted]]
   ; store a copy
-  ; CHECK: cmove      $c[[THIS_ADJUSTED_COPY:([0-9]+)]], $c[[THIS_ADJUSTED]]
-  ; CHECK: andi    $[[irreg0:([0-9]+)]], $4, 1
-  ; CHECK:      csc     $c4, [[STACK_MEMPTR_PTR:\$zero, (([0-9]+))\(\$c11\)]]
   ; CHECK-NEXT: csc     $c[[THIS_ADJUSTED]], [[STACK_THIS_ADJ:\$zero, (([0-9]+))\(\$c11\)]]
-  ; CHECK-NEXT: csc     $c[[THIS_ADJUSTED_COPY]], [[STACK_THIS_ADJ_COPY:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c[[THIS_ADJUSTED]], [[STACK_THIS_ADJ_COPY:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK-NEXT: andi    $[[irreg0:([0-9]+)]], $4, 1
   ; CHECK-NEXT: beqz    $[[irreg0]], .LBB0_3
 
   ; CHECK: .LBB0_2:                                # %memptr.virtual
+  ; CHECK: clc     [[MEMPTR:\$c2]], [[STACK_MEMPTR_PTR]]
   ; CHECK: clc     $c1, [[STACK_THIS_ADJ_COPY]]
-  ; CHECK: clc     $c2, $zero, 0($c1)
-  ; CHECK: clc     [[MEMPTR:\$c3]], [[STACK_MEMPTR_PTR]]
+  ; CHECK: clc     $c1, $zero, 0($c1)
   ; CHECK: cgetaddr $1, [[MEMPTR]]
-  ; CHECK: clc     $c2, $1, 0($c2)
-  ; CHECK: csc     $c2, [[STACK_TARGET_FN_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK: clc     $c1, $1, 0($c1)
+  ; CHECK: csc     $c1, [[STACK_TARGET_FN_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
 
@@ -68,14 +68,13 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
   ; CHECK: .LBB0_4:                                # %memptr.end
-  ; CHECK: clc     $c1, [[STACK_TARGET_FN_PTR]]
-  ; CHECK: clc     $c3, [[STACK_THIS_ADJ]]
-  ; CHECK: cmove   $c12, $c1
-  ; CHECK: cjalr   $c12, $c17
-  ; CHECK: nop
-  ; CHECK: clc     $c17, [[STACK_RETURN_ADDR]]
-  ; CHECK: cincoffset      $c11, $c11, [[STACK_ADJ]]
-  ; CHECK: cjr     $c17
+  ; CHECK-NEXT: clc     $c3, [[STACK_THIS_ADJ]]
+  ; CHECK-NEXT: clc     $c12, [[STACK_TARGET_FN_PTR]]
+  ; CHECK-NEXT: cjalr   $c12, $c17
+  ; CHECK-NEXT: nop
+  ; CHECK-NEXT: clc     $c17, [[STACK_RETURN_ADDR]]
+  ; CHECK-NEXT: cincoffset      $c11, $c11, [[STACK_ADJ]]
+  ; CHECK-NEXT: cjr     $c17
 
 
 

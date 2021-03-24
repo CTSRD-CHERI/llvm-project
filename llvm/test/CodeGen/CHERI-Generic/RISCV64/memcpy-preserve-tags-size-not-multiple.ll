@@ -10,16 +10,18 @@ declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture, i8 add
 define void @test_string_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) addrspace(200) nounwind {
 ; CHECK-LABEL: test_string_memmove:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    clc ca2, 0(ca1)
-; CHECK-NEXT:    clc ca3, 16(ca1)
-; CHECK-NEXT:    cld a4, 32(ca1)
-; CHECK-NEXT:    clw a5, 40(ca1)
-; CHECK-NEXT:    clb a6, 44(ca1)
-; CHECK-NEXT:    csb a6, 44(ca0)
-; CHECK-NEXT:    csw a5, 40(ca0)
-; CHECK-NEXT:    csd a4, 32(ca0)
-; CHECK-NEXT:    csc ca3, 16(ca0)
-; CHECK-NEXT:    csc ca2, 0(ca0)
+; CHECK-NEXT:    cmove ca5, ca1
+; CHECK-NEXT:    cmove ca1, ca0
+; CHECK-NEXT:    clc ca0, 0(ca5)
+; CHECK-NEXT:    clc ca2, 16(ca5)
+; CHECK-NEXT:    cld a3, 32(ca5)
+; CHECK-NEXT:    clw a4, 40(ca5)
+; CHECK-NEXT:    clb a5, 44(ca5)
+; CHECK-NEXT:    csb a5, 44(ca1)
+; CHECK-NEXT:    csw a4, 40(ca1)
+; CHECK-NEXT:    csd a3, 32(ca1)
+; CHECK-NEXT:    csc ca2, 16(ca1)
+; CHECK-NEXT:    csc ca0, 0(ca1)
 ; CHECK-NEXT:    cret
 entry:
   ; Note: has must_preserve_cheri_tags, but this memmove can still be inlined since it's aligned
@@ -30,16 +32,21 @@ entry:
 define void @test_string_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) addrspace(200) nounwind {
 ; CHECK-LABEL: test_string_memcpy:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    clb a2, 44(ca1)
-; CHECK-NEXT:    csb a2, 44(ca0)
-; CHECK-NEXT:    clw a2, 40(ca1)
-; CHECK-NEXT:    csw a2, 40(ca0)
-; CHECK-NEXT:    cld a2, 32(ca1)
-; CHECK-NEXT:    csd a2, 32(ca0)
-; CHECK-NEXT:    clc ca3, 16(ca1)
-; CHECK-NEXT:    csc ca3, 16(ca0)
-; CHECK-NEXT:    clc ca1, 0(ca1)
-; CHECK-NEXT:    csc ca1, 0(ca0)
+; CHECK-NEXT:    cincoffset csp, csp, -16
+; CHECK-NEXT:    csc ca1, 0(csp)
+; CHECK-NEXT:    cmove ca1, ca0
+; CHECK-NEXT:    clc ca0, 0(csp)
+; CHECK-NEXT:    clb a2, 44(ca0)
+; CHECK-NEXT:    csb a2, 44(ca1)
+; CHECK-NEXT:    clw a2, 40(ca0)
+; CHECK-NEXT:    csw a2, 40(ca1)
+; CHECK-NEXT:    cld a2, 32(ca0)
+; CHECK-NEXT:    csd a2, 32(ca1)
+; CHECK-NEXT:    clc ca2, 16(ca0)
+; CHECK-NEXT:    csc ca2, 16(ca1)
+; CHECK-NEXT:    clc ca0, 0(ca0)
+; CHECK-NEXT:    csc ca0, 0(ca1)
+; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    cret
 entry:
   ; Note: has must_preserve_cheri_tags, but this memcpy can still be inlined since it's aligned

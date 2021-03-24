@@ -22,8 +22,8 @@ define float @return_constant_pool() nounwind readnone {
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $1
 ; PURECAP-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c1)
-; PURECAP-NEXT:    clw $2, $zero, 0($c1)
-; PURECAP-NEXT:    mtc1 $2, $f0
+; PURECAP-NEXT:    clw $1, $zero, 0($c1)
+; PURECAP-NEXT:    mtc1 $1, $f0
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 
@@ -68,13 +68,12 @@ define void @b() nounwind {
 ; N64-NEXT:    sd $gp, 0($sp) # 8-byte Folded Spill
 ; N64-NEXT:    lui $1, %hi(%neg(%gp_rel(b)))
 ; N64-NEXT:    daddu $1, $1, $25
-; N64-NEXT:    daddiu $1, $1, %lo(%neg(%gp_rel(b)))
-; N64-NEXT:    ld $25, %call16(d)($1)
+; N64-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(b)))
+; N64-NEXT:    ld $25, %call16(d)($gp)
 ; N64-NEXT:    # implicit-def: $a0_64
 ; N64-NEXT:    # implicit-def: $c3
 ; N64-NEXT:    # implicit-def: $a1_64
 ; N64-NEXT:    # implicit-def: $d14_64
-; N64-NEXT:    move $gp, $1
 ; N64-NEXT:    .reloc .Ltmp0, R_MIPS_JALR, d
 ; N64-NEXT:  .Ltmp0:
 ; N64-NEXT:    jalr $25

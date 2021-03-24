@@ -48,7 +48,7 @@
 // CHECK-EMPTY:
 // CHECK-NEXT: DW_TAG_lexical_block
 // MIPS-NEXT:                   DW_AT_low_pc	(0x0000000000000020)
-// CHERI-NEXT:                  DW_AT_low_pc	(0x0000000000000044)
+// CHERI-NEXT:                  DW_AT_low_pc	(0x0000000000000048)
 // MIPS-NEXT:                   DW_AT_high_pc	(0x000000000000002c)
 // CHERI-NEXT:                  DW_AT_high_pc	(0x0000000000000054)
 // CHECK-EMPTY:
@@ -64,7 +64,7 @@
 // CHECK-EMPTY:
 // CHECK-NEXT:  DW_TAG_lexical_block
 // MIPS-NEXT:                   DW_AT_low_pc	(0x0000000000000030)
-// CHERI-NEXT:                  DW_AT_low_pc	(0x0000000000000058)
+// CHERI-NEXT:                  DW_AT_low_pc	(0x000000000000005c)
 // MIPS-NEXT:                   DW_AT_high_pc	(0x000000000000003c)
 // CHERI-NEXT:                  DW_AT_high_pc	(0x0000000000000068)
 // CHECK-EMPTY:

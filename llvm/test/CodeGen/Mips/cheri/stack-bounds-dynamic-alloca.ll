@@ -44,11 +44,11 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
-; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
 ; ASM-NEXT:    csc $c1, $zero, 0($c11) # 16-byte Folded Spill
-; ASM-NEXT:    beqz $2, .LBB0_5
+; ASM-NEXT:    move $1, $4
+; ASM-NEXT:    sll $1, $1, 0
+; ASM-NEXT:    andi $1, $1, 1
+; ASM-NEXT:    beqz $1, .LBB0_5
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
 ; ASM-NEXT:    b .LBB0_2
@@ -62,9 +62,9 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    b .LBB0_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB0_4: # %use_alloca_need_bounds
+; ASM-NEXT:    clc $c1, $zero, 0($c11) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset $c3, $c11, 16
 ; ASM-NEXT:    csetbounds $c3, $c3, 16
-; ASM-NEXT:    clc $c1, $zero, 0($c11) # 16-byte Folded Reload
 ; ASM-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
@@ -156,11 +156,11 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
-; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
 ; ASM-NEXT:    csc $c1, $zero, 32($c24) # 16-byte Folded Spill
-; ASM-NEXT:    beqz $2, .LBB1_5
+; ASM-NEXT:    move $1, $4
+; ASM-NEXT:    sll $1, $1, 0
+; ASM-NEXT:    andi $1, $1, 1
+; ASM-NEXT:    beqz $1, .LBB1_5
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
 ; ASM-NEXT:    b .LBB1_2
@@ -169,24 +169,23 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    cmove $c1, $c11
 ; ASM-NEXT:    cgetaddr $1, $c1
 ; ASM-NEXT:    daddiu $1, $1, -16
-; ASM-NEXT:    csetaddr $c1, $c1, $1
-; ASM-NEXT:    csetbounds $c2, $c1, 16
-; ASM-NEXT:    cmove $c11, $c1
-; ASM-NEXT:    cmove $c1, $c2
-; ASM-NEXT:    csc $c2, $zero, 16($c24) # 16-byte Folded Spill
+; ASM-NEXT:    csetaddr $c2, $c1, $1
+; ASM-NEXT:    csetbounds $c1, $c2, 16
 ; ASM-NEXT:    csc $c1, $zero, 0($c24) # 16-byte Folded Spill
+; ASM-NEXT:    cmove $c11, $c2
+; ASM-NEXT:    csc $c1, $zero, 16($c24) # 16-byte Folded Spill
 ; ASM-NEXT:    b .LBB1_3
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB1_3: # %use_alloca_no_bounds
+; ASM-NEXT:    clc $c1, $zero, 16($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    daddiu $1, $zero, 1234
-; ASM-NEXT:    clc $c1, $zero, 0($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    csd $1, $zero, 8($c1)
 ; ASM-NEXT:    b .LBB1_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB1_4: # %use_alloca_need_bounds
+; ASM-NEXT:    clc $c3, $zero, 0($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    clc $c1, $zero, 32($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
-; ASM-NEXT:    clc $c3, $zero, 16($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
 ; ASM-NEXT:    b .LBB1_5
@@ -286,11 +285,11 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
-; ASM-NEXT:    # kill: def $a0 killed $a0 killed $a0_64
-; ASM-NEXT:    sll $2, $4, 0
-; ASM-NEXT:    andi $2, $2, 1
 ; ASM-NEXT:    csc $c1, $zero, 32($c24) # 16-byte Folded Spill
-; ASM-NEXT:    beqz $2, .LBB2_3
+; ASM-NEXT:    move $1, $4
+; ASM-NEXT:    sll $1, $1, 0
+; ASM-NEXT:    andi $1, $1, 1
+; ASM-NEXT:    beqz $1, .LBB2_3
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
 ; ASM-NEXT:    b .LBB2_2
@@ -303,8 +302,8 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    daddiu $1, $1, -16
 ; ASM-NEXT:    csetaddr $c1, $c1, $1
 ; ASM-NEXT:    csetbounds $c2, $c1, 16
-; ASM-NEXT:    cmove $c11, $c1
 ; ASM-NEXT:    csc $c2, $zero, 16($c24) # 16-byte Folded Spill
+; ASM-NEXT:    cmove $c11, $c1
 ; ASM-NEXT:    b .LBB2_4
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB2_4: # %while.end.loopexit
@@ -313,9 +312,9 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    b .LBB2_5
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  .LBB2_5: # %while.end
+; ASM-NEXT:    clc $c3, $zero, 0($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    clc $c1, $zero, 32($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    clcbi $c12, %capcall20(use_alloca)($c1)
-; ASM-NEXT:    clc $c3, $zero, 0($c24) # 16-byte Folded Reload
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
 ; ASM-NEXT:    addiu $2, $2, 1234
