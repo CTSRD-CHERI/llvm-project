@@ -1410,6 +1410,11 @@ static bool castPreservesZero(const CastExpr *CE) {
     // Reinterpreting integers as pointers and vice versa.
   case CK_IntegralToPointer:
   case CK_PointerToIntegral:
+    // Converting between CHERI capabilities and integers
+  case CK_CHERICapabilityToAddress:
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToPointer:
+  case CK_PointerToCHERICapability:
     // Language extensions.
   case CK_VectorSplat:
   case CK_NonAtomicToAtomic:
