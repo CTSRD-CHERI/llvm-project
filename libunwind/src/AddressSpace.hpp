@@ -667,16 +667,21 @@ static bool checkAddrInSegment(const Elf_Phdr *phdr, uintptr_t image_base,
   return false;
 }
 
+#define PINFO_NAME(pinfo)                                                      \
+  ((pinfo->dlpi_name && pinfo->dlpi_name[0] != '\0') ? pinfo->dlpi_name        \
+                                                     : "<self>")
+
 static bool boundEhFrameFromPhdr(struct dl_phdr_info *pinfo,
                                  uintptr_t image_base,
                                  dl_iterate_cb_data *cbdata) {
+  CHERI_DBG("Trying to bound PT_LOAD of .eh_frame in %s\n", PINFO_NAME(pinfo));
+  uintptr_t target_addr = cbdata->sects->dwarf_section();
   for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
     const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
     if (phdr->p_type == PT_LOAD) {
       uintptr_t begin = getPhdrCapability(image_base, phdr);
       uintptr_t end = begin + phdr->p_memsz;
-      if (cbdata->sects->dwarf_section() >= begin &&
-          cbdata->sects->dwarf_section() < end) {
+      if (target_addr >= begin && target_addr < end) {
         // This still overestimates the length of .eh_frame, but it
         // should respect the bounds of the containing PT_LOAD.
         cbdata->sects->dwarf_section_length =
@@ -686,7 +691,7 @@ static bool boundEhFrameFromPhdr(struct dl_phdr_info *pinfo,
       }
     }
   }
-  CHERI_DBG("Could not find PT_LOAD of .eh_frame in %s\n", pinfo->dlpi_name);
+  CHERI_DBG("Could not find PT_LOAD of .eh_frame in %s\n", PINFO_NAME(pinfo));
   return false;
 }
 
@@ -734,7 +739,7 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
   if (cbdata->targetAddr < pinfo->dlpi_addr) {
     CHERI_DBG("0x%jx out of bounds of %#p (%s)\n",
               (uintmax_t)cbdata->targetAddr.address(), (void *)pinfo->dlpi_addr,
-              pinfo->dlpi_name);
+              PINFO_NAME(pinfo));
     return 0;
   }
 #if defined(_LIBUNWIND_USE_FRAME_HEADER_CACHE)
@@ -760,11 +765,11 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
       cbdata->targetAddr) {
     CHERI_DBG("%#p out of bounds of %#p (%s)\n",
               (void *)cbdata->targetAddr.get(), (void *)image_base,
-              pinfo->dlpi_name);
+              PINFO_NAME(pinfo));
     return false;
   }
 #endif
-  CHERI_DBG("Checking %s for target 0x%jx (%#p). Base=%#p\n", pinfo->dlpi_name,
+  CHERI_DBG("Checking %s for target 0x%jx (%#p). Base=%#p\n", PINFO_NAME(pinfo),
             (uintmax_t)cbdata->targetAddr.address(),
             (void *)cbdata->targetAddr.get(), (void *)image_base);
 #ifdef __CHERI_PURE_CAPABILITY__
@@ -798,11 +803,11 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
     }
   }
   if (!found_unwind) {
-    CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
+    CHERI_DBG("Could not find EHDR in %s\n", PINFO_NAME(pinfo));
     return 0;
   }
 
-  CHERI_DBG("found_text && found_unwind in %s\n", pinfo->dlpi_name);
+  CHERI_DBG("found_text && found_unwind in %s\n", PINFO_NAME(pinfo));
   // Find the PT_LOAD containing .eh_frame.
   if (!boundEhFrameFromPhdr(pinfo, image_base, cbdata)) {
     return 0;

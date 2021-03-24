@@ -1950,8 +1950,11 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   #endif
         // If unwind table has entry, but entry says there is no unwind info,
         // record that we have no unwind info.
-        if (_info.format == 0)
+        if (_info.format == 0) {
+          CHERI_DBG("%s(%#jx): _info.format == 0 -> _unwindInfoMissing\n",
+                    __func__, (uintmax_t)pc.address());
           _unwindInfoMissing = true;
+        }
         return;
       }
     }
@@ -2008,6 +2011,8 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   }
 #endif // #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 
+  CHERI_DBG("%s(%#jx): failed to find unwind info\n", __func__,
+            (uintmax_t)pc.address());
   // no unwind info, flag that we can't reliably unwind
   _unwindInfoMissing = true;
 }
