@@ -1090,8 +1090,9 @@ Value *llvm::emitMemPCpy(Value *Dst, Value *Src, Value *Len, IRBuilderBase &B,
                          const DataLayout &DL, const TargetLibraryInfo *TLI) {
   LLVMContext &Context = B.GetInsertBlock()->getContext();
   return emitLibCall(
-      LibFunc_mempcpy, B.getInt8PtrTy(),
-      {B.getInt8PtrTy(), B.getInt8PtrTy(), DL.getIntPtrType(Context)},
+      LibFunc_mempcpy, getInt8PtrTy(Dst),
+      {getInt8PtrTy(Dst), getInt8PtrTy(Src),
+       DL.getIntPtrType(Context, Dst->getType()->getPointerAddressSpace())},
       {Dst, Src, Len}, B, TLI);
 }
 
