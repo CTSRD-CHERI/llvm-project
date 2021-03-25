@@ -202,10 +202,22 @@ void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
                                   ArgStringList &CmdArgs) const {
   ToolChain::RuntimeLibType RLT = GetRuntimeLibType(Args);
   switch (RLT) {
-  case ToolChain::RLT_CompilerRT:
-    CmdArgs.push_back(
-        Args.MakeArgString("-lclang_rt.builtins-" + getTriple().getArchName()));
+  case ToolChain::RLT_CompilerRT: {
+    SmallString<32> LibName("-lclang_rt.builtins-");
+    if (Target == BaremetalTarget::MIPS) {
+      if (getTriple().getArch() == llvm::Triple::mips64 && !IsCheriPurecap) {
+        LibName += "mips64";
+      } else if (getTriple().isMIPS() && IsCheriPurecap) {
+        LibName += "cheri"; // TODO: would be nice to have CHERI size here
+      } else {
+        LibName += getTriple().getArchName();
+      }
+    } else {
+      LibName += getTriple().getArchName();
+    }
+    CmdArgs.push_back(Args.MakeArgString(LibName));
     return;
+  }
   case ToolChain::RLT_Libgcc:
     CmdArgs.push_back("-lgcc");
     return;
