@@ -1531,7 +1531,7 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     if (!S.Context.getTargetInfo().SupportsCapabilities())
       S.Diag(DS.getTypeSpecTypeLoc(), diag::err_type_unsupported)
         << "__intcap";
-    if (DS.getTypeSpecSign() == DeclSpec::TSS_unsigned)
+    if (DS.getTypeSpecSign() == TypeSpecifierSign::Unsigned)
       Result = Context.UnsignedIntCapTy;
     else
       Result = Context.IntCapTy;

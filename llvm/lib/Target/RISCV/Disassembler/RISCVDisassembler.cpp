@@ -87,7 +87,7 @@ static DecodeStatus DecodeGPCRRegisterClass(MCInst &Inst, uint64_t RegNo,
   if (RegNo >= 32 || (IsRV32E && RegNo >= 16))
     return MCDisassembler::Fail;
 
-  Register Reg = RISCV::C0 + RegNo;
+  MCRegister Reg = RISCV::C0 + RegNo;
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
 }

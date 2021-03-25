@@ -221,7 +221,7 @@ public:
   // So we convert ELF reloc records to our own records in Relocations.cpp.
   // This vector contains such "cooked" relocations.
   SmallVector<Relocation, 0> relocations;
-  SmallVector<Relocation, 0> freeBSDMipsRelocationsHack;
+  std::vector<DynamicReloc> freeBSDMipsRelocationsHack;
 
   // These are modifiers to jump instructions that are necessary when basic
   // block sections are enabled.  Basic block sections creates opportunities to
@@ -400,7 +400,10 @@ private:
 #ifdef _WIN32
 static_assert(sizeof(InputSection) <= 192, "InputSection is too big");
 #else
-static_assert(sizeof(InputSection) <= 184, "InputSection is too big");
+// TODO: drop the extra SmallVector<Relocation, 0>, it should not longer be
+// needed.
+static_assert(sizeof(InputSection) <= 184 + sizeof(std::vector<DynamicReloc>),
+              "InputSection is too big");
 #endif
 
 inline bool isDebugSection(const InputSectionBase &sec) {
