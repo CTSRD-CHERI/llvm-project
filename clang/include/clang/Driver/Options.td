@@ -296,24 +296,24 @@ def internal_debug_Group :
 def cheri_Group : OptionGroup<"<CHERI specific options>">, HelpText<"CHERI OPTIONS">;
 
 // HACK for rtems:
-def q_rtems : Flag<["-"], "qrtems">, Flags<[DriverOption]>, Group<cheri_Group>,
+def q_rtems : Flag<["-"], "qrtems">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Hack for RTEMS to use start.o instead of crt0.o">;
 
-def cheri_EQ : Joined<["-"], "cheri=">, Flags<[DriverOption]>, Group<cheri_Group>,
+def cheri_EQ : Joined<["-"], "cheri=">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Enable CHERI support, specifying the size (in bits) of CHERI capabilities">;
-def cheri : Flag<["-"], "cheri">, Flags<[DriverOption]>, Group<cheri_Group>,
+def cheri : Flag<["-"], "cheri">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Enable CHERI support with the default capability size (128 bits)">;
 
 def cheri_cap_table_abi : Joined<["-"], "cheri-cap-table-abi=">, Group<cheri_Group>,
   HelpText<"CHERI cap table ABI to use">;
-def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
+def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Use large immediates to index the cap table">;
-def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
+def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Do not use large immediates to index the cap table">;
 
-def cheri_uintcap_offset : Flag<["-"], "cheri-uintcap=offset">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+def cheri_uintcap_offset : Flag<["-"], "cheri-uintcap=offset">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the capability offset when performing computations on uintcap_t (more GC-friendly but needs more changes to source code)">;
-def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the capability address when performing computations on uintcap_t (more C compatible but may break copying GC)">;
 def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">;
@@ -343,9 +343,9 @@ def cheri_int_to_cap_EQ : Joined<["-"], "cheri-int-to-cap=">, Flags<[CC1Option]>
            "'relative' (derive capabilities from DDC or PCC when converting from pointer/integer)">,
   Values<"explicit,strict,address,relative">;
 
-def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Equality comparisons between capabilities only compare the address (default)">;
-def cheri_comparison_exact : Flag<["-"], "cheri-comparison=exact">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+def cheri_comparison_exact : Flag<["-"], "cheri-comparison=exact">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Equality comparisons between capabilities compare all capability fields">;
 
 class InternalDriverOpt : Group<internal_driver_Group>,
