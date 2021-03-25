@@ -191,9 +191,9 @@ IntAndLong int_and_long() {
 extern IntAndLong extern_int_and_long();
 
 // CHECK-LABEL: define {{[^@]+}}@read_int_and_long_1
-// CHECK-SAME: () local_unnamed_addr addrspace(200) [[ATTR3]] {
+// CHECK-SAME: () local_unnamed_addr addrspace(200) [[ATTR4:#.*]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } bitcast ({ i64, i64 } (...) addrspace(200)* @extern_int_and_long to { i64, i64 } () addrspace(200)*)() [[ATTR5:#.*]]
+// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } bitcast ({ i64, i64 } (...) addrspace(200)* @extern_int_and_long to { i64, i64 } () addrspace(200)*)() [[ATTR6:#.*]]
 // CHECK-NEXT:    [[TMP0:%.*]] = extractvalue { i64, i64 } [[CALL]], 0
 // CHECK-NEXT:    [[COERCE_SROA_0_0_EXTRACT_SHIFT:%.*]] = lshr i64 [[TMP0]], 32
 // CHECK-NEXT:    [[COERCE_SROA_0_0_EXTRACT_TRUNC:%.*]] = trunc i64 [[COERCE_SROA_0_0_EXTRACT_SHIFT]] to i32
@@ -215,9 +215,9 @@ int read_int_and_long_1() {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@read_int_and_long_2
-// CHECK-SAME: () local_unnamed_addr addrspace(200) [[ATTR3]] {
+// CHECK-SAME: () local_unnamed_addr addrspace(200) [[ATTR4]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } bitcast ({ i64, i64 } (...) addrspace(200)* @extern_int_and_long to { i64, i64 } () addrspace(200)*)() [[ATTR5]]
+// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } bitcast ({ i64, i64 } (...) addrspace(200)* @extern_int_and_long to { i64, i64 } () addrspace(200)*)() [[ATTR6]]
 // CHECK-NEXT:    [[TMP0:%.*]] = extractvalue { i64, i64 } [[CALL]], 1
 // CHECK-NEXT:    ret i64 [[TMP0]]
 //
@@ -583,8 +583,8 @@ typedef struct {
 // CHECK-NEXT:    [[IN_SROA_2_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE1]] to i128
 // CHECK-NEXT:    [[IN_SROA_0_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE0]] to i128
 // CHECK-NEXT:    [[IN_SROA_0_0_INSERT_SHIFT:%.*]] = shl nuw i128 [[IN_SROA_0_0_INSERT_EXT]], 64
-// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_INSERT:%.*]] = or i128 [[IN_SROA_0_0_INSERT_SHIFT]], [[IN_SROA_2_0_INSERT_EXT]]
-// CHECK-NEXT:    [[ADD:%.*]] = add nsw i128 [[IN_SROA_0_0_INSERT_INSERT]], 1
+// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_INSERT:%.*]] = add nuw nsw i128 [[IN_SROA_2_0_INSERT_EXT]], 1
+// CHECK-NEXT:    [[ADD:%.*]] = add i128 [[IN_SROA_0_0_INSERT_INSERT]], [[IN_SROA_0_0_INSERT_SHIFT]]
 // CHECK-NEXT:    store i128 [[ADD]], i128 addrspace(200)* [[I128]], align 16, [[TBAA25:!tbaa !.*]]
 // CHECK-NEXT:    [[C:%.*]] = getelementptr inbounds [[STRUCT_INT128ANDCAP]], [[STRUCT_INT128ANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 1
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE2]], i64 2

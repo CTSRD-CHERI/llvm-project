@@ -8,7 +8,8 @@
 // CHECK-NEXT:    call void @llvm.var.annotation.p200i8(i8 addrspace(200)* [[B1]], i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @.str, i32 0, i32 0),
 // CHECK-SAME:  i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY:\[[0-9]+ x i8\]]],
 // CHECK-SAME:  [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0),
-// CHECK-SAME:  i32 [[@LINE+13]])
+// CHECK-SAME:  i32 [[@LINE+15]],
+// CHECK-SAME:  i8 addrspace(200)* null)
 // CHECK-NEXT:    ret void
 // HYBRID-LABEL: @var_annotation(
 // HYBRID-NEXT:  entry:
@@ -17,7 +18,8 @@
 // HYBRID-NEXT:    call void @llvm.var.annotation.p0i8(i8* [[B1]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str, i32 0, i32 0),
 // HYBRID-SAME:  i8* getelementptr inbounds ([[FILENAME_ARRAY:\[[0-9]+ x i8\]]],
 // HYBRID-SAME:  [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0),
-// HYBRID-SAME:  i32 [[@LINE+4]])
+// HYBRID-SAME:  i32 [[@LINE+5]],
+// HYBRID-SAME:  i8* null)
 // HYBRID-NEXT:    ret void
 //
 void var_annotation(void) {
@@ -25,8 +27,8 @@ void var_annotation(void) {
 }
 
 // Should be overloaded and args in AS200
-// CHECK: declare void @llvm.var.annotation.p200i8(i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i32) addrspace(200)
-// HYBRID: declare void @llvm.var.annotation.p0i8(i8*, i8*, i8*, i32)
+// CHECK: declare void @llvm.var.annotation.p200i8(i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i32, i8 addrspace(200)*) addrspace(200)
+// HYBRID: declare void @llvm.var.annotation.p0i8(i8*, i8*, i8*, i32, i8*)
 
 // CHECK-LABEL: @ptr_annotation(
 // CHECK-NEXT:  entry:
@@ -35,7 +37,7 @@ void var_annotation(void) {
 // CHECK-NEXT:    store i32 0, i32 addrspace(200)* [[U]], align 4
 // CHECK-NEXT:    [[V:%.*]] = getelementptr inbounds [[STRUCT_ANON]], [[STRUCT_ANON]] addrspace(200)* [[VAR]], i32 0, i32 1
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[V]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.2, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+19]])
+// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.2, i32 0, i32 0), i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0), i32 [[@LINE+19]], i8 addrspace(200)* null)
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 // CHECK-NEXT:    store i32 0, i32 addrspace(200)* [[TMP2]], align 4
 // CHECK-NEXT:    ret i32 0
@@ -46,7 +48,7 @@ void var_annotation(void) {
 // HYBRID-NEXT:    store i32 0, i32* [[U]], align 4
 // HYBRID-NEXT:    [[V:%.*]] = getelementptr inbounds [[STRUCT_ANON]], %struct.anon* [[VAR]], i32 0, i32 1
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32* [[V]] to i8*
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i8* @llvm.ptr.annotation.p0i8.p0i8(i8* [[TMP0]], i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.2, i32 0, i32 0), i8* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0), i32 [[@LINE+8]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i8* @llvm.ptr.annotation.p0i8.p0i8(i8* [[TMP0]], i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.2, i32 0, i32 0), i8* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0), i32 [[@LINE+8]], i8* null)
 // HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8* [[TMP1]] to i32*
 // HYBRID-NEXT:    store i32 0, i32* [[TMP2]], align 4
 // HYBRID-NEXT:    ret i32 0
@@ -62,8 +64,8 @@ int ptr_annotation(void) {
 }
 
 // Should be overloaded and args in AS200
-// CHECK: declare i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i32) addrspace(200)
-// HYBRID: declare i8* @llvm.ptr.annotation.p0i8.p0i8(i8*, i8*, i8*, i32)
+// CHECK: declare i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i32, i8 addrspace(200)*) addrspace(200)
+// HYBRID: declare i8* @llvm.ptr.annotation.p0i8.p0i8(i8*, i8*, i8*, i32, i8*)
 
 // CHECK-LABEL: @builtin_annotation(
 // CHECK-NEXT:  entry:
@@ -113,15 +115,19 @@ void issue327(void) {
 // CHECK: define void @issue327() addrspace(200)
 // CHECK: call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)* %{{.+}}, i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.2, i32 0, i32 0),
 // CHECK-SAME: i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0),
-// CHECK-SAME: i32 [[MYANNOTATION_LINE:107]])
+// CHECK-SAME: i32 [[MYANNOTATION_LINE:109]],
+// CHECK-SAME: i8 addrspace(200)* null)
 // CHECK: call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p200i8(i8 addrspace(200)* %{{.+}}, i8 addrspace(200)* getelementptr inbounds ([13 x i8], [13 x i8] addrspace(200)* @.str.2, i32 0, i32 0),
 // CHECK-SAME: i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0),
-// CHECK-SAME: i32 [[MYANNOTATION_LINE]])
+// CHECK-SAME: i32 [[MYANNOTATION_LINE]],
+// CHECK-SAME: i8 addrspace(200)* null)
 
 // HYBRID: define void @issue327()
 // HYBRID: call i8* @llvm.ptr.annotation.p0i8.p0i8(i8* %{{.+}}, i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.2, i32 0, i32 0),
 // HYBRID-SAME: i8* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0),
-// HYBRID-SAME: i32 [[MYANNOTATION_LINE:107]])
+// HYBRID-SAME: i32 [[MYANNOTATION_LINE:109]],
+// HYBRID-SAME: i8* null)
 // HYBRID: call i8* @llvm.ptr.annotation.p0i8.p0i8(i8* %{{.+}}, i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.2, i32 0, i32 0),
 // HYBRID-SAME: i8* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0),
-// HYBRID-SAME: i32 [[MYANNOTATION_LINE]])
+// HYBRID-SAME: i32 [[MYANNOTATION_LINE]],
+// HYBRID-SAME: i8* null)
