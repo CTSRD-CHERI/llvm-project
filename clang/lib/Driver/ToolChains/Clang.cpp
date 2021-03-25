@@ -3051,7 +3051,7 @@ static void RenderSSPOptions(const Driver &D, const ToolChain &TC,
     if (StackProtectorLevel && TC.isCheriPurecap()) {
       TC.getDriver().Diag(diag::warn_drv_ignored_ssp_purecap)
           << A->getOption().getName();
-      StackProtectorLevel = 0;
+      StackProtectorLevel = LangOptions::SSPOff;
     }
   } else {
     StackProtectorLevel = DefaultStackProtectorLevel;

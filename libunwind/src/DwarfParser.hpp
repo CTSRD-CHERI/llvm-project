@@ -526,10 +526,9 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
     // PrologInfo accessor functions to avoid reading uninitialized data.
     PrologInfo initialState(PrologInfo::InitializeTime::kLazy);
 
-  _LIBUNWIND_TRACE_DWARF("parseInstructions(instructions=" _LIBUNWIND_FMT_PTR
-                         "-%p, pcoffset=0x%zx)\n",
-                         (void *)instructions, (void *)instructionsEnd,
-                         pcoffset);
+    _LIBUNWIND_TRACE_DWARF("parseInstructions(instructions=" _LIBUNWIND_FMT_PTR
+                           "-%p, pcoffset=0x%zx)\n",
+                           (void *)p, (void *)instructionsEnd, pcoffset);
 
     // see DWARF Spec, section 6.4.2 for details on unwind opcodes
     while ((p < instructionsEnd) && (codeOffset < pcoffset)) {
