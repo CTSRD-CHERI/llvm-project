@@ -4124,7 +4124,8 @@ void Driver::BuildJobs(Compilation &C) const {
         Out.flush();
         std::error_code EC;
         llvm::raw_fd_ostream OS(CCPrintStatReportFilename, EC,
-                                llvm::sys::fs::OF_Append);
+                                llvm::sys::fs::OF_Append |
+                                    llvm::sys::fs::OF_Text);
         if (EC)
           return;
         auto L = OS.lock();
