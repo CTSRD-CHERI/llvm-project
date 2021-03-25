@@ -221,6 +221,7 @@ public:
     Musl,
     MuslEABI,
     MuslEABIHF,
+    MuslX32,
 
     CheriPurecap,
 
@@ -693,7 +694,8 @@ public:
   bool isMusl() const {
     return getEnvironment() == Triple::Musl ||
            getEnvironment() == Triple::MuslEABI ||
-           getEnvironment() == Triple::MuslEABIHF;
+           getEnvironment() == Triple::MuslEABIHF ||
+           getEnvironment() == Triple::MuslX32;
   }
 
   /// Tests whether the target is SPIR (32- or 64-bit).
