@@ -2300,8 +2300,9 @@ void CodeGenFunction::EmitVarAnnotations(const VarDecl *D, llvm::Value *V) {
   auto AnnotateIntrin =
       CGM.getIntrinsic(llvm::Intrinsic::var_annotation, Int8PtrTy);
   for (const auto *I : D->specific_attrs<AnnotateAttr>())
-    EmitAnnotationCall(CGM.getIntrinsic(llvm::Intrinsic::var_annotation),
-                       Builder.CreatePointerBitCastOrAddrSpaceCast(V, CGM.Int8PtrTy, V->getName()),
+    EmitAnnotationCall(AnnotateIntrin,
+                       Builder.CreatePointerBitCastOrAddrSpaceCast(
+                           V, CGM.Int8PtrTy, V->getName()),
                        I->getAnnotation(), D->getLocation(), I);
 }
 
