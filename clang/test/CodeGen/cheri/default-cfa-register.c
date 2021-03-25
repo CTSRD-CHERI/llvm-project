@@ -27,8 +27,8 @@ int* test(int i) {
 // HYBRID:  Return address column: 31
 // PURECAP: Return address column: 89
 // CHECK-EMPTY:
-// HYBRID-NEXT: DW_CFA_def_cfa_register: reg29
-// PURECAP-NEXT: DW_CFA_def_cfa_register: reg83
+// HYBRID-NEXT: DW_CFA_def_cfa_register: SP_64
+// PURECAP-NEXT: DW_CFA_def_cfa_register: C11
 // CHECK-NEXT: DW_CFA_nop
 
 // CHECK-LABEL: 00000018
@@ -37,10 +37,10 @@ int* test(int i) {
 
 // PURECAP-NEXT: DW_CFA_def_cfa_offset: +{{32|64}}
 // PURECAP-NEXT: DW_CFA_advance_loc: 4
-// PURECAP-NEXT: DW_CFA_offset_extended: reg89 -{{16|32}}
+// PURECAP-NEXT: DW_CFA_offset_extended: C17 -{{16|32}}
 // PURECAP-NEXT: DW_CFA_nop:
 
 // HYBRID-NEXT: DW_CFA_def_cfa_offset: +32
 // HYBRID-NEXT: DW_CFA_advance_loc: 8
-// HYBRID-NEXT: DW_CFA_offset: reg31 -8
-// HYBRID-NEXT: DW_CFA_offset: reg28 -16
+// HYBRID-NEXT: DW_CFA_offset: RA_64 -8
+// HYBRID-NEXT: DW_CFA_offset: GP_64 -16

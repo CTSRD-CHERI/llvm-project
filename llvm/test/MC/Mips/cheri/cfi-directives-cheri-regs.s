@@ -29,8 +29,8 @@ b:
 
 .end b
 
-# HYBRID:   DW_CFA_def_cfa_register: reg29
-# PURECAP:   DW_CFA_def_cfa_register: reg83
+# HYBRID:   DW_CFA_def_cfa_register: SP_64
+# PURECAP:   DW_CFA_def_cfa_register: C11
 
 # HYBRID:      00000014 00000028 00000018 FDE cie=00000000 pc=00000000...00000014
 # PURECAP:     00000014 00000020 00000018 FDE cie=00000000 pc=00000000...00000014
@@ -38,12 +38,12 @@ b:
 # CHECK-NEXT:   DW_CFA_advance_loc: 4
 # CHECK-NEXT:   DW_CFA_def_cfa_offset: +48
 # CHECK-NEXT:   DW_CFA_advance_loc: 4
-# CHECK-NEXT:   DW_CFA_def_cfa: reg29 +64
+# CHECK-NEXT:   DW_CFA_def_cfa: SP_64 +64
 # CHECK-NEXT:   DW_CFA_advance_loc: 4
-# CHECK-NEXT:   DW_CFA_def_cfa: reg83 +32
+# CHECK-NEXT:   DW_CFA_def_cfa: C11 +32
 # CHECK-NEXT:   DW_CFA_advance_loc: 4
-# CHECK-NEXT:   DW_CFA_offset_extended: reg90 -32
+# CHECK-NEXT:   DW_CFA_offset_extended: C18 -32
 # CHECK-NEXT:   DW_CFA_advance_loc: 4
-# CHECK-NEXT:   DW_CFA_restore_extended: reg89
+# CHECK-NEXT:   DW_CFA_restore_extended: C17
 # CHECK-NEXT:   DW_CFA_nop:
 # CHECK-EMPTY:
