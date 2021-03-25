@@ -6015,7 +6015,7 @@ static SDValue getMemsetStringVal(EVT VT, const SDLoc &dl, SelectionDAG &DAG,
 SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, TypeSize Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
-  if (Offset == 0)
+  if (Offset.isZero())
     return Base;
 
   // For integer pointers the offset and pointer type must be identical
