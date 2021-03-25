@@ -55,14 +55,14 @@ define i32 @test_stackrestore() {
 ; CHECK-LABEL: @test_stackrestore(
 ; CHECK-NEXT:    [[TMPMEM:%.*]] = alloca [10 x i8], align 4
 ; CHECK-NEXT:    [[TMP:%.*]] = getelementptr inbounds [10 x i8], [10 x i8]* [[TMPMEM]], i32 0, i32 0
-; CHECK-NEXT:    [[INALLOCA_SAVE:%.*]] = tail call i8* @llvm.stacksave()
+; CHECK-NEXT:    [[INALLOCA_SAVE:%.*]] = tail call i8* @llvm.stacksave.p0i8()
 ; CHECK-NEXT:    [[ARGMEM:%.*]] = alloca inalloca [10 x i8], align 4
 ; CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [10 x i8], [10 x i8]* [[ARGMEM]], i32 0, i32 0
 ; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* [[P]], i8* align 1 getelementptr inbounds ([9 x i8], [9 x i8]* @str, i32 0, i32 0), i32 9, i1 false)
 ; CHECK-NEXT:    [[P10:%.*]] = getelementptr inbounds [10 x i8], [10 x i8]* [[ARGMEM]], i32 0, i32 9
 ; CHECK-NEXT:    store i8 0, i8* [[P10]], align 1
 ; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* [[TMP]], i8* [[P]], i32 10, i1 false)
-; CHECK-NEXT:    call void @llvm.stackrestore(i8* [[INALLOCA_SAVE]])
+; CHECK-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[INALLOCA_SAVE]])
 ; CHECK-NEXT:    [[HEAP:%.*]] = call i8* @malloc(i32 9)
 ; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* [[HEAP]], i8* [[TMP]], i32 9, i1 false)
 ; CHECK-NEXT:    call void @useit(i8* [[HEAP]])
