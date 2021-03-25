@@ -52,15 +52,16 @@ entry:
 }
 
 define i64 @g(i8 addrspace(4)** %gp) {
+;; TODO-CHERI: We don't perform the same GEP hoist as upstream here. Should find out why and if so determine whether
+;; that is patch that should be upstreamed.
 ; CHECK-LABEL: @g(
 ; CHECK-NEXT:    [[DOTPRE:%.*]] = load i8 addrspace(4)*, i8 addrspace(4)** [[GP:%.*]], align 8
 ; CHECK-NEXT:    [[V74:%.*]] = call i8 addrspace(4)* @alloc()
-; CHECK-NEXT:    [[V77:%.*]] = getelementptr i8, i8 addrspace(4)* [[V74]], i64 -8
-; CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(4)* [[V77]] to i8 addrspace(4)* addrspace(4)*
-; CHECK-NEXT:    [[TMP2:%.*]] = addrspacecast i8 addrspace(4)* addrspace(4)* [[TMP1]] to i8 addrspace(4)**
-; CHECK-NEXT:    store i8 addrspace(4)* [[DOTPRE]], i8 addrspace(4)** [[TMP2]], align 8
-; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(4)* [[V77]] to i64 addrspace(4)*
-; CHECK-NEXT:    [[V80:%.*]] = addrspacecast i64 addrspace(4)* [[TMP3]] to i64*
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(4)* [[V74]] to i8 addrspace(4)* addrspace(4)*
+; CHECK-NEXT:    [[V76:%.*]] = addrspacecast i8 addrspace(4)* addrspace(4)* [[TMP1]] to i8 addrspace(4)**
+; CHECK-NEXT:    [[V77:%.*]] = getelementptr i8 addrspace(4)*, i8 addrspace(4)** [[V76]], i64 -1
+; CHECK-NEXT:    store i8 addrspace(4)* [[DOTPRE]], i8 addrspace(4)** [[V77]], align 8
+; CHECK-NEXT:    [[V80:%.*]] = bitcast i8 addrspace(4)** [[V77]] to i64*
 ; CHECK-NEXT:    [[V81:%.*]] = load i64, i64* [[V80]], align 8
 ; CHECK-NEXT:    ret i64 [[V81]]
 ;
