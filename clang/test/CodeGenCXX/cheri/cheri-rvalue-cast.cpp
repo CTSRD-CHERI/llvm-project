@@ -35,7 +35,7 @@ namespace PR20227 {
 
 // CHECK-LABEL: define internal void @__cxx_global_var_init.1()
 // CHECK:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align [[#CAP_SIZE]] bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 0, i64 [[#CAP_SIZE]], i1 false)
-// CHECK:    call void @_ZN7PR202271CC1Ev(%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_) #2
+// CHECK:    call void @_ZN7PR202271CC1Ev(%"struct.PR20227::C" addrspace(200)* dereferenceable(16) @_ZGRN7PR202271cE_) #2
 // CHECK:    call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*
 // CHECK-SAME: bitcast (void (%"struct.PR20227::C" addrspace(200)*) addrspace(200)* @_ZN7PR202271CD1Ev to void (i8 addrspace(200)*) addrspace(200)*),
 // CHECK-SAME:  i8 addrspace(200)* bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 addrspace(200)* @__dso_handle) #2
