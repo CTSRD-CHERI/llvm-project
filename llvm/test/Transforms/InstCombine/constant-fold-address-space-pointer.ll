@@ -211,7 +211,7 @@ define i32 @test_cast_gep_small_indices_as() {
   float 0.0,
   [4 x i32] zeroinitializer,
   i32 addrspace(3)* getelementptr ([10 x i32], [10 x i32] addrspace(3)* @i32_array_as3, i64 0, i64 0)
-}, align 8
+}
 
 define i32 @test_cast_gep_large_indices_as() {
 ; CHECK-LABEL: @test_cast_gep_large_indices_as(
