@@ -43,8 +43,9 @@
 // AMD64-SHLIB:         Index: 6
 // AMD64-SHLIB:         Name: .rela.plt
 // AMD64-SHLIB-NEXT:    Type: SHT_RELA (0x4)
-// AMD64-SHLIB-NEXT:    Flags [ (0x2)
+// AMD64-SHLIB-NEXT:    Flags [ (0x42)
 // AMD64-SHLIB-NEXT:      SHF_ALLOC (0x2)
+// AMD64-SHLIB-NEXT:      SHF_INFO_LINK (0x40)
 // AMD64-SHLIB-NEXT:    ]
 // AMD64-SHLIB-NEXT:    Address: [[PLT_REL_ADDR:.+]]
 // AMD64-SHLIB-NEXT:    Offset: [[PLT_REL_ADDR]]
@@ -118,8 +119,9 @@
 // PURECAP-SHLIB:         Index: 8
 // PURECAP-SHLIB-NEXT:    Name: .rel.plt
 // PURECAP-SHLIB-NEXT:    Type: SHT_REL (0x9)
-// PURECAP-SHLIB-NEXT:    Flags [ (0x2)
+// PURECAP-SHLIB-NEXT:    Flags [ (0x42)
 // PURECAP-SHLIB-NEXT:      SHF_ALLOC (0x2)
+// PURECAP-SHLIB-NEXT:      SHF_INFO_LINK (0x40)
 // PURECAP-SHLIB-NEXT:    ]
 // PURECAP-SHLIB-NEXT:    Address: [[PLT_REL_ADDR:.+]]
 // PURECAP-SHLIB-NEXT:    Offset: [[PLT_REL_ADDR]]
