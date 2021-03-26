@@ -174,7 +174,7 @@ int test_fake_vla2(struct_fake_vla2 *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_vla_c
-// CHECK-SAME: (i32 signext [[LEN:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// CHECK-SAME: (i32 signext [[LEN:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR6:#.*]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = zext i32 [[LEN]] to i64
 // CHECK-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP0]], align 4, addrspace(200)
@@ -207,7 +207,7 @@ typedef int ext_vector_size_int32_8 __attribute__((ext_vector_type(8)));
 
 // No bounds on vector indexing:
 // CHECK-LABEL: define {{[^@]+}}@test_vector
-// CHECK-SAME: (i32 inreg [[V4_COERCE:%.*]], i192 [[TMP0:%.*]], i64 inreg [[V8_COERCE0:%.*]], i64 inreg [[V8_COERCE1:%.*]], i64 inreg [[V8_COERCE2:%.*]], i64 inreg [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) [[ATTR7:#.*]] {
+// CHECK-SAME: (i32 inreg [[V4_COERCE:%.*]], i192 [[TMP0:%.*]], i64 inreg [[V8_COERCE0:%.*]], i64 inreg [[V8_COERCE1:%.*]], i64 inreg [[V8_COERCE2:%.*]], i64 inreg [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) [[ATTR8:#.*]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32 [[V4_COERCE]] to <4 x i8>
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64 [[V8_COERCE3]] to <2 x i32>
@@ -225,7 +225,7 @@ int test_vector(v4i8 v4, ext_vector_size_int32_8 v8) {
 
 // Even with an arbitraty index (backend should guarantee that it is never out of bounds)
 // CHECK-LABEL: define {{[^@]+}}@test_vector2
-// CHECK-SAME: (i64 signext [[INDEX:%.*]], i32 inreg [[V4_COERCE:%.*]], i128 [[TMP0:%.*]], i64 inreg [[V8_COERCE0:%.*]], i64 inreg [[V8_COERCE1:%.*]], i64 inreg [[V8_COERCE2:%.*]], i64 inreg [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) [[ATTR7]] {
+// CHECK-SAME: (i64 signext [[INDEX:%.*]], i32 inreg [[V4_COERCE:%.*]], i128 [[TMP0:%.*]], i64 inreg [[V8_COERCE0:%.*]], i64 inreg [[V8_COERCE1:%.*]], i64 inreg [[V8_COERCE2:%.*]], i64 inreg [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) [[ATTR8]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32 [[V4_COERCE]] to <4 x i8>
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64 [[V8_COERCE0]] to <2 x i32>
@@ -265,7 +265,7 @@ int test_ptr_to_array1(int (*array)[10], long index) {
   return (*array)[index]; // expected-remark{{setting sub-object bounds for array subscript on 'int [10]' to 40 bytes}}
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array2
-// CHECK-SAME: ([10 x i32] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR8:#.*]] {
+// CHECK-SAME: ([10 x i32] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR9:#.*]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [10 x i32], [10 x i32] addrspace(200)* [[ARRAY]], i64 [[INDEX]], i64 0
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[ARRAYDECAY]] to i8 addrspace(200)*
@@ -279,7 +279,7 @@ int* test_ptr_to_array2(int (*array)[10], long index) {
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array3
-// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR8]] {
+// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR9]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x [5 x i32]] addrspace(200)* [[ARRAY]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 200)
@@ -296,7 +296,7 @@ int* test_ptr_to_array3(int (*array)[10][5], long index) {
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array4
-// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR8]] {
+// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR9]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [10 x [5 x i32]], [10 x [5 x i32]] addrspace(200)* [[ARRAY]], i64 [[INDEX]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x [5 x i32]] addrspace(200)* [[ARRAYIDX]] to i8 addrspace(200)*
@@ -521,7 +521,7 @@ typedef struct {
 } my_struct28;
 
 // CHECK-LABEL: define {{[^@]+}}@test28a
-// CHECK-SAME: (i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// CHECK-SAME: (i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR6]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAY23:%.*]] = alloca [100 x i8], align 1, addrspace(200)
 // CHECK-NEXT:    [[ARRAY23_SUB:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 0
@@ -545,7 +545,7 @@ int test28a(long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28b
-// CHECK-SAME: (%struct.my_struct28 addrspace(200)* addrspace(200)* nocapture readonly [[ARRAY1:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR9:#.*]] {
+// CHECK-SAME: (%struct.my_struct28 addrspace(200)* addrspace(200)* nocapture readonly [[ARRAY1:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT28:%.*]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAY1]], i64 4
 // CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAYIDX]], align 16, [[TBAA14:!tbaa !.*]]
@@ -562,7 +562,7 @@ int test28b(my_struct28 **array1, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28c
-// CHECK-SAME: (i64 signext [[INDEX1:%.*]], i64 signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// CHECK-SAME: (i64 signext [[INDEX1:%.*]], i64 signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) [[ATTR6]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAY23:%.*]] = alloca [100 x i8], align 1, addrspace(200)
 // CHECK-NEXT:    [[ARRAY23_SUB:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 0
@@ -587,7 +587,7 @@ int test28c(long index1, long index2) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28d
-// CHECK-SAME: (%struct.my_struct28 addrspace(200)* addrspace(200)* nocapture readonly [[ARRAY1:%.*]], i64 signext [[INDEX1:%.*]], i64 signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) [[ATTR9]] {
+// CHECK-SAME: (%struct.my_struct28 addrspace(200)* addrspace(200)* nocapture readonly [[ARRAY1:%.*]], i64 signext [[INDEX1:%.*]], i64 signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT28:%.*]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAY1]], i64 [[INDEX1]]
 // CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAYIDX]], align 16, [[TBAA14]]

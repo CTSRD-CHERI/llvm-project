@@ -55,10 +55,10 @@ extern int fail2(void);
 // MIPS-NEXT:    [[TMP1:%.*]] = add i8 [[TMP0]], 1
 // MIPS-NEXT:    store i8 [[TMP1]], i8* getelementptr inbounds ([1 x i8], [1 x i8]* @__sancov_gen_, i64 0, i64 0), align 1, !nosanitize !5
 // MIPS-NEXT:    [[TMP2:%.*]] = getelementptr inbounds [10 x i8], [10 x i8]* [[FOO]], i64 0, i64 0
-// MIPS-NEXT:    call void @llvm.lifetime.start.p0i8(i64 10, i8* nonnull [[TMP2]]) [[ATTR4:#.*]]
-// MIPS-NEXT:    [[CALL:%.*]] = call i8* @gets(i8* nonnull [[TMP2]]) [[ATTR5:#.*]]
-// MIPS-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8* nonnull [[TMP2]]) [[ATTR5]]
-// MIPS-NEXT:    call void @llvm.lifetime.end.p0i8(i64 10, i8* nonnull [[TMP2]]) [[ATTR4]]
+// MIPS-NEXT:    call void @llvm.lifetime.start.p0i8(i64 10, i8* nonnull [[TMP2]]) [[ATTR5:#.*]]
+// MIPS-NEXT:    [[CALL:%.*]] = call i8* @gets(i8* nonnull [[TMP2]]) [[ATTR6:#.*]]
+// MIPS-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8* nonnull [[TMP2]]) [[ATTR6]]
+// MIPS-NEXT:    call void @llvm.lifetime.end.p0i8(i64 10, i8* nonnull [[TMP2]]) [[ATTR5]]
 // MIPS-NEXT:    ret i32 0
 //
 // PURECAP-LABEL: define {{[^@]+}}@main
@@ -82,7 +82,7 @@ int main(void) {
 }
 
 // MIPS-LABEL: define {{[^@]+}}@func2
-// MIPS-SAME: (i32 signext [[I:%.*]]) local_unnamed_addr [[ATTR0]] comdat {
+// MIPS-SAME: (i32 signext [[I:%.*]]) local_unnamed_addr [[ATTR3:#.*]] comdat {
 // MIPS-NEXT:  entry:
 // MIPS-NEXT:    [[TMP0:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 0), align 1, !nosanitize !5
 // MIPS-NEXT:    [[TMP1:%.*]] = add i8 [[TMP0]], 1
@@ -94,7 +94,7 @@ int main(void) {
 // MIPS-NEXT:    [[TMP2:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 1), align 1, !nosanitize !5
 // MIPS-NEXT:    [[TMP3:%.*]] = add i8 [[TMP2]], 1
 // MIPS-NEXT:    store i8 [[TMP3]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 1), align 1, !nosanitize !5
-// MIPS-NEXT:    [[CALL:%.*]] = tail call signext i32 @fail1() [[ATTR6:#.*]]
+// MIPS-NEXT:    [[CALL:%.*]] = tail call signext i32 @fail1() [[ATTR7:#.*]]
 // MIPS-NEXT:    br label [[RETURN:%.*]]
 // MIPS:       if.else:
 // MIPS-NEXT:    call void @__sanitizer_cov_trace_const_cmp4(i32 200, i32 [[I]])
@@ -104,7 +104,7 @@ int main(void) {
 // MIPS-NEXT:    [[TMP4:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 2), align 1, !nosanitize !5
 // MIPS-NEXT:    [[TMP5:%.*]] = add i8 [[TMP4]], 1
 // MIPS-NEXT:    store i8 [[TMP5]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 2), align 1, !nosanitize !5
-// MIPS-NEXT:    [[CALL3:%.*]] = tail call signext i32 @fail2() [[ATTR6]]
+// MIPS-NEXT:    [[CALL3:%.*]] = tail call signext i32 @fail2() [[ATTR7]]
 // MIPS-NEXT:    br label [[RETURN]]
 // MIPS:       if.end4:
 // MIPS-NEXT:    [[TMP6:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i64 0, i64 3), align 1, !nosanitize !5
