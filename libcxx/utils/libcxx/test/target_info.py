@@ -25,6 +25,9 @@ class DefaultTargetInfo(object):
     def is_windows(self):
         return False
 
+    def is_zos(self):
+        return False
+
     def is_mingw(self):
         return False
 
@@ -223,6 +226,13 @@ class BaremetalNewlibTI(DefaultTargetInfo):
             flags += ['-latomic']
 
 
+class ZOSLocalTI(DefaultTargetInfo):
+    def __init__(self, full_config):
+        super(ZOSLocalTI, self).__init__(full_config)
+
+    def is_zos(self):
+        return True
+
 class MingwLocalTI(WindowsLocalTI):
     def __init__(self, full_config):
         super(MingwLocalTI, self).__init__(full_config)
@@ -245,4 +255,5 @@ def make_target_info(full_config):
     if target_system == 'NetBSD':  return NetBSDLocalTI(full_config)
     if target_system == 'Linux':   return LinuxLocalTI(full_config)
     if target_system == 'Windows': return WindowsLocalTI(full_config)
+    if target_system == 'OS/390':  return ZOSLocalTI(full_config)
     return DefaultTargetInfo(full_config)
