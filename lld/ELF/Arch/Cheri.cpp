@@ -703,7 +703,7 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
       CheriCapRelocLocation loc{isec, offset, false};
       std::string msg = "call relocation against non-function symbol " + verboseToString(&sym, 0) +
       "\n>>> referenced by " + loc.toString();
-      if (sym.isUndefined() && config->allowShlibUndefined) {
+      if (sym.isUndefined() && config->unresolvedSymbolsInShlib == UnresolvedPolicy::Ignore) {
         // Don't fail the build for shared libraries unless
         nonFatalWarning(msg);
       } else {

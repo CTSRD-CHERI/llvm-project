@@ -79,6 +79,8 @@ add_llvm_target(MipsCodeGen
   Support
   Target
   GlobalISel
+  ScalarOpts
+  TransformUtils
 
   ADD_TO_COMPONENT
   Mips
