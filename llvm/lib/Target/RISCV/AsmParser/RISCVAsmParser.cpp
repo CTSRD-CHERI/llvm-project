@@ -489,7 +489,7 @@ public:
     // Must be of 'immediate' type but not a constant.
     if (!isImm() || evaluateConstantImm(getImm(), Imm, VK))
       return false;
-    return RISCVAsmParser::classifySymbolRef(getImm(), VK, Imm) &&
+    return RISCVAsmParser::classifySymbolRef(getImm(), VK) &&
            VK == RISCVMCExpr::VK_RISCV_TPREL_CINCOFFSET;
   }
 

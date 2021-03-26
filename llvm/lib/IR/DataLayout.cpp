@@ -735,12 +735,7 @@ unsigned DataLayout::getIndexSize(unsigned AS) const {
 }
 
 bool DataLayout::isFatPointer(unsigned AS) const {
-  PointersTy::const_iterator I = findPointerLowerBound(AS);
-  if (I == Pointers.end() || I->AddressSpace != AS) {
-    I = findPointerLowerBound(0);
-    assert(I->AddressSpace == 0);
-  }
-  return I->IsFatPointer;
+  return getPointerAlignElem(AS).IsFatPointer;
 }
 
 unsigned DataLayout::getIndexTypeSizeInBits(Type *Ty) const {
