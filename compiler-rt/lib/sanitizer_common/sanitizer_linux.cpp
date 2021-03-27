@@ -185,11 +185,13 @@ uptr internal_munmap(void *addr, usize length) {
   return internal_syscall(SYSCALL(munmap), (uptr)addr, length);
 }
 
+#if SANITIZER_LINUX
 uptr internal_mremap(void *old_address, usize old_size, usize new_size, int flags,
                      void *new_address) {
   return internal_syscall(SYSCALL(mremap), (uptr)old_address, old_size,
                           new_size, flags, (uptr)new_address);
 }
+#endif
 
 int internal_mprotect(void *addr, uptr length, int prot) {
   return internal_syscall(SYSCALL(mprotect), (uptr)addr, length, prot);
