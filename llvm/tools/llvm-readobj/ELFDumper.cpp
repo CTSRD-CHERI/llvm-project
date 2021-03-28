@@ -3362,7 +3362,7 @@ static const EnumEntry<uint64_t> CapRelocsPermsFlags[] = {
     {"Function", 0x8000000000000000ULL}};
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
-  const ELFFile<ELFT> *Obj = ObjF.getELFFile();
+  const ELFFile<ELFT> &Obj = ObjF.getELFFile();
   const Elf_Shdr *Shdr = findSectionByName("__cap_relocs");
   if (!Shdr) {
     W.startLine() << "There is no __cap_relocs section in the file.\n";
@@ -3370,7 +3370,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   }
   // TODO: get symbol name for __cap_reloc
   ArrayRef<uint8_t> Data =
-      unwrapOrError(ObjF.getFileName(), Obj->getSectionContents(*Shdr));
+      unwrapOrError(ObjF.getFileName(), Obj.getSectionContents(*Shdr));
   const uint64_t CapRelocsStartVaddr = Shdr->sh_addr;
   const uint64_t CapRelocsEndVaddr = Shdr->sh_addr + Shdr->sh_size;
   const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
@@ -3395,7 +3395,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     if (R.r_offset >= CapRelocsStartVaddr && R.r_offset < CapRelocsEndVaddr) {
       // No need to store relocations aginst symbol zero since they don't have
       // a name
-      if (R.getSymbol(Obj->isMips64EL()) != 0)
+      if (R.getSymbol(Obj.isMips64EL()) != 0)
         CapRelocsDynRels.insert(std::make_pair((uint64_t)R.r_offset, R));
     }
   }
@@ -3405,9 +3405,9 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   StringRef StrTable;
   bool UsingDynsym = false;
   if (DotSymtabSec) {
-    StrTable = unwrapOrError(
-        ObjF.getFileName(), Obj->getStringTableForSymtab(*DotSymtabSec));
-    Syms = unwrapOrError(ObjF.getFileName(), Obj->symbols(DotSymtabSec));
+    StrTable = unwrapOrError(ObjF.getFileName(),
+                             Obj.getStringTableForSymtab(*DotSymtabSec));
+    Syms = unwrapOrError(ObjF.getFileName(), Obj.symbols(DotSymtabSec));
   } else {
     StrTable = DynamicStringTable;
     Syms = dynamic_symbols();
@@ -3470,10 +3470,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       if (it != CapRelocsDynRels.end()) {
         Elf_Rel R = it->second;
         const Elf_Sym *Sym = unwrapOrError(ObjF.getFileName(),
-                                           Obj->getRelocationSymbol(R, SymTab));
+                                           Obj.getRelocationSymbol(R, SymTab));
         // Since we are looking up dynamic relocations, we have to look for the
         // symbol name in the .dynstrtab section.
-        BaseSymbol = getFullSymbolName(*Sym, R.getSymbol(Obj->isMips64EL()),
+        BaseSymbol = getFullSymbolName(*Sym, R.getSymbol(Obj.isMips64EL()),
                                        DynamicStringTable, true);
         // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "Name=" << BaseSymbol << "\n";
       }
@@ -3519,7 +3519,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
-  const ELFFile<ELFT> *Obj = ObjF.getELFFile();
+  const ELFFile<ELFT> &Obj = ObjF.getELFFile();
   const Elf_Shdr *Shdr = findSectionByName(".captable");
   if (!Shdr) {
     W.startLine() << "There is no .captable section in the file.\n";
@@ -3527,7 +3527,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
   }
   ListScope L(W, "CHERI .captable");
 
-  const Elf_Ehdr &e = Obj->getHeader();
+  const Elf_Ehdr &e = Obj.getHeader();
   unsigned CapSize;
   switch (e.e_machine) {
   case EM_MIPS:
@@ -3555,9 +3555,9 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
   StringRef StrTable;
   bool UsingDynsym = false;
   if (DotSymtabSec) {
-    StrTable = unwrapOrError(
-        ObjF.getFileName(), Obj->getStringTableForSymtab(*DotSymtabSec));
-    Syms = unwrapOrError(ObjF.getFileName(), Obj->symbols(DotSymtabSec));
+    StrTable = unwrapOrError(ObjF.getFileName(),
+                             Obj.getStringTableForSymtab(*DotSymtabSec));
+    Syms = unwrapOrError(ObjF.getFileName(), Obj.symbols(DotSymtabSec));
   } else {
     StrTable = DynamicStringTable;
     Syms = dynamic_symbols();
@@ -3637,10 +3637,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
       auto R = Reloc->second;
       SmallString<32> RelocName;
       StringRef TargetName;
-      Obj->getRelocationTypeName(R.getType(Obj->isMips64EL()), RelocName);
+      Obj.getRelocationTypeName(R.getType(Obj.isMips64EL()), RelocName);
 
-      const Elf_Sym *Sym = unwrapOrError(ObjF.getFileName(),
-                                         Obj->getRelocationSymbol(R, SymTab));
+      const Elf_Sym *Sym =
+          unwrapOrError(ObjF.getFileName(), Obj.getRelocationSymbol(R, SymTab));
       if (Sym) {
         TargetName = unwrapOrError(
             ObjF.getFileName(), Sym->getName(getDynamicStringTable()));
@@ -3653,23 +3653,23 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapTableMapping() {
-  const ELFFile<ELFT> *Obj = ObjF.getELFFile();
+  const ELFFile<ELFT> &Obj = ObjF.getELFFile();
   const Elf_Shdr *Shdr = findSectionByName(".captable_mapping");
   if (!Shdr) {
     W.startLine() << "There is no .captable_mapping section in the file.\n";
     return;
   }
   ArrayRef<uint8_t> Data =
-      unwrapOrError(ObjF.getFileName(), Obj->getSectionContents(*Shdr));
+      unwrapOrError(ObjF.getFileName(), Obj.getSectionContents(*Shdr));
   const size_t EntrySize = 24;
 
   typename ELFT::SymRange Syms;
   StringRef StrTable;
   bool UsingDynsym = false;
   if (DotSymtabSec) {
-    StrTable = unwrapOrError(
-        ObjF.getFileName(), Obj->getStringTableForSymtab(*DotSymtabSec));
-    Syms = unwrapOrError(ObjF.getFileName(), Obj->symbols(DotSymtabSec));
+    StrTable = unwrapOrError(ObjF.getFileName(),
+                             Obj.getStringTableForSymtab(*DotSymtabSec));
+    Syms = unwrapOrError(ObjF.getFileName(), Obj.symbols(DotSymtabSec));
   } else {
     StrTable = DynamicStringTable;
     Syms = dynamic_symbols();
