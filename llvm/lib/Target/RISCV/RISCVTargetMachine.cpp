@@ -25,6 +25,7 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Support/FormattedStream.h"
@@ -137,6 +138,11 @@ RISCVTargetMachine::getTargetTransformInfo(const Function &F) {
 // change to this, they can override it here.
 bool RISCVTargetMachine::isNoopAddrSpaceCast(unsigned SrcAS,
                                              unsigned DstAS) const {
+  // TODO: We should get the DataLayout instead of hardcoding AS200.
+  const bool SrcIsCheri = isCheriPointer(SrcAS, nullptr);
+  const bool DestIsCheri = isCheriPointer(DstAS, nullptr);
+  if ((SrcIsCheri || DestIsCheri) && (SrcIsCheri != DestIsCheri))
+    return false;
   return true;
 }
 
