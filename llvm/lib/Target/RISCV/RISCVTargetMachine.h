@@ -47,6 +47,9 @@ public:
   bool IsRV64() const {
     return getTargetTriple().isArch64Bit();
   }
+
+  virtual bool isNoopAddrSpaceCast(unsigned SrcAS,
+                                   unsigned DstAS) const override;
 };
 }
 
