@@ -2089,13 +2089,93 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
          " is a target node!");
 
   Known.resetAll();
+  bool IsRV64 = Subtarget.is64Bit();
   switch (Opc) {
-  default: break;
+  default:
+    break;
   case RISCVISD::READ_VLENB:
     // We assume VLENB is at least 8 bytes.
     // FIXME: The 1.0 draft spec defines minimum VLEN as 128 bits.
     Known.Zero.setLowBits(3);
     break;
+  case ISD::INTRINSIC_WO_CHAIN: {
+    switch (cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue()) {
+    default:
+      break;
+    case Intrinsic::cheri_round_representable_length:
+      if (CapTypeHasPreciseBounds) {
+        Known = DAG.computeKnownBits(Op.getOperand(1));
+      } else if (IsRV64) {
+        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
+        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
+        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
+        uint64_t MinRoundedLength =
+            RISCVCompressedCap::getRepresentableLength(MinLength, IsRV64);
+        uint64_t MaxRoundedLength =
+            RISCVCompressedCap::getRepresentableLength(MaxLength, IsRV64);
+        bool MinRoundedOverflow = MinRoundedLength < MinLength;
+        bool MaxRoundedOverflow = MaxRoundedLength < MaxLength;
+
+        // A bit is known if the two different output bits are the same and:
+        //
+        //  (1) All more-significant bits are known. This is regardless of
+        //      whether the corresponding input bits were known, since rounding
+        //      is monotonic.
+        //
+        //  OR
+        //
+        //  (2) All less-significant bits are known and the corresponding input
+        //      bit is known.
+        //
+        // If the two rounded values are the same, repeated application of (1)
+        // yields the expected result that all bits are known.
+        //
+        // Note that the properties as described above are in terms of the
+        // (N+1)-bit outputs, not their truncated forms, with the (N+1)th bit
+        // being the overflow bit, and so we must take that into account.
+        //
+        // This can be improved upon to consider inner and trailing bits that
+        // are still known regardless of the input bits (such as because they
+        // are 1 in the input and the bounds are not rounded up too much to
+        // lose them), but this is a good first start.
+
+        uint64_t MinMaxRoundedAgreeMask = MinRoundedLength ^ ~MaxRoundedLength;
+        uint64_t InputKnownMask =
+            (KnownLengthBits.Zero | KnownLengthBits.One).getZExtValue();
+
+        // Calculate bits for property (1)
+        uint64_t LeadingKnownBits = countLeadingOnes(MinMaxRoundedAgreeMask);
+        uint64_t LeadingKnownMask =
+            MinRoundedOverflow == MaxRoundedOverflow
+                ? maskLeadingOnes<uint64_t>(LeadingKnownBits)
+                : 0;
+
+        // Calculate bits for property (2)
+        uint64_t TrailingKnownBits = countTrailingOnes(MinMaxRoundedAgreeMask);
+        uint64_t TrailingKnownMask =
+            maskTrailingOnes<uint64_t>(TrailingKnownBits) & InputKnownMask;
+
+        // Combine properties
+        uint64_t KnownMask = LeadingKnownMask | TrailingKnownMask;
+
+        Known.Zero |= ~MinRoundedLength & KnownMask;
+        Known.One |= MinRoundedLength & KnownMask;
+      }
+      break;
+    case Intrinsic::cheri_representable_alignment_mask:
+      if (CapTypeHasPreciseBounds) {
+        Known.setAllOnes();
+      } else if (IsRV64) {
+        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
+        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
+        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
+
+        Known.Zero |= ~RISCVCompressedCap::getAlignmentMask(MinLength, IsRV64);
+        Known.One |= RISCVCompressedCap::getAlignmentMask(MaxLength, IsRV64);
+      }
+      break;
+    }
+  }
   }
 }
 
@@ -2129,92 +2209,6 @@ unsigned RISCVTargetLowering::ComputeNumSignBitsForTargetNode(
   }
 
   return 1;
-}
-
-void RISCVTargetLowering::computeKnownBitsForTargetNode(
-    const SDValue Op, KnownBits &Known, const APInt &DemandedElts,
-    const SelectionDAG &DAG, unsigned Depth) const {
-  Known.resetAll();
-  bool IsRV64 = Subtarget.is64Bit();
-  switch (Op.getOpcode()) {
-  default: break;
-  case ISD::INTRINSIC_WO_CHAIN: {
-    switch (cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue()) {
-    default: break;
-    case Intrinsic::cheri_round_representable_length:
-      if (CapTypeHasPreciseBounds) {
-        Known = DAG.computeKnownBits(Op.getOperand(1));
-      } else if (IsRV64) {
-        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
-        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
-        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
-        uint64_t MinRoundedLength =
-          RISCVCompressedCap::getRepresentableLength(MinLength, IsRV64);
-        uint64_t MaxRoundedLength =
-          RISCVCompressedCap::getRepresentableLength(MaxLength, IsRV64);
-        bool MinRoundedOverflow = MinRoundedLength < MinLength;
-        bool MaxRoundedOverflow = MaxRoundedLength < MaxLength;
-
-        // A bit is known if the two different output bits are the same and:
-        //
-        //  (1) All more-significant bits are known. This is regardless of
-        //      whether the corresponding input bits were known, since rounding
-        //      is monotonic.
-        //
-        //  OR
-        //
-        //  (2) All less-significant bits are known and the corresponding input
-        //      bit is known.
-        //
-        // If the two rounded values are the same, repeated application of (1)
-        // yields the expected result that all bits are known.
-        //
-        // Note that the properties as described above are in terms of the
-        // (N+1)-bit outputs, not their truncated forms, with the (N+1)th bit
-        // being the overflow bit, and so we must take that into account.
-        //
-        // This can be improved upon to consider inner and trailing bits that
-        // are still known regardless of the input bits (such as because they
-        // are 1 in the input and the bounds are not rounded up too much to
-        // lose them), but this is a good first start.
-
-        uint64_t MinMaxRoundedAgreeMask = MinRoundedLength ^ ~MaxRoundedLength;
-        uint64_t InputKnownMask =
-          (KnownLengthBits.Zero | KnownLengthBits.One).getZExtValue();
-
-        // Calculate bits for property (1)
-        uint64_t LeadingKnownBits = countLeadingOnes(MinMaxRoundedAgreeMask);
-        uint64_t LeadingKnownMask =
-          MinRoundedOverflow == MaxRoundedOverflow
-            ? maskLeadingOnes<uint64_t>(LeadingKnownBits) : 0;
-
-        // Calculate bits for property (2)
-        uint64_t TrailingKnownBits = countTrailingOnes(MinMaxRoundedAgreeMask);
-        uint64_t TrailingKnownMask =
-            maskTrailingOnes<uint64_t>(TrailingKnownBits) & InputKnownMask;
-
-        // Combine properties
-        uint64_t KnownMask = LeadingKnownMask | TrailingKnownMask;
-
-        Known.Zero |= ~MinRoundedLength & KnownMask;
-        Known.One |= MinRoundedLength & KnownMask;
-      }
-      break;
-    case Intrinsic::cheri_representable_alignment_mask:
-      if (CapTypeHasPreciseBounds) {
-        Known.setAllOnes();
-      } else if (IsRV64) {
-        KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
-        uint64_t MinLength = KnownLengthBits.One.getZExtValue();
-        uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
-
-        Known.Zero |= ~RISCVCompressedCap::getAlignmentMask(MinLength, IsRV64);
-        Known.One |= RISCVCompressedCap::getAlignmentMask(MaxLength, IsRV64);
-      }
-      break;
-    }
-  }
-  }
 }
 
 TailPaddingAmount

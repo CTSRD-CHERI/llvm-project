@@ -3259,7 +3259,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   using Elf_Rel = typename ELFT::Rel;
   // typedef Elf64_Rel Elf_Rel;
   DenseMap<uint64_t, Elf_Rel> CapRelocsDynRels;
-  for (const Elf_Rel &R : this->DynRelRegion.getAsArrayRef<Elf_Rel>()) {
+  for (const Elf_Rel &R : DynRelRegion.getAsArrayRef<Elf_Rel>()) {
     if (R.r_offset >= CapRelocsStartVaddr && R.r_offset < CapRelocsEndVaddr) {
       // No need to store relocations aginst symbol zero since they don't have
       // a name
@@ -3271,14 +3271,19 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   // Use the .symtab section if available otherwise use .dynsym:
   typename ELFT::SymRange Syms;
   StringRef StrTable;
+  DataRegion<Elf_Word> ShndxTable = ArrayRef<Elf_Word>();
+  DataRegion<Elf_Word> DynShndxTable(
+      (const Elf_Word *)this->DynSymTabShndxRegion.Addr, this->Obj.end());
   bool UsingDynsym = false;
   if (DotSymtabSec) {
     StrTable = unwrapOrError(ObjF.getFileName(),
                              Obj.getStringTableForSymtab(*DotSymtabSec));
     Syms = unwrapOrError(ObjF.getFileName(), Obj.symbols(DotSymtabSec));
+    ShndxTable = this->getShndxTable(this->DotSymtabSec);
   } else {
     StrTable = DynamicStringTable;
     Syms = dynamic_symbols();
+    ShndxTable = DynShndxTable;
     UsingDynsym = true;
   }
   std::unordered_map<uint64_t, std::string> SymbolNames;
@@ -3288,7 +3293,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     if (!Start)
       continue;
     std::string Name =
-        getFullSymbolName(Sym, &Sym - &FirstSym, StrTable, UsingDynsym);
+        getFullSymbolName(Sym, &Sym - &FirstSym, ShndxTable, StrTable, UsingDynsym);
     if (Name.empty())
       continue;
     SymbolNames.insert({Start, Name});
@@ -3342,7 +3347,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
         // Since we are looking up dynamic relocations, we have to look for the
         // symbol name in the .dynstrtab section.
         BaseSymbol = getFullSymbolName(*Sym, R.getSymbol(Obj.isMips64EL()),
-                                       DynamicStringTable, true);
+                                       DynShndxTable, DynamicStringTable, true);
         // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "Name=" << BaseSymbol << "\n";
       }
     } else {
@@ -3422,13 +3427,18 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
   typename ELFT::SymRange Syms;
   StringRef StrTable;
   bool UsingDynsym = false;
+  DataRegion<Elf_Word> ShndxTable = ArrayRef<Elf_Word>();
+  DataRegion<Elf_Word> DynShndxTable(
+      (const Elf_Word *)this->DynSymTabShndxRegion.Addr, this->Obj.end());
   if (DotSymtabSec) {
     StrTable = unwrapOrError(ObjF.getFileName(),
                              Obj.getStringTableForSymtab(*DotSymtabSec));
     Syms = unwrapOrError(ObjF.getFileName(), Obj.symbols(DotSymtabSec));
+    ShndxTable = this->getShndxTable(this->DotSymtabSec);
   } else {
     StrTable = DynamicStringTable;
     Syms = dynamic_symbols();
+    ShndxTable = DynShndxTable;
     UsingDynsym = true;
   }
 
@@ -3438,8 +3448,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
     uint64_t Start = Sym.st_value;
     if (Start < CapTableStartVaddr || Start > CapTableEndVaddr)
       continue;
-    std::string Name =
-        getFullSymbolName(Sym, &Sym - &FirstSym, StrTable, UsingDynsym);
+    std::string Name = getFullSymbolName(Sym, &Sym - &FirstSym, ShndxTable,
+                                         StrTable, UsingDynsym);
     if (Name == "_CHERI_CAPABILITY_TABLE_")
       continue;
     SymbolNames.insert({Start, Name});
@@ -3534,13 +3544,18 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTableMapping() {
   typename ELFT::SymRange Syms;
   StringRef StrTable;
   bool UsingDynsym = false;
+  DataRegion<Elf_Word> ShndxTable = ArrayRef<Elf_Word>();
+  DataRegion<Elf_Word> DynShndxTable(
+      (const Elf_Word *)this->DynSymTabShndxRegion.Addr, this->Obj.end());
   if (DotSymtabSec) {
     StrTable = unwrapOrError(ObjF.getFileName(),
                              Obj.getStringTableForSymtab(*DotSymtabSec));
     Syms = unwrapOrError(ObjF.getFileName(), Obj.symbols(DotSymtabSec));
+    ShndxTable = this->getShndxTable(this->DotSymtabSec);
   } else {
     StrTable = DynamicStringTable;
     Syms = dynamic_symbols();
+    ShndxTable = DynShndxTable;
     UsingDynsym = true;
   }
 
@@ -3566,7 +3581,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTableMapping() {
       if (Sym.getType() != ELF::STT_FUNC)
         continue;
       if (Sym.st_value >= FunctionStart && Sym.st_value < FunctionEnd) {
-        SymName = getFullSymbolName(Sym, &Sym - &FirstSym, StrTable, UsingDynsym);
+        SymName = getFullSymbolName(Sym, &Sym - &FirstSym, ShndxTable, StrTable,
+                                    UsingDynsym);
         break;
       }
     }
