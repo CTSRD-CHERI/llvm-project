@@ -835,8 +835,9 @@ SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
 SDValue RISCVTargetLowering::lowerJumpTable(SDValue Op,
                                             SelectionDAG &DAG) const {
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
+  EVT Ty = Op.getValueType();
 
-  return getAddr(N, DAG);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
 }
 
 SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
