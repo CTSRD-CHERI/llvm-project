@@ -1018,13 +1018,6 @@ bool CompilerInvocation::ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args,
     }
   }
 
-  const bool IsPurecapFreeBSD =
-      Triple.isOSFreeBSD() && TargetOpts.ABI == "purecap";
-  // CheriBSD purecap RTLD does not support .ctors for shared libraries/pie
-  // binaries so we report a warning when not using .init_array
-  if (!Opts.UseInitArray && IsPurecapFreeBSD)
-    Diags.Report(diag::warn_cheri_purecap_init_array_required);
-
   // Basic Block Sections implies Function Sections.
   Opts.FunctionSections =
       Args.hasArg(OPT_ffunction_sections) ||
@@ -3073,6 +3066,13 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
   llvm::Triple T(Res.getTargetOpts().Triple);
   Success &= ParseCodeGenArgs(Res.getCodeGenOpts(), Args, DashX, Diags, T,
                               Res.getFrontendOpts().OutputFile);
+  // TODO: this diagnostic can probably be removed...
+  const bool IsPurecapFreeBSD =
+      T.isOSFreeBSD() && Res.getTargetOpts().ABI == "purecap";
+  // CheriBSD purecap RTLD does not support .ctors for shared libraries/pie
+  // binaries so we report a warning when not using .init_array
+  if (!Res.getCodeGenOpts().UseInitArray && IsPurecapFreeBSD)
+    Diags.Report(diag::warn_cheri_purecap_init_array_required);
   ParseHeaderSearchArgs(Res.getHeaderSearchOpts(), Args,
                         Res.getFileSystemOpts().WorkingDir);
   if (DashX.getFormat() == InputKind::Precompiled ||
