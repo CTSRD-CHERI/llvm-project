@@ -3192,7 +3192,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   using Elf_Rel = typename ELFT::Rel;
   // typedef Elf64_Rel Elf_Rel;
   DenseMap<uint64_t, Elf_Rel> CapRelocsDynRels;
-  for (const Elf_Rel &R : dyn_rels()) {
+  for (const Elf_Rel &R : this->DynRelRegion.getAsArrayRef<Elf_Rel>()) {
     if (R.r_offset >= CapRelocsStartVaddr && R.r_offset < CapRelocsEndVaddr) {
       // No need to store relocations aginst symbol zero since they don't have
       // a name
@@ -3231,7 +3231,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
 
   // Static binaries won't have a dynamic symbol table, and we only use this
   // for looking up relocations' symbols.
-  const Elf_Shdr *SymTab = getDynSymSec();
+  const Elf_Shdr *SymTab = DotDynsymSec;
   if (!SymTab && !CapRelocsDynRels.empty())
     reportError(
         createStringError(object_error::parse_failed,
@@ -3407,13 +3407,13 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
       }
     }
   };
-  FindRelocs(getDynPLTRelRegion());
-  FindRelocs(getDynRelRegion());
-  FindRelocs(getDynRelaRegion());
+  FindRelocs(DynPLTRelRegion);
+  FindRelocs(DynRelRegion);
+  FindRelocs(DynRelaRegion);
 
   // Static binaries won't have a dynamic symbol table, and we only use this
   // for looking up relocations' symbols.
-  const Elf_Shdr *SymTab = getDynSymSec();
+  const Elf_Shdr *SymTab = DotDynsymSec;
   if (!SymTab && !CapTableDynRels.empty())
     reportError(
         createStringError(object_error::parse_failed,
