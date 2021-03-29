@@ -72,11 +72,6 @@ public:
   void AddLinkRuntimeLib(const llvm::opt::ArgList &Args,
                          llvm::opt::ArgStringList &CmdArgs) const;
   std::string computeSysRoot() const override;
-
-private:
-  enum class BaremetalTarget { Unknown, ARM, MIPS };
-  BaremetalTarget Target = BaremetalTarget::Unknown;
-  bool IsCheriPurecap = false;
 };
 
 } // namespace toolchains

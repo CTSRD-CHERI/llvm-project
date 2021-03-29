@@ -92,22 +92,12 @@ static bool findRISCVMultilibs(const Driver &D,
   return false;
 }
 
-static bool isARMBareMetal(const llvm::Triple &Triple);
-static bool isMIPSBareMetal(const llvm::Triple &Triple);
-
 BareMetal::BareMetal(const Driver &D, const llvm::Triple &Triple,
                            const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   getProgramPaths().push_back(getDriver().getInstalledDir());
   if (getDriver().getInstalledDir() != getDriver().Dir)
     getProgramPaths().push_back(getDriver().Dir);
-  if (isARMBareMetal(Triple))
-    Target = BaremetalTarget::ARM;
-  else if (isMIPSBareMetal(Triple)) {
-    Target = BaremetalTarget::MIPS;
-    if (tools::mips::hasMipsAbiArg(Args, "purecap"))
-      IsCheriPurecap = true;
-  }
 
   findMultilibs(D, Triple, Args);
   SmallString<128> SysRoot(computeSysRoot());
@@ -195,17 +185,16 @@ std::string BareMetal::getCompilerRTBasename(const llvm::opt::ArgList &,
 }
 
 std::string BareMetal::getRuntimesDir() const {
-  if (Target == BaremetalTarget::MIPS) {
+  if (getTriple().isMIPS()) {
     SmallString<128> Dir(getDriver().SysRoot);
     if (Dir.empty())
       Dir = getDriver().ResourceDir;
-    if (IsCheriPurecap)
+    if (isCheriPurecap())
       llvm::sys::path::append(Dir, "libcheri");
     else
       llvm::sys::path::append(Dir, "lib");
     return Dir.str().str();
   }
-  assert(Target == BaremetalTarget::ARM);
   SmallString<128> Dir(getDriver().ResourceDir);
   llvm::sys::path::append(Dir, "lib", "baremetal");
   Dir += SelectedMultilib.gccSuffix();
@@ -300,7 +289,7 @@ void BareMetal::AddCXXStdlibLibArgs(const ArgList &Args,
   switch (GetCXXStdlibType(Args)) {
   case ToolChain::CST_Libcxx:
     CmdArgs.push_back("-lc++");
-    CmdArgs.push_back(Target == BaremetalTarget::ARM ? "-lc++abi" : "-lcxxrt");
+    CmdArgs.push_back(getTriple().isMIPS() ? "-lcxxrt" : "-lc++abi");
     break;
   case ToolChain::CST_Libstdcxx:
     CmdArgs.push_back("-lstdc++");
@@ -316,10 +305,10 @@ void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
   switch (RLT) {
   case ToolChain::RLT_CompilerRT: {
     SmallString<32> LibName("-lclang_rt.builtins-");
-    if (Target == BaremetalTarget::MIPS) {
-      if (getTriple().getArch() == llvm::Triple::mips64 && !IsCheriPurecap) {
+    if (getTriple().isMIPS()) {
+      if (getTriple().getArch() == llvm::Triple::mips64 && !isCheriPurecap()) {
         LibName += "mips64";
-      } else if (getTriple().isMIPS() && IsCheriPurecap) {
+      } else if (getTriple().isMIPS() && isCheriPurecap()) {
         LibName += "cheri"; // TODO: would be nice to have CHERI size here
       } else {
         LibName += getTriple().getArchName();
