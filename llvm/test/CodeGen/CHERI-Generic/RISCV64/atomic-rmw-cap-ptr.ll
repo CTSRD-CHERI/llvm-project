@@ -2,10 +2,10 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/atomic-rmw-cap-ptr.ll
 ; Check that we can generate sensible code for atomic operations using capability pointers
 ; https://github.com/CTSRD-CHERI/llvm-project/issues/470
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS --allow-unused-prefixes
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS --allow-unused-prefixes
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS --allow-unused-prefixes
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS --allow-unused-prefixes
 
 define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg:
@@ -16,24 +16,24 @@ define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xchg:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
-; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:  .LBB0_1: # %bb
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_exchange_8)
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB0_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca3
-; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a2, zero, 5
 ; HYBRID-NEXT:    call __atomic_exchange_8_c@plt
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 bb:
@@ -50,24 +50,24 @@ define i64 @atomic_cap_ptr_add(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_add:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
-; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:  .LBB1_1: # %bb
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_add_8)
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB1_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca3
-; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_add:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a2, zero, 5
 ; HYBRID-NEXT:    call __atomic_fetch_add_8_c@plt
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 bb:
@@ -85,24 +85,24 @@ define i64 @atomic_cap_ptr_sub(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_sub:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
-; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:  .LBB2_1: # %bb
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_sub_8)
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB2_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca3
-; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_sub:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a2, zero, 5
 ; HYBRID-NEXT:    call __atomic_fetch_sub_8_c@plt
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 bb:
@@ -119,24 +119,24 @@ define i64 @atomic_cap_ptr_and(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_and:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
-; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:  .LBB3_1: # %bb
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_and_8)
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB3_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca3
-; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_and:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a2, zero, 5
 ; HYBRID-NEXT:    call __atomic_fetch_and_8_c@plt
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 bb:
@@ -161,24 +161,24 @@ define i64 @atomic_cap_ptr_nand(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_nand:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
-; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:  .LBB4_1: # %bb
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_nand_8)
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB4_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca3
-; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_nand:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a2, zero, 5
 ; HYBRID-NEXT:    call __atomic_fetch_nand_8_c@plt
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 bb:
@@ -195,24 +195,24 @@ define i64 @atomic_cap_ptr_or(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_or:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
-; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:  .LBB5_1: # %bb
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_or_8)
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB5_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca3
-; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_or:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a2, zero, 5
 ; HYBRID-NEXT:    call __atomic_fetch_or_8_c@plt
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 bb:
@@ -229,24 +229,24 @@ define i64 @atomic_cap_ptr_xor(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_xor:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
-; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:  .LBB6_1: # %bb
 ; PURECAP-LIBCALLS-NEXT:    # Label of block must be emitted
 ; PURECAP-LIBCALLS-NEXT:    auipcc ca3, %captab_pcrel_hi(__atomic_fetch_xor_8)
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, %pcrel_lo(.LBB6_1)(ca3)
 ; PURECAP-LIBCALLS-NEXT:    addi a2, zero, 5
 ; PURECAP-LIBCALLS-NEXT:    cjalr ca3
-; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xor:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a2, zero, 5
 ; HYBRID-NEXT:    call __atomic_fetch_xor_8_c@plt
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 bb:
@@ -263,10 +263,10 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_max:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -80
-; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs2, ca0
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    mv s1, a1
@@ -298,19 +298,19 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    j .LBB7_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB7_4: # %atomicrmw.end
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a3
-; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 80
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_max:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -48
-; HYBRID-NEXT:    sd ra, 40(sp)
-; HYBRID-NEXT:    sd s0, 32(sp)
-; HYBRID-NEXT:    sc ca0, 0(sp)
+; HYBRID-NEXT:    sd ra, 40(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    ld.cap a3, (ca0)
 ; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:    j .LBB7_2
@@ -320,7 +320,7 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    addi a1, sp, 24
 ; HYBRID-NEXT:    addi a3, zero, 5
 ; HYBRID-NEXT:    addi a4, zero, 5
-; HYBRID-NEXT:    lc ca0, 0(sp)
+; HYBRID-NEXT:    lc ca0, 0(sp) # 16-byte Folded Reload
 ; HYBRID-NEXT:    call __atomic_compare_exchange_8_c@plt
 ; HYBRID-NEXT:    ld a3, 24(sp)
 ; HYBRID-NEXT:    bnez a0, .LBB7_4
@@ -334,8 +334,8 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    j .LBB7_1
 ; HYBRID-NEXT:  .LBB7_4: # %atomicrmw.end
 ; HYBRID-NEXT:    mv a0, a3
-; HYBRID-NEXT:    ld s0, 32(sp)
-; HYBRID-NEXT:    ld ra, 40(sp)
+; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld ra, 40(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
 bb:
@@ -352,10 +352,10 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_min:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -80
-; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs2, ca0
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    mv s1, a1
@@ -387,19 +387,19 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    j .LBB8_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB8_4: # %atomicrmw.end
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a3
-; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 80
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_min:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -48
-; HYBRID-NEXT:    sd ra, 40(sp)
-; HYBRID-NEXT:    sd s0, 32(sp)
-; HYBRID-NEXT:    sc ca0, 0(sp)
+; HYBRID-NEXT:    sd ra, 40(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    ld.cap a3, (ca0)
 ; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:    j .LBB8_2
@@ -409,7 +409,7 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    addi a1, sp, 24
 ; HYBRID-NEXT:    addi a3, zero, 5
 ; HYBRID-NEXT:    addi a4, zero, 5
-; HYBRID-NEXT:    lc ca0, 0(sp)
+; HYBRID-NEXT:    lc ca0, 0(sp) # 16-byte Folded Reload
 ; HYBRID-NEXT:    call __atomic_compare_exchange_8_c@plt
 ; HYBRID-NEXT:    ld a3, 24(sp)
 ; HYBRID-NEXT:    bnez a0, .LBB8_4
@@ -423,8 +423,8 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    j .LBB8_1
 ; HYBRID-NEXT:  .LBB8_4: # %atomicrmw.end
 ; HYBRID-NEXT:    mv a0, a3
-; HYBRID-NEXT:    ld s0, 32(sp)
-; HYBRID-NEXT:    ld ra, 40(sp)
+; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld ra, 40(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
 bb:
@@ -441,10 +441,10 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_umax:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -80
-; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs2, ca0
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    mv s1, a1
@@ -476,19 +476,19 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    j .LBB9_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB9_4: # %atomicrmw.end
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a3
-; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 80
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_umax:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -48
-; HYBRID-NEXT:    sd ra, 40(sp)
-; HYBRID-NEXT:    sd s0, 32(sp)
-; HYBRID-NEXT:    sc ca0, 0(sp)
+; HYBRID-NEXT:    sd ra, 40(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    ld.cap a3, (ca0)
 ; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:    j .LBB9_2
@@ -498,7 +498,7 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    addi a1, sp, 24
 ; HYBRID-NEXT:    addi a3, zero, 5
 ; HYBRID-NEXT:    addi a4, zero, 5
-; HYBRID-NEXT:    lc ca0, 0(sp)
+; HYBRID-NEXT:    lc ca0, 0(sp) # 16-byte Folded Reload
 ; HYBRID-NEXT:    call __atomic_compare_exchange_8_c@plt
 ; HYBRID-NEXT:    ld a3, 24(sp)
 ; HYBRID-NEXT:    bnez a0, .LBB9_4
@@ -512,8 +512,8 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    j .LBB9_1
 ; HYBRID-NEXT:  .LBB9_4: # %atomicrmw.end
 ; HYBRID-NEXT:    mv a0, a3
-; HYBRID-NEXT:    ld s0, 32(sp)
-; HYBRID-NEXT:    ld ra, 40(sp)
+; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld ra, 40(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
 bb:
@@ -530,10 +530,10 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_umin:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -80
-; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 64(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs0, 48(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs1, 32(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs2, ca0
 ; PURECAP-LIBCALLS-NEXT:    cld a3, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    mv s1, a1
@@ -565,19 +565,19 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LIBCALLS-NEXT:    j .LBB10_1
 ; PURECAP-LIBCALLS-NEXT:  .LBB10_4: # %atomicrmw.end
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a3
-; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cs2, 16(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs1, 32(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs0, 48(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cra, 64(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 80
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_umin:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -48
-; HYBRID-NEXT:    sd ra, 40(sp)
-; HYBRID-NEXT:    sd s0, 32(sp)
-; HYBRID-NEXT:    sc ca0, 0(sp)
+; HYBRID-NEXT:    sd ra, 40(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    ld.cap a3, (ca0)
 ; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:    j .LBB10_2
@@ -587,7 +587,7 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    addi a1, sp, 24
 ; HYBRID-NEXT:    addi a3, zero, 5
 ; HYBRID-NEXT:    addi a4, zero, 5
-; HYBRID-NEXT:    lc ca0, 0(sp)
+; HYBRID-NEXT:    lc ca0, 0(sp) # 16-byte Folded Reload
 ; HYBRID-NEXT:    call __atomic_compare_exchange_8_c@plt
 ; HYBRID-NEXT:    ld a3, 24(sp)
 ; HYBRID-NEXT:    bnez a0, .LBB10_4
@@ -601,8 +601,8 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    j .LBB10_1
 ; HYBRID-NEXT:  .LBB10_4: # %atomicrmw.end
 ; HYBRID-NEXT:    mv a0, a3
-; HYBRID-NEXT:    ld s0, 32(sp)
-; HYBRID-NEXT:    ld ra, 40(sp)
+; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld ra, 40(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
 bb:
@@ -640,10 +640,10 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_fadd:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -64
-; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    cflw ft0, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    fmv.s fs0, fa0
@@ -668,19 +668,19 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB11_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
 ; PURECAP-LIBCALLS-NEXT:    fmv.s fa0, ft0
-; PURECAP-LIBCALLS-NEXT:    cfld fs0, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs1, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cra, 48(csp)
+; PURECAP-LIBCALLS-NEXT:    cfld fs0, 8(csp) # 8-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 64
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fadd:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -48
-; HYBRID-NEXT:    sd ra, 40(sp)
-; HYBRID-NEXT:    fsd fs0, 32(sp)
-; HYBRID-NEXT:    sc ca0, 0(sp)
+; HYBRID-NEXT:    sd ra, 40(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    fsd fs0, 32(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lw.cap a0, (ca0)
 ; HYBRID-NEXT:    fmv.s fs0, fa0
 ; HYBRID-NEXT:    fmv.w.x fa0, a0
@@ -692,13 +692,13 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; HYBRID-NEXT:    addi a1, sp, 28
 ; HYBRID-NEXT:    addi a3, zero, 5
 ; HYBRID-NEXT:    addi a4, zero, 5
-; HYBRID-NEXT:    lc ca0, 0(sp)
+; HYBRID-NEXT:    lc ca0, 0(sp) # 16-byte Folded Reload
 ; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
 ; HYBRID-NEXT:    flw fa0, 28(sp)
 ; HYBRID-NEXT:    beqz a0, .LBB11_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
-; HYBRID-NEXT:    fld fs0, 32(sp)
-; HYBRID-NEXT:    ld ra, 40(sp)
+; HYBRID-NEXT:    fld fs0, 32(sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld ra, 40(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
 bb:
@@ -736,10 +736,10 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-LABEL: atomic_cap_ptr_fsub:
 ; PURECAP-LIBCALLS:       # %bb.0: # %bb
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -64
-; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    cflw ft0, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    fmv.s fs0, fa0
@@ -764,19 +764,19 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    beqz a0, .LBB12_1
 ; PURECAP-LIBCALLS-NEXT:  # %bb.2: # %atomicrmw.end
 ; PURECAP-LIBCALLS-NEXT:    fmv.s fa0, ft0
-; PURECAP-LIBCALLS-NEXT:    cfld fs0, 8(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs1, 16(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp)
-; PURECAP-LIBCALLS-NEXT:    clc cra, 48(csp)
+; PURECAP-LIBCALLS-NEXT:    cfld fs0, 8(csp) # 8-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 64
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fsub:
 ; HYBRID:       # %bb.0: # %bb
 ; HYBRID-NEXT:    addi sp, sp, -48
-; HYBRID-NEXT:    sd ra, 40(sp)
-; HYBRID-NEXT:    fsd fs0, 32(sp)
-; HYBRID-NEXT:    sc ca0, 0(sp)
+; HYBRID-NEXT:    sd ra, 40(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    fsd fs0, 32(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lw.cap a0, (ca0)
 ; HYBRID-NEXT:    fmv.s fs0, fa0
 ; HYBRID-NEXT:    fmv.w.x fa0, a0
@@ -788,13 +788,13 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; HYBRID-NEXT:    addi a1, sp, 28
 ; HYBRID-NEXT:    addi a3, zero, 5
 ; HYBRID-NEXT:    addi a4, zero, 5
-; HYBRID-NEXT:    lc ca0, 0(sp)
+; HYBRID-NEXT:    lc ca0, 0(sp) # 16-byte Folded Reload
 ; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
 ; HYBRID-NEXT:    flw fa0, 28(sp)
 ; HYBRID-NEXT:    beqz a0, .LBB12_1
 ; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
-; HYBRID-NEXT:    fld fs0, 32(sp)
-; HYBRID-NEXT:    ld ra, 40(sp)
+; HYBRID-NEXT:    fld fs0, 32(sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld ra, 40(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
 bb:

@@ -3,10 +3,10 @@
 ; Check that we can generate sensible code for atomic operations using capability pointers on capabilities
 ; in both hybrid and purecap mode.
 ; See https://github.com/CTSRD-CHERI/llvm-project/issues/470
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS
-; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS --allow-unused-prefixes
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS --allow-unused-prefixes
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS --allow-unused-prefixes
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS --allow-unused-prefixes
 
 define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_i8:
@@ -30,7 +30,7 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_strong_i8:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 15(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 15
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
@@ -45,14 +45,14 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_strong_i8:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sb a1, 7(sp)
 ; HYBRID-NEXT:    addi a1, sp, 7
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -62,7 +62,7 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -92,7 +92,7 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_strong_i16:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 14
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 14(csp)
@@ -108,14 +108,14 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_strong_i16:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sh a1, 6(sp)
 ; HYBRID-NEXT:    addi a1, sp, 6
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -125,7 +125,7 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -154,7 +154,7 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_strong_i32:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 12
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 12(csp)
@@ -170,14 +170,14 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_strong_i32:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sw a1, 4(sp)
 ; HYBRID-NEXT:    addi a1, sp, 4
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -187,7 +187,7 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -215,7 +215,7 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_strong_i64:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 8
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csd a1, 8(csp)
@@ -231,14 +231,14 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_strong_i64:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sd a1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -248,7 +248,7 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -276,7 +276,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_strong_cap:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 16
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
@@ -292,14 +292,14 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_strong_cap:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -32
-; HYBRID-NEXT:    sd ra, 24(sp)
+; HYBRID-NEXT:    sd ra, 24(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -309,7 +309,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    cmove ca0, ca1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 24(sp)
+; HYBRID-NEXT:    ld ra, 24(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 32
 ; HYBRID-NEXT:    ret
 entry:
@@ -337,7 +337,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_strong_cap_i32:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 16
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
@@ -353,14 +353,14 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_strong_cap_i32:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -32
-; HYBRID-NEXT:    sd ra, 24(sp)
+; HYBRID-NEXT:    sd ra, 24(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -370,7 +370,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    cmove ca0, ca1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 24(sp)
+; HYBRID-NEXT:    ld ra, 24(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 32
 ; HYBRID-NEXT:    ret
 entry:
@@ -401,7 +401,7 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_weak_i8:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 15(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 15
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
@@ -416,14 +416,14 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_weak_i8:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sb a1, 7(sp)
 ; HYBRID-NEXT:    addi a1, sp, 7
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -433,7 +433,7 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -463,7 +463,7 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_weak_i16:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 14
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 14(csp)
@@ -479,14 +479,14 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_weak_i16:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sh a1, 6(sp)
 ; HYBRID-NEXT:    addi a1, sp, 6
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -496,7 +496,7 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -525,7 +525,7 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_weak_i32:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 12
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 12(csp)
@@ -541,14 +541,14 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_weak_i32:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sw a1, 4(sp)
 ; HYBRID-NEXT:    addi a1, sp, 4
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -558,7 +558,7 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -586,7 +586,7 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_weak_i64:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 8
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csd a1, 8(csp)
@@ -602,14 +602,14 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    mv a0, a1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_weak_i64:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp)
+; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sd a1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -619,7 +619,7 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    mv a0, a1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 8(sp)
+; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
 entry:
@@ -647,7 +647,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_weak_cap:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 16
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
@@ -663,14 +663,14 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_weak_cap:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -32
-; HYBRID-NEXT:    sd ra, 24(sp)
+; HYBRID-NEXT:    sd ra, 24(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -680,7 +680,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    cmove ca0, ca1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 24(sp)
+; HYBRID-NEXT:    ld ra, 24(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 32
 ; HYBRID-NEXT:    ret
 entry:
@@ -708,7 +708,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; PURECAP-LIBCALLS-LABEL: test_cmpxchg_weak_cap_i32:
 ; PURECAP-LIBCALLS:       # %bb.0: # %entry
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -32
-; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca6, ca3, 16
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
@@ -724,14 +724,14 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
 ; PURECAP-LIBCALLS-NEXT:    cmove ca0, ca1
 ; PURECAP-LIBCALLS-NEXT:    mv a1, a2
-; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp)
+; PURECAP-LIBCALLS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-LIBCALLS-NEXT:    cret
 ;
 ; HYBRID-LABEL: test_cmpxchg_weak_cap_i32:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -32
-; HYBRID-NEXT:    sd ra, 24(sp)
+; HYBRID-NEXT:    sd ra, 24(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
 ; HYBRID-NEXT:    addi a3, zero, 4
@@ -741,7 +741,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; HYBRID-NEXT:    mv a2, a0
 ; HYBRID-NEXT:    cmove ca0, ca1
 ; HYBRID-NEXT:    mv a1, a2
-; HYBRID-NEXT:    ld ra, 24(sp)
+; HYBRID-NEXT:    ld ra, 24(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 32
 ; HYBRID-NEXT:    ret
 entry:
