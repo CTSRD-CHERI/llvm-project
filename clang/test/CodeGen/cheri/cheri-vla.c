@@ -8,7 +8,7 @@ void foo(void) {
     vla[i - 1] = '\0';
     test(vla);
   }
-  // CHECK-LABEL: define void @foo()
+  // CHECK-LABEL: define dso_local void @foo()
   // CHECK: br label %[[FOR_BODY:.+]]
   // CHECK: [[FOR_BODY]]:
   // CHECK: [[I_05:%.+]] = phi i64 [ 1, %[[ENTRY:.+]] ], [ [[INC:%.+]], %[[FOR_BODY]] ]

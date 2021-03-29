@@ -1,10 +1,10 @@
-// default is address:
+// Check that the default is address interpretation of uintcap_t:
 // RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations -Wno-cheri-provenance | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
 // RUN: %cheri_purecap_cc1 -cheri-uintcap=offset -emit-llvm %s -O2 -o - -Wno-cheri-provenance -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,OFFSET -enable-var-scope
 // RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -emit-llvm %s -O2 -o - -Wno-cheri-provenance -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
 
 long uintcap_to_long(__uintcap_t cap) {
-  // BOTH-LABEL: define i64 @uintcap_to_long(i8 addrspace(200)* readnone
+  // BOTH-LABEL: define dso_local i64 @uintcap_to_long(i8 addrspace(200)* readnone
   // OFFSET: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %{{.+}})
   // ADDR: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %{{.+}})
   // BOTH-NEXT: ret i64 [[RESULT]]
@@ -13,7 +13,7 @@ long uintcap_to_long(__uintcap_t cap) {
 
 long cap_to_long(void *__capability cap) {
   // Casting a pointer to long should give the address in both modes:
-  // BOTH-LABEL: define i64 @cap_to_long(i8 addrspace(200)* readnone
+  // BOTH-LABEL: define dso_local i64 @cap_to_long(i8 addrspace(200)* readnone
   // BOTH: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %{{.+}})
   // BOTH-NEXT: ret i64 [[RESULT]]
   return (long)cap;

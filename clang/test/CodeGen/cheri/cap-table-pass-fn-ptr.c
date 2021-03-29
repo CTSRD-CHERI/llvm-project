@@ -7,7 +7,7 @@ extern int a(void (*fn)(void));
 
 void snprintf_func(void) {
   a(snprintf_func);
-  // CHECK-LABEL: define void @snprintf_func()
+  // CHECK-LABEL: define dso_local void @snprintf_func()
   // CHECK:       %call = tail call signext i32 @a(void () addrspace(200)* nonnull @snprintf_func) #2
 }
 

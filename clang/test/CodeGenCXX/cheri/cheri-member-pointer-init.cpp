@@ -17,10 +17,10 @@ MemberPtr global_nonvirt_ptr = &A::nonvirt;
 MemberPtr global_virt_ptr = &A::virt;
 int (*global_fn_ptr)() = &global_fn;
 
-// CHECK: @global_nonvirt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } {
+// CHECK: @global_nonvirt_ptr = dso_local addrspace(200) global { i8 addrspace(200)*, i64 } {
 // CAPTABLE-SAME: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A7nonvirtEv to i8 addrspace(200)*), i64 0 }, align [[#CAP_SIZE]]
-// CHECK: @global_virt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, align [[#CAP_SIZE]]
-// CAPTABLE: @global_fn_ptr = addrspace(200) global i32 () addrspace(200)* @_Z9global_fnv, align [[#CAP_SIZE]]
+// CHECK: @global_virt_ptr = dso_local addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, align [[#CAP_SIZE]]
+// CAPTABLE: @global_fn_ptr = dso_local addrspace(200) global i32 () addrspace(200)* @_Z9global_fnv, align [[#CAP_SIZE]]
 
 void local_struct_constant_init() {
   struct {

@@ -6,8 +6,8 @@
 void __ledf2() {}
 void a(void) __attribute__((__alias__("__ledf2")));
 
-// CHECK: @a = alias void (), void () addrspace(200)* @__ledf2
-// CHECK: define void @__ledf2()
+// CHECK: @a = dso_local alias void (), void () addrspace(200)* @__ledf2
+// CHECK: define dso_local void @__ledf2()
 
 // ASM:      .globl	a
 // ASM-NEXT: .type	a,@function

@@ -5,7 +5,7 @@
 struct a {
   void *__capability ptr;
 };
-// CHECK-LABEL: define void @c(
+// CHECK-LABEL: define dso_local void @c(
 // CHECK:       entry:
 // CHECK-NEXT:    %first = alloca %struct.a, align [[#CAP_SIZE]], addrspace(200)
 // CHECK-NEXT:    %second = alloca %struct.a, align [[#CAP_SIZE]], addrspace(200)
@@ -14,7 +14,7 @@ struct a {
 // CHECK-NEXT:    store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %ptr, align [[#CAP_SIZE]]
 // CHECK-NEXT:    ret void
 //
-// HYBRID-LABEL: define void @c(
+// HYBRID-LABEL: define dso_local void @c(
 // HYBRID:       entry:
 // HYBRID-NEXT:    %first = alloca %struct.a, align [[#CAP_SIZE]]
 // HYBRID-NEXT:    %second = alloca %struct.a, align [[#CAP_SIZE]]
@@ -31,7 +31,7 @@ void c(void) {
 
 struct foo;
 
-// CHECK-LABEL: define signext i32 @test(
+// CHECK-LABEL: define dso_local signext i32 @test(
 // CHECK:       entry:
 // CHECK-NEXT:    %fooptr.addr = alloca %struct.foo addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
 // CHECK-NEXT:    %foocap.addr = alloca %struct.foo addrspace(200)*, align [[#CAP_SIZE]], addrspace(200)
@@ -54,7 +54,7 @@ struct foo;
 // CHECK-NEXT:    %add = add nsw i32 %7, %9
 // CHECK-NEXT:    ret i32 %add
 //
-// HYBRID-LABEL: define signext i32 @test(
+// HYBRID-LABEL: define dso_local signext i32 @test(
 // HYBRID:       entry:
 // HYBRID-NEXT:    %fooptr.addr = alloca %struct.foo*, align 8
 // HYBRID-NEXT:    %foocap.addr = alloca %struct.foo addrspace(200)*, align [[#CAP_SIZE]]

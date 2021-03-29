@@ -7,9 +7,8 @@
 // RUN: %cheri_cc1 -emit-obj -mrelocation-model pic -O2 -std=gnu99 -ftls-model=local-exec -x c -o - -S %s | FileCheck %s -check-prefix ASM-MIPS
 
 _Thread_local int dtors;
-// IR-PURECAP: @dtors = thread_local(localexec) addrspace(200) global i32 0, align 4
-// IR-MIPS:    @dtors = thread_local(localexec) global i32 0, align 4
-
+// IR-PURECAP: @dtors = dso_local thread_local(localexec) addrspace(200) global i32 0, align 4
+// IR-MIPS:    @dtors = dso_local thread_local(localexec) global i32 0, align 4
 
 int test(void) {
   // ASM-MIPS: rdhwr   $3, $29

@@ -12,7 +12,7 @@ static void foo()
 	bar();
 }
 
-// CHECK-LABEL: define void @baz()
+// CHECK-LABEL: define dso_local void @baz()
 // CHECK: @bar
 void baz()
 {

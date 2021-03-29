@@ -5,7 +5,7 @@ struct foo {
 
 // CHECK: @_ZGVZ1fvE1x = internal addrspace(200) global i64 0, align 8
 foo *f() {
-  // CHECK-LABEL: define %struct.foo addrspace(200)* @_Z1fv()
+  // CHECK-LABEL: define dso_local %struct.foo addrspace(200)* @_Z1fv()
   // CHECK: [[LOADED_GUARD:%.+]] = load atomic i8, i8 addrspace(200)* bitcast (i64 addrspace(200)* @_ZGVZ1fvE1x to i8 addrspace(200)*) acquire, align 8
   // CHECK-NEXT: [[UNINITIALIZED:%.+]] = icmp eq i8 [[LOADED_GUARD]], 0
   // CHECK-NEXT: br i1 [[UNINITIALIZED]], label %[[ACQUIRE_LABEL:.+]], label %[[EXIT_LABEL:[^, !]+]]
@@ -26,6 +26,6 @@ foo *f() {
   return &x;
 }
 
+// UTC_ARGS: --disable
 // CHECK: declare i32 @__cxa_guard_acquire(i64 addrspace(200)*)
 // CHECK: declare void @__cxa_guard_release(i64 addrspace(200)*)
-

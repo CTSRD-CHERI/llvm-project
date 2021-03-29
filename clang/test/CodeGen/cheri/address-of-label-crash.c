@@ -6,7 +6,7 @@
 int addrof_label_in_static(void) {
   static void *b = &&label1;
   // COMMON: @addrof_label_in_static.b = internal addrspace(200) global i8 addrspace(200)* blockaddress(@addrof_label_in_static, %label1)
-  // COMMON-LABEL: define signext i32 @addrof_label_in_static()
+  // COMMON-LABEL: define dso_local signext i32 @addrof_label_in_static()
   // COMMON: load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @addrof_label_in_static.b
   goto *b;
 label1:
@@ -15,7 +15,7 @@ label1:
 
 int addrof_label_in_local(void) {
   void *d = &&label2;
-  // COMMON-LABEL: define signext i32 @addrof_label_in_local()
+  // COMMON-LABEL: define dso_local signext i32 @addrof_label_in_local()
   // TODO we should derive this from $c12 instead of using a global
   // COMMON: store i8 addrspace(200)* blockaddress(@addrof_label_in_local, %label2), i8 addrspace(200)* addrspace(200)* [[D_ADDR:%.+]], align
   goto *d;

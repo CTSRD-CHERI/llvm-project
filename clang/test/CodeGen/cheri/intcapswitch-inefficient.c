@@ -23,7 +23,7 @@ int y(void) {
     case C...D: return 6;
   }
   // with optimization this switch gets constant folded:
-  // CHECK-OPT:      define signext i32 @y()
+  // CHECK-OPT:      define dso_local signext i32 @y()
   // CHECK-OPT-NEXT: entry:
   // CHECK-OPT-NEXT:   ret i32 6
   // CHECK-OPT-NEXT: }

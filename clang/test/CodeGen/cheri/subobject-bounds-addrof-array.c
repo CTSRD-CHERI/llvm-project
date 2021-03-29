@@ -56,7 +56,7 @@ void marker2(void);
 void marker3(void);
 
 void test_len2_array(struct WithLen2Array *s) {
-  // CHECK-LABEL: define void @test_len2_array(
+  // CHECK-LABEL: define dso_local void @test_len2_array(
   // In safe mode there should not be any bounds here:
   do_stuff_untyped(&s->values);
   // common-remark@-1 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo [3]') to 12 bytes}}

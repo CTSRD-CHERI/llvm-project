@@ -41,8 +41,8 @@ void *__capability global_data_to_cap(void) {
   // ASM-MIPS-NEXT: cfromddc $c1, $1
   // MIPS automatically sets bounds in hybrid mode for global variables
   // ASM-MIPS-NEXT: csetbounds $c3, $c1, 4
-  // ASM-RISCV: auipc a0, %got_pcrel_hi(external_global)
-  // ASM-RISCV-NEXT:  ld a0, %pcrel_lo(
+  // ASM-RISCV: auipc a0, %pcrel_hi(external_global)
+  // ASM-RISCV-NEXT:  addi a0, a0, %pcrel_lo(.LBB1_1)
   // ASM-RISCV-NEXT:  cfromptr ca0, ddc, a0
   // We do not set bounds on RISCV
   // ASM-RISCV-NOT: csetbounds

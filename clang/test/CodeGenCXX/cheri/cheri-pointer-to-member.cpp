@@ -24,8 +24,8 @@ struct mem_fn_ptr {
 void func(void);
 mem_fn_ptr virt = {(void *)32, 1};
 mem_fn_ptr nonvirt = {(void *)&func, 1};
-// CHECK: @virt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 32), i64 1 }, align [[#CAP_SIZE]]
-// CHECK: @nonvirt = addrspace(200) global { i8 addrspace(200)*, i64 } {
+// CHECK: @virt = dso_local addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 32), i64 1 }, align [[#CAP_SIZE]]
+// CHECK: @nonvirt = dso_local addrspace(200) global { i8 addrspace(200)*, i64 } {
 // CHECK-SAME: i8 addrspace(200)* bitcast (void () addrspace(200)* @_Z4funcv to i8 addrspace(200)*), i64 1 }, align [[#CAP_SIZE]]
 
 // now the real thing
@@ -35,12 +35,12 @@ AMemberFuncPtr global_null_func_ptr = nullptr;
 int A::*global_data_ptr = &A::y;
 AMemberFuncPtr global_nonvirt_func_ptr = &A::bar;
 AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
-// CHECK: @global_null_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } zeroinitializer, align [[#CAP_SIZE]]
+// CHECK: @global_null_func_ptr = dso_local addrspace(200) global { i8 addrspace(200)*, i64 } zeroinitializer, align [[#CAP_SIZE]]
 // Offet is 20 for 128 and 36 for 256:
-// CHECK: @global_data_ptr = addrspace(200) global i64 [[$A_Y_OFFSET:20|36]], align 8
-// CHECK: @global_nonvirt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } {
+// CHECK: @global_data_ptr = dso_local addrspace(200) global i64 [[$A_Y_OFFSET:20|36]], align 8
+// CHECK: @global_nonvirt_func_ptr = dso_local addrspace(200) global { i8 addrspace(200)*, i64 } {
 // CHECK-SAME: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i64 0 }, align [[#CAP_SIZE]]
-// CHECK: @global_virt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 [[#CAP_SIZE]]), i64 1 }, align [[#CAP_SIZE]]
+// CHECK: @global_virt_func_ptr = dso_local addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 [[#CAP_SIZE]]), i64 1 }, align [[#CAP_SIZE]]
 // UTC_ARGS: --enable
 
 // CHECK-LABEL: define {{[^@]+}}@main

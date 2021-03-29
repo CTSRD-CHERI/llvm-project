@@ -10,7 +10,7 @@
 
 int x(__intcap_t y)
 {
-  // CHECK-LABEL: define signext i32 @x(i8 addrspace(200)*
+  // CHECK-LABEL: define dso_local signext i32 @x(i8 addrspace(200)*
   // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
   // CHECK: switch i64 [[SWITCH_VAR]], label {{%.+}} [
   switch (y)
@@ -34,7 +34,7 @@ int x(__intcap_t y)
 }
 
 int y(void) {
-  // CHECK-LABEL: define signext i32 @y()
+  // CHECK-LABEL: define dso_local signext i32 @y()
   __intcap_t foo = C;
   // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
   // CHECK: switch i64 [[SWITCH_VAR]], label {{%.+}} [
@@ -58,7 +58,7 @@ int y(void) {
 
   // XXXAR: this is currently not optimized after the fix to https://github.com/CTSRD-CHERI/clang/issues/132
   // with optimization this switch gets constant folded:
-  // DONTCHECK-OPT-LABEL: define signext i32 @y()
+  // DONTCHECK-OPT-LABEL: define dso_local signext i32 @y()
   // DONTCHECK-OPT:          ret i32 6
   return 0;
 }
@@ -66,7 +66,7 @@ int y(void) {
 char buf[16];
 
 int z_long(void) {
-  // CHECK-OPT-LABEL: define signext i32 @z_long()
+  // CHECK-OPT-LABEL: define dso_local signext i32 @z_long()
   // CHECK-OPT:      [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
   // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
 
@@ -83,7 +83,7 @@ int z_long(void) {
 
 int z_intcap(void) {
   // Check that we actually switch on the virtual address and not the offset:
-  // CHECK-OPT-LABEL: define signext i32 @z_intcap()
+  // CHECK-OPT-LABEL: define dso_local signext i32 @z_intcap()
   // CHECK-OPT-NOT: ret i32 4
   // CHECK-OPT:      [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
   // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
@@ -102,7 +102,7 @@ int z_intcap(void) {
 int z_fixed_offset(void) {
   // Offset is known, so this could be optimized to a base.get and the case statements get adjusted
   // This was the previous behaviour when using separate base.get and offset.get intrinsics, but I'm not sure it makes sense to keep it.
-  // CHECK-OPT-LABEL: define signext i32 @z_fixed_offset()
+  // CHECK-OPT-LABEL: define dso_local signext i32 @z_fixed_offset()
   // CHECK-OPT-NOT: ret i32 4
   // CHECK-OPT: [[CAP:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0), i64 4)
   // CHECK-OPT-NEXT: [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]])

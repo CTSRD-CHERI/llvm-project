@@ -8,7 +8,7 @@
 // CHECK: @_ZTIi = external addrspace(200) constant i8 addrspace(200)*
 extern void fn2(int);
 
-// CHECK: define void @_Z3fn1v() {{.+}} personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*)
+// CHECK: define dso_local void @_Z3fn1v() {{.+}} personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*)
 void fn1() {
   try {
     throw 4;
