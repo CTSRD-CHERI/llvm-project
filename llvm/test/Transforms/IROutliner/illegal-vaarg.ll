@@ -21,10 +21,10 @@ define i32 @func1(i32 %a, double %b, i8* %v, ...) nounwind {
 ; CHECK-NEXT:    call void @outlined_ir_func_0(i32 [[A:%.*]], i32* [[A_ADDR]], double [[B:%.*]], double* [[B_ADDR]], i8** [[AP]], i8** [[AP1_LOC]])
 ; CHECK-NEXT:    [[AP1_RELOAD:%.*]] = load i8*, i8** [[AP1_LOC]], align 8
 ; CHECK-NEXT:    call void @llvm.lifetime.end.p0i8(i64 -1, i8* [[LT_CAST]])
-; CHECK-NEXT:    call void @llvm.va_start(i8* [[AP1_RELOAD]])
+; CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1_RELOAD]])
 ; CHECK-NEXT:    [[TMP0:%.*]] = va_arg i8** [[AP]], i32
-; CHECK-NEXT:    call void @llvm.va_copy(i8* [[V:%.*]], i8* [[AP1_RELOAD]])
-; CHECK-NEXT:    call void @llvm.va_end(i8* [[AP1_RELOAD]])
+; CHECK-NEXT:    call void @llvm.va_copy.p0i8.p0i8(i8* [[V:%.*]], i8* [[AP1_RELOAD]])
+; CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP1_RELOAD]])
 ; CHECK-NEXT:    store i32 [[TMP0]], i32* [[C]], align 4
 ; CHECK-NEXT:    [[TMP:%.*]] = load i32, i32* [[C]], align 4
 ; CHECK-NEXT:    ret i32 [[TMP]]
@@ -59,10 +59,10 @@ define i32 @func2(i32 %a, double %b, i8* %v, ...) nounwind {
 ; CHECK-NEXT:    call void @outlined_ir_func_0(i32 [[A:%.*]], i32* [[A_ADDR]], double [[B:%.*]], double* [[B_ADDR]], i8** [[AP]], i8** [[AP1_LOC]])
 ; CHECK-NEXT:    [[AP1_RELOAD:%.*]] = load i8*, i8** [[AP1_LOC]], align 8
 ; CHECK-NEXT:    call void @llvm.lifetime.end.p0i8(i64 -1, i8* [[LT_CAST]])
-; CHECK-NEXT:    call void @llvm.va_start(i8* [[AP1_RELOAD]])
+; CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1_RELOAD]])
 ; CHECK-NEXT:    [[TMP0:%.*]] = va_arg i8** [[AP]], i32
-; CHECK-NEXT:    call void @llvm.va_copy(i8* [[V:%.*]], i8* [[AP1_RELOAD]])
-; CHECK-NEXT:    call void @llvm.va_end(i8* [[AP1_RELOAD]])
+; CHECK-NEXT:    call void @llvm.va_copy.p0i8.p0i8(i8* [[V:%.*]], i8* [[AP1_RELOAD]])
+; CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP1_RELOAD]])
 ; CHECK-NEXT:    store i32 [[TMP0]], i32* [[C]], align 4
 ; CHECK-NEXT:    [[AP2:%.*]] = bitcast i8** [[AP]] to i8*
 ; CHECK-NEXT:    [[TMP:%.*]] = load i32, i32* [[C]], align 4

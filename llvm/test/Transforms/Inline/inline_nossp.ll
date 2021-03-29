@@ -32,7 +32,7 @@ define dso_local void @nossp() {
 ; CHECK-LABEL: @nossp(
 ; CHECK-NEXT:    [[TMP1:%.*]] = alloca i64, align 8
 ; CHECK-NEXT:    call void @ssp(i64 1024)
-; CHECK-NEXT:    [[SAVEDSTACK:%.*]] = call i8* @llvm.stacksave()
+; CHECK-NEXT:    [[SAVEDSTACK:%.*]] = call i8* @llvm.stacksave.p0i8()
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64* [[TMP1]] to i8*
 ; CHECK-NEXT:    call void @llvm.lifetime.start.p0i8(i64 8, i8* [[TMP2]])
 ; CHECK-NEXT:    store i64 1024, i64* [[TMP1]], align 8
@@ -41,7 +41,7 @@ define dso_local void @nossp() {
 ; CHECK-NEXT:    call void @foo(i8* [[TMP4]])
 ; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i64* [[TMP1]] to i8*
 ; CHECK-NEXT:    call void @llvm.lifetime.end.p0i8(i64 8, i8* [[TMP5]])
-; CHECK-NEXT:    call void @llvm.stackrestore(i8* [[SAVEDSTACK]])
+; CHECK-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[SAVEDSTACK]])
 ; CHECK-NEXT:    ret void
 ;
   call void @ssp(i64 1024)
@@ -63,9 +63,9 @@ define dso_local void @nossp_alwaysinline() #2 {
 define dso_local void @nossp_caller() {
 ; CHECK-LABEL: @nossp_caller(
 ; CHECK-NEXT:    [[TMP1:%.*]] = alloca i64, align 8
-; CHECK-NEXT:    [[SAVEDSTACK:%.*]] = call i8* @llvm.stacksave()
+; CHECK-NEXT:    [[SAVEDSTACK:%.*]] = call i8* @llvm.stacksave.p0i8()
 ; CHECK-NEXT:    call void @ssp(i64 1024)
-; CHECK-NEXT:    [[SAVEDSTACK_I:%.*]] = call i8* @llvm.stacksave()
+; CHECK-NEXT:    [[SAVEDSTACK_I:%.*]] = call i8* @llvm.stacksave.p0i8()
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64* [[TMP1]] to i8*
 ; CHECK-NEXT:    call void @llvm.lifetime.start.p0i8(i64 8, i8* [[TMP2]])
 ; CHECK-NEXT:    store i64 1024, i64* [[TMP1]], align 8
@@ -74,8 +74,8 @@ define dso_local void @nossp_caller() {
 ; CHECK-NEXT:    call void @foo(i8* [[TMP4]])
 ; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i64* [[TMP1]] to i8*
 ; CHECK-NEXT:    call void @llvm.lifetime.end.p0i8(i64 8, i8* [[TMP5]])
-; CHECK-NEXT:    call void @llvm.stackrestore(i8* [[SAVEDSTACK_I]])
-; CHECK-NEXT:    call void @llvm.stackrestore(i8* [[SAVEDSTACK]])
+; CHECK-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[SAVEDSTACK_I]])
+; CHECK-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[SAVEDSTACK]])
 ; CHECK-NEXT:    ret void
 ;
   call void @nossp_alwaysinline()

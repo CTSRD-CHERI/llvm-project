@@ -105,10 +105,10 @@ define void @f6(i32 %count1, i32 %count2) #0 {
 ; CHECK-DAG: stg [[BC3]], 152([[NEWSP2]])
 ; CHECK: lmg %r11, %r15, 160(%r11)
 ; CHECK: br %r14
-  %src = call i8 *@llvm.stacksave()
+  %src = call i8 *@llvm.stacksave.p0i8()
   %array1 = alloca i8, i32 %count1
   store volatile i8 0, i8 *%array1
-  call void @llvm.stackrestore(i8 *%src)
+  call void @llvm.stackrestore.p0i8(i8 *%src)
   %array2 = alloca i8, i32 %count2
   store volatile i8 0, i8 *%array2
   ret void

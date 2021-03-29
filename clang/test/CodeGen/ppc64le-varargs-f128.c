@@ -30,7 +30,7 @@ void foo_fq(__float128);
 
 // OMP-HOST-LABEL: define{{.*}} void @omp(
 // OMP-HOST: %[[AP1:[0-9a-zA-Z_.]+]] = bitcast i8** %[[AP:[0-9a-zA-Z_.]+]] to i8*
-// OMP-HOST: call void @llvm.va_start(i8* %[[AP1]])
+// OMP-HOST: call void @llvm.va_start.p0i8(i8* %[[AP1]])
 // OMP-HOST: %[[CUR:[0-9a-zA-Z_.]+]] = load i8*, i8** %[[AP]], align 8
 // OMP-HOST: %[[V0:[0-9a-zA-Z_.]+]] = ptrtoint i8* %[[CUR]] to i64
 // OMP-HOST: %[[V1:[0-9a-zA-Z_.]+]] = add i64 %[[V0]], 15
