@@ -6,12 +6,12 @@
 ; because the frontend would almost always emit a local alloca already.
 
 ; First check that non-CHERI targets add a memcpy
-; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC
-; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,RV64,RV64-PIC
-; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,MIPS,MIPS-PIC
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC --allow-unused-prefixes
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,RV64,RV64-PIC --allow-unused-prefixes
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,MIPS,MIPS-PIC --allow-unused-prefixes
 ; Next check purecap targets:
-; RUN: %riscv64_cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-RV64
-; RUN: %cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-MIPS
+; RUN: %riscv64_cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-RV64 --allow-unused-prefixes
+; RUN: %cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-MIPS --allow-unused-prefixes
 
 ; IR originally generated from %cheri_purecap_cc1 -mrelocation-model pic -pic-level 1 -pic-is-pie -O -S %s -o - -emit-llvm
 ; Interestingly, the purecap RISCV IR contains a temporary alloca and MIPS also does without the pic flags (CodeGenFunction::EmitCall()).

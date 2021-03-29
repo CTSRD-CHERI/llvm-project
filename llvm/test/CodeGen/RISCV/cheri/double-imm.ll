@@ -4,7 +4,7 @@
 ; RUNNOT: %riscv32_cheri_purecap_llc -mattr=+d -verify-machineinstrs < %s \
 ; RUNNOT:   | FileCheck --check-prefix=CHECK,IL32PC64 %s
 ; RUN: %riscv64_cheri_purecap_llc -mattr=+d -verify-machineinstrs < %s \
-; RUN:   | FileCheck --check-prefixes=CHECK,L64PC128  %s
+; RUN:   | FileCheck --check-prefixes=CHECK,L64PC128 %s --allow-unused-prefixes
 
 ; CHECK-LABEL: .section .sdata,"aw",@progbits
 ; CHECK-NEXT:  .p2align 3
