@@ -57,7 +57,7 @@ entry:
   %tmp = alloca %struct.Dwarf_Error, align 8, addrspace(200)
   %0 = bitcast %struct.Dwarf_Error addrspace(200)* %tmp to i8 addrspace(200)*
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nonnull %0, i8 addrspace(200)* bitcast (%struct.Dwarf_Error addrspace(200)* @a to i8 addrspace(200)*), i64 4096, i32 4, i1 false), !tbaa.struct !1
-  %call = call i32 (...) @fn2(%struct.Dwarf_Error addrspace(200)* byval nonnull align 8 %tmp) #3
+  %call = call i32 (...) @fn2(%struct.Dwarf_Error addrspace(200)* byval(%struct.Dwarf_Error) nonnull align 8 %tmp) #3
   ret i32 undef
 }
 

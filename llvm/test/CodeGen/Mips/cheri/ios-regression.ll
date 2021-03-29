@@ -26,7 +26,7 @@
 ;$_ZN1dIcE1fE1c = comdat any
 ;
 ;; Function Attrs: noinline optnone
-;define weak_odr void @_ZN1dIcE1fE1c(%class.c addrspace(200)* noalias sret %agg.result, %class.d addrspace(200)* %this, i64 inreg %.coerce0, i64 inreg %.coerce1, i64 inreg %.coerce2, i64 inreg %.coerce3, i64 inreg %.coerce4, i64 inreg %.coerce5, i64 inreg %.coerce6, i64 inreg %.coerce7, i64 inreg %.coerce8, i64 inreg %.coerce9, i64 inreg %.coerce10, i64 inreg %.coerce11, i64 inreg %.coerce12, i64 inreg %.coerce13, i64 inreg %.coerce14, i64 inreg %.coerce15) #0 comdat align 2 {
+;define weak_odr void @_ZN1dIcE1fE1c(%class.c addrspace(200)* noalias sret(%class.c) %agg.result, %class.d addrspace(200)* %this, i64 inreg %.coerce0, i64 inreg %.coerce1, i64 inreg %.coerce2, i64 inreg %.coerce3, i64 inreg %.coerce4, i64 inreg %.coerce5, i64 inreg %.coerce6, i64 inreg %.coerce7, i64 inreg %.coerce8, i64 inreg %.coerce9, i64 inreg %.coerce10, i64 inreg %.coerce11, i64 inreg %.coerce12, i64 inreg %.coerce13, i64 inreg %.coerce14, i64 inreg %.coerce15) #0 comdat align 2 {
 ;entry:
 ;  %0 = alloca %class.c, align 1, addrspace(200)
 ;  %this.addr = alloca %class.d addrspace(200)*, align 16, addrspace(200)
@@ -65,7 +65,7 @@
 ;  store i64 %.coerce15, i64 addrspace(200)* %17, align 1
 ;  store %class.d addrspace(200)* %this, %class.d addrspace(200)* addrspace(200)* %this.addr, align 16
 ;  %this1 = load %class.d addrspace(200)*, %class.d addrspace(200)* addrspace(200)* %this.addr, align 16
-;  call void @_ZN1dIcE1gEv(%class.c addrspace(200)* sret %agg.result, %class.d addrspace(200)* %this1)
+;  call void @_ZN1dIcE1gEv(%class.c addrspace(200)* sret(%class.c) %agg.result, %class.d addrspace(200)* %this1)
 ;  ret void
 ;}
 ;
@@ -79,7 +79,7 @@
 
 $_ZN1dIcE1fE1c = comdat any
 
-define weak_odr void @_ZN1dIcE1fE1c(%class.c addrspace(200)* noalias sret %agg.result, %class.d addrspace(200)* %this, i64 inreg %.coerce0, i64 inreg %.coerce1, i64 inreg %.coerce2, i64 inreg %.coerce3, i64 inreg %.coerce4, i64 inreg %.coerce5, i64 inreg %.coerce6, i64 inreg %.coerce7, i64 inreg %.coerce8, i64 inreg %.coerce9, i64 inreg %.coerce10, i64 inreg %.coerce11, i64 inreg %.coerce12, i64 inreg %.coerce13, i64 inreg %.coerce14, i64 inreg %.coerce15) comdat align 2 {
+define weak_odr void @_ZN1dIcE1fE1c(%class.c addrspace(200)* noalias sret(%class.c) %agg.result, %class.d addrspace(200)* %this, i64 inreg %.coerce0, i64 inreg %.coerce1, i64 inreg %.coerce2, i64 inreg %.coerce3, i64 inreg %.coerce4, i64 inreg %.coerce5, i64 inreg %.coerce6, i64 inreg %.coerce7, i64 inreg %.coerce8, i64 inreg %.coerce9, i64 inreg %.coerce10, i64 inreg %.coerce11, i64 inreg %.coerce12, i64 inreg %.coerce13, i64 inreg %.coerce14, i64 inreg %.coerce15) comdat align 2 {
 ; CHECK-LABEL: _ZN1dIcE1fE1c:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cjr $c17
@@ -88,4 +88,4 @@ entry:
   ret void
 }
 
-declare void @_ZN1dIcE1gEv(%class.c addrspace(200)* sret, %class.d addrspace(200)*)
+declare void @_ZN1dIcE1gEv(%class.c addrspace(200)* sret(%class.c), %class.d addrspace(200)*)

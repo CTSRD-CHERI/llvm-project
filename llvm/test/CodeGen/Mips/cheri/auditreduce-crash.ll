@@ -63,7 +63,7 @@ entry:
   ret i32 0
 }
 
-define i32 @foo(i512 addrspace(200)* byval %x, %struct.tokenstr addrspace(200)* byval(%struct.tokenstr), i32 addrspace(200)* %optchkd) nounwind {
+define i32 @foo(i512 addrspace(200)* byval(i512) %x, %struct.tokenstr addrspace(200)* byval(%struct.tokenstr), i32 addrspace(200)* %optchkd) nounwind {
 ; MIPS-LABEL: foo:
 ; MIPS:       # %bb.0: # %entry
 ; MIPS-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
