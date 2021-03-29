@@ -2,7 +2,7 @@
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv32 -mattr=+a,+xcheri < %s \
 # RUN:     | llvm-objdump --riscv-no-aliases --mattr=+a,+xcheri -d - \
-# RUN:     | FileCheck -check-prefixes=CHECK-OBJ,CHECK-ASM-AND-OBJ %s
+# RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 
 # CHECK-ASM-AND-OBJ: lr.c ct0, (t1)
 # CHECK-ASM: encoding: [0xaf,0x32,0x03,0x10]
