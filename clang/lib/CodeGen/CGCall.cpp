@@ -2264,7 +2264,8 @@ void CodeGenModule::ConstructAttributeList(
     llvm::AttrBuilder Attrs;
 
     if (!CodeGenOpts.NullPointerIsValid &&
-        getAddressSpaceForType(FI.arg_begin()->type) == 0) {
+        getTargetCodeGenInfo().canMarkAsNonNull(FI.arg_begin()->type,
+                                                getContext())) {
       Attrs.addAttribute(llvm::Attribute::NonNull);
       Attrs.addDereferenceableAttr(
           getMinimumObjectSize(

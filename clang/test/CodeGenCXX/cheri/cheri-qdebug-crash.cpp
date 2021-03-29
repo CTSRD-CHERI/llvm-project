@@ -42,7 +42,7 @@ QTextStreamManipulator qSetPadChar();
 // HYBRID-NEXT:    ret void
 //
 // PURECAP-LABEL: define {{[^@]+}}@_ZN6QDebug7putUcs4Ev
-// PURECAP-SAME: (%class.QDebug addrspace(200)* dereferenceable(1) [[THIS:%.*]]) addrspace(200) [[ATTR0:#.*]] align 2 {
+// PURECAP-SAME: (%class.QDebug addrspace(200)* nonnull dereferenceable(1) [[THIS:%.*]]) addrspace(200) [[ATTR0:#.*]] align 2 {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[THIS_ADDR:%.*]] = alloca [[CLASS_QDEBUG:%.*]] addrspace(200)*, align 16, addrspace(200)
 // PURECAP-NEXT:    [[AGG_TMP:%.*]] = alloca [[CLASS_QTEXTSTREAMMANIPULATOR:%.*]], align 16, addrspace(200)

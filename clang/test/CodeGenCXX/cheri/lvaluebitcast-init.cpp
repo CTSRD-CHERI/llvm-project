@@ -25,7 +25,7 @@ private:
 // CHECK-NEXT:    store %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* [[TYPES]], %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* addrspace(200)* [[TYPES_ADDR]], align 16
 // CHECK-NEXT:    store i32 [[METATYPE]], i32 addrspace(200)* [[METATYPE_ADDR]], align 4
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* [[METATYPE_ADDR]], align 4
-// CHECK-NEXT:    call void @_ZN9QMetaTypeC1Ei(%class.QMetaType addrspace(200)* dereferenceable(16) [[MT]], i32 signext [[TMP0]])
+// CHECK-NEXT:    call void @_ZN9QMetaTypeC1Ei(%class.QMetaType addrspace(200)* nonnull dereferenceable(16) [[MT]], i32 signext [[TMP0]])
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[CLASS_QMETATYPE]] addrspace(200)* [[MT]] to %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)*
 // CHECK-NEXT:    [[TMP2:%.*]] = load %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)*, %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* [[TMP1]], align 16
 // CHECK-NEXT:    [[TMP3:%.*]] = load %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)*, %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* addrspace(200)* [[TYPES_ADDR]], align 16

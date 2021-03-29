@@ -14,7 +14,7 @@ const int *j = &i;
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[EXCEPTION]] to [[CLASS_A:%.*]] addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[CLASS_A]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
 // CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[TMP1]], i8 0, i64 16, i1 false)
-// CHECK-NEXT:    call void @_ZN1aC1Ev(%class.a addrspace(200)* dereferenceable(16) [[TMP0]]) [[ATTR4]]
+// CHECK-NEXT:    call void @_ZN1aC1Ev(%class.a addrspace(200)* nonnull dereferenceable(16) [[TMP0]]) [[ATTR4]]
 // CHECK-NEXT:    call void @__cxa_throw(i8 addrspace(200)* [[EXCEPTION]], i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @_ZTI1a to i8 addrspace(200)*), i8 addrspace(200)* bitcast (void (%class.a addrspace(200)*) addrspace(200)* @_ZN1aD1Ev to i8 addrspace(200)*)) [[ATTR5:#.*]]
 // CHECK-NEXT:    unreachable
 //

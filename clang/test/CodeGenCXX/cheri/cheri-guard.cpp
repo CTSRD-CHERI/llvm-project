@@ -16,7 +16,7 @@ foo *f() {
   // CHECK-NEXT: br i1 [[TOBOOL]], label %[[INITIALIZE_LABEL:.+]], label %[[EXIT_LABEL]]
 
   // CHECK: [[INITIALIZE_LABEL]]:
-  // CHECK-NEXT: call void @_ZN3fooC1Ev(%struct.foo addrspace(200)* dereferenceable(1) @_ZZ1fvE1x)
+  // CHECK-NEXT: call void @_ZN3fooC1Ev(%struct.foo addrspace(200)* nonnull dereferenceable(1) @_ZZ1fvE1x)
   // CHECK-NEXT: call void @__cxa_guard_release(i64 addrspace(200)* @_ZGVZ1fvE1x)
   // CHECK-NEXT: br label %[[EXIT_LABEL]]
 
