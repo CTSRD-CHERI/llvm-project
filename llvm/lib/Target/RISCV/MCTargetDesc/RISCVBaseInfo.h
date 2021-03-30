@@ -232,7 +232,7 @@ struct SpecialCapReg {
 };
 
 #define GET_SpecialCapRegsList_DECL
-#include "RISCVGenSystemOperands.inc"
+#include "RISCVGenSearchableTables.inc"
 } // end namespace RISCVSpecialCapReg
 
 namespace RISCVABI {

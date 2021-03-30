@@ -24,7 +24,7 @@ namespace RISCVSysReg {
 
 namespace RISCVSpecialCapReg {
 #define GET_SpecialCapRegsList_IMPL
-#include "RISCVGenSystemOperands.inc"
+#include "RISCVGenSearchableTables.inc"
 } // namespace RISCVSpecialCapReg
 
 namespace RISCVABI {
