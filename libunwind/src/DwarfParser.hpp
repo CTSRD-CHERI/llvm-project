@@ -504,20 +504,20 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
   struct ParseInfo {
     pint_t instructions;
     pint_t instructionsEnd;
-    pint_t pcoffset;
+    size_t pcoffset;
   };
 
   ParseInfo parseInfoArray[] = {
       {cieInfo.cieInstructions, cieInfo.cieStart + cieInfo.cieLength,
-       (pint_t)(-1)},
+       (size_t)(-1)},
       {fdeInfo.fdeInstructions, fdeInfo.fdeStart + fdeInfo.fdeLength,
        upToPC - fdeInfo.pcStart}};
 
   for (const auto &info : parseInfoArray) {
     pint_t p = info.instructions;
     pint_t instructionsEnd = info.instructionsEnd;
-    pint_t pcoffset = info.pcoffset;
-    pint_t codeOffset = 0;
+    size_t pcoffset = info.pcoffset;
+    size_t codeOffset = 0;
 
     // initialState initialized as registers in results are modified. Use
     // PrologInfo accessor functions to avoid reading uninitialized data.
@@ -792,10 +792,10 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
         length = addressSpace.getULEB128(p, instructionsEnd);
         assert(length < static_cast<pint_t>(~0) && "pointer overflow");
         p += static_cast<pint_t>(length);
-        _LIBUNWIND_TRACE_DWARF("DW_CFA_val_expression(reg=%" PRIu64 ", "
-                               "expression=0x%" PRIx64 ", length=%" PRIu64
-                               ")\n",
-                               reg, results->savedRegisters[reg].value, length);
+        _LIBUNWIND_TRACE_DWARF(
+            "DW_CFA_val_expression(reg=%" PRIu64 ", "
+            "expression=0x%" PRIx64 ", length=%" PRIu64 ")\n",
+            reg, (uint64_t)results->savedRegisters[reg].value, length);
         break;
       case DW_CFA_GNU_args_size:
         length = addressSpace.getULEB128(p, instructionsEnd);
