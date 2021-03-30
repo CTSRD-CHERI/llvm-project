@@ -1047,9 +1047,9 @@ void MCStreamer::Finish(SMLoc EndLoc) {
 
       std::tie(Sym, Value, GroupName) = R;
       if (GroupName != StringRef()) {
-        RelocSection =
-          Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
-                                ELF::SHF_ALLOC | ELF::SHF_GROUP, 0, GroupName);
+        RelocSection = Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
+                                             ELF::SHF_ALLOC | ELF::SHF_GROUP, 0,
+                                             GroupName, false);
         RelocSection->setAlignment(llvm::Align(8));
       } else {
         RelocSection = DefaultRelocSection;

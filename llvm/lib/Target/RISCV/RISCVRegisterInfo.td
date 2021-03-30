@@ -135,7 +135,7 @@ let RegAltNameIndices = [ABIRegAltName] in {
 
   // TODO: Review costs
   def C0  : RISCVCapReg<X0, "c0", ["cnull"]>, DwarfRegNum<[0]> { let isConstant = 1; }
-  let CostPerUse = 1 in {
+  let CostPerUse = [1] in {
   def C1  : RISCVCapReg<X1, "c1", ["cra"]>, DwarfRegNum<[1]>;
   def C2  : RISCVCapReg<X2, "c2", ["csp"]>, DwarfRegNum<[2]>;
   def C3  : RISCVCapReg<X3, "c3", ["cgp"]>, DwarfRegNum<[3]>;
@@ -152,7 +152,7 @@ let RegAltNameIndices = [ABIRegAltName] in {
   def C13 : RISCVCapReg<X13,"c13", ["ca3"]>, DwarfRegNum<[13]>;
   def C14 : RISCVCapReg<X14,"c14", ["ca4"]>, DwarfRegNum<[14]>;
   def C15 : RISCVCapReg<X15,"c15", ["ca5"]>, DwarfRegNum<[15]>;
-  let CostPerUse = 1 in {
+  let CostPerUse = [1] in {
   def C16 : RISCVCapReg<X16,"c16", ["ca6"]>, DwarfRegNum<[16]>;
   def C17 : RISCVCapReg<X17,"c17", ["ca7"]>, DwarfRegNum<[17]>;
   def C18 : RISCVCapReg<X18,"c18", ["cs2"]>, DwarfRegNum<[18]>;

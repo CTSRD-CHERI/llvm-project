@@ -1253,8 +1253,8 @@ defm : LdPat<load, LD, i64>;
 
 /// Stores
 
-defm : StPat<truncstorei32, SW, GPR, i64>>;
-defm : StPat<store, SD, GPR, i64>>;
+defm : StPat<truncstorei32, SW, GPR, i64>;
+defm : StPat<store, SD, GPR, i64>;
 } // Predicates = [IsRV64, NotCapMode]
 
 /// readcyclecounter

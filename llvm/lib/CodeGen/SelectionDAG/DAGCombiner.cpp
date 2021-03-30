@@ -17684,11 +17684,12 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
     return SDValue();
   }
 
-  const unsigned Alignment = ST->getAlignment();
+  const Align Alignment = ST->getAlign();
   // Don't bother doing this transformation if the unaligned load/store is fast
   bool Fast = false;
-  if (TLI.allowsMisalignedMemoryAccesses(
-          ST->getMemoryVT(), ST->getAddressSpace(), Alignment, MachineMemOperand::MONone, &Fast)) {
+  if (TLI.allowsMisalignedMemoryAccesses(ST->getMemoryVT(),
+                                         ST->getAddressSpace(), Alignment,
+                                         MachineMemOperand::MONone, &Fast)) {
     if (Fast)
       return SDValue();
   }
@@ -17697,7 +17698,7 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
   unsigned StoreBits = ST->getMemoryVT().getStoreSizeInBits();
   unsigned StoreBytes = StoreBits / 8;
   assert((StoreBits % 8) == 0 && "Store size in bits must be a multiple of 8");
-  unsigned ABIAlignment = DAG.getDataLayout().getABITypeAlignment(
+  Align ABIAlignment = DAG.getDataLayout().getABITypeAlign(
       ST->getMemoryVT().getTypeForEVT(*DAG.getContext()));
   if (Alignment >= ABIAlignment) {
     return SDValue();
@@ -17705,7 +17706,7 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
 
   if (LoadSDNode *LD = dyn_cast<LoadSDNode>(ST->getValue())) {
     if (LD->hasNUsesOfValue(1, 0) && ST->getMemoryVT() == LD->getMemoryVT() &&
-        LD->getAlignment() < ABIAlignment && !LD->isVolatile() &&
+        LD->getAlign() < ABIAlignment && !LD->isVolatile() &&
         !LD->isIndexed() &&
         Chain.reachesChainWithoutSideEffects(SDValue(LD, 1))) {
       SDLoc dl(N);
@@ -17719,7 +17720,8 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
             DAG.getMachineFunction().getFunction(), dl.getDebugLoc(),
             "found underaligned store of underaligned load of capability type"
             " (aligned to " +
-                Twine(Alignment) + " bytes instead of " + Twine(ABIAlignment) +
+                Twine(Alignment.value()) + " bytes instead of " +
+                Twine(ABIAlignment.value()) +
                 "). Will use memmove() to preserve tags if it is aligned "
                 "correctly at runtime");
         DAG.getContext()->diagnose(Warning);
