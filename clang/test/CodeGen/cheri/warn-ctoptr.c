@@ -9,7 +9,7 @@
 // RUN: %cheri_cc1 -Wcheri-pointer-conversion -S %s -o - -O1 -verify | FileCheck %s -implicit-check-not ctoptr  --check-prefixes CHECK,HYBRID
 
 // And finally try compiling this in purecap mode (and verify doesn't create any ctoptr):
-// RUN: %cheri_purecap_cc1 -Wcheri-pointer-conversion -S %s -o - -O1 -verify=purecap-codegen | FileCheck %s -implicit-check-not ctoptr --check-prefixes CHECK,PURECAP
+// RUN: %cheri_purecap_cc1 -Wcheri-pointer-conversion -S %s -o - -O1 -verify=purecap-codegen | FileCheck %s -implicit-check-not ctoptr --check-prefixes CHECK
 // purecap-codegen-no-diagnostics
 
 // CHECK: .file "warn-ctoptr.c"

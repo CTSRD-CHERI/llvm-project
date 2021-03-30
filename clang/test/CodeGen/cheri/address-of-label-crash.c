@@ -1,7 +1,7 @@
 // Check that we don't crash when using computed goto:
 // https://github.com/CTSRD-CHERI/clang/issues/163
 
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -o - -O0 -emit-llvm %s | FileCheck --check-prefixes=COMMON,IR %s
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -o - -O0 -emit-llvm %s | FileCheck --check-prefixes=COMMON %s
 
 int addrof_label_in_static(void) {
   static void *b = &&label1;

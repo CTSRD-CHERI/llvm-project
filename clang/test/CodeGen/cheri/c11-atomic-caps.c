@@ -40,28 +40,28 @@ void test_store(_Atomic(__uintcap_t) *f, __uintcap_t value) {
   __c11_atomic_store(f, value, __ATOMIC_SEQ_CST);
 }
 
-// PURECAP-MIPS64: Function Attrs: nofree norecurse nounwind writeonly
+// PURECAP-MIPS64: Function Attrs: nofree norecurse nounwind willreturn writeonly
 // PURECAP-MIPS64-LABEL: define {{[^@]+}}@test_init
 // PURECAP-MIPS64-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR1:#.*]] {
 // PURECAP-MIPS64-NEXT:  entry:
 // PURECAP-MIPS64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16, [[TBAA2:!tbaa !.*]]
 // PURECAP-MIPS64-NEXT:    ret void
 //
-// PURECAP-RISCV64: Function Attrs: nofree norecurse nounwind writeonly
+// PURECAP-RISCV64: Function Attrs: nofree norecurse nounwind willreturn writeonly
 // PURECAP-RISCV64-LABEL: define {{[^@]+}}@test_init
 // PURECAP-RISCV64-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR1:#.*]] {
 // PURECAP-RISCV64-NEXT:  entry:
 // PURECAP-RISCV64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16, [[TBAA4:!tbaa !.*]]
 // PURECAP-RISCV64-NEXT:    ret void
 //
-// HYBRID-MIPS64: Function Attrs: nofree norecurse nounwind writeonly
+// HYBRID-MIPS64: Function Attrs: nofree norecurse nounwind willreturn writeonly
 // HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_init
 // HYBRID-MIPS64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR1:#.*]] {
 // HYBRID-MIPS64-NEXT:  entry:
 // HYBRID-MIPS64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]], align 16, [[TBAA2:!tbaa !.*]]
 // HYBRID-MIPS64-NEXT:    ret void
 //
-// HYBRID-RISCV64: Function Attrs: nofree norecurse nounwind writeonly
+// HYBRID-RISCV64: Function Attrs: nofree norecurse nounwind willreturn writeonly
 // HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_init
 // HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR1:#.*]] {
 // HYBRID-RISCV64-NEXT:  entry:

@@ -2,14 +2,14 @@
 // REQUIRES: asserts
 
 // CHeck that -O0 inlines only the always_inline function
-// RUN: %cheri_cc1 -emit-llvm %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,N64,N64-NOOPT
-// RUN: %cheri_purecap_cc1 -emit-llvm %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-CAPTABLE-NOOPT,PURECAP-CAPTABLE
+// RUN: %cheri_cc1 -emit-llvm %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,N64-NOOPT
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-CAPTABLE-NOOPT
 
 // at -O1/O2 the maybe_inline function should be inlined
-// RUN: %cheri_cc1 -emit-llvm %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,N64
-// RUN: %cheri_cc1 -emit-llvm %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,N64
-// RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
-// RUN: %cheri_purecap_cc1 -emit-llvm %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
+// RUN: %cheri_cc1 -emit-llvm %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT
+// RUN: %cheri_cc1 -emit-llvm %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP
 
 static __attribute__((always_inline)) int always_inlined(void) {
   return 5;
