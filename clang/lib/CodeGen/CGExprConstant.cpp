@@ -1389,7 +1389,7 @@ llvm::Constant *ConstantEmitter::tryEmitConstantExpr(const ConstantExpr *CE) {
   if (!CE->hasAPValueResult())
     return nullptr;
   const Expr *Inner = CE->getSubExpr()->IgnoreImplicit();
-  QualType RetType;
+  QualType RetType = Inner->getType();
   if (auto *Call = dyn_cast<CallExpr>(Inner))
     RetType = Call->getCallReturnType(CGF->getContext());
   else if (auto *Ctor = dyn_cast<CXXConstructExpr>(Inner))
