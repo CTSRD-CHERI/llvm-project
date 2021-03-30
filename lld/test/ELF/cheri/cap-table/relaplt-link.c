@@ -12,7 +12,7 @@
 // RUN: llvm-readobj -r %t-amd64.o | FileCheck --check-prefix AMD64-OBJ %s
 // AMD64-OBJ: Relocations [
 // AMD64-OBJ-NEXT: Section ({{.+}}) .rela.text {
-// AMD64-OBJ-NEXT:     0x3 R_X86_64_GOTPCREL call 0xFFFFFFFFFFFFFFFC
+// AMD64-OBJ-NEXT:     0x3 R_X86_64_GOTPCREL fn_ptr 0xFFFFFFFFFFFFFFFC
 // AMD64-OBJ-NEXT:     0x8 R_X86_64_PLT32 extern_function 0xFFFFFFFFFFFFFFFC
 // AMD64-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t-amd64.so %t-amd64.o
@@ -73,7 +73,7 @@
 
 // AMD64-SHLIB-LABEL: Relocations [
 // AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.dyn {
-// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_GLOB_DAT call 0x0
+// AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_GLOB_DAT fn_ptr 0x0
 // AMD64-SHLIB-NEXT: }
 // AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.plt {
 // AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_JUMP_SLOT extern_function 0x0
@@ -89,7 +89,7 @@
 // RUN: llvm-readobj -r %t.o | FileCheck --check-prefix PURECAP-OBJ %s
 // PURECAP-OBJ: Relocations [
 // PURECAP-OBJ-NEXT: Section ({{.+}}) .rela.text {
-// PURECAP-OBJ-NEXT:    0x10 R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE call 0x0
+// PURECAP-OBJ-NEXT:    0x10 R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE fn_ptr 0x0
 // PURECAP-OBJ-NEXT:    0x14 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0
 // PURECAP-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t.so %t.o
@@ -148,18 +148,20 @@
 
 // PURECAP-SHLIB: Relocations [
 // PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.dyn {
-// PURECAP-SHLIB-NEXT:    0x204{{9|A}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE call{{$}}
+// PURECAP-SHLIB-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE fn_ptr{{$}}
 // PURECAP-SHLIB-NEXT:  }
 // PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.plt {
-// PURECAP-SHLIB-NEXT:    0x204{{A|C}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function{{$}}
+// PURECAP-SHLIB-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function{{$}}
 // PURECAP-SHLIB-NEXT:  }
 
 // RUN: llvm-strip -o /dev/stdout %t.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix PURECAP-STRIPPED
 // PURECAP-STRIPPED: SectionHeaderCount: 15
 
 
-extern void* extern_function(void*);
+extern void* extern_function(void *);
 
-void* call() {
-  return extern_function(&call);
+extern void* fn_ptr(void *);
+
+void *call(void) {
+  return extern_function(&fn_ptr);
 }
