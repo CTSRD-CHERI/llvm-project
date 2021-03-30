@@ -364,10 +364,6 @@ int main(int argc, char **argv) {
       TheTarget->createMCRegInfo(TripleName, MCOptions));
   assert(MRI && "Unable to create target register info!");
 
-  std::unique_ptr<MCRegisterInfo> MRI(
-      TheTarget->createMCRegInfo(TripleName, MCOptions));
-  assert(MRI && "Unable to create target register info!");
-
   std::unique_ptr<MCAsmInfo> MAI(
       TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   assert(MAI && "Unable to create target asm info!");

@@ -4334,7 +4334,6 @@ bool AsmParser::parseDirectiveCFIRestore(SMLoc DirectiveLoc) {
   int64_t Register = 0;
   if (parseRegisterOrRegisterNumber(Register, DirectiveLoc) || parseEOL())
     return true;
-  }
 
   if (Register == -1) {
     Warning(DirectiveLoc, "Failed to parse get DWARF regnum for .cfi_restore");

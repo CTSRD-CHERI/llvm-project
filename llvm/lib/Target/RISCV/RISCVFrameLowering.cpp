@@ -332,7 +332,7 @@ void RISCVFrameLowering::adjustStackForRVV(MachineFunction &MF,
   assert(Amount != 0 && "Did not need to adjust stack pointer for RVV.");
 
   const RISCVInstrInfo *TII = STI.getInstrInfo();
-  Register SPReg = getSPReg(STI);
+  Register SPReg = getSPReg();
   unsigned Opc = RISCV::ADD;
   if (Amount < 0) {
     Amount = -Amount;
