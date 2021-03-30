@@ -14,7 +14,7 @@
 ## Check that there is a dynamic relocation against the weak symbol
 ## even though it is defined here.
 # INTERPOSABLE-LABEL: Dynamic Relocations {
-# INTERPOSABLE-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE weak_symbol 0x0
+# INTERPOSABLE-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE weak_symbol{{$}}
 # INTERPOSABLE-NEXT:  }
 ## However, in an executable where it is defined there is no need for dynamic relocation:
 # DEFINED-EXE-LABEL: Dynamic Relocations {

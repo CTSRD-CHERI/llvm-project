@@ -38,13 +38,13 @@
 
 // CHECK-LABEL: Dynamic Relocations {
 // We need a R_MIPS_CHERI_CAPABILITY relocation against return1 to ensure that the dynamic linker creates a unique trampoline
-// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_return1 0x0
+// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_return1{{$}}
 // R_MIPS_CHERI_CAPABILITY against the global function pointer:
-// CHECK-SHLIB-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_return2 0x0
+// CHECK-SHLIB-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_return2{{$}}
 // In executables with --export-dynamic we add a new hidden symbol:
-// CHECK-NODYN-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_global_return2 0x0
+// CHECK-NODYN-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_global_return2{{$}}
 // We need a R_MIPS_CHERI_CAPABILITY_CALL relocation against use_callback to call a function in another DSO
-// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE use_callback 0x0
+// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE use_callback{{$}}
 // CHECK-NEXT:  }
 // CHECK-LABEL: DynamicSymbols [
 // CHECK-NEXT:   Symbol {

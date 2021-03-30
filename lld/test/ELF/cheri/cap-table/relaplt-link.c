@@ -148,10 +148,10 @@
 
 // PURECAP-SHLIB: Relocations [
 // PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.dyn {
-// PURECAP-SHLIB-NEXT:    0x204{{9|A}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE call 0x0
+// PURECAP-SHLIB-NEXT:    0x204{{9|A}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE call{{$}}
 // PURECAP-SHLIB-NEXT:  }
 // PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.plt {
-// PURECAP-SHLIB-NEXT:    0x204{{A|C}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0
+// PURECAP-SHLIB-NEXT:    0x204{{A|C}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function{{$}}
 // PURECAP-SHLIB-NEXT:  }
 
 // RUN: llvm-strip -o /dev/stdout %t.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix PURECAP-STRIPPED

@@ -37,26 +37,26 @@
 
 // CHECK-LABEL: Dynamic Relocations {
 // With the version script default_callback comes first
-// CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback 0x0
-// CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback 0x0
+// CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback{{$}}
+// CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback{{$}}
 // one reference in .captable
-// CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback 0x0
+// CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback{{$}}
 // We need exactly one R_MIPS_CHERI_CAPABILITY relocation against static_callback to ensure that
 // the dynamic linker creates a unique trampoline
 // two global references to static_callback:
-// CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback 0x0
-// CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback 0x0
+// CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback{{$}}
+// CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback{{$}}
 // one reference in .captable
-// CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback 0x0
+// CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback{{$}}
 
 // The function pointer to the global function should be in .captable once and twice in .rodata
-// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback 0x0
-// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback 0x0
+// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
+// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
 // one reference in .captable
-// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback 0x0
+// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
 
 // We need a R_MIPS_CHERI_CAPABILITY_CALL relocation against use_callback to call a function (potentially) in another DSO
-// CHECK-SHLINEXT:     R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE check_if_default 0x0
+// CHECK-SHLINEXT:     R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE check_if_default{{$}}
 // CHECK-NEXT:  }
 // CHECK-LABEL: DynamicSymbols [
 // CHECK-NEXT:   Symbol {

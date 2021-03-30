@@ -45,11 +45,11 @@
 
 # SHARED:       Relocations [
 # SHARED-FREEBSD-NEXT: Section (7) .rel.dyn {
-# SHARED-FREEBSD-NEXT:         0x203A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0
+# SHARED-FREEBSD-NEXT:         0x203A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo{{$}}
 # SHARED-FREEBSD32-NEXT: Section (7) .rel.dyn {
-# SHARED-FREEBSD32-NEXT:       0x20234 R_MIPS_REL32 foo 0x0
+# SHARED-FREEBSD32-NEXT:       0x20234 R_MIPS_REL32 foo{{$}}
 # SHARED-LINUX-NEXT:   Section (7) .rel.dyn {
-# SHARED-LINUX-NEXT:           0x203A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0
+# SHARED-LINUX-NEXT:           0x203A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo{{$}}
 # SHARED-NEXT:         }
 # SHARED-NEXT: ]
 
@@ -62,7 +62,7 @@
 # RELOCATABLE-MIPS32:     Relocations [
 # RELOCATABLE-MIPS32-NEXT:   Section ({{.+}}) .rel.data {
 # FIXME: 0x10 is in the location of the relocation but llvm-readobj doesn't print it....
-# RELOCATABLE-MIPS32-NEXT:    0x4 R_MIPS_32 foo 0x0
+# RELOCATABLE-MIPS32-NEXT:    0x4 R_MIPS_32 foo{{$}}
 # RELOCATABLE-MIPS32-NEXT:  }
 # RELOCATABLE-MIPS32-NEXT:]
 

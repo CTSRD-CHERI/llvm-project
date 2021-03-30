@@ -30,7 +30,7 @@
 // RUN: llvm-readobj -r %t-fnptr1.so | FileCheck --check-prefix ONE-FNPTR %s
 // ONE-FNPTR: Relocations [
 // ONE-FNPTR-NEXT: Section ({{.+}}) .rel.dyn {
-// ONE-FNPTR-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0
+// ONE-FNPTR-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1{{$}}
 // ONE-FNPTR-NEXT:  }
 
 // If the symbol is only ever called we can emit a R_MIPS_CHERI_CAPABILITY_CALL which will allow the
@@ -46,7 +46,7 @@
 // ONE-CALL-NEXT: 0x0000000000000014 PLTREL               REL
 // ONE-CALL-LABEL: Relocations [
 // ONE-CALL-NEXT: Section ({{.+}}) .rel.plt {
-// ONE-CALL-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern1 0x0
+// ONE-CALL-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern1{{$}}
 // ONE-CALL-NEXT:  }
 
 // RUN: ld.lld -shared -o %t-2calls.so %t-call1.o %t-call2.o
@@ -59,8 +59,8 @@
 // TWO-CALLS-NEXT: 0x0000000000000014 PLTREL               REL
 // TWO-CALLS-LABEL: Relocations [
 // TWO-CALLS-NEXT: Section ({{.+}}) .rel.plt {
-// TWO-CALLS-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern1 0x0
-// TWO-CALLS-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2 0x0
+// TWO-CALLS-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern1{{$}}
+// TWO-CALLS-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2{{$}}
 // TWO-CALLS-NEXT:  }
 
 
@@ -76,7 +76,7 @@
 // RUN: llvm-readobj -r %t-call-and-fnptr.so | FileCheck --check-prefix CALL-AND-FNPTR %s
 // CALL-AND-FNPTR: Relocations [
 // CALL-AND-FNPTR-NEXT: Section ({{.+}}) .rel.dyn {
-// CALL-AND-FNPTR-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0
+// CALL-AND-FNPTR-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1{{$}}
 // CALL-AND-FNPTR-NEXT:  }
 
 // RUN: ld.lld -shared -o %t-all.so %t-call1.o %t-fnptr1.o %t-call2.o %t-fnptr2.o
@@ -92,14 +92,14 @@
 // ALL-NEXT:  0x0000000000000014 PLTREL               REL
 // ALL: Relocations [
 // ALL-NEXT: Section ({{.+}}) .rel.dyn {
-// ALL-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0
+// ALL-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1{{$}}
 // Since this is a data symbol we have to eagerly resolve it to a stub
-// ALL-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern2 0x0
+// ALL-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern2{{$}}
 // ALL-NEXT:  }
 // FIXME: we should to avoid another PLT relocation here since we are already resolving the symbol!
 // However, it is a data symbol and not just a local value loaded from the captable so it will require a bit more logic.
 // ALL-NEXT:  Section ({{.+}}) .rel.plt {
-// ALL-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2 0x0
+// ALL-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2{{$}}
 // ALL-NEXT:  }
 
 extern void* extern1(void);
