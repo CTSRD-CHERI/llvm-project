@@ -79,9 +79,8 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    cmove ca0, cs2
 ; CHECK-NEXT:    cmove ca1, cs1
 ; CHECK-NEXT:    cjalr ca2
+; CHECK-NEXT:    addiw a0, s0, 1
 ; CHECK-NEXT:    addi s0, s0, 1
-; CHECK-NEXT:    slli a0, s0, 32
-; CHECK-NEXT:    srli a0, a0, 32
 ; CHECK-NEXT:    bne a0, s3, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %for.cond.cleanup
 ; CHECK-NEXT:    clc cs3, 592(csp)
@@ -121,23 +120,22 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    csc cs2, 624(csp)
 ; CHECK-NEXT:    csc cs3, 608(csp)
 ; CHECK-NEXT:    csc cs4, 592(csp)
-; CHECK-NEXT:    mv s0, zero
-; CHECK-NEXT:    seqz s1, a0
-; CHECK-NEXT:    addi s4, zero, 100
+; CHECK-NEXT:    mv s1, zero
+; CHECK-NEXT:    seqz s0, a0
+; CHECK-NEXT:    addi s3, zero, 100
 ; CHECK-NEXT:    cincoffset ca0, csp, 100
 ; CHECK-NEXT:    csetbounds cs2, ca0, 492
 ; CHECK-NEXT:    cincoffset ca0, csp, 12
-; CHECK-NEXT:    csetbounds cs3, ca0, 88
+; CHECK-NEXT:    csetbounds cs4, ca0, 88
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    addi s0, s0, 1
-; CHECK-NEXT:    slli a0, s0, 32
-; CHECK-NEXT:    srli a0, a0, 32
-; CHECK-NEXT:    beq a0, s4, .LBB1_4
+; CHECK-NEXT:    addiw a0, s1, 1
+; CHECK-NEXT:    addi s1, s1, 1
+; CHECK-NEXT:    beq a0, s3, .LBB1_4
 ; CHECK-NEXT:  .LBB1_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    bnez s1, .LBB1_1
+; CHECK-NEXT:    bnez s0, .LBB1_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
 ; CHECK-NEXT:  .LBB1_5: # %if.then
@@ -146,7 +144,7 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    auipcc ca2, %captab_pcrel_hi(call)
 ; CHECK-NEXT:    clc ca2, %pcrel_lo(.LBB1_5)(ca2)
 ; CHECK-NEXT:    cmove ca0, cs2
-; CHECK-NEXT:    cmove ca1, cs3
+; CHECK-NEXT:    cmove ca1, cs4
 ; CHECK-NEXT:    cjalr ca2
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
