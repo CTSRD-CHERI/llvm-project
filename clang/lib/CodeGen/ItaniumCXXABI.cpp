@@ -2683,7 +2683,8 @@ void CodeGenModule::unregisterGlobalDtorsWithUnAtExit() {
 
     // Get the destructor function type, void(*)(void).
     llvm::FunctionType *dtorFuncTy = llvm::FunctionType::get(CGF.VoidTy, false);
-    llvm::Type *dtorTy = dtorFuncTy->getPointerTo();
+    llvm::Type *dtorTy =
+        dtorFuncTy->getPointerTo(getDataLayout().getProgramAddressSpace());
 
     // Destructor functions are run/unregistered in non-ascending
     // order of their priorities.
@@ -2754,7 +2755,8 @@ void CodeGenModule::registerGlobalDtorsWithAtExit() {
       } else {
         // Get the destructor function type, void(*)(void).
         llvm::Type *dtorTy =
-            llvm::FunctionType::get(CGF.VoidTy, false)->getPointerTo();
+            llvm::FunctionType::get(CGF.VoidTy, false)
+                ->getPointerTo(getDataLayout().getProgramAddressSpace());
 
         // We're assuming that the destructor function is something we can
         // reasonably call with the correct CC.  Go ahead and cast it to the
