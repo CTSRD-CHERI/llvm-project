@@ -6242,6 +6242,12 @@ void OMPClauseWriter::VisitOMPDestroyClause(OMPDestroyClause *C) {
   Record.AddSourceLocation(C->getVarLoc());
 }
 
+void OMPClauseWriter::VisitOMPNovariantsClause(OMPNovariantsClause *C) {
+  VisitOMPClauseWithPreInit(C);
+  Record.AddStmt(C->getCondition());
+  Record.AddSourceLocation(C->getLParenLoc());
+}
+
 void OMPClauseWriter::VisitOMPPrivateClause(OMPPrivateClause *C) {
   Record.push_back(C->varlist_size());
   Record.AddSourceLocation(C->getLParenLoc());

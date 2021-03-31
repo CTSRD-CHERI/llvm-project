@@ -2292,6 +2292,10 @@ void OMPClauseEnqueue::VisitOMPDestroyClause(const OMPDestroyClause *C) {
     Visitor->AddStmt(C->getInteropVar());
 }
 
+void OMPClauseEnqueue::VisitOMPNovariantsClause(const OMPNovariantsClause *C) {
+  Visitor->AddStmt(C->getCondition());
+}
+
 void OMPClauseEnqueue::VisitOMPUnifiedAddressClause(
     const OMPUnifiedAddressClause *) {}
 
