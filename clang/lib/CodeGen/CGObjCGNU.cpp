@@ -4121,7 +4121,7 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
                          const ObjCIvarDecl *Ivar) {
   if (CGM.getLangOpts().ObjCRuntime.isNonFragile()) {
     Interface = FindIvarInterface(CGM.getContext(), Interface, Ivar);
-
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     // The MSVC linker cannot have a single global defined as LinkOnceAnyLinkage
     // and ExternalLinkage, so create a reference to the ivar global and rely on
     // the definition being created as part of GenerateClass.
@@ -4130,7 +4130,7 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
       return CGF.Builder.CreateZExtOrBitCast(
           CGF.Builder.CreateAlignedLoad(
               Int32Ty, CGF.Builder.CreateAlignedLoad(
-                           llvm::Type::getInt32PtrTy(VMContext),
+                           llvm::Type::getInt32PtrTy(VMContext, AS),
                            ObjCIvarOffsetVariable(Interface, Ivar),
                            CGF.getPointerAlign(), "ivar"),
               CharUnits::fromQuantity(4)),
@@ -4139,7 +4139,6 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
       Interface->getNameAsString() +"." + Ivar->getNameAsString();
     CharUnits Align = CGM.getIntAlign();
     llvm::Value *Offset = TheModule.getGlobalVariable(name);
-    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     if (!Offset) {
       auto GV = new llvm::GlobalVariable(TheModule, IntTy,
           false, llvm::GlobalValue::LinkOnceAnyLinkage,

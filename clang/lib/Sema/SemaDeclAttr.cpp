@@ -4661,8 +4661,10 @@ static void handleGlobalAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
 
 static void handleSensitiveAttr(Sema &S, Decl *D, const ParsedAttr &Attr) {
   // check the attribute arguments.
-  if (!checkAttributeNumArgs(S, Attr, 0))
+  if (!Attr.checkExactlyNumArgs(S, 0)) {
+    Attr.setInvalid();
     return;
+  }
 
 
   if (!isa<FunctionDecl>(D)) {

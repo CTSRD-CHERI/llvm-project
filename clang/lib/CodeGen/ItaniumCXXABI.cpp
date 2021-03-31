@@ -657,9 +657,9 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   // Apply the adjustment and cast back to the original struct type
   // for consistency.
   llvm::Value *This = ThisAddr.getPointer();
-  llvm::Value *Ptr = Builder.CreateBitCast(This, CGM.Int8PtrTy);
-  Ptr = Builder.CreateInBoundsGEP(Builder.getInt8Ty(), Ptr, Adj);
-  This = Builder.CreateBitCast(Ptr, This->getType(), "this.adjusted");
+  llvm::Value *VTableAddr = Builder.CreateBitCast(This, CGM.Int8PtrTy);
+  VTableAddr = Builder.CreateInBoundsGEP(Builder.getInt8Ty(), VTableAddr, Adj);
+  This = Builder.CreateBitCast(VTableAddr, This->getType(), "this.adjusted");
   ThisPtrForCall = This;
 
   // Load the function pointer.
@@ -1646,10 +1646,11 @@ ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF, Address This,
         CGF.Int32Ty, VBaseOffsetPtr, CharUnits::fromQuantity(4),
         "vbase.offset");
   } else {
-    VBaseOffsetPtr = CGF.Builder.CreateBitCast(
-        VBaseOffsetPtr,
-        IsPurecap ? CGM.Int8PtrPtrTy : CGM.PtrDiffTy->getPointerTo(DefaultAS));
-    llvm::Type *LoadTy = IsPurecap ? CGM.Int8PtrTy : CGM.PtrDiffTy;
+    llvm::Type *LoadTy = CGM.PtrDiffTy;
+    if (IsPurecap)
+      LoadTy = CGM.Int8PtrTy;
+    VBaseOffsetPtr = CGF.Builder.CreateBitCast(VBaseOffsetPtr,
+                                               LoadTy->getPointerTo(DefaultAS));
     VBaseOffset = CGF.Builder.CreateAlignedLoad(
         LoadTy, VBaseOffsetPtr, CGF.getPointerAlign(), "vbase.offset");
     if (IsPurecap)

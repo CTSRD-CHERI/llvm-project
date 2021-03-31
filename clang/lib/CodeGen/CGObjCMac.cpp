@@ -2104,7 +2104,7 @@ CGObjCMac::GenerateMessageSendSuper(CodeGen::CodeGenFunction &CGF,
                           CGF.Builder.CreateStructGEP(ObjCSuper, 0));
 
   // If this is a class message the metaclass is passed as the target.
-  llvm::Type *ClassTyPtr = llvm::PointerType::getUnqual(ObjCTypes.ClassTy);
+  llvm::Type *ClassTyPtr = ObjCTypes.ClassPtrTy;
   llvm::Value *Target;
   if (IsClassMessage) {
     if (isCategoryImpl) {
