@@ -92,6 +92,15 @@
 // CHECK-NEXT:     ]
 // CHECK-NEXT:     Section: .text (0x
 // CHECK-NEXT:   }
+// CHECK-NO-VERSION-SCRIPT-NEXT:  Symbol {
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Name: default_callback (
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Value:
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Size: 12
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Binding: Global (0x1)
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Type: Function (0x2)
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Other: 0
+// CHECK-NO-VERSION-SCRIPT-NEXT:    Section: .text (0x
+// CHECK-NO-VERSION-SCRIPT-NEXT:  }
 // CHECK-SHLIB-NEXT:  Symbol {
 // CHECK-SHLIB-NEXT:    Name: check_if_default (
 // CHECK-SHLIB-NEXT:    Value:
@@ -103,15 +112,6 @@
 // CHECK-SHLIB-NEXT:    ]
 // CHECK-SHLIB-NEXT:    Section: .text (0x
 // CHECK-SHLIB-NEXT:  }
-// CHECK-NO-VERSION-SCRIPT-NEXT:  Symbol {
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Name: default_callback (
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Value:
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Size: 12
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Binding: Global (0x1)
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Type: Function (0x2)
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Other: 0
-// CHECK-NO-VERSION-SCRIPT-NEXT:    Section: .text (0x
-// CHECK-NO-VERSION-SCRIPT-NEXT:  }
 // CHECK-NEXT: ]
 // __cap_relocs should be empty other than the one global reference to callbacks
 // CHECK-NEXT: CHERI __cap_relocs [

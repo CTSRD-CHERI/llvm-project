@@ -28,13 +28,13 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 .end __start
 
 # DYNAMIC-LABEL: SYMBOL TABLE:
+# DYNAMIC-NEXT: 0000000000000001 l       *ABS*		 0000000000000000 .hidden _HAS__DYNAMIC
+#                       ^----- _HAS__DYNAMIC == 1
 # DYNAMIC-PIE-NEXT:    00000000[[DYNAMIC_ADDR:[0-9a-f]+]] l       .dynamic  0000000000000000 .hidden _DYNAMIC
 # DYNAMIC-SHLIB-NEXT:  00000000[[DYNAMIC_ADDR:[0-9a-f]+]] l       .dynamic  0000000000000000 .hidden _DYNAMIC
 #                       ^----- _DYNAMIC == relocbase + 0x1f8/258
 # DYNAMIC-NONPIC-NEXT: 00000000[[DYNAMIC_ADDR:[0-9a-f]+]] l       .dynamic  0000000000000000 .hidden _DYNAMIC
 #                      ^----- absolute value for _DYNAMIC in non-pie executable with shlibs
-# DYNAMIC-NEXT: 0000000000000001 l       *ABS*		 0000000000000000 .hidden _HAS__DYNAMIC
-#                       ^----- _HAS__DYNAMIC == 1
 # DYNAMIC-NEXT: {{.+}}         .got		   0000000000000000 .hidden _gp
 
 # DYNAMIC-LABEL: Contents of section .data:
@@ -49,6 +49,7 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 # STATIC-LABEL: SYMBOL TABLE:
 # STATIC-NEXT: 0000000000000000 l       *ABS*		 0000000000000000 .hidden _HAS__DYNAMIC
 # STATIC-NEXT: {{.+}}         .got		 0000000000000000 .hidden _gp
+# STATIC-NEXT: {{.+}} g F     .text		 0000000000000004 __start
 # STATIC-NEXT: 0000000000000000  w      *UND*		 0000000000000000 _DYNAMIC
 # STATIC-LABEL: Contents of section .data:
 # STATIC-NEXT: 00000000 00000000 12345678 90abcdef

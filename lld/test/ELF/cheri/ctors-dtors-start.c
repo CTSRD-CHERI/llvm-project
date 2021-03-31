@@ -44,12 +44,12 @@ void __start(void) {
 // WITH-CTORS:       .ctors        00000008 [[#%x,CTORS_START:]] DATA
 // WITH-CTORS-LABEL: SYMBOL TABLE:
 // WITH-CTORS-NEXT:  0000000000000000 l df    *ABS* 0000000000000000 ctors-dtors-start.c
-// WITH-CTORS:  [[#CTORS_START + 8]]  l      .ctors 0000000000000000 .hidden __ctors_end
 // WITH-CTORS:  [[#CTORS_START + 0]] l      .ctors 0000000000000008 .hidden __ctors_start
+// WITH-CTORS:  [[#CTORS_START + 8]]  l      .ctors 0000000000000000 .hidden __ctors_end
 
 // EMPTY-CTORS-LABEL: Section
 // EMPTY-CTORS-NOT: .ctors
 // EMPTY-CTORS-LABEL: SYMBOL TABLE:
 // EMPTY-CTORS:  0000000000000000 l df    *ABS* 0000000000000000 ctors-dtors-start.c
-// EMPTY-CTORS:  [[#%x,CTORS_START:]] l       .text 0000000000000000 .hidden __ctors_end
-// EMPTY-CTORS:  [[#CTORS_START]] l       .text 0000000000000000 .hidden __ctors_start
+// EMPTY-CTORS:  [[#%x,CTORS_START:]] l  .text 0000000000000000 .hidden __ctors_start
+// EMPTY-CTORS:  [[#%x,CTORS_START]] l    .text 0000000000000000 .hidden __ctors_end

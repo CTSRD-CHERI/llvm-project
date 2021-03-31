@@ -12,7 +12,7 @@ __start:
 
 
 // CHECK:      Symbol {
-// CHECK:         Name: _CHERI_CAPABILITY_TABLE_ (35)
+// CHECK:         Name: _CHERI_CAPABILITY_TABLE_ ({{.+}})
 // CHECK-NEXT:    Value: 0x20{{3F0|400}}
 // CHECK-NEXT:    Size: [[#CAP_SIZE]]
 // CHECK-NEXT:    Binding: Local (0x0)
