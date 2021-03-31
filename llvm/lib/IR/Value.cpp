@@ -877,7 +877,7 @@ Align Value::getPointerAlignment(const DataLayout &DL) const {
     }
   } else if (auto *CstPtr = dyn_cast<Constant>(this)) {
     if (auto *CstInt = dyn_cast_or_null<ConstantInt>(ConstantExpr::getPtrToInt(
-            const_cast<Constant *>(CstPtr), DL.getIntPtrType(getType()),
+            const_cast<Constant *>(CstPtr), DL.getIndexType(getType()),
             /*OnlyIfReduced=*/true))) {
       size_t TrailingZeros = CstInt->getValue().countTrailingZeros();
       // While the actual alignment may be large, elsewhere we have
