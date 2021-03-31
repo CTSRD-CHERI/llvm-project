@@ -925,20 +925,20 @@ test_tailq_macros(void)
         TAILQ_INSERT_HEAD(&bufhead, bp, b_list);
         // default-remark@-1 2 {{setting sub-object bounds for field 'tqe_next' (pointer to 'struct bufarea *')}}
         // default-remark@-2 {{setting sub-object bounds for field 'tqh_first' (pointer to 'struct bufarea *')}}
-        // opt-out-remark-re@-3 2 {{not setting bounds for pointer to 'struct bufarea::(anonymous at {{.+}})' (base type declaration has opt-out attribute)}}
+        // opt-out-remark-re@-3 2 {{not setting bounds for pointer to 'struct bufarea::(unnamed at {{.+}})' (base type declaration has opt-out attribute)}}
         // opt-out-remark@-4 {{not setting bounds for pointer to 'struct buflist' (base type declaration has opt-out attribute)}}
 
         TAILQ_INSERT_TAIL(&bufhead, bp, b_list);
         // default-remark@-1 {{setting sub-object bounds for field 'tqe_next' (pointer to 'struct bufarea *')}}
-        // opt-out-remark-re@-2 {{not setting bounds for pointer to 'struct bufarea::(anonymous at {{.+}})' (base type declaration has opt-out attribute)}}
+        // opt-out-remark-re@-2 {{not setting bounds for pointer to 'struct bufarea::(unnamed at {{.+}})' (base type declaration has opt-out attribute)}}
 
         TAILQ_INSERT_BEFORE(bp2, bp, b_list);
         // default-remark@-1 {{setting sub-object bounds for field 'tqe_next' (pointer to 'struct bufarea *')}}
-        // opt-out-remark-re@-2 {{not setting bounds for pointer to 'struct bufarea::(anonymous at {{.+}})' (base type declaration has opt-out attribute)}}
+        // opt-out-remark-re@-2 {{not setting bounds for pointer to 'struct bufarea::(unnamed at {{.+}})' (base type declaration has opt-out attribute)}}
 
         TAILQ_INSERT_AFTER(&bufhead, bp2, bp, b_list);
         // default-remark@-1 3 {{setting sub-object bounds for field 'tqe_next' (pointer to 'struct bufarea *')}}
-        // opt-out-remark-re@-2 3 {{not setting bounds for pointer to 'struct bufarea::(anonymous at {{.+}})' (base type declaration has opt-out attribute)}}
+        // opt-out-remark-re@-2 3 {{not setting bounds for pointer to 'struct bufarea::(unnamed at {{.+}})' (base type declaration has opt-out attribute)}}
 
         TAILQ_SWAP(&bufhead, &bufhead2, bufarea, b_list);
         // default-remark@-1 4 {{setting sub-object bounds for field 'tqh_first' (pointer to 'struct bufarea *')}}

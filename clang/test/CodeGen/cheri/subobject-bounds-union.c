@@ -67,9 +67,9 @@ void test2(union WithNestedStruct* un) {
   // very-aggressive-remark@-2{{setting sub-object bounds for field 'b' (pointer to 'int') to 4 bytes}}
   // But using the immediate children of the union should not
   call(&un->nested);
-  // aggressive-remark-re@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'struct (anonymous struct at {{.+}}subobject-bounds-union.c:53:3)' for subobject bounds on union member}}
-  // aggressive-remark-re@-2{{setting sub-object bounds for pointer to 'struct (anonymous struct at {{.+}}subobject-bounds-union.c:53:3)' to 64 bytes}}
-  // very-aggressive-remark-re@-3{{setting sub-object bounds for field 'nested' (pointer to 'struct (anonymous struct at {{.+}}subobject-bounds-union.c:53:3)') to 8 bytes}}
+  // aggressive-remark-re@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'struct (unnamed struct at {{.+}}subobject-bounds-union.c:53:3)' for subobject bounds on union member}}
+  // aggressive-remark-re@-2{{setting sub-object bounds for pointer to 'struct (unnamed struct at {{.+}}subobject-bounds-union.c:53:3)' to 64 bytes}}
+  // very-aggressive-remark-re@-3{{setting sub-object bounds for field 'nested' (pointer to 'struct (unnamed struct at {{.+}}subobject-bounds-union.c:53:3)') to 8 bytes}}
   call(&un->buffer);
   // aggressive-remark@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'char [64]' for subobject bounds on union member}}
   // aggressive-remark@-2{{setting sub-object bounds for pointer to 'char [64]' to 64 bytes}}

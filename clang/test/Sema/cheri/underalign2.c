@@ -36,7 +36,7 @@ with_cap_td2 b_td2;
 
 // annotation on a variable also sets alignemnt
 __attribute__((__aligned__(2))) struct { int i; } no_caps_global_align2;
-__attribute__((__aligned__(2))) struct { int *__capability i; } with_cap_global_align2; // expected-warning-re{{alignment (2) of 'struct (anonymous struct at {{.+}}' is less than the required capability alignment}}
+__attribute__((__aligned__(2))) struct { int *__capability i; } with_cap_global_align2; // expected-warning-re{{alignment (2) of 'struct (unnamed struct at {{.+}}' is less than the required capability alignment}}
 // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 // CHECK: @no_caps_global_align2 = dso_local [[$GLOBALS_AS]]global %struct.anon zeroinitializer, align 2
 // CHECK: @with_cap_global_align2 = dso_local [[$GLOBALS_AS]]global %struct.anon.0 zeroinitializer, align 2
