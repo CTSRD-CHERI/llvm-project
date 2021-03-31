@@ -4,7 +4,7 @@
 // RUN: %clang -target cheri -mabi=purecap -### -c %s 2>&1 | FileCheck %s -check-prefix EXCEPTIONS
 // RUN: %clang -target cheri -mabi=purecap -fexceptions -### -c %s 2>&1 | FileCheck %s -check-prefix EXCEPTIONS
 // RUN: %clang -target cheri -mabi=purecap -fno-exceptions -### -c %s 2>&1 | FileCheck %s -check-prefix NO_EXCEPTIONS
-// RUN: %clang -target cheri -mabi=purecap -fno-rtti -fno-exceptions -### -c %s 2>&1 | FileCheck %s -check-prefixes NO_EXCEPTION,NO_RTTI
+// RUN: %clang -target cheri -mabi=purecap -fno-rtti -fno-exceptions -### -c %s 2>&1 | FileCheck %s -check-prefixes NO_EXCEPTIONS,NO_RTTI
 
 // EXCEPTIONS: -fcxx-exceptions
 // EXCEPTIONS: -fexceptions
