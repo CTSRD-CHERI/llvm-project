@@ -177,6 +177,13 @@ CallInst *IRBuilderBase::CreateMemTransferInst(
   Type *Tys[] = { Dst->getType(), Src->getType(), Size->getType() };
   Module *M = BB->getParent()->getParent();
   Function *TheFn = Intrinsic::getDeclaration(M, IntrID, Tys);
+  // TODO: Should do this for all pointers not just CHERI capabilities but that
+  // breaks some upstream tests.
+  if (M->getDataLayout().isFatPointer(Tys[0]) &&
+      Tys[2] != M->getDataLayout().getIndexType(Tys[0])) {
+    report_fatal_error("Created bad MemTransfer intrinsic: " + TheFn->getName(),
+                       false);
+  }
 
   CallInst *CI = createCallHelper(TheFn, Ops, this);
 
@@ -280,6 +287,13 @@ CallInst *IRBuilderBase::CreateMemMove(Value *Dst, MaybeAlign DstAlign,
   Type *Tys[] = { Dst->getType(), Src->getType(), Size->getType() };
   Module *M = BB->getParent()->getParent();
   Function *TheFn = Intrinsic::getDeclaration(M, Intrinsic::memmove, Tys);
+  // TODO: Should do this for all pointers not just CHERI capabilities but that
+  // breaks some upstream tests.
+  if (M->getDataLayout().isFatPointer(Tys[0]) &&
+      Tys[2] != M->getDataLayout().getIndexType(Tys[0])) {
+    report_fatal_error("Created bad MemTransfer intrinsic: " + TheFn->getName(),
+                       false);
+  }
 
   CallInst *CI = createCallHelper(TheFn, Ops, this);
 
