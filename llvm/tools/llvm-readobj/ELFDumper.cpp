@@ -2057,7 +2057,7 @@ void printFlags(T Value, ArrayRef<EnumEntry<TFlag>> Flags, raw_ostream &OS) {
     RemainingBits &= ~Flag.Value;
   }
   if (RemainingBits) {
-    OS << "| 0x" << utohexstr(RemainingBits, false);
+    OS << "| 0x" << utohexstr(RemainingBits, false) << " ";
   }
 }
 
