@@ -1087,6 +1087,9 @@ bool RISCVDAGToDAGISel::SelectCapFI(SDValue Cap, SDValue &Base) {
 bool RISCVDAGToDAGISel::SelectBaseAddr(SDValue Addr, SDValue &Base) {
   // If this is FrameIndex, select it directly. Otherwise just let it get
   // selected to a register independently.
+  if (Addr.getValueType().isFatPointer())
+    return false;
+  assert(Addr.getValueType().isInteger() || Addr.getValueType() == MVT::iPTR);
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr))
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
   else
