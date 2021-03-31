@@ -773,7 +773,7 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
         VFPAddr = CGF.Builder.CreateBitCast(
             VFPAddr, FTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS));
         VirtualFn = CGF.Builder.CreateAlignedLoad(
-            FTy->getPointerTo(), VFPAddr, CGF.getPointerAlign(),
+            FTy->getPointerTo(DefaultAS), VFPAddr, CGF.getPointerAlign(),
             "memptr.virtualfn");
       }
     }
@@ -1519,7 +1519,8 @@ llvm::Value *ItaniumCXXABI::EmitTypeid(CodeGenFunction &CGF,
         {Value, llvm::ConstantInt::get(CGM.Int32Ty, -4)});
 
     // Setup to dereference again since this is a proxy we accessed.
-    Value = CGF.Builder.CreateBitCast(Value, StdTypeInfoPtrTy->getPointerTo());
+    Value = CGF.Builder.CreateBitCast(
+        Value, StdTypeInfoPtrTy->getPointerTo(DefaultAS));
   } else {
     // Load the type info.
     Value = CGF.Builder.CreateConstInBoundsGEP1_64(Value, -1ULL);
@@ -1991,9 +1992,8 @@ CGCallee ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
           CGF.Builder.CreateBitCast(VTable, Ty->getPointerTo(AS)->getPointerTo(AS));
       llvm::Value *VTableSlotPtr =
           CGF.Builder.CreateConstInBoundsGEP1_64(VTable, VTableIndex, "vfn");
-      VFuncLoad =
-          CGF.Builder.CreateAlignedLoad(Ty->getPointerTo(), VTableSlotPtr,
-                                        CGF.getPointerAlign());
+      VFuncLoad = CGF.Builder.CreateAlignedLoad(
+          Ty->getPointerTo(AS), VTableSlotPtr, CGF.getPointerAlign());
     }
 
     // Add !invariant.load md to virtual function load to indicate that
