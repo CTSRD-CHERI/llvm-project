@@ -561,12 +561,9 @@ Value *LibCallSimplifier::optimizeStrCpy(CallInst *CI, IRBuilderBase &B) {
 
   // We have enough information to now generate the memcpy call to do the
   // copy for us.  Make a memcpy to copy the nul byte with align = 1.
-  CallInst *NewCI = B.CreateMemCpy(
-      Dst, Align(1), Src, Align(1),
-      ConstantInt::get(
-          DL.getIntPtrType(CI->getContext(),
-                           Dst->getType()->getPointerAddressSpace()),
-          Len));
+  CallInst *NewCI =
+      B.CreateMemCpy(Dst, Align(1), Src, Align(1),
+                     ConstantInt::get(DL.getIndexType(Dst->getType()), Len));
   NewCI->setAttributes(CI->getAttributes());
   NewCI->removeAttributes(AttributeList::ReturnIndex,
                           AttributeFuncs::typeIncompatible(NewCI->getType()));
