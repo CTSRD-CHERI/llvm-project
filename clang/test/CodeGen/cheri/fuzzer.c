@@ -16,10 +16,10 @@ extern int fail2(void);
 // Check that the globals have the right type
 // UTC_ARGS: --disable
 // MIPS: @__sancov_lowest_stack = external thread_local(initialexec) global i64
-// MIPS: @__sancov_gen_ = private global [1 x i8] zeroinitializer, section "__sancov_cntrs", comdat($main), align 1, !associated !0
-// MIPS: @__sancov_gen_.1 = private constant [2 x i64] [i64 ptrtoint (i32 ()* @main to i64), i64 1], section "__sancov_pcs", comdat($main), align 8, !associated !0
-// MIPS: @__sancov_gen_.2 = private global [4 x i8] zeroinitializer, section "__sancov_cntrs", comdat($func2), align 1, !associated !1
-// MIPS: @__sancov_gen_.3 = private constant [8 x i64] [i64 ptrtoint (i32 (i32)* @func2 to i64), i64 1, i64 ptrtoint (i8* blockaddress(@func2, %if.then) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.then2) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.end4) to i64), i64 0], section "__sancov_pcs", comdat($func2), align 8, !associated !1
+// MIPS: @__sancov_gen_ = private global [1 x i8] zeroinitializer, section "__sancov_cntrs", comdat($main), align 1{{$}}
+// MIPS: @__sancov_gen_.1 = private constant [2 x i64] [i64 ptrtoint (i32 ()* @main to i64), i64 1], section "__sancov_pcs", comdat($main), align 8{{$}}
+// MIPS: @__sancov_gen_.2 = private global [4 x i8] zeroinitializer, section "__sancov_cntrs", comdat($func2), align 1{{$}}
+// MIPS: @__sancov_gen_.3 = private constant [8 x i64] [i64 ptrtoint (i32 (i32)* @func2 to i64), i64 1, i64 ptrtoint (i8* blockaddress(@func2, %if.then) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.then2) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.end4) to i64), i64 0], section "__sancov_pcs", comdat($func2), align 8{{$}}
 // MIPS: @__start___sancov_cntrs = external hidden global i8
 // MIPS: @__stop___sancov_cntrs = external hidden global i8
 // MIPS: @llvm.global_ctors = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 2, void ()* @sancov.module_ctor_8bit_counters, i8* bitcast (void ()* @sancov.module_ctor_8bit_counters to i8*) }]
@@ -29,15 +29,15 @@ extern int fail2(void);
 
 // These should all be in AS200:
 // PURECAP: @__sancov_lowest_stack = external thread_local(initialexec) addrspace(200) global i64
-// PURECAP: @__sancov_gen_ = private addrspace(200) global [1 x i8] zeroinitializer, section "__sancov_cntrs", comdat($main), align 1, !associated !0
-// PURECAP: @__sancov_gen_.1 = private addrspace(200) constant [2 x i64] [i64 ptrtoint (i32 () addrspace(200)* @main to i64), i64 1], section "__sancov_pcs", comdat($main), align 8, !associated !0
-// PURECAP: @__sancov_gen_.2 = private addrspace(200) global [4 x i8] zeroinitializer, section "__sancov_cntrs", comdat($func2), align 1, !associated !1
+// PURECAP: @__sancov_gen_ = private addrspace(200) global [1 x i8] zeroinitializer, section "__sancov_cntrs", comdat($main), align 1{{$}}
+// PURECAP: @__sancov_gen_.1 = private addrspace(200) constant [2 x i64] [i64 ptrtoint (i32 () addrspace(200)* @main to i64), i64 1], section "__sancov_pcs", comdat($main), align 8{{$}}
+// PURECAP: @__sancov_gen_.2 = private addrspace(200) global [4 x i8] zeroinitializer, section "__sancov_cntrs", comdat($func2), align 1{{$}}
 // PURECAP: @__sancov_gen_.3 = private addrspace(200) constant [8 x i64] [
 // PURECAP-SAME:   i64 ptrtoint (i32 (i32) addrspace(200)* @func2 to i64), i64 1,
 // PURECAP-SAME:   i64 ptrtoint (i8 addrspace(200)* blockaddress(@func2, %if.then) to i64), i64 0,
 // PURECAP-SAME:   i64 ptrtoint (i8 addrspace(200)* blockaddress(@func2, %if.then2) to i64), i64 0,
 // PURECAP-SAME:   i64 ptrtoint (i8 addrspace(200)* blockaddress(@func2, %if.end4) to i64), i64 0],
-// PURECAP-SAME: section "__sancov_pcs", comdat($func2), align 8, !associated !1
+// PURECAP-SAME: section "__sancov_pcs", comdat($func2), align 8{{$}}
 // PURECAP: @__start___sancov_cntrs = external hidden addrspace(200) global i8
 // PURECAP: @__stop___sancov_cntrs = external hidden addrspace(200) global i8
 // PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void () addrspace(200)*, i8 addrspace(200)* }] [{ i32, void () addrspace(200)*, i8 addrspace(200)* } { i32 2, void () addrspace(200)* @sancov.module_ctor_8bit_counters, i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor_8bit_counters to i8 addrspace(200)*) }]
