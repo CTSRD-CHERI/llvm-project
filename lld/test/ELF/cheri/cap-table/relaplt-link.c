@@ -79,7 +79,7 @@
 // AMD64-SHLIB-NEXT:    0x{{.+}} R_X86_64_JUMP_SLOT extern_function 0x0
 // AMD64-SHLIB-NEXT: }
 
-// RUN: llvm-strip -o /dev/stdout %t-amd64.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix AMD64-STRIPPED
+// RUN: llvm-strip -o - %t-amd64.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix AMD64-STRIPPED
 // AMD64-STRIPPED: SectionHeaderCount: 13
 
 
@@ -154,7 +154,7 @@
 // PURECAP-SHLIB-NEXT:    R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function{{$}}
 // PURECAP-SHLIB-NEXT:  }
 
-// RUN: llvm-strip -o /dev/stdout %t.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix PURECAP-STRIPPED
+// RUN: llvm-strip -o - %t.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix PURECAP-STRIPPED
 // PURECAP-STRIPPED: SectionHeaderCount: 15
 
 

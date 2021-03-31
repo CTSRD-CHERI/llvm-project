@@ -1,13 +1,13 @@
 /// Check that we use the lib64 directory if it is available
 // RUN: %cheri_clang -no-canonical-prefixes \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID64,HYBRID-MIPS128 %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID64 %s
 // RUN: %riscv32_cheri_clang -no-canonical-prefixes \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID32,HYBRID-RISCV32 %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID32 %s
 // RUN: %riscv64_cheri_clang -no-canonical-prefixes \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID64,HYBRID-RISCV64 %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID64 %s
 // CHECK-CHERI-HYBRID: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
 // TODO: should probably set /libexec/ld-elf64.so.1
 // CHECK-CHERI-HYBRID: "-dynamic-linker" "/libexec/ld-elf.so.1"
@@ -22,13 +22,13 @@
 /// Purecap should never look at lib64:
 // RUN: %cheri_purecap_clang -no-canonical-prefixes -no-pie \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP,CHECK-CHERI-PURECAP64,PURECAP-MIPS128 %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP %s
 // RUN: %riscv32_cheri_purecap_clang -no-canonical-prefixes -no-pie \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP,CHECK-CHERI-PURECAP32,PURECAP-RISCV32 %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP %s
 // RUN: %riscv64_cheri_purecap_clang -no-canonical-prefixes -no-pie \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP,CHECK-CHERI-PURECAP64,PURECAP-RISCV64 %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP %s
 // PURECAP-MIPS128: "-cc1" "-triple" "mips64c{{128|256}}-unknown-freebsd-purecap"
 // PURECAP-MIPS128: "-target-abi" "purecap"
 // PURECAP-RISCV32: "-cc1" "-triple" "riscv32-unknown-freebsd"

@@ -295,8 +295,8 @@
 
 
 // RUN: %cheri128_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI-MIPS,CHERI128 %s
-// RUN: %riscv64_cheri_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI-RISCV,CHERI128 %s
-// RUN: %riscv32_cheri_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI-RISCV,CHERI64 %s
+// RUN: %riscv64_cheri_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI-RISCV64,CHERI128 %s
+// RUN: %riscv32_cheri_cc1 -fgnuc-version=4.2.1 -E -dM -ffreestanding < /dev/null | FileCheck -check-prefixes CHERI-COMMON,CHERI-RISCV32,CHERI64 %s
 
 // CHERI-MIPS: #define MIPSEB 1
 // CHERI-MIPS-NEXT:   #define _ABI64 3
@@ -376,6 +376,8 @@
 // CHERI64-NEXT:      #define __UINTPTR_WIDTH__ 32
 // CHERI-COMMON:      #define __capability __attribute__((cheri_capability))
 // CHERI-COMMON-NEXT: #define __clang__ 1
+// CHERI-RISCV32: #define __riscv_clen 64
+// CHERI-RISCV64: #define __riscv_clen 128
 
 // RUN: %cheri_cc1 -E -dM -ffreestanding -triple=mips64-none-none -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-PURECAP %s
 // CHERI128-PURECAP: #define _MIPS_FPSET 32

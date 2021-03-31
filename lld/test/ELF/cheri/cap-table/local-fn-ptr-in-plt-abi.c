@@ -19,7 +19,7 @@
 
 // Should not build with the --building-freebsd-rtld flag
 // Check that we emit a R_CHERI_CAPABILITY relocation instead of __cap_relocs for shlib/pie/dynamically linked exe
-// RUN: ld.lld -shared %t.o %t-shlib.so -o %t.so  --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefixes VERBOSE-MSG,SHLIB-MSG
+// RUN: ld.lld -shared %t.o %t-shlib.so -o %t.so  --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefixes VERBOSE-MSG
 // RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.so | FileCheck %s --check-prefixes CHECK,CHECK-SHLIB
 // RUN: ld.lld -pie %t.o %t-shlib.so -o %t-pie.exe --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefixes VERBOSE-MSG,EXE-MSG
 // RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-pie.exe | FileCheck %s --check-prefixes CHECK,CHECK-NODYN

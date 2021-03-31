@@ -9,11 +9,11 @@
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -preemptible-caprelocs=legacy -pie -Bdynamic %t.o -o %t-dynamic.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
-// RUN: llvm-readobj --cap-relocs -t -s --sd -r %t-dynamic.exe | FileCheck --check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
+// RUN: llvm-readobj --cap-relocs -t -s --sd -r %t-dynamic.exe | FileCheck --check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 
 // Look at shared libraries:
 // RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
-// RUN: llvm-readobj --cap-relocs -t -s --sd -r %t.so | FileCheck --check-prefixes DUMP-CAPRELOCS,SHLIB,SHLIB-RELOCS %s
+// RUN: llvm-readobj --cap-relocs -t -s --sd -r %t.so | FileCheck --check-prefixes DUMP-CAPRELOCS,SHLIB %s
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
 

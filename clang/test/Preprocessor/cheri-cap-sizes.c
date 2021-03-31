@@ -28,7 +28,7 @@
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=128 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,CHERI128 -DARCHNAME=MIPS3 %s
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=128 \
-// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,128 -DARCHNAME=MIPS3 %s
+// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS,CHERI128 -DARCHNAME=MIPS3 %s
 
 
 // MIPS: #define _MIPS_ARCH_CHERI128 1
