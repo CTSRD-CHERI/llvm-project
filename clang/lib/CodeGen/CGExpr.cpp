@@ -6271,7 +6271,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       // isn't declared.
       DeclarationName DN(ClsAttr->getDefaultClass());
       auto *TU = CGM.getContext().getTranslationUnitDecl();
-      auto Cls = cast<VarDecl>(TU->lookup(DN)[0]);
+      auto Cls = TU->lookup(DN).find_first<VarDecl>();
       llvm::Value *V = CGM.GetAddrOfGlobalVar(Cls);
       auto ClsTy = Cls->getType();
       llvm::Type *RealVarTy = getTypes().ConvertTypeForMem(ClsTy);

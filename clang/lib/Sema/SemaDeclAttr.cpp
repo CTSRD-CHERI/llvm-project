@@ -2205,12 +2205,13 @@ static void handleCHERIMethodClass(Sema &S, Decl *D, const ParsedAttr &Attr) {
   DeclarationName DN(II);
   auto *TU = S.Context.getTranslationUnitDecl();
   auto Lookup = TU->lookup(DN);
-  if (!((Lookup.size() == 1) && isa<VarDecl>(Lookup[0]))) {
+  if (Lookup.empty() || !Lookup.isSingleResult() ||
+      !isa<VarDecl>(*Lookup.begin())) {
     S.Diag(Attr.getLoc(), diag::err_cheri_method_class_must_exist)
-      << Attr.getAttrName() << Attr.getRange();
+        << Attr.getAttrName() << Attr.getRange();
     return;
   }
-  auto Cls = cast<VarDecl>(Lookup[0]);
+  auto Cls = Lookup.find_first<VarDecl>();
   auto ClsTy = Cls->getType().getDesugaredType(S.Context);
   bool isValid = false;
   // Check that this type is a struct containing exactly two capability fields
