@@ -198,8 +198,8 @@ CallInst *IRBuilderBase::CreateMemTransferInst(
   // breaks some upstream tests.
   if (M->getDataLayout().isFatPointer(Tys[0]) &&
       Tys[2] != M->getDataLayout().getIndexType(Tys[0])) {
-    report_fatal_error("Created bad MemTransfer intrinsic: " + TheFn->getName(),
-                       false);
+    report_fatal_error("Created bad MemTransfer intrinsic: " +
+                       TheFn->getName());
   }
 
   CallInst *CI = createCallHelper(TheFn, Ops, this);
