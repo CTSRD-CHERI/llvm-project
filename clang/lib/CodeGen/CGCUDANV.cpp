@@ -337,9 +337,9 @@ void CGNVCUDARuntime::emitDeviceStubBodyNew(CodeGenFunction &CGF,
   auto LaunchKernelName = addPrefixToName("LaunchKernel");
   IdentifierInfo &cudaLaunchKernelII =
       CGM.getContext().Idents.get(LaunchKernelName);
-  FunctionDecl *cudaLaunchKernelFD = nullptr;
-  for (const auto &Result : DC->lookup(&cudaLaunchKernelII)) {
-    if (FunctionDecl *FD = dyn_cast<FunctionDecl>(Result))
+  const FunctionDecl *cudaLaunchKernelFD = nullptr;
+  for (const auto *Result : DC->lookup(&cudaLaunchKernelII)) {
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(Result))
       cudaLaunchKernelFD = FD;
   }
 
@@ -349,7 +349,7 @@ void CGNVCUDARuntime::emitDeviceStubBodyNew(CodeGenFunction &CGF,
     return;
   }
   // Create temporary dim3 grid_dim, block_dim.
-  ParmVarDecl *GridDimParam = cudaLaunchKernelFD->getParamDecl(1);
+  const ParmVarDecl *GridDimParam = cudaLaunchKernelFD->getParamDecl(1);
   QualType Dim3Ty = GridDimParam->getType();
   Address GridDim =
       CGF.CreateMemTemp(Dim3Ty, CharUnits::fromQuantity(8), "grid_dim");
