@@ -223,7 +223,7 @@ define void @test9(%struct_type* %a) {
 ; ALL-NEXT:    ret void
 ;
 entry:
-  %inalloca.save = call i8* @llvm.stacksave.p0i8()
+  %inalloca.save = call i8* @llvm.stacksave()
   %argmem = alloca inalloca <{ %struct_type }>
   %0 = getelementptr inbounds <{ %struct_type }>, <{ %struct_type }>* %argmem, i32 0, i32 0
   %1 = bitcast %struct_type* %0 to i8*

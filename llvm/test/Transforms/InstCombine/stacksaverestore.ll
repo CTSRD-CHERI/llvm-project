@@ -2,28 +2,28 @@
 
 @glob = global i32 0
 
-declare i8* @llvm.stacksave.p0i8()
-declare void @llvm.stackrestore.p0i8(i8*)
+declare i8* @llvm.stacksave()
+declare void @llvm.stackrestore(i8*)
 
-;; Test that llvm.stackrestore.p0i8 is removed when possible.
+;; Test that llvm.stackrestore is removed when possible.
 define i32* @test1(i32 %P) {
 	%tmp = call i8* @llvm.stacksave( )
-	call void @llvm.stackrestore.p0i8( i8* %tmp ) ;; not restoring anything
+	call void @llvm.stackrestore( i8* %tmp ) ;; not restoring anything
 	%A = alloca i32, i32 %P
 	ret i32* %A
 }
 
 ; CHECK-LABEL: define i32* @test1(
-; CHECK-NOT: call void @llvm.stackrestore.p0i8
+; CHECK-NOT: call void @llvm.stackrestore
 ; CHECK: ret i32*
 
 define void @test2(i8* %X) {
-	call void @llvm.stackrestore.p0i8( i8* %X )  ;; no allocas before return.
+	call void @llvm.stackrestore( i8* %X )  ;; no allocas before return.
 	ret void
 }
 
 ; CHECK-LABEL: define void @test2(
-; CHECK-NOT: call void @llvm.stackrestore.p0i8
+; CHECK-NOT: call void @llvm.stackrestore
 ; CHECK: ret void
 
 define void @foo(i32 %size) nounwind  {
@@ -80,18 +80,18 @@ entry:
 
 loop:
   %i = phi i32 [0, %entry], [%i1, %loop]
-  %save1 = call i8* @llvm.stacksave.p0i8()
+  %save1 = call i8* @llvm.stacksave()
   %argmem = alloca inalloca i32
   store i32 0, i32* %argmem
   call void @inalloca_callee(i32* inalloca(i32) %argmem)
 
   ; This restore cannot be deleted, the restore below does not make it dead.
-  call void @llvm.stackrestore.p0i8(i8* %save1)
+  call void @llvm.stackrestore(i8* %save1)
 
   ; FIXME: We should be able to remove this save/restore pair, but we don't.
-  %save2 = call i8* @llvm.stacksave.p0i8()
+  %save2 = call i8* @llvm.stacksave()
   store i32 0, i32* @glob
-  call void @llvm.stackrestore.p0i8(i8* %save2)
+  call void @llvm.stackrestore(i8* %save2)
   %i1 = add i32 1, %i
   %done = icmp eq i32 %i1, %c
   br i1 %done, label %loop, label %return
