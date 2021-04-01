@@ -426,8 +426,8 @@ class LLVMConfig(object):
         cheri128_args = [triple_opt + '=mips64-unknown-freebsd', '-mcpu=cheri128', '-mattr=+cheri128'] + extra_args
         riscv32_cheri_args = [triple_opt + '=riscv32-unknown-freebsd', '-mattr=+xcheri'] + extra_args
         riscv64_cheri_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+xcheri'] + extra_args
-        riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64', '-mattr=+cap-mode'] + riscv32_cheri_args
-        riscv64_cheri_purecap_args = ['-target-abi', 'l64pc128', '-mattr=+cap-mode'] + riscv64_cheri_args
+        riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64d', '-mattr=+cap-mode'] + riscv32_cheri_args
+        riscv64_cheri_purecap_args = ['-target-abi', 'l64pc128d', '-mattr=+cap-mode'] + riscv64_cheri_args
 
         assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
         default_args = cheri128_args
