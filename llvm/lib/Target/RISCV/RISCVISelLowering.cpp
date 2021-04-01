@@ -746,7 +746,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   setMinFunctionAlignment(FunctionAlignment);
   setPrefFunctionAlignment(FunctionAlignment);
 
-  setMinimumJumpTableEntries(5);
+  // FIXME: Jump tables are not implemented yet for purecap.
+  setMinimumJumpTableEntries(RISCVABI::isCheriPureCapABI(ABI) ? UINT_MAX : 5);
 
   // Jumps are expensive, compared to logic
   setJumpIsExpensive();
