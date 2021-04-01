@@ -2,7 +2,7 @@
 ; Test that the strcpy library call simplifier also works when the string
 ; libcall arguments are in a non-zero address space.
 ; RUN: opt < %s -instcombine -S | FileCheck %s
-target datalayout = "e-m:e-p200:128:128:128:64-p:64:64-A200-P200-G200"
+target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-A200-P200-G200"
 
 @str = private unnamed_addr addrspace(200) constant [17 x i8] c"exactly 16 chars\00", align 1
 
@@ -13,9 +13,9 @@ declare i8 addrspace(200)* @stpncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64)
 
 define void @test_strcpy_to_memcpy(i8 addrspace(200)* %dst) addrspace(200) nounwind {
 ; CHECK-LABEL: define {{[^@]+}}@test_strcpy_to_memcpy
-; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) [[ATTR0:#.*]] {
+; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    call addrspace(200) void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef align 1 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef align 1 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false)
+; CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false)
 ; CHECK-NEXT:    ret void
 ;
 entry:
@@ -25,9 +25,9 @@ entry:
 
 define void @test_stpcpy_to_memcpy(i8 addrspace(200)* %dst) addrspace(200) nounwind {
 ; CHECK-LABEL: define {{[^@]+}}@test_stpcpy_to_memcpy
-; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) [[ATTR0]] {
+; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    call addrspace(200) void @llvm.memcpy.p200i8.p200i8.i128(i8 addrspace(200)* noundef align 1 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef align 1 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i128 17, i1 false)
+; CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false)
 ; CHECK-NEXT:    ret void
 ;
 entry:
@@ -37,9 +37,9 @@ entry:
 
 define void @test_strncpy_to_memcpy(i8 addrspace(200)* %dst) addrspace(200) nounwind {
 ; CHECK-LABEL: define {{[^@]+}}@test_strncpy_to_memcpy
-; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) [[ATTR0]] {
+; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    call addrspace(200) void @llvm.memcpy.p200i8.p200i8.i128(i8 addrspace(200)* noundef align 1 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef align 1 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i128 17, i1 false)
+; CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false)
 ; CHECK-NEXT:    ret void
 ;
 entry:
@@ -50,9 +50,9 @@ entry:
 ; Note: stpncpy is not handled by SimplifyLibcalls yet, so this should not be changed.
 define void @test_stpncpy_to_memcpy(i8 addrspace(200)* %dst) addrspace(200) nounwind {
 ; CHECK-LABEL: define {{[^@]+}}@test_stpncpy_to_memcpy
-; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) [[ATTR0]] {
+; CHECK-SAME: (i8 addrspace(200)* [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[CALL:%.*]] = call addrspace(200) i8 addrspace(200)* @stpncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17)
+; CHECK-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17)
 ; CHECK-NEXT:    ret void
 ;
 entry:
