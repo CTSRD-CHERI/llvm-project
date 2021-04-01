@@ -2745,6 +2745,12 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   }
 
   if (ABI.IsCheriPureCap()) {
+    if (GVTy->getPointerAddressSpace() == 0) {
+      // We used to support a legacy ABI with globals in AS0, but this is now
+      // invalid IR. Report a useful error message and exit instead of crashing.
+      report_fatal_error("Found global " + GV->getName() +
+                         "in address space 0. Please fix the input IR");
+    }
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() || DAG.getDataLayout().isFatPointer(GVTy);
     EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
@@ -2765,15 +2771,6 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         report_fatal_error("Found function " + GV->getName() +
                            " not in AS200. Compiling old IR?");
         CanUseCapTable = true;
-      }
-    }
-    if (!CanUseCapTable && !GV->isThreadLocal()) {
-      if (GVTy->getPointerAddressSpace() == 0) {
-        errs() << "warning: Found global in default address space: "
-               << GV->getName()
-               << ". This should not happen, assuming it is AS200 for now\n";
-        CanUseCapTable = true;
-        Ty = CapType;  // Ensure that we load a capability and not an i64
       }
     }
     if (CanUseCapTable) {
