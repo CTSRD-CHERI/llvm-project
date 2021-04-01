@@ -451,7 +451,7 @@ def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$
   "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (CapSubsetTest CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
 
 // Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason
-multiclass UseCNullPatterns<PatFrag NullPat> {
+multiclass UseCNullPatterns<dag NullPat> {
   def : Pat<(ptradd NullPat, (i64 0)), (COPY CNULL)>;
   def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_offset_set NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;

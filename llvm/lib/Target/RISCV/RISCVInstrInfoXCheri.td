@@ -1264,7 +1264,7 @@ class PseudoCheriAMO : Pseudo<(outs GPR:$res, GPR:$scratch),
   let hasSideEffects = 0;
 }
 
-multiclass PseudoCheriAMOPat<string AtomicOp, string BaseInst> {
+multiclass PseudoCheriAMOPat<string AtomicOp, Instruction BaseInst> {
   def : Pat<(!cast<PatFrag>(AtomicOp#"_monotonic") GPCR:$addr, GPR:$incr),
             (BaseInst GPCR:$addr, GPR:$incr, 2)>;
   def : Pat<(!cast<PatFrag>(AtomicOp#"_acquire") GPCR:$addr, GPR:$incr),
