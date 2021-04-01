@@ -491,8 +491,8 @@ bool foldFuncPtrAndConstToNull(LLVMContext &Context, Module *TheModule,
                                MaybeAlign FunctionAlign = llvm::None) {
   Type *VoidType(Type::getVoidTy(Context));
   FunctionType *FuncType(FunctionType::get(VoidType, false));
-  Function *Func(
-      Function::Create(FuncType, GlobalValue::ExternalLinkage, "", TheModule));
+  Function *Func(Function::Create(FuncType, GlobalValue::ExternalLinkage, 0, "",
+                                  TheModule));
 
   if (FunctionAlign)
     Func->setAlignment(*FunctionAlign);
