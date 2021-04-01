@@ -243,7 +243,8 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     Register DestReg;
     if (RISCVABI::isCheriPureCapABI(STI.getTargetABI())) {
       Opc = RISCV::CIncOffset;
-      ImmOpc = RISCV::CIncOffsetImm;
+      // ImmOpc = RISCV::CIncOffsetImm;
+      ImmOpc = -1;
       DestReg = MRI.createVirtualRegister(&RISCV::GPCRRegClass);
     } else {
       Opc = RISCV::ADD;
