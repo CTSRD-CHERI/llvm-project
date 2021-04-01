@@ -67,7 +67,7 @@ protected:
     TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     EXPECT_NE(TheTarget, nullptr);
 
-    MRI.reset(TheTarget->createMCRegInfo(TripleName));
+    MRI.reset(TheTarget->createMCRegInfo(TripleName, MCOptions));
     EXPECT_NE(MRI, nullptr);
 
     std::unique_ptr<MCAsmInfo> MAI;
