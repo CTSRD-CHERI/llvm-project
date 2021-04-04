@@ -548,9 +548,6 @@ usize GetTlsSize() {
   return 0;
 }
 
-void InitTlsSize() {
-}
-
 uptr TlsBaseAddr() {
   uptr segbase = 0;
 #if defined(__x86_64__)
