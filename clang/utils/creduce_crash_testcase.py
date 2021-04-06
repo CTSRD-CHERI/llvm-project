@@ -860,7 +860,7 @@ class Reducer(object):
             noargs_opts_to_remove=["-dwarf-column-info", "-munwind-tables", "-ggnu-pubnames"],
             one_arg_opts_to_remove=["-split-dwarf-file", "-split-dwarf-output"],
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning=",
-                                              "-fdebug-prefix-map="],
+                                              "-fdebug-prefix-map=", "-fdebug-compilation-dir="],
         )
         # try emitting llvm-ir (i.e. frontend bug):
         print("Checking whether -emit-llvm crashes:", end="", flush=True)
