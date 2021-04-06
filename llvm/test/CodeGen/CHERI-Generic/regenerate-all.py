@@ -199,6 +199,9 @@ def main():
         else:
             all_input_files.append(t)
     for test in all_input_files:
+        if not test.parent.name == "Inputs":
+            print("Skipping non-Inputs path:", test)
+            continue
         for arch_def in architectures:
             with test.open("rb") as input_file:
                 update_one_test(test.name, input_file, arch_def, options)

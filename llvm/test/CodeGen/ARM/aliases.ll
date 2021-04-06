@@ -6,31 +6,32 @@
 ; CHECK: .size .Lstructvar, 8
 
 ; CHECK: .globl	foo1
-; CHECK: .set foo1, bar
-; CHECK-NOT: .size foo1
+; CHECK-NEXT: .set foo1, bar
+; CHECK-NEXT: .size foo1, 4
 
 ; CHECK: .globl	foo2
-; CHECK: .set foo2, bar
-; CHECK-NOT: .size foo2
+; CHECK-NEXT: .set foo2, bar
+; CHECK-NEXT: .size foo2, 4
 
 ; CHECK: .weak	bar_f
-; CHECK: .set bar_f, foo_f
-; CHECK-NOT: .size bar_f
+; CHECK-NEXT: .type bar_f,%function
+; CHECK-NEXT: .set bar_f, foo_f
+; CHECK-NEXT: .size bar_f, .Lfunc_end0-foo_f
 
 ; CHECK: .set bar_i, bar
-; CHECK-NOT: .size bar_i
+; CHECK-NEXT: .size bar_i, 4
 
 ; CHECK: .globl	A
-; CHECK: .set A, bar
-; CHECK-NOT: .size A
+; CHECK-NEXT: .set A, bar
+; CHECK-NEXT: .size A, 4
 
 ; CHECK: .globl elem0
-; CHECK: .set elem0, .Lstructvar
-; CHECK: .size elem0, 4
+; CHECK-NEXT: .set elem0, .Lstructvar
+; CHECK-NEXT: .size elem0, 4
 
 ; CHECK: .globl elem1
-; CHECK: .set elem1, .Lstructvar+4
-; CHECK: .size elem1, 4
+; CHECK-NEXT: .set elem1, .Lstructvar+4
+; CHECK-NEXT: .size elem1, 4
 
 @bar = global i32 42
 @foo1 = alias i32, i32* @bar
