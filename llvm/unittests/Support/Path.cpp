@@ -1264,7 +1264,7 @@ TEST_F(FileSystemTest, CarriageReturn) {
   path::append(FilePathname, "test");
 
   {
-    raw_fd_ostream File(FilePathname, EC, sys::fs::OF_Text);
+    raw_fd_ostream File(FilePathname, EC, sys::fs::OF_TextWithCRLF);
     ASSERT_NO_ERROR(EC);
     File << '\n';
   }
