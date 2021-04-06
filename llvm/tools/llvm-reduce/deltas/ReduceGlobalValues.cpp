@@ -24,7 +24,7 @@ static void extractGVsFromModule(std::vector<Chunk> ChunksToKeep,
 
   // remove dso_local from global values
   for (auto &GV : Program->global_values())
-    if (GV.isDSOLocal() && !O.shouldKeep()) {
+    if (GV.isDSOLocal() && !GV.isImplicitDSOLocal() && !O.shouldKeep()) {
       GV.setDSOLocal(false);
     }
 }
