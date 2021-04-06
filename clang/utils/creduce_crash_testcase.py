@@ -889,7 +889,7 @@ class Reducer(object):
                 return self._simplify_frontend_crash_cmd(new_command, infile)
             else:
                 print("will try to use bugpoint/llvm-reduce.")
-                return self._simplify_backend_crash_cmd(new_command, infile, full_cmd)
+                return self._simplify_backend_crash_cmd(infile, new_command)
 
     def _shrink_preprocessed_source(self, input_path, out_file):
         # The initial remove #includes pass takes a long time -> remove all the includes that are inside a #if 0
@@ -1122,11 +1122,11 @@ class Reducer(object):
         )
         return new_command, infile
 
-    def _simplify_backend_crash_cmd(self, new_command: list, infile: Path, full_cmd: list):
+    def _simplify_backend_crash_cmd(self, infile: Path, clang_cc1_command: list):
         # TODO: convert it to a llc commandline and use bugpoint
-        assert "-emit-llvm" not in full_cmd
-        assert "-o" in full_cmd
-        command = full_cmd.copy()
+        assert "-emit-llvm" not in clang_cc1_command
+        assert "-o" in clang_cc1_command
+        command = clang_cc1_command.copy()
         irfile = infile.with_name(infile.name.partition(".")[0] + "-bugpoint.ll")
         command[command.index("-o") + 1] = str(irfile.absolute())
         if "-discard-value-names" in command:
@@ -1140,7 +1140,7 @@ class Reducer(object):
             subprocess.check_call(command + [str(infile)])
         except subprocess.CalledProcessError:
             print("Failed to generate IR from", infile, "will have to reduce using creduce")
-            return self._simplify_frontend_crash_cmd(new_command, infile)
+            return self._simplify_frontend_crash_cmd(clang_cc1_command, infile)
         if not irfile.exists():
             die("IR file was not generated?")
         llc_args = [str(self.options.llc_cmd), "-o", "/dev/null"]  # TODO: -o -?
