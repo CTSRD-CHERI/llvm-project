@@ -25,9 +25,11 @@ try:
     from colors import blue, red, green, bold
 except ImportError:
     print("Install the ansicolors package for coloured output.")
+
     # noinspection PyUnusedLocal
     def blue(s, bg=None, style=None):
         return s
+
     bold = blue
     red = blue
     green = blue
@@ -62,14 +64,15 @@ def run(cmd: list, **kwargs):
 
 class ErrorKind(Enum):
     CRASH = tuple()
-    INFINITE_LOOP = (b"INFINITE LOOP:", )
+    INFINITE_LOOP = (b"INFINITE LOOP:",)
     FATAL_ERROR = (b"fatal error:", b"LLVM ERROR:", b"*** Bad machine code:")
-    AddressSanitizer_ERROR = (b"ERROR: AddressSanitizer:", )
+    AddressSanitizer_ERROR = (b"ERROR: AddressSanitizer:",)
 
 
 class LitSubstitutionHandler(object):
+    # noinspection PyMethodMayBeStatic
     class _FakeLitConfig(object):
-        def __init__(self, args: "Options"):
+        def __init__(self, _: "Options"):
             self.params = dict(CHERI_CAP_SIZE="16")
             self.quiet = True
 
@@ -91,7 +94,8 @@ class LitSubstitutionHandler(object):
             self.host_triple = "x86_64-unknown-linux-gnu"
 
     def __init__(self, args: "Options"):
-        llvm_config = LLVMConfig(LitSubstitutionHandler._FakeLitConfig(args), LitSubstitutionHandler._FakeLitParams(args))
+        llvm_config = LLVMConfig(LitSubstitutionHandler._FakeLitConfig(args),
+                                 LitSubstitutionHandler._FakeLitParams(args))
         llvm_config.use_default_substitutions()
         # Not really required but makes debugging tests easier
         llvm_config.use_clang()
@@ -130,12 +134,13 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
         if str(path) in run_line:
             run_line = run_line.replace(str(path), replacement)
             break
-    run_line = re.sub("%clang\s+-cc1", "%clang_cc1", run_line)
+    run_line = re.sub(r"%clang\s+-cc1", "%clang_cc1", run_line)
     # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
     run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
     if "%clang_cc1" in run_line:
         target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
-        triple_cheri_freebsd_re = re.compile(r"-triple\s+((?:cheri|mips64c128|mips64c256)-unknown-freebsd\d*(-purecap)?)*\s+")
+        triple_cheri_freebsd_re = re.compile(
+            r"-triple\s+((?:cheri|mips64c128|mips64c256)-unknown-freebsd\d*(-purecap)?)*\s+")
         found_cheri_triple = None
         triple_match = re.search(triple_cheri_freebsd_re, run_line)
         print(triple_match)
@@ -155,7 +160,8 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
                 run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
     if "llc " in run_line:
         # TODO: convert the 128/256 variants?
-        triple_cheri_freebsd_re = re.compile(r"-mtriple=+((?:cheri|mips64c128|mips64c256)-unknown-freebsd\d*(-purecap)?)*\s+")
+        triple_cheri_freebsd_re = re.compile(
+            r"-mtriple=+((?:cheri|mips64c128|mips64c256)-unknown-freebsd\d*(-purecap)?)*\s+")
         found_cheri_triple = None
         triple_match = re.search(triple_cheri_freebsd_re, run_line)
         if triple_match:
@@ -167,10 +173,10 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
                 # purecap
                 run_line = re.sub(target_abi_re, "", run_line)  # remove
                 run_line = re.sub(r"\s-relocation-model=pic", "", run_line)  # remove
-                run_line = re.sub("llc\s+", "%cheri_purecap_llc ", run_line)  # remove triple
+                run_line = re.sub(r"llc\s+", "%cheri_purecap_llc ", run_line)  # remove triple
             else:
                 # hybrid
-                run_line = re.sub("llc\s+", "%cheri_llc ", run_line)  # remove triple
+                run_line = re.sub(r"llc\s+", "%cheri_llc ", run_line)  # remove triple
 
             # remove 128 vs 256:
             run_line = re.sub(r" -cheri-size \d+", "", run_line)  # remove
@@ -188,8 +194,7 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
 #     llc_cmd = "/path/to/llc"
 #     opt_cmd = "/path/to/opt"
 #
-# print(add_lit_substitutions(fake_args(), "llc -o /dev/null -mtriple=cheri-unknown-freebsd-purecap -relocation-model=pic -thread-model=posix -mattr=-noabicalls -mattr=+soft-float -mattr=+chericap -mattr=+cheri128 -target-abi purecap -float-abi=soft -vectorize-loops -vectorize-slp -mcpu=mips4 -O2 -mxcaptable=false -mips-ssection-threshold=0 -cheri-cap-table-abi=pcrel -verify-machineinstrs %s"))
-# print(add_lit_substitutions(fake_args(), "%clang_cc1 -triple mips64c128-unknown-freebsd13-purecap -munwind-tables -fuse-init-array -target-cpu mips4 -target-abi purecap -cheri-size 128 -mllvm -cheri-cap-table-abi=pcrel -target-linker-version 450.3 -std=c++11 -fno-builtin -faddrsig -o - -emit-llvm -O0 -Wimplicit-int  -Wfatal-errors %s"))
+# print(add_lit_substitutions(fake_args(), "%clang_cc1 -Wfatal-errors %s"))
 #
 # sys.exit()
 
@@ -368,11 +373,13 @@ class RunBugpoint(ReduceTool):
             # TODO: generate a test case from the output files?
         if expected_output_file.exists():
             print("Attempting to convert generated bitcode file to a test case...")
-            dis = subprocess.run([str(self.args.llvm_dis_cmd), "-o", "-", str(expected_output_file)], stdout=subprocess.PIPE)
+            subprocess.run([str(self.args.llvm_dis_cmd), "-o", "-", str(expected_output_file)],
+                           stdout=subprocess.PIPE, check=True)
             # Rename instructions to avoid stupidly long names generated by bugpoint:
             renamed = subprocess.run([str(self.args.opt_cmd), "-S", "-o", "-", "--instnamer", "--metarenamer",
-                "--name-anon-globals", str(expected_output_file)], stdout=subprocess.PIPE)
-            self.create_test_case(renamed.stdout.decode("utf-8"), input_file.with_suffix(".test" + input_file.suffix), run_lines)
+                                      "--name-anon-globals", str(expected_output_file)], stdout=subprocess.PIPE)
+            self.create_test_case(renamed.stdout.decode("utf-8"), input_file.with_suffix(".test" + input_file.suffix),
+                                  run_lines)
 
     def input_file_arg(self, input_file: Path):
         # bugpoint expects a script that takes the input files as arguments:
@@ -390,7 +397,8 @@ class RunLLVMReduce(ReduceTool):
         self.interesting_exit_code = 0  # type: int
         self.not_interesting_exit_code = 1  # type: int
 
-    def reduce(self, input_file, extra_args, tempdir, run_cmds: typing.List[typing.List[str]], run_lines: typing.List[str]):
+    def reduce(self, input_file, extra_args, tempdir, run_cmds: typing.List[typing.List[str]],
+               run_lines: typing.List[str]):
         expected_output_file = Path.cwd() / (input_file.name + "-reduced.ll")
         if expected_output_file.exists():
             print("bugpoint output file already exists: ", bold(expected_output_file))
@@ -419,8 +427,10 @@ class RunLLVMReduce(ReduceTool):
             # print("Renaming functions in test...")
             # renamed = subprocess.run([str(self.args.opt_cmd), "-S", "-o", "-", "--instnamer", "--metarenamer",
             #                           "--name-anon-globals", str(expected_output_file)], stdout=subprocess.PIPE)
-            # self.create_test_case(renamed.stdout.decode("utf-8"), input_file.with_suffix(".test" + input_file.suffix), run_lines)
-            self.create_test_case(expected_output_file.read_text("utf-8"), input_file.with_suffix(".test" + input_file.suffix), run_lines)
+            # self.create_test_case(renamed.stdout.decode("utf-8"),
+            #                       input_file.with_suffix(".test" + input_file.suffix), run_lines)
+            self.create_test_case(expected_output_file.read_text("utf-8"),
+                                  input_file.with_suffix(".test" + input_file.suffix), run_lines)
 
     def input_file_arg(self, input_file: Path):
         # llvm-reduce expects a script that takes the input files as arguments:
@@ -429,6 +439,7 @@ class RunLLVMReduce(ReduceTool):
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
         proc = subprocess.run([str(reduce_script), str(input_file)])
         return proc.returncode == self.interesting_exit_code
+
 
 class RunCreduce(ReduceTool):
     def __init__(self, args: "Options") -> None:
@@ -633,7 +644,8 @@ class Reducer(object):
             die("Could not compute input file for crash reproducer")
         return real_in_file
 
-    def _check_crash(self, command, infile, proc_info: subprocess.CompletedProcess=None, force_print_cmd=False) -> typing.Optional[ErrorKind]:
+    def _check_crash(self, command, infile, proc_info: subprocess.CompletedProcess = None,
+                     force_print_cmd=False) -> typing.Optional[ErrorKind]:
         # command = ["/tmp/crash"]
         full_cmd = command + [str(infile)]
         assert "%s" not in full_cmd, full_cmd
@@ -680,7 +692,8 @@ class Reducer(object):
             if self.options.expected_error_kind and self.options.expected_error_kind != error_kind:
                 print(red(" yes, but got " + error_kind.name + " instead of " + self.options.expected_error_kind.name))
                 return None
-            crash_message_found = not self.options.crash_message or (self.options.crash_message in proc.stderr.decode("utf-8"))
+            crash_message_found = not self.options.crash_message or (
+                        self.options.crash_message in proc.stderr.decode("utf-8"))
             if error_kind == ErrorKind.INFINITE_LOOP or crash_message_found:
                 print(green(" yes"))
                 return error_kind
@@ -693,8 +706,15 @@ class Reducer(object):
         return None
 
     @staticmethod
-    def _filter_args(args, *, noargs_opts_to_remove=list(), noargs_opts_to_remove_startswith=list(),
-                     one_arg_opts_to_remove=list(), one_arg_opts_to_remove_if=None):
+    def _filter_args(args, *, noargs_opts_to_remove=None, noargs_opts_to_remove_startswith: typing.List[str] = None,
+                     one_arg_opts_to_remove: typing.List[str] = None,
+                     one_arg_opts_to_remove_if: typing.Dict[str, typing.Callable[[str], bool]] = None):
+        if one_arg_opts_to_remove is None:
+            one_arg_opts_to_remove = list()
+        if noargs_opts_to_remove_startswith is None:
+            noargs_opts_to_remove_startswith = list()
+        if noargs_opts_to_remove is None:
+            noargs_opts_to_remove = list()
         if one_arg_opts_to_remove_if is None:
             one_arg_opts_to_remove_if = dict()
         result = []
@@ -712,7 +732,8 @@ class Reducer(object):
             if skip_next:
                 skip_next = False
                 continue
-            if any(arg == a for a in noargs_opts_to_remove) or any(arg.startswith(a) for a in noargs_opts_to_remove_startswith):
+            if any(arg == a for a in noargs_opts_to_remove) or any(
+                    arg.startswith(a) for a in noargs_opts_to_remove_startswith):
                 continue
             if any(arg == a for a in one_arg_opts_to_remove):
                 skip_next = True
@@ -724,7 +745,7 @@ class Reducer(object):
             result.append(arg)
         return result
 
-    def _try_remove_args(self, command: list, infile: Path, message: str, *, extra_args: list=None, **kwargs):
+    def _try_remove_args(self, command: list, infile: Path, message: str, *, extra_args: list = None, **kwargs):
         new_command = self._filter_args(command, **kwargs)
         print(message, end="", flush=True)
         if extra_args:
@@ -752,11 +773,12 @@ class Reducer(object):
             r"LLVM ERROR: Cannot select:",
             r"LLVM ERROR: (.+)",
             r"\*\*\* Bad machine code: (.+) \*\*\*",
-       )]
+        )]
         regexes = [(r, 0) for r in simple_regexes]
         # For this crash message we only want group 1
         # TODO: add another grep for the program counter
-        regexes.insert(0, (re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
+        regexes.insert(0, (
+            re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
         # only get the kind of the cannot select from the message (without the number for tNN)
         regexes.insert(0, (re.compile(r"LLVM ERROR: Cannot select: (t\w+): (.+)", ), 2))
         # This message is different when invoked as llc: it prints LLVM ERROR instead
@@ -777,7 +799,7 @@ class Reducer(object):
                 if match:
                     message = match.group(index)
                     if "\x1b" in message:
-                         message = message[:message.rfind("\x1b")]
+                        message = message[:message.rfind("\x1b")]
                     print("Inferred crash message bytes: ", message.encode("utf-8"))
                     return message
         return None
@@ -845,7 +867,6 @@ class Reducer(object):
         assert new_command[0] == str(self.options.clang_cmd)
         assert "-o" in new_command
         assert "%s" not in new_command
-        full_cmd = new_command.copy()
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether replacing optimization level with -O0 crashes:",
             noargs_opts_to_remove_startswith=["-O"],
@@ -909,7 +930,8 @@ class Reducer(object):
                     in_rewrite_includes = True
                     continue
                 elif re.match(end_rewrite_includes, line):
-                    extremely_verbose_print("Ending -frewrite-includes-block, skipped", skipped_rewrite_includes, "lines")
+                    extremely_verbose_print("Ending -frewrite-includes-block, skipped", skipped_rewrite_includes,
+                                            "lines")
                     assert in_rewrite_includes
                     in_rewrite_includes = False
                     skipped_rewrite_includes = 0
@@ -960,7 +982,8 @@ class Reducer(object):
             verbose_print(no_line_pp_command)
             subprocess.check_call(no_line_pp_command)
             assert preprocessed.exists()
-            print("Checking if preprocessed source (without line numbers)", preprocessed, "crashes: ", end="", flush=True)
+            print("Checking if preprocessed source (without line numbers)", preprocessed, "crashes: ", end="",
+                  flush=True)
             if self._check_crash(new_command, preprocessed):
                 infile = preprocessed
             else:
@@ -990,7 +1013,7 @@ class Reducer(object):
                 new_size = smaller.stat().st_size
                 percent_reduction = 100 - 100.0 * (new_size / original_size)
                 print("Initial preprocessing: {} bytes -> {} bytes ({}% reduction)".format(
-                      original_size, new_size, percent_reduction))
+                    original_size, new_size, percent_reduction))
             if self._check_crash(new_command, smaller):
                 infile = smaller
             else:
@@ -1037,11 +1060,13 @@ class Reducer(object):
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
-            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot" or a == "-mgpopt"}
+            one_arg_opts_to_remove_if={
+                "-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot" or a == "-mgpopt"}
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various CHERI flags crashes:",
-            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-cheri-cap-table-abi=") or a.startswith("-mxcaptable")}
+            one_arg_opts_to_remove_if={
+                "-mllvm": lambda a: a.startswith("-cheri-cap-table-abi=") or a.startswith("-mxcaptable")}
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
@@ -1118,7 +1143,8 @@ class Reducer(object):
             noargs_opts_to_remove=["-disable-free", "-discard-value-names", "-masm-verbose",
                                    "-fdeprecated-macro", "-fcolor-diagnostics"],
             noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime="],
-            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length", "-fvisibility", "-target-linker-version"]
+            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length", "-fvisibility",
+                                    "-target-linker-version"]
         )
         return new_command, infile
 
@@ -1197,11 +1223,11 @@ class Reducer(object):
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
         llc_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(llc_args, irfile, llc_info):
-            print("Crash found with llc -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            print("Crash found with llc -> using llvm-reduce/bugpoint which is faster than creduce.")
             self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return llc_args, irfile
         if self._check_crash(llc_args + ["-filetype=obj"], irfile, llc_info):
-            print("Crash found with llc -filetype=obj -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            print("Crash found with llc -filetype=obj -> using llvm-reduce/bugpoint which is faster than creduce.")
             self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return llc_args + ["-filetype=obj"], irfile
         print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info.stderr.decode("utf-8"))
@@ -1211,24 +1237,25 @@ class Reducer(object):
         opt_args.append("-S")
         opt_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(opt_args, irfile, opt_info):
-            print("Crash found with opt -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            print("Crash found with opt -> using llvm-reduce/bugpoint which is faster than creduce.")
             self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return opt_args, irfile
         print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info.stderr.decode("utf-8"))
 
         print("Checking whether compiling IR file with clang crashes:", end="", flush=True)
-        clang_info = subprocess.CompletedProcess(None, None)
-        bugpoint_clang_cmd = self._filter_args(full_cmd, noargs_opts_to_remove_startswith=["-xc", "-W", "-std="],
+        clang_info = subprocess.CompletedProcess(b"", -1)
+        bugpoint_clang_cmd = self._filter_args(clang_cc1_command,
+                                               noargs_opts_to_remove_startswith=["-xc", "-W", "-std="],
                                                one_arg_opts_to_remove=["-D", "-x", "-main-file-name"])
         bugpoint_clang_cmd.extend(["-x", "ir"])
         if self._check_crash(bugpoint_clang_cmd, irfile, clang_info):
-            print("Crash found compiling IR with clang -> using llvm-reduce followed by bugpoint which is faster than creduce.")
+            print("Crash found compiling IR with clang -> using llvm-reduce/bugpoint which is faster than creduce.")
             self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return bugpoint_clang_cmd, irfile
         print("Compiling IR file with clang did not reproduce crash. Stderr was:", clang_info.stderr.decode("utf-8"))
         print(red("No crash found compiling the IR! Possibly crash only happens when invoking clang -> using creduce."))
         self.reduce_tool = RunCreduce(self.options)
-        return self._simplify_frontend_crash_cmd(new_command, infile)
+        return self._simplify_frontend_crash_cmd(clang_cc1_command, infile)
 
     def _parse_test_case(self, f, infile: Path):
         # test case: just search for RUN: lines
@@ -1303,16 +1330,21 @@ def main():
                         help="Treat the test case as not interesting if it runs longer than n seconds")
     parser.add_argument("--extremely-verbose", action="store_true", help="Print tons of debug output")
     parser.add_argument("--llvm-error", action="store_true", help="Reduce a LLVM ERROR: message instead of a crash")
-    parser.add_argument("--infinite-loop", action="store_true", help="Try debugging an infinite loop (-> timed out testcases are interesting)."
-                                                                     "If timeout is not set this will set it to 30 seconds")
-    parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
-                                                " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
+    parser.add_argument("--infinite-loop", action="store_true",
+                        help="Try debugging an infinite loop (-> timed out testcases are interesting)."
+                             "If timeout is not set this will set it to 30 seconds")
+    parser.add_argument("--crash-message",
+                        help="If set the crash must contain this message to be accepted for reduction."
+                             " This is useful if creduce ends up generating another crash bug that"
+                             " is not the one being debugged.")
     parser.add_argument("--reduce-tool", help="The tool to use for test case reduction. "
-                                              "Defaults to `llvm-reduce-and-bugpoint` if input file is a .ll or .bc file and `creduce` otherwise.",
+                                              "Defaults to `llvm-reduce-and-bugpoint` if input file is a .ll or .bc "
+                                              "file and `creduce` otherwise.",
                         choices=["llvm-reduce-and-bugpoint", "bugpoint", "creduce", "llvm-reduce", "noop"])
-    parser.add_argument("--no-initial-reduce", help="Pass the original input file to creduce without "
-                        "removing #if 0 regions. Generally this will speed up but in very rare corner "
-                        "cases it might cause the test case to no longer crash.", action="store_true")
+    parser.add_argument("--no-initial-reduce", help="Pass the original input file to creduce without removing #if 0 "
+                                                    "regions. Generally this will speed up but in very rare corner "
+                                                    "cases it might cause the test case to no longer crash.",
+                        action="store_true")
     parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes "
                                          "or a .sh file from a clang crash")
     # bash completion for arguments:
