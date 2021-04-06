@@ -1919,7 +1919,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
               {RetainedKnowledge{Attribute::NonNull, 0, A}}, Next, &AC, &DT)) {
 
         Replacement->insertBefore(Next);
-        AC.registerAssumption(Replacement);
+        AC.registerAssumption(cast<AssumeInst>(Replacement));
         return RemoveConditionFromAssume(II);
       }
     }
@@ -1951,7 +1951,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
                   buildAssumeFromKnowledge(RK, Next, &AC, &DT)) {
 
             Replacement->insertAfter(II);
-            AC.registerAssumption(Replacement);
+            AC.registerAssumption(cast<AssumeInst>(Replacement));
           }
           return RemoveConditionFromAssume(II);
         }
@@ -1999,7 +1999,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
 
     // Update the cache of affected values for this assumption (we might be
     // here because we just simplified the condition).
-    AC.updateAffectedValues(II);
+    AC.updateAffectedValues(cast<AssumeInst>(II));
     break;
   }
   case Intrinsic::experimental_guard: {

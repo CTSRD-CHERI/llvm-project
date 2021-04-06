@@ -2537,7 +2537,7 @@ static bool FoldCondBranchOnPHI(BranchInst *BI, DomTreeUpdater *DTU,
 
         // Register the new instruction with the assumption cache if necessary.
         if (AC && match(N, m_Intrinsic<Intrinsic::assume>()))
-          AC->registerAssumption(cast<IntrinsicInst>(N));
+          AC->registerAssumption(cast<AssumeInst>(N));
       }
     }
 
