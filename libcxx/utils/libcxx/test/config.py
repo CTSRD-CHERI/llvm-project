@@ -492,8 +492,8 @@ class Configuration(object):
             if self.target_info.allow_cxxabi_link() or testing_libcxxabi or testing_libunwind:
                 libcxxabi_shared = self.get_lit_bool('libcxxabi_shared', default=True)
                 if self.link_shared and libcxxabi_shared:
-                    link_flags += ['-lc++abi']
                     self.cxx.link_libcxxabi_flag = '-lc++abi'
+                    link_flags += [self.cxx.link_libcxxabi_flag]
                 else:
                     if self.abi_library_root:
                         libname = self.make_static_lib_name('c++abi')
@@ -507,15 +507,21 @@ class Configuration(object):
             self.cxx.link_libcxxabi_flag = '-lcxxrt'
         elif cxx_abi == 'vcruntime':
             debug_suffix = 'd' if self.debug_build else ''
-            link_flags += ['-l%s%s' % (lib, debug_suffix) for lib in
-                                    ['vcruntime', 'ucrt', 'msvcrt']]
+            vcrt_linker_flags = ['-l%s%s' % (lib, debug_suffix) for lib in
+                                 ['vcruntime', 'ucrt', 'msvcrt']]
+            link_flags += vcrt_linker_flags
+            self.cxx.link_libcxxabi_flag = ' '.join(vcrt_linker_flags)
         elif cxx_abi == 'none' or cxx_abi == 'default':
             if self.target_info.is_windows():
                 debug_suffix = 'd' if self.debug_build else ''
-                link_flags += ['-lmsvcrt%s' % debug_suffix]
+                self.cxx.link_libcxxabi_flag = '-lmsvcrt%s' % debug_suffix
+                link_flags += [self.cxx.link_libcxxabi_flag]
+            else:
+                self.cxx.link_libcxxabi_flag = ''
         else:
             self.lit_config.fatal(
                 'C++ ABI setting %s unsupported for tests' % cxx_abi)
+        assert self.cxx.link_libcxxabi_flag is not None
         return link_flags
 
     def configure_extra_library_flags(self):
