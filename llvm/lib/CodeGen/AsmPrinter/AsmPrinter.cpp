@@ -1182,9 +1182,8 @@ void AsmPrinter::emitStackSizeSection(const MachineFunction &MF) {
   OutStreamer->PopSection();
 }
 
-static bool needFuncLabelsForEHOrDebugInfo(const MachineFunction &MF) {
-  MachineModuleInfo &MMI = MF.getMMI();
-  if (!MF.getLandingPads().empty() || MF.hasEHFunclets() || MMI.hasDebugInfo())
+static bool needFuncLabelsForEH(const MachineFunction &MF) {
+  if (!MF.getLandingPads().empty() || MF.hasEHFunclets())
     return true;
 
   // We might emit an EH table that uses function begin and end labels even if
@@ -1193,6 +1192,10 @@ static bool needFuncLabelsForEHOrDebugInfo(const MachineFunction &MF) {
     return false;
   return !isNoOpWithoutInvoke(
       classifyEHPersonality(MF.getFunction().getPersonalityFn()));
+}
+
+static bool needFuncLabelsForEHOrDebugInfo(const MachineFunction &MF) {
+  return MF.getMMI().hasDebugInfo() || needFuncLabelsForEH(MF);
 }
 
 /// EmitFunctionBody - This method emits the body and trailer for a
@@ -1972,12 +1975,11 @@ void AsmPrinter::SetupMachineFunction(MachineFunction &MF) {
   MBBSectionRanges.clear();
   MBBSectionExceptionSyms.clear();
   bool NeedsLocalForSize = MAI->needsLocalForSize();
-  bool NeedsLabelsForEH = needFuncLabelsForEHOrDebugInfo(MF);
   if (F.hasFnAttribute("patchable-function-entry") ||
       F.hasFnAttribute("function-instrument") ||
-      F.hasFnAttribute("xray-instruction-threshold") || NeedsLabelsForEH ||
-      NeedsLocalForSize || MF.getTarget().Options.EmitStackSizeSection ||
-      MF.hasBBLabels()) {
+      F.hasFnAttribute("xray-instruction-threshold") ||
+      needFuncLabelsForEHOrDebugInfo(MF) || NeedsLocalForSize ||
+      MF.getTarget().Options.EmitStackSizeSection || MF.hasBBLabels()) {
     CurrentFnBegin = createTempSymbol("func_begin");
     if (NeedsLocalForSize)
       CurrentFnSymForSize = CurrentFnBegin;
@@ -1986,7 +1988,7 @@ void AsmPrinter::SetupMachineFunction(MachineFunction &MF) {
     // relocation with a non-zero addend, we need to ensure that the target
     // symbol is non-preemptible by creating a local alias for the function.
     // TODO: could probably omit this for !F.isInterposable()?
-    if (NeedsLabelsForEH && MAI->isCheriPurecapABI()) {
+    if (MAI->isCheriPurecapABI() && needFuncLabelsForEH(MF)) {
       CurrentFnLocalForEH =
           OutContext.getOrCreateSymbol(MAI->getLinkerPrivateGlobalPrefix() +
                                        CurrentFnSym->getName() + "$eh_alias");
