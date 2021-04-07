@@ -2356,7 +2356,7 @@ void CodeGenModule::ConstructAttributeList(
         llvm::AttributeSet::get(getLLVMContext(), Attrs);
   }
 
-  // Apply `nonnull` and `dereferencable(N)` to the `this` argument.
+  // Apply `nonnull`, `dereferencable(N)` and `align N` to the `this` argument.
   if (FI.isInstanceMethod() && !IRFunctionArgs.hasInallocaArg() &&
       !FI.arg_begin()->type->isVoidPointerType()) {
     auto IRArgs = IRFunctionArgs.getIRArgs(0);
@@ -2365,14 +2365,14 @@ void CodeGenModule::ConstructAttributeList(
 
     llvm::AttrBuilder Attrs;
 
+    QualType ThisTy =
+        FI.arg_begin()->type.castAs<PointerType>()->getPointeeType();
+
     if (!CodeGenOpts.NullPointerIsValid &&
         getTargetCodeGenInfo().canMarkAsNonNull(FI.arg_begin()->type,
                                                 getContext())) {
       Attrs.addAttribute(llvm::Attribute::NonNull);
-      Attrs.addDereferenceableAttr(
-          getMinimumObjectSize(
-              FI.arg_begin()->type.castAs<PointerType>()->getPointeeType())
-              .getQuantity());
+      Attrs.addDereferenceableAttr(getMinimumObjectSize(ThisTy).getQuantity());
     } else {
       // FIXME dereferenceable should be correct here, regardless of
       // NullPointerIsValid. However, dereferenceable currently does not always
@@ -2383,6 +2383,12 @@ void CodeGenModule::ConstructAttributeList(
               FI.arg_begin()->type.castAs<PointerType>()->getPointeeType())
               .getQuantity());
     }
+
+    llvm::Align Alignment =
+        getNaturalTypeAlignment(ThisTy, /*BaseInfo=*/nullptr,
+                                /*TBAAInfo=*/nullptr, /*forPointeeType=*/true)
+            .getAsAlign();
+    Attrs.addAlignmentAttr(Alignment);
 
     ArgAttrs[IRArgs.first] = llvm::AttributeSet::get(getLLVMContext(), Attrs);
   }
