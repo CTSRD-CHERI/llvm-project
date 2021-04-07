@@ -1101,44 +1101,15 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                              llvm::function_ref<std::string()> referencedBy,
                              RelocationBaseSection *dynRelSec) {
 
-  // Special case for exception handling tables in the purecap ABI:
-  // Always create a non-preemptible local relocation for these relocation
-  // since they should not be preempted. It also means that RTLD only needs to
-  // create function sentries with non-zero offsets for these kinds of symbols
-  // using the local relocation mechanism rather than performing symbol lookups.
   if (sec->name == ".gcc_except_table" && sym->isPreemptible) {
-    if (!sym->isDefined()) {
-      warn("got relocation against undefined symbol " + toString(*sym) +
-          " in exception handling table");
-    } else {
-      // Create a new "fake" symbol with hidden visibility for the relocation
-      // to ensure that it can't be preempted and uses a local capability
-      // relocation in RTLD.
-      assert(sym->visibility == llvm::ELF::STV_DEFAULT);
-      std::string uniqueName = ("__cheri_eh_" + sym->getName()).str();
-      for (int i = 2; symtab->find(uniqueName); i++) {
-        uniqueName = ("__cheri_eh_" + Twine(i) + "_" + sym->getName()).str();
-      }
-      StringRef newName = saver.save(uniqueName);
-      Symbol *newSym = symtab->insert(newName);
-      // Copy over all properties from the old symbol to the new one
-      memcpy(newSym, sym, sizeof(SymbolUnion));
-      // But change name, set visibility to hidden and mark as non-preemptible:
-      newSym->setName(newName);
-      newSym->visibility = llvm::ELF::STV_HIDDEN;
-      if (newSym->binding != llvm::ELF::STB_GLOBAL) {
-        assert(newSym->binding == llvm::ELF::STB_WEAK &&
-               "Not STB_GLOBAL and not STB_WEAK?");
-        newSym->binding = llvm::ELF::STB_GLOBAL;
-      }
-      newSym->isPreemptible = false;
-
-      sym = newSym; // Make the relocation point to the newly added symbol
-      assert(sym->isDefined());
-      assert(sym->isFunc() && "This should only be used for functions");
-      assert(sym->binding == llvm::ELF::STB_GLOBAL);
-      assert(!sym->isPreemptible);
-    }
+    // We previously had an ugly workaround here to create a hidden alias for
+    // relocations in the exception table, but this has since been fixed in
+    // the compiler. Add an explicit error here in case someone tries to
+    // link against object files/static libraries from an old toolchain.
+    errorOrWarn("got relocation against preemptible symbol " + toString(*sym) +
+                " in exception handling table. Please recompile this file!\n"
+                ">>> referenced by " +
+                sec->getObjMsg(offset));
   }
 
   // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc

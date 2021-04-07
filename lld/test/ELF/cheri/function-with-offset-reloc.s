@@ -6,7 +6,10 @@
 # RUN: %cheri128_purecap_llvm-mc %s -defsym=SHLIB=1 -filetype=obj -o %t-lib.o
 # RUN: ld.lld %t-lib.o -shared -o %t-lib.so
 # RUN: llvm-readobj --cap-relocs -r %t.o | FileCheck %s --check-prefix=OBJ
-# RUN: ld.lld %t.o %t-lib.so -shared -o %t.so 2>&1 | FileCheck %s --check-prefix=WARNING-MSG
+# RUN: rm -f %t.so
+# RUN: not ld.lld %t.o %t-lib.so -shared -o %t.so 2>&1 | FileCheck %s --check-prefix=ERROR-MSG
+# ERROR-MSG: error: got relocation against preemptible symbol
+# RUN: ld.lld %t.o %t-lib.so -shared -o %t.so --noinhibit-exec 2>&1 | FileCheck %s --check-prefix=WARNING-MSG
 # RUN: llvm-readobj --cap-relocs -r --sections --section-data %t.so | FileCheck %s
 
 .type undef_func,@function
@@ -39,17 +42,18 @@ define_func protected_local_func
 .global exported_local_func
 define_func exported_local_func
 
-.global weak_exported_local_func
 .weak weak_exported_local_func
 define_func weak_exported_local_func
 
 .data
+.global bad_relocs
 .type bad_relocs,@object
 bad_relocs:
 .8byte hidden_local_func -0x1
 .chericap hidden_local_func + 0x1
 .chericap protected_local_func + 0x2
 .chericap exported_local_func + 0x3
+
 # WARNING-MSG: warning: got capability relocation with non-zero addend (0x3) against function exported_local_func. This may not be supported by the runtime linker.
 # WARNING-MSG-NEXT: >>> defined in {{.+}}function-with-offset-reloc.s.tmp.o
 # WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.data+0x30)
@@ -76,15 +80,25 @@ except_table:
 .chericap hidden_local_func + 0x10
 .chericap protected_local_func + 0x11
 .chericap exported_local_func + 0x12
-## Note: no warning for exported_local_func
 .chericap external_func + 0x13
-# WARNING-MSG-NEXT: warning: got relocation against undefined symbol external_func in exception handling table
+# WARNING-MSG-NEXT: warning: got relocation against preemptible symbol exported_local_func in exception handling table. Please recompile this file!
+# WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.gcc_except_table+0x30)
+# WARNING-MSG-EMPTY:
+# WARNING-MSG-NEXT: warning: got capability relocation with non-zero addend (0x12) against function exported_local_func. This may not be supported by the runtime linker.
+# WARNING-MSG-NEXT: >>> defined in {{.+}}function-with-offset-reloc.s.tmp.o
+# WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.gcc_except_table+0x30)
+# WARNING-MSG-EMPTY:
+# WARNING-MSG-NEXT: warning: got relocation against preemptible symbol external_func in exception handling table. Please recompile this file!
+# WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.gcc_except_table+0x40)
+# WARNING-MSG-EMPTY:
 # WARNING-MSG-NEXT: warning: got capability relocation with non-zero addend (0x13) against function external_func. This may not be supported by the runtime linker.
 # WARNING-MSG-NEXT: >>> defined in {{.+}}function-with-offset-reloc.s.tmp-lib.so
 # WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.gcc_except_table+0x40)
 # WARNING-MSG-EMPTY:
 .chericap undef_func + 0x14
-# WARNING-MSG-NEXT: warning: got relocation against undefined symbol undef_func in exception handling table
+# WARNING-MSG-NEXT: warning: got relocation against preemptible symbol undef_func in exception handling table. Please recompile this file!
+# WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.gcc_except_table+0x50)
+# WARNING-MSG-EMPTY:
 # WARNING-MSG-NEXT: warning: got capability relocation with non-zero addend (0x14) against function undef_func. This may not be supported by the runtime linker.
 # WARNING-MSG-NEXT: >>> defined in {{.+}}function-with-offset-reloc.s.tmp.o
 # WARNING-MSG-NEXT: >>> referenced by {{.+}}function-with-offset-reloc.s.tmp.o:(.gcc_except_table+0x50)
@@ -125,18 +139,14 @@ except_table:
 ##                            ^^ no addend since __cap_relocs is used (hidden_local_func)
 # CHECK-NEXT:   0020: CACACACA CACACACA CACACACA CACACACA
 ##                            ^^ no addend since __cap_relocs is used (protected_local_func)
-# CHECK-NEXT:   0030: CACACACA CACACACA CACACACA CACACACA
-##                            ^^ no addend since __cap_relocs is used (exported_local_func)
-##                               While this function is preemptible, we don't want it to be preemptible
-##                               when used inside exception tables. Those should always refer to the local symbol.
+# CHECK-NEXT:   0030: 00000000 00000012 CACACACA CACACACA
+##                            ^^ addend 0x12 (exported_local_func)
 # CHECK-NEXT:   0040: 00000000 00000013 CACACACA CACACACA
 ##                            ^^ addend 0x13 (external_func)
 # CHECK-NEXT:   0050: 00000000 00000014 CACACACA CACACACA
 ##                            ^^ addend 0x14 (undef_func)
-# CHECK-NEXT:   0060: CACACACA CACACACA CACACACA CACACACA
-##                            ^^ no addend since __cap_relocs is used (weak_exported_local_func)
-##                               While this function is preemptible, we don't want it to be preemptible
-##                               when used inside exception tables. Those should always refer to the local symbol.
+# CHECK-NEXT:   0060: 00000000 00000015 CACACACA CACACACA
+##                            ^^ addend 0x15 (weak_exported_local_func)
 # CHECK-NEXT: )
 
 # CHECK:   Section {
@@ -161,14 +171,16 @@ except_table:
 
 # CHECK-LABEL:  Relocations [
 # CHECK-NEXT:    Section ({{.+}}) .rel.dyn {
-# CHECK-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHECK-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func{{$}}
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func{{$}}
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE exported_local_func{{$}}
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE weak_exported_local_func{{$}}
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func{{$}}
-# CHECK-NEXT:      R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func{{$}}
+# CHECK-NEXT:      0x20{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
+# CHECK-NEXT:      0x30{{.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
+# CHECK-NEXT:      0x20{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func{{$}}
+# CHECK-NEXT:      0x30{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE undef_func{{$}}
+# CHECK-NEXT:      0x20{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE exported_local_func{{$}}
+# CHECK-NEXT:      0x30{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE exported_local_func{{$}}
+# CHECK-NEXT:      0x20{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE weak_exported_local_func{{$}}
+# CHECK-NEXT:      0x30{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE weak_exported_local_func{{$}}
+# CHECK-NEXT:      0x20{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func{{$}}
+# CHECK-NEXT:      0x30{{.+}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE external_func{{$}}
 # CHECK-NEXT:    }
 # CHECK-NEXT:  ]
 
@@ -176,8 +188,6 @@ except_table:
 ## First the three .eh_frame relocations, including the fake symbol that was added to avoid relocations:
 # CHECK-NEXT:    0x02{{.+}} Base: 0x{{.+}} (hidden_local_func+16) Length: 4 Perms: Function
 # CHECK-NEXT:    0x02{{.+}} Base: 0x{{.+}} (protected_local_func+17) Length: 4 Perms: Function
-# CHECK-NEXT:    0x02{{.+}} Base: 0x{{.+}} (__cheri_eh_exported_local_func+18) Length: 4 Perms: Function
-# CHECK-NEXT:    0x02{{.+}} Base: 0x{{.+}} (__cheri_eh_weak_exported_local_func+21) Length: 4 Perms: Function
 # CHECK-NEXT:    0x03{{.+}} Base: 0x{{.+}} (hidden_local_func+1) Length: 4 Perms: Function
 # CHECK-NEXT:    0x03{{.+}} Base: 0x{{.+}} (protected_local_func+2) Length: 4 Perms: Function
 # CHECK-NEXT: ]
