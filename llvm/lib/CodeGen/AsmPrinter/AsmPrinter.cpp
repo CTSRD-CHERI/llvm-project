@@ -1430,13 +1430,29 @@ void AsmPrinter::emitFunctionBody() {
 
   // If the target wants a .size directive for the size of the function, emit
   // it.
+  const MCExpr *SizeExp = nullptr;
   if (MAI->hasDotTypeDotSizeDirective()) {
     // We can get the size as difference between the function label and the
     // temp label.
-    const MCExpr *SizeExp = MCBinaryExpr::createSub(
+    SizeExp = MCBinaryExpr::createSub(
         MCSymbolRefExpr::create(CurrentFnEnd, OutContext),
         MCSymbolRefExpr::create(CurrentFnSymForSize, OutContext), OutContext);
     OutStreamer->emitELFSize(CurrentFnSym, SizeExp);
+  }
+  if (CurrentFnLocalForEH) {
+    // For CHERI exception landing pad tables we need a local alias so
+    // that we can emit non-preemptible relocations with the correct addend.
+    // See https://github.com/CTSRD-CHERI/llvm-project/issues/512.
+    // Note: We add .local so that the symbol is not deleted after assembling
+    // even though the name might start with ".L".
+    OutStreamer->emitSymbolAttribute(CurrentFnLocalForEH, MCSA_Local);
+    OutStreamer->emitSymbolAttribute(CurrentFnLocalForEH,
+                                     MCSA_ELF_TypeFunction);
+    OutStreamer->emitAssignment(
+        CurrentFnLocalForEH,
+        MCSymbolRefExpr::create(CurrentFnSymForSize, OutContext));
+    if (SizeExp)
+      OutStreamer->emitELFSize(CurrentFnLocalForEH, SizeExp);
   }
 
   for (const HandlerInfo &HI : Handlers) {
@@ -1951,18 +1967,30 @@ void AsmPrinter::SetupMachineFunction(MachineFunction &MF) {
 
   CurrentFnSymForSize = CurrentFnSym;
   CurrentFnBegin = nullptr;
+  CurrentFnLocalForEH = nullptr;
   CurrentSectionBeginSym = nullptr;
   MBBSectionRanges.clear();
   MBBSectionExceptionSyms.clear();
   bool NeedsLocalForSize = MAI->needsLocalForSize();
+  bool NeedsLabelsForEH = needFuncLabelsForEHOrDebugInfo(MF);
   if (F.hasFnAttribute("patchable-function-entry") ||
       F.hasFnAttribute("function-instrument") ||
-      F.hasFnAttribute("xray-instruction-threshold") ||
-      needFuncLabelsForEHOrDebugInfo(MF) || NeedsLocalForSize ||
-      MF.getTarget().Options.EmitStackSizeSection || MF.hasBBLabels()) {
+      F.hasFnAttribute("xray-instruction-threshold") || NeedsLabelsForEH ||
+      NeedsLocalForSize || MF.getTarget().Options.EmitStackSizeSection ||
+      MF.hasBBLabels()) {
     CurrentFnBegin = createTempSymbol("func_begin");
     if (NeedsLocalForSize)
       CurrentFnSymForSize = CurrentFnBegin;
+    // In the pure-capability ABI we have to create dynamic relocations for the
+    // landing pads. To avoid creating an (unnecessary and incorrect) dynamic
+    // relocation with a non-zero addend, we need to ensure that the target
+    // symbol is non-preemptible by creating a local alias for the function.
+    // TODO: could probably omit this for !F.isInterposable()?
+    if (NeedsLabelsForEH && MAI->isCheriPurecapABI()) {
+      CurrentFnLocalForEH =
+          OutContext.getOrCreateSymbol(MAI->getLinkerPrivateGlobalPrefix() +
+                                       CurrentFnSym->getName() + "$eh_alias");
+    }
   }
 
   ORE = &getAnalysis<MachineOptimizationRemarkEmitterPass>().getORE();
