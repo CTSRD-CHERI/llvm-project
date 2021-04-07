@@ -64,7 +64,7 @@ int main(int, char**)
 {
     m.lock();
     std::thread t = support::make_test_thread(f);
-    std::this_thread::sleep_for(WaitTime);
+    std::this_thread::sleep_for(main_thread_sleep_duration);
     m.unlock();
     t.join();
 
