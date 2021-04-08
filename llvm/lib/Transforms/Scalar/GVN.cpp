@@ -2212,6 +2212,9 @@ bool GVN::processInstruction(Instruction *I) {
   if (Value *V = SimplifyInstruction(I, {DL, TLI, DT, AC})) {
     bool Changed = false;
     if (!I->use_empty()) {
+      // Simplification can cause a special instruction to become not special.
+      // For example, devirtualization to a willreturn function.
+      ICF->removeUsersOf(I);
       I->replaceAllUsesWith(V);
       Changed = true;
     }
