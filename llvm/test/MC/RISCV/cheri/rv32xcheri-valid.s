@@ -177,6 +177,10 @@ crepresentablealignmentmask x1, x2
 # CHECK: encoding: [0xdb,0x00,0x91,0xfe]
 cram x1, x2
 
+# CHECK-INST: cloadtags ra, (csp)
+# CHECK: encoding: [0xdb,0x00,0x21,0xff]
+cloadtags x1, (c2)
+
 # CHECK-INST: lb.ddc ra, (sp)
 # CHECK: encoding: [0xdb,0x00,0x01,0xfa]
 lb.ddc x1, (x2)
