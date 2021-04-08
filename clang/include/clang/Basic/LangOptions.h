@@ -223,7 +223,6 @@ public:
                      /// capability with the address
     CapInt_Relative, /// Perform conversions relative to DDC (previous
                      /// default)
-    CapInt_Invalid = -1,
   };
 
   // TODO: this should probably be flags

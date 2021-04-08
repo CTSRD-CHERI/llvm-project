@@ -529,14 +529,18 @@ def cheri_cap_to_int_EQ : Joined<["-"], "cheri-cap-to-int=">, Flags<[CC1Option]>
            "'strict' (like 'explicit' but also require explicit casts to convert __(u)intcap_t to integer), "
            "'address' (return the address when casting from capability to pointer/integer) "
            "'relative' (create DDC or PCC relative offsets when casting from capability to pointer/integer)">,
-  Values<"explicit,strict,address,relative">;
+  Values<"explicit,strict,address,relative">, NormalizedValuesScope<"LangOptions">,
+  NormalizedValues<["CapInt_Explicit", "CapInt_Strict", "CapInt_Address", "CapInt_Relative"]>,
+  MarshallingInfoEnum<LangOpts<"CheriCapToInt">, "CapInt_Relative">;
 def cheri_int_to_cap_EQ : Joined<["-"], "cheri-int-to-cap=">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"How to convert capabilities to integer values. Choices are: "
            "'explicit' (require explicit casts when casting to capabilities), "
            "'strict' (like 'explicit' but also require explicit casts to convert integers to __(u)intcap_t), "
            "'address' (create untagged capabilities holding the pointer address when casting from pointer/integer) "
            "'relative' (derive capabilities from DDC or PCC when converting from pointer/integer)">,
-  Values<"explicit,strict,address,relative">;
+  Values<"explicit,strict,address,relative">, NormalizedValuesScope<"LangOptions">,
+  NormalizedValues<["CapInt_Explicit", "CapInt_Strict", "CapInt_Address", "CapInt_Relative"]>,
+  MarshallingInfoEnum<LangOpts<"CheriIntToCap">, "CapInt_Relative">;
 
 def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Equality comparisons between capabilities only compare the address (default)">;
