@@ -521,7 +521,11 @@ def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option, NoDriver
            "'very-aggressive' (Same as aggressive but also set bounds for &array[index] expressions) and "
            "'everywhere-unsafe' (attempt to set bounds everwhere where there isn't an explicit opt-out. "
            "This is highly unsafe and will almost certainly not work at runtime)">,
-  Values<"conservative,references-only,subobject-safe,aggressive,very-aggressive,everywhere-unsafe">;
+  Values<"conservative,references-only,subobject-safe,aggressive,very-aggressive,everywhere-unsafe">,
+  NormalizedValuesScope<"LangOptions">,
+  NormalizedValues<["CBM_Conservative", "CBM_References", "CBM_SubObjectsSafe", "CBM_Aggressive",
+                    "CBM_VeryAggressive", "CBM_EverywhereUnsafe"]>,
+  MarshallingInfoEnum<LangOpts<"CheriBounds">, "CBM_Conservative">;
 
 def cheri_cap_to_int_EQ : Joined<["-"], "cheri-cap-to-int=">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"How to convert capabilities to integer values. Choices are: "

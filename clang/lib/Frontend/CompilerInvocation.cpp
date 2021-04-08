@@ -3710,27 +3710,6 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
       Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
                    Opts.CheriCompareExact);
 
-  // Parse the -cheri-bounds= option to determine whether we should set more
-  // bounds on capabilities (e.g. when passing subobject references to
-  // functions)
-  if (const Arg *A = Args.getLastArg(OPT_cheri_bounds_EQ)) {
-    auto BoundsMode =
-        llvm::StringSwitch<int>(A->getValue())
-            .Case("conservative", LangOptions::CBM_Conservative)
-            .Case("references-only", LangOptions::CBM_References)
-            .Case("subobject-safe", LangOptions::CBM_SubObjectsSafe)
-            .Case("aggressive", LangOptions::CBM_Aggressive)
-            .Case("very-aggressive", LangOptions::CBM_VeryAggressive)
-            .Case("everywhere-unsafe", LangOptions::CBM_EverywhereUnsafe)
-            .Default((LangOptions::CheriBoundsMode)-1);
-
-    if (BoundsMode == -1) {
-      Diags.Report(diag::err_drv_invalid_value)
-          << A->getAsString(Args) << A->getValue();
-    } else {
-      Opts.setCheriBounds((LangOptions::CheriBoundsMode)BoundsMode);
-    }
-  }
   Opts.CheriDataDependentProvenance =
       Args.hasArg(OPT_cheri_data_dependent_provenance);
 
