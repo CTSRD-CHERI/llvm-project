@@ -1634,8 +1634,6 @@ bool CompilerInvocation::ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args,
         {std::string(Split.first), std::string(Split.second)});
   }
 
-  Opts.CHERIStatsFile = Args.getLastArgValue(OPT_cheri_stats_file).str();
-
   for (const auto &Arg : Args.getAllArgValues(OPT_fcoverage_prefix_map_EQ)) {
     auto Split = StringRef(Arg).split('=');
     Opts.CoveragePrefixMap.insert(

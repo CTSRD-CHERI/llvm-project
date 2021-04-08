@@ -5282,7 +5282,8 @@ def stats_file : Joined<["-"], "stats-file=">,
   HelpText<"Filename to write statistics to">,
   MarshallingInfoString<FrontendOpts<"StatsFile">>;
 def cheri_stats_file : Joined<["-"], "cheri-stats-file=">,
-  HelpText<"Filename to write CHERI statistics to">;
+  HelpText<"Filename to write CHERI statistics to">,
+  MarshallingInfoString<CodeGenOpts<"CHERIStatsFile">>;
 def fdump_record_layouts_simple : Flag<["-"], "fdump-record-layouts-simple">,
   HelpText<"Dump record layout information in a simple form used for testing">,
   MarshallingInfoFlag<LangOpts<"DumpRecordLayoutsSimple">>;
