@@ -467,8 +467,7 @@ option(CLANG_ENABLE_STATIC_ANALYZER
 
 option(CLANG_ENABLE_PROTO_FUZZER "Build Clang protobuf fuzzer." OFF)
 
-option(CLANG_ROUND_TRIP_CC1_ARGS
-  "Round-trip command line arguments in -cc1." ${LLVM_ENABLE_ASSERTIONS})
+option(CLANG_ROUND_TRIP_CC1_ARGS "Round-trip command line arguments in -cc1." OFF)
 
 if(NOT CLANG_ENABLE_STATIC_ANALYZER AND CLANG_ENABLE_ARCMT)
   message(FATAL_ERROR "Cannot disable static analyzer while enabling ARCMT or Z3")
