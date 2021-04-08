@@ -359,7 +359,7 @@ public:
   static void CreateNonTerminatorUnreachable(Instruction *InsertAt) {
     auto &Ctx = InsertAt->getContext();
     new StoreInst(ConstantInt::getTrue(Ctx),
-                  UndefValue::get(Type::getInt1PtrTy(Ctx)), InsertAt);
+                  UndefValue::get(Type::getInt1PtrTy(Ctx, 0)), InsertAt);
   }
 
   void addToWorklist(Instruction *I) { Worklist.push(I); }
