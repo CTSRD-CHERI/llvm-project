@@ -2300,6 +2300,11 @@ void OMPClauseEnqueue::VisitOMPNocontextClause(const OMPNocontextClause *C) {
   Visitor->AddStmt(C->getCondition());
 }
 
+void OMPClauseEnqueue::VisitOMPFilterClause(const OMPFilterClause *C) {
+  VisitOMPClauseWithPreInit(C);
+  Visitor->AddStmt(C->getThreadID());
+}
+
 void OMPClauseEnqueue::VisitOMPUnifiedAddressClause(
     const OMPUnifiedAddressClause *) {}
 
@@ -5679,6 +5684,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPInteropDirective");
   case CXCursor_OMPDispatchDirective:
     return cxstring::createRef("OMPDispatchDirective");
+  case CXCursor_OMPMaskedDirective:
+    return cxstring::createRef("OMPMaskedDirective");
   case CXCursor_OverloadCandidate:
     return cxstring::createRef("OverloadCandidate");
   case CXCursor_TypeAliasTemplateDecl:
