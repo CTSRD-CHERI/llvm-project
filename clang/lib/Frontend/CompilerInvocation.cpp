@@ -3703,13 +3703,6 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
       Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
                    Opts.CheriCompareExact);
 
-  Opts.CheriDataDependentProvenance =
-      Args.hasArg(OPT_cheri_data_dependent_provenance);
-
-
-
-
-
   Opts.MSCompatibilityVersion = 0;
   if (const Arg *A = Args.getLastArg(OPT_fms_compatibility_version)) {
     VersionTuple VT;

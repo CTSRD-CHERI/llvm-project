@@ -514,7 +514,8 @@ def cheri_uintcap_EQ : Joined<["-"], "cheri-uintcap=">, Flags<[NoXarchOption,CC1
   NormalizedValues<["UIntCap_Addr", "UIntCap_Addr", "UIntCap_Offset"]>,
   MarshallingInfoEnum<LangOpts<"CheriUIntCap">, "UIntCap_Addr">;
 def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
-  HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">;
+  HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">,
+  MarshallingInfoFlag<LangOpts<"CheriDataDependentProvenance">>;
 def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"Choose when to tighten bounds on capabilities. Choices are: "
            "'conservative' (only stack allocations, default), "
