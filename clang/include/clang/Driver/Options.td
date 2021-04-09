@@ -523,7 +523,7 @@ def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<
            "'references-only' (also set bounds on C++ references that are definitely fixed size) "
            "'subobject-safe' (also set bounds when taking a pointer to a subobject) "
            "'aggressive' (tighten bounds whenever feasible and not annotated as unsafe) "
-           "'very-aggressive' (Same as aggressive but also set bounds for &array[index] expressions) and "
+           "'very-aggressive' (same as aggressive but also set bounds for &array[index] expressions) and "
            "'everywhere-unsafe' (attempt to set bounds everwhere where there isn't an explicit opt-out. "
            "This is highly unsafe and will almost certainly not work at runtime)">,
   Values<"conservative,references-only,subobject-safe,aggressive,very-aggressive,everywhere-unsafe">,
