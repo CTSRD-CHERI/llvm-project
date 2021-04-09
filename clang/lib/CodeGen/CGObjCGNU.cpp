@@ -1234,7 +1234,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
         DeclContext *DC = TranslationUnitDecl::castToDeclContext(TUDecl);
 
         const ObjCInterfaceDecl *OID = nullptr;
-        for (const auto &Result : DC->lookup(&II))
+        for (const auto *Result : DC->lookup(&II))
           if ((OID = dyn_cast<ObjCInterfaceDecl>(Result)))
             break;
 
@@ -2333,7 +2333,7 @@ llvm::Value *CGObjCGNU::EmitNSAutoreleasePoolClassRef(CodeGenFunction &CGF) {
       DeclContext *DC = TranslationUnitDecl::castToDeclContext(TUDecl);
 
       const VarDecl *VD = nullptr;
-      for (const auto &Result : DC->lookup(&II))
+      for (const auto *Result : DC->lookup(&II))
         if ((VD = dyn_cast<VarDecl>(Result)))
           break;
 
