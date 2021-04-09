@@ -478,7 +478,7 @@ inline uptr RoundDownTo(uptr x, usize boundary) {
 #endif
 }
 template <typename T>
-INLINE T *RoundDownTo(T *p, usize boundary) {
+inline T *RoundDownTo(T *p, usize boundary) {
   RAW_CHECK(IsPowerOfTwo(boundary));
 #if __has_builtin(__builtin_align_down)
   return __builtin_align_down(p, boundary);
@@ -495,7 +495,7 @@ inline bool IsAligned(uptr a, usize alignment) {
 #endif
 }
 
-INLINE bool IsAligned(const void *ptr, usize alignment) {
+inline bool IsAligned(const void *ptr, usize alignment) {
   return IsAligned((uptr)ptr, alignment);
 }
 

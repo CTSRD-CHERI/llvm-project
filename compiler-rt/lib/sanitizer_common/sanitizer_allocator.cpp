@@ -175,11 +175,11 @@ void *InternalAlloc(usize size, InternalAllocatorCache *cache, usize alignment) 
   usize difference = real_size - size;
   if (real_size < size) // integer overflow
     return nullptr;
-  char *p = RawInternalAlloc(real_size, cache, alignment);
+  void *p = RawInternalAlloc(real_size, cache, alignment);
   if (UNLIKELY(!p))
     ReportInternalAllocatorOutOfMemory(real_size);
   char* result = (char*)p + difference;
-  BlockHeader* metadata = ((BlockHeader*)data - 1);
+  BlockHeader *metadata = ((BlockHeader *)result - 1);
   metadata->magic = kBlockMagic;
   metadata->offset_to_real_allocation = difference;
   // Report("%s: result=%p (real=%p), offset=%zd, req_align=%zd\n", __func__, result, p, difference, alignment);
@@ -194,7 +194,7 @@ void *InternalRealloc(void *addr, usize size, InternalAllocatorCache *cache) {
   if (real_size < size) // integer overflow
     return nullptr;
   // Load the original metadata
-  BlockHeader* metadata = (BlockHeader*)addr - 1;
+  BlockHeader *metadata = (BlockHeader *)addr - 1;
   CHECK_EQ(kBlockMagic, metadata->magic);
   // Must load this value now since it might be clobbered by realloc()
   const usize offset_to_alloc = metadata->offset_to_real_allocation;
@@ -203,7 +203,7 @@ void *InternalRealloc(void *addr, usize size, InternalAllocatorCache *cache) {
     ReportInternalAllocatorOutOfMemory(real_size);
   // Check that the metadata is still valid after realloc():
   char* result = (char*)p + offset_to_alloc;
-  metadata = (InternalAllocMetaData*)result - 1;
+  metadata = (BlockHeader *)result - 1;
   CHECK_EQ(kBlockMagic, metadata->magic);
   // Report("%s: result=%p (real=%p), offset=%zd\n", __func__, result, p, offset_to_alloc);
   return result;

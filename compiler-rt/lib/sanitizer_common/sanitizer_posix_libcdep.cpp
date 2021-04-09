@@ -60,7 +60,7 @@ void ReleaseMemoryPagesToOS(uptr beg, uptr end) {
   char *beg_aligned = (char *)RoundUpTo(beg, page_size);
   char *end_aligned = (char *)RoundDownTo(end, page_size);
   if (beg_aligned < end_aligned)
-    internal_madvise(beg_aligned, end_aligned - beg_aligned,
+    internal_madvise((uptr)beg_aligned, end_aligned - beg_aligned,
                      SANITIZER_MADVISE_DONTNEED);
 }
 
