@@ -149,11 +149,9 @@ SubtargetFeatures ELFObjectFileBase::getMIPSFeatures() const {
     Features.AddFeature("beri");
     break;
   case ELF::EF_MIPS_MACH_CHERI128:
-    Features.AddFeature("chericap");
     Features.AddFeature("cheri128");
     break;
   case ELF::EF_MIPS_MACH_CHERI256:
-    Features.AddFeature("chericap");
     Features.AddFeature("cheri256");
     break;
   default:

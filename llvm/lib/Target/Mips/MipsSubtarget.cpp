@@ -247,10 +247,9 @@ MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
   // enable capabilties for all cheri-*-* triples even if CPUName != cheri
   if (TM.getTargetTriple().getEnvironment() == llvm::Triple::CheriPurecap) {
     if (FS.empty())
-      FS = "+chericap,+cheri128";
+      FS = "+cheri128";
     else {
       CheriFeatures = FS.str();
-      CheriFeatures += ",+chericap";
       if (!FS.contains("+cheri256") && !FS.contains("+cheri64"))
         CheriFeatures += ",+cheri128";
       FS = CheriFeatures;

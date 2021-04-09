@@ -182,7 +182,6 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
             run_line = re.sub(r" -cheri-size \d+", "", run_line)  # remove
             run_line = re.sub(r" -mattr=\+cheri\d+", "", run_line)  # remove
             run_line = re.sub(r" -mcpu=\+cheri\d+", "", run_line)  # remove
-            run_line = re.sub(r" -mattr=\+chericap", "", run_line)  # remove (implied by %cheri)
     if "opt " in run_line:
         run_line = re.sub(r"opt\s+-mtriple=cheri-unknown-freebsd", "%cheri_opt", run_line)
     return run_line

@@ -412,7 +412,6 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
                    "ginv");
 
   if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
-    Features.push_back("+chericap");
     if (A->getOption().matches(options::OPT_cheri))
       Features.push_back("+cheri128");
     else {

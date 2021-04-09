@@ -4285,7 +4285,6 @@ static bool ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
 
   if (const Arg *A = Args.getLastArg(OPT_cheri_size)) {
     // NOTE: Opts.Features is cleared after this so we need to add it to FeaturesAsWritten!
-    Opts.FeaturesAsWritten.push_back("+chericap");
     StringRef CheriCPUName = llvm::StringSwitch<StringRef>(A->getValue())
         .Case("64", "+cheri64")
         .Case("128", "+cheri128")
