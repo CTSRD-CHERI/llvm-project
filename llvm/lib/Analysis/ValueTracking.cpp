@@ -4275,6 +4275,12 @@ bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
   }
 }
 
+bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
+    ImmutableCallSite CS) {
+  return CS.getIntrinsicID() == Intrinsic::launder_invariant_group ||
+         CS.getIntrinsicID() == Intrinsic::strip_invariant_group;
+}
+
 /// \p PN defines a loop-variant pointer to an object.  Check if the
 /// previous iteration of the loop was referring to the same object as \p PN.
 static bool isSameUnderlyingObjectInLoop(const PHINode *PN,

@@ -165,6 +165,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
     case Intrinsic::cheri_cap_type_copy:
     case Intrinsic::cheri_cap_type_get:
     case Intrinsic::cheri_cap_unseal:
+    case Intrinsic::cheri_check_cap_store_cap:
       // CHERI intrinsics might depend on the bounds
       DBG_INDENTED("Adding stack bounds for alloca used in CHERI intrinsic:";
                    I->dump());

@@ -80,9 +80,9 @@ include "RISCVInstrFormatsXCheri.td"
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class Cheri_r<bits<5> funct5, string opcodestr, RegisterClass rdClass=GPR,
-              RegisterClass rs1Class=GPCR>
+              DAGOperand rs1Operand=GPCR>
     : RVInstCheriSrcDst<0x7f, funct5, 0, OPC_CHERI, (outs rdClass:$rd),
-                        (ins rs1Class:$rs1), opcodestr, "$rd, $rs1">;
+                        (ins rs1Operand:$rs1), opcodestr, "$rd, $rs1">;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class Cheri_rr<bits<7> funct7, string opcodestr, RegisterClass rdClass=GPCR,
@@ -385,6 +385,13 @@ def CRAM : Cheri_r<0x9, "crepresentablealignmentmask", GPR, GPR>;
 def : InstAlias<"crrl $rd, $rs1", (CRRL GPR:$rd, GPR:$rs1)>;
 def : InstAlias<"cram $rd, $rs1", (CRAM GPR:$rd, GPR:$rs1)>;
 }
+
+//===----------------------------------------------------------------------===//
+// Tag-Memory Access Instructions
+//===----------------------------------------------------------------------===//
+
+let Predicates = [HasCheri], hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+def CLoadTags : Cheri_r<0x12, "cloadtags", GPR, GPCRMemAtomic>;
 
 //===----------------------------------------------------------------------===//
 // Memory-Access with Explicit Address Type Instructions
@@ -1040,7 +1047,9 @@ def : Pat<(int_cheri_pcc_get), (CSpecialRW SCR_PCC.Encoding, C0)>;
 def : PatGpr<int_cheri_round_representable_length, CRRL>;
 def : PatGpr<int_cheri_representable_alignment_mask, CRAM>;
 
-// TODO: int_cheri_cap_load_tags
+/// Tag-Memory Access Instructions
+
+def : PatGpcr<int_cheri_cap_load_tags, CLoadTags>;
 
 /// Memory-Access with Explicit Address Type Instructions
 

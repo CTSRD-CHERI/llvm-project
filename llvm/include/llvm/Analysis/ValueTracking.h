@@ -17,6 +17,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/InstrTypes.h"
@@ -360,6 +361,14 @@ class Value;
   /// the intrinsic must preserve the nullness of the pointer.
   bool isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
       const CallBase *Call, bool MustPreserveNullness);
+
+  // {launder,strip}.invariant.group returns pointer that aliases its argument,
+  // and it only captures pointer by returning it.
+  // These intrinsics are not marked as nocapture, because returning is
+  // considered as capture. The arguments are not marked as returned neither,
+  // because it would make it useless.
+  bool isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
+      ImmutableCallSite CS);
 
   /// This method strips off any GEP address adjustments and pointer casts from
   /// the specified value, returning the original object being addressed. Note
