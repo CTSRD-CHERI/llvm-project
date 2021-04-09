@@ -513,7 +513,8 @@ def cheri_uintcap_EQ : Joined<["-"], "cheri-uintcap=">, Flags<[NoXarchOption,CC1
   Values<"address,addr,offset">, NormalizedValuesScope<"LangOptions">,
   NormalizedValues<["UIntCap_Addr", "UIntCap_Addr", "UIntCap_Offset"]>,
   MarshallingInfoEnum<LangOpts<"CheriUIntCap">, "UIntCap_Addr">;
-def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
+def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">,
+  Flags<[CC1Option, NoDriverOption, HelpHidden]>, Group<cheri_Group>,
   HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">,
   MarshallingInfoFlag<LangOpts<"CheriDataDependentProvenance">>;
 def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<cheri_Group>,
