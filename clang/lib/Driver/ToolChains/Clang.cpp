@@ -5267,9 +5267,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddLastArg(CmdArgs, options::OPT_cheri_bounds_EQ);
   Args.AddLastArg(CmdArgs, options::OPT_cheri_uintcap_EQ);
-  Args.AddLastArg(CmdArgs, options::OPT_cheri_comparison_address,
-                  options::OPT_cheri_comparison_exact);
-
+  Args.AddLastArg(CmdArgs, options::OPT_cheri_exact_equality,
+                  options::OPT_no_cheri_exact_equality);
   RenderARCMigrateToolOptions(D, Args, CmdArgs);
 
   // Add preprocessing options like -I, -D, etc. if we are using the

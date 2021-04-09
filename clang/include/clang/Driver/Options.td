@@ -551,10 +551,17 @@ def cheri_int_to_cap_EQ : Joined<["-"], "cheri-int-to-cap=">, Flags<[CC1Option]>
   NormalizedValues<["CapInt_Explicit", "CapInt_Strict", "CapInt_Address", "CapInt_Relative"]>,
   MarshallingInfoEnum<LangOpts<"CheriIntToCap">, "CapInt_Relative">;
 
-def cheri_comparison_address : Flag<["-"], "cheri-comparison=address">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
-  HelpText<"Equality comparisons between capabilities only compare the address (default)">;
-def cheri_comparison_exact : Flag<["-"], "cheri-comparison=exact">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
-  HelpText<"Equality comparisons between capabilities compare all capability fields">;
+// TODO: it would be nice if BoolOption allowed custom spelling of the positive and negative flags
+defm cheri_exact_equality : BoolOption<"", "cheri-exact-equality",
+  LangOpts<"CheriCompareExact">, DefaultFalse,
+  PosFlag<SetTrue, [], "Equality comparisons between capabilities compare all capability fields">,
+  NegFlag<SetFalse, [], "Equality comparisons between capabilities only compare the address (default)">,
+  BothFlags<[NoXarchOption,CC1Option], "">>, Group<cheri_Group>;
+def : Flag<["-"], "cheri-comparison=address">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<no_cheri_exact_equality.HelpText>, Alias<no_cheri_exact_equality>;
+def : Flag<["-"], "cheri-comparison=exact">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<cheri_exact_equality.HelpText>, Alias<cheri_exact_equality>;
+
 
 class InternalDriverOpt : Group<internal_driver_Group>,
   Flags<[NoXarchOption, HelpHidden]>;

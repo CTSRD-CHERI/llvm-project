@@ -428,6 +428,7 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
             << A->getOption().getName() << A->getValue();
     }
   }
+
   if (Arg *A = Args.getLastArg(options::OPT_mindirect_jump_EQ)) {
     StringRef Val = StringRef(A->getValue());
     if (Val == "hazard") {

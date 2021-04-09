@@ -3699,10 +3699,6 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
   else if (Args.hasArg(OPT_fwrapv))
     Opts.setSignedOverflowBehavior(LangOptions::SOB_Defined);
 
-  Opts.CheriCompareExact =
-      Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
-                   Opts.CheriCompareExact);
-
   Opts.MSCompatibilityVersion = 0;
   if (const Arg *A = Args.getLastArg(OPT_fms_compatibility_version)) {
     VersionTuple VT;
@@ -4300,9 +4296,12 @@ static bool ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     Opts.FeaturesAsWritten.push_back(CheriCPUName.str());
     A->claim();
   }
-  if (Args.hasFlag(options::OPT_cheri_comparison_exact,
-                   options::OPT_cheri_comparison_address, false)) {
-    Opts.FeaturesAsWritten.push_back("+cheri-exact-equals");
+  // TODO: If we decide to keep this flag, it should probably be done in
+  //  the frontend instead of the backend.
+  if (Args.hasFlag(options::OPT_cheri_exact_equality,
+                   options::OPT_no_cheri_exact_equality, false)) {
+    if (!llvm::is_contained(Opts.FeaturesAsWritten, "+cheri-exact-equals"))
+      Opts.FeaturesAsWritten.push_back("+cheri-exact-equals");
   }
 
   if (Arg *A = Args.getLastArg(options::OPT_target_sdk_version_EQ)) {
