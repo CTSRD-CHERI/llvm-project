@@ -506,7 +506,7 @@ def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[NoXarchOption]>, G
 def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Do not use large immediates to index the cap table">;
 
-def cheri_uintcap_EQ : Joined<["-"], "cheri-uintcap=">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
+def cheri_uintcap_EQ : Joined<["-"], "cheri-uintcap=">, Flags<[NoXarchOption,CC1Option,HelpHidden]>, Group<cheri_Group>,
   HelpText<"Whether to use the capability address or offset when performing arithmetic on capabilities."
             "By default 'address' is used, 'offset' could theoretically be useful for copying GC but is usually "
             "incompatible with existing C code.">,
