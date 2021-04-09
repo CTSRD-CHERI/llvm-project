@@ -1030,10 +1030,24 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *Load, MemDepResult DepInfo,
       // If this is a clobber and L is the first instruction in its block, then
       // we have the first instruction in the entry block.
       // Can't forward from non-atomic to atomic without violating memory model.
-      if (DepLoad != Load && Address && Load->isAtomic() <= DepLoad->isAtomic()) {
-        int Offset =
-          analyzeLoadFromClobberingLoad(Load->getType(), Address, DepLoad, DL, TLI);
+      if (DepLoad != Load && Address &&
+          Load->isAtomic() <= DepLoad->isAtomic()) {
+        Type *LoadType = Load->getType();
+        int Offset = -1;
 
+        // If Memory Dependence Analysis reported clobber check, it was nested
+        // and can be extracted from the MD result
+        if (DepInfo.isClobber() &&
+            canCoerceMustAliasedValueToLoad(DepLoad, LoadType, DL)) {
+          const auto ClobberOff = MD->getClobberOffset();
+          // GVN has no deal with a negative offset.
+          Offset = (ClobberOff == None || ClobberOff.getValue() < 0)
+                       ? -1
+                       : ClobberOff.getValue();
+        }
+        if (Offset == -1)
+          Offset = analyzeLoadFromClobberingLoad(LoadType, Address, DepLoad, DL,
+                                                 TLI);
         if (Offset != -1 &&
             canExtractBitsFromCapability(DepLoad->getType(), Load->getType(),
                                          Offset, DL)) {
