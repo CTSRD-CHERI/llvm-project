@@ -80,9 +80,9 @@ include "RISCVInstrFormatsXCheri.td"
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class Cheri_r<bits<5> funct5, string opcodestr, RegisterClass rdClass=GPR,
-              RegisterClass rs1Class=GPCR>
+              DAGOperand rs1Operand=GPCR>
     : RVInstCheriSrcDst<0x7f, funct5, 0, OPC_CHERI, (outs rdClass:$rd),
-                        (ins rs1Class:$rs1), opcodestr, "$rd, $rs1">;
+                        (ins rs1Operand:$rs1), opcodestr, "$rd, $rs1">;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class Cheri_rr<bits<7> funct7, string opcodestr, RegisterClass rdClass=GPCR,
