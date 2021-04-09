@@ -506,10 +506,13 @@ def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[NoXarchOption]>, G
 def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Do not use large immediates to index the cap table">;
 
-def cheri_uintcap_offset : Flag<["-"], "cheri-uintcap=offset">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
-  HelpText<"Use the capability offset when performing computations on uintcap_t (more GC-friendly but needs more changes to source code)">;
-def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
-  HelpText<"Use the capability address when performing computations on uintcap_t (more C compatible but may break copying GC)">;
+def cheri_uintcap_EQ : Joined<["-"], "cheri-uintcap=">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<"Whether to use the capability address or offset when performing arithmetic on capabilities."
+            "By default 'address' is used, 'offset' could theoretically be useful for copying GC but is usually "
+            "incompatible with existing C code.">,
+  Values<"address,addr,offset">, NormalizedValuesScope<"LangOptions">,
+  NormalizedValues<["UIntCap_Addr", "UIntCap_Addr", "UIntCap_Offset"]>,
+  MarshallingInfoEnum<LangOpts<"CheriUIntCap">, "UIntCap_Addr">;
 def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">;
 def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<cheri_Group>,

@@ -170,8 +170,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.ClaimAllArgs(options::OPT_cheri_EQ);
   Args.ClaimAllArgs(options::OPT_cheri);
   // And -cheri-uintcap=
-  Args.ClaimAllArgs(options::OPT_cheri_uintcap_offset);
-  Args.ClaimAllArgs(options::OPT_cheri_uintcap_addr);
+  Args.ClaimAllArgs(options::OPT_cheri_uintcap_EQ);
   // Also pretend that all the captable flags were used
   Args.ClaimAllArgs(options::OPT_cheri_cap_table_abi);
   Args.ClaimAllArgs(options::OPT_cheri_large_cap_table);

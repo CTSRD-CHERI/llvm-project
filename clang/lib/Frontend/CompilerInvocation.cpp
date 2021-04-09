@@ -3699,13 +3699,6 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
   else if (Args.hasArg(OPT_fwrapv))
     Opts.setSignedOverflowBehavior(LangOptions::SOB_Defined);
 
-  // uintcap_t mode: vaddr or offset
-  bool UseCheriVaddrMode =
-      Args.hasFlag(OPT_cheri_uintcap_addr, OPT_cheri_uintcap_offset, true);
-  Opts.setCheriUIntCap(UseCheriVaddrMode
-                           ? LangOptions::CheriUIntCapMode::UIntCap_Addr
-                           : LangOptions::CheriUIntCapMode::UIntCap_Offset);
-
   Opts.CheriCompareExact =
       Args.hasFlag(OPT_cheri_comparison_exact, OPT_cheri_comparison_address,
                    Opts.CheriCompareExact);

@@ -5265,9 +5265,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddLastArg(CmdArgs, options::OPT_working_directory);
 
-  Args.AddLastArg(CmdArgs, options::OPT_cheri_uintcap_offset,
-                  options::OPT_cheri_uintcap_addr);
   Args.AddLastArg(CmdArgs, options::OPT_cheri_bounds_EQ);
+  Args.AddLastArg(CmdArgs, options::OPT_cheri_uintcap_EQ);
   Args.AddLastArg(CmdArgs, options::OPT_cheri_comparison_address,
                   options::OPT_cheri_comparison_exact);
 
