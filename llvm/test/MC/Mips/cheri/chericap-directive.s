@@ -1,6 +1,6 @@
-# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+cheri128,+chericap -filetype=obj %s -o - \
+# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+cheri128 -filetype=obj %s -o - \
 # RUN:     | llvm-readobj -r - -s -section-data
-# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+cheri128,+chericap -filetype=obj %s -o - \
+# RUN: llvm-mc -triple mips64-unknown-freebsd -mattr=+cheri128 -filetype=obj %s -o - \
 # RUN:     | llvm-readobj -r - -s -section-data | %cheri_FileCheck %s -check-prefixes CHECK
 # RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o - | llvm-readobj -r - -s -section-data | %cheri_FileCheck %s -check-prefixes CHECK
 
