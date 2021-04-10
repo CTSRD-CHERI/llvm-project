@@ -183,6 +183,9 @@ def XLenRI : RegInfoByHwMode<
       [RegInfo<32,32,32>, RegInfo<64,64,64>]>;
 def CLenVT : ValueTypeByHwMode<[RV32, RV64],
                                [iFATPTR64, iFATPTR128]>;
+def CLenRI : RegInfoByHwMode<
+      [RV32,              RV64],
+      [RegInfo<64,64,64>, RegInfo<128,128,128>]>;
 
 // The order of registers represents the preferred allocation sequence.
 // Registers are listed in the order caller-save, callee-save, specials.
@@ -205,9 +208,7 @@ def GPCR : RegisterClass<"RISCV", [CLenVT], 64, (add
     (sequence "C%u", 18, 27),
     (sequence "C%u", 0, 4)
   )> {
-  let RegInfos = RegInfoByHwMode<
-      [RV32,              RV64],
-      [RegInfo<64,64,64>, RegInfo<128,128,128>]>;
+  let RegInfos = CLenRI;
 }
 
 def GPCRC0IsDDC : RegisterClass<"RISCV", [CLenVT], 64, (add
@@ -219,9 +220,7 @@ def GPCRC0IsDDC : RegisterClass<"RISCV", [CLenVT], 64, (add
     (sequence "C%u", 1, 4),
     DDC
   )> {
-  let RegInfos = RegInfoByHwMode<
-      [RV32,              RV64],
-      [RegInfo<64,64,64>, RegInfo<128,128,128>]>;
+  let RegInfos = CLenRI;
 }
 
 def GPRX0 : RegisterClass<"RISCV", [XLenVT], 32, (add X0)> {
@@ -249,9 +248,7 @@ def GPCRNoC0 : RegisterClass<"RISCV", [CLenVT], 64, (add
     (sequence "C%u", 18, 27),
     (sequence "C%u", 1, 4)
   )> {
-  let RegInfos = RegInfoByHwMode<
-      [RV32,              RV64],
-      [RegInfo<64,64,64>, RegInfo<128,128,128>]>;
+  let RegInfos = CLenRI;
 }
 
 def GPRNoX0X2 : RegisterClass<"RISCV", [XLenVT], 32, (add
@@ -288,9 +285,7 @@ def GPCRTC : RegisterClass<"RISCV", [CLenVT], 32, (add
     (sequence "C%u", 10, 17),
     (sequence "C%u", 28, 31)
   )> {
-  let RegInfos = RegInfoByHwMode<
-      [RV32,              RV64],
-      [RegInfo<64,64,64>, RegInfo<128,128,128>]>;
+  let RegInfos = CLenRI;
 }
 
 def SP : RegisterClass<"RISCV", [XLenVT], 32, (add X2)> {
