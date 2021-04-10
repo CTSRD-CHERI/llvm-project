@@ -8090,9 +8090,7 @@ void ScalarEvolution::forgetLoop(const Loop *L) {
 }
 
 void ScalarEvolution::forgetTopmostLoop(const Loop *L) {
-  while (Loop *Parent = L->getParentLoop())
-    L = Parent;
-  forgetLoop(L);
+  forgetLoop(L->getOutermostLoop());
 }
 
 void ScalarEvolution::forgetValue(Value *V) {
