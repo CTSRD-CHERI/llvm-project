@@ -1804,6 +1804,7 @@ bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
   case CK_FixedPointCast:
   case CK_FixedPointToIntegral:
   case CK_IntegralToFixedPoint:
+  case CK_MatrixCast:
     assert(!getType()->isBooleanType() && "unheralded conversion to bool");
     goto CheckNoBasePath;
 

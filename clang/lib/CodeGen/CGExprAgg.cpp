@@ -905,6 +905,7 @@ void AggExprEmitter::VisitCastExpr(CastExpr *E) {
   case CK_PointerToCHERICapability:
   case CK_CHERICapabilityToOffset:
   case CK_CHERICapabilityToAddress:
+  case CK_MatrixCast:
 
   case CK_IntToOCLSampler:
   case CK_FloatingToFixedPoint:
@@ -1431,6 +1432,7 @@ static bool castPreservesZero(const CastExpr *CE) {
   case CK_PointerToCHERICapability:
     // Language extensions.
   case CK_VectorSplat:
+  case CK_MatrixCast:
   case CK_NonAtomicToAtomic:
   case CK_AtomicToNonAtomic:
     return true;
