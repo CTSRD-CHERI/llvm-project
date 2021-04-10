@@ -430,16 +430,6 @@ bool InlineSpiller::hoistSpillInsideBB(LiveInterval &SpillLI,
   for (const MachineInstr &MI : make_range(MIS.begin(), MII))
     getVDefInterval(MI, LIS);
   --MII; // Point to store instruction.
-#if 0
-  // CHERI, with hardware floating point, lacks instructions for storing
-  // floating point via a capability.  As such, the storeRegToStackSlot call
-  // will insert two instructions and we must update the maps for both of them.
-  if (MII != MBB->begin()) {
-    --MII; // Point to the instruction before the store instruction.
-    if (LIS.isNotInMIMap(*MII))
-      LIS.InsertMachineInstrInMaps(*MII);
-  }
-#endif
   LLVM_DEBUG(dbgs() << "\thoisted: " << SrcVNI->def << '\t' << *MII);
 
   // If there is only 1 store instruction is required for spill, add it
