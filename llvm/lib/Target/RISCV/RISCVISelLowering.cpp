@@ -5469,6 +5469,13 @@ bool RISCVTargetLowering::targetShrinkDemandedConstant(
   if (ShrunkMask.isSignedIntN(12))
     return false;
 
+  // Preserve (and X, 0xffff) when zext.h is supported.
+  if (Subtarget.hasStdExtZbb() || Subtarget.hasStdExtZbp()) {
+    APInt NewMask = APInt(Mask.getBitWidth(), 0xffff);
+    if (IsLegalMask(NewMask))
+      return UseMask(NewMask);
+  }
+
   // Try to preserve (and X, 0xffffffff), the (zext_inreg X, i32) pattern.
   if (VT == MVT::i64) {
     APInt NewMask = APInt(64, 0xffffffff);
