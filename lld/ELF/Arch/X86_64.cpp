@@ -704,13 +704,19 @@ int64_t X86_64::getImplicitAddend(const uint8_t *buf, RelType type) const {
   case R_X86_64_DTPOFF64:
   case R_X86_64_PC64:
   case R_X86_64_SIZE64:
+  case R_X86_64_GLOB_DAT:
   case R_X86_64_GOT64:
   case R_X86_64_GOTOFF64:
   case R_X86_64_GOTPC64:
+  case R_X86_64_IRELATIVE:
   case R_X86_64_RELATIVE:
     return read64le(buf);
+  case R_X86_64_JUMP_SLOT:
+  case R_X86_64_NONE:
+    return 0; // The stored value at this location is not the addend.
   default:
-    llvm_unreachable("unknown relocation");
+    errorOrWarn(toString(type) + " not handled in getImplicitAddend");
+    return 0;
   }
 }
 
