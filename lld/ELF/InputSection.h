@@ -221,7 +221,6 @@ public:
   // So we convert ELF reloc records to our own records in Relocations.cpp.
   // This vector contains such "cooked" relocations.
   SmallVector<Relocation, 0> relocations;
-  std::vector<DynamicReloc> freeBSDMipsRelocationsHack;
 
   // These are modifiers to jump instructions that are necessary when basic
   // block sections are enabled.  Basic block sections creates opportunities to

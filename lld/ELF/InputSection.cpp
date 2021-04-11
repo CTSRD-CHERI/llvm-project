@@ -1191,25 +1191,6 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
       target->applyJumpInstrMod(bufLoc, jumpMod.original, jumpMod.size);
     }
   }
-  for (const DynamicReloc &reloc : freeBSDMipsRelocationsHack) {
-    int64_t addend = reloc.computeAddend();
-    // getOffset adds the output section base address here
-    uint64_t offset = reloc.offsetInSec;
-    if (errorHandler().verbose) {
-      message("Adding hack: addend=0x" + utohexstr(addend) + " offset=0x" +
-              utohexstr(reloc.offsetInSec) + " Type: 0x" +
-              utohexstr(reloc.type) + " at " +
-              reloc.inputSec->getObjMsg(reloc.offsetInSec));
-    }
-    uint8_t *bufLoc = buf + offset;
-    auto oldAddend = target->getImplicitAddend(bufLoc, reloc.type);
-    target->relocate(bufLoc,
-                     {R_ADDEND, reloc.type, reloc.getOffset(), 0, reloc.sym},
-                     /*targetVA=*/addend);
-    auto newAddend = target->getImplicitAddend(bufLoc, reloc.type);
-    assert(oldAddend == newAddend && "freeBSDMipsRelocationsHack still required?");
-  }
-
 }
 
 // For each function-defining prologue, find any calls to __morestack,
