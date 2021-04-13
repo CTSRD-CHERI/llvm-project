@@ -2542,9 +2542,9 @@ static bool mergeAlignedAttrs(Sema &S, NamedDecl *New, Decl *Old) {
   return AnyAdded;
 }
 
-#define WANT_MERGE_LOGIC
+#define WANT_DECL_MERGE_LOGIC
 #include "clang/Sema/AttrParsedAttrImpl.inc"
-#undef WANT_MERGE_LOGIC
+#undef WANT_DECL_MERGE_LOGIC
 
 static bool mergeDeclAttribute(Sema &S, NamedDecl *D,
                                const InheritableAttr *Attr,
