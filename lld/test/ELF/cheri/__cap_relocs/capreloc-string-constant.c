@@ -41,15 +41,9 @@ struct option options_table[] = {
 // UNKNOWN_LENGTH: warning: cannot find entry symbol __start
 // UNKNOWN_LENGTH-NOT: warning
 
-
-// dynamic should have 10 relocations against the load address
+// dynamic should have 5 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-// DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-// DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-// DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-// DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
 // DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
 // DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
 // DYNAMIC-RELOCS-NEXT:     R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
@@ -76,8 +70,6 @@ struct option options_table[] = {
 // STATIC-NEXT:    Base: 0x[[#RODATA + 6]]  (<unknown symbol>+1) Length: 10 Perms: Constant
 // STATIC-NEXT: ]
 
-
-
 // DYNAMIC: Section {
 // DYNAMIC:      Name: .rodata (
 // DYNAMIC-NEXT: Type: SHT_PROGBITS (0x1)
@@ -86,7 +78,7 @@ struct option options_table[] = {
 // DYNAMIC-NEXT:   SHF_MERGE (0x10)
 // DYNAMIC-NEXT:   SHF_STRINGS (0x20)
 // DYNAMIC-NEXT: ]
-// DYNAMIC-NEXT: Address: 0x[[#%X,RODATA:0x4E0]]
+// DYNAMIC-NEXT: Address: 0x[[#%X,RODATA:0x490]]
 
 // PIE exe amd shlib should have a dynamic relocations and only have the offset+length values filled in:
 // DYNAMIC-LABEL: CHERI __cap_relocs [

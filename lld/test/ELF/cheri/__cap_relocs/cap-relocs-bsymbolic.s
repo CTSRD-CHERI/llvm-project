@@ -42,34 +42,31 @@
 
 # Now check for CHERI:
 # RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-cheri.o -shared -o %t-cheri.so
-# We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
+# We have 3 dynamic relocations each for the base and the size against the symbols:
 # RUN: llvm-readobj -r --cap-relocs %t-cheri.so | FileCheck %s --check-prefix CHERI-PREEMPTIBLE
 # CHERI-PREEMPTIBLE-LABEL:  Relocations [
 # CHERI-PREEMPTIBLE-NEXT:    Section (7) .rel.dyn {
-# CHERI-PREEMPTIBLE-NEXT:      0x20590 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x205B8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x205E0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x20598 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x205A8 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x205C0 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE bar{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x205D0 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE bar{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x205E8 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE baz{{$}}
-# CHERI-PREEMPTIBLE-NEXT:      0x205F8 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE baz{{$}}
+# CHERI-PREEMPTIBLE-NEXT:      R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo{{$}}
+# CHERI-PREEMPTIBLE-NEXT:      R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo{{$}}
+# CHERI-PREEMPTIBLE-NEXT:      R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE bar{{$}}
+# CHERI-PREEMPTIBLE-NEXT:      R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE bar{{$}}
+# CHERI-PREEMPTIBLE-NEXT:      R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE baz{{$}}
+# CHERI-PREEMPTIBLE-NEXT:      R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE baz{{$}}
 # CHERI-PREEMPTIBLE-NEXT:    }
 # CHERI-PREEMPTIBLE-NEXT:  ]
 
 # In the case of CHERI we have the addend in the offset field of the cap reloc:
 # and .data only contains three uninitialized capabilities:
 # CHERI-PREEMPTIBLE-LABEL: CHERI __cap_relocs [
-# CHERI-PREEMPTIBLE-NEXT:    0x030640 (funcptr)       Base: 0x0 (foo+0) Length: 0 Perms: Function
-# CHERI-PREEMPTIBLE-NEXT:    0x030650 (intptr)        Base: 0x0 (bar+0) Length: 0 Perms: Object
-# CHERI-PREEMPTIBLE-NEXT:    0x030660 (shortptr)      Base: 0x0 (baz+7) Length: 0 Perms: Object
+# CHERI-PREEMPTIBLE-NEXT:    0x{{.+}}0 (funcptr)       Base: 0x0 (foo+0) Length: 0 Perms: Function
+# CHERI-PREEMPTIBLE-NEXT:    0x{{.+}}0 (intptr)        Base: 0x0 (bar+0) Length: 0 Perms: Object
+# CHERI-PREEMPTIBLE-NEXT:    0x{{.+}}0 (shortptr)      Base: 0x0 (baz+7) Length: 0 Perms: Object
 # CHERI-PREEMPTIBLE-NEXT: ]
 # RUN: llvm-objdump --section=.data -s %t-cheri.so | FileCheck %s --check-prefix CHERI-PREEMPTIBLE-ADDEND
 # CHERI-PREEMPTIBLE-ADDEND-LABEL: Contents of section .data:
-# CHERI-PREEMPTIBLE-ADDEND-NEXT:  30640 cacacaca cacacaca cacacaca cacacaca  ................
-# CHERI-PREEMPTIBLE-ADDEND-NEXT:  30650 cacacaca cacacaca cacacaca cacacaca  ................
-# CHERI-PREEMPTIBLE-ADDEND-NEXT:  30660 cacacaca cacacaca cacacaca cacacaca  ................
+# CHERI-PREEMPTIBLE-ADDEND-NEXT:  30600 cacacaca cacacaca cacacaca cacacaca  ................
+# CHERI-PREEMPTIBLE-ADDEND-NEXT:  30610 cacacaca cacacaca cacacaca cacacaca  ................
+# CHERI-PREEMPTIBLE-ADDEND-NEXT:  30620 cacacaca cacacaca cacacaca cacacaca  ................
 
 
 # RUN: ld.lld %t-mips.o -shared -Bsymbolic -o %t-mips-symbolic.so
@@ -93,17 +90,13 @@
 
 # Now check for CHERI -Bsymbolic:
 # RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t-cheri.o -shared -Bsymbolic -o %t-cheri-symbolic.so
-# With -BSymbolic all 6 relocations should be against the load address:
-# We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
+# With -BSymbolic all 3 relocations should be against the load address (for the base field):
 # RUN: llvm-readobj -r --cap-relocs %t-cheri-symbolic.so | FileCheck %s --check-prefix CHERI-BSYMBOLIC
 # CHERI-BSYMBOLIC-LABEL:  Relocations [
 # CHERI-BSYMBOLIC-NEXT:    Section (7) .rel.dyn {
-# CHERI-BSYMBOLIC-NEXT:      0x20570 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-BSYMBOLIC-NEXT:      0x20578 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-BSYMBOLIC-NEXT:      0x20598 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-BSYMBOLIC-NEXT:      0x205A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-BSYMBOLIC-NEXT:      0x205C0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
-# CHERI-BSYMBOLIC-NEXT:      0x205C8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
+# CHERI-BSYMBOLIC-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
+# CHERI-BSYMBOLIC-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
+# CHERI-BSYMBOLIC-NEXT:      R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE -{{$}}
 # CHERI-BSYMBOLIC-NEXT:    }
 # CHERI-BSYMBOLIC-NEXT:  ]
 
@@ -111,16 +104,17 @@
 
 # In the case of CHERI we have the addend in the offset field of the cap reloc:
 # CHERI-BSYMBOLIC-LABEL: CHERI __cap_relocs [
-# CHERI-BSYMBOLIC-NEXT:    0x030600 (funcptr)       Base: 0x10560 (foo+0) Length: 16 Perms: Function
-# CHERI-BSYMBOLIC-NEXT:    0x030610 (intptr)        Base: 0x30630 (bar+0) Length: 4 Perms: Object
-# CHERI-BSYMBOLIC-NEXT:    0x030620 (shortptr)      Base: 0x30640 (baz+7) Length: 32 Perms: Object
+# CHERI-BSYMBOLIC-NEXT:    0x0305c0 (funcptr)       Base: 0x10530 (foo+0) Length: 16 Perms: Function
+# CHERI-BSYMBOLIC-NEXT:    0x0305d0 (intptr)        Base: 0x305f0 (bar+0) Length: 4 Perms: Object
+# CHERI-BSYMBOLIC-NEXT:    0x0305e0 (shortptr)      Base: 0x30600 (baz+7) Length: 32 Perms: Object
 #                                                            ^---- All values filled in (but the +7 is in the offset field!)
 # CHERI-BSYMBOLIC-NEXT: ]
 # and .data only contains three uninitialized capabilities since it will be filled in by __cap_relocs processing:
 # CHERI-BSYMBOLIC-ADDEND-LABEL: Contents of section .data:
-# CHERI-BSYMBOLIC-ADDEND-NEXT:  30600 cacacaca cacacaca cacacaca cacacaca  ................
-# CHERI-BSYMBOLIC-ADDEND-NEXT:  30610 cacacaca cacacaca cacacaca cacacaca  ................
-# CHERI-BSYMBOLIC-ADDEND-NEXT:  30620 cacacaca cacacaca cacacaca cacacaca  ................
+# CHERI-BSYMBOLIC-ADDEND-NEXT:  305c0 cacacaca cacacaca cacacaca cacacaca
+# CHERI-BSYMBOLIC-ADDEND-NEXT:  305d0 cacacaca cacacaca cacacaca cacacaca
+# CHERI-BSYMBOLIC-ADDEND-NEXT:  305e0 cacacaca cacacaca cacacaca cacacaca
+# CHERI-BSYMBOLIC-ADDEND-NEXT:  305f0 0000002a 00000000 00000000 00000000
 
 # TODO: check -Bsymbolic-functions as well?
 

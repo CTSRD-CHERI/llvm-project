@@ -263,8 +263,8 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *s) {
     assert(locationSym->isSection());
     auto *locationDef = cast<Defined>(locationSym);
     auto *locationSec = cast<InputSectionBase>(locationDef->section);
-    addCapReloc({locationSec, (uint64_t)locationRel.r_addend, false},
-                realTarget, targetNeedsDynReloc, targetCapabilityOffset,
+    addCapReloc({locationSec, (uint64_t)locationRel.r_addend}, realTarget,
+                targetNeedsDynReloc, targetCapabilityOffset,
                 realLocation.sym());
   }
 }
@@ -276,7 +276,6 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
                                               int64_t capabilityOffset,
                                               Symbol *sourceSymbol) {
   if (config->relativeCapRelocsOnly) {
-    assert(!loc.needsDynReloc);
     if (targetNeedsDynReloc) {
       error("Cannot add __cap_reloc against target that needs a dynamic "
             "relocation when --relative-cap-relocs is enabled: " +
@@ -285,7 +284,6 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
     }
   } else {
     // Allow relocations in __cap_relocs section for legacy mode
-    loc.needsDynReloc = loc.needsDynReloc || config->isPic || config->pie;
     targetNeedsDynReloc = targetNeedsDynReloc || config->isPic || config->pie;
   }
   uint64_t currentEntryOffset = relocsMap.size() * relocSize;
@@ -317,40 +315,6 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
 
   if (!addEntry(loc, {target, capabilityOffset, targetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
-  }
-  if (loc.needsDynReloc) {
-    // XXXAR: We don't need to create a symbol here since if we pass nullptr
-    // to the dynamic reloc it will add a relocation against the load address
-#ifdef DEBUG_CAP_RELOCS
-    llvm::sys::path::filename(Loc.Section->File->getName());
-    StringRef Filename = llvm::sys::path::filename(Loc.Section->File->getName());
-    std::string SymbolHackName = ("__caprelocs_hack_" + Loc.Section->Name + "_" +
-                                  Filename).str();
-    auto LocationSym = Symtab->find(SymbolHackName);
-    if (!LocationSym) {
-      Symtab->addDefined(saver.save(SymbolHackName), STV_DEFAULT, STT_OBJECT,
-                         Loc.Offset, Config->CapabilitySize, STB_GLOBAL,
-                         Loc.Section, Loc.Section->File);
-      LocationSym = Symtab->find(SymbolHackName);
-      assert(LocationSym);
-    }
-
-    // Needed because local symbols cannot be used in dynamic relocations
-    // TODO: do this better
-    // message("Adding dyn reloc at " + toString(this) + "+0x" +
-    // utohexstr(CurrentEntryOffset))
-#endif
-    assert(currentEntryOffset < getSize());
-    // Add a dynamic relocation so that RTLD fills in the right base address
-    // We only have the offset relative to the load address...
-    // Ideally RTLD/crt_init_globals would just add the load address to all
-    // cap_relocs entries that have a RELATIVE flag set instead of requiring a
-    // full Elf_Rel/Elf_Rela
-    // The addend is zero here since it will be written in writeTo()
-    assert(!config->isRela);
-    mainPart->relaDyn->addReloc(elf::target->relativeRel, this,
-                                currentEntryOffset, nullptr);
-    containsDynamicRelocations = true;
   }
   if (targetNeedsDynReloc) {
 #ifdef DEBUG_CAP_RELOCS
@@ -701,7 +665,7 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   case R_CHERI_CAPABILITY_TABLE_INDEX_CALL:
   case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
     if (!sym.isFunc() && !sym.isUndefWeak()) {
-      CheriCapRelocLocation loc{isec, offset, false};
+      CheriCapRelocLocation loc{isec, offset};
       std::string msg = "call relocation against non-function symbol " + verboseToString(&sym, 0) +
       "\n>>> referenced by " + loc.toString();
       if (sym.isUndefined() && config->unresolvedSymbolsInShlib == UnresolvedPolicy::Ignore) {
@@ -1205,12 +1169,10 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
         type, sec, offset, sym, addend, expr,
         /* Relocation type for the addend = */ target->symbolicRel);
   } else if (capRelocMode == CapRelocsMode::Legacy) {
-    bool needsDynReloc = config->isPic;
     if (config->relativeCapRelocsOnly) {
       assert(!sym->isPreemptible);
-      needsDynReloc = false;
     }
-    InX<ELFT>::capRelocs->addCapReloc({sec, offset, needsDynReloc}, {sym, 0u},
+    InX<ELFT>::capRelocs->addCapReloc({sec, offset}, {sym, 0u},
                                       sym->isPreemptible, addend);
   } else {
     assert(config->localCapRelocsMode == CapRelocsMode::CBuildCap);

@@ -51,7 +51,6 @@ private:
 struct CheriCapRelocLocation {
   InputSectionBase *section;
   uint64_t offset;
-  bool needsDynReloc;
   bool operator==(const CheriCapRelocLocation &other) const {
     return section == other.section && offset == other.offset;
   }
@@ -331,10 +330,10 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
 namespace llvm {
 template <> struct DenseMapInfo<lld::elf::CheriCapRelocLocation> {
   static inline lld::elf::CheriCapRelocLocation getEmptyKey() {
-    return {nullptr, 0, false};
+    return {nullptr, 0};
   }
   static inline lld::elf::CheriCapRelocLocation getTombstoneKey() {
-    return {nullptr, std::numeric_limits<uint64_t>::max(), false};
+    return {nullptr, std::numeric_limits<uint64_t>::max()};
   }
   static unsigned getHashValue(const lld::elf::CheriCapRelocLocation &val) {
     auto pair = std::make_pair(val.section, val.offset);
