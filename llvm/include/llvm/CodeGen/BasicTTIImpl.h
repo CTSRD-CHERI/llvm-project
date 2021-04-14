@@ -413,7 +413,7 @@ public:
     return true;
   }
 
-  unsigned getFPOpCost(Type *Ty) {
+  InstructionCost getFPOpCost(Type *Ty) {
     // Check whether FADD is available, as a proxy for floating-point in
     // general.
     const TargetLoweringBase *TLI = getTLI();
