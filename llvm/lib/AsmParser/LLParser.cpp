@@ -1728,6 +1728,13 @@ bool LLParser::parseOptionalParamAttrs(AttrBuilder &B) {
       B.addAlignmentAttr(Alignment);
       continue;
     }
+    case lltok::kw_alignstack: {
+      unsigned Alignment;
+      if (parseOptionalStackAlignment(Alignment))
+        return true;
+      B.addStackAlignmentAttr(Alignment);
+      continue;
+    }
     case lltok::kw_byval: {
       Type *Ty;
       if (parseRequiredTypeAttr(Ty, lltok::kw_byval))
@@ -1796,7 +1803,6 @@ bool LLParser::parseOptionalParamAttrs(AttrBuilder &B) {
     case lltok::kw_zeroext:         B.addAttribute(Attribute::ZExt); break;
     case lltok::kw_immarg:          B.addAttribute(Attribute::ImmArg); break;
 
-    case lltok::kw_alignstack:
     case lltok::kw_alwaysinline:
     case lltok::kw_argmemonly:
     case lltok::kw_builtin:

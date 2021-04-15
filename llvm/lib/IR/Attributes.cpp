@@ -1587,6 +1587,10 @@ MaybeAlign AttributeList::getParamAlignment(unsigned ArgNo) const {
   return getAttributes(ArgNo + FirstArgIndex).getAlignment();
 }
 
+MaybeAlign AttributeList::getParamStackAlignment(unsigned ArgNo) const {
+  return getAttributes(ArgNo + FirstArgIndex).getStackAlignment();
+}
+
 Type *AttributeList::getParamByValType(unsigned Index) const {
   return getAttributes(Index+FirstArgIndex).getByValType();
 }

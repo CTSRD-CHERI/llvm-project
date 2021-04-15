@@ -486,6 +486,10 @@ public:
     return AttributeSets.getParamAlignment(ArgNo);
   }
 
+  MaybeAlign getParamStackAlign(unsigned ArgNo) const {
+    return AttributeSets.getParamStackAlignment(ArgNo);
+  }
+
   /// Extract the byval type for a parameter.
   Type *getParamByValType(unsigned ArgNo) const {
     return AttributeSets.getParamByValType(ArgNo);
