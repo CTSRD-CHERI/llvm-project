@@ -637,7 +637,8 @@ void CheriCapTableSection::writeTo(uint8_t* buf) {
     write(it.second.index.getValue(), it.first, 0);
 }
 
-static Defined *findMatchingFunction(InputSectionBase *isec, uint64_t symOffset) {
+static Defined *findMatchingFunction(const InputSectionBase *isec,
+                                     uint64_t symOffset) {
   switch (config->ekind) {
   default:
     llvm_unreachable("Invalid kind");
@@ -653,8 +654,8 @@ static Defined *findMatchingFunction(InputSectionBase *isec, uint64_t symOffset)
 }
 
 CheriCapTableSection::CaptableMap &
-CheriCapTableSection::getCaptableMapForFileAndOffset(InputSectionBase *isec,
-                                                     uint64_t offset) {
+CheriCapTableSection::getCaptableMapForFileAndOffset(
+    const InputSectionBase *isec, uint64_t offset) {
   if (LLVM_LIKELY(config->capTableScope == CapTableScopePolicy::All))
     return globalEntries;
   if (config->capTableScope == CapTableScopePolicy::File) {
@@ -758,10 +759,13 @@ void CheriCapTableSection::addTlsEntry(Symbol &sym) {
   tlsEntries.map.insert(std::make_pair(&sym, CapTableIndex()));
 }
 
-uint32_t CheriCapTableSection::getIndex(const Symbol &sym, InputSectionBase *isec,
+uint32_t CheriCapTableSection::getIndex(const Symbol &sym,
+                                        const InputSectionBase *isec,
                                         uint64_t offset) const {
   assert(valuesAssigned && "getIndex called before index assignment");
-  const CaptableMap &entries = getCaptableMapForFileAndOffset(isec, offset);
+  const CaptableMap &entries =
+      const_cast<CheriCapTableSection *>(this)->getCaptableMapForFileAndOffset(
+          isec, offset);
   auto it = entries.map.find(const_cast<Symbol *>(&sym));
   assert(entries.firstIndex != std::numeric_limits<uint64_t>::max() &&
          "First index not set yet?");

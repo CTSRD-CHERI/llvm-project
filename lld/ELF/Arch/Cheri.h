@@ -196,7 +196,7 @@ public:
   void addDynTlsEntry(Symbol &sym);
   void addTlsIndex();
   void addTlsEntry(Symbol &sym);
-  uint32_t getIndex(const Symbol &sym, InputSectionBase *isec,
+  uint32_t getIndex(const Symbol &sym, const InputSectionBase *isec,
                     uint64_t offset) const;
   uint32_t getDynTlsOffset(const Symbol &sym) const;
   uint32_t getTlsIndexOffset() const;
@@ -243,12 +243,7 @@ private:
   /// be inserted. Usually this will just be the GlobalEntries map, but when
   /// compiling with the experimental per-function/per-file captables it will
   /// return a reference to the file/function that matches InputFile+Offset
-  const CaptableMap &getCaptableMapForFileAndOffset(InputSectionBase *isec,
-                                                    uint64_t offset) const {
-    return const_cast<CheriCapTableSection *>(this)
-        ->getCaptableMapForFileAndOffset(isec, offset);
-  }
-  CaptableMap &getCaptableMapForFileAndOffset(InputSectionBase *isec,
+  CaptableMap &getCaptableMapForFileAndOffset(const InputSectionBase *isec,
                                               uint64_t offset);
   size_t nonTlsEntryCount() const {
     size_t totalCount = globalEntries.size();

@@ -214,7 +214,7 @@ public:
   void relocateAlloc(uint8_t *buf, uint8_t *bufEnd);
   static uint64_t getRelocTargetVA(const InputFile *File, RelType Type,
                                    int64_t A, uint64_t P, const Symbol &Sym,
-                                   RelExpr Expr, InputSectionBase *isec,
+                                   RelExpr Expr, const InputSectionBase *isec,
                                    uint64_t offset);
 
   // The native ELF reloc data type is not very convenient to handle.
