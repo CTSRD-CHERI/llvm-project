@@ -3748,7 +3748,7 @@ GetRuntimeFunctionDecl(ASTContext &C, StringRef Name) {
 
   IdentifierInfo &CII = C.Idents.get(Name);
   for (const auto *Result : DC->lookup(&CII))
-    if (const auto FD = dyn_cast<FunctionDecl>(Result))
+    if (const auto *FD = dyn_cast<FunctionDecl>(Result))
       return FD;
 
   if (!C.getLangOpts().CPlusPlus)
@@ -3764,14 +3764,14 @@ GetRuntimeFunctionDecl(ASTContext &C, StringRef Name) {
     IdentifierInfo &NS = C.Idents.get(N);
     for (const auto *Result : DC->lookup(&NS)) {
       const NamespaceDecl *ND = dyn_cast<NamespaceDecl>(Result);
-      if (auto LSD = dyn_cast<LinkageSpecDecl>(Result))
-        for (const auto *R : LSD->lookup(&NS))
-          if ((ND = dyn_cast<NamespaceDecl>(R)))
+      if (auto *LSD = dyn_cast<LinkageSpecDecl>(Result))
+        for (const auto *Result : LSD->lookup(&NS))
+          if ((ND = dyn_cast<NamespaceDecl>(Result)))
             break;
 
       if (ND)
-        for (const auto *R : ND->lookup(&CXXII))
-          if (const auto *FD = dyn_cast<FunctionDecl>(R))
+        for (const auto *Result : ND->lookup(&CXXII))
+          if (const auto *FD = dyn_cast<FunctionDecl>(Result))
             return FD;
     }
   }
