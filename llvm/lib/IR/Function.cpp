@@ -346,6 +346,16 @@ Function *Function::CreateBefore(Function &InsertBefore, FunctionType *Ty,
   return F;
 }
 
+Function *Function::createWithDefaultAttr(FunctionType *Ty,
+                                          LinkageTypes Linkage,
+                                          unsigned AddrSpace, const Twine &N,
+                                          Module *M) {
+  auto *F = new Function(Ty, Linkage, AddrSpace, N, M);
+  if (M->getUwtable())
+    F->addAttribute(AttributeList::FunctionIndex, Attribute::UWTable);
+  return F;
+}
+
 void Function::removeFromParent() {
   getParent()->getFunctionList().remove(getIterator());
 }

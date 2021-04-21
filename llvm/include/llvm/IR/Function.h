@@ -153,6 +153,11 @@ public:
   static Function *Create(FunctionType *Ty, LinkageTypes Linkage,
                           const Twine &N, Module &M);
 
+  static Function *createWithDefaultAttr(FunctionType *Ty, LinkageTypes Linkage,
+                                         unsigned AddrSpace,
+                                         const Twine &N = "",
+                                         Module *M = nullptr);
+
   static Function *CreateBefore(Function &InsertBefore, FunctionType *Ty,
                                 LinkageTypes Linkage, const Twine &N = "");
 
