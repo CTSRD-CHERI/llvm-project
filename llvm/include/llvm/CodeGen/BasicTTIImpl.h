@@ -2089,7 +2089,7 @@ public:
     return RedCost + MulCost + ExtCost;
   }
 
-  unsigned getVectorSplitCost() { return 1; }
+  InstructionCost getVectorSplitCost() { return 1; }
 
   /// @}
 };
