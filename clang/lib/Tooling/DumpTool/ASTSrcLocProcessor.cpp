@@ -113,7 +113,7 @@ CaptureMethods(std::string TypeString, const clang::CXXRecordDecl *ASTClass,
 
   auto publicAccessor = [](auto... InnerMatcher) {
     return cxxMethodDecl(isPublic(), parameterCountIs(0), isConst(),
-                         InnerMatcher...);
+                         unless(isDeleted()), InnerMatcher...);
   };
 
   auto BoundNodesVec =
