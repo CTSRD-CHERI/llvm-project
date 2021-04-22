@@ -184,6 +184,12 @@ public:
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
                       std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
+  using XCOFFStreamerCtorTy =
+      MCStreamer *(*)(const Triple &T, MCContext &Ctx,
+                      std::unique_ptr<MCAsmBackend> &&TAB,
+                      std::unique_ptr<MCObjectWriter> &&OW,
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
+
   using NullTargetStreamerCtorTy = MCTargetStreamer *(*)(MCStreamer &S);
   using AsmTargetStreamerCtorTy =
       MCTargetStreamer *(*)(MCStreamer &S, formatted_raw_ostream &OS,
@@ -271,6 +277,7 @@ private:
   MachOStreamerCtorTy MachOStreamerCtorFn = nullptr;
   ELFStreamerCtorTy ELFStreamerCtorFn = nullptr;
   WasmStreamerCtorTy WasmStreamerCtorFn = nullptr;
+  XCOFFStreamerCtorTy XCOFFStreamerCtorFn = nullptr;
 
   /// Construction function for this target's null TargetStreamer, if
   /// registered (default = nullptr).
@@ -515,8 +522,12 @@ public:
     case Triple::GOFF:
       report_fatal_error("GOFF MCObjectStreamer not implemented yet");
     case Triple::XCOFF:
-      S = createXCOFFStreamer(Ctx, std::move(TAB), std::move(OW),
-                              std::move(Emitter), RelaxAll);
+      if (XCOFFStreamerCtorFn)
+        S = XCOFFStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
+                                std::move(Emitter), RelaxAll);
+      else
+        S = createXCOFFStreamer(Ctx, std::move(TAB), std::move(OW),
+                                std::move(Emitter), RelaxAll);
       break;
     }
     if (ObjectTargetStreamerCtorFn)
@@ -868,6 +879,10 @@ struct TargetRegistry {
 
   static void RegisterWasmStreamer(Target &T, Target::WasmStreamerCtorTy Fn) {
     T.WasmStreamerCtorFn = Fn;
+  }
+
+  static void RegisterXCOFFStreamer(Target &T, Target::XCOFFStreamerCtorTy Fn) {
+    T.XCOFFStreamerCtorFn = Fn;
   }
 
   static void RegisterNullTargetStreamer(Target &T,
