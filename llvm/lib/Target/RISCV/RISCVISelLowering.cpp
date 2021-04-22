@@ -2570,7 +2570,7 @@ SDValue RISCVTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
       RHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, RHS);
     }
 
-    SDValue TargetCC = DAG.getConstant(CCVal, DL, XLenVT);
+    SDValue TargetCC = DAG.getTargetConstant(CCVal, DL, XLenVT);
     SDValue Ops[] = {LHS, RHS, TargetCC, TrueV, FalseV};
     return DAG.getNode(RISCVISD::SELECT_CC, DL, Op.getValueType(), Ops);
   }
@@ -2579,7 +2579,7 @@ SDValue RISCVTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
   // (select condv, truev, falsev)
   // -> (riscvisd::select_cc condv, zero, setne, truev, falsev)
   SDValue Zero = DAG.getConstant(0, DL, XLenVT);
-  SDValue SetNE = DAG.getConstant(ISD::SETNE, DL, XLenVT);
+  SDValue SetNE = DAG.getTargetConstant(ISD::SETNE, DL, XLenVT);
 
   SDValue Ops[] = {CondV, Zero, SetNE, TrueV, FalseV};
 
@@ -5369,7 +5369,8 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
             RISCV::sub_cap_addr, DL, Subtarget.getXLenVT(), RHS);
       }
 
-      SDValue TargetCC = DAG.getConstant(CCVal, DL, Subtarget.getXLenVT());
+      SDValue TargetCC =
+          DAG.getTargetConstant(CCVal, DL, Subtarget.getXLenVT());
       return DAG.getNode(
           RISCVISD::SELECT_CC, DL, N->getValueType(0),
           {LHS, RHS, TargetCC, N->getOperand(3), N->getOperand(4)});
@@ -5389,7 +5390,8 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
     if (isOneConstant(RHS) && DAG.MaskedValueIsZero(LHS, Mask)) {
       SDLoc DL(N);
       CCVal = ISD::getSetCCInverse(CCVal, LHS.getValueType());
-      SDValue TargetCC = DAG.getConstant(CCVal, DL, Subtarget.getXLenVT());
+      SDValue TargetCC =
+          DAG.getTargetConstant(CCVal, DL, Subtarget.getXLenVT());
       RHS = DAG.getConstant(0, DL, LHS.getValueType());
       return DAG.getNode(
           RISCVISD::SELECT_CC, DL, N->getValueType(0),
