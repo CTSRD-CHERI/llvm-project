@@ -1160,8 +1160,8 @@ RISCVTargetLowering::decomposeSubvectorInsertExtractToSubRegs(
 }
 
 // Return the largest legal scalable vector type that matches VT's element type.
-MVT RISCVTargetLowering::getContainerForFixedLengthVector(
-    const TargetLowering &TLI, MVT VT, const RISCVSubtarget &Subtarget) {
+static MVT getContainerForFixedLengthVector(const TargetLowering &TLI, MVT VT,
+                                            const RISCVSubtarget &Subtarget) {
   assert(VT.isFixedLengthVector() && TLI.isTypeLegal(VT) &&
          "Expected legal fixed length vector!");
 
@@ -1191,14 +1191,14 @@ MVT RISCVTargetLowering::getContainerForFixedLengthVector(
   }
 }
 
-MVT RISCVTargetLowering::getContainerForFixedLengthVector(
-    SelectionDAG &DAG, MVT VT, const RISCVSubtarget &Subtarget) {
+static MVT getContainerForFixedLengthVector(SelectionDAG &DAG, MVT VT,
+                                            const RISCVSubtarget &Subtarget) {
   return getContainerForFixedLengthVector(DAG.getTargetLoweringInfo(), VT,
                                           Subtarget);
 }
 
 MVT RISCVTargetLowering::getContainerForFixedLengthVector(MVT VT) const {
-  return getContainerForFixedLengthVector(*this, VT, getSubtarget());
+  return ::getContainerForFixedLengthVector(*this, VT, getSubtarget());
 }
 
 // Grow V to consume an entire RVV register.
@@ -1275,8 +1275,7 @@ static SDValue lowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG,
   MVT VT = Op.getSimpleValueType();
   assert(VT.isFixedLengthVector() && "Unexpected vector!");
 
-  MVT ContainerVT =
-      RISCVTargetLowering::getContainerForFixedLengthVector(DAG, VT, Subtarget);
+  MVT ContainerVT = getContainerForFixedLengthVector(DAG, VT, Subtarget);
 
   SDLoc DL(Op);
   SDValue Mask, VL;
@@ -1437,8 +1436,7 @@ static SDValue lowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG,
       SDValue ViaVL =
           DAG.getConstant(ViaVecVT.getVectorNumElements(), DL, XLenVT);
       MVT ViaContainerVT =
-          RISCVTargetLowering::getContainerForFixedLengthVector(DAG, ViaVecVT,
-                                                                Subtarget);
+          getContainerForFixedLengthVector(DAG, ViaVecVT, Subtarget);
       SDValue Splat =
           DAG.getNode(RISCVISD::VMV_V_X_VL, DL, ViaContainerVT,
                       DAG.getConstant(SplatValue, DL, XLenVT), ViaVL);
@@ -1610,8 +1608,7 @@ static SDValue lowerVECTOR_SHUFFLE(SDValue Op, SelectionDAG &DAG,
   unsigned NumElts = VT.getVectorNumElements();
   ShuffleVectorSDNode *SVN = cast<ShuffleVectorSDNode>(Op.getNode());
 
-  MVT ContainerVT =
-      RISCVTargetLowering::getContainerForFixedLengthVector(DAG, VT, Subtarget);
+  MVT ContainerVT = getContainerForFixedLengthVector(DAG, VT, Subtarget);
 
   SDValue TrueMask, VL;
   std::tie(TrueMask, VL) = getDefaultVLOps(VT, ContainerVT, DL, DAG, Subtarget);
