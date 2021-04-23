@@ -757,14 +757,18 @@ public:
                          VK == RISCVMCExpr::VK_RISCV_GOT_HI ||
                          VK == RISCVMCExpr::VK_RISCV_TLS_GOT_HI ||
                          VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI ||
-                         VK == RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI);
+                         VK == RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI ||
+                         VK == RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI ||
+                         VK == RISCVMCExpr::VK_RISCV_TLS_GD_CAPTAB_PCREL_HI);
     } else {
       return isUInt<20>(Imm) && (VK == RISCVMCExpr::VK_RISCV_None ||
                                  VK == RISCVMCExpr::VK_RISCV_PCREL_HI ||
                                  VK == RISCVMCExpr::VK_RISCV_GOT_HI ||
                                  VK == RISCVMCExpr::VK_RISCV_TLS_GOT_HI ||
                                  VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI ||
-                                 VK == RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI);
+                                 VK == RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI ||
+                                 VK == RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI ||
+                                 VK == RISCVMCExpr::VK_RISCV_TLS_GD_CAPTAB_PCREL_HI);
     }
   }
 
