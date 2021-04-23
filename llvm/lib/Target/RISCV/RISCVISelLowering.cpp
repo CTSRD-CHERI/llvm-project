@@ -49,6 +49,19 @@ static cl::opt<bool>
                           "pure-capability function calls"),
                  cl::init(false), cl::Hidden);
 
+static unsigned getLMULForFixedLengthVector(MVT VT,
+                                            const RISCVSubtarget &Subtarget) {
+  unsigned MinVLen = Subtarget.getMinRVVVectorSizeInBits();
+
+  // Masks only occupy a single register. An LMUL==1 operation can only use
+  // at most 1/8 of the register. Only an LMUL==8 operaton on i8 types can
+  // use the whole register.
+  if (VT.getVectorElementType() == MVT::i1)
+    MinVLen /= 8;
+
+  return divideCeil(VT.getSizeInBits(), MinVLen);
+}
+
 RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
                                          const RISCVSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI) {
@@ -165,7 +178,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
     if (Subtarget.useRVVForFixedLengthVectors()) {
       auto addRegClassForFixedVectors = [this](MVT VT) {
-        unsigned LMul = Subtarget.getLMULForFixedLengthVector(VT);
+        unsigned LMul = getLMULForFixedLengthVector(VT, Subtarget);
         const TargetRegisterClass *RC;
         if (LMul == 1 || VT.getVectorElementType() == MVT::i1)
           RC = &RISCV::VRRegClass;
@@ -1165,7 +1178,7 @@ static MVT getContainerForFixedLengthVector(const TargetLowering &TLI, MVT VT,
   assert(VT.isFixedLengthVector() && TLI.isTypeLegal(VT) &&
          "Expected legal fixed length vector!");
 
-  unsigned LMul = Subtarget.getLMULForFixedLengthVector(VT);
+  unsigned LMul = getLMULForFixedLengthVector(VT, Subtarget);
   assert(LMul <= 8 && isPowerOf2_32(LMul) && "Unexpected LMUL!");
 
   MVT EltVT = VT.getVectorElementType();
@@ -8567,7 +8580,7 @@ bool RISCVTargetLowering::useRVVForFixedLengthVectorVT(MVT VT) const {
     break;
   }
 
-  unsigned LMul = Subtarget.getLMULForFixedLengthVector(VT);
+  unsigned LMul = getLMULForFixedLengthVector(VT, Subtarget);
   // Don't use RVV for types that don't fit.
   if (LMul > Subtarget.getMaxLMULForFixedLengthVectors())
     return false;

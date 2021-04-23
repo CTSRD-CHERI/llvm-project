@@ -164,7 +164,6 @@ public:
   // implied by the architecture.
   unsigned getMaxRVVVectorSizeInBits() const;
   unsigned getMinRVVVectorSizeInBits() const;
-  unsigned getLMULForFixedLengthVector(MVT VT) const;
   unsigned getMaxLMULForFixedLengthVectors() const;
   bool useRVVForFixedLengthVectors() const;
 };
