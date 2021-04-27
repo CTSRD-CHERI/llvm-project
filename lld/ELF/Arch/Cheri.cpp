@@ -952,7 +952,10 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     cti.index = tlsBaseIndex + assignedTlsIndexes++;
     Symbol *s = it.first;
     uint64_t offset = cti.index.getValue() * config->wordsize;
-    if (s->isPreemptible)
+    // When building a shared library we still need a dynamic relocation
+    // for the TP-relative offset as we don't know how much other data will
+    // be allocated before us in the static TLS block.
+    if (s->isPreemptible || config->shared)
       mainPart->relaDyn->addReloc(target->tlsGotRel, this, offset, s);
   }
 
