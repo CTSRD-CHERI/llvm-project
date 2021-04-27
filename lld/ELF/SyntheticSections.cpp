@@ -1140,11 +1140,8 @@ void MipsGotSection::writeTo(uint8_t *buf) {
         write(p.second, p.first, 0);
     for (const std::pair<Symbol *, size_t> &p : g.relocs)
       write(p.second, p.first, 0);
-    // In the legacy CHERI ABI we still use the GOT for TLS so we need
-    // to write offset 0 instead of -0x7000 to match the captable.
     for (const std::pair<Symbol *, size_t> &p : g.tls)
-      write(p.second, p.first,
-            (p.first->isPreemptible || config->isCheriAbi) ? 0 : -0x7000);
+      write(p.second, p.first, p.first->isPreemptible ? 0 : -0x7000);
     for (const std::pair<Symbol *, size_t> &p : g.dynTlsSymbols) {
       if (p.first == nullptr && !config->isPic)
         write(p.second, nullptr, 1);
@@ -1154,9 +1151,7 @@ void MipsGotSection::writeTo(uint8_t *buf) {
         // one will be treated as an addend and will cause crashes at runtime
         if (!config->isPic)
           write(p.second, nullptr, 1);
-        // In the legacy CHERI ABI we still use the GOT for TLS so we need
-        // to write offset 0 instead of -0x8000 to match the captable.
-        write(p.second + 1, p.first, config->isCheriAbi ? 0 : -0x8000);
+        write(p.second + 1, p.first, -0x8000);
       }
     }
   }
