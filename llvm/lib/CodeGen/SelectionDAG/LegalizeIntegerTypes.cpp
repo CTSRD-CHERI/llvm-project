@@ -1560,9 +1560,6 @@ bool DAGTypeLegalizer::PromoteIntegerOperand(SDNode *N, unsigned OpNo) {
 
   case ISD::FPOWI: Res = PromoteIntOp_FPOWI(N); break;
 
-  case ISD::FP_TO_SINT_SAT:
-  case ISD::FP_TO_UINT_SAT: PromoteIntOp_FP_TO_XINT_SAT(N); break;
-
   case ISD::VECREDUCE_ADD:
   case ISD::VECREDUCE_MUL:
   case ISD::VECREDUCE_AND:
@@ -1986,12 +1983,6 @@ SDValue DAGTypeLegalizer::PromoteIntOp_FIX(SDNode *N) {
   SDValue Op2 = ZExtPromotedInteger(N->getOperand(2));
   return SDValue(
       DAG.UpdateNodeOperands(N, N->getOperand(0), N->getOperand(1), Op2), 0);
-}
-
-SDValue DAGTypeLegalizer::PromoteIntOp_FP_TO_XINT_SAT(SDNode *N) {
-  SDValue Op1 = ZExtPromotedInteger(N->getOperand(1));
-  return SDValue(
-      DAG.UpdateNodeOperands(N, N->getOperand(0), Op1), 0);
 }
 
 SDValue DAGTypeLegalizer::PromoteIntOp_FRAMERETURNADDR(SDNode *N) {
