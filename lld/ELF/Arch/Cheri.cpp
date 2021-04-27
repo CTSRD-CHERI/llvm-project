@@ -585,13 +585,13 @@ void CheriCapTableSection::writeTo(uint8_t* buf) {
   // initialized by zero. Write down adjusted TLS symbol's values otherwise.
   // To calculate the adjustments use offsets for thread-local storage.
   for (auto &it : dynTlsEntries.map) {
-    if (it.first == nullptr && !config->isPic)
+    if (it.first == nullptr && !config->shared)
       write(it.second.index.getValue(), nullptr, 1);
     else if (it.first && !it.first->isPreemptible) {
-      // If we are emitting PIC code with relocations we mustn't write
+      // If we are emitting a shared library with relocations we mustn't write
       // anything to the GOT here. When using Elf_Rel relocations the value
       // one will be treated as an addend and will cause crashes at runtime
-      if (!config->isPic)
+      if (!config->shared)
         write(it.second.index.getValue(), nullptr, 1);
       write(it.second.index.getValue() + 1, it.first, 0);
     }
@@ -926,7 +926,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     Symbol *s = it.first;
     uint64_t offset = cti.index.getValue() * config->wordsize;
     if (s == nullptr) {
-      if (!config->isPic)
+      if (!config->shared)
         continue;
       mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
     } else {
@@ -934,7 +934,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       // for the module index. Therefore only checking for
       // S->IsPreemptible is not sufficient (this happens e.g. for
       // thread-locals that have been marked as local through a linker script)
-      if (!s->isPreemptible && !config->isPic)
+      if (!s->isPreemptible && !config->shared)
         continue;
       mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
       // However, we can skip writing the TLS offset reloc for non-preemptible
