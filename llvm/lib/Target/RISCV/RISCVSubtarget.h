@@ -66,6 +66,7 @@ class RISCVSubtarget : public RISCVGenSubtargetInfo {
   bool EnableSaveRestore = false;
   unsigned XLen = 32;
   MVT XLenVT = MVT::i32;
+  uint8_t MaxInterleaveFactor = 2;
   RISCVABI::ABI TargetABI = RISCVABI::ABI_Unknown;
   BitVector UserReservedRegister;
   RISCVFrameLowering FrameLowering;
@@ -145,6 +146,7 @@ public:
     assert(HasCheri && "Cannot get capability type for non-CHERI");
     return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
   }
+  unsigned getMaxInterleaveFactor() const { return MaxInterleaveFactor; }
 
 protected:
   // GlobalISel related APIs.
