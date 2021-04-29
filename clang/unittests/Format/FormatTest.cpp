@@ -10300,7 +10300,7 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
   verifyFormat("f({}, {{}, {}}, MyMap[{k, v}]);", SpaceBeforeBrace);
 
   FormatStyle SpaceBetweenBraces = getLLVMStyle();
-  SpaceBetweenBraces.SpacesInAngles = true;
+  SpaceBetweenBraces.SpacesInAngles = FormatStyle::SIAS_Always;
   SpaceBetweenBraces.SpacesInParentheses = true;
   SpaceBetweenBraces.SpacesInSquareBrackets = true;
   verifyFormat("vector< int > x{ 1, 2, 3, 4 };", SpaceBetweenBraces);
@@ -16322,7 +16322,6 @@ TEST_F(FormatTest, ParsesConfigurationBools) {
   CHECK_PARSE_BOOL(SortUsingDeclarations);
   CHECK_PARSE_BOOL(SpacesInParentheses);
   CHECK_PARSE_BOOL(SpacesInSquareBrackets);
-  CHECK_PARSE_BOOL(SpacesInAngles);
   CHECK_PARSE_BOOL(SpacesInConditionalStatement);
   CHECK_PARSE_BOOL(SpaceInEmptyBlock);
   CHECK_PARSE_BOOL(SpaceInEmptyParentheses);
@@ -16879,6 +16878,15 @@ TEST_F(FormatTest, ParsesConfiguration) {
               "  Maximum: 1",
               SpacesInLineCommentPrefix.Maximum, 1u);
   EXPECT_EQ(Style.SpacesInLineCommentPrefix.Minimum, 1u);
+
+  Style.SpacesInAngles = FormatStyle::SIAS_Always;
+  CHECK_PARSE("SpacesInAngles: Never", SpacesInAngles, FormatStyle::SIAS_Never);
+  CHECK_PARSE("SpacesInAngles: Always", SpacesInAngles,
+              FormatStyle::SIAS_Always);
+  CHECK_PARSE("SpacesInAngles: Leave", SpacesInAngles, FormatStyle::SIAS_Leave);
+  // For backward compatibility:
+  CHECK_PARSE("SpacesInAngles: false", SpacesInAngles, FormatStyle::SIAS_Never);
+  CHECK_PARSE("SpacesInAngles: true", SpacesInAngles, FormatStyle::SIAS_Always);
 }
 
 TEST_F(FormatTest, ParsesConfigurationWithLanguages) {
@@ -18456,7 +18464,7 @@ TEST_F(FormatTest, WrappedClosingParenthesisIndent) {
 
 TEST_F(FormatTest, SpacesInAngles) {
   FormatStyle Spaces = getLLVMStyle();
-  Spaces.SpacesInAngles = true;
+  Spaces.SpacesInAngles = FormatStyle::SIAS_Always;
 
   verifyFormat("vector< ::std::string > x1;", Spaces);
   verifyFormat("Foo< int, Bar > x2;", Spaces);
@@ -18472,23 +18480,48 @@ TEST_F(FormatTest, SpacesInAngles) {
                Spaces);
 
   Spaces.Standard = FormatStyle::LS_Cpp03;
-  Spaces.SpacesInAngles = true;
+  Spaces.SpacesInAngles = FormatStyle::SIAS_Always;
   verifyFormat("A< A< int > >();", Spaces);
 
-  Spaces.SpacesInAngles = false;
+  Spaces.SpacesInAngles = FormatStyle::SIAS_Never;
   verifyFormat("A<A<int> >();", Spaces);
 
-  Spaces.Standard = FormatStyle::LS_Cpp11;
-  Spaces.SpacesInAngles = true;
+  Spaces.SpacesInAngles = FormatStyle::SIAS_Leave;
+  verifyFormat("vector< ::std::string> x4;", "vector<::std::string> x4;",
+               Spaces);
+  verifyFormat("vector< ::std::string > x4;", "vector<::std::string > x4;",
+               Spaces);
+
+  verifyFormat("A<A<int> >();", Spaces);
+  verifyFormat("A<A<int> >();", "A<A<int>>();", Spaces);
   verifyFormat("A< A< int > >();", Spaces);
 
-  Spaces.SpacesInAngles = false;
+  Spaces.Standard = FormatStyle::LS_Cpp11;
+  Spaces.SpacesInAngles = FormatStyle::SIAS_Always;
+  verifyFormat("A< A< int > >();", Spaces);
+
+  Spaces.SpacesInAngles = FormatStyle::SIAS_Never;
   verifyFormat("vector<::std::string> x4;", Spaces);
   verifyFormat("vector<int> x5;", Spaces);
   verifyFormat("Foo<int, Bar> x6;", Spaces);
   verifyFormat("Foo<::int, ::Bar> x7;", Spaces);
 
   verifyFormat("A<A<int>>();", Spaces);
+
+  Spaces.SpacesInAngles = FormatStyle::SIAS_Leave;
+  verifyFormat("vector<::std::string> x4;", Spaces);
+  verifyFormat("vector< ::std::string > x4;", Spaces);
+  verifyFormat("vector<int> x5;", Spaces);
+  verifyFormat("vector< int > x5;", Spaces);
+  verifyFormat("Foo<int, Bar> x6;", Spaces);
+  verifyFormat("Foo< int, Bar > x6;", Spaces);
+  verifyFormat("Foo<::int, ::Bar> x7;", Spaces);
+  verifyFormat("Foo< ::int, ::Bar > x7;", Spaces);
+
+  verifyFormat("A<A<int>>();", Spaces);
+  verifyFormat("A< A< int > >();", Spaces);
+  verifyFormat("A<A<int > >();", Spaces);
+  verifyFormat("A< A< int>>();", Spaces);
 }
 
 TEST_F(FormatTest, SpaceAfterTemplateKeyword) {
