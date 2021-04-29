@@ -212,6 +212,19 @@ static inline int64_t getAddend(const typename ELFT::Rela &rel) {
 std::string getLocationMessage(const InputSectionBase &s, const Symbol &sym,
                                uint64_t off);
 
+
+template <typename RelTy>
+ArrayRef<RelTy> sortRels(ArrayRef<RelTy> rels, SmallVector<RelTy, 0> &storage) {
+  auto cmp = [](const RelTy &a, const RelTy &b) {
+    return a.r_offset < b.r_offset;
+  };
+  if (!llvm::is_sorted(rels, cmp)) {
+    storage.assign(rels.begin(), rels.end());
+    llvm::stable_sort(storage, cmp);
+    rels = storage;
+  }
+  return rels;
+}
 } // namespace elf
 } // namespace lld
 
