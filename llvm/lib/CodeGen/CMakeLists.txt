@@ -30,6 +30,7 @@ add_llvm_component_library(LLVMCodeGen
   ExpandMemCmp.cpp
   ExpandPostRAPseudos.cpp
   ExpandReductions.cpp
+  ExpandVectorPredication.cpp
   FaultMaps.cpp
   FEntryInserter.cpp
   FinalizeISel.cpp
