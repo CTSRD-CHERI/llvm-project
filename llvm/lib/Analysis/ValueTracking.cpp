@@ -5537,10 +5537,9 @@ static bool programUndefinedIfUndefOrPoison(const Value *V,
 
       SmallPtrSet<const Value *, 4> WellDefinedOps;
       getGuaranteedWellDefinedOps(&I, WellDefinedOps);
-      for (auto *Op : WellDefinedOps) {
-        if (Op == V)
-          return true;
-      }
+      if (WellDefinedOps.contains(V))
+        return true;
+
       if (!isGuaranteedToTransferExecutionToSuccessor(&I))
         break;
     }
@@ -5576,16 +5575,12 @@ static bool programUndefinedIfUndefOrPoison(const Value *V,
         for_each(I.users(), Propagate);
     }
 
-    if (auto *NextBB = BB->getSingleSuccessor()) {
-      if (Visited.insert(NextBB).second) {
-        BB = NextBB;
-        Begin = BB->getFirstNonPHI()->getIterator();
-        End = BB->end();
-        continue;
-      }
-    }
+    BB = BB->getSingleSuccessor();
+    if (!BB || !Visited.insert(BB).second)
+      break;
 
-    break;
+    Begin = BB->getFirstNonPHI()->getIterator();
+    End = BB->end();
   }
   return false;
 }
