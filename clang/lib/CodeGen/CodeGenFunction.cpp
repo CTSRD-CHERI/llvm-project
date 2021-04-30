@@ -1228,9 +1228,6 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
 
 void CodeGenFunction::EmitFunctionBody(const Stmt *Body) {
   incrementProfileCounter(Body);
-  if (CPlusPlusWithProgress())
-    FnIsMustProgress = true;
-
   if (const CompoundStmt *S = dyn_cast<CompoundStmt>(Body))
     EmitCompoundStmtWithoutScope(*S);
   else
@@ -1238,7 +1235,7 @@ void CodeGenFunction::EmitFunctionBody(const Stmt *Body) {
 
   // This is checked after emitting the function body so we know if there
   // are any permitted infinite loops.
-  if (FnIsMustProgress)
+  if (checkIfFunctionMustProgress())
     CurFn->addFnAttr(llvm::Attribute::MustProgress);
 }
 
