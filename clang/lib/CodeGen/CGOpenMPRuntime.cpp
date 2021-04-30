@@ -7770,6 +7770,8 @@ private:
       const ValueDecl *MapDecl = (I->getAssociatedDeclaration())
                                      ? I->getAssociatedDeclaration()
                                      : BaseDecl;
+      MapExpr = (I->getAssociatedExpression()) ? I->getAssociatedExpression()
+                                               : MapExpr;
 
       // Get information on whether the element is a pointer. Have to do a
       // special treatment for array sections given that they are built-in
