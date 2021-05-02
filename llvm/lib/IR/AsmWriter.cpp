@@ -654,6 +654,12 @@ void TypePrinting::print(Type *Ty, raw_ostream &OS) {
   }
   case Type::PointerTyID: {
     PointerType *PTy = cast<PointerType>(Ty);
+    if (PTy->isOpaque()) {
+      OS << "ptr";
+      if (unsigned AddressSpace = PTy->getAddressSpace())
+        OS << " addrspace(" << AddressSpace << ')';
+      return;
+    }
     print(PTy->getElementType(), OS);
     if (unsigned AddressSpace = PTy->getAddressSpace())
       OS << " addrspace(" << AddressSpace << ')';
