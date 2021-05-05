@@ -193,8 +193,7 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
 void RISCVAsmPrinter::emitAttributes() {
   RISCVTargetStreamer &RTS =
       static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
-
-  RTS.emitTargetAttributes(*TM.getMCSubtargetInfo());
+  RTS.emitTargetAttributes(*STI);
 }
 
 // Force static initialization.
