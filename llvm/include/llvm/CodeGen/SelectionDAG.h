@@ -1052,6 +1052,7 @@ public:
                     bool MustPreserveCheriCapabilities,
                     MachinePointerInfo DstPtrInfo,
                     MachinePointerInfo SrcPtrInfo,
+                    const AAMDNodes &AAInfo = AAMDNodes(),
                     StringRef CopyType = StringRef());
 
   SDValue getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
@@ -1059,11 +1060,13 @@ public:
                      bool MustPreserveCheriCapabilities,
                      MachinePointerInfo DstPtrInfo,
                      MachinePointerInfo SrcPtrInfo,
+                     const AAMDNodes &AAInfo = AAMDNodes(),
                      StringRef MoveType = StringRef());
 
   SDValue getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                     SDValue Size, Align Alignment, bool isVol, bool isTailCall,
-                    MachinePointerInfo DstPtrInfo);
+                    MachinePointerInfo DstPtrInfo,
+                    const AAMDNodes &AAInfo = AAMDNodes());
 
   SDValue getAtomicMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                           unsigned DstAlign, SDValue Src, unsigned SrcAlign,

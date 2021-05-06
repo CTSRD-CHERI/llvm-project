@@ -5877,11 +5877,13 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     Attribute CopyType = I.getAttribute(AttributeList::FunctionIndex,
                                         "frontend-memtransfer-type");
     SDValue Root = isVol ? getRoot() : getMemoryRoot();
+    AAMDNodes AAInfo;
+    I.getAAMetadata(AAInfo);
     SDValue MC = DAG.getMemcpy(Root, sdl, Op1, Op2, Op3, Alignment, isVol,
                                /* AlwaysInline */ false, isTC,
                                I.hasFnAttr(Attribute::MustPreserveCheriTags),
                                MachinePointerInfo(I.getArgOperand(0)),
-                               MachinePointerInfo(I.getArgOperand(1)),
+                               MachinePointerInfo(I.getArgOperand(1)), AAInfo,
                                CopyType.getValueAsString());
     updateDAGForMaybeTailCall(MC);
     return;
@@ -5900,13 +5902,15 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     bool isTC = I.isTailCall() && isInTailCallPosition(I, DAG.getTarget());
     // FIXME: Support passing different dest/src alignments to the memcpy DAG
     // node.
+    AAMDNodes AAInfo;
+    I.getAAMetadata(AAInfo);
     Attribute MoveType = I.getAttribute(AttributeList::FunctionIndex,
                                         "frontend-memtransfer-type");
     SDValue MC = DAG.getMemcpy(getRoot(), sdl, Dst, Src, Size, Alignment, isVol,
                                /* AlwaysInline */ true, isTC,
                                I.hasFnAttr(Attribute::MustPreserveCheriTags),
                                MachinePointerInfo(I.getArgOperand(0)),
-                               MachinePointerInfo(I.getArgOperand(1)),
+                               MachinePointerInfo(I.getArgOperand(1)), AAInfo,
                                MoveType.getValueAsString());
     updateDAGForMaybeTailCall(MC);
     return;
@@ -5921,8 +5925,10 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     bool isVol = MSI.isVolatile();
     bool isTC = I.isTailCall() && isInTailCallPosition(I, DAG.getTarget());
     SDValue Root = isVol ? getRoot() : getMemoryRoot();
+    AAMDNodes AAInfo;
+    I.getAAMetadata(AAInfo);
     SDValue MS = DAG.getMemset(Root, sdl, Op1, Op2, Op3, Alignment, isVol, isTC,
-                               MachinePointerInfo(I.getArgOperand(0)));
+                               MachinePointerInfo(I.getArgOperand(0)), AAInfo);
     updateDAGForMaybeTailCall(MS);
     return;
   }
@@ -5942,11 +5948,14 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     // FIXME: Support passing different dest/src alignments to the memmove DAG
     // node.
     SDValue Root = isVol ? getRoot() : getMemoryRoot();
-    SDValue MM = DAG.getMemmove(
-        Root, sdl, Op1, Op2, Op3, Alignment, isVol, isTC,
-        I.hasFnAttr(Attribute::MustPreserveCheriTags),
-        MachinePointerInfo(I.getArgOperand(0)),
-        MachinePointerInfo(I.getArgOperand(1)), MoveType.getValueAsString());
+    AAMDNodes AAInfo;
+    I.getAAMetadata(AAInfo);
+    SDValue MM =
+        DAG.getMemmove(Root, sdl, Op1, Op2, Op3, Alignment, isVol, isTC,
+                       I.hasFnAttr(Attribute::MustPreserveCheriTags),
+                       MachinePointerInfo(I.getArgOperand(0)),
+                       MachinePointerInfo(I.getArgOperand(1)), AAInfo,
+                       MoveType.getValueAsString());
     updateDAGForMaybeTailCall(MM);
     return;
   }
@@ -7806,10 +7815,12 @@ bool SelectionDAGBuilder::visitMemPCpyCall(const CallInst &I) {
   // because the return pointer needs to be adjusted by the size of
   // the copied memory.
   SDValue Root = isVol ? getRoot() : getMemoryRoot();
-  SDValue MC = DAG.getMemcpy(Root, sdl, Dst, Src, Size, Alignment, isVol,
-                             false, /*isTailCall=*/false, MustPreserveCheriTags,
+  AAMDNodes AAInfo;
+  I.getAAMetadata(AAInfo);
+  SDValue MC = DAG.getMemcpy(Root, sdl, Dst, Src, Size, Alignment, isVol, false,
+                             /*isTailCall=*/false, MustPreserveCheriTags,
                              MachinePointerInfo(I.getArgOperand(0)),
-                             MachinePointerInfo(I.getArgOperand(1)),
+                             MachinePointerInfo(I.getArgOperand(1)), AAInfo,
                              CopyType.getValueAsString());
   assert(MC.getNode() != nullptr &&
          "** memcpy should not be lowered as TailCall in mempcpy context **");
