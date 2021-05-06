@@ -33,9 +33,9 @@ define void @test_string_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src
 ; CHECK-LABEL: test_string_memcpy:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    csc ca1, 0(csp)
+; CHECK-NEXT:    csc ca1, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cmove ca1, ca0
-; CHECK-NEXT:    clc ca0, 0(csp)
+; CHECK-NEXT:    clc ca0, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    clb a2, 44(ca0)
 ; CHECK-NEXT:    csb a2, 44(ca1)
 ; CHECK-NEXT:    clw a2, 40(ca0)

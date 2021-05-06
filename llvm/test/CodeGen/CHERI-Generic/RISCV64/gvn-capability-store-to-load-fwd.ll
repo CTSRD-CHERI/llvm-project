@@ -31,7 +31,7 @@ define i32 @first_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_a
 ; ASM-NEXT:    cincoffset csp, csp, 80
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@first_i32_store_to_load_fwd
-; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 16, addrspace(200)
 ; CHECK-NEXT:    [[FIELD:%.*]] = getelementptr inbounds [[STRUCT_ADDRINFO]], [[STRUCT_ADDRINFO]] addrspace(200)* [[STACKVAL]], i64 0, i32 0
@@ -58,7 +58,7 @@ define i32 @second_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_
 ; ASM-NEXT:    cincoffset csp, csp, 80
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@second_i32_store_to_load_fwd
-; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 16, addrspace(200)
 ; CHECK-NEXT:    [[FIELD:%.*]] = getelementptr inbounds [[STRUCT_ADDRINFO]], [[STRUCT_ADDRINFO]] addrspace(200)* [[STACKVAL]], i64 0, i32 1
@@ -85,7 +85,7 @@ define i32 @third_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_a
 ; ASM-NEXT:    cincoffset csp, csp, 80
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@third_i32_store_to_load_fwd
-; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 16, addrspace(200)
 ; CHECK-NEXT:    [[FIELD:%.*]] = getelementptr inbounds [[STRUCT_ADDRINFO]], [[STRUCT_ADDRINFO]] addrspace(200)* [[STACKVAL]], i64 0, i32 2
@@ -112,7 +112,7 @@ define i32 @fourth_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_
 ; ASM-NEXT:    cincoffset csp, csp, 80
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@fourth_i32_store_to_load_fwd
-; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 16, addrspace(200)
 ; CHECK-NEXT:    [[FIELD:%.*]] = getelementptr inbounds [[STRUCT_ADDRINFO]], [[STRUCT_ADDRINFO]] addrspace(200)* [[STACKVAL]], i64 0, i32 3

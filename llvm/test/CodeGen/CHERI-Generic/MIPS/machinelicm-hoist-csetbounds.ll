@@ -72,7 +72,7 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, 80
 ; HOIST-OPT-LABEL: define {{[^@]+}}@hoist_csetbounds
-; HOIST-OPT-SAME: (i32 signext [[COND:%.*]], [[STRUCT_FOO:%.*]] addrspace(200)* [[F:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+; HOIST-OPT-SAME: (i32 signext [[COND:%.*]], [[STRUCT_FOO:%.*]] addrspace(200)* [[F:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; HOIST-OPT-NEXT:  entry:
 ; HOIST-OPT-NEXT:    [[TOBOOL:%.*]] = icmp eq [[STRUCT_FOO]] addrspace(200)* [[F]], null
 ; HOIST-OPT-NEXT:    br i1 [[TOBOOL]], label [[FOR_COND_CLEANUP:%.*]], label [[FOR_BODY_PREHEADER:%.*]]

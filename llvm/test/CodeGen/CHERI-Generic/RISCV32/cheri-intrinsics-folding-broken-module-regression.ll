@@ -35,7 +35,7 @@ define void @g(i32 %x, i32 %y) addrspace(200) nounwind {
 ; ASM-NEXT:    csc ca0, 0(ca4)
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@g
-; CHECK-SAME: (i32 [[X:%.*]], i32 [[Y:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+; CHECK-SAME: (i32 [[X:%.*]], i32 [[Y:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TMP3:%.*]] = tail call i32 @llvm.cheri.cap.offset.get.i32(i8 addrspace(200)* bitcast (i32 addrspace(200)* @d to i8 addrspace(200)*))
 ; CHECK-NEXT:    [[ADD:%.*]] = add i32 [[Y]], [[X]]

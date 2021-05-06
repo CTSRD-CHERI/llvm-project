@@ -15,18 +15,18 @@ define void @infer_values_from_null_set_offset() addrspace(200) nounwind {
 ; ASM-LABEL: infer_values_from_null_set_offset:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
-; ASM-NEXT:    csc cra, 0(csp)
+; ASM-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:  .LBB0_1: # Label of block must be emitted
 ; ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(check_fold)
 ; ASM-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
 ; ASM-NEXT:    lui a0, 30
 ; ASM-NEXT:    addiw a0, a0, 576
 ; ASM-NEXT:    cjalr ca1
-; ASM-NEXT:    clc cra, 0(csp)
+; ASM-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 16
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@infer_values_from_null_set_offset
-; CHECK-SAME: () addrspace(200) [[ATTR1:#.*]] {
+; CHECK-SAME: () addrspace(200) #[[ATTR1:[0-9]+]] {
 ; CHECK-NEXT:    [[OFFSET_CHECK:%.*]] = call i64 @check_fold(i64 123456)
 ; CHECK-NEXT:    ret void
 ;
@@ -40,9 +40,9 @@ define void @multiple_uses_big_constant() addrspace(200) nounwind {
 ; ASM-LABEL: multiple_uses_big_constant:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -48
-; ASM-NEXT:    csc cra, 32(csp)
-; ASM-NEXT:    csc cs0, 16(csp)
-; ASM-NEXT:    csc cs1, 0(csp)
+; ASM-NEXT:    csc cra, 32(csp) # 16-byte Folded Spill
+; ASM-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
+; ASM-NEXT:    csc cs1, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    lui a0, 30
 ; ASM-NEXT:    addiw a0, a0, 576
 ; ASM-NEXT:    cincoffset cs0, cnull, a0
@@ -55,13 +55,13 @@ define void @multiple_uses_big_constant() addrspace(200) nounwind {
 ; ASM-NEXT:    cjalr cs1
 ; ASM-NEXT:    cmove ca0, cs0
 ; ASM-NEXT:    cjalr cs1
-; ASM-NEXT:    clc cs1, 0(csp)
-; ASM-NEXT:    clc cs0, 16(csp)
-; ASM-NEXT:    clc cra, 32(csp)
+; ASM-NEXT:    clc cs1, 0(csp) # 16-byte Folded Reload
+; ASM-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
+; ASM-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 48
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@multiple_uses_big_constant
-; CHECK-SAME: () addrspace(200) [[ATTR1]] {
+; CHECK-SAME: () addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    call void @check_fold_i8ptr(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123456))
 ; CHECK-NEXT:    call void @check_fold_i8ptr(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123456))
 ; CHECK-NEXT:    call void @check_fold_i8ptr(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123456))
@@ -79,8 +79,8 @@ define void @multiple_uses_small_constant() addrspace(200) nounwind {
 ; ASM-LABEL: multiple_uses_small_constant:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -32
-; ASM-NEXT:    csc cra, 16(csp)
-; ASM-NEXT:    csc cs0, 0(csp)
+; ASM-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; ASM-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:  .LBB2_1: # Label of block must be emitted
 ; ASM-NEXT:    auipcc cs0, %captab_pcrel_hi(check_fold_i8ptr)
 ; ASM-NEXT:    clc cs0, %pcrel_lo(.LBB2_1)(cs0)
@@ -90,12 +90,12 @@ define void @multiple_uses_small_constant() addrspace(200) nounwind {
 ; ASM-NEXT:    cjalr cs0
 ; ASM-NEXT:    cincoffset ca0, cnull, 123
 ; ASM-NEXT:    cjalr cs0
-; ASM-NEXT:    clc cs0, 0(csp)
-; ASM-NEXT:    clc cra, 16(csp)
+; ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; ASM-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 32
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@multiple_uses_small_constant
-; CHECK-SAME: () addrspace(200) [[ATTR1]] {
+; CHECK-SAME: () addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    call void @check_fold_i8ptr(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123))
 ; CHECK-NEXT:    call void @check_fold_i8ptr(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123))
 ; CHECK-NEXT:    call void @check_fold_i8ptr(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123))
