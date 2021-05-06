@@ -96,10 +96,10 @@ entry:
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_le(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -108,10 +108,10 @@ entry:
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_gt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -120,10 +120,10 @@ entry:
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_ge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -132,8 +132,8 @@ entry:
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }

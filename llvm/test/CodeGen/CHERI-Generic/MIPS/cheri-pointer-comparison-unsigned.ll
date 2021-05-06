@@ -197,12 +197,20 @@ define i32 @branch_lt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:  .Ltmp0:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ; HYBRID-NEXT:  .LBB8_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp1, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp1:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ;
 ; PURECAP-LABEL: branch_lt:
 ; PURECAP:       # %bb.0: # %entry
@@ -218,19 +226,25 @@ define i32 @branch_lt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 ; PURECAP-NEXT:  .LBB8_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 entry:
   %cmp = icmp ult i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_le(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -250,12 +264,20 @@ define i32 @branch_le(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:  .Ltmp2:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ; HYBRID-NEXT:  .LBB9_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp3, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp3:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ;
 ; PURECAP-LABEL: branch_le:
 ; PURECAP:       # %bb.0: # %entry
@@ -271,19 +293,25 @@ define i32 @branch_le(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 ; PURECAP-NEXT:  .LBB9_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 entry:
   %cmp = icmp ule i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_gt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -303,12 +331,20 @@ define i32 @branch_gt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:  .Ltmp4:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ; HYBRID-NEXT:  .LBB10_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp5, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp5:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ;
 ; PURECAP-LABEL: branch_gt:
 ; PURECAP:       # %bb.0: # %entry
@@ -324,19 +360,25 @@ define i32 @branch_gt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 ; PURECAP-NEXT:  .LBB10_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 entry:
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_ge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -356,12 +398,20 @@ define i32 @branch_ge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:  .Ltmp6:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ; HYBRID-NEXT:  .LBB11_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp7, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp7:
 ; HYBRID-NEXT:    jalr $25
 ; HYBRID-NEXT:    nop
+; HYBRID-NEXT:    ld $gp, 0($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ;
 ; PURECAP-LABEL: branch_ge:
 ; PURECAP:       # %bb.0: # %entry
@@ -377,17 +427,23 @@ define i32 @branch_ge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 ; PURECAP-NEXT:  .LBB11_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
+; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 16
 entry:
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }

@@ -211,38 +211,36 @@ define i32 @branch_lt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:    xori a0, a0, 1
 ; HYBRID-NEXT:    bnez a0, .LBB8_2
 ; HYBRID-NEXT:  # %bb.1: # %if.then
-; HYBRID-NEXT:    call func1@plt
+; HYBRID-NEXT:    tail func1@plt
 ; HYBRID-NEXT:  .LBB8_2: # %if.end
-; HYBRID-NEXT:    call func2@plt
+; HYBRID-NEXT:    tail func2@plt
 ;
 ; PURECAP-LABEL: branch_lt:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cincoffset csp, csp, -16
-; PURECAP-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-NEXT:    sltu a0, a0, a1
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    bnez a0, .LBB8_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:  .LBB8_3: # %if.then
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB8_3)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB8_3)(ca5)
+; PURECAP-NEXT:    cjr ca5
 ; PURECAP-NEXT:  .LBB8_2: # %if.end
 ; PURECAP-NEXT:  .LBB8_4: # %if.end
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB8_4)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB8_4)(ca5)
+; PURECAP-NEXT:    cjr ca5
 entry:
   %cmp = icmp ult i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_le(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -251,37 +249,35 @@ define i32 @branch_le(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:    sltu a0, a1, a0
 ; HYBRID-NEXT:    bnez a0, .LBB9_2
 ; HYBRID-NEXT:  # %bb.1: # %if.then
-; HYBRID-NEXT:    call func1@plt
+; HYBRID-NEXT:    tail func1@plt
 ; HYBRID-NEXT:  .LBB9_2: # %if.end
-; HYBRID-NEXT:    call func2@plt
+; HYBRID-NEXT:    tail func2@plt
 ;
 ; PURECAP-LABEL: branch_le:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cincoffset csp, csp, -16
-; PURECAP-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-NEXT:    sltu a0, a1, a0
 ; PURECAP-NEXT:    bnez a0, .LBB9_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:  .LBB9_3: # %if.then
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB9_3)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB9_3)(ca5)
+; PURECAP-NEXT:    cjr ca5
 ; PURECAP-NEXT:  .LBB9_2: # %if.end
 ; PURECAP-NEXT:  .LBB9_4: # %if.end
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB9_4)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB9_4)(ca5)
+; PURECAP-NEXT:    cjr ca5
 entry:
   %cmp = icmp ule i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_gt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -291,38 +287,36 @@ define i32 @branch_gt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:    xori a0, a0, 1
 ; HYBRID-NEXT:    bnez a0, .LBB10_2
 ; HYBRID-NEXT:  # %bb.1: # %if.then
-; HYBRID-NEXT:    call func1@plt
+; HYBRID-NEXT:    tail func1@plt
 ; HYBRID-NEXT:  .LBB10_2: # %if.end
-; HYBRID-NEXT:    call func2@plt
+; HYBRID-NEXT:    tail func2@plt
 ;
 ; PURECAP-LABEL: branch_gt:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cincoffset csp, csp, -16
-; PURECAP-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-NEXT:    sltu a0, a1, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    bnez a0, .LBB10_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:  .LBB10_3: # %if.then
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB10_3)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB10_3)(ca5)
+; PURECAP-NEXT:    cjr ca5
 ; PURECAP-NEXT:  .LBB10_2: # %if.end
 ; PURECAP-NEXT:  .LBB10_4: # %if.end
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB10_4)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB10_4)(ca5)
+; PURECAP-NEXT:    cjr ca5
 entry:
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
 
 define i32 @branch_ge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind noreturn {
@@ -331,35 +325,33 @@ define i32 @branch_ge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind nor
 ; HYBRID-NEXT:    sltu a0, a0, a1
 ; HYBRID-NEXT:    bnez a0, .LBB11_2
 ; HYBRID-NEXT:  # %bb.1: # %if.then
-; HYBRID-NEXT:    call func1@plt
+; HYBRID-NEXT:    tail func1@plt
 ; HYBRID-NEXT:  .LBB11_2: # %if.end
-; HYBRID-NEXT:    call func2@plt
+; HYBRID-NEXT:    tail func2@plt
 ;
 ; PURECAP-LABEL: branch_ge:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cincoffset csp, csp, -16
-; PURECAP-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; PURECAP-NEXT:    sltu a0, a0, a1
 ; PURECAP-NEXT:    bnez a0, .LBB11_2
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:  .LBB11_3: # %if.then
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func1)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB11_3)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func1)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB11_3)(ca5)
+; PURECAP-NEXT:    cjr ca5
 ; PURECAP-NEXT:  .LBB11_2: # %if.end
 ; PURECAP-NEXT:  .LBB11_4: # %if.end
 ; PURECAP-NEXT:    # Label of block must be emitted
-; PURECAP-NEXT:    auipcc ca0, %captab_pcrel_hi(func2)
-; PURECAP-NEXT:    clc ca0, %pcrel_lo(.LBB11_4)(ca0)
-; PURECAP-NEXT:    cjalr ca0
+; PURECAP-NEXT:    auipcc ca5, %captab_pcrel_hi(func2)
+; PURECAP-NEXT:    clc ca5, %pcrel_lo(.LBB11_4)(ca5)
+; PURECAP-NEXT:    cjr ca5
 entry:
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
-  unreachable
+  ret i32 %retval1
 if.end:
   %retval2 = tail call i32 @func2()
-  unreachable
+  ret i32 %retval2
 }
