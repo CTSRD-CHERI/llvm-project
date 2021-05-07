@@ -568,37 +568,11 @@ CheriCapTableSection::CheriCapTableSection()
 }
 
 void CheriCapTableSection::writeTo(uint8_t* buf) {
-  // Should be filled with all zeros and crt_init_globals fills it in
-  // TODO: fill in the raw bits and use csettag
-
-  auto write = [&](size_t i, const Symbol *s, int64_t a) {
-    uint64_t va = a;
-    if (s)
-      va = s->getVA(a);
-
-    if (config->is64)
-      write64(buf + i * 8, va);
-    else
-      write32(buf + i * 4, va);
-  };
-  // If TLS entry has a corresponding dynamic relocations, leave it
-  // initialized by zero. Write down adjusted TLS symbol's values otherwise.
-  // To calculate the adjustments use offsets for thread-local storage.
-  for (auto &it : dynTlsEntries.map) {
-    if (it.first == nullptr && !config->shared)
-      write(it.second.index.getValue(), nullptr, 1);
-    else if (it.first && !it.first->isPreemptible) {
-      // If we are emitting a shared library with relocations we mustn't write
-      // anything to the GOT here. When using Elf_Rel relocations the value
-      // one will be treated as an addend and will cause crashes at runtime
-      if (!config->shared)
-        write(it.second.index.getValue(), nullptr, 1);
-      write(it.second.index.getValue() + 1, it.first, 0);
-    }
-  }
-
-  for (auto &it : tlsEntries.map)
-    write(it.second.index.getValue(), it.first, 0);
+  // Capability part should be filled with all zeros and crt_init_globals fills
+  // it in. For the TLS part, assignValuesAndAddCapTableSymbols adds any static
+  // relocations needed, and should be procesed by relocateAlloc.
+  // TODO: Fill in the raw capability bits and use CBuildCap
+  relocateAlloc(buf, buf + getSize());
 }
 
 static Defined *findMatchingFunction(const InputSectionBase *isec,
@@ -927,22 +901,30 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     uint64_t offset = cti.index.getValue() * config->wordsize;
     if (s == nullptr) {
       if (!config->shared)
-        continue;
-      mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
+        this->relocations.push_back(
+            {R_ADDEND, target->symbolicRel, offset, 1, s});
+      else
+        mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
     } else {
       // When building a shared library we still need a dynamic relocation
       // for the module index. Therefore only checking for
-      // S->IsPreemptible is not sufficient (this happens e.g. for
+      // s->isPreemptible is not sufficient (this happens e.g. for
       // thread-locals that have been marked as local through a linker script)
       if (!s->isPreemptible && !config->shared)
-        continue;
-      mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
+        this->relocations.push_back(
+            {R_ADDEND, target->symbolicRel, offset, 1, s});
+      else
+        mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
+
+      offset += config->wordsize;
+
       // However, we can skip writing the TLS offset reloc for non-preemptible
       // symbols since it is known even in shared libraries
       if (!s->isPreemptible)
-        continue;
-      offset += config->wordsize;
-      mainPart->relaDyn->addReloc(target->tlsOffsetRel, this, offset, s);
+        this->relocations.push_back(
+            {R_ABS, target->tlsOffsetRel, offset, 0, s});
+      else
+        mainPart->relaDyn->addReloc(target->tlsOffsetRel, this, offset, s);
     }
   }
 
@@ -955,8 +937,12 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     // When building a shared library we still need a dynamic relocation
     // for the TP-relative offset as we don't know how much other data will
     // be allocated before us in the static TLS block.
-    if (s->isPreemptible || config->shared)
-      mainPart->relaDyn->addReloc(target->tlsGotRel, this, offset, s);
+    if (!s->isPreemptible && !config->shared)
+      this->relocations.push_back({R_TPREL, target->symbolicRel, offset, 0, s});
+    else
+      mainPart->relaDyn->addReloc(target->tlsGotRel, this, offset, s, 0,
+                                  s->isPreemptible ? R_ADDEND : R_ABS,
+                                  target->symbolicRel);
   }
 
   valuesAssigned = true;
