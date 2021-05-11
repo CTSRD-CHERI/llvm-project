@@ -277,6 +277,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_PCREL_HI20:
   case R_RISCV_RVC_BRANCH:
   case R_RISCV_RVC_JUMP:
+  case R_RISCV_CHERI_RVC_CJUMP:
   case R_RISCV_32_PCREL:
     return R_PC;
   case R_RISCV_CALL:
@@ -354,7 +355,8 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
 
-  case R_RISCV_RVC_JUMP: {
+  case R_RISCV_RVC_JUMP:
+  case R_RISCV_CHERI_RVC_CJUMP: {
     checkInt(loc, static_cast<int64_t>(val) >> 1, 11, rel);
     checkAlignment(loc, val, 2, rel);
     uint16_t insn = read16le(loc) & 0xE003;
