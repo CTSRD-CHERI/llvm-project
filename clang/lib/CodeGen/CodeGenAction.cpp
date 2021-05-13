@@ -911,10 +911,6 @@ llvm::LLVMContext *CodeGenAction::takeLLVMContext() {
   return VMContext;
 }
 
-CodeGenerator *CodeGenAction::getCodeGenerator() const {
-  return BEConsumer->getCodeGenerator();
-}
-
 static std::unique_ptr<raw_pwrite_stream>
 GetOutputStream(CompilerInstance &CI, StringRef InFile, BackendAction Action) {
   switch (Action) {
