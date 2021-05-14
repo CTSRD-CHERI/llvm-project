@@ -149,8 +149,8 @@ struct Configuration {
   bool armHasMovtMovw = false;
   bool armJ1J2BranchEncoding = false;
   bool asNeeded = false;
-  bool bsymbolic;
-  bool bsymbolicFunctions;
+  bool bsymbolic = false;
+  bool bsymbolicFunctions = false;
   // make dynamic relocations that are not supported by
   // FreeBSD _rtld_relocate_nonplt_self an error.
   bool buildingFreeBSDRtld;

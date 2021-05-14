@@ -1022,8 +1022,13 @@ static void readConfigs(opt::InputArgList &args) {
       hasZOption(args, "muldefs");
   config->allowUndefinedCapRelocs = args.hasArg(OPT_allow_undefined_cap_relocs);
   config->auxiliaryList = args::getStrings(args, OPT_auxiliary);
-  config->bsymbolic = args.hasArg(OPT_Bsymbolic);
-  config->bsymbolicFunctions = args.hasArg(OPT_Bsymbolic_functions);
+  if (opt::Arg *arg = args.getLastArg(OPT_Bno_symbolic, OPT_Bsymbolic_functions,
+                                      OPT_Bsymbolic)) {
+    if (arg->getOption().matches(OPT_Bsymbolic_functions))
+      config->bsymbolicFunctions = true;
+    else if (arg->getOption().matches(OPT_Bsymbolic))
+      config->bsymbolic = true;
+  }
   config->buildingFreeBSDRtld = args.hasArg(OPT_building_freebsd_rtld);
   config->capTableScope = getCapTableScope(args);
   config->checkSections =
@@ -1398,8 +1403,7 @@ static void readConfigs(opt::InputArgList &args) {
   // When producing an executable, --dynamic-list specifies non-local defined
   // symbols which are required to be exported. When producing a shared object,
   // symbols not specified by --dynamic-list are non-preemptible.
-  config->symbolic =
-      args.hasArg(OPT_Bsymbolic) || args.hasArg(OPT_dynamic_list);
+  config->symbolic = config->bsymbolic || args.hasArg(OPT_dynamic_list);
   for (auto *arg : args.filtered(OPT_dynamic_list))
     if (Optional<MemoryBufferRef> buffer = readFile(arg->getValue()))
       readDynamicList(*buffer);
