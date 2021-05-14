@@ -1944,8 +1944,8 @@ const std::pair<const char *, const char *> IsBytewiseValueTests[] = {
     },
 };
 
-INSTANTIATE_TEST_CASE_P(IsBytewiseValueParamTests, IsBytewiseValueTest,
-                        ::testing::ValuesIn(IsBytewiseValueTests),);
+INSTANTIATE_TEST_SUITE_P(IsBytewiseValueParamTests, IsBytewiseValueTest,
+                         ::testing::ValuesIn(IsBytewiseValueTests));
 
 TEST_P(IsBytewiseValueTest, IsBytewiseValue) {
   auto M = parseModule(std::string("@test = global ") + GetParam().second);
@@ -2267,5 +2267,5 @@ TEST_P(FindAllocaForValueTest, findAllocaForValueZeroOffset) {
   EXPECT_EQ(!!AI, GetParam().ZeroOffsetResult);
 }
 
-INSTANTIATE_TEST_CASE_P(FindAllocaForValueTest, FindAllocaForValueTest,
-                        ::testing::ValuesIn(FindAllocaForValueTests), );
+INSTANTIATE_TEST_SUITE_P(FindAllocaForValueTest, FindAllocaForValueTest,
+                         ::testing::ValuesIn(FindAllocaForValueTests));
