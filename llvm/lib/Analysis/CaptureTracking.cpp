@@ -107,7 +107,8 @@ namespace {
     void tooManyUses() override { Captured = true; }
 
     bool isSafeToPrune(Instruction *I) {
-      assert(I != BeforeHere && "Should have been handled earlier");
+      if (BeforeHere == I)
+        return !IncludeI;
 
       BasicBlock *BB = I->getParent();
       // We explore this usage only if the usage can reach "BeforeHere".
@@ -153,17 +154,15 @@ namespace {
       return false;
     }
 
-    bool shouldExplore(const Use *U) override {
-      Instruction *I = cast<Instruction>(U->getUser());
-
-      if (BeforeHere == I)
-        return IncludeI;
-
-      return !isSafeToPrune(I);
-    }
-
     bool captured(const Use *U) override {
-      if (isa<ReturnInst>(U->getUser()) && !ReturnCaptures)
+      Instruction *I = cast<Instruction>(U->getUser());
+      if (isa<ReturnInst>(I) && !ReturnCaptures)
+        return false;
+
+      // Check isSafeToPrune() here rather than in shouldExplore() to avoid
+      // an expensive reachability query for every instruction we look at.
+      // Instead we only do one for actual capturing candidates.
+      if (isSafeToPrune(I))
         return false;
 
       Captured = true;
