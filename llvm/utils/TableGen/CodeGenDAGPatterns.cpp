@@ -1963,8 +1963,6 @@ bool TreePatternNode::isIsomorphicTo(const TreePatternNode *N,
     return false;
 
   if (isLeaf()) {
-    if (getLeafValue() == N->getLeafValue())
-      return true;
     if (DefInit *DI = dyn_cast<DefInit>(getLeafValue())) {
       if (DefInit *NDI = dyn_cast<DefInit>(N->getLeafValue())) {
         return ((DI->getDef() == NDI->getDef())
@@ -1972,7 +1970,7 @@ bool TreePatternNode::isIsomorphicTo(const TreePatternNode *N,
                     || getName() == N->getName()));
       }
     }
-    return false;
+    return getLeafValue() == N->getLeafValue();
   }
 
   if (N->getOperator() != getOperator() ||
