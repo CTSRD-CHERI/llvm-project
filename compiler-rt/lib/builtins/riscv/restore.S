@@ -25,8 +25,13 @@
   .globl  __riscv_restore_12
   .type   __riscv_restore_12,@function
 __riscv_restore_12:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs11, 24(csp)
+  cincoffset    csp, csp, 32
+#else
   lw      s11, 12(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_11/10/9/8
 
   .globl  __riscv_restore_11
@@ -41,11 +46,19 @@ __riscv_restore_11:
 __riscv_restore_10:
 __riscv_restore_9:
 __riscv_restore_8:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc        cs10, 0(csp)
+  clc        cs9, 8(csp)
+  clc        cs8, 16(csp)
+  clc        cs7, 24(csp)
+  cincoffset csp, csp, 32
+#else
   lw      s10, 0(sp)
   lw      s9,  4(sp)
   lw      s8,  8(sp)
   lw      s7,  12(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_7/6/5/4
 
   .globl  __riscv_restore_7
@@ -60,11 +73,19 @@ __riscv_restore_7:
 __riscv_restore_6:
 __riscv_restore_5:
 __riscv_restore_4:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs6, 0(csp)
+  clc           cs5, 8(csp)
+  clc           cs4, 16(csp)
+  clc           cs3, 24(csp)
+  cincoffset    csp, csp, 32
+#else
   lw      s6,  0(sp)
   lw      s5,  4(sp)
   lw      s4,  8(sp)
   lw      s3,  12(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_3/2/1/0
 
   .globl  __riscv_restore_3
@@ -79,20 +100,34 @@ __riscv_restore_3:
 __riscv_restore_2:
 __riscv_restore_1:
 __riscv_restore_0:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc      cs2, 0(csp)
+  clc      cs1, 8(csp)
+  clc      cs0, 16(csp)
+  clc      cra, 24(csp)
+  cincoffset    csp, csp, 32
+  cret
+#else
   lw      s2,  0(sp)
   lw      s1,  4(sp)
   lw      s0,  8(sp)
   lw      ra,  12(sp)
   addi    sp, sp, 16
   ret
+#endif /* __CHERI_PURE_CAPABILITY__ */
 
 #elif __riscv_xlen == 64
 
   .globl  __riscv_restore_12
   .type   __riscv_restore_12,@function
 __riscv_restore_12:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs11, 16(csp)
+  cincoffset    csp, csp, 32
+#else
   ld      s11, 8(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_11/10/9/8
 
   .globl  __riscv_restore_11
@@ -101,9 +136,15 @@ __riscv_restore_12:
   .type   __riscv_restore_10,@function
 __riscv_restore_11:
 __riscv_restore_10:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs10, 0(csp)
+  clc           cs9, 16(csp)
+  cincoffset    csp, csp, 32
+#else
   ld      s10, 0(sp)
   ld      s9,  8(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_9/8
 
   .globl  __riscv_restore_9
@@ -112,9 +153,15 @@ __riscv_restore_10:
   .type   __riscv_restore_8,@function
 __riscv_restore_9:
 __riscv_restore_8:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs8, 0(csp)
+  clc           cs7, 16(csp)
+  cincoffset    csp, csp, 32
+#else
   ld      s8,  0(sp)
   ld      s7,  8(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_7/6
 
   .globl  __riscv_restore_7
@@ -123,9 +170,15 @@ __riscv_restore_8:
   .type   __riscv_restore_6,@function
 __riscv_restore_7:
 __riscv_restore_6:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs6, 0(csp)
+  clc           cs5, 16(csp)
+  cincoffset    csp, csp, 32
+#else
   ld      s6,  0(sp)
   ld      s5,  8(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_5/4
 
   .globl  __riscv_restore_5
@@ -134,9 +187,15 @@ __riscv_restore_6:
   .type   __riscv_restore_4,@function
 __riscv_restore_5:
 __riscv_restore_4:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs4, 0(csp)
+  clc           cs3, 16(csp)
+  cincoffset    csp, csp, 32
+#else
   ld      s4,  0(sp)
   ld      s3,  8(sp)
   addi    sp, sp, 16
+#endif /* __CHERI_PURE_CAPABILITY__ */
   // fallthrough into __riscv_restore_3/2
 
   .globl  __riscv_restore_3
@@ -149,6 +208,19 @@ __riscv_restore_4:
   .type   __riscv_restore_0,@function
 __riscv_restore_3:
 __riscv_restore_2:
+#ifdef __CHERI_PURE_CAPABILITY__
+  clc           cs2, 0(csp)
+  clc           cs1, 16(csp)
+  cincoffset    csp, csp, 32
+  // fallthrough into __riscv_restore_1/0
+
+__riscv_restore_1:
+__riscv_restore_0:
+  clc           cs0, 0(csp)
+  clc           cra, 16(csp)
+  cincoffset    csp, csp, 32
+  cret
+#else
   ld      s2,  0(sp)
   ld      s1,  8(sp)
   addi    sp, sp, 16
@@ -161,6 +233,7 @@ __riscv_restore_0:
   addi    sp, sp, 16
   ret
 
+#endif /* __CHERI_PURE_CAPABILITY__ */
 #else
 # error "xlen must be 32 or 64 for save-restore implementation
 #endif
