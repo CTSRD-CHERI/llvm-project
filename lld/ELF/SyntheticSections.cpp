@@ -681,8 +681,8 @@ void EhFrameSection::writeTo(uint8_t *buf) {
 }
 
 GotSection::GotSection()
-    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS, config->wordsize,
-                       ".got") {
+    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
+                       target->gotEntrySize, ".got") {
   numEntries = target->gotHeaderEntriesNum;
 }
 
@@ -1182,15 +1182,16 @@ void GotPltSection::addEntry(Symbol &sym) {
 }
 
 size_t GotPltSection::getSize() const {
-  return (target->gotPltHeaderEntriesNum + entries.size()) * config->wordsize;
+  return (target->gotPltHeaderEntriesNum + entries.size()) *
+         target->gotEntrySize;
 }
 
 void GotPltSection::writeTo(uint8_t *buf) {
   target->writeGotPltHeader(buf);
-  buf += target->gotPltHeaderEntriesNum * config->wordsize;
+  buf += target->gotPltHeaderEntriesNum * target->gotEntrySize;
   for (const Symbol *b : entries) {
     target->writeGotPlt(buf, *b);
-    buf += config->wordsize;
+    buf += target->gotEntrySize;
   }
 }
 
@@ -1218,7 +1219,7 @@ static StringRef getIgotPltName() {
 IgotPltSection::IgotPltSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE,
                        config->emachine == EM_PPC64 ? SHT_NOBITS : SHT_PROGBITS,
-                       config->wordsize, getIgotPltName()) {}
+                       target->gotEntrySize, getIgotPltName()) {}
 
 void IgotPltSection::addEntry(Symbol &sym) {
   assert(sym.pltIndex == entries.size());
@@ -1226,13 +1227,13 @@ void IgotPltSection::addEntry(Symbol &sym) {
 }
 
 size_t IgotPltSection::getSize() const {
-  return entries.size() * config->wordsize;
+  return entries.size() * target->gotEntrySize;
 }
 
 void IgotPltSection::writeTo(uint8_t *buf) {
   for (const Symbol *b : entries) {
     target->writeIgotPlt(buf, *b);
-    buf += config->wordsize;
+    buf += target->gotEntrySize;
   }
 }
 

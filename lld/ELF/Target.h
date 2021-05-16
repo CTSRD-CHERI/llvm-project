@@ -128,6 +128,7 @@ public:
   llvm::Optional<RelType> sizeRel;
   llvm::Optional<RelType> cheriCapRel;
   llvm::Optional<RelType> cheriCapCallRel;
+  unsigned gotEntrySize = config->wordsize;
   unsigned pltEntrySize;
   unsigned pltHeaderSize;
   unsigned ipltEntrySize;
