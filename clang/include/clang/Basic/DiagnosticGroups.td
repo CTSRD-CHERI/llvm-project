@@ -753,6 +753,7 @@ def UnusedMemberFunction : DiagGroup<"unused-member-function",
 def UnusedLabel : DiagGroup<"unused-label">;
 def UnusedLambdaCapture : DiagGroup<"unused-lambda-capture">;
 def UnusedParameter : DiagGroup<"unused-parameter">;
+def UnusedButSetParameter : DiagGroup<"unused-but-set-parameter">;
 def UnusedResult : DiagGroup<"unused-result">;
 def PotentiallyEvaluatedExpression : DiagGroup<"potentially-evaluated-expression">;
 def UnevaluatedExpression : DiagGroup<"unevaluated-expression",
@@ -762,6 +763,7 @@ def UnusedValue : DiagGroup<"unused-value", [UnusedComparison, UnusedResult,
 def UnusedConstVariable : DiagGroup<"unused-const-variable">;
 def UnusedVariable : DiagGroup<"unused-variable",
                                [UnusedConstVariable]>;
+def UnusedButSetVariable : DiagGroup<"unused-but-set-variable">;
 def UnusedLocalTypedef : DiagGroup<"unused-local-typedef">;
 def UnusedPropertyIvar :  DiagGroup<"unused-property-ivar">;
 def UnusedGetterReturnValue : DiagGroup<"unused-getter-return-value">;
@@ -904,7 +906,7 @@ def Unused : DiagGroup<"unused",
                         // UnusedMemberFunction, (clean-up llvm before enabling)
                         UnusedPrivateField, UnusedLambdaCapture,
                         UnusedLocalTypedef, UnusedValue, UnusedVariable,
-                        UnusedPropertyIvar]>,
+                        UnusedButSetVariable, UnusedPropertyIvar]>,
                         DiagCategory<"Unused Entity Issue">;
 
 // Format settings.
@@ -957,6 +959,7 @@ def Extra : DiagGroup<"extra", [
     MissingMethodReturnType,
     SignCompare,
     UnusedParameter,
+    UnusedButSetParameter,
     NullPointerArithmetic,
     EmptyInitStatement,
     StringConcatation,
