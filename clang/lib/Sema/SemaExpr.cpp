@@ -18692,9 +18692,8 @@ void Sema::CleanupVarDeclMarking() {
          "MarkVarDeclODRUsed failed to cleanup MaybeODRUseExprs?");
 }
 
-static void DoMarkVarDeclReferenced(
-    Sema &SemaRef, SourceLocation Loc, VarDecl *Var, Expr *E,
-    llvm::DenseMap<const VarDecl *, int> &RefsMinusAssignments) {
+static void DoMarkVarDeclReferenced(Sema &SemaRef, SourceLocation Loc,
+                                    VarDecl *Var, Expr *E) {
   assert((!E || isa<DeclRefExpr>(E) || isa<MemberExpr>(E) ||
           isa<FunctionParmPackExpr>(E)) &&
          "Invalid Expr argument to DoMarkVarDeclReferenced");
@@ -18710,10 +18709,6 @@ static void DoMarkVarDeclReferenced(
   OdrUseContext OdrUse = isOdrUseContext(SemaRef);
   bool UsableInConstantExpr =
       Var->mightBeUsableInConstantExpressions(SemaRef.Context);
-
-  if (Var->isLocalVarDeclOrParm() && !Var->hasExternalStorage()) {
-    RefsMinusAssignments.insert({Var, 0}).first->getSecond()++;
-  }
 
   // C++20 [expr.const]p12:
   //   A variable [...] is needed for constant evaluation if it is [...] a
@@ -18870,18 +18865,16 @@ static void DoMarkVarDeclReferenced(
 /// (C++ [basic.def.odr]p2, C99 6.9p3).  Note that this should not be
 /// used directly for normal expressions referring to VarDecl.
 void Sema::MarkVariableReferenced(SourceLocation Loc, VarDecl *Var) {
-  DoMarkVarDeclReferenced(*this, Loc, Var, nullptr, RefsMinusAssignments);
+  DoMarkVarDeclReferenced(*this, Loc, Var, nullptr);
 }
 
-static void
-MarkExprReferenced(Sema &SemaRef, SourceLocation Loc, Decl *D, Expr *E,
-                   bool MightBeOdrUse,
-                   llvm::DenseMap<const VarDecl *, int> &RefsMinusAssignments) {
+static void MarkExprReferenced(Sema &SemaRef, SourceLocation Loc,
+                               Decl *D, Expr *E, bool MightBeOdrUse) {
   if (SemaRef.isInOpenMPDeclareTargetContext())
     SemaRef.checkDeclIsAllowedInOpenMPTarget(E, D);
 
   if (VarDecl *Var = dyn_cast<VarDecl>(D)) {
-    DoMarkVarDeclReferenced(SemaRef, Loc, Var, E, RefsMinusAssignments);
+    DoMarkVarDeclReferenced(SemaRef, Loc, Var, E);
     return;
   }
 
@@ -18927,8 +18920,7 @@ void Sema::MarkDeclRefReferenced(DeclRefExpr *E, const Expr *Base) {
     if (!isConstantEvaluated() && FD->isConsteval() &&
         !RebuildingImmediateInvocation)
       ExprEvalContexts.back().ReferenceToConsteval.insert(E);
-  MarkExprReferenced(*this, E->getLocation(), E->getDecl(), E, OdrUse,
-                     RefsMinusAssignments);
+  MarkExprReferenced(*this, E->getLocation(), E->getDecl(), E, OdrUse);
 }
 
 /// Perform reference-marking and odr-use handling for a MemberExpr.
@@ -18947,15 +18939,13 @@ void Sema::MarkMemberReferenced(MemberExpr *E) {
   }
   SourceLocation Loc =
       E->getMemberLoc().isValid() ? E->getMemberLoc() : E->getBeginLoc();
-  MarkExprReferenced(*this, Loc, E->getMemberDecl(), E, MightBeOdrUse,
-                     RefsMinusAssignments);
+  MarkExprReferenced(*this, Loc, E->getMemberDecl(), E, MightBeOdrUse);
 }
 
 /// Perform reference-marking and odr-use handling for a FunctionParmPackExpr.
 void Sema::MarkFunctionParmPackReferenced(FunctionParmPackExpr *E) {
   for (VarDecl *VD : *E)
-    MarkExprReferenced(*this, E->getParameterPackLocation(), VD, E, true,
-                       RefsMinusAssignments);
+    MarkExprReferenced(*this, E->getParameterPackLocation(), VD, E, true);
 }
 
 /// Perform marking for a reference to an arbitrary declaration.  It
