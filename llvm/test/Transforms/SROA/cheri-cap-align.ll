@@ -262,14 +262,19 @@ entry:
 %quad = type { %pair, %pair }
 %pair = type { i8 addrspace(200)*, i8 addrspace(200)* }
 
-; TODO: This currently gets mis-optimised. SROA revisits the memcpy multiple
-; times on one pass without updating its offset information, yielding GEPs with
-; incorrect offsets that go out of bounds, causing the alloca to be regarded as
-; unused and the entire function optimised away. Whilst that's a correct end
-; result, the intermediate states are not, and it's not SROA's responsibility
+; This was previously mis-optimised. SROA revisited the memcpy multiple times
+; on one pass without updating its offset information, yielding GEPs with
+; incorrect offsets that went out of bounds, causing the alloca to be regarded
+; as unused and the entire function optimised away. Whilst that's a correct end
+; result, the intermediate states were not, and it's not SROA's responsibility
 ; to realise that.
 define void @offset_transfer() {
 ; CHECK-LABEL: @offset_transfer(
+; CHECK-NEXT:    [[PQ_SROA_0:%.*]] = alloca [[PAIR:%.*]], align 16
+; CHECK-NEXT:    [[PQ_SROA_1:%.*]] = alloca [[PAIR]], align 16
+; CHECK-NEXT:    [[PQ_SROA_1_32_PQ_SROA_0_0_PQ_CAST_SROA_CAST_SROA_CAST:%.*]] = bitcast %pair* [[PQ_SROA_0]] to i8*
+; CHECK-NEXT:    [[PQ_SROA_1_32_PQ_1_CAST_SROA_CAST:%.*]] = bitcast %pair* [[PQ_SROA_1]] to i8*
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[PQ_SROA_1_32_PQ_SROA_0_0_PQ_CAST_SROA_CAST_SROA_CAST]], i8* align 16 [[PQ_SROA_1_32_PQ_1_CAST_SROA_CAST]], i64 32, i1 false)
 ; CHECK-NEXT:    ret void
 ;
   %pq = alloca %quad, align 16
