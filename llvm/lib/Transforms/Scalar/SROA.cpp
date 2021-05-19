@@ -166,14 +166,20 @@ class Slice {
   /// split.
   PointerIntPair<Use *, 1, bool> UseAndIsSplittable;
 
+  /// Indicates if this is a dummy slice used to enforce strict alignment (i.e.
+  /// for memory transfers which can copy capability tags).
+  bool IsStrictAlignSlice = false;
+
 public:
   Slice() = default;
 
   Slice(uint64_t BeginOffset, uint64_t EndOffset, Align MinAlignment,
-        bool ReadsTags, bool WritesTags, Use *U, bool IsSplittable)
+        bool ReadsTags, bool WritesTags, Use *U, bool IsSplittable,
+        bool IsStrictAlignSlice = false)
       : BeginOffset(BeginOffset), EndOffset(EndOffset),
         MinAlignment(MinAlignment), ReadsTags(ReadsTags),
-        WritesTags(WritesTags), UseAndIsSplittable(U, IsSplittable) {}
+        WritesTags(WritesTags), UseAndIsSplittable(U, IsSplittable),
+        IsStrictAlignSlice(IsStrictAlignSlice) {}
 
   uint64_t beginOffset() const { return BeginOffset; }
   uint64_t endOffset() const { return EndOffset; }
@@ -193,6 +199,8 @@ public:
 
   bool readsTags() const { return ReadsTags; }
   bool writesTags() const { return WritesTags; }
+
+  bool isStrictAlignSlice() const { return IsStrictAlignSlice; }
 
   /// Support for ordering ranges.
   ///
@@ -217,6 +225,8 @@ public:
       return !writesTags();
     if (minAlignment() > RHS.minAlignment())
       return true;
+    if (isStrictAlignSlice() != RHS.isStrictAlignSlice())
+      return !isStrictAlignSlice();
     return false;
   }
 
@@ -718,7 +728,8 @@ private:
 
   void insertUse(Instruction &I, const APInt &Offset, uint64_t Size,
                  bool ReadsTags, bool WritesTags,
-                 bool IsSplittable/* = false*/) {
+                 bool IsSplittable/* = false*/,
+                 bool IsStrictAlignSlice = false) {
     // Completely skip uses which have a zero size or start either before or
     // past the end of the allocation.
     if (Size == 0 || Offset.uge(AllocSize)) {
@@ -756,7 +767,7 @@ private:
       MinAlign = commonAlignment(Align(getCapabilitySize(DL)), BeginOffset);
 
     AS.Slices.push_back(Slice(BeginOffset, EndOffset, MinAlign, ReadsTags,
-                              WritesTags, U, IsSplittable));
+                              WritesTags, U, IsSplittable, IsStrictAlignSlice));
   }
 
   void visitBitCastInst(BitCastInst &BC) {
@@ -936,7 +947,7 @@ private:
          CapOffset + CapSize <= EndOffset; CapOffset += CapSize)
       if (CapOffset < AllocSize)
         insertUse(I, APInt(OffsetWidth, CapOffset), CapSize, !IsDest, IsDest,
-                  IsSplittable);
+                  IsSplittable, /*IsStrictAlignSlice=*/true);
   }
 
   void visitMemTransferInst(MemTransferInst &II) {
@@ -1193,18 +1204,21 @@ void AllocaSlices::processTaggedSlices() {
   // This makes use of the fact that the slices vector is sorted.
   for (unsigned Idx = 0, EIdx = Slices.size(); Idx < EIdx; ++Idx) {
     Slice &S = Slices[Idx];
-    if ((S.readsTags() || S.writesTags()) && S.isSplittable()) {
+    if ((S.readsTags() || S.writesTags()) && S.isStrictAlignSlice()) {
       LLVM_DEBUG(dbgs() << "Finding pair of tagged slice ["
                         << S.beginOffset() << ", " << S.endOffset() << "] "
                         << (S.writesTags() ? "(writes tags)" : "")
                         << (S.readsTags() ? "(reads tags)" : "") << "\n");
-      Slice ToFind(S.beginOffset(), S.endOffset(), Align(), !S.readsTags(),
-                   !S.writesTags(), S.getUse(), true);
+      Slice ToFindS(S.beginOffset(), S.endOffset(), Align(), !S.readsTags(),
+                    !S.writesTags(), S.getUse(), true, true);
+      Slice ToFindU(S.beginOffset(), S.endOffset(), Align(), !S.readsTags(),
+                    !S.writesTags(), S.getUse(), false, true);
+      const Slice &ToFindMax = std::max(ToFindS, ToFindU);
       auto I = partition_point(Slices, [&](Slice &I) {
-        return !(ToFind < I || ToFind == I);
+        return !(ToFindMax < I || I == ToFindS || I == ToFindU);
       });
 
-      if (I != Slices.end() && *I == ToFind) {
+      if (I != Slices.end() && (*I == ToFindS || *I == ToFindU)) {
         Unsplittable.push_back(Idx);
         LLVM_DEBUG(dbgs() << "Found ["
                         << I->beginOffset() << ", " << I->endOffset() << "] "
