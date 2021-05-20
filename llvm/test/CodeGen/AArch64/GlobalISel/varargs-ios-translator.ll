@@ -8,9 +8,9 @@ define void @test_varargs_sentinel(i8* %list, i64, i64, i64, i64, i64, i64, i64,
 ; CHECK: body:
 ; CHECK:   [[LIST:%[0-9]+]]:gpr64sp = COPY $x0
 ; CHECK:   [[VARARGS_AREA:%[0-9]+]]:gpr64common = ADDXri %fixed-stack.[[VARARGS_SLOT]], 0, 0
-; CHECK:   STRXui [[VARARGS_AREA]], [[LIST]], 0 :: (store 8 into %ir.list, align 1)
-  call void @llvm.va_start.p0i8(i8* %list)
+; CHECK:   STRXui [[VARARGS_AREA]], [[LIST]], 0 :: (store (s64) into %ir.list, align 1)
+  call void @llvm.va_start(i8* %list)
   ret void
 }
 
-declare void @llvm.va_start.p0i8(i8*)
+declare void @llvm.va_start(i8*)
