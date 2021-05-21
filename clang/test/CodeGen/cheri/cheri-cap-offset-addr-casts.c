@@ -8,6 +8,7 @@
 // CHECK-NEXT:    [[X1:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    [[X2:%.*]] = alloca i16, align 2, addrspace(200)
 // CHECK-NEXT:    [[X3:%.*]] = alloca i64, align 8, addrspace(200)
+// CHECK-NEXT:    [[X4:%.*]] = alloca i128, align 16, addrspace(200)
 // CHECK-NEXT:    store i8 addrspace(200)* [[C:%.*]], i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
 // CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
 // CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
@@ -21,12 +22,17 @@
 // CHECK-NEXT:    [[CONV1:%.*]] = trunc i64 [[TMP5]] to i16
 // CHECK-NEXT:    [[CONV2:%.*]] = sext i16 [[CONV1]] to i64
 // CHECK-NEXT:    store i64 [[CONV2]], i64 addrspace(200)* [[X3]], align 8
+// CHECK-NEXT:    [[TMP6:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP6]])
+// CHECK-NEXT:    [[CONV3:%.*]] = sext i64 [[TMP7]] to i128
+// CHECK-NEXT:    store i128 [[CONV3]], i128 addrspace(200)* [[X4]], align 16
 // CHECK-NEXT:    ret void
 //
 void check_offset(char *c) {
   long x1 = (__cheri_offset long)c;
   short x2 = (__cheri_offset short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the capability offset field; truncation may occur}}
   long x3 = (__cheri_offset short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the capability offset field; truncation may occur}}
+  __int128 x4 = (__cheri_offset __int128)c;
 }
 
 // CHECK-LABEL: @check_addr(
@@ -35,6 +41,7 @@ void check_offset(char *c) {
 // CHECK-NEXT:    [[X1:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    [[X2:%.*]] = alloca i16, align 2, addrspace(200)
 // CHECK-NEXT:    [[X3:%.*]] = alloca i64, align 8, addrspace(200)
+// CHECK-NEXT:    [[X4:%.*]] = alloca i128, align 16, addrspace(200)
 // CHECK-NEXT:    store i8 addrspace(200)* [[C:%.*]], i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
 // CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
 // CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
@@ -48,12 +55,17 @@ void check_offset(char *c) {
 // CHECK-NEXT:    [[CONV1:%.*]] = trunc i64 [[TMP5]] to i16
 // CHECK-NEXT:    [[CONV2:%.*]] = sext i16 [[CONV1]] to i64
 // CHECK-NEXT:    store i64 [[CONV2]], i64 addrspace(200)* [[X3]], align 8
+// CHECK-NEXT:    [[TMP6:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP6]])
+// CHECK-NEXT:    [[CONV3:%.*]] = sext i64 [[TMP7]] to i128
+// CHECK-NEXT:    store i128 [[CONV3]], i128 addrspace(200)* [[X4]], align 16
 // CHECK-NEXT:    ret void
 //
 void check_addr(char *c) {
   long x1 = (__cheri_addr long)c;
   short x2 = (__cheri_addr short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the address; truncation may occur}}
   long x3 = (__cheri_addr short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the address; truncation may occur}}
+  __int128 x4 = (__cheri_addr __int128)c;
 }
 
 // Using (u)intcap_t as the source previously crashed

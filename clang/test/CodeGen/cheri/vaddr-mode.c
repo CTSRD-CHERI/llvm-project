@@ -212,3 +212,32 @@ void this_broke_qmutex(__uintcap_t mtx) {
     do_unlock();
   }
 }
+
+// ADDR-LABEL: @uintcap_to_oversized(
+// ADDR-NEXT:  entry:
+// ADDR-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR-NEXT:    [[CONV:%.*]] = zext i64 [[TMP0]] to i128
+// ADDR-NEXT:    ret i128 [[CONV]]
+//
+// OFFSET-LABEL: @uintcap_to_oversized(
+// OFFSET-NEXT:  entry:
+// OFFSET-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET-NEXT:    [[CONV:%.*]] = zext i64 [[TMP0]] to i128
+// OFFSET-NEXT:    ret i128 [[CONV]]
+//
+__int128 uintcap_to_oversized(__uintcap_t cap) {
+  return (__int128)cap;
+}
+
+// Casts from a capability to an oversized integer previously crashed Clang,
+// but only for purecap and only when lacking a __cheri_addr/__cheri_offset.
+// BOTH-LABEL: @cap_to_oversized(
+// BOTH-NEXT:  entry:
+// BOTH-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// BOTH-NEXT:    [[CONV:%.*]] = sext i64 [[TMP0]] to i128
+// BOTH-NEXT:    ret i128 [[CONV]]
+//
+__int128 cap_to_oversized(void *__capability cap) {
+  // Casting a pointer to __int128 should give the address in both modes:
+  return (__int128)cap;
+}

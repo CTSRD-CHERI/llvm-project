@@ -2663,7 +2663,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     }
     if (IsPureCap) {
       PtrExpr = CGF.getPointerAddress(PtrExpr);
-      return Builder.CreateTruncOrBitCast(PtrExpr, ResultType);
+      bool DestSigned = DestTy->isSignedIntegerOrEnumerationType();
+      // Insert int cast in case size of result type and capability offset field
+      // are not the same. This will be a no-op if the sizes are the same.
+      return Builder.CreateIntCast(PtrExpr, ResultType, DestSigned, "conv");
     }
     // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
     if (E->getType()->isCHERICapabilityType(C)) {
