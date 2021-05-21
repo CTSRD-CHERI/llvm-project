@@ -259,5 +259,26 @@ entry:
   ret void
 }
 
+%quad = type { %pair, %pair }
+%pair = type { i8 addrspace(200)*, i8 addrspace(200)* }
+
+; TODO: This currently gets mis-optimised. SROA revisits the memcpy multiple
+; times on one pass without updating its offset information, yielding GEPs with
+; incorrect offsets that go out of bounds, causing the alloca to be regarded as
+; unused and the entire function optimised away. Whilst that's a correct end
+; result, the intermediate states are not, and it's not SROA's responsibility
+; to realise that.
+define void @offset_transfer() {
+; CHECK-LABEL: @offset_transfer(
+; CHECK-NEXT:    ret void
+;
+  %pq = alloca %quad, align 16
+  %pq.1 = getelementptr inbounds %quad, %quad* %pq, i64 0, i32 1
+  %pq.cast = bitcast %quad* %pq to i8*
+  %pq.1.cast = bitcast %pair* %pq.1 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %pq.cast, i8* %pq.1.cast, i64 32, i1 false)
+  ret void
+}
+
 declare i32 @bar(i32)
 declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture writeonly, i8* nocapture readonly, i64, i1 immarg)
