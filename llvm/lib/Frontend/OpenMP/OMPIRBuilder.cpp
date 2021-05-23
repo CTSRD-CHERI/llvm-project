@@ -2372,9 +2372,7 @@ OpenMPIRBuilder::createAtomicWrite(const LocationDescription &Loc,
         X.Var, IntCastTy->getPointerTo(Addrspace), "atomic.dst.int.cast");
     Value *ExprCast =
         Builder.CreateBitCast(Expr, IntCastTy, "atomic.src.int.cast");
-    Builder.GetInsertBlock()->getParent()->dump();
     StoreInst *XSt = Builder.CreateStore(ExprCast, XBCast, X.IsVolatile);
-    Builder.GetInsertBlock()->dump();
     XSt->setAtomic(AO);
   }
 
