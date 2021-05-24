@@ -11130,6 +11130,10 @@ static Register genTPEntry(MachineBasicBlock *TpEntry,
       .addUse(TotalIterationsReg)
       .addMBB(TpExit);
 
+  BuildMI(TpEntry, Dl, TII->get(ARM::t2B))
+      .addMBB(TpLoopBody)
+      .add(predOps(ARMCC::AL));
+
   return TotalIterationsReg;
 }
 
