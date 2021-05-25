@@ -2448,6 +2448,8 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
   for (const Arg *A :
        Args.filtered(options::OPT_Wa_COMMA, options::OPT_Xassembler,
                      options::OPT_mimplicit_it_EQ)) {
+    A->claim();
+
     if (A->getOption().getID() == options::OPT_mimplicit_it_EQ) {
       switch (C.getDefaultToolChain().getArch()) {
       case llvm::Triple::arm:
@@ -2464,8 +2466,6 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
         break;
       }
     }
-
-    A->claim();
 
     for (StringRef Value : A->getValues()) {
       if (TakeNextArg) {
