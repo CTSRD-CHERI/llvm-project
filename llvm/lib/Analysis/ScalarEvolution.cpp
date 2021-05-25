@@ -12640,7 +12640,7 @@ ScalarEvolution::forgetMemoizedResults(const SCEV *S) {
   }
 
   auto RemoveSCEVFromBackedgeMap =
-      [S, this](DenseMap<const Loop *, BackedgeTakenInfo> &Map) {
+      [S](DenseMap<const Loop *, BackedgeTakenInfo> &Map) {
         for (auto I = Map.begin(), E = Map.end(); I != E;) {
           BackedgeTakenInfo &BEInfo = I->second;
           if (BEInfo.hasOperand(S))
