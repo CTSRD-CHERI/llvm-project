@@ -6979,25 +6979,8 @@ unsigned ScalarEvolution::getSmallConstantTripMultiple(const Loop *L) {
   return 0;
 }
 
-/// Returns the largest constant divisor of the trip count of this loop as a
-/// normal unsigned value, if possible. This means that the actual trip count is
-/// always a multiple of the returned value (don't forget the trip count could
-/// very well be zero as well!).
-///
-/// Returns 1 if the trip count is unknown or not guaranteed to be the
-/// multiple of a constant (which is also the case if the trip count is simply
-/// constant, use getSmallConstantTripCount for that case), Will also return 1
-/// if the trip count is very large (>= 2^32).
-///
-/// As explained in the comments for getSmallConstantTripCount, this assumes
-/// that control exits the loop via ExitingBlock.
-unsigned
-ScalarEvolution::getSmallConstantTripMultiple(const Loop *L,
-                                              const BasicBlock *ExitingBlock) {
-  assert(ExitingBlock && "Must pass a non-null exiting block!");
-  assert(L->isLoopExiting(ExitingBlock) &&
-         "Exiting block must actually branch out of the loop!");
-  const SCEV *ExitCount = getExitCount(L, ExitingBlock);
+unsigned ScalarEvolution::getSmallConstantTripMultiple(const Loop *L,
+                                                       const SCEV *ExitCount) {
   if (ExitCount == getCouldNotCompute())
     return 1;
 
@@ -7022,6 +7005,28 @@ ScalarEvolution::getSmallConstantTripMultiple(const Loop *L,
     return 1;
 
   return (unsigned)Result->getZExtValue();
+}
+
+/// Returns the largest constant divisor of the trip count of this loop as a
+/// normal unsigned value, if possible. This means that the actual trip count is
+/// always a multiple of the returned value (don't forget the trip count could
+/// very well be zero as well!).
+///
+/// Returns 1 if the trip count is unknown or not guaranteed to be the
+/// multiple of a constant (which is also the case if the trip count is simply
+/// constant, use getSmallConstantTripCount for that case), Will also return 1
+/// if the trip count is very large (>= 2^32).
+///
+/// As explained in the comments for getSmallConstantTripCount, this assumes
+/// that control exits the loop via ExitingBlock.
+unsigned
+ScalarEvolution::getSmallConstantTripMultiple(const Loop *L,
+                                              const BasicBlock *ExitingBlock) {
+  assert(ExitingBlock && "Must pass a non-null exiting block!");
+  assert(L->isLoopExiting(ExitingBlock) &&
+         "Exiting block must actually branch out of the loop!");
+  const SCEV *ExitCount = getExitCount(L, ExitingBlock);
+  return getSmallConstantTripMultiple(L, ExitCount);
 }
 
 const SCEV *ScalarEvolution::getExitCount(const Loop *L,
