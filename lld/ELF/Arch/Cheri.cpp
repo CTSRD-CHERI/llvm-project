@@ -40,7 +40,7 @@ CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
     : SyntheticSection((config->isPic && !config->relativeCapRelocsOnly)
                            ? SHF_ALLOC | SHF_WRITE /* XXX: actually RELRO */
                            : SHF_ALLOC,
-                       SHT_PROGBITS, 8, "__cap_relocs") {
+                       SHT_PROGBITS, config->wordsize, "__cap_relocs") {
   this->entsize = relocSize;
 }
 
