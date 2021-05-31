@@ -1496,6 +1496,7 @@ bool VirtSpecifiers::SetSpecifier(Specifier VS, SourceLocation Loc,
   case VS_GNU_Final:
   case VS_Sealed:
   case VS_Final:    VS_finalLoc = Loc; break;
+  case VS_Abstract: VS_abstractLoc = Loc; break;
   }
 
   return false;
@@ -1508,5 +1509,6 @@ const char *VirtSpecifiers::getSpecifierName(Specifier VS) {
   case VS_Final: return "final";
   case VS_GNU_Final: return "__final";
   case VS_Sealed: return "sealed";
+  case VS_Abstract: return "abstract";
   }
 }
