@@ -83,6 +83,9 @@ bool Sema::CanUseDecl(NamedDecl *D, bool TreatUnavailableAsInvalid) {
       cast<Decl>(CurContext)->getAvailability() != AR_Unavailable)
     return false;
 
+  if (isa<UnresolvedUsingIfExistsDecl>(D))
+    return false;
+
   return true;
 }
 
@@ -388,6 +391,12 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, ArrayRef<SourceLocation> Locs,
     Diag(Loc, diag::err_omp_declare_mapper_wrong_var)
         << getOpenMPDeclareMapperVarName();
     Diag(D->getLocation(), diag::note_entity_declared_at) << D;
+    return true;
+  }
+
+  if (const auto *EmptyD = dyn_cast<UnresolvedUsingIfExistsDecl>(D)) {
+    Diag(Loc, diag::err_use_of_empty_using_if_exists);
+    Diag(EmptyD->getLocation(), diag::note_empty_using_if_exists_here);
     return true;
   }
 
@@ -3261,8 +3270,7 @@ ExprResult Sema::BuildDeclarationNameExpr(
   }
 
   // Make sure that we're referring to a value.
-  ValueDecl *VD = dyn_cast<ValueDecl>(D);
-  if (!VD) {
+  if (!isa<ValueDecl, UnresolvedUsingIfExistsDecl>(D)) {
     Diag(Loc, diag::err_ref_non_value)
       << D << SS.getRange();
     Diag(D->getLocation(), diag::note_declared_at);
@@ -3273,8 +3281,10 @@ ExprResult Sema::BuildDeclarationNameExpr(
   // this check when we're going to perform argument-dependent lookup
   // on this function name, because this might not be the function
   // that overload resolution actually selects.
-  if (DiagnoseUseOfDecl(VD, Loc))
+  if (DiagnoseUseOfDecl(D, Loc))
     return ExprError();
+
+  auto *VD = cast<ValueDecl>(D);
 
   // Only create DeclRefExpr's for valid Decl's.
   if (VD->isInvalidDecl() && !AcceptInvalidDecl)

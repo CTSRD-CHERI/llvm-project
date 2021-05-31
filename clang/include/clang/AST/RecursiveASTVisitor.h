@@ -1854,6 +1854,8 @@ DEF_TRAVERSE_DECL(UnresolvedUsingTypenameDecl, {
   // source.
 })
 
+DEF_TRAVERSE_DECL(UnresolvedUsingIfExistsDecl, {})
+
 DEF_TRAVERSE_DECL(EnumDecl, {
   TRY_TO(TraverseDeclTemplateParameterLists(D));
 
