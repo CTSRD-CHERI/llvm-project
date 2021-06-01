@@ -137,7 +137,7 @@ static PointerInterpretationKind
 pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
   bool SawDeref = false;
 
-  while (true) {
+  while (!SawDeref) {
     const Expr *NewBase = nullptr;
 
     if (auto *ME = dyn_cast<MemberExpr>(Base)) {
