@@ -2635,7 +2635,11 @@ public:
   /// qualified element of the array.
   ///
   /// See C99 6.7.5.3p7 and C99 6.3.2.1p3.
-  QualType getArrayDecayedType(QualType T) const;
+  QualType getArrayDecayedType(QualType T) const {
+    return getArrayDecayedType(T, getDefaultPointerInterpretation());
+  }
+  QualType getArrayDecayedType(QualType T,
+                               PointerInterpretationKind PIK) const;
 
   /// Return the type that \p PromotableType will promote to: C99
   /// 6.3.1.1p2, assuming that \p PromotableType is a promotable integer type.

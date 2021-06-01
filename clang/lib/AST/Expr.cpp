@@ -1616,8 +1616,13 @@ bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
   case CK_NullToPointer:
     // This can be either a capability NULL pointer or a non-capability one.
     break;
-  case CK_FunctionToPointerDecay:
   case CK_ArrayToPointerDecay:
+    // Decays brought about by dereferencing a container inherit whether they
+    // are a capability based on the pointer to the container, as they are just
+    // a GEP, and thus can be either type. We could add checks here, but that
+    // would just be a pointless copy of the code in SemaExpr.
+    break;
+  case CK_FunctionToPointerDecay:
   case CK_BuiltinFnToFnPtr:
     // For purecap these should create capabilities and not integer pointers
     assert(getType()->isCapabilityPointerType() == IsPurecap);

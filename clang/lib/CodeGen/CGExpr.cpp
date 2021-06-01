@@ -4474,23 +4474,6 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
   if (TBAAInfo) *TBAAInfo = CGM.getTBAAAccessInfo(EltType);
 
   Addr = Builder.CreateElementBitCast(Addr, ConvertTypeForMem(EltType));
-  // FIXME-cheri-qual: should getTargetAddressSpace return 200?
-  unsigned AS =
-    CGM.getTargetAddressSpace(E->getType().getAddressSpace());
-  llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
-  if (PtrTy->getPointerAddressSpace() != AS) {
-    if (getContext().getTargetInfo().areAllPointersCapabilities()) {
-      assert(PtrTy->getPointerAddressSpace() ==
-                        CGM.getTargetCodeGenInfo().getCHERICapabilityAS() &&
-             "Expected memory capability address space in pure capability ABI");
-      assert(E->getType().getAddressSpace() == LangAS::Default &&
-             "non-zero address space in pure capability ABI");
-      return Addr;
-    } else
-      Addr = Address(Builder.CreateAddrSpaceCast(Addr.getPointer(),
-            llvm::PointerType::get(PtrTy->getElementType(), AS)),
-          Addr.getAlignment());
-  }
   if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
     auto BoundedResult = setCHERIBoundsOnArrayDecay(Addr.getPointer(), E);
     assert(BoundedResult->getType() == Addr.getType());

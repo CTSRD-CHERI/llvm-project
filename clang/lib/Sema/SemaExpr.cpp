@@ -133,6 +133,52 @@ static bool hasAnyExplicitStorageClass(const FunctionDecl *D) {
   return false;
 }
 
+static PointerInterpretationKind
+pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
+  bool SawDeref = false;
+
+  while (true) {
+    const Expr *NewBase = nullptr;
+
+    if (auto *ME = dyn_cast<MemberExpr>(Base)) {
+      NewBase = ME->getBase();
+      if (ME->isArrow())
+        SawDeref = true;
+    } else if (auto *AS = dyn_cast<ArraySubscriptExpr>(Base)) {
+      // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
+      NewBase = AS->getBase()->IgnoreImpCasts();
+      SawDeref = true;
+    } else if (auto *UO = dyn_cast<UnaryOperator>(Base)) {
+      if (UO->getOpcode() == UO_Deref &&
+          UO->getSubExpr()->getType()->isPointerType()) {
+        // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
+        NewBase = UO->getSubExpr()->IgnoreImpCasts();
+        SawDeref = true;
+      }
+    }
+
+    if (!NewBase)
+      break;
+
+    Base = NewBase;
+  }
+
+  // If we are just taking the address of something that happens to be a
+  // capability, or decaying something that happens to have capability
+  // elements, we should not infer that the result is a capability. This only
+  // applies if there is a least one level of dereferencing. For example, the
+  // following should be an error in the hybrid ABI:
+  // void * __capability b;
+  // void *__capability *__capability c = &b;
+  if (!SawDeref)
+    return Context.getDefaultPointerInterpretation();
+  // If the basetype is __uintcap_t we don't want to treat the result as a
+  // capability (such as in uintcap_t foo; return &foo;)
+  if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
+    return PIK_Capability;
+  return Context.getDefaultPointerInterpretation();
+}
+
 /// Check whether we're in an extern inline function and referring to a
 /// variable or function with internal linkage (C11 6.7.4p3).
 ///
@@ -532,9 +578,11 @@ ExprResult Sema::DefaultFunctionArrayConversion(Expr *E, bool Diagnose) {
     // An lvalue or rvalue of type "array of N T" or "array of unknown bound of
     // T" can be converted to an rvalue of type "pointer to T".
     //
-    if (getLangOpts().C99 || getLangOpts().CPlusPlus || E->isLValue())
-      E = ImpCastExprToType(E, Context.getArrayDecayedType(Ty),
+    if (getLangOpts().C99 || getLangOpts().CPlusPlus || E->isLValue()) {
+      PointerInterpretationKind PIK = pointerKindForBaseExpr(Context, E);
+      E = ImpCastExprToType(E, Context.getArrayDecayedType(Ty, PIK),
                             CK_ArrayToPointerDecay).get();
+    }
   }
   return E;
 }
@@ -13576,29 +13624,6 @@ enum {
 static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
                                          Expr *E, unsigned Type) {
   S.Diag(Loc, diag::err_typecheck_address_of) << Type << E->getSourceRange();
-}
-
-static PointerInterpretationKind
-pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base, bool WasMemberExpr = false) {
-  if (auto *mr = dyn_cast<MemberExpr>(Base))
-    return pointerKindForBaseExpr(Context, mr->getBase(), true);
-  else if (auto *as = dyn_cast<ArraySubscriptExpr>(Base))
-    // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
-    return pointerKindForBaseExpr(Context, as->getBase()->IgnoreImpCasts(), true);
-
-  // If we are just taking the address of something that happens to be a
-  // capability we should not infer that the result is a capability. This only
-  // applies if there is a least one level of MemberExpr/ArraySubscriptExpr
-  // For example the following should be an error in the hybrid ABI:
-  // void * __capability b;
-  // void *__capability *__capability c = &b;
-  if (!WasMemberExpr)
-    return Context.getDefaultPointerInterpretation();
-  // If the basetype is __uintcap_t we don't want to treat the result as a
-  // capability (such as in uintcap_t foo; return &foo;)
-  if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
-    return PIK_Capability;
-  return Context.getDefaultPointerInterpretation();
 }
 
 /// CheckAddressOfOperand - The operand of & must be either a function
