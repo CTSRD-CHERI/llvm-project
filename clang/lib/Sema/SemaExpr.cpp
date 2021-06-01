@@ -135,30 +135,27 @@ static bool hasAnyExplicitStorageClass(const FunctionDecl *D) {
 
 static PointerInterpretationKind
 pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
-  bool SawDeref = false;
+  QualType DerefType;
 
-  while (!SawDeref) {
+  while (Base) {
     const Expr *NewBase = nullptr;
 
     if (auto *ME = dyn_cast<MemberExpr>(Base)) {
-      NewBase = ME->getBase();
       if (ME->isArrow())
-        SawDeref = true;
+        DerefType = ME->getBase()->getType();
+      else if (ME->getMemberDecl()->getType()->isReferenceType())
+        DerefType = ME->getMemberDecl()->getType();
+      else
+        NewBase = ME->getBase();
     } else if (auto *AS = dyn_cast<ArraySubscriptExpr>(Base)) {
       // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
-      NewBase = AS->getBase()->IgnoreImpCasts();
-      SawDeref = true;
+      DerefType = AS->getBase()->IgnoreImpCasts()->getType();
     } else if (auto *UO = dyn_cast<UnaryOperator>(Base)) {
       if (UO->getOpcode() == UO_Deref &&
-          UO->getSubExpr()->getType()->isPointerType()) {
+          UO->getSubExpr()->getType()->isPointerType())
         // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
-        NewBase = UO->getSubExpr()->IgnoreImpCasts();
-        SawDeref = true;
-      }
+        DerefType = UO->getSubExpr()->IgnoreImpCasts()->getType();
     }
-
-    if (!NewBase)
-      break;
 
     Base = NewBase;
   }
@@ -170,11 +167,11 @@ pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
   // following should be an error in the hybrid ABI:
   // void * __capability b;
   // void *__capability *__capability c = &b;
-  if (!SawDeref)
+  if (!DerefType.getTypePtrOrNull())
     return Context.getDefaultPointerInterpretation();
   // If the basetype is __uintcap_t we don't want to treat the result as a
   // capability (such as in uintcap_t foo; return &foo;)
-  if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
+  if (DerefType->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
     return PIK_Capability;
   return Context.getDefaultPointerInterpretation();
 }
