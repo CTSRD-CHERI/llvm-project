@@ -2532,8 +2532,7 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
                        diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    Kind = SrcIsCap && !DestType->isIntCapType() ? CK_CHERICapabilityToAddress
-                                                 : CK_PointerToIntegral;
+    Kind = CK_PointerToIntegral;
     return TC_Success;
   }
 
@@ -2625,18 +2624,10 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
         return TC_Failed;
       }
     }
-    if (SrcIsCap && !DestType->isIntCapType()) {
-      // Note: In offset mode (size_t)cap_ptr always returns an address and not
-      // an offset. Changing that behaviour would change offset mode from being
-      // "mostly compatible" to being "completely incompatible" with existing C
-      // code. Therefore we shouldn't use the following here:
-      //   Kind = Self.getLangOpts().cheriUIntCapUsesAddr()
-      //           ? CK_CHERICapabilityToAddress
-      //           : CK_CHERICapabilityToOffset;
-      Kind = CK_CHERICapabilityToAddress;
-    } else {
-      Kind = CK_PointerToIntegral;
-    }
+    // XXX: Make reinterpret_cast<__cheri_addr void *> valid syntax rather than
+    // forcing the use of C-style (__cheri_addr void *)? That would need to be
+    // checked here if so.
+    Kind = CK_PointerToIntegral;
     return TC_Success;
   }
 
