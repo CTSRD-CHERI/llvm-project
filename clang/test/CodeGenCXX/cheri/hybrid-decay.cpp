@@ -2,6 +2,8 @@
 // RUN: %cheri_cc1 -disable-O0-optnone -emit-llvm %s -o - \
 // RUN:   | opt -S -mem2reg | FileCheck %s
 
+extern "C" {
+
 struct S {
   char buf[1];
 };
@@ -9,68 +11,52 @@ struct S {
 // These tests may look redundant, as one would expect that if the decay-only
 // tests all work (which test various different expressions the frontend needs
 // to look at in order to find the __capability) then the binary expression
-// ones should too. However, arrow_plus_1 (and curiously only it) is stubborn
-// and, if it generates erroneous addrspacecast's, those somehow persist,
-// whereas the other two variants, and all the decay-only tests, all have their
-// addrspacecast's folded if optimisations are enabled, masking the bug.
+// ones should too. However, arrow_plus_1 in the corresponding C tests (and
+// curiously only that C test) is stubborn and, if it generates erroneous
+// addrspacecast's, those somehow persist, whereas its other two variants, and
+// all the decay-only tests, all have their addrspacecast's folded if
+// optimisations are enabled, masking the bug. For completeness, we have both
+// sets of equivalent reference tests here, though all of these would
+// previously crash Clang.
 
-// CHECK-LABEL: @arrow(
+// CHECK-LABEL: @dot(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* [[P:%.*]], i32 0, i32 0
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
 // CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
 //
-char * __capability arrow(struct S * __capability p) {
-  return p->buf;
+char * __capability dot(struct S & __capability p) {
+  return p.buf;
 }
 
-// CHECK-LABEL: @deref(
+// CHECK-LABEL: @ref(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0, i64 0
 // CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
 //
-char * __capability deref(char (* __capability p)[1]) {
-  return *p;
+char * __capability ref(char (& __capability p)[1]) {
+  return p;
 }
 
-// CHECK-LABEL: @sub(
-// CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0
-// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[ARRAYIDX]], i64 0, i64 0
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
-//
-char * __capability sub(char (* __capability p)[1]) {
-  return p[0];
-}
-
-// CHECK-LABEL: @arrow_plus_1(
+// CHECK-LABEL: @dot_plus_1(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* [[P:%.*]], i32 0, i32 0
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
 // CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
 // CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
 //
-char * __capability arrow_plus_1(struct S * __capability p) {
-  return p->buf + 1;
+char * __capability dot_plus_1(struct S & __capability p) {
+  return p.buf + 1;
 }
 
-// CHECK-LABEL: @deref_plus_1(
+// CHECK-LABEL: @ref_plus_1(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0, i64 0
 // CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
 // CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
 //
-char * __capability deref_plus_1(char (* __capability p)[1]) {
-  return *p + 1;
+char * __capability ref_plus_1(char (& __capability p)[1]) {
+  return p + 1;
 }
 
-// CHECK-LABEL: @sub_plus_1(
-// CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0
-// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[ARRAYIDX]], i64 0, i64 0
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
-//
-char * __capability sub_plus_1(char (* __capability p)[1]) {
-  return p[0] + 1;
-}
+}; // extern "C"
