@@ -56,6 +56,6 @@ add_lld_library(lldMachO2
   ${tablegen_deps}
   )
 
-if(HAVE_LIBXAR)
+if(LLVM_HAVE_LIBXAR)
   target_link_libraries(lldMachO2 PRIVATE ${XAR_LIB})
 endif()
