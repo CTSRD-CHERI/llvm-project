@@ -1281,6 +1281,15 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     }
     if (hasBoundsOptOutAnnotation(*this, E, BaseTy, Kind, "base type"))
       return None;
+
+    // When subscripting, attributes on the field only make sense for arrays,
+    // since pointers (and references) don't have their storage inline.
+    if (Kind == SubObjectBoundsKind::ArraySubscript &&
+        !ME->getMemberDecl()->getType()->isArrayType()) {
+      *ReturnValueValid = false;
+      return None;
+    }
+
     if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), Kind, "field"))
       return None;
 
@@ -1360,11 +1369,14 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
     const Expr *Base = ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
     if (auto ME = dyn_cast<MemberExpr>(Base)) {
-      // FIXME: refactor this properly to get a sane API...
-      bool ReturnValueValid = true;
-      auto Result = HandleMemberExpr(ME, &ReturnValueValid);
-      if (ReturnValueValid)
-        return Result;
+      // Arrays have their storage allocated inline
+      if (ME->getMemberDecl()->getType()->isArrayType()) {
+        // FIXME: refactor this properly to get a sane API...
+        bool ReturnValueValid = true;
+        auto Result = HandleMemberExpr(ME, &ReturnValueValid);
+        if (ReturnValueValid)
+          return Result;
+      }
     }
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
     switch (canSetBoundsOnArraySubscript(E, ASE, Kind, BoundsMode, *this)) {
