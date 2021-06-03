@@ -27,11 +27,6 @@ struct TP {
   char *p __attribute__((cheri_subobject_bounds_use_remaining_size));
 };
 
-// TODO: Currently the UP and TP tests incorrectly use the bounds of the
-// pointer's container, treating it as if it were an array instead. TP
-// additionally gets its first use-remaining-size bounds setting wrong,
-// applying it to the pointer as well.
-
 // CHECK-LABEL: @test_UA(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[A:%.*]] = bitcast [[UNION_UA:%.*]] addrspace(200)* [[UA:%.*]] to [2 x i8] addrspace(200)*
@@ -97,15 +92,13 @@ char *test_TA(struct TA *ta) {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[P:%.*]] = bitcast [[UNION_UP:%.*]] addrspace(200)* [[UP:%.*]] to i8 addrspace(200)* addrspace(200)*
 // CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[P]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 16)
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 1
 // CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
 //
 char *test_UP(union UP *up) {
   return &up->p[1];
   // expected-remark@-1 {{not setting bounds for array subscript on 'char *' (array subscript on non-array type)}}
-  // expected-remark@-2 {{using size of containing type 'union UP' instead of object type 'char' for subobject bounds on union member}}
-  // expected-remark@-3 {{setting sub-object bounds for pointer to 'char' to 16 bytes}}
+  // expected-remark@-2 {{not setting bounds for pointer to 'char' (should set bounds on full array but size is not known)}}
 }
 
 // CHECK-LABEL: @test_SP(
@@ -125,19 +118,11 @@ char *test_SP(struct SP *sp) {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_TP:%.*]], [[STRUCT_TP]] addrspace(200)* [[TP:%.*]], i32 0, i32 0
 // CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[P]], align 16
-// CHECK-NEXT:    [[CUR_OFFSET:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[REMAINING_BYTES]])
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 1
-// CHECK-NEXT:    [[CUR_OFFSET1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[ARRAYIDX]])
-// CHECK-NEXT:    [[CUR_LEN2:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[ARRAYIDX]])
-// CHECK-NEXT:    [[REMAINING_BYTES3:%.*]] = sub i64 [[CUR_LEN2]], [[CUR_OFFSET1]]
-// CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[ARRAYIDX]], i64 [[REMAINING_BYTES3]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 1
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
 //
 char *test_TP(struct TP *tp) {
   return &tp->p[1];
-  // expected-remark@-1 {{setting sub-object bounds for field 'p' (array subscript on 'char *') to remaining bytes (member has use-remaining-size attribute)}}
-  // expected-remark@-2 {{setting sub-object bounds for field 'p' (pointer to 'char') to remaining bytes (member has use-remaining-size attribute)}}
+  // expected-remark@-1 {{not setting bounds for array subscript on 'char *' (array subscript on non-array type)}}
+  // expected-remark@-2 {{not setting bounds for pointer to 'char' (should set bounds on full array but size is not known)}}
 }
