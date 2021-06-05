@@ -8721,7 +8721,7 @@ void RISCVTargetLowering::LowerAsmOperandForConstraint(
   TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops, DAG);
 }
 
-Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilder<> &Builder,
+Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilderBase &Builder,
                                                    Instruction *Inst,
                                                    AtomicOrdering Ord) const {
   if (isa<LoadInst>(Inst) && Ord == AtomicOrdering::SequentiallyConsistent)
@@ -8731,7 +8731,7 @@ Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilder<> &Builder,
   return nullptr;
 }
 
-Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilder<> &Builder,
+Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilderBase &Builder,
                                                     Instruction *Inst,
                                                     AtomicOrdering Ord) const {
   if (isa<LoadInst>(Inst) && isAcquireOrStronger(Ord))
@@ -8839,7 +8839,7 @@ getIntrinsicForMaskedAtomicRMWBinOp(unsigned XLen, AtomicRMWInst::BinOp BinOp) {
 }
 
 Value *RISCVTargetLowering::emitMaskedAtomicRMWIntrinsic(
-    IRBuilder<> &Builder, AtomicRMWInst *AI, Value *AlignedAddr, Value *Incr,
+    IRBuilderBase &Builder, AtomicRMWInst *AI, Value *AlignedAddr, Value *Incr,
     Value *Mask, Value *ShiftAmt, AtomicOrdering Ord) const {
   assert(!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()));
   unsigned XLen = Subtarget.getXLen();
@@ -8893,7 +8893,7 @@ RISCVTargetLowering::shouldExpandAtomicCmpXchgInIR(
 }
 
 Value *RISCVTargetLowering::emitMaskedAtomicCmpXchgIntrinsic(
-    IRBuilder<> &Builder, AtomicCmpXchgInst *CI, Value *AlignedAddr,
+    IRBuilderBase &Builder, AtomicCmpXchgInst *CI, Value *AlignedAddr,
     Value *CmpVal, Value *NewVal, Value *Mask, AtomicOrdering Ord) const {
   assert(!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()));
   unsigned XLen = Subtarget.getXLen();
