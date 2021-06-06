@@ -8051,7 +8051,7 @@ QualType Sema::BuildPointerInterpretationAttr(QualType T,
 /// only applicable to pointer and reference types and specifies that this
 /// pointer/reference should be treated as a capability.
 static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &state,
-                                       TypeAttrLocation TAL, ParsedAttr& attr) {
+                                      TypeAttrLocation TAL, ParsedAttr& attr) {
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
 
