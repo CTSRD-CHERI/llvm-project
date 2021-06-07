@@ -1364,6 +1364,10 @@ void AsmPrinter::emitFunctionBody() {
       case TargetOpcode::PSEUDO_PROBE:
         emitPseudoProbe(MI);
         break;
+      case TargetOpcode::ARITH_FENCE:
+        if (isVerbose())
+          OutStreamer->emitRawComment("ARITH_FENCE");
+        break;
       default:
         emitInstruction(&MI);
         if (CanDoExtraAnalysis) {
