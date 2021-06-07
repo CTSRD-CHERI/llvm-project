@@ -3543,6 +3543,8 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   Op.IsCheriFromCap = !IsToCap;
   // Do all the default cast checks (including array-to-pointer decay, etc.)
   Op.CheckCheriCast();
+  if (Op.SrcExpr.isInvalid())
+    return ExprError();
   // Update the SubExpr pointer after potential conversions
   const Expr *const SubExpr = Op.SrcExpr.get();
   const QualType DestTy = Op.DestType;
@@ -3550,8 +3552,6 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc, bool IsToCap,
   const QualType SrcTy = SubExpr->getRealReferenceType(Context, false);
   if (SrcTy->isDependentType() || DestTy->isDependentType()) {
     // Don't perform any checking for dependent types:
-    if (Op.SrcExpr.isInvalid())
-      return ExprError();
     auto CE = CStyleCastExpr::Create(
         Context, Op.ResultType, Op.ValueKind, CK_Dependent, Op.SrcExpr.get(),
         &Op.BasePath, CurFPFeatureOverrides(), TSInfo, LParenLoc, RParenLoc);

@@ -34,22 +34,32 @@ void instantiate() {
 
 #if __has_feature(capabilities)
 template <class T, T *__capability Func>
+// hybrid-note@-1 3 {{template parameter is declared here}}
 struct c_cap {
   static constexpr T *__capability function = Func;
 };
 template <class T, class Arg>
 c_cap<T, a> test_overloaded_fn_cap(Arg arg) {
   // expected-note@-1{{candidate template ignored: substitution failure [with T = void (char)]: address of overloaded function 'a' does not match required type 'void (char)'}}
+  // hybrid-note@-2{{candidate template ignored: substitution failure [with T = void (int)]: non-type template argument of type 'void (int)' cannot be converted to a value of type 'void (* __capability)(int)'}}
+  // hybrid-note@-3{{candidate template ignored: substitution failure [with T = void (long)]: non-type template argument of type 'void (long)' cannot be converted to a value of type 'void (* __capability)(long)'}}
   c_cap<T, a>::function(arg);
   return {};
 }
 void instantiate_cap() {
-  // The following (valid) expressions were previously rejected by CHERI Clang:
+  // TODO: These were previously allowed, but had the wrong semantics, since
+  // T * __capability dropped the __capability when instantiated. Should these
+  // only warn for implicit?
   test_overloaded_fn_cap<void(int)>(1);
+  // hybrid-error@-1{{no matching function for call to 'test_overloaded_fn_cap'}}
   c_cap<void(int), a>::function(1);
+  // hybrid-error@-1{{non-type template argument of type 'void (int)' cannot be converted to a value of type 'void (* __capability)(int)'}}
   test_overloaded_fn_cap<void(long)>(1);
+  // hybrid-error@-1{{no matching function for call to 'test_overloaded_fn_cap'}}
   c_cap<void(long), a>::function(1);
-  // This one should always be an error:
+  // hybrid-error@-1{{non-type template argument of type 'void (long)' cannot be converted to a value of type 'void (* __capability)(long)'}}
+
+  // These should always be an error:
   test_overloaded_fn_cap<void(char)>(1); // expected-error{{no matching function for call to 'test_overloaded_fn_cap'}}
   c_cap<void(char), a>::function(1);     // expected-error{{address of overloaded function 'a' does not match required type 'void (char)'}}
 
@@ -63,7 +73,6 @@ void instantiate_cap() {
   // hybrid-explicit-error@-1{{converting non-capability type 'void (*const)(long)' to capability type 'void (* __capability)(long)' without an explicit cast}}
   // hybrid-implicit-warning@-2{{converting non-capability type 'void (*)(long)' to capability type 'void (* __capability)(long)' without an explicit cast}}
   void (*__capability tmp4)(long) = c_cap<void(long), a>::function;
-  // hybrid-explicit-error@-1{{converting non-capability type 'void (*const)(long)' to capability type 'void (* __capability)(long)' without an explicit cast}}
-  // hybrid-implicit-warning@-2{{converting non-capability type 'void (*)(long)' to capability type 'void (* __capability)(long)' without an explicit cast}}
+  // hybrid-error@-1{{non-type template argument of type 'void (long)' cannot be converted to a value of type 'void (* __capability)(long)'}}
 }
 #endif
