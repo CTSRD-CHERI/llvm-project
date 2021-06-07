@@ -20,6 +20,13 @@ func2(int *__capability asp) {
   return &(asp[42]); // no-diagnostics
 }
 
+// This would previously not give an error as we erroneously peeked through the
+// ArrayToPointerDecay and saw `int [10]` as the base, giving a pointer not a
+// capability. It would, however, crash once it hit CodeGen.
+int *func3(struct astruct * __capability asp) {
+  return &(asp->buf[0]); // expected-error {{converting capability type 'int * __capability' to non-capability type 'int *' without an explicit cast}}
+}
+
 struct as {
   char name[10];
   int value;

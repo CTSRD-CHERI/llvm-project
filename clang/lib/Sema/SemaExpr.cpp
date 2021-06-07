@@ -148,13 +148,11 @@ pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
       else
         NewBase = ME->getBase();
     } else if (auto *AS = dyn_cast<ArraySubscriptExpr>(Base)) {
-      // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
-      DerefType = AS->getBase()->IgnoreImpCasts()->getType();
+      DerefType = AS->getBase()->getType();
     } else if (auto *UO = dyn_cast<UnaryOperator>(Base)) {
       if (UO->getOpcode() == UO_Deref &&
           UO->getSubExpr()->getType()->isPointerType())
-        // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
-        DerefType = UO->getSubExpr()->IgnoreImpCasts()->getType();
+        DerefType = UO->getSubExpr()->getType();
     }
 
     Base = NewBase;
