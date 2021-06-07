@@ -57,6 +57,7 @@ public:
   bool MCFatalWarnings : 1;
   bool MCNoWarn : 1;
   bool MCNoDeprecatedWarn : 1;
+  bool MCNoTypeCheck : 1;
   bool MCSaveTempLabels : 1;
   bool MCUseDwarfDirectory : 1;
   bool MCIncrementalLinkerCompatible : 1;
