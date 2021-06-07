@@ -39,3 +39,18 @@ void typeof_arg(void * __capability p) {
   typeof(&p) q = &p;
   foo(q);
 }
+
+// Previously this would crash without the __cheri_fromcap and give an error
+// with it since Sema incorrectly determined the address to be a pointer not a
+// capability, as it peeked through the ArrayToPointerDecay and saw the type as
+// `char [1]`, which is not a capability.
+// CHECK-LABEL: @fromcap_member(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* [[S:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
+// CHECK-NEXT:    [[ARRAYIDX_ASCAST:%.*]] = addrspacecast i8 addrspace(200)* [[ARRAYIDX]] to i8*
+// CHECK-NEXT:    ret i8* [[ARRAYIDX_ASCAST]]
+//
+char *fromcap_member(struct S * __capability s) {
+  return (__cheri_fromcap char *)&s->buf[0];
+}
