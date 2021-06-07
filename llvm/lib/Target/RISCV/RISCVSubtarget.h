@@ -146,7 +146,9 @@ public:
     assert(HasCheri && "Cannot get capability type for non-CHERI");
     return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
   }
-  unsigned getMaxInterleaveFactor() const { return MaxInterleaveFactor; }
+  unsigned getMaxInterleaveFactor() const {
+    return hasStdExtV() ? MaxInterleaveFactor : 1;
+  }
 
 protected:
   // GlobalISel related APIs.
