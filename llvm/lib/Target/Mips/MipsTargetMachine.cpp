@@ -150,15 +150,11 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                         getEffectiveCodeModel(CM, CodeModel::Small), OL),
       isLittle(isLittle), TLOF(std::make_unique<MipsTargetObjectFile>()),
       ABI(MipsABIInfo::computeTargetABI(TT, CPU, Options.MCOptions)),
-      Subtarget(nullptr),
-      DefaultSubtarget(TT, CPU, FS, isLittle, *this,
-                       MaybeAlign(Options.StackAlignmentOverride)),
+      Subtarget(nullptr), DefaultSubtarget(TT, CPU, FS, isLittle, *this, None),
       NoMips16Subtarget(TT, CPU, FS.empty() ? "-mips16" : FS.str() + ",-mips16",
-                        isLittle, *this,
-                        MaybeAlign(Options.StackAlignmentOverride)),
+                        isLittle, *this, None),
       Mips16Subtarget(TT, CPU, FS.empty() ? "+mips16" : FS.str() + ",+mips16",
-                      isLittle, *this,
-                      MaybeAlign(Options.StackAlignmentOverride)) {
+                      isLittle, *this, None) {
   Subtarget = &DefaultSubtarget;
   initAsmInfo();
 
@@ -233,7 +229,7 @@ MipsTargetMachine::getSubtargetImpl(const Function &F) const {
     resetTargetOptions(F);
     I = std::make_unique<MipsSubtarget>(
         TargetTriple, CPU, FS, isLittle, *this,
-        MaybeAlign(Options.StackAlignmentOverride));
+        MaybeAlign(F.getParent()->getOverrideStackAlignment()));
   }
   return I.get();
 }
