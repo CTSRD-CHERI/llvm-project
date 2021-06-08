@@ -9807,7 +9807,8 @@ ConstantFPSDNode *llvm::isConstOrConstSplatFP(SDValue N,
 
 bool llvm::isNullOrNullSplat(SDValue N, bool AllowUndefs) {
   // TODO: may want to use peekThroughBitcast() here.
-  ConstantSDNode *C = isConstOrConstSplat(N, AllowUndefs);
+  ConstantSDNode *C =
+      isConstOrConstSplat(N, AllowUndefs, /*AllowTruncation=*/true);
   return C && C->isNullValue();
 }
 
