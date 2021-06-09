@@ -1555,10 +1555,10 @@ public:
     return getNumRegisters(Context, VT);
   }
 
-  /// Certain targets have context senstive alignment requirements, where one
+  /// Certain targets have context sensitive alignment requirements, where one
   /// type has the alignment requirement of another type.
   virtual Align getABIAlignmentForCallingConv(Type *ArgTy,
-                                              DataLayout DL) const {
+                                              const DataLayout &DL) const {
     return DL.getABITypeAlign(ArgTy);
   }
 

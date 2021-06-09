@@ -20105,8 +20105,8 @@ static bool isHomogeneousAggregate(Type *Ty, HABaseType &Base,
 }
 
 /// Return the correct alignment for the current calling convention.
-Align ARMTargetLowering::getABIAlignmentForCallingConv(Type *ArgTy,
-                                                       DataLayout DL) const {
+Align ARMTargetLowering::getABIAlignmentForCallingConv(
+    Type *ArgTy, const DataLayout &DL) const {
   const Align ABITypeAlign = DL.getABITypeAlign(ArgTy);
   if (!ArgTy->isVectorTy())
     return ABITypeAlign;
