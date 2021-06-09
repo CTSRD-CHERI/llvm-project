@@ -1467,6 +1467,9 @@ public:
 
   bool areAllPointersCapabilities() const { return CapabilityABI; }
 
+  /// Controls if __arithmetic_fence is supported in the targeted backend.
+  virtual bool checkArithmeticFenceSupported() const { return false; }
+
   /// Gets the default calling convention for the given target and
   /// declaration context.
   virtual CallingConv getDefaultCallingConv() const {
