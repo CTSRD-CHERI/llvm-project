@@ -366,7 +366,7 @@ public:
   /// Return the in-memory pointer type for the given address space, defaults to
   /// the pointer type from the data layout.  FIXME: The default needs to be
   /// removed once all the code is updated.
-  MVT getPointerMemTy(const DataLayout &DL,
+  virtual MVT getPointerMemTy(const DataLayout &DL,
   // To ease porting of backends allow defaulting to AS0
 #ifdef LLVM_TARGETLOWERINGINFO_DEFAULT_AS
                    uint32_t AS = LLVM_TARGETLOWERINGINFO_DEFAULT_AS) const {

@@ -1170,8 +1170,8 @@ void MachineMemOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
        << "unknown-address";
   }
   MachineOperand::printOperandOffset(OS, getOffset());
-  if (getAlign() != getSize())
-    OS << ", align " << getAlign().value();
+  if (getSize() > 0 && getAlign() != getSize())
+      OS << ", align " << getAlign().value();
   if (getAlign() != getBaseAlign())
     OS << ", basealign " << getBaseAlign().value();
   auto AAInfo = getAAInfo();
