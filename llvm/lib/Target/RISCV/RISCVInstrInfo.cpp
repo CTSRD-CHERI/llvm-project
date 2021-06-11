@@ -869,6 +869,7 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCJump:
   case RISCV::PseudoCTAIL:
   case RISCV::PseudoCLLC:
+  case RISCV::PseudoCLGC_GP_Call:
   case RISCV::PseudoCLGC:
   case RISCV::PseudoCLA_TLS_IE:
   case RISCV::PseudoCLC_TLS_GD:
@@ -1212,6 +1213,8 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TLS_GOT_HI, "riscv-tls-got-hi"},
       {MO_TLS_GD_HI, "riscv-tls-gd-hi"},
       {MO_CAPTAB_PCREL_HI, "riscv-captab-pcrel-hi"},
+      {MO_CCALL_GPREL, "riscv-ccall-gprel"},
+      {MO_CAPTAB_GPREL, "riscv-captab-gprel"},
       {MO_TPREL_CINCOFFSET, "riscv-tprel-cincoffset"},
       {MO_TLS_IE_CAPTAB_PCREL_HI, "riscv-tls-ie-captab-pcrel-hi"},
       {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"},

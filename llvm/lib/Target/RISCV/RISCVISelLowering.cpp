@@ -2756,11 +2756,21 @@ static SDValue getTargetNode(JumpTableSDNode *N, SDLoc DL, EVT Ty,
 
 template <class NodeTy>
 SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
-                                     bool IsLocal, bool CanDeriveFromPcc) const {
+                                     bool IsLocal, bool CanDeriveFromPcc,
+                                     bool IsFuncCall) const {
   SDLoc DL(N);
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
+
+    if (RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::Gprel) {
+      MVT XLenVT = Subtarget.getXLenVT();
+      if (IsFuncCall)
+          return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC_GP_Call, DL, Ty, XLenVT, Addr), 0);
+      else
+          return SDValue(DAG.getMachineNode(RISCV::PseudoCLGP, DL, Ty, XLenVT, Addr), 0);
+    }
+
     if (IsLocal && CanDeriveFromPcc) {
       // Use PC-relative addressing to access the symbol. This generates the
       // pattern (PseudoCLLC sym), which expands to
@@ -2829,7 +2839,7 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   // bounds and therefore would not be checked when we pass the reference to
   // another function. Therefore, we always load from the captable for all
   // global variables.
-  SDValue Addr = getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false);
+  SDValue Addr = getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false, false);
 
   // In order to maximise the opportunity for common subexpression elimination,
   // emit a separate ADD/PTRADD node for the global address offset instead of
@@ -2845,7 +2855,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
   BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true, false);
 }
 
 SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
@@ -2853,7 +2863,7 @@ SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true, false);
 }
 
 SDValue RISCVTargetLowering::lowerJumpTable(SDValue Op,
@@ -2861,7 +2871,7 @@ SDValue RISCVTargetLowering::lowerJumpTable(SDValue Op,
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true, false);
 }
 
 SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
@@ -8467,9 +8477,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     }
 
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-        UseLegacyIndirectPurecapCalls)
+        (UseLegacyIndirectPurecapCalls ||
+        RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::Gprel))
       Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
-                       /*CanDeriveFromPcc=*/true);
+                       /*CanDeriveFromPcc=*/true, true);
     else
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
@@ -8488,9 +8499,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     // This could be optimised, but shouldAssumeDSOLocal is too weak, since
     // extern functions are marked dso_local for position-dependent code.
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-        UseLegacyIndirectPurecapCalls)
+        (UseLegacyIndirectPurecapCalls ||
+        RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::Gprel))
       Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
-                       /*CanDeriveFromPcc=*/true);
+                       /*CanDeriveFromPcc=*/true, true);
     else
       Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
   }

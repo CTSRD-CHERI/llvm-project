@@ -81,6 +81,7 @@ const MCFixup *RISCVMCExpr::getPCRelHiFixup(const MCFragment **DFOut) const {
     case RISCV::fixup_riscv_tls_gd_hi20:
     case RISCV::fixup_riscv_pcrel_hi20:
     case RISCV::fixup_riscv_captab_pcrel_hi20:
+    case RISCV::fixup_riscv_captab_gprel:
     case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
     case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
       if (DFOut)
@@ -95,16 +96,35 @@ const MCFixup *RISCVMCExpr::getPCRelHiFixup(const MCFragment **DFOut) const {
 bool RISCVMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
                                             const MCAsmLayout *Layout,
                                             const MCFixup *Fixup) const {
-  // Explicitly drop the layout and assembler to prevent any symbolic folding in
-  // the expression handling.  This is required to preserve symbolic difference
-  // expressions to emit the paired relocations.
-  if (!getSubExpr()->evaluateAsRelocatable(Res, nullptr, nullptr))
+  if (!getSubExpr()->evaluateAsRelocatable(Res, Layout, Fixup))
     return false;
 
-  Res =
-      MCValue::get(Res.getSymA(), Res.getSymB(), Res.getConstant(), getKind());
-  // Custom fixup types are not valid with symbol difference expressions.
-  return Res.getSymB() ? getKind() == VK_RISCV_None : true;
+  // Some custom fixup types are not valid with symbol difference expressions
+  if (Res.getSymA() && Res.getSymB()) {
+    switch (getKind()) {
+    default:
+      return true;
+    case VK_RISCV_LO:
+    case VK_RISCV_HI:
+    case VK_RISCV_PCREL_LO:
+    case VK_RISCV_PCREL_HI:
+    case VK_RISCV_GOT_HI:
+    case VK_RISCV_TPREL_LO:
+    case VK_RISCV_TPREL_HI:
+    case VK_RISCV_TPREL_ADD:
+    case VK_RISCV_TLS_GOT_HI:
+    case VK_RISCV_TLS_GD_HI:
+    case VK_RISCV_CAPTAB_PCREL_HI:
+    case VK_RISCV_CCALL_GPREL:
+    case VK_RISCV_CAPTAB_GPREL:
+    case VK_RISCV_TPREL_CINCOFFSET:
+    case VK_RISCV_TLS_IE_CAPTAB_PCREL_HI:
+    case VK_RISCV_TLS_GD_CAPTAB_PCREL_HI:
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void RISCVMCExpr::visitUsedExpr(MCStreamer &Streamer) const {
@@ -124,6 +144,8 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
       .Case("tls_ie_pcrel_hi", VK_RISCV_TLS_GOT_HI)
       .Case("tls_gd_pcrel_hi", VK_RISCV_TLS_GD_HI)
       .Case("captab_pcrel_hi", VK_RISCV_CAPTAB_PCREL_HI)
+      .Case("ccall_gprel", VK_RISCV_CCALL_GPREL)
+      .Case("captab_gprel", VK_RISCV_CAPTAB_GPREL)
       .Case("tprel_cincoffset", VK_RISCV_TPREL_CINCOFFSET)
       .Case("tls_ie_captab_pcrel_hi", VK_RISCV_TLS_IE_CAPTAB_PCREL_HI)
       .Case("tls_gd_captab_pcrel_hi", VK_RISCV_TLS_GD_CAPTAB_PCREL_HI)
@@ -157,6 +179,10 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "tls_gd_pcrel_hi";
   case VK_RISCV_CAPTAB_PCREL_HI:
     return "captab_pcrel_hi";
+  case VK_RISCV_CCALL_GPREL:
+    return "ccall_gprel";
+  case VK_RISCV_CAPTAB_GPREL:
+    return "captab_gprel";
   case VK_RISCV_TPREL_CINCOFFSET:
     return "tprel_cincoffset";
   case VK_RISCV_TLS_IE_CAPTAB_PCREL_HI:
@@ -228,6 +254,8 @@ bool RISCVMCExpr::evaluateAsConstant(int64_t &Res) const {
       Kind == VK_RISCV_TLS_GOT_HI || Kind == VK_RISCV_TLS_GD_HI ||
       Kind == VK_RISCV_CALL || Kind == VK_RISCV_CALL_PLT ||
       Kind == VK_RISCV_CAPTAB_PCREL_HI ||
+      Kind == VK_RISCV_CCALL_GPREL ||
+      Kind == VK_RISCV_CAPTAB_GPREL ||
       Kind == VK_RISCV_TPREL_CINCOFFSET ||
       Kind == VK_RISCV_TLS_IE_CAPTAB_PCREL_HI ||
       Kind == VK_RISCV_TLS_GD_CAPTAB_PCREL_HI ||

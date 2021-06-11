@@ -39,6 +39,8 @@ enum class CheriCapabilityTableABI {
   FunctionDescriptor = 3, /// Use function descriptors to get $cgp (functions
                           /// assume $cgp is set correctly) (TODO: different
                           /// approaches possible here)
+
+  Gprel = 4 /// Use $cgp as the address of capability tables
 };
 
 enum class TailPaddingAmount : uint64_t { None = 0u };

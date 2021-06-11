@@ -152,6 +152,8 @@ enum {
   MO_TLS_IE_CAPTAB_PCREL_HI = 15,
   MO_TLS_GD_CAPTAB_PCREL_HI = 16,
   MO_CCALL = 17,
+  MO_CAPTAB_GPREL = 18,
+  MO_CCALL_GPREL = 19,
 
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have
@@ -306,6 +308,10 @@ enum ABI {
   ABI_L64PC128D,
   ABI_Unknown
 };
+
+inline static CheriCapabilityTableABI CapabilityTableABI() {
+  return MCTargetOptions::cheriCapabilityTableABI();
+}
 
 // Returns the target ABI, or else a StringError if the requested ABIName is
 // not supported for the given TT and FeatureBits combination.
