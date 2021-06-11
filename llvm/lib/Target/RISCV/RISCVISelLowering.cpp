@@ -2009,6 +2009,12 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
+
+    if (RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::Gprel) {
+      MVT XLenVT = Subtarget.getXLenVT();
+      return SDValue(DAG.getMachineNode(RISCV::PseudoCLGP, DL, Ty, XLenVT, Addr), 0);
+    }
+
     if (IsLocal && CanDeriveFromPcc) {
       // Use PC-relative addressing to access the symbol. This generates the
       // pattern (PseudoCLLC sym), which expands to

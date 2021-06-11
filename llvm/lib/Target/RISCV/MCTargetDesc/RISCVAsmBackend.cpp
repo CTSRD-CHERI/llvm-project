@@ -72,6 +72,7 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"fixup_riscv_relax", 0, 0, 0},
       {"fixup_riscv_align", 0, 0, 0},
       {"fixup_riscv_captab_pcrel_hi20", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_riscv_captab_gprel", 0, 0, 0},
       {"fixup_riscv_capability", 0, 0, 0},
       {"fixup_riscv_tprel_cincoffset", 0, 0, 0},
       {"fixup_riscv_tls_ie_captab_pcrel_hi20", 12, 20,
@@ -117,6 +118,7 @@ bool RISCVAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case RISCV::fixup_riscv_tls_got_hi20:
   case RISCV::fixup_riscv_tls_gd_hi20:
   case RISCV::fixup_riscv_captab_pcrel_hi20:
+  case RISCV::fixup_riscv_captab_gprel:
   case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
   case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
     return true;
@@ -238,6 +240,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case RISCV::fixup_riscv_tls_got_hi20:
   case RISCV::fixup_riscv_tls_gd_hi20:
   case RISCV::fixup_riscv_captab_pcrel_hi20:
+  case RISCV::fixup_riscv_captab_gprel:
   case RISCV::fixup_riscv_capability:
   case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
   case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
@@ -263,7 +266,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     return ((Value + 0x800) >> 12) & 0xfffff;
   case RISCV::fixup_riscv_jal: {
     if (!isInt<21>(Value))
-      Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+      //Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+      return 0;
     if (Value & 0x1)
       Ctx.reportError(Fixup.getLoc(), "fixup value must be 2-byte aligned");
     // Need to produce imm[19|10:1|11|19:12] from the 21-bit Value.
@@ -280,7 +284,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   }
   case RISCV::fixup_riscv_branch: {
     if (!isInt<13>(Value))
-      Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+      //Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+      return 0;
     if (Value & 0x1)
       Ctx.reportError(Fixup.getLoc(), "fixup value must be 2-byte aligned");
     // Need to extract imm[12], imm[10:5], imm[4:1], imm[11] from the 13-bit

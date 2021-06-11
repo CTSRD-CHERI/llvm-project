@@ -19,6 +19,8 @@ static cl::opt<CheriCapabilityTableABI> CapTableABI(
                           "Use PLT stubs to setup $cgp correctly"),
                clEnumValN(CheriCapabilityTableABI::Pcrel, "pcrel",
                           "Derive $cgp from $pcc in every function"),
+               clEnumValN(CheriCapabilityTableABI::Gprel, "gprel",
+                          "Use $cgp to load caps"),
                clEnumValN(CheriCapabilityTableABI::FunctionDescriptor,
                           "fn-desc",
                           "Use function descriptors to setup $cgp correctly")));
