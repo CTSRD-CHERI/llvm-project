@@ -64,10 +64,17 @@ private:
                             MachineBasicBlock::iterator MBBI,
                             MachineBasicBlock::iterator &NextMBBI,
                             unsigned FlagsHi, unsigned SecondOpcode);
+  bool expandGPRelInst(MachineBasicBlock &MBB,
+                            MachineBasicBlock::iterator MBBI,
+                            MachineBasicBlock::iterator &NextMBBI,
+                            unsigned FlagsHi, unsigned SecondOpcode);
   bool expandCapLoadLocalCap(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
                              MachineBasicBlock::iterator &NextMBBI);
   bool expandCapLoadGlobalCap(MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MBBI,
+                              MachineBasicBlock::iterator &NextMBBI);
+  bool expandCapLoadGPCap(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MBBI,
                               MachineBasicBlock::iterator &NextMBBI);
   bool expandCapLoadTLSIEAddress(MachineBasicBlock &MBB,
@@ -125,6 +132,8 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandCapLoadLocalCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLGC:
     return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI);
+  case RISCV::PseudoCLGP:
+    return expandCapLoadGPCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLA_TLS_IE:
     return expandCapLoadTLSIEAddress(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLC_TLS_GD:
@@ -306,6 +315,54 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
   return true;
 }
 
+bool RISCVExpandPseudo::expandGPRelInst(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    MachineBasicBlock::iterator &NextMBBI, unsigned FlagsHi,
+    unsigned SecondOpcode) {
+  MachineFunction *MF = MBB.getParent();
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  bool HasTmpReg = MI.getNumOperands() > 2;
+  Register DestCReg = MI.getOperand(0).getReg();
+  Register TmpReg = MI.getOperand(HasTmpReg ? 1 : 0).getReg();
+  const MachineOperand &Symbol = MI.getOperand(HasTmpReg ? 2 : 1);
+
+  MachineBasicBlock *NewMBB = MF->CreateMachineBasicBlock(MBB.getBasicBlock());
+
+  // Tell AsmPrinter that we unconditionally want the symbol of this label to be
+  // emitted.
+  NewMBB->setLabelMustBeEmitted();
+
+  MF->insert(++MBB.getIterator(), NewMBB);
+
+  BuildMI(NewMBB, DL, TII->get(RISCV::LUI), TmpReg)
+      .addDisp(Symbol, 0, FlagsHi);
+
+  BuildMI(NewMBB, DL, TII->get(RISCV::CIncOffset), DestCReg)
+      .addReg(RISCV::C3)
+      .addReg(TmpReg);
+
+  BuildMI(NewMBB, DL, TII->get(SecondOpcode), DestCReg)
+      .addReg(DestCReg)
+      .addImm(0);
+
+  // Move all the rest of the instructions to NewMBB.
+  NewMBB->splice(NewMBB->end(), &MBB, std::next(MBBI), MBB.end());
+  // Update machine-CFG edges.
+  NewMBB->transferSuccessorsAndUpdatePHIs(&MBB);
+  // Make the original basic block fall-through to the new.
+  MBB.addSuccessor(NewMBB);
+
+  // Make sure live-ins are correctly attached to this new basic block.
+  LivePhysRegs LiveRegs;
+  computeAndAddLiveIns(LiveRegs, *NewMBB);
+
+  NextMBBI = MBB.end();
+  MI.eraseFromParent();
+  return true;
+}
+
 bool RISCVExpandPseudo::expandCapLoadLocalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
@@ -321,6 +378,17 @@ bool RISCVExpandPseudo::expandCapLoadGlobalCap(
   const auto &STI = MF->getSubtarget<RISCVSubtarget>();
   unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
   return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_CAPTAB_PCREL_HI,
+                              SecondOpcode);
+}
+
+bool RISCVExpandPseudo::expandCapLoadGPCap(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    MachineBasicBlock::iterator &NextMBBI) {
+  MachineFunction *MF = MBB.getParent();
+
+  const auto &STI = MF->getSubtarget<RISCVSubtarget>();
+  unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
+  return expandGPRelInst(MBB, MBBI, NextMBBI, RISCVII::MO_CAPTAB_GPREL,
                               SecondOpcode);
 }
 
