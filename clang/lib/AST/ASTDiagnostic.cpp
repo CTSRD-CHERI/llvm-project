@@ -19,6 +19,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/AST/Type.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
@@ -1759,7 +1760,7 @@ class TemplateDiff {
       if (FromIntType->isBooleanType()) {
         OS << ((FromInt == 0) ? "false" : "true");
       } else {
-        OS << FromInt.toString(10);
+        OS << toString(FromInt, 10);
       }
       return;
     }
@@ -1803,7 +1804,7 @@ class TemplateDiff {
       if (IntType->isBooleanType()) {
         OS << ((Val == 0) ? "false" : "true");
       } else {
-        OS << Val.toString(10);
+        OS << toString(Val, 10);
       }
     } else if (E) {
       PrintExpr(E);
