@@ -137,6 +137,7 @@ void __clear_cache(void *start, void *end) {
          addr += icache_line_size)
       __asm __volatile("ic ivau, %0" :: ADDR_CONSTR(addr));
   }
+  __asm __volatile("dsb ish");
   __asm __volatile("isb sy");
 #undef ADDR_CONSTR
 #elif defined(__powerpc64__)
