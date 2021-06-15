@@ -166,6 +166,7 @@ if (LIBUNWIND_ENABLE_SHARED)
       OUTPUT_NAME "unwind"
       VERSION "1.0"
       SOVERSION "1"
+      POSITION_INDEPENDENT_CODE ON
   )
   # To allow testing exceptions with a shared libcxxrt.so
   if (LIBUNWIND_USE_VERSION_SCRIPT)
@@ -195,6 +196,7 @@ if (LIBUNWIND_ENABLE_STATIC)
       LINK_FLAGS "${LIBUNWIND_LINK_FLAGS}"
       LINKER_LANGUAGE C
       OUTPUT_NAME "unwind"
+      POSITION_INDEPENDENT_CODE ON
   )
 
   if(LIBUNWIND_HIDE_SYMBOLS)
