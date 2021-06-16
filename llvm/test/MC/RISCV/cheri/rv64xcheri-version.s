@@ -12,7 +12,7 @@ cgetversion x3, c2
 # CHECK-DISABLED: error: instruction requires the following: CHERI Extension with memory versioning
 csetversion c1, c2, x3
 # CHECK: cloadversion    sp, (cra)
-# CHECK: encoding: [0x5b,0x81,0x40,0xff]
+# CHECK: encoding: [0x5b,0x81,0x60,0xff]
 # CHECK-DISABLED: error: instruction requires the following: CHERI Extension with memory versioning
 cloadversion x2, (c1)
 # CHECK: cloadversions   sp, (cra)

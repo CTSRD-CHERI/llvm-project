@@ -1561,7 +1561,7 @@ let Predicates = [HasCheri, HasCheriMemVersion] in {
 def CGetVersion   : Cheri_r<0x13, "cgetversion">;
 def CSetVersion   : Cheri_rr<0x2, "csetversion">;
 let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
-def CLoadVersion : RVInstCheriSrcDst<0x7f, 0x14, 0, OPC_CHERI, (outs GPR:$rd),
+def CLoadVersion : RVInstCheriSrcDst<0x7f, 0x16, 0, OPC_CHERI, (outs GPR:$rd),
                                      (ins GPCRMemAtomic:$rs1),
                                      "cloadversion", "$rd, $rs1">;
 def CLoadVersions : RVInstCheriSrcDst<0x7f, 0x15, 0, OPC_CHERI, (outs GPR:$rd),
