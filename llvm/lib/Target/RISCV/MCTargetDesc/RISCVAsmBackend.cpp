@@ -298,7 +298,6 @@ bool RISCVAsmBackend::relaxDwarfLineAddr(MCDwarfLineAddrFragment &DF,
 bool RISCVAsmBackend::relaxDwarfCFA(MCDwarfCallFrameFragment &DF,
                                     MCAsmLayout &Layout,
                                     bool &WasRelaxed) const {
-  MCContext &C = Layout.getAssembler().getContext();
 
   const MCExpr &AddrDelta = DF.getAddrDelta();
   SmallVectorImpl<char> &Data = DF.getContents();
@@ -314,8 +313,10 @@ bool RISCVAsmBackend::relaxDwarfCFA(MCDwarfCallFrameFragment &DF,
   Fixups.clear();
   raw_svector_ostream OS(Data);
 
-  assert(C.getAsmInfo()->getMinInstAlignment() == 1 &&
-         "expected 1-byte alignment");
+  assert(
+      Layout.getAssembler().getContext().getAsmInfo()->getMinInstAlignment() ==
+          1 &&
+      "expected 1-byte alignment");
   if (Value == 0) {
     WasRelaxed = OldSize != Data.size();
     return true;
