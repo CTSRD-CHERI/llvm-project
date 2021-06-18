@@ -30,6 +30,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h"
+#include "llvm/Transforms/CHERICap.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/Attributor.h"
 #include "llvm/Transforms/IPO/ForceFunctionAttrs.h"
@@ -166,6 +167,16 @@ cl::opt<AttributorRunOption> AttributorRun(
                           "disable attributor runs")));
 
 extern cl::opt<bool> EnableKnowledgeRetention;
+
+cl::opt<bool> EscapeAnalysisForLifetimeChecks(
+    "do-escape-analysis-for-lifetime-checks", cl::init(false),
+    cl::desc(
+        "Enable escape analysis for more efficient stack lifetime checks"));
+
+cl::opt<bool> LTEscapeAnalysisForLifetimeChecks(
+    "do-lto-escape-analysis-for-lifetime-checks", cl::init(false),
+    cl::desc("Enable link-time escape analysis for more efficient stack "
+             "lifetime checks"));
 
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
@@ -475,6 +486,12 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   if (EnableCHR && OptLevel >= 3 &&
       (!PGOInstrUse.empty() || !PGOSampleUse.empty() || EnablePGOCSInstrGen))
     MPM.add(createControlHeightReductionLegacyPass());
+
+  if (EscapeAnalysisForLifetimeChecks) {
+    auto escapeAnalysisPass = createCHERISafeStacksPass();
+    if (escapeAnalysisPass)
+      MPM.add(escapeAnalysisPass);
+  }
 }
 
 void PassManagerBuilder::populateModulePassManager(
@@ -866,6 +883,13 @@ void PassManagerBuilder::populateModulePassManager(
     // Rename anon globals to be able to handle them in the summary
     MPM.add(createNameAnonGlobalPass());
   }
+
+  // This should be last
+  if (LTEscapeAnalysisForLifetimeChecks) {
+    auto escapeAnalysisPass = createCHERISafeStacksPass();
+    if (escapeAnalysisPass)
+      MPM.add(escapeAnalysisPass);
+  }
 }
 
 void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
@@ -1048,6 +1072,13 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
   addExtensionsToPM(EP_Peephole, PM);
 
   PM.add(createJumpThreadingPass());
+
+  // Run escape analysis pass
+  if (LTEscapeAnalysisForLifetimeChecks) {
+    auto escapeAnalysisPass = createCHERISafeStacksPass();
+    if (escapeAnalysisPass)
+      PM.add(escapeAnalysisPass);
+  }
 }
 
 void PassManagerBuilder::addLateLTOOptimizationPasses(
