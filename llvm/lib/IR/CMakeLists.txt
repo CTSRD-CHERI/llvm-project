@@ -46,6 +46,7 @@ add_llvm_component_library(LLVMCore
   PassTimingInfo.cpp
   SafepointIRVerifier.cpp
   ProfileSummary.cpp
+  RevocationStrategy.cpp
   Statepoint.cpp
   Type.cpp
   TypeFinder.cpp

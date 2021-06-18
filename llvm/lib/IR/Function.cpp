@@ -1721,6 +1721,16 @@ bool Function::nullPointerIsDefined() const {
   return hasFnAttribute(Attribute::NullPointerIsValid);
 }
 
+bool Function::containsPossiblyEscapingLocals() const {
+  MDNode *analysis = getMetadata("stackLifetimeSafety");
+  if (analysis)
+    return !dyn_cast<MDString>(analysis->getOperand(0))
+                ->getString()
+                .equals("safe");
+  else
+    return true;
+}
+
 bool llvm::NullPointerIsDefined(const Function *F, unsigned AS) {
   if (F && F->nullPointerIsDefined())
     return true;

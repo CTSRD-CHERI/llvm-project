@@ -37,11 +37,19 @@ def int_cheri_cap_flags_get :
   Intrinsic<[llvm_anyint_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
+def int_cheri_cap_stack_frame_size_get :
+  Intrinsic<[llvm_anyint_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_bounds_set :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_bounds_set_exact :
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_anyint_ty],
+            [IntrNoMem, IntrWillReturn]>;
+def int_cheri_cap_stack_frame_size_set :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem, IntrWillReturn]>;
@@ -165,3 +173,29 @@ def int_cheri_representable_alignment_mask :
 /// another function, etc)
 def int_cheri_bounded_stack_cap :
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem, IntrWillReturn]>;
+
+////////////////////////////////////////////////////////////////////////////////
+// Stack temporal safety functions
+////////////////////////////////////////////////////////////////////////////////
+
+/// Checks the arguments to a csc (cap store cap) instruction and raises a
+/// StackLifetimeViolation exception the argument lifetimes are invalid.
+def int_cheri_check_cap_store_cap :
+  Intrinsic<[], [llvm_anyptr_ty, llvm_anyptr_ty, llvm_anyint_ty],
+            [IntrNoMem, IntrWillReturn, IntrHasSideEffects]>;
+
+def int_cheri_cap_get_frame_size :
+  Intrinsic<[llvm_anyint_ty], [llvm_anyptr_ty], [IntrNoMem, IntrWillReturn]>;
+
+def int_cheri_cap_set_frame_size :
+  Intrinsic<[llvm_anyptr_ty],
+            [llvm_anyptr_ty, llvm_anyint_ty],
+            [IntrNoMem, IntrWillReturn]>;
+
+def int_cheri_cap_get_frame_base :
+  Intrinsic<[llvm_anyptr_ty], [llvm_anyptr_ty], [IntrNoMem, IntrWillReturn]>;
+
+/// A hacky way to grab the stack pointer without it being sealed, as is the
+/// case when you use llvm.frameaddr.
+def int_cheri_cap_get_csp :
+  Intrinsic<[llvm_anyptr_ty], [], [IntrNoMem, IntrWillReturn]>;

@@ -242,6 +242,7 @@ def CGetSealed : Cheri_r<0x5, "cgetsealed">;
 def CGetOffset : Cheri_r<0x6, "cgetoffset">;
 def CGetFlags  : Cheri_r<0x7, "cgetflags">;
 def CGetAddr   : Cheri_r<0xf, "cgetaddr">;
+def CGFS       : Cheri_r<0x13, "cgfs">;
 }
 
 //===----------------------------------------------------------------------===//
@@ -269,6 +270,7 @@ def CSetBounds      : Cheri_rr<0x8, "csetbounds">;
 def CSetBoundsExact : Cheri_rr<0x9, "csetboundsexact">;
 def CSetBoundsImm   : Cheri_ri<0x2, "csetbounds", 0>;
 } // mayTrap = 1
+def CSFS : Cheri_ri<0x3, "csfs", 0>;
 } // let Constraints = "@traps_if_sealed $rs1"
 def CClearTag       : Cheri_r<0xb, "ccleartag", GPCR>;
 let mayTrap = 1 in {
@@ -281,10 +283,16 @@ let defsCanBeSealed = 1 in
 def CSealEntry      : Cheri_r<0x11, "csealentry", GPCR>;
 } // let mayTrap = 1
 
+let Predicates = [HasCheri] in {
+def CGetFrameBase   : Cheri_r<0x14, "cgetframebase", GPCR>;
+}
+
 def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
 def : InstAlias<"csetboundsimm $cd, $cs1, $imm",
                 (CSetBoundsImm GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
+def : InstAlias<"csfs $cd, $cs1, $imm",
+                (CSFS GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -470,6 +478,9 @@ def SC_CAP_64  : CheriStore_r<0b01011, "sc.cap", GPCR, GPCRMemAtomic>;
 
 let Predicates = [HasCheri, IsRV64] in
 def SC_CAP_128 : CheriStore_r<0b01100, "sc.cap", GPCR, GPCRMemAtomic>;
+
+let Predicates = [HasCheri, IsRV64] in
+def C_SC_CAP_128 : CheriStore_r<0b01101, "c.sc.cap", GPCR, GPCRMemAtomic>;
 
 let Predicates = [HasCheri, HasStdExtA] in {
 def LR_B_DDC  : CheriLoad_r<0b10000, "lr.b.ddc",  GPR, GPRMemAtomic>;
@@ -659,11 +670,19 @@ def CSC_128  : RVInstS<0x4, OPC_STORE, (outs),
                        (ins GPCR:$rs2, GPCR:$rs1, simm12:$imm12),
                        "csc", "$rs2, ${imm12}(${rs1})">;
 
+let DecoderNamespace = "CapModeOnly_",
+    hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
+def CCSC_128 : RVInstS<0x5, OPC_STORE, (outs),
+                       (ins GPCR:$rs2, GPCR:$rs1, simm12:$imm12),
+                       "ccsc", "$rs2, ${imm12}(${rs1})">;
+
 let EmitPriority = 0 in {
 def : InstAlias<"clc $rd, (${rs1})",
                 (CLC_128  GPCR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"csc $rs2, (${rs1})",
                 (CSC_128  GPCR:$rs2, GPCR:$rs1, 0)>;
+def : InstAlias<"ccsc $rs2, (${rs1})",
+                (CCSC_128 GPCR:$rs2, GPCR:$rs1, 0)>;
 }
 }
 
@@ -696,6 +715,18 @@ def : InstAlias<"cld $rd, (${rs1})",
 def : InstAlias<"csd $rs2, (${rs1})",
                 (CSD  GPR:$rs2, GPCR:$rs1, 0)>;
 } // Predicates = [HasCheri, IsRV64, IsCapMode]
+}
+
+//===----------------------------------------------------------------------===//
+// Temporal Safety Instructions
+//===----------------------------------------------------------------------===//
+
+let Predicates = [HasCheri, IsCapMode] in {
+def : Pat<(int_cheri_check_cap_store_cap GPCR:$rs1, GPCR:$rs2, simm12:$imm12),
+          (CCSC_128 GPCR:$rs1, GPCR:$rs2, simm12:$imm12)>;
+
+def : Pat<(int_cheri_cap_get_csp), (CMove C2)>;
+
 }
 
 /// 'A' (Atomic Instructions) extension
@@ -857,6 +888,8 @@ def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
 def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
 def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
 def : PatGpcr<int_cheri_cap_address_get, CGetAddr>;
+def : PatGpcr<int_cheri_cap_stack_frame_size_get, CGFS>;
+def : PatGpcr<int_cheri_cap_get_frame_base, CGetFrameBase>;
 
 /// Capability-Modification Instructions
 
@@ -871,6 +904,7 @@ def : PatGpcrSimm12<ptradd, CIncOffsetImm>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set_exact, CSetBoundsExact>;
 def : PatGpcrUimm12<int_cheri_cap_bounds_set, CSetBoundsImm>;
+def : PatGpcrUimm12<int_cheri_cap_stack_frame_size_set, CSFS>;
 def : PatGpcr<int_cheri_cap_tag_clear, CClearTag>;
 def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
 def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;

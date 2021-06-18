@@ -13,6 +13,7 @@
 #ifndef LLVM_LIB_TARGET_RISCV_RISCVFRAMELOWERING_H
 #define LLVM_LIB_TARGET_RISCV_RISCVFRAMELOWERING_H
 
+#include "llvm/ADT/Optional.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 
 namespace llvm {
@@ -75,6 +76,21 @@ private:
   void adjustReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                  const DebugLoc &DL, Register DestReg, Register SrcReg,
                  int64_t Val, MachineInstr::MIFlag Flag) const;
+
+  /// Emits instructions to align the stack pointer for lifetime-based stack
+  /// temporal safety mitigations.
+  void emitCapDerivedLifetimesPrologue(MachineBasicBlock &MBB,
+                                       MachineBasicBlock::iterator &MBBI,
+                                       const DebugLoc &DL,
+                                       uint64_t StackFrameSize, Register SPReg,
+                                       Optional<Register> FPReg) const;
+
+  /// Emits instructions to undo the stack alignment that was performed in the
+  /// prolog.
+  void emitCapDerivedLifetimesEpilogue(MachineBasicBlock &MBB,
+                                       MachineBasicBlock::iterator &MBBI,
+                                       const DebugLoc &DL, Register SPReg,
+                                       Optional<Register> FPReg) const;
 };
-}
+} // namespace llvm
 #endif

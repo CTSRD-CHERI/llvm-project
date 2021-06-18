@@ -877,6 +877,9 @@ public:
   /// Return value: true =>  null pointer dereference is not undefined.
   bool nullPointerIsDefined() const;
 
+  /// Returns true if a reference to this function's stack frame may escape.
+  bool containsPossiblyEscapingLocals() const;
+
 private:
   void allocHungoffUselist();
   template<int Idx> void setHungoffOperand(Constant *C);
