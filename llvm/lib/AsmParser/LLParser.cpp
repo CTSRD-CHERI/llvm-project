@@ -3868,7 +3868,7 @@ bool LLParser::parseValID(ValID &ID, PerFunctionState *PFS) {
 
       Type *BaseType = Elts[0]->getType();
       auto *BasePointerType = cast<PointerType>(BaseType->getScalarType());
-      if (Ty != BasePointerType->getElementType()) {
+      if (!BasePointerType->isOpaqueOrPointeeTypeMatches(Ty)) {
         return error(
             ExplicitTypeLoc,
             typeComparisonErrorMessage(
