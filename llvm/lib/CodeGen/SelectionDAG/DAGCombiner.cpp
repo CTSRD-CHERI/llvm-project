@@ -12989,11 +12989,6 @@ ConstantFoldBITCASTofBUILD_VECTOR(SDNode *BV, EVT DstEltVT) {
   return DAG.getBuildVector(VT, DL, Ops);
 }
 
-static bool isContractable(SDNode *N) {
-  SDNodeFlags F = N->getFlags();
-  return F.hasAllowContract() || F.hasAllowReassociation();
-}
-
 /// Try to perform FMA combining on a given FADD node.
 SDValue DAGCombiner::visitFADDForFMACombine(SDNode *N) {
   SDValue N0 = N->getOperand(0);
@@ -13015,13 +13010,12 @@ SDValue DAGCombiner::visitFADDForFMACombine(SDNode *N) {
   if (!HasFMAD && !HasFMA)
     return SDValue();
 
-  bool CanFuse = Options.UnsafeFPMath || isContractable(N);
   bool CanReassociate =
       Options.UnsafeFPMath || N->getFlags().hasAllowReassociation();
   bool AllowFusionGlobally = (Options.AllowFPOpFusion == FPOpFusion::Fast ||
-                              CanFuse || HasFMAD);
+                              Options.UnsafeFPMath || HasFMAD);
   // If the addition is not contractable, do not combine.
-  if (!AllowFusionGlobally && !isContractable(N))
+  if (!AllowFusionGlobally && !N->getFlags().hasAllowContract())
     return SDValue();
 
   if (TLI.generateFMAsInMachineCombiner(VT, OptLevel))
@@ -13036,7 +13030,7 @@ SDValue DAGCombiner::visitFADDForFMACombine(SDNode *N) {
   auto isContractableFMUL = [AllowFusionGlobally](SDValue N) {
     if (N.getOpcode() != ISD::FMUL)
       return false;
-    return AllowFusionGlobally || isContractable(N.getNode());
+    return AllowFusionGlobally || N->getFlags().hasAllowContract();
   };
   // If we have two choices trying to fold (fadd (fmul u, v), (fmul x, y)),
   // prefer to fold the multiply with fewer uses.
@@ -13225,12 +13219,11 @@ SDValue DAGCombiner::visitFSUBForFMACombine(SDNode *N) {
     return SDValue();
 
   const SDNodeFlags Flags = N->getFlags();
-  bool CanFuse = Options.UnsafeFPMath || isContractable(N);
   bool AllowFusionGlobally = (Options.AllowFPOpFusion == FPOpFusion::Fast ||
-                              CanFuse || HasFMAD);
+                              Options.UnsafeFPMath || HasFMAD);
 
   // If the subtraction is not contractable, do not combine.
-  if (!AllowFusionGlobally && !isContractable(N))
+  if (!AllowFusionGlobally && !N->getFlags().hasAllowContract())
     return SDValue();
 
   if (TLI.generateFMAsInMachineCombiner(VT, OptLevel))
@@ -13246,7 +13239,7 @@ SDValue DAGCombiner::visitFSUBForFMACombine(SDNode *N) {
   auto isContractableFMUL = [AllowFusionGlobally](SDValue N) {
     if (N.getOpcode() != ISD::FMUL)
       return false;
-    return AllowFusionGlobally || isContractable(N.getNode());
+    return AllowFusionGlobally || N->getFlags().hasAllowContract();
   };
 
   // fold (fsub (fmul x, y), z) -> (fma x, y, (fneg z))
@@ -13378,6 +13371,7 @@ SDValue DAGCombiner::visitFSUBForFMACombine(SDNode *N) {
 
   // More folding opportunities when target permits.
   if (Aggressive) {
+    bool CanFuse = Options.UnsafeFPMath || N->getFlags().hasAllowContract();
     // fold (fsub (fma x, y, (fmul u, v)), z)
     //   -> (fma x, y (fma u, v, (fneg z)))
     if (CanFuse && N0.getOpcode() == PreferredFusedOpcode &&
