@@ -45,12 +45,12 @@
 #include <system_error>
 #include <utility>
 
-namespace llvm {
-namespace objcopy {
-namespace elf {
+using namespace llvm;
+using namespace llvm::ELF;
+using namespace llvm::objcopy;
+using namespace llvm::objcopy::elf;
+using namespace llvm::object;
 
-using namespace object;
-using namespace ELF;
 using SectionPred = std::function<bool(const SectionBase &Sec)>;
 
 static bool isDebugSection(const SectionBase &Sec) {
@@ -71,7 +71,7 @@ static bool onlyKeepDWOPred(const Object &Obj, const SectionBase &Sec) {
   return !isDWOSection(Sec);
 }
 
-uint64_t getNewShfFlags(SectionFlag AllFlags) {
+static uint64_t getNewShfFlags(SectionFlag AllFlags) {
   uint64_t NewFlags = 0;
   if (AllFlags & SectionFlag::SecAlloc)
     NewFlags |= ELF::SHF_ALLOC;
@@ -720,9 +720,9 @@ static Error writeOutput(const CommonConfig &Config, Object &Obj,
   return Writer->write();
 }
 
-Error executeObjcopyOnIHex(const CommonConfig &Config,
-                           const ELFConfig &ELFConfig, MemoryBuffer &In,
-                           raw_ostream &Out) {
+Error objcopy::elf::executeObjcopyOnIHex(const CommonConfig &Config,
+                                         const ELFConfig &ELFConfig,
+                                         MemoryBuffer &In, raw_ostream &Out) {
   IHexReader Reader(&In);
   Expected<std::unique_ptr<Object>> Obj = Reader.create(true);
   if (!Obj)
@@ -735,9 +735,10 @@ Error executeObjcopyOnIHex(const CommonConfig &Config,
   return writeOutput(Config, **Obj, Out, OutputElfType);
 }
 
-Error executeObjcopyOnRawBinary(const CommonConfig &Config,
-                                const ELFConfig &ELFConfig, MemoryBuffer &In,
-                                raw_ostream &Out) {
+Error objcopy::elf::executeObjcopyOnRawBinary(const CommonConfig &Config,
+                                              const ELFConfig &ELFConfig,
+                                              MemoryBuffer &In,
+                                              raw_ostream &Out) {
   BinaryReader Reader(&In, ELFConfig.NewSymbolVisibility);
   Expected<std::unique_ptr<Object>> Obj = Reader.create(true);
   if (!Obj)
@@ -752,9 +753,10 @@ Error executeObjcopyOnRawBinary(const CommonConfig &Config,
   return writeOutput(Config, **Obj, Out, OutputElfType);
 }
 
-Error executeObjcopyOnBinary(const CommonConfig &Config,
-                             const ELFConfig &ELFConfig,
-                             object::ELFObjectFileBase &In, raw_ostream &Out) {
+Error objcopy::elf::executeObjcopyOnBinary(const CommonConfig &Config,
+                                           const ELFConfig &ELFConfig,
+                                           object::ELFObjectFileBase &In,
+                                           raw_ostream &Out) {
   ELFReader Reader(&In, Config.ExtractPartition);
   Expected<std::unique_ptr<Object>> Obj =
       Reader.create(!Config.SymbolsToAdd.empty());
@@ -773,7 +775,3 @@ Error executeObjcopyOnBinary(const CommonConfig &Config,
 
   return Error::success();
 }
-
-} // end namespace elf
-} // end namespace objcopy
-} // end namespace llvm
