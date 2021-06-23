@@ -4622,7 +4622,7 @@ TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *RI,
       continue;
 
     for (const MCPhysReg &PR : *RC) {
-      if (RegName.equals_lower(RI->getRegAsmName(PR))) {
+      if (RegName.equals_insensitive(RI->getRegAsmName(PR))) {
         std::pair<unsigned, const TargetRegisterClass *> S =
             std::make_pair(PR, RC);
 

@@ -18629,7 +18629,7 @@ RCPair ARMTargetLowering::getRegForInlineAsmConstraint(
     break;
   }
 
-  if (StringRef("{cc}").equals_lower(Constraint))
+  if (StringRef("{cc}").equals_insensitive(Constraint))
     return std::make_pair(unsigned(ARM::CPSR), &ARM::CCRRegClass);
 
   return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
