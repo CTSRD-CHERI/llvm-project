@@ -956,7 +956,7 @@ Value *LibCallSimplifier::optimizeMemChr(CallInst *CI, IRBuilderBase &B) {
     // materialising a nonsense pointer value, we select either a null or the
     // source string and hope that later bits of instcombine will fold the two
     // compares.
-    Value *Result = B.CreateAnd(Bounds, Bits, "memchr");
+    Value *Result = B.CreateLogicalAnd(Bounds, Bits, "memchr");
     return B.CreateSelect(B.CreateIsNull(Result),
         Constant::getNullValue(CI->getType()), SrcStr);
   }
