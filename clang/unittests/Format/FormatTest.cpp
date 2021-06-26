@@ -19610,8 +19610,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                "          });\n"
                "    });",
                LLVMWithBeforeLambdaBody);
-  verifyFormat("void Fct()\n"
-               "{\n"
+  verifyFormat("void Fct() {\n"
                "  return {[]()\n"
                "          {\n"
                "            return 17;\n"
@@ -19814,6 +19813,35 @@ TEST_F(FormatTest, FormatsLambdas) {
                "            return 17;\n"
                "          });\n"
                "    });",
+               LLVMWithBeforeLambdaBody);
+
+  LLVMWithBeforeLambdaBody.AllowShortLambdasOnASingleLine =
+      FormatStyle::ShortLambdaStyle::SLS_None;
+
+  verifyFormat("auto select = [this]() -> const Library::Object *\n"
+               "{\n"
+               "  return MyAssignment::SelectFromList(this);\n"
+               "};\n",
+               LLVMWithBeforeLambdaBody);
+
+  verifyFormat("auto select = [this]() -> const Library::Object &\n"
+               "{\n"
+               "  return MyAssignment::SelectFromList(this);\n"
+               "};\n",
+               LLVMWithBeforeLambdaBody);
+
+  verifyFormat("auto select = [this]() -> std::unique_ptr<Object>\n"
+               "{\n"
+               "  return MyAssignment::SelectFromList(this);\n"
+               "};\n",
+               LLVMWithBeforeLambdaBody);
+
+  verifyFormat("namespace test {\n"
+               "class Test {\n"
+               "public:\n"
+               "  Test() = default;\n"
+               "};\n"
+               "} // namespace test",
                LLVMWithBeforeLambdaBody);
 
   // Lambdas with different indentation styles.
