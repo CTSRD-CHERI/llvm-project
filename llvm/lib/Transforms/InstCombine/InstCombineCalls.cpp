@@ -1223,6 +1223,11 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     if (Instruction *Sel = foldClampRangeOfTwo(II, Builder))
       return Sel;
 
+    if (match(I1, m_ImmConstant()))
+      if (auto *Sel = dyn_cast<SelectInst>(I0))
+        if (Instruction *R = FoldOpIntoSelect(*II, Sel))
+          return R;
+
     break;
   }
   case Intrinsic::bswap: {
