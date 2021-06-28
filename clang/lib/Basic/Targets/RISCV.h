@@ -95,6 +95,7 @@ public:
     WIntType = UnsignedInt;
     HasRISCVVTypes = true;
     MCountName = "_mcount";
+    HasFloat16 = true;
   }
 
   bool setCPU(const std::string &Name) override {
