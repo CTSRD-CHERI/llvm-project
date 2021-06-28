@@ -339,12 +339,12 @@ ModuleSanitizerCoverage::CreateSecStartEnd(Module &M, const char *Section,
                                           ? GlobalVariable::ExternalLinkage
                                           : GlobalVariable::ExternalWeakLinkage;
   GlobalVariable *SecStart =
-      new GlobalVariable(M, Ty->getPointerElementType(), false, Linkage,
-                         nullptr, getSectionStart(Section));
+      new GlobalVariable(M, Ty, false, Linkage, nullptr,
+                         getSectionStart(Section));
   SecStart->setVisibility(GlobalValue::HiddenVisibility);
   GlobalVariable *SecEnd =
-      new GlobalVariable(M, Ty->getPointerElementType(), false, Linkage,
-                         nullptr, getSectionEnd(Section));
+      new GlobalVariable(M, Ty, false, Linkage, nullptr,
+                         getSectionEnd(Section));
   SecEnd->setVisibility(GlobalValue::HiddenVisibility);
   IRBuilder<> IRB(M.getContext());
   if (!TargetTriple.isOSBinFormatCOFF())
@@ -355,7 +355,11 @@ ModuleSanitizerCoverage::CreateSecStartEnd(Module &M, const char *Section,
   auto SecStartI8Ptr = IRB.CreatePointerCast(SecStart, GlobalsInt8PtrTy);
   auto GEP = IRB.CreateGEP(Int8Ty, SecStartI8Ptr,
                            ConstantInt::get(IntptrTy, sizeof(uint64_t)));
-  return std::make_pair(IRB.CreatePointerCast(GEP, Ty), SecEnd);
+  return std::make_pair(
+      IRB.CreatePointerCast(
+          GEP, PointerType::get(
+                   Ty, M.getDataLayout().getDefaultGlobalsAddressSpace())),
+      SecEnd);
 }
 
 Function *ModuleSanitizerCoverage::CreateInitCallsForSections(
@@ -365,8 +369,10 @@ Function *ModuleSanitizerCoverage::CreateInitCallsForSections(
   auto SecStart = SecStartEnd.first;
   auto SecEnd = SecStartEnd.second;
   Function *CtorFunc;
+  Type *PtrTy =
+      PointerType::get(Ty, M.getDataLayout().getDefaultGlobalsAddressSpace());
   std::tie(CtorFunc, std::ignore) = createSanitizerCtorAndInitFunctions(
-      M, CtorName, InitFunctionName, {Ty, Ty}, {SecStart, SecEnd});
+      M, CtorName, InitFunctionName, {PtrTy, PtrTy}, {SecStart, SecEnd});
   assert(CtorFunc->getName() == CtorName);
 
   if (TargetTriple.supportsCOMDAT()) {
@@ -498,19 +504,19 @@ bool ModuleSanitizerCoverage::instrumentModule(
 
   if (FunctionGuardArray)
     Ctor = CreateInitCallsForSections(M, SanCovModuleCtorTracePcGuardName,
-                                      SanCovTracePCGuardInitName, GlobalsInt32PtrTy,
+                                      SanCovTracePCGuardInitName, Int32Ty,
                                       SanCovGuardsSectionName);
   if (Function8bitCounterArray)
     Ctor = CreateInitCallsForSections(M, SanCovModuleCtor8bitCountersName,
-                                      SanCov8bitCountersInitName, GlobalsInt8PtrTy,
+                                      SanCov8bitCountersInitName, Int8Ty,
                                       SanCovCountersSectionName);
   if (FunctionBoolArray) {
     Ctor = CreateInitCallsForSections(M, SanCovModuleCtorBoolFlagName,
-                                      SanCovBoolFlagInitName, GlobalsInt1PtrTy,
+                                      SanCovBoolFlagInitName, Int1Ty,
                                       SanCovBoolFlagSectionName);
   }
   if (Ctor && Options.PCTable) {
-    auto SecStartEnd = CreateSecStartEnd(M, SanCovPCsSectionName, PcAddrPtrTy);
+    auto SecStartEnd = CreateSecStartEnd(M, SanCovPCsSectionName, PcAddrTy);
     FunctionCallee InitFunction = declareSanitizerInitFunction(
         M, SanCovPCsInitName, {PcAddrPtrTy, PcAddrPtrTy});
     IRBuilder<> IRBCtor(Ctor->getEntryBlock().getTerminator());
