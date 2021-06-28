@@ -12746,6 +12746,18 @@ static void CheckImplicitConversion(Sema &S, Expr *E, QualType T,
             << E->getType());
   }
 
+  // Check for implicit casts that drop the capability metadata. Such code could
+  // can result in crashes later on, but the warning probably too noisy to be
+  // turned on by default (or -Wall/-Wextra). To match -Wshorten-64-to-32, we
+  // currently only enable it with -Wconversion.
+  // TODO: do we need a S.SourceMgr.isInSystemMacro(CC) check?
+  // TODO: should probably add a Expr::canCarryProvenance() function.
+  if (Source->isIntCapType() && !Target->isIntCapType() &&
+      E->getType()->canCarryProvenance(S.Context)) {
+    return DiagnoseImpCast(S, E, T, CC, diag::warn_impcast_capability_integer,
+                           /* pruneControlFlow */ true);
+  }
+
   IntRange SourceTypeRange =
       IntRange::forTargetOfCanonicalType(S.Context, Source);
   IntRange LikelySourceRange =

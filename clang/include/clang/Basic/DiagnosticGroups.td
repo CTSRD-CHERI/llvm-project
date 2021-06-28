@@ -590,6 +590,7 @@ def ShadowAll : DiagGroup<"shadow-all", [Shadow, ShadowFieldInConstructor,
                                          ShadowUncapturedLocal, ShadowField]>;
 
 def Shorten64To32 : DiagGroup<"shorten-64-to-32">;
+def ShortenCapToInt : DiagGroup<"shorten-cap-to-int">;
 def : DiagGroup<"sign-promo">;
 def SignCompare : DiagGroup<"sign-compare">;
 def : DiagGroup<"switch-default">;
@@ -874,6 +875,7 @@ def Conversion : DiagGroup<"conversion",
                             BitFieldEnumConversion,
                             FloatConversion,
                             Shorten64To32,
+                            ShortenCapToInt,
                             IntConversion,
                             ImplicitIntConversion,
                             ImplicitFloatConversion,
