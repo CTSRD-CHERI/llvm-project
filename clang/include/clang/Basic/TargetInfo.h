@@ -1462,13 +1462,10 @@ public:
   bool isBigEndian() const { return BigEndian; }
   bool isLittleEndian() const { return !BigEndian; }
 
-  /// Whether the option -fextend-arguments={32,64} is supported on the target.
-  virtual bool supportsExtendIntArgs() const { return false; }
-
   bool areAllPointersCapabilities() const { return CapabilityABI; }
 
-  /// Controls if __arithmetic_fence is supported in the targeted backend.
-  virtual bool checkArithmeticFenceSupported() const { return false; }
+  /// Whether the option -fextend-arguments={32,64} is supported on the target.
+  virtual bool supportsExtendIntArgs() const { return false; }
 
   /// Gets the default calling convention for the given target and
   /// declaration context.

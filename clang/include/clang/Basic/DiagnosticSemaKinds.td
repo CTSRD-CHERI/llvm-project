@@ -8720,9 +8720,6 @@ def err_typecheck_expect_capability_operand : Error<
   "operand of type %0 where capability is required">;
 def err_typecheck_cond_incompatible_operands : Error<
   "incompatible operand types%diff{ ($ and $)|}0,1">;
-def err_typecheck_expect_flt_or_vector : Error<
-  "invalid operand of type %0 where floating, complex or "
-  "a vector of such types is required">;
 def err_cast_selector_expr : Error<
   "cannot type cast @selector expression">;
 def ext_typecheck_cond_incompatible_pointers : ExtWarn<
