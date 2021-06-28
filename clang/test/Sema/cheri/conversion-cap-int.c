@@ -13,7 +13,7 @@ long test_ret(__intcap v) {
   return v; // expected-warning {{implicit conversion loses capability metadata: '__intcap' to 'long'}}
 }
 
-long test_ret_cast() {
+long test_ret_cast(void) {
   // We should not warn if we know that the intcap_t does not carry provenace
   return (__intcap)1;
 }
