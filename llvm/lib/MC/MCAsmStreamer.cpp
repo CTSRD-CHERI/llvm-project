@@ -154,6 +154,8 @@ public:
 
   void emitLOHDirective(MCLOHType Kind, const MCLOHArgs &Args) override;
 
+  void emitGNUAttribute(unsigned Tag, unsigned Value) override;
+
   StringRef getMnemonic(MCInst &MI) override {
     return InstPrinter->getMnemonic(&MI).first;
   }
@@ -544,6 +546,10 @@ void MCAsmStreamer::emitLOHDirective(MCLOHType Kind, const MCLOHArgs &Args) {
     Arg->print(OS, MAI);
   }
   EmitEOL();
+}
+
+void MCAsmStreamer::emitGNUAttribute(unsigned Tag, unsigned Value) {
+  OS << "\t.gnu_attribute " << Tag << ", " << Value << "\n";
 }
 
 void MCAsmStreamer::emitAssemblerFlag(MCAssemblerFlag Flag) {
