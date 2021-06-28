@@ -46,7 +46,7 @@ typedef __uintcap_t uintcap_t;
 #else
 #define __IF_CAPS(x, y) y
 typedef __INTPTR_TYPE__ intcap_t;
-typedef __INTPTR_TYPE__ uintcap_t;
+typedef __UINTPTR_TYPE__ uintcap_t;
 #define __capability
 #ifdef WANT_CHERI_QUALIFIER_MACROS
 #define capability
