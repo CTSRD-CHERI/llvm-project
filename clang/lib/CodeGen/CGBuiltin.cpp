@@ -1682,7 +1682,6 @@ llvm::Function *CodeGenFunction::generateBuiltinOSLogHelperFunction(
   }
 
   QualType ReturnTy = Ctx.VoidTy;
-  QualType FuncionTy = Ctx.getFunctionType(ReturnTy, ArgTys, {});
 
   // The helper function has linkonce_odr linkage to enable the linker to merge
   // identical functions. To ensure the merging always happens, 'noinline' is
@@ -1702,14 +1701,7 @@ llvm::Function *CodeGenFunction::generateBuiltinOSLogHelperFunction(
     Fn->addFnAttr(llvm::Attribute::NoInline);
 
   auto NL = ApplyDebugLocation::CreateEmpty(*this);
-  IdentifierInfo *II = &Ctx.Idents.get(Name);
-  FunctionDecl *FD = FunctionDecl::Create(
-      Ctx, Ctx.getTranslationUnitDecl(), SourceLocation(), SourceLocation(), II,
-      FuncionTy, nullptr, SC_PrivateExtern, false, false);
-  // Avoid generating debug location info for the function.
-  FD->setImplicit();
-
-  StartFunction(FD, ReturnTy, Fn, FI, Args);
+  StartFunction(GlobalDecl(), ReturnTy, Fn, FI, Args);
 
   // Create a scope with an artificial location for the body of this function.
   auto AL = ApplyDebugLocation::CreateArtificial(*this);
