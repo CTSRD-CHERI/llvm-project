@@ -2595,11 +2595,24 @@ bool LLParser::parseType(Type *&Result, const Twine &Msg, bool AllowVoid) {
   }
   }
 
+  // Handle (explicit) opaque pointer types (not --force-opaque-pointers).
+  //
+  // Type ::= ptr ('addrspace' '(' uint32 ')')?
   if (Result->isOpaquePointerTy()) {
     unsigned AddrSpace;
     if (parseOptionalAddrSpace(AddrSpace))
       return true;
     Result = PointerType::get(getContext(), AddrSpace);
+
+    // Give a nice error for 'ptr*'.
+    if (Lex.getKind() == lltok::star)
+      return tokError("ptr* is invalid - use ptr instead");
+
+    // Fall through to parsing the type suffixes only if this 'ptr' is a
+    // function return. Otherwise, return success, implicitly rejecting other
+    // suffixes.
+    if (Lex.getKind() != lltok::lparen)
+      return false;
   }
 
   // parse the type suffixes.
@@ -2617,8 +2630,6 @@ bool LLParser::parseType(Type *&Result, const Twine &Msg, bool AllowVoid) {
         return tokError("basic block pointers are invalid");
       if (Result->isVoidTy())
         return tokError("pointers to void are invalid - use i8* instead");
-      if (Result->isOpaquePointerTy())
-        return tokError("ptr* is invalid - use ptr instead");
       if (!PointerType::isValidElementType(Result))
         return tokError("pointer to this type is invalid");
       Result = PointerType::getUnqual(Result);
