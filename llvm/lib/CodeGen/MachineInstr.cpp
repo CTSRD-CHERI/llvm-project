@@ -2418,3 +2418,9 @@ unsigned MachineInstr::getDebugInstrNum() {
     DebugInstrNum = getParent()->getParent()->getNewDebugInstrNum();
   return DebugInstrNum;
 }
+
+unsigned MachineInstr::getDebugInstrNum(MachineFunction &MF) {
+  if (DebugInstrNum == 0)
+    DebugInstrNum = MF.getNewDebugInstrNum();
+  return DebugInstrNum;
+}
