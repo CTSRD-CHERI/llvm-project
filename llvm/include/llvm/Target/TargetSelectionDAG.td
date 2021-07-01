@@ -734,7 +734,6 @@ def assertsext : SDNode<"ISD::AssertSext", SDT_assert>;
 def assertzext : SDNode<"ISD::AssertZext", SDT_assert>;
 def assertalign : SDNode<"ISD::AssertAlign", SDT_assert>;
 
-
 //===----------------------------------------------------------------------===//
 // Selection DAG Condition Codes
 
