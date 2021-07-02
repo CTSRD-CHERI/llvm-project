@@ -17272,16 +17272,15 @@ AArch64TargetLowering::shouldExpandAtomicCmpXchgInIR(
 }
 
 Value *AArch64TargetLowering::emitLoadLinked(IRBuilderBase &Builder,
-                                             Value *Addr,
+                                             Type *ValueTy, Value *Addr,
                                              AtomicOrdering Ord) const {
   Module *M = Builder.GetInsertBlock()->getParent()->getParent();
-  Type *ValTy = cast<PointerType>(Addr->getType())->getElementType();
   bool IsAcquire = isAcquireOrStronger(Ord);
 
   // Since i128 isn't legal and intrinsics don't get type-lowered, the ldrexd
   // intrinsic must return {i64, i64} and we have to recombine them into a
   // single i128 here.
-  if (ValTy->getPrimitiveSizeInBits() == 128) {
+  if (ValueTy->getPrimitiveSizeInBits() == 128) {
     Intrinsic::ID Int =
         IsAcquire ? Intrinsic::aarch64_ldaxp : Intrinsic::aarch64_ldxp;
     Function *Ldxr = Intrinsic::getDeclaration(M, Int);
@@ -17291,30 +17290,30 @@ Value *AArch64TargetLowering::emitLoadLinked(IRBuilderBase &Builder,
 
     Value *Lo = Builder.CreateExtractValue(LoHi, 0, "lo");
     Value *Hi = Builder.CreateExtractValue(LoHi, 1, "hi");
-    Lo = Builder.CreateZExt(Lo, ValTy, "lo64");
-    Hi = Builder.CreateZExt(Hi, ValTy, "hi64");
+    Lo = Builder.CreateZExt(Lo, ValueTy, "lo64");
+    Hi = Builder.CreateZExt(Hi, ValueTy, "hi64");
     return Builder.CreateOr(
-        Lo, Builder.CreateShl(Hi, ConstantInt::get(ValTy, 64)), "val64");
+        Lo, Builder.CreateShl(Hi, ConstantInt::get(ValueTy, 64)), "val64");
   }
 
-  const DataLayout &DL = M->getDataLayout();
-  Type *EltTy = cast<PointerType>(Addr->getType())->getElementType();
-  IntegerType *IntEltTy = Builder.getIntNTy(DL.getTypeSizeInBits(EltTy));
-  if (EltTy->isPointerTy())
-    Addr = Builder.CreatePointerCast(
-        Addr,
-        IntEltTy->getPointerTo(Addr->getType()->getPointerAddressSpace()));
   Type *Tys[] = {Addr->getType()};
   Intrinsic::ID Int =
       IsAcquire ? Intrinsic::aarch64_ldaxr : Intrinsic::aarch64_ldxr;
   Function *Ldxr = Intrinsic::getDeclaration(M, Int, Tys);
 
+  const DataLayout &DL = M->getDataLayout();
+  IntegerType *IntEltTy = Builder.getIntNTy(DL.getTypeSizeInBits(ValueTy));
+  if (ValueTy->isPointerTy())
+    Addr = Builder.CreatePointerCast(
+        Addr,
+        IntEltTy->getPointerTo(Addr->getType()->getPointerAddressSpace()));
   Value *Trunc = Builder.CreateTrunc(Builder.CreateCall(Ldxr, Addr), IntEltTy);
   // For atomicrmw xchg it's possible that Addr is a pointer not an integer
-  assert(!DL.isFatPointer(EltTy) && "Should not be handled here!");
-  if (EltTy->isPointerTy())
-    return Builder.CreateIntToPtr(Trunc, EltTy);
-  return Builder.CreateBitCast(Trunc, EltTy);
+  assert(!DL.isFatPointer(ValueTy) && "Should not be handled here!");
+  if (ValueTy->isPointerTy())
+    return Builder.CreateIntToPtr(Trunc, ValueTy);
+
+  return Builder.CreateBitCast(Trunc, ValueTy);
 }
 
 void AArch64TargetLowering::emitAtomicCmpXchgNoStoreLLBalance(
