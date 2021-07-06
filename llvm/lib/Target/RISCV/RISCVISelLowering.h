@@ -226,6 +226,10 @@ enum NodeType : unsigned {
   FP_ROUND_VL,
   FP_EXTEND_VL,
 
+  // Widening instructions
+  VWMUL_VL,
+  VWMULU_VL,
+
   // Vector compare producing a mask. Fourth operand is input mask. Fifth
   // operand is VL.
   SETCC_VL,
@@ -251,6 +255,7 @@ enum NodeType : unsigned {
   // Vector sign/zero extend with additional mask & VL operands.
   VSEXT_VL,
   VZEXT_VL,
+
   //  vpopc.m with additional mask and VL operands.
   VPOPC_VL,
 
