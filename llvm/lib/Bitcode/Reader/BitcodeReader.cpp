@@ -1385,6 +1385,8 @@ static Attribute::AttrKind getAttrFromCode(uint64_t Code) {
     return Attribute::Cold;
   case bitc::ATTR_KIND_CONVERGENT:
     return Attribute::Convergent;
+  case bitc::ATTR_KIND_ELEMENTTYPE:
+    return Attribute::ElementType;
   case bitc::ATTR_KIND_HAS_SIDE_EFFECTS:
     return Attribute::HasSideEffects;
   case bitc::ATTR_KIND_INACCESSIBLEMEM_ONLY:
