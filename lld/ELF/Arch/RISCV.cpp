@@ -28,6 +28,7 @@ public:
   int getCapabilitySize() const override;
   void writeGotHeader(uint8_t *buf) const override;
   void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
+  void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
   void writePltHeader(uint8_t *buf) const override;
   void writePlt(uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
@@ -179,6 +180,15 @@ void RISCV::writeGotPlt(uint8_t *buf, const Symbol &s) const {
     write64le(buf, in.plt->getVA());
   else
     write32le(buf, in.plt->getVA());
+}
+
+void RISCV::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
+  if (config->writeAddends) {
+    if (config->is64)
+      write64le(buf, s.getVA());
+    else
+      write32le(buf, s.getVA());
+  }
 }
 
 void RISCV::writePltHeader(uint8_t *buf) const {
