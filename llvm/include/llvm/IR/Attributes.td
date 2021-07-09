@@ -273,7 +273,7 @@ def ZExt : EnumAttr<"zeroext">;
 def MustPreserveCheriTags : EnumAttr<"must_preserve_cheri_tags">;
 
 /// Function is required to make Forward Progress.
-def MustProgress : TypeAttr<"mustprogress">;
+def MustProgress : EnumAttr<"mustprogress">;
 
 /// Target-independent string attributes.
 def LessPreciseFPMAD : StrBoolAttr<"less-precise-fpmad">;
