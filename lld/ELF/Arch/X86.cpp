@@ -275,9 +275,11 @@ int64_t X86::getImplicitAddend(const uint8_t *buf, RelType type) const {
     return SignExtend64<32>(read32le(buf));
   case R_386_NONE:
   case R_386_JUMP_SLOT:
-    return 0; // The stored value at this location is not the addend.
+    // These relocations are defined as not having an implicit addend.
+    return 0;
   default:
-    errorOrWarn(toString(type) + " not handled in getImplicitAddend");
+    internalLinkerError(getErrorLocation(buf),
+                        "cannot read addend for relocation " + toString(type));
     return 0;
   }
 }

@@ -149,7 +149,8 @@ bool TargetInfo::calcIsCheriAbi() const {
 }
 
 int64_t TargetInfo::getImplicitAddend(const uint8_t *buf, RelType type) const {
-  errorOrWarn(toString(type) + " not handled in getImplicitAddend");
+  internalLinkerError(getErrorLocation(buf),
+                      "cannot read addend for relocation " + toString(type));
   return 0;
 }
 

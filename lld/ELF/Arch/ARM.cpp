@@ -707,8 +707,8 @@ void ARM::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 int64_t ARM::getImplicitAddend(const uint8_t *buf, RelType type) const {
   switch (type) {
   default:
-    errorOrWarn(toString(type) + " not handled in getImplicitAddend");
-    // llvm_unreachable("unknown relocation");
+    internalLinkerError(getErrorLocation(buf),
+                        "cannot read addend for relocation " + toString(type));
     return 0;
   case R_ARM_ABS32:
   case R_ARM_BASE_PREL:
@@ -839,7 +839,8 @@ int64_t ARM::getImplicitAddend(const uint8_t *buf, RelType type) const {
   }
   case R_ARM_NONE:
   case R_ARM_JUMP_SLOT:
-    return 0; // The stored value at this location is not the addend.
+    // These relocations are defined as not having an implicit addend.
+    return 0;
   }
 }
 

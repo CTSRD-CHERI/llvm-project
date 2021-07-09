@@ -20,6 +20,7 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/GlobPattern.h"
+#include "llvm/Support/PrettyStackTrace.h"
 #include <atomic>
 #include <vector>
 
@@ -156,6 +157,7 @@ struct Configuration {
   bool buildingFreeBSDRtld;
   bool callGraphProfileSort;
   bool checkSections;
+  bool checkDynamicRelocs;
   bool compressDebugSections;
   bool cref;
   std::vector<std::pair<llvm::GlobPattern, uint64_t>> deadRelocInNonAlloc;
@@ -383,6 +385,12 @@ static inline void errorOrWarn(const Twine &msg) {
   else
     warn(msg);
 }
+
+static inline void internalLinkerError(StringRef loc, const Twine &msg) {
+  errorOrWarn(loc + "internal linker error: " + msg + "\n" +
+              llvm::getBugReportMsg());
+}
+
 } // namespace elf
 } // namespace lld
 
