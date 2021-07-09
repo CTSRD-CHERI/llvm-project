@@ -2299,9 +2299,6 @@ static bool markAliveBlocks(Function &F,
         // that they should be changed to unreachable by passes that can't
         // modify the CFG.
 
-        // Don't touch volatile stores.
-        if (SI->isVolatile()) continue;
-
         Value *Ptr = SI->getOperand(1);
 
         if (isa<UndefValue>(Ptr) ||
