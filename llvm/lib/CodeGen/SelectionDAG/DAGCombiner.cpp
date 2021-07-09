@@ -2252,7 +2252,7 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
   if (N1.isUndef())
     return DAG.getUNDEF(PtrVT);
 
-  // fold (ptradd x, 0) -> 0
+  // fold (ptradd x, 0) -> x
   if (isNullConstant(N1))
     return N0;
 
