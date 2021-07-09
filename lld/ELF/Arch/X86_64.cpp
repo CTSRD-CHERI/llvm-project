@@ -702,7 +702,9 @@ int64_t X86_64::getImplicitAddend(const uint8_t *buf, RelType type) const {
   case R_X86_64_SIZE32:
     return SignExtend64<32>(read32le(buf));
   case R_X86_64_64:
+  case R_X86_64_TPOFF64:
   case R_X86_64_DTPOFF64:
+  case R_X86_64_DTPMOD64:
   case R_X86_64_PC64:
   case R_X86_64_SIZE64:
   case R_X86_64_GLOB_DAT:
@@ -714,9 +716,11 @@ int64_t X86_64::getImplicitAddend(const uint8_t *buf, RelType type) const {
     return read64le(buf);
   case R_X86_64_JUMP_SLOT:
   case R_X86_64_NONE:
-    return 0; // The stored value at this location is not the addend.
+    // These relocations are defined as not having an implicit addend.
+    return 0;
   default:
-    errorOrWarn(toString(type) + " not handled in getImplicitAddend");
+    internalLinkerError(getErrorLocation(buf),
+                        "cannot read addend for relocation " + toString(type));
     return 0;
   }
 }
