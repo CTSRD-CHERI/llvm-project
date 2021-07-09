@@ -31,6 +31,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
@@ -141,7 +142,7 @@ private:
                                       SmallVectorImpl<InstructionInfo> &All,
                                       const DataLayout &DL);
   bool addrPointsToConstantData(Value *Addr);
-  int getMemoryAccessFuncIndex(Value *Addr, const DataLayout &DL);
+  int getMemoryAccessFuncIndex(Type *OrigTy, Value *Addr, const DataLayout &DL);
   void InsertRuntimeIgnores(Function &F);
 
   Type *IntptrTy;
@@ -617,6 +618,7 @@ bool ThreadSanitizer::instrumentLoadOrStore(const InstructionInfo &II,
   const bool IsWrite = isa<StoreInst>(*II.Inst);
   Value *Addr = IsWrite ? cast<StoreInst>(II.Inst)->getPointerOperand()
                         : cast<LoadInst>(II.Inst)->getPointerOperand();
+  Type *OrigTy = getLoadStoreType(II.Inst);
 
   // swifterror memory addresses are mem2reg promoted by instruction selection.
   // As such they cannot have regular uses like an instrumentation function and
@@ -624,7 +626,7 @@ bool ThreadSanitizer::instrumentLoadOrStore(const InstructionInfo &II,
   if (Addr->isSwiftError())
     return false;
 
-  int Idx = getMemoryAccessFuncIndex(Addr, DL);
+  int Idx = getMemoryAccessFuncIndex(OrigTy, Addr, DL);
   if (Idx < 0)
     return false;
   if (IsWrite && isVtableAccess(II.Inst)) {
@@ -661,7 +663,6 @@ bool ThreadSanitizer::instrumentLoadOrStore(const InstructionInfo &II,
                                    : cast<LoadInst>(II.Inst)->isVolatile());
   assert((!IsVolatile || !IsCompoundRW) && "Compound volatile invalid!");
 
-  Type *OrigTy = cast<PointerType>(Addr->getType())->getElementType();
   const uint32_t TypeSize = DL.getTypeStoreSizeInBits(OrigTy);
   FunctionCallee OnAccessFunc = nullptr;
   if (Alignment == 0 || Alignment >= 8 || (Alignment % (TypeSize / 8)) == 0) {
@@ -745,7 +746,8 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
   IRBuilder<> IRB(I);
   if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
     Value *Addr = LI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    Type *OrigTy = LI->getType();
+    int Idx = getMemoryAccessFuncIndex(OrigTy, Addr, DL);
     if (Idx < 0)
       return false;
     const unsigned ByteSize = 1U << Idx;
@@ -754,13 +756,13 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
     Type *PtrTy = Ty->getPointerTo();
     Value *Args[] = {IRB.CreatePointerCast(Addr, PtrTy),
                      createOrdering(&IRB, LI->getOrdering())};
-    Type *OrigTy = cast<PointerType>(Addr->getType())->getElementType();
     Value *C = IRB.CreateCall(TsanAtomicLoad[Idx], Args);
     Value *Cast = IRB.CreateBitOrPointerCast(C, OrigTy);
     I->replaceAllUsesWith(Cast);
   } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
     Value *Addr = SI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    int Idx =
+        getMemoryAccessFuncIndex(SI->getValueOperand()->getType(), Addr, DL);
     if (Idx < 0)
       return false;
     const unsigned ByteSize = 1U << Idx;
@@ -774,7 +776,8 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
     ReplaceInstWithInst(I, C);
   } else if (AtomicRMWInst *RMWI = dyn_cast<AtomicRMWInst>(I)) {
     Value *Addr = RMWI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    int Idx =
+        getMemoryAccessFuncIndex(RMWI->getValOperand()->getType(), Addr, DL);
     if (Idx < 0)
       return false;
     FunctionCallee F = TsanAtomicRMW[RMWI->getOperation()][Idx];
@@ -791,7 +794,8 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
     ReplaceInstWithInst(I, C);
   } else if (AtomicCmpXchgInst *CASI = dyn_cast<AtomicCmpXchgInst>(I)) {
     Value *Addr = CASI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    Type *OrigOldValTy = CASI->getNewValOperand()->getType();
+    int Idx = getMemoryAccessFuncIndex(OrigOldValTy, Addr, DL);
     if (Idx < 0)
       return false;
     const unsigned ByteSize = 1U << Idx;
@@ -810,7 +814,6 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
     CallInst *C = IRB.CreateCall(TsanAtomicCAS[Idx], Args);
     Value *Success = IRB.CreateICmpEQ(C, CmpOperand);
     Value *OldVal = C;
-    Type *OrigOldValTy = CASI->getNewValOperand()->getType();
     if (Ty != OrigOldValTy) {
       // The value is a pointer, so we need to cast the return value.
       OldVal = IRB.CreateIntToPtr(C, OrigOldValTy);
@@ -833,11 +836,11 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
   return true;
 }
 
-int ThreadSanitizer::getMemoryAccessFuncIndex(Value *Addr,
+int ThreadSanitizer::getMemoryAccessFuncIndex(Type *OrigTy, Value *Addr,
                                               const DataLayout &DL) {
-  Type *OrigPtrTy = Addr->getType();
-  Type *OrigTy = cast<PointerType>(OrigPtrTy)->getElementType();
   assert(OrigTy->isSized());
+  assert(
+      cast<PointerType>(Addr->getType())->isOpaqueOrPointeeTypeMatches(OrigTy));
   uint32_t TypeSize = DL.getTypeStoreSizeInBits(OrigTy);
   if (TypeSize != 8  && TypeSize != 16 &&
       TypeSize != 32 && TypeSize != 64 && TypeSize != 128) {
