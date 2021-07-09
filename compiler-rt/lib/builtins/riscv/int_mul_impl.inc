@@ -30,4 +30,8 @@ __mulxi3:
 	srli   a1, a1, 1
 	slli   a2, a2, 1
 	bnez   a1, .L1
+#ifdef __CHERI_PURE_CAPABILITY__
+	cret
+#else
 	ret
+#endif
