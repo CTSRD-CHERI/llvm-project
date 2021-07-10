@@ -1823,7 +1823,7 @@ class StringLiteral final
   /// * An array of getByteLength() char used to store the string data.
 
 public:
-  enum StringKind { Ordinary, Wide, UTF8, UTF16, UTF32 };
+  enum StringKind { Ordinary, Wide, UTF8, UTF16, UTF32, Unevaluated };
 
 private:
   unsigned numTrailingObjects(OverloadToken<unsigned>) const { return 1; }
@@ -1885,7 +1885,7 @@ public:
                                     unsigned CharByteWidth);
 
   StringRef getString() const {
-    assert(getCharByteWidth() == 1 &&
+    assert((isUnevaluated() || getCharByteWidth() == 1) &&
            "This function is used in places that assume strings use char");
     return StringRef(getStrDataAsChar(), getByteLength());
   }
@@ -1925,6 +1925,7 @@ public:
   bool isUTF8() const { return getKind() == UTF8; }
   bool isUTF16() const { return getKind() == UTF16; }
   bool isUTF32() const { return getKind() == UTF32; }
+  bool isUnevaluated() const { return getKind() == Unevaluated; }
   bool isPascal() const { return StringLiteralBits.IsPascal; }
 
   bool containsNonAscii() const {
