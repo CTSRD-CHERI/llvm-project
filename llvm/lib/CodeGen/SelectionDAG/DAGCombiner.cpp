@@ -2286,15 +2286,20 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
       // therefore we have to load the new value to perform the checks whether
       // the reassociation fold is profitable. Otherwise just update Add to the
       // simplified node.
-      if (VisitedAdd.getNode() == Add.getNode())
+      if (VisitedAdd.getNode() == Add.getNode()) {
         Add = Reassociated.getOperand(1);
-      else
+      } else {
         Add = VisitedAdd;
+        // Update Reassociated to handle cases where visit() did not RAUW.
+        recursivelyDeleteUnusedNodes(Reassociated.getNode());
+        Reassociated = DAG.getPointerAdd(DL, X, Add);
+      }
     }
     LLVM_DEBUG(dbgs() << "visitPTRADD() add operand:"; Add.dump(&DAG));
     LLVM_DEBUG(dbgs() << "visitPTRADD() reassociated:";
                Reassociated.dump(&DAG));
     assert(Add->getOpcode() != ISD::DELETED_NODE && "Deleted Node used");
+    assert(Reassociated.getOperand(1) == Add);
     if (isNullConstant(X) ||
         DAG.isConstantIntBuildVectorOrConstantInt(Add) ||
         (VisitedAdd && !DAG.isConstantIntBuildVectorOrConstantInt(Z)) ||
