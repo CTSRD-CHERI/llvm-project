@@ -59,3 +59,35 @@ entry:
   %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 304
   ret i8 addrspace(200)* %gep2
 }
+
+; The following is a regression for an assertion failure that was triggered by DAGCombiner::visitPTRADD() calling
+; deleteAndRecombine() instead of recursivelyDeleteUnusedNodes().
+; The problem happens when the line `SDValue Reassociated = DAG.getPointerAdd(DL, X, Add);` returns a node that
+; already exists in the current DAG (in this case part of the memcpy() expansion) instead of a new one.
+%struct.bar = type { i8 addrspace(200)*, i8 addrspace(200)* }
+
+declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noalias nocapture writeonly, i8 addrspace(200)* noalias nocapture readonly, i64, i1 immarg) addrspace(200)
+
+define i8 addrspace(200)* @reassociated_node_reuses_other_node(i64 %arg1, %struct.bar addrspace(200)* %arg2) nounwind {
+; CHECK-LABEL: reassociated_node_reuses_other_node:
+; CHECK:       # %bb.0: # %bb
+; CHECK-NEXT:    slli a0, a0, 5
+; CHECK-NEXT:    ori a2, a0, 16
+; CHECK-NEXT:    cincoffset ca2, ca1, a2
+; CHECK-NEXT:    csc cnull, 0(ca2)
+; CHECK-NEXT:    clc ca2, 16(ca1)
+; CHECK-NEXT:    cincoffset ca0, ca1, a0
+; CHECK-NEXT:    csc ca2, 16(ca0)
+; CHECK-NEXT:    clc ca1, 0(ca1)
+; CHECK-NEXT:    csc ca1, 0(ca0)
+; CHECK-NEXT:    cret
+bb:
+  %dst0 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 %arg1, i32 0
+  %dst1 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 %arg1, i32 1
+  %src0 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 0, i32 0
+  %src = bitcast i8 addrspace(200)* addrspace(200)* %src0 to i8 addrspace(200)*
+  %dst = bitcast i8 addrspace(200)* addrspace(200)* %dst0 to i8 addrspace(200)*
+  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* %dst1, align 16
+  call addrspace(200) void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 32, i1 false)
+  ret i8 addrspace(200)* %dst
+}
