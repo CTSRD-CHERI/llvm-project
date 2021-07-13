@@ -13,6 +13,10 @@ struct S {
 // and, if it generates erroneous addrspacecast's, those somehow persist,
 // whereas the other two variants, and all the decay-only tests, all have their
 // addrspacecast's folded if optimisations are enabled, masking the bug.
+//
+// The variants that implicitly cast to void * __capability also used to
+// previously crash Clang only when compiling C++, but are included for
+// completeness here too.
 
 // CHECK-LABEL: @arrow(
 // CHECK-NEXT:  entry:
@@ -72,5 +76,66 @@ char * __capability deref_plus_1(char (* __capability p)[1]) {
 // CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
 //
 char * __capability sub_plus_1(char (* __capability p)[1]) {
+  return p[0] + 1;
+}
+
+// CHECK-LABEL: @arrow_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* [[P:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
+//
+void * __capability arrow_imp_cast(struct S * __capability p) {
+  return p->buf;
+}
+
+// CHECK-LABEL: @deref_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0, i64 0
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
+//
+void * __capability deref_imp_cast(char (* __capability p)[1]) {
+  return *p;
+}
+
+// CHECK-LABEL: @sub_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[ARRAYIDX]], i64 0, i64 0
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
+//
+void * __capability sub_imp_cast(char (* __capability p)[1]) {
+  return p[0];
+}
+
+// CHECK-LABEL: @arrow_plus_1_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* [[P:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+//
+void * __capability arrow_plus_1_imp_cast(struct S * __capability p) {
+  return p->buf + 1;
+}
+
+// CHECK-LABEL: @deref_plus_1_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0, i64 0
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+//
+void * __capability deref_plus_1_imp_cast(char (* __capability p)[1]) {
+  return *p + 1;
+}
+
+// CHECK-LABEL: @sub_plus_1_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[ARRAYIDX]], i64 0, i64 0
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+//
+void * __capability sub_plus_1_imp_cast(char (* __capability p)[1]) {
   return p[0] + 1;
 }

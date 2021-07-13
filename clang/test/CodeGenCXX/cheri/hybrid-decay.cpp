@@ -18,6 +18,9 @@ struct S {
 // optimisations are enabled, masking the bug. For completeness, we have both
 // sets of equivalent reference tests here, though all of these would
 // previously crash Clang.
+//
+// The variants that implicitly cast to void * __capability also used to
+// previously crash Clang when compiling C++.
 
 // CHECK-LABEL: @dot(
 // CHECK-NEXT:  entry:
@@ -56,6 +59,46 @@ char * __capability dot_plus_1(struct S & __capability p) {
 // CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
 //
 char * __capability ref_plus_1(char (& __capability p)[1]) {
+  return p + 1;
+}
+
+// CHECK-LABEL: @dot_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* [[P:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
+//
+void * __capability dot_imp_cast(struct S & __capability p) {
+  return p.buf;
+}
+
+// CHECK-LABEL: @ref_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0, i64 0
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYDECAY]]
+//
+void * __capability ref_imp_cast(char (& __capability p)[1]) {
+  return p;
+}
+
+// CHECK-LABEL: @dot_plus_1_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* [[P:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+//
+void * __capability dot_plus_1_imp_cast(struct S & __capability p) {
+  return p.buf + 1;
+}
+
+// CHECK-LABEL: @ref_plus_1_imp_cast(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x i8], [1 x i8] addrspace(200)* [[P:%.*]], i64 0, i64 0
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 1
+// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+//
+void * __capability ref_plus_1_imp_cast(char (& __capability p)[1]) {
   return p + 1;
 }
 
