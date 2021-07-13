@@ -106,6 +106,9 @@ bool RISCVTargetInfo::validateAsmConstraint(
     // A capability register.
     Info.setAllowsRegister();
     return HasCheri;
+  case 'S': // A symbolic address
+    Info.setAllowsRegister();
+    return true;
   case 'v':
     // A vector register.
     if (Name[1] == 'r' || Name[1] == 'm') {
