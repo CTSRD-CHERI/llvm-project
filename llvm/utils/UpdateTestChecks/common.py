@@ -152,7 +152,7 @@ def invoke_tool(exe, cmd_args, ir, preprocess_cmd=None, verbose=False):
       assert isinstance(preprocess_cmd, str)  # TODO: use a list instead of using shell
       preprocess_cmd = preprocess_cmd.replace('%s', ir).strip()
       if verbose:
-        print('Pre-processing ir_file: ', ir, " with command '",
+        print('Pre-processing input file: ', ir, " with command '",
               preprocess_cmd, "'", sep="", file=sys.stderr)
       # Python 2.7 doesn't have subprocess.DEVNULL:
       with open(os.devnull, 'w') as devnull:

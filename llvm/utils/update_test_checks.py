@@ -80,7 +80,13 @@ def main():
         common.warn('Skipping unparseable RUN line: ' + l)
         continue
 
-      (tool_cmd, filecheck_cmd) = tuple([cmd.strip() for cmd in l.split('|', 1)])
+      commands = [cmd.strip() for cmd in l.split('|')]
+      assert len(commands) >= 2
+      preprocess_cmd = None
+      if len(commands) > 2:
+        preprocess_cmd = " | ".join(commands[:-2])
+      tool_cmd = commands[-2]
+      filecheck_cmd = commands[-1]
 
       if tool_cmd.startswith("%"):
         tool_cmd = tool_cmd.replace("%cheri_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
@@ -112,7 +118,7 @@ def main():
 
       # FIXME: We should use multiple check prefixes to common check lines. For
       # now, we just ignore all but the last.
-      prefix_list.append((check_prefixes, tool_cmd_args))
+      prefix_list.append((check_prefixes, tool_cmd_args, preprocess_cmd))
 
     global_vars_seen_dict = {}
     builder = common.FunctionTestBuilder(
@@ -120,12 +126,13 @@ def main():
       flags=ti.args,
       scrubber_args=[])
 
-    for prefixes, opt_args in prefix_list:
+    for prefixes, opt_args, preprocess_cmd in prefix_list:
       common.debug('Extracted opt cmd: ' + opt_basename + ' ' + opt_args)
       common.debug('Extracted FileCheck prefixes: ' + str(prefixes))
 
       raw_tool_output = common.invoke_tool(ti.args.opt_binary, opt_args,
-                                           ti.path)
+                                           ti.path, preprocess_cmd=preprocess_cmd,
+                                           verbose=ti.args.verbose)
       builder.process_run_line(common.OPT_FUNCTION_RE, common.scrub_body,
               raw_tool_output, prefixes)
 
@@ -133,7 +140,7 @@ def main():
     is_in_function = False
     is_in_function_start = False
     has_checked_pre_function_globals = False
-    prefix_set = set([prefix for prefixes, _ in prefix_list for prefix in prefixes])
+    prefix_set = set([prefix for prefixes, _, _ in prefix_list for prefix in prefixes])
     common.debug('Rewriting FileCheck prefixes:', str(prefix_set))
     output_lines = []
 

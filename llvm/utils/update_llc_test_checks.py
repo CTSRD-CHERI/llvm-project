@@ -64,37 +64,25 @@ def main():
         common.warn('Skipping unparseable RUN line: ' + l)
         continue
 
-      commands = [cmd.strip() for cmd in l.split('|', 2)]
+      commands = [cmd.strip() for cmd in l.split('|')]
+      assert len(commands) >= 2
       preprocess_cmd = None
-      # Allow pre-preocessing test inputs with sed, etc.
-      if len(commands) == 3:
-        # TODO: allow other tools
-        first_command = commands[0]
-        if first_command.startswith("%"):
-          first_command = first_command.replace("%cheri_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
-          first_command = first_command.replace("%cheri128_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
-          first_command = first_command.replace("%cheri_opt", "opt -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
-          first_command = first_command.replace("%cheri128_opt", "opt -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
-          first_command = first_command.replace("%riscv32_cheri_purecap_opt", "opt -mtriple=riscv32-unknown-freebsd -target-abi il32pc64d -mattr=+xcheri,+cap-mode")
-          first_command = first_command.replace("%riscv64_cheri_purecap_opt", "opt -mtriple=riscv64-unknown-freebsd -target-abi l64pc128d -mattr=+xcheri,+cap-mode")
-          first_command = first_command.replace("%riscv32_cheri_opt", "opt -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
-          first_command = first_command.replace("%riscv64_cheri_opt", "opt -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
-        first_command_list = first_command.split()
-        known_command = False
-        if first_command_list[0] == "sed":
-          known_command = True
-        elif first_command_list[0] == "opt":
-          known_command = True
-          first_command_list[0] = ti.args.opt_binary
-          first_command = " ".join(first_command_list)
-        if not known_command:
-          common.warn('WARNING: Skipping RUN line with more than two commands and unknown first tool: ' + l)
-          continue
-        # Handle known pre-processing command
-        preprocess_cmd = first_command
-        commands = commands[1:]
-
-      llc_cmd = commands[0]
+      if len(commands) > 2:
+        preprocess_cmd = " | ".join(commands[:-2])
+        if "%" in preprocess_cmd:
+          preprocess_cmd = preprocess_cmd.replace("%cheri_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+          preprocess_cmd = preprocess_cmd.replace("%cheri128_purecap_opt", "opt -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+          preprocess_cmd = preprocess_cmd.replace("%cheri_opt", "opt -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+          preprocess_cmd = preprocess_cmd.replace("%cheri128_opt", "opt -mtriple=mips64-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+          preprocess_cmd = preprocess_cmd.replace("%riscv32_cheri_purecap_opt", "opt -mtriple=riscv32-unknown-freebsd -target-abi il32pc64d -mattr=+xcheri,+cap-mode")
+          preprocess_cmd = preprocess_cmd.replace("%riscv64_cheri_purecap_opt", "opt -mtriple=riscv64-unknown-freebsd -target-abi l64pc128d -mattr=+xcheri,+cap-mode")
+          preprocess_cmd = preprocess_cmd.replace("%riscv32_cheri_opt", "opt -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
+          preprocess_cmd = preprocess_cmd.replace("%riscv64_cheri_opt", "opt -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
+        preprocess_cmd_list = preprocess_cmd.split()
+        if preprocess_cmd_list[0] == "opt":
+          preprocess_cmd_list[0] = ti.args.opt_binary
+          preprocess_cmd = " ".join(preprocess_cmd_list)
+      llc_cmd = commands[-2]
       if llc_cmd.startswith("%"):
         llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
         llc_cmd = llc_cmd.replace("%cheri128_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
@@ -104,6 +92,13 @@ def main():
         llc_cmd = llc_cmd.replace("%riscv64_cheri_purecap_llc", "llc -mtriple=riscv64-unknown-freebsd -target-abi l64pc128d -mattr=+xcheri,+cap-mode")
         llc_cmd = llc_cmd.replace("%riscv32_cheri_llc", "llc -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
         llc_cmd = llc_cmd.replace("%riscv64_cheri_llc", "llc -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
+      filecheck_cmd = commands[-1]
+      if filecheck_cmd.startswith("%cheri64_FileCheck"):
+        filecheck_cmd = filecheck_cmd.replace("%cheri64_FileCheck", "FileCheck '-D#CAP_SIZE=8'")
+      elif filecheck_cmd.startswith("%cheri128_FileCheck"):
+        filecheck_cmd = filecheck_cmd.replace("%cheri128_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
+      elif filecheck_cmd.startswith("%cheri_FileCheck"):
+        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
       llc_tool = llc_cmd.split(' ')[0]
 
       triple_in_cmd = None
@@ -116,15 +111,6 @@ def main():
       if m:
         march_in_cmd = m.groups()[0]
 
-      filecheck_cmd = ''
-      if len(commands) > 1:
-        filecheck_cmd = commands[1]
-      if filecheck_cmd.startswith("%cheri64_FileCheck"):
-        filecheck_cmd = filecheck_cmd.replace("%cheri64_FileCheck", "FileCheck '-D#CAP_SIZE=8'")
-      elif filecheck_cmd.startswith("%cheri128_FileCheck"):
-        filecheck_cmd = filecheck_cmd.replace("%cheri128_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
-      elif filecheck_cmd.startswith("%cheri_FileCheck"):
-        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D#CAP_SIZE=16'")
       common.verify_filecheck_prefixes(filecheck_cmd)
       if llc_tool not in LLC_LIKE_TOOLS:
         common.warn('Skipping non-llc RUN line: ' + l)
@@ -145,7 +131,8 @@ def main():
 
       # FIXME: We should use multiple check prefixes to common check lines. For
       # now, we just ignore all but the last.
-      run_list.append((check_prefixes, llc_cmd_args, triple_in_cmd, preprocess_cmd, march_in_cmd))
+      run_list.append((check_prefixes, llc_tool, llc_cmd_args, preprocess_cmd,
+                       triple_in_cmd, march_in_cmd))
 
     if ti.path.endswith('.mir'):
       check_indent = '  '
@@ -153,7 +140,7 @@ def main():
       check_indent = ''
 
     builder = common.FunctionTestBuilder(
-        run_list=run_list,
+        run_list=run_list, 
         flags=type('', (object,), {
             'verbose': ti.args.verbose,
             'function_signature': False,
@@ -161,14 +148,15 @@ def main():
             'replace_function_regex': []}),
         scrubber_args=[ti.args])
 
-    for prefixes, llc_args, triple_in_cmd, preprocess_cmd, march_in_cmd in run_list:
+    for prefixes, llc_tool, llc_args, preprocess_cmd, triple_in_cmd, march_in_cmd in run_list:
       common.debug('Extracted LLC cmd:', llc_tool, llc_args)
       common.debug('Extracted FileCheck prefixes:', str(prefixes))
       if preprocess_cmd:
         common.debug('Extracted pre-processing command: ' + str(preprocess_cmd))
 
       raw_tool_output = common.invoke_tool(ti.args.llc_binary or llc_tool,
-                                           llc_args, ti.path, preprocess_cmd)
+                                           llc_args, ti.path, preprocess_cmd,
+                                           verbose=ti.args.verbose)
       triple = triple_in_cmd or triple_in_ir
       if not triple:
         triple = asm.get_triple_from_march(march_in_cmd)
