@@ -91,3 +91,14 @@ bb:
   call addrspace(200) void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 32, i1 false)
   ret i8 addrspace(200)* %dst
 }
+
+; This test case previously triggered an overly-restrictive assertion in
+; DAGCombiner::visitPTRADD: assert(Reassociated.getOperand(1) == Add)
+; This assertion does not hold if add ends up being folded to a zero constant since
+; DAG.getPointerAdd() will return the original node in that case.
+define i8 addrspace(200)* @trivial_ptradd_fold(i8 addrspace(200)* %this) nounwind {
+entry:
+  %0 = getelementptr inbounds i8, i8 addrspace(200)* %this, i64 -16
+  %1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 16
+  ret i8 addrspace(200)* %1
+}
