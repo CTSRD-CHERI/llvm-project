@@ -152,10 +152,10 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
     Int8CheriCapTy = nullptr;
   }
   Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
-  AllocaInt8PtrTy =
-      Int8Ty->getPointerTo(M.getDataLayout().getAllocaAddrSpace());
-  ProgramInt8PtrTy =
-      Int8Ty->getPointerTo(M.getDataLayout().getProgramAddressSpace());
+  const llvm::DataLayout &DL = M.getDataLayout();
+  AllocaInt8PtrTy = Int8Ty->getPointerTo(DL.getAllocaAddrSpace());
+  GlobalsInt8PtrTy = Int8Ty->getPointerTo(DL.getDefaultGlobalsAddressSpace());
+  ProgramInt8PtrTy = Int8Ty->getPointerTo(DL.getProgramAddressSpace());
   ASTAllocaAddressSpace = getTargetCodeGenInfo().getASTAllocaAddressSpace();
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();
@@ -2543,9 +2543,9 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
 
   // Not found yet, create a new global.
   llvm::Constant *s = llvm::ConstantDataArray::getString(getLLVMContext(), Str);
-  auto *gv = new llvm::GlobalVariable(getModule(), s->getType(),
-    true, llvm::GlobalValue::PrivateLinkage, s, ".str", nullptr,
-    llvm::GlobalVariable::NotThreadLocal, getTargetCodeGenInfo().getDefaultAS());
+  auto *gv =
+      new llvm::GlobalVariable(getModule(), s->getType(), true,
+                               llvm::GlobalValue::PrivateLinkage, s, ".str");
   gv->setSection(AnnotationSection);
   gv->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   AStr = gv;
@@ -2571,7 +2571,7 @@ llvm::Constant *CodeGenModule::EmitAnnotationLineNo(SourceLocation L) {
 llvm::Constant *CodeGenModule::EmitAnnotationArgs(const AnnotateAttr *Attr) {
   ArrayRef<Expr *> Exprs = {Attr->args_begin(), Attr->args_size()};
   if (Exprs.empty())
-    return llvm::ConstantPointerNull::get(Int8PtrTy);
+    return llvm::ConstantPointerNull::get(GlobalsInt8PtrTy);
 
   llvm::FoldingSetNodeID ID;
   for (Expr *E : Exprs) {
@@ -2595,7 +2595,7 @@ llvm::Constant *CodeGenModule::EmitAnnotationArgs(const AnnotateAttr *Attr) {
                                       ".args");
   GV->setSection(AnnotationSection);
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-  auto *Bitcasted = llvm::ConstantExpr::getBitCast(GV, Int8PtrTy);
+  auto *Bitcasted = llvm::ConstantExpr::getBitCast(GV, GlobalsInt8PtrTy);
 
   Lookup = Bitcasted;
   return Bitcasted;
@@ -2610,17 +2610,19 @@ llvm::Constant *CodeGenModule::EmitAnnotateAttr(llvm::GlobalValue *GV,
                  *LineNoCst = EmitAnnotationLineNo(L),
                  *Args = EmitAnnotationArgs(AA);
 
-  llvm::Constant *ASZeroGV = GV;
-  if (GV->getAddressSpace() != 0) {
-    ASZeroGV = llvm::ConstantExpr::getAddrSpaceCast(
-                   GV, GV->getValueType()->getPointerTo(0));
+  llvm::Constant *GVInGlobalsAS = GV;
+  if (GV->getAddressSpace() !=
+      getDataLayout().getDefaultGlobalsAddressSpace()) {
+    GVInGlobalsAS = llvm::ConstantExpr::getAddrSpaceCast(
+        GV, GV->getValueType()->getPointerTo(
+                getDataLayout().getDefaultGlobalsAddressSpace()));
   }
 
   // Create the ConstantStruct for the global annotation.
   llvm::Constant *Fields[] = {
-      llvm::ConstantExpr::getBitCast(ASZeroGV, Int8PtrTy),
-      llvm::ConstantExpr::getBitCast(AnnoGV, Int8PtrTy),
-      llvm::ConstantExpr::getBitCast(UnitGV, Int8PtrTy),
+      llvm::ConstantExpr::getBitCast(GVInGlobalsAS, GlobalsInt8PtrTy),
+      llvm::ConstantExpr::getBitCast(AnnoGV, GlobalsInt8PtrTy),
+      llvm::ConstantExpr::getBitCast(UnitGV, GlobalsInt8PtrTy),
       LineNoCst,
       Args,
   };
