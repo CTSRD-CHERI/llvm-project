@@ -4933,6 +4933,9 @@ public:
   void DiagnoseSentinelCalls(NamedDecl *D, SourceLocation Loc,
                              ArrayRef<Expr *> Args);
 
+  PointerInterpretationKind
+  PointerInterpretationForBaseExpr(const Expr *Base) const;
+
   void PushExpressionEvaluationContext(
       ExpressionEvaluationContext NewContext, Decl *LambdaContextDecl = nullptr,
       ExpressionEvaluationContextRecord::ExpressionKind Type =

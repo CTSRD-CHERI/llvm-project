@@ -4200,11 +4200,13 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     break;
   }
 
-  case ICK_Array_To_Pointer:
-    FromType = Context.getArrayDecayedType(FromType);
+  case ICK_Array_To_Pointer: {
+    PointerInterpretationKind PIK = PointerInterpretationForBaseExpr(From);
+    FromType = Context.getArrayDecayedType(FromType, PIK);
     From = ImpCastExprToType(From, FromType, CK_ArrayToPointerDecay,
                              VK_RValue, /*BasePath=*/nullptr, CCK).get();
     break;
+  }
 
   case ICK_Function_To_Pointer:
     FromType = Context.getPointerType(FromType);
