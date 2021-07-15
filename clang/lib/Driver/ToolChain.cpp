@@ -403,6 +403,9 @@ static StringRef getArchNameForCompilerRTLib(const ToolChain &TC,
     return Triple.getArchName();
   }
 
+  if (TC.getArch() == llvm::Triple::x86_64 && Triple.isX32())
+    return "x32";
+
   return llvm::Triple::getArchTypeName(TC.getArch());
 }
 
