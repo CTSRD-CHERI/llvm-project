@@ -159,6 +159,107 @@ int *__capability maybe_unrepresentable(int *__capability input, long index) {
 // PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP5]]
 //
 int *__capability maybe_unrepresentable_intcap(int *__capability input, long index) {
-  // No checks generated here since arithmentic on __intcap_t is not required to be inbounds.
+  // No checks generated here since arithmetic on __intcap_t is not required to be inbounds.
+  // TODO: generate checks here
   return (int *__capability)((__intcap_t)input + index * sizeof(long));
+}
+
+// HYBRID-LABEL: define {{[^@]+}}@bitwise_and_update_address
+// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[MASK:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MASK]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// HYBRID-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[AND]])
+// HYBRID-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
+// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@bitwise_and_update_address
+// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[MASK:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MASK]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// PURECAP-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[AND]])
+// PURECAP-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
+// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+//
+int *__capability bitwise_and_update_address(int *__capability input, long mask) {
+  // TODO: generate checks here
+  return (int *__capability)((__intcap_t)input & mask);
+}
+
+// HYBRID-LABEL: define {{[^@]+}}@bitwise_or_update_address
+// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[BITS:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[BITS]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// HYBRID-NEXT:    [[OR:%.*]] = or i64 [[TMP2]], [[TMP3]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OR]])
+// HYBRID-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
+// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@bitwise_or_update_address
+// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[BITS:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[BITS]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// PURECAP-NEXT:    [[OR:%.*]] = or i64 [[TMP2]], [[TMP3]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OR]])
+// PURECAP-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
+// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+//
+int *__capability bitwise_or_update_address(int *__capability input, long bits) {
+  // TODO: generate checks here
+  return (int *__capability)((__intcap_t)input | bits);
+}
+
+// HYBRID-LABEL: define {{[^@]+}}@update_address_intrinsic
+// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[ADDR:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADDR]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
+// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP2]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@update_address_intrinsic
+// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADDR]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
+// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP2]]
+//
+int *__capability update_address_intrinsic(int *__capability input, long addr) {
+  // TODO: generate checks here
+  return __builtin_cheri_address_set(input, addr);
+}
+
+// HYBRID-LABEL: define {{[^@]+}}@update_offset_intrinsic
+// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[OFFSET:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OFFSET]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
+// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP2]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@update_offset_intrinsic
+// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OFFSET]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
+// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP2]]
+//
+int *__capability update_offset_intrinsic(int *__capability input, long offset) {
+  // TODO: generate checks here
+  return __builtin_cheri_offset_set(input, offset);
 }
