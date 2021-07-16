@@ -5517,6 +5517,28 @@ static GEPOffsetAndOverflow EmitGEPOffsetInBytes(Value *BasePtr, Value *GEPVal,
   return {TotalOffset, OffsetOverflows};
 }
 
+Value *CodeGenFunction::EmitCapabilityArithmeticCheck(Value *Input,
+                                                      Value *Result,
+                                                      SourceLocation Loc) {
+  assert(SanOpts.has(SanitizerKind::PointerOverflow));
+  // TODO: we may want to have a separate category just for unrepresentable
+  // capabilities since there are quite a few cases where offsets are
+  // added to a NULL pointer (e.g. the FreeBSD base system).
+  SanitizerScope SanScope(this);
+  auto *OldTagged =
+      getTargetHooks().getPointerValidity(*this, Input, "tag.pre");
+  auto *NewTagged =
+      getTargetHooks().getPointerValidity(*this, Result, "tag.post");
+  auto *Valid = Builder.CreateICmpEQ(OldTagged, NewTagged);
+  llvm::Constant *StaticArgs[] = {EmitCheckSourceLocation(Loc)};
+  llvm::Value *DynamicArgs[] = {Input, Result};
+  // TODO: we should probably pass the computed address to the runtime to
+  // avoid emitting poisoned arguments (see below).
+  EmitCheck({{Valid, SanitizerKind::PointerOverflow}},
+            SanitizerHandler::PointerOverflow, StaticArgs, DynamicArgs);
+  return Result;
+}
+
 Value *
 CodeGenFunction::EmitCheckedInBoundsGEP(Value *Ptr, ArrayRef<Value *> IdxList,
                                         bool SignedIndices, bool IsSubtraction,
@@ -5527,7 +5549,14 @@ CodeGenFunction::EmitCheckedInBoundsGEP(Value *Ptr, ArrayRef<Value *> IdxList,
   if (!SanOpts.has(SanitizerKind::PointerOverflow))
     return GEPVal;
 
+  const auto &DL = CGM.getDataLayout();
   llvm::Type *PtrTy = Ptr->getType();
+  if (DL.isFatPointer(PtrTy)) {
+    // We still perform this check with zero offsets for CHERI capabilities
+    // since a zero offset GEP could still remove tag bits (e.g. for sealed
+    // capabilities on Morello) instead of trapping.
+    GEPVal = EmitCapabilityArithmeticCheck(Ptr, GEPVal, Loc);
+  }
 
   // Perform nullptr-and-offset check unless the nullptr is defined.
   bool PerformNullCheck = !NullPointerIsDefined(
@@ -5537,10 +5566,7 @@ CodeGenFunction::EmitCheckedInBoundsGEP(Value *Ptr, ArrayRef<Value *> IdxList,
   bool PerformOverflowCheck =
       !isa<llvm::Constant>(GEPVal) && PtrTy->getPointerAddressSpace() == 0;
 
-  const auto &DL = CGM.getDataLayout();
-  bool IsCheriCap = DL.isFatPointer(Ptr->getType());
-
-  if (!(PerformNullCheck || PerformOverflowCheck || IsCheriCap))
+  if (!(PerformNullCheck || PerformOverflowCheck))
     return GEPVal;
 
   SanitizerScope SanScope(this);
@@ -5558,11 +5584,7 @@ CodeGenFunction::EmitCheckedInBoundsGEP(Value *Ptr, ArrayRef<Value *> IdxList,
 
   // Common case: if the total offset is zero, and we are using C++ semantics,
   // where nullptr+0 is defined, don't emit a check.
-  // We don't skip this for CHERI capabilities since a zero offset GEP could
-  // still remove tag bits (e.g. for sealed capabilities on Morello) instead
-  // of trapping.
-  if (!IsCheriCap && EvaluatedGEP.TotalOffset == Zero &&
-      CGM.getLangOpts().CPlusPlus)
+  if (EvaluatedGEP.TotalOffset == Zero && CGM.getLangOpts().CPlusPlus)
     return GEPVal;
 
   // Now that we've computed the total offset, add it to the base pointer (with
@@ -5571,15 +5593,6 @@ CodeGenFunction::EmitCheckedInBoundsGEP(Value *Ptr, ArrayRef<Value *> IdxList,
   auto *ComputedGEP = Builder.CreateAdd(IntPtr, EvaluatedGEP.TotalOffset);
 
   llvm::SmallVector<std::pair<llvm::Value *, SanitizerMask>, 2> Checks;
-
-  if (IsCheriCap) {
-    auto *OldTagged =
-        getTargetHooks().getPointerValidity(*this, Ptr, "tag.pre");
-    auto *NewTagged =
-        getTargetHooks().getPointerValidity(*this, GEPVal, "tag.post");
-    auto *Valid = Builder.CreateICmpEQ(OldTagged, NewTagged);
-    Checks.emplace_back(Valid, SanitizerKind::PointerOverflow);
-  }
 
   if (PerformNullCheck) {
     // In C++, if the base pointer evaluates to a null pointer value,

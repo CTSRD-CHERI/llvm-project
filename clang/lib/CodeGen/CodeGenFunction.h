@@ -4525,6 +4525,13 @@ public:
                                       bool IsSubtraction,
                                       SourceLocation Loc,
                                       const Twine &Name = "");
+  /// Checks whether a capability arithmetic operation is invalid.
+  /// Currently this implements a check for values becoming untagged, but in
+  /// the future we may want to add an option to also check creation of
+  /// out-of-bounds CHERI capabilities.
+  llvm::Value *EmitCapabilityArithmeticCheck(llvm::Value *Input,
+                                             llvm::Value *Result,
+                                             SourceLocation Loc);
 
   /// Specifies which type of sanitizer check to apply when handling a
   /// particular builtin.
