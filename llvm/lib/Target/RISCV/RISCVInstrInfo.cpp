@@ -786,11 +786,11 @@ unsigned RISCVInstrInfo::insertBranch(
   return 2;
 }
 
-unsigned RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
-                                              MachineBasicBlock &DestBB,
-                                              const DebugLoc &DL,
-                                              int64_t BrOffset,
-                                              RegScavenger *RS) const {
+void RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
+                                          MachineBasicBlock &DestBB,
+                                          MachineBasicBlock &RestoreBB,
+                                          const DebugLoc &DL, int64_t BrOffset,
+                                          RegScavenger *RS) const {
   assert(RS && "RegScavenger required for long branching");
   assert(MBB.empty() &&
          "new block should be inserted for expanding unconditional branch");
@@ -827,10 +827,11 @@ unsigned RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
   RS->enterBasicBlockEnd(MBB);
   unsigned Scav = RS->scavengeRegisterBackwards(*RC,
                                                 MI.getIterator(), false, 0);
+  // TODO: The case when there is no scavenged register needs special handling.
+  assert(Scav != RISCV::NoRegister && "No register is scavenged!");
   MRI.replaceRegWith(ScratchReg, Scav);
   MRI.clearVirtRegs();
   RS->setRegUsed(Scav);
-  return 8;
 }
 
 bool RISCVInstrInfo::reverseBranchCondition(
