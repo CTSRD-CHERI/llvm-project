@@ -3879,8 +3879,7 @@ public:
         if (auto *CE = dyn_cast<llvm::ConstantExpr>(C)) {
           if (CE->getOpcode() == llvm::Instruction::IntToPtr &&
               CGF.CGM.getDataLayout().isFatPointer(PTy)) {
-            return CGF.setCapabilityIntegerValue(
-                llvm::ConstantPointerNull::get(PTy), CE->getOperand(0));
+            return CGF.getNullDerivedCapability(PTy, CE->getOperand(0));
           }
         }
         // TODO: are there any other exprs we need to special case?
