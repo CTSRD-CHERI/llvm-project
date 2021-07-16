@@ -806,6 +806,7 @@ class CommonCheriTargetCodeGenInfo : public TargetCodeGenInfo {
   mutable llvm::Function *GetBase = nullptr;
   mutable llvm::Function *GetAddress = nullptr;
   mutable llvm::Function *SetBounds = nullptr;
+  mutable llvm::Function *GetTag = nullptr;
   llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
     return CGF.Int8CheriCapTy;
   }
@@ -861,6 +862,14 @@ public:
     assert(Size->getType()->getIntegerBitWidth() ==
            CGF.CGM.getDataLayout().getIndexTypeSizeInBits(DstTy));
     return B.CreateBitCast(B.CreateCall(SetBounds, {Ptr, Size}), DstTy, Name);
+  }
+
+  llvm::Value *getPointerValidity(CodeGen::CodeGenFunction &CGF, llvm::Value *V,
+                                  const llvm::Twine &Name) const override {
+    if (!GetTag)
+      GetTag = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_tag_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetTag, V, Name);
   }
 
   llvm::Value *getPointerBase(CodeGen::CodeGenFunction &CGF,

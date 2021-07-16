@@ -260,32 +260,41 @@ public:
   }
 
   virtual unsigned getCHERICapabilityAS() const {
-    llvm_unreachable("Target does not support capabilities!\n");
+    llvm_unreachable("Target does not support CHERI capabilities!\n");
     return 0;
   }
 
   virtual llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &,
                                         llvm::Value *V) const {
-    llvm_unreachable("Target does not support capabilities!\n");
+    llvm_unreachable("Target does not support CHERI capabilities!\n");
     return nullptr;
   }
   virtual llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &,
           llvm::Value *Ptr, llvm::Value *Offset) const {
-    llvm_unreachable("Target does not support capabilities!\n");
+    llvm_unreachable("Target does not support CHERI capabilities!\n");
     return nullptr;
   }
   virtual llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &,
                                          llvm::Value *Ptr,
                                          llvm::Value *Offset) const {
-    llvm_unreachable("Target does not support capabilities!\n");
+    llvm_unreachable("Target does not support CHERI capabilities!\n");
     return nullptr;
   }
   virtual llvm::Value *setPointerBounds(CodeGen::CodeGenFunction &,
                                         llvm::Value *Ptr, llvm::Value *Size,
                                         const llvm::Twine &Name) const {
-    llvm_unreachable("Target does not support capabilities!\n");
+    llvm_unreachable("Target does not support CHERI capabilities!\n");
     return nullptr;
   }
+  virtual llvm::Value *getPointerValidity(CodeGen::CodeGenFunction &,
+                                          llvm::Value *V,
+                                          const llvm::Twine &Name) const {
+    // In theory we could also query something like the ASAN runtime to check
+    // if a pointer is valid, but for now this is only implemented for CHERI.
+    llvm_unreachable("Target does not support CHERI capabilities!\n");
+    return nullptr;
+  }
+
   virtual llvm::Value *getPointerBase(CodeGen::CodeGenFunction &,
                                       llvm::Value *V) const {
       return V;
