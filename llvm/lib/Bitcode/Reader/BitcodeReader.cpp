@@ -682,9 +682,10 @@ private:
     return getFnValueByID(ValNo, Ty);
   }
 
-  /// Upgrades old-style typeless byval or sret attributes by adding the
-  /// corresponding argument's pointee type.
-  void propagateByValSRetTypes(CallBase *CB, ArrayRef<Type *> ArgsTys);
+  /// Upgrades old-style typeless byval/sret/inalloca attributes by adding the
+  /// corresponding argument's pointee type. Also upgrades intrinsics that now
+  /// require an elementtype attribute.
+  void propagateAttributeTypes(CallBase *CB, ArrayRef<Type *> ArgsTys);
 
   /// Converts alignment exponent (i.e. power of two (or zero)) to the
   /// corresponding alignment to use. If alignment is too large, returns
@@ -3813,7 +3814,7 @@ Error BitcodeReader::typeCheckLoadStoreInst(Type *ValType, Type *PtrType) {
   return Error::success();
 }
 
-void BitcodeReader::propagateByValSRetTypes(CallBase *CB,
+void BitcodeReader::propagateAttributeTypes(CallBase *CB,
                                             ArrayRef<Type *> ArgsTys) {
   for (unsigned i = 0; i != CB->arg_size(); ++i) {
     for (Attribute::AttrKind Kind : {Attribute::ByVal, Attribute::StructRet,
@@ -3841,6 +3842,19 @@ void BitcodeReader::propagateByValSRetTypes(CallBase *CB,
 
       CB->addParamAttr(i, NewAttr);
     }
+  }
+
+  switch (CB->getIntrinsicID()) {
+  case Intrinsic::preserve_array_access_index:
+  case Intrinsic::preserve_struct_access_index:
+    if (!CB->getAttributes().getParamElementType(0)) {
+      Type *ElTy = cast<PointerType>(ArgsTys[0])->getElementType();
+      Attribute NewAttr = Attribute::get(Context, Attribute::ElementType, ElTy);
+      CB->addParamAttr(0, NewAttr);
+    }
+    break;
+  default:
+    break;
   }
 }
 
@@ -4683,7 +4697,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       cast<InvokeInst>(I)->setCallingConv(
           static_cast<CallingConv::ID>(CallingConv::MaxID & CCInfo));
       cast<InvokeInst>(I)->setAttributes(PAL);
-      propagateByValSRetTypes(cast<CallBase>(I), ArgsTys);
+      propagateAttributeTypes(cast<CallBase>(I), ArgsTys);
 
       break;
     }
@@ -5322,7 +5336,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
         TCK = CallInst::TCK_NoTail;
       cast<CallInst>(I)->setTailCallKind(TCK);
       cast<CallInst>(I)->setAttributes(PAL);
-      propagateByValSRetTypes(cast<CallBase>(I), ArgsTys);
+      propagateAttributeTypes(cast<CallBase>(I), ArgsTys);
       if (FMF.any()) {
         if (!isa<FPMathOperator>(I))
           return error("Fast-math-flags specified for call without "
