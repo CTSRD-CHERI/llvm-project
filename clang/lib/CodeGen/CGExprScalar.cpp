@@ -5595,9 +5595,10 @@ Value *
 CodeGenFunction::EmitCheckedInBoundsGEP(Value *Ptr, ArrayRef<Value *> IdxList,
                                         bool SignedIndices, bool IsSubtraction,
                                         SourceLocation Loc, const Twine &Name) {
-  Value *GEPVal = Builder.CreateInBoundsGEP(Ptr, IdxList, Name);
   const auto &DL = CGM.getDataLayout();
   llvm::Type *PtrTy = Ptr->getType();
+  Value *GEPVal = Builder.CreateInBoundsGEP(
+      PtrTy->getPointerElementType(), Ptr, IdxList, Name);
   if (SanOpts.has(SanitizerKind::CheriUnrepresentable) &&
       DL.isFatPointer(PtrTy)) {
     // We still perform this check with zero offsets for CHERI capabilities
