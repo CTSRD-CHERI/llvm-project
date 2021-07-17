@@ -1961,7 +1961,7 @@ CGCallee MicrosoftCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
       CGF.EmitTypeMetadataCodeForVCall(getObjectWithVPtr(), VTable, Loc);
 
     llvm::Value *VFuncPtr =
-        Builder.CreateConstInBoundsGEP1_64(VTable, ML.Index, "vfn");
+        Builder.CreateConstInBoundsGEP1_64(Ty, VTable, ML.Index, "vfn");
     VFunc = Builder.CreateAlignedLoad(Ty, VFuncPtr, CGF.getPointerAlign());
   }
 
@@ -2091,14 +2091,14 @@ MicrosoftCXXABI::EmitVirtualMemPtrThunk(const CXXMethodDecl *MD,
   // Load the vfptr and then callee from the vftable.  The callee should have
   // adjusted 'this' so that the vfptr is at offset zero.
   unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *ThunkPtrTy = ThunkTy->getPointerTo(DefaultAS);
   llvm::Value *VTable = CGF.GetVTablePtr(
-      getThisAddress(CGF), ThunkTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS), MD->getParent());
+      getThisAddress(CGF), ThunkPtrTy->getPointerTo(DefaultAS), MD->getParent());
 
-  llvm::Value *VFuncPtr =
-      CGF.Builder.CreateConstInBoundsGEP1_64(VTable, ML.Index, "vfn");
+  llvm::Value *VFuncPtr = CGF.Builder.CreateConstInBoundsGEP1_64(
+      ThunkPtrTy, VTable, ML.Index, "vfn");
   llvm::Value *Callee =
-    CGF.Builder.CreateAlignedLoad(ThunkTy->getPointerTo(), VFuncPtr,
-                                  CGF.getPointerAlign());
+    CGF.Builder.CreateAlignedLoad(ThunkPtrTy, VFuncPtr, CGF.getPointerAlign());
 
   CGF.EmitMustTailThunk(MD, getThisValue(CGF), {ThunkTy, Callee});
 
