@@ -1786,8 +1786,10 @@ public:
     return Insert(new AtomicRMWInst(Op, Ptr, Val, *Align, Ordering, SSID));
   }
 
-  Value *CreateGEP(Value *Ptr, ArrayRef<Value *> IdxList,
-                   const Twine &Name = "") {
+  LLVM_ATTRIBUTE_DEPRECATED(
+      Value *CreateGEP(Value *Ptr, ArrayRef<Value *> IdxList,
+                       const Twine &Name = ""),
+      "Use the version with explicit element type instead") {
     return CreateGEP(Ptr->getType()->getScalarType()->getPointerElementType(),
                      Ptr, IdxList, Name);
   }
@@ -1828,11 +1830,6 @@ public:
                       Name);
     }
     return Insert(GetElementPtrInst::CreateInBounds(Ty, Ptr, IdxList), Name);
-  }
-
-  Value *CreateGEP(Value *Ptr, Value *Idx, const Twine &Name = "") {
-    return CreateGEP(Ptr->getType()->getScalarType()->getPointerElementType(),
-                     Ptr, Idx, Name);
   }
 
   Value *CreateGEP(Type *Ty, Value *Ptr, Value *Idx, const Twine &Name = "") {
