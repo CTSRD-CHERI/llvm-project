@@ -14,7 +14,7 @@
 // CHECK-NEXT:    ret i32** [[TMP2]]
 //
 
-int **a(int *__attribute__((cheri_capability)) * ptr_to_cap) {
+int **a(int * __capability *ptr_to_cap) {
   // casting a capability pointer to a non-capability pointer used to crash
   int **c = ptr_to_cap; // expected-warning{{initializing 'int **' with an expression of type 'int * __capability *' discards qualifiers in nested pointer types}}
   return c;

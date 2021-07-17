@@ -8,8 +8,8 @@ void * memcpy(void *, const void *, unsigned long);
 void * memmove(void *, const void *, unsigned long);
 
 struct libcheri_stack_frame {
-  void *__attribute__lcsf_caller_pcc;
-  void *__attribute__((cheri_capability)) lcsf_caller_csp;
+  void * __capability lcsf_caller_pcc;
+  void * __capability lcsf_caller_csp;
 };
 struct libcheri_stack {
   struct libcheri_stack_frame lcs_frames[8];
