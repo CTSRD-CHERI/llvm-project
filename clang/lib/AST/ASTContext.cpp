@@ -4625,7 +4625,7 @@ QualType ASTContext::getTypedefType(const TypedefNameDecl *Decl,
   if (IsCHERICap) {
     if (const PointerType *PT = Canonical->getAs<PointerType>()) {
       // Create a copy of the typedef whose name is prefixed by "__chericap_"
-      // and whose underlying type is the cheri_capability qualified version of
+      // and whose underlying type is the __capability qualified version of
       // the pointer type
       Canonical = getPointerType(PT->getPointeeType(), PIK_Capability);
       TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getBeginLoc());
