@@ -824,7 +824,6 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   // Target-independent CHERI definitions. The MIPS backend still defines the
   // values for __CHERI_CAP_PERMISSION_* and _MIPS_SZCAP, etc.
   if (TI.SupportsCapabilities()) {
-    Builder.defineMacro("__capability", "__attribute__((cheri_capability))");
     const uint64_t CapWidth = TI.getCHERICapabilityWidth();
     const uint64_t CapRange = TI.getPointerRangeForCHERICapability();
     Builder.defineMacro("__CHERI__", "1"); // TODO: or define __CHERI__ to 128/256?
