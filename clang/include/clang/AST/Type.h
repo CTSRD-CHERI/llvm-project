@@ -1561,12 +1561,19 @@ protected:
     /// 'int X[static restrict 4]'. For function parameters only.
     /// Actually an ArrayType::ArraySizeModifier.
     unsigned SizeModifier : 3;
+
+    /// The interpretation (PointerInterpretationKind) to use for this array.
+    /// For function parameters only.
+    unsigned PIK : 1;
+
+    /// Whether the pointer interpretation for this array is set.
+    unsigned HasPIK : 1;
   };
 
   class ConstantArrayTypeBitfields {
     friend class ConstantArrayType;
 
-    unsigned : NumTypeBits + 3 + 3;
+    unsigned : NumTypeBits + 3 + 3 + 2;
 
     /// Whether we have a stored size expression.
     unsigned HasStoredSizeExpr : 1;
@@ -2706,6 +2713,23 @@ public:
   }
 };
 
+/// This class augments a type with an optional pointer interpretation.
+template <class T>
+class OptionalPointerInterpretationTrait {
+protected:
+  OptionalPointerInterpretationTrait() = default;
+
+public:
+  bool isCHERICapability() const {
+    return getPointerInterpretation() == PIK_Capability;
+  }
+
+  llvm::Optional<PointerInterpretationKind>
+  getPointerInterpretation() const {
+    return static_cast<const T *>(this)->getPointerInterpretationImpl();
+  }
+};
+
 /// PointerType - C99 6.7.5.1 - Pointer Declarators.
 class PointerType : public Type,
                     public PointerInterpretationTrait<PointerType>,
@@ -2975,7 +2999,11 @@ public:
 };
 
 /// Represents an array type, per C99 6.7.5.2 - Array Declarators.
-class ArrayType : public Type, public llvm::FoldingSetNode {
+class ArrayType : public Type,
+                  public OptionalPointerInterpretationTrait<ArrayType>,
+                  public llvm::FoldingSetNode {
+  friend class OptionalPointerInterpretationTrait<ArrayType>;
+
 public:
   /// Capture whether this is a normal array (e.g. int X[4])
   /// an array with a static size (e.g. int X[static 4]), or an array
@@ -2989,11 +3017,19 @@ private:
   /// The element type of the array.
   QualType ElementType;
 
+  llvm::Optional<PointerInterpretationKind>
+  getPointerInterpretationImpl() const {
+    if (!ArrayTypeBits.HasPIK)
+      return llvm::None;
+    return static_cast<PointerInterpretationKind>(ArrayTypeBits.PIK);
+  }
+
 protected:
   friend class ASTContext; // ASTContext creates these.
 
   ArrayType(TypeClass tc, QualType et, QualType can, ArraySizeModifier sm,
-            unsigned tq, const Expr *sz = nullptr);
+            unsigned tq, llvm::Optional<PointerInterpretationKind> PIK,
+            const Expr *sz = nullptr);
 
 public:
   QualType getElementType() const { return ElementType; }
@@ -3030,8 +3066,9 @@ class ConstantArrayType final
   llvm::APInt Size; // Allows us to unique the type.
 
   ConstantArrayType(QualType et, QualType can, const llvm::APInt &size,
-                    const Expr *sz, ArraySizeModifier sm, unsigned tq)
-      : ArrayType(ConstantArray, et, can, sm, tq, sz), Size(size) {
+                    const Expr *sz, ArraySizeModifier sm, unsigned tq,
+                    llvm::Optional<PointerInterpretationKind> PIK)
+      : ArrayType(ConstantArray, et, can, sm, tq, PIK, sz), Size(size) {
     ConstantArrayTypeBits.HasStoredSizeExpr = sz != nullptr;
     if (ConstantArrayTypeBits.HasStoredSizeExpr) {
       assert(!can.isNull() && "canonical constant array should not have size");
@@ -3065,13 +3102,15 @@ public:
 
   void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Ctx) {
     Profile(ID, Ctx, getElementType(), getSize(), getSizeExpr(),
-            getSizeModifier(), getIndexTypeCVRQualifiers());
+            getSizeModifier(), getIndexTypeCVRQualifiers(),
+            getPointerInterpretation());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Ctx,
                       QualType ET, const llvm::APInt &ArraySize,
                       const Expr *SizeExpr, ArraySizeModifier SizeMod,
-                      unsigned TypeQuals);
+                      unsigned TypeQuals,
+                      llvm::Optional<PointerInterpretationKind> PIK);
 
   static bool classof(const Type *T) {
     return T->getTypeClass() == ConstantArray;
@@ -3085,8 +3124,9 @@ class IncompleteArrayType : public ArrayType {
   friend class ASTContext; // ASTContext creates these.
 
   IncompleteArrayType(QualType et, QualType can,
-                      ArraySizeModifier sm, unsigned tq)
-      : ArrayType(IncompleteArray, et, can, sm, tq) {}
+                      ArraySizeModifier sm, unsigned tq,
+                      llvm::Optional<PointerInterpretationKind> PIK)
+      : ArrayType(IncompleteArray, et, can, sm, tq, PIK) {}
 
 public:
   friend class StmtIteratorBase;
@@ -3100,14 +3140,18 @@ public:
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getElementType(), getSizeModifier(),
-            getIndexTypeCVRQualifiers());
+            getIndexTypeCVRQualifiers(), getPointerInterpretation());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID, QualType ET,
-                      ArraySizeModifier SizeMod, unsigned TypeQuals) {
+                      ArraySizeModifier SizeMod, unsigned TypeQuals,
+                      llvm::Optional<PointerInterpretationKind> PIK) {
     ID.AddPointer(ET.getAsOpaquePtr());
     ID.AddInteger(SizeMod);
     ID.AddInteger(TypeQuals);
+    ID.AddBoolean(PIK.hasValue());
+    if (PIK.hasValue())
+      ID.AddInteger(*PIK);
   }
 };
 
@@ -3137,8 +3181,9 @@ class VariableArrayType : public ArrayType {
 
   VariableArrayType(QualType et, QualType can, Expr *e,
                     ArraySizeModifier sm, unsigned tq,
-                    SourceRange brackets)
-      : ArrayType(VariableArray, et, can, sm, tq, e),
+                    SourceRange brackets,
+                    llvm::Optional<PointerInterpretationKind> PIK)
+      : ArrayType(VariableArray, et, can, sm, tq, PIK, e),
         SizeExpr((Stmt*) e), Brackets(brackets) {}
 
 public:
@@ -3196,7 +3241,8 @@ class DependentSizedArrayType : public ArrayType {
 
   DependentSizedArrayType(const ASTContext &Context, QualType et, QualType can,
                           Expr *e, ArraySizeModifier sm, unsigned tq,
-                          SourceRange brackets);
+                          SourceRange brackets,
+                          llvm::Optional<PointerInterpretationKind> PIK);
 
 public:
   friend class StmtIteratorBase;
@@ -3220,12 +3266,14 @@ public:
 
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, Context, getElementType(),
-            getSizeModifier(), getIndexTypeCVRQualifiers(), getSizeExpr());
+            getSizeModifier(), getIndexTypeCVRQualifiers(), getSizeExpr(),
+            getPointerInterpretation());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Context,
                       QualType ET, ArraySizeModifier SizeMod,
-                      unsigned TypeQuals, Expr *E);
+                      unsigned TypeQuals, Expr *E,
+                      llvm::Optional<PointerInterpretationKind> PIK);
 };
 
 /// Represents an extended address space qualifier where the input address space
