@@ -1,4 +1,3 @@
-// RUN: %cheri_cc1 -dM -x c -E /dev/null | FileCheck -check-prefix=CHECK-MACRO %s
 // RUN: %cheri_cc1 -DDEPRECATED=1  -fsyntax-only -verify %s
 // RUN: %cheri_cc1 -DDEPRECATED=1  -fsyntax-only -fdiagnostics-parseable-fixits -ast-dump %s 2>&1 | FileCheck -check-prefix=CHECK-DEPRECATED %s
 // RUN: %cheri_cc1 -DAMBIGUOUS=1  -fsyntax-only -verify %s
@@ -10,8 +9,6 @@
 // RUN: %cheri_cc1 -DLIST=1  -fsyntax-only -ast-dump %s | FileCheck -check-prefix=CHECK-LIST %s
 
 // Test expected compiler warnings/errors for the __capability qualifier 
-
-// CHECK-MACRO: define __capability __attribute__((cheri_capability))
 
 #ifdef DEPRECATED
 __capability int *x; // expected-warning{{use of __capability before}}

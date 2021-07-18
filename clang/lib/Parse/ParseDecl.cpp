@@ -868,6 +868,13 @@ void Parser::ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs) {
   }
 }
 
+void Parser::ParseCapabilityQualifier(ParsedAttributes &Attrs) {
+  IdentifierInfo *AttrName = Tok.getIdentifierInfo();
+  SourceLocation AttrNameLoc = Tok.getLocation();
+  Attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
+               ParsedAttr::AS_Keyword);
+}
+
 static bool VersionNumberSeparator(const char Separator) {
   return (Separator == '.' || Separator == '_');
 }
@@ -3986,6 +3993,11 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       isInvalid = DS.SetTypeQual(DeclSpec::TQ_restrict, Loc, PrevSpec, DiagID,
                                  getLangOpts());
       break;
+
+    // CHERI C qualifiers
+    case tok::kw___capability:
+      ParseCapabilityQualifier(DS.getAttributes());
+      break;
     case tok::kw___cheri_input:
       isInvalid = DS.SetInput(PrevSpec, DiagID);
       break;
@@ -5046,6 +5058,7 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw_const:
   case tok::kw_volatile:
   case tok::kw_restrict:
+  case tok::kw___capability:
   case tok::kw___cheri_output:
   case tok::kw__Sat:
 
@@ -5214,6 +5227,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw_const:
   case tok::kw_volatile:
   case tok::kw_restrict:
+  case tok::kw___capability:
   case tok::kw___cheri_output:
   case tok::kw__Sat:
 
@@ -5525,6 +5539,11 @@ void Parser::ParseTypeQualifierListOpt(
         Diag(Tok, diag::ext_c11_feature) << Tok.getName();
       isInvalid = DS.SetTypeQual(DeclSpec::TQ_atomic, Loc, PrevSpec, DiagID,
                                  getLangOpts());
+      break;
+
+    // CHERI C qualifiers
+    case tok::kw___capability:
+      ParseCapabilityQualifier(DS.getAttributes());
       break;
     case tok::kw___cheri_input:
       isInvalid = DS.SetInput(PrevSpec, DiagID);

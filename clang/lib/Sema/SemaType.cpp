@@ -8055,18 +8055,10 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
                                       TypeAttrLocation TAL, ParsedAttr& attr) {
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
+  std::string Name = attr.getAttrName()->getName().str();
 
-  if (TAL == TAL_DeclName) {
-    // TODO: we should use the spelling as written in the source
-    // StringRef Name = attr.getName()->getName();
-    StringRef Name = "__capability";
-    S.Diag(attr.getLoc(), diag::err_attr_wrong_position) << Name
-        << FixItHint::CreateRemoval(attr.getLoc())
-        << FixItHint::CreateInsertion(state.getDeclarator().getName().getBeginLoc(), Name);
-    return;
-  }
-
-  if (TAL == TAL_DeclSpec) {
+  switch (TAL) {
+  case TAL_DeclSpec:
     // Possible deprecated use; move to the outermost pointer declarator,
     // unless this is a typedef'd pointer type or similar where we instead
     // create a new instance of this type with a memory capability as the
@@ -8099,28 +8091,10 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
             }
 
             // Output a deprecated usage warning with a FixItHint
-            SourceRange AttrRange;
-            SourceLocation AttrLoc = attr.getLoc();
-            if (AttrLoc.isValid()) {
-              // The cheri_capability attribute should always be inserted via
-              // the predefined __capability macro, but we also cater for when it
-              // isn't in the else branch
-              if (AttrLoc.isMacroID()) {
-                CharSourceRange expansionRange =
-                    S.SourceMgr.getImmediateExpansionRange(AttrLoc);
-                AttrRange.setBegin(expansionRange.getBegin());
-                AttrRange.setEnd(expansionRange.getEnd());
-              } else {
-                // Calculate extended range to include the preceding
-                // __attribute(( and following ))
-                AttrRange.setBegin(AttrLoc.getLocWithOffset(-15));
-                AttrRange.setEnd(AttrLoc.getLocWithOffset(18));
-              }
-            }
             S.Diag(chunk.Loc, diag::warn_cheri_capability_attribute_location)
-                << FixItHint::CreateRemoval(AttrRange)
+                << FixItHint::CreateRemoval(attr.getRange())
                 << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
-                                              " __capability ");
+                                              " " + Name + " ");
 
             // Put this attribute in the right place after the next pointer
             // chunk so we are called again with the parsed pointer type.
@@ -8128,7 +8102,8 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
                    .create(const_cast<IdentifierInfo *>(attr.getAttrName()),
                            attr.getRange(),
                            const_cast<IdentifierInfo *>(attr.getScopeName()),
-                           attr.getScopeLoc(), nullptr, 0, ParsedAttr::AS_GNU);
+                           attr.getScopeLoc(), nullptr, 0,
+                           ParsedAttr::AS_Keyword);
             chunk.getAttrs().addAtEnd(attrCopy);
             return;
           }
@@ -8145,6 +8120,17 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
         }
       }
     }
+    break;
+
+  case TAL_DeclChunk:
+    break;
+
+  case TAL_DeclName:
+    llvm_unreachable(
+        "Keyword attribute should never be parsed after declaration's name");
+
+  default:
+    llvm_unreachable("Unknown type attribute location");
   }
 
   CurType = S.BuildPointerInterpretationAttr(CurType, PIK_Capability,
