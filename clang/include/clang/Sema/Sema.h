@@ -1906,7 +1906,8 @@ public:
                               SourceLocation Loc, DeclarationName Entity);
   QualType BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
                           Expr *ArraySize, unsigned Quals,
-                          SourceRange Brackets, DeclarationName Entity);
+                          SourceRange Brackets, DeclarationName Entity,
+                          llvm::Optional<PointerInterpretationKind> PIK);
   QualType BuildVectorType(QualType T, Expr *VecSize, SourceLocation AttrLoc);
   QualType BuildExtVectorType(QualType T, Expr *ArraySize,
                               SourceLocation AttrLoc);

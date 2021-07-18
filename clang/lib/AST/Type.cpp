@@ -117,7 +117,9 @@ bool QualType::isConstant(QualType T, const ASTContext &Ctx) {
 //       size is specified by a constant expression that is
 //       value-dependent,
 ArrayType::ArrayType(TypeClass tc, QualType et, QualType can,
-                     ArraySizeModifier sm, unsigned tq, const Expr *sz)
+                     ArraySizeModifier sm, unsigned tq,
+                     llvm::Optional<PointerInterpretationKind> PIK,
+                     const Expr *sz)
     // Note, we need to check for DependentSizedArrayType explicitly here
     // because we use a DependentSizedArrayType with no size expression as the
     // type of a dependent array of unknown bound with a dependent braced
@@ -137,6 +139,9 @@ ArrayType::ArrayType(TypeClass tc, QualType et, QualType can,
       ElementType(et) {
   ArrayTypeBits.IndexTypeQuals = tq;
   ArrayTypeBits.SizeModifier = sm;
+  ArrayTypeBits.HasPIK = PIK.hasValue();
+  if (PIK.hasValue())
+    ArrayTypeBits.PIK = *PIK;
 }
 
 unsigned ConstantArrayType::getNumAddressingBits(const ASTContext &Context,
@@ -190,7 +195,8 @@ void ConstantArrayType::Profile(llvm::FoldingSetNodeID &ID,
                                 const ASTContext &Context, QualType ET,
                                 const llvm::APInt &ArraySize,
                                 const Expr *SizeExpr, ArraySizeModifier SizeMod,
-                                unsigned TypeQuals) {
+                                unsigned TypeQuals,
+                                llvm::Optional<PointerInterpretationKind> PIK) {
   ID.AddPointer(ET.getAsOpaquePtr());
   ID.AddInteger(ArraySize.getZExtValue());
   ID.AddInteger(SizeMod);
@@ -198,14 +204,18 @@ void ConstantArrayType::Profile(llvm::FoldingSetNodeID &ID,
   ID.AddBoolean(SizeExpr != 0);
   if (SizeExpr)
     SizeExpr->Profile(ID, Context, true);
+  ID.AddBoolean(PIK.hasValue());
+  if (PIK.hasValue())
+    ID.AddInteger(*PIK);
 }
 
 DependentSizedArrayType::DependentSizedArrayType(const ASTContext &Context,
                                                  QualType et, QualType can,
                                                  Expr *e, ArraySizeModifier sm,
                                                  unsigned tq,
-                                                 SourceRange brackets)
-    : ArrayType(DependentSizedArray, et, can, sm, tq, e),
+                                                 SourceRange brackets,
+                                                 llvm::Optional<PointerInterpretationKind> PIK)
+    : ArrayType(DependentSizedArray, et, can, sm, tq, PIK, e),
       Context(Context), SizeExpr((Stmt*) e), Brackets(brackets) {}
 
 void DependentSizedArrayType::Profile(llvm::FoldingSetNodeID &ID,
@@ -213,11 +223,15 @@ void DependentSizedArrayType::Profile(llvm::FoldingSetNodeID &ID,
                                       QualType ET,
                                       ArraySizeModifier SizeMod,
                                       unsigned TypeQuals,
-                                      Expr *E) {
+                                      Expr *E,
+                                      llvm::Optional<PointerInterpretationKind> PIK) {
   ID.AddPointer(ET.getAsOpaquePtr());
   ID.AddInteger(SizeMod);
   ID.AddInteger(TypeQuals);
   E->Profile(ID, Context, true);
+  ID.AddBoolean(PIK.hasValue());
+  if (PIK.hasValue())
+    ID.AddInteger(*PIK);
 }
 
 DependentVectorType::DependentVectorType(const ASTContext &Context,
