@@ -5960,7 +5960,7 @@ TargetLowering::prepareSREMEqFold(EVT SETCCVT, SDValue REMNode,
   if (!isOperationLegalOrCustom(ISD::SETEQ, VT) ||
       !isOperationLegalOrCustom(ISD::AND, VT) ||
       !isOperationLegalOrCustom(Cond, VT) ||
-      !isOperationLegalOrCustom(ISD::VSELECT, VT))
+      !isOperationLegalOrCustom(ISD::VSELECT, SETCCVT))
     return SDValue();
 
   Created.push_back(Fold.getNode());
@@ -5986,8 +5986,8 @@ TargetLowering::prepareSREMEqFold(EVT SETCCVT, SDValue REMNode,
   // 'MaskedIsZero'. If the divisor for channel was *NOT* INT_MIN, we pick
   // from 'Fold', else pick from 'MaskedIsZero'. Since 'DivisorIsIntMin' is
   // constant-folded, select can get lowered to a shuffle with constant mask.
-  SDValue Blended =
-      DAG.getNode(ISD::VSELECT, DL, VT, DivisorIsIntMin, MaskedIsZero, Fold);
+  SDValue Blended = DAG.getNode(ISD::VSELECT, DL, SETCCVT, DivisorIsIntMin,
+                                MaskedIsZero, Fold);
 
   return Blended;
 }
