@@ -4708,11 +4708,11 @@ public:
   /// Update a __uintcap_t with a long value:
   /// This sets the address by default but if -cheri-uintcap=offset is
   /// passed we will update the offset instead.
-  llvm::Value *setCapabilityIntegerValue(llvm::Value *Ptr,
-                                         llvm::Value *NewVal) {
+  llvm::Value *setCapabilityIntegerValue(llvm::Value *Ptr, llvm::Value *NewVal,
+                                         SourceLocation Loc) {
     return getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr
-               ? setPointerAddress(Ptr, NewVal)
-               : setPointerOffset(Ptr, NewVal);
+               ? getTargetHooks().setPointerAddress(*this, Ptr, NewVal, "", Loc)
+               : getTargetHooks().setPointerOffset(*this, Ptr, NewVal, "", Loc);
   }
   llvm::Value *getNullDerivedCapability(llvm::Type *ResultTy,
                                         llvm::Value *IntValue) {
@@ -4721,12 +4721,6 @@ public:
         Builder.CreateGEP(llvm::ConstantPointerNull::get(Int8CheriCapTy),
                           IntValue),
         ResultTy);
-  }
-  llvm::Value *setPointerOffset(llvm::Value *Ptr, llvm::Value *Offset) {
-    return getTargetHooks().setPointerOffset(*this, Ptr, Offset);
-  }
-  llvm::Value *setPointerAddress(llvm::Value *Ptr, llvm::Value *Offset) {
-    return getTargetHooks().setPointerAddress(*this, Ptr, Offset);
   }
   llvm::Value *getPointerAddress(llvm::Value *V, const llvm::Twine &Name = "") {
     return getTargetHooks().getPointerAddress(*this, V, Name);
