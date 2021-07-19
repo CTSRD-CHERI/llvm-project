@@ -500,17 +500,16 @@ int *__capability update_offset_intrinsic(int *__capability input, long offset) 
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@tag_stripping_cast
-// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[TMP1]])
-// HYBRID-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
-// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
+// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP3]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@tag_stripping_cast
-// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
@@ -519,7 +518,7 @@ int *__capability update_offset_intrinsic(int *__capability input, long offset) 
 // PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP3]]
 //
 int *__capability tag_stripping_cast(int *__capability input) {
-  return (int *__capability)(__intcap_t)(long)input; // Should not generate any UBSan checks
+  return (int *__capability)(__intcap_t)(__cheri_addr long)input; // Should not generate any UBSan checks
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@tag_preserving_cast
