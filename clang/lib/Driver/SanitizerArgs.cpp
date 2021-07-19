@@ -42,7 +42,7 @@ static const SanitizerMask NeedsUnwindTables =
 static const SanitizerMask SupportsCoverage =
     SanitizerKind::Address | SanitizerKind::HWAddress |
     SanitizerKind::KernelAddress | SanitizerKind::KernelHWAddress |
-    SanitizerKind::MemTag | SanitizerKind::Memory |
+    SanitizerKind::MemTag | SanitizerKind::Memory | SanitizerKind::CHERI |
     SanitizerKind::KernelMemory | SanitizerKind::Leak |
     SanitizerKind::Undefined | SanitizerKind::Integer | SanitizerKind::Bounds |
     SanitizerKind::ImplicitConversion | SanitizerKind::Nullability |
@@ -52,6 +52,7 @@ static const SanitizerMask SupportsCoverage =
     SanitizerKind::Thread | SanitizerKind::ObjCCast;
 static const SanitizerMask RecoverableByDefault =
     SanitizerKind::Undefined | SanitizerKind::Integer |
+    SanitizerKind::CheriUnrepresentable |
     SanitizerKind::ImplicitConversion | SanitizerKind::Nullability |
     SanitizerKind::FloatDivideByZero | SanitizerKind::ObjCCast;
 static const SanitizerMask Unrecoverable =
@@ -63,7 +64,7 @@ static const SanitizerMask TrappingSupported =
     (SanitizerKind::Undefined & ~SanitizerKind::Vptr) | SanitizerKind::Integer |
     SanitizerKind::Nullability | SanitizerKind::LocalBounds |
     SanitizerKind::CFI | SanitizerKind::FloatDivideByZero |
-    SanitizerKind::ObjCCast;
+    SanitizerKind::ObjCCast | SanitizerKind::CHERI;
 static const SanitizerMask TrappingDefault = SanitizerKind::CFI;
 static const SanitizerMask CFIClasses =
     SanitizerKind::CFIVCall | SanitizerKind::CFINVCall |
