@@ -57,24 +57,24 @@ struct MapUnmapCallback;
 #if defined(__mips64) || defined(__aarch64__) || defined(__powerpc__)
 
 struct AP32 {
-  static const vaddr kSpaceBeg = 0;
+  static const uptr kSpaceBeg = 0;
   static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
-  static const usize kMetadataSize = 0;
+  static const uptr kMetadataSize = 0;
   typedef __sanitizer::CompactSizeClassMap SizeClassMap;
-  static const usize kRegionSizeLog = 20;
+  static const uptr kRegionSizeLog = 20;
   using AddressSpaceView = LocalAddressSpaceView;
   typedef __tsan::MapUnmapCallback MapUnmapCallback;
-  static const usize kFlags = 0;
+  static const uptr kFlags = 0;
 };
 typedef SizeClassAllocator32<AP32> PrimaryAllocator;
 #else
 struct AP64 {  // Allocator64 parameters. Deliberately using a short name.
-  static const vaddr kSpaceBeg = Mapping::kHeapMemBeg;
-  static const usize kSpaceSize = Mapping::kHeapMemEnd - Mapping::kHeapMemBeg;
-  static const usize kMetadataSize = 0;
+  static const uptr kSpaceBeg = Mapping::kHeapMemBeg;
+  static const uptr kSpaceSize = Mapping::kHeapMemEnd - Mapping::kHeapMemBeg;
+  static const uptr kMetadataSize = 0;
   typedef DefaultSizeClassMap SizeClassMap;
   typedef __tsan::MapUnmapCallback MapUnmapCallback;
-  static const usize kFlags = 0;
+  static const uptr kFlags = 0;
   using AddressSpaceView = LocalAddressSpaceView;
 };
 typedef SizeClassAllocator64<AP64> PrimaryAllocator;
@@ -400,9 +400,6 @@ struct ThreadState {
   Vector<JmpBuf> jmp_bufs;
   int ignore_interceptors;
 #endif
-#if TSAN_COLLECT_STATS
-  u64 stat[StatCnt];
-#endif
   const u32 tid;
   const int unique_id;
   bool in_symbolizer;
@@ -550,7 +547,6 @@ struct Context {
 
   Flags flags;
 
-  u64 stat[StatCnt];
   u64 int_alloc_cnt[MBlockTypeCount];
   u64 int_alloc_siz[MBlockTypeCount];
 };
@@ -589,7 +585,7 @@ class ScopedReportBase {
   void AddUniqueTid(int unique_tid);
   void AddMutex(const SyncVar *s);
   u64 AddMutex(u64 id);
-  void AddLocation(uptr addr, usize size);
+  void AddLocation(uptr addr, uptr size);
   void AddSleep(u32 stack_id);
   void SetCount(int count);
 
@@ -658,26 +654,10 @@ void ObtainCurrentStack(ThreadState *thr, uptr toppc, StackTraceTy *stack,
   ObtainCurrentStack(thr, pc, &stack); \
   stack.ReverseOrder();
 
-#if TSAN_COLLECT_STATS
-void StatAggregate(u64 *dst, u64 *src);
-void StatOutput(u64 *stat);
-#endif
-
-void ALWAYS_INLINE StatInc(ThreadState *thr, StatType typ, u64 n = 1) {
-#if TSAN_COLLECT_STATS
-  thr->stat[typ] += n;
-#endif
-}
-void ALWAYS_INLINE StatSet(ThreadState *thr, StatType typ, u64 n) {
-#if TSAN_COLLECT_STATS
-  thr->stat[typ] = n;
-#endif
-}
-
-void MapShadow(uptr addr, usize size);
-void MapThreadTrace(uptr addr, usize size, const char *name);
-void DontNeedShadowFor(uptr addr, usize size);
-void UnmapShadow(ThreadState *thr, uptr addr, usize size);
+void MapShadow(uptr addr, uptr size);
+void MapThreadTrace(uptr addr, uptr size, const char *name);
+void DontNeedShadowFor(uptr addr, uptr size);
+void UnmapShadow(ThreadState *thr, uptr addr, uptr size);
 void InitializeShadowMemory();
 void InitializeInterceptors();
 void InitializeLibIgnore();
@@ -690,7 +670,7 @@ void ForkChildAfter(ThreadState *thr, uptr pc);
 void ReportRace(ThreadState *thr);
 bool OutputReport(ThreadState *thr, const ScopedReport &srep);
 bool IsFiredSuppression(Context *ctx, ReportType type, StackTrace trace);
-bool IsExpectedReport(uptr addr, usize size);
+bool IsExpectedReport(uptr addr, uptr size);
 void PrintMatchedBenignRaces();
 
 #if defined(TSAN_DEBUG_OUTPUT) && TSAN_DEBUG_OUTPUT >= 1
@@ -714,7 +694,7 @@ void Initialize(ThreadState *thr);
 void MaybeSpawnBackgroundThread();
 int Finalize(ThreadState *thr);
 
-void OnUserAlloc(ThreadState *thr, uptr pc, uptr p, usize sz, bool write);
+void OnUserAlloc(ThreadState *thr, uptr pc, uptr p, uptr sz, bool write);
 void OnUserFree(ThreadState *thr, uptr pc, uptr p, bool write);
 
 void MemoryAccess(ThreadState *thr, uptr pc, uptr addr,
@@ -754,11 +734,11 @@ void ALWAYS_INLINE MemoryWriteAtomic(ThreadState *thr, uptr pc,
   MemoryAccess(thr, pc, addr, kAccessSizeLog, true, true);
 }
 
-void MemoryResetRange(ThreadState *thr, uptr pc, uptr addr, usize size);
-void MemoryRangeFreed(ThreadState *thr, uptr pc, uptr addr, usize size);
-void MemoryRangeImitateWrite(ThreadState *thr, uptr pc, uptr addr, usize size);
+void MemoryResetRange(ThreadState *thr, uptr pc, uptr addr, uptr size);
+void MemoryRangeFreed(ThreadState *thr, uptr pc, uptr addr, uptr size);
+void MemoryRangeImitateWrite(ThreadState *thr, uptr pc, uptr addr, uptr size);
 void MemoryRangeImitateWriteOrResetRange(ThreadState *thr, uptr pc, uptr addr,
-                                         usize size);
+                                         uptr size);
 
 void ThreadIgnoreBegin(ThreadState *thr, uptr pc, bool save_stack = true);
 void ThreadIgnoreEnd(ThreadState *thr, uptr pc);
@@ -854,7 +834,6 @@ void ALWAYS_INLINE TraceAddEvent(ThreadState *thr, FastState fs,
   DCHECK_GE((int)typ, 0);
   DCHECK_LE((int)typ, 7);
   DCHECK_EQ(GetLsb(addr, kEventPCBits), addr);
-  StatInc(thr, StatEvents);
   u64 pos = fs.GetTracePos();
   if (UNLIKELY((pos % kTracePartSize) == 0)) {
 #if !SANITIZER_GO
