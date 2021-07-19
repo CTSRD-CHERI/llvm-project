@@ -332,7 +332,10 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
             llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
       PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
                llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
-      Addr = Address(CGF.setPointerAddress(Ptr, PtrAsInt), DirectAlign);
+      Addr =
+          Address(CGF.getTargetHooks().setPointerAddress(
+                      CGF, Ptr, PtrAsInt, "", CGF.CurCodeDecl->getLocation()),
+                  DirectAlign);
     } else
       Addr = Address(emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign),
                                                  DirectAlign);
@@ -816,9 +819,10 @@ public:
       : TargetCodeGenInfo(std::move(info)) {}
 
   llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &CGF, llvm::Value *Ptr,
-                                llvm::Value *Offset) const override {
+                                llvm::Value *Offset, const llvm::Twine &Name,
+                                SourceLocation Loc) const override {
     if (isa<llvm::ConstantPointerNull>(Ptr)) {
-      // Avoid unncessary work for instcombine;
+      // Avoid unnecessary work for instcombine by returning a null-derived cap:
       return CGF.getNullDerivedCapability(Ptr->getType(), Offset);
     }
     if (!SetOffset)
@@ -829,14 +833,18 @@ public:
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
     assert(Offset->getType()->getIntegerBitWidth() ==
            CGF.CGM.getDataLayout().getIndexTypeSizeInBits(DstTy));
-    return B.CreateBitCast(B.CreateCall(SetOffset, {Ptr, Offset}), DstTy);
+    llvm::Value *Result = B.CreateCall(SetOffset, {Ptr, Offset}, Name);
+    if (CGF.SanOpts.has(SanitizerKind::CheriUnrepresentable))
+      Result = CGF.EmitCapabilityArithmeticCheck(Ptr, Result, Loc);
+    return B.CreateBitCast(Result, DstTy);
   }
 
   llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &CGF,
-                                 llvm::Value *Ptr,
-                                 llvm::Value *Addr) const override {
+                                 llvm::Value *Ptr, llvm::Value *Addr,
+                                 const llvm::Twine &Name,
+                                 SourceLocation Loc) const override {
     if (isa<llvm::ConstantPointerNull>(Ptr)) {
-      // Avoid unncessary work for instcombine;
+      // Avoid unnecessary work for instcombine by returning a null-derived cap:
       return CGF.getNullDerivedCapability(Ptr->getType(), Addr);
     }
     if (!SetAddr)
@@ -847,7 +855,10 @@ public:
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
     assert(Addr->getType()->getIntegerBitWidth() ==
            CGF.CGM.getDataLayout().getIndexTypeSizeInBits(DstTy));
-    return B.CreateBitCast(B.CreateCall(SetAddr, {Ptr, Addr}), DstTy);
+    llvm::Value *Result = B.CreateCall(SetAddr, {Ptr, Addr}, Name);
+    if (CGF.SanOpts.has(SanitizerKind::CheriUnrepresentable))
+      Result = CGF.EmitCapabilityArithmeticCheck(Ptr, Result, Loc);
+    return B.CreateBitCast(Result, DstTy);
   }
 
   llvm::Value *setPointerBounds(CodeGen::CodeGenFunction &CGF, llvm::Value *Ptr,

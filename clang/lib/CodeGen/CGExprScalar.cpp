@@ -830,17 +830,18 @@ public:
           cast<llvm::PointerType>(LHS->getType()));
       auto DataDepResult = Builder.CreateSelect(ShouldDeriveFromNull, CapNull,
                                                 LHS, "bitand.provenance");
-      return CGF.setCapabilityIntegerValue(DataDepResult, V);
+      return CGF.setCapabilityIntegerValue(DataDepResult, V,
+                                           Op.E->getExprLoc());
     }
 
     if (const auto *BO = dyn_cast<BinaryOperator>(Op.E)) {
       // For assignment (|=, &=, +=, etc) operators the provenance source is
       // always the LHS (even if the RHS carries provenance and the LHS doesn't)
       if (BO->isAssignmentOp())
-        return CGF.setCapabilityIntegerValue(LHS, V);
+        return CGF.setCapabilityIntegerValue(LHS, V, Op.E->getExprLoc());
       // The same also applies for non-commutative operators:
       if (!BO->isCommutative())
-        return CGF.setCapabilityIntegerValue(LHS, V);
+        return CGF.setCapabilityIntegerValue(LHS, V, Op.E->getExprLoc());
 
       // Otherwise, we look at the CheriNoProvenance attribute to determine
       // whether to derive from the RHS or LHS.
@@ -852,11 +853,11 @@ public:
         // If both have a no-provenance attribute, we derive from NULL
         return CGF.getNullDerivedCapability(LHS->getType(), V);
       } else if (RHSNoProvenance) {
-        // If the RHS doens't carry provenance we can use the LHS
-        return CGF.setCapabilityIntegerValue(LHS, V);
+        // If the RHS doesn't carry provenance we can use the LHS
+        return CGF.setCapabilityIntegerValue(LHS, V, BO->getExprLoc());
       } else if (LHSNoProvenance) {
         // And the other way around
-        return CGF.setCapabilityIntegerValue(RHS, V);
+        return CGF.setCapabilityIntegerValue(RHS, V, BO->getExprLoc());
       } else {
 #ifndef NDEBUG
         llvm::errs() << "Found ambiguous provenance in code-generation: ";
@@ -872,7 +873,7 @@ public:
       // For consistency with unary (logical) not, we derive from the original
       // capability instead of using a null-derived one:
       assert(CGF.CGM.getDataLayout().isFatPointer(RHS->getType()));
-      return CGF.setCapabilityIntegerValue(RHS, V);
+      return CGF.setCapabilityIntegerValue(RHS, V, Op.E->getExprLoc());
     } else {
       llvm_unreachable("Should not get here!");
     }
@@ -880,7 +881,7 @@ public:
     llvm::errs() << "GETBINOP AMBIGUOUS:";
     Op.E->dumpColor();
 #endif
-    return CGF.setCapabilityIntegerValue(LHS, V);
+    return CGF.setCapabilityIntegerValue(LHS, V, Op.E->getExprLoc());
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *RHS, Value *V) {
     return GetBinOpResult(Op, LHS, RHS, V, Op.E->getType());
@@ -2986,7 +2987,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
     }
     if (IsCapType)
-      value = CGF.setCapabilityIntegerValue(Base, value);
+      value = CGF.setCapabilityIntegerValue(Base, value, E->getExprLoc());
   // Next most common: pointer increment.
   } else if (const PointerType *ptr = type->getAs<PointerType>()) {
     QualType type = ptr->getPointeeType();
@@ -3196,7 +3197,7 @@ Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
     Op = CGF.getCapabilityIntegerValue(Op);
   Op = Builder.CreateNot(Op, "neg");
   if (IsIntCap)
-    Op = CGF.setCapabilityIntegerValue(Base, Op);
+    Op = CGF.setCapabilityIntegerValue(Base, Op, E->getExprLoc());
   return Op;
 }
 

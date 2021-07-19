@@ -270,13 +270,16 @@ public:
     return nullptr;
   }
   virtual llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &,
-          llvm::Value *Ptr, llvm::Value *Offset) const {
+                                        llvm::Value *Ptr, llvm::Value *Offset,
+                                        const llvm::Twine &Name,
+                                        SourceLocation Loc) const {
     llvm_unreachable("Target does not support CHERI capabilities!\n");
     return nullptr;
   }
   virtual llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &,
-                                         llvm::Value *Ptr,
-                                         llvm::Value *Offset) const {
+                                         llvm::Value *Ptr, llvm::Value *Address,
+                                         const llvm::Twine &Name,
+                                         SourceLocation Loc) const {
     llvm_unreachable("Target does not support CHERI capabilities!\n");
     return nullptr;
   }
