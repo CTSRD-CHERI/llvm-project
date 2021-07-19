@@ -130,7 +130,10 @@ SANITIZER("safe-stack", SafeStack)
 // Shadow Call Stack
 SANITIZER("shadow-call-stack", ShadowCallStack)
 
+// -fsanitize=cheri includes all the sanitizers that make use of capability
+// metadata and don't have any ABI implications.
 SANITIZER("cheri-unrepresentable", CheriUnrepresentable)
+SANITIZER_GROUP("cheri", CHERI, CheriUnrepresentable)
 
 // -fsanitize=undefined includes all the sanitizers which have low overhead, no
 // ABI or address space layout implications, and only catch undefined behavior.
