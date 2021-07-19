@@ -7,6 +7,9 @@
 // RUN:   | opt -S -mem2reg | FileCheck %s --check-prefixes=PURECAP,PURECAP-RUNTIME
 // RUN: %riscv64_cheri_purecap_cc1 %s -fsanitize=cheri-unrepresentable -fsanitize-trap=cheri-unrepresentable -disable-O0-optnone -emit-llvm -o - \
 // RUN:   | opt -S -mem2reg | FileCheck %s --check-prefixes=PURECAP,PURECAP-TRAP
+/// Using -fsanitize=cheri should enable the same checks:
+// RUN: %riscv64_cheri_purecap_clang -c %s -fsanitize=cheri -fsanitize-trap=cheri -Xclang -disable-O0-optnone -S -emit-llvm -o - \
+// RUN:   | opt -S -mem2reg | FileCheck %s --check-prefixes=PURECAP,PURECAP-TRAP
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@maybe_unrepresentable
 // HYBRID-RUNTIME-SAME: (i32 addrspace(200)* [[INPUT:%.*]], i64 [[INDEX:%.*]]) #[[ATTR0:[0-9]+]] {
@@ -210,4 +213,45 @@ int *__capability update_address_intrinsic(int *__capability input, long addr) {
 int *__capability update_offset_intrinsic(int *__capability input, long offset) {
   // TODO: generate checks here
   return __builtin_cheri_offset_set(input, offset);
+}
+
+// HYBRID-LABEL: define {{[^@]+}}@tag_stripping_cast
+// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[TMP1]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
+// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP4]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@tag_stripping_cast
+// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
+// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP3]]
+//
+int *__capability tag_stripping_cast(int *__capability input) {
+  return (int *__capability)(__intcap_t)(long)input; // Should not generate any UBSan checks
+}
+
+// HYBRID-LABEL: define {{[^@]+}}@tag_preserving_cast
+// HYBRID-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
+// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@tag_preserving_cast
+// PURECAP-SAME: (i32 addrspace(200)* [[INPUT:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
+// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+//
+int *__capability tag_preserving_cast(int *__capability input) {
+  return (int *__capability)(__intcap_t)input; // Should not generate any UBSan checks
 }
