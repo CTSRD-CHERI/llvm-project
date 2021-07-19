@@ -4674,9 +4674,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_address_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Address = EmitScalarExpr(E->getArg(1));
-    return RValue::get(
-        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_address_set,
-                                {IntPtrTy}, {EmitCastToVoidPtr(Cap), Address}));
+    return RValue::get(getTargetHooks().setPointerAddress(
+        *this, EmitCastToVoidPtr(Cap), Address, "", E->getExprLoc()));
   }
   case Builtin::BI__builtin_cheri_base_get:
     return RValue::get(Builder.CreateIntrinsic(
@@ -4735,9 +4734,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_offset_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Offset = EmitScalarExpr(E->getArg(1));
-    return RValue::get(
-        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_offset_set, {SizeTy},
-                                {EmitCastToVoidPtr(Cap), Offset}));
+    return RValue::get(getTargetHooks().setPointerOffset(
+        *this, EmitCastToVoidPtr(Cap), Offset, "", E->getExprLoc()));
   }
   case Builtin::BI__builtin_cheri_perms_get:
     return RValue::get(Builder.CreateIntrinsic(

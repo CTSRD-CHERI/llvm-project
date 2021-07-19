@@ -36,7 +36,7 @@ typedef _Bool bool;
   __builtin_cheri_type_check(x, x2);
 
 // PURECAP-LABEL: define {{[^@]+}}@test_void_ptr
-// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 1)
@@ -72,7 +72,7 @@ typedef _Bool bool;
 // PURECAP-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_void_ptr
-// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) #0
+// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 1)
@@ -112,7 +112,7 @@ void test_void_ptr(void *__capability arg, void *__capability arg2) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_const_char_ptr
-// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 1)
@@ -148,7 +148,7 @@ void test_void_ptr(void *__capability arg, void *__capability arg2) {
 // PURECAP-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_const_char_ptr
-// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) #0
+// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 1)
@@ -188,7 +188,7 @@ void test_const_char_ptr(const char *__capability arg, const char *__capability 
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_long_ptr
-// PURECAP-SAME: (i64 addrspace(200)* [[ARG:%.*]], i64 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i64 addrspace(200)* [[ARG:%.*]], i64 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)* [[ARG]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
@@ -272,7 +272,7 @@ void test_const_char_ptr(const char *__capability arg, const char *__capability 
 // PURECAP-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_long_ptr
-// HYBRID-SAME: (i64 addrspace(200)* [[ARG:%.*]], i64 addrspace(200)* [[ARG2:%.*]]) #0
+// HYBRID-SAME: (i64 addrspace(200)* [[ARG:%.*]], i64 addrspace(200)* [[ARG2:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)* [[ARG]] to i8 addrspace(200)*
 // HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
@@ -360,7 +360,7 @@ void test_long_ptr(long *__capability arg, long *__capability arg2) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_uintcap_t
-// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 1)
@@ -396,7 +396,7 @@ void test_long_ptr(long *__capability arg, long *__capability arg2) {
 // PURECAP-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_uintcap_t
-// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) #0
+// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]], i8 addrspace(200)* [[ARG2:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 1)
@@ -436,71 +436,67 @@ void test_uintcap_t(__uintcap_t arg, __uintcap_t arg2) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_null_constant
-// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP5:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP5]] to i8
-// PURECAP-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP8:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP10:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP12:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP13:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP14:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP15:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP15]] to i8
-// PURECAP-NEXT:    [[TMP16:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP16]] to i8
-// PURECAP-NEXT:    [[TMP17:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP18:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP18]] to i8
-// PURECAP-NEXT:    [[TMP19:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP22:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP23:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP4]] to i8
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP8:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP12:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP13:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP13]] to i8
+// PURECAP-NEXT:    [[TMP14:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP14]] to i8
+// PURECAP-NEXT:    [[TMP15:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP16:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP16]] to i8
+// PURECAP-NEXT:    [[TMP17:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP18:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP19:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // PURECAP-NEXT:    call void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)* null, i64 1)
 // PURECAP-NEXT:    call void @llvm.cheri.cap.type.check(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // PURECAP-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_null_constant
-// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]]) #0
+// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP5]] to i8
-// HYBRID-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP8:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP10:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP12:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP13:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP14:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP15:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP15]] to i8
-// HYBRID-NEXT:    [[TMP16:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP16]] to i8
-// HYBRID-NEXT:    [[TMP17:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP18:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP18]] to i8
-// HYBRID-NEXT:    [[TMP19:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP22:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP23:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP4]] to i8
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP8:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP12:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP13:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP13]] to i8
+// HYBRID-NEXT:    [[TMP14:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP14]] to i8
+// HYBRID-NEXT:    [[TMP15:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP16:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP16]] to i8
+// HYBRID-NEXT:    [[TMP17:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP18:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP19:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // HYBRID-NEXT:    call void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)* null, i64 1)
 // HYBRID-NEXT:    call void @llvm.cheri.cap.type.check(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // HYBRID-NEXT:    ret void
@@ -510,95 +506,87 @@ void test_null_constant(__uintcap_t arg) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_null_int_ptr
-// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
 // PURECAP-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP7:%.*]] = bitcast i8 addrspace(200)* [[TMP6]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP8:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP8]] to i8
-// PURECAP-NEXT:    [[TMP9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP10:%.*]] = bitcast i8 addrspace(200)* [[TMP9]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP11:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP12:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP13:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP14:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP15:%.*]] = bitcast i8 addrspace(200)* [[TMP14]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP16:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
-// PURECAP-NEXT:    [[TMP17:%.*]] = bitcast i8 addrspace(200)* [[TMP16]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP18:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP19:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP20:%.*]] = bitcast i8 addrspace(200)* [[TMP19]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP6:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP6]] to i8
+// PURECAP-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP7]] to i32 addrspace(200)*
+// PURECAP-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP11:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP12:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
+// PURECAP-NEXT:    [[TMP13:%.*]] = bitcast i8 addrspace(200)* [[TMP12]] to i32 addrspace(200)*
+// PURECAP-NEXT:    [[TMP14:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP15:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP16:%.*]] = bitcast i8 addrspace(200)* [[TMP15]] to i32 addrspace(200)*
+// PURECAP-NEXT:    [[TMP17:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP18:%.*]] = bitcast i8 addrspace(200)* [[TMP17]] to i32 addrspace(200)*
+// PURECAP-NEXT:    [[TMP19:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP19]] to i8
+// PURECAP-NEXT:    [[TMP20:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP20]] to i8
+// PURECAP-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
 // PURECAP-NEXT:    [[TMP22:%.*]] = bitcast i8 addrspace(200)* [[TMP21]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP23:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP23]] to i8
-// PURECAP-NEXT:    [[TMP24:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP24]] to i8
-// PURECAP-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP23:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP23]] to i8
+// PURECAP-NEXT:    [[TMP24:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // PURECAP-NEXT:    [[TMP26:%.*]] = bitcast i8 addrspace(200)* [[TMP25]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP27:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP27]] to i8
-// PURECAP-NEXT:    [[TMP28:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP29:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP27:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP28:%.*]] = bitcast i8 addrspace(200)* [[TMP27]] to i32 addrspace(200)*
+// PURECAP-NEXT:    [[TMP29:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // PURECAP-NEXT:    [[TMP30:%.*]] = bitcast i8 addrspace(200)* [[TMP29]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP31:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP32:%.*]] = bitcast i8 addrspace(200)* [[TMP31]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP33:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// PURECAP-NEXT:    [[TMP34:%.*]] = bitcast i8 addrspace(200)* [[TMP33]] to i32 addrspace(200)*
-// PURECAP-NEXT:    [[TMP35:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// PURECAP-NEXT:    [[TMP31:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // PURECAP-NEXT:    call void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)* null, i64 1)
 // PURECAP-NEXT:    call void @llvm.cheri.cap.type.check(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // PURECAP-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_null_int_ptr
-// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]]) #0
+// HYBRID-SAME: (i8 addrspace(200)* [[ARG:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
 // HYBRID-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP7:%.*]] = bitcast i8 addrspace(200)* [[TMP6]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP8:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP8]] to i8
-// HYBRID-NEXT:    [[TMP9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP10:%.*]] = bitcast i8 addrspace(200)* [[TMP9]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP11:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP12:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP13:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP14:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP15:%.*]] = bitcast i8 addrspace(200)* [[TMP14]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP16:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
-// HYBRID-NEXT:    [[TMP17:%.*]] = bitcast i8 addrspace(200)* [[TMP16]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP18:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP19:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP20:%.*]] = bitcast i8 addrspace(200)* [[TMP19]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP6:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP6]] to i8
+// HYBRID-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP7]] to i32 addrspace(200)*
+// HYBRID-NEXT:    [[TMP9:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP11:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP12:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* null, i64 1)
+// HYBRID-NEXT:    [[TMP13:%.*]] = bitcast i8 addrspace(200)* [[TMP12]] to i32 addrspace(200)*
+// HYBRID-NEXT:    [[TMP14:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP15:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP16:%.*]] = bitcast i8 addrspace(200)* [[TMP15]] to i32 addrspace(200)*
+// HYBRID-NEXT:    [[TMP17:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP18:%.*]] = bitcast i8 addrspace(200)* [[TMP17]] to i32 addrspace(200)*
+// HYBRID-NEXT:    [[TMP19:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP19]] to i8
+// HYBRID-NEXT:    [[TMP20:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP20]] to i8
+// HYBRID-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
 // HYBRID-NEXT:    [[TMP22:%.*]] = bitcast i8 addrspace(200)* [[TMP21]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP23:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TMP23]] to i8
-// HYBRID-NEXT:    [[TMP24:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL2:%.*]] = zext i1 [[TMP24]] to i8
-// HYBRID-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP23:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP23]] to i8
+// HYBRID-NEXT:    [[TMP24:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // HYBRID-NEXT:    [[TMP26:%.*]] = bitcast i8 addrspace(200)* [[TMP25]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP27:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TMP27]] to i8
-// HYBRID-NEXT:    [[TMP28:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP29:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP27:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP28:%.*]] = bitcast i8 addrspace(200)* [[TMP27]] to i32 addrspace(200)*
+// HYBRID-NEXT:    [[TMP29:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // HYBRID-NEXT:    [[TMP30:%.*]] = bitcast i8 addrspace(200)* [[TMP29]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP31:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP32:%.*]] = bitcast i8 addrspace(200)* [[TMP31]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP33:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* null, i8 addrspace(200)* null)
-// HYBRID-NEXT:    [[TMP34:%.*]] = bitcast i8 addrspace(200)* [[TMP33]] to i32 addrspace(200)*
-// HYBRID-NEXT:    [[TMP35:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
+// HYBRID-NEXT:    [[TMP31:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // HYBRID-NEXT:    call void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)* null, i64 1)
 // HYBRID-NEXT:    call void @llvm.cheri.cap.type.check(i8 addrspace(200)* null, i8 addrspace(200)* null)
 // HYBRID-NEXT:    ret void
@@ -608,7 +596,7 @@ void test_null_int_ptr(__uintcap_t arg) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@test_cap_from_ptr
-// PURECAP-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i64 signext [[L:%.*]], i32 signext [[I:%.*]], i32 signext [[U:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i64 signext [[L:%.*]], i32 signext [[I:%.*]], i32 signext [[U:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[L]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP2]], i64 [[L]])
@@ -622,7 +610,7 @@ void test_null_int_ptr(__uintcap_t arg) {
 // PURECAP-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_cap_from_ptr
-// HYBRID-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i64 signext [[L:%.*]], i32 signext [[I:%.*]], i32 signext [[U:%.*]]) #0
+// HYBRID-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i64 signext [[L:%.*]], i32 signext [[I:%.*]], i32 signext [[U:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i64 [[L]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[AUTHCAP2]], i64 [[L]])
@@ -657,7 +645,7 @@ void test_cap_from_ptr(void *__capability authcap1, __uintcap_t authcap2, long l
 
 #ifndef __CHERI_PURE_CAPABILITY__
 // HYBRID-LABEL: define {{[^@]+}}@test_cap_to_ptr
-// HYBRID-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i8 addrspace(200)* [[VCAP:%.*]], i64 addrspace(200)* [[LCAP:%.*]], i32 addrspace(200)* [[ICAP:%.*]]) #0
+// HYBRID-SAME: (i8 addrspace(200)* [[AUTHCAP1:%.*]], i8 addrspace(200)* [[AUTHCAP2:%.*]], i8 addrspace(200)* [[VCAP:%.*]], i64 addrspace(200)* [[LCAP:%.*]], i32 addrspace(200)* [[ICAP:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[AUTHCAP1]], i8 addrspace(200)* [[VCAP]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = inttoptr i64 [[TMP0]] to i8*
@@ -695,7 +683,8 @@ void test_cap_to_ptr(void *__capability authcap1, __uintcap_t authcap2, void *__
 static char global_buffer[16];
 static char global_buffer2[32];
 
-// PURECAP-LABEL: define {{[^@]+}}@test_array() addrspace(200) #0
+// PURECAP-LABEL: define {{[^@]+}}@test_array
+// PURECAP-SAME: () addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @global_buffer, i64 0, i64 0))
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @global_buffer, i64 0, i64 0), i64 1)
@@ -735,7 +724,8 @@ void test_array(void) {
 
 typedef void (*__capability fnptr_t)(void);
 
-// PURECAP-LABEL: define {{[^@]+}}@test_function() addrspace(200) #0
+// PURECAP-LABEL: define {{[^@]+}}@test_function
+// PURECAP-SAME: () addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* bitcast (void () addrspace(200)* @test_function to i8 addrspace(200)*))
 // PURECAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* bitcast (void () addrspace(200)* @test_function to i8 addrspace(200)*), i64 1)
