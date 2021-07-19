@@ -5520,7 +5520,7 @@ static GEPOffsetAndOverflow EmitGEPOffsetInBytes(Value *BasePtr, Value *GEPVal,
 Value *CodeGenFunction::EmitCapabilityArithmeticCheck(Value *Input,
                                                       Value *Result,
                                                       SourceLocation Loc) {
-  assert(SanOpts.has(SanitizerKind::PointerOverflow));
+  assert(SanOpts.has(SanitizerKind::CheriUnrepresentable));
   // TODO: we may want to have a separate category just for unrepresentable
   // capabilities since there are quite a few cases where offsets are
   // added to a NULL pointer (e.g. the FreeBSD base system).
@@ -5532,9 +5532,12 @@ Value *CodeGenFunction::EmitCapabilityArithmeticCheck(Value *Input,
   auto *Valid = Builder.CreateICmpEQ(OldTagged, NewTagged);
   llvm::Constant *StaticArgs[] = {EmitCheckSourceLocation(Loc)};
   llvm::Value *DynamicArgs[] = {Input, Result};
-  // TODO: we should probably pass the computed address to the runtime to
+  // TODO: We should probably pass the computed address to the runtime to
   // avoid emitting poisoned arguments (see below).
-  EmitCheck({{Valid, SanitizerKind::PointerOverflow}},
+  // Note: We reuse the ubsan_handle_pointer_overflow() handler to avoid
+  // having to modify the runtime library.
+  // TODO: Add a separate handler function?
+  EmitCheck({{Valid, SanitizerKind::CheriUnrepresentable}},
             SanitizerHandler::PointerOverflow, StaticArgs, DynamicArgs);
   return Result;
 }
@@ -5544,19 +5547,19 @@ CodeGenFunction::EmitCheckedInBoundsGEP(Value *Ptr, ArrayRef<Value *> IdxList,
                                         bool SignedIndices, bool IsSubtraction,
                                         SourceLocation Loc, const Twine &Name) {
   Value *GEPVal = Builder.CreateInBoundsGEP(Ptr, IdxList, Name);
-
-  // If the pointer overflow sanitizer isn't enabled, do nothing.
-  if (!SanOpts.has(SanitizerKind::PointerOverflow))
-    return GEPVal;
-
   const auto &DL = CGM.getDataLayout();
   llvm::Type *PtrTy = Ptr->getType();
-  if (DL.isFatPointer(PtrTy)) {
+  if (SanOpts.has(SanitizerKind::CheriUnrepresentable) &&
+      DL.isFatPointer(PtrTy)) {
     // We still perform this check with zero offsets for CHERI capabilities
     // since a zero offset GEP could still remove tag bits (e.g. for sealed
     // capabilities on Morello) instead of trapping.
     GEPVal = EmitCapabilityArithmeticCheck(Ptr, GEPVal, Loc);
   }
+
+  // If the pointer overflow sanitizer isn't enabled, do nothing.
+  if (!SanOpts.has(SanitizerKind::PointerOverflow))
+    return GEPVal;
 
   // Perform nullptr-and-offset check unless the nullptr is defined.
   bool PerformNullCheck = !NullPointerIsDefined(
