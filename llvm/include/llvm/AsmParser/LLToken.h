@@ -265,7 +265,7 @@ enum Kind {
   kw_any,
   kw_exactmatch,
   kw_largest,
-  kw_noduplicates,
+  kw_nodeduplicate,
   kw_samesize,
 
   kw_eq,
