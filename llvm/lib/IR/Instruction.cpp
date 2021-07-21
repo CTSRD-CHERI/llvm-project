@@ -669,6 +669,10 @@ bool Instruction::hasSideEffects() const {
   return false;
 }
 
+bool Instruction::mayHaveSideEffects() const {
+  return mayWriteToMemory() || mayThrow() || hasSideEffects() || !willReturn();
+}
+
 bool Instruction::isSafeToRemove() const {
   return (!isa<CallInst>(this) || !this->mayHaveSideEffects()) &&
          !this->isTerminator();
