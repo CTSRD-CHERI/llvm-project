@@ -570,8 +570,11 @@ ExprResult Sema::DefaultFunctionArrayConversion(Expr *E, bool Diagnose) {
     //
     if (getLangOpts().C99 || getLangOpts().CPlusPlus || E->isLValue()) {
       PointerInterpretationKind PIK = PointerInterpretationForBaseExpr(E);
-      E = ImpCastExprToType(E, Context.getArrayDecayedType(Ty, PIK),
-                            CK_ArrayToPointerDecay).get();
+      ExprResult Res = ImpCastExprToType(
+          E, Context.getArrayDecayedType(Ty, PIK), CK_ArrayToPointerDecay);
+      if (Res.isInvalid())
+        return ExprError();
+      E = Res.get();
     }
   }
   return E;
