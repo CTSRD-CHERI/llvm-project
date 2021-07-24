@@ -1006,6 +1006,10 @@ public:
                                           CostKind, I));
       }
 
+      // Scalarization cost is Invalid, can't assume any num elements.
+      if (isa<ScalableVectorType>(DstVTy))
+        return InstructionCost::getInvalid();
+
       // In other cases where the source or destination are illegal, assume
       // the operation will get scalarized.
       unsigned Num = cast<FixedVectorType>(DstVTy)->getNumElements();
