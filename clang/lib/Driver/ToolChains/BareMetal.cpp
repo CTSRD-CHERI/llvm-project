@@ -9,10 +9,10 @@
 #include "BareMetal.h"
 
 #include "CommonArgs.h"
-#include "InputInfo.h"
 #include "Gnu.h"
-#include "Arch/Mips.h"
+#include "clang/Driver/InputInfo.h"
 
+#include "Arch/Mips.h"
 #include "Arch/RISCV.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
