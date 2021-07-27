@@ -183,7 +183,10 @@ TargetLowering::makeLibCall(SelectionDAG &DAG, RTLIB::Libcall LC, EVT RetVT,
 
 bool TargetLowering::findOptimalMemOpLowering(
     std::vector<EVT> &MemOps, unsigned Limit, const MemOp &Op, unsigned DstAS,
-    unsigned SrcAS, const AttributeList &FuncAttributes) const {
+    unsigned SrcAS, const AttributeList &FuncAttributes,
+    bool *ReachedLimit) const {
+  if (ReachedLimit)
+    *ReachedLimit = false;
   if (Op.isMemcpyWithFixedDstAlign() && Op.getSrcAlign() < Op.getDstAlign())
     return false;
 
@@ -279,8 +282,11 @@ bool TargetLowering::findOptimalMemOpLowering(
       }
     }
 
-    if (++NumMemOps > Limit)
+    if (++NumMemOps > Limit) {
+      if (ReachedLimit)
+        *ReachedLimit = true;
       return false;
+    }
 
     // If we are preserving capabilities, the first VT must be a capability
     if (Op.MustPreserveCheriCaps && MemOps.empty() && !VT.isFatPointer()) {

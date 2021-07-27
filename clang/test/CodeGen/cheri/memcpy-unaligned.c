@@ -275,11 +275,8 @@ void test_no_crash_with_array(void) {
   // CHECK-LABEL: @test_no_crash_with_array(
   char buffer[1234];
   memcpy(buffer, foo_array, sizeof(foo_array));
-  // Since the merge, these are now turned into an intrinsic in the front end
-  // so this warning is never seen.  They are then turned into a memcpy call in
-  // the back end, which doesn't warn.
-  // not-expected-warning@-1{{memcpy operation with capability argument 'unsigned __intcap' and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
-  // not-expected-note@-2{{use __builtin_assume_aligned() or cast to (u)intptr_t*}}
+  // expected-warning@-1{{memcpy operation with capability argument 'unsigned __intcap' and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
+  // expected-note@-2{{use __builtin_assume_aligned() or cast to (u)intptr_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 {{.+}}, i64 320, i1 false)
   // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
