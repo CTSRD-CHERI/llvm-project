@@ -3372,7 +3372,8 @@ public:
   /// memset / memcpy by reference.
   bool findOptimalMemOpLowering(std::vector<EVT> &MemOps, unsigned Limit,
                                 const MemOp &Op, unsigned DstAS, unsigned SrcAS,
-                                const AttributeList &FuncAttributes) const;
+                                const AttributeList &FuncAttributes,
+                                bool *ReachedLimit = nullptr) const;
 
   /// Check to see if the specified operand of the specified instruction is a
   /// constant integer.  If so, check to see if there are any bits set in the
