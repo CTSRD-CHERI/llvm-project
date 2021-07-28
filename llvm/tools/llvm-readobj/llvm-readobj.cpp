@@ -160,7 +160,7 @@ static StringRef ToolName;
 
 namespace llvm {
 
-LLVM_ATTRIBUTE_NORETURN static void error(Twine Msg) {
+[[noreturn]] static void error(Twine Msg) {
   // Flush the standard output to print the error at a
   // proper place.
   fouts().flush();
@@ -168,7 +168,7 @@ LLVM_ATTRIBUTE_NORETURN static void error(Twine Msg) {
   exit(1);
 }
 
-LLVM_ATTRIBUTE_NORETURN void reportError(Error Err, StringRef Input) {
+[[noreturn]] void reportError(Error Err, StringRef Input) {
   assert(Err);
   if (Input == "-")
     Input = "<stdin>";
