@@ -539,6 +539,21 @@ void PredicateInfoBuilder::buildPredicateInfo() {
   renameUses(OpsToRename);
 }
 
+// Create a ssa_copy declaration with custom mangling, because
+// Intrinsic::getDeclaration does not handle overloaded unnamed types properly:
+// all unnamed types get mangled to the same string. We use the pointer
+// to the type as name here, as it guarantees unique names for different
+// types and we remove the declarations when destroying PredicateInfo.
+// It is a workaround for PR38117, because solving it in a fully general way is
+// tricky (FIXME).
+static Function *getCopyDeclaration(Module *M, Type *Ty) {
+  std::string Name = "llvm.ssa.copy." + utostr((uintptr_t) Ty);
+  return cast<Function>(
+      M->getOrInsertFunction(Name,
+                             getType(M->getContext(), Intrinsic::ssa_copy, Ty))
+          .getCallee());
+}
+
 // Given the renaming stack, make all the operands currently on the stack real
 // by inserting them into the IR.  Return the last operation's value.
 Value *PredicateInfoBuilder::materializeStack(unsigned int &Counter,
