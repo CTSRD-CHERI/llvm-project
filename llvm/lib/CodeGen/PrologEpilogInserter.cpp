@@ -405,13 +405,14 @@ static void assignCalleeSavedSpillSlots(MachineFunction &F,
     unsigned Reg = CSRegs[i];
     if (SavedRegs.test(Reg)) {
       bool SavedSuper = false;
-      for (MCSuperRegIterator AI(Reg, RegInfo, false); AI.isValid(); ++AI)
+      for (const MCPhysReg &SuperReg : RegInfo->superregs(Reg)) {
         // Some backends set all aliases for some registers as saved, such as
         // Mips's $fp, so they appear in SavedRegs but not CSRegs.
-        if (SavedRegs.test(*AI) && CSMask.test(*AI)) {
+        if (SavedRegs.test(SuperReg) && CSMask.test(SuperReg)) {
           SavedSuper = true;
           break;
         }
+      }
 
       if (!SavedSuper)
         CSI.push_back(CalleeSavedInfo(Reg));
