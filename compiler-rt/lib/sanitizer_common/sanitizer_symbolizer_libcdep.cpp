@@ -83,7 +83,7 @@ const char *ExtractTokenUpToDelimiter(const char *str, const char *delimiter,
 }
 
 SymbolizedStack *Symbolizer::SymbolizePC(vaddr addr) {
-  BlockingMutexLock l(&mu_);
+  Lock l(&mu_);
   const char *module_name = nullptr;
   usize module_offset;
   ModuleArch arch;
@@ -103,7 +103,7 @@ SymbolizedStack *Symbolizer::SymbolizePC(vaddr addr) {
 }
 
 bool Symbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
-  BlockingMutexLock l(&mu_);
+  Lock l(&mu_);
   const char *module_name = nullptr;
   usize module_offset;
   ModuleArch arch;
@@ -124,7 +124,7 @@ bool Symbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
 }
 
 bool Symbolizer::SymbolizeFrame(vaddr addr, FrameInfo *info) {
-  BlockingMutexLock l(&mu_);
+  Lock l(&mu_);
   const char *module_name = nullptr;
   if (!FindModuleNameAndOffsetForAddress(
           addr, &module_name, &info->module_offset, &info->module_arch))
@@ -141,7 +141,7 @@ bool Symbolizer::SymbolizeFrame(vaddr addr, FrameInfo *info) {
 
 bool Symbolizer::GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
                                              usize *module_address) {
-  BlockingMutexLock l(&mu_);
+  Lock l(&mu_);
   const char *internal_module_name = nullptr;
   ModuleArch arch;
   if (!FindModuleNameAndOffsetForAddress(pc, &internal_module_name,
@@ -154,7 +154,7 @@ bool Symbolizer::GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
 }
 
 void Symbolizer::Flush() {
-  BlockingMutexLock l(&mu_);
+  Lock l(&mu_);
   for (auto &tool : tools_) {
     SymbolizerScope sym_scope(this);
     tool.Flush();
@@ -162,7 +162,7 @@ void Symbolizer::Flush() {
 }
 
 const char *Symbolizer::Demangle(const char *name) {
-  BlockingMutexLock l(&mu_);
+  Lock l(&mu_);
   for (auto &tool : tools_) {
     SymbolizerScope sym_scope(this);
     if (const char *demangled = tool.Demangle(name))
