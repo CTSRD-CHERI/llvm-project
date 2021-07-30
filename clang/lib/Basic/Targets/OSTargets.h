@@ -798,7 +798,6 @@ public:
     this->UseZeroLengthBitfieldAlignment = true;
     this->UseLeadingZeroLengthBitfield = false;
     this->ZeroLengthBitfieldBoundary = 32;
-    this->DefaultAlignForAttributeAligned = 128;
   }
 };
 
