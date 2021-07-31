@@ -4720,7 +4720,8 @@ TargetLowering::ParseConstraints(const DataLayout &DL,
             getSimpleValueType(DL, STy->getElementType(ResNo));
       } else {
         assert(ResNo == 0 && "Asm only has one result!");
-        OpInfo.ConstraintVT = getSimpleValueType(DL, Call.getType());
+        OpInfo.ConstraintVT =
+            getAsmOperandValueType(DL, Call.getType()).getSimpleVT();
       }
       ++ResNo;
       break;
