@@ -216,7 +216,9 @@ def untyped   : ValueType<8,    174>;  // Produces an untyped value
 def funcref   : ValueType<0,    175>;  // WebAssembly's funcref type
 def externref : ValueType<0,    176>;  // WebAssembly's externref type
 def x86amx    : ValueType<8192, 177>;  // X86 AMX value
-def iFATPTR64 : ValueType<64,   !add(x86amx.Value, 1)>;      // 64-bit fat pointer.
+def i64x8     : ValueType<512,  178>;  // 8 Consecutive GPRs (AArch64)
+
+def iFATPTR64 : ValueType<64,   !add(i64x8.Value, 1)>;       // 64-bit fat pointer.
 def iFATPTR128: ValueType<128,  !add(iFATPTR64.Value, 1)>;   // 128-bit fat pointer.
 def iFATPTR256: ValueType<256,  !add(iFATPTR128.Value, 1)>;  // 256-bit fat pointer.
 def iFATPTR512: ValueType<512,  !add(iFATPTR256.Value, 1)>;  // 512-bit fat pointer.

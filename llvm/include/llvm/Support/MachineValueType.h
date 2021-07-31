@@ -270,7 +270,9 @@ namespace llvm {
       funcref        = 175,    // WebAssembly's funcref type
       externref      = 176,    // WebAssembly's externref type
       x86amx         = 177,    // This is an X86 AMX value
-      iFATPTR64      = x86amx + 1,     // 64-bit fat pointer type
+      i64x8          = 178,    // 8 Consecutive GPRs (AArch64)
+
+      iFATPTR64      = i64x8 + 1,     // 64-bit fat pointer type
       iFATPTR128     = iFATPTR64 + 1,  // 128-bit fat pointer type
       iFATPTR256     = iFATPTR128 + 1, // 256-bit fat pointer type
       iFATPTR512     = iFATPTR256 + 1, // 512-bit fat pointer type
@@ -279,8 +281,8 @@ namespace llvm {
       FIRST_FAT_POINTER = iFATPTR64,
       LAST_FAT_POINTER = iFATPTRAny,
 
-      FIRST_VALUETYPE = 1, // This is always the beginning of the list.
-      LAST_VALUETYPE = iFATPTRAny, // This always remains at the end of the list.
+      FIRST_VALUETYPE =  1,    // This is always the beginning of the list.
+      LAST_VALUETYPE = iFATPTRAny,  // This always remains at the end of the list.
       VALUETYPE_SIZE = LAST_VALUETYPE + 1,
 
       // This is the current maximum for LAST_VALUETYPE.
@@ -1006,6 +1008,7 @@ namespace llvm {
       case nxv16f16:
       case nxv8f32:
       case nxv4f64: return TypeSize::Scalable(256);
+      case i64x8:
       case v512i1:
       case v64i8:
       case v32i16:
