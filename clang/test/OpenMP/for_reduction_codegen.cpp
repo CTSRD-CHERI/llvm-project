@@ -1858,7 +1858,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP8:%.*]] = sdiv exact i64 [[TMP7]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP9:%.*]] = add nuw i64 [[TMP8]], 1
 // CHECK1-NEXT:    [[TMP10:%.*]] = mul nuw i64 [[TMP9]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave.p0i8()
+// CHECK1-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave()
 // CHECK1-NEXT:    store i8* [[TMP11]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S]], i64 [[TMP9]], align 16
 // CHECK1-NEXT:    store i64 [[TMP9]], i64* [[__VLA_EXPR0]], align 8
@@ -3209,7 +3209,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP7:%.*]] = sdiv exact i64 [[TMP6]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S:%.*]], %struct.S* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP8:%.*]] = add nuw i64 [[TMP7]], 1
 // CHECK1-NEXT:    [[TMP9:%.*]] = mul nuw i64 [[TMP8]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP10:%.*]] = call i8* @llvm.stacksave.p0i8()
+// CHECK1-NEXT:    [[TMP10:%.*]] = call i8* @llvm.stacksave()
 // CHECK1-NEXT:    store i8* [[TMP10]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S]], i64 [[TMP8]], align 16
 // CHECK1-NEXT:    store i64 [[TMP8]], i64* [[__VLA_EXPR0]], align 8
@@ -5793,7 +5793,7 @@ int main() {
 // CHECK2-NEXT:    [[TMP8:%.*]] = sdiv exact i64 [[TMP7]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
 // CHECK2-NEXT:    [[TMP9:%.*]] = add nuw i64 [[TMP8]], 1
 // CHECK2-NEXT:    [[TMP10:%.*]] = mul nuw i64 [[TMP9]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
-// CHECK2-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave.p0i8()
+// CHECK2-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave()
 // CHECK2-NEXT:    store i8* [[TMP11]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S]], i64 [[TMP9]], align 16
 // CHECK2-NEXT:    store i64 [[TMP9]], i64* [[__VLA_EXPR0]], align 8
@@ -7144,7 +7144,7 @@ int main() {
 // CHECK2-NEXT:    [[TMP7:%.*]] = sdiv exact i64 [[TMP6]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S:%.*]], %struct.S* null, i32 1) to i64)
 // CHECK2-NEXT:    [[TMP8:%.*]] = add nuw i64 [[TMP7]], 1
 // CHECK2-NEXT:    [[TMP9:%.*]] = mul nuw i64 [[TMP8]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
-// CHECK2-NEXT:    [[TMP10:%.*]] = call i8* @llvm.stacksave.p0i8()
+// CHECK2-NEXT:    [[TMP10:%.*]] = call i8* @llvm.stacksave()
 // CHECK2-NEXT:    store i8* [[TMP10]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S]], i64 [[TMP8]], align 16
 // CHECK2-NEXT:    store i64 [[TMP8]], i64* [[__VLA_EXPR0]], align 8
