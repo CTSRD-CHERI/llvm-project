@@ -125,6 +125,8 @@ public:
   /// This is used to emit bytes in \p Data as sequence of .byte directives.
   virtual void emitRawBytes(StringRef Data);
 
+  virtual void emitConstantPools();
+
   virtual void finish();
 };
 
@@ -167,7 +169,7 @@ public:
 
   virtual void emitThumbSet(MCSymbol *Symbol, const MCExpr *Value);
 
-  void finish() override;
+  void emitConstantPools() override;
 
   /// Reset any state between object emissions, i.e. the equivalent of
   /// MCStreamer's reset method.

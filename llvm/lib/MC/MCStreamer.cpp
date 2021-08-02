@@ -56,6 +56,8 @@ void MCTargetStreamer::emitLabel(MCSymbol *Symbol) {}
 
 void MCTargetStreamer::finish() {}
 
+void MCTargetStreamer::emitConstantPools() {}
+
 void MCTargetStreamer::changeSection(const MCSection *CurSection,
                                      MCSection *Section,
                                      const MCExpr *Subsection,
