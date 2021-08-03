@@ -161,7 +161,7 @@ public:
       PointerType *AllocaTy = AI->getType();
       assert(isCheriPointer(AllocaTy, &DL));
       Type *AllocationTy = AllocaTy->getElementType();
-      Value *ArraySize = AI->getArraySize();
+      Value *ArraySize = B.CreateZExtOrTrunc(AI->getArraySize(), SizeTy);
 
       // Create a new (AS 0) alloca
       // For imprecise capabilities, we need to increase the alignment for
@@ -244,7 +244,7 @@ public:
       unsigned ElementSize = DL.getTypeAllocSize(AllocationTy);
       Value *Size = ConstantInt::get(SizeTy, ElementSize);
       if (AI->isArrayAllocation())
-        Size = B.CreateMul(Size, AI->getArraySize());
+        Size = B.CreateMul(Size, ArraySize);
 
       if (AI->isStaticAlloca() && ForcedAlignment != Align()) {
         // Pad to ensure bounds don't overlap adjacent objects
@@ -257,7 +257,7 @@ public:
               AI->isArrayAllocation()
                   ? ArrayType::get(
                         AI->getAllocatedType(),
-                        cast<ConstantInt>(AI->getArraySize())->getZExtValue())
+                        cast<ConstantInt>(ArraySize)->getZExtValue())
                   : AI->getAllocatedType();
           Type *PaddingType =
             ArrayType::get(Type::getInt8Ty(F.getContext()),
