@@ -157,7 +157,7 @@ ALWAYS_INLINE VirtAddr TracePC::GetNextInstructionPc(VirtAddr PC) {
 }
 
 void TracePC::UpdateObservedPCs() {
-  Vector<VirtAddr> CoveredFuncs;
+  std::vector<VirtAddr> CoveredFuncs;
   auto ObservePC = [&](const PCTableEntry *TE) {
     if (ObservedPCs.insert(TE).second && DoPrintNewPCs) {
       PrintPC("\tNEW_PC: %p %F %L", "\tNEW_PC: %p",
@@ -300,8 +300,8 @@ void TracePC::PrintCoverage(bool PrintAllCounters) {
       FunctionStr = FunctionStr.substr(3);
     std::string LineStr = DescribePC("%l", VisualizePC);
     size_t NumEdges = Last - First;
-    Vector<VirtAddr> UncoveredPCs;
-    Vector<VirtAddr> CoveredPCs;
+    std::vector<VirtAddr> UncoveredPCs;
+    std::vector<VirtAddr> CoveredPCs;
     for (auto TE = First; TE < Last; TE++)
       if (!ObservedPCs.count(TE))
         UncoveredPCs.push_back(TE->PC);
