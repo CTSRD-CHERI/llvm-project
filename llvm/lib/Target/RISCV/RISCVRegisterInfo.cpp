@@ -105,6 +105,10 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   markSuperRegs(Reserved, RISCV::X4); // tp
   if (TFI->hasFP(MF))
     markSuperRegs(Reserved, RISCV::X8); // fp
+  // Reserve the base register if we need to realign the stack and allocate
+  // variable-sized objects at runtime.
+  if (TFI->hasBP(MF))
+    markSuperRegs(Reserved, RISCV::X9); // bp
 
   markSuperRegs(Reserved, RISCV::C0); // cnull
   markSuperRegs(Reserved, RISCV::C2); // csp
@@ -112,13 +116,10 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   markSuperRegs(Reserved, RISCV::C4); // ctp
   if (TFI->hasFP(MF))
     markSuperRegs(Reserved, RISCV::C8); // cfp
+  if (TFI->hasBP(MF))
+    markSuperRegs(Reserved, RISCV::C9); // cbp
 
   markSuperRegs(Reserved, RISCV::DDC);
-
-  // Reserve the base register if we need to realign the stack and allocate
-  // variable-sized objects at runtime.
-  if (TFI->hasBP(MF))
-    markSuperRegs(Reserved, RISCVABI::getBPReg(STI.getTargetABI())); // (c)bp
 
   // V registers for code generation. We handle them manually.
   markSuperRegs(Reserved, RISCV::VL);
