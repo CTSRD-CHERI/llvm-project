@@ -388,7 +388,7 @@ def : SysReg<"vxrm", 0x00A>;
 def : SysReg<"vcsr", 0x00F>;
 def : SysReg<"vl", 0xC20>;
 def : SysReg<"vtype", 0xC21>;
-def : SysReg<"vlenb", 0xC22>;
+def SysRegVLENB: SysReg<"vlenb", 0xC22>;
 
 //===-----------------------------------------------
 // Non-standard Extensions
