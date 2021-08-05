@@ -1672,8 +1672,8 @@ Value *llvm::emitMalloc(Value *Num, IRBuilderBase &B, const DataLayout &DL,
   return CI;
 }
 
-Value *llvm::emitCalloc(Value *Num, Value *Size, const AttributeList &Attrs,
-                        IRBuilderBase &B, const TargetLibraryInfo &TLI) {
+Value *llvm::emitCalloc(Value *Num, Value *Size, IRBuilderBase &B,
+                        const TargetLibraryInfo &TLI) {
   if (!TLI.has(LibFunc_calloc))
     return nullptr;
 
@@ -1683,7 +1683,7 @@ Value *llvm::emitCalloc(Value *Num, Value *Size, const AttributeList &Attrs,
   IntegerType *PtrType = DL.getIntPtrType(B.GetInsertBlock()->getContext(),
                                           DL.getGlobalsAddressSpace());
   FunctionCallee Calloc = M->getOrInsertFunction(
-      CallocName, Attrs, B.getInt8PtrTy(DL.getGlobalsAddressSpace()), PtrType,
+      CallocName, B.getInt8PtrTy(DL.getGlobalsAddressSpace()), PtrType,
       PtrType);
   inferLibFuncAttributes(M, CallocName, TLI);
   CallInst *CI = B.CreateCall(Calloc, {Num, Size}, CallocName);
