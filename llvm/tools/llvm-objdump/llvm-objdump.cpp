@@ -1487,7 +1487,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
             if (!PrintTarget)
               if (Optional<uint64_t> MaybeTarget =
                       MIA->evaluateMemoryOperandAddress(
-                          Inst, SectionAddr + Index, Size)) {
+                          Inst, STI, SectionAddr + Index, Size)) {
                 Target = *MaybeTarget;
                 PrintTarget = true;
                 // Do not print real address when symbolizing.
