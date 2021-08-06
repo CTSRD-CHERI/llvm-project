@@ -577,7 +577,7 @@ int main(int argc, char **argv) {
         MCOptions.MCIncrementalLinkerCompatible,
         /*DWARFMustBeAtTheEnd*/ false));
     if (NoExecStack)
-      Str->InitSections(true);
+      Str->initSections(true, *STI);
   }
 
   // Use Assembler information for parsing.
