@@ -17010,7 +17010,8 @@ void Sema::CheckUnusedVolatileAssignment(Expr *E) {
 }
 
 ExprResult Sema::CheckForImmediateInvocation(ExprResult E, FunctionDecl *Decl) {
-  if (!E.isUsable() || !Decl || !Decl->isConsteval() || isConstantEvaluated() ||
+  if (isUnevaluatedContext() || !E.isUsable() || !Decl ||
+      !Decl->isConsteval() || isConstantEvaluated() ||
       RebuildingImmediateInvocation)
     return E;
 
@@ -19129,8 +19130,8 @@ void Sema::MarkDeclRefReferenced(DeclRefExpr *E, const Expr *Base) {
       OdrUse = false;
 
   if (auto *FD = dyn_cast<FunctionDecl>(E->getDecl()))
-    if (!isConstantEvaluated() && FD->isConsteval() &&
-        !RebuildingImmediateInvocation)
+    if (!isUnevaluatedContext() && !isConstantEvaluated() &&
+        FD->isConsteval() && !RebuildingImmediateInvocation)
       ExprEvalContexts.back().ReferenceToConsteval.insert(E);
   MarkExprReferenced(*this, E->getLocation(), E->getDecl(), E, OdrUse,
                      RefsMinusAssignments);
