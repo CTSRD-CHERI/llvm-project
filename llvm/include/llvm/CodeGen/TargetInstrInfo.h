@@ -1650,9 +1650,6 @@ public:
   unsigned defaultDefLatency(const MCSchedModel &SchedModel,
                              const MachineInstr &DefMI) const;
 
-  int computeDefOperandLatency(const InstrItineraryData *ItinData,
-                               const MachineInstr &DefMI) const;
-
   /// Return true if this opcode has high latency to its result.
   virtual bool isHighLatencyDef(int opc) const { return false; }
 
