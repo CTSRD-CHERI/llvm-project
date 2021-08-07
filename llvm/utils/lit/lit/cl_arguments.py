@@ -10,9 +10,11 @@ from lit.LitConfig import CheriTestMode
 
 
 
+@enum.unique
 class TestOrder(enum.Enum):
-    DEFAULT = enum.auto()
-    RANDOM = enum.auto()
+    LEXICAL = 'lexical'
+    RANDOM = 'random'
+    SMART = 'smart'
 
 
 def parse_args():
@@ -160,11 +162,17 @@ def parse_args():
             metavar="N",
             help="Maximum time to spend testing (in seconds)",
             type=_positive_int)
+    selection_group.add_argument("--order",
+            choices=[x.value for x in TestOrder],
+            default=TestOrder.SMART,
+            help="Test order to use (default: smart)")
     selection_group.add_argument("--shuffle",
-            help="Run tests in random order",
-            action="store_true")
+            dest="order",
+            help="Run tests in random order (DEPRECATED: use --order=random)",
+            action="store_const",
+            const=TestOrder.RANDOM)
     selection_group.add_argument("-i", "--incremental",
-            help="Run failed tests first (DEPRECATED: now always enabled)",
+            help="Run failed tests first (DEPRECATED: use --order=smart)",
             action="store_true")
     selection_group.add_argument("--filter",
             metavar="REGEX",
@@ -236,11 +244,6 @@ def parse_args():
 
     if opts.incremental:
         print('WARNING: --incremental is deprecated. Failing tests now always run first.')
-
-    if opts.shuffle:
-        opts.order = TestOrder.RANDOM
-    else:
-        opts.order = TestOrder.DEFAULT
 
     if opts.numShards or opts.runShard:
         if not opts.numShards or not opts.runShard:
