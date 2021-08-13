@@ -645,6 +645,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(convergent);
   KEYWORD(dereferenceable);
   KEYWORD(dereferenceable_or_null);
+  KEYWORD(disable_sanitizer_instrumentation);
   KEYWORD(elementtype);
   KEYWORD(hassideeffects);
   KEYWORD(inaccessiblememonly);
