@@ -17,7 +17,6 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/CodeGen/AtomicExpandUtils.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/TargetLowering.h"
@@ -59,7 +58,6 @@ namespace {
 
   class AtomicExpand: public FunctionPass {
     const TargetLowering *TLI = nullptr;
-    OptimizationRemarkEmitter *ORE;
 
   public:
     static char ID; // Pass identification, replacement for typeid
@@ -71,7 +69,6 @@ namespace {
     bool runOnFunction(Function &F) override;
 
   private:
-    void getAnalysisUsage(AnalysisUsage &AU) const override;
     bool bracketInstWithFences(Instruction *I, AtomicOrdering Order);
     IntegerType *getCorrespondingIntegerType(Type *T, const DataLayout &DL);
     LoadInst *convertAtomicLoadToIntegerType(LoadInst *LI);
@@ -158,16 +155,11 @@ static unsigned getAtomicOpSize(AtomicCmpXchgInst *CASI) {
   return DL.getTypeStoreSize(CASI->getCompareOperand()->getType());
 }
 
-void AtomicExpand::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<OptimizationRemarkEmitterWrapperPass>();
-}
-
 bool AtomicExpand::runOnFunction(Function &F) {
   auto *TPC = getAnalysisIfAvailable<TargetPassConfig>();
   if (!TPC)
     return false;
 
-  ORE = &getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE();
   auto &TM = TPC->getTM<TargetMachine>();
   if (!TM.getSubtargetImpl(F)->enableAtomicExpand())
     return false;
@@ -621,9 +613,7 @@ static Value *performAtomicOp(AtomicRMWInst::BinOp Op, IRBuilder<> &Builder,
 }
 
 bool AtomicExpand::tryExpandAtomicRMW(AtomicRMWInst *AI) {
-  LLVMContext &Ctx = AI->getModule()->getContext();
-  TargetLowering::AtomicExpansionKind Kind = TLI->shouldExpandAtomicRMWInIR(AI);
-  switch (Kind) {
+  switch (TLI->shouldExpandAtomicRMWInIR(AI)) {
   case TargetLoweringBase::AtomicExpansionKind::None:
     return false;
   case TargetLoweringBase::AtomicExpansionKind::LLSC: {
@@ -653,17 +643,6 @@ bool AtomicExpand::tryExpandAtomicRMW(AtomicRMWInst *AI) {
       expandPartwordAtomicRMW(AI,
                               TargetLoweringBase::AtomicExpansionKind::CmpXChg);
     } else {
-      SmallVector<StringRef> SSNs;
-      Ctx.getSyncScopeNames(SSNs);
-      auto MemScope = SSNs[AI->getSyncScopeID()].empty()
-                          ? "system"
-                          : SSNs[AI->getSyncScopeID()];
-      ORE->emit([&]() {
-        return OptimizationRemark(DEBUG_TYPE, "Passed", AI->getFunction())
-               << "A compare and swap loop was generated for an atomic "
-               << AI->getOperationName(AI->getOperation()) << " operation at "
-               << MemScope << " memory scope";
-      });
       expandAtomicRMWToCmpXchg(AI, createCmpXchgInstFun);
     }
     return true;
