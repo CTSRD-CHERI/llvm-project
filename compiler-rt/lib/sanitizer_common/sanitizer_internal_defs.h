@@ -143,9 +143,14 @@ typedef __uintcap_t uptr;
 typedef __intcap_t sptr;
 typedef unsigned long vaddr;
 #else
+#  if (SANITIZER_WORDSIZE == 64)
 typedef unsigned long uptr;
 typedef signed long sptr;
 typedef unsigned long vaddr;
+#  else
+typedef unsigned int uptr;
+typedef signed int sptr;
+typedef unsigned int vaddr;
 #  endif
 #endif  // defined(_WIN64)
 #if defined(__x86_64__)
@@ -190,15 +195,17 @@ typedef u64  OFF64_T;
 
 #ifdef __CHERI_PURE_CAPABILITY__
 typedef __SIZE_TYPE__ operator_new_size_type;
-#elif (SANITIZER_WORDSIZE == 64) || SANITIZER_MAC
+#elif (SANITIZER_WORDSIZE == 64)
 typedef uptr operator_new_size_type;
 #else
-# if defined(__s390__) && !defined(__s390x__)
+#  if defined(__s390__) && !defined(__s390x__)
 // Special case: 31-bit s390 has unsigned long as size_t.
 typedef unsigned long operator_new_size_type;
-# else
+#  elif SANITIZER_MAC
+typedef unsigned long operator_new_size_type;
+#  else
 typedef u32 operator_new_size_type;
-# endif
+#  endif
 #endif
 
 #if (SANITIZER_WORDSIZE == 64)
