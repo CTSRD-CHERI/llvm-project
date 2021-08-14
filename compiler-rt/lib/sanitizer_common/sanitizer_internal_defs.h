@@ -143,9 +143,15 @@ typedef __uintcap_t uptr;
 typedef __intcap_t sptr;
 typedef unsigned long vaddr;
 #else
+#  if (SANITIZER_WORDSIZE == 64) || SANITIZER_MAC
 typedef unsigned long uptr;
 typedef signed long sptr;
 typedef unsigned long vaddr;
+#  else
+typedef unsigned int uptr;
+typedef signed int sptr;
+typedef unsigned int vaddr;
+#  endif
 #endif  // defined(_WIN64)
 #if defined(__x86_64__)
 // Since x32 uses ILP32 data model in 64-bit hardware mode, we must use
