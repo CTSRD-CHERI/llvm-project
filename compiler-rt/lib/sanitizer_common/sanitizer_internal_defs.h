@@ -143,7 +143,7 @@ typedef __uintcap_t uptr;
 typedef __intcap_t sptr;
 typedef unsigned long vaddr;
 #else
-#  if (SANITIZER_WORDSIZE == 64) || SANITIZER_MAC
+#  if (SANITIZER_WORDSIZE == 64) || SANITIZER_MAC || SANITIZER_WINDOWS
 typedef unsigned long uptr;
 typedef signed long sptr;
 typedef unsigned long vaddr;
