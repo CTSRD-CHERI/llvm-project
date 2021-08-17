@@ -514,6 +514,9 @@ namespace llvm {
   /// Create CHERI pass to bound alloca.s
   ModulePass *createCheriBoundAllocasPass();
 
+  /// Create CHERI pass to remove capability address reading instructions.
+  FunctionPass *createCheriGetAddressElimPass();
+
   /// This pass inserts pseudo probe annotation for callsite profiling.
   FunctionPass *createPseudoProbeInserter();
 

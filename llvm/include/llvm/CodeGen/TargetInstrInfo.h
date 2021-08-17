@@ -446,6 +446,17 @@ public:
     return nullptr;
   }
 
+  // True if \p MI is an instruction that extracts the capability address.
+  virtual bool isCheriGetAddressInst(MachineInstr &MI) const {
+    llvm_unreachable("target did not implement");
+  }
+
+  // Returns the subregister index which contains the address part of a
+  // capability.
+  virtual unsigned getCheriAddressSubregIdx(MVT CapTy) const {
+    llvm_unreachable("target did not implement");
+  }
+
   // This constant can be used as an input value of operand index passed to
   // the method findCommutedOpIndices() to tell the method that the
   // corresponding operand index is not pre-defined and that the method
