@@ -1949,7 +1949,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   // Now, the return type.
   if (CASExpected) {
     ResultTy = Type::getInt1Ty(Ctx);
-    Attr = Attr.addAttribute(Ctx, AttributeList::ReturnIndex, Attribute::ZExt);
+    Attr = Attr.addRetAttribute(Ctx, Attribute::ZExt);
   } else if (HasResult && UseSizedLibcall) {
     ResultTy = ValueOperandIsCap ? I8CapTy : SizedIntTy;
   } else
