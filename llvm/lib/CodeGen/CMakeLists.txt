@@ -40,6 +40,7 @@ add_llvm_component_library(LLVMCodeGen
   CFGuardLongjmp.cpp
   CFIInstrInserter.cpp
   CheriBoundAllocas.cpp
+  CheriGetAddressElim.cpp
   CodeGen.cpp
   CodeGenCommonISel.cpp
   CodeGenPassBuilder.cpp

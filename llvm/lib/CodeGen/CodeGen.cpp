@@ -27,6 +27,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeCFIInstrInserterPass(Registry);
   initializeCheckDebugMachineModulePass(Registry);
   initializeCheriBoundAllocasPass(Registry);
+  initializeCheriGetAddressElimPass(Registry);
   initializeCodeGenPreparePass(Registry);
   initializeDeadMachineInstructionElimPass(Registry);
   initializeDebugifyMachineModulePass(Registry);
