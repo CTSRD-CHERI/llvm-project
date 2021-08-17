@@ -4458,8 +4458,7 @@ void llvm::UpgradeFunctionAttributes(Function &F) {
   }
 
   // Remove all incompatibile attributes from function.
-  F.removeAttributes(AttributeList::ReturnIndex,
-                     AttributeFuncs::typeIncompatible(F.getReturnType()));
+  F.removeRetAttrs(AttributeFuncs::typeIncompatible(F.getReturnType()));
   for (auto &Arg : F.args())
     Arg.removeAttrs(AttributeFuncs::typeIncompatible(Arg.getType()));
 }
