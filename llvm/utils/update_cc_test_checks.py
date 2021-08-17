@@ -39,8 +39,12 @@ SUBST = {
     '%cheri128_purecap_cc1': ['-cc1', "-triple=mips64-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri128", "-cheri-size", "128"],
     '%riscv32_cheri_cc1': ['-cc1', "-triple=riscv32-unknown-freebsd", "-target-feature", "+xcheri"],
     '%riscv64_cheri_cc1': ['-cc1', "-triple=riscv64-unknown-freebsd", "-target-feature", "+xcheri"],
+    '%riscv32_cheri_clang': ['-target', 'riscv32-unknown-freebsd', '-march=rv32imafdcxcheri'],
+    '%riscv64_cheri_clang': ['-target', 'riscv64-unknown-freebsd', '-march=rv64imafdcxcheri'],
     '%riscv32_cheri_purecap_cc1': ['-cc1', "-triple=riscv32-unknown-freebsd", "-target-feature", "+xcheri", "-target-abi", "il32pc64", '-target-feature', '+cap-mode'],
     '%riscv64_cheri_purecap_cc1': ['-cc1', "-triple=riscv64-unknown-freebsd", "-target-feature", "+xcheri", "-target-abi", "l64pc128", '-target-feature', '+cap-mode'],
+    '%riscv32_cheri_purecap_clang': ['-target', 'riscv32-unknown-freebsd', '-march=rv32imafdcxcheri', '-mabi=il32pc64'],
+    '%riscv64_cheri_purecap_clang': ['-target', 'riscv64-unknown-freebsd', '-march=rv64imafdcxcheri', '-mabi=l64pc128'],
 }
 
 def get_line2func_list(args, clang_args):
