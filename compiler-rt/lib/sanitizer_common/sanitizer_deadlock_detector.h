@@ -395,14 +395,14 @@ class DeadlockDetector {
     int unique_tid;
   };
 
-  uptr current_epoch_;
+  usize current_epoch_;
   BV available_nodes_;
   BV recycled_nodes_;
   BV tmp_bv_;
   BVGraph<BV> g_;
   uptr data_[BV::kSize];
   Edge edges_[BV::kSize * 32];
-  uptr n_edges_;
+  usize n_edges_;
 };
 
 } // namespace __sanitizer
