@@ -16,9 +16,9 @@
 // UBSAN-SAME: "-fsanitize-recover=alignment,array-bounds,
 // UBSAN-NEXT: "/usr/bin/ld"
 // UBSAN-RISCV64-SAME:         "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-riscv64.a"
-// UBSAN-PURECAP-RISCV64-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-riscv64.a"
+// UBSAN-PURECAP-RISCV64-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-riscv64c.a"
 // UBSAN-RISCV32-SAME:         "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-riscv32.a"
-// UBSAN-PURECAP-RISCV32-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-riscv32.a"
+// UBSAN-PURECAP-RISCV32-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-riscv32c.a"
 // UBSAN-MIPS64-SAME:          "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-mips64.a"
 // UBSAN-PURECAP-MIPS64-SAME:  "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_standalone-mips64c128.a"
 
@@ -40,9 +40,9 @@
 // UBSAN-MINIMAL-SAME: "-fsanitize-recover=alignment,array-bounds,
 // UBSAN-MINIMAL-NEXT: "/usr/bin/ld"
 // UBSAN-MINIMAL-RISCV64-SAME:         "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-riscv64.a"
-// UBSAN-MINIMAL-PURECAP-RISCV64-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-riscv64.a"
+// UBSAN-MINIMAL-PURECAP-RISCV64-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-riscv64c.a"
 // UBSAN-MINIMAL-RISCV32-SAME:         "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-riscv32.a"
-// UBSAN-MINIMAL-PURECAP-RISCV32-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-riscv32.a"
+// UBSAN-MINIMAL-PURECAP-RISCV32-SAME: "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-riscv32c.a"
 // UBSAN-MINIMAL-MIPS64-SAME:          "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-mips64.a"
 // UBSAN-MINIMAL-PURECAP-MIPS64-SAME:  "[[RESOURCE_DIR]]/lib/freebsd/libclang_rt.ubsan_minimal-mips64c128.a"
 

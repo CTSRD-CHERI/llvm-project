@@ -384,8 +384,8 @@ Tool *ToolChain::getTool(Action::ActionClass AC) const {
   llvm_unreachable("Invalid tool kind.");
 }
 
-static StringRef getArchNameForCompilerRTLib(const ToolChain &TC,
-                                             const ArgList &Args) {
+static std::string getArchNameForCompilerRTLib(const ToolChain &TC,
+                                               const ArgList &Args) {
   const llvm::Triple &Triple = TC.getTriple();
   bool IsWindows = Triple.isOSWindows();
 
@@ -398,15 +398,21 @@ static StringRef getArchNameForCompilerRTLib(const ToolChain &TC,
   if (TC.getArch() == llvm::Triple::x86 && Triple.isAndroid())
     return "i686";
 
-  if (Triple.isMIPS() && Triple.getEnvironment() == llvm::Triple::CheriPurecap) {
-    assert(Triple.getSubArch() != llvm::Triple::NoSubArch && "purecap triple should have subarch");
-    return Triple.getArchName();
+  if (Triple.isMIPS() && TC.isCheriPurecap()) {
+    // Purecap MIPS uses mips64c128 as the library name.
+    assert(Triple.getSubArch() != llvm::Triple::NoSubArch &&
+           "purecap triple should have subarch");
+    return Triple.getArchName().str();
   }
 
   if (TC.getArch() == llvm::Triple::x86_64 && Triple.isX32())
     return "x32";
 
-  return llvm::Triple::getArchTypeName(TC.getArch());
+  std::string Result = llvm::Triple::getArchTypeName(TC.getArch()).str();
+  // For other purecap architectures we append a single "c" to the library name.
+  if (TC.isCheriPurecap())
+    Result += "c";
+  return Result;
 }
 
 StringRef ToolChain::getOSLibName() const {
@@ -473,9 +479,9 @@ std::string ToolChain::buildCompilerRTBasename(const llvm::opt::ArgList &Args,
 
   std::string ArchAndEnv;
   if (AddArch) {
-    StringRef Arch = getArchNameForCompilerRTLib(*this, Args);
+    std::string Arch = getArchNameForCompilerRTLib(*this, Args);
     const char *Env = TT.isAndroid() ? "-android" : "";
-    ArchAndEnv = ("-" + Arch + Env).str();
+    ArchAndEnv = "-" + Arch + Env;
   }
   return (Prefix + Twine("clang_rt.") + Component + ArchAndEnv + Suffix).str();
 }
