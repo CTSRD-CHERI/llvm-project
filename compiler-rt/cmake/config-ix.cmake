@@ -120,6 +120,7 @@ check_cxx_compiler_flag(/wd4800 COMPILER_RT_HAS_WD4800_FLAG)
 
 # Symbols.
 check_symbol_exists(__func__ "" COMPILER_RT_HAS_FUNC_SYMBOL)
+check_symbol_exists(__CHERI_PURE_CAPABILITY__ "" COMPILER_RT_IS_CHERI_PURECAP)
 
 # Includes.
 check_cxx_compiler_flag(-nostdinc++ COMPILER_RT_HAS_NOSTDINCXX_FLAG)
@@ -192,8 +193,9 @@ file(WRITE ${SIMPLE_SOURCE} "#include <stdlib.h>\n#include <stdio.h>\nint main()
 # Detect whether the current target platform is 32-bit or 64-bit, and setup
 # the correct commandline flags needed to attempt to target 32-bit and 64-bit.
 if (NOT CMAKE_SIZEOF_VOID_P EQUAL 4 AND
-    NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(WARNING "Please use architecture with 4 or 8 byte pointers.")
+    NOT CMAKE_SIZEOF_VOID_P EQUAL 8 AND
+    NOT COMPILER_RT_IS_CHERI_PURECAP)
+  message(FATAL_ERROR "Please use architecture with 4 or 8 byte pointers.")
 endif()
 
 test_targets()
