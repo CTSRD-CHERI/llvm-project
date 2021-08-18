@@ -312,7 +312,8 @@ static usize TlsPreTcbSize() {
 #if !SANITIZER_GO
 namespace {
 struct TlsBlock {
-  uptr begin, end, align;
+  uptr begin, end;
+  usize align;
   size_t tls_modid;
   bool operator<(const TlsBlock &rhs) const { return begin < rhs.begin; }
 };
@@ -366,16 +367,17 @@ static int CollectStaticTlsBlocks(struct dl_phdr_info *info, size_t size,
   return 0;
 }
 
-__attribute__((unused)) static void GetStaticTlsBoundary(uptr *addr, uptr *size,
-                                                         uptr *align) {
+__attribute__((unused)) static void GetStaticTlsBoundary(uptr *addr,
+                                                         usize *size,
+                                                         usize *align) {
   InternalMmapVector<TlsBlock> ranges;
   dl_iterate_phdr(CollectStaticTlsBlocks, &ranges);
-  uptr len = ranges.size();
+  usize len = ranges.size();
   Sort(ranges.begin(), len);
   // Find the range with tls_modid=1. For glibc, because libc.so uses PT_TLS,
   // this module is guaranteed to exist and is one of the initially loaded
   // modules.
-  uptr one = 0;
+  usize one = 0;
   while (one != len && ranges[one].tls_modid != 1) ++one;
   if (one == len) {
     // This may happen with musl if no module uses PT_TLS.
@@ -468,7 +470,7 @@ static void GetTls(uptr *addr, usize *size) {
   *addr = tp - pre_tcb_size;
   *size = g_tls_size + pre_tcb_size;
 #elif SANITIZER_FREEBSD || SANITIZER_LINUX
-  uptr align;
+  usize align;
   GetStaticTlsBoundary(addr, size, &align);
 #if defined(__x86_64__) || defined(__i386__) || defined(__s390__) || \
     defined(__sparc__)
@@ -911,13 +913,13 @@ uptr MapDynamicShadow(usize shadow_size_bytes, uptr shadow_scale,
                       uptr min_shadow_base_alignment,
                       UNUSED uptr &high_mem_end) {
   const uptr granularity = GetMmapGranularity();
-  const uptr alignment =
-      Max<uptr>(granularity << shadow_scale, 1ULL << min_shadow_base_alignment);
-  const uptr left_padding =
-      Max<uptr>(granularity, 1ULL << min_shadow_base_alignment);
+  const usize alignment = Max<usize>(granularity << shadow_scale,
+                                     1ULL << min_shadow_base_alignment);
+  const usize left_padding =
+      Max<usize>(granularity, 1ULL << min_shadow_base_alignment);
 
-  const uptr shadow_size = RoundUpTo(shadow_size_bytes, granularity);
-  const uptr map_size = shadow_size + left_padding + alignment;
+  const usize shadow_size = RoundUpTo(shadow_size_bytes, granularity);
+  const usize map_size = shadow_size + left_padding + alignment;
 
   const uptr map_start = (uptr)MmapNoAccess(map_size);
   CHECK_NE(map_start, ~(uptr)0);
@@ -948,19 +950,20 @@ static uptr MremapCreateAlias(uptr base_addr, uptr alias_addr,
 #endif
 }
 
-static void CreateAliases(uptr start_addr, uptr alias_size, uptr num_aliases) {
-  uptr total_size = alias_size * num_aliases;
+static void CreateAliases(uptr start_addr, usize alias_size,
+                          usize num_aliases) {
+  usize total_size = alias_size * num_aliases;
   uptr mapped = MmapSharedNoReserve(start_addr, total_size);
   CHECK_EQ(mapped, start_addr);
 
-  for (uptr i = 1; i < num_aliases; ++i) {
+  for (usize i = 1; i < num_aliases; ++i) {
     uptr alias_addr = start_addr + i * alias_size;
     CHECK_EQ(MremapCreateAlias(start_addr, alias_addr, alias_size), alias_addr);
   }
 }
 
-uptr MapDynamicShadowAndAliases(uptr shadow_size, uptr alias_size,
-                                uptr num_aliases, uptr ring_buffer_size) {
+uptr MapDynamicShadowAndAliases(usize shadow_size, usize alias_size,
+                                usize num_aliases, usize ring_buffer_size) {
   CHECK_EQ(alias_size & (alias_size - 1), 0);
   CHECK_EQ(num_aliases & (num_aliases - 1), 0);
   CHECK_EQ(ring_buffer_size & (ring_buffer_size - 1), 0);
@@ -969,13 +972,13 @@ uptr MapDynamicShadowAndAliases(uptr shadow_size, uptr alias_size,
   shadow_size = RoundUpTo(shadow_size, granularity);
   CHECK_EQ(shadow_size & (shadow_size - 1), 0);
 
-  const uptr alias_region_size = alias_size * num_aliases;
+  const usize alias_region_size = alias_size * num_aliases;
   const uptr alignment =
       2 * Max(Max(shadow_size, alias_region_size), ring_buffer_size);
-  const uptr left_padding = ring_buffer_size;
+  const usize left_padding = ring_buffer_size;
 
-  const uptr right_size = alignment;
-  const uptr map_size = left_padding + 2 * alignment;
+  const usize right_size = alignment;
+  const usize map_size = left_padding + 2 * alignment;
 
   const uptr map_start = reinterpret_cast<uptr>(MmapNoAccess(map_size));
   CHECK_NE(map_start, static_cast<uptr>(-1));

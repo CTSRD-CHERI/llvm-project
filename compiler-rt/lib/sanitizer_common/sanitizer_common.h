@@ -141,8 +141,8 @@ uptr MapDynamicShadow(usize shadow_size_bytes, uptr shadow_scale,
 // Also creates num_aliases regions of accessible memory starting at offset S
 // from the returned address.  Each region has size alias_size and is backed by
 // the same physical memory.
-uptr MapDynamicShadowAndAliases(uptr shadow_size, uptr alias_size,
-                                uptr num_aliases, uptr ring_buffer_size);
+uptr MapDynamicShadowAndAliases(usize shadow_size, usize alias_size,
+                                usize num_aliases, usize ring_buffer_size);
 
 // Reserve memory range [beg, end]. If madvise_shadow is true then apply
 // madvise (e.g. hugepages, core dumping) requested by options.
