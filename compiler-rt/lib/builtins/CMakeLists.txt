@@ -606,7 +606,6 @@ set(mips64_SOURCES ${GENERIC_TF_SOURCES}
 set(mips64el_SOURCES ${GENERIC_TF_SOURCES}
                      ${mips_SOURCES})
 set(mips64c128_SOURCES ${GENERIC_TF_SOURCES} ${mips_SOURCES})
-set(mips64c256_SOURCES ${GENERIC_TF_SOURCES} ${mips_SOURCES})
 
 
 set(powerpc_SOURCES ${GENERIC_SOURCES})
@@ -645,10 +644,15 @@ set(riscv32_SOURCES
   riscv/mulsi3.S
   ${riscv_SOURCES}
 )
+set(riscv32c_SOURCES ${riscv64_SOURCES})
 set(riscv64_SOURCES
   riscv/muldi3.S
   ${riscv_SOURCES}
 )
+set(riscv64c_SOURCES ${riscv64_SOURCES})
+# save.S and restore.S need https://github.com/CTSRD-CHERI/llvm-project/pull/533
+list(REMOVE_ITEM riscv32c_SOURCES riscv/save.S riscv/restore.S)
+list(REMOVE_ITEM riscv64c_SOURCES riscv/save.S riscv/restore.S)
 
 set(sparc_SOURCES ${GENERIC_SOURCES} ${GENERIC_TF_SOURCES})
 set(sparcv9_SOURCES ${GENERIC_SOURCES} ${GENERIC_TF_SOURCES})
