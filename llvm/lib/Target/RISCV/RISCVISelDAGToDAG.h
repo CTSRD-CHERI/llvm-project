@@ -114,7 +114,8 @@ public:
 #include "RISCVGenDAGISel.inc"
 
 private:
-  void doPeepholeLoadStoreOffset();
+  bool doPeepholeLoadStoreOffset(SDNode *Node);
+  bool doPeepholeSExtW(SDNode *Node);
 };
 
 namespace RISCV {
