@@ -412,10 +412,10 @@ static struct tls_tcb * ThreadSelfTlsTcb() {
   return tcb;
 }
 
-uptr ThreadSelf() { return (uptr)ThreadSelfTlsTcb()->tcb_pthread; }
-#endif  // SANITIZER_NETBSD
+uptr ThreadSelf() {
+  return (uptr)ThreadSelfTlsTcb()->tcb_pthread;
+}
 
-#if SANITIZER_NETBSD || (SANITIZER_FREEBSD && defined(__mips__))
 int GetSizeFromHdr(struct dl_phdr_info *info, size_t size, void *data) {
   const Elf_Phdr *hdr = info->dlpi_phdr;
   const Elf_Phdr *last_hdr = hdr + info->dlpi_phnum;
@@ -428,7 +428,7 @@ int GetSizeFromHdr(struct dl_phdr_info *info, size_t size, void *data) {
   }
   return 0;
 }
-#endif  // SANITIZER_NETBSD || (SANITIZER_FREEBSD && defined(__mips__))
+#endif  // SANITIZER_NETBSD
 
 #if SANITIZER_ANDROID
 // Bionic provides this API since S.
