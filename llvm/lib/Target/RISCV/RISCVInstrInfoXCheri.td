@@ -1564,3 +1564,26 @@ let Predicates = [HasCheri, IsRV64, IsCapMode] in {
 defm : CheriLdPat<load, CLC_128>;
 defm : CheriStPat<store, CSC_128, GPCR>;
 } // Predicates = [HasCheri, IsRV64, IsCapMode]
+
+
+/// CHERI memory colouring extensions
+let Predicates = [HasCheri, HasCheriMemVersion] in {
+def CGetVersion   : Cheri_r<0x13, "cgetversion">;
+def CSetVersion   : Cheri_rr<0x2, "csetversion">;
+let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
+def CLoadVersion : RVInstCheriSrcDst<0x7f, 0x16, 0, OPC_CHERI, (outs GPR:$rd),
+                                     (ins GPCRMemAtomic:$rs1),
+                                     "cloadversion", "$rd, $rs1">;
+def CLoadVersions : RVInstCheriSrcDst<0x7f, 0x15, 0, OPC_CHERI, (outs GPR:$rd),
+                                      (ins GPCRMemAtomic:$rs1),
+                                      "cloadversions", "$rd, $rs1">;
+}
+let mayStore = 1, mayLoad = 0, hasSideEffects = 0 in
+def CStoreVersion : RVInstCheriTwoSrc<0x7e, 0x2, 0, OPC_CHERI, (outs),
+                                      (ins GPCRMemAtomic:$rs1, GPR:$rs2),
+                                      "cstoreversion", "$rs2, $rs1">;
+let mayLoad = 1, mayStore = 1, hasSideEffects = 0 in
+def CAmoCDecVersion : RVInstR<0x3, 0, OPC_CHERI, (outs GPR:$rd),
+                              (ins GPCRMemAtomic:$rs1, GPCR:$rs2),
+                              "camocdecversion", "$rd, $rs1, $rs2">;
+}
