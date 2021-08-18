@@ -273,7 +273,7 @@ usize ReadBinaryNameCached(/*out*/char *buf, usize buf_len) {
   return name_len;
 }
 
-uptr ReadBinaryDir(/*out*/ char *buf, uptr buf_len) {
+usize ReadBinaryDir(/*out*/ char *buf, usize buf_len) {
   ReadBinaryNameCached(buf, buf_len);
   const char *exec_name_pos = StripModuleName(buf);
   uptr name_len = exec_name_pos - buf;

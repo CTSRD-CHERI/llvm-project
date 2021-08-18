@@ -349,7 +349,7 @@ int internal_snprintf(char *buffer, usize length, const char *format, ...) {
 
 FORMAT(2, 3)
 void InternalScopedString::append(const char *format, ...) {
-  uptr prev_len = length();
+  usize prev_len = length();
 
   while (true) {
     buffer_.resize(buffer_.capacity());

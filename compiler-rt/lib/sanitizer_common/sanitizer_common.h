@@ -132,7 +132,7 @@ void UnmapFromTo(uptr from, uptr to);
 // have max(2^min_shadow_base_alignment, mmap granularity) on the left, and
 // shadow_size_bytes bytes on the right, which on linux is mapped no access.
 // The high_mem_end may be updated if the original shadow size doesn't fit.
-uptr MapDynamicShadow(uptr shadow_size_bytes, uptr shadow_scale,
+uptr MapDynamicShadow(usize shadow_size_bytes, uptr shadow_scale,
                       uptr min_shadow_base_alignment, uptr &high_mem_end);
 
 // Let S = max(shadow_size, num_aliases * alias_size, ring_buffer_size).
@@ -403,7 +403,7 @@ inline usize MostSignificantSetBitIndex(usize x) {
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 usize MostSignificantSetBitIndex(uptr x) = delete;
-INLINE usize MostSignificantSetBitIndex(u64 x) {
+inline usize MostSignificantSetBitIndex(u64 x) {
   return MostSignificantSetBitIndex((usize)x);
 }
 #endif
@@ -426,7 +426,7 @@ inline usize LeastSignificantSetBitIndex(usize x) {
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 usize LeastSignificantSetBitIndex(uptr x) = delete;
-INLINE usize LeastSignificantSetBitIndex(u64 x) {
+inline usize LeastSignificantSetBitIndex(u64 x) {
   return LeastSignificantSetBitIndex((usize)x);
 }
 #endif
@@ -436,7 +436,7 @@ inline bool IsPowerOfTwo(u64 x) {
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 bool IsPowerOfTwo(uptr x) = delete;
-INLINE bool IsPowerOfTwo(usize x) {
+inline bool IsPowerOfTwo(usize x) {
   return IsPowerOfTwo((u64)x);
 }
 #endif
@@ -452,7 +452,7 @@ inline u64 RoundUpToPowerOfTwo(u64 size) {
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 uptr RoundUpToPowerOfTwo(uptr size) = delete;
-INLINE usize RoundUpToPowerOfTwo(usize x) {
+inline usize RoundUpToPowerOfTwo(usize x) {
   return (usize)RoundUpToPowerOfTwo((u64)x);
 }
 #endif
@@ -510,7 +510,7 @@ inline u64 Log2(u64 x) {
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 uptr Log2(uptr x) = delete;
-INLINE usize Log2(usize x) {
+inline usize Log2(usize x) {
   return (usize)Log2((u64)x);
 }
 #endif

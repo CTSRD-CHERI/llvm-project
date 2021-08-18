@@ -111,7 +111,7 @@ uptr internal_mremap(void *old_address, usize old_size, usize new_size, int flag
   return 0;
 }
 
-int internal_mprotect(void *addr, uptr length, int prot) {
+int internal_mprotect(void *addr, usize length, int prot) {
   DEFINE__REAL(int, mprotect, void *a, uptr b, int c);
   return _REAL(mprotect, addr, length, prot);
 }

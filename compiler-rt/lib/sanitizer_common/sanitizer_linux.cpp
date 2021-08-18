@@ -167,7 +167,7 @@ namespace __sanitizer {
 #if !SANITIZER_S390
 uptr internal_mmap(void *addr, usize length, int prot, int flags, int fd,
                    u64 offset) {
-#ifdef __CHERI_PURE_CAPABILITY__
+#if SANITIZER_FREEBSD && defined(__CHERI_PURE_CAPABILITY__)
   return (uptr)mmap(addr, length, prot, flags, fd, offset);
 #elif SANITIZER_FREEBSD || SANITIZER_LINUX_USES_64BIT_SYSCALLS
   return internal_syscall(SYSCALL(mmap), (uptr)addr, length, prot, flags, fd,
@@ -193,11 +193,11 @@ uptr internal_mremap(void *old_address, usize old_size, usize new_size, int flag
 }
 #endif
 
-int internal_mprotect(void *addr, uptr length, int prot) {
+int internal_mprotect(void *addr, usize length, int prot) {
   return internal_syscall(SYSCALL(mprotect), (uptr)addr, length, prot);
 }
 
-int internal_madvise(uptr addr, uptr length, int advice) {
+int internal_madvise(uptr addr, usize length, int advice) {
   return internal_syscall(SYSCALL(madvise), addr, length, advice);
 }
 
@@ -1854,7 +1854,11 @@ SignalContext::WriteFlag SignalContext::GetWriteFlag() const {
   uint32_t op_code;
 
 # if SANITIZER_FREEBSD
+#  ifdef __CHERI_PURE_CAPABILITY__
+  exception_source = (uint32_t *)ucontext->uc_mcontext.mc_cheriframe.cf_pcc;
+#  else
   exception_source = (uint32_t *)(uptr)ucontext->uc_mcontext.mc_pc;
+#  endif
 # else
   exception_source = (uint32_t *)ucontext->uc_mcontext.pc;
 # endif
@@ -2133,9 +2137,15 @@ static void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
 #elif defined(__mips__)
 # if SANITIZER_FREEBSD
   ucontext_t *ucontext = (ucontext_t*)context;
+#  ifdef __CHERI_PURE_CAPABILITY__
+  *pc = (uptr)ucontext->uc_mcontext.mc_cheriframe.cf_pcc;
+  *bp = (uptr)ucontext->uc_mcontext.mc_cheriframe.cf_c24;
+  *sp = (uptr)ucontext->uc_mcontext.mc_cheriframe.cf_csp;
+#  else
   *pc = ucontext->uc_mcontext.mc_pc;
   *bp = ucontext->uc_mcontext.mc_regs[30];
   *sp = ucontext->uc_mcontext.mc_regs[29];
+#  endif
 # else
   ucontext_t *ucontext = (ucontext_t*)context;
   *pc = ucontext->uc_mcontext.pc;

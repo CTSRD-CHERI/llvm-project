@@ -53,7 +53,7 @@ inline void *PersistentAllocator::alloc(usize size) {
     s = tryAlloc(size);
     if (s) return s;
     atomic_store(&region_pos, 0, memory_order_relaxed);
-    uptr allocsz = 64 * 1024;
+    usize allocsz = 64 * 1024;
     if (allocsz < size) allocsz = size;
     uptr mem = (uptr)MmapOrDie(allocsz, "stack depot");
     atomic_store(&region_end, mem + allocsz, memory_order_release);

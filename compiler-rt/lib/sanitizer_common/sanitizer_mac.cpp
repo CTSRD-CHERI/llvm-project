@@ -148,7 +148,7 @@ uptr internal_mremap(void *old_address, usize old_size, usize new_size, int flag
   return 0;
 }
 
-int internal_mprotect(void *addr, uptr length, int prot) {
+int internal_mprotect(void *addr, usize length, int prot) {
   return mprotect(addr, length, prot);
 }
 
@@ -1225,7 +1225,7 @@ vaddr GetMaxVirtualAddress() {
   return GetMaxUserVirtualAddress();
 }
 
-uptr MapDynamicShadow(uptr shadow_size_bytes, uptr shadow_scale,
+uptr MapDynamicShadow(usize shadow_size_bytes, uptr shadow_scale,
                       uptr min_shadow_base_alignment, uptr &high_mem_end) {
   const uptr granularity = GetMmapGranularity();
   const uptr alignment =
