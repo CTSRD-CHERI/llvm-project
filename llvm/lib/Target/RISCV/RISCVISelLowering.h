@@ -487,6 +487,9 @@ public:
   bool decomposeMulByConstant(LLVMContext &Context, EVT VT,
                               SDValue C) const override;
 
+  bool isMulAddWithConstProfitable(const SDValue &AddNode,
+                                   const SDValue &ConstNode) const override;
+
   bool supportsAtomicOperation(const DataLayout &DL, const Instruction *AI,
                                Type *ValueTy, Type *PointerTy,
                                Align Alignment) const override;
