@@ -331,8 +331,12 @@ public:
   /// Set the attribute list for this Function.
   void setAttributes(AttributeList Attrs) { AttributeSets = Attrs; }
 
+  // TODO: remove non-AtIndex versions of these methods.
   /// adds the attribute to the list of attributes.
-  void addAttribute(unsigned i, Attribute Attr);
+  void addAttributeAtIndex(unsigned i, Attribute Attr);
+  void addAttribute(unsigned i, Attribute Attr) {
+    addAttributeAtIndex(i, Attr);
+  }
 
   /// Add function attributes to this function.
   void addFnAttr(Attribute::AttrKind Kind);
@@ -359,10 +363,16 @@ public:
   void addParamAttrs(unsigned ArgNo, const AttrBuilder &Attrs);
 
   /// removes the attribute from the list of attributes.
-  void removeAttribute(unsigned i, Attribute::AttrKind Kind);
+  void removeAttributeAtIndex(unsigned i, Attribute::AttrKind Kind);
+  void removeAttribute(unsigned i, Attribute::AttrKind Kind) {
+    removeAttributeAtIndex(i, Kind);
+  }
 
   /// removes the attribute from the list of attributes.
-  void removeAttribute(unsigned i, StringRef Kind);
+  void removeAttributeAtIndex(unsigned i, StringRef Kind);
+  void removeAttribute(unsigned i, StringRef Kind) {
+    removeAttributeAtIndex(i, Kind);
+  }
 
   /// Remove function attributes from this function.
   void removeFnAttr(Attribute::AttrKind Kind);
@@ -403,10 +413,16 @@ public:
   bool hasParamAttribute(unsigned ArgNo, Attribute::AttrKind Kind) const;
 
   /// gets the attribute from the list of attributes.
-  Attribute getAttribute(unsigned i, Attribute::AttrKind Kind) const;
+  Attribute getAttributeAtIndex(unsigned i, Attribute::AttrKind Kind) const;
+  Attribute getAttribute(unsigned i, Attribute::AttrKind Kind) const {
+    return getAttributeAtIndex(i, Kind);
+  }
 
   /// gets the attribute from the list of attributes.
-  Attribute getAttribute(unsigned i, StringRef Kind) const;
+  Attribute getAttributeAtIndex(unsigned i, StringRef Kind) const;
+  Attribute getAttribute(unsigned i, StringRef Kind) const {
+    return getAttributeAtIndex(i, Kind);
+  }
 
   /// Return the attribute for the given attribute kind.
   Attribute getFnAttribute(Attribute::AttrKind Kind) const;
