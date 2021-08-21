@@ -12887,6 +12887,9 @@ static SDValue PerformVQDMULHCombine(SDNode *N, SelectionDAG &DAG) {
   SDValue Shft;
   ConstantSDNode *Clamp;
 
+  if (!VT.isVector())
+    return SDValue();
+
   if (N->getOpcode() == ISD::SMIN) {
     Shft = N->getOperand(0);
     Clamp = isConstOrConstSplat(N->getOperand(1));
