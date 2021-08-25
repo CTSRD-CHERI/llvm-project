@@ -5738,6 +5738,23 @@ static Instruction *foldICmpOfUAddOv(ICmpInst &I) {
   return ExtractValueInst::Create(UAddOv, 1);
 }
 
+static Instruction *foldICmpInvariantGroup(ICmpInst &I) {
+  if (!I.getOperand(0)->getType()->isPointerTy() ||
+      NullPointerIsDefined(
+          I.getParent()->getParent(),
+          I.getOperand(0)->getType()->getPointerAddressSpace())) {
+    return nullptr;
+  }
+  Instruction *Op;
+  if (match(I.getOperand(0), m_Instruction(Op)) &&
+      match(I.getOperand(1), m_Zero()) &&
+      Op->isLaunderOrStripInvariantGroup()) {
+    return ICmpInst::Create(Instruction::ICmp, I.getPredicate(),
+                            Op->getOperand(0), I.getOperand(1));
+  }
+  return nullptr;
+}
+
 Instruction *InstCombinerImpl::visitICmpInst(ICmpInst &I) {
   bool Changed = false;
   const SimplifyQuery Q = SQ.getWithInstruction(&I);
@@ -5977,6 +5994,9 @@ Instruction *InstCombinerImpl::visitICmpInst(ICmpInst &I) {
   if (I.getType()->isVectorTy())
     if (Instruction *Res = foldVectorCmp(I, Builder))
       return Res;
+
+  if (Instruction *Res = foldICmpInvariantGroup(I))
+    return Res;
 
   return Changed ? &I : nullptr;
 }
