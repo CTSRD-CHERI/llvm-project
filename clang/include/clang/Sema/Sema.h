@@ -3344,6 +3344,8 @@ public:
                                             const AttributeCommonInfo &CI,
                                             bool BestCase,
                                             MSInheritanceModel Model);
+  ErrorAttr *mergeErrorAttr(Decl *D, const AttributeCommonInfo &CI,
+                            StringRef NewUserDiagnostic);
   FormatAttr *mergeFormatAttr(Decl *D, const AttributeCommonInfo &CI,
                               IdentifierInfo *Format, int FormatIdx,
                               int FirstArg);

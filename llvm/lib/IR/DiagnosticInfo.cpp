@@ -411,3 +411,7 @@ std::string DiagnosticInfoOptimizationBase::getMsg() const {
 
 void OptimizationRemarkAnalysisFPCommute::anchor() {}
 void OptimizationRemarkAnalysisAliasing::anchor() {}
+
+void DiagnosticInfoDontCall::print(DiagnosticPrinter &DP) const {
+  DP << "call to " << getFunctionName() << " marked \"dontcall\"";
+}
