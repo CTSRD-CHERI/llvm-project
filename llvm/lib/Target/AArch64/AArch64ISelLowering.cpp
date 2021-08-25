@@ -4006,8 +4006,8 @@ SDValue AArch64TargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
     return DAG.getNode(AArch64ISD::SPLICE, dl, Op.getValueType(),
                        Op.getOperand(1), Op.getOperand(2), Op.getOperand(3));
   case Intrinsic::aarch64_sve_ptrue:
-    return DAG.getNode(AArch64ISD::PTRUE, dl, Op.getValueType(),
-                       Op.getOperand(1));
+    return getPTrue(DAG, dl, Op.getValueType(),
+                    cast<ConstantSDNode>(Op.getOperand(1))->getZExtValue());
   case Intrinsic::aarch64_sve_clz:
     return DAG.getNode(AArch64ISD::CTLZ_MERGE_PASSTHRU, dl, Op.getValueType(),
                        Op.getOperand(2), Op.getOperand(3), Op.getOperand(1));
@@ -18099,8 +18099,7 @@ static SDValue getPredicateForFixedLengthVector(SelectionDAG &DAG, SDLoc &DL,
     break;
   }
 
-  return DAG.getNode(AArch64ISD::PTRUE, DL, MaskVT,
-                     DAG.getTargetConstant(PgPattern, DL, MVT::i64));
+  return getPTrue(DAG, DL, MaskVT, PgPattern);
 }
 
 static SDValue getPredicateForScalableVector(SelectionDAG &DAG, SDLoc &DL,
