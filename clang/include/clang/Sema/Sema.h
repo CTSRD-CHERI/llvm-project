@@ -3897,6 +3897,8 @@ public:
                                        SourceLocation LParenLoc,
                                        MultiExprArg Args,
                                        SourceLocation RParenLoc,
+                                       Expr *ExecConfig = nullptr,
+                                       bool IsExecConfig = false,
                                        bool AllowRecovery = false);
   ExprResult
   BuildCallToObjectOfClassType(Scope *S, Expr *Object, SourceLocation LParenLoc,
