@@ -139,9 +139,9 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   IntAlignInBytes =
     C.toCharUnitsFromBits(Target.getIntAlign()).getQuantity();
   CharTy =
-      llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getCharWidth());
-  IntTy = llvm::IntegerType::get(LLVMContext, Target.getIntWidth());
-  // XXXAR it seems like the codegen uses this type as an integer which can fit
+    llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getCharWidth());
+  IntTy = llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getIntWidth());
+  // XXXAR: it seems like the codegen uses this type as an integer which can fit
   // the pointer range and not as an integer with the same width as a pointer
   IntPtrTy = llvm::IntegerType::get(LLVMContext, Target.getMaxPointerRange());
   Int8PtrTy = Int8Ty->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
