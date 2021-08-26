@@ -33,6 +33,7 @@ config.cxx_ext_threads          = @LIBUNWIND_BUILD_EXTERNAL_THREAD_LIBRARY@
 config.cxx_stdlib_under_test    = "cxx_default"
 # Avoid the slow checks for locale support (we don't care about those features).
 config.test_localization      = False
+config.x86_cet                  = @LIBUNWIND_ENABLE_CET@
 
 site.addsitedir(os.path.join(config.libunwind_src_root, 'test'))
 site.addsitedir(os.path.join(config.libcxx_src_root, 'utils'))
