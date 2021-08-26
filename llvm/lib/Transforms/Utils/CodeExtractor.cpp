@@ -1584,6 +1584,13 @@ static void fixupDebugInfoPostExtraction(Function &OldFunc, Function &NewFunc,
 
 Function *
 CodeExtractor::extractCodeRegion(const CodeExtractorAnalysisCache &CEAC) {
+  ValueSet Inputs, Outputs;
+  return extractCodeRegion(CEAC, Inputs, Outputs);
+}
+
+Function *
+CodeExtractor::extractCodeRegion(const CodeExtractorAnalysisCache &CEAC,
+                                 ValueSet &inputs, ValueSet &outputs) {
   if (!isEligible())
     return nullptr;
 
@@ -1672,7 +1679,7 @@ CodeExtractor::extractCodeRegion(const CodeExtractorAnalysisCache &CEAC) {
   }
   newFuncRoot->getInstList().push_back(BranchI);
 
-  ValueSet inputs, outputs, SinkingCands, HoistingCands;
+  ValueSet SinkingCands, HoistingCands;
   BasicBlock *CommonExit = nullptr;
   findAllocas(CEAC, SinkingCands, HoistingCands, CommonExit);
   assert(HoistingCands.empty() || CommonExit);
