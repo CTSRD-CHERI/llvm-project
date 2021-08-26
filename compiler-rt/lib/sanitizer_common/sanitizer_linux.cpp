@@ -419,7 +419,7 @@ uptr internal_unlink(const char *path) {
 }
 
 usize internal_rename(const char *oldpath, const char *newpath) {
-#if defined(__riscv)
+#if defined(__riscv) && defined(__linux__)
   return internal_syscall(SYSCALL(renameat2), AT_FDCWD, (uptr)oldpath, AT_FDCWD,
                           (uptr)newpath, 0);
 #elif SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
@@ -1179,7 +1179,8 @@ void ForEachMappedRegion(link_map *map, void (*cb)(const void *, usize)) {
 }
 #endif
 
-#if defined(__x86_64__) && SANITIZER_LINUX
+#if SANITIZER_LINUX
+#if defined(__x86_64__)
 // We cannot use glibc's clone wrapper, because it messes with the child
 // task's TLS. It writes the PID and TID of the child task to its thread
 // descriptor, but in our case the child task shares the thread descriptor with
@@ -1318,8 +1319,8 @@ usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
   return res;
 }
 #elif SANITIZER_RISCV64
-uptr internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
-                    int *parent_tidptr, void *newtls, int *child_tidptr) {
+usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
+                     int *parent_tidptr, void *newtls, int *child_tidptr) {
   if (!fn || !child_stack)
     return -EINVAL;
 
@@ -1518,9 +1519,9 @@ usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
              : "cr0", "cr1", "memory", "ctr", "r0", "r27", "r28", "r29");
   return res;
 }
-#elif defined(__i386__) && SANITIZER_LINUX
+#elif defined(__i386__)
 usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
-                    int *parent_tidptr, void *newtls, int *child_tidptr) {
+                     int *parent_tidptr, void *newtls, int *child_tidptr) {
   int res;
   if (!fn || !child_stack)
     return -EINVAL;
@@ -1583,9 +1584,9 @@ usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
                        : "memory");
   return res;
 }
-#elif defined(__arm__) && SANITIZER_LINUX
+#elif defined(__arm__)
 usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
-                    int *parent_tidptr, void *newtls, int *child_tidptr) {
+                     int *parent_tidptr, void *newtls, int *child_tidptr) {
   unsigned int res;
   if (!fn || !child_stack)
     return -EINVAL;
@@ -1649,7 +1650,8 @@ usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
                        : "memory");
   return res;
 }
-#endif  // defined(__x86_64__) && SANITIZER_LINUX
+#endif
+#endif  // SANITIZER_LINUX
 
 #if SANITIZER_LINUX
 int internal_uname(struct utsname *buf) {
@@ -1887,7 +1889,11 @@ SignalContext::WriteFlag SignalContext::GetWriteFlag() const {
   u32 instr = *(u32 *)pc;
   return (instr >> 21) & 1 ? WRITE: READ;
 #elif defined(__riscv)
+#if SANITIZER_FREEBSD
+  unsigned long pc = ucontext->uc_mcontext.mc_gpregs.gp_sepc;
+#else
   unsigned long pc = ucontext->uc_mcontext.__gregs[REG_PC];
+#endif
   unsigned faulty_instruction = *(uint16_t *)pc;
 
 #if defined(__riscv_compressed)
@@ -2113,9 +2119,15 @@ static void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
   *sp = ucontext->uc_mcontext.gregs[15];
 #elif defined(__riscv)
   ucontext_t *ucontext = (ucontext_t*)context;
+#    if SANITIZER_FREEBSD
+  *pc = ucontext->uc_mcontext.mc_gpregs.gp_sepc;
+  *bp = ucontext->uc_mcontext.mc_gpregs.gp_s[0];
+  *sp = ucontext->uc_mcontext.mc_gpregs.gp_sp;
+#    else
   *pc = ucontext->uc_mcontext.__gregs[REG_PC];
   *bp = ucontext->uc_mcontext.__gregs[REG_S0];
   *sp = ucontext->uc_mcontext.__gregs[REG_SP];
+#    endif
 #  elif defined(__hexagon__)
   ucontext_t *ucontext = (ucontext_t *)context;
   *pc = ucontext->uc_mcontext.pc;
