@@ -1992,7 +1992,7 @@ ABIArgInfo X86_32ABIInfo::classifyArgumentType(QualType Ty,
 
     // Pass over-aligned aggregates on Windows indirectly. This behavior was
     // added in MSVC 2015.
-    if (IsWin32StructABI && TI.AlignIsRequired && TI.Align > 32)
+    if (IsWin32StructABI && TI.isAlignRequired() && TI.Align > 32)
       return getIndirectResult(Ty, /*ByVal=*/false, State);
 
     // Expand small (<= 128-bit) record types when we know that the stack layout
@@ -7146,7 +7146,7 @@ Address ARMABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
     TyAlignForABI = CharUnits::fromQuantity(4);
   }
 
-  TypeInfoChars TyInfo(TySize, TyAlignForABI, false);
+  TypeInfoChars TyInfo(TySize, TyAlignForABI, AlignRequirementKind::None);
   return emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect, TyInfo,
                           SlotSize, /*AllowHigherAlign*/ true);
 }
