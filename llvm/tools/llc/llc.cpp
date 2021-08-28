@@ -330,8 +330,6 @@ int main(int argc, char **argv) {
   // Enable debug stream buffering.
   EnableDebugBuffering = true;
 
-  LLVMContext Context;
-
   // Initialize targets first, so that --version shows registered targets.
   InitializeAllTargets();
   InitializeAllTargetMCs();
@@ -366,6 +364,7 @@ int main(int argc, char **argv) {
 
   cl::ParseCommandLineOptions(argc, argv, "llvm system compiler\n");
 
+  LLVMContext Context;
   Context.setDiscardValueNames(DiscardValueNames);
 
   // Set a diagnostic handler that doesn't exit on the first error
