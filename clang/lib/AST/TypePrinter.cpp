@@ -2065,10 +2065,9 @@ static bool isSubstitutedDefaultArgument(ASTContext &Ctx, TemplateArgument Arg,
 }
 
 template <typename TA>
-static void printTo(raw_ostream &OS, ArrayRef<TA> Args,
-                    const PrintingPolicy &Policy, bool SkipBrackets,
-                    const TemplateParameterList *TPL, bool IsPack,
-                    unsigned ParmIndex) {
+static void
+printTo(raw_ostream &OS, ArrayRef<TA> Args, const PrintingPolicy &Policy,
+        const TemplateParameterList *TPL, bool IsPack, unsigned ParmIndex) {
   // Drop trailing template arguments that match default arguments.
   if (TPL && Policy.SuppressDefaultTemplateArgs &&
       !Policy.PrintCanonicalTypes && !Args.empty() && !IsPack &&
@@ -2085,7 +2084,7 @@ static void printTo(raw_ostream &OS, ArrayRef<TA> Args,
   }
 
   const char *Comma = Policy.MSVCFormatting ? "," : ", ";
-  if (!SkipBrackets)
+  if (!IsPack)
     OS << '<';
 
   bool NeedSpace = false;
@@ -2098,7 +2097,7 @@ static void printTo(raw_ostream &OS, ArrayRef<TA> Args,
     if (Argument.getKind() == TemplateArgument::Pack) {
       if (Argument.pack_size() && !FirstArg)
         OS << Comma;
-      printTo(ArgOS, Argument.getPackAsArray(), Policy, true, TPL,
+      printTo(ArgOS, Argument.getPackAsArray(), Policy, TPL,
               /*IsPack*/ true, ParmIndex);
     } else {
       if (!FirstArg)
@@ -2132,7 +2131,7 @@ static void printTo(raw_ostream &OS, ArrayRef<TA> Args,
   if (NeedSpace)
     OS << ' ';
 
-  if (!SkipBrackets)
+  if (!IsPack)
     OS << '>';
 }
 
@@ -2147,14 +2146,14 @@ void clang::printTemplateArgumentList(raw_ostream &OS,
                                       ArrayRef<TemplateArgument> Args,
                                       const PrintingPolicy &Policy,
                                       const TemplateParameterList *TPL) {
-  printTo(OS, Args, Policy, false, TPL, /*isPack*/ false, /*parmIndex*/ 0);
+  printTo(OS, Args, Policy, TPL, /*isPack*/ false, /*parmIndex*/ 0);
 }
 
 void clang::printTemplateArgumentList(raw_ostream &OS,
                                       ArrayRef<TemplateArgumentLoc> Args,
                                       const PrintingPolicy &Policy,
                                       const TemplateParameterList *TPL) {
-  printTo(OS, Args, Policy, false, TPL, /*isPack*/ false, /*parmIndex*/ 0);
+  printTo(OS, Args, Policy, TPL, /*isPack*/ false, /*parmIndex*/ 0);
 }
 
 std::string Qualifiers::getAsString() const {
