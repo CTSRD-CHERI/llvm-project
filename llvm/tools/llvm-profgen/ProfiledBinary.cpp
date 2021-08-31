@@ -546,8 +546,8 @@ SampleContextFrameVector ProfiledBinary::symbolize(const InstructionPointer &IP,
   return CallStack;
 }
 
-InstructionPointer::InstructionPointer(ProfiledBinary *Binary, uint64_t Address,
-                                       bool RoundToNext)
+InstructionPointer::InstructionPointer(const ProfiledBinary *Binary,
+                                       uint64_t Address, bool RoundToNext)
     : Binary(Binary), Address(Address) {
   Index = Binary->getIndexForAddr(Address);
   if (RoundToNext) {
