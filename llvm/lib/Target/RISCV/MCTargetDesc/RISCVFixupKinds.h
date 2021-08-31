@@ -85,6 +85,8 @@ enum Fixups {
   // fixup_riscv_captab_pcrel_hi20 - 20-bit fixup corresponding to
   // captab_pcrel_hi(foo) for instructions like auipcc
   fixup_riscv_captab_pcrel_hi20,
+  // fixup_riscv_ccall_gprel - Used to do $cgp-based calls
+  fixup_riscv_ccall_gprel,
   // fixup_riscv_captab_gprel - Used to reference $cgp-based capabilities
   fixup_riscv_captab_gprel,
   // fixup_riscv_capability - CLen-bit fixup corresponding to .chericap

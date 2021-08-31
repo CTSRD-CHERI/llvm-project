@@ -115,6 +115,7 @@ bool RISCVMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case VK_RISCV_TLS_GOT_HI:
     case VK_RISCV_TLS_GD_HI:
     case VK_RISCV_CAPTAB_PCREL_HI:
+    case VK_RISCV_CCALL_GPREL:
     case VK_RISCV_CAPTAB_GPREL:
     case VK_RISCV_TPREL_CINCOFFSET:
     case VK_RISCV_TLS_IE_CAPTAB_PCREL_HI:
@@ -143,6 +144,7 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
       .Case("tls_ie_pcrel_hi", VK_RISCV_TLS_GOT_HI)
       .Case("tls_gd_pcrel_hi", VK_RISCV_TLS_GD_HI)
       .Case("captab_pcrel_hi", VK_RISCV_CAPTAB_PCREL_HI)
+      .Case("ccall_gprel", VK_RISCV_CCALL_GPREL)
       .Case("captab_gprel", VK_RISCV_CAPTAB_GPREL)
       .Case("tprel_cincoffset", VK_RISCV_TPREL_CINCOFFSET)
       .Case("tls_ie_captab_pcrel_hi", VK_RISCV_TLS_IE_CAPTAB_PCREL_HI)
@@ -177,6 +179,8 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "tls_gd_pcrel_hi";
   case VK_RISCV_CAPTAB_PCREL_HI:
     return "captab_pcrel_hi";
+  case VK_RISCV_CCALL_GPREL:
+    return "ccall_gprel";
   case VK_RISCV_CAPTAB_GPREL:
     return "captab_gprel";
   case VK_RISCV_TPREL_CINCOFFSET:
@@ -248,6 +252,7 @@ bool RISCVMCExpr::evaluateAsConstant(int64_t &Res) const {
       Kind == VK_RISCV_TLS_GOT_HI || Kind == VK_RISCV_TLS_GD_HI ||
       Kind == VK_RISCV_CALL || Kind == VK_RISCV_CALL_PLT ||
       Kind == VK_RISCV_CAPTAB_PCREL_HI ||
+      Kind == VK_RISCV_CCALL_GPREL ||
       Kind == VK_RISCV_CAPTAB_GPREL ||
       Kind == VK_RISCV_TPREL_CINCOFFSET ||
       Kind == VK_RISCV_TLS_IE_CAPTAB_PCREL_HI ||

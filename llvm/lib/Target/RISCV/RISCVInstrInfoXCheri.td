@@ -815,6 +815,12 @@ def PseudoCLGP : Pseudo<(outs GPCR:$dst, GPR:$tmp),
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
+def PseudoCLGC_GP_Call: Pseudo<(outs GPCR:$dst, GPR:$tmp),
+                        (ins bare_symbol:$src), [],
+                        "clgc.gp.call", "$dst, $src, $tmp">;
+
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1 in
 def PseudoCLA_TLS_IE : Pseudo<(outs GPR:$dst, GPCR:$tmp),
                               (ins bare_symbol:$src), [],
                               "cla.tls.ie", "$dst, $src, $tmp">;

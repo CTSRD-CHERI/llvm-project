@@ -154,6 +154,8 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_RISCV_CHERI_CAPABILITY;
   case RISCV::fixup_riscv_tprel_cincoffset:
     return ELF::R_RISCV_CHERI_TPREL_CINCOFFSET;
+  case RISCV::fixup_riscv_ccall_gprel:
+    return ELF::R_RISCV_CHERI_CCALL_GPREL;
   case RISCV::fixup_riscv_captab_gprel:
     return ELF::R_RISCV_CHERI_CAPTAB_GPREL;
   }

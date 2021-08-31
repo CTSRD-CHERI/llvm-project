@@ -72,6 +72,7 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"fixup_riscv_relax", 0, 0, 0},
       {"fixup_riscv_align", 0, 0, 0},
       {"fixup_riscv_captab_pcrel_hi20", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_riscv_ccall_gprel", 0, 0, 0},
       {"fixup_riscv_captab_gprel", 0, 0, 0},
       {"fixup_riscv_capability", 0, 0, 0},
       {"fixup_riscv_tprel_cincoffset", 0, 0, 0},
@@ -118,6 +119,7 @@ bool RISCVAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case RISCV::fixup_riscv_tls_got_hi20:
   case RISCV::fixup_riscv_tls_gd_hi20:
   case RISCV::fixup_riscv_captab_pcrel_hi20:
+  case RISCV::fixup_riscv_ccall_gprel:
   case RISCV::fixup_riscv_captab_gprel:
   case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
   case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
@@ -240,6 +242,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case RISCV::fixup_riscv_tls_got_hi20:
   case RISCV::fixup_riscv_tls_gd_hi20:
   case RISCV::fixup_riscv_captab_pcrel_hi20:
+  case RISCV::fixup_riscv_ccall_gprel:
   case RISCV::fixup_riscv_captab_gprel:
   case RISCV::fixup_riscv_capability:
   case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:

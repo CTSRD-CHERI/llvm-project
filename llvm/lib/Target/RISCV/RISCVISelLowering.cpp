@@ -2004,7 +2004,8 @@ static SDValue getTargetNode(JumpTableSDNode *N, SDLoc DL, EVT Ty,
 
 template <class NodeTy>
 SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
-                                     bool IsLocal, bool CanDeriveFromPcc) const {
+                                     bool IsLocal, bool CanDeriveFromPcc,
+                                     bool IsFuncCall) const {
   SDLoc DL(N);
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
@@ -2012,7 +2013,10 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
 
     if (RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::Gprel) {
       MVT XLenVT = Subtarget.getXLenVT();
-      return SDValue(DAG.getMachineNode(RISCV::PseudoCLGP, DL, Ty, XLenVT, Addr), 0);
+      if (IsFuncCall)
+          return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC_GP_Call, DL, Ty, XLenVT, Addr), 0);
+      else
+          return SDValue(DAG.getMachineNode(RISCV::PseudoCLGP, DL, Ty, XLenVT, Addr), 0);
     }
 
     if (IsLocal && CanDeriveFromPcc) {
@@ -2083,7 +2087,7 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   // bounds and therefore would not be checked when we pass the reference to
   // another function. Therefore, we always load from the captable for all
   // global variables.
-  SDValue Addr = getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false);
+  SDValue Addr = getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false, false);
 
   // In order to maximise the opportunity for common subexpression elimination,
   // emit a separate ADD/PTRADD node for the global address offset instead of
@@ -2099,7 +2103,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
   BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true, false);
 }
 
 SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
@@ -2107,7 +2111,7 @@ SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true, false);
 }
 
 SDValue RISCVTargetLowering::lowerJumpTable(SDValue Op,
@@ -2115,7 +2119,7 @@ SDValue RISCVTargetLowering::lowerJumpTable(SDValue Op,
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true, false);
 }
 
 SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
@@ -6910,7 +6914,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
       IsLocal = false;
       Callee = getAddr(S, Callee.getValueType(), DAG, IsLocal,
-                       /*CanDeriveFromPcc=*/true);
+                       /*CanDeriveFromPcc=*/true, true);
     } else {
       unsigned OpFlags = IsLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
@@ -6922,7 +6926,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       // FIXME: we can't set IsLocal yet since we don't handle PLTs yet
       IsLocal = false;
       Callee = getAddr(S, Callee.getValueType(), DAG, IsLocal,
-                       /*CanDeriveFromPcc=*/true);
+                       /*CanDeriveFromPcc=*/true, true);
     } else {
       unsigned OpFlags = IsLocal ? RISCVII::MO_CALL : RISCVII::MO_PLT;
       Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);

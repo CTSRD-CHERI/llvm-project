@@ -74,6 +74,9 @@ private:
   bool expandCapLoadGlobalCap(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MBBI,
                               MachineBasicBlock::iterator &NextMBBI);
+  bool expandCLGC_GP_Call(MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MBBI,
+                              MachineBasicBlock::iterator &NextMBBI);
   bool expandCapLoadGPCap(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MBBI,
                               MachineBasicBlock::iterator &NextMBBI);
@@ -134,6 +137,8 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLGP:
     return expandCapLoadGPCap(MBB, MBBI, NextMBBI);
+  case RISCV::PseudoCLGC_GP_Call:
+    return expandCLGC_GP_Call(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLA_TLS_IE:
     return expandCapLoadTLSIEAddress(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLC_TLS_GD:
@@ -389,6 +394,17 @@ bool RISCVExpandPseudo::expandCapLoadGPCap(
   const auto &STI = MF->getSubtarget<RISCVSubtarget>();
   unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
   return expandGPRelInst(MBB, MBBI, NextMBBI, RISCVII::MO_CAPTAB_GPREL,
+                              SecondOpcode);
+}
+
+bool RISCVExpandPseudo::expandCLGC_GP_Call(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    MachineBasicBlock::iterator &NextMBBI) {
+  MachineFunction *MF = MBB.getParent();
+
+  const auto &STI = MF->getSubtarget<RISCVSubtarget>();
+  unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
+  return expandGPRelInst(MBB, MBBI, NextMBBI, RISCVII::MO_CCALL_GPREL,
                               SecondOpcode);
 }
 
