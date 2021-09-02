@@ -1364,7 +1364,9 @@ public:
   QualType getVariableArrayType(QualType EltTy, Expr *NumElts,
                                 ArrayType::ArraySizeModifier ASM,
                                 unsigned IndexTypeQuals,
-                                SourceRange Brackets) const;
+                                SourceRange Brackets,
+                                llvm::Optional<PointerInterpretationKind>
+                                PIK = llvm::None) const;
 
   /// Return a non-unique reference to the type for a dependently-sized
   /// array of the specified element type.
@@ -1374,20 +1376,27 @@ public:
   QualType getDependentSizedArrayType(QualType EltTy, Expr *NumElts,
                                       ArrayType::ArraySizeModifier ASM,
                                       unsigned IndexTypeQuals,
-                                      SourceRange Brackets) const;
+                                      SourceRange Brackets,
+                                      llvm::Optional<PointerInterpretationKind>
+                                      PIK = llvm::None) const;
 
   /// Return a unique reference to the type for an incomplete array of
   /// the specified element type.
   QualType getIncompleteArrayType(QualType EltTy,
                                   ArrayType::ArraySizeModifier ASM,
-                                  unsigned IndexTypeQuals) const;
+                                  unsigned IndexTypeQuals,
+                                  llvm::Optional<PointerInterpretationKind>
+                                  PIK = llvm::None) const;
+
 
   /// Return the unique reference to the type for a constant array of
   /// the specified element type.
   QualType getConstantArrayType(QualType EltTy, const llvm::APInt &ArySize,
                                 const Expr *SizeExpr,
                                 ArrayType::ArraySizeModifier ASM,
-                                unsigned IndexTypeQuals) const;
+                                unsigned IndexTypeQuals,
+                                llvm::Optional<PointerInterpretationKind>
+                                PIK = llvm::None) const;
 
   /// Return a type for a constant array for a string literal of the
   /// specified element type and length.
@@ -2635,11 +2644,9 @@ public:
   /// qualified element of the array.
   ///
   /// See C99 6.7.5.3p7 and C99 6.3.2.1p3.
-  QualType getArrayDecayedType(QualType T) const {
-    return getArrayDecayedType(T, getDefaultPointerInterpretation());
-  }
   QualType getArrayDecayedType(QualType T,
-                               PointerInterpretationKind PIK) const;
+                               llvm::Optional<PointerInterpretationKind>
+                               PIKFromBase = llvm::None) const;
 
   /// Return the type that \p PromotableType will promote to: C99
   /// 6.3.1.1p2, assuming that \p PromotableType is a promotable integer type.

@@ -456,9 +456,8 @@ public:
       auto Value = E->getValue();
       assert(Value.getBitWidth() == CGF.getTarget().getPointerRangeForCHERICapability());
       // assert(E->getValue().getBitWidth() <= 64);
-      return CGF.setCapabilityIntegerValue(
-          llvm::ConstantPointerNull::get(CGF.Int8CheriCapTy),
-          Builder.getInt(Value));
+      return CGF.getNullDerivedCapability(CGF.Int8CheriCapTy,
+                                          Builder.getInt(Value));
     }
     return Builder.getInt(E->getValue());
   }
@@ -851,9 +850,7 @@ public:
           BO->getRHS()->getType()->hasAttr(attr::CHERINoProvenance);
       if (LHSNoProvenance && RHSNoProvenance) {
         // If both have a no-provenance attribute, we derive from NULL
-        auto NullCap = llvm::ConstantPointerNull::get(
-            cast<llvm::PointerType>(LHS->getType()));
-        return CGF.setCapabilityIntegerValue(NullCap, V);
+        return CGF.getNullDerivedCapability(LHS->getType(), V);
       } else if (RHSNoProvenance) {
         // If the RHS doens't carry provenance we can use the LHS
         return CGF.setCapabilityIntegerValue(LHS, V);
@@ -1488,11 +1485,11 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
         Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
     // Then, cast to pointer.
     if (DstType->isCHERICapabilityType(CGF.getContext())) {
-      // But for capabilities we want to avoid createing a inttoptr instruction
+      // But for capabilities we want to avoid creating an inttoptr instruction
       // and instead use llvm.cheri.cap.address/offset.set(NULL, value)
-      assert(MiddleTy->getScalarSizeInBits() <= 64 && "Should use pointer range not size");
-      Value *Null = llvm::ConstantPointerNull::get(DstPT);
-      return CGF.setCapabilityIntegerValue(Null, IntResult);
+      assert(MiddleTy->getScalarSizeInBits() <= 64 &&
+             "Should use pointer range not size");
+      return CGF.getNullDerivedCapability(DstPT, IntResult);
     }
     return Builder.CreateIntToPtr(IntResult, DstTy, "conv");
   }
@@ -2654,10 +2651,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       PtrExpr = Builder.CreatePtrToInt(PtrExpr, CGF.PtrDiffTy);
       // FIXME: should casts to intcap_t yield a tagged or untagged value?
       // I believe we should make a cast to __intcap_t yield the integer value
-      // and require a (__cheri_tocap ) cast if you really want the cfromddc behaviour
-      return CGF.setCapabilityIntegerValue(
-          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)), PtrExpr);
-#if 0   // This would yield a cfromddc:
+      // and require a (__cheri_tocap ) cast if you really want the cfromddc
+      // behaviour
+      return CGF.getNullDerivedCapability(ResultType, PtrExpr);
+#if 0 // This would yield a cfromddc:
       return Builder.CreateIntToPtr(PtrExpr, ResultType);
 #endif
     }
@@ -4194,31 +4191,30 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
   if (RHSExpr && RHSExpr->getType()->isIntCapType()) {
     const bool IsAddrMode = CGF.CGM.getLangOpts().cheriUIntCapUsesAddr();
     // Subtraction of __intcap_t is ambiguous: could be pointer
-    // increment/decrement or pointer difference
+    // increment/decrement or pointer difference.
     auto LHSExpr = cast<BinaryOperator>(op.E)->getLHS();
-    // However, we can avoid emitting this warning in address interpretation
-    // if the LHS is an non-capability integer that was promoted to __intcap_t
-    // since it will always yield an untagged capability with the correct value
+    // However, we can avoid emitting this warning in if the LHS is a
+    // non-capability integer that was promoted to __intcap_t since it will
+    // always yield an untagged capability with the correct value
     // TODO: should avoid the getaddr/setaddr calls in codegen for this case
     QualType LhsRealType = LHSExpr->IgnoreImplicit()->getType();
-    bool ShouldWarn =
-        op.Ty->isIntCapType() && (!IsAddrMode || LhsRealType->isIntCapType());
     QualType RhsRealType = RHSExpr->IgnoreImplicit()->getType();
-    if (ShouldWarn && RhsRealType->isIntCapType()) {
-      CGF.CGM.getDiags().Report(op.E->getExprLoc(),
-                                diag::warn_uintcap_add_subtract)
-          << /* subtraction */ 1 << RhsRealType << LhsRealType << IsAddrMode
-          << op.E->getSourceRange();
+    if (LhsRealType->isIntCapType() && RhsRealType->isIntCapType()) {
+      CGF.CGM.getDiags().Report(
+          op.E->getExprLoc(), diag::warn_uintcap_subtract_unintended_provenance)
+          << RhsRealType << LhsRealType << op.E->getSourceRange();
       CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
                                 diag::note_uintcap_subtract);
     }
-    // In offset interpretation subtracting an __intcap_t from a pointer may
-    // also yield the wrong result since only the offset is subtracted.
-    if (!IsAddrMode && op.Ty->isPointerType() && RhsRealType->isIntCapType()) {
+    // In offset interpretation subtracting an __intcap_t may yield the
+    // wrong result since only the offset of the RHS is subtracted.
+    if (!IsAddrMode && RhsRealType->isIntCapType()) {
       CGF.CGM.getDiags().Report(op.E->getExprLoc(),
                                 diag::warn_ptr_uintcap_subtract_offset_mode)
-          << /* subtraction */ 1 << RhsRealType << op.Ty
-          << op.E->getSourceRange();
+          << RhsRealType << LhsRealType << op.E->getSourceRange();
+      if (LhsRealType->isIntCapType())
+        CGF.CGM.getDiags().Report(RHSExpr->getExprLoc(),
+                                  diag::note_uintcap_subtract);
     }
     // TODO: warn about inefficient code generation?
   }

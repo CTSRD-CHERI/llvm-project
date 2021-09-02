@@ -56,8 +56,8 @@ int ca1(void* __capability x, void* __capability y)
   // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap b = (__intcap)y;
   // CHECK: sub
-  return a - b; // expected-warning{{subtracting '__intcap' from '__intcap' may yield incorrect results}}
-  // expected-note@-1{{in order to perform pointer arithmetic, cast the right-hand oper}}
+  return a - b; // offset-warning{{subtracting '__intcap' from '__intcap' may give an unexpected result}}
+  // offset-note@-1{{in order to perform pointer arithmetic, cast the right-hand oper}}
 }
 
 // CHECK-LABEL: i32 @ca2(

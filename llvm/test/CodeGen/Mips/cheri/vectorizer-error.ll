@@ -2,8 +2,8 @@
 ; This is a regression test for the SLP vectorizer (which was crashing when handling capabilities)
 ; Reduced C source code:
 ; struct {
-;   void *__attribute__((cheri_capability)) a;
-;   void *__attribute__((cheri_capability)) b
+;   void * __capability a;
+;   void * __capability b
 ; } c;
 ; void d() {
 ;   if (c.a == 0 || c.b == 0)

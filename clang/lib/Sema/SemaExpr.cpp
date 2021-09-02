@@ -133,18 +133,18 @@ static bool hasAnyExplicitStorageClass(const FunctionDecl *D) {
   return false;
 }
 
-static PointerInterpretationKind
-pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
+PointerInterpretationKind
+Sema::PointerInterpretationForBaseExpr(const Expr *Base) const {
   QualType DerefType;
 
   while (Base) {
     const Expr *NewBase = nullptr;
 
     if (auto *ME = dyn_cast<MemberExpr>(Base)) {
-      if (ME->isArrow())
-        DerefType = ME->getBase()->getType();
-      else if (ME->getMemberDecl()->getType()->isReferenceType())
+      if (ME->getMemberDecl()->getType()->isReferenceType())
         DerefType = ME->getMemberDecl()->getType();
+      else if (ME->isArrow())
+        DerefType = ME->getBase()->getType();
       else
         NewBase = ME->getBase();
     } else if (auto *AS = dyn_cast<ArraySubscriptExpr>(Base)) {
@@ -153,6 +153,8 @@ pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
       if (UO->getOpcode() == UO_Deref &&
           UO->getSubExpr()->getType()->isPointerType())
         DerefType = UO->getSubExpr()->getType();
+    } else if (Base->getRealReferenceType(Context)->isReferenceType()) {
+      DerefType = Base->getRealReferenceType(Context);
     }
 
     Base = NewBase;
@@ -574,7 +576,7 @@ ExprResult Sema::DefaultFunctionArrayConversion(Expr *E, bool Diagnose) {
     // T" can be converted to an rvalue of type "pointer to T".
     //
     if (getLangOpts().C99 || getLangOpts().CPlusPlus || E->isLValue()) {
-      PointerInterpretationKind PIK = pointerKindForBaseExpr(Context, E);
+      PointerInterpretationKind PIK = PointerInterpretationForBaseExpr(E);
       E = ImpCastExprToType(E, Context.getArrayDecayedType(Ty, PIK),
                             CK_ArrayToPointerDecay).get();
     }
@@ -13844,7 +13846,7 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
 
   CheckAddressOfPackedMember(op);
 
-  PointerInterpretationKind PIK = pointerKindForBaseExpr(Context, op);
+  PointerInterpretationKind PIK = PointerInterpretationForBaseExpr(op);
   return Context.getPointerType(op->getType(), PIK);
 }
 

@@ -10,6 +10,10 @@
 // instead and crash.
 // See: https://github.com/CTSRD-CHERI/llvm-project/issues/363 for a related
 // issue that inspired this test.
+//
+// The fix for this then erroneously looked at arrows before reference members,
+// causing the second test to crash in the same way. The third test using a
+// reference to the struct is added for completeness.
 
 extern "C" {
 
@@ -17,7 +21,7 @@ struct S {
   char & __capability p;
 };
 
-// CHECK-LABEL: @foo(
+// CHECK-LABEL: @dot(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[S:%.*]] = alloca [[STRUCT_S:%.*]], align 16
 // CHECK-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[S]], i32 0, i32 0
@@ -27,7 +31,29 @@ struct S {
 // CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast i8 addrspace(200)* [[TMP0]] to i8*
 // CHECK-NEXT:    ret i8* [[TMP1]]
 //
-char *foo(struct S s) {
+char *dot(struct S s) {
+  return (char *)&s.p;
+}
+
+// CHECK-LABEL: @arrow(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], %struct.S* [[S:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[P]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast i8 addrspace(200)* [[TMP0]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP1]]
+//
+char *arrow(struct S *s) {
+  return (char *)&s->p;
+}
+
+// CHECK-LABEL: @ref_dot(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], %struct.S* [[S:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[P]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast i8 addrspace(200)* [[TMP0]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP1]]
+//
+char *ref_dot(struct S &s) {
   return (char *)&s.p;
 }
 

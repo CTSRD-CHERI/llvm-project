@@ -39,12 +39,16 @@ SUBST = {
     '%cheri128_purecap_cc1': ['-cc1', "-triple=mips64-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri128", "-cheri-size", "128"],
     '%riscv32_cheri_cc1': ['-cc1', "-triple=riscv32-unknown-freebsd", "-target-feature", "+xcheri"],
     '%riscv64_cheri_cc1': ['-cc1', "-triple=riscv64-unknown-freebsd", "-target-feature", "+xcheri"],
+    '%riscv32_cheri_clang': ['-target', 'riscv32-unknown-freebsd', '-march=rv32imafdcxcheri'],
+    '%riscv64_cheri_clang': ['-target', 'riscv64-unknown-freebsd', '-march=rv64imafdcxcheri'],
     '%riscv32_cheri_purecap_cc1': ['-cc1', "-triple=riscv32-unknown-freebsd", "-target-feature", "+xcheri", "-target-abi", "il32pc64", '-target-feature', '+cap-mode'],
     '%riscv64_cheri_purecap_cc1': ['-cc1', "-triple=riscv64-unknown-freebsd", "-target-feature", "+xcheri", "-target-abi", "l64pc128", '-target-feature', '+cap-mode'],
+    '%riscv32_cheri_purecap_clang': ['-target', 'riscv32-unknown-freebsd', '-march=rv32imafdcxcheri', '-mabi=il32pc64'],
+    '%riscv64_cheri_purecap_clang': ['-target', 'riscv64-unknown-freebsd', '-march=rv64imafdcxcheri', '-mabi=l64pc128'],
 }
 
-def get_line2spell_and_mangled(args, clang_args):
-  ret = {}
+def get_line2func_list(args, clang_args):
+  ret = collections.defaultdict(list)
   # Use clang's JSON AST dump to get the mangled name
   json_dump_args = [args.clang] + clang_args + ['-fsyntax-only', '-o', '-']
   if '-cc1' not in json_dump_args:
@@ -65,26 +69,37 @@ def get_line2spell_and_mangled(args, clang_args):
 
   # Parse the clang JSON and add all children of type FunctionDecl.
   # TODO: Should we add checks for global variables being emitted?
-  def parse_clang_ast_json(node):
+  def parse_clang_ast_json(node, loc, search):
     node_kind = node['kind']
     # Recurse for the following nodes that can contain nested function decls:
     if node_kind in ('NamespaceDecl', 'LinkageSpecDecl', 'TranslationUnitDecl',
-                     'CXXRecordDecl'):
+                     'CXXRecordDecl', 'ClassTemplateSpecializationDecl'):
+      # Specializations must use the loc from the specialization, not the
+      # template, and search for the class's spelling as the specialization
+      # does not mention the method names in the source.
+      if node_kind == 'ClassTemplateSpecializationDecl':
+        inner_loc = node['loc']
+        inner_search = node['name']
+      else:
+        inner_loc = None
+        inner_search = None
       if 'inner' in node:
         for inner in node['inner']:
-          parse_clang_ast_json(inner)
+          parse_clang_ast_json(inner, inner_loc, inner_search)
     # Otherwise we ignore everything except functions:
     if node_kind not in ('FunctionDecl', 'CXXMethodDecl', 'CXXConstructorDecl',
                          'CXXDestructorDecl', 'CXXConversionDecl'):
       return
+    if loc is None:
+      loc = node['loc']
     if node.get('isImplicit') is True and node.get('storageClass') == 'extern':
-      common.debug('Skipping builtin function:', node['name'], '@', node['loc'])
+      common.debug('Skipping builtin function:', node['name'], '@', loc)
       return
-    common.debug('Found function:', node['kind'], node['name'], '@', node['loc'])
-    line = node['loc'].get('line')
+    common.debug('Found function:', node['kind'], node['name'], '@', loc)
+    line = loc.get('line')
     # If there is no line it is probably a builtin function -> skip
     if line is None:
-      common.debug('Skipping function without line number:', node['name'], '@', node['loc'])
+      common.debug('Skipping function without line number:', node['name'], '@', loc)
       return
 
     # If there is no 'inner' object, it is a function declaration and we can
@@ -98,20 +113,23 @@ def get_line2spell_and_mangled(args, clang_args):
           has_body = True
           break
     if not has_body:
-      common.debug('Skipping function without body:', node['name'], '@', node['loc'])
+      common.debug('Skipping function without body:', node['name'], '@', loc)
       return
     spell = node['name']
+    if search is None:
+      search = spell
     mangled = node.get('mangledName', spell)
-    ret[int(line)-1] = (spell, mangled)
+    ret[int(line)-1].append((spell, mangled, search))
 
   ast = json.loads(stdout)
   if ast['kind'] != 'TranslationUnitDecl':
     common.error('Clang AST dump JSON format changed?')
     sys.exit(2)
-  parse_clang_ast_json(ast)
+  parse_clang_ast_json(ast, None, None)
 
-  for line, func_name in sorted(ret.items()):
-    common.debug('line {}: found function {}'.format(line+1, func_name), file=sys.stderr)
+  for line, funcs in sorted(ret.items()):
+    for func in funcs:
+      common.debug('line {}: found function {}'.format(line+1, func), file=sys.stderr)
   if not ret:
     common.warn('Did not find any functions using', ' '.join(json_dump_args))
   return ret
@@ -230,7 +248,7 @@ def main():
                              comment_prefix='//', argparse_callback=infer_dependent_args):
     # Build a list of clang command lines and check prefixes from RUN lines.
     run_list = []
-    line2spell_and_mangled_list = collections.defaultdict(list)
+    line2func_list = collections.defaultdict(list)
 
     subs = {
       '%s' : ti.path,
@@ -310,8 +328,8 @@ def main():
 
       # Invoke clang -Xclang -ast-dump=json to get mapping from start lines to
       # mangled names. Forward all clang args for now.
-      for k, v in get_line2spell_and_mangled(ti.args, clang_args).items():
-        line2spell_and_mangled_list[k].append(v)
+      for k, v in get_line2func_list(ti.args, clang_args).items():
+        line2func_list[k].extend(v)
 
     func_dict = builder.finish_and_get_func_dict()
     global_vars_seen_dict = {}
@@ -363,15 +381,16 @@ def main():
         m = common.CHECK_RE.match(line)
         if m and m.group(1) in prefix_set:
           continue  # Don't append the existing CHECK lines
-        if idx in line2spell_and_mangled_list:
+        if idx in line2func_list:
           added = set()
-          for spell, mangled in line2spell_and_mangled_list[idx]:
+          for spell, mangled, search in line2func_list[idx]:
             # One line may contain multiple function declarations.
             # Skip if the mangled name has been added before.
-            # The line number may come from an included file,
-            # we simply require the spelling name to appear on the line
-            # to exclude functions from other files.
-            if mangled in added or spell not in line:
+            # The line number may come from an included file, we simply require
+            # the search string (normally the function's spelling name, but is
+            # the class's spelling name for class specializations) to appear on
+            # the line to exclude functions from other files.
+            if mangled in added or search not in line:
               continue
             if args.functions is None or any(re.search(regex, spell) for regex in args.functions):
               last_line = output_lines[-1].strip()

@@ -283,18 +283,15 @@ def note_cheri_memintrin_misaligned_fixit : Note<
   " https://github.com/CTSRD-CHERI/llvm-project/wiki/Unaligned-capability-copies">;
 
 // TODO: move these into a sensible warning group
-// TODO: it probably doesn't make sense to warn for additions since this is just inefficient
-def warn_uintcap_add_subtract : Warning<
-  "%select{adding|subtracting}0 %1 %select{to|from}0 %2 may yield incorrect results "
-  "if the %select{right|left}3-hand side is derived from a pointer since it "
-  "%select{will only consider the capability offset|may result in an unintended tagged value}3; "
+def warn_uintcap_subtract_unintended_provenance : Warning<
+  "subtracting %0 from %1 may result in an unintended tagged value "
+  "if the left-hand side is derived from a pointer; "
   "see https://github.com/CTSRD-CHERI/llvm-project/wiki/intcap_t-arithmetic">,
-  InGroup<CHERIIntCapArithmetic>, DefaultWarnNoWerror;
+  InGroup<CHERIProvenancePedantic>, DefaultIgnore;
 def warn_ptr_uintcap_subtract_offset_mode : Warning<
-  "%select{adding|subtracting}0 %1 %select{to|from}0 %2 may yield an incorrect "
-  "result if the %1 value is derived from a pointer since it will only consider "
-  "the capability offset; see https://github.com/CTSRD-CHERI/llvm-project/wiki/intcap_t-arithmetic">,
-  InGroup<CHERIIntCapArithmetic>, DefaultWarnNoWerror;
+  "subtracting %0 from %1 may give an unexpected result if the right-hand side "
+  "is derived from a pointer since it will only consider the capability offset">,
+  InGroup<CHERIProvenance>, DefaultWarnNoWerror;
 def note_uintcap_subtract: Note<"in order to perform pointer arithmetic, "
   "cast the right-hand operand to an integer type; if you intended to compute "
   "the difference between the addresses cast both operands to char*">;

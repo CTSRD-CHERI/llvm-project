@@ -843,7 +843,7 @@ Parser::TPResult Parser::TryParsePtrOperatorSeq() {
       while (Tok.isOneOf(tok::kw_const, tok::kw_volatile, tok::kw_restrict,
                          tok::kw__Nonnull, tok::kw__Nullable,
                          tok::kw__Nullable_result, tok::kw__Null_unspecified,
-                         tok::kw__Atomic))
+                         tok::kw__Atomic, tok::kw___capability))
         ConsumeToken();
     } else {
       return TPResult::True;
@@ -1395,6 +1395,10 @@ Parser::isCXXDeclarationSpecifier(Parser::TPResult BracedCastResult,
     // cv-qualifier
   case tok::kw_const:
   case tok::kw_volatile:
+    return TPResult::True;
+
+    // CHERI C qualifier
+  case tok::kw___capability:
     return TPResult::True;
 
     // OpenCL address space qualifiers

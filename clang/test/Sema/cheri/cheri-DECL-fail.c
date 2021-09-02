@@ -3,5 +3,5 @@
 
 __END_DECLS a __capability
 // expected-error@-1 {{unknown type name '__END_DECLS'}}
-// expected-error@-2 {{'__capability' type specifier must precede the declarator}}
-// expected-error@-3 {{expected ';' after top level declarator}}
+// expected-error@-2 {{expected ';' after top level declarator}}
+// expected-error {{expected identifier or '('}}

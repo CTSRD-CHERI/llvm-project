@@ -374,8 +374,7 @@
 // CHERI64:           #define __UINTPTR_MAX__ 4294967295U
 // CHERI64-NEXT:      #define __UINTPTR_TYPE__ unsigned int
 // CHERI64-NEXT:      #define __UINTPTR_WIDTH__ 32
-// CHERI-COMMON:      #define __capability __attribute__((cheri_capability))
-// CHERI-COMMON-NEXT: #define __clang__ 1
+// CHERI-COMMON       #define __clang__ 1
 // CHERI-RISCV32: #define __riscv_clen 64
 // CHERI-RISCV64: #define __riscv_clen 128
 

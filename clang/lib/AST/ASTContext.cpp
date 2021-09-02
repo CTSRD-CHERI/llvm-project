@@ -3474,7 +3474,9 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
                                           const llvm::APInt &ArySizeIn,
                                           const Expr *SizeExpr,
                                           ArrayType::ArraySizeModifier ASM,
-                                          unsigned IndexTypeQuals) const {
+                                          unsigned IndexTypeQuals,
+                                          llvm::Optional<PointerInterpretationKind>
+                                          PIK) const {
   assert((EltTy->isDependentType() ||
           EltTy->isIncompleteType() || EltTy->isConstantSizeType()) &&
          "Constant array of VLAs is illegal!");
@@ -3490,7 +3492,7 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
 
   llvm::FoldingSetNodeID ID;
   ConstantArrayType::Profile(ID, *this, EltTy, ArySize, SizeExpr, ASM,
-                             IndexTypeQuals);
+                             IndexTypeQuals, PIK);
 
   void *InsertPos = nullptr;
   if (ConstantArrayType *ATP =
@@ -3504,7 +3506,7 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
   if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers() || SizeExpr) {
     SplitQualType canonSplit = getCanonicalType(EltTy).split();
     Canon = getConstantArrayType(QualType(canonSplit.Ty, 0), ArySize, nullptr,
-                                 ASM, IndexTypeQuals);
+                                 ASM, IndexTypeQuals, PIK);
     Canon = getQualifiedType(Canon, canonSplit.Quals);
 
     // Get the new insert position for the node we care about.
@@ -3517,7 +3519,8 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
       ConstantArrayType::totalSizeToAlloc<const Expr *>(SizeExpr ? 1 : 0),
       TypeAlignment);
   auto *New = new (Mem)
-    ConstantArrayType(EltTy, Canon, ArySize, SizeExpr, ASM, IndexTypeQuals);
+    ConstantArrayType(EltTy, Canon, ArySize, SizeExpr, ASM, IndexTypeQuals,
+                      PIK);
   ConstantArrayTypes.InsertNode(New, InsertPos);
   Types.push_back(New);
   return QualType(New, 0);
@@ -3671,7 +3674,9 @@ QualType ASTContext::getVariableArrayType(QualType EltTy,
                                           Expr *NumElts,
                                           ArrayType::ArraySizeModifier ASM,
                                           unsigned IndexTypeQuals,
-                                          SourceRange Brackets) const {
+                                          SourceRange Brackets,
+                                          llvm::Optional<PointerInterpretationKind>
+                                          PIK) const {
   // Since we don't unique expressions, it isn't possible to unique VLA's
   // that have an expression provided for their size.
   QualType Canon;
@@ -3680,12 +3685,13 @@ QualType ASTContext::getVariableArrayType(QualType EltTy,
   if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers()) {
     SplitQualType canonSplit = getCanonicalType(EltTy).split();
     Canon = getVariableArrayType(QualType(canonSplit.Ty, 0), NumElts, ASM,
-                                 IndexTypeQuals, Brackets);
+                                 IndexTypeQuals, Brackets, PIK);
     Canon = getQualifiedType(Canon, canonSplit.Quals);
   }
 
   auto *New = new (*this, TypeAlignment)
-    VariableArrayType(EltTy, Canon, NumElts, ASM, IndexTypeQuals, Brackets);
+    VariableArrayType(EltTy, Canon, NumElts, ASM, IndexTypeQuals, Brackets,
+                      PIK);
 
   VariableArrayTypes.push_back(New);
   Types.push_back(New);
@@ -3699,7 +3705,9 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
                                                 Expr *numElements,
                                                 ArrayType::ArraySizeModifier ASM,
                                                 unsigned elementTypeQuals,
-                                                SourceRange brackets) const {
+                                                SourceRange brackets,
+                                                llvm::Optional<PointerInterpretationKind>
+                                                PIK) const {
   assert((!numElements || numElements->isTypeDependent() ||
           numElements->isValueDependent()) &&
          "Size must be type- or value-dependent!");
@@ -3713,7 +3721,7 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
       = new (*this, TypeAlignment)
           DependentSizedArrayType(*this, elementType, QualType(),
                                   numElements, ASM, elementTypeQuals,
-                                  brackets);
+                                  brackets, PIK);
     Types.push_back(newType);
     return QualType(newType, 0);
   }
@@ -3727,7 +3735,7 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
   llvm::FoldingSetNodeID ID;
   DependentSizedArrayType::Profile(ID, *this,
                                    QualType(canonElementType.Ty, 0),
-                                   ASM, elementTypeQuals, numElements);
+                                   ASM, elementTypeQuals, numElements, PIK);
 
   // Look for an existing type with these properties.
   DependentSizedArrayType *canonTy =
@@ -3738,7 +3746,7 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
     canonTy = new (*this, TypeAlignment)
       DependentSizedArrayType(*this, QualType(canonElementType.Ty, 0),
                               QualType(), numElements, ASM, elementTypeQuals,
-                              brackets);
+                              brackets, PIK);
     DependentSizedArrayTypes.InsertNode(canonTy, insertPos);
     Types.push_back(canonTy);
   }
@@ -3758,16 +3766,18 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
   auto *sugaredType
     = new (*this, TypeAlignment)
         DependentSizedArrayType(*this, elementType, canon, numElements,
-                                ASM, elementTypeQuals, brackets);
+                                ASM, elementTypeQuals, brackets, PIK);
   Types.push_back(sugaredType);
   return QualType(sugaredType, 0);
 }
 
 QualType ASTContext::getIncompleteArrayType(QualType elementType,
                                             ArrayType::ArraySizeModifier ASM,
-                                            unsigned elementTypeQuals) const {
+                                            unsigned elementTypeQuals,
+                                            llvm::Optional<PointerInterpretationKind>
+                                            PIK) const {
   llvm::FoldingSetNodeID ID;
-  IncompleteArrayType::Profile(ID, elementType, ASM, elementTypeQuals);
+  IncompleteArrayType::Profile(ID, elementType, ASM, elementTypeQuals, PIK);
 
   void *insertPos = nullptr;
   if (IncompleteArrayType *iat =
@@ -3782,7 +3792,7 @@ QualType ASTContext::getIncompleteArrayType(QualType elementType,
   if (!elementType.isCanonical() || elementType.hasLocalQualifiers()) {
     SplitQualType canonSplit = getCanonicalType(elementType).split();
     canon = getIncompleteArrayType(QualType(canonSplit.Ty, 0),
-                                   ASM, elementTypeQuals);
+                                   ASM, elementTypeQuals, PIK);
     canon = getQualifiedType(canon, canonSplit.Quals);
 
     // Get the new insert position for the node we care about.
@@ -3792,7 +3802,7 @@ QualType ASTContext::getIncompleteArrayType(QualType elementType,
   }
 
   auto *newType = new (*this, TypeAlignment)
-    IncompleteArrayType(elementType, canon, ASM, elementTypeQuals);
+    IncompleteArrayType(elementType, canon, ASM, elementTypeQuals, PIK);
 
   IncompleteArrayTypes.InsertNode(newType, insertPos);
   Types.push_back(newType);
@@ -4625,7 +4635,7 @@ QualType ASTContext::getTypedefType(const TypedefNameDecl *Decl,
   if (IsCHERICap) {
     if (const PointerType *PT = Canonical->getAs<PointerType>()) {
       // Create a copy of the typedef whose name is prefixed by "__chericap_"
-      // and whose underlying type is the cheri_capability qualified version of
+      // and whose underlying type is the __capability qualified version of
       // the pointer type
       Canonical = getPointerType(PT->getPointeeType(), PIK_Capability);
       TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getBeginLoc());
@@ -6305,14 +6315,24 @@ QualType ASTContext::getExceptionObjectType(QualType T) const {
 /// this returns a pointer to a properly qualified element of the array.
 ///
 /// See C99 6.7.5.3p7 and C99 6.3.2.1p3.
-QualType ASTContext::getArrayDecayedType(QualType Ty,
-                                         PointerInterpretationKind PIK) const {
+QualType ASTContext::getArrayDecayedType(
+    QualType Ty, llvm::Optional<PointerInterpretationKind> PIKFromBase) const {
   // Get the element type with 'getAsArrayType' so that we don't lose any
   // typedefs in the element type of the array.  This also handles propagation
   // of type qualifiers from the array type into the element type if present
   // (C99 6.7.3p8).
   const ArrayType *PrettyArrayType = getAsArrayType(Ty);
   assert(PrettyArrayType && "Not an array type!");
+
+  llvm::Optional<PointerInterpretationKind> PIKFromType =
+      PrettyArrayType->getPointerInterpretation();
+
+  assert((!PIKFromType.hasValue() || !PIKFromBase.hasValue()) &&
+         "Cannot have both a qualifier and an interpretation from a base");
+
+  PointerInterpretationKind PIK =
+      PIKFromType.getValueOr(
+          PIKFromBase.getValueOr(getDefaultPointerInterpretation()));
 
   QualType PtrTy = getPointerType(PrettyArrayType->getElementType(), PIK);
 

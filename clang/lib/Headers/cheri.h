@@ -46,7 +46,7 @@ typedef __uintcap_t uintcap_t;
 #else
 #define __IF_CAPS(x, y) y
 typedef __INTPTR_TYPE__ intcap_t;
-typedef __INTPTR_TYPE__ uintcap_t;
+typedef __UINTPTR_TYPE__ uintcap_t;
 #define __capability
 #ifdef WANT_CHERI_QUALIFIER_MACROS
 #define capability
@@ -146,27 +146,18 @@ void * __capability cheri_program_counter_get(void) {
 /* TODO: Should these be builtins to get better diagnostics? */
 
 static inline __attribute__((always_inline)) __attribute__((warn_unused_result))
-__SIZE_TYPE__
-__cheri_low_bits_get(__UINTPTR_TYPE__ ptr, __SIZE_TYPE__ mask) {
+__PTRADDR_TYPE__
+__cheri_low_bits_get(uintcap_t ptr, __PTRADDR_TYPE__ mask) {
   /*
-   * Note: we continue to use bitwise and on the uintcap value and silence the
-   * warning instead of using __builtin_cheri_offset_get() in case we decide
-   * to use a virtual-address instead offset interpretation of capabilities in
-   * the future.
+   * We need to return a NULL-derived capability here, so we need to explicitly
+   * cast the LHS to a non-capability integer.
    */
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcheri-bitwise-operations"
-  /*
-   * We mustn't return a LHS-derived capability here so we need to explicitly
-   * cast the result to a non-capability integer
-   */
-  return (__SIZE_TYPE__)(ptr & mask);
-#pragma clang diagnostic pop
+  return (__PTRADDR_TYPE__)ptr & mask;
 }
 
 static inline __attribute__((always_inline)) __attribute__((warn_unused_result))
-__UINTPTR_TYPE__
-__cheri_low_bits_or(__UINTPTR_TYPE__ ptr, __SIZE_TYPE__ bits) {
+uintcap_t
+__cheri_low_bits_or(uintcap_t ptr, __PTRADDR_TYPE__ bits) {
   /*
    * We want to return a LHS-derived capability here so using the default
    * uintcap_t semantics is fine.
@@ -175,32 +166,31 @@ __cheri_low_bits_or(__UINTPTR_TYPE__ ptr, __SIZE_TYPE__ bits) {
 }
 
 static inline __attribute__((always_inline)) __attribute__((warn_unused_result))
-__UINTPTR_TYPE__
-__cheri_low_bits_clear(__UINTPTR_TYPE__ ptr, __SIZE_TYPE__ bits_mask) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcheri-bitwise-operations"
+uintcap_t
+__cheri_low_bits_clear(uintcap_t ptr, __PTRADDR_TYPE__ bits_mask) {
   /*
    * We want to return a LHS-derived capability here so using the default
    * uintcap_t semantics is fine.
    */
   return ptr & (~bits_mask);
-#pragma clang diagnostic pop
 }
 
 #ifndef __cheri_usable_low_bits_mask
 #define __cheri_usable_low_bits_mask 31
 #endif
-#define __runtime_assert_sensible_low_bits(bits, mask)                         \
-  __extension__({                                                              \
-    assert(((bits & mask) == bits) && "Bits outside mask used!");              \
-    bits;                                                                      \
-  })
 #define __static_assert_sensible_low_bits(bits)                                \
   __extension__({                                                              \
     _Static_assert(bits < (__cheri_usable_low_bits_mask + 1),                  \
                    "Using too many low pointer bits");                         \
     _Static_assert((bits & (bits + 1)) == 0, "Mask must be all ones");         \
-    bits;                                                                      \
+    (__PTRADDR_TYPE__)(bits);                                                  \
+  })
+#define __runtime_assert_sensible_low_bits(bits, mask)                         \
+  __extension__({                                                              \
+    __PTRADDR_TYPE__ _bits = (__PTRADDR_TYPE__)(bits);                         \
+    __PTRADDR_TYPE__ _mask = __static_assert_sensible_low_bits(mask);          \
+    assert(((_bits & _mask) == _bits) && "Bits outside mask used!");           \
+    _bits;                                                                     \
   })
 
 /*

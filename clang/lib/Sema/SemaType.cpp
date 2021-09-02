@@ -2350,7 +2350,8 @@ static ExprResult checkArraySize(Sema &S, Expr *&ArraySize,
 /// returns a NULL type.
 QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
                               Expr *ArraySize, unsigned Quals,
-                              SourceRange Brackets, DeclarationName Entity) {
+                              SourceRange Brackets, DeclarationName Entity,
+                              llvm::Optional<PointerInterpretationKind> PIK) {
 
   SourceLocation Loc = Brackets.getBegin();
   if (getLangOpts().CPlusPlus) {
@@ -2475,12 +2476,13 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       if (VLAIsError)
         return QualType();
 
-      T = Context.getVariableArrayType(T, nullptr, ASM, Quals, Brackets);
+      T = Context.getVariableArrayType(T, nullptr, ASM, Quals, Brackets, PIK);
     } else {
-      T = Context.getIncompleteArrayType(T, ASM, Quals);
+      T = Context.getIncompleteArrayType(T, ASM, Quals, PIK);
     }
   } else if (ArraySize->isTypeDependent() || ArraySize->isValueDependent()) {
-    T = Context.getDependentSizedArrayType(T, ArraySize, ASM, Quals, Brackets);
+    T = Context.getDependentSizedArrayType(T, ArraySize, ASM, Quals, Brackets,
+                                           PIK);
   } else {
     ExprResult R =
         checkArraySize(*this, ArraySize, ConstVal, VLADiag, VLAIsError);
@@ -2491,7 +2493,8 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       // C99: an array with a non-ICE size is a VLA. We accept any expression
       // that we can fold to a non-zero positive value as a non-VLA as an
       // extension.
-      T = Context.getVariableArrayType(T, ArraySize, ASM, Quals, Brackets);
+      T = Context.getVariableArrayType(T, ArraySize, ASM, Quals, Brackets,
+                                       PIK);
     } else if (!T->isDependentType() && !T->isIncompleteType() &&
                !T->isConstantSizeType()) {
       // C99: an array with an element type that has a non-constant-size is a
@@ -2500,7 +2503,8 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       Diag(Loc, VLADiag);
       if (VLAIsError)
         return QualType();
-      T = Context.getVariableArrayType(T, ArraySize, ASM, Quals, Brackets);
+      T = Context.getVariableArrayType(T, ArraySize, ASM, Quals, Brackets,
+                                       PIK);
     } else {
       // C99 6.7.5.2p1: If the expression is a constant expression, it shall
       // have a value greater than zero.
@@ -2537,7 +2541,8 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
         return QualType();
       }
 
-      T = Context.getConstantArrayType(T, ConstVal, ArraySize, ASM, Quals);
+      T = Context.getConstantArrayType(T, ConstVal, ArraySize, ASM, Quals,
+                                       PIK);
     }
   }
 
@@ -4950,8 +4955,17 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         checkNullabilityConsistency(S, SimplePointerKind::Array, DeclType.Loc);
       }
 
+      // Array parameters have an interpretation based on the qualifiers
+      // (deferred until attribute parsing) and default interpretation. All
+      // other arrays are implicit based on their container (if any).
+      llvm::Optional<PointerInterpretationKind> PIK = llvm::None;
+      if (D.isPrototypeContext() &&
+          !hasOuterPointerLikeChunk(D, chunkIndex))
+        PIK = Context.getDefaultPointerInterpretation();
+
       T = S.BuildArrayType(T, ASM, ArraySize, ATI.TypeQuals,
-                           SourceRange(DeclType.Loc, DeclType.EndLoc), Name);
+                           SourceRange(DeclType.Loc, DeclType.EndLoc), Name,
+                           PIK);
       break;
     }
     case DeclaratorChunk::Function: {
@@ -8038,6 +8052,35 @@ QualType Sema::BuildPointerInterpretationAttr(QualType T,
 
     if (Qs.hasQualifiers())
       T = Context.getQualifiedType(T, Qs);
+  } else if (T->isArrayType()) {
+    // preserve existing qualifiers on T
+    Qualifiers Qs = T.getQualifiers();
+
+    const auto *AT = T->getAsArrayTypeUnsafe();
+
+    QualType EltTy = AT->getElementType();
+    ArrayType::ArraySizeModifier ASM = AT->getSizeModifier();
+    unsigned IndexTypeQuals = AT->getIndexTypeCVRQualifiers();
+
+    if (const auto *VAT = dyn_cast<VariableArrayType>(T))
+      T = Context.getVariableArrayType(EltTy, VAT->getSizeExpr(), ASM,
+                                       IndexTypeQuals,
+                                       VAT->getBracketsRange(), PIK);
+    else if (const auto *DSAT = dyn_cast<DependentSizedArrayType>(T))
+      T = Context.getDependentSizedArrayType(EltTy, DSAT->getSizeExpr(), ASM,
+                                             IndexTypeQuals,
+                                             DSAT->getBracketsRange(), PIK);
+    else if (isa<IncompleteArrayType>(T))
+      T = Context.getIncompleteArrayType(EltTy, ASM, IndexTypeQuals, PIK);
+    else if (const auto *CAT = dyn_cast<ConstantArrayType>(T))
+      T = Context.getConstantArrayType(EltTy, CAT->getSize(),
+                                       CAT->getSizeExpr(), ASM,
+                                       IndexTypeQuals, PIK);
+    else
+      llvm_unreachable("Don't know how to set the interpretation for T");
+
+    if (Qs.hasQualifiers())
+      T = Context.getQualifiedType(T, Qs);
   } else if (T->isDependentType()) {
     T = Context.getDependentPointerType(T, PIK, QualifierLoc);
   } else {
@@ -8055,18 +8098,10 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
                                       TypeAttrLocation TAL, ParsedAttr& attr) {
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
+  std::string Name = attr.getAttrName()->getName().str();
 
-  if (TAL == TAL_DeclName) {
-    // TODO: we should use the spelling as written in the source
-    // StringRef Name = attr.getName()->getName();
-    StringRef Name = "__capability";
-    S.Diag(attr.getLoc(), diag::err_attr_wrong_position) << Name
-        << FixItHint::CreateRemoval(attr.getLoc())
-        << FixItHint::CreateInsertion(state.getDeclarator().getName().getBeginLoc(), Name);
-    return;
-  }
-
-  if (TAL == TAL_DeclSpec) {
+  switch (TAL) {
+  case TAL_DeclSpec:
     // Possible deprecated use; move to the outermost pointer declarator,
     // unless this is a typedef'd pointer type or similar where we instead
     // create a new instance of this type with a memory capability as the
@@ -8099,28 +8134,10 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
             }
 
             // Output a deprecated usage warning with a FixItHint
-            SourceRange AttrRange;
-            SourceLocation AttrLoc = attr.getLoc();
-            if (AttrLoc.isValid()) {
-              // The cheri_capability attribute should always be inserted via
-              // the predefined __capability macro, but we also cater for when it
-              // isn't in the else branch
-              if (AttrLoc.isMacroID()) {
-                CharSourceRange expansionRange =
-                    S.SourceMgr.getImmediateExpansionRange(AttrLoc);
-                AttrRange.setBegin(expansionRange.getBegin());
-                AttrRange.setEnd(expansionRange.getEnd());
-              } else {
-                // Calculate extended range to include the preceding
-                // __attribute(( and following ))
-                AttrRange.setBegin(AttrLoc.getLocWithOffset(-15));
-                AttrRange.setEnd(AttrLoc.getLocWithOffset(18));
-              }
-            }
             S.Diag(chunk.Loc, diag::warn_cheri_capability_attribute_location)
-                << FixItHint::CreateRemoval(AttrRange)
+                << FixItHint::CreateRemoval(attr.getRange())
                 << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
-                                              " __capability ");
+                                              " " + Name + " ");
 
             // Put this attribute in the right place after the next pointer
             // chunk so we are called again with the parsed pointer type.
@@ -8128,7 +8145,8 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
                    .create(const_cast<IdentifierInfo *>(attr.getAttrName()),
                            attr.getRange(),
                            const_cast<IdentifierInfo *>(attr.getScopeName()),
-                           attr.getScopeLoc(), nullptr, 0, ParsedAttr::AS_GNU);
+                           attr.getScopeLoc(), nullptr, 0,
+                           ParsedAttr::AS_Keyword);
             chunk.getAttrs().addAtEnd(attrCopy);
             return;
           }
@@ -8145,6 +8163,45 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
         }
       }
     }
+    break;
+
+  case TAL_DeclChunk: {
+    unsigned chunkIndex = state.getCurrentChunkIndex();
+    DeclaratorChunk &chunk = declarator.getTypeObject(chunkIndex);
+
+    if (chunk.Kind == DeclaratorChunk::Array) {
+      bool InvalidArrayQualifier = false;
+
+      // C99 6.7.5.2p1: The optional type qualifiers and the keyword static
+      // shall appear only in a declaration of a function parameter with an
+      // array type, ...
+      if (!(declarator.isPrototypeContext() ||
+            declarator.getContext() == DeclaratorContext::KNRTypeList)) {
+        S.Diag(attr.getLoc(), diag::err_array_static_outside_prototype) <<
+            "'" + Name + "'";
+        InvalidArrayQualifier = true;
+      }
+
+      // C99 6.7.5.2p1: ... and then only in the outermost array type
+      // derivation.
+      if (hasOuterPointerLikeChunk(declarator, chunkIndex)) {
+        S.Diag(attr.getLoc(), diag::err_array_static_not_outermost) <<
+            "'" + Name + "'";
+        InvalidArrayQualifier = true;
+      }
+
+      if (InvalidArrayQualifier)
+        return;
+    }
+    break;
+  }
+
+  case TAL_DeclName:
+    llvm_unreachable(
+        "Keyword attribute should never be parsed after declaration's name");
+
+  default:
+    llvm_unreachable("Unknown type attribute location");
   }
 
   CurType = S.BuildPointerInterpretationAttr(CurType, PIK_Capability,

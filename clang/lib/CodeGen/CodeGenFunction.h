@@ -3879,8 +3879,7 @@ public:
         if (auto *CE = dyn_cast<llvm::ConstantExpr>(C)) {
           if (CE->getOpcode() == llvm::Instruction::IntToPtr &&
               CGF.CGM.getDataLayout().isFatPointer(PTy)) {
-            return CGF.setCapabilityIntegerValue(
-                llvm::ConstantPointerNull::get(PTy), CE->getOperand(0));
+            return CGF.getNullDerivedCapability(PTy, CE->getOperand(0));
           }
         }
         // TODO: are there any other exprs we need to special case?
@@ -4692,17 +4691,16 @@ public:
     return getTargetHooks().getPointerOffset(*this, V);
   }
   /// Returns the result of casting a __uintcap_t to long:
-  /// This is a getoffset operation by default but if -cheri-uintcap=addr is
-  /// passed we will return the address instead
+  /// This returns the address by default but if -cheri-uintcap=offset is
+  /// passed we will return the offset instead.
   llvm::Value *getCapabilityIntegerValue(llvm::Value *V) {
     return getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr
                ? getPointerAddress(V)
                : getPointerOffset(V);
   }
   /// Update a __uintcap_t with a long value:
-  /// This is a getoffset operation by default but if -cheri-uintcap=addr is
-  /// passed we will return the address instead (this may make certain alignment
-  /// code work unchanged)
+  /// This sets the address by default but if -cheri-uintcap=offset is
+  /// passed we will update the offset instead.
   llvm::Value *setCapabilityIntegerValue(llvm::Value *Ptr,
                                          llvm::Value *NewVal) {
     return getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr

@@ -132,9 +132,9 @@ def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
 // Generally useful CHERI warnings
 def CHERICaps : DiagGroup<"cheri-capability-misuse">;
 def CHERIProvenance : DiagGroup<"cheri-provenance">;
+def CHERIProvenancePedantic : DiagGroup<"cheri-provenance-pendatic">;
 def CHERIMisaligned : DiagGroup<"cheri-misaligned">;
 def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
-def CHERIIntCapArithmetic : DiagGroup<"cheri-intcap-arithmetic">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
 def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplicitConversionSign, CHERIImplicitConversion]>;
@@ -146,10 +146,10 @@ def CheriSubobjectBoundsRemarks : DiagGroup<"cheri-subobject-bounds">;
 
 def CheriAll : DiagGroup<"cheri",
      [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion, CheriSubobjectBoundsSuspicous,
-      CHERIIntCapArithmetic, CHERIProvenance, CHERIImplicitConversionSign, CHERIPrototypes]>;
+      CHERIProvenance, CHERIImplicitConversionSign, CHERIPrototypes]>;
 // CHERI warnings that are too noisy to turn on by default
 def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
-def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, CHERIPrototypesStrict]>;
+def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, CHERIPrototypesStrict, CHERIProvenancePedantic]>;
 // Warnings/Errors for bugs in the MIPS/CHERI backend
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
 
@@ -590,6 +590,7 @@ def ShadowAll : DiagGroup<"shadow-all", [Shadow, ShadowFieldInConstructor,
                                          ShadowUncapturedLocal, ShadowField]>;
 
 def Shorten64To32 : DiagGroup<"shorten-64-to-32">;
+def ShortenCapToInt : DiagGroup<"shorten-cap-to-int">;
 def : DiagGroup<"sign-promo">;
 def SignCompare : DiagGroup<"sign-compare">;
 def : DiagGroup<"switch-default">;
@@ -874,6 +875,7 @@ def Conversion : DiagGroup<"conversion",
                             BitFieldEnumConversion,
                             FloatConversion,
                             Shorten64To32,
+                            ShortenCapToInt,
                             IntConversion,
                             ImplicitIntConversion,
                             ImplicitFloatConversion,
