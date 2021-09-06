@@ -1064,11 +1064,14 @@ enum PredefinedTypeIDs {
   /// \brief The '__bf16' type
   PREDEF_TYPE_BFLOAT16_ID = 73,
 
+  /// \brief The '__ibm128' type
+  PREDEF_TYPE_IBM128_ID = 74,
+
   /// The '__uintcap_t' type.
-  PREDEF_TYPE_UINTCAP_ID = 74,
+  PREDEF_TYPE_UINTCAP_ID = 75,
 
   /// The '__intcap_t' type.
-  PREDEF_TYPE_INTCAP_ID = 75,
+  PREDEF_TYPE_INTCAP_ID = 76,
 
 /// OpenCL image types with auto numeration
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix)                   \

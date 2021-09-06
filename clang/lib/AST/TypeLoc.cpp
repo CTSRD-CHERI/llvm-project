@@ -353,6 +353,7 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
   case BuiltinType::UIntCap:
   case BuiltinType::Float16:
   case BuiltinType::Float128:
+  case BuiltinType::Ibm128:
   case BuiltinType::ShortAccum:
   case BuiltinType::Accum:
   case BuiltinType::LongAccum:
