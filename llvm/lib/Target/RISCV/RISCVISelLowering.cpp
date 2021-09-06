@@ -2279,14 +2279,20 @@ SDValue RISCVTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
   // compare+branch instructions. i.e.:
   // (select (setcc lhs, rhs, cc), truev, falsev)
   // -> (riscvisd::select_cc lhs, rhs, cc, truev, falsev)
-  if (Op.getSimpleValueType() == XLenVT && CondV.getOpcode() == ISD::SETCC &&
-      CondV.getOperand(0).getSimpleValueType() == XLenVT) {
+  if (CondV.getOpcode() == ISD::SETCC &&
+      (CondV.getOperand(0).getValueType() == XLenVT ||
+       CondV.getOperand(0).getValueType().isFatPointer())) {
     SDValue LHS = CondV.getOperand(0);
     SDValue RHS = CondV.getOperand(1);
     auto CC = cast<CondCodeSDNode>(CondV.getOperand(2));
     ISD::CondCode CCVal = CC->get();
 
     translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG);
+
+    if (LHS.getValueType().isFatPointer()) {
+      LHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, LHS);
+      RHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, RHS);
+    }
 
     SDValue TargetCC = DAG.getConstant(CCVal, DL, XLenVT);
     SDValue Ops[] = {LHS, RHS, TargetCC, TrueV, FalseV};
@@ -2310,12 +2316,18 @@ SDValue RISCVTargetLowering::lowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   MVT XLenVT = Subtarget.getXLenVT();
 
   if (CondV.getOpcode() == ISD::SETCC &&
-      CondV.getOperand(0).getValueType() == XLenVT) {
+      (CondV.getOperand(0).getValueType() == XLenVT ||
+       CondV.getOperand(0).getValueType().isFatPointer())) {
     SDValue LHS = CondV.getOperand(0);
     SDValue RHS = CondV.getOperand(1);
     ISD::CondCode CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
 
     translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG);
+
+    if (LHS.getValueType().isFatPointer()) {
+      LHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, LHS);
+      RHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, RHS);
+    }
 
     SDValue TargetCC = DAG.getCondCode(CCVal);
     return DAG.getNode(RISCVISD::BR_CC, DL, Op.getValueType(), Op.getOperand(0),
@@ -4878,7 +4890,8 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
     //      (select_cc X, Y, lt, trueV, falseV)
     // Sometimes the setcc is introduced after select_cc has been formed.
     if (LHS.getOpcode() == ISD::SETCC && isNullConstant(RHS) &&
-        LHS.getOperand(0).getValueType() == Subtarget.getXLenVT()) {
+        (LHS.getOperand(0).getValueType() == Subtarget.getXLenVT() ||
+         LHS.getOperand(0).getValueType().isFatPointer())) {
       // If we're looking for eq 0 instead of ne 0, we need to invert the
       // condition.
       bool Invert = CCVal == ISD::SETEQ;
@@ -4890,6 +4903,13 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       RHS = LHS.getOperand(1);
       LHS = LHS.getOperand(0);
       translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG);
+
+      if (LHS.getValueType().isFatPointer()) {
+        LHS = DAG.getTargetExtractSubreg(
+            RISCV::sub_cap_addr, DL, Subtarget.getXLenVT(), LHS);
+        RHS = DAG.getTargetExtractSubreg(
+            RISCV::sub_cap_addr, DL, Subtarget.getXLenVT(), RHS);
+      }
 
       SDValue TargetCC = DAG.getConstant(CCVal, DL, Subtarget.getXLenVT());
       return DAG.getNode(
@@ -4931,7 +4951,8 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
     //      (br_cc X, Y, lt, dest)
     // Sometimes the setcc is introduced after br_cc has been formed.
     if (LHS.getOpcode() == ISD::SETCC && isNullConstant(RHS) &&
-        LHS.getOperand(0).getValueType() == Subtarget.getXLenVT()) {
+        (LHS.getOperand(0).getValueType() == Subtarget.getXLenVT() ||
+         LHS.getOperand(0).getValueType().isFatPointer())) {
       // If we're looking for eq 0 instead of ne 0, we need to invert the
       // condition.
       bool Invert = CCVal == ISD::SETEQ;
@@ -4943,6 +4964,13 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       RHS = LHS.getOperand(1);
       LHS = LHS.getOperand(0);
       translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG);
+
+      if (LHS.getValueType().isFatPointer()) {
+        LHS = DAG.getTargetExtractSubreg(
+            RISCV::sub_cap_addr, DL, Subtarget.getXLenVT(), LHS);
+        RHS = DAG.getTargetExtractSubreg(
+            RISCV::sub_cap_addr, DL, Subtarget.getXLenVT(), RHS);
+      }
 
       return DAG.getNode(RISCVISD::BR_CC, DL, N->getValueType(0),
                          N->getOperand(0), LHS, RHS, DAG.getCondCode(CCVal),
