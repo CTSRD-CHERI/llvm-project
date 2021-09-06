@@ -61,6 +61,7 @@ set(files
   cheri_init_globals.h
   cldemoteintrin.h
   clzerointrin.h
+  crc32intrin.h
   cpuid.h
   clflushoptintrin.h
   clwbintrin.h
