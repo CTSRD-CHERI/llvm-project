@@ -1217,35 +1217,45 @@ class CheriSetCCPatGpcrGpcr<PatFrag CondOp, dag GprGprDag>
             (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr),
             (EXTRACT_SUBREG GPCR:$cs2, sub_cap_addr))>;
 
-multiclass CheriSetCCPatGpcrSimm12<PatFrag CondOp, dag GprSimm12Dag> {
-  def : Pat<(CondOp GPCR:$cs1, (inttoptr simm12:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+multiclass CheriSetCCPatGpcrImm<PatFrag CondOp, Operand ImmTy, dag GprImmDag> {
+  def : Pat<(CondOp GPCR:$cs1, (inttoptr ImmTy:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
-              (ptradd (inttoptr (XLenVT 0)), simm12:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+              (ptradd (iFATPTR64 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
+  def : Pat<(CondOp GPCR:$cs1,
+              (ptradd (iFATPTR128 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
               (int_cheri_cap_offset_set
-                (iFATPTR64 (inttoptr (XLenVT 0))), simm12:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+                (iFATPTR64 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
               (int_cheri_cap_offset_set
-                (iFATPTR64 (inttoptr (XLenVT 0))), simm12:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+                (iFATPTR128 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
               (int_cheri_cap_address_set
-                (iFATPTR64 (inttoptr (XLenVT 0))), simm12:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+                (iFATPTR64 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
               (int_cheri_cap_address_set
-                (iFATPTR128 (inttoptr (XLenVT 0))), simm12:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+                (iFATPTR128 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
 }
+
+multiclass CheriSetCCPatGpcrSimm12<PatFrag CondOp, dag GprImmDag>
+    : CheriSetCCPatGpcrImm<CondOp, simm12, GprImmDag>;
+
+multiclass CheriSetCCPatGpcrSimm12Plus1<PatFrag CondOp, dag GprImmDag>
+    : CheriSetCCPatGpcrImm<CondOp, simm12_plus1, GprImmDag>;
 
 class CheriSetCCPatGpcrNull<PatFrag CondOp, dag GprDag>
     : Pat<(CondOp GPCR:$cs1, (inttoptr (XLenVT 0))),
@@ -1255,26 +1265,36 @@ class CheriSetCCPatGpcrNull<PatFrag CondOp, dag GprDag>
 class Swap<PatFrag BinFrag>
     : PatFrag<(ops node:$a, node:$b), (BinFrag $b, $a)>;
 
-def  : CheriSetCCPatGpcrNull<seteq, (SLTIU node:$rs1, 1)>;
-def  : CheriSetCCPatGpcrGpcr<seteq, (SLTIU (XOR node:$rs1, node:$rs2), 1)>;
-defm : CheriSetCCPatGpcrSimm12<seteq, (SLTIU (XORI node:$rs1, node:$imm12), 1)>;
-defm : CheriSetCCPatGpcrSimm12<Swap<seteq>, (SLTIU (XORI node:$rs1, node:$imm12), 1)>;
-def  : CheriSetCCPatGpcrNull<setne, (SLTU X0, node:$rs1)>;
-def  : CheriSetCCPatGpcrGpcr<setne, (SLTU X0, (XOR node:$rs1, node:$rs2))>;
-defm : CheriSetCCPatGpcrSimm12<setne, (SLTU X0, (XORI node:$rs1, node:$imm12))>;
-defm : CheriSetCCPatGpcrSimm12<Swap<setne>, (SLTU X0, (XORI node:$rs1, node:$imm12))>;
-def  : CheriSetCCPatGpcrGpcr<setugt, (SLTU node:$rs2, node:$rs1)>;
-defm : CheriSetCCPatGpcrSimm12<Swap<setugt>, (SLTIU node:$rs1, node:$imm12)>;
-def  : CheriSetCCPatGpcrGpcr<setuge, (XORI (SLTU node:$rs1, node:$rs2), 1)>;
-def  : CheriSetCCPatGpcrGpcr<setule, (XORI (SLTU node:$rs2, node:$rs1), 1)>;
-def  : CheriSetCCPatGpcrGpcr<setult, (SLTU node:$rs1, node:$rs2)>;
-defm : CheriSetCCPatGpcrSimm12<setult, (SLTIU node:$rs1, node:$imm12)>;
-def  : CheriSetCCPatGpcrGpcr<setgt, (SLT node:$rs2, node:$rs1)>;
-defm : CheriSetCCPatGpcrSimm12<Swap<setgt>, (SLTI node:$rs1, node:$imm12)>;
-def  : CheriSetCCPatGpcrGpcr<setge, (XORI (SLT node:$rs1, node:$rs2), 1)>;
-def  : CheriSetCCPatGpcrGpcr<setle, (XORI (SLT node:$rs2, node:$rs1), 1)>;
+// NB: Constants are wrapped as (ptradd (inttoptr 0) C) so the operand order
+// isn't canonicalised like for integers so we have to add extra patterns for
+// the commutative and inverse cases. Maybe we should support Constant:iFATPTR,
+// represent them as (inttoptr C), or just canonicalise the current form?
+
 def  : CheriSetCCPatGpcrGpcr<setlt, (SLT node:$rs1, node:$rs2)>;
 defm : CheriSetCCPatGpcrSimm12<setlt, (SLTI node:$rs1, node:$imm12)>;
+defm : CheriSetCCPatGpcrSimm12<Swap<setgt>, (SLTI node:$rs1, node:$imm12)>;
+def  : CheriSetCCPatGpcrGpcr<setult, (SLTU node:$rs1, node:$rs2)>;
+defm : CheriSetCCPatGpcrSimm12<setult, (SLTIU node:$rs1, node:$imm12)>;
+defm : CheriSetCCPatGpcrSimm12<Swap<setugt>, (SLTIU node:$rs1, node:$imm12)>;
+
+def  : CheriSetCCPatGpcrNull<seteq, (SLTIU node:$rs1, 1)>;
+def  : CheriSetCCPatGpcrGpcr<seteq, (SLTIU (XOR node:$rs1, node:$rs2), 1)>;
+defm : CheriSetCCPatGpcrSimm12Plus1<
+           seteq, (SLTIU (ADDI node:$rs1, (NegImm node:$imm12)), 1)>;
+defm : CheriSetCCPatGpcrSimm12Plus1<
+           Swap<seteq>, (SLTIU (ADDI node:$rs1, (NegImm node:$imm12)), 1)>;
+def  : CheriSetCCPatGpcrNull<setne, (SLTU X0, node:$rs1)>;
+def  : CheriSetCCPatGpcrGpcr<setne, (SLTU X0, (XOR node:$rs1, node:$rs2))>;
+defm : CheriSetCCPatGpcrSimm12Plus1<
+           setne, (SLTU X0, (ADDI node:$rs1, (NegImm node:$imm12)))>;
+defm : CheriSetCCPatGpcrSimm12Plus1<
+           Swap<setne>, (SLTU X0, (ADDI node:$rs1, (NegImm node:$imm12)))>;
+def  : CheriSetCCPatGpcrGpcr<setugt, (SLTU node:$rs2, node:$rs1)>;
+def  : CheriSetCCPatGpcrGpcr<setuge, (XORI (SLTU node:$rs1, node:$rs2), 1)>;
+def  : CheriSetCCPatGpcrGpcr<setule, (XORI (SLTU node:$rs2, node:$rs1), 1)>;
+def  : CheriSetCCPatGpcrGpcr<setgt, (SLT node:$rs2, node:$rs1)>;
+def  : CheriSetCCPatGpcrGpcr<setge, (XORI (SLT node:$rs1, node:$rs2), 1)>;
+def  : CheriSetCCPatGpcrGpcr<setle, (XORI (SLT node:$rs2, node:$rs1), 1)>;
 
 def Select_GPCR_Using_CC_GPR : SelectCC_rrirr<GPCR, GPR>;
 
