@@ -1214,6 +1214,7 @@ if(NOT LLVM_TOOLCHAIN_TOOLS)
     llvm-cxxfilt
     llvm-ranlib
     llvm-lib
+    llvm-ml
     llvm-nm
     llvm-objcopy
     llvm-objdump
