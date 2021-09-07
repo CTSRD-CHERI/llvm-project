@@ -5620,7 +5620,6 @@ llvm::StringRef clang::driver::getDriverMode(StringRef ProgName,
     if (!Arg.startswith(OptName))
       continue;
     Opt = Arg;
-    break;
   }
   if (Opt.empty())
     Opt = ToolChain::getTargetAndModeFromProgramName(ProgName).DriverMode;
