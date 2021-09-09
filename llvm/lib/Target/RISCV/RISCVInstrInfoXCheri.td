@@ -1122,9 +1122,6 @@ def PseudoCIncOffsetTPRel : Pseudo<(outs GPCR:$rd),
 class PatGpcr<SDPatternOperator OpNode, RVInstCheriSrcDst Inst>
     : Pat<(OpNode GPCR:$rs1), (Inst GPCR:$rs1)>;
 
-class PatGpr<SDPatternOperator OpNode, RVInstCheriSrcDst Inst>
-    : Pat<(OpNode GPR:$rs1), (Inst GPR:$rs1)>;
-
 class PatGpcrGpcr<SDPatternOperator OpNode, RVInst Inst>
     : Pat<(OpNode GPCR:$rs1, GPCR:$rs2), (Inst GPCR:$rs1, GPCR:$rs2)>;
 
