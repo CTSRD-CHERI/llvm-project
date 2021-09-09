@@ -250,7 +250,7 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
 
     TII->movImm(MBB, II, DL, ScratchReg, Offset.getFixed());
-    if (MI.getOpcode() == ImmOpc) {
+    if (MI.getOpcode() == ImmOpc  && !Offset.getScalable()) {
       BuildMI(MBB, II, DL, TII->get(Opc), MI.getOperand(0).getReg())
           .addReg(FrameReg)
           .addReg(ScratchReg, RegState::Kill);
@@ -299,6 +299,13 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
         TII->getVLENFactoredAmount(MF, MBB, II, ScalableValue);
 
     // 2. Calculate address: FrameReg + result of multiply
+    if (MI.getOpcode() == ImmOpc && !Offset.getFixed()) {
+      BuildMI(MBB, II, DL, TII->get(Opc), MI.getOperand(0).getReg())
+          .addReg(FrameReg, getKillRegState(FrameRegIsKill))
+          .addReg(FactorRegister, RegState::Kill);
+      MI.eraseFromParent();
+      return;
+    }
     Register VL = MRI.createVirtualRegister(&RISCV::GPRRegClass);
     BuildMI(MBB, II, DL, TII->get(Opc), VL)
         .addReg(FrameReg, getKillRegState(FrameRegIsKill))
