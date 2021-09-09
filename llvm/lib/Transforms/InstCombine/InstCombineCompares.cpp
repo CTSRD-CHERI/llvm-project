@@ -3747,7 +3747,7 @@ foldShiftIntoShiftInAnotherHandOfAndInICmp(ICmpInst &I, const SimplifyQuery SQ,
       (WidestTy->getScalarSizeInBits() - 1) +
       (NarrowestTy->getScalarSizeInBits() - 1);
   APInt MaximalRepresentableShiftAmount =
-      APInt::getAllOnesValue(XShAmt->getType()->getScalarSizeInBits());
+      APInt::getAllOnes(XShAmt->getType()->getScalarSizeInBits());
   if (MaximalRepresentableShiftAmount.ult(MaximalPossibleTotalShiftAmount))
     return nullptr;
 
@@ -5043,7 +5043,7 @@ static Instruction *processUMulZExtIdiom(ICmpInst &I, Value *MulVal,
 static APInt getDemandedBitsLHSMask(ICmpInst &I, unsigned BitWidth) {
   const APInt *RHS;
   if (!match(I.getOperand(1), m_APInt(RHS)))
-    return APInt::getAllOnesValue(BitWidth);
+    return APInt::getAllOnes(BitWidth);
 
   // If this is a normal comparison, it demands all bits. If it is a sign bit
   // comparison, it only demands the sign bit.
@@ -5065,7 +5065,7 @@ static APInt getDemandedBitsLHSMask(ICmpInst &I, unsigned BitWidth) {
     return APInt::getBitsSetFrom(BitWidth, RHS->countTrailingZeros());
 
   default:
-    return APInt::getAllOnesValue(BitWidth);
+    return APInt::getAllOnes(BitWidth);
   }
 }
 
@@ -5264,8 +5264,7 @@ Instruction *InstCombinerImpl::foldICmpUsingKnownBits(ICmpInst &I) {
                            Op0Known, 0))
     return &I;
 
-  if (SimplifyDemandedBits(&I, 1, APInt::getAllOnesValue(BitWidth),
-                           Op1Known, 0))
+  if (SimplifyDemandedBits(&I, 1, APInt::getAllOnes(BitWidth), Op1Known, 0))
     return &I;
 
   // Given the known and unknown bits, compute a range that the LHS could be

@@ -570,7 +570,7 @@ bool TargetLowering::ShrinkDemandedConstant(SDValue Op,
                                             TargetLoweringOpt &TLO) const {
   EVT VT = Op.getValueType();
   APInt DemandedElts = VT.isVector()
-                           ? APInt::getAllOnesValue(VT.getVectorNumElements())
+                           ? APInt::getAllOnes(VT.getVectorNumElements())
                            : APInt(1, 1);
   return ShrinkDemandedConstant(Op, DemandedBits, DemandedElts, TLO);
 }
@@ -654,7 +654,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
   }
 
   APInt DemandedElts = VT.isVector()
-                           ? APInt::getAllOnesValue(VT.getVectorNumElements())
+                           ? APInt::getAllOnes(VT.getVectorNumElements())
                            : APInt(1, 1);
   return SimplifyDemandedBits(Op, DemandedBits, DemandedElts, Known, TLO, Depth,
                               AssumeSingleUse);
@@ -700,8 +700,8 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
         DAG.getDataLayout().isLittleEndian()) {
       unsigned Scale = NumDstEltBits / NumSrcEltBits;
       unsigned NumSrcElts = SrcVT.getVectorNumElements();
-      APInt DemandedSrcBits = APInt::getNullValue(NumSrcEltBits);
-      APInt DemandedSrcElts = APInt::getNullValue(NumSrcElts);
+      APInt DemandedSrcBits = APInt::getZero(NumSrcEltBits);
+      APInt DemandedSrcElts = APInt::getZero(NumSrcElts);
       for (unsigned i = 0; i != Scale; ++i) {
         unsigned Offset = i * NumSrcEltBits;
         APInt Sub = DemandedBits.extractBits(NumSrcEltBits, Offset);
@@ -723,8 +723,8 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
         DAG.getDataLayout().isLittleEndian()) {
       unsigned Scale = NumSrcEltBits / NumDstEltBits;
       unsigned NumSrcElts = SrcVT.isVector() ? SrcVT.getVectorNumElements() : 1;
-      APInt DemandedSrcBits = APInt::getNullValue(NumSrcEltBits);
-      APInt DemandedSrcElts = APInt::getNullValue(NumSrcElts);
+      APInt DemandedSrcBits = APInt::getZero(NumSrcEltBits);
+      APInt DemandedSrcElts = APInt::getZero(NumSrcElts);
       for (unsigned i = 0; i != NumElts; ++i)
         if (DemandedElts[i]) {
           unsigned Offset = (i % Scale) * NumDstEltBits;
@@ -907,7 +907,7 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
     unsigned Depth) const {
   EVT VT = Op.getValueType();
   APInt DemandedElts = VT.isVector()
-                           ? APInt::getAllOnesValue(VT.getVectorNumElements())
+                           ? APInt::getAllOnes(VT.getVectorNumElements())
                            : APInt(1, 1);
   return SimplifyMultipleUseDemandedBits(Op, DemandedBits, DemandedElts, DAG,
                                          Depth);
@@ -916,7 +916,7 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
 SDValue TargetLowering::SimplifyMultipleUseDemandedVectorElts(
     SDValue Op, const APInt &DemandedElts, SelectionDAG &DAG,
     unsigned Depth) const {
-  APInt DemandedBits = APInt::getAllOnesValue(Op.getScalarValueSizeInBits());
+  APInt DemandedBits = APInt::getAllOnes(Op.getScalarValueSizeInBits());
   return SimplifyMultipleUseDemandedBits(Op, DemandedBits, DemandedElts, DAG,
                                          Depth);
 }
@@ -983,8 +983,8 @@ bool TargetLowering::SimplifyDemandedBits(
     }
     // If this is the root being simplified, allow it to have multiple uses,
     // just set the DemandedBits/Elts to all bits.
-    DemandedBits = APInt::getAllOnesValue(BitWidth);
-    DemandedElts = APInt::getAllOnesValue(NumElts);
+    DemandedBits = APInt::getAllOnes(BitWidth);
+    DemandedElts = APInt::getAllOnes(NumElts);
   } else if (OriginalDemandedBits == 0 || OriginalDemandedElts == 0) {
     // Not demanding any bits/elts from Op.
     return TLO.CombineTo(Op, TLO.DAG.getUNDEF(VT));
@@ -1079,7 +1079,7 @@ bool TargetLowering::SimplifyDemandedBits(
     unsigned NumSubElts = Sub.getValueType().getVectorNumElements();
     APInt DemandedSubElts = DemandedElts.extractBits(NumSubElts, Idx);
     APInt DemandedSrcElts = DemandedElts;
-    DemandedSrcElts.insertBits(APInt::getNullValue(NumSubElts), Idx);
+    DemandedSrcElts.insertBits(APInt::getZero(NumSubElts), Idx);
 
     KnownBits KnownSub, KnownSrc;
     if (SimplifyDemandedBits(Sub, DemandedBits, DemandedSubElts, KnownSub, TLO,
@@ -1097,8 +1097,8 @@ bool TargetLowering::SimplifyDemandedBits(
       Known = KnownBits::commonBits(Known, KnownSrc);
 
     // Attempt to avoid multi-use src if we don't need anything from it.
-    if (!DemandedBits.isAllOnesValue() || !DemandedSubElts.isAllOnesValue() ||
-        !DemandedSrcElts.isAllOnesValue()) {
+    if (!DemandedBits.isAllOnes() || !DemandedSubElts.isAllOnes() ||
+        !DemandedSrcElts.isAllOnes()) {
       SDValue NewSub = SimplifyMultipleUseDemandedBits(
           Sub, DemandedBits, DemandedSubElts, TLO.DAG, Depth + 1);
       SDValue NewSrc = SimplifyMultipleUseDemandedBits(
@@ -1127,7 +1127,7 @@ bool TargetLowering::SimplifyDemandedBits(
       return true;
 
     // Attempt to avoid multi-use src if we don't need anything from it.
-    if (!DemandedBits.isAllOnesValue() || !DemandedSrcElts.isAllOnesValue()) {
+    if (!DemandedBits.isAllOnes() || !DemandedSrcElts.isAllOnes()) {
       SDValue DemandedSrc = SimplifyMultipleUseDemandedBits(
           Src, DemandedBits, DemandedSrcElts, TLO.DAG, Depth + 1);
       if (DemandedSrc) {
@@ -1257,7 +1257,7 @@ bool TargetLowering::SimplifyDemandedBits(
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
-    if (!DemandedBits.isAllOnesValue() || !DemandedElts.isAllOnesValue()) {
+    if (!DemandedBits.isAllOnes() || !DemandedElts.isAllOnes()) {
       SDValue DemandedOp0 = SimplifyMultipleUseDemandedBits(
           Op0, DemandedBits, DemandedElts, TLO.DAG, Depth + 1);
       SDValue DemandedOp1 = SimplifyMultipleUseDemandedBits(
@@ -1304,7 +1304,7 @@ bool TargetLowering::SimplifyDemandedBits(
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
-    if (!DemandedBits.isAllOnesValue() || !DemandedElts.isAllOnesValue()) {
+    if (!DemandedBits.isAllOnes() || !DemandedElts.isAllOnes()) {
       SDValue DemandedOp0 = SimplifyMultipleUseDemandedBits(
           Op0, DemandedBits, DemandedElts, TLO.DAG, Depth + 1);
       SDValue DemandedOp1 = SimplifyMultipleUseDemandedBits(
@@ -1347,7 +1347,7 @@ bool TargetLowering::SimplifyDemandedBits(
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
-    if (!DemandedBits.isAllOnesValue() || !DemandedElts.isAllOnesValue()) {
+    if (!DemandedBits.isAllOnes() || !DemandedElts.isAllOnes()) {
       SDValue DemandedOp0 = SimplifyMultipleUseDemandedBits(
           Op0, DemandedBits, DemandedElts, TLO.DAG, Depth + 1);
       SDValue DemandedOp1 = SimplifyMultipleUseDemandedBits(
@@ -1696,7 +1696,7 @@ bool TargetLowering::SimplifyDemandedBits(
         Known.One.setHighBits(ShAmt);
 
       // Attempt to avoid multi-use ops if we don't need anything from them.
-      if (!InDemandedMask.isAllOnesValue() || !DemandedElts.isAllOnesValue()) {
+      if (!InDemandedMask.isAllOnes() || !DemandedElts.isAllOnes()) {
         SDValue DemandedOp0 = SimplifyMultipleUseDemandedBits(
             Op0, InDemandedMask, DemandedElts, TLO.DAG, Depth + 1);
         if (DemandedOp0) {
@@ -2112,7 +2112,7 @@ bool TargetLowering::SimplifyDemandedBits(
 
     // Demand the bits from every vector element without a constant index.
     unsigned NumSrcElts = SrcEltCnt.getFixedValue();
-    APInt DemandedSrcElts = APInt::getAllOnesValue(NumSrcElts);
+    APInt DemandedSrcElts = APInt::getAllOnes(NumSrcElts);
     if (auto *CIdx = dyn_cast<ConstantSDNode>(Idx))
       if (CIdx->getAPIntValue().ult(NumSrcElts))
         DemandedSrcElts = APInt::getOneBitSet(NumSrcElts, CIdx->getZExtValue());
@@ -2128,8 +2128,7 @@ bool TargetLowering::SimplifyDemandedBits(
       return true;
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
-    if (!DemandedSrcBits.isAllOnesValue() ||
-        !DemandedSrcElts.isAllOnesValue()) {
+    if (!DemandedSrcBits.isAllOnes() || !DemandedSrcElts.isAllOnes()) {
       if (SDValue DemandedSrc = SimplifyMultipleUseDemandedBits(
               Src, DemandedSrcBits, DemandedSrcElts, TLO.DAG, Depth + 1)) {
         SDValue NewOp =
@@ -2179,8 +2178,8 @@ bool TargetLowering::SimplifyDemandedBits(
         TLO.DAG.getDataLayout().isLittleEndian()) {
       unsigned Scale = BitWidth / NumSrcEltBits;
       unsigned NumSrcElts = SrcVT.getVectorNumElements();
-      APInt DemandedSrcBits = APInt::getNullValue(NumSrcEltBits);
-      APInt DemandedSrcElts = APInt::getNullValue(NumSrcElts);
+      APInt DemandedSrcBits = APInt::getZero(NumSrcEltBits);
+      APInt DemandedSrcElts = APInt::getZero(NumSrcElts);
       for (unsigned i = 0; i != Scale; ++i) {
         unsigned Offset = i * NumSrcEltBits;
         APInt Sub = DemandedBits.extractBits(NumSrcEltBits, Offset);
@@ -2205,8 +2204,8 @@ bool TargetLowering::SimplifyDemandedBits(
                TLO.DAG.getDataLayout().isLittleEndian()) {
       unsigned Scale = NumSrcEltBits / BitWidth;
       unsigned NumSrcElts = SrcVT.isVector() ? SrcVT.getVectorNumElements() : 1;
-      APInt DemandedSrcBits = APInt::getNullValue(NumSrcEltBits);
-      APInt DemandedSrcElts = APInt::getNullValue(NumSrcElts);
+      APInt DemandedSrcBits = APInt::getZero(NumSrcEltBits);
+      APInt DemandedSrcElts = APInt::getZero(NumSrcElts);
       for (unsigned i = 0; i != NumElts; ++i)
         if (DemandedElts[i]) {
           unsigned Offset = (i % Scale) * BitWidth;
@@ -2263,7 +2262,7 @@ bool TargetLowering::SimplifyDemandedBits(
     }
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
-    if (!LoMask.isAllOnesValue() || !DemandedElts.isAllOnesValue()) {
+    if (!LoMask.isAllOnes() || !DemandedElts.isAllOnes()) {
       SDValue DemandedOp0 = SimplifyMultipleUseDemandedBits(
           Op0, LoMask, DemandedElts, TLO.DAG, Depth + 1);
       SDValue DemandedOp1 = SimplifyMultipleUseDemandedBits(
@@ -2287,7 +2286,7 @@ bool TargetLowering::SimplifyDemandedBits(
     ConstantSDNode *C = isConstOrConstSplat(Op1);
     APInt HighMask = APInt::getHighBitsSet(BitWidth, DemandedBitsLZ);
     if (C && !C->isAllOnesValue() && !C->isOne() &&
-        (C->getAPIntValue() | HighMask).isAllOnesValue()) {
+        (C->getAPIntValue() | HighMask).isAllOnes()) {
       SDValue Neg1 = TLO.DAG.getAllOnesConstant(dl, VT);
       // Disable the nsw and nuw flags. We can no longer guarantee that we
       // won't wrap after simplification.
@@ -2385,7 +2384,7 @@ static APInt getKnownUndefForVectorBinop(SDValue BO, SelectionDAG &DAG,
     return SDValue();
   };
 
-  APInt KnownUndef = APInt::getNullValue(NumElts);
+  APInt KnownUndef = APInt::getZero(NumElts);
   for (unsigned i = 0; i != NumElts; ++i) {
     // If both inputs for this element are either constant or undef and match
     // the element type, compute the constant/undef result for this element of
@@ -2412,7 +2411,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
   unsigned NumElts = DemandedElts.getBitWidth();
   assert(VT.isVector() && "Expected vector op");
 
-  KnownUndef = KnownZero = APInt::getNullValue(NumElts);
+  KnownUndef = KnownZero = APInt::getZero(NumElts);
 
   // TODO: For now we assume we know nothing about scalable vectors.
   if (VT.isScalableVector())
@@ -2505,7 +2504,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
                                         KnownZero, TLO, Depth + 1);
 
     APInt SrcZero, SrcUndef;
-    APInt SrcDemandedElts = APInt::getNullValue(NumSrcElts);
+    APInt SrcDemandedElts = APInt::getZero(NumSrcElts);
 
     // Bitcast from 'large element' src vector to 'small element' vector, we
     // must demand a source element if any DemandedElt maps to it.
@@ -2524,7 +2523,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
       // TODO - bigendian once we have test coverage.
       if (TLO.DAG.getDataLayout().isLittleEndian()) {
         unsigned SrcEltSizeInBits = SrcVT.getScalarSizeInBits();
-        APInt SrcDemandedBits = APInt::getNullValue(SrcEltSizeInBits);
+        APInt SrcDemandedBits = APInt::getZero(SrcEltSizeInBits);
         for (unsigned i = 0; i != NumElts; ++i)
           if (DemandedElts[i]) {
             unsigned Ofs = (i % Scale) * EltSizeInBits;
@@ -2566,9 +2565,9 @@ bool TargetLowering::SimplifyDemandedVectorElts(
       // the output element will be as well, assuming it was demanded.
       for (unsigned i = 0; i != NumElts; ++i) {
         if (DemandedElts[i]) {
-          if (SrcZero.extractBits(Scale, i * Scale).isAllOnesValue())
+          if (SrcZero.extractBits(Scale, i * Scale).isAllOnes())
             KnownZero.setBit(i);
-          if (SrcUndef.extractBits(Scale, i * Scale).isAllOnesValue())
+          if (SrcUndef.extractBits(Scale, i * Scale).isAllOnes())
             KnownUndef.setBit(i);
         }
       }
@@ -2577,7 +2576,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
   }
   case ISD::BUILD_VECTOR: {
     // Check all elements and simplify any unused elements with UNDEF.
-    if (!DemandedElts.isAllOnesValue()) {
+    if (!DemandedElts.isAllOnes()) {
       // Don't simplify BROADCASTS.
       if (llvm::any_of(Op->op_values(),
                        [&](SDValue Elt) { return Op.getOperand(0) != Elt; })) {
@@ -2630,7 +2629,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     unsigned NumSubElts = Sub.getValueType().getVectorNumElements();
     APInt DemandedSubElts = DemandedElts.extractBits(NumSubElts, Idx);
     APInt DemandedSrcElts = DemandedElts;
-    DemandedSrcElts.insertBits(APInt::getNullValue(NumSubElts), Idx);
+    DemandedSrcElts.insertBits(APInt::getZero(NumSubElts), Idx);
 
     APInt SubUndef, SubZero;
     if (SimplifyDemandedVectorElts(Sub, DemandedSubElts, SubUndef, SubZero, TLO,
@@ -2650,8 +2649,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     KnownZero.insertBits(SubZero, Idx);
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
-    if (!DemandedSrcElts.isAllOnesValue() ||
-        !DemandedSubElts.isAllOnesValue()) {
+    if (!DemandedSrcElts.isAllOnes() || !DemandedSubElts.isAllOnes()) {
       SDValue NewSrc = SimplifyMultipleUseDemandedVectorElts(
           Src, DemandedSrcElts, TLO.DAG, Depth + 1);
       SDValue NewSub = SimplifyMultipleUseDemandedVectorElts(
@@ -2683,7 +2681,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     KnownZero = SrcZero.extractBits(NumElts, Idx);
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
-    if (!DemandedElts.isAllOnesValue()) {
+    if (!DemandedElts.isAllOnes()) {
       SDValue NewSrc = SimplifyMultipleUseDemandedVectorElts(
           Src, DemandedSrcElts, TLO.DAG, Depth + 1);
       if (NewSrc) {
@@ -2883,7 +2881,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
     // TODO - use KnownUndef to relax the demandedelts?
-    if (!DemandedElts.isAllOnesValue())
+    if (!DemandedElts.isAllOnes())
       if (SimplifyDemandedVectorEltsBinOp(Op0, Op1))
         return true;
     break;
@@ -2910,7 +2908,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
     // TODO - use KnownUndef to relax the demandedelts?
-    if (!DemandedElts.isAllOnesValue())
+    if (!DemandedElts.isAllOnes())
       if (SimplifyDemandedVectorEltsBinOp(Op0, Op1))
         return true;
     break;
@@ -2938,7 +2936,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
 
     // Attempt to avoid multi-use ops if we don't need anything from them.
     // TODO - use KnownUndef to relax the demandedelts?
-    if (!DemandedElts.isAllOnesValue())
+    if (!DemandedElts.isAllOnes())
       if (SimplifyDemandedVectorEltsBinOp(Op0, Op1))
         return true;
     break;
@@ -2964,7 +2962,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
         return true;
     } else {
       KnownBits Known;
-      APInt DemandedBits = APInt::getAllOnesValue(EltSizeInBits);
+      APInt DemandedBits = APInt::getAllOnes(EltSizeInBits);
       if (SimplifyDemandedBits(Op, DemandedBits, OriginalDemandedElts, Known,
                                TLO, Depth, AssumeSingleUse))
         return true;
@@ -3154,7 +3152,7 @@ bool TargetLowering::isConstTrueVal(const SDNode *N) const {
   case ZeroOrOneBooleanContent:
     return CVal.isOneValue();
   case ZeroOrNegativeOneBooleanContent:
-    return CVal.isAllOnesValue();
+    return CVal.isAllOnes();
   }
 
   llvm_unreachable("Invalid boolean contents");
@@ -4053,7 +4051,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
 
     if (Cond == ISD::SETEQ || Cond == ISD::SETNE) {
       // (X & (C l>>/<< Y)) ==/!= 0  -->  ((X <</l>> Y) & C) ==/!= 0
-      if (C1.isNullValue())
+      if (C1.isZero())
         if (SDValue CC = optimizeSetCCByHoistingAndByConstFromLogicalShift(
                 VT, N0, N1, Cond, DCI, dl))
           return CC;
@@ -4063,7 +4061,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
       // all bits clear: (X | (Y<<32)) ==  0 --> (X | Y) ==  0
       // all bits set:   (X | (Y<<32)) == -1 --> (X & Y) == -1
       bool CmpZero = N1C->getAPIntValue().isNullValue();
-      bool CmpNegOne = N1C->getAPIntValue().isAllOnesValue();
+      bool CmpNegOne = N1C->getAPIntValue().isAllOnes();
       if ((CmpZero || CmpNegOne) && N0.hasOneUse()) {
         // Match or(lo,shl(hi,bw/2)) pattern.
         auto IsConcat = [&](SDValue V, SDValue &Lo, SDValue &Hi) {
@@ -5194,7 +5192,7 @@ static mu magicu(const APInt &d, unsigned LeadingZeros = 0) {
   APInt nc, delta, q1, r1, q2, r2;
   struct mu magu;
   magu.a = 0; // initialize "add" indicator
-  APInt allOnes = APInt::getAllOnesValue(d.getBitWidth()).lshr(LeadingZeros);
+  APInt allOnes = APInt::getAllOnes(d.getBitWidth()).lshr(LeadingZeros);
   APInt signedMin = APInt::getSignedMinValue(d.getBitWidth());
   APInt signedMax = APInt::getSignedMaxValue(d.getBitWidth());
 
@@ -5322,7 +5320,7 @@ SDValue TargetLowering::BuildSDIV(SDNode *N, SelectionDAG &DAG,
     int NumeratorFactor = 0;
     int ShiftMask = -1;
 
-    if (Divisor.isOneValue() || Divisor.isAllOnesValue()) {
+    if (Divisor.isOneValue() || Divisor.isAllOnes()) {
       // If d is +1/-1, we just multiply the numerator by +1/-1.
       NumeratorFactor = Divisor.getSExtValue();
       magics.m = 0;
@@ -5493,7 +5491,7 @@ SDValue TargetLowering::BuildUDIV(SDNode *N, SelectionDAG &DAG,
     MagicFactors.push_back(DAG.getConstant(Magic, dl, SVT));
     NPQFactors.push_back(
         DAG.getConstant(SelNPQ ? APInt::getOneBitSet(EltBits, EltBits - 1)
-                               : APInt::getNullValue(EltBits),
+                               : APInt::getZero(EltBits),
                         dl, SVT));
     PostShifts.push_back(DAG.getConstant(PostShift, dl, ShSVT));
     UseNPQ |= SelNPQ;
@@ -5724,14 +5722,14 @@ TargetLowering::prepareUREMEqFold(EVT SETCCVT, SDValue REMNode,
     // Q = floor((2^W - 1) u/ D)
     // R = ((2^W - 1) u% D)
     APInt Q, R;
-    APInt::udivrem(APInt::getAllOnesValue(W), D, Q, R);
+    APInt::udivrem(APInt::getAllOnes(W), D, Q, R);
 
     // If we are comparing with zero, then that comparison constant is okay,
     // else it may need to be one less than that.
     if (Cmp.ugt(R))
       Q -= 1;
 
-    assert(APInt::getAllOnesValue(ShSVT.getSizeInBits()).ugt(K) &&
+    assert(APInt::getAllOnes(ShSVT.getSizeInBits()).ugt(K) &&
            "We are expecting that K is always less than all-ones for ShSVT");
 
     // If the lane is tautological the result can be constant-folded.
@@ -5980,9 +5978,9 @@ TargetLowering::prepareSREMEqFold(EVT SETCCVT, SDValue REMNode,
     // Q = floor((2 * A) / (2^K))
     APInt Q = (2 * A).udiv(APInt::getOneBitSet(W, K));
 
-    assert(APInt::getAllOnesValue(SVT.getSizeInBits()).ugt(A) &&
+    assert(APInt::getAllOnes(SVT.getSizeInBits()).ugt(A) &&
            "We are expecting that A is always less than all-ones for SVT");
-    assert(APInt::getAllOnesValue(ShSVT.getSizeInBits()).ugt(K) &&
+    assert(APInt::getAllOnes(ShSVT.getSizeInBits()).ugt(K) &&
            "We are expecting that K is always less than all-ones for ShSVT");
 
     // If the divisor is 1 the result can be constant-folded. Likewise, we
@@ -6113,7 +6111,7 @@ TargetLowering::prepareSREMEqFold(EVT SETCCVT, SDValue REMNode,
   SDValue IntMax = DAG.getConstant(
       APInt::getSignedMaxValue(SVT.getScalarSizeInBits()), DL, VT);
   SDValue Zero =
-      DAG.getConstant(APInt::getNullValue(SVT.getScalarSizeInBits()), DL, VT);
+      DAG.getConstant(APInt::getZero(SVT.getScalarSizeInBits()), DL, VT);
 
   // Which lanes had INT_MIN divisors? Divisor is constant, so const-folded.
   SDValue DivisorIsIntMin = DAG.getSetCC(DL, SETCCVT, D, IntMin, ISD::SETEQ);
@@ -6939,7 +6937,7 @@ bool TargetLowering::expandFP_TO_UINT(SDNode *Node, SDValue &Result,
   // the destination signmask can't be represented by the float, so we can
   // just use FP_TO_SINT directly.
   const fltSemantics &APFSem = DAG.EVTToAPFloatSemantics(SrcVT);
-  APFloat APF(APFSem, APInt::getNullValue(SrcVT.getScalarSizeInBits()));
+  APFloat APF(APFSem, APInt::getZero(SrcVT.getScalarSizeInBits()));
   APInt SignMask = APInt::getSignMask(DstVT.getScalarSizeInBits());
   if (APFloat::opOverflow &
       APF.convertFromAPInt(SignMask, false, APFloat::rmNearestTiesToEven)) {
