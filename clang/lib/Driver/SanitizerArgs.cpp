@@ -684,7 +684,8 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         Arg->claim();
         if (LegacySanitizeCoverage != 0) {
           D.Diag(diag::warn_drv_deprecated_arg)
-              << Arg->getAsString(Args) << "-fsanitize-coverage=trace-pc-guard";
+              << Arg->getAsString(Args) << true
+              << "-fsanitize-coverage=trace-pc-guard";
         }
         continue;
       }
@@ -719,11 +720,11 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   // enabled.
   if (CoverageFeatures & CoverageTraceBB)
     D.Diag(clang::diag::warn_drv_deprecated_arg)
-        << "-fsanitize-coverage=trace-bb"
+        << "-fsanitize-coverage=trace-bb" << true
         << "-fsanitize-coverage=trace-pc-guard";
   if (CoverageFeatures & Coverage8bitCounters)
     D.Diag(clang::diag::warn_drv_deprecated_arg)
-        << "-fsanitize-coverage=8bit-counters"
+        << "-fsanitize-coverage=8bit-counters" << true
         << "-fsanitize-coverage=trace-pc-guard";
 
   int InsertionPointTypes = CoverageFunc | CoverageBB | CoverageEdge;
@@ -733,7 +734,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   if ((CoverageFeatures & InsertionPointTypes) &&
       !(CoverageFeatures & InstrumentationTypes)) {
     D.Diag(clang::diag::warn_drv_deprecated_arg)
-        << "-fsanitize-coverage=[func|bb|edge]"
+        << "-fsanitize-coverage=[func|bb|edge]" << true
         << "-fsanitize-coverage=[func|bb|edge],[trace-pc-guard|trace-pc]";
   }
 
