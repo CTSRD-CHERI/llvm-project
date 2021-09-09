@@ -1880,7 +1880,7 @@ public:
   /// Determine if the call returns a structure through first
   /// pointer argument.
   bool hasStructRetAttr() const {
-    if (getNumArgOperands() == 0)
+    if (arg_empty())
       return false;
 
     // Be friendly and also check the callee.
