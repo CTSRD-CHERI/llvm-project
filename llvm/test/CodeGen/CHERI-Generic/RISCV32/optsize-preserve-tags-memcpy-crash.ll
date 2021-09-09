@@ -36,13 +36,9 @@ define hidden void @optsize_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 add
 ; CHECK:       # %bb.0: # %bb
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:  .LBB1_1: # %bb
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca4, %captab_pcrel_hi(memcpy)
-; CHECK-NEXT:    clc ca4, %pcrel_lo(.LBB1_1)(ca4)
 ; CHECK-NEXT:    addi a2, zero, 31
 ; CHECK-NEXT:    mv a3, zero
-; CHECK-NEXT:    cjalr ca4
+; CHECK-NEXT:    ccall memcpy
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    cret
@@ -98,13 +94,9 @@ define hidden void @optsize_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 ad
 ; CHECK:       # %bb.0: # %bb
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:  .LBB4_1: # %bb
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca4, %captab_pcrel_hi(memmove)
-; CHECK-NEXT:    clc ca4, %pcrel_lo(.LBB4_1)(ca4)
 ; CHECK-NEXT:    addi a2, zero, 31
 ; CHECK-NEXT:    mv a3, zero
-; CHECK-NEXT:    cjalr ca4
+; CHECK-NEXT:    ccall memmove
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    cret
