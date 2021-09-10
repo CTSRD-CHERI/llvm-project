@@ -273,6 +273,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_SUB64:
     return R_RISCV_ADD;
   case R_RISCV_JAL:
+  case R_RISCV_CHERI_CJAL:
   case R_RISCV_BRANCH:
   case R_RISCV_PCREL_HI20:
   case R_RISCV_RVC_BRANCH:
@@ -387,7 +388,8 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
 
-  case R_RISCV_JAL: {
+  case R_RISCV_JAL:
+  case R_RISCV_CHERI_CJAL: {
     checkInt(loc, static_cast<int64_t>(val) >> 1, 20, rel);
     checkAlignment(loc, val, 2, rel);
 
