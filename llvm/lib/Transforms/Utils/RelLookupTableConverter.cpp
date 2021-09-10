@@ -70,7 +70,7 @@ static bool shouldConvertToRelLookupTable(Module &M, GlobalVariable &GV) {
 
     // If an operand is not a constant offset from a lookup table,
     // do not generate a relative lookup table.
-    if (!IsConstantOffsetFromGlobal(ConstOp, GVOp, Offset, DL))
+    if (!IsConstantOffsetFromGlobal(ConstOp, GVOp, Offset, DL, false))
       return false;
 
     // If operand is mutable, do not generate a relative lookup table.
@@ -107,7 +107,8 @@ static GlobalVariable *createRelLookupTable(Function &Func,
 
   for (Use &Operand : LookupTableArr->operands()) {
     Constant *Element = cast<Constant>(Operand);
-    Type *IntPtrTy = M.getDataLayout().getIntPtrType(M.getContext());
+    Type *IntPtrTy = M.getDataLayout().getIntPtrType(
+        M.getContext(), LookupTable.getAddressSpace());
     Constant *Base = llvm::ConstantExpr::getPtrToInt(RelLookupTable, IntPtrTy);
     Constant *Target = llvm::ConstantExpr::getPtrToInt(Element, IntPtrTy);
     Constant *Sub = llvm::ConstantExpr::getSub(Target, Base);
@@ -146,7 +147,8 @@ static void convertToRelLookupTable(GlobalVariable &LookupTable) {
 
   Function *LoadRelIntrinsic = llvm::Intrinsic::getDeclaration(
       &M, Intrinsic::load_relative, {Index->getType()});
-  Value *Base = Builder.CreateBitCast(RelLookupTable, Builder.getInt8PtrTy());
+  Value *Base = Builder.CreateBitCast(
+      RelLookupTable, Builder.getInt8PtrTy(LookupTable.getAddressSpace()));
 
   // Create a call to load.relative intrinsic that computes the target address
   // by adding base address (lookup table address) and relative offset.
@@ -154,7 +156,7 @@ static void convertToRelLookupTable(GlobalVariable &LookupTable) {
                                      "reltable.intrinsic");
 
   // Create a bitcast instruction if necessary.
-  if (Load->getType() != Builder.getInt8PtrTy())
+  if (Load->getType() != Builder.getInt8PtrTy(LookupTable.getAddressSpace()))
     Result = Builder.CreateBitCast(Result, Load->getType(), "reltable.bitcast");
 
   // Replace load instruction with the new generated instruction sequence.
