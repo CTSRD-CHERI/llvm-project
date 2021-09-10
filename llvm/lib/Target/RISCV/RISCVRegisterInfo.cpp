@@ -286,6 +286,8 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       }
     }
   } else {
+    assert(!RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
+           "This code needs to be updated for purecap");
     // Offset = (fixed offset, scalable offset)
     unsigned Opc = RISCV::ADD;
     int64_t ScalableValue = Offset.getScalable();
@@ -299,7 +301,7 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
         TII->getVLENFactoredAmount(MF, MBB, II, ScalableValue);
 
     // 2. Calculate address: FrameReg + result of multiply
-    if (MI.getOpcode() == ImmOpc && !Offset.getFixed()) {
+    if (MI.getOpcode() == RISCV::ADDI && !Offset.getFixed()) {
       BuildMI(MBB, II, DL, TII->get(Opc), MI.getOperand(0).getReg())
           .addReg(FrameReg, getKillRegState(FrameRegIsKill))
           .addReg(FactorRegister, RegState::Kill);
