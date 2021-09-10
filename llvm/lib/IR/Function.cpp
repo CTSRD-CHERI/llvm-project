@@ -159,7 +159,7 @@ bool Argument::hasPointeeInMemoryValueAttr() const {
 
 /// For a byval, sret, inalloca, or preallocated parameter, get the in-memory
 /// parameter type.
-static Type *getMemoryParamAllocType(AttributeSet ParamAttrs, Type *ArgTy) {
+static Type *getMemoryParamAllocType(AttributeSet ParamAttrs) {
   // FIXME: All the type carrying attributes are mutually exclusive, so there
   // should be a single query to get the stored type that handles any of them.
   if (Type *ByValTy = ParamAttrs.getByValType())
@@ -179,7 +179,7 @@ static Type *getMemoryParamAllocType(AttributeSet ParamAttrs, Type *ArgTy) {
 uint64_t Argument::getPassPointeeByValueCopySize(const DataLayout &DL) const {
   AttributeSet ParamAttrs =
       getParent()->getAttributes().getParamAttrs(getArgNo());
-  if (Type *MemTy = getMemoryParamAllocType(ParamAttrs, getType()))
+  if (Type *MemTy = getMemoryParamAllocType(ParamAttrs))
     return DL.getTypeAllocSize(MemTy);
   return 0;
 }
@@ -187,7 +187,7 @@ uint64_t Argument::getPassPointeeByValueCopySize(const DataLayout &DL) const {
 Type *Argument::getPointeeInMemoryValueType() const {
   AttributeSet ParamAttrs =
       getParent()->getAttributes().getParamAttrs(getArgNo());
-  return getMemoryParamAllocType(ParamAttrs, getType());
+  return getMemoryParamAllocType(ParamAttrs);
 }
 
 unsigned Argument::getParamAlignment() const {
