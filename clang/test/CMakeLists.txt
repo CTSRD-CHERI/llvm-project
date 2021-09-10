@@ -120,7 +120,6 @@ if( NOT CLANG_BUILT_STANDALONE )
     llvm-objcopy
     llvm-objdump
     llvm-profdata
-    llvm-rc
     llvm-readelf
     llvm-readobj
     llvm-strip
@@ -130,6 +129,9 @@ if( NOT CLANG_BUILT_STANDALONE )
     yaml2obj
     )
 
+  if (TARGET llvm-rc)
+    list(APPEND LLVM_TEST_DEPENDS llvm-rc)
+  endif()
   if(TARGET llvm-lto)
     list(APPEND CLANG_TEST_DEPS llvm-lto)
   endif()

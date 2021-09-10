@@ -91,6 +91,9 @@ if config.clang_staticanalyzer:
 
 llvm_config.add_tool_substitutions(tools, tool_dirs)
 
+if llvm_config.add_tool_substitutions(['llvm-rc'], tool_dirs):
+    config.available_features.add('llvm-rc')
+
 config.substitutions.append(
     ('%hmaptool', "'%s' %s" % (config.python_executable,
                              os.path.join(config.clang_tools_dir, 'hmaptool'))))
