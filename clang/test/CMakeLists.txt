@@ -124,14 +124,13 @@ if( NOT CLANG_BUILT_STANDALONE )
     llvm-readobj
     llvm-strip
     llvm-symbolizer
-    llvm-windres
     opt
     split-file
     yaml2obj
     )
 
   if (TARGET llvm-rc)
-    list(APPEND LLVM_TEST_DEPENDS llvm-rc)
+    list(APPEND LLVM_TEST_DEPENDS llvm-rc llvm-windres)
   endif()
   if(TARGET llvm-lto)
     list(APPEND CLANG_TEST_DEPS llvm-lto)

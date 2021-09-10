@@ -114,7 +114,6 @@ set(LLVM_TEST_DEPENDS
           llvm-symbolizer
           llvm-tblgen
           llvm-undname
-          llvm-windres
           llvm-xray
           not
           obj2yaml
@@ -131,7 +130,7 @@ if (TARGET llvm-mca)
   list(APPEND LLVM_TEST_DEPENDS llvm-mca)
 endif()
 if (TARGET llvm-rc)
-  list(APPEND LLVM_TEST_DEPENDS llvm-rc)
+  list(APPEND LLVM_TEST_DEPENDS llvm-rc llvm-windres)
 endif()
 if (TARGET llvm-exegesis)
   list(APPEND LLVM_TEST_DEPENDS llvm-exegesis)

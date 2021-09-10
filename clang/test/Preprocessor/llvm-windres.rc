@@ -2,6 +2,7 @@
 // RUN: llvm-readobj %t.res | FileCheck %s
 // CHECK: Resource type (int): RCDATA (ID 10)
 // CHECK: Resource name (int): 42
+// REQUIRES: llvm-rc
 #include "llvm-windres.h"
 MY_ID RCDATA {
   "a long string of data"
