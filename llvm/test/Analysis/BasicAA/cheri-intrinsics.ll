@@ -24,7 +24,7 @@ declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200
 define i8 @testBoundsSetAlias() {
 ; CHECK-LABEL: Function: testBoundsSetAlias: 5 pointers, 1 call sites
 ; CHECK-DAG:   MustAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %a.bitcast
-; CHECK-DAG:   PartialAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n
+; CHECK-DAG:   PartialAlias (off 8):	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n
 ; CHECK-DAG:   NoAlias:	i8 addrspace(200)* %a.bitcast, i8 addrspace(200)* %n
 ; CHECK-DAG:   MayAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %a.laundered
 ; CHECK-DAG:   MayAlias:	i8 addrspace(200)* %a.bitcast, i8 addrspace(200)* %a.laundered
@@ -58,9 +58,9 @@ entry:
 define i8 @testIncOffsetAlias() {
 ; CHECK-LABEL: Function: testIncOffsetAlias: 5 pointers, 0 call sites
 ; CHECK-DAG:     MustAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %a.bitcast
-; CHECK-DAG:     PartialAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n
+; CHECK-DAG:     PartialAlias (off 8):	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n
 ; CHECK-DAG:     NoAlias:	i8 addrspace(200)* %a.bitcast, i8 addrspace(200)* %n
-; CHECK-DAG:     PartialAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %a.laundered
+; CHECK-DAG:     PartialAlias (off 4):	%struct.A addrspace(200)* %a, i8 addrspace(200)* %a.laundered
 ; CHECK-DAG:     NoAlias:	i8 addrspace(200)* %a.bitcast, i8 addrspace(200)* %a.laundered
 ; CHECK-DAG:     NoAlias:	i8 addrspace(200)* %a.laundered, i8 addrspace(200)* %n
 ; CHECK-DAG:     NoAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n.laundered
@@ -86,12 +86,12 @@ entry:
 define i8 @testIncOffsetZeroAlias() {
 ; CHECK-LABEL: Function: testIncOffsetZeroAlias: 5 pointers, 0 call sites
 ; CHECK-DAG:  MustAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %a.bitcast
-; CHECK-DAG:  PartialAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n
+; CHECK-DAG:  PartialAlias (off 8):	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n
 ; CHECK-DAG:  NoAlias:	i8 addrspace(200)* %a.bitcast, i8 addrspace(200)* %n
 ; CHECK-DAG:  MustAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %a.laundered
 ; CHECK-DAG:  MustAlias:	i8 addrspace(200)* %a.bitcast, i8 addrspace(200)* %a.laundered
 ; CHECK-DAG:  NoAlias:	i8 addrspace(200)* %a.laundered, i8 addrspace(200)* %n
-; CHECK-DAG:  PartialAlias:	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n.laundered
+; CHECK-DAG:  PartialAlias (off 8):	%struct.A addrspace(200)* %a, i8 addrspace(200)* %n.laundered
 ; CHECK-DAG:  NoAlias:	i8 addrspace(200)* %a.bitcast, i8 addrspace(200)* %n.laundered
 ; CHECK-DAG:  MustAlias:	i8 addrspace(200)* %n, i8 addrspace(200)* %n.laundered
 ; CHECK-DAG:  NoAlias:	i8 addrspace(200)* %a.laundered, i8 addrspace(200)* %n.laundered
