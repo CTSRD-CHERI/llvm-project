@@ -1516,7 +1516,6 @@ static void makeAllConstantUsesInstructions(Constant *C) {
 /// it if possible.  If we make a change, return true.
 static bool
 processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
-                      function_ref<TargetTransformInfo &(Function &)> GetTTI,
                       function_ref<TargetLibraryInfo &(Function &)> GetTLI,
                       function_ref<DominatorTree &(Function &)> LookupDomTree) {
   auto &DL = GV->getParent()->getDataLayout();
@@ -1615,26 +1614,18 @@ processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
     if (SRAGlobal(GV, DL))
       return true;
   }
-  Value *StoredOnceValue = GS.getStoredOnceValue();
-  if (GS.StoredType == GlobalStatus::StoredOnce && StoredOnceValue) {
+  if (GS.StoredType == GlobalStatus::StoredOnce && GS.StoredOnceValue) {
     // Avoid speculating constant expressions that might trap (div/rem).
-    auto *SOVConstant = dyn_cast<Constant>(StoredOnceValue);
+    auto *SOVConstant = dyn_cast<Constant>(GS.StoredOnceValue);
     if (SOVConstant && SOVConstant->canTrap())
       return Changed;
 
-    Function &StoreFn =
-        const_cast<Function &>(*GS.StoredOnceStore->getFunction());
     // If the initial value for the global was an undef value, and if only
     // one other value was stored into it, we can just change the
     // initializer to be the stored value, then delete all stores to the
     // global.  This allows us to mark it constant.
-    // This is restricted to address spaces that allow globals to have
-    // initializers. NVPTX, for example, does not support initializers for
-    // shared memory (AS 3).
     if (SOVConstant && SOVConstant->getType() == GV->getValueType() &&
-        isa<UndefValue>(GV->getInitializer()) &&
-        GetTTI(StoreFn).canHaveNonUndefGlobalInitializerInAddressSpace(
-            GV->getType()->getAddressSpace())) {
+        isa<UndefValue>(GV->getInitializer())) {
       // Change the initial value here.
       GV->setInitializer(SOVConstant);
 
@@ -1653,7 +1644,8 @@ processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
 
     // Try to optimize globals based on the knowledge that only one value
     // (besides its initializer) is ever stored to the global.
-    if (optimizeOnceStoredGlobal(GV, StoredOnceValue, GS.Ordering, DL, GetTLI))
+    if (optimizeOnceStoredGlobal(GV, GS.StoredOnceValue, GS.Ordering, DL,
+                                 GetTLI))
       return true;
 
     // Otherwise, if the global was not a boolean, we can shrink it to be a
@@ -1673,7 +1665,6 @@ processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
 /// make a change, return true.
 static bool
 processGlobal(GlobalValue &GV,
-              function_ref<TargetTransformInfo &(Function &)> GetTTI,
               function_ref<TargetLibraryInfo &(Function &)> GetTLI,
               function_ref<DominatorTree &(Function &)> LookupDomTree) {
   if (GV.getName().startswith("llvm."))
@@ -1706,8 +1697,7 @@ processGlobal(GlobalValue &GV,
   if (GVar->isConstant() || !GVar->hasInitializer())
     return Changed;
 
-  return processInternalGlobal(GVar, GS, GetTTI, GetTLI, LookupDomTree) ||
-         Changed;
+  return processInternalGlobal(GVar, GS, GetTLI, LookupDomTree) || Changed;
 }
 
 /// Walk all of the direct calls of the specified function, changing them to
@@ -2013,7 +2003,7 @@ OptimizeFunctions(Module &M,
       }
     }
 
-    Changed |= processGlobal(*F, GetTTI, GetTLI, LookupDomTree);
+    Changed |= processGlobal(*F, GetTLI, LookupDomTree);
 
     if (!F->hasLocalLinkage())
       continue;
@@ -2082,7 +2072,6 @@ OptimizeFunctions(Module &M,
 
 static bool
 OptimizeGlobalVars(Module &M,
-                   function_ref<TargetTransformInfo &(Function &)> GetTTI,
                    function_ref<TargetLibraryInfo &(Function &)> GetTLI,
                    function_ref<DominatorTree &(Function &)> LookupDomTree,
                    SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
@@ -2111,7 +2100,7 @@ OptimizeGlobalVars(Module &M,
       continue;
     }
 
-    Changed |= processGlobal(*GV, GetTTI, GetTLI, LookupDomTree);
+    Changed |= processGlobal(*GV, GetTLI, LookupDomTree);
   }
   return Changed;
 }
@@ -2689,8 +2678,8 @@ static bool optimizeGlobalsInModule(
     });
 
     // Optimize non-address-taken globals.
-    LocalChange |= OptimizeGlobalVars(M, GetTTI, GetTLI, LookupDomTree,
-                                      NotDiscardableComdats);
+    LocalChange |=
+        OptimizeGlobalVars(M, GetTLI, LookupDomTree, NotDiscardableComdats);
 
     // Resolve aliases, when possible.
     LocalChange |= OptimizeGlobalAliases(M, NotDiscardableComdats);
