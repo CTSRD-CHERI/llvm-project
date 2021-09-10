@@ -15233,6 +15233,10 @@ void Sema::AddKnownFunctionAttributes(FunctionDecl *FD) {
     // Add known guaranteed alignment for allocation functions.
     switch (BuiltinID) {
     case Builtin::BIaligned_alloc:
+      if (!FD->hasAttr<AllocAlignAttr>())
+        FD->addAttr(AllocAlignAttr::CreateImplicit(Context, ParamIdx(1, FD),
+                                                   FD->getLocation()));
+      LLVM_FALLTHROUGH;
     case Builtin::BIcalloc:
     case Builtin::BImalloc:
     case Builtin::BImemalign:
