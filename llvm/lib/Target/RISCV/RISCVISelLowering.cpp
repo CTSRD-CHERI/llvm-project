@@ -1533,8 +1533,9 @@ static SDValue splatSplitI64WithVL(const SDLoc &DL, MVT VT, SDValue Scalar,
   int FI = FuncInfo->getMoveF64FrameIndex(MF);
   MachinePointerInfo MPI = MachinePointerInfo::getFixedStack(MF, FI);
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+  unsigned AllocaAS = MF.getDataLayout().getAllocaAddrSpace();
   SDValue StackSlot =
-      DAG.getFrameIndex(FI, TLI.getPointerTy(DAG.getDataLayout()));
+      DAG.getFrameIndex(FI, TLI.getPointerTy(DAG.getDataLayout(), AllocaAS));
 
   SDValue Chain = DAG.getEntryNode();
   Lo = DAG.getStore(Chain, DL, Lo, StackSlot, MPI, Align(8));
