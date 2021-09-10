@@ -18,7 +18,6 @@
 #include "clang/Basic/TargetOptions.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/IR/Cheri.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
@@ -65,10 +64,6 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
     else
       resetDataLayout(
           ("e-" + Layout + (CapabilityABI ? PurecapOptions : "")).str());
-
-    if (IsCHERI) {
-      assert(DataLayout->getStackAlignment() >= ((unsigned)CapSize / 8));
-    }
   }
 
   static const Builtin::Info BuiltinInfo[];
@@ -91,6 +86,9 @@ protected:
   std::string ABI;
   bool IsCHERI = false;
   int CapSize = -1;
+  // Note: clang/Basic should not depend on llvm/IR headers so we have to
+  // duplicate this information here.
+  bool isCheriAddrSpace(unsigned AS) const { return AS == 200; }
 
 public:
   MipsTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
@@ -560,15 +558,15 @@ public:
   uint64_t getPointerRangeForCHERICapability() const override { return 64; }
 
   uint64_t getPointerWidthV(unsigned AddrSpace) const override {
-    return isCheriPointer(AddrSpace, &getDataLayout()) ? CapSize : PointerWidth;
+    return isCheriAddrSpace(AddrSpace) ? CapSize : PointerWidth;
   }
 
   uint64_t getPointerRangeV(unsigned AddrSpace) const override {
-    return isCheriPointer(AddrSpace, &getDataLayout()) ? getPointerRangeForCHERICapability() : PointerWidth;
+    return isCheriAddrSpace(AddrSpace) ? getPointerRangeForCHERICapability() : PointerWidth;
   }
 
   uint64_t getPointerAlignV(unsigned AddrSpace) const override {
-    return isCheriPointer(AddrSpace, &getDataLayout()) ? CapSize : PointerAlign;
+    return isCheriAddrSpace(AddrSpace) ? CapSize : PointerAlign;
   }
 
   bool SupportsCapabilities() const override { return IsCHERI; }
