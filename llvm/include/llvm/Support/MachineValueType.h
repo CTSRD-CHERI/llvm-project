@@ -265,6 +265,8 @@ namespace llvm {
       iFATPTR512 = 171, // 512-bit fat pointer type
       iFATPTRAny = 172, // Generic fat pointer type (must be legalised to a
       // sized  version)
+      FIRST_FAT_POINTER = iFATPTR64,
+      LAST_FAT_POINTER = iFATPTRAny,
 
       FIRST_VALUETYPE =  1,   // This is always the beginning of the list.
       LAST_VALUETYPE = 173,   // This always remains at the end of the list.

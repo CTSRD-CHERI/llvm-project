@@ -792,7 +792,7 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         OS << LS << "Attribute::Convergent";
       if (Intrinsic.isSpeculatable)
         OS << LS << "Attribute::Speculatable";
-      if (intrinsic.hasSideEffects)
+      if (Intrinsic.hasSideEffects)
         OS << LS << "Attribute::HasSideEffects";
 
       switch (Intrinsic.ModRef) {
