@@ -53,3 +53,7 @@ add_lld_library(lldMachO2
   MachOOptionsTableGen
   ${tablegen_deps}
   )
+
+if(HAVE_LIBXAR)
+  target_link_libraries(lldMachO2 PRIVATE ${XAR_LIB})
+endif()
