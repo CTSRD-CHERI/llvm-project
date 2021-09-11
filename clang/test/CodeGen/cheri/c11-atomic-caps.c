@@ -4,16 +4,16 @@
 // RUN: %cheri_cc1 -std=c11 -o - -emit-llvm -O1 %s -verify=expected,hybrid | FileCheck %s --check-prefixes=HYBRID,HYBRID-MIPS64
 // RUN: %riscv64_cheri_cc1 -std=c11 -o - -emit-llvm -O1 -verify=expected,hybrid %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-RISCV64
 
-// PURECAP: Function Attrs: nofree norecurse nounwind
+// PURECAP: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_load
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture readonly [[F:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture readonly [[F:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[F]] seq_cst, align 16
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
-// HYBRID: Function Attrs: nofree norecurse nounwind
+// HYBRID: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_load
-// HYBRID-SAME: (i8 addrspace(200)** nocapture readonly [[F:%.*]]) local_unnamed_addr [[ATTR0:#.*]] {
+// HYBRID-SAME: (i8 addrspace(200)** nocapture readonly [[F:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = load atomic i8 addrspace(200)*, i8 addrspace(200)** [[F]] seq_cst, align 16
 // HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
@@ -22,16 +22,16 @@ __uintcap_t test_load(_Atomic(__uintcap_t) *f) {
   return __c11_atomic_load(f, __ATOMIC_SEQ_CST);
 }
 
-// PURECAP: Function Attrs: nofree norecurse nounwind
+// PURECAP: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_store
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    store atomic i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]] seq_cst, align 16
 // PURECAP-NEXT:    ret void
 //
-// HYBRID: Function Attrs: nofree norecurse nounwind
+// HYBRID: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_store
-// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    store atomic i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]] seq_cst, align 16
 // HYBRID-NEXT:    ret void
@@ -40,80 +40,80 @@ void test_store(_Atomic(__uintcap_t) *f, __uintcap_t value) {
   __c11_atomic_store(f, value, __ATOMIC_SEQ_CST);
 }
 
-// PURECAP-MIPS64: Function Attrs: nofree norecurse nounwind willreturn writeonly
+// PURECAP-MIPS64: Function Attrs: nofree norecurse nosync nounwind willreturn writeonly mustprogress
 // PURECAP-MIPS64-LABEL: define {{[^@]+}}@test_init
-// PURECAP-MIPS64-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR1:#.*]] {
+// PURECAP-MIPS64-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] {
 // PURECAP-MIPS64-NEXT:  entry:
-// PURECAP-MIPS64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16, [[TBAA2:!tbaa !.*]]
+// PURECAP-MIPS64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16, !tbaa [[TBAA2:![0-9]+]]
 // PURECAP-MIPS64-NEXT:    ret void
 //
-// PURECAP-RISCV64: Function Attrs: nofree norecurse nounwind willreturn writeonly
+// PURECAP-RISCV64: Function Attrs: nofree norecurse nosync nounwind willreturn writeonly mustprogress
 // PURECAP-RISCV64-LABEL: define {{[^@]+}}@test_init
-// PURECAP-RISCV64-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR1:#.*]] {
+// PURECAP-RISCV64-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] {
 // PURECAP-RISCV64-NEXT:  entry:
-// PURECAP-RISCV64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16, [[TBAA4:!tbaa !.*]]
+// PURECAP-RISCV64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16, !tbaa [[TBAA4:![0-9]+]]
 // PURECAP-RISCV64-NEXT:    ret void
 //
-// HYBRID-MIPS64: Function Attrs: nofree norecurse nounwind willreturn writeonly
+// HYBRID-MIPS64: Function Attrs: nofree norecurse nosync nounwind willreturn writeonly mustprogress
 // HYBRID-MIPS64-LABEL: define {{[^@]+}}@test_init
-// HYBRID-MIPS64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR1:#.*]] {
+// HYBRID-MIPS64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR1:[0-9]+]] {
 // HYBRID-MIPS64-NEXT:  entry:
-// HYBRID-MIPS64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]], align 16, [[TBAA2:!tbaa !.*]]
+// HYBRID-MIPS64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]], align 16, !tbaa [[TBAA2:![0-9]+]]
 // HYBRID-MIPS64-NEXT:    ret void
 //
-// HYBRID-RISCV64: Function Attrs: nofree norecurse nounwind willreturn writeonly
+// HYBRID-RISCV64: Function Attrs: nofree norecurse nosync nounwind willreturn writeonly mustprogress
 // HYBRID-RISCV64-LABEL: define {{[^@]+}}@test_init
-// HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR1:#.*]] {
+// HYBRID-RISCV64-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR1:[0-9]+]] {
 // HYBRID-RISCV64-NEXT:  entry:
-// HYBRID-RISCV64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]], align 16, [[TBAA4:!tbaa !.*]]
+// HYBRID-RISCV64-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]], align 16, !tbaa [[TBAA4:![0-9]+]]
 // HYBRID-RISCV64-NEXT:    ret void
 //
 void test_init(_Atomic(__uintcap_t) *f, __uintcap_t value) {
   __c11_atomic_init(f, value);
 }
 
-// PURECAP: Function Attrs: nofree norecurse nounwind
+// PURECAP: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[VALUE]] seq_cst
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
-// HYBRID: Function Attrs: nofree norecurse nounwind
+// HYBRID: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg
-// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[VALUE]] seq_cst
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
 // HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
 __uintcap_t test_xchg(_Atomic(__uintcap_t) *f, __uintcap_t value) {
   return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
 }
 
-// PURECAP: Function Attrs: nofree norecurse nounwind
+// PURECAP: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)* addrspace(200)* [[F]], i64 addrspace(200)* [[VALUE]] seq_cst
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)* addrspace(200)* [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP0]]
 //
-// HYBRID: Function Attrs: nofree norecurse nounwind
+// HYBRID: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// HYBRID-SAME: (i64 addrspace(200)** nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-SAME: (i64 addrspace(200)** nocapture [[F:%.*]], i64 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)** [[F]], i64 addrspace(200)* [[VALUE]] seq_cst
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)** [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
 // HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP0]]
 //
 long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__capability value) {
   return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
 }
 
-// PURECAP: Function Attrs: nofree norecurse nounwind
+// PURECAP: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* addrspace(200)* nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* addrspace(200)* nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[EXP]], align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
+// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
 // PURECAP-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
 // PURECAP-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // PURECAP:       cmpxchg.store_expected:
@@ -123,12 +123,12 @@ long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__ca
 // PURECAP:       cmpxchg.continue:
 // PURECAP-NEXT:    ret i1 [[TMP2]]
 //
-// HYBRID: Function Attrs: nofree norecurse nounwind
+// HYBRID: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
+// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
 // HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
 // HYBRID-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // HYBRID:       cmpxchg.store_expected:
@@ -141,12 +141,12 @@ long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__ca
 _Bool test_cmpxchg_weak(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t new) {
   return __c11_atomic_compare_exchange_weak(f, exp, new, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
-// PURECAP: Function Attrs: nofree norecurse nounwind
+// PURECAP: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* addrspace(200)* nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* nocapture [[F:%.*]], i8 addrspace(200)* addrspace(200)* nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[EXP]], align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
+// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
 // PURECAP-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
 // PURECAP-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // PURECAP:       cmpxchg.store_expected:
@@ -156,12 +156,12 @@ _Bool test_cmpxchg_weak(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t n
 // PURECAP:       cmpxchg.continue:
 // PURECAP-NEXT:    ret i1 [[TMP2]]
 //
-// HYBRID: Function Attrs: nofree norecurse nounwind
+// HYBRID: Function Attrs: nofree norecurse nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-SAME: (i8 addrspace(200)** nocapture [[F:%.*]], i8 addrspace(200)** nocapture [[EXP:%.*]], i8 addrspace(200)* [[NEW:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic
+// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
 // HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
 // HYBRID-NEXT:    br i1 [[TMP2]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // HYBRID:       cmpxchg.store_expected:
@@ -178,17 +178,17 @@ _Bool test_cmpxchg_strong(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t
 // Most are only supported for __uintcap_t, but fetch_add/fetch_sub also work
 // with pointer types (and multiply the increment by the size of the pointee)
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2:#.*]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2:#.*]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2:[0-9]+]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
 // HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
@@ -199,9 +199,9 @@ __uintcap_t test_fetch_add_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
@@ -211,9 +211,9 @@ __uintcap_t test_fetch_add_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
 // PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP4]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
@@ -228,9 +228,9 @@ long *__capability test_fetch_add_longptr(_Atomic(long *__capability) *ptr, __ui
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
@@ -240,9 +240,9 @@ long *__capability test_fetch_add_longptr(_Atomic(long *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
@@ -257,9 +257,9 @@ long *__capability test_fetch_add_longptr_and_short(_Atomic(long *__capability) 
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
@@ -267,9 +267,9 @@ long *__capability test_fetch_add_longptr_and_short(_Atomic(long *__capability) 
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
@@ -282,9 +282,9 @@ char *__capability test_fetch_add_charptr(_Atomic(char *__capability) *ptr, __ui
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
@@ -292,9 +292,9 @@ char *__capability test_fetch_add_charptr(_Atomic(char *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
@@ -307,17 +307,17 @@ char *__capability test_fetch_add_charptr_and_short(_Atomic(char *__capability) 
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
 // HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
@@ -328,9 +328,9 @@ __uintcap_t test_fetch_sub_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
@@ -340,9 +340,9 @@ __uintcap_t test_fetch_sub_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
 // PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP4]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = shl i64 [[TMP0]], 3
@@ -357,9 +357,9 @@ long *__capability test_fetch_sub_longptr(_Atomic(long *__capability) *ptr, __ui
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
@@ -369,9 +369,9 @@ long *__capability test_fetch_sub_longptr(_Atomic(long *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i64 addrspace(200)*
 // PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = shl nsw i64 [[CONV]], 3
@@ -386,9 +386,9 @@ long *__capability test_fetch_sub_longptr_and_short(_Atomic(long *__capability) 
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
@@ -396,9 +396,9 @@ long *__capability test_fetch_sub_longptr_and_short(_Atomic(long *__capability) 
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
@@ -411,9 +411,9 @@ char *__capability test_fetch_sub_charptr(_Atomic(char *__capability) *ptr, __ui
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
@@ -421,9 +421,9 @@ char *__capability test_fetch_sub_charptr(_Atomic(char *__capability) *ptr, __ui
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
@@ -436,17 +436,17 @@ char *__capability test_fetch_sub_charptr_and_short(_Atomic(char *__capability) 
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
 // HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
@@ -457,17 +457,17 @@ __uintcap_t test_fetch_and_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
 // HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
@@ -478,17 +478,17 @@ __uintcap_t test_fetch_or_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) 
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
 // HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
@@ -499,17 +499,17 @@ __uintcap_t test_fetch_xor_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
 // HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
@@ -520,17 +520,17 @@ __uintcap_t test_fetch_max_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value)
   // expected-warning@-1{{unsupported atomic operation may incur significant performance penalty}}
 }
 
-// PURECAP: Function Attrs: nounwind
+// PURECAP: Function Attrs: nounwind willreturn mustprogress
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) [[ATTR2]] {
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
 // PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
-// HYBRID: Function Attrs: nounwind
+// HYBRID: Function Attrs: nounwind willreturn mustprogress
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr [[ATTR2]] {
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr #[[ATTR2]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
 // HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
