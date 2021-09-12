@@ -1806,7 +1806,7 @@ ScalarExprEmitter::VisitSYCLUniqueStableNameExpr(SYCLUniqueStableNameExpr *E) {
       E->ComputeName(Context), "__usn_str",
       static_cast<unsigned>(GlobalAS.getValueOr(LangAS::Default)));
 
-  unsigned ExprAS = Context.getTargetAddressSpace(E->getType());
+  unsigned ExprAS = CGF.CGM.getAddressSpaceForType(E->getType());
 
   if (GlobalConstStr->getType()->getPointerAddressSpace() == ExprAS)
     return GlobalConstStr;
