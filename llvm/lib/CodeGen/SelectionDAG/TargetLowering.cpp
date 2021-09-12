@@ -7545,7 +7545,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
                                /*AlwaysInline=*/false,
                                /*isTailCall=*/false,
                                /*MustPreserveCheriCapabilities=*/true,
-                               TmpPtrInfo, LD->getPointerInfo(),
+                               TmpPtrInfo, LD->getPointerInfo(), AAMDNodes(),
                                "!!<CHERI-NODIAG>!!");
     // Load the updated value (does not need to be bounded!)
     auto Result = DAG.getLoad(VT, dl, Ch, TmpPtr, TmpPtrInfo);
@@ -7728,7 +7728,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                 /*AlwaysInline=*/false,
                                 /*isTailCall=*/false,
                                 /*MustPreserveCheriCapabilities=*/true,
-                                ST->getPointerInfo(), TmpPtrInfo,
+                                ST->getPointerInfo(), TmpPtrInfo, AAMDNodes(),
                                 "!!<CHERI-NODIAG>!!");
     return Result;
   }

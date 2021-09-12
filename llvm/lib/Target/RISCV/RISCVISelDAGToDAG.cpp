@@ -70,8 +70,9 @@ void RISCVDAGToDAGISel::PreprocessISelDAG() {
     int FI = FuncInfo->getMoveF64FrameIndex(MF);
     MachinePointerInfo MPI = MachinePointerInfo::getFixedStack(MF, FI);
     const TargetLowering &TLI = CurDAG->getTargetLoweringInfo();
-    SDValue StackSlot =
-        CurDAG->getFrameIndex(FI, TLI.getPointerTy(CurDAG->getDataLayout()));
+    SDValue StackSlot = CurDAG->getFrameIndex(
+        FI, TLI.getPointerTy(CurDAG->getDataLayout(),
+                             CurDAG->getDataLayout().getAllocaAddrSpace()));
 
     SDValue Chain = CurDAG->getEntryNode();
     Lo = CurDAG->getStore(Chain, DL, Lo, StackSlot, MPI, Align(8));
