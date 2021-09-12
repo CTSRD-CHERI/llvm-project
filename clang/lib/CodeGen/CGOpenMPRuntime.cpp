@@ -10,9 +10,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// XXXAR: TODO fix default address space in this file as well
-#define getUnqual(arg) get(arg, 0u)
-
 #include "CGOpenMPRuntime.h"
 #include "CGCXXABI.h"
 #include "CGCleanup.h"
@@ -42,6 +39,9 @@
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <numeric>
+
+// XXXAR: TODO fix default address space in this file as well
+#define getUnqual(arg) get(arg, 0u)
 
 using namespace clang;
 using namespace CodeGen;
