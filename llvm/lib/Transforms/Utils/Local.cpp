@@ -2679,9 +2679,7 @@ static unsigned replaceDominatedUsesWith(Value *From, Value *To,
   assert(From->getType() == To->getType());
 
   unsigned Count = 0;
-  for (Value::use_iterator UI = From->use_begin(), UE = From->use_end();
-       UI != UE;) {
-    Use &U = *UI++;
+  for (Use &U : llvm::make_early_inc_range(From->uses())) {
     if (!Dominates(Root, U))
       continue;
     U.set(To);
@@ -2697,9 +2695,7 @@ unsigned llvm::replaceNonLocalUsesWith(Instruction *From, Value *To) {
    auto *BB = From->getParent();
    unsigned Count = 0;
 
-  for (Value::use_iterator UI = From->use_begin(), UE = From->use_end();
-       UI != UE;) {
-    Use &U = *UI++;
+   for (Use &U : llvm::make_early_inc_range(From->uses())) {
     auto *I = cast<Instruction>(U.getUser());
     if (I->getParent() == BB)
       continue;
