@@ -3460,7 +3460,7 @@ Sema::PerformMoveOrCopyInitialization(const InitializedEntity &Entity,
       NRInfo.isMoveEligible()) {
     ImplicitCastExpr AsRvalue(ImplicitCastExpr::OnStack, Value->getType(),
                               CK_NoOp, Value, VK_XValue, FPOptionsOverride(),
-                              S.Context);
+                              Context);
     Expr *InitExpr = &AsRvalue;
     auto Kind = InitializationKind::CreateCopy(Value->getBeginLoc(),
                                                Value->getBeginLoc());
@@ -3471,7 +3471,7 @@ Sema::PerformMoveOrCopyInitialization(const InitializedEntity &Entity,
       // expression node to persist.
       Value = ImplicitCastExpr::Create(Context, Value->getType(), CK_NoOp,
                                        Value, nullptr, VK_XValue,
-                                       FPOptionsOverride(), S.Context);
+                                       FPOptionsOverride());
       // Complete type-checking the initialization of the return type
       // using the constructor we found.
       return Seq.Perform(*this, Entity, Kind, Value);

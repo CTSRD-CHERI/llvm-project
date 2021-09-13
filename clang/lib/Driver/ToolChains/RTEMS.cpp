@@ -46,8 +46,8 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // TODO: warn if rtlib/c++lib is missing: err_drv_missing_argument
 
   const char *Exec = Args.MakeArgString(ToolChain.GetLinkerPath());
-  if (llvm::sys::path::filename(Exec).equals_lower("ld.lld") ||
-      llvm::sys::path::stem(Exec).equals_lower("ld.lld")) {
+  if (llvm::sys::path::filename(Exec).equals_insensitive("ld.lld") ||
+      llvm::sys::path::stem(Exec).equals_insensitive("ld.lld")) {
     CmdArgs.push_back("-z");
     CmdArgs.push_back("rodynamic");
   }
