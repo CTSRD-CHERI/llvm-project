@@ -98,6 +98,22 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
       return ELF::R_RISCV_CHERI_CCALL;
     case RISCV::fixup_riscv_rvc_cjump:
       return ELF::R_RISCV_CHERI_RVC_CJUMP;
+    case RISCV::fixup_riscv_add_8:
+      return ELF::R_RISCV_ADD8;
+    case RISCV::fixup_riscv_sub_8:
+      return ELF::R_RISCV_SUB8;
+    case RISCV::fixup_riscv_add_16:
+      return ELF::R_RISCV_ADD16;
+    case RISCV::fixup_riscv_sub_16:
+      return ELF::R_RISCV_SUB16;
+    case RISCV::fixup_riscv_add_32:
+      return ELF::R_RISCV_ADD32;
+    case RISCV::fixup_riscv_sub_32:
+      return ELF::R_RISCV_SUB32;
+    case RISCV::fixup_riscv_add_64:
+      return ELF::R_RISCV_ADD64;
+    case RISCV::fixup_riscv_sub_64:
+      return ELF::R_RISCV_SUB64;
     }
   }
 
@@ -118,26 +134,6 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_RISCV_32;
   case FK_Data_8:
     return ELF::R_RISCV_64;
-  case FK_Data_Add_1:
-    return ELF::R_RISCV_ADD8;
-  case FK_Data_Add_2:
-    return ELF::R_RISCV_ADD16;
-  case FK_Data_Add_4:
-    return ELF::R_RISCV_ADD32;
-  case FK_Data_Add_8:
-    return ELF::R_RISCV_ADD64;
-  case FK_Data_Add_6b:
-    return ELF::R_RISCV_SET6;
-  case FK_Data_Sub_1:
-    return ELF::R_RISCV_SUB8;
-  case FK_Data_Sub_2:
-    return ELF::R_RISCV_SUB16;
-  case FK_Data_Sub_4:
-    return ELF::R_RISCV_SUB32;
-  case FK_Data_Sub_8:
-    return ELF::R_RISCV_SUB64;
-  case FK_Data_Sub_6b:
-    return ELF::R_RISCV_SUB6;
   case RISCV::fixup_riscv_hi20:
     return ELF::R_RISCV_HI20;
   case RISCV::fixup_riscv_lo12_i:
@@ -160,6 +156,32 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_RISCV_CHERI_CAPABILITY;
   case RISCV::fixup_riscv_tprel_cincoffset:
     return ELF::R_RISCV_CHERI_TPREL_CINCOFFSET;
+  case RISCV::fixup_riscv_set_6b:
+    return ELF::R_RISCV_SET6;
+  case RISCV::fixup_riscv_sub_6b:
+    return ELF::R_RISCV_SUB6;
+  case RISCV::fixup_riscv_add_8:
+    return ELF::R_RISCV_ADD8;
+  case RISCV::fixup_riscv_set_8:
+    return ELF::R_RISCV_SET8;
+  case RISCV::fixup_riscv_sub_8:
+    return ELF::R_RISCV_SUB8;
+  case RISCV::fixup_riscv_set_16:
+    return ELF::R_RISCV_SET16;
+  case RISCV::fixup_riscv_add_16:
+    return ELF::R_RISCV_ADD16;
+  case RISCV::fixup_riscv_sub_16:
+    return ELF::R_RISCV_SUB16;
+  case RISCV::fixup_riscv_set_32:
+    return ELF::R_RISCV_SET32;
+  case RISCV::fixup_riscv_add_32:
+    return ELF::R_RISCV_ADD32;
+  case RISCV::fixup_riscv_sub_32:
+    return ELF::R_RISCV_SUB32;
+  case RISCV::fixup_riscv_add_64:
+    return ELF::R_RISCV_ADD64;
+  case RISCV::fixup_riscv_sub_64:
+    return ELF::R_RISCV_SUB64;
   }
 }
 
