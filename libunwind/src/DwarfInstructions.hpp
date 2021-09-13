@@ -155,6 +155,7 @@ typename A::capability_t DwarfInstructions<A, R>::getSavedCapabilityRegister(
     break;
 #endif
 
+  case CFI_Parser<A>::kRegisterUndefined:
   case CFI_Parser<A>::kRegisterUnused:
   case CFI_Parser<A>::kRegisterOffsetFromCFA:
     // FIX ME
