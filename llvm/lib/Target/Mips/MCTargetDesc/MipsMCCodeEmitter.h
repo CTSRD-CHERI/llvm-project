@@ -16,6 +16,7 @@
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/DataTypes.h"
+#include "llvm/Support/MathExtras.h"
 #include <assert.h>
 
 namespace llvm {
