@@ -22,6 +22,7 @@ void initSignalsOptions();
 void initStatisticOptions();
 void initTimerOptions();
 void initTypeSizeOptions();
+void initSetBoundsOptions();
 void initWithColorOptions();
 void initDebugOptions();
 void initRandomSeedOptions();
