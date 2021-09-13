@@ -341,18 +341,17 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
     int64_t addend = target.offset;
     // Capability target is the second field
     assert((currentEntryOffset + fieldSize) < getSize());
-    mainPart->relaDyn->addReloc(relocKind, this, currentEntryOffset + fieldSize,
-                                target.sym(), addend,
-                                target.sym()->isPreemptible ? R_ADDEND : R_ABS,
-                                lld::elf::target->symbolicRel);
+    mainPart->relaDyn->addSymbolReloc(
+        relocKind, this, currentEntryOffset + fieldSize, *target.sym(), addend,
+        lld::elf::target->symbolicRel);
     containsDynamicRelocations = true;
     if (!relativeToLoadAddress) {
       // We also add a size relocation for the size field here
       RelType sizeRel = *elf::target->sizeRel;
       // Capability size is the fourth field
-      assert((currentEntryOffset + 3*fieldSize) < getSize());
-      mainPart->relaDyn->addReloc(sizeRel, this, currentEntryOffset + 3*fieldSize,
-                             target.sym());
+      assert((currentEntryOffset + 3 * fieldSize) < getSize());
+      mainPart->relaDyn->addSymbolReloc(
+          sizeRel, this, currentEntryOffset + 3 * fieldSize, *target.sym());
     }
   }
 }
@@ -904,7 +903,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         this->relocations.push_back(
             {R_ADDEND, target->symbolicRel, offset, 1, s});
       else
-        mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
+        mainPart->relaDyn->addSymbolReloc(target->tlsModuleIndexRel, this,
+                                          offset, *s);
     } else {
       // When building a shared library we still need a dynamic relocation
       // for the module index. Therefore only checking for
@@ -914,7 +914,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         this->relocations.push_back(
             {R_ADDEND, target->symbolicRel, offset, 1, s});
       else
-        mainPart->relaDyn->addReloc(target->tlsModuleIndexRel, this, offset, s);
+        mainPart->relaDyn->addSymbolReloc(target->tlsModuleIndexRel, this,
+                                          offset, *s);
 
       offset += config->wordsize;
 
@@ -924,7 +925,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         this->relocations.push_back(
             {R_ABS, target->tlsOffsetRel, offset, 0, s});
       else
-        mainPart->relaDyn->addReloc(target->tlsOffsetRel, this, offset, s);
+        mainPart->relaDyn->addSymbolReloc(target->tlsOffsetRel, this, offset,
+                                          *s);
     }
   }
 
@@ -940,9 +942,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     if (!s->isPreemptible && !config->shared)
       this->relocations.push_back({R_TPREL, target->symbolicRel, offset, 0, s});
     else
-      mainPart->relaDyn->addReloc(target->tlsGotRel, this, offset, s, 0,
-                                  s->isPreemptible ? R_ADDEND : R_ABS,
-                                  target->symbolicRel);
+      mainPart->relaDyn->addAddendOnlyRelocIfNonPreemptible(
+          target->tlsGotRel, this, offset, *s, target->symbolicRel);
   }
 
   valuesAssigned = true;
@@ -1155,8 +1156,10 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       sym = newSym; // Make the relocation point to the newly added symbol
     }
     dynRelSec->addReloc(
-        type, sec, offset, sym, addend, expr,
+        DynamicReloc::AgainstSymbol, type, sec, offset, *sym, addend,
+        R_CHERI_CAPABILITY,
         /* Relocation type for the addend = */ target->symbolicRel);
+
   } else if (capRelocMode == CapRelocsMode::Legacy) {
     if (config->relativeCapRelocsOnly) {
       assert(!sym->isPreemptible);

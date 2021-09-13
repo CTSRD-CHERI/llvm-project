@@ -87,7 +87,7 @@ def DereferenceableOrNull : IntAttr<"dereferenceable_or_null",
                                     [ParamAttr, RetAttr]>;
 
 /// Function has additional side-effects.
-def HasSideEffects : EnumAttr<"hassideeffects">;
+def HasSideEffects : EnumAttr<"hassideeffects", [FnAttr]>;
 
 /// Function may only access memory that is inaccessible from IR.
 def InaccessibleMemOnly : EnumAttr<"inaccessiblememonly", [FnAttr]>;
@@ -286,7 +286,7 @@ def ZExt : EnumAttr<"zeroext", [ParamAttr, RetAttr]>;
 
 // This MemTransferInst may transfer capabilities and must not be
 // split into smaller loads/stores that would break this property
-def MustPreserveCheriTags : EnumAttr<"must_preserve_cheri_tags">;
+def MustPreserveCheriTags : EnumAttr<"must_preserve_cheri_tags", [FnAttr]>;
 
 /// Function is required to make Forward Progress.
 def MustProgress : EnumAttr<"mustprogress", [FnAttr]>;
