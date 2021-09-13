@@ -214,11 +214,11 @@ def untyped   : ValueType<8,    172>;  // Produces an untyped value
 def funcref   : ValueType<0,    173>;  // WebAssembly's funcref type
 def externref : ValueType<0,    174>;  // WebAssembly's externref type
 def x86amx    : ValueType<8192, 175>;  // X86 AMX value
-def iFATPTR64 : ValueType<64,   176>;  // 64-bit fat pointer.
-def iFATPTR128: ValueType<128,  177>;  // 128-bit fat pointer.
-def iFATPTR256: ValueType<256,  178>;  // 256-bit fat pointer.
-def iFATPTR512: ValueType<512,  179>;  // 512-bit fat pointer.
-def iFATPTRAny: ValueType<0,    180>;  // Any fat pointer.
+def iFATPTR64 : ValueType<64,   !add(x86amx.Value, 1)>;      // 64-bit fat pointer.
+def iFATPTR128: ValueType<128,  !add(iFATPTR64.Value, 1)>;   // 128-bit fat pointer.
+def iFATPTR256: ValueType<256,  !add(iFATPTR128.Value, 1)>;  // 256-bit fat pointer.
+def iFATPTR512: ValueType<512,  !add(iFATPTR256.Value, 1)>;  // 512-bit fat pointer.
+def iFATPTRAny: ValueType<0,    !add(iFATPTR512.Value, 1)>;  // Any fat pointer.
 
 def token      : ValueType<0, 248>;  // TokenTy
 def MetadataVT : ValueType<0, 249>;  // Metadata

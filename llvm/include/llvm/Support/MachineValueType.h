@@ -268,12 +268,12 @@ namespace llvm {
       funcref        = 173,    // WebAssembly's funcref type
       externref      = 174,    // WebAssembly's externref type
       x86amx         = 175,    // This is an X86 AMX value
-      iFATPTR64      = 176,  // 64-bit fat pointer type
-      iFATPTR128     = 177, // 128-bit fat pointer type
-      iFATPTR256     = 178, // 256-bit fat pointer type
-      iFATPTR512     = 179, // 512-bit fat pointer type
-      iFATPTRAny     = 180, // Generic fat pointer type (must be legalised to a
-      // sized  version)
+      iFATPTR64      = x86amx + 1,     // 64-bit fat pointer type
+      iFATPTR128     = iFATPTR64 + 1,  // 128-bit fat pointer type
+      iFATPTR256     = iFATPTR128 + 1, // 256-bit fat pointer type
+      iFATPTR512     = iFATPTR256 + 1, // 512-bit fat pointer type
+      iFATPTRAny     = iFATPTR512 + 1, // Generic fat pointer type (must be
+      // legalised to a sized  version)
       FIRST_FAT_POINTER = iFATPTR64,
       LAST_FAT_POINTER = iFATPTRAny,
 
