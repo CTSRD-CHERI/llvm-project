@@ -4809,7 +4809,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_offset_increment: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Increment = EmitScalarExpr(E->getArg(1));
-    return RValue::get(Builder.CreateGEP(EmitCastToVoidPtr(Cap), Increment,
+    return RValue::get(Builder.CreateGEP(Int8Ty, EmitCastToVoidPtr(Cap),
+                                         Increment,
                                          "__builtin_cheri_offset_increment"));
   }
   case Builtin::BI__builtin_cheri_offset_set: {

@@ -4757,8 +4757,8 @@ public:
                                         llvm::Value *IntValue) {
     assert(isa<llvm::PointerType>(ResultTy));
     return Builder.CreateBitCast(
-        Builder.CreateGEP(llvm::ConstantPointerNull::get(Int8CheriCapTy),
-                          IntValue),
+        Builder.CreateGEP(
+            Int8Ty, llvm::ConstantPointerNull::get(Int8CheriCapTy), IntValue),
         ResultTy);
   }
   llvm::Value *getPointerAddress(llvm::Value *V, const llvm::Twine &Name = "") {

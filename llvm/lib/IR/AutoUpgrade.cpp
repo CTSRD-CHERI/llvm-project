@@ -3719,7 +3719,8 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
                                    {Builder.getFloatTy()}),
                                CI->getArgOperand(0), "h2f");
     } else if (!IsX86 && Name.startswith("cheri.cap.offset.increment")) {
-      Rep = Builder.CreateGEP(CI->getArgOperand(0), CI->getArgOperand(1));
+      Rep = Builder.CreateGEP(Builder.getInt8Ty(), CI->getArgOperand(0),
+                              CI->getArgOperand(1));
       Rep->takeName(CI);
     } else {
       llvm_unreachable("Unknown function for CallInst upgrade.");

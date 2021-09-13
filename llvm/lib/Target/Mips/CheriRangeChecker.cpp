@@ -143,7 +143,8 @@ class CheriRangeChecker : public FunctionPass,
       LLVM_DEBUG(dbgs() << "Inserting GEP for non-zero Offset "
                         << AO.ValueSrc.Offset << "\n";
                      BitCast->dump(););
-      Result = B.CreateConstGEP1_64(Result, AO.ValueSrc.Offset, "offs");
+      Result = B.CreateConstGEP1_64(B.getInt8Ty(), Result, AO.ValueSrc.Offset,
+                                    "offs");
     }
     return B.CreateBitCast(Result, I2P->getType());
   }

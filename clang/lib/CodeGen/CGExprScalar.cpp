@@ -2639,7 +2639,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
     if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext())) {
       IntToPtr = Builder.CreateBitCast(
-          Builder.CreateGEP(llvm::ConstantPointerNull::get(CGF.Int8CheriCapTy),
+          Builder.CreateGEP(CGF.Int8Ty,
+                            llvm::ConstantPointerNull::get(CGF.Int8CheriCapTy),
                             IntResult),
           DestLLVMTy);
     } else {
