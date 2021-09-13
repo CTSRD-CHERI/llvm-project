@@ -107,23 +107,6 @@ createRISCVObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
   return nullptr;
 }
 
-static MCStreamer *
-createRISCVMCStreamer(const Triple &TT, MCContext &Context,
-                      std::unique_ptr<MCAsmBackend> &&MAB,
-                      std::unique_ptr<MCObjectWriter> &&OW,
-                      std::unique_ptr<MCCodeEmitter> &&Emitter,
-                      bool RelaxAll) {
-  if (!TT.isOSBinFormatELF())
-    return nullptr;
-
-  RISCVELFStreamer *S =
-      new RISCVELFStreamer(Context, std::move(MAB), std::move(OW),
-                           std::move(Emitter), TT.isArch64Bit());
-  if (RelaxAll)
-    S->getAssembler().setRelaxAll(true);
-  return S;
-}
-
 static MCTargetStreamer *createRISCVAsmTargetStreamer(MCStreamer &S,
                                                       formatted_raw_ostream &OS,
                                                       MCInstPrinter *InstPrint,

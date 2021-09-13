@@ -110,25 +110,6 @@ public:
   void emitDirectiveOptionNoCapMode() override;
 };
 
-class RISCVELFStreamer : public MCELFStreamer {
-  bool Is64Bit;
-
-public:
-  RISCVELFStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> MAB,
-                   std::unique_ptr<MCObjectWriter> OW,
-                   std::unique_ptr<MCCodeEmitter> Emitter, bool Is64Bit)
-      : MCELFStreamer(Context, std::move(MAB), std::move(OW),
-                      std::move(Emitter)),
-        Is64Bit(Is64Bit) {}
-
-  void emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
-                       SMLoc Loc) override;
-
-protected:
-  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, const MCExpr *Addend,
-                               unsigned CapSize, SMLoc Loc) override;
-};
-
 MCELFStreamer *createRISCVELFStreamer(MCContext &C,
                                       std::unique_ptr<MCAsmBackend> MAB,
                                       std::unique_ptr<MCObjectWriter> MOW,
