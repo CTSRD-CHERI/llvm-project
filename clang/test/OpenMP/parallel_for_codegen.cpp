@@ -1210,7 +1210,7 @@ void range_for_collapsed() {
 // CHECK1-NEXT:    store i32 [[N]], i32* [[N_ADDR]], align 4
 // CHECK1-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK1-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK1-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK1-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -1220,7 +1220,7 @@ void range_for_collapsed() {
 // CHECK1-NEXT:    [[TMP4:%.*]] = load i64, i64* [[N_CASTED]], align 8
 // CHECK1-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB2]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, float**, i64, i64)* @.omp_outlined..8 to void (i32*, i32*, ...)*), float** [[A_ADDR]], i64 [[TMP1]], i64 [[TMP4]])
 // CHECK1-NEXT:    [[TMP5:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP5]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP5]])
 // CHECK1-NEXT:    ret void
 //
 //
@@ -1253,7 +1253,7 @@ void range_for_collapsed() {
 // CHECK1-NEXT:    store i32 16908288, i32* [[DOTOMP_UB]], align 4
 // CHECK1-NEXT:    store i32 1, i32* [[DOTOMP_STRIDE]], align 4
 // CHECK1-NEXT:    store i32 0, i32* [[DOTOMP_IS_LAST]], align 4
-// CHECK1-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA1:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK1-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -1337,7 +1337,7 @@ void range_for_collapsed() {
 // CHECK1:       omp.dispatch.end:
 // CHECK1-NEXT:    call void @__kmpc_for_static_fini(%struct.ident_t* @[[GLOB1]], i32 [[TMP4]])
 // CHECK1-NEXT:    [[TMP24:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP24]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP24]])
 // CHECK1-NEXT:    ret void
 // CHECK1:       terminate.lpad:
 // CHECK1-NEXT:    [[TMP25:%.*]] = landingpad { i8*, i32 }
@@ -2324,7 +2324,7 @@ void range_for_collapsed() {
 // CHECK2-NEXT:    store i32 [[N]], i32* [[N_ADDR]], align 4
 // CHECK2-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK2-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK2-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK2-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK2-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK2-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -2334,7 +2334,7 @@ void range_for_collapsed() {
 // CHECK2-NEXT:    [[TMP4:%.*]] = load i64, i64* [[N_CASTED]], align 8
 // CHECK2-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB2]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, float**, i64, i64)* @.omp_outlined..8 to void (i32*, i32*, ...)*), float** [[A_ADDR]], i64 [[TMP1]], i64 [[TMP4]])
 // CHECK2-NEXT:    [[TMP5:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP5]])
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP5]])
 // CHECK2-NEXT:    ret void
 //
 //
@@ -2367,7 +2367,7 @@ void range_for_collapsed() {
 // CHECK2-NEXT:    store i32 16908288, i32* [[DOTOMP_UB]], align 4
 // CHECK2-NEXT:    store i32 1, i32* [[DOTOMP_STRIDE]], align 4
 // CHECK2-NEXT:    store i32 0, i32* [[DOTOMP_IS_LAST]], align 4
-// CHECK2-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK2-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK2-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA1:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK2-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -2451,7 +2451,7 @@ void range_for_collapsed() {
 // CHECK2:       omp.dispatch.end:
 // CHECK2-NEXT:    call void @__kmpc_for_static_fini(%struct.ident_t* @[[GLOB1]], i32 [[TMP4]])
 // CHECK2-NEXT:    [[TMP24:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP24]])
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP24]])
 // CHECK2-NEXT:    ret void
 // CHECK2:       terminate.lpad:
 // CHECK2-NEXT:    [[TMP25:%.*]] = landingpad { i8*, i32 }
@@ -3438,7 +3438,7 @@ void range_for_collapsed() {
 // CHECK3-NEXT:    store i32 [[N]], i32* [[N_ADDR]], align 4
 // CHECK3-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK3-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK3-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK3-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK3-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -3448,7 +3448,7 @@ void range_for_collapsed() {
 // CHECK3-NEXT:    [[TMP4:%.*]] = load i64, i64* [[N_CASTED]], align 8
 // CHECK3-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB2]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, float**, i64, i64)* @.omp_outlined..8 to void (i32*, i32*, ...)*), float** [[A_ADDR]], i64 [[TMP1]], i64 [[TMP4]])
 // CHECK3-NEXT:    [[TMP5:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK3-NEXT:    call void @llvm.stackrestore(i8* [[TMP5]])
+// CHECK3-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP5]])
 // CHECK3-NEXT:    ret void
 //
 //
@@ -3481,7 +3481,7 @@ void range_for_collapsed() {
 // CHECK3-NEXT:    store i32 16908288, i32* [[DOTOMP_UB]], align 4
 // CHECK3-NEXT:    store i32 1, i32* [[DOTOMP_STRIDE]], align 4
 // CHECK3-NEXT:    store i32 0, i32* [[DOTOMP_IS_LAST]], align 4
-// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK3-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK3-NEXT:    [[VLA1:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK3-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -3565,7 +3565,7 @@ void range_for_collapsed() {
 // CHECK3:       omp.dispatch.end:
 // CHECK3-NEXT:    call void @__kmpc_for_static_fini(%struct.ident_t* @[[GLOB1]], i32 [[TMP4]])
 // CHECK3-NEXT:    [[TMP24:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK3-NEXT:    call void @llvm.stackrestore(i8* [[TMP24]])
+// CHECK3-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP24]])
 // CHECK3-NEXT:    ret void
 // CHECK3:       terminate.lpad:
 // CHECK3-NEXT:    [[TMP25:%.*]] = landingpad { i8*, i32 }
@@ -4552,7 +4552,7 @@ void range_for_collapsed() {
 // CHECK4-NEXT:    store i32 [[N]], i32* [[N_ADDR]], align 4
 // CHECK4-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK4-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK4-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK4-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK4-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK4-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK4-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -4562,7 +4562,7 @@ void range_for_collapsed() {
 // CHECK4-NEXT:    [[TMP4:%.*]] = load i64, i64* [[N_CASTED]], align 8
 // CHECK4-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB2]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, float**, i64, i64)* @.omp_outlined..8 to void (i32*, i32*, ...)*), float** [[A_ADDR]], i64 [[TMP1]], i64 [[TMP4]])
 // CHECK4-NEXT:    [[TMP5:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK4-NEXT:    call void @llvm.stackrestore(i8* [[TMP5]])
+// CHECK4-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP5]])
 // CHECK4-NEXT:    ret void
 //
 //
@@ -4595,7 +4595,7 @@ void range_for_collapsed() {
 // CHECK4-NEXT:    store i32 16908288, i32* [[DOTOMP_UB]], align 4
 // CHECK4-NEXT:    store i32 1, i32* [[DOTOMP_STRIDE]], align 4
 // CHECK4-NEXT:    store i32 0, i32* [[DOTOMP_IS_LAST]], align 4
-// CHECK4-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK4-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK4-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK4-NEXT:    [[VLA1:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK4-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -4679,7 +4679,7 @@ void range_for_collapsed() {
 // CHECK4:       omp.dispatch.end:
 // CHECK4-NEXT:    call void @__kmpc_for_static_fini(%struct.ident_t* @[[GLOB1]], i32 [[TMP4]])
 // CHECK4-NEXT:    [[TMP24:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK4-NEXT:    call void @llvm.stackrestore(i8* [[TMP24]])
+// CHECK4-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP24]])
 // CHECK4-NEXT:    ret void
 // CHECK4:       terminate.lpad:
 // CHECK4-NEXT:    [[TMP25:%.*]] = landingpad { i8*, i32 }
@@ -5666,7 +5666,7 @@ void range_for_collapsed() {
 // CHECK5-NEXT:    store i32 [[N]], i32* [[N_ADDR]], align 4
 // CHECK5-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4, !dbg [[DBG104:![0-9]+]]
 // CHECK5-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64, !dbg [[DBG104]]
-// CHECK5-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave(), !dbg [[DBG104]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8(), !dbg [[DBG104]]
 // CHECK5-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8, !dbg [[DBG104]]
 // CHECK5-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 16, !dbg [[DBG104]]
 // CHECK5-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8, !dbg [[DBG104]]
@@ -5676,7 +5676,7 @@ void range_for_collapsed() {
 // CHECK5-NEXT:    [[TMP4:%.*]] = load i64, i64* [[N_CASTED]], align 8, !dbg [[DBG105]]
 // CHECK5-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB32:[0-9]+]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, float**, i64, i64)* @.omp_outlined..8 to void (i32*, i32*, ...)*), float** [[A_ADDR]], i64 [[TMP1]], i64 [[TMP4]]), !dbg [[DBG105]]
 // CHECK5-NEXT:    [[TMP5:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8, !dbg [[DBG106:![0-9]+]]
-// CHECK5-NEXT:    call void @llvm.stackrestore(i8* [[TMP5]]), !dbg [[DBG106]]
+// CHECK5-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP5]]), !dbg [[DBG106]]
 // CHECK5-NEXT:    ret void, !dbg [[DBG106]]
 //
 //
@@ -5709,7 +5709,7 @@ void range_for_collapsed() {
 // CHECK5-NEXT:    store i32 16908288, i32* [[DOTOMP_UB]], align 4, !dbg [[DBG109]]
 // CHECK5-NEXT:    store i32 1, i32* [[DOTOMP_STRIDE]], align 4, !dbg [[DBG109]]
 // CHECK5-NEXT:    store i32 0, i32* [[DOTOMP_IS_LAST]], align 4, !dbg [[DBG109]]
-// CHECK5-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave(), !dbg [[DBG108]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8(), !dbg [[DBG108]]
 // CHECK5-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8, !dbg [[DBG108]]
 // CHECK5-NEXT:    [[VLA1:%.*]] = alloca float, i64 [[TMP1]], align 16, !dbg [[DBG108]]
 // CHECK5-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8, !dbg [[DBG108]]
@@ -5793,7 +5793,7 @@ void range_for_collapsed() {
 // CHECK5:       omp.dispatch.end:
 // CHECK5-NEXT:    call void @__kmpc_for_static_fini(%struct.ident_t* @[[GLOB31:[0-9]+]], i32 [[TMP4]]), !dbg [[DBG108]]
 // CHECK5-NEXT:    [[TMP24:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8, !dbg [[DBG108]]
-// CHECK5-NEXT:    call void @llvm.stackrestore(i8* [[TMP24]]), !dbg [[DBG108]]
+// CHECK5-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP24]]), !dbg [[DBG108]]
 // CHECK5-NEXT:    ret void, !dbg [[DBG110]]
 // CHECK5:       terminate.lpad:
 // CHECK5-NEXT:    [[TMP25:%.*]] = landingpad { i8*, i32 }
@@ -6780,7 +6780,7 @@ void range_for_collapsed() {
 // CHECK6-NEXT:    store i32 [[N]], i32* [[N_ADDR]], align 4
 // CHECK6-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK6-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK6-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK6-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK6-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK6-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK6-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -6790,7 +6790,7 @@ void range_for_collapsed() {
 // CHECK6-NEXT:    [[TMP4:%.*]] = load i64, i64* [[N_CASTED]], align 8
 // CHECK6-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB2]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, float**, i64, i64)* @.omp_outlined..8 to void (i32*, i32*, ...)*), float** [[A_ADDR]], i64 [[TMP1]], i64 [[TMP4]])
 // CHECK6-NEXT:    [[TMP5:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK6-NEXT:    call void @llvm.stackrestore(i8* [[TMP5]])
+// CHECK6-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP5]])
 // CHECK6-NEXT:    ret void
 //
 //
@@ -6823,7 +6823,7 @@ void range_for_collapsed() {
 // CHECK6-NEXT:    store i32 16908288, i32* [[DOTOMP_UB]], align 4
 // CHECK6-NEXT:    store i32 1, i32* [[DOTOMP_STRIDE]], align 4
 // CHECK6-NEXT:    store i32 0, i32* [[DOTOMP_IS_LAST]], align 4
-// CHECK6-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK6-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK6-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK6-NEXT:    [[VLA1:%.*]] = alloca float, i64 [[TMP1]], align 16
 // CHECK6-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -6905,7 +6905,7 @@ void range_for_collapsed() {
 // CHECK6:       omp.dispatch.end:
 // CHECK6-NEXT:    call void @__kmpc_for_static_fini(%struct.ident_t* @[[GLOB1]], i32 [[TMP4]])
 // CHECK6-NEXT:    [[TMP24:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK6-NEXT:    call void @llvm.stackrestore(i8* [[TMP24]])
+// CHECK6-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP24]])
 // CHECK6-NEXT:    ret void
 //
 //

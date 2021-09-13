@@ -665,7 +665,7 @@ int main() {
 // CHECK1-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i32], [2 x i32]* [[VEC]], i64 0, i64 1
 // CHECK1-NEXT:    [[TMP2:%.*]] = load i32, i32* [[ARRAYIDX]], align 4
 // CHECK1-NEXT:    [[TMP3:%.*]] = zext i32 [[TMP2]] to i64
-// CHECK1-NEXT:    [[TMP4:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP4:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP4]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[TMP5:%.*]] = mul nuw i64 10, [[TMP3]]
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP5]], align 16
@@ -681,7 +681,7 @@ int main() {
 // CHECK1-NEXT:    [[CALL10:%.*]] = call i32 @_Z5tmainIiLi42EET_v()
 // CHECK1-NEXT:    store i32 [[CALL10]], i32* [[RETVAL]], align 4
 // CHECK1-NEXT:    [[TMP8:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP8]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP8]])
 // CHECK1-NEXT:    [[ARRAY_BEGIN11:%.*]] = getelementptr inbounds [5 x %struct.S.0], [5 x %struct.S.0]* [[VVAR2]], i32 0, i32 0
 // CHECK1-NEXT:    [[TMP9:%.*]] = getelementptr inbounds [[STRUCT_S_0]], %struct.S.0* [[ARRAY_BEGIN11]], i64 5
 // CHECK1-NEXT:    br label [[ARRAYDESTROY_BODY:%.*]]
@@ -1131,7 +1131,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP12:%.*]] = sdiv exact i64 [[TMP11]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP13:%.*]] = add nuw i64 [[TMP12]], 1
 // CHECK1-NEXT:    [[TMP14:%.*]] = mul nuw i64 [[TMP13]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP15:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP15:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP15]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA7:%.*]] = alloca i32, i64 [[TMP13]], align 16
 // CHECK1-NEXT:    store i64 [[TMP13]], i64* [[__VLA_EXPR0]], align 8
@@ -1363,7 +1363,7 @@ int main() {
 // CHECK1-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE63]], label [[ARRAYDESTROY_BODY]]
 // CHECK1:       arraydestroy.done63:
 // CHECK1-NEXT:    [[TMP85:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP85]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP85]])
 // CHECK1-NEXT:    ret void
 //
 //
@@ -1494,7 +1494,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP4:%.*]] = mul nuw i64 [[TMP0]], [[TMP1]]
 // CHECK1-NEXT:    [[TMP5:%.*]] = mul nuw i64 [[TMP4]], 4
 // CHECK1-NEXT:    [[TMP6:%.*]] = udiv exact i64 [[TMP5]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP7]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA3:%.*]] = alloca i32, i64 [[TMP6]], align 16
 // CHECK1-NEXT:    store i64 [[TMP6]], i64* [[__VLA_EXPR0]], align 8
@@ -1696,7 +1696,7 @@ int main() {
 // CHECK1-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE53:%.*]], label [[ARRAYDESTROY_BODY]]
 // CHECK1:       arraydestroy.done53:
 // CHECK1-NEXT:    [[TMP56:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP56]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP56]])
 // CHECK1-NEXT:    [[TMP57:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK1-NEXT:    [[TMP58:%.*]] = load i32, i32* [[TMP57]], align 4
 // CHECK1-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4]], i32 [[TMP58]])
@@ -1802,7 +1802,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP8:%.*]] = sdiv exact i64 [[TMP7]], ptrtoint (%struct.S.0* getelementptr ([[STRUCT_S_0]], %struct.S.0* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP9:%.*]] = add nuw i64 [[TMP8]], 1
 // CHECK1-NEXT:    [[TMP10:%.*]] = mul nuw i64 [[TMP9]], ptrtoint (%struct.S.0* getelementptr ([[STRUCT_S_0]], %struct.S.0* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP11]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S_0]], i64 [[TMP9]], align 16
 // CHECK1-NEXT:    store i64 [[TMP9]], i64* [[__VLA_EXPR0]], align 8
@@ -1960,7 +1960,7 @@ int main() {
 // CHECK1-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE27]], label [[ARRAYDESTROY_BODY]]
 // CHECK1:       arraydestroy.done27:
 // CHECK1-NEXT:    [[TMP56:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP56]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP56]])
 // CHECK1-NEXT:    [[TMP57:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK1-NEXT:    [[TMP58:%.*]] = load i32, i32* [[TMP57]], align 4
 // CHECK1-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4]], i32 [[TMP58]])
@@ -3736,7 +3736,7 @@ int main() {
 // CHECK2-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i32], [2 x i32]* [[VEC]], i64 0, i64 1
 // CHECK2-NEXT:    [[TMP2:%.*]] = load i32, i32* [[ARRAYIDX]], align 4
 // CHECK2-NEXT:    [[TMP3:%.*]] = zext i32 [[TMP2]] to i64
-// CHECK2-NEXT:    [[TMP4:%.*]] = call i8* @llvm.stacksave()
+// CHECK2-NEXT:    [[TMP4:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK2-NEXT:    store i8* [[TMP4]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[TMP5:%.*]] = mul nuw i64 10, [[TMP3]]
 // CHECK2-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP5]], align 16
@@ -3752,7 +3752,7 @@ int main() {
 // CHECK2-NEXT:    [[CALL10:%.*]] = call i32 @_Z5tmainIiLi42EET_v()
 // CHECK2-NEXT:    store i32 [[CALL10]], i32* [[RETVAL]], align 4
 // CHECK2-NEXT:    [[TMP8:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP8]])
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP8]])
 // CHECK2-NEXT:    [[ARRAY_BEGIN11:%.*]] = getelementptr inbounds [5 x %struct.S.0], [5 x %struct.S.0]* [[VVAR2]], i32 0, i32 0
 // CHECK2-NEXT:    [[TMP9:%.*]] = getelementptr inbounds [[STRUCT_S_0]], %struct.S.0* [[ARRAY_BEGIN11]], i64 5
 // CHECK2-NEXT:    br label [[ARRAYDESTROY_BODY:%.*]]
@@ -4202,7 +4202,7 @@ int main() {
 // CHECK2-NEXT:    [[TMP12:%.*]] = sdiv exact i64 [[TMP11]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
 // CHECK2-NEXT:    [[TMP13:%.*]] = add nuw i64 [[TMP12]], 1
 // CHECK2-NEXT:    [[TMP14:%.*]] = mul nuw i64 [[TMP13]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
-// CHECK2-NEXT:    [[TMP15:%.*]] = call i8* @llvm.stacksave()
+// CHECK2-NEXT:    [[TMP15:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK2-NEXT:    store i8* [[TMP15]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA7:%.*]] = alloca i32, i64 [[TMP13]], align 16
 // CHECK2-NEXT:    store i64 [[TMP13]], i64* [[__VLA_EXPR0]], align 8
@@ -4434,7 +4434,7 @@ int main() {
 // CHECK2-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE63]], label [[ARRAYDESTROY_BODY]]
 // CHECK2:       arraydestroy.done63:
 // CHECK2-NEXT:    [[TMP85:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP85]])
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP85]])
 // CHECK2-NEXT:    ret void
 //
 //
@@ -4565,7 +4565,7 @@ int main() {
 // CHECK2-NEXT:    [[TMP4:%.*]] = mul nuw i64 [[TMP0]], [[TMP1]]
 // CHECK2-NEXT:    [[TMP5:%.*]] = mul nuw i64 [[TMP4]], 4
 // CHECK2-NEXT:    [[TMP6:%.*]] = udiv exact i64 [[TMP5]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
-// CHECK2-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave()
+// CHECK2-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK2-NEXT:    store i8* [[TMP7]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA3:%.*]] = alloca i32, i64 [[TMP6]], align 16
 // CHECK2-NEXT:    store i64 [[TMP6]], i64* [[__VLA_EXPR0]], align 8
@@ -4767,7 +4767,7 @@ int main() {
 // CHECK2-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE53:%.*]], label [[ARRAYDESTROY_BODY]]
 // CHECK2:       arraydestroy.done53:
 // CHECK2-NEXT:    [[TMP56:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP56]])
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP56]])
 // CHECK2-NEXT:    [[TMP57:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK2-NEXT:    [[TMP58:%.*]] = load i32, i32* [[TMP57]], align 4
 // CHECK2-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4]], i32 [[TMP58]])
@@ -4873,7 +4873,7 @@ int main() {
 // CHECK2-NEXT:    [[TMP8:%.*]] = sdiv exact i64 [[TMP7]], ptrtoint (%struct.S.0* getelementptr ([[STRUCT_S_0]], %struct.S.0* null, i32 1) to i64)
 // CHECK2-NEXT:    [[TMP9:%.*]] = add nuw i64 [[TMP8]], 1
 // CHECK2-NEXT:    [[TMP10:%.*]] = mul nuw i64 [[TMP9]], ptrtoint (%struct.S.0* getelementptr ([[STRUCT_S_0]], %struct.S.0* null, i32 1) to i64)
-// CHECK2-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave()
+// CHECK2-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK2-NEXT:    store i8* [[TMP11]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S_0]], i64 [[TMP9]], align 16
 // CHECK2-NEXT:    store i64 [[TMP9]], i64* [[__VLA_EXPR0]], align 8
@@ -5031,7 +5031,7 @@ int main() {
 // CHECK2-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE27]], label [[ARRAYDESTROY_BODY]]
 // CHECK2:       arraydestroy.done27:
 // CHECK2-NEXT:    [[TMP56:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP56]])
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP56]])
 // CHECK2-NEXT:    [[TMP57:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK2-NEXT:    [[TMP58:%.*]] = load i32, i32* [[TMP57]], align 4
 // CHECK2-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4]], i32 [[TMP58]])
@@ -6807,7 +6807,7 @@ int main() {
 // CHECK3-NEXT:    [[ARRAYIDX14:%.*]] = getelementptr inbounds [2 x i32], [2 x i32]* [[VEC]], i64 0, i64 1
 // CHECK3-NEXT:    [[TMP9:%.*]] = load i32, i32* [[ARRAYIDX14]], align 4
 // CHECK3-NEXT:    [[TMP10:%.*]] = zext i32 [[TMP9]] to i64
-// CHECK3-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave()
+// CHECK3-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK3-NEXT:    store i8* [[TMP11]], i8** [[SAVED_STACK]], align 8
 // CHECK3-NEXT:    [[TMP12:%.*]] = mul nuw i64 10, [[TMP10]]
 // CHECK3-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP12]], align 16
@@ -6923,7 +6923,7 @@ int main() {
 // CHECK3-NEXT:    [[CALL69:%.*]] = call i32 @_Z5tmainIiLi42EET_v()
 // CHECK3-NEXT:    store i32 [[CALL69]], i32* [[RETVAL]], align 4
 // CHECK3-NEXT:    [[TMP35:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK3-NEXT:    call void @llvm.stackrestore(i8* [[TMP35]])
+// CHECK3-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP35]])
 // CHECK3-NEXT:    [[ARRAY_BEGIN70:%.*]] = getelementptr inbounds [5 x %struct.S.0], [5 x %struct.S.0]* [[VVAR2]], i32 0, i32 0
 // CHECK3-NEXT:    [[TMP36:%.*]] = getelementptr inbounds [[STRUCT_S_0]], %struct.S.0* [[ARRAY_BEGIN70]], i64 5
 // CHECK3-NEXT:    br label [[ARRAYDESTROY_BODY:%.*]]
@@ -7445,7 +7445,7 @@ int main() {
 // CHECK4-NEXT:    [[ARRAYIDX14:%.*]] = getelementptr inbounds [2 x i32], [2 x i32]* [[VEC]], i64 0, i64 1
 // CHECK4-NEXT:    [[TMP9:%.*]] = load i32, i32* [[ARRAYIDX14]], align 4
 // CHECK4-NEXT:    [[TMP10:%.*]] = zext i32 [[TMP9]] to i64
-// CHECK4-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave()
+// CHECK4-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK4-NEXT:    store i8* [[TMP11]], i8** [[SAVED_STACK]], align 8
 // CHECK4-NEXT:    [[TMP12:%.*]] = mul nuw i64 10, [[TMP10]]
 // CHECK4-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP12]], align 16
@@ -7561,7 +7561,7 @@ int main() {
 // CHECK4-NEXT:    [[CALL69:%.*]] = call i32 @_Z5tmainIiLi42EET_v()
 // CHECK4-NEXT:    store i32 [[CALL69]], i32* [[RETVAL]], align 4
 // CHECK4-NEXT:    [[TMP35:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK4-NEXT:    call void @llvm.stackrestore(i8* [[TMP35]])
+// CHECK4-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP35]])
 // CHECK4-NEXT:    [[ARRAY_BEGIN70:%.*]] = getelementptr inbounds [5 x %struct.S.0], [5 x %struct.S.0]* [[VVAR2]], i32 0, i32 0
 // CHECK4-NEXT:    [[TMP36:%.*]] = getelementptr inbounds [[STRUCT_S_0]], %struct.S.0* [[ARRAY_BEGIN70]], i64 5
 // CHECK4-NEXT:    br label [[ARRAYDESTROY_BODY:%.*]]

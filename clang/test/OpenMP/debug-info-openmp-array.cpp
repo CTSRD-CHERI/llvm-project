@@ -25,7 +25,7 @@ void f(int m) {
 // CHECK1-NEXT:    call void @llvm.dbg.declare(metadata i32* [[I]], metadata [[META13:![0-9]+]], metadata !DIExpression()), !dbg [[DBG14:![0-9]+]]
 // CHECK1-NEXT:    [[TMP0:%.*]] = load i32, i32* [[M_ADDR]], align 4, !dbg [[DBG15:![0-9]+]]
 // CHECK1-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64, !dbg [[DBG16:![0-9]+]]
-// CHECK1-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave(), !dbg [[DBG16]]
+// CHECK1-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8(), !dbg [[DBG16]]
 // CHECK1-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8, !dbg [[DBG16]]
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP1]], align 16, !dbg [[DBG16]]
 // CHECK1-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8, !dbg [[DBG16]]
@@ -33,7 +33,7 @@ void f(int m) {
 // CHECK1-NEXT:    call void @llvm.dbg.declare(metadata i32* [[VLA]], metadata [[META20:![0-9]+]], metadata !DIExpression()), !dbg [[DBG24:![0-9]+]]
 // CHECK1-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB4:[0-9]+]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, i32*, i64, i32*)* @.omp_outlined. to void (i32*, i32*, ...)*), i32* [[M_ADDR]], i64 [[TMP1]], i32* [[VLA]]), !dbg [[DBG25:![0-9]+]]
 // CHECK1-NEXT:    [[TMP3:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8, !dbg [[DBG26:![0-9]+]]
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP3]]), !dbg [[DBG26]]
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP3]]), !dbg [[DBG26]]
 // CHECK1-NEXT:    ret void, !dbg [[DBG26]]
 //
 //
