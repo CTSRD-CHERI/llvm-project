@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 // CHECK1-NEXT:    [[TMP11:%.*]] = sdiv exact i64 [[TMP10]], ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP12:%.*]] = add nuw i64 [[TMP11]], 1
 // CHECK1-NEXT:    [[TMP13:%.*]] = mul nuw i64 [[TMP12]], ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP14:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP14:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP14]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca i8, i64 [[TMP12]], align 16
 // CHECK1-NEXT:    store i64 [[TMP12]], i64* [[__VLA_EXPR0]], align 8
@@ -314,7 +314,7 @@ int main(int argc, char **argv) {
 // CHECK1-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]]
 // CHECK1:       .omp.reduction.default:
 // CHECK1-NEXT:    [[TMP113:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP113]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP113]])
 // CHECK1-NEXT:    [[TMP114:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK1-NEXT:    [[TMP115:%.*]] = load i32, i32* [[TMP114]], align 4
 // CHECK1-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4:[0-9]+]], i32 [[TMP115]])
@@ -614,7 +614,7 @@ int main(int argc, char **argv) {
 // CHECK2-NEXT:    [[TMP11:%.*]] = sdiv exact i64 [[TMP10]], ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i64)
 // CHECK2-NEXT:    [[TMP12:%.*]] = add nuw i64 [[TMP11]], 1
 // CHECK2-NEXT:    [[TMP13:%.*]] = mul nuw i64 [[TMP12]], ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i64)
-// CHECK2-NEXT:    [[TMP14:%.*]] = call i8* @llvm.stacksave()
+// CHECK2-NEXT:    [[TMP14:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK2-NEXT:    store i8* [[TMP14]], i8** [[SAVED_STACK]], align 8
 // CHECK2-NEXT:    [[VLA:%.*]] = alloca i8, i64 [[TMP12]], align 16
 // CHECK2-NEXT:    store i64 [[TMP12]], i64* [[__VLA_EXPR0]], align 8
@@ -830,7 +830,7 @@ int main(int argc, char **argv) {
 // CHECK2-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]]
 // CHECK2:       .omp.reduction.default:
 // CHECK2-NEXT:    [[TMP113:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP113]])
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP113]])
 // CHECK2-NEXT:    [[TMP114:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK2-NEXT:    [[TMP115:%.*]] = load i32, i32* [[TMP114]], align 4
 // CHECK2-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4:[0-9]+]], i32 [[TMP115]])
