@@ -7,10 +7,10 @@ public:
 };
 
 // CHECK-LABEL: define {{[^@]+}}@_Z1gv
-// CHECK-SAME: () addrspace(200) [[ATTR0:#.*]] {
+// CHECK-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[A:%.*]] = alloca [[CLASS_A:%.*]], align 1, addrspace(200)
-// CHECK-NEXT:    call void @_ZN1A1fEv(%class.A addrspace(200)* nonnull dereferenceable(1) [[A]])
+// CHECK-NEXT:    call void @_ZN1A1fEv([[CLASS_A]] addrspace(200)* nonnull align 1 dereferenceable(1) [[A]])
 // CHECK-NEXT:    ret void
 //
 void g() {
@@ -19,9 +19,9 @@ void g() {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_ZN1A1fEv
-// CHECK-SAME: (%class.A addrspace(200)* nonnull dereferenceable(1) [[THIS:%.*]]) addrspace(200) [[ATTR0]] align 2 {
+// CHECK-SAME: ([[CLASS_A:%.*]] addrspace(200)* nonnull align 1 dereferenceable(1) [[THIS:%.*]]) addrspace(200) #[[ATTR0]] align 2 {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[THIS_ADDR:%.*]] = alloca [[CLASS_A:%.*]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[THIS_ADDR:%.*]] = alloca [[CLASS_A]] addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    store [[CLASS_A]] addrspace(200)* [[THIS]], [[CLASS_A]] addrspace(200)* addrspace(200)* [[THIS_ADDR]], align 16
 // CHECK-NEXT:    [[THIS1:%.*]] = load [[CLASS_A]] addrspace(200)*, [[CLASS_A]] addrspace(200)* addrspace(200)* [[THIS_ADDR]], align 16
 // CHECK-NEXT:    ret void

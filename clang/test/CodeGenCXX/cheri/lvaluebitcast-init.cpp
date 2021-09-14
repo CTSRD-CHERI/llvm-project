@@ -17,7 +17,7 @@ private:
 };
 
 // CHECK-LABEL: define {{[^@]+}}@_Z4testPPN9QtPrivate18QMetaTypeInterfaceEi
-// CHECK-SAME: (%"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* [[TYPES:%.*]], i32 signext [[METATYPE:%.*]]) addrspace(200) [[ATTR0:#.*]] {
+// CHECK-SAME: (%"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* [[TYPES:%.*]], i32 signext [[METATYPE:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TYPES_ADDR:%.*]] = alloca %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[METATYPE_ADDR:%.*]] = alloca i32, align 4, addrspace(200)
@@ -25,7 +25,7 @@ private:
 // CHECK-NEXT:    store %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* [[TYPES]], %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* addrspace(200)* [[TYPES_ADDR]], align 16
 // CHECK-NEXT:    store i32 [[METATYPE]], i32 addrspace(200)* [[METATYPE_ADDR]], align 4
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* [[METATYPE_ADDR]], align 4
-// CHECK-NEXT:    call void @_ZN9QMetaTypeC1Ei(%class.QMetaType addrspace(200)* nonnull dereferenceable(16) [[MT]], i32 signext [[TMP0]])
+// CHECK-NEXT:    call void @_ZN9QMetaTypeC1Ei([[CLASS_QMETATYPE]] addrspace(200)* nonnull align 16 dereferenceable(16) [[MT]], i32 signext [[TMP0]])
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[CLASS_QMETATYPE]] addrspace(200)* [[MT]] to %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)*
 // CHECK-NEXT:    [[TMP2:%.*]] = load %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)*, %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* [[TMP1]], align 16
 // CHECK-NEXT:    [[TMP3:%.*]] = load %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)*, %"struct.QtPrivate::QMetaTypeInterface" addrspace(200)* addrspace(200)* addrspace(200)* [[TYPES_ADDR]], align 16
@@ -33,7 +33,7 @@ private:
 // CHECK-NEXT:    ret void
 //
 // NOCHERI-LABEL: define {{[^@]+}}@_Z4testPPN9QtPrivate18QMetaTypeInterfaceEi
-// NOCHERI-SAME: (%"struct.QtPrivate::QMetaTypeInterface"** [[TYPES:%.*]], i32 [[METATYPE:%.*]]) [[ATTR0:#.*]] {
+// NOCHERI-SAME: (%"struct.QtPrivate::QMetaTypeInterface"** [[TYPES:%.*]], i32 [[METATYPE:%.*]]) #[[ATTR0:[0-9]+]] {
 // NOCHERI-NEXT:  entry:
 // NOCHERI-NEXT:    [[TYPES_ADDR:%.*]] = alloca %"struct.QtPrivate::QMetaTypeInterface"**, align 8
 // NOCHERI-NEXT:    [[METATYPE_ADDR:%.*]] = alloca i32, align 4
@@ -41,7 +41,7 @@ private:
 // NOCHERI-NEXT:    store %"struct.QtPrivate::QMetaTypeInterface"** [[TYPES]], %"struct.QtPrivate::QMetaTypeInterface"*** [[TYPES_ADDR]], align 8
 // NOCHERI-NEXT:    store i32 [[METATYPE]], i32* [[METATYPE_ADDR]], align 4
 // NOCHERI-NEXT:    [[TMP0:%.*]] = load i32, i32* [[METATYPE_ADDR]], align 4
-// NOCHERI-NEXT:    call void @_ZN9QMetaTypeC1Ei(%class.QMetaType* nonnull dereferenceable(8) [[MT]], i32 [[TMP0]])
+// NOCHERI-NEXT:    call void @_ZN9QMetaTypeC1Ei(%class.QMetaType* nonnull align 8 dereferenceable(8) [[MT]], i32 [[TMP0]])
 // NOCHERI-NEXT:    [[TMP1:%.*]] = bitcast %class.QMetaType* [[MT]] to %"struct.QtPrivate::QMetaTypeInterface"**
 // NOCHERI-NEXT:    [[TMP2:%.*]] = load %"struct.QtPrivate::QMetaTypeInterface"*, %"struct.QtPrivate::QMetaTypeInterface"** [[TMP1]], align 8
 // NOCHERI-NEXT:    [[TMP3:%.*]] = load %"struct.QtPrivate::QMetaTypeInterface"**, %"struct.QtPrivate::QMetaTypeInterface"*** [[TYPES_ADDR]], align 8
@@ -56,7 +56,7 @@ void test(QtPrivate::QMetaTypeInterface **types, int metatype) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z5test2v
-// CHECK-SAME: () addrspace(200) [[ATTR0]] {
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[FOO:%.*]] = alloca i32, align 4, addrspace(200)
 // CHECK-NEXT:    [[BAR:%.*]] = alloca i32, align 4, addrspace(200)
@@ -69,7 +69,7 @@ void test(QtPrivate::QMetaTypeInterface **types, int metatype) {
 // CHECK-NEXT:    ret i32 [[TMP2]]
 //
 // NOCHERI-LABEL: define {{[^@]+}}@_Z5test2v
-// NOCHERI-SAME: () [[ATTR0]] {
+// NOCHERI-SAME: () #[[ATTR0]] {
 // NOCHERI-NEXT:  entry:
 // NOCHERI-NEXT:    [[FOO:%.*]] = alloca i32, align 4
 // NOCHERI-NEXT:    [[BAR:%.*]] = alloca i32, align 4

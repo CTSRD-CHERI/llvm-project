@@ -16,16 +16,16 @@ public:
 };
 int d;
 // CHECK-LABEL: define {{[^@]+}}@_Z1ev
-// CHECK-SAME: () local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+// CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[AGG_TMP_ENSURED:%.*]] = alloca [[CLASS_C:%.*]], align 1, addrspace(200)
-// CHECK-NEXT:    call void @_ZN1CC1EPi1a(%class.C addrspace(200)* nonnull dereferenceable(1) [[AGG_TMP_ENSURED]], i32 addrspace(200)* nonnull @d, i8 inreg undef)
+// CHECK-NEXT:    call void @_ZN1CC1EPi1a([[CLASS_C]] addrspace(200)* nonnull align 1 dereferenceable(1) [[AGG_TMP_ENSURED]], i32 addrspace(200)* nonnull @d, i8 inreg undef)
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[CLASS_C]] addrspace(200)* [[AGG_TMP_ENSURED]] to [[CLASS_C:%.*]] addrspace(200)*
-// CHECK-NEXT:    call void @_ZN1cD2Ev(%class.c addrspace(200)* nonnull dereferenceable(1) [[TMP0]]) [[ATTR3:#.*]]
+// CHECK-NEXT:    call void @_ZN1cD2Ev([[CLASS_C]] addrspace(200)* nonnull align 1 dereferenceable(1) [[TMP0]]) #[[ATTR3:[0-9]+]]
 // CHECK-NEXT:    ret void
 //
 void e() { C(&d, a::b); }
 
 // UTC_ARGS: --disable
 // C::C(int* cap, a):
-// CHECK: declare void @_ZN1CC1EPi1a(%class.C addrspace(200)* nonnull dereferenceable(1), i32 addrspace(200)*, i8 inreg) unnamed_addr
+// CHECK: declare void @_ZN1CC1EPi1a(%class.C addrspace(200)* nonnull align 1 dereferenceable(1), i32 addrspace(200)*, i8 inreg) unnamed_addr
