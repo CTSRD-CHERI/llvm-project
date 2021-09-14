@@ -7,7 +7,7 @@ struct a {
 };
 
 // CHECK-LABEL: define {{[^@]+}}@test1
-// CHECK-SAME: (void (...) addrspace(200)* inreg readnone [[ARG_COERCE:%.*]]) local_unnamed_addr #0
+// CHECK-SAME: (void (...) addrspace(200)* inreg readnone [[ARG_COERCE:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast void (...) addrspace(200)* [[ARG_COERCE]] to i8 addrspace(200)*
@@ -20,7 +20,7 @@ long test1(struct a arg) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test2
-// CHECK-SAME: (void (...) addrspace(200)* inreg readnone [[ARG_COERCE:%.*]]) local_unnamed_addr #0
+// CHECK-SAME: (void (...) addrspace(200)* inreg readnone [[ARG_COERCE:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast void (...) addrspace(200)* [[ARG_COERCE]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
@@ -31,7 +31,7 @@ long test2(struct a arg) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test3
-// CHECK-SAME: (void (...) addrspace(200)* inreg readnone [[ARG_COERCE:%.*]]) local_unnamed_addr #0
+// CHECK-SAME: (void (...) addrspace(200)* inreg readnone [[ARG_COERCE:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast void (...) addrspace(200)* [[ARG_COERCE]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
@@ -42,13 +42,12 @@ long test3(struct a arg) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test4
-// CHECK-SAME: (void (...) addrspace(200)* inreg [[ARG_COERCE:%.*]]) local_unnamed_addr #0
+// CHECK-SAME: (void (...) addrspace(200)* inreg [[ARG_COERCE:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast void (...) addrspace(200)* [[ARG_COERCE]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to void (...)*
-// CHECK-NEXT:    [[TMP3:%.*]] = bitcast void (...)* [[TMP2]] to i8*
-// CHECK-NEXT:    ret i8* [[TMP3]]
+// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to i8*
+// CHECK-NEXT:    ret i8* [[TMP2]]
 //
 void* test4(struct a arg) {
   return __builtin_cheri_cap_to_pointer(arg.cap_fnptr, arg.cap_fnptr);
