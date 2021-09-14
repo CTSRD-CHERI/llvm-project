@@ -263,9 +263,9 @@ static llvm::FunctionCallee getPersonalityFn(CodeGenModule &CGM,
 static llvm::Constant *getOpaquePersonalityFn(CodeGenModule &CGM,
                                         const EHPersonality &Personality) {
   llvm::FunctionCallee Fn = getPersonalityFn(CGM, Personality);
-  llvm::PointerType* Int8PtrTy = llvm::PointerType::get(
-      llvm::Type::getInt8Ty(CGM.getLLVMContext()),
-      CGM.getFunctionAddrSpace());
+  llvm::PointerType *Int8PtrTy =
+      llvm::PointerType::get(llvm::Type::getInt8Ty(CGM.getLLVMContext()),
+                             CGM.getDataLayout().getProgramAddressSpace());
 
   return llvm::ConstantExpr::getBitCast(cast<llvm::Constant>(Fn.getCallee()),
                                         Int8PtrTy);

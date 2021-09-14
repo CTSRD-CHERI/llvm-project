@@ -1545,8 +1545,8 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
 
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy = llvm::FunctionType::get(VoidTy, false);
-  unsigned CtorPtrAS = TheModule.getDataLayout().getProgramAddressSpace();
-  llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
+  llvm::Type *CtorPFTy = llvm::PointerType::get(
+      CtorFTy, TheModule.getDataLayout().getProgramAddressSpace());
 
   // Get the type of a ctor entry, { i32, void ()*, i8* }.
   llvm::StructType *CtorStructTy = llvm::StructType::get(
@@ -1558,8 +1558,7 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   for (const auto &I : Fns) {
     auto ctor = ctors.beginStruct(CtorStructTy);
     ctor.addInt(Int32Ty, I.Priority);
-    ctor.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(I.Initializer,
-                                                                  CtorPFTy));
+    ctor.add(llvm::ConstantExpr::getBitCast(I.Initializer, CtorPFTy));
     if (I.AssociatedData)
       ctor.add(llvm::ConstantExpr::getBitCast(I.AssociatedData, VoidPtrTy));
     else
