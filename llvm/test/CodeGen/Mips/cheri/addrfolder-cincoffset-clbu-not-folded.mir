@@ -106,12 +106,12 @@ body:             |
     %1:gpr64 = COPY $a0_64
     %0:cherigpr = COPY $c3
     %2:cherigpr = CIncOffsetImm %0, 80
-    %3:cherigpr = LOADCAP $zero_64, 0, killed %2 :: (load 16 from %ir.value.i.i, addrspace 200)
+    %3:cherigpr = LOADCAP $zero_64, 0, killed %2 :: (load (s128) from %ir.value.i.i, addrspace 200)
     %4:gpr64 = ANDi64 %1, 16383
     %6:gpr64 = nsw DSUBu killed $zero_64, killed %4
     %7:cherigpr = CIncOffset killed %3, killed %6
     %8:cherigpr = CIncOffsetImm killed %7, 200
-    %9:gpr32 = CAPLOAD832 $zero_64, 0, killed %8 :: (load 1 from %ir.gep, align 8, addrspace 200)
+    %9:gpr32 = CAPLOAD832 $zero_64, 0, killed %8 :: (load (s8) from %ir.gep, align 8, addrspace 200)
     $v0 = COPY %9
     CapRetPseudo implicit $v0
 
@@ -123,12 +123,12 @@ body:             |
 # CHECK-NEXT:     liveins: $c3, $a0_64
 # CHECK:          %1:gpr64 = COPY $a0_64
 # CHECK-NEXT:     %0:cherigpr = COPY $c3
-# CHECK-NEXT:     %3:cherigpr = LOADCAP $zero_64, 80, killed %0 :: (load 16 from %ir.value.i.i, addrspace 200)
+# CHECK-NEXT:     %3:cherigpr = LOADCAP $zero_64, 80, killed %0 :: (load (s128) from %ir.value.i.i, addrspace 200)
 # CHECK-NEXT:     %4:gpr64 = ANDi64 %1, 16383
 # CHECK-NEXT:     %6:gpr64 = nsw DSUBu killed $zero_64, killed %4
 # CHECK-NEXT:     %8:cherigpr = CIncOffsetImm killed %3, 200
 # This previously generated ""%7:cherigpr = CIncOffset %1, %2" followed by "%8:cherigpr = CIncOffsetImm %7, 200" and did not mark %7 as killed
-# CHECK-NEXT:     %9:gpr32 = CAPLOAD832 killed %6, 0, killed %8 :: (load 1 from %ir.gep, align 8, addrspace 200)
+# CHECK-NEXT:     %9:gpr32 = CAPLOAD832 killed %6, 0, killed %8 :: (load (s8) from %ir.gep, align 8, addrspace 200)
 # CHECK-NEXT:     $v0 = COPY %9
 # CHECK-NEXT:     CapRetPseudo implicit $v0
 
@@ -185,12 +185,12 @@ body:             |
     %1:gpr64 = COPY $a0_64
     %0:cherigpr = COPY $c3
     %2:cherigpr = CIncOffsetImm %0, 80
-    %3:cherigpr = LOADCAP $zero_64, 0, killed %2 :: (load 16 from %ir.value.i.i, addrspace 200)
+    %3:cherigpr = LOADCAP $zero_64, 0, killed %2 :: (load (s128) from %ir.value.i.i, addrspace 200)
     %4:gpr64 = ANDi64 %1, 16383
     %6:gpr64 = nsw DSUBu killed $zero_64, killed %4
     %7:cherigpr = CIncOffset killed %3, killed %6
     %8:cherigpr = CIncOffsetImm killed %7, 65
-    %9:gpr32 = CAPLOAD832 $zero_64, 0, killed %8 :: (load 1 from %ir.gep, align 8, addrspace 200)
+    %9:gpr32 = CAPLOAD832 $zero_64, 0, killed %8 :: (load (s8) from %ir.gep, align 8, addrspace 200)
     $v0 = COPY %9
     CapRetPseudo implicit $v0
 
@@ -201,9 +201,9 @@ body:             |
 # CHECK-NEXT:     liveins: $c3, $a0_64
 # CHECK:          %1:gpr64 = COPY $a0_64
 # CHECK-NEXT:     %0:cherigpr = COPY $c3
-# CHECK-NEXT:     %3:cherigpr = LOADCAP $zero_64, 80, killed %0 :: (load 16 from %ir.value.i.i, addrspace 200)
+# CHECK-NEXT:     %3:cherigpr = LOADCAP $zero_64, 80, killed %0 :: (load (s128) from %ir.value.i.i, addrspace 200)
 # CHECK-NEXT:     %4:gpr64 = ANDi64 %1, 16383
 # CHECK-NEXT:     %6:gpr64 = nsw DSUBu killed $zero_64, killed %4
-# CHECK-NEXT:     %9:gpr32 = CAPLOAD832 killed %6, 65, killed %3 :: (load 1 from %ir.gep, align 8, addrspace 200)
+# CHECK-NEXT:     %9:gpr32 = CAPLOAD832 killed %6, 65, killed %3 :: (load (s8) from %ir.gep, align 8, addrspace 200)
 # CHECK-NEXT:     $v0 = COPY %9
 # CHECK-NEXT:     CapRetPseudo implicit $v0

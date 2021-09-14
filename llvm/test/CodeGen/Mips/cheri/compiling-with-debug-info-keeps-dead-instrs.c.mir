@@ -167,7 +167,7 @@ body:             |
   ; CHECK-NOT: CIncOffsetImm
   ; The DBG_VALUE should have been updated to use $noreg:
   ; CHECK-NEXT: DBG_VALUE $noreg, $noreg, !19, !DIExpression(), debug-location !26
-  ; CHECK-NEXT:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 $zero_64, 160, [[COPY]], debug-location !27 :: (load 4 from %ir.0, !tbaa !28, addrspace 200)
+  ; CHECK-NEXT:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 $zero_64, 160, [[COPY]], debug-location !27 :: (load (s32) from %ir.0, !tbaa !28, addrspace 200)
 
   bb.0.entry:
     successors: %bb.1(0x40000000), %bb.2(0x40000000)
@@ -179,11 +179,11 @@ body:             |
     INLINEASM &"li $$zero, 1", 25, 12, implicit-def early-clobber $at, !23, debug-location !22
     %4:cherigpr = CIncOffsetImm %3, 160, debug-location !24
     DBG_VALUE %4, $noreg, !19, !DIExpression(), debug-location !26
-    %0:gpr32 = CAPLOAD32 $zero_64, 0, %4, debug-location !27 :: (load 4 from %ir.0, !tbaa !28, addrspace 200)
+    %0:gpr32 = CAPLOAD32 $zero_64, 0, %4, debug-location !27 :: (load (s32) from %ir.0, !tbaa !28, addrspace 200)
     DBG_VALUE %0, $noreg, !20, !DIExpression(), debug-location !32
     INLINEASM &"li $$zero, 2", 25, 12, implicit-def early-clobber $at, !34, debug-location !33
     %5:cherigpr = CIncOffsetImm %3, 4, debug-location !35
-    %6:gpr32 = CAPLOADU832 $zero_64, 0, killed %5, debug-location !35 :: (load 1 from %ir.arrayidx1, !tbaa !37, addrspace 200)
+    %6:gpr32 = CAPLOADU832 $zero_64, 0, killed %5, debug-location !35 :: (load (s8) from %ir.arrayidx1, !tbaa !37, addrspace 200)
     %7:gpr32 = ADDiu $zero, 97
     BNE killed %6, killed %7, %bb.2, implicit-def dead $at, debug-location !39
     B %bb.1, implicit-def dead $at, debug-location !39
@@ -192,7 +192,7 @@ body:             |
     successors: %bb.2(0x80000000)
 
     INLINEASM &"li $$zero, 3", 25, 12, implicit-def early-clobber $at, !42, debug-location !40
-    %9:gpr32 = CAPLOAD32 $zero_64, 0, %4, debug-location !43 :: (load 4 from %ir.3, !tbaa !28, addrspace 200)
+    %9:gpr32 = CAPLOAD32 $zero_64, 0, %4, debug-location !43 :: (load (s32) from %ir.3, !tbaa !28, addrspace 200)
     %1:gpr32 = nsw ADDu killed %9, %0, debug-location !44
     DBG_VALUE %1, $noreg, !20, !DIExpression(), debug-location !32
 

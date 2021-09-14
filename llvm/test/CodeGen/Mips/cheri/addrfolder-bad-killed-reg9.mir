@@ -121,11 +121,11 @@ body:             |
   ; CHECK:   successors: %bb.1(0x80000000)
   ; CHECK:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %9
   ; CHECK:   [[DEF:%[0-9]+]]:gpr32 = IMPLICIT_DEF
-  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, [[PseudoPccRelativeAddressPostRA]] :: (load 16 from cap-table)
+  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
   ; CHECK: bb.1.bb16.lr.ph:
   ; CHECK:   successors: %bb.2(0x80000000)
   ; CHECK:   [[PHI:%[0-9]+]]:gpr32 = PHI [[DEF]], %bb.0, %5, %bb.5
-  ; CHECK:   [[LOADCAP:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 0, [[LOADCAP_BigImm]] :: (dereferenceable load 16 from @global, addrspace 200)
+  ; CHECK:   [[LOADCAP:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 0, [[LOADCAP_BigImm]] :: (dereferenceable load (s128) from @global, addrspace 200)
   ; CHECK:   [[CMove:%[0-9]+]]:cherigpr = COPY $cnull
   ; CHECK: bb.2.bb16:
   ; CHECK:   successors: %bb.4(0x30000000), %bb.3(0x50000000)
@@ -134,8 +134,8 @@ body:             |
   ; CHECK:   B %bb.3, implicit-def dead $at
   ; CHECK: bb.3.bb19:
   ; CHECK:   successors: %bb.4(0x80000000)
-  ; CHECK:   [[LOADCAP1:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 176, [[LOADCAP]] :: (load 16 from %ir.2, addrspace 200)
-  ; CHECK:   [[CAPLOAD64_:%[0-9]+]]:gpr64 = CAPLOAD64 $zero_64, 48, killed [[LOADCAP1]] :: (load 8 from %ir.tmp24, align 16, addrspace 200)
+  ; CHECK:   [[LOADCAP1:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 176, [[LOADCAP]] :: (load (s128) from %ir.2, addrspace 200)
+  ; CHECK:   [[CAPLOAD64_:%[0-9]+]]:gpr64 = CAPLOAD64 $zero_64, 48, killed [[LOADCAP1]] :: (load (s64) from %ir.tmp24, align 16, addrspace 200)
   ; CHECK:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset $cnull, killed [[CAPLOAD64_]]
   ; CHECK: bb.4.bb28:
   ; CHECK:   successors: %bb.5(0x04000000), %bb.2(0x7c000000)
@@ -151,13 +151,13 @@ body:             |
 
     %8:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %9
     %6:gpr32 = IMPLICIT_DEF
-    %10:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %8 :: (load 16 from cap-table)
+    %10:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %8 :: (load (s128) from cap-table)
 
   bb.1.bb16.lr.ph:
     successors: %bb.2(0x80000000)
 
     %0:gpr32 = PHI %6, %bb.0, %5, %bb.5
-    %1:cherigpr = LOADCAP $zero_64, 0, %10 :: (dereferenceable load 16 from @global, addrspace 200)
+    %1:cherigpr = LOADCAP $zero_64, 0, %10 :: (dereferenceable load (s128) from @global, addrspace 200)
     %7:cherigpr = COPY $cnull
 
   bb.2.bb16:
@@ -171,9 +171,9 @@ body:             |
     successors: %bb.4(0x80000000)
 
     %11:cherigpr = CIncOffsetImm %1, 176
-    %12:cherigpr = LOADCAP $zero_64, 0, killed %11 :: (load 16 from %ir.2, addrspace 200)
+    %12:cherigpr = LOADCAP $zero_64, 0, killed %11 :: (load (s128) from %ir.2, addrspace 200)
     %13:cherigpr = CIncOffsetImm killed %12, 48
-    %14:gpr64 = CAPLOAD64 $zero_64, 0, killed %13 :: (load 8 from %ir.tmp24, align 16, addrspace 200)
+    %14:gpr64 = CAPLOAD64 $zero_64, 0, killed %13 :: (load (s64) from %ir.tmp24, align 16, addrspace 200)
     %3:cherigpr = CIncOffset $cnull, killed %14
 
   bb.4.bb28:

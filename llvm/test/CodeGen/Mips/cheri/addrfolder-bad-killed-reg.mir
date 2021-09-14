@@ -1,3 +1,4 @@
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -run-pass=cheriaddrmodefolder  -o -
 # RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -run-pass=cheriaddrmodefolder  -o - | FileCheck %s
 # previously the CheriAddressModeFolder would produce a due to setting the kill flag on a register that wasn't killed: *** Bad machine code: Using a killed virtual register ***
 --- |
@@ -99,22 +100,22 @@ body:             |
     %0:gpr64 = COPY $a0_64
     %2:cherigpr = CIncOffset %stack.0.a.addr, $zero_64
     %3:cherigpr = CSetBoundsImm killed %2, 1
-    CAPSTORE8 %0, $zero_64, 0, killed %3 :: (store 1 into %ir.1, addrspace 200)
-    %4:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @stderr, %1 :: (load 16 from cap-table)
-    %5:cherigpr = LOADCAP $zero_64, 0, killed %4 :: (dereferenceable load 16 from @stderr, addrspace 200)
+    CAPSTORE8 %0, $zero_64, 0, killed %3 :: (store (s8) into %ir.1, addrspace 200)
+    %4:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @stderr, %1 :: (load (s128) from cap-table)
+    %5:cherigpr = LOADCAP $zero_64, 0, killed %4 :: (dereferenceable load (s128) from @stderr, addrspace 200)
     ADJCALLSTACKCAPDOWN 16, 0, implicit-def dead $c11, implicit $c11
     %6:cherigpr = COPY $c11
-    CAPSTORE64 %0, $zero_64, 0, %6 :: (store 8)
+    CAPSTORE64 %0, $zero_64, 0, %6 :: (store (s64))
 
     %7:cherigpr = CIncOffsetImm %6, 8
-    CAPSTORE64 killed $zero_64, $zero_64, 0, killed %7 :: (store 8)
+    CAPSTORE64 killed $zero_64, $zero_64, 0, killed %7 :: (store (s64))
     %9:cherigpr = CSetBoundsImm %6, 16
     %10:cherigpr = CIncOffsetImm %9, 8
-    CAPSTORE64 killed $zero_64, $zero_64, 0, killed %10 :: (store 8)
+    CAPSTORE64 killed $zero_64, $zero_64, 0, killed %10 :: (store (s64))
 
 ...
 # We can't call %6 in the first store since it is used afterwards but in the second we can:
-# CHECK:      CAPSTORE64 %0, $zero_64, 0, %6 :: (store 8)
-# CHECK-NEXT: CAPSTORE64 killed $zero_64, $zero_64, 8, %6 :: (store 8)
+# CHECK:      CAPSTORE64 %0, $zero_64, 0, %6 :: (store (s64))
+# CHECK-NEXT: CAPSTORE64 killed $zero_64, $zero_64, 8, %6 :: (store (s64))
 # CHECK-NEXT: %9:cherigpr = CSetBoundsImm %6, 16
-# CHECK-NEXT: CAPSTORE64 killed $zero_64, $zero_64, 8, killed %9 :: (store 8)
+# CHECK-NEXT: CAPSTORE64 killed $zero_64, $zero_64, 8, killed %9 :: (store (s64))

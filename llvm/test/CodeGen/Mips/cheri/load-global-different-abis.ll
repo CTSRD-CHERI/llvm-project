@@ -1,8 +1,8 @@
 ; RUN: sed 's/addrspace(200)//' %s | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mattr=+xgot -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=MIPS,MIPS-MXGOT,COMMON
 ; RUN: sed 's/addrspace(200)//' %s | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mattr=-xgot -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=MIPS,MIPS-SMALLGOT,COMMON
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON
+; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=PLT,COMMON
+; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=FNDESC,COMMON
+; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   %s -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=PCREL,COMMON
 
 target triple = "cheri-unknown-freebsd"
 
@@ -31,26 +31,26 @@ entry:
 ; MIPS-NEXT: %0:gpr64 = DADDiu %{{6|4}}:gpr64, target-flags(mips-gpoff-lo) @test
 ; MIPS-MXGOT-NEXT: %1:gpr64 = LUi64 target-flags(mips-got-hi16) @global
 ; MIPS-MXGOT-NEXT: %2:gpr64 = DADDu killed %1:gpr64, %0
-; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2:gpr64, target-flags(mips-got-lo16) @global, implicit $ddc :: (load 8 from got)
-; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global, implicit $ddc :: (load 8 from got)
-; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]]:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global)
+; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2:gpr64, target-flags(mips-got-lo16) @global, implicit $ddc :: (load (s64) from got)
+; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global, implicit $ddc :: (load (s64) from got)
+; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]]:gpr64, 0, implicit $ddc :: (dereferenceable load (s64) from @global)
 
 
 ; Due to the $cgp live-in the PLT and FNDESC functions are much shorter:
 
 ; PLT-NEXT: liveins: $c26
 ; PLT-NEXT: %0:cherigpr = COPY $c26
-; PLT-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[#CAP_SIZE]] from cap-table)
-; PLT-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
+; PLT-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load (s128) from cap-table)
+; PLT-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load (s64) from @global, addrspace 200)
 
 ; FNDESC-NEXT:  liveins: $c26
 ; FNDESC-NEXT:  %0:cherigpr = COPY $c26
-; FNDESC-NEXT:  %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[#CAP_SIZE]] from cap-table)
-; FNDESC-NEXT:  [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
+; FNDESC-NEXT:  %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load (s128) from cap-table)
+; FNDESC-NEXT:  [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load (s64) from @global, addrspace 200)
 
 ; PCREL-NEXT: [[CAPTABLE:%.+:cherigpr]] = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %1:gpr64
-; PCREL-NEXT: [[GLOBAL_CAP:%.+:cherigpr]] = LOADCAP_BigImm target-flags(mips-captable20) @global, [[CAPTABLE]] :: (load [[#CAP_SIZE]] from cap-table)
-; PCREL-NEXT: [[RESULT:%([0-9]+)]]:gpr64 = CAPLOAD64 $zero_64, 0, killed [[GLOBAL_CAP]] :: (dereferenceable load 8 from @global, addrspace 200)
+; PCREL-NEXT: [[GLOBAL_CAP:%.+:cherigpr]] = LOADCAP_BigImm target-flags(mips-captable20) @global, [[CAPTABLE]] :: (load (s128) from cap-table)
+; PCREL-NEXT: [[RESULT:%([0-9]+)]]:gpr64 = CAPLOAD64 $zero_64, 0, killed [[GLOBAL_CAP]] :: (dereferenceable load (s64) from @global, addrspace 200)
 
 
 ; COMMON-NEXT:   $v0_64 = COPY [[RESULT]]

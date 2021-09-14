@@ -79,7 +79,7 @@ body:             |
 
     %0:cherigpr = COPY $c3
     %1:cherigpr = CIncOffset %stack.0.this.addr, $zero_64
-    STORECAP %0, $zero_64, 0, killed %1 :: (store 16 into %ir.2, addrspace 200)
+    STORECAP %0, $zero_64, 0, killed %1 :: (store (s128) into %ir.2, addrspace 200)
     CapRetPseudo
 
 ...
@@ -87,5 +87,5 @@ body:             |
 # Do not change frame indexes:
 # CHECK:      %0:cherigpr = COPY $c3
 # CHECK-NEXT: %1:cherigpr = CIncOffset %stack.0.this.addr, $zero_64
-# CHECK-NEXT: STORECAP %0, $zero_64, 0, killed %1 :: (store 16 into %ir.2, addrspace 200)
+# CHECK-NEXT: STORECAP %0, $zero_64, 0, killed %1 :: (store (s128) into %ir.2, addrspace 200)
 # CHECK-NEXT: CapRetPseudo

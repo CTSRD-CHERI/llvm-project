@@ -81,42 +81,42 @@ body:             |
   ; CHECK: bb.0.entry:
   ; CHECK:   successors: %bb.1(0x80000000)
   ; CHECK:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
-  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @b, [[PseudoPccRelativeAddressPostRA]] :: (load 16 from cap-table)
-  ; CHECK:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 0, killed [[LOADCAP_BigImm]] :: (dereferenceable load 2 from @b, addrspace 200)
+  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @b, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
+  ; CHECK:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 0, killed [[LOADCAP_BigImm]] :: (dereferenceable load (s16) from @b, addrspace 200)
   ; CHECK:   [[DSLL:%[0-9]+]]:gpr64 = DSLL [[CAPLOAD16_]], 2
-  ; CHECK:   [[LOADCAP_BigImm1:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a, [[PseudoPccRelativeAddressPostRA]] :: (load 16 from cap-table)
+  ; CHECK:   [[LOADCAP_BigImm1:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
   ; CHECK:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm [[LOADCAP_BigImm1]], 1
   ; CHECK:   [[CIncOffsetImm1:%[0-9]+]]:cherigpr = CIncOffsetImm [[LOADCAP_BigImm1]], 1
-  ; CHECK:   CAPSTORE32 killed $zero, [[DSLL]], 0, killed [[CIncOffsetImm1]] :: (store 4 into %ir.2, addrspace 200)
+  ; CHECK:   CAPSTORE32 killed $zero, [[DSLL]], 0, killed [[CIncOffsetImm1]] :: (store (s32) into %ir.2, addrspace 200)
   ; CHECK:   [[DSLL1:%[0-9]+]]:gpr64 = DSLL killed [[CAPLOAD16_]], 2
   ; CHECK:   [[CIncOffsetImm2:%[0-9]+]]:cherigpr = CIncOffsetImm [[LOADCAP_BigImm1]], 1
-  ; CHECK:   CAPSTORE32 killed $zero, killed [[DSLL1]], 0, killed [[CIncOffsetImm2]] :: (store 4 into %ir.2, addrspace 200)
+  ; CHECK:   CAPSTORE32 killed $zero, killed [[DSLL1]], 0, killed [[CIncOffsetImm2]] :: (store (s32) into %ir.2, addrspace 200)
   ; CHECK: bb.1.for.cond:
   ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   CAPSTORE32 killed $zero, [[DSLL]], 0, [[CIncOffsetImm]] :: (store 4 into %ir.2, addrspace 200)
+  ; CHECK:   CAPSTORE32 killed $zero, [[DSLL]], 0, [[CIncOffsetImm]] :: (store (s32) into %ir.2, addrspace 200)
   ; CHECK:   B %bb.1, implicit-def dead $at
   bb.0.entry:
     successors: %bb.1(0x80000000)
 
     %1:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
-    %3:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @b, %1 :: (load 16 from cap-table)
-    %4:gpr64 = CAPLOAD16 $zero_64, 0, killed %3 :: (dereferenceable load 2 from @b, addrspace 200)
+    %3:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @b, %1 :: (load (s128) from cap-table)
+    %4:gpr64 = CAPLOAD16 $zero_64, 0, killed %3 :: (dereferenceable load (s16) from @b, addrspace 200)
     %5:gpr64 = DSLL %4, 2
-    %6:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a, %1 :: (load 16 from cap-table)
+    %6:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a, %1 :: (load (s128) from cap-table)
     %0:cherigpr = CIncOffset %6, killed %5
     %7:cherigpr = CIncOffsetImm %0, 1
     %10:cherigpr = CIncOffsetImm %0, 1
-    CAPSTORE32 killed $zero, $zero_64, 0, killed %10 :: (store 4 into %ir.2, addrspace 200)
+    CAPSTORE32 killed $zero, $zero_64, 0, killed %10 :: (store (s32) into %ir.2, addrspace 200)
     %9:gpr64 = DSLL killed %4, 2
     %11:cherigpr = CIncOffset killed %6, killed %9
     %12:cherigpr = CIncOffsetImm %11, 1
-    CAPSTORE32 killed $zero, $zero_64, 0, killed %12 :: (store 4 into %ir.2, addrspace 200)
+    CAPSTORE32 killed $zero, $zero_64, 0, killed %12 :: (store (s32) into %ir.2, addrspace 200)
 
   bb.1.for.cond:
     successors: %bb.1(0x80000000)
     ; The addressing folder would previously hoist %5 here, but mark it as killed.
     ; This is not valid since there is a branch to the same basic block at the end and %5 must be live
-    CAPSTORE32 killed $zero, $zero_64, 0, %7 :: (store 4 into %ir.2, addrspace 200)
+    CAPSTORE32 killed $zero, $zero_64, 0, %7 :: (store (s32) into %ir.2, addrspace 200)
     B %bb.1, implicit-def dead $at
 
 ...

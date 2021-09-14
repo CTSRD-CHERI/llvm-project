@@ -111,21 +111,21 @@ body:             |
   ; CHECK:   liveins: $c3
   ; CHECK:   [[COPY:%[0-9]+]]:cherigpr = COPY $c3
   ; CHECK:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm $cnull, 20
-  ; CHECK:   [[CAPLOADU16_:%[0-9]+]]:gpr64 = CAPLOADU16 $zero_64, 0, killed [[CIncOffsetImm]] :: (load 2 from `i16 addrspace(200)* getelementptr ([1 x i16], [1 x i16] addrspace(200)* inttoptr (i64 20 to [1 x i16] addrspace(200)*), i64 0, i64 undef)`, addrspace 200)
-  ; CHECK:   CAPSTORE8 killed $zero_64, [[CAPLOADU16_]], 0, [[COPY]] :: (store 1 into %ir.add.ptr, addrspace 200)
-  ; CHECK:   [[CAPLOADU832_:%[0-9]+]]:gpr32 = CAPLOADU832 [[CAPLOADU16_]], 4, [[COPY]] :: (load 1 from %ir.add.ptr33, addrspace 200)
+  ; CHECK:   [[CAPLOADU16_:%[0-9]+]]:gpr64 = CAPLOADU16 $zero_64, 0, killed [[CIncOffsetImm]] :: (load (s16) from `i16 addrspace(200)* getelementptr ([1 x i16], [1 x i16] addrspace(200)* inttoptr (i64 20 to [1 x i16] addrspace(200)*), i64 0, i64 undef)`, addrspace 200)
+  ; CHECK:   CAPSTORE8 killed $zero_64, [[CAPLOADU16_]], 0, [[COPY]] :: (store (s8) into %ir.add.ptr, addrspace 200)
+  ; CHECK:   [[CAPLOADU832_:%[0-9]+]]:gpr32 = CAPLOADU832 [[CAPLOADU16_]], 4, [[COPY]] :: (load (s8) from %ir.add.ptr33, addrspace 200)
   ; CHECK:   [[ANDi:%[0-9]+]]:gpr32 = ANDi killed [[CAPLOADU832_]], 2
   ; CHECK:   BEQ killed [[ANDi]], $zero, %bb.2, implicit-def dead $at
   ; CHECK:   B %bb.1, implicit-def dead $at
   ; CHECK: bb.1.if.then37:
   ; CHECK:   successors: %bb.2(0x80000000)
   ; CHECK:   [[CIncOffsetImm1:%[0-9]+]]:cherigpr = CIncOffsetImm [[COPY]], 5
-  ; CHECK:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 [[CAPLOADU16_]], 0, killed [[CIncOffsetImm1]] :: (load 4 from %ir.3, addrspace 200)
+  ; CHECK:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 [[CAPLOADU16_]], 0, killed [[CIncOffsetImm1]] :: (load (s32) from %ir.3, addrspace 200)
   ; CHECK:   [[SRL:%[0-9]+]]:gpr32 = SRL killed [[CAPLOAD32_]], 24
   ; CHECK:   [[DEF:%[0-9]+]]:gpr64 = IMPLICIT_DEF
   ; CHECK:   [[INSERT_SUBREG:%[0-9]+]]:gpr64 = INSERT_SUBREG [[DEF]], killed [[SRL]], %subreg.sub_32
   ; CHECK:   [[CIncOffsetImm2:%[0-9]+]]:cherigpr = CIncOffsetImm $cnull, 3
-  ; CHECK:   CAPSTORE8 killed [[INSERT_SUBREG]], $zero_64, 0, killed [[CIncOffsetImm2]] :: (store 1 into `i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*)`, addrspace 200)
+  ; CHECK:   CAPSTORE8 killed [[INSERT_SUBREG]], $zero_64, 0, killed [[CIncOffsetImm2]] :: (store (s8) into `i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*)`, addrspace 200)
   ; CHECK: bb.2.if.end58:
   ; CHECK:   TRAP
   bb.0.entry:
@@ -134,11 +134,11 @@ body:             |
 
     %1:cherigpr = COPY $c3
     %2:cherigpr = CIncOffsetImm $cnull, 20
-    %0:gpr64 = CAPLOADU16 $zero_64, 0, killed %2 :: (load 2 from `i16 addrspace(200)* getelementptr ([1 x i16], [1 x i16] addrspace(200)* inttoptr (i64 20 to [1 x i16] addrspace(200)*), i64 0, i64 undef)`, addrspace 200)
+    %0:gpr64 = CAPLOADU16 $zero_64, 0, killed %2 :: (load (s16) from `i16 addrspace(200)* getelementptr ([1 x i16], [1 x i16] addrspace(200)* inttoptr (i64 20 to [1 x i16] addrspace(200)*), i64 0, i64 undef)`, addrspace 200)
     %3:cherigpr = CIncOffset %1, %0
-    CAPSTORE8 killed $zero_64, $zero_64, 0, %3 :: (store 1 into %ir.add.ptr, addrspace 200)
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %3 :: (store (s8) into %ir.add.ptr, addrspace 200)
     %5:cherigpr = CIncOffsetImm %3, 4
-    %6:gpr32 = CAPLOADU832 $zero_64, 0, killed %5 :: (load 1 from %ir.add.ptr33, addrspace 200)
+    %6:gpr32 = CAPLOADU832 $zero_64, 0, killed %5 :: (load (s8) from %ir.add.ptr33, addrspace 200)
     %7:gpr32 = ANDi killed %6, 2
     BEQ killed %7, $zero, %bb.2, implicit-def dead $at
     B %bb.1, implicit-def dead $at
@@ -147,12 +147,12 @@ body:             |
     successors: %bb.2(0x80000000)
 
     %9:cherigpr = CIncOffsetImm %3, 5
-    %10:gpr32 = CAPLOAD32 $zero_64, 0, killed %9 :: (load 4 from %ir.3, addrspace 200)
+    %10:gpr32 = CAPLOAD32 $zero_64, 0, killed %9 :: (load (s32) from %ir.3, addrspace 200)
     %11:gpr32 = SRL killed %10, 24
     %13:gpr64 = IMPLICIT_DEF
     %12:gpr64 = INSERT_SUBREG %13, killed %11, %subreg.sub_32
     %14:cherigpr = CIncOffsetImm $cnull, 3
-    CAPSTORE8 killed %12, $zero_64, 0, killed %14 :: (store 1 into `i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*)`, addrspace 200)
+    CAPSTORE8 killed %12, $zero_64, 0, killed %14 :: (store (s8) into `i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*)`, addrspace 200)
 
   bb.2.if.end58:
     TRAP

@@ -104,26 +104,26 @@ body:             |
   ; CHECK: bb.0.entry:
   ; CHECK:   successors: %bb.1(0x80000000)
   ; CHECK:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
-  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @f, [[PseudoPccRelativeAddressPostRA]] :: (load 16 from cap-table)
-  ; CHECK:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 6, [[LOADCAP_BigImm]] :: (load 2 from `i16 addrspace(200)* getelementptr (%struct.d.0.1.2.3.6.7.32, %struct.d.0.1.2.3.6.7.32 addrspace(200)* bitcast (void () addrspace(200)* @f to %struct.d.0.1.2.3.6.7.32 addrspace(200)*), i64 0, i32 2, i64 0)`, addrspace 200)
+  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @f, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
+  ; CHECK:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 6, [[LOADCAP_BigImm]] :: (load (s16) from `i16 addrspace(200)* getelementptr (%struct.d.0.1.2.3.6.7.32, %struct.d.0.1.2.3.6.7.32 addrspace(200)* bitcast (void () addrspace(200)* @f to %struct.d.0.1.2.3.6.7.32 addrspace(200)*), i64 0, i32 2, i64 0)`, addrspace 200)
   ; CHECK:   [[DSLL:%[0-9]+]]:gpr64 = DSLL killed [[CAPLOAD16_]], 3
   ; CHECK:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset [[LOADCAP_BigImm]], [[DSLL]]
   ; CHECK:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm [[LOADCAP_BigImm]], 1
   ; CHECK: bb.1.for.cond:
   ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   [[CAPLOAD3264_:%[0-9]+]]:gpr64 = CAPLOAD3264 [[DSLL]], 0, [[CIncOffsetImm]] :: (load 4 from %ir.2, addrspace 200)
+  ; CHECK:   [[CAPLOAD3264_:%[0-9]+]]:gpr64 = CAPLOAD3264 [[DSLL]], 0, [[CIncOffsetImm]] :: (load (s32) from %ir.2, addrspace 200)
   ; CHECK:   [[DADDiu:%[0-9]+]]:gpr64 = nsw DADDiu killed [[CAPLOAD3264_]], 3
   ; CHECK:   [[CSetAddr:%[0-9]+]]:cherigpr = CSetAddr killed $cnull, killed [[DADDiu]]
-  ; CHECK:   [[CAPLOAD8_:%[0-9]+]]:gpr64 = CAPLOAD8 $zero_64, 0, killed [[CSetAddr]] :: (load 1 from %ir.5, addrspace 200)
-  ; CHECK:   CAPSTORE8 killed [[CAPLOAD8_]], $zero_64, 1, [[CIncOffset]] :: (store 1 into %ir.sunkaddr1, addrspace 200)
+  ; CHECK:   [[CAPLOAD8_:%[0-9]+]]:gpr64 = CAPLOAD8 $zero_64, 0, killed [[CSetAddr]] :: (load (s8) from %ir.5, addrspace 200)
+  ; CHECK:   CAPSTORE8 killed [[CAPLOAD8_]], $zero_64, 1, [[CIncOffset]] :: (store (s8) into %ir.sunkaddr1, addrspace 200)
   ; CHECK:   B %bb.1, implicit-def dead $at
   bb.0.entry:
     successors: %bb.1(0x80000000)
 
     %1:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
-    %3:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @f, %1 :: (load 16 from cap-table)
+    %3:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @f, %1 :: (load (s128) from cap-table)
     %4:cherigpr = CIncOffsetImm %3, 6
-    %5:gpr64 = CAPLOAD16 $zero_64, 0, killed %4 :: (load 2 from `i16 addrspace(200)* getelementptr (%struct.d.0.1.2.3.6.7.32, %struct.d.0.1.2.3.6.7.32 addrspace(200)* bitcast (void () addrspace(200)* @f to %struct.d.0.1.2.3.6.7.32 addrspace(200)*), i64 0, i32 2, i64 0)`, addrspace 200)
+    %5:gpr64 = CAPLOAD16 $zero_64, 0, killed %4 :: (load (s16) from `i16 addrspace(200)* getelementptr (%struct.d.0.1.2.3.6.7.32, %struct.d.0.1.2.3.6.7.32 addrspace(200)* bitcast (void () addrspace(200)* @f to %struct.d.0.1.2.3.6.7.32 addrspace(200)*), i64 0, i32 2, i64 0)`, addrspace 200)
     %6:gpr64 = DSLL killed %5, 3
     ; Previously the killed flag was not removed here even though the register was reused in the next basic block
     %0:cherigpr = CIncOffset %3, killed %6
@@ -132,11 +132,11 @@ body:             |
   bb.1.for.cond:
     successors: %bb.1(0x80000000)
 
-    %8:gpr64 = CAPLOAD3264 $zero_64, 0, %7 :: (load 4 from %ir.2, addrspace 200)
+    %8:gpr64 = CAPLOAD3264 $zero_64, 0, %7 :: (load (s32) from %ir.2, addrspace 200)
     %9:gpr64 = nsw DADDiu killed %8, 3
     %11:cherigpr = CSetAddr killed $cnull, killed %9
-    %12:gpr64 = CAPLOAD8 $zero_64, 0, killed %11 :: (load 1 from %ir.5, addrspace 200)
-    CAPSTORE8 killed %12, $zero_64, 0, %7 :: (store 1 into %ir.sunkaddr1, addrspace 200)
+    %12:gpr64 = CAPLOAD8 $zero_64, 0, killed %11 :: (load (s8) from %ir.5, addrspace 200)
+    CAPSTORE8 killed %12, $zero_64, 0, %7 :: (store (s8) into %ir.sunkaddr1, addrspace 200)
     B %bb.1, implicit-def dead $at
 
 ...

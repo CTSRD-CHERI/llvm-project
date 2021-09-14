@@ -107,64 +107,64 @@ body:             |
     ; CHECK: $c11 = CIncOffset $c11, killed $at_64
     ; CHECK-NEXT: CFI_INSTRUCTION def_cfa_offset 80432
 
-    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.6.tiny_imm :: (store 1 into %ir.tiny_imm, align 4, addrspace 200)
-    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, $zero_64, 12, $c11 :: (store 1 into %ir.tiny_imm, align 4, addrspace 200)
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.6.tiny_imm :: (store (s8) into %ir.tiny_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, $zero_64, 12, $c11 :: (store (s8) into %ir.tiny_imm, align 4, addrspace 200)
 
-    CAPSTORE16 killed $zero_64, $zero_64, 0, %stack.4.medium_imm :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+    CAPSTORE16 killed $zero_64, $zero_64, 0, %stack.4.medium_imm :: (store (s8) into %ir.medium_imm, align 4, addrspace 200)
     ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 396
-    ; CHECK-NEXT: CAPSTORE16 killed $zero_64, killed $at_64, 0, $c11 :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE16 killed $zero_64, killed $at_64, 0, $c11 :: (store (s8) into %ir.medium_imm, align 4, addrspace 200)
 
-    CAPSTORE16 killed $zero_64, $a0_64, 0, %stack.4.medium_imm :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+    CAPSTORE16 killed $zero_64, $a0_64, 0, %stack.4.medium_imm :: (store (s8) into %ir.medium_imm, align 4, addrspace 200)
     ; CHECK-NEXT: $c1 = CIncOffsetImm $c11, 396
-    ; CHECK-NEXT: CAPSTORE16 killed $zero_64, $a0_64, 0, killed $c1 :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE16 killed $zero_64, $a0_64, 0, killed $c1 :: (store (s8) into %ir.medium_imm, align 4, addrspace 200)
 
-    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.2.huge_imm :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.2.huge_imm :: (store (s8) into %ir.huge_imm, align 4, addrspace 200)
     ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
-    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, killed $at_64, 0, $c11 :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, killed $at_64, 0, $c11 :: (store (s8) into %ir.huge_imm, align 4, addrspace 200)
 
-    CAPSTORE8 killed $zero_64, $a0_64, 0, %stack.2.huge_imm :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+    CAPSTORE8 killed $zero_64, $a0_64, 0, %stack.2.huge_imm :: (store (s8) into %ir.huge_imm, align 4, addrspace 200)
     ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
     ; CHECK-NEXT: $c1 = CIncOffset $c11, killed $at_64
-    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, $a0_64, 0, killed $c1 :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, $a0_64, 0, killed $c1 :: (store (s8) into %ir.huge_imm, align 4, addrspace 200)
 
     ; This might crash at runtime since it is misaligned (but it is not divisible by 16 so it must use a CIncOffset)
-    $c11 = LOADCAP $zero_64, 0, %stack.4.medium_imm :: (load 16 from %ir.medium_imm, align 16, addrspace 200)
+    $c11 = LOADCAP $zero_64, 0, %stack.4.medium_imm :: (load (s128) from %ir.medium_imm, align 16, addrspace 200)
     ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 396
-    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load 16 from %ir.medium_imm, addrspace 200)
-    $c11 = LOADCAP $a0_64, 0, %stack.4.medium_imm :: (load 16 from %ir.medium_imm, align 16, addrspace 200)
+    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load (s128) from %ir.medium_imm, addrspace 200)
+    $c11 = LOADCAP $a0_64, 0, %stack.4.medium_imm :: (load (s128) from %ir.medium_imm, align 16, addrspace 200)
     ; CHECK-NEXT: $c11 = CIncOffsetImm killed $c11, 396
-    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c11 :: (load 16 from %ir.medium_imm, addrspace 200)
+    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c11 :: (load (s128) from %ir.medium_imm, addrspace 200)
 
     ; Try loading into the frame register (over 11 bits):
-    $c11 = LOADCAP $zero_64, 0, %stack.2.huge_imm :: (load 16 from %ir.huge_imm, align 16, addrspace 200)
+    $c11 = LOADCAP $zero_64, 0, %stack.2.huge_imm :: (load (s128) from %ir.huge_imm, align 16, addrspace 200)
     ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
-    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load 16 from %ir.huge_imm, addrspace 200)
-    $c11 = LOADCAP $a0_64, 0, %stack.2.huge_imm :: (load 16 from %ir.huge_imm, align 16, addrspace 200)
+    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load (s128) from %ir.huge_imm, addrspace 200)
+    $c11 = LOADCAP $a0_64, 0, %stack.2.huge_imm :: (load (s128) from %ir.huge_imm, align 16, addrspace 200)
     ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
     ; CHECK-NEXT: $c11 = CIncOffset killed $c11, killed $at_64
-    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c11 :: (load 16 from %ir.huge_imm, addrspace 200)
+    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c11 :: (load (s128) from %ir.huge_imm, addrspace 200)
 
     ; more than 16 bits test here:
-    CAPSTORE64 killed $zero_64, $zero_64, 0, %stack.0.over_16_bit_imm :: (store 8 into %ir.over_16_bit_imm, align 8, addrspace 200)
+    CAPSTORE64 killed $zero_64, $zero_64, 0, %stack.0.over_16_bit_imm :: (store (s64) into %ir.over_16_bit_imm, align 8, addrspace 200)
     ; CHECK-NEXT: $at_64 = LUi64 1
     ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
-    ; CHECK-NEXT: CAPSTORE64 killed $zero_64, killed $at_64, 0, $c11 :: (store 8 into %ir.over_16_bit_imm, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE64 killed $zero_64, killed $at_64, 0, $c11 :: (store (s64) into %ir.over_16_bit_imm, addrspace 200)
 
-    CAPSTORE64 killed $zero_64, $a0_64, 0, %stack.0.over_16_bit_imm :: (store 8 into %ir.over_16_bit_imm, align 8, addrspace 200)
+    CAPSTORE64 killed $zero_64, $a0_64, 0, %stack.0.over_16_bit_imm :: (store (s64) into %ir.over_16_bit_imm, align 8, addrspace 200)
     ; CHECK-NEXT: $at_64 = LUi64 1
     ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
     ; CHECK-NEXT: $c1 = CIncOffset $c11, killed $at_64
-    ; CHECK-NEXT: CAPSTORE64 killed $zero_64, $a0_64, 0, killed $c1 :: (store 8 into %ir.over_16_bit_imm, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE64 killed $zero_64, $a0_64, 0, killed $c1 :: (store (s64) into %ir.over_16_bit_imm, addrspace 200)
 
 
-    $c11 = LOADCAP $zero_64, 0, %stack.0.over_16_bit_imm :: (load 16 from %ir.over_16_bit_imm, align 16, addrspace 200)
+    $c11 = LOADCAP $zero_64, 0, %stack.0.over_16_bit_imm :: (load (s128) from %ir.over_16_bit_imm, align 16, addrspace 200)
     ; CHECK-NEXT: $at_64 = LUi64 1
     ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
-    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load 16 from %ir.over_16_bit_imm, addrspace 200)
+    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load (s128) from %ir.over_16_bit_imm, addrspace 200)
 
-    $c11 = LOADCAP $a0_64, 0, %stack.0.over_16_bit_imm :: (load 16 from %ir.over_16_bit_imm, align 16, addrspace 200)
+    $c11 = LOADCAP $a0_64, 0, %stack.0.over_16_bit_imm :: (load (s128) from %ir.over_16_bit_imm, align 16, addrspace 200)
     ; CHECK-NEXT: $at_64 = LUi64 1
     ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
     ; CHECK-NEXT: $c11 = CIncOffset killed $c11, killed $at_64
-    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c11 :: (load 16 from %ir.over_16_bit_imm, addrspace 200)
+    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c11 :: (load (s128) from %ir.over_16_bit_imm, addrspace 200)
 ...

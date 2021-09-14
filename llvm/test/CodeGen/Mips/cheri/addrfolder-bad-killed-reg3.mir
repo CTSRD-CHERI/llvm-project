@@ -88,7 +88,7 @@ body:             |
     %1:gpr64 = LUi64 target-flags(mips-captable-hi16-call) @strcmp
     %2:gpr64 = DADDiu killed %1, target-flags(mips-captable-lo16-call) @strcmp
     %3:cherigpr = CIncOffset %0, killed %2
-    %4:cherigpr = LOADCAP $zero_64, 0, killed %3 :: (load 16 from call-entry @strcmp)
+    %4:cherigpr = LOADCAP $zero_64, 0, killed %3 :: (load (s128) from call-entry @strcmp)
     %5:gpr64 = DADDiu $zero_64, 0
     $c13 = CFromPtr $ddc, killed $zero_64
     $c12 = COPY %4
@@ -102,4 +102,4 @@ body:             |
 # CHECK-NEXT: %1:gpr64 = LUi64 target-flags(mips-captable-hi16-call) @strcmp
 # CHECK-NEXT: %2:gpr64 = DADDiu killed %1, target-flags(mips-captable-lo16-call) @strcmp
 # The CIncOffset is gone:
-# CHECK-NEXT: %4:cherigpr = LOADCAP killed %2, 0, %0 :: (load 16 from call-entry @strcmp)
+# CHECK-NEXT: %4:cherigpr = LOADCAP killed %2, 0, %0 :: (load (s128) from call-entry @strcmp)

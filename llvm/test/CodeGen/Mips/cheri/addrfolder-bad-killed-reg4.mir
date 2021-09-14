@@ -113,9 +113,9 @@ body:             |
     %11:gpr64 = SLL64_32 %0
     %12:gpr64 = DSLL killed %11, 2
     %13:cherigpr = CIncOffset %5, killed %12
-    %14:gpr32 = CAPLOAD32 $zero_64, 0, %13 :: (load 4 from %ir.arrayidx, addrspace 200)
+    %14:gpr32 = CAPLOAD32 $zero_64, 0, %13 :: (load (s32) from %ir.arrayidx, addrspace 200)
     %2:gpr32 = ADDu killed %14, %1
-    CAPSTORE32 %2, $zero_64, 0, %13 :: (store 4 into %ir.arrayidx, addrspace 200)
+    CAPSTORE32 %2, $zero_64, 0, %13 :: (store (s32) into %ir.arrayidx, addrspace 200)
     %3:gpr32 = ADDiu %0, 1
     BNE %7, %3, %bb.2, implicit-def dead $at
     J %bb.3, implicit-def dead $at
@@ -130,9 +130,9 @@ body:             |
 # CHECK:      %11:gpr64 = SLL64_32 %0
 # CHECK-NEXT: %12:gpr64 = DSLL killed %11, 2
 # This was previously marking the first %12 as killed:
-# CHECK-NEXT: %14:gpr32 = CAPLOAD32 %12, 0, %5 :: (load 4 from %ir.arrayidx, addrspace 200)
+# CHECK-NEXT: %14:gpr32 = CAPLOAD32 %12, 0, %5 :: (load (s32) from %ir.arrayidx, addrspace 200)
 # CHECK-NEXT: %2:gpr32 = ADDu killed %14, %1
 # However actually it should mark this %12 as killed:
-# CHECK-NEXT: CAPSTORE32 %2, killed %12, 0, %5 :: (store 4 into %ir.arrayidx, addrspace 200)
+# CHECK-NEXT: CAPSTORE32 %2, killed %12, 0, %5 :: (store (s32) into %ir.arrayidx, addrspace 200)
 # CHECK-NEXT: %3:gpr32 = ADDiu %0, 1
 # CHECK-NEXT: BNE %7, %3, %bb.3, implicit-def dead $at

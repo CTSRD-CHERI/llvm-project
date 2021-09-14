@@ -76,14 +76,14 @@ body:             |
     %3:gpr64 = IMPLICIT_DEF
     %1:cherigpr = CIncOffset %2, killed %3
     %4:cherigpr = IMPLICIT_DEF
-    STORECAP %1, $zero_64, 0, %4 :: (store 16 into `i8 addrspace(200)* addrspace(200)* undef`, addrspace 200)
+    STORECAP %1, $zero_64, 0, %4 :: (store (s128) into `i8 addrspace(200)* addrspace(200)* undef`, addrspace 200)
     %5:gpr64 = DADDiu $zero_64, 0
-    CAPSTORE8 killed $zero_64, $zero_64, 0, %1 :: (store 1 into %ir.add.ptr408, addrspace 200)
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %1 :: (store (s8) into %ir.add.ptr408, addrspace 200)
 
     %6:cherigpr = IMPLICIT_DEF
     %7:gpr64 = IMPLICIT_DEF
     %8:cherigpr = CIncOffset %6, killed %7
-    CAPSTORE8 killed $zero_64, $zero_64, 0, %8 :: (store 1 into %ir.add.ptr408, addrspace 200)
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %8 :: (store (s8) into %ir.add.ptr408, addrspace 200)
 
 ...
 
@@ -95,11 +95,11 @@ body:             |
 # CHECK-NEXT:   %3:gpr64 = IMPLICIT_DEF
 # CHECK-NEXT:   %1:cherigpr = CIncOffset %2, %3
 # CHECK-NEXT:   %4:cherigpr = IMPLICIT_DEF
-# CHECK-NEXT:   STORECAP %1, $zero_64, 0, %4 :: (store 16 into `i8 addrspace(200)* addrspace(200)* undef`, addrspace 200)
+# CHECK-NEXT:   STORECAP %1, $zero_64, 0, %4 :: (store (s128) into `i8 addrspace(200)* addrspace(200)* undef`, addrspace 200)
 # CHECK-NEXT:   %5:gpr64 = DADDiu $zero_64, 0
-# CHECK-NEXT:   CAPSTORE8 killed $zero_64, killed %3, 0, killed %2 :: (store 1 into %ir.add.ptr408, addrspace 200)
+# CHECK-NEXT:   CAPSTORE8 killed $zero_64, killed %3, 0, killed %2 :: (store (s8) into %ir.add.ptr408, addrspace 200)
 
 # Also check what happens if the CIncOffset can be removed:
 # CHECK-NEXT:   %6:cherigpr = IMPLICIT_DEF
 # CHECK-NEXT:   %7:gpr64 = IMPLICIT_DEF
-# CHECK-NEXT:   CAPSTORE8 killed $zero_64, killed %7, 0, killed %6 :: (store 1 into %ir.add.ptr408, addrspace 200)
+# CHECK-NEXT:   CAPSTORE8 killed $zero_64, killed %7, 0, killed %6 :: (store (s8) into %ir.add.ptr408, addrspace 200)

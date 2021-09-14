@@ -1,8 +1,8 @@
 ; FreeBSD sed is different from GNU sed -> use the lowest common denominator
 ; RUN: sed 's/addrspace(200)//' %s | sed  's/addrspace(TLS)//' | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mattr=-xgot -o - -show-mc-encoding -print-after=finalize-isel 2>&1  | FileCheck %s -check-prefixes=MIPS,COMMON
-; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE
-; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE
-; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc -o - -show-mc-encoding -print-after=finalize-isel 2>&1 | FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE
 
 
 target triple = "cheri-unknown-freebsd"
@@ -34,12 +34,12 @@ entry:
 ; MIPS-NEXT:  %0:gpr64 = DADDiu %10:gpr64, target-flags(mips-gpoff-lo) @test
 ; MIPS-NEXT:  %1:gpr64 = RDHWR64 $hwr29
 ; MIPS-NEXT:  $v1_64 = COPY %1
-; MIPS-NEXT:  %2:gpr64 = LD %0:gpr64, target-flags(mips-gottprel) @global_tls, implicit $ddc :: (load 8)
+; MIPS-NEXT:  %2:gpr64 = LD %0:gpr64, target-flags(mips-gottprel) @global_tls, implicit $ddc :: (load (s64))
 ; MIPS-NEXT:  %3:gpr64 = COPY $v1_64
 ; MIPS-NEXT:  %4:gpr64 = DADDu %3:gpr64, killed %2
-; MIPS-NEXT:  %5:gpr64 = LD killed %4:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global_tls)
-; MIPS-NEXT:  %6:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global_normal, implicit $ddc :: (load 8 from got)
-; MIPS-NEXT:  %7:gpr64 = LD killed %6:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global_normal)
+; MIPS-NEXT:  %5:gpr64 = LD killed %4:gpr64, 0, implicit $ddc :: (dereferenceable load (s64) from @global_tls)
+; MIPS-NEXT:  %6:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global_normal, implicit $ddc :: (load (s64) from got)
+; MIPS-NEXT:  %7:gpr64 = LD killed %6:gpr64, 0, implicit $ddc :: (dereferenceable load (s64) from @global_normal)
 ; MIPS-NEXT:  [[RESULT:%8]]:gpr64 = DADDu killed %5:gpr64, killed %7
 
 ; PCREL, PLT and FNDESC only differ in the prologue since they all use the same TLS mechanism:
@@ -54,12 +54,12 @@ entry:
 ; CAP-TABLE-NEXT:  %[[A:([0-9])]]:gpr64 = LUi64 target-flags(mips-captable-gottprel-hi16) @global_tls
 ; CAP-TABLE-NEXT:  %[[B:([0-9])]]:gpr64 = DADDiu killed %[[A]]:gpr64, target-flags(mips-captable-gottprel-lo16) @global_tls
 ; CAP-TABLE-NEXT:  %[[C:([0-9])]]:cherigpr = CIncOffset [[CGP_VREG]]:cherigpr, killed %[[B]]:gpr64
-; CAP-TABLE-NEXT:  %[[D:([0-9])]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %[[C]]:cherigpr :: (load 8 from cap-table)
+; CAP-TABLE-NEXT:  %[[D:([0-9])]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %[[C]]:cherigpr :: (load (s64) from cap-table)
 ; CAP-TABLE-NEXT:  %[[E:([0-9])]]:cherigpr = CReadHwr $caphwr1
 ; CAP-TABLE-NEXT:  %[[F:([0-9])]]:cherigpr = CIncOffset killed %[[E]]:cherigpr, killed %[[D]]:gpr64
-; CAP-TABLE-NEXT:  %[[G:([0-9])]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %[[F]]:cherigpr :: (dereferenceable load 8 from @global_tls, addrspace 200)
-; CAP-TABLE-NEXT:  %[[H:([0-9])+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global_normal, [[CGP_VREG]]:cherigpr :: (load {{16|32}} from cap-table)
-; CAP-TABLE-NEXT:  %[[I:([0-9])+]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %[[H]]:cherigpr :: (dereferenceable load 8 from @global_normal, addrspace 200)
+; CAP-TABLE-NEXT:  %[[G:([0-9])]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %[[F]]:cherigpr :: (dereferenceable load (s64) from @global_tls, addrspace 200)
+; CAP-TABLE-NEXT:  %[[H:([0-9])+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global_normal, [[CGP_VREG]]:cherigpr :: (load (s128) from cap-table)
+; CAP-TABLE-NEXT:  %[[I:([0-9])+]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %[[H]]:cherigpr :: (dereferenceable load (s64) from @global_normal, addrspace 200)
 ; CAP-TABLE-NEXT:  [[RESULT:%([0-9])+]]:gpr64 = DADDu killed %[[G]]:gpr64, killed %[[I]]:gpr64
 
 
