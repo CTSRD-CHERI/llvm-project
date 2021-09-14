@@ -413,7 +413,6 @@ class LLVMConfig(object):
 
     def _add_cheri_tool_substitution(self, tool):
         assert tool in ('llc', 'opt', 'llvm-mc'), 'Invalid tool: ' + tool
-        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
         if tool == 'llvm-mc':
             triple_opt = '-triple'
             purecap_args = ['-target-abi', 'purecap', '-position-independent']
@@ -429,9 +428,7 @@ class LLVMConfig(object):
         riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64d', '-mattr=+cap-mode'] + riscv32_cheri_args
         riscv64_cheri_purecap_args = ['-target-abi', 'l64pc128d', '-mattr=+cap-mode'] + riscv64_cheri_args
 
-        assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
         default_args = cheri128_args
-        self.config.substitutions.append(('%cheri_cap_bytes', default_cheri_size))
         tool_patterns = [
             ToolSubst('%cheri_' + tool, FindTool(tool), extra_args=default_args),
             ToolSubst('%cheri128_' + tool, FindTool(tool), extra_args=cheri128_args),
