@@ -7,12 +7,10 @@
 define void @below_threshold(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-LABEL: below_threshold:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    sext.w a2, a0
-; CHECK-NEXT:    addi a3, zero, 2
-; CHECK-NEXT:    beq a2, a3, .LBB0_3
+; CHECK-NEXT:    sext.w a0, a0
+; CHECK-NEXT:    addi a2, zero, 2
+; CHECK-NEXT:    beq a0, a2, .LBB0_3
 ; CHECK-NEXT:  # %bb.1: # %entry
-; CHECK-NEXT:    slli a0, a0, 32
-; CHECK-NEXT:    srli a0, a0, 32
 ; CHECK-NEXT:    addi a2, zero, 1
 ; CHECK-NEXT:    bne a0, a2, .LBB0_5
 ; CHECK-NEXT:  # %bb.2: # %bb1
@@ -44,8 +42,7 @@ exit:
 define void @above_threshold_mips(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-LABEL: above_threshold_mips:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    slli a0, a0, 32
-; CHECK-NEXT:    srli a0, a0, 32
+; CHECK-NEXT:    sext.w a0, a0
 ; CHECK-NEXT:    addi a2, zero, 2
 ; CHECK-NEXT:    blt a2, a0, .LBB1_4
 ; CHECK-NEXT:  # %bb.1: # %entry
@@ -101,8 +98,7 @@ exit:
 define void @above_threshold_all(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-LABEL: above_threshold_all:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    slli a0, a0, 32
-; CHECK-NEXT:    srli a0, a0, 32
+; CHECK-NEXT:    sext.w a0, a0
 ; CHECK-NEXT:    addi a2, zero, 3
 ; CHECK-NEXT:    blt a2, a0, .LBB2_5
 ; CHECK-NEXT:  # %bb.1: # %entry

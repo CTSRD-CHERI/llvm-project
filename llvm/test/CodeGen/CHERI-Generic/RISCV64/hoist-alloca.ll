@@ -30,8 +30,8 @@
 ; }
 
 ; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -o %t.mir -stop-before=early-machinelicm < %s
-; RUN: echo "DONOTAUTOGEN" | llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -run-pass=early-machinelicm \
-; RUN:    -debug-only=machinelicm %t.mir -o /dev/null 2>&1 | FileCheck --check-prefix=MACHINELICM-DBG %s
+; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -run-pass=early-machinelicm -debug-only=machinelicm %t.mir -o /dev/null 2>%t.dbg
+; RUN: FileCheck --input-file=%t.dbg --check-prefix=MACHINELICM-DBG %s
 ; Check that MachineLICM hoists the CheriBoundedStackPseudoImm (MIPS) / IncOffset+SetBoundsImm (RISCV) instructions
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_uncond
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
@@ -74,9 +74,8 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    cmove ca0, cs2
 ; CHECK-NEXT:    cmove ca1, cs1
 ; CHECK-NEXT:    ccall call
-; CHECK-NEXT:    addiw a0, s0, 1
-; CHECK-NEXT:    addi s0, s0, 1
-; CHECK-NEXT:    bne a0, s3, .LBB0_1
+; CHECK-NEXT:    addiw s0, s0, 1
+; CHECK-NEXT:    bne s0, s3, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %for.cond.cleanup
 ; CHECK-NEXT:    clc cs3, 592(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    clc cs2, 608(csp) # 16-byte Folded Reload
@@ -115,26 +114,25 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    csc cs2, 624(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc cs3, 608(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc cs4, 592(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    mv s1, zero
-; CHECK-NEXT:    seqz s0, a0
-; CHECK-NEXT:    addi s3, zero, 100
+; CHECK-NEXT:    mv s0, zero
+; CHECK-NEXT:    seqz s1, a0
+; CHECK-NEXT:    addi s4, zero, 100
 ; CHECK-NEXT:    cincoffset ca0, csp, 100
 ; CHECK-NEXT:    csetbounds cs2, ca0, 492
 ; CHECK-NEXT:    cincoffset ca0, csp, 12
-; CHECK-NEXT:    csetbounds cs4, ca0, 88
+; CHECK-NEXT:    csetbounds cs3, ca0, 88
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    addiw a0, s1, 1
-; CHECK-NEXT:    addi s1, s1, 1
-; CHECK-NEXT:    beq a0, s3, .LBB1_4
+; CHECK-NEXT:    addiw s0, s0, 1
+; CHECK-NEXT:    beq s0, s4, .LBB1_4
 ; CHECK-NEXT:  .LBB1_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    bnez s0, .LBB1_1
+; CHECK-NEXT:    bnez s1, .LBB1_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
 ; CHECK-NEXT:    cmove ca0, cs2
-; CHECK-NEXT:    cmove ca1, cs4
+; CHECK-NEXT:    cmove ca1, cs3
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
