@@ -17419,10 +17419,6 @@ Value *AArch64TargetLowering::emitLoadLinked(IRBuilderBase &Builder,
         Lo, Builder.CreateShl(Hi, ConstantInt::get(ValueTy, 64)), "val64");
   }
 
-  Type *Tys[] = {Addr->getType()};
-  Intrinsic::ID Int =
-      IsAcquire ? Intrinsic::aarch64_ldaxr : Intrinsic::aarch64_ldxr;
-  Function *Ldxr = Intrinsic::getDeclaration(M, Int, Tys);
 
   const DataLayout &DL = M->getDataLayout();
   IntegerType *IntEltTy = Builder.getIntNTy(DL.getTypeSizeInBits(ValueTy));
@@ -17430,6 +17426,11 @@ Value *AArch64TargetLowering::emitLoadLinked(IRBuilderBase &Builder,
     Addr = Builder.CreatePointerCast(
         Addr,
         IntEltTy->getPointerTo(Addr->getType()->getPointerAddressSpace()));
+  Type *Tys[] = {Addr->getType()};
+  Intrinsic::ID Int =
+      IsAcquire ? Intrinsic::aarch64_ldaxr : Intrinsic::aarch64_ldxr;
+  Function *Ldxr = Intrinsic::getDeclaration(M, Int, Tys);
+
   Value *Trunc = Builder.CreateTrunc(Builder.CreateCall(Ldxr, Addr), IntEltTy);
   // For atomicrmw xchg it's possible that Addr is a pointer not an integer
   assert(!DL.isFatPointer(ValueTy) && "Should not be handled here!");
