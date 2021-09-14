@@ -2525,7 +2525,9 @@ void CodeGenFunction::InitializeVTablePointer(const VPtr &Vptr) {
   // vtable field is is derived from `this` pointer, therefore it should be in
   // default address space.
   VTableField = Builder.CreatePointerBitCastOrAddrSpaceCast(
-      VTableField, VTablePtrTy->getPointerTo());
+      VTableField,
+      VTablePtrTy->getPointerTo(
+          CGM.getContext().getTargetAddressSpace(LangAS::Default)));
   VTableAddressPoint = Builder.CreatePointerBitCastOrAddrSpaceCast(
       VTableAddressPoint, VTablePtrTy);
 
