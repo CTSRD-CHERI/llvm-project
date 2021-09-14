@@ -18,7 +18,7 @@
 // CHECK-NEXT: ld	$fp, 8($sp) # 8-byte Folded Reload
 // CHECK-NEXT: jr	$ra
 // CHECK-NEXT: daddiu	$sp, $sp, 16
-// CHECK-NEXT:
+// CHECK-EMPTY:
 
 void doLoop(char * in, char * out, int i)
 {
