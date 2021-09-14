@@ -6,7 +6,7 @@
 
 ; Note: Opt correctly hoists the condition+csetbounds into a preheader, and LLC
 ; used to unconditionally hoist the csetbounds.
-; RUN: opt -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
+; RUN: opt -data-layout="e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200" -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O3 < %s | FileCheck %s
 
 ; Generated from the following C code (with subobject bounds):
@@ -73,22 +73,22 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; HOIST-OPT-NEXT:    [[TOBOOL:%.*]] = icmp eq [[STRUCT_FOO]] addrspace(200)* [[F]], null
 ; HOIST-OPT-NEXT:    br i1 [[TOBOOL]], label [[FOR_COND_CLEANUP:%.*]], label [[FOR_BODY_PREHEADER:%.*]]
 ; HOIST-OPT:       for.body.preheader:
-; HOIST-OPT-NEXT:    [[DST:%.*]] = getelementptr inbounds [[STRUCT_FOO]], [[STRUCT_FOO]] addrspace(200)* [[F]], i64 0, i32 1
+; HOIST-OPT-NEXT:    [[DST:%.*]] = getelementptr inbounds [[STRUCT_FOO]], [[STRUCT_FOO]] addrspace(200)* [[F]], i32 0, i32 1
 ; HOIST-OPT-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[DST]] to i8 addrspace(200)*
 ; HOIST-OPT-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_FOO]] addrspace(200)* [[F]] to i8 addrspace(200)*
-; HOIST-OPT-NEXT:    [[TMP2:%.*]] = tail call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* nonnull [[TMP1]], i32 4)
+; HOIST-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* nonnull [[TMP1]], i32 4)
 ; HOIST-OPT-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
-; HOIST-OPT-NEXT:    [[TMP3:%.*]] = tail call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* nonnull [[TMP0]], i32 4)
+; HOIST-OPT-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* nonnull [[TMP0]], i32 4)
 ; HOIST-OPT-NEXT:    [[ADDRESS_WITH_BOUNDS1:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
 ; HOIST-OPT-NEXT:    br label [[FOR_BODY:%.*]]
 ; HOIST-OPT:       for.cond.cleanup:
 ; HOIST-OPT-NEXT:    ret void
 ; HOIST-OPT:       for.body:
 ; HOIST-OPT-NEXT:    [[I_06:%.*]] = phi i32 [ [[INC:%.*]], [[FOR_BODY]] ], [ 0, [[FOR_BODY_PREHEADER]] ]
-; HOIST-OPT-NEXT:    tail call addrspace(200) void @call(i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS1]])
+; HOIST-OPT-NEXT:    tail call void @call(i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS1]])
 ; HOIST-OPT-NEXT:    [[INC]] = add nuw nsw i32 [[I_06]], 1
-; HOIST-OPT-NEXT:    [[CMP:%.*]] = icmp ult i32 [[I_06]], 99
-; HOIST-OPT-NEXT:    br i1 [[CMP]], label [[FOR_BODY]], label [[FOR_COND_CLEANUP]]
+; HOIST-OPT-NEXT:    [[EXITCOND_NOT:%.*]] = icmp eq i32 [[INC]], 100
+; HOIST-OPT-NEXT:    br i1 [[EXITCOND_NOT]], label [[FOR_COND_CLEANUP]], label [[FOR_BODY]]
 ;
 entry:
   %tobool = icmp eq %struct.foo addrspace(200)* %f, null
