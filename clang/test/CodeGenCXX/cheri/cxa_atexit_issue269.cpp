@@ -12,8 +12,8 @@ struct n {
 thread_local m f;
 thread_local n h;
 
-// CHECK: @f = dso_local thread_local addrspace(200) global %struct.m zeroinitializer, align 1
-// CHECK: @h = dso_local thread_local addrspace(200) global %struct.n zeroinitializer, align 1
+// CHECK: @f = thread_local addrspace(200) global %struct.m zeroinitializer, align 1
+// CHECK: @h = thread_local addrspace(200) global %struct.n zeroinitializer, align 1
 // CHECK: @__tls_guard = internal thread_local unnamed_addr addrspace(200) global i1 false, align 1
 
 void r() {

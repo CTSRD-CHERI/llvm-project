@@ -37,7 +37,6 @@ extern int g1 __attribute((alias("g0")));
 // CHECKBASIC-DAG: @g1 ={{.*}} alias i32, i32* @g0
 // CHECKASM-DAG: .globl g1
 // CHECKASM-DAG: .set g1, g0
-// CHECKASM-DAG: .set .Lg1$local, g0
 // CHECKASM-DAG: .size g1, 4
 
 extern __thread int __libc_errno __attribute__ ((alias ("TL_WITH_ALIAS")));

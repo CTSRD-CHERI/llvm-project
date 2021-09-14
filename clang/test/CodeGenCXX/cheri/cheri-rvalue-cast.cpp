@@ -12,7 +12,7 @@ struct B {
 struct C : B {};
 
 A &&a = dynamic_cast<A &&>(A{}); // this is valid even with -fno-rtti as it only does lifetime extension
-// CHECK: @_ZN7PR202271aE = dso_local addrspace(200) global %"struct.PR20227::A" addrspace(200)* null, align [[#CAP_SIZE]]
+// CHECK: @_ZN7PR202271aE = addrspace(200) global %"struct.PR20227::A" addrspace(200)* null, align [[#CAP_SIZE]]
 // CHECK: @_ZGRN7PR202271aE_ = internal addrspace(200) global %"struct.PR20227::A" zeroinitializer, align 1
 
 #ifdef CHECK_ERROR
@@ -21,7 +21,7 @@ B &&b = dynamic_cast<C &&>(dynamic_cast<B &&>(C{})); // expected-error {{use of 
 #endif
 
 B &&c = static_cast<C &&>(static_cast<B &&>(C{}));
-// CHECK: @_ZN7PR202271cE = dso_local addrspace(200) global %"struct.PR20227::B" addrspace(200)* null, align [[#CAP_SIZE]]
+// CHECK: @_ZN7PR202271cE = addrspace(200) global %"struct.PR20227::B" addrspace(200)* null, align [[#CAP_SIZE]]
 // CHECK: @_ZGRN7PR202271cE_ = internal addrspace(200) global %"struct.PR20227::C" zeroinitializer, align [[#CAP_SIZE]]
 } // namespace PR20227
 

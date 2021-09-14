@@ -11,7 +11,7 @@ int annotated_global __attribute__((annotate("global"))) = 1;
 /// Check that globals annotations are emitted in AS200 for purecap:
 // CHECK:      @.str = private unnamed_addr addrspace(200) constant [9 x i8] c"function\00", section "llvm.metadata"
 // CHECK-NEXT: @.str.1 = private unnamed_addr addrspace(200) constant [[FILENAME_ARRAY:\[21 x i8\]]] c"/some/dir/annotate.c\00", section "llvm.metadata"
-// CHECK-NEXT: @annotated_global = dso_local addrspace(200) global i32 1, align 4
+// CHECK-NEXT: @annotated_global = addrspace(200) global i32 1, align 4
 // CHECK-NEXT: @.str.2 = private unnamed_addr addrspace(200) constant [7 x i8] c"global\00", section "llvm.metadata"
 // CHECK-NEXT: @.str.3 = private unnamed_addr addrspace(200) constant [4 x i8] c"foo\00", section "llvm.metadata"
 // CHECK-NEXT: @.str.4 = private unnamed_addr addrspace(200) constant [13 x i8] c"myannotation\00", section "llvm.metadata"

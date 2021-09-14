@@ -34,8 +34,8 @@ quintptr qtHookData[] = {
     0,
     16};
 
-// CHECK-HYBRID: @qtHookData = dso_local global [7 x i64] [i64 3, i64 7, i64 331776, i64 0, i64 0, i64 0, i64 16], align 8
-// CHECK-PURECAP: @qtHookData = dso_local addrspace(200) global [7 x i8 addrspace(200)*]
+// CHECK-HYBRID: @qtHookData = global [7 x i64] [i64 3, i64 7, i64 331776, i64 0, i64 0, i64 0, i64 16], align 8
+// CHECK-PURECAP: @qtHookData = addrspace(200) global [7 x i8 addrspace(200)*]
 // CHECK-PURECAP-SAME: [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 7),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 331776),
@@ -43,7 +43,6 @@ quintptr qtHookData[] = {
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 16)], align [[#CAP_SIZE]]
 
 // HYBRID-ASM-LABEL: qtHookData:
-// HYBRID-ASM-NEXT: .LqtHookData$local:
 // HYBRID-ASM-NEXT: 	.8byte	3
 // HYBRID-ASM-NEXT: 	.8byte	7
 // HYBRID-ASM-NEXT: 	.8byte	331776
@@ -54,7 +53,6 @@ quintptr qtHookData[] = {
 // HYBRID-ASM-NEXT: 	.size	qtHookData, 56
 
 // PURECAP-ASM-LABEL: qtHookData:
-// PURECAP-ASM-NEXT: .LqtHookData$local:
 // PURECAP-ASM-NEXT: 	.chericap	3
 // PURECAP-ASM-NEXT: 	.chericap	7
 // PURECAP-ASM-NEXT: 	.chericap	331776
@@ -82,22 +80,20 @@ quintptr array2[4] = {
     (quintptr)&array2,
 };
 
-// CHECK-HYBRID: @array2 = dso_local global [4 x i64] [i64 42, i64 ptrtoint ([4 x i64]* @array2 to i64), i64 0, i64 0], align 8
+// CHECK-HYBRID: @array2 = global [4 x i64] [i64 42, i64 ptrtoint ([4 x i64]* @array2 to i64), i64 0, i64 0], align 8
 // HYBRID-ASM-LABEL: array2:
-// HYBRID-ASM-NEXT:	.Larray2$local:
 // HYBRID-ASM-NEXT:	.8byte	42
 // HYBRID-ASM-NEXT:	.8byte	array2
 // HYBRID-ASM-NEXT:	.8byte	0
 // HYBRID-ASM-NEXT:	.8byte	0
 // HYBRID-ASM-NEXT:	.size	array2, 32
 
-// CHECK-PURECAP: @array2 = dso_local addrspace(200) global [4 x i8 addrspace(200)*]
+// CHECK-PURECAP: @array2 = addrspace(200) global [4 x i8 addrspace(200)*]
 // CHECK-PURECAP-SAME: [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 42),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* bitcast ([4 x i8 addrspace(200)*] addrspace(200)* @array2 to i8 addrspace(200)*),
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* null,
 // CHECK-PURECAP-SAME:  i8 addrspace(200)* null], align [[#CAP_SIZE]]
 // PURECAP-ASM-LABEL: array2:
-// PURECAP-ASM-NEXT:	.Larray2$local:
 // PURECAP-ASM-NEXT:	.chericap	42
 // PURECAP-ASM-NEXT:	.chericap	array2
 // PURECAP-ASM-NEXT:	.chericap	0
@@ -113,17 +109,15 @@ quintptr array3[4] = {
     (quintptr)&extern_func,
     1234567};
 
-// CHECK-HYBRID: @array3 = dso_local global [4 x i64] zeroinitializer, align 8
+// CHECK-HYBRID: @array3 = global [4 x i64] zeroinitializer, align 8
 // CHECK-HYBRID: @llvm.global_ctors = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 65535, void ()* @_GLOBAL__sub_I_qhooks_array.cpp, i8* null }]
 // HYBRID-ASM-LABEL: array3:
-// HYBRID-ASM-LABEL:	.Larray3$local:
 // HYBRID-ASM-NEXT:	.space	32
 // HYBRID-ASM-NEXT:	.size	array3, 32
 
-// CHECK-PURECAP: @array3 = dso_local addrspace(200) global [4 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
+// CHECK-PURECAP: @array3 = addrspace(200) global [4 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
 // CHECK-PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void () addrspace(200)*, i8 addrspace(200)* }] [{ i32, void () addrspace(200)*, i8 addrspace(200)* }
 // CHECK-PURECAP-SAME: { i32 65535, void () addrspace(200)* @_GLOBAL__sub_I_qhooks_array.cpp, i8 addrspace(200)* null }]
 // PURECAP-ASM-LABEL: array3:
-// PURECAP-ASM-LABEL:	.Larray3$local:
 // PURECAP-ASM-NEXT:	.space	[[#CAP_SIZE * 4]]
 // PURECAP-ASM-NEXT: 	.size	array3, [[#CAP_SIZE * 4]]
