@@ -5793,7 +5793,7 @@ uint32_t ScalarEvolution::GetMinTrailingZerosImpl(const SCEV *S) {
   if (const SCEVMulExpr *M = dyn_cast<SCEVMulExpr>(S)) {
     // The result is the sum of all operands results.
     uint32_t SumOpRes = GetMinTrailingZeros(M->getOperand(0));
-    unsigned BitWidth = getTypeSizeInBits(M->getType());
+    uint32_t BitWidth = getTypeSizeInBits(M->getType());
     for (unsigned i = 1, e = M->getNumOperands();
          SumOpRes != BitWidth && i != e; ++i)
       SumOpRes =
