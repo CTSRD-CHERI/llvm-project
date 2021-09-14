@@ -82,14 +82,14 @@ void do_stuff(struct group *g);
 // CHECK-NEXT:    [[BUFFER:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata i8 addrspace(200)* [[A]], metadata !32, metadata !DIExpression()), !dbg !38
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[BUFFER]] to i8 addrspace(200)*, !dbg !39
-// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull [[TMP0]]) #5, !dbg !39
+// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull [[TMP0]]) #6, !dbg !39
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata i8 addrspace(200)* [[A]], metadata !33, metadata !DIExpression()), !dbg !38
 // CHECK-NEXT:    store i8 addrspace(200)* [[A]], i8 addrspace(200)* addrspace(200)* [[BUFFER]], align 16, !dbg !40
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[BUFFER]] to [[STRUCT_GROUP:%.*]] addrspace(200)*, !dbg !41
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata [[STRUCT_GROUP]] addrspace(200)* [[TMP1]], metadata !37, metadata !DIExpression()), !dbg !38
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata i8 addrspace(200)* addrspace(200)* [[BUFFER]], metadata !33, metadata !DIExpression(DW_OP_deref)), !dbg !38
-// CHECK-NEXT:    call void @do_stuff(%struct.group addrspace(200)* nonnull [[TMP1]]) #5, !dbg !42
-// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull [[TMP0]]) #5, !dbg !43
+// CHECK-NEXT:    call void @do_stuff(%struct.group addrspace(200)* nonnull [[TMP1]]) #6, !dbg !42
+// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull [[TMP0]]) #6, !dbg !43
 // CHECK-NEXT:    ret void, !dbg !43
 //
 void copy_group(const char *a) {
@@ -128,7 +128,7 @@ void copy_group(const char *a) {
 // CHECK-NEXT:    store i8 addrspace(200)* [[A]], i8 addrspace(200)* addrspace(200)* [[A_ADDR_0_BUFFER_ADDR_0__SROA_CAST]], align 1, !dbg !52
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[BUFFER]] to [[STRUCT_GROUP:%.*]] addrspace(200)*, !dbg !53
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata [[STRUCT_GROUP]] addrspace(200)* [[TMP0]], metadata !50, metadata !DIExpression()), !dbg !51
-// CHECK-NEXT:    tail call void @do_stuff(%struct.group addrspace(200)* [[TMP0]]) #5, !dbg !54
+// CHECK-NEXT:    tail call void @do_stuff(%struct.group addrspace(200)* [[TMP0]]) #6, !dbg !54
 // CHECK-NEXT:    ret void, !dbg !55
 //
 void copy_group2(const char *a, char *buffer) {
@@ -174,10 +174,10 @@ void copy_group2(const char *a, char *buffer) {
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata i64 [[SIZE]], metadata !63, metadata !DIExpression()), !dbg !65
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata i8 addrspace(200)* addrspace(200)* [[A_SROA_0]], metadata !62, metadata !DIExpression(DW_OP_deref)), !dbg !65
 // CHECK-NEXT:    [[A_SROA_0_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[A_SROA_0]] to i8 addrspace(200)*, !dbg !66
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[BUFFER]], i8 addrspace(200)* nonnull align 16 [[A_SROA_0_0__SROA_CAST]], i64 [[SIZE]], i1 false) #6, !dbg !66
+// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[BUFFER]], i8 addrspace(200)* nonnull align 16 [[A_SROA_0_0__SROA_CAST]], i64 [[SIZE]], i1 false) #7, !dbg !66
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[BUFFER]] to [[STRUCT_GROUP:%.*]] addrspace(200)*, !dbg !67
 // CHECK-NEXT:    call void @llvm.dbg.value(metadata [[STRUCT_GROUP]] addrspace(200)* [[TMP0]], metadata !64, metadata !DIExpression()), !dbg !65
-// CHECK-NEXT:    tail call void @do_stuff(%struct.group addrspace(200)* [[TMP0]]) #5, !dbg !68
+// CHECK-NEXT:    tail call void @do_stuff(%struct.group addrspace(200)* [[TMP0]]) #6, !dbg !68
 // CHECK-NEXT:    ret void, !dbg !69
 //
 void copy_group3(char *buffer, struct group a, long size) {
@@ -186,3 +186,6 @@ void copy_group3(char *buffer, struct group a, long size) {
   struct group *g = (struct group *)buffer;
   do_stuff(g);
 }
+
+// UTC_ARGS: --disable
+// CHECK: attributes #7 = { must_preserve_cheri_tags "frontend-memtransfer-type"="'struct group'" }
