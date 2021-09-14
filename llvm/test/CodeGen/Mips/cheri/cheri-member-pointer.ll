@@ -1,4 +1,3 @@
-; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O0
 ; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | %cheri_FileCheck %s
 ; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | %cheri_FileCheck %s -check-prefix OPT
 ; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | %cheri_FileCheck %s -check-prefix OPT
