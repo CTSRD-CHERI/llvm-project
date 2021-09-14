@@ -1,5 +1,5 @@
 ; RUN: llc @PURECAP_HARDFLOAT_ARGS@ < %s -o - | FileCheck %s
-; RUN: llc @PURECAP_HARDFLOAT_ARGS@ < %s -o - -filetype=obj | llvm-readobj -r -t - | FileCheck %s --check-prefix=RELOCS
+; RUN: llc @PURECAP_HARDFLOAT_ARGS@ < %s -o - -filetype=obj | llvm-readobj --relocs --symbols - | FileCheck %s --check-prefix=RELOCS
 ; Capabilities for exception landing pads were using preemptible relocations such as
 ; .chericap foo + .Ltmp - .Lfunc_begin instead of using a local alias.
 ; https://github.com/CTSRD-CHERI/llvm-project/issues/512
@@ -102,6 +102,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 
 
 
+; RELOCS-LABEL: Relocations [
 ; RELOCS-LABEL:  Section ({{.+}}) .rela.gcc_except_table {
 @IF-MIPS@; RELOCS-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE  .L_Z8do_catchv$eh_alias 0x4C
 @IF-MIPS@; RELOCS-NEXT:    R_MIPS_PC32/R_MIPS_NONE/R_MIPS_NONE .L_ZTIi.DW.stub 0x0

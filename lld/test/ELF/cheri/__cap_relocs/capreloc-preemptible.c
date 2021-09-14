@@ -8,7 +8,7 @@
 
 // By default building a shared library should not warn about unresolved symbols (but still report them)
 // RUN: ld.lld -preemptible-caprelocs=legacy -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o
-// RUN: llvm-readobj -r -t %t.so | FileCheck %s --check-prefix SHLIB-RELOCS
+// RUN: llvm-readobj -r %t.so | FileCheck %s --check-prefix SHLIB-RELOCS
 // First reloc the is __cap_reloc target which has a load address relocation
 // Second is the target, which is foo
 // SHLIB-RELOCS:      Relocations [

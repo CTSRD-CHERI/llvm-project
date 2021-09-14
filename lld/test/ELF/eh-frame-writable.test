@@ -1,7 +1,7 @@
 # RUN: yaml2obj %s -o %t.o
-# RUN: llvm-readobj -r -s %t.o | FileCheck %s -check-prefix OBJECT
+# RUN: llvm-readobj -r --section-details %t.o | FileCheck %s -check-prefix OBJECT
 # RUN: ld.lld --eh-frame-hdr --shared --fatal-warnings -o %t.so %t.o
-# RUN: llvm-readobj -elf-output-style=GNU -program-headers -relocations -sections %t.so | FileCheck %s
+# RUN: llvm-readobj --elf-output-style=GNU --program-headers --relocations --sections %t.so | FileCheck %s
 
 # OBJECT-LABEL:  Section {
 # OBJECT:         Name: .eh_frame

@@ -3,9 +3,9 @@
 # This was a problem with __cap_relocs and was found building RTLD
 
 // RUN: %cheri128_purecap_llvm-mc -filetype=obj -defsym=CHERI=1 %s -o %t-cheri.o
-// RUN: llvm-readobj -r -t %t-cheri.o | FileCheck %s --check-prefixes OBJ-RELOCS,CHERI-OBJ-RELOCS
+// RUN: llvm-readobj -r %t-cheri.o | FileCheck %s --check-prefixes OBJ-RELOCS,CHERI-OBJ-RELOCS
 // RUN: llvm-mc -triple=mips64-unknown-freebsd -position-independent -filetype=obj %s -o %t-mips.o
-// RUN: llvm-readobj -r -t %t-mips.o | FileCheck %s --check-prefixes OBJ-RELOCS,MIPS-OBJ-RELOCS
+// RUN: llvm-readobj -r %t-mips.o | FileCheck %s --check-prefixes OBJ-RELOCS,MIPS-OBJ-RELOCS
 
 
 # OBJ-RELOCS-LABEL: Relocations [

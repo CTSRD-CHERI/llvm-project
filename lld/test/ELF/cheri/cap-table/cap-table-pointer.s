@@ -1,8 +1,8 @@
 # RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld --fatal-warnings -pie %t.o -o %t.exe
-# RUN: llvm-readobj --cap-relocs --cap-table --dyn-relocations -t %t.exe | %cheri_FileCheck %s
+# RUN: llvm-readobj --cap-relocs --cap-table --dyn-relocations --symbols %t.exe | %cheri_FileCheck %s
 # RUN: ld.lld --fatal-warnings -shared %t.o -o %t.so
-# RUN: llvm-readobj --cap-relocs --cap-table --dyn-relocations -t %t.so | %cheri_FileCheck %s
+# RUN: llvm-readobj --cap-relocs --cap-table --dyn-relocations --symbols %t.so | %cheri_FileCheck %s
 
 .text
 .global __start

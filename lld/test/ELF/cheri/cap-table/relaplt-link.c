@@ -16,7 +16,7 @@
 // AMD64-OBJ-NEXT:     0x8 R_X86_64_PLT32 extern_function 0xFFFFFFFFFFFFFFFC
 // AMD64-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t-amd64.so %t-amd64.o
-// RUN: llvm-readobj --dynamic-table -r -sections --file-headers %t-amd64.so | FileCheck --check-prefix AMD64-SHLIB %s
+// RUN: llvm-readobj --dynamic-table -r --sections --file-headers %t-amd64.so | FileCheck --check-prefix AMD64-SHLIB %s
 
 // AMD64-SHLIB:      SectionHeaderCount: 16
 // AMD64-SHLIB:  Section {
