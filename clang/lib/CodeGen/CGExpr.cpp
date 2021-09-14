@@ -164,7 +164,8 @@ Address CodeGenFunction::CreateMemTemp(QualType Ty, CharUnits Align,
                                                 ArrayTy->getNumElements());
 
     Result = Address(
-        Builder.CreateBitCast(Result.getPointer(), VectorTy->getPointerTo()),
+        Builder.CreateBitCast(Result.getPointer(),
+                              VectorTy->getPointerTo(Result.getAddressSpace())),
         Result.getAlignment());
   }
   return Result;

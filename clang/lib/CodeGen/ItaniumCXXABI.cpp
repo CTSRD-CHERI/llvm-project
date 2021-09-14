@@ -4877,7 +4877,8 @@ void XLCXXABI::registerGlobalDtor(CodeGenFunction &CGF, const VarDecl &D,
     // atexit routine expects "int(*)(int,...)"
     llvm::FunctionType *FTy =
         llvm::FunctionType::get(CGM.IntTy, CGM.IntTy, true);
-    llvm::PointerType *FpTy = FTy->getPointerTo();
+    llvm::PointerType *FpTy =
+        FTy->getPointerTo(CGF.CGM.getDataLayout().getProgramAddressSpace());
 
     // extern "C" int __pt_atexit_np(int flags, int(*)(int,...), ...);
     llvm::FunctionType *AtExitTy =
