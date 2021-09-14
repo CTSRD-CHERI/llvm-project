@@ -54,41 +54,41 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-STATIC-LABEL: clang_purecap_byval_args:
 ; RV64-STATIC:       # %bb.0: # %entry
 ; RV64-STATIC-NEXT:    addi sp, sp, -1056
-; RV64-STATIC-NEXT:    sd ra, 1048(sp)
-; RV64-STATIC-NEXT:    sd s0, 1040(sp)
-; RV64-STATIC-NEXT:    sd s1, 1032(sp)
+; RV64-STATIC-NEXT:    sd ra, 1048(sp) # 8-byte Folded Spill
+; RV64-STATIC-NEXT:    sd s0, 1040(sp) # 8-byte Folded Spill
+; RV64-STATIC-NEXT:    sd s1, 1032(sp) # 8-byte Folded Spill
 ; RV64-STATIC-NEXT:    lui s1, %hi(global_foo)
 ; RV64-STATIC-NEXT:    addi s0, s1, %lo(global_foo)
 ; RV64-STATIC-NEXT:    addi a2, zero, 1024
 ; RV64-STATIC-NEXT:    mv a0, s0
 ; RV64-STATIC-NEXT:    mv a1, zero
-; RV64-STATIC-NEXT:    call memset
+; RV64-STATIC-NEXT:    call memset@plt
 ; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
 ; RV64-STATIC-NEXT:    mv a1, zero
-; RV64-STATIC-NEXT:    call assert_eq
+; RV64-STATIC-NEXT:    call assert_eq@plt
 ; RV64-STATIC-NEXT:    addi a0, sp, 8
 ; RV64-STATIC-NEXT:    addi a2, zero, 1024
 ; RV64-STATIC-NEXT:    mv a1, s0
-; RV64-STATIC-NEXT:    call memcpy
+; RV64-STATIC-NEXT:    call memcpy@plt
 ; RV64-STATIC-NEXT:    addi a0, sp, 8
 ; RV64-STATIC-NEXT:    call foo_byval
 ; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
 ; RV64-STATIC-NEXT:    mv a1, zero
-; RV64-STATIC-NEXT:    call assert_eq
-; RV64-STATIC-NEXT:    ld s1, 1032(sp)
-; RV64-STATIC-NEXT:    ld s0, 1040(sp)
-; RV64-STATIC-NEXT:    ld ra, 1048(sp)
+; RV64-STATIC-NEXT:    call assert_eq@plt
+; RV64-STATIC-NEXT:    ld s1, 1032(sp) # 8-byte Folded Reload
+; RV64-STATIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
+; RV64-STATIC-NEXT:    ld ra, 1048(sp) # 8-byte Folded Reload
 ; RV64-STATIC-NEXT:    addi sp, sp, 1056
 ; RV64-STATIC-NEXT:    ret
 ;
 ; RV64-PIC-LABEL: clang_purecap_byval_args:
 ; RV64-PIC:       # %bb.0: # %entry
 ; RV64-PIC-NEXT:    addi sp, sp, -1056
-; RV64-PIC-NEXT:    sd ra, 1048(sp)
-; RV64-PIC-NEXT:    sd s0, 1040(sp)
+; RV64-PIC-NEXT:    sd ra, 1048(sp) # 8-byte Folded Spill
+; RV64-PIC-NEXT:    sd s0, 1040(sp) # 8-byte Folded Spill
 ; RV64-PIC-NEXT:  .LBB0_1: # %entry
 ; RV64-PIC-NEXT:    # Label of block must be emitted
-; RV64-PIC-NEXT:    auipc s0, %pcrel_hi(global_foo)
+; RV64-PIC-NEXT:    auipc s0, %pcrel_hi(.Lglobal_foo$local)
 ; RV64-PIC-NEXT:    addi s0, s0, %pcrel_lo(.LBB0_1)
 ; RV64-PIC-NEXT:    addi a2, zero, 1024
 ; RV64-PIC-NEXT:    mv a0, s0
@@ -106,8 +106,8 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-PIC-NEXT:    lb a0, 0(s0)
 ; RV64-PIC-NEXT:    mv a1, zero
 ; RV64-PIC-NEXT:    call assert_eq@plt
-; RV64-PIC-NEXT:    ld s0, 1040(sp)
-; RV64-PIC-NEXT:    ld ra, 1048(sp)
+; RV64-PIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
+; RV64-PIC-NEXT:    ld ra, 1048(sp) # 8-byte Folded Reload
 ; RV64-PIC-NEXT:    addi sp, sp, 1056
 ; RV64-PIC-NEXT:    ret
 ;
@@ -170,8 +170,8 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; PURECAP-RV64-LABEL: clang_purecap_byval_args:
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -1072
-; PURECAP-RV64-NEXT:    csc cra, 1056(csp)
-; PURECAP-RV64-NEXT:    csc cs0, 1040(csp)
+; PURECAP-RV64-NEXT:    csc cra, 1056(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    csc cs0, 1040(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:  .LBB0_1: # %entry
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
 ; PURECAP-RV64-NEXT:    auipcc cs0, %captab_pcrel_hi(global_foo)
@@ -192,8 +192,8 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; PURECAP-RV64-NEXT:    clb a0, 0(cs0)
 ; PURECAP-RV64-NEXT:    mv a1, zero
 ; PURECAP-RV64-NEXT:    ccall assert_eq
-; PURECAP-RV64-NEXT:    clc cs0, 1040(csp)
-; PURECAP-RV64-NEXT:    clc cra, 1056(csp)
+; PURECAP-RV64-NEXT:    clc cs0, 1040(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    clc cra, 1056(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 1072
 ; PURECAP-RV64-NEXT:    cret
 ;
