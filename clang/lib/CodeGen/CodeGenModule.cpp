@@ -4164,10 +4164,8 @@ llvm::GlobalVariable *CodeGenModule::CreateOrReplaceCXXRuntimeVariable(
   }
 
   // Create a new variable.
-  GV = new llvm::GlobalVariable(getModule(), Ty, /*isConstant=*/true,
-                                Linkage, nullptr, Name, nullptr,
-                                llvm::GlobalVariable::NotThreadLocal,
-                                getTargetCodeGenInfo().getDefaultAS());
+  GV = new llvm::GlobalVariable(getModule(), Ty, /*isConstant=*/true, Linkage,
+                                nullptr, Name);
 
   if (OldGV) {
     // Replace occurrences of the old variable if needed.
@@ -5304,11 +5302,9 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
 
   // Note: -fwritable-strings doesn't make the backing store strings of
   // CFStrings writable. (See <rdar://problem/10657500>)
-  auto GV =
-    new llvm::GlobalVariable(getModule(), C->getType(), /*isConstant=*/true,
-                             llvm::GlobalValue::PrivateLinkage, C, ".str", nullptr,
-                             llvm::GlobalVariable::NotThreadLocal,
-                             getTargetCodeGenInfo().getDefaultAS());
+  auto *GV =
+      new llvm::GlobalVariable(getModule(), C->getType(), /*isConstant=*/true,
+                               llvm::GlobalValue::PrivateLinkage, C, ".str");
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
