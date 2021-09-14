@@ -1132,6 +1132,9 @@ static void emitCatchDispatchBlock(CodeGenFunction &CGF,
     assert(handler.Type.Flags == 0 &&
            "landingpads do not support catch handler flags");
     assert(typeValue && "fell into catch-all case!");
+    // The backend extracts a constant address from the cast, so it doesn't
+    // actually matter which AS it's in. Use AS0 here to avoid having to
+    // overloading the intrinsic.
     typeValue = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(typeValue,
             CGF.Int8Ty->getPointerTo(0));
 
