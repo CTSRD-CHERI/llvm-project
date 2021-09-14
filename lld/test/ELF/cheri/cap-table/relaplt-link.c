@@ -93,7 +93,7 @@
 // PURECAP-OBJ-NEXT:    0x14 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0
 // PURECAP-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t.so %t.o
-// RUN: llvm-readobj --dynamic-table -file-headers -r --sections %t.so | FileCheck --check-prefix PURECAP-SHLIB %s
+// RUN: llvm-readobj --dynamic-table --file-headers -r --sections %t.so | FileCheck --check-prefix PURECAP-SHLIB %s
 // PURECAP-SHLIB:      SectionHeaderCount: 19
 // PURECAP-SHLIB:  Section {
 // PURECAP-SHLIB:      Index: [[DYNSYM_INDEX:3]]
