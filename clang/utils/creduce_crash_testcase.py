@@ -73,7 +73,7 @@ class LitSubstitutionHandler(object):
     # noinspection PyMethodMayBeStatic
     class _FakeLitConfig(object):
         def __init__(self, _: "Options"):
-            self.params = dict(CHERI_CAP_SIZE="16")
+            self.params = dict()
             self.quiet = True
 
         def note(self, msg):

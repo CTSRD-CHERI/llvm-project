@@ -394,15 +394,13 @@ class LLVMConfig(object):
             ToolSubst(r'\| \bnot\b', command=FindTool('not'),
                 verbatim=True, unresolved='fatal')]
 
-        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
         tool_patterns.append(ToolSubst('%cheri128_FileCheck', FindTool('FileCheck'),
                                        extra_args=['-D\\#CAP_SIZE=16']))
         tool_patterns.append(ToolSubst('%cheri64_FileCheck', FindTool('FileCheck'),
                                        extra_args=['-D\\#CAP_SIZE=8']))
+        # TODO: remove this substitution
         tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
-                                       extra_args=['-D\\#CAP_SIZE=' + default_cheri_size]))
-        if not self.lit_config.quiet:
-            self.lit_config.note('Running tests for CHERI_CAP_SIZE=' + default_cheri_size)
+                                       extra_args=['-D\\#CAP_SIZE=16']))
 
         self.config.substitutions.append(('%python', '"%s"' % (sys.executable)))
 
@@ -564,8 +562,6 @@ class LLVMConfig(object):
             riscv64_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
 
-            default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
-            assert default_cheri_size == '16', "cap size=" + default_cheri_size + "no longer supported"
             cheri_cc1_args = cheri128_cc1_args
             default_cheri_cpu = 'cheri128'
             cheri_clang_args = ['-target', 'mips64-unknown-freebsd', '-nostdinc',

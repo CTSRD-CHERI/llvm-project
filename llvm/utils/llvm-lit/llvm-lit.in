@@ -15,8 +15,7 @@ def map_config(source_dir, site_config):
 
 # Set up some builtin parameters, so that by default the LLVM test suite
 # configuration file knows how to find the object tree.
-builtin_parameters = { 'build_mode' : '@BUILD_MODE@',
-                       'CHERI_CAP_SIZE': '@CHERI_CAP_SIZE@'}
+builtin_parameters = { 'build_mode' : '@BUILD_MODE@' }
 
 @LLVM_LIT_CONFIG_MAP@
 

@@ -28,20 +28,9 @@ if (${file_last} GREATER -1)
 endif()
 
 function(create_llvm_lit _output_file)
-  set(CHERI_CAP_SIZE 16)  # TODO: allow setting a default
   configure_file(
     llvm-lit.in
     ${_output_file}
-  )
-  set(CHERI_CAP_SIZE 16)
-  configure_file(
-    llvm-lit.in
-    ${_output_file}-cheri128
-  )
-  set(CHERI_CAP_SIZE 32)
-  configure_file(
-    llvm-lit.in
-    ${_output_file}-cheri256
   )
 endfunction()
 
