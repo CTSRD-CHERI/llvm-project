@@ -46,6 +46,7 @@
 ; CHECK-NEXT:      Constant Hoisting
 ; CHECK-NEXT:      Replace intrinsics with calls to vector library
 ; CHECK-NEXT:      Partially inline calls to library functions
+; CHECK-NEXT:      Expand vector predication intrinsics
 ; CHECK-NEXT:      Scalarize Masked Memory Intrinsics
 ; CHECK-NEXT:      Expand reduction intrinsics
 ; CHECK-NEXT:      Expand Atomic instructions
@@ -61,8 +62,6 @@
 ; CHERI-NEXT:      Dominator Tree Construction
 ; CHERI-NEXT:      Natural Loop Information
 ; CHECK-NEXT:      CodeGen Prepare
-; CHECK-NEXT:    Rewrite Symbols
-; CHECK-NEXT:    FunctionPass Manager
 ; CHECK-NEXT:      Dominator Tree Construction
 ; CHECK-NEXT:      Exception handling preparation
 ; CHECK-NEXT:      Safe Stack instrumentation pass
@@ -137,6 +136,7 @@
 ; CHECK-NEXT:      Machine Copy Propagation Pass
 ; CHECK-NEXT:      Machine Loop Invariant Code Motion
 ; CHERI-NEXT:      CHERI invalidate pass
+; CHECK-NEXT:      Remove Redundant DEBUG_VALUE analysis
 ; CHECK-NEXT:      Fixup Statepoint Caller Saved
 ; CHECK-NEXT:      PostRA Machine Sink
 ; CHERI-NEXT:      MachineDominator Tree Construction
