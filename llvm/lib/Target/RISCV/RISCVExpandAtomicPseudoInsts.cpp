@@ -396,8 +396,8 @@ static unsigned getLRForRMWCap(bool PtrIsCap, AtomicOrdering Ordering, int CLen)
     return CLen == 64 ? (PtrIsCap ? RISCV::CLR_C_AQ_64 : RISCV::LR_C_AQ_64)
                       : (PtrIsCap ? RISCV::CLR_C_AQ_128 : RISCV::LR_C_AQ_128);
   case AtomicOrdering::Release:
-    return CLen == 64 ? (PtrIsCap ? RISCV::CLR_C_64 : RISCV::LR_C_64)
-                      : (PtrIsCap ? RISCV::CLR_C_128 : RISCV::LR_C_128);
+    return CLen == 64 ? (PtrIsCap ? RISCV::CLR_C_RL_64 : RISCV::LR_C_RL_64)
+                      : (PtrIsCap ? RISCV::CLR_C_RL_128 : RISCV::LR_C_RL_128);
   case AtomicOrdering::AcquireRelease:
     return CLen == 64 ? (PtrIsCap ? RISCV::CLR_C_AQ_64 : RISCV::LR_C_AQ_64)
                       : (PtrIsCap ? RISCV::CLR_C_AQ_128 : RISCV::LR_C_AQ_128);

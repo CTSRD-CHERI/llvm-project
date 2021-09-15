@@ -17,7 +17,7 @@ define void @cmpxchg_cap_monotonic_monotonic(i8 addrspace(200)** %ptr, i8 addrsp
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    mv a3, zero
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -41,7 +41,7 @@ define void @cmpxchg_cap_monotonic_monotonic(i8 addrspace(200)** %ptr, i8 addrsp
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    mv a3, zero
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -69,7 +69,7 @@ define void @cmpxchg_cap_acquire_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -93,7 +93,7 @@ define void @cmpxchg_cap_acquire_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 2
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -121,7 +121,7 @@ define void @cmpxchg_cap_acquire_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 2
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -145,7 +145,7 @@ define void @cmpxchg_cap_acquire_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 2
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -173,7 +173,7 @@ define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -181,7 +181,7 @@ define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IAXCHERI-LABEL: cmpxchg_cap_release_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
 ; RV32IAXCHERI-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.c ca3, (a0)
+; RV32IAXCHERI-NEXT:    lr.c.rl ca3, (a0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB3_3
 ; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB3_1 Depth=1
 ; RV32IAXCHERI-NEXT:    sc.c a4, ca2, (a0)
@@ -197,7 +197,7 @@ define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 3
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -205,7 +205,7 @@ define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IAXCHERI-LABEL: cmpxchg_cap_release_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
 ; RV64IAXCHERI-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.c ca3, (a0)
+; RV64IAXCHERI-NEXT:    lr.c.rl ca3, (a0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB3_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB3_1 Depth=1
 ; RV64IAXCHERI-NEXT:    sc.c a4, ca2, (a0)
@@ -225,7 +225,7 @@ define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 3
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -233,10 +233,10 @@ define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IAXCHERI-LABEL: cmpxchg_cap_release_acquire:
 ; RV32IAXCHERI:       # %bb.0:
 ; RV32IAXCHERI-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.c ca3, (a0)
+; RV32IAXCHERI-NEXT:    lr.c.aq ca3, (a0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB4_3
 ; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB4_1 Depth=1
-; RV32IAXCHERI-NEXT:    sc.c a4, ca2, (a0)
+; RV32IAXCHERI-NEXT:    sc.c.aq a4, ca2, (a0)
 ; RV32IAXCHERI-NEXT:    bnez a4, .LBB4_1
 ; RV32IAXCHERI-NEXT:  .LBB4_3:
 ; RV32IAXCHERI-NEXT:    ret
@@ -249,7 +249,7 @@ define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 3
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -257,10 +257,10 @@ define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IAXCHERI-LABEL: cmpxchg_cap_release_acquire:
 ; RV64IAXCHERI:       # %bb.0:
 ; RV64IAXCHERI-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.c ca3, (a0)
+; RV64IAXCHERI-NEXT:    lr.c.aq ca3, (a0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB4_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB4_1 Depth=1
-; RV64IAXCHERI-NEXT:    sc.c a4, ca2, (a0)
+; RV64IAXCHERI-NEXT:    sc.c.aq a4, ca2, (a0)
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB4_1
 ; RV64IAXCHERI-NEXT:  .LBB4_3:
 ; RV64IAXCHERI-NEXT:    ret
@@ -277,7 +277,7 @@ define void @cmpxchg_cap_acq_rel_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -301,7 +301,7 @@ define void @cmpxchg_cap_acq_rel_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 4
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -329,7 +329,7 @@ define void @cmpxchg_cap_acq_rel_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 4
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -353,7 +353,7 @@ define void @cmpxchg_cap_acq_rel_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 4
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -381,7 +381,7 @@ define void @cmpxchg_cap_seq_cst_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
 ; RV32IXCHERI-NEXT:    mv a4, zero
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -405,7 +405,7 @@ define void @cmpxchg_cap_seq_cst_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 5
 ; RV64IXCHERI-NEXT:    mv a4, zero
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -433,7 +433,7 @@ define void @cmpxchg_cap_seq_cst_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
 ; RV32IXCHERI-NEXT:    addi a4, zero, 2
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -457,7 +457,7 @@ define void @cmpxchg_cap_seq_cst_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 5
 ; RV64IXCHERI-NEXT:    addi a4, zero, 2
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
@@ -485,7 +485,7 @@ define void @cmpxchg_cap_seq_cst_seq_cst(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    addi a3, zero, 5
 ; RV32IXCHERI-NEXT:    addi a4, zero, 5
-; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV32IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp)
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -509,7 +509,7 @@ define void @cmpxchg_cap_seq_cst_seq_cst(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    addi a3, zero, 5
 ; RV64IXCHERI-NEXT:    addi a4, zero, 5
-; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap
+; RV64IXCHERI-NEXT:    call __atomic_compare_exchange_cap@plt
 ; RV64IXCHERI-NEXT:    ld ra, 24(sp)
 ; RV64IXCHERI-NEXT:    addi sp, sp, 32
 ; RV64IXCHERI-NEXT:    ret
