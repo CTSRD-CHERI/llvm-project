@@ -903,8 +903,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         this->relocations.push_back(
             {R_ADDEND, target->symbolicRel, offset, 1, s});
       else
-        mainPart->relaDyn->addSymbolReloc(target->tlsModuleIndexRel, this,
-                                          offset, *s);
+        mainPart->relaDyn->addReloc({target->tlsModuleIndexRel, this, offset});
     } else {
       // When building a shared library we still need a dynamic relocation
       // for the module index. Therefore only checking for
@@ -1058,7 +1057,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                              bool isCallExpr,
                              llvm::function_ref<std::string()> referencedBy,
                              RelocationBaseSection *dynRelSec) {
-
+  assert(expr == R_CHERI_CAPABILITY);
   if (sec->name == ".gcc_except_table" && sym->isPreemptible) {
     // We previously had an ugly workaround here to create a hidden alias for
     // relocations in the exception table, but this has since been fixed in
@@ -1156,8 +1155,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       sym = newSym; // Make the relocation point to the newly added symbol
     }
     dynRelSec->addReloc(
-        DynamicReloc::AgainstSymbol, type, sec, offset, *sym, addend,
-        R_CHERI_CAPABILITY,
+        DynamicReloc::AgainstSymbol, type, sec, offset, *sym, addend, expr,
         /* Relocation type for the addend = */ target->symbolicRel);
 
   } else if (capRelocMode == CapRelocsMode::Legacy) {
