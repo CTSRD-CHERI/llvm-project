@@ -325,25 +325,25 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
 #endif
 
     bool relativeToLoadAddress = false;
-    RelType relocKind;
-    if (target.sym()->isPreemptible) {
-      relocKind = *elf::target->absPointerRel;
-    } else {
-      // If the target is not preemptible we can optimize this to a relative
-      // relocation agaist the image base
-      relativeToLoadAddress = true;
-      relocKind = elf::target->relativeRel;
-    }
     // The addend is not used as the offset into the capability here, as we
     // have the offset field in the __cap_relocs for that. The Addend
-    // will be zero unless we are targetting a string constant as these
+    // will be zero unless we are targeting a string constant as these
     // don't have a symbol and will be like .rodata.str+0x1234
     int64_t addend = target.offset;
     // Capability target is the second field
+    if (target.sym()->isPreemptible) {
+      mainPart->relaDyn->addSymbolReloc(
+          *elf::target->absPointerRel, this, currentEntryOffset + fieldSize,
+          *target.sym(), addend, lld::elf::target->symbolicRel);
+    } else {
+      // If the target is not preemptible we can optimize this to a relative
+      // relocation against the image base.
+      relativeToLoadAddress = true;
+      mainPart->relaDyn->addRelativeReloc(
+          elf::target->relativeRel, this, currentEntryOffset + fieldSize,
+          *target.sym(), addend, lld::elf::target->symbolicRel, R_ABS);
+    }
     assert((currentEntryOffset + fieldSize) < getSize());
-    mainPart->relaDyn->addSymbolReloc(
-        relocKind, this, currentEntryOffset + fieldSize, *target.sym(), addend,
-        lld::elf::target->symbolicRel);
     containsDynamicRelocations = true;
     if (!relativeToLoadAddress) {
       // We also add a size relocation for the size field here
