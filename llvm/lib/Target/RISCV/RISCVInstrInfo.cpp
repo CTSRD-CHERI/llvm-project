@@ -151,15 +151,18 @@ static bool forwardCopyWillClobberTuple(unsigned DstReg, unsigned SrcReg,
 void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MBBI,
                                  const DebugLoc &DL, MCRegister DstReg,
-                                 MCRegister SrcReg, bool KillSrc) const {
+                                 MCRegister SrcReg, bool KillSrc,
+                                 MachineInstr::MIFlag Flag) const {
   if (RISCV::GPRRegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(RISCV::ADDI), DstReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
-        .addImm(0);
+        .addImm(0)
+        .setMIFlag(Flag);
     return;
   } else if (RISCV::GPCRRegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(RISCV::CMove), DstReg)
-        .addReg(SrcReg, getKillRegState(KillSrc));
+        .addReg(SrcReg, getKillRegState(KillSrc))
+        .setMIFlag(Flag);
     return;
   }
 
@@ -248,7 +251,8 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   if (IsScalableVector) {
     if (NF == 1) {
       BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
-          .addReg(SrcReg, getKillRegState(KillSrc));
+          .addReg(SrcReg, getKillRegState(KillSrc))
+          .setMIFlag(Flag);
     } else {
       const TargetRegisterInfo *TRI = STI.getRegisterInfo();
 
@@ -264,13 +268,15 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
       for (; I != End; I += Incr) {
         BuildMI(MBB, MBBI, DL, get(Opc), TRI->getSubReg(DstReg, SubRegIdx + I))
             .addReg(TRI->getSubReg(SrcReg, SubRegIdx + I),
-                    getKillRegState(KillSrc));
+                    getKillRegState(KillSrc))
+            .setMIFlag(Flag);
       }
     }
   } else {
     BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
-        .addReg(SrcReg, getKillRegState(KillSrc));
+        .addReg(SrcReg, getKillRegState(KillSrc))
+        .setMIFlag(Flag);
   }
 }
 
