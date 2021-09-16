@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
 import argparse
+import datetime
 import re
 import os
 import tempfile
@@ -1292,7 +1293,7 @@ class Reducer(object):
         infile = self.parse_RUN_lines(self.testcase)
 
         if self.reduce_tool is None:
-            default_tool = RunBugpoint if infile.suffix in (".ll", ".bc") else RunCreduce
+            default_tool = RunLLVMReduce if infile.suffix in (".ll", ".bc") else RunCreduce
             self.reduce_tool = self.get_llvm_ir_reduce_tool(default_tool)
         if self.args.output_file:
             reduce_input = Path(self.args.output_file).absolute()
@@ -1301,10 +1302,12 @@ class Reducer(object):
         shutil.copy(str(infile), str(reduce_input))
         with tempfile.TemporaryDirectory() as tmpdir:
             # run("ulimit -S -c 0".split())
+            starttime = datetime.datetime.now()
             self.reduce_tool.reduce(input_file=reduce_input, extra_args=self.reduce_args, tempdir=tmpdir,
                                     run_cmds=self.run_cmds, run_lines=self.run_lines)
+            print("Reducing the testcase took", datetime.datetime.now() - starttime)
 
-    def get_llvm_ir_reduce_tool(self, default_tool=RunBugpoint):
+    def get_llvm_ir_reduce_tool(self, default_tool=RunLLVMReduce):
         if self.args.reduce_tool is None:
             return default_tool(self.options)
         # if self.args.reduce_tool == "llvm-reduce-and-bugpoint":
