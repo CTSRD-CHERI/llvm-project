@@ -891,20 +891,23 @@ class Reducer(object):
         while "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile, force_print_cmd=True):
-            print("Crashed while generating IR, trying again with -O0")
-            generate_ir_cmd = self.list_with_flag_at_end(generate_ir_cmd, "-O0")
+            print("Crashed while generating IR, trying again with -O1")
+            generate_ir_cmd = self.list_with_flag_at_end(generate_ir_cmd, "-O1")
             if self._check_crash(generate_ir_cmd, infile, force_print_cmd=True):
-                print("Crashed while generating IR -> must be a", blue("frontend crash.", style="bold"),
-                      "Will need to use creduce for test case reduction")
-                # Try to remove the flags that were added:
-                new_command = generate_ir_cmd
-                new_command = self._try_remove_args(
-                    new_command, infile, "Checking if it also crashes at -O0:",
-                    noargs_opts_to_remove=["-disable-O0-optnone"],
-                    noargs_opts_to_remove_startswith=["-O"],
-                    extra_args=["-O0"]
-                )
-                return self._simplify_frontend_crash_cmd(new_command, infile)
+                print("Crashed while generating IR at -O1, trying again with -O0")
+                generate_ir_cmd = self.list_with_flag_at_end(generate_ir_cmd, "-O0")
+                if self._check_crash(generate_ir_cmd, infile, force_print_cmd=True):
+                    print("Crashed while generating IR -> must be a", blue("frontend crash.", style="bold"),
+                          "Will need to use creduce for test case reduction")
+                    # Try to remove the flags that were added:
+                    new_command = generate_ir_cmd
+                    new_command = self._try_remove_args(
+                        new_command, infile, "Checking if it also crashes at -O0:",
+                        noargs_opts_to_remove=["-disable-O0-optnone"],
+                        noargs_opts_to_remove_startswith=["-O"],
+                        extra_args=["-O0"]
+                    )
+                    return self._simplify_frontend_crash_cmd(new_command, infile)
         # Generating IR worked, try reducing the IR testcase
         print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
         if self.args.reduce_tool == "creduce":
