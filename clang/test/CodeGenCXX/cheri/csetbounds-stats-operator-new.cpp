@@ -1,6 +1,10 @@
 // RUN: rm -f %t.csv
 // Use -emit-llvm here to ignore all bounds added in the backend
-// RUN: %cheri128_purecap_cc1 %s -std=c++2a -cheri-bounds=aggressive \
+// RUN: %cheri_purecap_cc1 -O1 -fexperimental-new-pass-manager %s -std=c++2a -cheri-bounds=aggressive \
+// RUN:   -mllvm -collect-csetbounds-stats=csv -mllvm -collect-csetbounds-output=%t.csv -emit-llvm -o /dev/null
+// RUN: FileCheck -input-file %t.csv %s -check-prefixes CSV
+// RUN: rm -f %t.csv
+// RUN: %cheri_purecap_cc1 -O1 -fno-experimental-new-pass-manager %s -std=c++2a -cheri-bounds=aggressive \
 // RUN:   -mllvm -collect-csetbounds-stats=csv -mllvm -collect-csetbounds-output=%t.csv -emit-llvm -o /dev/null
 // RUN: FileCheck -input-file %t.csv %s -check-prefixes CSV
 
@@ -14,10 +18,10 @@ namespace std {
 }
 std::nothrow_t nothrow;
 
-void* operator new(std::size_t count, void* p) { return __builtin_cheri_bounds_set(p, count); }
-void* operator new[](std::size_t count, void* p) { return __builtin_cheri_bounds_set(p, count); }
-void* operator new(std::size_t count, const std::nothrow_t& tag) { return ::operator new(count); }
-void* operator new[](std::size_t count, const std::nothrow_t& tag) { return ::operator new[](count); }
+__attribute__((noinline)) void *operator new(std::size_t count, void *p) { return __builtin_cheri_bounds_set(p, count); }
+__attribute__((noinline)) void *operator new[](std::size_t count, void *p) { return __builtin_cheri_bounds_set(p, count); }
+__attribute__((noinline)) void *operator new(std::size_t count, const std::nothrow_t &tag) { return ::operator new(count); }
+__attribute__((noinline)) void *operator new[](std::size_t count, const std::nothrow_t &tag) { return ::operator new[](count); }
 struct Foo {
   int x;
 };

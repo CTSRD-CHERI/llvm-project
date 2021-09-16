@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/Utils/CheriLogSetBounds.h"
+
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
@@ -18,12 +20,13 @@ using namespace llvm;
 
 namespace {
 
-/// This pass frees the MachineFunction object associated with a Function.
-class LogCheriSetBounds : public FunctionPass {
+/// This should really be in Analysis/ but it depends on
+/// getOrEnforceKnownAlignment which is in Transforms/Scalar.
+class CheriLogSetBoundsLegacyPass : public FunctionPass {
 public:
   static char ID;
 
-  LogCheriSetBounds() : FunctionPass(ID) {
+  CheriLogSetBoundsLegacyPass() : FunctionPass(ID) {
     assert(cheri::ShouldCollectCSetBoundsStats &&
            "Pass should only be created when we are logging bouds");
   }
@@ -34,13 +37,16 @@ public:
   }
 
   bool runOnFunction(Function &F) override {
+    DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+    AssumptionCache &AC =
+        getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
+    runImpl(F, DT, AC);
+    return false;
+  }
+  static void runImpl(Function &F, DominatorTree &DT, AssumptionCache &AC) {
     assert(cheri::ShouldCollectCSetBoundsStats &&
            "Should not have been created otherwise");
     // errs() << "Logging bounds for " << F.getName() << "\n";
-    DominatorTree *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-    AssumptionCache *AC =
-        &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
-    assert(AC && DT && "Cannot be non-null");
     // For MIPS we can guess the size here by multiplying by 4:
     const DataLayout &DL = F.getParent()->getDataLayout();
     for (auto &BB : F) {
@@ -67,8 +73,8 @@ public:
               // llvm.assume, we simply use the last instruction in the same
               // basic block since the asssume will always dominated it.
               // See llvm::isValidAssumeForContext()
-              Instruction* Ctx = &BB.back();
-              Align Alignment = getKnownAlignment(&I, DL, Ctx, AC, DT);
+              Instruction *Ctx = &BB.back();
+              Align Alignment = getKnownAlignment(&I, DL, Ctx, &AC, &DT);
               Optional<uint64_t> KnownSize;
               Optional<uint64_t> SizeMultipleOf;
 
@@ -133,7 +139,6 @@ public:
     // TODO: get machine function and count instructions?
     // Probably better to get the code bounds from the ELF writer instead
     // MF.getInstructionCount();
-    return false;
   }
 
   StringRef getPassName() const override { return "Log CHERI SetBounds Stats"; }
@@ -141,11 +146,19 @@ public:
 
 } // end anonymous namespace
 
-char LogCheriSetBounds::ID;
+char CheriLogSetBoundsLegacyPass::ID;
 
 FunctionPass *llvm::createLogCheriSetBoundsPass() {
   static bool created = false;
   assert(!created && "Should only be created once");
   created = true;
-  return new LogCheriSetBounds();
+  return new CheriLogSetBoundsLegacyPass();
+}
+
+PreservedAnalyses CheriLogSetBoundsPass::run(Function &F,
+                                             FunctionAnalysisManager &AM) {
+  auto &AC = AM.getResult<AssumptionAnalysis>(F);
+  auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
+  CheriLogSetBoundsLegacyPass::runImpl(F, DT, AC);
+  return PreservedAnalyses::all();
 }

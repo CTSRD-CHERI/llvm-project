@@ -6,12 +6,6 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-// This family of functions perform various local transformations to the
-// program.
-//
-//===----------------------------------------------------------------------===//
-
 #ifndef LLVM_TRANSFORMS_UTILS_CHERISETBOUNDS_H
 #define LLVM_TRANSFORMS_UTILS_CHERISETBOUNDS_H
 
