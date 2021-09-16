@@ -36,6 +36,17 @@ static bool shouldConvertToRelLookupTable(Module &M, GlobalVariable &GV) {
       !GV.hasOneUse())
     return false;
 
+  const DataLayout &DL = M.getDataLayout();
+  // Relative lookup tables derive pointers to the other globals by adding an
+  // offset to the address of a newly synthesized global array. We can't do
+  // this in the current purecap code generation since the bounds of that new
+  // array will not cover the referenced globals. We could allow this
+  // transformation if we relaxed the global bounds and inserted setbounds
+  // instructions for the loaded value but for now this is very low priority.
+  // See https://github.com/CTSRD-CHERI/llvm-project/issues/572
+  if (DL.isFatPointer(GV.getAddressSpace()))
+    return false;
+
   GetElementPtrInst *GEP =
       dyn_cast<GetElementPtrInst>(GV.use_begin()->getUser());
   if (!GEP || !GEP->hasOneUse())
@@ -62,7 +73,6 @@ static bool shouldConvertToRelLookupTable(Module &M, GlobalVariable &GV) {
   if (!Array || !Array->getType()->getElementType()->isPointerTy())
     return false;
 
-  const DataLayout &DL = M.getDataLayout();
   for (const Use &Op : Array->operands()) {
     Constant *ConstOp = cast<Constant>(&Op);
     GlobalValue *GVOp;
