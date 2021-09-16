@@ -51,17 +51,10 @@ public:
     const DataLayout &DL = F.getParent()->getDataLayout();
     for (auto &BB : F) {
       for (Instruction &I : BB) {
-        // TODO: CallBase
-        Function *CalledFunc = nullptr;
-        AttributeList AL;
-        // TODO: use CallBase when we merge upstream
-        if (const CallInst *CI = dyn_cast<CallInst>(&I)) {
-          CalledFunc = CI->getCalledFunction();
-          AL = CI->getAttributes();
-        } else if (const InvokeInst *II = dyn_cast<InvokeInst>(&I)) {
-          CalledFunc = II->getCalledFunction();
-          AL = II->getAttributes();
-        }
+        const CallBase *CB = dyn_cast<CallBase>(&I);
+        if (!CB)
+          continue; // Not a call
+        Function *CalledFunc = CB->getCalledFunction();
         const auto LogAllocSize =
             [&](std::pair<unsigned, Optional<unsigned>> AllocSize) {
               // TODO: should we also log this for non-capabilities?
@@ -117,22 +110,18 @@ public:
                       (CalledFunc ? CalledFunc->getName() : "function pointer"),
                   cheri::inferSourceLocation(&I), SizeMultipleOf);
             };
-        // We can only do this analysis on calls that return pointers
-        if (!I.getType()->isPointerTy())
+        // Check both the target function and the CallBase for alloc_size attrs:
+        if (CalledFunc &&
+            CalledFunc->hasFnAttribute(Attribute::AttrKind::AllocSize)) {
+          Attribute Attr =
+              CalledFunc->getFnAttribute(Attribute::AttrKind::AllocSize);
+          LogAllocSize(Attr.getAllocSizeArgs());
           continue;
-
-        // Check both the target function and the CallInst for alloc_size attrs:
-        if (CalledFunc) {
-          if (CalledFunc->hasFnAttribute(Attribute::AttrKind::AllocSize)) {
-            Attribute Attr =
-                CalledFunc->getFnAttribute(Attribute::AttrKind::AllocSize);
-            LogAllocSize(Attr.getAllocSizeArgs());
-            continue;
-          }
         }
         // no attr on the called func, try call site too
-        if (AL.hasFnAttribute(Attribute::AttrKind::AllocSize)) {
-          LogAllocSize(AL.getFnAttributes().getAllocSizeArgs());
+        if (CB->hasFnAttr(Attribute::AttrKind::AllocSize)) {
+          LogAllocSize(
+              CB->getAttributes().getFnAttributes().getAllocSizeArgs());
         }
       }
     }
