@@ -460,19 +460,6 @@ if (LIBUNWIND_INCLUDE_DOCS)
   add_subdirectory(docs)
 endif()
 
-if (LIBUNWIND_INCLUDE_TESTS)
-  if (LIBUNWIND_STANDALONE_BUILD)
-    include(AddLLVM) # for get_llvm_lit_path
-    get_llvm_lit_path(LIT_BASE_DIR LIT_FILE_NAME)
-    set(LLVM_EXTERNAL_LIT ${LIT_BASE_DIR}/${LIT_FILE_NAME} CACHE STRING "" FORCE)
-  endif()
+if (LIBUNWIND_INCLUDE_TESTS AND EXISTS ${LLVM_CMAKE_DIR})
   add_subdirectory(test)
-  if (LIBUNWIND_STANDALONE_BUILD)
-    # Make sure the llvm-lit script is generated into the bin directory, and
-    # do it after adding all tests, since the generated script will only work
-    # correctly discovered tests against test locations from the source tree
-    # that have already been discovered.
-    add_subdirectory(${LLVM_MAIN_SRC_DIR}/utils/llvm-lit
-                     ${CMAKE_CURRENT_BINARY_DIR}/llvm-lit)
-  endif()
 endif()
