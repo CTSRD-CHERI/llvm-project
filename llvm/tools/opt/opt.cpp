@@ -512,6 +512,7 @@ static bool shouldPinPassToLegacyPM(StringRef Pass) {
       "si-",   "gcn-",   "amdgpu-",  "aarch64-", "amdgcn-", "polly-"};
   std::vector<StringRef> PassNameContain = {"ehprepare"};
   std::vector<StringRef> PassNameExact = {
+      "cheri-bound-allocas", // CodeGen pass so still uses LPM.
       "safe-stack",           "cost-model",
       "codegenprepare",       "interleaved-load-combine",
       "unreachableblockelim", "verify-safepoint-ir",
