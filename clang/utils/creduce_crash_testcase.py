@@ -1252,8 +1252,8 @@ class Reducer(object):
         print("Checking whether compiling IR file with clang crashes:", end="", flush=True)
         clang_info = subprocess.CompletedProcess(b"", -1)
         bugpoint_clang_cmd = self._filter_args(clang_cc1_command,
-                                               noargs_opts_to_remove_startswith=["-xc", "-W", "-std="],
-                                               one_arg_opts_to_remove=["-D", "-x", "-main-file-name"])
+                                               noargs_opts_to_remove_startswith=["-W", "-std="],
+                                               one_arg_opts_to_remove=["-D", "-x", "-xc", "-xc++", "-main-file-name"])
         bugpoint_clang_cmd.extend(["-x", "ir"])
         if self._check_crash(bugpoint_clang_cmd, irfile, clang_info, force_print_cmd=True):
             print("Crash found compiling IR with clang -> using llvm-reduce/bugpoint which is faster than creduce.")
