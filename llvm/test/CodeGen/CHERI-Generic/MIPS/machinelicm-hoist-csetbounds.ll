@@ -6,7 +6,7 @@
 
 ; Note: Opt correctly hoists the condition+csetbounds into a preheader, and LLC
 ; used to unconditionally hoist the csetbounds.
-; RUN: opt -data-layout="E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -O3 -S < %s | FileCheck %s --check-prefix=HOIST-OPT
+; RUN: opt -data-layout="E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -enable-new-pm=1 "-passes=default<O3>" -S < %s | FileCheck %s --check-prefix=HOIST-OPT
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -O3 < %s | FileCheck %s
 
 ; Generated from the following C code (with subobject bounds):
@@ -75,8 +75,8 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; HOIST-OPT-SAME: (i32 signext [[COND:%.*]], [[STRUCT_FOO:%.*]] addrspace(200)* [[F:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; HOIST-OPT-NEXT:  entry:
 ; HOIST-OPT-NEXT:    [[TOBOOL:%.*]] = icmp eq [[STRUCT_FOO]] addrspace(200)* [[F]], null
-; HOIST-OPT-NEXT:    br i1 [[TOBOOL]], label [[FOR_COND_CLEANUP:%.*]], label [[FOR_BODY_PREHEADER:%.*]]
-; HOIST-OPT:       for.body.preheader:
+; HOIST-OPT-NEXT:    br i1 [[TOBOOL]], label [[FOR_COND_CLEANUP:%.*]], label [[ENTRY_SPLIT:%.*]]
+; HOIST-OPT:       entry.split:
 ; HOIST-OPT-NEXT:    [[DST:%.*]] = getelementptr inbounds [[STRUCT_FOO]], [[STRUCT_FOO]] addrspace(200)* [[F]], i64 0, i32 1
 ; HOIST-OPT-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[DST]] to i8 addrspace(200)*
 ; HOIST-OPT-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_FOO]] addrspace(200)* [[F]] to i8 addrspace(200)*
@@ -88,7 +88,7 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; HOIST-OPT:       for.cond.cleanup:
 ; HOIST-OPT-NEXT:    ret void
 ; HOIST-OPT:       for.body:
-; HOIST-OPT-NEXT:    [[I_06:%.*]] = phi i32 [ [[INC:%.*]], [[FOR_BODY]] ], [ 0, [[FOR_BODY_PREHEADER]] ]
+; HOIST-OPT-NEXT:    [[I_06:%.*]] = phi i32 [ 0, [[ENTRY_SPLIT]] ], [ [[INC:%.*]], [[FOR_BODY]] ]
 ; HOIST-OPT-NEXT:    tail call void @call(i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]], i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS1]])
 ; HOIST-OPT-NEXT:    [[INC]] = add nuw nsw i32 [[I_06]], 1
 ; HOIST-OPT-NEXT:    [[EXITCOND_NOT:%.*]] = icmp eq i32 [[INC]], 100
