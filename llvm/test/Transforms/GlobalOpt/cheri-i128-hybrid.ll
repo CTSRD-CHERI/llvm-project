@@ -12,7 +12,7 @@ entry:
   store i128 0, i128* %alloca, align 16
   %0 = bitcast i128* %alloca to i8 addrspace(200)**
   %1 = load i8 addrspace(200)*, i8 addrspace(200)** %0, align 16
-  store i8 addrspace(200)* %1, i8 addrspace(200)** @cap_from_zero, align 16
+  store i8 addrspace(200)* %1, i8 addrspace(200)** @cap_from_bitcast_zero, align 16
   ret void
 }
 
@@ -22,7 +22,49 @@ entry:
   store i128 4321, i128* %alloca, align 16
   %0 = bitcast i128* %alloca to i8 addrspace(200)**
   %1 = load i8 addrspace(200)*, i8 addrspace(200)** %0, align 16
-  store i8 addrspace(200)* %1, i8 addrspace(200)** @cap_from_nonzero, align 16
+  store i8 addrspace(200)* %1, i8 addrspace(200)** @cap_from_bitcast_nonzero, align 16
+  ret void
+}
+
+define internal void @inttoptr_zero_i128_to_cap() {
+entry:
+  %alloca = alloca i128, align 16
+  store i128 0, i128* %alloca, align 16
+  %val = load i128, i128* %alloca, align 16
+  %trunc = trunc i128 %val to i64
+  %cast = inttoptr i64 %trunc to i8 addrspace(200)*
+  store i8 addrspace(200)* %cast, i8 addrspace(200)** @cap_from_i128_inttoptr_zero, align 16
+  ret void
+}
+
+define internal void @inttoptr_nonzero_i128_to_cap() {
+entry:
+  %alloca = alloca i128, align 16
+  store i128 4321, i128* %alloca, align 16
+  %val = load i128, i128* %alloca, align 16
+  %trunc = trunc i128 %val to i64
+  %cast = inttoptr i64 %trunc to i8 addrspace(200)*
+  store i8 addrspace(200)* %cast, i8 addrspace(200)** @cap_from_i128_inttoptr_nonzero, align 16
+  ret void
+}
+
+define internal void @inttoptr_zero_i64_to_cap() {
+entry:
+  %alloca = alloca i64, align 16
+  store i64 0, i64* %alloca, align 16
+  %val = load i64, i64* %alloca, align 16
+  %cast = inttoptr i64 %val to i8 addrspace(200)*
+  store i8 addrspace(200)* %cast, i8 addrspace(200)** @cap_from_i64_inttoptr_zero, align 16
+  ret void
+}
+
+define internal void @inttoptr_nonzero_i64_to_cap() {
+entry:
+  %alloca = alloca i64, align 16
+  store i64 4321, i64* %alloca, align 16
+  %val = load i64, i64* %alloca, align 16
+  %cast = inttoptr i64 %val to i8 addrspace(200)*
+  store i8 addrspace(200)* %cast, i8 addrspace(200)** @cap_from_i64_inttoptr_nonzero, align 16
   ret void
 }
 
@@ -32,7 +74,7 @@ entry:
   store i64 0, i64* %alloca, align 8
   %0 = bitcast i64* %alloca to i8**
   %1 = load i8*, i8** %0, align 8
-  store i8* %1, i8** @ptr_from_zero, align 8
+  store i8* %1, i8** @ptr_from_bitcast_zero, align 8
   ret void
 }
 
@@ -42,27 +84,95 @@ entry:
   store i64 4321, i64* %alloca, align 8
   %0 = bitcast i64* %alloca to i8**
   %1 = load i8*, i8** %0, align 8
-  store i8* %1, i8** @ptr_from_nonzero, align 8
+  store i8* %1, i8** @ptr_from_bitcast_nonzero, align 8
   ret void
 }
 
-@llvm.global_ctors = appending global [4 x { i32, void ()*, i8* }]
+define internal void @inttoptr_zero_i128_to_ptr() {
+entry:
+  %alloca = alloca i128, align 16
+  store i128 0, i128* %alloca, align 16
+  %val = load i128, i128* %alloca, align 16
+  %trunc = trunc i128 %val to i64
+  %cast = inttoptr i64 %trunc to i8*
+  store i8* %cast, i8** @ptr_from_i128_inttoptr_zero, align 16
+  ret void
+}
+
+define internal void @inttoptr_nonzero_i128_to_ptr() {
+entry:
+  %alloca = alloca i128, align 16
+  store i128 4321, i128* %alloca, align 16
+  %val = load i128, i128* %alloca, align 16
+  %trunc = trunc i128 %val to i64
+  %cast = inttoptr i64 %trunc to i8*
+  store i8* %cast, i8** @ptr_from_i128_inttoptr_nonzero, align 16
+  ret void
+}
+
+define internal void @inttoptr_zero_i64_to_ptr() {
+entry:
+  %alloca = alloca i64, align 16
+  store i64 0, i64* %alloca, align 16
+  %val = load i64, i64* %alloca, align 16
+  %cast = inttoptr i64 %val to i8*
+  store i8* %cast, i8** @ptr_from_i64_inttoptr_zero, align 16
+  ret void
+}
+
+define internal void @inttoptr_nonzero_i64_to_ptr() {
+entry:
+  %alloca = alloca i64, align 16
+  store i64 4321, i64* %alloca, align 16
+  %val = load i64, i64* %alloca, align 16
+  %cast = inttoptr i64 %val to i8*
+  store i8* %cast, i8** @ptr_from_i64_inttoptr_nonzero, align 16
+  ret void
+}
+
+@llvm.global_ctors = appending global [12 x { i32, void ()*, i8* }]
   [{ i32, void ()*, i8* } { i32 65535, void ()* @bitcast_zero_i128_to_cap, i8* null },
   { i32, void ()*, i8* } { i32 65535, void ()* @bitcast_nonzero_i128_to_cap, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_zero_i128_to_cap, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_nonzero_i128_to_cap, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_zero_i64_to_cap, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_nonzero_i64_to_cap, i8* null },
   { i32, void ()*, i8* } { i32 65535, void ()* @bitcast_zero_i64_to_ptr, i8* null },
-  { i32, void ()*, i8* } { i32 65535, void ()* @bitcast_nonzero_i64_to_ptr, i8* null }]
+  { i32, void ()*, i8* } { i32 65535, void ()* @bitcast_nonzero_i64_to_ptr, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_zero_i128_to_ptr, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_nonzero_i128_to_ptr, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_zero_i64_to_ptr, i8* null },
+  { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_nonzero_i64_to_ptr, i8* null }
+  ]
 
-@cap_from_zero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
-@cap_from_nonzero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
-@ptr_from_zero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
-@ptr_from_nonzero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
-
+@cap_from_bitcast_zero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
+@cap_from_bitcast_nonzero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
+@ptr_from_bitcast_zero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
+@ptr_from_bitcast_nonzero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
+; Note: the non-zero inttoptr can't be optimized for capabilities since we generate a DDC-relative value.
+; This is not supported for globals so we have to use a global constructor to perform that operation.
+@cap_from_i128_inttoptr_zero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
+@cap_from_i128_inttoptr_nonzero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
+@cap_from_i64_inttoptr_zero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
+@cap_from_i64_inttoptr_nonzero = dso_local global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234)
+@ptr_from_i128_inttoptr_zero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
+@ptr_from_i128_inttoptr_nonzero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
+@ptr_from_i64_inttoptr_zero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
+@ptr_from_i64_inttoptr_nonzero = dso_local global i8* getelementptr (i8, i8* null, i32 1234)
 ;.
-; CHECK: @[[LLVM_GLOBAL_CTORS:[a-zA-Z0-9_$"\\.-]+]] = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 65535, void ()* @bitcast_nonzero_i128_to_cap, i8* null }]
-; CHECK: @[[CAP_FROM_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* null
-; CHECK: @[[CAP_FROM_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1234)
-; CHECK: @[[PTR_FROM_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* null
-; CHECK: @[[PTR_FROM_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* inttoptr (i64 4321 to i8*)
+; CHECK: @[[LLVM_GLOBAL_CTORS:[a-zA-Z0-9_$"\\.-]+]] = appending global [3 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 65535, void ()* @bitcast_nonzero_i128_to_cap, i8* null }, { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_nonzero_i128_to_cap, i8* null }, { i32, void ()*, i8* } { i32 65535, void ()* @inttoptr_nonzero_i64_to_cap, i8* null }]
+; CHECK: @[[CAP_FROM_BITCAST_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* null
+; CHECK: @[[CAP_FROM_BITCAST_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1234)
+; CHECK: @[[PTR_FROM_BITCAST_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* null
+; CHECK: @[[PTR_FROM_BITCAST_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* inttoptr (i64 4321 to i8*)
+; CHECK: @[[CAP_FROM_I128_INTTOPTR_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* null
+; CHECK: @[[CAP_FROM_I128_INTTOPTR_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1234)
+; CHECK: @[[CAP_FROM_I64_INTTOPTR_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* null
+; CHECK: @[[CAP_FROM_I64_INTTOPTR_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1234)
+; CHECK: @[[PTR_FROM_I128_INTTOPTR_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* null
+; CHECK: @[[PTR_FROM_I128_INTTOPTR_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* inttoptr (i64 4321 to i8*)
+; CHECK: @[[PTR_FROM_I64_INTTOPTR_ZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* null
+; CHECK: @[[PTR_FROM_I64_INTTOPTR_NONZERO:[a-zA-Z0-9_$"\\.-]+]] = dso_local local_unnamed_addr global i8* inttoptr (i64 4321 to i8*)
 ;.
 ; CHECK-LABEL: define {{[^@]+}}@bitcast_nonzero_i128_to_cap() {
 ; CHECK-NEXT:  entry:
@@ -70,6 +180,27 @@ entry:
 ; CHECK-NEXT:    store i128 4321, i128* [[ALLOCA]], align 16
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i128* [[ALLOCA]] to i8 addrspace(200)**
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP0]], align 16
-; CHECK-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** @cap_from_nonzero, align 16
+; CHECK-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** @cap_from_bitcast_nonzero, align 16
+; CHECK-NEXT:    ret void
+;
+;
+; CHECK-LABEL: define {{[^@]+}}@inttoptr_nonzero_i128_to_cap() {
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[ALLOCA:%.*]] = alloca i128, align 16
+; CHECK-NEXT:    store i128 4321, i128* [[ALLOCA]], align 16
+; CHECK-NEXT:    [[VAL:%.*]] = load i128, i128* [[ALLOCA]], align 16
+; CHECK-NEXT:    [[TRUNC:%.*]] = trunc i128 [[VAL]] to i64
+; CHECK-NEXT:    [[CAST:%.*]] = inttoptr i64 [[TRUNC]] to i8 addrspace(200)*
+; CHECK-NEXT:    store i8 addrspace(200)* [[CAST]], i8 addrspace(200)** @cap_from_i128_inttoptr_nonzero, align 16
+; CHECK-NEXT:    ret void
+;
+;
+; CHECK-LABEL: define {{[^@]+}}@inttoptr_nonzero_i64_to_cap() {
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[ALLOCA:%.*]] = alloca i64, align 16
+; CHECK-NEXT:    store i64 4321, i64* [[ALLOCA]], align 16
+; CHECK-NEXT:    [[VAL:%.*]] = load i64, i64* [[ALLOCA]], align 16
+; CHECK-NEXT:    [[CAST:%.*]] = inttoptr i64 [[VAL]] to i8 addrspace(200)*
+; CHECK-NEXT:    store i8 addrspace(200)* [[CAST]], i8 addrspace(200)** @cap_from_i64_inttoptr_nonzero, align 16
 ; CHECK-NEXT:    ret void
 ;
