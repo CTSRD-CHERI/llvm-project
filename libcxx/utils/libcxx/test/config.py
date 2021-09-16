@@ -146,11 +146,6 @@ class Configuration(object):
         self.configure_link_flags()
         self.configure_env()
         self.configure_coverage()
-        # Add the ABI library link flags to cxx for use by libunwind tests
-        # This works for me on macOS and FreeBSD but for other systems
-        # we may need to add more linker flags (but probably not the full
-        # call to self.target_info.add_cxx_link_flags()).
-        self.cxx.abi_library_link_flags = self.get_link_flags_abi_library()
         self.configure_substitutions()
         self.configure_features()
 
@@ -362,6 +357,11 @@ class Configuration(object):
         # Configure library path
         self.configure_link_flags_cxx_library_path()
         self.configure_link_flags_abi_library_path()
+        # Add the ABI library link flags to cxx for use by libunwind tests
+        # This works for me on macOS and FreeBSD but for other systems
+        # we may need to add more linker flags (but probably not the full
+        # call to self.target_info.add_cxx_link_flags()).
+        self.cxx.link_libcxxabi_flag = ' '.join(self.get_link_flags_abi_library())
 
         # Handle force_static_executable
         if self.force_static_executable:
@@ -447,12 +447,9 @@ class Configuration(object):
         link_flags = []
         if cxx_abi_lib_path:
             link_flags += [cxx_abi_lib_path]
-            self.cxx.link_libcxxabi_flag = cxx_abi_lib_path
         elif cxx_abi == 'libstdc++':
-            self.cxx.link_libcxxabi_flag = '-lstdc++'
             link_flags += ['-lstdc++']
         elif cxx_abi == 'libsupc++':
-            self.cxx.link_libcxxabi_flag = '-lsupc++'
             link_flags += ['-lsupc++']
         elif cxx_abi == 'libcxxabi':
             # If the C++ library requires explicitly linking to libc++abi, or
@@ -463,19 +460,16 @@ class Configuration(object):
             if self.target_info.allow_cxxabi_link() or testing_libcxxabi or testing_libunwind:
                 libcxxabi_shared = self.get_lit_bool('libcxxabi_shared', default=True)
                 if self.link_shared and libcxxabi_shared:
-                    self.cxx.link_libcxxabi_flag = '-lc++abi'
-                    link_flags += [self.cxx.link_libcxxabi_flag]
+                    link_flags += ['-lc++abi']
                 else:
                     if self.abi_library_root:
                         libname = self.make_static_lib_name('c++abi')
                         abs_path = os.path.join(self.abi_library_root, libname)
-                        self.cxx.link_libcxxabi_flag = abs_path
                         link_flags += [abs_path]
                     else:
                         link_flags += ['-lc++abi']
         elif cxx_abi == 'libcxxrt':
             link_flags += ['-lcxxrt']
-            self.cxx.link_libcxxabi_flag = '-lcxxrt'
         elif cxx_abi == 'vcruntime':
             debug_suffix = 'd' if self.debug_build else ''
             # This matches the set of libraries linked in the toplevel
@@ -483,21 +477,16 @@ class Configuration(object):
             vcrt_linker_flags = ['-l%s%s' % (lib, debug_suffix) for lib in
                                  ['vcruntime', 'ucrt', 'msvcrt', 'msvcprt']]
             link_flags += vcrt_linker_flags
-            self.cxx.link_libcxxabi_flag = ' '.join(vcrt_linker_flags)
             # The compiler normally links in oldnames.lib too, but we've
             # specified -nostdlib above, so we need to specify it manually.
             link_flags += ['-loldnames']
         elif cxx_abi == 'none' or cxx_abi == 'default':
             if self.target_info.is_windows():
                 debug_suffix = 'd' if self.debug_build else ''
-                self.cxx.link_libcxxabi_flag = '-lmsvcrt%s' % debug_suffix
-                link_flags += [self.cxx.link_libcxxabi_flag]
-            else:
-                self.cxx.link_libcxxabi_flag = ''
+                link_flags += ['-lmsvcrt%s' % debug_suffix]
         else:
             self.lit_config.fatal(
                 'C++ ABI setting %s unsupported for tests' % cxx_abi)
-        assert self.cxx.link_libcxxabi_flag is not None
         return link_flags
 
     def configure_extra_library_flags(self):
