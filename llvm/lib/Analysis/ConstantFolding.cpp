@@ -381,9 +381,14 @@ Constant *llvm::ConstantFoldLoadThroughBitcast(Constant *C, Type *DestTy,
     // If the type sizes are the same and a cast is legal, just directly
     // cast the constant.
     // But be careful not to coerce non-integral pointers illegally.
+    // Similarly, we don't do conversions between capabilities and integers of
+    // the same size since that would require knowing the exact encoding format
+    // in this IR-level transformation (the common NULL case is handled above).
     if (SrcSize == DestSize &&
         DL.isNonIntegralPointerType(SrcTy->getScalarType()) ==
-            DL.isNonIntegralPointerType(DestTy->getScalarType())) {
+            DL.isNonIntegralPointerType(DestTy->getScalarType()) &&
+        DL.isFatPointer(SrcTy->getScalarType()) ==
+            DL.isFatPointer(DestTy->getScalarType())) {
       Instruction::CastOps Cast = Instruction::BitCast;
       // If we are going from a pointer to int or vice versa, we spell the cast
       // differently.
