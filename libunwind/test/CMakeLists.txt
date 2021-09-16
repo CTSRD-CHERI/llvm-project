@@ -127,6 +127,10 @@ if (LIBUNWIND_BUILD_32_BITS)
   serialize_lit_param(enable_32bit True)
 endif()
 
+if (NOT LIBUNWIND_TEST_ENABLE_EXCEPTIONS)
+  serialize_lit_param(enable_exceptions False)
+endif()
+
 foreach(param IN LISTS LIBUNWIND_TEST_PARAMS)
   string(REGEX REPLACE "(.+)=(.+)" "\\1" name "${param}")
   string(REGEX REPLACE "(.+)=(.+)" "\\2" value "${param}")
