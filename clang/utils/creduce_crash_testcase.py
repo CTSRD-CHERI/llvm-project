@@ -385,7 +385,7 @@ class RunBugpoint(ReduceTool):
         return "''' + ' '.join(sys.argv[1:]) + '''"
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
-        proc = subprocess.run([str(reduce_script), str(input_file)])
+        proc = subprocess.run([str(reduce_script), str(input_file)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return proc.returncode == self.interesting_exit_code
 
 
@@ -590,8 +590,7 @@ class Reducer(object):
             if is_crash_reproducer:
                 real_infile = self._parse_crash_reproducer(infile, f)
             else:
-                real_infile = infile
-                self._parse_test_case(f, infile)
+                real_infile = self._parse_test_case(f, infile)
         if len(self.run_cmds) < 1:
             die("Could not find any RUN: lines in", infile)
         return real_infile
@@ -890,26 +889,29 @@ class Reducer(object):
             generate_ir_cmd = self.list_with_flag_at_end(generate_ir_cmd, "-disable-O0-optnone")
         while "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
-        if self._check_crash(generate_ir_cmd, infile):
-            print("Crashed while generating IR -> must be a", blue("frontend crash.", style="bold"),
-                  "Will need to use creduce for test case reduction")
-            # Try to remove the flags that were added:
-            new_command = generate_ir_cmd
-            new_command = self._try_remove_args(
-                new_command, infile, "Checking if it also crashes at -O0:",
-                noargs_opts_to_remove=["-disable-O0-optnone"],
-                noargs_opts_to_remove_startswith=["-O"],
-                extra_args=["-O0"]
-            )
+        if self._check_crash(generate_ir_cmd, infile, force_print_cmd=True):
+            print("Crashed while generating IR, trying again with -O0")
+            generate_ir_cmd = self.list_with_flag_at_end(generate_ir_cmd, "-O0")
+            if self._check_crash(generate_ir_cmd, infile, force_print_cmd=True):
+                print("Crashed while generating IR -> must be a", blue("frontend crash.", style="bold"),
+                      "Will need to use creduce for test case reduction")
+                # Try to remove the flags that were added:
+                new_command = generate_ir_cmd
+                new_command = self._try_remove_args(
+                    new_command, infile, "Checking if it also crashes at -O0:",
+                    noargs_opts_to_remove=["-disable-O0-optnone"],
+                    noargs_opts_to_remove_startswith=["-O"],
+                    extra_args=["-O0"]
+                )
+                return self._simplify_frontend_crash_cmd(new_command, infile)
+        # Generating IR worked, try reducing the IR testcase
+        print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
+        if self.args.reduce_tool == "creduce":
+            print("but reducing with creduce requested. Will not try to convert to a bugpoint test case")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
-            print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
-            if self.args.reduce_tool == "creduce":
-                print("but reducing with creduce requested. Will not try to convert to a bugpoint test case")
-                return self._simplify_frontend_crash_cmd(new_command, infile)
-            else:
-                print("will try to use bugpoint/llvm-reduce.")
-                return self._simplify_backend_crash_cmd(infile, new_command)
+            print("will try to use bugpoint/llvm-reduce.")
+            return self._simplify_backend_crash_cmd(infile, new_command, generate_ir_cmd)
 
     def _shrink_preprocessed_source(self, input_path, out_file):
         # The initial remove #includes pass takes a long time -> remove all the includes that are inside a #if 0
@@ -1147,27 +1149,7 @@ class Reducer(object):
         )
         return new_command, infile
 
-    def _simplify_backend_crash_cmd(self, infile: Path, clang_cc1_command: list):
-        # TODO: convert it to a llc commandline and use bugpoint
-        assert "-emit-llvm" not in clang_cc1_command
-        assert "-o" in clang_cc1_command
-        command = clang_cc1_command.copy()
-        irfile = infile.with_name(infile.name.partition(".")[0] + "-bugpoint.ll")
-        command[command.index("-o") + 1] = str(irfile.absolute())
-        if "-discard-value-names" in command:
-            command.remove("-discard-value-names")
-        command = self.list_with_flag_at_end(command, "-emit-llvm")
-        command = self.list_with_flag_at_end(command, "-disable-O0-optnone")
-        command = self.list_with_flag_at_end(command, "-O0")
-        print("Generating IR file", irfile)
-        try:
-            verbose_print(command + [str(infile)])
-            subprocess.check_call(command + [str(infile)])
-        except subprocess.CalledProcessError:
-            print("Failed to generate IR from", infile, "will have to reduce using creduce")
-            return self._simplify_frontend_crash_cmd(clang_cc1_command, infile)
-        if not irfile.exists():
-            die("IR file was not generated?")
+    def _generate_matching_llc_command(self, command: list) -> list:
         llc_args = [str(self.options.llc_cmd), "-o", "/dev/null"]  # TODO: -o -?
         cpu_flag = None  # -mcpu= only allowed once!
         pass_once_flags = set()
@@ -1219,23 +1201,45 @@ class Reducer(object):
             llc_args.append(cpu_flag)
         llc_args.append(optimization_flag)
         llc_args.extend(pass_once_flags)
-        print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
-        llc_info = subprocess.CompletedProcess(None, None)
-        if self._check_crash(llc_args, irfile, llc_info):
-            print("Crash found with llc -> using llvm-reduce/bugpoint which is faster than creduce.")
-            self.reduce_tool = self.get_llvm_ir_reduce_tool()
-            return llc_args, irfile
-        if self._check_crash(llc_args + ["-filetype=obj"], irfile, llc_info):
-            print("Crash found with llc -filetype=obj -> using llvm-reduce/bugpoint which is faster than creduce.")
-            self.reduce_tool = self.get_llvm_ir_reduce_tool()
-            return llc_args + ["-filetype=obj"], irfile
-        print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info.stderr.decode("utf-8"))
-        print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
+        return llc_args
+
+    def _simplify_backend_crash_cmd(self, infile: Path, clang_cc1_command: list, generate_ir_command: list):
+        ir_pass_crashing = "-emit-llvm" in clang_cc1_command
+        assert "-o" in clang_cc1_command
+        generate_ir_command = generate_ir_command.copy()
+        irfile = infile.with_name(infile.name.partition(".")[0] + "-bugpoint.ll")
+        generate_ir_command[generate_ir_command.index("-o") + 1] = str(irfile.absolute())
+        if "-discard-value-names" in generate_ir_command:
+            generate_ir_command.remove("-discard-value-names")
+        print("Generating IR file", irfile)
+        try:
+            verbose_print(generate_ir_command + [str(infile)])
+            subprocess.check_call(generate_ir_command + [str(infile)])
+        except subprocess.CalledProcessError:
+            print("Failed to generate IR from", infile, "will have to reduce using creduce")
+            return self._simplify_frontend_crash_cmd(clang_cc1_command, infile)
+        if not irfile.exists():
+            die("IR file was not generated?")
+        llc_args = self._generate_matching_llc_command(clang_cc1_command)
+        # Only makes sense to compile with llc if the crash happened while generating machine code
+        if not ir_pass_crashing:
+            print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
+            llc_info = subprocess.CompletedProcess(b"", -1)
+            if self._check_crash(llc_args, irfile, llc_info, force_print_cmd=True):
+                print("Crash found with llc -> using llvm-reduce/bugpoint which is faster than creduce.")
+                self.reduce_tool = self.get_llvm_ir_reduce_tool()
+                return llc_args, irfile
+            if self._check_crash(llc_args + ["-filetype=obj"], irfile, llc_info, force_print_cmd=True):
+                print("Crash found with llc -filetype=obj -> using llvm-reduce/bugpoint which is faster than creduce.")
+                self.reduce_tool = self.get_llvm_ir_reduce_tool()
+                return llc_args + ["-filetype=obj"], irfile
+            print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info.stderr.decode("utf-8"))
         opt_args = llc_args.copy()
         opt_args[0] = str(self.options.opt_cmd)
         opt_args.append("-S")
-        opt_info = subprocess.CompletedProcess(None, None)
-        if self._check_crash(opt_args, irfile, opt_info):
+        opt_info = subprocess.CompletedProcess(b"", -1)
+        print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
+        if self._check_crash(opt_args, irfile, opt_info, force_print_cmd=True):
             print("Crash found with opt -> using llvm-reduce/bugpoint which is faster than creduce.")
             self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return opt_args, irfile
@@ -1247,7 +1251,7 @@ class Reducer(object):
                                                noargs_opts_to_remove_startswith=["-xc", "-W", "-std="],
                                                one_arg_opts_to_remove=["-D", "-x", "-main-file-name"])
         bugpoint_clang_cmd.extend(["-x", "ir"])
-        if self._check_crash(bugpoint_clang_cmd, irfile, clang_info):
+        if self._check_crash(bugpoint_clang_cmd, irfile, clang_info, force_print_cmd=True):
             print("Crash found compiling IR with clang -> using llvm-reduce/bugpoint which is faster than creduce.")
             self.reduce_tool = self.get_llvm_ir_reduce_tool()
             return bugpoint_clang_cmd, irfile
@@ -1256,8 +1260,9 @@ class Reducer(object):
         self.reduce_tool = RunCreduce(self.options)
         return self._simplify_frontend_crash_cmd(clang_cc1_command, infile)
 
-    def _parse_test_case(self, f, infile: Path):
+    def _parse_test_case(self, f, infile: Path) -> Path:
         # test case: just search for RUN: lines
+        real_input_file = None
         for line in f.readlines():
             match = re.match(r".*\s+RUN: (.+)", line)
             if line.endswith("\\"):
@@ -1272,10 +1277,15 @@ class Reducer(object):
                 command = self.subst_handler.expand_lit_subtitutions(command)
                 verbose_print("After expansion:", command)
                 # We can only simplify the command line for clang right now
-                command, _ = self.simplify_crash_command(shlex.split(command), infile.absolute())
+                command, new_infile = self.simplify_crash_command(shlex.split(command), infile.absolute())
+                if real_input_file is None:
+                    real_input_file = new_infile
+                elif real_input_file != new_infile:
+                    die("Cannot handle RUN lines using different input files")
                 verbose_print("Final command:", command)
                 self.run_cmds.append(command)
                 self.run_lines.append(line[0:line.find(match.group(1))] + quote_cmd(command))
+        return real_input_file
 
     def run(self):
         # scan test case for RUN: lines
