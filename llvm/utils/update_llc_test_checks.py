@@ -79,9 +79,8 @@ def main():
           preprocess_cmd = preprocess_cmd.replace("%riscv32_cheri_opt", "opt -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
           preprocess_cmd = preprocess_cmd.replace("%riscv64_cheri_opt", "opt -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
         preprocess_cmd_list = preprocess_cmd.split()
-        if preprocess_cmd_list[0] == "opt":
-          preprocess_cmd_list[0] = ti.args.opt_binary
-          preprocess_cmd = " ".join(preprocess_cmd_list)
+        preprocess_cmd_list = [ti.args.opt_binary if x == "opt" else x for x in preprocess_cmd_list]
+        preprocess_cmd = " ".join(preprocess_cmd_list)
       llc_cmd = commands[-2]
       if llc_cmd.startswith("%"):
         llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=mips64-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
