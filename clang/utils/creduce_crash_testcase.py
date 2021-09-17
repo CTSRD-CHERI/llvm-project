@@ -758,7 +758,7 @@ class Reducer(object):
 
     @staticmethod
     def _infer_crash_message(stderr: bytes):
-        print("Inferring crash message from", stderr)
+        print("Inferring crash message from", stderr.decode("utf-8"))
         if not stderr:
             return None
         simple_regexes = [re.compile(s) for s in (
