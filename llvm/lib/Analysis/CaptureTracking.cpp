@@ -99,10 +99,10 @@ namespace {
   /// as the given instruction and the use.
   struct CapturesBefore : public CaptureTracker {
 
-    CapturesBefore(bool ReturnCaptures, const Instruction *I, const DominatorTree *DT,
-                   bool IncludeI)
-      : BeforeHere(I), DT(DT),
-        ReturnCaptures(ReturnCaptures), IncludeI(IncludeI), Captured(false) {}
+    CapturesBefore(bool ReturnCaptures, const Instruction *I,
+                   const DominatorTree *DT, bool IncludeI, const LoopInfo *LI)
+        : BeforeHere(I), DT(DT), ReturnCaptures(ReturnCaptures),
+          IncludeI(IncludeI), Captured(false), LI(LI) {}
 
     void tooManyUses() override { Captured = true; }
 
@@ -116,7 +116,7 @@ namespace {
         return true;
 
       // Check whether there is a path from I to BeforeHere.
-      return !isPotentiallyReachable(I, BeforeHere, nullptr, DT);
+      return !isPotentiallyReachable(I, BeforeHere, nullptr, DT, LI);
     }
 
     bool captured(const Use *U) override {
@@ -141,6 +141,8 @@ namespace {
     bool IncludeI;
 
     bool Captured;
+
+    const LoopInfo *LI;
   };
 }
 
@@ -184,7 +186,8 @@ bool llvm::PointerMayBeCaptured(const Value *V,
 bool llvm::PointerMayBeCapturedBefore(const Value *V, bool ReturnCaptures,
                                       bool StoreCaptures, const Instruction *I,
                                       const DominatorTree *DT, bool IncludeI,
-                                      unsigned MaxUsesToExplore) {
+                                      unsigned MaxUsesToExplore,
+                                      const LoopInfo *LI) {
   assert(!isa<GlobalValue>(V) &&
          "It doesn't make sense to ask whether a global is captured.");
 
@@ -195,7 +198,7 @@ bool llvm::PointerMayBeCapturedBefore(const Value *V, bool ReturnCaptures,
   // TODO: See comment in PointerMayBeCaptured regarding what could be done
   // with StoreCaptures.
 
-  CapturesBefore CB(ReturnCaptures, I, DT, IncludeI);
+  CapturesBefore CB(ReturnCaptures, I, DT, IncludeI, LI);
   PointerMayBeCaptured(V, &CB, MaxUsesToExplore);
   if (CB.Captured)
     ++NumCapturedBefore;
