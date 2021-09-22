@@ -39,6 +39,11 @@ cl::opt<bool> ShowPseudoProbe(
     "show-pseudo-probe", cl::ReallyHidden, cl::init(false), cl::ZeroOrMore,
     cl::desc("Print pseudo probe section and disassembled info."));
 
+static cl::list<std::string> DisassembleFunctions(
+    "disassemble-functions", cl::CommaSeparated,
+    cl::desc("List of functions to print disassembly for. Accept demangled "
+             "names only. Only work with show-disassembly-only"));
+
 namespace llvm {
 namespace sampleprof {
 
@@ -299,7 +304,10 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
       ShowCanonicalFnName
           ? FunctionSamples::getCanonicalFnName(Symbols[SI].Name)
           : Symbols[SI].Name;
-  if (ShowDisassemblyOnly)
+  bool ShowDisassembly =
+      ShowDisassemblyOnly && (DisassembleFunctionSet.empty() ||
+                              DisassembleFunctionSet.count(SymbolName));
+  if (ShowDisassembly)
     outs() << '<' << SymbolName << ">:\n";
 
   auto WarnInvalidInsts = [](uint64_t Start, uint64_t End) {
@@ -322,7 +330,7 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
     if (Size == 0)
       Size = 1;
 
-    if (ShowDisassemblyOnly) {
+    if (ShowDisassembly) {
       if (ShowPseudoProbe) {
         ProbeDecoder.printProbeForAddress(outs(),
                                           Offset + getPreferredBaseAddress());
@@ -386,7 +394,7 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
   if (InvalidInstLength)
     WarnInvalidInsts(Offset - InvalidInstLength, Offset - 1);
 
-  if (ShowDisassemblyOnly)
+  if (ShowDisassembly)
     outs() << "\n";
 
   FuncStartAddrMap[StartOffset] = Symbols[SI].Name.str();
@@ -452,6 +460,12 @@ void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
   // Sort all the symbols. Use a stable sort to stabilize the output.
   for (std::pair<const SectionRef, SectionSymbolsTy> &SecSyms : AllSymbols)
     stable_sort(SecSyms.second);
+
+  DisassembleFunctionSet.insert(DisassembleFunctions.begin(),
+                                DisassembleFunctions.end());
+  assert((DisassembleFunctionSet.empty() || ShowDisassemblyOnly) &&
+         "Functions to disassemble should be only specified together with "
+         "--show-disassembly-only");
 
   if (ShowDisassemblyOnly)
     outs() << "\nDisassembly of " << FileName << ":\n";
