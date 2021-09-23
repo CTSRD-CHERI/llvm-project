@@ -1914,6 +1914,9 @@ void CodeGenRegBank::computeRegUnitSets() {
       RegUnitSets.pop_back();
   }
 
+  if (RegUnitSets.empty())
+    PrintFatalError("RegUnitSets cannot be empty!");
+
   LLVM_DEBUG(dbgs() << "\nBefore pruning:\n"; for (unsigned USIdx = 0,
                                                    USEnd = RegUnitSets.size();
                                                    USIdx < USEnd; ++USIdx) {
@@ -2024,7 +2027,8 @@ void CodeGenRegBank::computeRegUnitSets() {
       }
     }
     LLVM_DEBUG(dbgs() << "\n");
-    assert(!RegClassUnitSets[RCIdx].empty() && "missing unit set for regclass");
+    assert((!RegClassUnitSets[RCIdx].empty() || !RC.GeneratePressureSet) &&
+           "missing unit set for regclass");
   }
 
   // For each register unit, ensure that we have the list of UnitSets that
