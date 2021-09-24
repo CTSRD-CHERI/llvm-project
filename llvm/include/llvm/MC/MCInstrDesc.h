@@ -77,7 +77,7 @@ enum OperandType {
   OPERAND_FIRST_TARGET = 13,
 };
 
-}
+} // namespace MCOI
 
 /// This holds information about one operand of a machine instruction,
 /// indicating the register class for register operands, etc.
@@ -194,7 +194,7 @@ enum Flag {
   VariadicOpsAreDefs,
   Authenticated,
 };
-}
+} // namespace MCID
 
 /// Describe properties that are true of each instruction in the target
 /// description file.  This captures information about side effects, register
