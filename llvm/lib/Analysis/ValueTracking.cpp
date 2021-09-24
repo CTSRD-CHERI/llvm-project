@@ -1809,7 +1809,7 @@ static void computeKnownBitsFromOperator(const Operator *I,
           Known.Zero.setBitsFrom(31);
         break;
       case Intrinsic::vscale: {
-        if (!II->getParent() ||
+        if (!II->getParent() || !II->getFunction() ||
             !II->getFunction()->hasFnAttribute(Attribute::VScaleRange))
           break;
 
