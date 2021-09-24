@@ -137,6 +137,7 @@ private:
     MM_MachO,
     MM_WinCOFF,
     MM_WinCOFFX86,
+    MM_GOFF,
     MM_Mips,
     MM_XCOFF
   };
@@ -324,6 +325,7 @@ public:
     switch (ManglingMode) {
     case MM_None:
     case MM_ELF:
+    case MM_GOFF:
     case MM_Mips:
     case MM_WinCOFF:
     case MM_XCOFF:
@@ -342,6 +344,8 @@ public:
     case MM_ELF:
     case MM_WinCOFF:
       return ".L";
+    case MM_GOFF:
+      return "@";
     case MM_Mips:
       return "$";
     case MM_MachO:
