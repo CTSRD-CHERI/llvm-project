@@ -48,7 +48,6 @@ public:
 template <class ELFT> MIPS<ELFT>::MIPS() {
   gotPltHeaderEntriesNum = 2;
   defaultMaxPageSize = 65536;
-  gotBaseSymInGotPlt = false;
   pltEntrySize = 16;
   pltHeaderSize = 32;
   copyRel = R_MIPS_COPY;

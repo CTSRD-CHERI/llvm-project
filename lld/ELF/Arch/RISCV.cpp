@@ -105,7 +105,6 @@ RISCV::RISCV() {
   absPointerRel = symbolicRel;
 
   // .got[0] = _DYNAMIC
-  gotBaseSymInGotPlt = false;
   gotHeaderEntriesNum = 1;
 
   // .got.plt[0] = _dl_runtime_resolve, .got.plt[1] = link_map
