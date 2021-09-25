@@ -248,13 +248,13 @@ template <class ELFT> void elf::combineCapRelocsSections() {
 
 static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
                                    uint64_t val, uint8_t stOther = STV_HIDDEN,
-                                   uint8_t binding = STB_GLOBAL,
                                    bool canBeSectionStart = true) {
   Symbol *s = symtab->find(name);
   if (!s || s->isDefined())
     return nullptr;
 
-  s->resolve(Defined{/*file=*/nullptr, name, binding, stOther, STT_NOTYPE, val,
+  s->resolve(Defined{/*file=*/nullptr, name, STB_GLOBAL, stOther, STT_NOTYPE,
+                     val,
                      /*size=*/0, sec});
   // If Val == 0 assume this symbol references the start of a section.
   // When targetting CHERI we set the size of that symbol since otherwise
@@ -1155,11 +1155,11 @@ template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
   // sure that .rela.plt exists in output.
   ElfSym::relaIpltStart = addOptionalRegular(
       config->isRela ? "__rela_iplt_start" : "__rel_iplt_start",
-      Out::elfHeader, 0, STV_HIDDEN, STB_WEAK);
+      Out::elfHeader, 0, STV_HIDDEN);
 
   ElfSym::relaIpltEnd = addOptionalRegular(
       config->isRela ? "__rela_iplt_end" : "__rel_iplt_end",
-      Out::elfHeader, 0, STV_HIDDEN, STB_WEAK);
+      Out::elfHeader, 0, STV_HIDDEN);
 }
 
 template <class ELFT>
@@ -2043,7 +2043,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     OutputSection *sec = findSection(".sdata");
     ElfSym::riscvGlobalPointer =
         addOptionalRegular("__global_pointer$", sec ? sec : Out::elfHeader,
-                           0x800, STV_DEFAULT, STB_GLOBAL);
+                           0x800, STV_DEFAULT);
   }
 
   if (config->emachine == EM_X86_64) {
@@ -2427,10 +2427,10 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
       // Since this is an empty section we don't want to set canBeSectionStart
       // Iterating over this should terminate immediately so setting the size
       // to zero is fine
-      addOptionalRegular(start, Default, 0, STV_HIDDEN, STB_GLOBAL,
+      addOptionalRegular(start, Default, 0, STV_HIDDEN,
                          /*canBeSectionStart=*/false);
       // End is not a section start symbol even though it has value 0:
-      addOptionalRegular(end, Default, 0, STV_HIDDEN, STB_GLOBAL,
+      addOptionalRegular(end, Default, 0, STV_HIDDEN,
                          /*canBeSectionStart=*/false);
     }
   };
@@ -2459,9 +2459,11 @@ void Writer<ELFT>::addStartStopSymbols(OutputSection *sec) {
   if (!isValidCIdentifier(s))
     return;
   addOptionalRegular(saver.save("__start_" + s), sec, 0,
-                     config->zStartStopVisibility);
+                     config->zStartStopVisibility,
+                     /*canBeSectionStart=*/true);
   addOptionalRegular(saver.save("__stop_" + s), sec, -1,
-                     config->zStartStopVisibility);
+                     config->zStartStopVisibility,
+                     /*canBeSectionStart=*/false);
 }
 
 static bool needsPtLoad(OutputSection *sec) {
