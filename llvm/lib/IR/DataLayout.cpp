@@ -260,12 +260,12 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
   while (!Desc.empty()) {
     // Split at '-'.
     std::pair<StringRef, StringRef> Split;
-    if (Error Err = split(Desc, '-', Split))
+    if (Error Err = ::split(Desc, '-', Split))
       return Err;
     Desc = Split.second;
 
     // Split at ':'.
-    if (Error Err = split(Split.first, ':', Split))
+    if (Error Err = ::split(Split.first, ':', Split))
       return Err;
 
     // Aliases used below.
@@ -274,7 +274,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
 
     if (Tok == "ni") {
       do {
-        if (Error Err = split(Rest, ':', Split))
+        if (Error Err = ::split(Rest, ':', Split))
           return Err;
         Rest = Split.second;
         unsigned AS;
@@ -323,7 +323,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       if (Rest.empty())
         return reportError(
             "Missing size specification for pointer in datalayout string");
-      if (Error Err = split(Rest, ':', Split))
+      if (Error Err = ::split(Rest, ':', Split))
         return Err;
       unsigned PointerMemSize;
       if (Error Err = getIntInBytes(Tok, PointerMemSize))
@@ -335,7 +335,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       if (Rest.empty())
         return reportError(
             "Missing alignment specification for pointer in datalayout string");
-      if (Error Err = split(Rest, ':', Split))
+      if (Error Err = ::split(Rest, ':', Split))
         return Err;
       unsigned PointerABIAlign;
       if (Error Err = getIntInBytes(Tok, PointerABIAlign))
@@ -352,7 +352,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       // Preferred alignment.
       unsigned PointerPrefAlign = PointerABIAlign;
       if (!Rest.empty()) {
-        if (Error Err = split(Rest, ':', Split))
+        if (Error Err = ::split(Rest, ':', Split))
           return Err;
         if (Error Err = getIntInBytes(Tok, PointerPrefAlign))
           return Err;
@@ -362,7 +362,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
 
         // Now read the index. It is the second optional parameter here.
         if (!Rest.empty()) {
-          if (Error Err = split(Rest, ':', Split))
+          if (Error Err = ::split(Rest, ':', Split))
             return Err;
           if (Error Err = getIntInBytes(Tok, IndexSize))
             return Err;
@@ -404,7 +404,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       if (Rest.empty())
         return reportError(
             "Missing alignment specification in datalayout string");
-      if (Error Err = split(Rest, ':', Split))
+      if (Error Err = ::split(Rest, ':', Split))
         return Err;
       unsigned ABIAlign;
       if (Error Err = getIntInBytes(Tok, ABIAlign))
@@ -421,7 +421,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
       // Preferred alignment.
       unsigned PrefAlign = ABIAlign;
       if (!Rest.empty()) {
-        if (Error Err = split(Rest, ':', Split))
+        if (Error Err = ::split(Rest, ':', Split))
           return Err;
         if (Error Err = getIntInBytes(Tok, PrefAlign))
           return Err;
@@ -450,7 +450,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
         LegalIntWidths.push_back(Width);
         if (Rest.empty())
           break;
-        if (Error Err = split(Rest, ':', Split))
+        if (Error Err = ::split(Rest, ':', Split))
           return Err;
       }
       break;
