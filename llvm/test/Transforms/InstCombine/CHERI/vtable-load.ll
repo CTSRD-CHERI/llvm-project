@@ -9,11 +9,11 @@ target triple = "riscv64-unknown-freebsd"
 
 %struct.A = type { i64 (...) addrspace(200)* addrspace(200)* }
 @_ZTV1A = internal unnamed_addr addrspace(200) constant { [4 x i8 addrspace(200)*] } { [4 x i8 addrspace(200)*]
-   [ i8 addrspace(200)* null,
-     i8 addrspace(200)* bitcast ({ i8 addrspace(200)*, i8 addrspace(200)* } addrspace(200)* @_ZTI1A to i8 addrspace(200)*),
-     i8 addrspace(200)* bitcast (i64 (%struct.A addrspace(200)*) addrspace(200)* @member_function_1 to i8 addrspace(200)*),
-     i8 addrspace(200)* bitcast (i64 (%struct.A addrspace(200)*) addrspace(200)* @member_function_2 to i8 addrspace(200)*)
-   ] }, align 16
+  [ i8 addrspace(200)* null,
+  i8 addrspace(200)* bitcast ({ i8 addrspace(200)*, i8 addrspace(200)* } addrspace(200)* @_ZTI1A to i8 addrspace(200)*),
+  i8 addrspace(200)* bitcast (i64 (%struct.A addrspace(200)*) addrspace(200)* @member_function_1 to i8 addrspace(200)*),
+  i8 addrspace(200)* bitcast (i64 (%struct.A addrspace(200)*) addrspace(200)* @member_function_2 to i8 addrspace(200)*)
+  ] }, align 16
 @_ZTI1A = external addrspace(200) constant { i8 addrspace(200)*, i8 addrspace(200)* }, align 16
 
 define i64 (%struct.A addrspace(200)*) addrspace(200)* @return_member_function_1() {
@@ -23,8 +23,7 @@ define i64 (%struct.A addrspace(200)*) addrspace(200)* @return_member_function_1
 ;
 ; PURECAP-LABEL: define {{[^@]+}}@return_member_function_1() addrspace(200) {
 ; PURECAP-NEXT:  call_member_fn_ptr.exit:
-; PURECAP-NEXT:    [[MEMPTR_VIRTUALFN_I:%.*]] = load i64 ([[STRUCT_A:%.*]] addrspace(200)*) addrspace(200)*, i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* getelementptr inbounds ({ [4 x i8 addrspace(200)*] }, { [4 x i8 addrspace(200)*] } addrspace(200)* @_ZTV1A, i64 0, inrange i32 0, i64 2) to i8 addrspace(200)*), i64 add (i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i64), i64 -1)) to i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)*), align 16
-; PURECAP-NEXT:    ret i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* [[MEMPTR_VIRTUALFN_I]]
+; PURECAP-NEXT:    ret i64 ([[STRUCT_A:%.*]] addrspace(200)*) addrspace(200)* @member_function_1
 ;
 call_member_fn_ptr.exit:
   %memptr.virtualfn.i = load i64 (%struct.A addrspace(200)*) addrspace(200)*, i64 (%struct.A addrspace(200)*) addrspace(200)* addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* getelementptr inbounds ({ [4 x i8 addrspace(200)*] }, { [4 x i8 addrspace(200)*] } addrspace(200)* @_ZTV1A, i64 0, inrange i32 0, i64 2) to i8 addrspace(200)*), i64 add (i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i64), i64 -1)) to i64 (%struct.A addrspace(200)*) addrspace(200)* addrspace(200)*), align 16
