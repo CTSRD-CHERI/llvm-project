@@ -90,14 +90,10 @@ define dso_local i64 @call_f1_via_member_ptr() {
 ; INLINE-ONLY-NEXT:    [[CALL_I:%.*]] = call i64 [[TMP8]]([[STRUCT_A]] addrspace(200)* nonnull align 16 dereferenceable(16) [[THIS_ADJUSTED_I]])
 ; INLINE-ONLY-NEXT:    ret i64 [[CALL_I]]
 ;
-; FULL-LABEL: define {{[^@]+}}@call_f1_via_member_ptr() local_unnamed_addr addrspace(200) {
+; FULL-LABEL: define {{[^@]+}}@call_f1_via_member_ptr
+; FULL-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; FULL-NEXT:  call_member_fn_ptr_indirect_arg.exit:
-; FULL-NEXT:    [[A:%.*]] = alloca [[STRUCT_A:%.*]], align 16, addrspace(200)
-; FULL-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_A]], [[STRUCT_A]] addrspace(200)* [[A]], i64 0, i32 0
-; FULL-NEXT:    store i64 (...) addrspace(200)* addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* getelementptr inbounds ({ [4 x i8 addrspace(200)*] }, { [4 x i8 addrspace(200)*] } addrspace(200)* @_ZTV1A, i64 0, inrange i32 0, i64 2) to i64 (...) addrspace(200)* addrspace(200)*), i64 (...) addrspace(200)* addrspace(200)* addrspace(200)* [[TMP0]], align 16
-; FULL-NEXT:    [[MEMPTR_VIRTUALFN_I:%.*]] = load i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)*, i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* getelementptr inbounds ({ [4 x i8 addrspace(200)*] }, { [4 x i8 addrspace(200)*] } addrspace(200)* @_ZTV1A, i64 0, inrange i32 0, i64 2) to i8 addrspace(200)*), i64 add (i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i64), i64 -1)) to i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)*), align 16
-; FULL-NEXT:    [[CALL_I:%.*]] = call i64 [[MEMPTR_VIRTUALFN_I]]([[STRUCT_A]] addrspace(200)* nonnull align 16 dereferenceable(16) [[A]])
-; FULL-NEXT:    ret i64 [[CALL_I]]
+; FULL-NEXT:    ret i64 1
 ;
 entry:
   %a = alloca %struct.A, align 16, addrspace(200)
@@ -145,7 +141,7 @@ define dso_local i64 @call_f2_via_member_ptr() {
 ; INLINE-ONLY-NEXT:    ret i64 [[CALL_I]]
 ;
 ; FULL-LABEL: define {{[^@]+}}@call_f2_via_member_ptr
-; FULL-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+; FULL-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0]] {
 ; FULL-NEXT:  call_member_fn_ptr_indirect_arg.exit:
 ; FULL-NEXT:    ret i64 2
 ;
@@ -198,20 +194,14 @@ define dso_local i64 @call_f1_via_member_ptr_direct_arg() {
 ; INLINE-ONLY-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_A]] addrspace(200)* [[A]] to i8 addrspace(200)*
 ; INLINE-ONLY-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
 ; INLINE-ONLY-NEXT:    [[VTABLE_I:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP2]], align 16
-; INLINE-ONLY-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* [[VTABLE_I]], i64 sub (i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i64), i64 1)
-; INLINE-ONLY-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)*
-; INLINE-ONLY-NEXT:    [[MEMPTR_VIRTUALFN_I:%.*]] = load i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)*, i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)* [[TMP4]], align 16
-; INLINE-ONLY-NEXT:    [[CALL_I:%.*]] = call i64 [[MEMPTR_VIRTUALFN_I]]([[STRUCT_A]] addrspace(200)* nonnull align 16 dereferenceable(16) [[A]])
-; INLINE-ONLY-NEXT:    ret i64 [[CALL_I]]
+; INLINE-ONLY-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[VTABLE_I]] to i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)*
+; INLINE-ONLY-NEXT:    [[MEMPTR_VIRTUALFN_I:%.*]] = load i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)*, i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)* [[TMP3]], align 16
+; INLINE-ONLY-NEXT:    ret i64 1
 ;
-; FULL-LABEL: define {{[^@]+}}@call_f1_via_member_ptr_direct_arg() local_unnamed_addr addrspace(200) {
+; FULL-LABEL: define {{[^@]+}}@call_f1_via_member_ptr_direct_arg
+; FULL-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] {
 ; FULL-NEXT:  entry:
-; FULL-NEXT:    [[A:%.*]] = alloca [[STRUCT_A:%.*]], align 16, addrspace(200)
-; FULL-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_A]], [[STRUCT_A]] addrspace(200)* [[A]], i64 0, i32 0
-; FULL-NEXT:    store i64 (...) addrspace(200)* addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* getelementptr inbounds ({ [4 x i8 addrspace(200)*] }, { [4 x i8 addrspace(200)*] } addrspace(200)* @_ZTV1A, i64 0, inrange i32 0, i64 2) to i64 (...) addrspace(200)* addrspace(200)*), i64 (...) addrspace(200)* addrspace(200)* addrspace(200)* [[TMP0]], align 16
-; FULL-NEXT:    [[MEMPTR_VIRTUALFN_I:%.*]] = load i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)*, i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* getelementptr inbounds ({ [4 x i8 addrspace(200)*] }, { [4 x i8 addrspace(200)*] } addrspace(200)* @_ZTV1A, i64 0, inrange i32 0, i64 2) to i8 addrspace(200)*), i64 add (i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1) to i64), i64 -1)) to i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)*), align 16
-; FULL-NEXT:    [[CALL_I:%.*]] = call i64 [[MEMPTR_VIRTUALFN_I]]([[STRUCT_A]] addrspace(200)* nonnull align 16 dereferenceable(16) [[A]])
-; FULL-NEXT:    ret i64 [[CALL_I]]
+; FULL-NEXT:    ret i64 1
 ;
 entry:
   %a = alloca %struct.A, align 16, addrspace(200)
@@ -229,14 +219,13 @@ define dso_local i64 @call_f2_via_member_ptr_direct_arg() {
 ; INLINE-ONLY-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_A]] addrspace(200)* [[A]] to i8 addrspace(200)*
 ; INLINE-ONLY-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
 ; INLINE-ONLY-NEXT:    [[VTABLE_I:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP2]], align 16
-; INLINE-ONLY-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* [[VTABLE_I]], i64 sub (i64 mul (i64 ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i64), i64 17), i64 1)
+; INLINE-ONLY-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* [[VTABLE_I]], i64 16
 ; INLINE-ONLY-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)*
 ; INLINE-ONLY-NEXT:    [[MEMPTR_VIRTUALFN_I:%.*]] = load i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)*, i64 ([[STRUCT_A]] addrspace(200)*) addrspace(200)* addrspace(200)* [[TMP4]], align 16
-; INLINE-ONLY-NEXT:    [[CALL_I:%.*]] = call i64 [[MEMPTR_VIRTUALFN_I]]([[STRUCT_A]] addrspace(200)* nonnull align 16 dereferenceable(16) [[A]])
-; INLINE-ONLY-NEXT:    ret i64 [[CALL_I]]
+; INLINE-ONLY-NEXT:    ret i64 2
 ;
 ; FULL-LABEL: define {{[^@]+}}@call_f2_via_member_ptr_direct_arg
-; FULL-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0]] {
+; FULL-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1]] {
 ; FULL-NEXT:  entry:
 ; FULL-NEXT:    ret i64 2
 ;
@@ -267,11 +256,6 @@ define internal i64 @member_function_1(%struct.A addrspace(200)* nocapture nonnu
 ; INLINE-ONLY-NEXT:  entry:
 ; INLINE-ONLY-NEXT:    ret i64 1
 ;
-; FULL-LABEL: define {{[^@]+}}@member_function_1
-; FULL-SAME: ([[STRUCT_A:%.*]] addrspace(200)* nocapture nonnull readnone align 16 dereferenceable(16) [[THIS:%.*]]) addrspace(200) #[[ATTR0]] {
-; FULL-NEXT:  entry:
-; FULL-NEXT:    ret i64 1
-;
 entry:
   ret i64 1
 }
@@ -281,11 +265,6 @@ define internal i64 @member_function_2(%struct.A addrspace(200)* nocapture nonnu
 ; INLINE-ONLY-SAME: ([[STRUCT_A:%.*]] addrspace(200)* nocapture nonnull readnone align 16 dereferenceable(16) [[THIS:%.*]]) addrspace(200) {
 ; INLINE-ONLY-NEXT:  entry:
 ; INLINE-ONLY-NEXT:    ret i64 2
-;
-; FULL-LABEL: define {{[^@]+}}@member_function_2
-; FULL-SAME: ([[STRUCT_A:%.*]] addrspace(200)* nocapture nonnull readnone align 16 dereferenceable(16) [[THIS:%.*]]) addrspace(200) #[[ATTR0]] {
-; FULL-NEXT:  entry:
-; FULL-NEXT:    ret i64 2
 ;
 entry:
   ret i64 2
