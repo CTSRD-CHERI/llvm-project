@@ -1888,6 +1888,10 @@ def err_not_integral_type_bitfield : Error<
   "bit-field %0 has non-integral type %1">;
 def err_not_integral_type_anon_bitfield : Error<
   "anonymous bit-field has non-integral type %0">;
+def err_capability_type_bitfield : Error<
+  "bit-field %0 has capability type %1; this is not supported yet">;
+def err_capability_type_anon_bitfield : Error<
+  "anonymous bit-field has capability type %0; this is not supported yet">;
 def err_anon_bitfield_qualifiers : Error<
   "anonymous bit-field cannot have qualifiers">;
 def err_member_function_initialization : Error<

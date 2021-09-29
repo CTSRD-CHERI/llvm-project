@@ -16753,6 +16753,12 @@ ExprResult Sema::VerifyBitField(SourceLocation FieldLoc,
         << FieldName << FieldTy << BitWidth->getSourceRange();
     return Diag(FieldLoc, diag::err_not_integral_type_anon_bitfield)
       << FieldTy << BitWidth->getSourceRange();
+  } else if (FieldTy->isIntCapType()) {
+    if (FieldName)
+      return Diag(FieldLoc, diag::err_capability_type_bitfield)
+             << FieldName << FieldTy << BitWidth->getSourceRange();
+    return Diag(FieldLoc, diag::err_capability_type_anon_bitfield)
+           << FieldTy << BitWidth->getSourceRange();
   } else if (DiagnoseUnexpandedParameterPack(const_cast<Expr *>(BitWidth),
                                              UPPC_BitFieldWidth))
     return ExprError();
