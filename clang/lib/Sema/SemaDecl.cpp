@@ -16736,6 +16736,23 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
                 << Context.getTypeDeclType(RD) << Padding << Size;
       }
   }
+
+  // Clangs implementation of #pragma align(packed) differs in bitfield layout
+  // from XLs and instead matches the XL #pragma pack(1) behavior.
+  if (Context.getTargetInfo().getTriple().isOSAIX() &&
+      AlignPackStack.hasValue()) {
+    AlignPackInfo APInfo = AlignPackStack.CurrentValue;
+    // Only diagnose #pragma align(packed).
+    if (!APInfo.IsAlignAttr() || APInfo.getAlignMode() != AlignPackInfo::Packed)
+      return;
+    const RecordDecl *RD = dyn_cast<RecordDecl>(Tag);
+    if (!RD)
+      return;
+    // Only warn if there is at least 1 bitfield member.
+    if (llvm::any_of(RD->fields(),
+                     [](const FieldDecl *FD) { return FD->isBitField(); }))
+      Diag(BraceRange.getBegin(), diag::warn_pragma_align_not_xl_compatible);
+  }
 }
 
 void Sema::ActOnObjCContainerFinishDefinition() {
