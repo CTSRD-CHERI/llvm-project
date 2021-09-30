@@ -608,7 +608,7 @@ static bool isVectorAllOnes(SDValue N) {
   // Endianness doesn't matter in this context because we are looking for
   // an all-ones value.
   if (BVN->isConstantSplat(SplatValue, SplatUndef, SplatBitSize, HasAnyUndefs))
-    return SplatValue.isAllOnesValue();
+    return SplatValue.isAllOnes();
 
   return false;
 }
@@ -740,7 +740,7 @@ static SDValue performORCombine(SDNode *N, SelectionDAG &DAG,
 
     // Fold degenerate cases.
     if (IsConstantMask) {
-      if (Mask.isAllOnesValue())
+      if (Mask.isAllOnes())
         return IfSet;
       else if (Mask == 0)
         return IfClr;

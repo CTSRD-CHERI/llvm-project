@@ -9519,7 +9519,7 @@ SDValue DAGCombiner::foldSelectOfConstants(SDNode *N) {
       }
 
       // select Cond, Pow2, 0 --> (zext Cond) << log2(Pow2)
-      if (C1Val.isPowerOf2() && C2Val.isNullValue()) {
+      if (C1Val.isPowerOf2() && C2Val.isZero()) {
         if (VT != MVT::i1)
           Cond = DAG.getNode(ISD::ZERO_EXTEND, DL, VT, Cond);
         SDValue ShAmtC = DAG.getConstant(C1Val.exactLogBase2(), DL, VT);
@@ -11370,7 +11370,7 @@ static bool isTruncateOf(SelectionDAG &DAG, SDValue N, SDValue &Op,
 
   Known = DAG.computeKnownBits(Op);
 
-  return (Known.Zero | 1).isAllOnesValue();
+  return (Known.Zero | 1).isAllOnes();
 }
 
 /// Given an extending node with a pop-count operand, if the target does not
@@ -16410,7 +16410,7 @@ struct LoadedSlice {
 /// \p UsedBits looks like 0..0 1..1 0..0.
 static bool areUsedBitsDense(const APInt &UsedBits) {
   // If all the bits are one, this is dense!
-  if (UsedBits.isAllOnesValue())
+  if (UsedBits.isAllOnes())
     return true;
 
   // Get rid of the unused bits on the right.
@@ -16419,7 +16419,7 @@ static bool areUsedBitsDense(const APInt &UsedBits) {
   if (NarrowedUsedBits.countLeadingZeros())
     NarrowedUsedBits = NarrowedUsedBits.trunc(NarrowedUsedBits.getActiveBits());
   // Check that the chunk of bits is completely used.
-  return NarrowedUsedBits.isAllOnesValue();
+  return NarrowedUsedBits.isAllOnes();
 }
 
 /// Check whether or not \p First and \p Second are next to each other
@@ -16838,7 +16838,7 @@ SDValue DAGCombiner::ReduceLoadOpStoreWidth(SDNode *N) {
     APInt Imm = cast<ConstantSDNode>(N1)->getAPIntValue();
     if (Opc == ISD::AND)
       Imm ^= APInt::getAllOnes(BitWidth);
-    if (Imm == 0 || Imm.isAllOnesValue())
+    if (Imm == 0 || Imm.isAllOnes())
       return SDValue();
     unsigned ShAmt = Imm.countTrailingZeros();
     unsigned MSB = BitWidth - Imm.countLeadingZeros() - 1;
@@ -22313,7 +22313,7 @@ SDValue DAGCombiner::XformToShuffleWithZero(SDNode *N) {
       else
         Bits = Bits.extractBits(NumSubBits, SubIdx * NumSubBits);
 
-      if (Bits.isAllOnesValue())
+      if (Bits.isAllOnes())
         Indices.push_back(i);
       else if (Bits == 0)
         Indices.push_back(i + NumSubElts);
