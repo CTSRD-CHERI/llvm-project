@@ -1631,6 +1631,14 @@ multiclass PseudoCheriCmpXchgPat<string Op, Pseudo CmpXchgInst,
             (CmpXchgInst GPCR:$addr, ValTy:$cmp, ValTy:$new, 7)>;
 }
 
+multiclass PseudoCheriCmpXchgPatExplicit<string Op, Pseudo CmpXchgInst,
+                                         RegisterClass PtrTy,
+                                         RegisterClass ValTy=GPR> {
+  // The explicit address mode atomics are always relaxed.
+  def : Pat<(!cast<PatFrag>(Op#"_monotonic") PtrTy:$addr, ValTy:$cmp, ValTy:$new),
+            (CmpXchgInst PtrTy:$addr, ValTy:$cmp, ValTy:$new, 2)>;
+}
+
 multiclass CheriAMOCapPat<string CLenStr, string AtomicOp, string BaseInst> {
   def : PatGpcrGpcr<!cast<PatFrag>(AtomicOp#"_monotonic"),
                     !cast<RVInst>(BaseInst#"_"#CLenStr)>;
@@ -1940,13 +1948,19 @@ defm : CheriAMOCapPat<"128", "atomic_swap_cap", "CAMOSWAP_C">;
 /// Only atomic_cmp_swap is supported since all other operations are expanded.
 
 let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
-defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_8", PseudoCheriCmpXchg8ExplicitCap>;
-defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_16", PseudoCheriCmpXchg16ExplicitCap>;
-defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_32", PseudoCheriCmpXchg32ExplicitCap>;
-defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap", PseudoCheriCmpXchgCapExplicitCap, GPCR>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_8",
+                                     PseudoCheriCmpXchg8ExplicitCap, GPCR>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_16",
+                                     PseudoCheriCmpXchg16ExplicitCap, GPCR>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_32",
+                                     PseudoCheriCmpXchg32ExplicitCap, GPCR>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_cap",
+                                     PseudoCheriCmpXchgCapExplicitCap,
+                                     GPCR, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, NotCapMode]
 let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in
-defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_64", PseudoCheriCmpXchg64ExplicitCap>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_64",
+                                     PseudoCheriCmpXchg64ExplicitCap, GPCR>;
 
 /// 'F' (Single-Precision Floating-Point) extension
 

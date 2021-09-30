@@ -47,6 +47,7 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; HYBRID-ATOMICS:       # %bb.0:
 ; HYBRID-ATOMICS-NEXT:    slli a1, a1, 24
 ; HYBRID-ATOMICS-NEXT:    srai a1, a1, 24
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB0_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.b.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB0_3
@@ -57,6 +58,7 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; HYBRID-ATOMICS-NEXT:  .LBB0_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -120,6 +122,7 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; HYBRID-ATOMICS:       # %bb.0:
 ; HYBRID-ATOMICS-NEXT:    slli a1, a1, 16
 ; HYBRID-ATOMICS-NEXT:    srai a1, a1, 16
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB1_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.h.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB1_3
@@ -130,6 +133,7 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; HYBRID-ATOMICS-NEXT:  .LBB1_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -189,6 +193,7 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_i32:
 ; HYBRID-ATOMICS:       # %bb.0:
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB2_3
@@ -199,6 +204,7 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; HYBRID-ATOMICS-NEXT:  .LBB2_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -319,6 +325,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_cap:
 ; HYBRID-ATOMICS:       # %bb.0:
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB4_3
@@ -329,6 +336,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; HYBRID-ATOMICS-NEXT:  .LBB4_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -388,6 +396,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_strong_cap_i32:
 ; HYBRID-ATOMICS:       # %bb.0:
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB5_3
@@ -398,6 +407,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; HYBRID-ATOMICS-NEXT:  .LBB5_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -461,6 +471,7 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; HYBRID-ATOMICS:       # %bb.0:
 ; HYBRID-ATOMICS-NEXT:    slli a1, a1, 24
 ; HYBRID-ATOMICS-NEXT:    srai a1, a1, 24
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.b.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB6_3
@@ -471,6 +482,7 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; HYBRID-ATOMICS-NEXT:  .LBB6_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -534,6 +546,7 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; HYBRID-ATOMICS:       # %bb.0:
 ; HYBRID-ATOMICS-NEXT:    slli a1, a1, 16
 ; HYBRID-ATOMICS-NEXT:    srai a1, a1, 16
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.h.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB7_3
@@ -544,6 +557,7 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; HYBRID-ATOMICS-NEXT:  .LBB7_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -603,6 +617,7 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_i32:
 ; HYBRID-ATOMICS:       # %bb.0:
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB8_3
@@ -613,6 +628,7 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; HYBRID-ATOMICS-NEXT:  .LBB8_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -733,6 +749,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_cap:
 ; HYBRID-ATOMICS:       # %bb.0:
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB10_3
@@ -743,6 +760,7 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; HYBRID-ATOMICS-NEXT:  .LBB10_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -802,6 +820,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_cap_i32:
 ; HYBRID-ATOMICS:       # %bb.0:
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.c.cap ca2, (ca0)
 ; HYBRID-ATOMICS-NEXT:    bne a2, a1, .LBB11_3
@@ -812,6 +831,7 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; HYBRID-ATOMICS-NEXT:  .LBB11_3:
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    cmove ca0, ca2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -875,6 +895,7 @@ define { i32, i1 } @test_cmpxchg_weak_sc_sc(i32 addrspace(200)* %ptr, i32 %exp, 
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_sc_sc:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    fence rw, rw
 ; HYBRID-ATOMICS-NEXT:  .LBB12_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
@@ -887,6 +908,7 @@ define { i32, i1 } @test_cmpxchg_weak_sc_sc(i32 addrspace(200)* %ptr, i32 %exp, 
 ; HYBRID-ATOMICS-NEXT:  .LBB12_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -949,6 +971,7 @@ define { i32, i1 } @test_cmpxchg_weak_sc_acquire(i32 addrspace(200)* %ptr, i32 %
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_sc_acquire:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    fence rw, rw
 ; HYBRID-ATOMICS-NEXT:  .LBB13_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
@@ -961,6 +984,7 @@ define { i32, i1 } @test_cmpxchg_weak_sc_acquire(i32 addrspace(200)* %ptr, i32 %
 ; HYBRID-ATOMICS-NEXT:  .LBB13_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1023,6 +1047,7 @@ define { i32, i1 } @test_cmpxchg_weak_sc_relaxed(i32 addrspace(200)* %ptr, i32 %
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_sc_relaxed:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    fence rw, rw
 ; HYBRID-ATOMICS-NEXT:  .LBB14_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
@@ -1035,6 +1060,7 @@ define { i32, i1 } @test_cmpxchg_weak_sc_relaxed(i32 addrspace(200)* %ptr, i32 %
 ; HYBRID-ATOMICS-NEXT:  .LBB14_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1097,6 +1123,7 @@ define { i32, i1 } @test_cmpxchg_weak_acqrel_acquire(i32 addrspace(200)* %ptr, i
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_acqrel_acquire:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB15_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
@@ -1109,6 +1136,7 @@ define { i32, i1 } @test_cmpxchg_weak_acqrel_acquire(i32 addrspace(200)* %ptr, i
 ; HYBRID-ATOMICS-NEXT:  .LBB15_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1171,6 +1199,7 @@ define { i32, i1 } @test_cmpxchg_weak_acqrel_relaxed(i32 addrspace(200)* %ptr, i
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_acqrel_relaxed:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB16_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
@@ -1183,6 +1212,7 @@ define { i32, i1 } @test_cmpxchg_weak_acqrel_relaxed(i32 addrspace(200)* %ptr, i
 ; HYBRID-ATOMICS-NEXT:  .LBB16_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1245,6 +1275,7 @@ define { i32, i1 } @test_cmpxchg_weak_release_acquire(i32 addrspace(200)* %ptr, 
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_release_acquire:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB17_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
@@ -1257,6 +1288,7 @@ define { i32, i1 } @test_cmpxchg_weak_release_acquire(i32 addrspace(200)* %ptr, 
 ; HYBRID-ATOMICS-NEXT:  .LBB17_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1319,6 +1351,7 @@ define { i32, i1 } @test_cmpxchg_weak_release_relaxed(i32 addrspace(200)* %ptr, 
 ;
 ; HYBRID-ATOMICS-LABEL: test_cmpxchg_weak_release_relaxed:
 ; HYBRID-ATOMICS:       # %bb.0: # %entry
+; HYBRID-ATOMICS-NEXT:    fence rw, w
 ; HYBRID-ATOMICS-NEXT:  .LBB18_1: # %entry
 ; HYBRID-ATOMICS-NEXT:    # =>This Inner Loop Header: Depth=1
 ; HYBRID-ATOMICS-NEXT:    lr.w.cap a2, (ca0)
@@ -1405,6 +1438,7 @@ define { i32, i1 } @test_cmpxchg_weak_acquire_acquire(i32 addrspace(200)* %ptr, 
 ; HYBRID-ATOMICS-NEXT:  .LBB19_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
@@ -1479,6 +1513,7 @@ define { i32, i1 } @test_cmpxchg_weak_acquire_relaxed(i32 addrspace(200)* %ptr, 
 ; HYBRID-ATOMICS-NEXT:  .LBB20_3: # %entry
 ; HYBRID-ATOMICS-NEXT:    xor a0, a2, a1
 ; HYBRID-ATOMICS-NEXT:    seqz a1, a0
+; HYBRID-ATOMICS-NEXT:    fence r, rw
 ; HYBRID-ATOMICS-NEXT:    mv a0, a2
 ; HYBRID-ATOMICS-NEXT:    ret
 ;

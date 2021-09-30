@@ -9213,9 +9213,9 @@ void RISCVTargetLowering::LowerAsmOperandForConstraint(
 Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilderBase &Builder,
                                                    Instruction *Inst,
                                                    AtomicOrdering Ord) const {
-  if (isa<LoadInst>(Inst) && Ord == AtomicOrdering::SequentiallyConsistent)
+  if (Inst->hasAtomicLoad() && Ord == AtomicOrdering::SequentiallyConsistent)
     return Builder.CreateFence(Ord);
-  if (isa<StoreInst>(Inst) && isReleaseOrStronger(Ord))
+  if (Inst->hasAtomicStore() && isReleaseOrStronger(Ord))
     return Builder.CreateFence(AtomicOrdering::Release);
   return nullptr;
 }
@@ -9223,7 +9223,7 @@ Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilderBase &Builder,
 Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilderBase &Builder,
                                                     Instruction *Inst,
                                                     AtomicOrdering Ord) const {
-  if (isa<LoadInst>(Inst) && isAcquireOrStronger(Ord))
+  if (Inst->hasAtomicLoad() && isAcquireOrStronger(Ord))
     return Builder.CreateFence(AtomicOrdering::Acquire);
   return nullptr;
 }
@@ -9259,6 +9259,30 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
   }
 
   return TargetLowering::getOptimalMemOpType(Op, FuncAttributes);
+}
+
+template <typename Instr>
+static bool
+needsExplicitAddressingModeAtomics(const Instr *I,
+                                   const RISCVSubtarget &Subtarget) {
+  // We have to fall back to the explicit addressing mode atomics when we can't
+  // use the more powerful mode-dependent econdings. This happens when using
+  // capability pointers in non-capability mode and integer pointers in capmode.
+  const DataLayout &DL = I->getModule()->getDataLayout();
+  bool IsCheriPurecap = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
+  return DL.isFatPointer(I->getPointerOperand()->getType()) != IsCheriPurecap;
+}
+
+bool RISCVTargetLowering::shouldInsertFencesForAtomic(
+    const Instruction *I) const {
+  // The CHERI instructions with explicit addressing mode are always relaxed
+  // so we need to insert fences when using them.
+  if (const auto *RMWI = dyn_cast<AtomicRMWInst>(I)) {
+    return needsExplicitAddressingModeAtomics(RMWI, Subtarget);
+  } else if (const auto *CASI = dyn_cast<AtomicCmpXchgInst>(I)) {
+    return needsExplicitAddressingModeAtomics(CASI, Subtarget);
+  }
+  return isa<LoadInst>(I) || isa<StoreInst>(I);
 }
 
 TargetLowering::AtomicExpansionKind
