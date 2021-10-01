@@ -40,16 +40,16 @@ entry:
 ; MIPS-NEXT:  %0:gpr64 = DADDiu %13:gpr64, target-flags(mips-gpoff-lo) @test_gd
 ; MIPS-NEXT:  ADJCALLSTACKDOWN 0, 0, implicit-def dead $sp, implicit $sp
 ; MIPS-NEXT:  %1:gpr64 = DADDiu %0:gpr64, target-flags(mips-tlsgd) @external_gd
-; MIPS-NEXT:  %2:gpr64 = LD %0:gpr64, target-flags(mips-got-call) &__tls_get_addr, implicit $ddc :: (load (s64) from call-entry &__tls_get_addr)
+; MIPS-NEXT:  %2:gpr64 = LD %0:gpr64, target-flags(mips-got-call) &__tls_get_addr :: (load (s64) from call-entry &__tls_get_addr)
 ; MIPS-NEXT:  $a0_64 = COPY %1:gpr64
 ; MIPS-NEXT:  $gp_64 = COPY %0:gpr64
 ; MIPS-NEXT:  JALR64Pseudo killed %2:gpr64, <regmask {{.+}}>, target-flags(mips-jalr) <mcsymbol __tls_get_addr>, implicit-def dead $ra, implicit $a0_64, implicit $gp_64, implicit-def $sp, implicit-def $v0_64
 ; MIPS-NEXT:  ADJCALLSTACKUP 0, 0, implicit-def dead $sp, implicit $sp
 ; MIPS-NEXT:  %3:gpr64 = COPY $v0_64
-; MIPS-NEXT:  %4:gpr64 = LD %3:gpr64, 0, implicit $ddc :: (dereferenceable load (s64) from @external_gd)
+; MIPS-NEXT:  %4:gpr64 = LD %3:gpr64, 0 :: (dereferenceable load (s64) from @external_gd)
 ; MIPS-NEXT:  ADJCALLSTACKDOWN 0, 0, implicit-def dead $sp, implicit $sp
 ; MIPS-NEXT:  %5:gpr64 = DADDiu %0:gpr64, target-flags(mips-tlsldm) @internal_gd
-; MIPS-NEXT:  %6:gpr64 = LD %0:gpr64, target-flags(mips-got-call) &__tls_get_addr, implicit $ddc :: (load (s64) from call-entry &__tls_get_addr)
+; MIPS-NEXT:  %6:gpr64 = LD %0:gpr64, target-flags(mips-got-call) &__tls_get_addr :: (load (s64) from call-entry &__tls_get_addr)
 ; MIPS-NEXT:  $a0_64 = COPY %5:gpr64
 ; MIPS-NEXT:  $gp_64 = COPY %0:gpr64
 ; MIPS-NEXT:  JALR64Pseudo killed %6:gpr64, <regmask {{.+}}>, target-flags(mips-jalr) <mcsymbol __tls_get_addr>, implicit-def dead $ra, implicit $a0_64, implicit $gp_64, implicit-def $sp, implicit-def $v0_64
@@ -57,7 +57,7 @@ entry:
 ; MIPS-NEXT:  %7:gpr64 = COPY $v0_64
 ; MIPS-NEXT:  %8:gpr64 = LUi64 target-flags(mips-dtprel-hi) @internal_gd
 ; MIPS-NEXT:  %9:gpr64 = DADDu killed %8:gpr64, %7:gpr64
-; MIPS-NEXT:  %10:gpr64 = LD killed %9:gpr64, target-flags(mips-dtprel-lo) @internal_gd, implicit $ddc :: (dereferenceable load (s64) from @internal_gd)
+; MIPS-NEXT:  %10:gpr64 = LD killed %9:gpr64, target-flags(mips-dtprel-lo) @internal_gd :: (dereferenceable load (s64) from @internal_gd)
 ; MIPS-NEXT:  [[RESULT:%.+]] = DADDu killed %4:gpr64, killed %10:gpr64
 
 ; PCREL, PLT and FNDESC only differ in the prologue since they all use the same TLS mechanism:

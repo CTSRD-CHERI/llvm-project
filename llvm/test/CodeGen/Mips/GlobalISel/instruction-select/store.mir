@@ -22,13 +22,13 @@ body:             |
     ; MIPS32FP32: liveins: $a0, $a1
     ; MIPS32FP32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32FP32: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
-    ; MIPS32FP32: SW [[COPY]], [[COPY1]], 0, implicit $ddc :: (store (s32) into %ir.ptr)
+    ; MIPS32FP32: SW [[COPY]], [[COPY1]], 0 :: (store (s32) into %ir.ptr)
     ; MIPS32FP32: RetRA
     ; MIPS32FP64-LABEL: name: store_i32
     ; MIPS32FP64: liveins: $a0, $a1
     ; MIPS32FP64: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32FP64: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
-    ; MIPS32FP64: SW [[COPY]], [[COPY1]], 0, implicit $ddc :: (store (s32) into %ir.ptr)
+    ; MIPS32FP64: SW [[COPY]], [[COPY1]], 0 :: (store (s32) into %ir.ptr)
     ; MIPS32FP64: RetRA
     %0:gprb(s32) = COPY $a0
     %1:gprb(p0) = COPY $a1

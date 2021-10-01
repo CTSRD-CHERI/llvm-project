@@ -21,8 +21,8 @@ body:             |
     ; MIPS32: liveins: $a0, $a1
     ; MIPS32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
-    ; MIPS32: [[LBu:%[0-9]+]]:gpr32 = LBu [[COPY1]], 0, implicit $ddc :: (load (s8) from %ir.py)
-    ; MIPS32: SB [[LBu]], [[COPY]], 0, implicit $ddc :: (store (s8) into %ir.px)
+    ; MIPS32: [[LBu:%[0-9]+]]:gpr32 = LBu [[COPY1]], 0 :: (load (s8) from %ir.py)
+    ; MIPS32: SB [[LBu]], [[COPY]], 0 :: (store (s8) into %ir.px)
     ; MIPS32: RetRA
     %0:gprb(p0) = COPY $a0
     %1:gprb(p0) = COPY $a1
@@ -46,8 +46,8 @@ body:             |
     ; MIPS32: liveins: $a0, $a1
     ; MIPS32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
-    ; MIPS32: [[LHu:%[0-9]+]]:gpr32 = LHu [[COPY1]], 0, implicit $ddc :: (load (s16) from %ir.py)
-    ; MIPS32: SH [[LHu]], [[COPY]], 0, implicit $ddc :: (store (s16) into %ir.px)
+    ; MIPS32: [[LHu:%[0-9]+]]:gpr32 = LHu [[COPY1]], 0 :: (load (s16) from %ir.py)
+    ; MIPS32: SH [[LHu]], [[COPY]], 0 :: (store (s16) into %ir.px)
     ; MIPS32: RetRA
     %0:gprb(p0) = COPY $a0
     %1:gprb(p0) = COPY $a1
@@ -71,8 +71,8 @@ body:             |
     ; MIPS32: liveins: $a0, $a1
     ; MIPS32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
-    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[COPY1]], 0, implicit $ddc :: (load (s32) from %ir.py)
-    ; MIPS32: SW [[LW]], [[COPY]], 0, implicit $ddc :: (store (s32) into %ir.px)
+    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[COPY1]], 0 :: (load (s32) from %ir.py)
+    ; MIPS32: SW [[LW]], [[COPY]], 0 :: (store (s32) into %ir.px)
     ; MIPS32: RetRA
     %0:gprb(p0) = COPY $a0
     %1:gprb(p0) = COPY $a1

@@ -21,13 +21,13 @@ body:             |
     ; MIPS32FP32-LABEL: name: load_i32
     ; MIPS32FP32: liveins: $a0
     ; MIPS32FP32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
-    ; MIPS32FP32: [[LW:%[0-9]+]]:gpr32 = LW [[COPY]], 0, implicit $ddc :: (load (s32) from %ir.ptr)
+    ; MIPS32FP32: [[LW:%[0-9]+]]:gpr32 = LW [[COPY]], 0 :: (load (s32) from %ir.ptr)
     ; MIPS32FP32: $v0 = COPY [[LW]]
     ; MIPS32FP32: RetRA implicit $v0
     ; MIPS32FP64-LABEL: name: load_i32
     ; MIPS32FP64: liveins: $a0
     ; MIPS32FP64: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
-    ; MIPS32FP64: [[LW:%[0-9]+]]:gpr32 = LW [[COPY]], 0, implicit $ddc :: (load (s32) from %ir.ptr)
+    ; MIPS32FP64: [[LW:%[0-9]+]]:gpr32 = LW [[COPY]], 0 :: (load (s32) from %ir.ptr)
     ; MIPS32FP64: $v0 = COPY [[LW]]
     ; MIPS32FP64: RetRA implicit $v0
     %0:gprb(p0) = COPY $a0

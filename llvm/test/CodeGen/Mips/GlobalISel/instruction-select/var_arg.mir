@@ -59,31 +59,31 @@ body:             |
     ; MIPS32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
     ; MIPS32: [[ADDiu:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.1, 0
-    ; MIPS32: SW [[COPY1]], [[ADDiu]], 0, implicit $ddc :: (store (s32) into %fixed-stack.1)
+    ; MIPS32: SW [[COPY1]], [[ADDiu]], 0 :: (store (s32) into %fixed-stack.1)
     ; MIPS32: [[COPY2:%[0-9]+]]:gpr32 = COPY $a2
     ; MIPS32: [[ADDiu1:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.2, 0
-    ; MIPS32: SW [[COPY2]], [[ADDiu1]], 0, implicit $ddc :: (store (s32) into %fixed-stack.2)
+    ; MIPS32: SW [[COPY2]], [[ADDiu1]], 0 :: (store (s32) into %fixed-stack.2)
     ; MIPS32: [[COPY3:%[0-9]+]]:gpr32 = COPY $a3
     ; MIPS32: [[ADDiu2:%[0-9]+]]:gpr32 = ADDiu %fixed-stack.3, 0
-    ; MIPS32: SW [[COPY3]], [[ADDiu2]], 0, implicit $ddc :: (store (s32) into %fixed-stack.3)
+    ; MIPS32: SW [[COPY3]], [[ADDiu2]], 0 :: (store (s32) into %fixed-stack.3)
     ; MIPS32: [[LUi:%[0-9]+]]:gpr32 = LUi target-flags(mips-abs-hi) @.str
     ; MIPS32: [[ADDiu3:%[0-9]+]]:gpr32 = ADDiu [[LUi]], target-flags(mips-abs-lo) @.str
     ; MIPS32: [[ADDiu4:%[0-9]+]]:gpr32 = ADDiu %stack.0.fmt.addr, 0
     ; MIPS32: [[ADDiu5:%[0-9]+]]:gpr32 = ADDiu %stack.1.ap, 0
     ; MIPS32: [[ADDiu6:%[0-9]+]]:gpr32 = ADDiu %stack.2.aq, 0
     ; MIPS32: [[ADDiu7:%[0-9]+]]:gpr32 = ADDiu %stack.3.s, 0
-    ; MIPS32: SW [[COPY]], [[ADDiu4]], 0, implicit $ddc :: (store (p0) into %ir.fmt.addr)
+    ; MIPS32: SW [[COPY]], [[ADDiu4]], 0 :: (store (p0) into %ir.fmt.addr)
     ; MIPS32: [[LEA_ADDiu:%[0-9]+]]:gpr32 = LEA_ADDiu %stack.0.fmt.addr, 0
-    ; MIPS32: SW [[LEA_ADDiu]], [[ADDiu5]], 0, implicit $ddc
-    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu5]], 0, implicit $ddc :: (load (s32))
-    ; MIPS32: SW [[LW]], [[ADDiu6]], 0, implicit $ddc :: (store (s32))
-    ; MIPS32: [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu6]], 0, implicit $ddc :: (load (p0) from %ir.aq)
+    ; MIPS32: SW [[LEA_ADDiu]], [[ADDiu5]], 0
+    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDiu5]], 0 :: (load (s32))
+    ; MIPS32: SW [[LW]], [[ADDiu6]], 0 :: (store (s32))
+    ; MIPS32: [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu6]], 0 :: (load (p0) from %ir.aq)
     ; MIPS32: [[ORi:%[0-9]+]]:gpr32 = ORi $zero, 4
     ; MIPS32: [[ADDu:%[0-9]+]]:gpr32 = ADDu [[LW1]], [[ORi]]
-    ; MIPS32: SW [[ADDu]], [[ADDiu6]], 0, implicit $ddc :: (store (p0) into %ir.aq)
-    ; MIPS32: [[LW2:%[0-9]+]]:gpr32 = LW [[LW1]], 0, implicit $ddc :: (load (p0) from %ir.2)
-    ; MIPS32: SW [[LW2]], [[ADDiu7]], 0, implicit $ddc :: (store (p0) into %ir.s)
-    ; MIPS32: [[LW3:%[0-9]+]]:gpr32 = LW [[ADDiu7]], 0, implicit $ddc :: (load (p0) from %ir.s)
+    ; MIPS32: SW [[ADDu]], [[ADDiu6]], 0 :: (store (p0) into %ir.aq)
+    ; MIPS32: [[LW2:%[0-9]+]]:gpr32 = LW [[LW1]], 0 :: (load (p0) from %ir.2)
+    ; MIPS32: SW [[LW2]], [[ADDiu7]], 0 :: (store (p0) into %ir.s)
+    ; MIPS32: [[LW3:%[0-9]+]]:gpr32 = LW [[ADDiu7]], 0 :: (load (p0) from %ir.s)
     ; MIPS32: ADJCALLSTACKDOWN 16, 0, implicit-def $sp, implicit $sp
     ; MIPS32: $a0 = COPY [[ADDiu3]]
     ; MIPS32: $a1 = COPY [[LW3]]
@@ -108,8 +108,8 @@ body:             |
     %10:gprb(p0) = G_FRAME_INDEX %stack.3.s
     G_STORE %0(p0), %7(p0) :: (store (p0) into %ir.fmt.addr)
     G_VASTART %8(p0) :: (store (p0) into %ir.ap1, align 1)
-    %19:gpr32 = LW %8(p0), 0, implicit $ddc :: (load (s32))
-    SW %19, %9(p0), 0, implicit $ddc :: (store (s32))
+    %19:gpr32 = LW %8(p0), 0 :: (load (s32))
+    SW %19, %9(p0), 0 :: (store (s32))
     %11:gprb(p0) = G_LOAD %9(p0) :: (load (p0) from %ir.aq)
     %12:gprb(s32) = G_CONSTANT i32 4
     %13:gprb(p0) = G_PTR_ADD %11, %12(s32)

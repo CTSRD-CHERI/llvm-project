@@ -71,7 +71,7 @@ body:             |
     %0:gpr64 = DADDiu %8, target-flags(mips-gpoff-lo) @test_sandbox_cs_clock_gettime_default
     %1:gpr64 = RDHWR64 $hwr29, 0
     $v1_64 = COPY %1
-    %2:gpr64 = LD %0, target-flags(mips-gottprel) @cheri_errno, implicit $ddc :: (load (s64))
+    %2:gpr64 = LD %0, target-flags(mips-gottprel) @cheri_errno :: (load (s64))
     %3:gpr64 = COPY $v1_64
     %4:gpr64 = DADDu %3, killed %2
     %5:cherigpr = CFromPtr $ddc, killed %4
@@ -87,14 +87,14 @@ body:             |
 
 
 ...
-# This would previously create SW64 $zero, %4:gpr64, 0, implicit $ddc from the CAPSTORE32
+# This would previously create SW64 $zero, %4:gpr64, 0 from the CAPSTORE32
 # However, we need to use a SW here since $zero is a GPR32 register
 # CHECK: %6:gpr32 = ADDiu $zero, 0
-# CHECK-NEXT: SW $zero, %4, 0, implicit $ddc
-# CHECK-NEXT: SW64 $zero_64, %4, 0, implicit $ddc
-# CHECK-NEXT: SH64 $zero_64, %4, 0, implicit $ddc
-# CHECK-NEXT: SH $zero, %4, 0, implicit $ddc
-# CHECK-NEXT: SB64 $zero_64, %4, 0, implicit $ddc
-# CHECK-NEXT: SB $zero, %4, 0, implicit $ddc
-# CHECK-NEXT: SD $zero_64, %4, 0, implicit $ddc
+# CHECK-NEXT: SW $zero, %4, 0
+# CHECK-NEXT: SW64 $zero_64, %4, 0
+# CHECK-NEXT: SH64 $zero_64, %4, 0
+# CHECK-NEXT: SH $zero, %4, 0
+# CHECK-NEXT: SB64 $zero_64, %4, 0
+# CHECK-NEXT: SB $zero, %4, 0
+# CHECK-NEXT: SD $zero_64, %4, 0
 # CHECK-NEXT: %9:gpr64 = DADDiu $zero_64, 0

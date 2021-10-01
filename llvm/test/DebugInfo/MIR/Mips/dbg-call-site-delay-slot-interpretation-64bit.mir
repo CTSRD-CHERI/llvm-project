@@ -102,9 +102,9 @@ body:             |
     DBG_VALUE $a1_64, $noreg, !19, !DIExpression(), debug-location !20
     $sp_64 = DADDiu $sp_64, -32
     CFI_INSTRUCTION def_cfa_offset 32
-    SD killed $ra_64, $sp_64, 24, implicit $ddc :: (store (s64) into %stack.0)
-    SD killed $s1_64, $sp_64, 16, implicit $ddc :: (store (s64) into %stack.1)
-    SD killed $s0_64, $sp_64, 8, implicit $ddc :: (store (s64) into %stack.2)
+    SD killed $ra_64, $sp_64, 24 :: (store (s64) into %stack.0)
+    SD killed $s1_64, $sp_64, 16 :: (store (s64) into %stack.1)
+    SD killed $s0_64, $sp_64, 8 :: (store (s64) into %stack.2)
     CFI_INSTRUCTION offset $ra_64, -8
     CFI_INSTRUCTION offset $s1_64, -16
     CFI_INSTRUCTION offset $s0_64, -24
@@ -118,10 +118,10 @@ body:             |
       $a1_64 = OR64 $s1_64, $zero_64, debug-location !20
     }
     renamable $at = nsw ADDu killed renamable $v0, renamable $s1, implicit killed $s1_64, debug-location !20
-    SW killed renamable $at, killed renamable $s0_64, 0, implicit $ddc
-    $s0_64 = LD $sp_64, 8, implicit $ddc
-    $s1_64 = LD $sp_64, 16, implicit $ddc
-    $ra_64 = LD $sp_64, 24, implicit $ddc
+    SW killed renamable $at, killed renamable $s0_64, 0
+    $s0_64 = LD $sp_64, 8
+    $s1_64 = LD $sp_64, 16
+    $ra_64 = LD $sp_64, 24
     PseudoReturn64 undef $ra_64 {
       $sp_64 = DADDiu $sp_64, 32
     }

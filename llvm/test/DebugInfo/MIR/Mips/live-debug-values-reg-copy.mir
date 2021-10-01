@@ -166,9 +166,9 @@ body:             |
     SDC164 killed $d26_64, $sp_64, 40 :: (store (s64) into %stack.0)
     SDC164 killed $d25_64, $sp_64, 32 :: (store (s64) into %stack.1)
     SDC164 killed $d24_64, $sp_64, 24 :: (store (s64) into %stack.2)
-    SD killed $ra_64, $sp_64, 16, implicit $ddc :: (store (s64) into %stack.3)
-    SD killed $s1_64, $sp_64, 8, implicit $ddc :: (store (s64) into %stack.4)
-    SD killed $s0_64, $sp_64, 0, implicit $ddc :: (store (s64) into %stack.5)
+    SD killed $ra_64, $sp_64, 16 :: (store (s64) into %stack.3)
+    SD killed $s1_64, $sp_64, 8 :: (store (s64) into %stack.4)
+    SD killed $s0_64, $sp_64, 0 :: (store (s64) into %stack.5)
     CFI_INSTRUCTION offset $d27_64, -8
     CFI_INSTRUCTION offset $d26_64, -4
     CFI_INSTRUCTION offset $d26_64, -16
@@ -240,9 +240,9 @@ body:             |
   bb.3.if.end:
     liveins: $f0
 
-    $s0_64 = LD $sp_64, 0, implicit $ddc, debug-location !19 :: (load (s64) from %stack.5)
-    $s1_64 = LD $sp_64, 8, implicit $ddc, debug-location !19 :: (load (s64) from %stack.4)
-    $ra_64 = LD $sp_64, 16, implicit $ddc, debug-location !19 :: (load (s64) from %stack.3)
+    $s0_64 = LD $sp_64, 0, debug-location !19 :: (load (s64) from %stack.5)
+    $s1_64 = LD $sp_64, 8, debug-location !19 :: (load (s64) from %stack.4)
+    $ra_64 = LD $sp_64, 16, debug-location !19 :: (load (s64) from %stack.3)
     $d24_64 = LDC164 $sp_64, 24, debug-location !19 :: (load (s64) from %stack.2)
     $d25_64 = LDC164 $sp_64, 32, debug-location !19 :: (load (s64) from %stack.1)
     $d26_64 = LDC164 $sp_64, 40, debug-location !19 :: (load (s64) from %stack.0)
