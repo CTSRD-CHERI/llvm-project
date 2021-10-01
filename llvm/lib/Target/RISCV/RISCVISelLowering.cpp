@@ -9293,9 +9293,14 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   if (AI->isFloatingPointOperation())
     return AtomicExpansionKind::CmpXChg;
 
-  unsigned Size = AI->getType()->getPrimitiveSizeInBits();
-  if ((Size == 8 || Size == 16) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+  // For capability pointers we must always use the smallest possible type
+  // instead of promoting to i32/i64 to ensure we don't trigger bounds errors.
+  const DataLayout &DL = AI->getModule()->getDataLayout();
+  if (DL.isFatPointer(AI->getPointerOperand()->getType()))
+    return AtomicExpansionKind::None;
+
+  uint64_t Size = DL.getTypeSizeInBits(AI->getType()).getFixedSize();
+  if (Size == 8 || Size == 16)
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }
@@ -9437,11 +9442,19 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
                                                   Type *ValueTy,
                                                   Type *PointerTy,
                                                   Align Alignment) const {
-  // FIXME: we current have to expand RMW to libcalls since we are missing
-  //  the SelectionDAG nodes+expansions to use the explicit addressing mode.
-  if (DL.isFatPointer(PointerTy) && isa<AtomicRMWInst>(AI) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
-    return false;
+  if (auto *RMWI = dyn_cast<AtomicRMWInst>(AI)) {
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      // We do not support AtomicRMW for explicit via-integer addressing
+      // in the purecap ABI (yet).
+      if (!DL.isFatPointer(PointerTy))
+        return false;
+    } else {
+      // In the hybrid ABI with explicit capability addressing, we support all
+      // integer operations, but do not handle capability arguments.
+      if (DL.isFatPointer(PointerTy) && DL.isFatPointer(ValueTy))
+        return false;
+    }
+  }
   return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
                                                  Alignment);
 }

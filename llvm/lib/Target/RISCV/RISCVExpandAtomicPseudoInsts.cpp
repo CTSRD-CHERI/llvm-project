@@ -292,6 +292,33 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   case RISCV::PseudoCheriCmpXchgCapExplicitCap:
     return expandAtomicCmpXchg(MBB, MBBI, false, CLenVT, true, NextMBBI,
                                   /*ExplicitAddrMode=*/true);
+
+    // To avoid the combinatorics explosion of cases here, we use a macro to
+    // handle the explicit addressing mode atomics.
+#define EXPLICIT_ADDRMODE_CASE(name, op, fn, size)                             \
+  case RISCV::PseudoCheriAtomicExplicitCap##name##size:                        \
+    return fn(MBB, MBBI, AtomicRMWInst::op, false, MVT::i##size, true,         \
+              NextMBBI, true);
+#define HANDLE_EXPLICIT_ADDRMODE_RMW_PSEUDOS(size)                             \
+  EXPLICIT_ADDRMODE_CASE(Swap, Xchg, expandAtomicBinOp, size)                  \
+  EXPLICIT_ADDRMODE_CASE(LoadAdd, Add, expandAtomicBinOp, size)                \
+  EXPLICIT_ADDRMODE_CASE(LoadSub, Sub, expandAtomicBinOp, size)                \
+  EXPLICIT_ADDRMODE_CASE(LoadAnd, And, expandAtomicBinOp, size)                \
+  EXPLICIT_ADDRMODE_CASE(LoadOr, Or, expandAtomicBinOp, size)                  \
+  EXPLICIT_ADDRMODE_CASE(LoadXor, Xor, expandAtomicBinOp, size)                \
+  EXPLICIT_ADDRMODE_CASE(LoadNand, Nand, expandAtomicBinOp, size)              \
+  EXPLICIT_ADDRMODE_CASE(LoadMax, Max, expandAtomicMinMaxOp, size)             \
+  EXPLICIT_ADDRMODE_CASE(LoadMin, Min, expandAtomicMinMaxOp, size)             \
+  EXPLICIT_ADDRMODE_CASE(LoadUMax, UMax, expandAtomicMinMaxOp, size)           \
+  EXPLICIT_ADDRMODE_CASE(LoadUMin, UMin, expandAtomicMinMaxOp, size)
+
+    HANDLE_EXPLICIT_ADDRMODE_RMW_PSEUDOS(8)
+    HANDLE_EXPLICIT_ADDRMODE_RMW_PSEUDOS(16)
+    HANDLE_EXPLICIT_ADDRMODE_RMW_PSEUDOS(32)
+    HANDLE_EXPLICIT_ADDRMODE_RMW_PSEUDOS(64)
+
+#undef HANDLE_EXPLICIT_ADDRMODE_RMW_PSEUDOS
+#undef EXPLICIT_ADDRMODE_CASE
   }
 
   return false;
