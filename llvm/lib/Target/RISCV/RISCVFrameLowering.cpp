@@ -708,15 +708,15 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
       // |--------------------------| --     |
       // | Padding after RVV        | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |-- MFI.getStackSize()
       // | RVV objects              | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |
       // | Padding before RVV       | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |
       // | scalar local variables   | | <----'
       // |--------------------------| -- <-- BP
@@ -733,15 +733,15 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
       // |--------------------------| --     |
       // | Padding after RVV        | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |-- MFI.getStackSize()
       // | RVV objects              | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |
       // | Padding before RVV       | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |
       // | scalar local variables   | | <----'
       // |--------------------------| -- <-- SP
@@ -786,15 +786,15 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
       // |--------------------------| --     |
       // | Padding after RVV        | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |
       // | RVV objects              | |      |-- MFI.getStackSize()
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |
       // | Padding before RVV       | |      |
       // | (not counted in          | |      |
-      // | MFI.getStackSize()       | |      |
+      // | MFI.getStackSize())      | |      |
       // |--------------------------| --     |
       // | scalar local variables   | | <----'
       // |--------------------------| -- <-- SP
