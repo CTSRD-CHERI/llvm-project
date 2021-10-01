@@ -31,9 +31,9 @@ entry:
 ; MIPS-NEXT: %0:gpr64 = DADDiu %{{6|4}}:gpr64, target-flags(mips-gpoff-lo) @test
 ; MIPS-MXGOT-NEXT: %1:gpr64 = LUi64 target-flags(mips-got-hi16) @global
 ; MIPS-MXGOT-NEXT: %2:gpr64 = DADDu killed %1:gpr64, %0
-; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2:gpr64, target-flags(mips-got-lo16) @global, implicit $ddc :: (load (s64) from got)
-; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global, implicit $ddc :: (load (s64) from got)
-; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]]:gpr64, 0, implicit $ddc :: (dereferenceable load (s64) from @global)
+; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2:gpr64, target-flags(mips-got-lo16) @global :: (load (s64) from got)
+; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global :: (load (s64) from got)
+; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]]:gpr64, 0 :: (dereferenceable load (s64) from @global)
 
 
 ; Due to the $cgp live-in the PLT and FNDESC functions are much shorter:

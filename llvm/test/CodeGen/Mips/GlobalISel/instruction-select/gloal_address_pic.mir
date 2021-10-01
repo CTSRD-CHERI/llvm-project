@@ -54,7 +54,7 @@ body:             |
     ; MIPS32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
     ; MIPS32: ADJCALLSTACKDOWN 16, 0, implicit-def $sp, implicit $sp
-    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got-call) @f, implicit $ddc :: (load (s32) from got)
+    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got-call) @f :: (load (s32) from got)
     ; MIPS32: $a0 = COPY [[COPY]]
     ; MIPS32: $a1 = COPY [[COPY1]]
     ; MIPS32: $gp = COPY [[ADDu1]]
@@ -95,7 +95,7 @@ body:             |
     ; MIPS32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32: [[COPY1:%[0-9]+]]:gpr32 = COPY $a1
     ; MIPS32: ADJCALLSTACKDOWN 16, 0, implicit-def $sp, implicit $sp
-    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got) @f_with_local_linkage, implicit $ddc :: (load (s32) from got)
+    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got) @f_with_local_linkage :: (load (s32) from got)
     ; MIPS32: [[ADDiu:%[0-9]+]]:gpr32 = ADDiu [[LW]], target-flags(mips-abs-lo) @f_with_local_linkage
     ; MIPS32: $a0 = COPY [[COPY]]
     ; MIPS32: $a1 = COPY [[COPY1]]
@@ -131,8 +131,8 @@ body:             |
     ; MIPS32-LABEL: name: ret_global_int
     ; MIPS32: liveins: $t9, $v0
     ; MIPS32: [[ADDu:%[0-9]+]]:gpr32 = ADDu $v0, $t9
-    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got) @val, implicit $ddc :: (load (s32) from got)
-    ; MIPS32: [[LW1:%[0-9]+]]:gpr32 = LW [[LW]], 0, implicit $ddc :: (load (s32) from @val)
+    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got) @val :: (load (s32) from got)
+    ; MIPS32: [[LW1:%[0-9]+]]:gpr32 = LW [[LW]], 0 :: (load (s32) from @val)
     ; MIPS32: $v0 = COPY [[LW1]]
     ; MIPS32: RetRA implicit $v0
     %1:gprb(p0) = G_GLOBAL_VALUE @val
@@ -152,9 +152,9 @@ body:             |
     ; MIPS32-LABEL: name: ret_global_int_with_local_linkage
     ; MIPS32: liveins: $t9, $v0
     ; MIPS32: [[ADDu:%[0-9]+]]:gpr32 = ADDu $v0, $t9
-    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got) @val_with_local_linkage, implicit $ddc :: (load (s32) from got)
+    ; MIPS32: [[LW:%[0-9]+]]:gpr32 = LW [[ADDu]], target-flags(mips-got) @val_with_local_linkage :: (load (s32) from got)
     ; MIPS32: [[ADDiu:%[0-9]+]]:gpr32 = ADDiu [[LW]], target-flags(mips-abs-lo) @val_with_local_linkage
-    ; MIPS32: [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0, implicit $ddc :: (load (s32) from @val_with_local_linkage)
+    ; MIPS32: [[LW1:%[0-9]+]]:gpr32 = LW [[ADDiu]], 0 :: (load (s32) from @val_with_local_linkage)
     ; MIPS32: $v0 = COPY [[LW1]]
     ; MIPS32: RetRA implicit $v0
     %1:gprb(p0) = G_GLOBAL_VALUE @val_with_local_linkage

@@ -173,8 +173,8 @@ body:             |
 
     %0:gpr32 = COPY $a0
     %1:gpr32 = COPY %0
-    SW %0, %stack.0.z.addr, 0, implicit $ddc :: (store (s32) into %ir.z.addr)
-    %2:gpr32 = LW %stack.0.z.addr, 0, implicit $ddc :: (dereferenceable load (s32) from %ir.z.addr)
+    SW %0, %stack.0.z.addr, 0 :: (store (s32) into %ir.z.addr)
+    %2:gpr32 = LW %stack.0.z.addr, 0 :: (dereferenceable load (s32) from %ir.z.addr)
     SYNC 0
     %3:gpr32 = ADDiu $zero, 42
 

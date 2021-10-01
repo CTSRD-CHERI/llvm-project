@@ -403,10 +403,6 @@ void RegDefsUses::setCallerSaved(const MachineInstr &MI) {
 
 void RegDefsUses::setUnallocatableRegs(const MachineFunction &MF) {
   BitVector AllocSet = TRI.getAllocatableSet(MF);
-  // If we're not a CHERI target, then the $DDC register is just a convenient
-  // fiction and shouldn't impede optimisation.
-  if (!MF.getSubtarget<MipsSubtarget>().isCheri())
-    AllocSet[Mips::DDC] = true;
 
   for (unsigned R : AllocSet.set_bits())
     for (MCRegAliasIterator AI(R, &TRI, false); AI.isValid(); ++AI)
@@ -414,7 +410,10 @@ void RegDefsUses::setUnallocatableRegs(const MachineFunction &MF) {
 
   AllocSet.set(Mips::ZERO);
   AllocSet.set(Mips::ZERO_64);
-  AllocSet.set(Mips::CNULL);
+  if (MF.getSubtarget<MipsSubtarget>().isCheri()) {
+    AllocSet.set(Mips::CNULL);
+    AllocSet.set(Mips::DDC); // All writes to DDC are marked as hasSideEffects.
+  }
 
   Defs |= AllocSet.flip();
 }

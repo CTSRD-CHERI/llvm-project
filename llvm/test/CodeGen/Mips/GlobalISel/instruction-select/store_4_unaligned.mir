@@ -89,7 +89,7 @@ body:             |
     ; MIPS32: [[COPY:%[0-9]+]]:gpr32 = COPY $a0
     ; MIPS32: [[LUi:%[0-9]+]]:gpr32 = LUi target-flags(mips-abs-hi) @i32_align8
     ; MIPS32: [[ADDiu:%[0-9]+]]:gpr32 = ADDiu [[LUi]], target-flags(mips-abs-lo) @i32_align8
-    ; MIPS32: SW [[COPY]], [[ADDiu]], 0, implicit $ddc :: (store (s32) into @i32_align8, align 8)
+    ; MIPS32: SW [[COPY]], [[ADDiu]], 0 :: (store (s32) into @i32_align8, align 8)
     ; MIPS32: RetRA
     %0:gprb(s32) = COPY $a0
     %1:gprb(p0) = G_GLOBAL_VALUE @i32_align8

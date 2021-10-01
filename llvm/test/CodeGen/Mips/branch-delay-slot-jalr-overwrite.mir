@@ -65,18 +65,18 @@ constants:
 body:             |
   bb.0.entry:
     liveins: $a0_64, $ra_64, $s1_64, $s0_64, $sp_64, $ddc
-    SD killed $ra_64, $sp_64, 24, implicit $ddc :: (store 8 into %stack.0)
+    SD killed $ra_64, $sp_64, 24 :: (store 8 into %stack.0)
     renamable $ra = SLL renamable $a0, 0
-    SW renamable $ra, renamable $s1_64, target-flags(mips-abs-lo) @g1, implicit $ddc :: (store (s32) into @g1, align 8)
+    SW renamable $ra, renamable $s1_64, target-flags(mips-abs-lo) @g1 :: (store (s32) into @g1, align 8)
     JAL @bar, csr_n64, implicit-def dead $ra, implicit $a0_64, implicit-def $sp, implicit-def dead $v0
 
-    $s1_64 = LD $sp_64, 24, implicit $ddc :: (load (s64) from %stack.0)
-    $a0_64 = LD $sp_64, 24, implicit $ddc :: (load (s64) from %stack.0)
-    SW renamable $s0, renamable $s1_64, target-flags(mips-abs-lo) @g1, implicit $ddc :: (store (s32) into @g1, align 8)
+    $s1_64 = LD $sp_64, 24 :: (load (s64) from %stack.0)
+    $a0_64 = LD $sp_64, 24 :: (load (s64) from %stack.0)
+    SW renamable $s0, renamable $s1_64, target-flags(mips-abs-lo) @g1 :: (store (s32) into @g1, align 8)
     JAL @bar, csr_n64, implicit-def dead $ra, implicit $a0_64, implicit-def $sp, implicit-def dead $v0
 
-    $v0_64 = LD $sp_64, 24, implicit $ddc :: (load (s64) from %stack.0)
-    $ra_64 = LD $sp_64, 24, implicit $ddc :: (load (s64) from %stack.0)
+    $v0_64 = LD $sp_64, 24 :: (load (s64) from %stack.0)
+    $ra_64 = LD $sp_64, 24 :: (load (s64) from %stack.0)
     PseudoReturn64 undef $ra_64, implicit $v0
 
 ...
@@ -86,5 +86,5 @@ body:             |
 # CHECK-NEXT: }
 # But this one can go in the delay slot:
 # CHECK:      JAL @bar, csr_n64, implicit-def dead $ra, implicit $a0_64, implicit-def $sp, implicit-def dead $v0 {
-# CHECK-NEXT:   SW renamable $s0, renamable $s1_64, target-flags(mips-abs-lo) @g1, implicit $ddc :: (store (s32) into @g1, align 8)
+# CHECK-NEXT:   SW renamable $s0, renamable $s1_64, target-flags(mips-abs-lo) @g1 :: (store (s32) into @g1, align 8)
 # CHECK-NEXT: }

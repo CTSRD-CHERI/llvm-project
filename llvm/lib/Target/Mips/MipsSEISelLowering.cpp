@@ -202,8 +202,7 @@ MipsSETargetLowering::MipsSETargetLowering(const MipsTargetMachine &TM,
     setOperationAction(ISD::SELECT, CapType, Legal);
     setOperationAction(ISD::SELECT_CC, CapType, Expand);
     setOperationAction(ISD::BR_CC, CapType, Expand);
-  } else
-    addRegisterClass(CapType, &Mips::FakeCheriRegsRegClass);
+  }
 
   setOperationAction(ISD::SMUL_LOHI,          MVT::i32, Custom);
   setOperationAction(ISD::UMUL_LOHI,          MVT::i32, Custom);
