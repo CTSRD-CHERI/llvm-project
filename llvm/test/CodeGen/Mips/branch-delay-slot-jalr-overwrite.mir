@@ -64,7 +64,7 @@ stack:
 constants:
 body:             |
   bb.0.entry:
-    liveins: $a0_64, $ra_64, $s1_64, $s0_64, $sp_64, $ddc
+    liveins: $a0_64, $ra_64, $s1_64, $s0_64, $sp_64
     SD killed $ra_64, $sp_64, 24 :: (store 8 into %stack.0)
     renamable $ra = SLL renamable $a0, 0
     SW renamable $ra, renamable $s1_64, target-flags(mips-abs-lo) @g1 :: (store (s32) into @g1, align 8)

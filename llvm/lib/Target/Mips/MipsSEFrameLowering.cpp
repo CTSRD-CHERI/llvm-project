@@ -425,10 +425,6 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   unsigned ADDiu = ABI.GetPtrAddiuOp();
   unsigned AND = ABI.IsN64() ? Mips::AND64 : Mips::AND;
 
-  // C0 is always live in.  In non-CHERI MIPS, C0 is treated as a read-only
-  // register that is implicitly read by loads and stores.
-  MBB.addLiveIn(Mips::DDC);
-
   const TargetRegisterClass *RC = ABI.ArePtrs64bit() ?
         &Mips::GPR64RegClass : &Mips::GPR32RegClass;
 

@@ -139,7 +139,7 @@ stack:
 constants:
 body:             |
   bb.0.entry:
-    liveins: $c12, $s0_64, $c24, $c23, $c22, $c21, $c20, $c19, $c18, $c17, $ddc
+    liveins: $c12, $s0_64, $c24, $c23, $c22, $c21, $c20, $c19, $c18, $c17
 
     $c11 = CIncOffsetImm $c11, -256
     $c24 = frame-setup CIncOffset $c11, $zero_64

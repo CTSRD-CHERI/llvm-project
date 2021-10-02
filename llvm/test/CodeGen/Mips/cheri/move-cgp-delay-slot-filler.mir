@@ -74,7 +74,7 @@ stack:
 constants:       []
 body:             |
   bb.0.entry:
-    liveins: $c26, $s0_64, $c18, $c17, $ddc
+    liveins: $c26, $s0_64, $c18, $c17
 
     ; CHECK-LABEL: name: a
     ; CHECK:      $c11 = CIncOffsetImm $c11, -48
