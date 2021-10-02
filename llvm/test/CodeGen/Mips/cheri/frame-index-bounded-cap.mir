@@ -104,7 +104,7 @@ body:             |
     liveins: $c12, $a0
 
     ; CHECK-LABEL: name: test_bounded_stack
-    ; CHECK: liveins: $c12, $a0, $ddc
+    ; CHECK: liveins: $c12, $a0{{$}}
     ; CHECK: $c11 = CIncOffset $c11, killed $at_64
     ; CHECK-NEXT: CFI_INSTRUCTION def_cfa_offset 80432
 
