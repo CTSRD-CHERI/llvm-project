@@ -319,6 +319,11 @@ public:
     return prepareDwarfEH(OptLevel, RewindFunction, F, TLI, DT, TTI);
   }
 
+  bool doFinalization(Module &M) override {
+    RewindFunction = nullptr;
+    return false;
+  }
+
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<TargetPassConfig>();
     AU.addRequired<TargetTransformInfoWrapperPass>();
