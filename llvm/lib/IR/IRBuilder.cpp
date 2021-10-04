@@ -205,7 +205,8 @@ CallInst *IRBuilderBase::CreateMemTransferInst(
   CallInst *CI = createCallHelper(TheFn, Ops, this);
 
   auto* MCI = cast<MemTransferInst>(CI);
-  MCI->setPreserveCheriTags(PreserveTags);
+  if (M->getDataLayout().hasCheriCapabilities())
+    MCI->setPreserveCheriTags(PreserveTags);
   if (DstAlign)
     MCI->setDestAlignment(*DstAlign);
   if (SrcAlign)
@@ -245,7 +246,8 @@ CallInst *IRBuilderBase::CreateMemCpyInline(
   CallInst *CI = createCallHelper(TheFn, Ops, this);
 
   auto *MCI = cast<MemCpyInlineInst>(CI);
-  MCI->setPreserveCheriTags(PreserveTags);
+  if (M->getDataLayout().hasCheriCapabilities())
+    MCI->setPreserveCheriTags(PreserveTags);
   if (DstAlign)
     MCI->setDestAlignment(*DstAlign);
   if (SrcAlign)
@@ -289,7 +291,8 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemCpy(
 
   // Set the alignment of the pointer args.
   auto *AMCI = cast<AtomicMemCpyInst>(CI);
-  AMCI->setPreserveCheriTags(PreserveTags);
+  if (M->getDataLayout().hasCheriCapabilities())
+    AMCI->setPreserveCheriTags(PreserveTags);
   AMCI->setDestAlignment(DstAlign);
   AMCI->setSourceAlignment(SrcAlign);
 
@@ -331,7 +334,8 @@ CallInst *IRBuilderBase::CreateMemMove(Value *Dst, MaybeAlign DstAlign,
   CallInst *CI = createCallHelper(TheFn, Ops, this);
 
   auto *MMI = cast<MemMoveInst>(CI);
-  MMI->setPreserveCheriTags(PreserveTags);
+  if (M->getDataLayout().hasCheriCapabilities())
+    MMI->setPreserveCheriTags(PreserveTags);
   if (DstAlign)
     MMI->setDestAlignment(*DstAlign);
   if (SrcAlign)
@@ -368,7 +372,8 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemMove(
       M, Intrinsic::memmove_element_unordered_atomic, Tys);
 
   CallInst *CI = createCallHelper(TheFn, Ops, this);
-  cast<AtomicMemTransferInst>(CI)->setPreserveCheriTags(PreserveTags);
+  if (M->getDataLayout().hasCheriCapabilities())
+    cast<AtomicMemTransferInst>(CI)->setPreserveCheriTags(PreserveTags);
 
   // Set the alignment of the pointer args.
   CI->addParamAttr(0, Attribute::getWithAlignment(CI->getContext(), DstAlign));
