@@ -26,13 +26,13 @@ public:
                                   SDValue Chain, SDValue Op1, SDValue Op2,
                                   SDValue Op3, Align Alignment, bool isVolatile,
                                   bool AlwaysInline,
-                                  bool MustPreserveCheriCapabilities,
+                                  PreserveCheriTags PreserveTags,
                                   MachinePointerInfo DstPtrInfo,
                                   MachinePointerInfo SrcPtrInfo) const override;
   SDValue EmitTargetCodeForMemmove(
       SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Op1,
       SDValue Op2, SDValue Op3, Align Alignment, bool isVolatile,
-      bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
+      PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
       MachinePointerInfo SrcPtrInfo) const override;
   SDValue EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &DL,
                                   SDValue Chain, SDValue Op1, SDValue Op2,

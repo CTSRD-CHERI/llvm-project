@@ -3463,11 +3463,11 @@ SDValue SystemZTargetLowering::lowerVACOPY(SDValue Op,
   const Value *SrcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
   SDLoc DL(Op);
 
-  return DAG.getMemcpy(
-      Chain, DL, DstPtr, SrcPtr, DAG.getIntPtrConstant(32, DL),
-      Align(8), /*isVolatile*/ false, /*AlwaysInline*/ false,
-      /*isTailCall*/ false, /*MustPreserveCheriCapabilities=*/false,
-      MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
+  return DAG.getMemcpy(Chain, DL, DstPtr, SrcPtr, DAG.getIntPtrConstant(32, DL),
+                       Align(8), /*isVolatile*/ false, /*AlwaysInline*/ false,
+                       /*isTailCall*/ false,
+                       llvm::PreserveCheriTags::Unnecessary,
+                       MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
 }
 
 SDValue SystemZTargetLowering::

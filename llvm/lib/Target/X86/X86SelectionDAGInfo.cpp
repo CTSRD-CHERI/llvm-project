@@ -282,16 +282,17 @@ static SDValue emitConstantSizeRepmov(
       DAG.getNode(ISD::ADD, dl, DstVT, Dst, DAG.getConstant(Offset, dl, DstVT)),
       DAG.getNode(ISD::ADD, dl, SrcVT, Src, DAG.getConstant(Offset, dl, SrcVT)),
       DAG.getConstant(BytesLeft, dl, SizeVT), llvm::Align(Align), isVolatile,
-      /*AlwaysInline*/ true, /*isTailCall*/ false, /* CHERI */ false,
-      DstPtrInfo.getWithOffset(Offset), SrcPtrInfo.getWithOffset(Offset)));
+      /*AlwaysInline*/ true, /*isTailCall*/ false,
+      PreserveCheriTags::Unnecessary, DstPtrInfo.getWithOffset(Offset),
+      SrcPtrInfo.getWithOffset(Offset)));
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, Results);
 }
 
 SDValue X86SelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
-    bool /*MustPreserveCheriCaps*/,
-    MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
+    PreserveCheriTags /*PreserveTags*/, MachinePointerInfo DstPtrInfo,
+    MachinePointerInfo SrcPtrInfo) const {
   // If to a segment-relative address space, use the default lowering.
   if (DstPtrInfo.getAddrSpace() >= 256 || SrcPtrInfo.getAddrSpace() >= 256)
     return SDValue();

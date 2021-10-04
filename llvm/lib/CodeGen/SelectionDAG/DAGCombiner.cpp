@@ -18169,6 +18169,7 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
           "store+load memmove src", LD->getBasePtr(), dl, StoreBytes, DAG);
       SDValue Dest = TLI.unalignedLoadStoreCSetbounds(
           "store+load memmove dest", ST->getBasePtr(), dl, StoreBytes, DAG);
+      auto PreserveTags = PreserveCheriTags::Unknown;
       if (ST->getMemoryVT().isFatPointer()) {
         DiagnosticInfoCheriInefficient Warning(
             DAG.getMachineFunction().getFunction(), dl.getDebugLoc(),
@@ -18179,12 +18180,12 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
                 "). Will use memmove() to preserve tags if it is aligned "
                 "correctly at runtime");
         DAG.getContext()->diagnose(Warning);
+        PreserveTags = PreserveCheriTags::Required;
       }
       return DAG.getMemmove(
           Chain, dl, Dest, Src, DAG.getConstant(StoreBytes, dl, MVT::i32),
-          Align(Alignment), false, isTail, ST->getMemoryVT().isFatPointer(),
-          ST->getPointerInfo(), LD->getPointerInfo(), AAMDNodes(),
-          "!!<CHERI-NODIAG>!!");
+          Align(Alignment), false, isTail, PreserveTags, ST->getPointerInfo(),
+          LD->getPointerInfo(), AAMDNodes(), "!!<CHERI-NODIAG>!!");
     }
   }
   return SDValue();

@@ -23,7 +23,7 @@ public:
                                   SDValue Chain, SDValue Op1, SDValue Op2,
                                   SDValue Op3, Align Alignment, bool isVolatile,
                                   bool AlwaysInline,
-                                  bool MustPreserveCheriCapabilities,
+                                  PreserveCheriTags PreserveTags,
                                   MachinePointerInfo DstPtrInfo,
                                   MachinePointerInfo SrcPtrInfo) const override;
 };

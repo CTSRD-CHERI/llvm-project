@@ -39,16 +39,16 @@ class ARMSelectionDAGInfo : public SelectionDAGTargetInfo {
 public:
   SDValue EmitTargetCodeForMemcpy(SelectionDAG &DAG, const SDLoc &dl,
                                   SDValue Chain, SDValue Dst, SDValue Src,
-                                  SDValue Size, Align Alignment, bool isVolatile,
-                                  bool AlwaysInline,
-                                  bool MustPreserveCheriCapabilities,
+                                  SDValue Size, Align Alignment,
+                                  bool isVolatile, bool AlwaysInline,
+                                  PreserveCheriTags PreserveTags,
                                   MachinePointerInfo DstPtrInfo,
                                   MachinePointerInfo SrcPtrInfo) const override;
 
   SDValue EmitTargetCodeForMemmove(
       SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst,
       SDValue Src, SDValue Size, Align Alignment, bool isVolatile,
-      bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
+      PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
       MachinePointerInfo SrcPtrInfo) const override;
 
   // Adjust parameters for memset, see RTABI section 4.3.4

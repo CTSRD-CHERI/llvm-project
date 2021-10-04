@@ -762,7 +762,7 @@ SparcTargetLowering::LowerCall_32(TargetLowering::CallLoweringInfo &CLI,
                             false,        // isVolatile,
                             (Size <= 32), // AlwaysInline if size <= 32,
                             false,        // isTailCall
-                            /*MustPreserveCheriCapabilities=*/false,
+                            llvm::PreserveCheriTags::Unnecessary,
                             MachinePointerInfo(), MachinePointerInfo());
       ByValArgs.push_back(FIPtr);
     }

@@ -643,7 +643,7 @@ SDValue LanaiTargetLowering::LowerCCCCallTo(
                           /*IsVolatile=*/false,
                           /*AlwaysInline=*/false,
                           /*isTailCall=*/false,
-                          /*MustPreserveCheriCapabilities=*/false,
+                          llvm::PreserveCheriTags::Unnecessary,
                           MachinePointerInfo(), MachinePointerInfo());
     ByValArgs.push_back(FIPtr);
   }

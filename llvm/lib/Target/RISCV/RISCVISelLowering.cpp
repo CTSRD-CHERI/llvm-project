@@ -8297,11 +8297,13 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     SDValue FIPtr = DAG.getFrameIndex(FI, PtrVT);
     SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
 
-    Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Alignment,
-                          /*IsVolatile=*/false,
-                          /*AlwaysInline=*/false,
-                          /*MustPreserveCheriCapabilities=*/false, IsTailCall,
-                          MachinePointerInfo(), MachinePointerInfo());
+    Chain = DAG.getMemcpy(
+        Chain, DL, FIPtr, Arg, SizeNode, Alignment,
+        /*IsVolatile=*/false,
+        /*AlwaysInline=*/false, IsTailCall,
+        llvm::PreserveCheriTags::Unnecessary, // should already be correctly
+                                              // aligned if it contains tags.
+        MachinePointerInfo(), MachinePointerInfo());
     ByValArgs.push_back(FIPtr);
   }
 
