@@ -4134,7 +4134,7 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
     Out << ' ';
     writeOperand(Operand, false);
     Out << '(';
-    for (unsigned op = 0, Eop = CI->getNumArgOperands(); op < Eop; ++op) {
+    for (unsigned op = 0, Eop = CI->arg_size(); op < Eop; ++op) {
       if (op > 0)
         Out << ", ";
       writeParamOperand(CI->getArgOperand(op), PAL.getParamAttrs(op));
@@ -4179,7 +4179,7 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
     Out << ' ';
     writeOperand(Operand, false);
     Out << '(';
-    for (unsigned op = 0, Eop = II->getNumArgOperands(); op < Eop; ++op) {
+    for (unsigned op = 0, Eop = II->arg_size(); op < Eop; ++op) {
       if (op)
         Out << ", ";
       writeParamOperand(II->getArgOperand(op), PAL.getParamAttrs(op));
@@ -4219,7 +4219,7 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
     Out << ' ';
     writeOperand(Operand, false);
     Out << '(';
-    for (unsigned op = 0, Eop = CBI->getNumArgOperands(); op < Eop; ++op) {
+    for (unsigned op = 0, Eop = CBI->arg_size(); op < Eop; ++op) {
       if (op)
         Out << ", ";
       writeParamOperand(CBI->getArgOperand(op), PAL.getParamAttrs(op));
