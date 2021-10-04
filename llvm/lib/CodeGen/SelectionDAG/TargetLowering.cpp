@@ -298,7 +298,8 @@ bool TargetLowering::findOptimalMemOpLowering(
     }
 
     // If we are preserving capabilities, the first VT must be a capability
-    if (Op.MustPreserveCheriCaps && MemOps.empty() && !VT.isFatPointer()) {
+    if (Op.PreserveTags == PreserveCheriTags::Required && MemOps.empty() &&
+        !VT.isFatPointer()) {
       return false;
     }
 
@@ -7566,15 +7567,12 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
                                           CapAlign, DAG);
     SDValue BoundedPtr = unalignedLoadStoreCSetbounds("load memcpy source", Ptr, dl, CapAlign,
                                        DAG);
-    SDValue Ch = DAG.getMemcpy(Chain, dl, BoundedTmpPtr, BoundedPtr,
-                               DAG.getConstant(CapAlign, dl, MVT::i64),
-                               Align(LD->getAlignment()),
-                               /*isVolatile=*/false,
-                               /*AlwaysInline=*/false,
-                               /*isTailCall=*/false,
-                               /*MustPreserveCheriCapabilities=*/true,
-                               TmpPtrInfo, LD->getPointerInfo(), AAMDNodes(),
-                               "!!<CHERI-NODIAG>!!");
+    SDValue Ch = DAG.getMemcpy(
+        Chain, dl, BoundedTmpPtr, BoundedPtr,
+        DAG.getConstant(CapAlign, dl, MVT::i64), Align(LD->getAlignment()),
+        /*isVolatile=*/false, /*AlwaysInline=*/false, /*isTailCall=*/false,
+        PreserveCheriTags::Required, TmpPtrInfo, LD->getPointerInfo(),
+        AAMDNodes(), "!!<CHERI-NODIAG>!!");
     // Load the updated value (does not need to be bounded!)
     auto Result = DAG.getLoad(VT, dl, Ch, TmpPtr, TmpPtrInfo);
     return std::make_pair(Result, Result.getValue(1));
@@ -7749,15 +7747,11 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                           CapAlign, DAG);
     Ptr = unalignedLoadStoreCSetbounds("store memcpy destination", Ptr, dl,
                                        CapAlign, DAG);
-    auto Result = DAG.getMemcpy(Ch, dl, Ptr, TmpPtr,
-                                DAG.getConstant(CapAlign, dl, MVT::i64),
-                                Align(ST->getAlignment()),
-                                /*isVolatile=*/false,
-                                /*AlwaysInline=*/false,
-                                /*isTailCall=*/false,
-                                /*MustPreserveCheriCapabilities=*/true,
-                                ST->getPointerInfo(), TmpPtrInfo, AAMDNodes(),
-                                "!!<CHERI-NODIAG>!!");
+    auto Result = DAG.getMemcpy(
+        Ch, dl, Ptr, TmpPtr, DAG.getConstant(CapAlign, dl, MVT::i64),
+        Align(ST->getAlignment()), /*isVolatile=*/false, /*AlwaysInline=*/false,
+        /*isTailCall=*/false, PreserveCheriTags::Required, ST->getPointerInfo(),
+        TmpPtrInfo, AAMDNodes(), "!!<CHERI-NODIAG>!!");
     return Result;
   }
 

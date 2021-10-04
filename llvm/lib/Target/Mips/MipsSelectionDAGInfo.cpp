@@ -61,7 +61,7 @@ SDValue EmitTargetCodeForMemOp(SelectionDAG &DAG, const SDLoc &dl,
                                SDValue Chain, SDValue Dst, SDValue Src,
                                SDValue Size, Align Alignment, bool isVolatile,
                                bool AlwaysInline,
-                               bool MustPreserveCheriCapabilities,
+                               PreserveCheriTags PreserveTags,
                                MachinePointerInfo DstPtrInfo,
                                MachinePointerInfo SrcPtrInfo, bool isMemCpy) {
   // If AlwaysInline is set, let SelectionDAG expand this.
@@ -95,21 +95,21 @@ MipsSelectionDAGInfo::~MipsSelectionDAGInfo() {
 SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
-    bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
+    PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
-  return EmitTargetCodeForMemOp(
-      DAG, dl, Chain, Dst, Src, Size, Alignment, isVolatile, AlwaysInline,
-      MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo, true);
+  return EmitTargetCodeForMemOp(DAG, dl, Chain, Dst, Src, Size, Alignment,
+                                isVolatile, AlwaysInline, PreserveTags,
+                                DstPtrInfo, SrcPtrInfo, true);
 }
 
 SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemmove(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, Align Alignment, bool isVolatile,
-    bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
+    PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
-  return EmitTargetCodeForMemOp(
-      DAG, dl, Chain, Dst, Src, Size, Alignment, isVolatile, false,
-      MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo, false);
+  return EmitTargetCodeForMemOp(DAG, dl, Chain, Dst, Src, Size, Alignment,
+                                isVolatile, false, PreserveTags, DstPtrInfo,
+                                SrcPtrInfo, false);
 }
 
 SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(

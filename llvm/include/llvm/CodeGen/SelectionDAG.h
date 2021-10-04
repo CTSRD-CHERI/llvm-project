@@ -73,6 +73,7 @@ class MachineBasicBlock;
 class MachineConstantPoolValue;
 class MCSymbol;
 class OptimizationRemarkEmitter;
+enum class PreserveCheriTags;
 class ProfileSummaryInfo;
 class SDDbgValue;
 class SDDbgOperand;
@@ -1053,7 +1054,7 @@ public:
   SDValue getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                     SDValue Size, Align Alignment, bool isVol,
                     bool AlwaysInline, bool isTailCall,
-                    bool MustPreserveCheriCapabilities,
+                    PreserveCheriTags PreserveTags,
                     MachinePointerInfo DstPtrInfo,
                     MachinePointerInfo SrcPtrInfo,
                     const AAMDNodes &AAInfo = AAMDNodes(),
@@ -1061,7 +1062,7 @@ public:
 
   SDValue getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                      SDValue Size, Align Alignment, bool isVol, bool isTailCall,
-                     bool MustPreserveCheriCapabilities,
+                     PreserveCheriTags PreserveTags,
                      MachinePointerInfo DstPtrInfo,
                      MachinePointerInfo SrcPtrInfo,
                      const AAMDNodes &AAInfo = AAMDNodes(),

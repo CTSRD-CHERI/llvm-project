@@ -5861,8 +5861,7 @@ void MipsTargetLowering::passByValArg(
   Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
                         DAG.getIntPtrConstant(MemCpySize, DL), Alignment,
                         /*isVolatile=*/false, /*AlwaysInline=*/false,
-                        /*isTailCall=*/false,
-                        /*MustPreserveCheriCapabilities=*/false,
+                        /*isTailCall=*/false, llvm::PreserveCheriTags::Unknown,
                         MachinePointerInfo(), MachinePointerInfo());
   MemOpChains.push_back(Chain);
 }
