@@ -203,6 +203,7 @@ enum Kind {
   kw_must_preserve_cheri_tags,
   kw_naked,
   kw_nest,
+  kw_no_preserve_cheri_tags,
   kw_noalias,
   kw_noundef,
   kw_nobuiltin,
