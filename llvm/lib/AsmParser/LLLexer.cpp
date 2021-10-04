@@ -656,6 +656,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(must_preserve_cheri_tags);
   KEYWORD(naked);
   KEYWORD(nest);
+  KEYWORD(no_preserve_cheri_tags);
   KEYWORD(noalias);
   KEYWORD(nobuiltin);
   KEYWORD(nocallback);
