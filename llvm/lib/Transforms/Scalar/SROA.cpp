@@ -3269,8 +3269,11 @@ private:
         SrcPtr = OurPtr;
         SrcAlign = SliceAlign;
       }
-      CallInst *New = IRB.CreateMemCpy(DestPtr, DestAlign, SrcPtr, SrcAlign,
-                                       Size, II.isVolatile());
+      // XXX: copying the II.shouldPreserveCheriTags() flags may be overly
+      // restrictive for optimization purposes.
+      CallInst *New =
+          IRB.CreateMemCpy(DestPtr, DestAlign, SrcPtr, SrcAlign, Size,
+                           II.shouldPreserveCheriTags(), II.isVolatile());
       if (AATags)
         New->setAAMetadata(AATags.shift(NewBeginOffset - BeginOffset));
       LLVM_DEBUG(dbgs() << "          to: " << *New << "\n");

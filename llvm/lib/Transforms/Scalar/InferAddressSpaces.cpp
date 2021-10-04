@@ -960,18 +960,19 @@ static bool handleMemIntrinsicPtrUse(MemIntrinsic *MI, Value *OldV,
       MDNode *TBAAStruct = MTI->getMetadata(LLVMContext::MD_tbaa_struct);
       B.CreateMemCpyInline(Dest, MTI->getDestAlign(), Src,
                            MTI->getSourceAlign(), MTI->getLength(),
+                           MTI->shouldPreserveCheriTags(),
                            false, // isVolatile
                            TBAA, TBAAStruct, ScopeMD, NoAliasMD);
     } else if (isa<MemCpyInst>(MTI)) {
       MDNode *TBAAStruct = MTI->getMetadata(LLVMContext::MD_tbaa_struct);
       B.CreateMemCpy(Dest, MTI->getDestAlign(), Src, MTI->getSourceAlign(),
-                     MTI->getLength(),
+                     MTI->getLength(), MTI->shouldPreserveCheriTags(),
                      false, // isVolatile
                      TBAA, TBAAStruct, ScopeMD, NoAliasMD);
     } else {
       assert(isa<MemMoveInst>(MTI));
       B.CreateMemMove(Dest, MTI->getDestAlign(), Src, MTI->getSourceAlign(),
-                      MTI->getLength(),
+                      MTI->getLength(), MTI->shouldPreserveCheriTags(),
                       false, // isVolatile
                       TBAA, ScopeMD, NoAliasMD);
     }

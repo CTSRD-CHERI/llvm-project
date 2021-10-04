@@ -620,38 +620,44 @@ public:
   /// If the pointers aren't i8*, they will be converted.  If a TBAA tag is
   /// specified, it will be added to the instruction. Likewise with alias.scope
   /// and noalias tags.
-  CallInst *CreateMemCpy(Value *Dst, MaybeAlign DstAlign, Value *Src,
-                         MaybeAlign SrcAlign, uint64_t Size,
-                         bool isVolatile = false, MDNode *TBAATag = nullptr,
-                         MDNode *TBAAStructTag = nullptr,
-                         MDNode *ScopeTag = nullptr,
-                         MDNode *NoAliasTag = nullptr) {
+  CallInst *
+  CreateMemCpy(Value *Dst, MaybeAlign DstAlign, Value *Src, MaybeAlign SrcAlign,
+               uint64_t Size,
+               PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+               bool isVolatile = false, MDNode *TBAATag = nullptr,
+               MDNode *TBAAStructTag = nullptr, MDNode *ScopeTag = nullptr,
+               MDNode *NoAliasTag = nullptr) {
     return CreateMemCpy(Dst, DstAlign, Src, SrcAlign, getInt64(Size),
-                        isVolatile, TBAATag, TBAAStructTag, ScopeTag,
-                        NoAliasTag);
+                        PreserveTags, isVolatile, TBAATag, TBAAStructTag,
+                        ScopeTag, NoAliasTag);
   }
 
   CallInst *CreateMemTransferInst(
       Intrinsic::ID IntrID, Value *Dst, MaybeAlign DstAlign, Value *Src,
-      MaybeAlign SrcAlign, Value *Size, bool isVolatile = false,
-      MDNode *TBAATag = nullptr, MDNode *TBAAStructTag = nullptr,
-      MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
+      MaybeAlign SrcAlign, Value *Size,
+      PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+      bool isVolatile = false, MDNode *TBAATag = nullptr,
+      MDNode *TBAAStructTag = nullptr, MDNode *ScopeTag = nullptr,
+      MDNode *NoAliasTag = nullptr);
 
-  CallInst *CreateMemCpy(Value *Dst, MaybeAlign DstAlign, Value *Src,
-                         MaybeAlign SrcAlign, Value *Size,
-                         bool isVolatile = false, MDNode *TBAATag = nullptr,
-                         MDNode *TBAAStructTag = nullptr,
-                         MDNode *ScopeTag = nullptr,
-                         MDNode *NoAliasTag = nullptr) {
+  CallInst *
+  CreateMemCpy(Value *Dst, MaybeAlign DstAlign, Value *Src, MaybeAlign SrcAlign,
+               Value *Size,
+               PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+               bool isVolatile = false, MDNode *TBAATag = nullptr,
+               MDNode *TBAAStructTag = nullptr, MDNode *ScopeTag = nullptr,
+               MDNode *NoAliasTag = nullptr) {
     return CreateMemTransferInst(Intrinsic::memcpy, Dst, DstAlign, Src,
-                                 SrcAlign, Size, isVolatile, TBAATag,
-                                 TBAAStructTag, ScopeTag, NoAliasTag);
+                                 SrcAlign, Size, PreserveTags, isVolatile,
+                                 TBAATag, TBAAStructTag, ScopeTag, NoAliasTag);
   }
 
   CallInst *
   CreateMemCpyInline(Value *Dst, MaybeAlign DstAlign, Value *Src,
-                     MaybeAlign SrcAlign, Value *Size, bool IsVolatile = false,
-                     MDNode *TBAATag = nullptr, MDNode *TBAAStructTag = nullptr,
+                     MaybeAlign SrcAlign, Value *Size,
+                     PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+                     bool IsVolatile = false, MDNode *TBAATag = nullptr,
+                     MDNode *TBAAStructTag = nullptr,
                      MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
 
   /// Create and insert an element unordered-atomic memcpy between the
@@ -664,24 +670,28 @@ public:
   /// and noalias tags.
   CallInst *CreateElementUnorderedAtomicMemCpy(
       Value *Dst, Align DstAlign, Value *Src, Align SrcAlign, Value *Size,
-      uint32_t ElementSize, MDNode *TBAATag = nullptr,
-      MDNode *TBAAStructTag = nullptr, MDNode *ScopeTag = nullptr,
-      MDNode *NoAliasTag = nullptr);
+      uint32_t ElementSize,
+      PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+      MDNode *TBAATag = nullptr, MDNode *TBAAStructTag = nullptr,
+      MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
 
-  CallInst *CreateMemMove(Value *Dst, MaybeAlign DstAlign, Value *Src,
-                          MaybeAlign SrcAlign, uint64_t Size,
-                          bool isVolatile = false, MDNode *TBAATag = nullptr,
-                          MDNode *ScopeTag = nullptr,
-                          MDNode *NoAliasTag = nullptr) {
+  CallInst *
+  CreateMemMove(Value *Dst, MaybeAlign DstAlign, Value *Src,
+                MaybeAlign SrcAlign, uint64_t Size,
+                PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+                bool isVolatile = false, MDNode *TBAATag = nullptr,
+                MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr) {
     return CreateMemMove(Dst, DstAlign, Src, SrcAlign, getInt64(Size),
-                         isVolatile, TBAATag, ScopeTag, NoAliasTag);
+                         PreserveTags, isVolatile, TBAATag, ScopeTag,
+                         NoAliasTag);
   }
 
-  CallInst *CreateMemMove(Value *Dst, MaybeAlign DstAlign, Value *Src,
-                          MaybeAlign SrcAlign, Value *Size,
-                          bool isVolatile = false, MDNode *TBAATag = nullptr,
-                          MDNode *ScopeTag = nullptr,
-                          MDNode *NoAliasTag = nullptr);
+  CallInst *
+  CreateMemMove(Value *Dst, MaybeAlign DstAlign, Value *Src,
+                MaybeAlign SrcAlign, Value *Size,
+                PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+                bool isVolatile = false, MDNode *TBAATag = nullptr,
+                MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
 
   /// \brief Create and insert an element unordered-atomic memmove between the
   /// specified pointers.
@@ -694,9 +704,10 @@ public:
   /// and noalias tags.
   CallInst *CreateElementUnorderedAtomicMemMove(
       Value *Dst, Align DstAlign, Value *Src, Align SrcAlign, Value *Size,
-      uint32_t ElementSize, MDNode *TBAATag = nullptr,
-      MDNode *TBAAStructTag = nullptr, MDNode *ScopeTag = nullptr,
-      MDNode *NoAliasTag = nullptr);
+      uint32_t ElementSize,
+      PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
+      MDNode *TBAATag = nullptr, MDNode *TBAAStructTag = nullptr,
+      MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
 
   /// Create a vector fadd reduction intrinsic of the source vector.
   /// The first parameter is a scalar accumulator value for ordered reductions.
