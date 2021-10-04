@@ -530,7 +530,8 @@ struct GenBinaryFunc : CopyStructVisitor<Derived, IsMove>,
           this->CGF->Builder.CreateElementBitCast(DstAddr, this->CGF->Int8Ty);
       SrcAddr =
           this->CGF->Builder.CreateElementBitCast(SrcAddr, this->CGF->Int8Ty);
-      this->CGF->Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal, false);
+      this->CGF->Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal,
+                                      llvm::PreserveCheriTags::TODO, false);
     } else {
       llvm::Type *Ty = llvm::Type::getIntNTy(
           this->CGF->getLLVMContext(),

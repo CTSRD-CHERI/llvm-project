@@ -334,7 +334,7 @@ void PointerReplacer::replace(Instruction *I) {
     auto *NewI = IC.Builder.CreateMemTransferInst(
         MemCpy->getIntrinsicID(), MemCpy->getRawDest(), MemCpy->getDestAlign(),
         SrcV, MemCpy->getSourceAlign(), MemCpy->getLength(),
-        MemCpy->isVolatile());
+        MemCpy->shouldPreserveCheriTags(), MemCpy->isVolatile());
     AAMDNodes AAMD;
     MemCpy->getAAMetadata(AAMD);
     if (AAMD)
