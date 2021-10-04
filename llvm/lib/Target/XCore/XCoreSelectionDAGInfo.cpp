@@ -18,7 +18,7 @@ using namespace llvm;
 SDValue XCoreSelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
-    bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
+    PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
   unsigned SizeBitWidth = Size.getValueSizeInBits();
   // Call __memcpy_4 if the src, dst and size are all 4 byte aligned.

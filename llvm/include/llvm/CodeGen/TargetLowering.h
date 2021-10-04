@@ -126,13 +126,13 @@ private:
   Align SrcAlign; // Inferred alignment of the source or default value if the
                   // memory operation does not need to load the value.
 public:
-  bool MustPreserveCheriCaps; // memcpy must preserve CHERI tags even if
-  // SrcAlign < CapSize (since it could be aligned
-  // at run time)
+  PreserveCheriTags PreserveTags; // Whether we must preserve CHERI tags even
+                                  // if SrcAlign < CapSize (since it could be
+                                  // aligned at run time)
 public:
   static MemOp Copy(uint64_t Size, bool DstAlignCanChange, Align DstAlign,
-                    Align SrcAlign, bool IsVolatile, bool MustPreserveCheriCaps,
-                    bool MemcpyStrSrc = false) {
+                    Align SrcAlign, bool IsVolatile,
+                    PreserveCheriTags PreserveTags, bool MemcpyStrSrc = false) {
     MemOp Op;
     Op.Size = Size;
     Op.DstAlignCanChange = DstAlignCanChange;
@@ -141,7 +141,7 @@ public:
     Op.IsMemset = false;
     Op.ZeroMemset = false;
     Op.MemcpyStrSrc = MemcpyStrSrc;
-    Op.MustPreserveCheriCaps = MustPreserveCheriCaps;
+    Op.PreserveTags = PreserveTags;
     Op.SrcAlign = SrcAlign;
     return Op;
   }
@@ -156,7 +156,7 @@ public:
     Op.IsMemset = true;
     Op.ZeroMemset = IsZeroMemset;
     Op.MemcpyStrSrc = false;
-    Op.MustPreserveCheriCaps = false;
+    Op.PreserveTags = PreserveCheriTags::Unnecessary;
     return Op;
   }
 

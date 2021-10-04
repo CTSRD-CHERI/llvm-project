@@ -3179,11 +3179,11 @@ static SDValue CreateCopyOfByValArgument(SDValue Src, SDValue Dst,
                                          SelectionDAG &DAG, const SDLoc &dl) {
   SDValue SizeNode = DAG.getIntPtrConstant(Flags.getByValSize(), dl);
 
-  return DAG.getMemcpy(Chain, dl, Dst, Src, SizeNode, Flags.getNonZeroByValAlign(),
-                       /*isVolatile*/ false, /*AlwaysInline=*/true,
-                       /*isTailCall*/ false,
-                       /*MustPreserveCheriCapabilities=*/false,
-                       MachinePointerInfo(), MachinePointerInfo());
+  return DAG.getMemcpy(
+      Chain, dl, Dst, Src, SizeNode, Flags.getNonZeroByValAlign(),
+      /*isVolatile*/ false, /*AlwaysInline=*/true,
+      /*isTailCall*/ false, llvm::PreserveCheriTags::Unnecessary,
+      MachinePointerInfo(), MachinePointerInfo());
 }
 
 /// Return true if the calling convention is one that we can guarantee TCO for.
@@ -24860,8 +24860,8 @@ static SDValue LowerVACOPY(SDValue Op, const X86Subtarget &Subtarget,
       Chain, DL, DstPtr, SrcPtr,
       DAG.getIntPtrConstant(Subtarget.isTarget64BitLP64() ? 24 : 16, DL),
       Align(Subtarget.isTarget64BitLP64() ? 8 : 4), /*isVolatile*/ false, false,
-      false, /*MustPreserveCheriCapabilities=*/false,
-      MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
+      false, llvm::PreserveCheriTags::Unnecessary, MachinePointerInfo(DstSV),
+      MachinePointerInfo(SrcSV));
 }
 
 // Helper to get immediate/variable SSE shift opcode from other shift opcodes.
