@@ -74,7 +74,6 @@ tools += ['llvm-readobj', 'llvm-objdump', 'llvm-dwarfdump']
 
 if config.clang_examples:
     config.available_features.add('examples')
-    tools.append('clang-interpreter')
 
 def have_host_jit_support():
     clang_repl_exe = lit.util.which('clang-repl', config.clang_tools_dir)
