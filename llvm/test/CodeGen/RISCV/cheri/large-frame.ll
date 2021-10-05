@@ -9,16 +9,25 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV32IXCHERI-IL32PC64:       # %bb.0: # %entry
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, -2032
 ; RV32IXCHERI-IL32PC64-NEXT:    csc cra, 2024(csp) # 8-byte Folded Spill
+; RV32IXCHERI-IL32PC64-NEXT:    csc cs0, 2016(csp) # 8-byte Folded Spill
+; RV32IXCHERI-IL32PC64-NEXT:    cincoffset cs0, csp, 2032
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1048575
-; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, 2016
+; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, 1008
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, a0
+; RV32IXCHERI-IL32PC64-NEXT:    cgetaddr a0, csp
+; RV32IXCHERI-IL32PC64-NEXT:    andi a0, a0, -512
+; RV32IXCHERI-IL32PC64-NEXT:    csetaddr csp, csp, a0
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1
-; RV32IXCHERI-IL32PC64-NEXT:    cincoffset ca1, csp, 8
+; RV32IXCHERI-IL32PC64-NEXT:    cincoffset ca1, csp, 512
 ; RV32IXCHERI-IL32PC64-NEXT:    csetbounds ca0, ca1, a0
 ; RV32IXCHERI-IL32PC64-NEXT:    ccall foo
+; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1048575
+; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, -1024
+; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, cs0, a0
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1
-; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, -2016
+; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, -1008
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, a0
+; RV32IXCHERI-IL32PC64-NEXT:    clc cs0, 2016(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-IL32PC64-NEXT:    clc cra, 2024(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, 2032
 ; RV32IXCHERI-IL32PC64-NEXT:    cret

@@ -21,14 +21,17 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV32IXCHERI-NEXT:    csetaddr csp, csp, a1
 ; RV32IXCHERI-NEXT:    cmove cs1, csp
 ; RV32IXCHERI-NEXT:    mv s2, a0
-; RV32IXCHERI-NEXT:    addi a0, a0, 15
-; RV32IXCHERI-NEXT:    andi a0, a0, -16
-; RV32IXCHERI-NEXT:    cgetaddr a1, csp
-; RV32IXCHERI-NEXT:    sub a1, a1, a0
-; RV32IXCHERI-NEXT:    csetaddr ca1, csp, a1
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca1, a0
-; RV32IXCHERI-NEXT:    cmove csp, ca1
-; RV32IXCHERI-NEXT:    csetbounds ca1, ca0, s2
+; RV32IXCHERI-NEXT:    cgetaddr a0, csp
+; RV32IXCHERI-NEXT:    addi a1, s2, 15
+; RV32IXCHERI-NEXT:    andi a1, a1, -16
+; RV32IXCHERI-NEXT:    crrl a2, a1
+; RV32IXCHERI-NEXT:    sub a0, a0, a2
+; RV32IXCHERI-NEXT:    cram a1, a1
+; RV32IXCHERI-NEXT:    and a0, a0, a1
+; RV32IXCHERI-NEXT:    csetaddr ca0, csp, a0
+; RV32IXCHERI-NEXT:    csetbounds ca1, ca0, a2
+; RV32IXCHERI-NEXT:    cmove csp, ca0
+; RV32IXCHERI-NEXT:    csetbounds ca1, ca1, s2
 ; RV32IXCHERI-NEXT:    cincoffset ca0, cs1, 0
 ; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 1
 ; RV32IXCHERI-NEXT:    ccall callee

@@ -43,8 +43,8 @@ define i8 addrspace(200)* @test_frameaddress_0_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 128
-; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -116
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
+; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -120
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 104
 ; RV32IXCHERI-NEXT:    ccall notdead
 ; RV32IXCHERI-NEXT:    cmove ca0, cs0
 ; RV32IXCHERI-NEXT:    clc cs0, 112(csp) # 8-byte Folded Reload
@@ -110,8 +110,8 @@ define i8 addrspace(200)* @test_frameaddress_3_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 128
-; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -116
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
+; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -120
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 104
 ; RV32IXCHERI-NEXT:    ccall notdead
 ; RV32IXCHERI-NEXT:    clc ca0, -8(cs0)
 ; RV32IXCHERI-NEXT:    clc ca0, -8(ca0)
@@ -165,8 +165,8 @@ define i8 addrspace(200)* @test_returnaddress_0_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cmove cs0, cra
-; RV32IXCHERI-NEXT:    cincoffset ca0, csp, 12
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
+; RV32IXCHERI-NEXT:    cincoffset ca0, csp, 8
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 104
 ; RV32IXCHERI-NEXT:    ccall notdead
 ; RV32IXCHERI-NEXT:    cmove ca0, cs0
 ; RV32IXCHERI-NEXT:    clc cs0, 112(csp) # 8-byte Folded Reload
@@ -234,8 +234,8 @@ define i8 addrspace(200)* @test_returnaddress_3_alloca() nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 120(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    csc cs0, 112(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 128
-; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -116
-; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 100
+; RV32IXCHERI-NEXT:    cincoffset ca0, cs0, -120
+; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 104
 ; RV32IXCHERI-NEXT:    ccall notdead
 ; RV32IXCHERI-NEXT:    clc ca0, -8(cs0)
 ; RV32IXCHERI-NEXT:    clc ca0, -8(ca0)

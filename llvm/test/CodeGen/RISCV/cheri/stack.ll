@@ -46,9 +46,12 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV32IXCHERI-NEXT:    slli a0, a0, 2
 ; RV32IXCHERI-NEXT:    addi a2, a0, 15
 ; RV32IXCHERI-NEXT:    andi a2, a2, -16
-; RV32IXCHERI-NEXT:    sub a1, a1, a2
+; RV32IXCHERI-NEXT:    crrl a3, a2
+; RV32IXCHERI-NEXT:    sub a1, a1, a3
+; RV32IXCHERI-NEXT:    cram a2, a2
+; RV32IXCHERI-NEXT:    and a1, a1, a2
 ; RV32IXCHERI-NEXT:    csetaddr ca1, csp, a1
-; RV32IXCHERI-NEXT:    csetbounds ca2, ca1, a2
+; RV32IXCHERI-NEXT:    csetbounds ca2, ca1, a3
 ; RV32IXCHERI-NEXT:    cmove csp, ca1
 ; RV32IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV32IXCHERI-NEXT:    ccall use_arg
