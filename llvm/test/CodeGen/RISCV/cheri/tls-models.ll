@@ -24,26 +24,26 @@ define i32 addrspace(200)* @f1() nounwind {
 ; IL32PC64-PIC-LABEL: f1:
 ; IL32PC64-PIC:       # %bb.0: # %entry
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, -16
-; IL32PC64-PIC-NEXT:    csc cra, 8(csp)
+; IL32PC64-PIC-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; IL32PC64-PIC-NEXT:  .LBB0_1: # %entry
 ; IL32PC64-PIC-NEXT:    # Label of block must be emitted
 ; IL32PC64-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(unspecified)
 ; IL32PC64-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB0_1)
 ; IL32PC64-PIC-NEXT:    ccall __tls_get_addr
-; IL32PC64-PIC-NEXT:    clc cra, 8(csp)
+; IL32PC64-PIC-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, 16
 ; IL32PC64-PIC-NEXT:    cret
 ;
 ; L64PC128-PIC-LABEL: f1:
 ; L64PC128-PIC:       # %bb.0: # %entry
 ; L64PC128-PIC-NEXT:    cincoffset csp, csp, -16
-; L64PC128-PIC-NEXT:    csc cra, 0(csp)
+; L64PC128-PIC-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; L64PC128-PIC-NEXT:  .LBB0_1: # %entry
 ; L64PC128-PIC-NEXT:    # Label of block must be emitted
 ; L64PC128-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(unspecified)
 ; L64PC128-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB0_1)
 ; L64PC128-PIC-NEXT:    ccall __tls_get_addr
-; L64PC128-PIC-NEXT:    clc cra, 0(csp)
+; L64PC128-PIC-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; L64PC128-PIC-NEXT:    cincoffset csp, csp, 16
 ; L64PC128-PIC-NEXT:    cret
 ;
@@ -75,26 +75,26 @@ define i32 addrspace(200)* @f2() nounwind {
 ; IL32PC64-PIC-LABEL: f2:
 ; IL32PC64-PIC:       # %bb.0: # %entry
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, -16
-; IL32PC64-PIC-NEXT:    csc cra, 8(csp)
+; IL32PC64-PIC-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; IL32PC64-PIC-NEXT:  .LBB1_1: # %entry
 ; IL32PC64-PIC-NEXT:    # Label of block must be emitted
 ; IL32PC64-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(ld)
 ; IL32PC64-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB1_1)
 ; IL32PC64-PIC-NEXT:    ccall __tls_get_addr
-; IL32PC64-PIC-NEXT:    clc cra, 8(csp)
+; IL32PC64-PIC-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, 16
 ; IL32PC64-PIC-NEXT:    cret
 ;
 ; L64PC128-PIC-LABEL: f2:
 ; L64PC128-PIC:       # %bb.0: # %entry
 ; L64PC128-PIC-NEXT:    cincoffset csp, csp, -16
-; L64PC128-PIC-NEXT:    csc cra, 0(csp)
+; L64PC128-PIC-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; L64PC128-PIC-NEXT:  .LBB1_1: # %entry
 ; L64PC128-PIC-NEXT:    # Label of block must be emitted
 ; L64PC128-PIC-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(ld)
 ; L64PC128-PIC-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB1_1)
 ; L64PC128-PIC-NEXT:    ccall __tls_get_addr
-; L64PC128-PIC-NEXT:    clc cra, 0(csp)
+; L64PC128-PIC-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; L64PC128-PIC-NEXT:    cincoffset csp, csp, 16
 ; L64PC128-PIC-NEXT:    cret
 ;

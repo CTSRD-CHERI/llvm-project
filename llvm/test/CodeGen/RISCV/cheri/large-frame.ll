@@ -8,7 +8,7 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV32IXCHERI-IL32PC64-LABEL: bar:
 ; RV32IXCHERI-IL32PC64:       # %bb.0: # %entry
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, -2032
-; RV32IXCHERI-IL32PC64-NEXT:    csc cra, 2024(csp)
+; RV32IXCHERI-IL32PC64-NEXT:    csc cra, 2024(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1048575
 ; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, 2016
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, a0
@@ -19,14 +19,14 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1
 ; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, -2016
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, a0
-; RV32IXCHERI-IL32PC64-NEXT:    clc cra, 2024(csp)
+; RV32IXCHERI-IL32PC64-NEXT:    clc cra, 2024(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, 2032
 ; RV32IXCHERI-IL32PC64-NEXT:    cret
 ;
 ; RV64IXCHERI-L64PC128-LABEL: bar:
 ; RV64IXCHERI-L64PC128:       # %bb.0: # %entry
 ; RV64IXCHERI-L64PC128-NEXT:    cincoffset csp, csp, -2032
-; RV64IXCHERI-L64PC128-NEXT:    csc cra, 2016(csp)
+; RV64IXCHERI-L64PC128-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-L64PC128-NEXT:    lui a0, 1048575
 ; RV64IXCHERI-L64PC128-NEXT:    addiw a0, a0, 2000
 ; RV64IXCHERI-L64PC128-NEXT:    cincoffset csp, csp, a0
@@ -37,7 +37,7 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV64IXCHERI-L64PC128-NEXT:    lui a0, 1
 ; RV64IXCHERI-L64PC128-NEXT:    addiw a0, a0, -2000
 ; RV64IXCHERI-L64PC128-NEXT:    cincoffset csp, csp, a0
-; RV64IXCHERI-L64PC128-NEXT:    clc cra, 2016(csp)
+; RV64IXCHERI-L64PC128-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-L64PC128-NEXT:    cincoffset csp, csp, 2032
 ; RV64IXCHERI-L64PC128-NEXT:    cret
 entry:

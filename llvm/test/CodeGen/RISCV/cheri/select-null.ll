@@ -17,8 +17,8 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; RV64-LABEL: eggs:
 ; RV64:       # %bb.0: # %bb
 ; RV64-NEXT:    addi sp, sp, -16
-; RV64-NEXT:    sd ra, 8(sp)
-; RV64-NEXT:    sd s0, 0(sp)
+; RV64-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
+; RV64-NEXT:    sd s0, 0(sp) # 8-byte Folded Spill
 ; RV64-NEXT:    andi a0, a0, 1
 ; RV64-NEXT:    mv s0, zero
 ; RV64-NEXT:    bnez a0, .LBB0_2
@@ -26,18 +26,18 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; RV64-NEXT:    addi s0, zero, 32
 ; RV64-NEXT:  .LBB0_2: # %bb
 ; RV64-NEXT:    mv a0, zero
-; RV64-NEXT:    call barney
+; RV64-NEXT:    call barney@plt
 ; RV64-NEXT:    mv a0, s0
-; RV64-NEXT:    ld s0, 0(sp)
-; RV64-NEXT:    ld ra, 8(sp)
+; RV64-NEXT:    ld s0, 0(sp) # 8-byte Folded Reload
+; RV64-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; RV64-NEXT:    addi sp, sp, 16
 ; RV64-NEXT:    ret
 ;
 ; PURECAP-LABEL: eggs:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    cincoffset csp, csp, -32
-; PURECAP-NEXT:    csc cra, 16(csp)
-; PURECAP-NEXT:    csc cs0, 0(csp)
+; PURECAP-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; PURECAP-NEXT:    andi a0, a0, 1
 ; PURECAP-NEXT:    cmove cs0, cnull
 ; PURECAP-NEXT:    bnez a0, .LBB0_2
@@ -47,8 +47,8 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-NEXT:    cmove ca0, cnull
 ; PURECAP-NEXT:    ccall barney
 ; PURECAP-NEXT:    cmove ca0, cs0
-; PURECAP-NEXT:    clc cs0, 0(csp)
-; PURECAP-NEXT:    clc cra, 16(csp)
+; PURECAP-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-NEXT:    cret
 bb:

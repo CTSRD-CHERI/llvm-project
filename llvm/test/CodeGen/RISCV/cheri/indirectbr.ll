@@ -8,22 +8,22 @@ define i32 @indirectbr(i8 addrspace(200)* %target) nounwind {
 ; RV32IXCHERI-LABEL: indirectbr:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IXCHERI-NEXT:    csc cra, 8(csp)
+; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cjr ca0
 ; RV32IXCHERI-NEXT:  .LBB0_1: # %test_label
 ; RV32IXCHERI-NEXT:    mv a0, zero
-; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: indirectbr:
 ; RV64IXCHERI:       # %bb.0:
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV64IXCHERI-NEXT:    csc cra, 0(csp)
+; RV64IXCHERI-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    cjr ca0
 ; RV64IXCHERI-NEXT:  .LBB0_1: # %test_label
 ; RV64IXCHERI-NEXT:    mv a0, zero
-; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
   indirectbr i8 addrspace(200)* %target, [label %test_label]
@@ -37,22 +37,22 @@ define i32 @indirectbr_with_offset(i8 addrspace(200)* %a) nounwind {
 ; RV32IXCHERI-LABEL: indirectbr_with_offset:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IXCHERI-NEXT:    csc cra, 8(csp)
+; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cjr 1380(ca0)
 ; RV32IXCHERI-NEXT:  .LBB1_1: # %test_label
 ; RV32IXCHERI-NEXT:    mv a0, zero
-; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: indirectbr_with_offset:
 ; RV64IXCHERI:       # %bb.0:
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV64IXCHERI-NEXT:    csc cra, 0(csp)
+; RV64IXCHERI-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    cjr 1380(ca0)
 ; RV64IXCHERI-NEXT:  .LBB1_1: # %test_label
 ; RV64IXCHERI-NEXT:    mv a0, zero
-; RV64IXCHERI-NEXT:    clc cra, 0(csp)
+; RV64IXCHERI-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    cret
   %target = getelementptr inbounds i8, i8 addrspace(200)* %a, i32 1380

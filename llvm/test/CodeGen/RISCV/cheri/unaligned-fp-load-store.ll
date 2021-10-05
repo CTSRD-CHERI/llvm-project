@@ -12,9 +12,9 @@ define i32 @unaligned_float(float addrspace(200)* nocapture readonly %arg, float
 ; RV32IFXCHERI-LABEL: unaligned_float:
 ; RV32IFXCHERI:       # %bb.0: # %bb
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV32IFXCHERI-NEXT:    csc cra, 24(csp)
-; RV32IFXCHERI-NEXT:    csc cs0, 16(csp)
-; RV32IFXCHERI-NEXT:    cfsw fs0, 12(csp)
+; RV32IFXCHERI-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    cfsw fs0, 12(csp) # 4-byte Folded Spill
 ; RV32IFXCHERI-NEXT:    fmv.s fs0, fa0
 ; RV32IFXCHERI-NEXT:    cmove cs0, ca0
 ; RV32IFXCHERI-NEXT:    clbu a0, 1(ca0)
@@ -40,18 +40,18 @@ define i32 @unaligned_float(float addrspace(200)* nocapture readonly %arg, float
 ; RV32IFXCHERI-NEXT:    srli a2, a1, 8
 ; RV32IFXCHERI-NEXT:    csb a2, 1(cs0)
 ; RV32IFXCHERI-NEXT:    csb a1, 0(cs0)
-; RV32IFXCHERI-NEXT:    cflw fs0, 12(csp)
-; RV32IFXCHERI-NEXT:    clc cs0, 16(csp)
-; RV32IFXCHERI-NEXT:    clc cra, 24(csp)
+; RV32IFXCHERI-NEXT:    cflw fs0, 12(csp) # 4-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV32IFXCHERI-NEXT:    cret
 ;
 ; RV64IFXCHERI-LABEL: unaligned_float:
 ; RV64IFXCHERI:       # %bb.0: # %bb
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, -64
-; RV64IFXCHERI-NEXT:    csc cra, 48(csp)
-; RV64IFXCHERI-NEXT:    csc cs0, 32(csp)
-; RV64IFXCHERI-NEXT:    cfsw fs0, 28(csp)
+; RV64IFXCHERI-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    cfsw fs0, 28(csp) # 4-byte Folded Spill
 ; RV64IFXCHERI-NEXT:    fmv.s fs0, fa0
 ; RV64IFXCHERI-NEXT:    cmove cs0, ca0
 ; RV64IFXCHERI-NEXT:    clbu a0, 1(ca0)
@@ -78,9 +78,9 @@ define i32 @unaligned_float(float addrspace(200)* nocapture readonly %arg, float
 ; RV64IFXCHERI-NEXT:    csb a2, 2(cs0)
 ; RV64IFXCHERI-NEXT:    srli a1, a1, 8
 ; RV64IFXCHERI-NEXT:    csb a1, 1(cs0)
-; RV64IFXCHERI-NEXT:    cflw fs0, 28(csp)
-; RV64IFXCHERI-NEXT:    clc cs0, 32(csp)
-; RV64IFXCHERI-NEXT:    clc cra, 48(csp)
+; RV64IFXCHERI-NEXT:    cflw fs0, 28(csp) # 4-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, 64
 ; RV64IFXCHERI-NEXT:    cret
 bb:
@@ -95,10 +95,10 @@ define i32 @unaligned_double(double addrspace(200)* nocapture readonly %arg, dou
 ; RV32IFXCHERI-LABEL: unaligned_double:
 ; RV32IFXCHERI:       # %bb.0: # %bb
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, -48
-; RV32IFXCHERI-NEXT:    csc cra, 40(csp)
-; RV32IFXCHERI-NEXT:    csc cs0, 32(csp)
-; RV32IFXCHERI-NEXT:    csc cs1, 24(csp)
-; RV32IFXCHERI-NEXT:    csc cs2, 16(csp)
+; RV32IFXCHERI-NEXT:    csc cra, 40(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs0, 32(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs1, 24(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs2, 16(csp) # 8-byte Folded Spill
 ; RV32IFXCHERI-NEXT:    mv s0, a2
 ; RV32IFXCHERI-NEXT:    mv s2, a1
 ; RV32IFXCHERI-NEXT:    cmove cs1, ca0
@@ -119,19 +119,19 @@ define i32 @unaligned_double(double addrspace(200)* nocapture readonly %arg, dou
 ; RV32IFXCHERI-NEXT:    srli a1, s2, 16
 ; RV32IFXCHERI-NEXT:    csh a1, 2(cs1)
 ; RV32IFXCHERI-NEXT:    csh s2, 0(cs1)
-; RV32IFXCHERI-NEXT:    clc cs2, 16(csp)
-; RV32IFXCHERI-NEXT:    clc cs1, 24(csp)
-; RV32IFXCHERI-NEXT:    clc cs0, 32(csp)
-; RV32IFXCHERI-NEXT:    clc cra, 40(csp)
+; RV32IFXCHERI-NEXT:    clc cs2, 16(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cs1, 24(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cs0, 32(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cra, 40(csp) # 8-byte Folded Reload
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, 48
 ; RV32IFXCHERI-NEXT:    cret
 ;
 ; RV64IFXCHERI-LABEL: unaligned_double:
 ; RV64IFXCHERI:       # %bb.0: # %bb
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, -64
-; RV64IFXCHERI-NEXT:    csc cra, 48(csp)
-; RV64IFXCHERI-NEXT:    csc cs0, 32(csp)
-; RV64IFXCHERI-NEXT:    csc cs1, 16(csp)
+; RV64IFXCHERI-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    csc cs1, 16(csp) # 16-byte Folded Spill
 ; RV64IFXCHERI-NEXT:    mv s0, a1
 ; RV64IFXCHERI-NEXT:    cmove cs1, ca0
 ; RV64IFXCHERI-NEXT:    clhu a0, 2(ca0)
@@ -153,9 +153,9 @@ define i32 @unaligned_double(double addrspace(200)* nocapture readonly %arg, dou
 ; RV64IFXCHERI-NEXT:    srli a1, s0, 16
 ; RV64IFXCHERI-NEXT:    csh a1, 2(cs1)
 ; RV64IFXCHERI-NEXT:    csh s0, 0(cs1)
-; RV64IFXCHERI-NEXT:    clc cs1, 16(csp)
-; RV64IFXCHERI-NEXT:    clc cs0, 32(csp)
-; RV64IFXCHERI-NEXT:    clc cra, 48(csp)
+; RV64IFXCHERI-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, 64
 ; RV64IFXCHERI-NEXT:    cret
 bb:
@@ -169,12 +169,12 @@ define i32 @unaligned_fp128(fp128 addrspace(200)* nocapture readonly %arg, fp128
 ; RV32IFXCHERI-LABEL: unaligned_fp128:
 ; RV32IFXCHERI:       # %bb.0: # %bb
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, -80
-; RV32IFXCHERI-NEXT:    csc cra, 72(csp)
-; RV32IFXCHERI-NEXT:    csc cs0, 64(csp)
-; RV32IFXCHERI-NEXT:    csc cs1, 56(csp)
-; RV32IFXCHERI-NEXT:    csc cs2, 48(csp)
-; RV32IFXCHERI-NEXT:    csc cs3, 40(csp)
-; RV32IFXCHERI-NEXT:    csc cs4, 32(csp)
+; RV32IFXCHERI-NEXT:    csc cra, 72(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs0, 64(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs1, 56(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs2, 48(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs3, 40(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs4, 32(csp) # 8-byte Folded Spill
 ; RV32IFXCHERI-NEXT:    cmove cs0, ca0
 ; RV32IFXCHERI-NEXT:    clw s2, 0(ca1)
 ; RV32IFXCHERI-NEXT:    clw s3, 4(ca1)
@@ -197,22 +197,22 @@ define i32 @unaligned_fp128(fp128 addrspace(200)* nocapture readonly %arg, fp128
 ; RV32IFXCHERI-NEXT:    csw s4, 8(cs0)
 ; RV32IFXCHERI-NEXT:    csw s3, 4(cs0)
 ; RV32IFXCHERI-NEXT:    csw s2, 0(cs0)
-; RV32IFXCHERI-NEXT:    clc cs4, 32(csp)
-; RV32IFXCHERI-NEXT:    clc cs3, 40(csp)
-; RV32IFXCHERI-NEXT:    clc cs2, 48(csp)
-; RV32IFXCHERI-NEXT:    clc cs1, 56(csp)
-; RV32IFXCHERI-NEXT:    clc cs0, 64(csp)
-; RV32IFXCHERI-NEXT:    clc cra, 72(csp)
+; RV32IFXCHERI-NEXT:    clc cs4, 32(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cs3, 40(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cs2, 48(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cs1, 56(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cs0, 64(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cra, 72(csp) # 8-byte Folded Reload
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, 80
 ; RV32IFXCHERI-NEXT:    cret
 ;
 ; RV64IFXCHERI-LABEL: unaligned_fp128:
 ; RV64IFXCHERI:       # %bb.0: # %bb
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, -80
-; RV64IFXCHERI-NEXT:    csc cra, 64(csp)
-; RV64IFXCHERI-NEXT:    csc cs0, 48(csp)
-; RV64IFXCHERI-NEXT:    csc cs1, 32(csp)
-; RV64IFXCHERI-NEXT:    csc cs2, 16(csp)
+; RV64IFXCHERI-NEXT:    csc cra, 64(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    csc cs0, 48(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    csc cs1, 32(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; RV64IFXCHERI-NEXT:    mv s0, a2
 ; RV64IFXCHERI-NEXT:    mv s2, a1
 ; RV64IFXCHERI-NEXT:    cmove cs1, ca0
@@ -233,10 +233,10 @@ define i32 @unaligned_fp128(fp128 addrspace(200)* nocapture readonly %arg, fp128
 ; RV64IFXCHERI-NEXT:    srli a1, s2, 32
 ; RV64IFXCHERI-NEXT:    csw a1, 4(cs1)
 ; RV64IFXCHERI-NEXT:    csw s2, 0(cs1)
-; RV64IFXCHERI-NEXT:    clc cs2, 16(csp)
-; RV64IFXCHERI-NEXT:    clc cs1, 32(csp)
-; RV64IFXCHERI-NEXT:    clc cs0, 48(csp)
-; RV64IFXCHERI-NEXT:    clc cra, 64(csp)
+; RV64IFXCHERI-NEXT:    clc cs2, 16(csp) # 16-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cs1, 32(csp) # 16-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cs0, 48(csp) # 16-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cra, 64(csp) # 16-byte Folded Reload
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, 80
 ; RV64IFXCHERI-NEXT:    cret
 bb:
@@ -251,8 +251,8 @@ define i32 @unaligned_int(i32 addrspace(200)* nocapture readonly %arg) unnamed_a
 ; RV32IFXCHERI-LABEL: unaligned_int:
 ; RV32IFXCHERI:       # %bb.0: # %bb
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV32IFXCHERI-NEXT:    csc cra, 24(csp)
-; RV32IFXCHERI-NEXT:    csc cs0, 16(csp)
+; RV32IFXCHERI-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
+; RV32IFXCHERI-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
 ; RV32IFXCHERI-NEXT:    cmove cs0, ca0
 ; RV32IFXCHERI-NEXT:    clbu a0, 1(ca0)
 ; RV32IFXCHERI-NEXT:    clbu a1, 0(cs0)
@@ -271,16 +271,16 @@ define i32 @unaligned_int(i32 addrspace(200)* nocapture readonly %arg) unnamed_a
 ; RV32IFXCHERI-NEXT:    csb zero, 1(cs0)
 ; RV32IFXCHERI-NEXT:    addi a1, zero, 1
 ; RV32IFXCHERI-NEXT:    csb a1, 0(cs0)
-; RV32IFXCHERI-NEXT:    clc cs0, 16(csp)
-; RV32IFXCHERI-NEXT:    clc cra, 24(csp)
+; RV32IFXCHERI-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
+; RV32IFXCHERI-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
 ; RV32IFXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV32IFXCHERI-NEXT:    cret
 ;
 ; RV64IFXCHERI-LABEL: unaligned_int:
 ; RV64IFXCHERI:       # %bb.0: # %bb
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, -48
-; RV64IFXCHERI-NEXT:    csc cra, 32(csp)
-; RV64IFXCHERI-NEXT:    csc cs0, 16(csp)
+; RV64IFXCHERI-NEXT:    csc cra, 32(csp) # 16-byte Folded Spill
+; RV64IFXCHERI-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
 ; RV64IFXCHERI-NEXT:    cmove cs0, ca0
 ; RV64IFXCHERI-NEXT:    clbu a0, 1(ca0)
 ; RV64IFXCHERI-NEXT:    clbu a1, 0(cs0)
@@ -299,8 +299,8 @@ define i32 @unaligned_int(i32 addrspace(200)* nocapture readonly %arg) unnamed_a
 ; RV64IFXCHERI-NEXT:    csb zero, 1(cs0)
 ; RV64IFXCHERI-NEXT:    addi a1, zero, 1
 ; RV64IFXCHERI-NEXT:    csb a1, 0(cs0)
-; RV64IFXCHERI-NEXT:    clc cs0, 16(csp)
-; RV64IFXCHERI-NEXT:    clc cra, 32(csp)
+; RV64IFXCHERI-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
+; RV64IFXCHERI-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
 ; RV64IFXCHERI-NEXT:    cincoffset csp, csp, 48
 ; RV64IFXCHERI-NEXT:    cret
 bb:
