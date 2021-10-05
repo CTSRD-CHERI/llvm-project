@@ -50,20 +50,20 @@ void test_invalid_length_modifiers(void *p) {
 #endif
 void test_priptr(__PTRDIFF_TYPE__ saddr, __PTRADDR_TYPE__ uaddr, __INTPTR_TYPE__ sptr, __UINTPTR_TYPE__ uptr) {
   // The x format string expects an unsigned type
-  // FIXME: However, we should no warn about this until Clang implements -Wformat-signedness
+  // However, we should no warn about this until Clang implements -Wformat-signedness
   printf("%" PRIxPTR, saddr); // purecap-warning{{format specifies type 'uintptr_t' (aka 'unsigned __intcap') but the argument has type 'long'}}
   printf("%" PRIxPTR, uaddr); // purecap-warning{{format specifies type 'uintptr_t' (aka 'unsigned __intcap') but the argument has type 'unsigned long'}}
-  printf("%" PRIxPTR, sptr);  // purecap-warning{{format specifies type 'uintptr_t' (aka 'unsigned __intcap') but the argument has type '__intcap'}}
+  printf("%" PRIxPTR, sptr);
   printf("%" PRIxPTR, uptr);
-  printf("%" PRIxPTR, (__INTPTR_TYPE__)saddr); // purecap-warning{{format specifies type 'uintptr_t' (aka 'unsigned __intcap') but the argument has type '__intcap __attribute__((cheri_no_provenance))'}}
+  printf("%" PRIxPTR, (__INTPTR_TYPE__)saddr);
   printf("%" PRIxPTR, (__UINTPTR_TYPE__)uaddr);
 
   // And the d format string expects a signed one:
-  // FIXME: However, we should no warn about this until Clang implements -Wformat-signedness
+  // However, we should no warn about this until Clang implements -Wformat-signedness
   printf("%" PRIdPTR, saddr); // purecap-warning{{format specifies type 'intptr_t' (aka '__intcap') but the argument has type 'long'}}
   printf("%" PRIdPTR, uaddr); // purecap-warning{{format specifies type 'intptr_t' (aka '__intcap') but the argument has type 'unsigned long'}}
   printf("%" PRIdPTR, sptr);
-  printf("%" PRIdPTR, uptr); // purecap-warning{{format specifies type 'intptr_t' (aka '__intcap') but the argument has type 'unsigned __intcap'}}
+  printf("%" PRIdPTR, uptr);
   printf("%" PRIdPTR, (__INTPTR_TYPE__)saddr);
-  printf("%" PRIdPTR, (__UINTPTR_TYPE__)uaddr); // purecap-warning{{format specifies type 'intptr_t' (aka '__intcap') but the argument has type 'unsigned __intcap __attribute__((cheri_no_provenance))'}}
+  printf("%" PRIdPTR, (__UINTPTR_TYPE__)uaddr);
 }

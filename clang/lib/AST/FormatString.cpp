@@ -416,7 +416,11 @@ ArgType::matchesType(ASTContext &C, QualType argTy) const {
             return T == C.UnsignedLongLongTy ? Match : NoMatch;
           case BuiltinType::ULongLong:
             return T == C.LongLongTy ? Match : NoMatch;
-        }
+          case BuiltinType::IntCap:
+            return T == C.UnsignedIntCapTy ? Match : NoMatch;
+          case BuiltinType::UIntCap:
+            return T == C.IntCapTy ? Match : NoMatch;
+          }
       return NoMatch;
     }
 
