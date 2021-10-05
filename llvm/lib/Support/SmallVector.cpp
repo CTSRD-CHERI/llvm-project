@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/Twine.h"
 #include <cstdint>
 #ifdef LLVM_ENABLE_EXCEPTIONS
 #include <stdexcept>
@@ -72,7 +73,7 @@ static void report_size_overflow(size_t MinSize, size_t MaxSize) {
 #ifdef LLVM_ENABLE_EXCEPTIONS
   throw std::length_error(Reason);
 #else
-  report_fatal_error(Reason);
+  report_fatal_error(Twine(Reason));
 #endif
 }
 
@@ -86,7 +87,7 @@ static void report_at_maximum_capacity(size_t MaxSize) {
 #ifdef LLVM_ENABLE_EXCEPTIONS
   throw std::length_error(Reason);
 #else
-  report_fatal_error(Reason);
+  report_fatal_error(Twine(Reason));
 #endif
 }
 
