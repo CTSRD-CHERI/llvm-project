@@ -8,6 +8,8 @@ void test(void) {
   printf("%ju", 42.0); // expected-warning {{format specifies type 'uintmax_t' (aka 'unsigned long')}}
   printf("%Pd", 42.0); // expected-warning {{format specifies type 'intptr_t' (aka '__intcap')}}
   printf("%Pu", 42.0); // expected-warning {{format specifies type 'uintptr_t' (aka 'unsigned __intcap')}}
+  printf("%Px", 42.0); // expected-warning {{format specifies type 'uintptr_t' (aka 'unsigned __intcap')}}
+  printf("%PX", 42.0); // expected-warning {{format specifies type 'uintptr_t' (aka 'unsigned __intcap')}}
   printf("%zu", 42.0); // expected-warning {{format specifies type 'size_t' (aka 'unsigned long')}}
   printf("%td", 42.0); // expected-warning {{format specifies type 'ptrdiff_t' (aka 'long')}}
   printf("%lc", 42.0); // expected-warning {{format specifies type 'wint_t' (aka 'int')}}
@@ -19,6 +21,8 @@ void test(void) {
   scanf("%ju", 0); // expected-warning {{format specifies type 'uintmax_t *' (aka 'unsigned long *')}}
   scanf("%Pd", 0); // expected-warning {{format specifies type 'intptr_t *' (aka '__intcap *')}}
   scanf("%Pu", 0); // expected-warning {{format specifies type 'uintptr_t *' (aka 'unsigned __intcap *')}}
+  scanf("%Px", 0); // expected-warning {{format specifies type 'uintptr_t *' (aka 'unsigned __intcap *')}}
+  scanf("%PX", 0); // expected-warning {{format specifies type 'uintptr_t *' (aka 'unsigned __intcap *')}}
   scanf("%zu", 0); // expected-warning {{format specifies type 'size_t *' (aka 'unsigned long *')}}
   scanf("%td", 0); // expected-warning {{format specifies type 'ptrdiff_t *' (aka 'long *')}}
   scanf("%lc", 0); // expected-warning {{format specifies type 'wchar_t *' (aka 'int *')}}
