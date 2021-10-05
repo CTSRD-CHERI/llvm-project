@@ -915,7 +915,7 @@ void MSAsmStmt::initialize(const ASTContext &C, StringRef asmstr,
                  });
 }
 
-IfStmt::IfStmt(const ASTContext &Ctx, SourceLocation IL, bool IsConstexpr,
+IfStmt::IfStmt(const ASTContext &Ctx, SourceLocation IL, IfStatementKind Kind,
                Stmt *Init, VarDecl *Var, Expr *Cond, SourceLocation LPL,
                SourceLocation RPL, Stmt *Then, SourceLocation EL, Stmt *Else)
     : Stmt(IfStmtClass), LParenLoc(LPL), RParenLoc(RPL) {
@@ -926,7 +926,7 @@ IfStmt::IfStmt(const ASTContext &Ctx, SourceLocation IL, bool IsConstexpr,
   IfStmtBits.HasVar = HasVar;
   IfStmtBits.HasInit = HasInit;
 
-  setConstexpr(IsConstexpr);
+  setStatementKind(Kind);
 
   setCond(Cond);
   setThen(Then);
@@ -950,9 +950,9 @@ IfStmt::IfStmt(EmptyShell Empty, bool HasElse, bool HasVar, bool HasInit)
 }
 
 IfStmt *IfStmt::Create(const ASTContext &Ctx, SourceLocation IL,
-                       bool IsConstexpr, Stmt *Init, VarDecl *Var, Expr *Cond,
-                       SourceLocation LPL, SourceLocation RPL, Stmt *Then,
-                       SourceLocation EL, Stmt *Else) {
+                       IfStatementKind Kind, Stmt *Init, VarDecl *Var,
+                       Expr *Cond, SourceLocation LPL, SourceLocation RPL,
+                       Stmt *Then, SourceLocation EL, Stmt *Else) {
   bool HasElse = Else != nullptr;
   bool HasVar = Var != nullptr;
   bool HasInit = Init != nullptr;
@@ -961,7 +961,7 @@ IfStmt *IfStmt::Create(const ASTContext &Ctx, SourceLocation IL,
           NumMandatoryStmtPtr + HasElse + HasVar + HasInit, HasElse),
       alignof(IfStmt));
   return new (Mem)
-      IfStmt(Ctx, IL, IsConstexpr, Init, Var, Cond, LPL, RPL, Then, EL, Else);
+      IfStmt(Ctx, IL, Kind, Init, Var, Cond, LPL, RPL, Then, EL, Else);
 }
 
 IfStmt *IfStmt::CreateEmpty(const ASTContext &Ctx, bool HasElse, bool HasVar,

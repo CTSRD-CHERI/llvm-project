@@ -5200,7 +5200,10 @@ static EvalStmtResult EvaluateStmt(StmtResult &Result, EvalInfo &Info,
       }
     }
     bool Cond;
-    if (!EvaluateCond(Info, IS->getConditionVariable(), IS->getCond(), Cond))
+    if (IS->isConsteval())
+      Cond = IS->isNonNegatedConsteval();
+    else if (!EvaluateCond(Info, IS->getConditionVariable(), IS->getCond(),
+                           Cond))
       return ESR_Failed;
 
     if (const Stmt *SubStmt = Cond ? IS->getThen() : IS->getElse()) {
