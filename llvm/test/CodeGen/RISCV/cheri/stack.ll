@@ -10,22 +10,22 @@ define i32 @static_alloca() nounwind {
 ; RV32IXCHERI-LABEL: static_alloca:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IXCHERI-NEXT:    csc cra, 8(csp)
+; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset ca0, csp, 4
 ; RV32IXCHERI-NEXT:    csetbounds ca0, ca0, 4
 ; RV32IXCHERI-NEXT:    ccall use_arg
-; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: static_alloca:
 ; RV64IXCHERI:       # %bb.0:
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV64IXCHERI-NEXT:    csc cra, 16(csp)
+; RV64IXCHERI-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    cincoffset ca0, csp, 12
 ; RV64IXCHERI-NEXT:    csetbounds ca0, ca0, 4
 ; RV64IXCHERI-NEXT:    ccall use_arg
-; RV64IXCHERI-NEXT:    clc cra, 16(csp)
+; RV64IXCHERI-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    cret
   %var = alloca i32, align 4, addrspace(200)
@@ -39,8 +39,8 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV32IXCHERI-LABEL: dynamic_alloca:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IXCHERI-NEXT:    csc cra, 8(csp)
-; RV32IXCHERI-NEXT:    csc cs0, 0(csp)
+; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
+; RV32IXCHERI-NEXT:    csc cs0, 0(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 16
 ; RV32IXCHERI-NEXT:    cgetaddr a1, csp
 ; RV32IXCHERI-NEXT:    slli a0, a0, 2
@@ -53,16 +53,16 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV32IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV32IXCHERI-NEXT:    ccall use_arg
 ; RV32IXCHERI-NEXT:    cincoffset csp, cs0, -16
-; RV32IXCHERI-NEXT:    clc cs0, 0(csp)
-; RV32IXCHERI-NEXT:    clc cra, 8(csp)
+; RV32IXCHERI-NEXT:    clc cs0, 0(csp) # 8-byte Folded Reload
+; RV32IXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: dynamic_alloca:
 ; RV64IXCHERI:       # %bb.0:
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, -32
-; RV64IXCHERI-NEXT:    csc cra, 16(csp)
-; RV64IXCHERI-NEXT:    csc cs0, 0(csp)
+; RV64IXCHERI-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; RV64IXCHERI-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    cincoffset cs0, csp, 32
 ; RV64IXCHERI-NEXT:    cgetaddr a1, csp
 ; RV64IXCHERI-NEXT:    slli a0, a0, 2
@@ -78,8 +78,8 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV64IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV64IXCHERI-NEXT:    ccall use_arg
 ; RV64IXCHERI-NEXT:    cincoffset csp, cs0, -32
-; RV64IXCHERI-NEXT:    clc cs0, 0(csp)
-; RV64IXCHERI-NEXT:    clc cra, 16(csp)
+; RV64IXCHERI-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; RV64IXCHERI-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    cret
   %var = alloca i32, iXLEN %x, align 4, addrspace(200)

@@ -13,29 +13,29 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-DEFAULT-LABEL: caller:
 ; IL32PC64-DEFAULT:       # %bb.0:
 ; IL32PC64-DEFAULT-NEXT:    cincoffset csp, csp, -16
-; IL32PC64-DEFAULT-NEXT:    csc cra, 8(csp)
+; IL32PC64-DEFAULT-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; IL32PC64-DEFAULT-NEXT:    cincoffset ca0, csp, 7
 ; IL32PC64-DEFAULT-NEXT:    csetbounds ca0, ca0, 1
 ; IL32PC64-DEFAULT-NEXT:    ccall callee
-; IL32PC64-DEFAULT-NEXT:    clc cra, 8(csp)
+; IL32PC64-DEFAULT-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; IL32PC64-DEFAULT-NEXT:    cincoffset csp, csp, 16
 ; IL32PC64-DEFAULT-NEXT:    cret
 ;
 ; L64PC128-DEFAULT-LABEL: caller:
 ; L64PC128-DEFAULT:       # %bb.0:
 ; L64PC128-DEFAULT-NEXT:    cincoffset csp, csp, -32
-; L64PC128-DEFAULT-NEXT:    csc cra, 16(csp)
+; L64PC128-DEFAULT-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; L64PC128-DEFAULT-NEXT:    cincoffset ca0, csp, 15
 ; L64PC128-DEFAULT-NEXT:    csetbounds ca0, ca0, 1
 ; L64PC128-DEFAULT-NEXT:    ccall callee
-; L64PC128-DEFAULT-NEXT:    clc cra, 16(csp)
+; L64PC128-DEFAULT-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; L64PC128-DEFAULT-NEXT:    cincoffset csp, csp, 32
 ; L64PC128-DEFAULT-NEXT:    cret
 ;
 ; IL32PC64-LABEL: caller:
 ; IL32PC64:       # %bb.0:
 ; IL32PC64-NEXT:    cincoffset csp, csp, -16
-; IL32PC64-NEXT:    csc cra, 8(csp)
+; IL32PC64-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; IL32PC64-NEXT:  .LBB0_3: # Label of block must be emitted
 ; IL32PC64-NEXT:    auipcc ca0, %captab_pcrel_hi(__stack_chk_guard)
 ; IL32PC64-NEXT:    clc ca0, %pcrel_lo(.LBB0_3)(ca0)
@@ -51,7 +51,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-NEXT:    clw a1, 4(csp)
 ; IL32PC64-NEXT:    bne a0, a1, .LBB0_2
 ; IL32PC64-NEXT:  # %bb.1:
-; IL32PC64-NEXT:    clc cra, 8(csp)
+; IL32PC64-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; IL32PC64-NEXT:    cincoffset csp, csp, 16
 ; IL32PC64-NEXT:    cret
 ; IL32PC64-NEXT:  .LBB0_2:
@@ -60,7 +60,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; L64PC128-LABEL: caller:
 ; L64PC128:       # %bb.0:
 ; L64PC128-NEXT:    cincoffset csp, csp, -32
-; L64PC128-NEXT:    csc cra, 16(csp)
+; L64PC128-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; L64PC128-NEXT:  .LBB0_3: # Label of block must be emitted
 ; L64PC128-NEXT:    auipcc ca0, %captab_pcrel_hi(__stack_chk_guard)
 ; L64PC128-NEXT:    clc ca0, %pcrel_lo(.LBB0_3)(ca0)
@@ -76,7 +76,7 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; L64PC128-NEXT:    cld a1, 8(csp)
 ; L64PC128-NEXT:    bne a0, a1, .LBB0_2
 ; L64PC128-NEXT:  # %bb.1:
-; L64PC128-NEXT:    clc cra, 16(csp)
+; L64PC128-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
 ; L64PC128-NEXT:    cincoffset csp, csp, 32
 ; L64PC128-NEXT:    cret
 ; L64PC128-NEXT:  .LBB0_2:

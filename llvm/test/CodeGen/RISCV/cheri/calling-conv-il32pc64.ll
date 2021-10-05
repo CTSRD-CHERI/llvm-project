@@ -109,11 +109,11 @@ define void @test_varargs_odd_cap_reg() nounwind {
 ; CHECK-LABEL: test_varargs_odd_cap_reg:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    csc cra, 8(csp)
+; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    addi a0, zero, 1
 ; CHECK-NEXT:    csc cnull, 0(csp)
 ; CHECK-NEXT:    ccall varargs
-; CHECK-NEXT:    clc cra, 8(csp)
+; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    cret
 entry:
