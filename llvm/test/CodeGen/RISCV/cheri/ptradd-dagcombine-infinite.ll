@@ -97,6 +97,9 @@ bb:
 ; This assertion does not hold if add ends up being folded to a zero constant since
 ; DAG.getPointerAdd() will return the original node in that case.
 define i8 addrspace(200)* @trivial_ptradd_fold(i8 addrspace(200)* %this) nounwind {
+; CHECK-LABEL: trivial_ptradd_fold:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cret
 entry:
   %0 = getelementptr inbounds i8, i8 addrspace(200)* %this, i64 -16
   %1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 16
