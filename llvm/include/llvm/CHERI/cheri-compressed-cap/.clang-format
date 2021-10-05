@@ -6,3 +6,5 @@ UseTab: Never
 # Force pointers to the type
 DerivePointerAlignment: false
 PointerAlignment: Left
+AllowShortCaseLabelsOnASingleLine: true
+AccessModifierOffset: -4

@@ -1,3 +1,4 @@
+#include <cinttypes>
 #include <iostream>
 #include <ostream>
 #include <string>
@@ -11,37 +12,29 @@ std::ostream& operator<<(std::ostream& os, cc128_length_t value) {
 }
 
 static const char* otype_suffix(uint32_t otype) {
-    // Two separate switches since if the number of otype bits is the same
-    // we cannot have both of the case statements in one switch
     switch (otype) {
-    case CC128_OTYPE_UNSEALED:
-        return " (CC128_OTYPE_UNSEALED)";
-    case CC128_OTYPE_SENTRY:
-        return " (CC128_OTYPE_SENTRY)";
-    case CC128_OTYPE_RESERVED2:
-        return " (CC128_OTYPE_RESERVED2)";
-    case CC128_OTYPE_RESERVED3:
-        return " (CC128_OTYPE_RESERVED3)";
-    default:
-        break;
-    }
-    switch (otype) {
-    case CC256_OTYPE_UNSEALED:
-        return " (CC256_OTYPE_UNSEALED)";
-    case CC256_OTYPE_SENTRY:
-        return " (CC256_OTYPE_SENTRY)";
-    case CC256_OTYPE_RESERVED2:
-        return " (CC256_OTYPE_RESERVED2)";
-    case CC256_OTYPE_RESERVED3:
-        return " (CC256_OTYPE_RESERVED3)";
-    default:
-        return "";
+#define OTYPE_CASE(Name, ...)                                                                                          \
+    case CC128_##Name: return " (CC128_" #Name ")";
+        LS_SPECIAL_OTYPES(OTYPE_CASE, )
+    default: return "";
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const cap_register_t& value);
+std::ostream& operator<<(std::ostream& os, const cc128_bounds_bits& value);
+std::ostream& operator<<(std::ostream& os, const cc128_bounds_bits& value) {
+    os << "{ B: " << (unsigned)value.B << " T: " << (unsigned)value.T << " E: " << (unsigned)value.E
+       << " IE: " << (unsigned)value.IE << " }";
+    return os;
+}
+std::ostream& operator<<(std::ostream& os, const cc64_bounds_bits& value);
+std::ostream& operator<<(std::ostream& os, const cc64_bounds_bits& value) {
+    os << "{ B: " << (unsigned)value.B << " T: " << (unsigned)value.T << " E: " << (unsigned)value.E
+       << " IE: " << (unsigned)value.IE << " }";
+    return os;
+}
 
-std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
+std::ostream& operator<<(std::ostream& os, const cc128_cap_t& value);
+std::ostream& operator<<(std::ostream& os, const cc128_cap_t& value) {
     char buffer[4096];
     cc128_length_t top_full = value._cr_top;
     snprintf(buffer, sizeof(buffer),
@@ -51,14 +44,45 @@ std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
              "\tOffset:      0x%016" PRIx64 "\n"
              "\tLength:      0x%" PRIx64 "%016" PRIx64 " %s\n"
              "\tTop:         0x%" PRIx64 "%016" PRIx64 " %s\n"
+             "\tFlags:       %d\n"
+             "\tReserved:    %d\n"
              "\tSealed:      %d\n"
              "\tOType:       0x%" PRIx32 "%s\n",
-             value.cr_perms, value.cr_uperms, value.cr_base, (uint64_t)value.offset(), (uint64_t)(value.length() >> 64),
-             (uint64_t)value.length(), value.length() > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
-             (uint64_t)(top_full >> 64), (uint64_t)top_full, top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
-             (int)cc128_is_cap_sealed(&value), value.cr_otype, otype_suffix(value.cr_otype));
+             value.permissions(), value.software_permissions(), value.base(), (uint64_t)value.offset(),
+             (uint64_t)(value.length() >> 64), (uint64_t)value.length(),
+             value.length() > UINT64_MAX ? " (greater than UINT64_MAX)" : "", (uint64_t)(top_full >> 64),
+             (uint64_t)top_full, top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "", (int)value.flags(),
+             (int)value.reserved_bits(), (int)(value.is_sealed()), value.type(), otype_suffix(value.type()));
     os << "{\n" << buffer << "}";
     return os;
+}
+std::ostream& operator<<(std::ostream& os, const cc64_cap_t& value);
+std::ostream& operator<<(std::ostream& os, const cc64_cap_t& value) {
+    char buffer[4096];
+    snprintf(buffer, sizeof(buffer),
+             "\tPermissions: 0x%" PRIx32 "\n"
+             "\tUser Perms:  0x%" PRIx32 "\n"
+             "\tBase:        0x%08" PRIx32 "\n"
+             "\tOffset:      0x%08" PRIx32 "\n"
+             "\tLength:      0x%08" PRIx64 " %s\n"
+             "\tTop:         0x%08" PRIx64 " %s\n"
+             "\tFlags:       %d\n"
+             "\tReserved:    %d\n"
+             "\tSealed:      %d\n"
+             "\tOType:       0x%" PRIx32 "%s\n",
+             value.permissions(), value.software_permissions(), value.base(), (uint32_t)value.offset(),
+             (uint64_t)value.length(), value.length() > UINT32_MAX ? " (greater than UINT32_MAX)" : "",
+             (uint64_t)value.top(), value.top() > UINT32_MAX ? " (greater than UINT32_MAX)" : "", (int)value.flags(),
+             (int)value.reserved_bits(), (int)(value.is_sealed()), value.type(), otype_suffix(value.type()));
+    os << "{\n" << buffer << "}";
+    return os;
+}
+
+static inline bool operator==(const cc128_bounds_bits& a, const cc128_bounds_bits& b) {
+    return a.B == b.B && a.E == b.E && a.T == b.T && a.IE == b.IE;
+}
+static inline bool operator==(const cc64_bounds_bits& a, const cc64_bounds_bits& b) {
+    return a.B == b.B && a.E == b.E && a.T == b.T && a.IE == b.IE;
 }
 
 #include "catch.hpp"
@@ -75,47 +99,39 @@ template <typename T> static inline bool check(T expected, T actual, const std::
 
 template <class T, std::size_t N> constexpr inline size_t array_lengthof(T (&)[N]) { return N; }
 
-static void dump_cap_fields(const cap_register_t& result) {
-    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.cr_perms); // TODO: decode perms
-    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
-    fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result.cr_base);
+template <class Cap> static void dump_cap_fields(const Cap& result) {
+    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.permissions()); // TODO: decode perms
+    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.software_permissions());
+    fprintf(stderr, "Base:        0x%016" PRIx64 "\n", (uint64_t)result.base());
     fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", (uint64_t)result.offset());
-    fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", result.address());
-    fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(result.length() >> 64),
-            (uint64_t)result.length() , result.length()  > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
+    fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", (uint64_t)result.address());
+    cc128_length_t len_full = result.length();
+    fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(len_full >> 64), (uint64_t)len_full,
+            len_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
     cc128_length_t top_full = result.top();
     fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    fprintf(stderr, "Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
-    fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result.cr_otype, otype_suffix(result.cr_otype));
+    fprintf(stderr, "Flags:       %d\n", (int)result.flags());
+    fprintf(stderr, "Reserved:    %d\n", (int)result.reserved_bits());
+    fprintf(stderr, "Sealed:      %d\n", (int)result.is_sealed());
+    fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result.type(), otype_suffix(result.type()));
     fprintf(stderr, "\n");
 }
 
-__attribute__((used)) static cap_register_t decompress_representable(uint64_t pesbt_already_xored, uint64_t cursor) {
-    cap_register_t result;
+__attribute__((used)) static cc128_cap_t decompress_representable(uint64_t pesbt_already_xored, uint64_t cursor) {
+    cc128_cap_t result;
     printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt_already_xored, cursor);
-    decompress_128cap_already_xored(pesbt_already_xored, cursor, &result);
+    cc128_decompress_raw(pesbt_already_xored, cursor, false, &result);
     dump_cap_fields(result);
     // Check that the result is the same again when compressed
-    uint64_t new_pesbt_already_xored = compress_128cap_without_xor(&result);
+    uint64_t new_pesbt_already_xored = cc128_compress_raw(&result);
     CHECK(pesbt_already_xored == new_pesbt_already_xored);
-    CHECK(cursor  == result.address());
+    CHECK(cursor == result.address());
     return result;
 }
 
-inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_length_t length) {
-    cap_register_t creg;
-    memset(&creg, 0, sizeof(creg));
-    creg.cr_base = base;
-    creg._cr_cursor = base + offset;
-    creg._cr_top = base + length;
-    creg.cr_perms = CC128_PERMS_ALL;
-    creg.cr_uperms = CC128_UPERMS_ALL;
-    creg.cr_otype = CC128_OTYPE_UNSEALED;
-    creg.cr_ebt = CC128_RESET_EBT;
-    creg.cr_tag = true;
-    REQUIRE(cc128_is_representable_cap_exact(&creg));
-    return creg;
+inline cc128_cap_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_length_t length) {
+    return cc128_make_max_perms_cap(base, offset, length);
 }
 
 #define DO_STRINGIFY2(x) #x
