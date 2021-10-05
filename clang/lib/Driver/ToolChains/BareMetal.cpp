@@ -126,6 +126,20 @@ static bool isARMBareMetal(const llvm::Triple &Triple) {
   return true;
 }
 
+/// Is the triple aarch64-none-elf?
+static bool isAArch64BareMetal(const llvm::Triple &Triple) {
+  if (Triple.getArch() != llvm::Triple::aarch64)
+    return false;
+
+  if (Triple.getVendor() != llvm::Triple::UnknownVendor)
+    return false;
+
+  if (Triple.getOS() != llvm::Triple::UnknownOS)
+    return false;
+
+  return Triple.getEnvironmentName() == "elf";
+}
+
 /// Allow mips*-none-elf
 static bool isMIPSBareMetal(const llvm::Triple& Triple) {
   switch(Triple.getArch()) {
@@ -169,8 +183,8 @@ void BareMetal::findMultilibs(const Driver &D, const llvm::Triple &Triple,
 }
 
 bool BareMetal::handlesTarget(const llvm::Triple &Triple) {
-  return isARMBareMetal(Triple) || isRISCVBareMetal(Triple) ||
-         isMIPSBareMetal(Triple);
+  return isARMBareMetal(Triple) || isAArch64BareMetal(Triple) ||
+         isRISCVBareMetal(Triple) || isMIPSBareMetal(Triple);
 }
 
 Tool *BareMetal::buildLinker() const {
