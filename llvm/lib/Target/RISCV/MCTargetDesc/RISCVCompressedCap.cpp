@@ -17,8 +17,7 @@ uint64_t getRepresentableLength(uint64_t Length, bool IsRV64) {
   if (IsRV64) {
     return cc128_get_representable_length(Length);
   } else {
-    // TODO: cc64 helpers
-    llvm_unreachable("RV32 getRepresentableLength requires cc64_* helper");
+    return cc64_get_representable_length(Length);
   }
 }
 
@@ -26,8 +25,7 @@ uint64_t getAlignmentMask(uint64_t Length, bool IsRV64) {
   if (IsRV64) {
     return cc128_get_alignment_mask(Length);
   } else {
-    // TODO: cc64 helpers
-    llvm_unreachable("RV32 getAlignmentMask requires cc64_* helper");
+    return cc64_get_alignment_mask(Length);
   }
 }
 
@@ -36,8 +34,8 @@ TailPaddingAmount getRequiredTailPadding(uint64_t Size, bool IsRV64) {
     return static_cast<TailPaddingAmount>(
         llvm::alignTo(Size, cc128_get_required_alignment(Size)) - Size);
   } else {
-    // TODO: cc64 helpers
-    return TailPaddingAmount::None;
+    return static_cast<TailPaddingAmount>(
+        llvm::alignTo(Size, cc64_get_required_alignment(Size)) - Size);
   }
 }
 
@@ -45,8 +43,7 @@ Align getRequiredAlignment(uint64_t Size, bool IsRV64) {
   if (IsRV64) {
     return Align(cc128_get_required_alignment(Size));
   } else {
-    // TODO: cc64 helpers
-    return Align();
+    return Align(cc64_get_required_alignment(Size));
   }
 }
 } // namespace RISCVCompressedCap
