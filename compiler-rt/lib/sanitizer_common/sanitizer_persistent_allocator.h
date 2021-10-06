@@ -23,13 +23,19 @@ namespace __sanitizer {
 class PersistentAllocator {
  public:
   void *alloc(usize size);
+  usize allocated() const {
+    SpinMutexLock l(&mtx);
+    return atomic_load_relaxed(&mapped_size) +
+           atomic_load_relaxed(&region_pos) - atomic_load_relaxed(&region_end);
+  }
 
  private:
   void *tryAlloc(usize size);
   void *refillAndAlloc(usize size);
-  StaticSpinMutex mtx;  // Protects alloc of new blocks for region allocator.
+  mutable StaticSpinMutex mtx;  // Protects alloc of new blocks.
   atomic_uintptr_t region_pos;  // Region allocator for Node's.
   atomic_uintptr_t region_end;
+  atomic_size_t mapped_size;
 };
 
 inline void *PersistentAllocator::tryAlloc(usize size) {
@@ -49,11 +55,6 @@ inline void *PersistentAllocator::alloc(usize size) {
   void *s = tryAlloc(size);
   if (s) return s;
   return refillAndAlloc(size);
-}
-
-extern PersistentAllocator thePersistentAllocator;
-inline void *PersistentAlloc(usize sz) {
-  return thePersistentAllocator.alloc(sz);
 }
 
 } // namespace __sanitizer
