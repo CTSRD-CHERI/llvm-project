@@ -1875,6 +1875,8 @@ DEF_TRAVERSE_DECL(EnumDecl, {
     TRY_TO(TraverseType(QualType(D->getTypeForDecl(), 0)));
 
   TRY_TO(TraverseNestedNameSpecifierLoc(D->getQualifierLoc()));
+  if (auto *TSI = D->getIntegerTypeSourceInfo())
+    TRY_TO(TraverseTypeLoc(TSI->getTypeLoc()));
   // The enumerators are already traversed by
   // decls_begin()/decls_end().
 })
