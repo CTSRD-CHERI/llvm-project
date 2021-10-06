@@ -328,7 +328,7 @@ void MCELFStreamer::emitCommonSymbol(MCSymbol *S, uint64_t Size,
   } else {
     if (Symbol->declareCommon(Size + static_cast<uint64_t>(TailPadding),
                               ByteAlignment))
-      report_fatal_error("Symbol: " + Symbol->getName() +
+      report_fatal_error(Twine("Symbol: ") + Symbol->getName() +
                          " redeclared as different type");
   }
 
@@ -504,7 +504,7 @@ void MCELFStreamer::finalizeCGProfileEntry(const MCSymbolRefExpr *&SRE,
               *MCOffset, "BFD_RELOC_NONE", SRE, SRE->getLoc(),
               *getContext().getSubtargetInfo()))
     report_fatal_error("Relocation for CG Profile could not be created: " +
-                       Err->second);
+                       Twine(Err->second));
 }
 
 void MCELFStreamer::finalizeCGProfile() {
