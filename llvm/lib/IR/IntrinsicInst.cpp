@@ -202,7 +202,7 @@ Optional<RoundingMode> ConstrainedFPIntrinsic::getRoundingMode() const {
     MD = MAV->getMetadata();
   if (!MD || !isa<MDString>(MD))
     return None;
-  return StrToRoundingMode(cast<MDString>(MD)->getString());
+  return convertStrToRoundingMode(cast<MDString>(MD)->getString());
 }
 
 Optional<fp::ExceptionBehavior>
@@ -214,7 +214,7 @@ ConstrainedFPIntrinsic::getExceptionBehavior() const {
     MD = MAV->getMetadata();
   if (!MD || !isa<MDString>(MD))
     return None;
-  return StrToExceptionBehavior(cast<MDString>(MD)->getString());
+  return convertStrToExceptionBehavior(cast<MDString>(MD)->getString());
 }
 
 bool ConstrainedFPIntrinsic::isDefaultFPEnvironment() const {
