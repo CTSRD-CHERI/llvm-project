@@ -65,7 +65,6 @@ protected:
   bool HasD = false;
   bool HasC = false;
   bool HasCheri = false;
-  bool HasB = false;
   bool HasV = false;
   bool HasZba = false;
   bool HasZbb = false;
