@@ -1710,20 +1710,20 @@ void AsmPrinter::emitGlobalIndirectSymbol(Module &M,
     // other situations as the alias and aliasee having differing types but same
     // size may be intentional.
     const DataLayout &DL = M.getDataLayout();
-    const GlobalObject *BaseObject = GA->getBaseObject();
+    const GlobalObject *Aliasee = GA->getAliaseeObject();
     const MCExpr *SizeExpr = nullptr;
     int64_t Offset = 0;
     if (MAI->hasDotTypeDotSizeDirective() && GA->getValueType()->isSized() &&
-        (!BaseObject || BaseObject->hasPrivateLinkage())) {
+        (!Aliasee || Aliasee->hasPrivateLinkage())) {
       uint64_t Size = DL.getTypeAllocSize(GA->getValueType());
       SizeExpr = MCConstantExpr::create(Size, OutContext);
     } else if (GetPointerBaseWithConstantOffset(GA->getAliasee(), Offset, DL,
-                                                false) == BaseObject) {
+                                                false) == Aliasee) {
       // If the base symbol has a defined ELF size and we are defining a simple
       // alias (no non-zero GEPs), we also apply that size to the alias symbol.
       // This is required for architectures that set bounds on globals (e.g.
       // CHERI) and use the st_size information for those bounds.
-      if (auto *BaseSymELF = dyn_cast<MCSymbolELF>(getSymbol(BaseObject)))
+      if (auto *BaseSymELF = dyn_cast<MCSymbolELF>(getSymbol(Aliasee)))
         SizeExpr = BaseSymELF->getSize();
       if (SizeExpr && Offset != 0) {
         int64_t AbsSize = 0;
