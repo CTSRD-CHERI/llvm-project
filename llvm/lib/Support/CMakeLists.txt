@@ -243,7 +243,6 @@ add_llvm_component_library(LLVMSupport
   Program.cpp
   RWMutex.cpp
   Signals.cpp
-  TargetRegistry.cpp
   ThreadLocal.cpp
   Threading.cpp
   Valgrind.cpp

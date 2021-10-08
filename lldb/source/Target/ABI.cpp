@@ -17,7 +17,7 @@
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/Log.h"
 #include "llvm/MC/MCTargetOptions.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 #include <cctype>
 
 using namespace lldb;
