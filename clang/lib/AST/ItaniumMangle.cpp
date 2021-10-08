@@ -5001,6 +5001,7 @@ recurse:
     Out << "L";
     mangleType(Context.getASTContext().getRecordType(cast<LambdaExpr>(E)->getLambdaClass()));
     Out << "E";
+    break;
   }
 
   case Expr::PackExpansionExprClass:
