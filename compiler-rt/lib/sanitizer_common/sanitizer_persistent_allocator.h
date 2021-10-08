@@ -20,9 +20,10 @@
 
 namespace __sanitizer {
 
+template <typename T>
 class PersistentAllocator {
  public:
-  void *alloc(usize size);
+  T *alloc(usize count = 1);
   usize allocated() const {
     SpinMutexLock l(&mtx);
     return atomic_load_relaxed(&mapped_size) +
@@ -30,42 +31,47 @@ class PersistentAllocator {
   }
 
  private:
-  void *tryAlloc(usize size);
-  void *refillAndAlloc(usize size);
+  T *tryAlloc(usize count);
+  T *refillAndAlloc(usize count);
   mutable StaticSpinMutex mtx;  // Protects alloc of new blocks.
   atomic_uintptr_t region_pos;  // Region allocator for Node's.
   atomic_uintptr_t region_end;
   atomic_size_t mapped_size;
 };
 
-inline void *PersistentAllocator::tryAlloc(usize size) {
+template <typename T>
+inline T *PersistentAllocator<T>::tryAlloc(usize count) {
   // Optimisic lock-free allocation, essentially try to bump the region ptr.
   for (;;) {
     uptr cmp = atomic_load(&region_pos, memory_order_acquire);
     uptr end = atomic_load(&region_end, memory_order_acquire);
+    uptr size = count * sizeof(T);
     if (cmp == 0 || cmp + size > end) return nullptr;
     if (atomic_compare_exchange_weak(&region_pos, &cmp, cmp + size,
                                      memory_order_acquire))
-      return (void *)cmp;
+      return reinterpret_cast<T *>(cmp);
   }
 }
 
-inline void *PersistentAllocator::alloc(usize size) {
+template <typename T>
+inline T *PersistentAllocator<T>::alloc(usize count) {
   // First, try to allocate optimisitically.
-  void *s = tryAlloc(size);
+  T *s = tryAlloc(count);
   if (LIKELY(s))
     return s;
-  return refillAndAlloc(size);
+  return refillAndAlloc(count);
 }
 
-inline void *PersistentAllocator::refillAndAlloc(uptr size) {
+template <typename T>
+inline T *PersistentAllocator<T>::refillAndAlloc(uptr count) {
   // If failed, lock, retry and alloc new superblock.
   SpinMutexLock l(&mtx);
   for (;;) {
-    void *s = tryAlloc(size);
+    T *s = tryAlloc(count);
     if (s)
       return s;
     atomic_store(&region_pos, 0, memory_order_relaxed);
+    uptr size = count * sizeof(T);
     uptr allocsz = 64 * 1024;
     if (allocsz < size)
       allocsz = size;
