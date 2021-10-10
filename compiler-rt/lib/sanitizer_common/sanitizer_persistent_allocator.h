@@ -24,11 +24,7 @@ template <typename T>
 class PersistentAllocator {
  public:
   T *alloc(usize count = 1);
-  usize allocated() const {
-    SpinMutexLock l(&mtx);
-    return atomic_load_relaxed(&mapped_size) +
-           atomic_load_relaxed(&region_pos) - atomic_load_relaxed(&region_end);
-  }
+  usize allocated() const { return atomic_load_relaxed(&mapped_size); }
 
  private:
   T *tryAlloc(usize count);
