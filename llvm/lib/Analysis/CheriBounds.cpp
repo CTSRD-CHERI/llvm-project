@@ -31,7 +31,7 @@ void CheriNeedBoundsChecker::findUsesThatNeedBounds(
     SmallVectorImpl<const Use *> *UsesThatNeedBounds, bool BoundAllUses,
     bool *MustUseSingleIntrinsic) const {
   // TODO: don't replace load/store instructions with the bounded value
-  for (const Use &U : I->uses()) {
+  for (const Use &U : RootInst->uses()) {
     if (BoundAllUses || check(U)) {
       UsesThatNeedBounds->push_back(&U);
 #if 0 // This should now be fixed
@@ -46,7 +46,7 @@ void CheriNeedBoundsChecker::findUsesThatNeedBounds(
 
 bool CheriNeedBoundsChecker::anyUseNeedsBounds() const {
   // TODO: don't replace load/store instructions with the bounded value
-  for (const Use &U : I->uses()) {
+  for (const Use &U : RootInst->uses()) {
     if (check(U)) {
       return true;
     }
