@@ -19,7 +19,6 @@
 
 namespace __sanitizer {
 
-static PersistentAllocator<StackDepotNode> allocator;
 static PersistentAllocator<vaddr> traceAllocator;
 
 struct StackDepotNode {
@@ -39,12 +38,7 @@ struct StackDepotNode {
   bool eq(hash_type hash, const args_type &args) const {
     return hash == stack_hash;
   }
-  static usize allocated() {
-    return allocator.allocated() + traceAllocator.allocated();
-  }
-  static StackDepotNode *allocate(const args_type &args) {
-    return allocator.alloc();
-  }
+  static usize allocated() { return traceAllocator.allocated(); }
   static hash_type hash(const args_type &args) {
     MurMur2Hash64Builder H(args.size * sizeof(args.trace[0]));
     for (uptr i = 0; i < args.size; i++) H.add(args.trace[i]);
