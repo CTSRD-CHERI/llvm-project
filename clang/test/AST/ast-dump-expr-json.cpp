@@ -7906,7 +7906,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "void (*)(NS::X)"
+// CHECK-NEXT:         "qualType": "void (*)(X)"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "castKind": "FunctionToPointerDecay",
@@ -7927,7 +7927,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "void (NS::X)"
+// CHECK-NEXT:           "qualType": "void (X)"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "referencedDecl": {
@@ -7935,7 +7935,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           "kind": "FunctionDecl",
 // CHECK-NEXT:           "name": "f",
 // CHECK-NEXT:           "type": {
-// CHECK-NEXT:            "qualType": "void (NS::X)"
+// CHECK-NEXT:            "qualType": "void (X)"
 // CHECK-NEXT:           }
 // CHECK-NEXT:          }
 // CHECK-NEXT:         }
@@ -7957,7 +7957,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "NS::X"
+// CHECK-NEXT:         "desugaredQualType": "NS::X",
+// CHECK-NEXT:         "qualType": "X"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
@@ -8336,7 +8337,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "void (*)(NS::X)"
+// CHECK-NEXT:         "qualType": "void (*)(X)"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "castKind": "FunctionToPointerDecay",
@@ -8357,7 +8358,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "void (NS::X)"
+// CHECK-NEXT:           "qualType": "void (X)"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "referencedDecl": {
@@ -8365,7 +8366,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           "kind": "FunctionDecl",
 // CHECK-NEXT:           "name": "f",
 // CHECK-NEXT:           "type": {
-// CHECK-NEXT:            "qualType": "void (NS::X)"
+// CHECK-NEXT:            "qualType": "void (X)"
 // CHECK-NEXT:           }
 // CHECK-NEXT:          }
 // CHECK-NEXT:         }
@@ -8387,7 +8388,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "NS::X"
+// CHECK-NEXT:         "desugaredQualType": "NS::X",
+// CHECK-NEXT:         "qualType": "X"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
@@ -8654,7 +8656,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "void (*)(NS::X)"
+// CHECK-NEXT:         "qualType": "void (*)(X)"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "castKind": "FunctionToPointerDecay",
@@ -8675,7 +8677,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "void (NS::X)"
+// CHECK-NEXT:           "qualType": "void (X)"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "referencedDecl": {
@@ -8683,7 +8685,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           "kind": "FunctionDecl",
 // CHECK-NEXT:           "name": "f",
 // CHECK-NEXT:           "type": {
-// CHECK-NEXT:            "qualType": "void (NS::X)"
+// CHECK-NEXT:            "qualType": "void (X)"
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "foundReferencedDecl": {
@@ -8710,7 +8712,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "NS::X"
+// CHECK-NEXT:         "desugaredQualType": "NS::X",
+// CHECK-NEXT:         "qualType": "X"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
@@ -9019,7 +9022,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:        "isUsed": true,
 // CHECK-NEXT:        "name": "x",
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "NS::X"
+// CHECK-NEXT:         "desugaredQualType": "NS::X",
+// CHECK-NEXT:         "qualType": "X"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "init": "call",
 // CHECK-NEXT:        "inner": [
@@ -9039,7 +9043,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "NS::X"
+// CHECK-NEXT:           "desugaredQualType": "NS::X",
+// CHECK-NEXT:           "qualType": "X"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "prvalue",
 // CHECK-NEXT:          "ctorType": {
@@ -9089,7 +9094,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "void (*)(NS::X)"
+// CHECK-NEXT:         "qualType": "void (*)(X)"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "castKind": "FunctionToPointerDecay",
@@ -9110,7 +9115,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "void (NS::X)"
+// CHECK-NEXT:           "qualType": "void (X)"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "referencedDecl": {
@@ -9118,7 +9123,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           "kind": "FunctionDecl",
 // CHECK-NEXT:           "name": "f",
 // CHECK-NEXT:           "type": {
-// CHECK-NEXT:            "qualType": "void (NS::X)"
+// CHECK-NEXT:            "qualType": "void (X)"
 // CHECK-NEXT:           }
 // CHECK-NEXT:          }
 // CHECK-NEXT:         }
@@ -9140,7 +9145,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:         }
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "type": {
-// CHECK-NEXT:         "qualType": "NS::X"
+// CHECK-NEXT:         "desugaredQualType": "NS::X",
+// CHECK-NEXT:         "qualType": "X"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
@@ -9186,7 +9192,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:             }
 // CHECK-NEXT:            },
 // CHECK-NEXT:            "type": {
-// CHECK-NEXT:             "qualType": "NS::X"
+// CHECK-NEXT:             "desugaredQualType": "NS::X",
+// CHECK-NEXT:             "qualType": "X"
 // CHECK-NEXT:            },
 // CHECK-NEXT:            "valueCategory": "lvalue",
 // CHECK-NEXT:            "referencedDecl": {
@@ -9194,7 +9201,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:             "kind": "VarDecl",
 // CHECK-NEXT:             "name": "x",
 // CHECK-NEXT:             "type": {
-// CHECK-NEXT:              "qualType": "NS::X"
+// CHECK-NEXT:              "desugaredQualType": "NS::X",
+// CHECK-NEXT:              "qualType": "X"
 // CHECK-NEXT:             }
 // CHECK-NEXT:            }
 // CHECK-NEXT:           }

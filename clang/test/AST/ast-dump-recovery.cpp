@@ -145,7 +145,7 @@ void test2(Foo2 f) {
   // CHECK-NEXT:   | `-DeclRefExpr {{.*}} 'f'
   // CHECK-NEXT: `-IntegerLiteral {{.*}} 'int' 1
   f.func(1);
-  // CHECK:      RecoveryExpr {{.*}} 'Foo2::ForwardClass'
+  // CHECK:      RecoveryExpr {{.*}} 'ForwardClass':'Foo2::ForwardClass'
   // CHECK-NEXT: `-MemberExpr {{.*}} '<bound member function type>' .createFwd
   // CHECK-NEXT:   `-DeclRefExpr {{.*}} 'f'
   f.createFwd();

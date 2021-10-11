@@ -91,20 +91,18 @@ void PointerToMember(S obj1, S *obj2, int S::* data, void (S::*call)(int)) {
 }
 
 void Casting(const S *s) {
-  // FIXME: The cast expressions contain "struct S" instead of "S".
-
   const_cast<S *>(s);
-  // CHECK: CXXConstCastExpr 0x{{[^ ]*}} <line:[[@LINE-1]]:3, col:20> 'S *' const_cast<struct S *> <NoOp>
+  // CHECK: CXXConstCastExpr 0x{{[^ ]*}} <line:[[@LINE-1]]:3, col:20> 'S *' const_cast<S *> <NoOp>
   // CHECK-NEXT: ImplicitCastExpr 0x{{[^ ]*}} <col:19> 'const S *' <LValueToRValue> part_of_explicit_cast
   // CHECK-NEXT: DeclRefExpr 0x{{[^ ]*}} <col:19> 'const S *' lvalue ParmVar 0x{{[^ ]*}} 's' 'const S *'
 
   static_cast<const T *>(s);
-  // CHECK: CXXStaticCastExpr 0x{{[^ ]*}} <line:[[@LINE-1]]:3, col:27> 'const T *' static_cast<const struct T *> <BaseToDerived (S)>
+  // CHECK: CXXStaticCastExpr 0x{{[^ ]*}} <line:[[@LINE-1]]:3, col:27> 'const T *' static_cast<const T *> <BaseToDerived (S)>
   // CHECK-NEXT: ImplicitCastExpr 0x{{[^ ]*}} <col:26> 'const S *' <LValueToRValue> part_of_explicit_cast
   // CHECK-NEXT: DeclRefExpr 0x{{[^ ]*}} <col:26> 'const S *' lvalue ParmVar 0x{{[^ ]*}} 's' 'const S *'
 
   dynamic_cast<const T *>(s);
-  // CHECK: CXXDynamicCastExpr 0x{{[^ ]*}} <line:[[@LINE-1]]:3, col:28> 'const T *' dynamic_cast<const struct T *> <Dynamic>
+  // CHECK: CXXDynamicCastExpr 0x{{[^ ]*}} <line:[[@LINE-1]]:3, col:28> 'const T *' dynamic_cast<const T *> <Dynamic>
   // CHECK-NEXT: ImplicitCastExpr 0x{{[^ ]*}} <col:27> 'const S *' <LValueToRValue> part_of_explicit_cast
   // CHECK-NEXT: DeclRefExpr 0x{{[^ ]*}} <col:27> 'const S *' lvalue ParmVar 0x{{[^ ]*}} 's' 'const S *'
 

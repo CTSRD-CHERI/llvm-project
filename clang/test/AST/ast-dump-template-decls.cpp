@@ -162,3 +162,19 @@ using t2 = D<float, char>::B<int, short>;
 // CHECK:      SubstTemplateTypeParmType 0x{{[^ ]*}} 'short' sugar
 // CHECK-NEXT: TemplateTypeParmType 0x{{[^ ]*}} 'U' dependent contains_unexpanded_pack depth 0 index 0 pack
 } // namespace PR56099
+
+namespace subst_default_argument {
+template<class A1> class A {};
+template<template<class C1, class C2 = A<C1>> class D1, class D2> using D = D1<D2>;
+
+template<class E1, class E2> class E {};
+using test1 = D<E, int>;
+// CHECK:      TypeAliasDecl 0x{{[^ ]*}} <line:{{[1-9]+}}:1, col:23> col:7 test1 'D<subst_default_argument::E, int>':'subst_default_argument::E<int, subst_default_argument::A<int>>'
+// CHECK:      TemplateSpecializationType 0x{{[^ ]*}} 'A<int>' sugar A
+// CHECK-NEXT: |-TemplateArgument type 'int'
+// CHECK-NEXT: | `-SubstTemplateTypeParmType 0x{{[^ ]*}} 'int' sugar class depth 0 index 1 D2
+// CHECK-NEXT: |   |-TypeAliasTemplate 0x{{[^ ]*}} 'D'
+// CHECK-NEXT: |   `-BuiltinType 0x{{[^ ]*}} 'int'
+// CHECK-NEXT: `-RecordType 0x{{[^ ]*}} 'subst_default_argument::A<int>'
+// CHECK-NEXT:   `-ClassTemplateSpecialization 0x{{[^ ]*}} 'A'
+} // namespace subst_default_argument

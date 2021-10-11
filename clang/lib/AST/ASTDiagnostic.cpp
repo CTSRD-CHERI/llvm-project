@@ -1687,9 +1687,24 @@ class TemplateDiff {
                                                 : FromType.getAsString(Policy);
     std::string ToTypeStr = ToType.isNull() ? "(no argument)"
                                             : ToType.getAsString(Policy);
-    // Switch to canonical typename if it is better.
+    // Print without ElaboratedType sugar if it is better.
     // TODO: merge this with other aka printing above.
     if (FromTypeStr == ToTypeStr) {
+      const auto *FromElTy = dyn_cast<ElaboratedType>(FromType),
+                 *ToElTy = dyn_cast<ElaboratedType>(ToType);
+      if (FromElTy || ToElTy) {
+        std::string FromNamedTypeStr =
+            FromElTy ? FromElTy->getNamedType().getAsString(Policy)
+                     : FromTypeStr;
+        std::string ToNamedTypeStr =
+            ToElTy ? ToElTy->getNamedType().getAsString(Policy) : ToTypeStr;
+        if (FromNamedTypeStr != ToNamedTypeStr) {
+          FromTypeStr = FromNamedTypeStr;
+          ToTypeStr = ToNamedTypeStr;
+          goto PrintTypes;
+        }
+      }
+      // Switch to canonical typename if it is better.
       std::string FromCanTypeStr =
           FromType.getCanonicalType().getAsString(Policy);
       std::string ToCanTypeStr = ToType.getCanonicalType().getAsString(Policy);
@@ -1699,6 +1714,7 @@ class TemplateDiff {
       }
     }
 
+  PrintTypes:
     if (PrintTree) OS << '[';
     OS << (FromDefault ? "(default) " : "");
     Bold();
