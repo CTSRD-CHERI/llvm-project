@@ -100,7 +100,12 @@ set(LIBUNWIND_CXX_ABI "default" CACHE STRING "Name of the C++ ABI library to use
 set_property(CACHE LIBUNWIND_CXX_ABI PROPERTY STRINGS ;${CXXABIS})
 set(LIBUNWIND_USE_VERSION_SCRIPT "" CACHE PATH "version script to use when linking libunwind.so.")
 
-set(LIBUNWIND_TEST_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/test/lit.site.cfg.in" CACHE STRING
+if (LIBUNWIND_ENABLE_SHARED)
+  set(LIBUNWIND_DEFAULT_TEST_CONFIG "llvm-libunwind-shared.cfg.in")
+else()
+  set(LIBUNWIND_DEFAULT_TEST_CONFIG "llvm-libunwind-static.cfg.in")
+endif()
+set(LIBUNWIND_TEST_CONFIG "${LIBUNWIND_DEFAULT_TEST_CONFIG}" CACHE STRING
   "The path to the Lit testing configuration to use when running the tests.
    If a relative path is provided, it is assumed to be relative to '<monorepo>/libunwind/test/configs'.")
 if (NOT IS_ABSOLUTE "${LIBUNWIND_TEST_CONFIG}")
