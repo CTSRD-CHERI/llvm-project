@@ -204,7 +204,7 @@ void StackDepotBase<Node, kReservedBits, kTabSizeLog>::PrintAll() {
   for (int i = 0; i < kTabSize; ++i) {
     atomic_uintptr_t *p = &tab[i];
     uptr v = atomic_load(p, memory_order_consume);
-    Node *s = (Node *)(v & ~1UL);
+    Node *s = (Node *)(v & ~uptr(1));
     for (; s; s = s->link) {
       Printf("Stack for id %u:\n", s->id);
       s->load().Print();
