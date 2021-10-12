@@ -139,9 +139,9 @@ cmake_dependent_option(LIBUNWIND_INSTALL_SHARED_LIBRARY
 
 set(LIBUNWIND_TEST_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/test/lit.site.cfg.in" CACHE STRING
   "The path to the Lit testing configuration to use when running the tests.
-   If a relative path is provided, it is assumed to be relative to '<monorepo>/libcxx/test/configs'.")
+   If a relative path is provided, it is assumed to be relative to '<monorepo>/libunwind/test/configs'.")
 if (NOT IS_ABSOLUTE "${LIBUNWIND_TEST_CONFIG}")
-  set(LIBUNWIND_TEST_CONFIG "${LIBUNWIND_LIBCXX_PATH}/test/configs/${LIBUNWIND_TEST_CONFIG}")
+  set(LIBUNWIND_TEST_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/test/configs/${LIBUNWIND_TEST_CONFIG}")
 endif()
 set(LIBUNWIND_TEST_PARAMS "" CACHE STRING
     "A list of parameters to run the Lit test suite with.")
