@@ -8180,10 +8180,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleNoEscapeAttr(S, D, AL);
     break;
   case ParsedAttr::AT_TemporalSafe:
-    handleSimpleAttribute<TemporalSafeAttr>(S, D, AL);
+    if (!checkAttrMutualExclusion<TemporalUnsafeAttr>(S, D, AL))
+      handleSimpleAttribute<TemporalSafeAttr>(S, D, AL);
     break;
   case ParsedAttr::AT_TemporalUnsafe:
-    handleSimpleAttribute<TemporalUnsafeAttr>(S, D, AL);
+    if (!checkAttrMutualExclusion<TemporalSafeAttr>(S, D, AL))
+      handleSimpleAttribute<TemporalUnsafeAttr>(S, D, AL);
     break;
   case ParsedAttr::AT_AssumeAligned:
     handleAssumeAlignedAttr(S, D, AL);

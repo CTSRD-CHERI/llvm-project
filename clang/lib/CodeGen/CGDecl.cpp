@@ -1638,9 +1638,6 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
   bool tsafe = D.hasAttr<TemporalSafeAttr>();
   bool tunsafe = D.hasAttr<TemporalUnsafeAttr>();
 
-  if (tsafe && tunsafe)
-    CGM.Error(D.getLocation(), "Cannot mark as both temporal safe and unsafe");
-
   if (tsafe || tunsafe) {
     llvm::Instruction *value =
         cast<llvm::Instruction>(emission.Addr.getPointer());
