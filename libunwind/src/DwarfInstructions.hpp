@@ -221,8 +221,8 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pc_t pc,
                                            bool &isSignalFrame) {
   FDE_Info fdeInfo;
   CIE_Info cieInfo;
-  if (CFI_Parser<A>::decodeFDE(addressSpace, pc, fdeStart, &fdeInfo,
-                               &cieInfo) == NULL) {
+  if (CFI_Parser<A>::decodeFDE(addressSpace, fdeStart, &fdeInfo, &cieInfo) ==
+      NULL) {
     PrologInfo prolog;
     if (CFI_Parser<A>::parseFDEInstructions(addressSpace, fdeInfo, cieInfo,
                                             pc.address(), R::getArch(),

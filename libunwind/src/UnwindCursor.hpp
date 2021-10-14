@@ -2030,7 +2030,7 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   if (cachedFDE != 0) {
     typename CFI_Parser<A>::FDE_Info fdeInfo;
     typename CFI_Parser<A>::CIE_Info cieInfo;
-    if (!CFI_Parser<A>::decodeFDE(_addressSpace, pc, cachedFDE, &fdeInfo, &cieInfo))
+    if (!CFI_Parser<A>::decodeFDE(_addressSpace, cachedFDE, &fdeInfo, &cieInfo))
       if (getInfoFromFdeCie(fdeInfo, cieInfo, pc, 0))
         return;
   }
@@ -2041,7 +2041,7 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   if (_addressSpace.findOtherFDE(pc.address(), fde)) {
     typename CFI_Parser<A>::FDE_Info fdeInfo;
     typename CFI_Parser<A>::CIE_Info cieInfo;
-    if (!CFI_Parser<A>::decodeFDE(_addressSpace, pc, fde, &fdeInfo, &cieInfo)) {
+    if (!CFI_Parser<A>::decodeFDE(_addressSpace, fde, &fdeInfo, &cieInfo)) {
       // Double check this FDE is for a function that includes the pc.
       if ((fdeInfo.pcStart <= pc.address()) && (pc.address() < fdeInfo.pcEnd))
         if (getInfoFromFdeCie(fdeInfo, cieInfo, pc, 0))

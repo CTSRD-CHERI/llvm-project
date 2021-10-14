@@ -89,7 +89,7 @@ bool EHHeaderParser<A>::decodeTableEntry(
   pint_t fde =
       addressSpace.getEncodedP(tableEntry, ehHdrEnd, tableEnc, ehHdrStart);
   const char *message =
-      CFI_Parser<A>::decodeFDE(addressSpace, pc, fde, fdeInfo, cieInfo);
+      CFI_Parser<A>::decodeFDE(addressSpace, fde, fdeInfo, cieInfo);
   if (message != NULL) {
     _LIBUNWIND_DEBUG_LOG("EHHeaderParser::decodeTableEntry: bad fde: %s",
                          message);
