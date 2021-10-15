@@ -295,60 +295,44 @@ public:
                         << (S ? Twine(*S) : Twine("<unknown>"));
                  AI->dump());
 
+      Value *SingleBoundedAlloc = nullptr;
       if (ReuseSingleIntrinsicCall) {
-        // If we use a single instrinsic for all uses, we can simply update
-        // all uses to point at the newly inserted intrinsic.
         NumSingleIntrin++;
         // We need to convert it to an i8* for the intrinisic:
-        Instruction *AllocaI8 = cast<Instruction>(B.CreateBitCast(AI, I8CapTy));
-        Value *SingleBoundedAlloc =
-            B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
+        Instruction *AllocaI8 =
+          cast<Instruction>(B.CreateBitCast(AI, I8CapTy));
+        SingleBoundedAlloc = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
         SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaTy);
-        for (const Use *U : UsesThatNeedBounds) {
+      }
+      for (const Use *U : UsesThatNeedBounds) {
+        Instruction *I = cast<Instruction>(U->getUser());
+        if (ReuseSingleIntrinsicCall) {
           const_cast<Use *>(U)->set(SingleBoundedAlloc);
-        }
-      } else {
-        // Otherwise, we create new intrinsics for every use. This can avoid
-        // stack spills but will result in additional instructions.
-        // When we encounter multiple uses within the same instruction, we need
-        // to ensure that we reuse the same bounded alloca intrinsic. If we
-        // don't do this, we could end up creating invalid PHI nodes where the
-        // PHI node has multiple entries for the same basic block and uses
-        // different incoming values (for an example see
-        // multiple-uses-in-same-instr.ll). This not only avoids invalid IR, but
-        // also avoids unnecessarily creating multiple intrinsic calls e.g.
-        // in cases where a call instruction passes the same IR variable twice.
-        SmallDenseMap<User *, Value *> ReplacedUses;
-        for (const Use *U : UsesThatNeedBounds) {
-          Value *BoundedAlloca;
-          Instruction *I = cast<Instruction>(U->getUser());
-          auto It = ReplacedUses.find(I);
-          if (It == ReplacedUses.end()) {
-            // First use in this instruction -> create a new intrinsic call.
-            if (auto PHI = dyn_cast<PHINode>(I)) {
-              // For PHI nodes we can't insert just before the PHI, instead we
-              // must insert it just before the end of the incoming BB.
-              auto BB = PHI->getIncomingBlock(*U);
-              // LLVM_DEBUG(dbgs() << "PHI use coming from"; BB->dump());
-              B.SetInsertPoint(BB->getTerminator());
-            } else {
-              // Insert just before the use. This should avoid spilling
-              // registers when using an alloca in a different basic block.
-              B.SetInsertPoint(I);
-            }
-            // We need to convert it to an i8* for the intrinisic. Note: we have
-            // to create a new bitcast every time since reusing the same one can
-            // cause the stack pointer + alloca offset register to be spilled
-            // just so we can do the setbounds in a different basic block.
-            Value *AllocaI8 = B.CreateBitCast(AI, I8CapTy);
-            auto WithBounds = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
-            BoundedAlloca = B.CreateBitCast(WithBounds, AllocaTy);
-            ReplacedUses.insert({I, BoundedAlloca});
+        } else {
+          if (auto PHI = dyn_cast<PHINode>(I)) {
+            // For PHI nodes we can't insert just before the PHI, instead we
+            // must insert it just before
+            auto BB = PHI->getIncomingBlock(*U);
+            // LLVM_DEBUG(dbgs() << "PHI use coming from"; BB->dump());
+            B.SetInsertPoint(BB->getTerminator());
           } else {
-            // Multiple uses in the same instruction -> reuse existing call.
-            BoundedAlloca = It->second;
+            // insert a new intrinsic call before every use. This can avoid
+            // stack spills but will result in additional instructions.
+            // This should avoid spilling registers when using an alloca in a
+            // different basic block.
+            // TODO: there should be a MIR pass to merge unncessary calls
+            B.SetInsertPoint(I);
           }
-          const_cast<Use *>(U)->set(BoundedAlloca);
+          // We need to convert it to an i8* for the intrinisic. Note: we must
+          // not reuse a bitcast since otherwise that results in spilling the
+          // register that was incremented and doing a setbounds in a different
+          // basic block. This is stupid and we should be either using the
+          // bounded capability everywhere or be doing inc+setoffset in the
+          // other block.
+          Instruction *AllocaI8 =
+            cast<Instruction>(B.CreateBitCast(AI, I8CapTy));
+          auto WithBounds = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
+          const_cast<Use *>(U)->set(B.CreateBitCast(WithBounds, AllocaTy));
         }
       }
     }

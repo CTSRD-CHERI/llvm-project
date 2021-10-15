@@ -34,6 +34,12 @@ void CheriNeedBoundsChecker::findUsesThatNeedBounds(
   for (const Use &U : RootInst->uses()) {
     if (BoundAllUses || check(U)) {
       UsesThatNeedBounds->push_back(&U);
+#if 0 // This should now be fixed
+      // See comment further down as to why we must reuse a single intrinsic
+      // if one of the bounded users is a phi node.
+      if (isa<PHINode>(U.getUser()))
+        *MustUseSingleIntrinsic = true;
+#endif
     }
   }
 }
