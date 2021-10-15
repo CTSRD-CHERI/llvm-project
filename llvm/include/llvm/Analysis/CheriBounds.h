@@ -6,8 +6,7 @@ namespace llvm {
 
 class CheriNeedBoundsChecker {
 public:
-  CheriNeedBoundsChecker(AllocaInst *AI, const DataLayout &DL)
-      : RootInst(AI), DL(DL) {
+  CheriNeedBoundsChecker(AllocaInst *AI, const DataLayout &DL) : I(AI), DL(DL) {
     auto AllocaSize = AI->getAllocationSizeInBits(DL);
     if (AllocaSize)
       MinSizeInBytes = *AllocaSize / 8;
@@ -15,7 +14,7 @@ public:
   }
   CheriNeedBoundsChecker(Instruction *I, Optional<uint64_t> MinSize,
                          const DataLayout &DL)
-      : RootInst(I), DL(DL), MinSizeInBytes(MinSize) {
+      : I(I), DL(DL), MinSizeInBytes(MinSize) {
     assert(I->getType()->isPointerTy());
     PointerAS = I->getType()->getPointerAddressSpace();
   }
@@ -34,7 +33,7 @@ private:
                                  const APInt &CurrentGEPOffset,
                                  unsigned Depth) const;
 
-  const Instruction *RootInst;
+  const Instruction *I;
   const DataLayout &DL;
   Optional<uint64_t> MinSizeInBytes;
   unsigned PointerAS = 0;
