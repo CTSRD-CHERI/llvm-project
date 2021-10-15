@@ -20,7 +20,7 @@ public:
     PointerAS = I->getType()->getPointerAddressSpace();
   }
   bool check(const Use &U) const;
-  void findUsesThatNeedBounds(SmallVectorImpl<Use *> *UsesThatNeedBounds,
+  void findUsesThatNeedBounds(SmallVectorImpl<const Use *> *UsesThatNeedBounds,
                               bool BoundAllUses,
                               bool *MustUseSingleIntrinsic) const;
   bool anyUseNeedsBounds() const;
@@ -34,7 +34,7 @@ private:
                                  const APInt &CurrentGEPOffset,
                                  unsigned Depth) const;
 
-  Instruction *RootInst;
+  const Instruction *RootInst;
   const DataLayout &DL;
   Optional<uint64_t> MinSizeInBytes;
   unsigned PointerAS = 0;
