@@ -179,7 +179,7 @@ public:
       // Only set bounds for allocas that escape this function
       bool NeedBounds = true;
       // Always set bounds if the function has the optnone attribute
-      SmallVector<const Use *, 32> UsesThatNeedBounds;
+      SmallVector<Use *, 32> UsesThatNeedBounds;
       // If one of the bounded alloca users is a PHI we must reuse the single
       // intrinsic since PHIs must be the first instruction in the basic block
       // and we can't insert anything before. Theoretically we could still
@@ -304,8 +304,8 @@ public:
         Value *SingleBoundedAlloc =
             B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
         SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaTy);
-        for (const Use *U : UsesThatNeedBounds) {
-          const_cast<Use *>(U)->set(SingleBoundedAlloc);
+        for (Use *U : UsesThatNeedBounds) {
+          U->set(SingleBoundedAlloc);
         }
       } else {
         // Otherwise, we create new intrinsics for every use. This can avoid
@@ -319,7 +319,7 @@ public:
         // also avoids unnecessarily creating multiple intrinsic calls e.g.
         // in cases where a call instruction passes the same IR variable twice.
         SmallDenseMap<User *, Value *> ReplacedUses;
-        for (const Use *U : UsesThatNeedBounds) {
+        for (Use *U : UsesThatNeedBounds) {
           Value *BoundedAlloca;
           Instruction *I = cast<Instruction>(U->getUser());
           auto It = ReplacedUses.find(I);
@@ -348,7 +348,7 @@ public:
             // Multiple uses in the same instruction -> reuse existing call.
             BoundedAlloca = It->second;
           }
-          const_cast<Use *>(U)->set(BoundedAlloca);
+          U->set(BoundedAlloca);
         }
       }
     }
