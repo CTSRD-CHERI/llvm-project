@@ -32,7 +32,7 @@ struct ChainedOriginDepotNode {
 
   bool eq(hash_type hash, const args_type &args) const;
 
-  static uptr allocated() { return 0; }
+  static usize allocated() { return 0; }
 
   static hash_type hash(const args_type &args);
 
