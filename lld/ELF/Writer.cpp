@@ -226,8 +226,7 @@ void elf::combineEhSections() {
     }
   }
 
-  std::vector<InputSectionBase *> &v = inputSections;
-  v.erase(std::remove(v.begin(), v.end(), nullptr), v.end());
+  llvm::erase_value(inputSections, nullptr);
 }
 
 template <class ELFT> void elf::combineCapRelocsSections() {
