@@ -42,7 +42,8 @@ static bool getArchFeatures(const Driver &D, StringRef Arch,
     return false;
   }
 
-  (*ISAInfo)->toFeatures(Args, Features);
+  (*ISAInfo)->toFeatures(
+      Features, [&Args](const Twine &Str) { return Args.MakeArgString(Str); });
   return true;
 }
 
