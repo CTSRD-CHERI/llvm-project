@@ -45,6 +45,7 @@ public:
 
   Register getFPReg() const;
   Register getSPReg() const;
+  Register getUSPReg() const;
 
   bool hasReservedCallFrame(const MachineFunction &MF) const override;
   MachineBasicBlock::iterator
@@ -70,6 +71,9 @@ public:
 
   bool isSupportedStackID(TargetStackID::Value ID) const override;
   TargetStackID::Value getStackIDForScalableVectors() const override;
+
+  int createUnsafeEndObject(MachineFunction &MF) const override;
+  bool partitionUnsafeObjects(void) const override;
 
 protected:
   const RISCVSubtarget &STI;

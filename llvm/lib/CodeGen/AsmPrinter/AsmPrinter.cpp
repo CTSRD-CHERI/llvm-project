@@ -878,6 +878,12 @@ void AsmPrinter::emitFunctionHeader() {
 /// function.  This can be overridden by targets as required to do custom stuff.
 void AsmPrinter::emitFunctionEntryLabel() {
   emitAuxFunctionEntryLabel(CurrentFnSym);
+
+  if (TM.getTargetTriple().isOSBinFormatELF()) {
+    MCSymbol *Sym = getSymbolPreferLocal(MF->getFunction());
+    if (Sym != CurrentFnSym)
+      OutStreamer->emitLabel(Sym);
+  }
 }
 
 void AsmPrinter::emitAuxFunctionEntryLabel(MCSymbol *Symbol) {
@@ -890,12 +896,6 @@ void AsmPrinter::emitAuxFunctionEntryLabel(MCSymbol *Symbol) {
                        "' is a protected alias");
 
   OutStreamer->emitLabel(Symbol);
-
-  if (TM.getTargetTriple().isOSBinFormatELF()) {
-    MCSymbol *Sym = getSymbolPreferLocal(MF->getFunction());
-    if (Sym != Symbol)
-      OutStreamer->emitLabel(Sym);
-  }
 }
 
 /// emitComments - Pretty-print comments for instructions.

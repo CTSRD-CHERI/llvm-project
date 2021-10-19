@@ -16,6 +16,7 @@
 #include "RISCVSubtarget.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/MC/MCContext.h"
 
 namespace llvm {
 
@@ -38,6 +39,10 @@ private:
   uint64_t RVVPadding = 0;
   /// Size of stack frame to save callee saved registers
   unsigned CalleeSavedStackSize = 0;
+  /// Entry point for untrusted external calls
+  MCSymbol *UntrustedExternalEntrySymbol = nullptr;
+  /// Entry point for trusted external calls
+  MCSymbol *TrustedExternalEntrySymbol = nullptr;
 
 public:
   RISCVMachineFunctionInfo(const MachineFunction &MF) {}
@@ -74,6 +79,23 @@ public:
 
   unsigned getCalleeSavedStackSize() const { return CalleeSavedStackSize; }
   void setCalleeSavedStackSize(unsigned Size) { CalleeSavedStackSize = Size; }
+
+  MCSymbol *getUntrustedExternalEntrySymbol(MachineFunction &MF) {
+    if (!UntrustedExternalEntrySymbol) {
+      MCContext &Ctx = MF.getContext();
+      UntrustedExternalEntrySymbol =
+          Ctx.getOrCreateSymbol(Twine("__cross_domain_") + Twine(MF.getName()));
+    }
+    return UntrustedExternalEntrySymbol;
+  }
+  MCSymbol *getTrustedExternalEntrySymbol(MachineFunction &MF) {
+    if (!TrustedExternalEntrySymbol) {
+      MCContext &Ctx = MF.getContext();
+      TrustedExternalEntrySymbol = Ctx.getOrCreateSymbol(
+          Twine("__cross_domain_trusted_") + Twine(MF.getName()));
+    }
+    return TrustedExternalEntrySymbol;
+  }
 };
 
 } // end namespace llvm

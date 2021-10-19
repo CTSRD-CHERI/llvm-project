@@ -63,6 +63,8 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
                                 : CSR_Interrupt_SaveList;
   }
 
+  // TODO: cusp and ctlp also now saved???
+
   switch (Subtarget.getTargetABI()) {
   default:
     llvm_unreachable("Unrecognized ABI");
@@ -111,6 +113,11 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     markSuperRegs(Reserved, RISCV::X9); // bp
 
   markSuperRegs(Reserved, RISCV::C0); // cnull
+
+  if (MCTargetOptions::isCheriOSABI()) {
+    markSuperRegs(Reserved, RISCV::C5); // cusp
+  }
+
   markSuperRegs(Reserved, RISCV::C2); // csp
   markSuperRegs(Reserved, RISCV::C3); // cgp
   markSuperRegs(Reserved, RISCV::C4); // ctp

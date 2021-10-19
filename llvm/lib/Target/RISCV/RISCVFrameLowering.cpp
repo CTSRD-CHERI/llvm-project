@@ -313,6 +313,13 @@ Register RISCVFrameLowering::getSPReg() const {
     return RISCV::X2;
 }
 
+// Returns the register used to hold the unsafe stack pointer.
+Register RISCVFrameLowering::getUSPReg() const {
+  assert(RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
+         MCTargetOptions::isCheriOSABI());
+  return RISCV::C5;
+}
+
 static SmallVector<CalleeSavedInfo, 8>
 getNonLibcallCSI(const MachineFunction &MF,
                  const std::vector<CalleeSavedInfo> &CSI) {
@@ -352,6 +359,40 @@ void RISCVFrameLowering::adjustStackForRVV(MachineFunction &MF,
       .setMIFlag(Flag);
 }
 
+// TODO I will move this somewhere sensible once I work out where that is
+class TemporalABILayout {
+
+public:
+  static int64_t GetThreadLocalOffset_CSP() { return 4; }
+  static int64_t GetThreadLocalOffset_CUSP() { return 5; }
+  static int64_t GetThreadLocalOffset_CDS() { return 6; }
+  static int64_t GetThreadLocalOffset_CDL() { return 7; }
+  static int64_t GetThreadLocalOffset_CGP() { return 8; }
+
+  static int64_t GetStackPointerOffset_Next() { return -1; }
+  static int64_t GetStackPointerOffset_Prev() { return -2; }
+  static int64_t GetStackPointerSize_Prev() { return 2; }
+  static int64_t GetStackPointerAlign_Prev() { return 1; }
+  static int64_t GetMinStack_Size() { return 0x4000; }
+};
+
+int RISCVFrameLowering::createUnsafeEndObject(MachineFunction &MF) const {
+  const TargetLowering &TLI = *MF.getSubtarget().getTargetLowering();
+  auto CapTy = TLI.cheriCapabilityType();
+  const uint64_t CapSize = CapTy.getStoreSize();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // This is the 'prev' pointer for the linked list of stacks
+  return MFI.CreateStackObject(
+      TemporalABILayout::GetStackPointerSize_Prev() * CapSize,
+      assumeAligned(TemporalABILayout::GetStackPointerAlign_Prev() * CapSize),
+      true);
+}
+
+bool RISCVFrameLowering::partitionUnsafeObjects(void) const {
+  return MCTargetOptions::isCheriOSABI();
+}
+
 void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -363,6 +404,9 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   Register FPReg = getFPReg();
   Register SPReg = getSPReg();
   Register BPReg = RISCVABI::getBPReg(STI.getTargetABI());
+  Register USPReg;
+  Register CTPReg = RISCV::C4;
+  uint64_t CapSize;
 
   // Debug location must be unknown since the first debug location is used
   // to determine the end of the prologue.
@@ -384,6 +428,72 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   // Determine the correct frame layout
   determineFrameLayout(MF);
 
+  // Insert the extra entry points that CheriOS uses
+  if (MCTargetOptions::isCheriOSABI()) {
+    const TargetLowering &TLI = *MF.getSubtarget().getTargetLowering();
+    auto CapTy = TLI.cheriCapabilityType();
+    CapSize = CapTy.getStoreSize();
+    USPReg = getUSPReg();
+
+    // TODO: This is very similar to other targets, maybe abstract it away?
+    if (MF.getFunction().hasExternalLinkage()) {
+      unsigned TMP = RISCV::C6;
+
+      // Create extra BBs at the start of the function
+      MachineBasicBlock &ExteralMBB =
+          *MF.CreateMachineBasicBlock(MBB.getBasicBlock());
+
+      MachineFunction::iterator MFStartIter = MF.begin();
+
+      MachineBasicBlock *EntryMBB = &*MFStartIter;
+
+      MF.insert(MFStartIter, &ExteralMBB);
+
+      MBB.setHasAddressTaken();
+      ExteralMBB.setHasAddressTaken();
+      EntryMBB->setHasAddressTaken();
+      ExteralMBB.addSuccessorWithoutProb(EntryMBB);
+
+      assert(ExteralMBB.getFallThrough() == EntryMBB);
+
+      // Add extra live in registers
+      ExteralMBB.addLiveIn(CTPReg);
+
+      // The first is the untrusted external entry point. It calls a helper
+      // which will call back once it has done extra work.
+      MachineBasicBlock::iterator ExteralMBBI = ExteralMBB.begin();
+      // TODO: Load from helper offset in ctlp, and jump and link
+      BuildMI(ExteralMBB, ExteralMBBI, DL,
+              TII->get(TargetOpcode::AUX_FUNC_START))
+          .addSym(RVFI->getUntrustedExternalEntrySymbol(MF));
+      BuildMI(ExteralMBB, ExteralMBBI, DL, TII->get(RISCV::CLC_128), TMP)
+          .addReg(CTPReg)
+          .addImm(TemporalABILayout::GetThreadLocalOffset_CDL() * CapSize);
+      BuildMI(ExteralMBB, ExteralMBBI, DL, TII->get(RISCV::CJALR))
+          .addReg(TMP)
+          .addReg(TMP)
+          .addImm(0);
+
+      // The second is the trusted external entry point, which will load
+      // two stacks and the globals table.
+      BuildMI(ExteralMBB, ExteralMBBI, DL,
+              TII->get(TargetOpcode::AUX_FUNC_START))
+          .addSym(RVFI->getTrustedExternalEntrySymbol(MF));
+      BuildMI(ExteralMBB, ExteralMBBI, DL, TII->get(RISCV::CLC_128), SPReg)
+          .addReg(CTPReg)
+          .addImm(TemporalABILayout::GetThreadLocalOffset_CSP() * CapSize);
+      BuildMI(ExteralMBB, ExteralMBBI, DL, TII->get(RISCV::CLC_128), USPReg)
+          .addReg(CTPReg)
+          .addImm(TemporalABILayout::GetThreadLocalOffset_CUSP() * CapSize);
+      BuildMI(ExteralMBB, ExteralMBBI, DL, TII->get(RISCV::CLC_128), RISCV::C3)
+          .addReg(CTPReg)
+          .addImm((TemporalABILayout::GetThreadLocalOffset_CGP()) * CapSize);
+
+      // Function actually starts here
+      MF.setHasCustomFunctionStarts(true);
+      BuildMI(ExteralMBB, ExteralMBBI, DL, TII->get(TargetOpcode::FUNC_START));
+    }
+  }
   // If libcalls are used to spill and restore callee-saved registers, the frame
   // has two sections; the opaque section managed by the libcalls, and the
   // section managed by MachineFrameInfo which can also hold callee saved
@@ -412,11 +522,13 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   // FIXME (note copied from Lanai): This appears to be overallocating.  Needs
   // investigation. Get the number of bytes to allocate from the FrameInfo.
   uint64_t StackSize = MFI.getStackSize() + RVFI->getRVVPadding();
+  uint64_t UnsafeStackSize = MFI.getUnsafeStackSize();
   uint64_t RealStackSize = StackSize + RVFI->getLibCallStackSize();
   uint64_t RVVStackSize = RVFI->getRVVStackSize();
 
   // Early exit if there is no need to allocate on the stack
-  if (RealStackSize == 0 && !MFI.adjustsStack() && RVVStackSize == 0)
+  if (UnsafeStackSize == 0 && RealStackSize == 0 && !MFI.adjustsStack() &&
+      RVVStackSize == 0)
     return;
 
   // If the stack pointer has been marked as reserved, then produce an error if
@@ -430,6 +542,19 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   if (FirstSPAdjustAmount) {
     StackSize = FirstSPAdjustAmount;
     RealStackSize = FirstSPAdjustAmount;
+  }
+
+  if (MFI.hasStaticUnsafeObjects() && MCTargetOptions::isCheriOSABI()) {
+    // Trap if frame is running out
+    // TODO
+
+    // Store old SP
+
+    // Allocate unsafe objects my adjusting SPReg, and moving it to USPReg
+    adjustReg(MBB, MBBI, DL, SPReg, USPReg, -UnsafeStackSize,
+              MachineInstr::FrameSetup);
+
+    // Get new USP
   }
 
   // Allocate space on the stack if necessary.
@@ -643,6 +768,11 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
 
   if (FirstSPAdjustAmount)
     StackSize = FirstSPAdjustAmount;
+
+  if (MFI.hasStaticUnsafeObjects() && MCTargetOptions::isCheriOSABI()) {
+    // Stack down again
+    // TODO
+  }
 
   // Deallocate stack
   adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackSize, MachineInstr::FrameDestroy);
