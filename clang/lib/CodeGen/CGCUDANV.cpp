@@ -177,7 +177,7 @@ public:
   llvm::Function *finalizeModule() override;
 };
 
-}
+} // end anonymous namespace
 
 std::string CGNVCUDARuntime::addPrefixToName(StringRef FuncName) const {
   if (CGM.getLangOpts().HIP)
@@ -238,11 +238,10 @@ llvm::FunctionCallee CGNVCUDARuntime::getLaunchFn() const {
     // hipError_t hipLaunchByPtr(char *);
     return CGM.CreateRuntimeFunction(
         llvm::FunctionType::get(IntTy, CharPtrTy, false), "hipLaunchByPtr");
-  } else {
-    // cudaError_t cudaLaunch(char *);
-    return CGM.CreateRuntimeFunction(
-        llvm::FunctionType::get(IntTy, CharPtrTy, false), "cudaLaunch");
   }
+  // cudaError_t cudaLaunch(char *);
+  return CGM.CreateRuntimeFunction(
+      llvm::FunctionType::get(IntTy, CharPtrTy, false), "cudaLaunch");
 }
 
 llvm::FunctionType *CGNVCUDARuntime::getRegisterGlobalsFnTy() const {
@@ -254,8 +253,8 @@ llvm::FunctionType *CGNVCUDARuntime::getCallbackFnTy() const {
 }
 
 llvm::FunctionType *CGNVCUDARuntime::getRegisterLinkedBinaryFnTy() const {
-  auto CallbackFnTy = getCallbackFnTy();
-  auto RegisterGlobalsFnTy = getRegisterGlobalsFnTy();
+  auto *CallbackFnTy = getCallbackFnTy();
+  auto *RegisterGlobalsFnTy = getRegisterGlobalsFnTy();
   llvm::Type *Params[] = {RegisterGlobalsFnTy->getPointerTo(), VoidPtrTy,
                           VoidPtrTy, CallbackFnTy->getPointerTo()};
   return llvm::FunctionType::get(VoidTy, Params, false);
@@ -398,7 +397,7 @@ void CGNVCUDARuntime::emitDeviceStubBodyNew(CodeGenFunction &CGF,
   QualType QT = cudaLaunchKernelFD->getType();
   QualType CQT = QT.getCanonicalType();
   llvm::Type *Ty = CGM.getTypes().ConvertType(CQT);
-  llvm::FunctionType *FTy = dyn_cast<llvm::FunctionType>(Ty);
+  llvm::FunctionType *FTy = cast<llvm::FunctionType>(Ty);
 
   const CGFunctionInfo &FI =
       CGM.getTypes().arrangeFunctionDeclaration(cudaLaunchKernelFD);
@@ -592,7 +591,7 @@ llvm::Function *CGNVCUDARuntime::makeRegisterGlobalsFn() {
       uint64_t VarSize =
           CGM.getDataLayout().getTypeAllocSize(Var->getValueType());
       if (Info.Flags.isManaged()) {
-        auto ManagedVar = new llvm::GlobalVariable(
+        auto *ManagedVar = new llvm::GlobalVariable(
             CGM.getModule(), Var->getType(),
             /*isConstant=*/false, Var->getLinkage(),
             /*Init=*/Var->isDeclaration()
@@ -825,7 +824,7 @@ llvm::Function *CGNVCUDARuntime::makeModuleCtorFunction() {
         GpuBinaryHandle,
         CharUnits::fromQuantity(GpuBinaryHandle->getAlignment()));
     {
-      auto HandleValue = CtorBuilder.CreateLoad(GpuBinaryAddr);
+      auto *HandleValue = CtorBuilder.CreateLoad(GpuBinaryAddr);
       llvm::Constant *Zero =
           llvm::Constant::getNullValue(HandleValue->getType());
       llvm::Value *EQZero = CtorBuilder.CreateICmpEQ(HandleValue, Zero);
@@ -844,7 +843,7 @@ llvm::Function *CGNVCUDARuntime::makeModuleCtorFunction() {
       CtorBuilder.SetInsertPoint(ExitBlock);
       // Call __hip_register_globals(GpuBinaryHandle);
       if (RegisterGlobalsFunc) {
-        auto HandleValue = CtorBuilder.CreateLoad(GpuBinaryAddr);
+        auto *HandleValue = CtorBuilder.CreateLoad(GpuBinaryAddr);
         CtorBuilder.CreateCall(RegisterGlobalsFunc, HandleValue);
       }
     }
@@ -960,7 +959,7 @@ llvm::Function *CGNVCUDARuntime::makeModuleDtorFunction() {
 
   Address GpuBinaryAddr(GpuBinaryHandle, CharUnits::fromQuantity(
                                              GpuBinaryHandle->getAlignment()));
-  auto HandleValue = DtorBuilder.CreateLoad(GpuBinaryAddr);
+  auto *HandleValue = DtorBuilder.CreateLoad(GpuBinaryAddr);
   // There is only one HIP fat binary per linked module, however there are
   // multiple destructor functions. Make sure the fat binary is unregistered
   // only once.
@@ -1073,7 +1072,7 @@ void CGNVCUDARuntime::transformManagedVars() {
     llvm::GlobalVariable *Var = Info.Var;
     if (Info.Flags.getKind() == DeviceVarFlags::Variable &&
         Info.Flags.isManaged()) {
-      auto ManagedVar = new llvm::GlobalVariable(
+      auto *ManagedVar = new llvm::GlobalVariable(
           CGM.getModule(), Var->getType(),
           /*isConstant=*/false, Var->getLinkage(),
           /*Init=*/Var->isDeclaration()
