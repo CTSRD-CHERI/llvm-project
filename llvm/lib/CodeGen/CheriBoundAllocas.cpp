@@ -153,11 +153,13 @@ public:
       const uint64_t TotalUses = AI->getNumUses();
       NumProcessed++;
       Function *SetBoundsIntrin = BoundedStackFn;
-      // Insert immediately after the alloca
-      B.SetInsertPoint(AI);
-      B.SetInsertPoint(&*++B.GetInsertPoint());
-      Align ForcedAlignment;
 
+      // Insert immediately after the alloca, but inherit its debug loc rather
+      // than the next instruction's which is entirely unrelated
+      B.SetInsertPoint(AI->getNextNode());
+      B.SetCurrentDebugLocation(AI->getDebugLoc());
+
+      Align ForcedAlignment;
       PointerType *AllocaTy = AI->getType();
       assert(isCheriPointer(AllocaTy, &DL));
       Type *AllocationTy = AllocaTy->getElementType();
@@ -346,6 +348,9 @@ public:
               // registers when using an alloca in a different basic block.
               B.SetInsertPoint(I);
             }
+            // Bounds should have debug loc of the alloca, not the instruction
+            // that happens to use them
+            B.SetCurrentDebugLocation(AI->getDebugLoc());
             // We need to convert it to an i8* for the intrinisic. Note: we have
             // to create a new bitcast every time since reusing the same one can
             // cause the stack pointer + alloca offset register to be spilled
