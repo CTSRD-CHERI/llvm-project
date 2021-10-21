@@ -747,7 +747,9 @@ void AggExprEmitter::VisitCastExpr(CastExpr *E) {
     llvm::Value *SizeVal = llvm::ConstantInt::get(
         CGF.SizeTy,
         CGF.getContext().getTypeSizeInChars(E->getType()).getQuantity());
-    Builder.CreateMemCpy(DestAddress, SourceAddress, SizeVal);
+    Builder.CreateMemCpy(
+        DestAddress, SourceAddress, SizeVal,
+        CGF.getTypes().copyShouldPreserveTags(E, E->getSubExpr(), SizeVal));
     break;
   }
 
@@ -2168,9 +2170,13 @@ void CodeGenFunction::EmitAggregateCopy(LValue Dest, LValue Src, QualType Ty,
       }
     }
   }
-
-  auto Inst = Builder.CreateMemCpy(DestPtr, SrcPtr, SizeVal,
-                                   llvm::PreserveCheriTags::TODO, isVolatile);
+  // Note: this is used for expressions such as x = y, and not memcpy() calls,
+  // so according to C2x 6.5 "the effective type of the object is simply
+  // the type of the lvalue used for the access."
+  auto PreserveTags = getTypes().copyShouldPreserveTagsForPointee(
+      Ty, /*EffectiveTypeKnown=*/true, SizeVal);
+  auto Inst =
+      Builder.CreateMemCpy(DestPtr, SrcPtr, SizeVal, PreserveTags, isVolatile);
 
   // Determine the metadata to describe the position of any padding in this
   // memcpy, as well as the TBAA tags for the members of the struct, in case

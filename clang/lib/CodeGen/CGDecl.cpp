@@ -1265,12 +1265,18 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
     }
   }
 
-  // Copy from a global.
+  // Copy from a global (and therefore the effective type of the variable is
+  // known).
+  auto PreserveTags =
+      IsAutoInit || !ContainsCaps
+          ? llvm::PreserveCheriTags::Unnecessary
+          : CGM.getTypes().copyShouldPreserveTagsForPointee(
+                D.getType(), /*EffectiveTypeKnown=*/true, SizeVal);
   auto *I =
       Builder.CreateMemCpy(Loc,
                            createUnnamedGlobalForMemcpyFrom(
                                CGM, D, Builder, constant, Loc.getAlignment()),
-                           SizeVal, llvm::PreserveCheriTags::TODO, isVolatile);
+                           SizeVal, PreserveTags, isVolatile);
   if (IsAutoInit)
     I->addAnnotationMetadata("auto-init");
 }
@@ -1799,11 +1805,13 @@ void CodeGenFunction::emitZeroOrPatternForAutoVarInit(QualType type,
     llvm::PHINode *Cur = Builder.CreatePHI(Begin.getType(), 2, "vla.cur");
     Cur->addIncoming(Begin.getPointer(), OriginBB);
     CharUnits CurAlign = Loc.getAlignment().alignmentOfArrayElement(EltSize);
+    // Pattern init never writes valid tags, so we can pass
+    // PreserveCheriTags::Unnecessary to the CreateMemCpy() call
     auto *I = Builder.CreateMemCpy(
         Address(Cur, CurAlign),
         createUnnamedGlobalForMemcpyFrom(CGM, D, Builder, Constant,
                                          ConstantAlign),
-        BaseSizeInChars, llvm::PreserveCheriTags::TODO, isVolatile);
+        BaseSizeInChars, llvm::PreserveCheriTags::Unnecessary, isVolatile);
     I->addAnnotationMetadata("auto-init");
     llvm::Value *Next =
         Builder.CreateInBoundsGEP(Int8Ty, Cur, BaseSizeInChars, "vla.next");

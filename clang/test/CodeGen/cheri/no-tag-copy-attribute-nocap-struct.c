@@ -3,9 +3,8 @@
 /// not to contain capabilities. Previously we assumed that all copies >= sizeof(capability)
 /// can contain capabilities and we therefore fell back to calling memcpy if the
 /// alignment was less than >= alignof(capability).
-/// TODO: include some end-to-end testing to ensure that the frontend and backend changes allow
-///  eliding the memcpy() call that we were previously force to make?
-// RUN: %riscv64_cheri_purecap_cc1 %s -emit-llvm -o - -O0 | FileCheck %s
+// RUN: %riscv64_cheri_purecap_cc1 %s -emit-llvm -o - -O0 | FileCheck %s --check-prefixes=CHECK
+// RUN: %riscv64_cheri_purecap_cc1 %s -relaxed-aliasing -emit-llvm -o - -O0 | FileCheck %s --check-prefixes=CHECK
 
 #if __has_feature(capabilities)
 #define CAP_SIZE sizeof(void *__capability)
@@ -28,10 +27,12 @@ struct vdso_timehands {
 
 void test_binuptime_assign(struct bintime *bt, struct vdso_timehands *th) {
   *bt = th->th_offset;
+  // We should always be able add the no_preserve_tags attribute for this assignment
+  // since this falls under C2x 6.5 "For all other accesses to an object having no declared type,
+  // the effective type of the object is simply the type of the lvalue used for the access."
   // CHECK-LABEL: void @test_binuptime_assign(
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 {{%[0-9a-zA-Z.]+}}, i8 addrspace(200)* align 8 {{%[0-9a-zA-Z.]+}},
-  // CHECK-SAME: i64 16, i1 false){{$}}
-  // FIXME-SAME: i64 16, i1 false) [[NO_PRESERVE_TAGS_ATTR:#[0-9]+]]{{$}}
+  // CHECK-SAME: i64 16, i1 false) [[NO_PRESERVE_TAGS_ATTR:#[0-9]+]]{{$}}
 }
 
 struct cap_size_buffer {
@@ -42,8 +43,7 @@ void test_cap_size_buffer_copy(struct cap_size_buffer *a, struct cap_size_buffer
   *a = *b;
   // CHECK-LABEL: void @test_cap_size_buffer_copy(
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 4 {{%[0-9a-zA-Z.]+}}, i8 addrspace(200)* align 4 {{%[0-9a-zA-Z.]+}},
-  // CHECK-SAME: i64 16, i1 false){{$}}
-  // FIXME-SAME: i64 16, i1 false) [[NO_PRESERVE_TAGS_ATTR]]{{$}}
+  // CHECK-SAME: i64 16, i1 false) [[NO_PRESERVE_TAGS_ATTR]]{{$}}
 }
 
 union large_union_align_half_cap_size {
@@ -54,12 +54,13 @@ union large_union_align_half_cap_size {
 };
 
 void test_bigger_union_copy(union large_union_align_half_cap_size *a, union large_union_align_half_cap_size *b) {
-  // No tags in this union -> can inline the memcpy()
+  // No tags in this union -> can inline the memcpy().
+  // Note: we can do this even with -fno-strict-aliasing since this is a direct assignment.
+  // XXX: Do we need an option to treats underaligned char[] members as potentially tag-bearing?
   *a = *b;
   // CHECK-LABEL: void @test_bigger_union_copy(
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 {{%[0-9a-zA-Z.]+}}, i8 addrspace(200)* align 8 {{%[0-9a-zA-Z.]+}},
-  // CHECK-SAME: i64 64, i1 false){{$}}
-  // FIXME-SAME: i64 64, i1 false) [[NO_PRESERVE_TAGS_ATTR]]{{$}}
+  // CHECK-SAME: i64 64, i1 false) [[NO_PRESERVE_TAGS_ATTR]]{{$}}
 }
 
 union large_union_with_char_array {
@@ -80,7 +81,7 @@ void test_union_with_char_array(union large_union_with_char_array *a, union larg
 }
 
 void test_align_copy_voidptr(void *a, void *b) {
-  // void* could contain caps but we don't add the attribute and rely on the backend to decide
+  // void* could contain caps so we don't add the attribute and rely on the backend to decide
   memcpy(a, b, CAP_SIZE);
   // CHECK-LABEL: void @test_align_copy_voidptr(
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 {{%[0-9a-zA-Z.]+}}, i8 addrspace(200)* align 1 {{%[0-9a-zA-Z.]+}},
@@ -89,7 +90,7 @@ void test_align_copy_voidptr(void *a, void *b) {
 
 void test_align_copy_charptr(char *a, char *b) {
   // char* could contain caps since it's (unfortunately) basically the same as void*,
-  // but again we don't add the attribute and rely on the backend to decide
+  // so again we don't add the attribute and rely on the backend to decide
   memcpy(a, b, CAP_SIZE);
   // CHECK-LABEL: void @test_align_copy_charptr(
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 {{%[0-9a-zA-Z.]+}}, i8 addrspace(200)* align 1 {{%[0-9a-zA-Z.]+}},
@@ -97,12 +98,12 @@ void test_align_copy_charptr(char *a, char *b) {
 }
 
 void test_align_copy_longptr(long *a, long *b) {
-  // Note: here we don't infer the no-preserve tags (yet)
+  // We don't know the effective type of the underlying objects, so we can't add
+  // no_preserve_cheri_tags despite both pointeee types being non-tag-carrying.
   memcpy(a, b, CAP_SIZE);
   // CHECK-LABEL: void @test_align_copy_longptr(
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 {{%[0-9a-zA-Z.]+}}, i8 addrspace(200)* align 8 {{%[0-9a-zA-Z.]+}},
   // CHECK-SAME: i64 16, i1 false){{$}}
-  // FIXME-SAME: [[NO_PRESERVE_TAGS_ATTR]]{{$}}
 }
 
 #if __has_feature(capabilities)
@@ -135,13 +136,17 @@ void test_align_copy_fwd_declared_2(void *a, struct fwddecl *b) {
 }
 
 void test_align_copy_fwd_declared_dst_notag(long *a, struct fwddecl *b) {
-  // We don't know if src contains capabilities, but the destination can't contain tags
+  // We don't know if src contains capabilities, and we also can't assume this
+  // for the destination since we don't know the effective type of the underlying object.
   // CHECK-LABEL: void @test_align_copy_fwd_declared_dst_notag(
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 {{%[0-9a-zA-Z.]+}}, i8 addrspace(200)* align 1 {{%[0-9a-zA-Z.]+}},
   // CHECK-SAME: i64 16, i1 false){{$}}
   memcpy(a, b, CAP_SIZE);
+  // Note: if you look at the assembly output for  this call, it
+  // still uses memcpy despite the attribute. b is only aligned to one byte and
+  // expanding it would be too costly on an architecture without fast unaligned loads/stores.
 }
 
 // CHECK: attributes #0 = {
-// FIXME-DAG: attributes [[NO_PRESERVE_TAGS_ATTR]] = { no_preserve_cheri_tags }
+// CHECK-DAG: attributes [[NO_PRESERVE_TAGS_ATTR]] = { no_preserve_cheri_tags }
 // CHECK-DAG: attributes [[MUST_PRESERVE_TAGS_ATTR]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'unsigned __intcap'" }

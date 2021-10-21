@@ -2164,18 +2164,17 @@ RValue CodeGenFunction::emitRotate(const CallExpr *E, bool IsRotateRight) {
 }
 
 // Diagnose misaligned copies (memmove/memcpy) of source types that contain
-// capabilities to a dst buffer that is less than capability aligned.
-// This can result in tags being lost at runtime if the buffer is not actually
-// capability aligned. Furthermore, if the user adds a __builtin_assume_aligned()
-// or a cast to a capability we can assume it is capability aligned an use
-// csc/clc if the memcpy()/memmove() is expanded inline.
+// capabilities to a dst buffer that is less than capability aligned. This can
+// result in tags being lost at runtime if the buffer is not actually capability
+// aligned. Another benefit of this diagnostic is that it can cause the the user
+// to add __builtin_assume_aligned() or a cast to a capability. This allows us
+// to potentially expand the memcpy()/memmove() inline.
 // TODO: maybe there needs to be an attribute __memmove_like__ or similar to
 // indicate that a function behaves like memmove/memcpy and we can use that
 // to diagnose unaligned copies.
-static void
-diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
-                                    const Expr *Src, const CharUnits DstAlignCU,
-                                    AnyMemTransferInst *MemInst = nullptr) {
+static void checkCapabilityCopy(CodeGenFunction &CGF, StringRef Function,
+                                const Expr *Src, const CharUnits DstAlignCU,
+                                AnyMemTransferInst *MemInst = nullptr) {
   // we want the real type not the implicit conversion to void*
   // TODO: ignore the first explicit cast to void*?
   auto UnderlyingSrcTy = Src->IgnoreParenImpCasts()->getType();
@@ -2187,18 +2186,15 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   if (!Ctx.containsCapabilities(UnderlyingSrcTy))
     return;
 
-  // Add a must_preserve_cheri_tags attribute to the memcpy/memmove
-  // intrinsic to ensure that the backend will not lower it to an inlined
-  // sequence of 1/2/4/8 byte loads and stores which would strip the tag bits.
-  // TODO: a clc/csc that works on unaligned data but traps for a csc
-  // with a tagged value and unaligned address could also prevent tags
-  // from being lost.
+  // If we have a memory intrinsic, we let the backend diagnose this issue
+  // since the clang frontend rarely has enough information to correctly infer
+  // the alignment.
   if (MemInst) {
-    // If we have a memory intrinsic let the backend diagnose this issue:
-    // First, tell the backend that this copy must preserve tags
-    MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
-                          llvm::Attribute::MustPreserveCheriTags);
-    // And also tell it what the underlying type was for improved diagnostics.
+    // No need to diagnose anything if we aren't preserving tags.
+    if (MemInst->shouldPreserveCheriTags() == PreserveCheriTags::Unnecessary)
+      return;
+    // Add a "frontend-memtransfer-type" attribute to the intrinsic
+    // to ensure that the backend can diagnose misaligned capability copies.
     std::string TypeName = UnderlyingSrcTy.getAsString();
     std::string CanonicalStr = UnderlyingSrcTy.getCanonicalType().getAsString();
     if (CanonicalStr != TypeName)
@@ -2255,23 +2251,20 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   }
 }
 
-static void diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF,
-                                                StringRef Function,
-                                                const Expr *Src, CallInst *CI) {
+static void checkCapabilityCopy(CodeGenFunction &CGF, StringRef Function,
+                                const Expr *Src, CallInst *CI) {
   AnyMemTransferInst *MemInst = cast<AnyMemTransferInst>(CI);
-  diagnoseMisalignedCapabiliyCopyDest(
-      CGF, Function, Src, CharUnits::fromQuantity(MemInst->getDestAlignment()),
-      MemInst);
+  checkCapabilityCopy(CGF, Function, Src,
+                      CharUnits::fromQuantity(MemInst->getDestAlignment()),
+                      MemInst);
 }
 
-static void diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF,
-                                                StringRef Function,
-                                                const Expr *Src,
-                                                const Expr *Dst) {
+static void checkCapabilityCopy(CodeGenFunction &CGF, StringRef Function,
+                                const Expr *Src, const Expr *Dst) {
   auto UnderlyingDstTy = QualType(
       Dst->IgnoreImpCasts()->getType()->getPointeeOrArrayElementType(), 0);
-  diagnoseMisalignedCapabiliyCopyDest(
-      CGF, Function, Src, CGF.CGM.getNaturalTypeAlignment(UnderlyingDstTy));
+  checkCapabilityCopy(CGF, Function, Src,
+                      CGF.CGM.getNaturalTypeAlignment(UnderlyingDstTy));
 }
 
 // Map math builtins for long-double to f128 version.
@@ -3490,9 +3483,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                         E->getArg(0)->getExprLoc(), FD, 0);
     EmitNonNullArgCheck(RValue::get(Src.getPointer()), E->getArg(1)->getType(),
                         E->getArg(1)->getExprLoc(), FD, 1);
-    auto CI = Builder.CreateMemCpy(Dest, Src, SizeVal,
-                                   llvm::PreserveCheriTags::TODO, false);
-    diagnoseMisalignedCapabiliyCopyDest(*this, "memcpy", E->getArg(1), CI);
+    auto CI = Builder.CreateMemCpy(
+        Dest, Src, SizeVal,
+        getTypes().copyShouldPreserveTags(E->getArg(0), E->getArg(1), SizeVal),
+        false);
+    checkCapabilityCopy(*this, "memcpy", E->getArg(1), CI);
     if (BuiltinID == Builtin::BImempcpy ||
         BuiltinID == Builtin::BI__builtin_mempcpy)
       return RValue::get(Builder.CreateInBoundsGEP(Dest.getElementType(),
@@ -3511,7 +3506,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                         E->getArg(0)->getExprLoc(), FD, 0);
     EmitNonNullArgCheck(RValue::get(Src.getPointer()), E->getArg(1)->getType(),
                         E->getArg(1)->getExprLoc(), FD, 1);
-    Builder.CreateMemCpyInline(Dest, Src, Size);
+    Builder.CreateMemCpyInline(
+        Dest, Src, Size,
+        getTypes().copyShouldPreserveTags(E->getArg(0), E->getArg(1),
+                                          CharUnits::fromQuantity(Size)));
     return RValue::get(nullptr);
   }
 
@@ -3524,23 +3522,23 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Expr::EvalResult SizeResult, DstSizeResult;
     if (!E->getArg(2)->EvaluateAsInt(SizeResult, CGM.getContext()) ||
         !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext())) {
-      diagnoseMisalignedCapabiliyCopyDest(*this, "__memcpy_chk", E->getArg(1),
-                                          E->getArg(0));
+      checkCapabilityCopy(*this, "__memcpy_chk", E->getArg(1), E->getArg(0));
       break;
     }
     llvm::APSInt Size = SizeResult.Val.getInt();
     llvm::APSInt DstSize = DstSizeResult.Val.getInt();
     if (Size.ugt(DstSize)) {
-      diagnoseMisalignedCapabiliyCopyDest(*this, "__memcpy_chk", E->getArg(1),
-                                          E->getArg(0));
+      checkCapabilityCopy(*this, "__memcpy_chk", E->getArg(1), E->getArg(0));
       break;
     }
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     Value *SizeVal = llvm::ConstantInt::get(Builder.getContext(), Size);
-    auto CI = Builder.CreateMemCpy(Dest, Src, SizeVal,
-                                   llvm::PreserveCheriTags::TODO, false);
-    diagnoseMisalignedCapabiliyCopyDest(*this, "memcpy", E->getArg(1), CI);
+    auto CI = Builder.CreateMemCpy(
+        Dest, Src, SizeVal,
+        getTypes().copyShouldPreserveTags(E->getArg(0), E->getArg(1), SizeVal),
+        false);
+    checkCapabilityCopy(*this, "memcpy", E->getArg(1), CI);
     return RValue::get(Dest.getPointer(), Dest.getAlignment().getQuantity());
   }
 
@@ -3559,23 +3557,23 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Expr::EvalResult SizeResult, DstSizeResult;
     if (!E->getArg(2)->EvaluateAsInt(SizeResult, CGM.getContext()) ||
         !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext())) {
-      diagnoseMisalignedCapabiliyCopyDest(*this, "__memmove_chk", E->getArg(1),
-                                          E->getArg(0));
+      checkCapabilityCopy(*this, "__memmove_chk", E->getArg(1), E->getArg(0));
       break;
     }
     llvm::APSInt Size = SizeResult.Val.getInt();
     llvm::APSInt DstSize = DstSizeResult.Val.getInt();
     if (Size.ugt(DstSize)) {
-      diagnoseMisalignedCapabiliyCopyDest(*this, "__memmove_chk", E->getArg(1),
-                                          E->getArg(0));
+      checkCapabilityCopy(*this, "__memmove_chk", E->getArg(1), E->getArg(0));
       break;
     }
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     Value *SizeVal = llvm::ConstantInt::get(Builder.getContext(), Size);
-    auto CI = Builder.CreateMemMove(Dest, Src, SizeVal,
-                                    llvm::PreserveCheriTags::TODO, false);
-    diagnoseMisalignedCapabiliyCopyDest(*this, "memmove", E->getArg(1), CI);
+    auto CI = Builder.CreateMemMove(
+        Dest, Src, SizeVal,
+        getTypes().copyShouldPreserveTags(E->getArg(0), E->getArg(1), SizeVal),
+        false);
+    checkCapabilityCopy(*this, "memmove", E->getArg(1), CI);
     return RValue::get(Dest.getPointer(), Dest.getAlignment().getQuantity());
   }
 
@@ -3588,9 +3586,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                         E->getArg(0)->getExprLoc(), FD, 0);
     EmitNonNullArgCheck(RValue::get(Src.getPointer()), E->getArg(1)->getType(),
                         E->getArg(1)->getExprLoc(), FD, 1);
-    auto CI = Builder.CreateMemMove(Dest, Src, SizeVal,
-                                    llvm::PreserveCheriTags::TODO, false);
-    diagnoseMisalignedCapabiliyCopyDest(*this, "memmove", E->getArg(1), CI);
+    auto CI = Builder.CreateMemMove(
+        Dest, Src, SizeVal,
+        getTypes().copyShouldPreserveTags(E->getArg(0), E->getArg(1), SizeVal),
+        false);
+    checkCapabilityCopy(*this, "memmove", E->getArg(1), CI);
     return RValue::get(Dest.getPointer(), Dest.getAlignment().getQuantity());
   }
   case Builtin::BImemset:

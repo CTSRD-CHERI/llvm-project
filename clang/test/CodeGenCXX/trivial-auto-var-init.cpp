@@ -1,6 +1,8 @@
 // RUN: %clang_cc1 -triple x86_64-unknown-unknown -fblocks %s -emit-llvm -o - | FileCheck %s -check-prefix=UNINIT
-// RUN: %clang_cc1 -triple x86_64-unknown-unknown -fblocks -ftrivial-auto-var-init=pattern %s -emit-llvm -o - | FileCheck %s -check-prefix=PATTERN
-// RUN: %clang_cc1 -triple x86_64-unknown-unknown -fblocks -ftrivial-auto-var-init=zero %s -emit-llvm -o - | FileCheck %s -check-prefix=ZERO
+// RUN: %clang_cc1 -triple x86_64-unknown-unknown -fblocks -ftrivial-auto-var-init=pattern %s -emit-llvm -o - | FileCheck %s --check-prefixes=PATTERN,PATTERN-NOCHERI
+// RUN: %clang_cc1 -triple x86_64-unknown-unknown -fblocks -ftrivial-auto-var-init=zero %s -emit-llvm -o - | FileCheck %s --check-prefixes=ZERO,ZERO-NOCHERI
+// RUN: %riscv64_cheri_cc1 -fblocks -ftrivial-auto-var-init=pattern %s -emit-llvm -o - | FileCheck %s --check-prefixes=PATTERN,PATTERN-CHERI
+// RUN: %riscv64_cheri_cc1 -fblocks -ftrivial-auto-var-init=zero %s -emit-llvm -o - | FileCheck %s --check-prefixes=ZERO,ZERO-CHERI
 
 // None of the synthesized globals should contain `undef`.
 // PATTERN-NOT: undef
@@ -140,7 +142,8 @@ void test_switch(int i) {
 // UNINIT-LABEL:  test_vla(
 // ZERO-LABEL:    test_vla(
 // ZERO:  %[[SIZE:[0-9]+]] = mul nuw i64 %{{.*}}, 4
-// ZERO:  call void @llvm.memset{{.*}}(i8* align 16 %{{.*}}, i8 0, i64 %[[SIZE]], i1 false), !annotation [[AUTO_INIT:!.+]]
+// ZERO-NOCHERI: call void @llvm.memset{{.*}}(i8* align 16 %{{.*}}, i8 0, i64 %[[SIZE]], i1 false), !annotation [[AUTO_INIT:!.+]]
+// ZERO-CHERI:   call void @llvm.memset{{.*}}(i8* align 4 %{{.*}}, i8 0, i64 %[[SIZE]], i1 false), !annotation [[AUTO_INIT:!.+]]
 // PATTERN-LABEL: test_vla(
 // PATTERN:  %vla.iszerosized = icmp eq i64 %{{.*}}, 0
 // PATTERN:  br i1 %vla.iszerosized, label %vla-init.cont, label %vla-setup.loop
@@ -151,7 +154,8 @@ void test_switch(int i) {
 // PATTERN:  br label %vla-init.loop
 // PATTERN: vla-init.loop:
 // PATTERN:  %vla.cur = phi i8* [ %vla.begin, %vla-setup.loop ], [ %vla.next, %vla-init.loop ]
-// PATTERN:  call void @llvm.memcpy{{.*}} %vla.cur, {{.*}}@__const.test_vla.vla {{.*}}), !annotation [[AUTO_INIT:!.+]]
+// PATTERN-NOCHERI: call void @llvm.memcpy{{.*}} %vla.cur, {{.*}}@__const.test_vla.vla {{.*}}), !annotation [[AUTO_INIT:!.+]]
+// PATTERN-CHERI:   call void @llvm.memcpy{{.*}} %vla.cur, {{.*}}@__const.test_vla.vla {{.*}}) [[NOTAGS:#[0-9]+]], !annotation [[AUTO_INIT:!.+]]
 // PATTERN:  %vla.next = getelementptr inbounds i8, i8* %vla.cur, i64 4
 // PATTERN:  %vla-init.isdone = icmp eq i8* %vla.next, %vla.end
 // PATTERN:  br i1 %vla-init.isdone, label %vla-init.cont, label %vla-init.loop
@@ -204,7 +208,8 @@ void test_alloca_with_align(int size) {
 // UNINIT-LABEL:  test_struct_vla(
 // ZERO-LABEL:    test_struct_vla(
 // ZERO:  %[[SIZE:[0-9]+]] = mul nuw i64 %{{.*}}, 16
-// ZERO:  call void @llvm.memset{{.*}}(i8* align 16 %{{.*}}, i8 0, i64 %[[SIZE]], i1 false), !annotation [[AUTO_INIT:!.+]]
+// ZERO-NOCHERI: call void @llvm.memset{{.*}}(i8* align 16 %{{.*}}, i8 0, i64 %[[SIZE]], i1 false), !annotation [[AUTO_INIT:!.+]]
+// ZERO-CHERI:   call void @llvm.memset{{.*}}(i8* align 8 %{{.*}}, i8 0, i64 %[[SIZE]], i1 false), !annotation [[AUTO_INIT:!.+]]
 // PATTERN-LABEL: test_struct_vla(
 // PATTERN:  %vla.iszerosized = icmp eq i64 %{{.*}}, 0
 // PATTERN:  br i1 %vla.iszerosized, label %vla-init.cont, label %vla-setup.loop
@@ -215,7 +220,8 @@ void test_alloca_with_align(int size) {
 // PATTERN:  br label %vla-init.loop
 // PATTERN: vla-init.loop:
 // PATTERN:  %vla.cur = phi i8* [ %vla.begin, %vla-setup.loop ], [ %vla.next, %vla-init.loop ]
-// PATTERN:  call void @llvm.memcpy{{.*}} %vla.cur, {{.*}}@__const.test_struct_vla.vla {{.*}}), !annotation [[AUTO_INIT:!.+]]
+// PATTERN-NOCHERI: call void @llvm.memcpy{{.*}} %vla.cur, {{.*}}@__const.test_struct_vla.vla {{.*}}), !annotation [[AUTO_INIT:!.+]]
+// PATTERN-CHERI:   call void @llvm.memcpy{{.*}} %vla.cur, {{.*}}@__const.test_struct_vla.vla {{.*}}) [[NOTAGS:#[0-9]+]], !annotation [[AUTO_INIT:!.+]]
 // PATTERN:  %vla.next = getelementptr inbounds i8, i8* %vla.cur, i64 16
 // PATTERN:  %vla-init.isdone = icmp eq i8* %vla.next, %vla.end
 // PATTERN:  br i1 %vla-init.isdone, label %vla-init.cont, label %vla-init.loop
@@ -282,10 +288,12 @@ void test_huge_small_init() {
 
 // UNINIT-LABEL:  test_huge_larger_init(
 // ZERO-LABEL:    test_huge_larger_init(
-// ZERO:  call void @llvm.memcpy{{.*}} @__const.test_huge_larger_init.big, {{.*}}, i64 65536,
+// ZERO-CHERI:  call void @llvm.memcpy{{.*}} @__const.test_huge_larger_init.big, {{.*}}, i64 65536, i1 false) [[NOTAGS:#[0-9]+]]{{$}}
+// ZERO-NOCHERI:  call void @llvm.memcpy{{.*}} @__const.test_huge_larger_init.big, {{.*}}, i64 65536, i1 false){{$}}
 // ZERO-NOT: !annotation
 // PATTERN-LABEL: test_huge_larger_init(
-// PATTERN:  call void @llvm.memcpy{{.*}} @__const.test_huge_larger_init.big, {{.*}}, i64 65536,
+// PATTERN-CHERI:  call void @llvm.memcpy{{.*}} @__const.test_huge_larger_init.big, {{.*}}, i64 65536, i1 false) [[NOTAGS]]{{$}}
+// PATTERN-NOCHERI:  call void @llvm.memcpy{{.*}} @__const.test_huge_larger_init.big, {{.*}}, i64 65536, i1 false){{$}}
 // PATTERN-NOT: !annotation
 void test_huge_larger_init() {
   char big[65536] = { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
@@ -294,4 +302,7 @@ void test_huge_larger_init() {
 
 } // extern "C"
 
-// CHECK: [[AUTO_INIT]] = !{ !"auto-init" }
+// PATTERN-CHERI: attributes [[NOTAGS]] = { no_preserve_cheri_tags }
+// ZERO-CHERI: attributes [[NOTAGS]] = { no_preserve_cheri_tags }
+// PATTERN: [[AUTO_INIT]] = !{!"auto-init"}
+// ZERO: [[AUTO_INIT]] = !{!"auto-init"}
