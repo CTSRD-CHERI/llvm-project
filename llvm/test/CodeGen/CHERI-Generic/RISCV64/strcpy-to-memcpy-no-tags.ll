@@ -34,7 +34,7 @@ define void @test_strcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(20
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strcpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR0]]
+; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR3:[0-9]+]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
@@ -59,7 +59,7 @@ define void @test_stpcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(20
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_stpcpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR0]]
+; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR3]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
@@ -91,7 +91,7 @@ define void @test_strcat_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(20
 ; CHECK-IR-NEXT:  entry:
 ; CHECK-IR-NEXT:    [[STRLEN:%.*]] = call i64 @strlen(i8 addrspace(200)* noundef nonnull dereferenceable(1) [[DST]])
 ; CHECK-IR-NEXT:    [[ENDPTR:%.*]] = getelementptr i8, i8 addrspace(200)* [[DST]], i64 [[STRLEN]]
-; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) [[ENDPTR]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false)
+; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) [[ENDPTR]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR4:[0-9]+]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
@@ -117,7 +117,7 @@ define void @test_strncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(2
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strncpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR0]]
+; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR3]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
@@ -153,6 +153,6 @@ entry:
 
 ; UTC_ARGS: --disable
 ; CHECK-IR: attributes #[[ATTR0]] = { nounwind }
-; The no_preserve_cheri_tags should be attribute 3 in all cases
-; CHECK-IR-NOT: no_preserve_cheri_tags
-; TODO: attributes #[[ATTR3]] = { no_preserve_cheri_tags }
+; The no_preserve_cheri_tags should be attribute 3/4 in all cases
+; CHECK-IR: attributes #[[ATTR3]] = { no_preserve_cheri_tags nounwind }
+; CHECK-IR: attributes #[[ATTR4]] = { no_preserve_cheri_tags }
