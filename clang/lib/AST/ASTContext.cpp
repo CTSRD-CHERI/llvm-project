@@ -11730,6 +11730,55 @@ bool ASTContext::containsCapabilities(QualType Ty) const {
   return Ret;
 }
 
+bool ASTContext::cannotContainCapabilities(const RecordDecl *RD) const {
+  for (auto i = RD->field_begin(), e = RD->field_end(); i != e; ++i) {
+    const QualType Ty = i->getType();
+    if (Ty->isCHERICapabilityType(*this))
+      return false;
+    else if (const RecordType *RT = Ty->getAs<RecordType>()) {
+      if (!cannotContainCapabilities(RT->getDecl()))
+        return false;
+    } else if (!cannotContainCapabilities(Ty))
+        return false;
+  }
+  // In the case of C++ classes, also check base classes
+  if (const CXXRecordDecl *CRD = dyn_cast<CXXRecordDecl>(RD)) {
+    for (auto i = CRD->bases_begin(), e = CRD->bases_end(); i != e; ++i) {
+      const QualType Ty = i->getType();
+      if (const RecordType *RT = Ty->getAs<RecordType>())
+        if (!cannotContainCapabilities(RT->getDecl()))
+          return false;
+    }
+  }
+  return true; // Check all types that could contain capabilities
+}
+
+bool ASTContext::cannotContainCapabilities(QualType Ty) const {
+  // If we've already looked up this type, then return the cached value.
+  auto Cached = CannotContainCapabilities.find(Ty.getAsOpaquePtr());
+  if (Cached != CannotContainCapabilities.end())
+    return Cached->second;
+  // Don't bother caching the trivial cases.
+  if (containsCapabilities(Ty))
+      return false;
+  if (Ty->isArrayType()) {
+    QualType ElTy(Ty->getBaseElementTypeUnsafe(), 0);
+    // We have to be conservative here and assume that (unsigned) char[] as
+    // well as std::byte can be used for buffers that store capabilities.
+    // TODO: we could restrict this to buffers that are large enough and
+    // sufficiently aligned to store a capability.
+    if (ElTy->isCharType() || ElTy->isStdByteType())
+      return false;
+    return cannotContainCapabilities(ElTy);
+  }
+  const RecordType *RT = Ty->getAs<RecordType>();
+  if (!RT)
+    return false;
+  bool Ret = cannotContainCapabilities(RT->getDecl());
+  CannotContainCapabilities[Ty.getAsOpaquePtr()] = Ret;
+  return Ret;
+}
+
 QualType ASTContext::getCorrespondingSaturatedType(QualType Ty) const {
   assert(Ty->isFixedPointType());
 

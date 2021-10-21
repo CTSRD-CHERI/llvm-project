@@ -980,10 +980,13 @@ namespace {
       LValue SrcLV = CGF.MakeNaturalAlignAddrLValue(SrcPtr, RecordTy);
       LValue Src = CGF.EmitLValueForFieldInitialization(SrcLV, FirstField);
 
+      // We can pass EffectiveTypeKnown=true since this a C++ field copy.
       emitMemcpyIR(
           Dest.isBitField() ? Dest.getBitFieldAddress() : Dest.getAddress(CGF),
           Src.isBitField() ? Src.getBitFieldAddress() : Src.getAddress(CGF),
-          MemcpySize, llvm::PreserveCheriTags::TODO);
+          MemcpySize,
+          CGF.getTypes().copyShouldPreserveTagsForPointee(
+              RecordTy, /*EffectiveTypeKnown=*/true, MemcpySize));
       reset();
     }
 

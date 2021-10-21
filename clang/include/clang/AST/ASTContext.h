@@ -2210,6 +2210,7 @@ public:
 private:
   /// Map storing whether a type contains capabilities.
   mutable llvm::DenseMap<void*, bool> ContainsCapabilities;
+  mutable llvm::DenseMap<void*, bool> CannotContainCapabilities;
 
   CanQualType getFromTargetType(unsigned Type) const;
   TypeInfo getTypeInfoImpl(const Type *T) const;
@@ -2477,6 +2478,17 @@ public:
   /// Returns true if the type is a scalar type that is represented as a
   /// capability or an aggregate type that contains one or more capabilities.
   bool containsCapabilities(QualType Ty) const;
+
+  /// Returns true if the record type cannot contain capabilities.
+  /// NB: this is a conservative analysis that treats overaligned char arrays as
+  /// potentially containing capabilities.
+  bool cannotContainCapabilities(const RecordDecl *RD) const;
+  /// Returns true if the type is a scalar type that has a representationa
+  /// that cannot be used to (legally) store capabilities.
+  /// NB: this is a conservative analysis that treats overaligned char arrays as
+  /// potentially containing capabilities.
+  bool cannotContainCapabilities(QualType Ty) const;
+
 
   /// Return true if the specified type has unique object representations
   /// according to (C++17 [meta.unary.prop]p9)
