@@ -201,6 +201,26 @@ static void mergeAttributes(CallInst *CI, AttributeList Attributes) {
       AttributeList::get(CI->getContext(), {CI->getAttributes(), Attributes}));
 }
 
+static MemTransferInst *
+createMemcpyFromStringCopy(IRBuilderBase &B, Value *Dst, MaybeAlign DstAlign,
+                           Value *Src, MaybeAlign SrcAlign, Value *Size) {
+  // A string never contains tags, so we can set no_preserve_tags.
+  return cast<MemTransferInst>(B.CreateMemCpy(
+      Dst, DstAlign, Src, SrcAlign, Size, PreserveCheriTags::Unnecessary));
+}
+
+static MemTransferInst *
+createMemcpyFromStringCopyWithAttrs(IRBuilderBase &B, AttributeList Attributes,
+                                    Value *Dst, MaybeAlign DstAlign, Value *Src,
+                                    MaybeAlign SrcAlign, Value *Size) {
+  MemTransferInst *Result =
+      createMemcpyFromStringCopy(B, Dst, DstAlign, Src, SrcAlign, Size);
+  // Merge with the attributes added by CreateMemCpy() to retain the
+  // no_preserve_tags attribute if present.
+  mergeAttributes(Result, Attributes);
+  return Result;
+}
+
 //===----------------------------------------------------------------------===//
 // String and Memory Library Call Optimizations
 //===----------------------------------------------------------------------===//
@@ -241,11 +261,13 @@ Value *LibCallSimplifier::emitStrLenMemCpy(Value *Src, Value *Dst, uint64_t Len,
 
   // We have enough information to now generate the memcpy call to do the
   // concatenation for us.  Make a memcpy to copy the nul byte with align = 1.
-  B.CreateMemCpy(CpyDst, Align(1), Src, Align(1),
-                 ConstantInt::get(
-                     DL.getIntPtrType(Src->getContext(),
-                                      Src->getType()->getPointerAddressSpace()),
-                     Len + 1));
+  createMemcpyFromStringCopy(
+      B, CpyDst, Align(1), Src, Align(1),
+      ConstantInt::get(
+          DL.getIntPtrType(Src->getContext(),
+                           Src->getType()->getPointerAddressSpace()),
+          Len + 1));
+
   return Dst;
 }
 
@@ -535,10 +557,9 @@ Value *LibCallSimplifier::optimizeStrCpy(CallInst *CI, IRBuilderBase &B) {
 
   // We have enough information to now generate the memcpy call to do the
   // copy for us.  Make a memcpy to copy the nul byte with align = 1.
-  CallInst *NewCI =
-      B.CreateMemCpy(Dst, Align(1), Src, Align(1),
-                     ConstantInt::get(DL.getIndexType(Dst->getType()), Len));
-  NewCI->setAttributes(CI->getAttributes());
+  CallInst *NewCI = createMemcpyFromStringCopyWithAttrs(
+      B, CI->getAttributes(), Dst, Align(1), Src, Align(1),
+      ConstantInt::get(DL.getIndexType(Dst->getType()), Len));
   NewCI->removeAttributes(AttributeList::ReturnIndex,
                           AttributeFuncs::typeIncompatible(NewCI->getType()));
   return Dst;
@@ -566,8 +587,8 @@ Value *LibCallSimplifier::optimizeStpCpy(CallInst *CI, IRBuilderBase &B) {
 
   // We have enough information to now generate the memcpy call to do the
   // copy for us.  Make a memcpy to copy the nul byte with align = 1.
-  CallInst *NewCI = B.CreateMemCpy(Dst, Align(1), Src, Align(1), LenV);
-  NewCI->setAttributes(CI->getAttributes());
+  CallInst *NewCI = createMemcpyFromStringCopyWithAttrs(
+      B, CI->getAttributes(), Dst, Align(1), Src, Align(1), LenV);
   NewCI->removeAttributes(AttributeList::ReturnIndex,
                           AttributeFuncs::typeIncompatible(NewCI->getType()));
   return DstEnd;
@@ -628,9 +649,9 @@ Value *LibCallSimplifier::optimizeStrNCpy(CallInst *CI, IRBuilderBase &B) {
 
   Type *PT = Callee->getFunctionType()->getParamType(0);
   // strncpy(x, s, c) -> memcpy(align 1 x, align 1 s, c) [s and c are constant]
-  CallInst *NewCI = B.CreateMemCpy(Dst, Align(1), Src, Align(1),
-                                   ConstantInt::get(DL.getIntPtrType(PT), Len));
-  NewCI->setAttributes(CI->getAttributes());
+  CallInst *NewCI = createMemcpyFromStringCopyWithAttrs(
+      B, CI->getAttributes(), Dst, Align(1), Src, Align(1),
+      ConstantInt::get(DL.getIntPtrType(PT), Len));
   NewCI->removeAttributes(AttributeList::ReturnIndex,
                           AttributeFuncs::typeIncompatible(NewCI->getType()));
   return Dst;
@@ -1144,7 +1165,8 @@ Value *LibCallSimplifier::optimizeMemCCpy(CallInst *CI, IRBuilderBase &B) {
   size_t Pos = SrcStr.find(StopChar->getSExtValue() & 0xFF);
   if (Pos == StringRef::npos) {
     if (N->getZExtValue() <= SrcStr.size()) {
-      B.CreateMemCpy(Dst, Align(1), Src, Align(1), CI->getArgOperand(3));
+      createMemcpyFromStringCopy(B, Dst, Align(1), Src, Align(1),
+                                 CI->getArgOperand(3));
       return Constant::getNullValue(CI->getType());
     }
     return nullptr;
@@ -1153,7 +1175,7 @@ Value *LibCallSimplifier::optimizeMemCCpy(CallInst *CI, IRBuilderBase &B) {
   Value *NewN =
       ConstantInt::get(N->getType(), std::min(uint64_t(Pos + 1), N->getZExtValue()));
   // memccpy -> llvm.memcpy
-  B.CreateMemCpy(Dst, Align(1), Src, Align(1), NewN);
+  createMemcpyFromStringCopy(B, Dst, Align(1), Src, Align(1), NewN);
   return Pos + 1 <= N->getZExtValue()
              ? B.CreateInBoundsGEP(B.getInt8Ty(), Dst, NewN)
              : Constant::getNullValue(CI->getType());
@@ -2515,8 +2537,8 @@ Value *LibCallSimplifier::optimizeSPrintFString(CallInst *CI,
       return nullptr; // we found a format specifier, bail out.
 
     // sprintf(str, fmt) -> llvm.memcpy(align 1 str, align 1 fmt, strlen(fmt)+1)
-    B.CreateMemCpy(
-        Dest, Align(1), CI->getArgOperand(1), Align(1),
+    createMemcpyFromStringCopy(
+        B, Dest, Align(1), CI->getArgOperand(1), Align(1),
         ConstantInt::get(
             DL.getIntPtrType(
                 CI->getContext(),
@@ -2557,7 +2579,9 @@ Value *LibCallSimplifier::optimizeSPrintFString(CallInst *CI,
 
     uint64_t SrcLen = GetStringLength(CI->getArgOperand(2));
     if (SrcLen) {
-      B.CreateMemCpy(Dest, Align(1), CI->getArgOperand(2), Align(1), SrcLen);
+      createMemcpyFromStringCopy(B, Dest, Align(1), CI->getArgOperand(2),
+                                 Align(1),
+                                 ConstantInt::get(CI->getType(), SrcLen));
       // Returns total number of characters written without null-character.
       return ConstantInt::get(CI->getType(), SrcLen - 1);
     } else if (Value *V = emitStpCpy(Dest, CI->getArgOperand(2), B, TLI)) {
@@ -2579,8 +2603,8 @@ Value *LibCallSimplifier::optimizeSPrintFString(CallInst *CI,
       return nullptr;
     Value *IncLen =
         B.CreateAdd(Len, ConstantInt::get(Len->getType(), 1), "leninc");
-    B.CreateMemCpy(Dest, Align(1), CI->getArgOperand(2), Align(1), IncLen);
-
+    createMemcpyFromStringCopy(B, Dest, Align(1), CI->getArgOperand(2),
+                               Align(1), IncLen);
     // The sprintf result is the unincremented number of bytes in the string.
     return B.CreateIntCast(Len, CI->getType(), false);
   }
@@ -2650,8 +2674,8 @@ Value *LibCallSimplifier::optimizeSnPrintFString(CallInst *CI,
 
     // snprintf(dst, size, fmt) -> llvm.memcpy(align 1 dst, align 1 fmt,
     // strlen(fmt)+1)
-    B.CreateMemCpy(
-        CI->getArgOperand(0), Align(1), CI->getArgOperand(2), Align(1),
+    createMemcpyFromStringCopy(
+        B, CI->getArgOperand(0), Align(1), CI->getArgOperand(2), Align(1),
         ConstantInt::get(
             DL.getIntPtrType(
                 CI->getContext(),
@@ -2695,8 +2719,9 @@ Value *LibCallSimplifier::optimizeSnPrintFString(CallInst *CI,
       else if (N < Str.size() + 1)
         return nullptr;
 
-      B.CreateMemCpy(CI->getArgOperand(0), Align(1), CI->getArgOperand(3),
-                     Align(1), ConstantInt::get(CI->getType(), Str.size() + 1));
+      createMemcpyFromStringCopy(
+          B, CI->getArgOperand(0), Align(1), CI->getArgOperand(3), Align(1),
+          ConstantInt::get(CI->getType(), Str.size() + 1));
 
       // The snprintf result is the unincremented number of bytes in the string.
       return ConstantInt::get(CI->getType(), Str.size());
