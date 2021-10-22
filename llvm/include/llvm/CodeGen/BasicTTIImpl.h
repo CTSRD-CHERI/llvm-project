@@ -1216,7 +1216,7 @@ public:
     //
     // TODO: Note that legalization can turn masked loads/stores into unmasked
     // (legalized) loads/stores. This can be reflected in the cost.
-    if (VecTySize > VecTyLTSize) {
+    if (Cost.isValid() && VecTySize > VecTyLTSize) {
       // The number of loads of a legal type it will take to represent a load
       // of the unlegalized vector type.
       unsigned NumLegalInsts = divideCeil(VecTySize, VecTyLTSize);
@@ -1233,7 +1233,8 @@ public:
 
       // Scale the cost of the load by the fraction of legal instructions that
       // will be used.
-      Cost *= UsedInsts.count() / NumLegalInsts;
+      Cost = divideCeil(UsedInsts.count() * Cost.getValue().getValue(),
+                        NumLegalInsts);
     }
 
     // Then plus the cost of interleave operation.
