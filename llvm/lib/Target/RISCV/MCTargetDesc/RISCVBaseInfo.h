@@ -316,7 +316,8 @@ ABI getTargetABI(StringRef ABIName);
 
 // Returns the register used to hold the stack pointer after realignment.
 MCRegister getBPReg(ABI TargetABI);
-
+// Returns the register used to hold the thread pointer.
+MCRegister getTPReg(ABI TargetABI);
 inline static bool isCheriPureCapABI(ABI TargetABI) {
   switch (TargetABI) {
   case ABI_ILP32:

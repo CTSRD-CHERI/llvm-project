@@ -405,8 +405,8 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   Register SPReg = getSPReg();
   Register BPReg = RISCVABI::getBPReg(STI.getTargetABI());
   Register USPReg;
-  Register CTPReg = RISCV::C4;
-  uint64_t CapSize;
+  Register CTPReg = RISCVABI::getTPReg(STI.getTargetABI());
+  unsigned CapSize;
 
   // Debug location must be unknown since the first debug location is used
   // to determine the end of the prologue.
@@ -462,7 +462,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
       // The first is the untrusted external entry point. It calls a helper
       // which will call back once it has done extra work.
       MachineBasicBlock::iterator ExteralMBBI = ExteralMBB.begin();
-      // TODO: Load from helper offset in ctlp, and jump and link
+
       BuildMI(ExteralMBB, ExteralMBBI, DL,
               TII->get(TargetOpcode::AUX_FUNC_START))
           .addSym(RVFI->getUntrustedExternalEntrySymbol(MF));
@@ -527,8 +527,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   uint64_t RVVStackSize = RVFI->getRVVStackSize();
 
   // Early exit if there is no need to allocate on the stack
-  if (UnsafeStackSize == 0 && RealStackSize == 0 && !MFI.adjustsStack() &&
-      RVVStackSize == 0)
+  if (RealStackSize == 0 && !MFI.adjustsStack() && RVVStackSize == 0)
     return;
 
   // If the stack pointer has been marked as reserved, then produce an error if
@@ -546,19 +545,42 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
 
   if (MFI.hasStaticUnsafeObjects() && MCTargetOptions::isCheriOSABI()) {
     // Trap if frame is running out
-    // TODO
+    Register StackLenReg =
+        MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+    Register MinSizeReg =
+        MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::CGetOffset), StackLenReg)
+        .addReg(USPReg);
+    TII->movImm(MBB, MBBI, DL, MinSizeReg,
+                TemporalABILayout::GetMinStack_Size(),
+                MachineInstr::FrameSetup);
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::BLTU))
+        .addReg(MinSizeReg)
+        .addReg(StackLenReg)
+        .addImm(6);
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::UNIMP));
 
     // Store old SP
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSC_128))
+        .addReg(SPReg)
+        .addReg(USPReg)
+        .addImm(-UnsafeStackSize +
+                (TemporalABILayout::GetStackPointerOffset_Prev() * CapSize));
 
     // Allocate unsafe objects my adjusting SPReg, and moving it to USPReg
-    adjustReg(MBB, MBBI, DL, SPReg, USPReg, -UnsafeStackSize,
+    adjustReg(MBB, MBBI, DL, SPReg, USPReg, -StackSize,
               MachineInstr::FrameSetup);
 
     // Get new USP
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::CLC_128), USPReg)
+        .addReg(SPReg)
+        .addImm((TemporalABILayout::GetStackPointerOffset_Next()) * CapSize);
+  } else {
+    // Allocate space on the stack if necessary.
+    adjustReg(MBB, MBBI, DL, SPReg, SPReg, -StackSize,
+              MachineInstr::FrameSetup);
   }
-
-  // Allocate space on the stack if necessary.
-  adjustReg(MBB, MBBI, DL, SPReg, SPReg, -StackSize, MachineInstr::FrameSetup);
 
   // Emit ".cfi_def_cfa_offset RealStackSize"
   unsigned CFIIndex = MF.addFrameInst(
@@ -770,13 +792,43 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
     StackSize = FirstSPAdjustAmount;
 
   if (MFI.hasStaticUnsafeObjects() && MCTargetOptions::isCheriOSABI()) {
-    // Stack down again
-    // TODO
+    uint64_t SafeStackSize = StackSize - MFI.getUnsafeStackSize();
+    const RISCVInstrInfo *TII = STI.getInstrInfo();
+    Register USPReg = getUSPReg();
+    const TargetLowering &TLI = *MF.getSubtarget().getTargetLowering();
+    auto CapTy = TLI.cheriCapabilityType();
+    unsigned CapSize = CapTy.getStoreSize();
+    Register TPReg = RISCVABI::getTPReg(STI.getTargetABI());
+
+    // Store old SP
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSC_128))
+        .addReg(USPReg)
+        .addReg(SPReg)
+        .addImm(SafeStackSize +
+                (TemporalABILayout::GetStackPointerOffset_Next() * CapSize));
+
+    // TODO: Optionally we could set bounds on unsafe stack here.
+
+    // Adjust SP and perform a stack down operation
+    adjustReg(MBB, MBBI, DL, USPReg, SPReg, SafeStackSize,
+              MachineInstr::FrameDestroy);
+
+    // Save USP as it may have changed, and this may be a cross domain return
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSC_128))
+        .addReg(USPReg)
+        .addReg(TPReg)
+        .addImm(TemporalABILayout::GetThreadLocalOffset_CUSP() * CapSize);
+
+    // Restore SP
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::CLC_128), SPReg)
+        .addReg(USPReg)
+        .addImm(TemporalABILayout::GetStackPointerOffset_Prev() * CapSize);
+  } else {
+
+    // Deallocate stack
+    adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackSize,
+              MachineInstr::FrameDestroy);
   }
-
-  // Deallocate stack
-  adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackSize, MachineInstr::FrameDestroy);
-
   // Emit epilogue for shadow call stack.
   emitSCSEpilogue(MF, MBB, MBBI, DL);
 }
@@ -1190,6 +1242,11 @@ RISCVFrameLowering::getFirstSPAdjustAmount(const MachineFunction &MF) const {
   // registers will be pushed by the save-restore libcalls, so we don't have to
   // split the SP adjustment in this case.
   if (RVFI->getLibCallStackSize())
+    return 0;
+
+  // There is no reason not to do two adjustments with unsafe stacks it is just
+  // a TODO as different sequence will be needed in emit epilog/prolog
+  if (MFI.getUnsafeStackSize() != 0)
     return 0;
 
   // Return the FirstSPAdjustAmount if the StackSize can not fit in signed

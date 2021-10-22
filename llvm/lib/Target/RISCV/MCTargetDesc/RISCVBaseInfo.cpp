@@ -103,6 +103,18 @@ MCRegister getBPReg(ABI TargetABI) {
   return isCheriPureCapABI(TargetABI) ? RISCV::C9 : RISCV::X9;
 }
 
+// Returns the register used to hold the thread local pointer.
+MCRegister getTPReg(ABI TargetABI) {
+  if (RISCVABI::isCheriPureCapABI(TargetABI)) {
+    if (MCTargetOptions::isCheriOSABI()) {
+      return RISCV::C31;
+    } else {
+      return RISCV::C4;
+    }
+  } else
+    return RISCV::X4;
+}
+
 // Returns the register holding shadow call stack pointer.
 MCRegister getSCSPReg() { return RISCV::X18; }
 

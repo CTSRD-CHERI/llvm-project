@@ -120,7 +120,9 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 
   markSuperRegs(Reserved, RISCV::C2); // csp
   markSuperRegs(Reserved, RISCV::C3); // cgp
-  markSuperRegs(Reserved, RISCV::C4); // ctp
+
+  markSuperRegs(Reserved, RISCVABI::getTPReg(STI.getTargetABI())); // ctp
+
   if (TFI->hasFP(MF))
     markSuperRegs(Reserved, RISCV::C8); // cfp
   if (TFI->hasBP(MF))

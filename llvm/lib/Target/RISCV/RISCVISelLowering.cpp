@@ -2872,7 +2872,12 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
   MVT XLenVT = Subtarget.getXLenVT();
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+
+    Register TPPhyReg = RISCVABI::getTPReg(Subtarget.getTargetABI());
     if (NotLocal) {
+
+      // TODO CheriOS and / or gprel here
+
       // Use PC-relative addressing to access the captable for this TLS symbol,
       // then load the address from the captable and add the thread pointer.
       // This generates the pattern (PseudoCLA_TLS_IE sym), which expands to
@@ -2882,7 +2887,7 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
           DAG.getMachineNode(RISCV::PseudoCLA_TLS_IE, DL, XLenVT, Ty, Addr), 0);
 
       // Add the thread pointer.
-      SDValue TPReg = DAG.getRegister(RISCV::C4, Ty);
+      SDValue TPReg = DAG.getRegister(TPPhyReg, Ty);
       return DAG.getPointerAdd(DL, TPReg, Load);
     }
 
@@ -2901,7 +2906,7 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
 
     SDValue MNHi =
         SDValue(DAG.getMachineNode(RISCV::LUI, DL, XLenVT, AddrHi), 0);
-    SDValue TPReg = DAG.getRegister(RISCV::C4, Ty);
+    SDValue TPReg = DAG.getRegister(TPPhyReg, Ty);
     SDValue MNAdd = SDValue(
         DAG.getMachineNode(RISCV::PseudoCIncOffsetTPRel, DL, Ty, TPReg, MNHi,
                            AddrCIncOffset),
@@ -3707,8 +3712,7 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   default:
     break; // Don't custom lower most intrinsics.
   case Intrinsic::thread_pointer: {
-    MCPhysReg PhysReg = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
-        ? RISCV::C4 : RISCV::X4;
+    MCPhysReg PhysReg = RISCVABI::getTPReg(Subtarget.getTargetABI());
     EVT PtrVT = getPointerTy(DAG.getDataLayout(),
                              DAG.getDataLayout().getGlobalsAddressSpace());
     return DAG.getRegister(PhysReg, PtrVT);
@@ -8977,7 +8981,7 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                  .Case("{cra}", RISCV::C1)
                                  .Case("{csp}", RISCV::C2)
                                  .Case("{cgp}", RISCV::C3)
-                                 .Case("{ctp}", RISCV::C4)
+                                 .Case("{ctp}", RISCVABI::getTPReg(Subtarget.getTargetABI()))
                                  .Case("{ct0}", RISCV::C5)
                                  .Case("{ct1}", RISCV::C6)
                                  .Case("{ct2}", RISCV::C7)
