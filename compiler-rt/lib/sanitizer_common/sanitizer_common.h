@@ -385,9 +385,9 @@ unsigned char _BitScanReverse64(unsigned long *index, unsigned __int64 mask);
 }
 #endif
 
-inline usize MostSignificantSetBitIndex(usize x) {
+inline constexpr usize MostSignificantSetBitIndex(usize x) {
   CHECK_NE(x, 0U);
-  unsigned long up;
+  unsigned long up = 0;
 #if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
 # ifdef _WIN64
   up = SANITIZER_WORDSIZE - 1 - __builtin_clzll(x);
@@ -408,9 +408,9 @@ INLINE usize MostSignificantSetBitIndex(u64 x) {
 }
 #endif
 
-inline usize LeastSignificantSetBitIndex(usize x) {
+inline constexpr usize LeastSignificantSetBitIndex(usize x) {
   CHECK_NE(x, 0U);
-  unsigned long up;
+  unsigned long up = 0;
 #if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
 # ifdef _WIN64
   up = __builtin_ctzll(x);
@@ -431,17 +431,16 @@ INLINE usize LeastSignificantSetBitIndex(u64 x) {
 }
 #endif
 
-inline bool IsPowerOfTwo(u64 x) {
-  return (x & (x - 1)) == 0;
-}
+inline constexpr bool IsPowerOfTwo(u64 x) { return (x & (x - 1)) == 0; }
 #ifdef __CHERI_PURE_CAPABILITY__
 bool IsPowerOfTwo(uptr x) = delete;
-INLINE bool IsPowerOfTwo(usize x) {
+inline constexpr bool IsPowerOfTwo(usize x) {
   return IsPowerOfTwo((u64)x);
 }
 #endif
 
-inline u64 RoundUpToPowerOfTwo(u64 size) {
+
+inline constexpr u64 RoundUpToPowerOfTwo(u64 size) {
   CHECK(size);
   if (IsPowerOfTwo(size)) return size;
 
@@ -457,7 +456,7 @@ INLINE usize RoundUpToPowerOfTwo(usize x) {
 }
 #endif
 
-inline uptr RoundUpTo(uptr p, usize boundary) {
+inline constexpr uptr RoundUpTo(uptr p, uptr boundary) {
   RAW_CHECK(IsPowerOfTwo(boundary));
 #if __has_builtin(__builtin_align_up)
   return __builtin_align_up(p, boundary);
@@ -466,7 +465,7 @@ inline uptr RoundUpTo(uptr p, usize boundary) {
 #endif
 }
 template <typename T>
-inline T *RoundUpTo(T *p, usize boundary) {
+inline constexpr T *RoundUpTo(T *p, usize boundary) {
   RAW_CHECK(IsPowerOfTwo(boundary));
 #if __has_builtin(__builtin_align_up)
   return __builtin_align_up(p, boundary);
@@ -475,7 +474,7 @@ inline T *RoundUpTo(T *p, usize boundary) {
 #endif
 }
 
-inline uptr RoundDownTo(uptr x, usize boundary) {
+inline constexpr uptr RoundDownTo(uptr x, usize boundary) {
 #if __has_builtin(__builtin_align_down)
   return __builtin_align_down(x, boundary);
 #else
@@ -483,7 +482,7 @@ inline uptr RoundDownTo(uptr x, usize boundary) {
 #endif
 }
 template <typename T>
-inline T *RoundDownTo(T *p, usize boundary) {
+inline constexpr T *RoundDownTo(T *p, usize boundary) {
   RAW_CHECK(IsPowerOfTwo(boundary));
 #if __has_builtin(__builtin_align_down)
   return __builtin_align_down(p, boundary);
@@ -492,7 +491,7 @@ inline T *RoundDownTo(T *p, usize boundary) {
 #endif
 }
 
-inline bool IsAligned(uptr a, usize alignment) {
+inline constexpr bool IsAligned(uptr a, usize alignment) {
 #if __has_builtin(__builtin_is_aligned)
   return __builtin_is_aligned(a, alignment);
 #else
@@ -504,13 +503,13 @@ inline bool IsAligned(const void *ptr, usize alignment) {
   return IsAligned((uptr)ptr, alignment);
 }
 
-inline u64 Log2(u64 x) {
+inline constexpr u64 Log2(u64 x) {
   CHECK(IsPowerOfTwo(x));
   return LeastSignificantSetBitIndex(x);
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 uptr Log2(uptr x) = delete;
-INLINE usize Log2(usize x) {
+inline constexpr usize Log2(usize x) {
   return (usize)Log2((u64)x);
 }
 #endif
