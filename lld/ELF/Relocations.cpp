@@ -132,50 +132,27 @@ void elf::reportRangeError(uint8_t *loc, int64_t v, int n, const Symbol &sym,
               Twine(llvm::maxIntN(n)) + "]" + hint);
 }
 
-namespace {
-// Build a bitmask with one bit set for each RelExpr.
-//
-// Constexpr function arguments can't be used in static asserts, so we
-// use template arguments to build the mask.
-// But function template partial specializations don't exist (needed
-// for base case of the recursion), so we need a dummy struct.
-template <RelExpr... Exprs> struct RelExprMaskBuilder {
-  static inline std::pair<uint64_t, uint64_t> build() { return {0, 0}; }
-};
+// Build a bitmask with one bit set for each 64 subset of RelExpr.
+static constexpr uint64_t buildMask() { return 0; }
 
-// Specialization for recursive case.
-template <RelExpr Head, RelExpr... Tail>
-struct RelExprMaskBuilder<Head, Tail...> {
-  using Mask = std::pair<uint64_t, uint64_t>;
-  static inline Mask combine_masks(Mask a, Mask b) {
-    return {a.first | b.first, a.second | b.second};
-  }
-  static inline Mask build() {
-    Mask p{0, 0};
-    uint64_t &part = (Head > 63) ? p.first : p.second;
-    uint64_t shift = static_cast<uint64_t>(Head);
-    if (shift > 63)
-      shift -= 64;
-    assert(shift < 64);
-    part = (uint64_t(1) << shift);
-    return combine_masks(p, RelExprMaskBuilder<Tail...>::build());
-  }
-};
-} // namespace
+template <typename... Tails>
+static constexpr uint64_t buildMask(int head, Tails... tails) {
+  return (0 <= head && head < 64 ? uint64_t(1) << head : 0) |
+         buildMask(tails...);
+}
 
 // Return true if `Expr` is one of `Exprs`.
-// There are fewer than 64 RelExpr's, so we can represent any set of
-// RelExpr's as a constant bit mask and test for membership with a
-// couple cheap bitwise operations.
-template <RelExpr... Exprs> bool oneof(RelExpr expr) {
-  auto mask = RelExprMaskBuilder<Exprs...>::build();
-  unsigned bit = (unsigned)expr;
-  assert(0 <= bit && bit < 128 &&
+// There are more than 64 but less than 128 RelExprs, so we divide the set of
+// exprs into [0, 64) and [64, 128) and represent each range as a constant
+// 64-bit mask. Then we decide which mask to test depending on the value of
+// expr and use a simple shift and bitwise-and to test for membership.
+template <RelExpr... Exprs> static bool oneof(RelExpr expr) {
+  assert(0 <= expr && (int)expr < 128 &&
          "RelExpr is too large for 128-bit mask!");
-  uint64_t &part = (bit > 63) ? mask.first : mask.second;
-  if (bit > 63)
-    bit -= 64;
-  return (uint64_t(1) << bit) & part;
+
+  if (expr >= 64)
+    return (uint64_t(1) << (expr - 64)) & buildMask((Exprs - 64)...);
+  return (uint64_t(1) << expr) & buildMask(Exprs...);
 }
 
 static RelType getMipsPairType(RelType type, bool isLocal) {
