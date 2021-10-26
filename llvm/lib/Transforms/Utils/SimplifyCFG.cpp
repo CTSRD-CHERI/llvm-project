@@ -281,7 +281,6 @@ public:
   }
 
   bool simplifyOnce(BasicBlock *BB);
-  bool simplifyOnceImpl(BasicBlock *BB);
   bool run(BasicBlock *BB);
 
   // Helper to set Resimplify and return change indication.
@@ -6714,7 +6713,7 @@ static bool removeUndefIntroducingPredecessor(BasicBlock *BB,
   return false;
 }
 
-bool SimplifyCFGOpt::simplifyOnceImpl(BasicBlock *BB) {
+bool SimplifyCFGOpt::simplifyOnce(BasicBlock *BB) {
   bool Changed = false;
 
   assert(BB && BB->getParent() && "Block not embedded in function!");
@@ -6790,12 +6789,6 @@ bool SimplifyCFGOpt::simplifyOnceImpl(BasicBlock *BB) {
     Changed |= simplifyIndirectBr(cast<IndirectBrInst>(Terminator));
     break;
   }
-
-  return Changed;
-}
-
-bool SimplifyCFGOpt::simplifyOnce(BasicBlock *BB) {
-  bool Changed = simplifyOnceImpl(BB);
 
   return Changed;
 }
