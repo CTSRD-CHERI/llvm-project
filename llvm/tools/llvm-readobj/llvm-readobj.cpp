@@ -152,6 +152,9 @@ static bool COFFLoadConfig;
 static bool COFFResources;
 static bool COFFTLSDirectory;
 
+// XCOFF specific options.
+static bool XCOFFAuxiliaryHeader;
+
 OutputStyleTy Output = OutputStyleTy::LLVM;
 static std::vector<std::string> InputFilenames;
 } // namespace opts
@@ -274,6 +277,9 @@ static void parseOptions(const opt::InputArgList &Args) {
   opts::COFFResources = Args.hasArg(OPT_coff_resources);
   opts::COFFTLSDirectory = Args.hasArg(OPT_coff_tls_directory);
 
+  // XCOFF specific options.
+  opts::XCOFFAuxiliaryHeader = Args.hasArg(OPT_auxiliary_header);
+
   opts::InputFilenames = Args.getAllArgValues(OPT_INPUT);
 }
 
@@ -348,6 +354,9 @@ static void dumpObject(ObjectFile &Obj, ScopedPrinter &Writer,
 
   if (opts::FileHeaders)
     Dumper->printFileHeaders();
+
+  if (Obj.isXCOFF() && opts::XCOFFAuxiliaryHeader)
+    Dumper->printAuxiliaryHeader();
 
   // This is only used for ELF currently. In some cases, when an object is
   // corrupt (e.g. truncated), we can't dump anything except the file header.
@@ -589,6 +598,7 @@ int main(int argc, char *argv[]) {
 
   if (opts::All) {
     opts::FileHeaders = true;
+    opts::XCOFFAuxiliaryHeader = true;
     opts::ProgramHeaders = true;
     opts::SectionHeaders = true;
     opts::Symbols = true;
@@ -609,6 +619,7 @@ int main(int argc, char *argv[]) {
 
   if (opts::Headers) {
     opts::FileHeaders = true;
+    opts::XCOFFAuxiliaryHeader = true;
     opts::ProgramHeaders = true;
     opts::SectionHeaders = true;
   }
