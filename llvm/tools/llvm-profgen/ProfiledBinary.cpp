@@ -188,7 +188,7 @@ void ProfiledBinary::load() {
 
   // Use function start and return address to infer prolog and epilog
   ProEpilogTracker.inferPrologOffsets(StartOffset2FuncRangeMap);
-  ProEpilogTracker.inferEpilogOffsets(RetAddrs);
+  ProEpilogTracker.inferEpilogOffsets(RetOffsets);
 
   // TODO: decode other sections.
 }
@@ -398,9 +398,11 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
       // Populate address maps.
       CodeAddrOffsets.push_back(Offset);
       if (MCDesc.isCall())
-        CallAddrs.insert(Offset);
+        CallOffsets.insert(Offset);
       else if (MCDesc.isReturn())
-        RetAddrs.insert(Offset);
+        RetOffsets.insert(Offset);
+      else if (MCDesc.isBranch())
+        BranchOffsets.insert(Offset);
 
       if (InvalidInstLength) {
         WarnInvalidInsts(Offset - InvalidInstLength, Offset - 1);
