@@ -856,6 +856,17 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   // These values are determined based on RISCVExpandAtomicPseudoInsts,
   // RISCVExpandPseudoInsts and RISCVMCCodeEmitter, depending on where the
   // pseudos are expanded.
+  case RISCV::PseudoCLLC:
+  case RISCV::PseudoCLGC:
+  case RISCV::PseudoCLGC_TLS:
+  case RISCV::PseudoCLGC_CALL:
+    // There is currently no good instruction sequence for getting a large
+    // immediate offset load from a capability. This is is rather sad. Either
+    // a CLCBI (like MIPS) or an AUI instruction would be good.
+    if (RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::PLT)
+      return 12;
+    else
+      return 8;
   case RISCV::PseudoCALLReg:
   case RISCV::PseudoCALL:
   case RISCV::PseudoJump:
@@ -868,8 +879,6 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCCALL:
   case RISCV::PseudoCJump:
   case RISCV::PseudoCTAIL:
-  case RISCV::PseudoCLLC:
-  case RISCV::PseudoCLGC:
   case RISCV::PseudoCLA_TLS_IE:
   case RISCV::PseudoCLC_TLS_GD:
     return 8;
@@ -1215,7 +1224,13 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TPREL_CINCOFFSET, "riscv-tprel-cincoffset"},
       {MO_TLS_IE_CAPTAB_PCREL_HI, "riscv-tls-ie-captab-pcrel-hi"},
       {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"},
-      {MO_CCALL, "riscv-ccall"}};
+      {MO_CCALL, "riscv-ccall"},
+      {MO_CAPTAB_HI, "riscv-captab-hi"},
+      {MO_CAPTAB_LO, "riscv-captab-lo"},
+      {MO_CAPTAB_TLS_HI, "riscv-captab-tls-hi"},
+      {MO_CAPTAB_TLS_LO, "riscv-captab-tls-lo"},
+  };
+
   return makeArrayRef(TargetFlags);
 }
 bool RISCVInstrInfo::isFunctionSafeToOutlineFrom(

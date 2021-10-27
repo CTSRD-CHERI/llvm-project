@@ -130,6 +130,20 @@ enum Fixups {
   // compressed capability jump instruction
   fixup_riscv_rvc_cjump,
 
+  // fixup_riscv_captab_hi20 - a 20-bit fixup for the hi 20 bits of a captable
+  // offset.
+  fixup_riscv_captab_hi20,
+  // fixup_riscv_captab_lo12 - a 12-bit fixup for the lo 12 bits of a captable
+  // offset
+  fixup_riscv_captab_lo12_s,
+  // same as other captab relocations, but with hints for the linker that the
+  // symbol should target a TLS captable
+  fixup_riscv_captab_tls_hi20,
+  fixup_riscv_captab_tls_lo12_s,
+  // same as the other captab relocations, but with hints for the linker that
+  // the symbol is only being used for a call
+  fixup_riscv_captab_call_hi20,
+  fixup_riscv_captab_call_lo12_s,
   // Used as a sentinel, must be the last
   fixup_riscv_invalid,
   NumTargetFixupKinds = fixup_riscv_invalid - FirstTargetFixupKind

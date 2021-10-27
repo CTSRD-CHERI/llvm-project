@@ -83,6 +83,10 @@ RISCVTargetELFStreamer::RISCVTargetELFStreamer(MCStreamer &S,
     llvm_unreachable("Improperly initialised target ABI");
   }
 
+  if (MCTargetOptions::isCheriOSABI()) {
+    EFlags |= ELF::EF_RISCV_CHERIOSABI;
+  }
+
   MCA.setELFHeaderEFlags(EFlags);
 }
 

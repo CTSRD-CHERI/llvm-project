@@ -2756,11 +2756,19 @@ static SDValue getTargetNode(JumpTableSDNode *N, SDLoc DL, EVT Ty,
 
 template <class NodeTy>
 SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
-                                     bool IsLocal, bool CanDeriveFromPcc) const {
+                                     bool IsLocal, bool CanDeriveFromPcc,
+                                     bool IsCall) const {
   SDLoc DL(N);
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
+
+    if (IsCall &&
+        RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::PLT) {
+      return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC_CALL, DL, Ty, Addr),
+                     0);
+    }
+
     if (IsLocal && CanDeriveFromPcc) {
       // Use PC-relative addressing to access the symbol. This generates the
       // pattern (PseudoCLLC sym), which expands to
@@ -2829,7 +2837,8 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   // bounds and therefore would not be checked when we pass the reference to
   // another function. Therefore, we always load from the captable for all
   // global variables.
-  SDValue Addr = getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false);
+  SDValue Addr =
+      getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false, false);
 
   // In order to maximise the opportunity for common subexpression elimination,
   // emit a separate ADD/PTRADD node for the global address offset instead of
@@ -2845,7 +2854,8 @@ SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
   BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true,
+                 false);
 }
 
 SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
@@ -2853,7 +2863,8 @@ SDValue RISCVTargetLowering::lowerConstantPool(SDValue Op,
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true,
+                 false);
 }
 
 SDValue RISCVTargetLowering::lowerJumpTable(SDValue Op,
@@ -2861,7 +2872,8 @@ SDValue RISCVTargetLowering::lowerJumpTable(SDValue Op,
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true);
+  return getAddr(N, Ty, DAG, /*IsLocal=*/true, /*CanDeriveFromPcc=*/true,
+                 false);
 }
 
 SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
@@ -2874,15 +2886,19 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
 
     Register TPPhyReg = RISCVABI::getTPReg(Subtarget.getTargetABI());
+    SDValue Addr = DAG.getTargetGlobalAddress(GV, DL, Ty, 0, 0);
+
+    if (RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::PLT) {
+      // The PLT ABI just has TP point to a locals captable
+      return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC_TLS, DL, Ty, Addr),
+                     0);
+    }
+
     if (NotLocal) {
-
-      // TODO CheriOS and / or gprel here
-
       // Use PC-relative addressing to access the captable for this TLS symbol,
       // then load the address from the captable and add the thread pointer.
       // This generates the pattern (PseudoCLA_TLS_IE sym), which expands to
       // (cld (auipcc %tls_ie_captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
-      SDValue Addr = DAG.getTargetGlobalAddress(GV, DL, Ty, 0, 0);
       SDValue Load = SDValue(
           DAG.getMachineNode(RISCV::PseudoCLA_TLS_IE, DL, XLenVT, Ty, Addr), 0);
 
@@ -8455,12 +8471,17 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         MF.getFunction(),
         "Return address register required, but has been reserved."});
 
+  // In the PLT ABI we always have to indirect via the captable
+  bool AlwaysIndirect =
+      RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+      (UseLegacyIndirectPurecapCalls ||
+       (RISCVABI::CapabilityTableABI() == CheriCapabilityTableABI::PLT));
+
   // If the callee is a GlobalAddress/ExternalSymbol node, turn it into a
   // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
   // split it and then direct call can be matched by PseudoCALL.
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = S->getGlobal();
-
     unsigned OpFlags;
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
       OpFlags = RISCVII::MO_CCALL;
@@ -8470,10 +8491,9 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         OpFlags = RISCVII::MO_PLT;
     }
 
-    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-        UseLegacyIndirectPurecapCalls)
+    if (AlwaysIndirect)
       Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
-                       /*CanDeriveFromPcc=*/true);
+                       /*CanDeriveFromPcc=*/true, true);
     else
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
@@ -8491,10 +8511,9 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     // Legacy behaviour always used indirect calls even for static functions.
     // This could be optimised, but shouldAssumeDSOLocal is too weak, since
     // extern functions are marked dso_local for position-dependent code.
-    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-        UseLegacyIndirectPurecapCalls)
+    if (AlwaysIndirect)
       Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
-                       /*CanDeriveFromPcc=*/true);
+                       /*CanDeriveFromPcc=*/true, true);
     else
       Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
   }

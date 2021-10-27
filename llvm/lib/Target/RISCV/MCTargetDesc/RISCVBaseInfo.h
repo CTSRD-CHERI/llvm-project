@@ -152,7 +152,12 @@ enum {
   MO_TLS_IE_CAPTAB_PCREL_HI = 15,
   MO_TLS_GD_CAPTAB_PCREL_HI = 16,
   MO_CCALL = 17,
-
+  MO_CAPTAB_HI = 18,
+  MO_CAPTAB_LO = 19,
+  MO_CAPTAB_TLS_HI = 20,
+  MO_CAPTAB_TLS_LO = 21,
+  MO_CAPTAB_CALL_HI = 22,
+  MO_CAPTAB_CALL_LO = 23,
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have
   // multiple "bitmask" flags.
@@ -307,6 +312,10 @@ enum ABI {
   ABI_Unknown
 };
 
+inline static CheriCapabilityTableABI CapabilityTableABI() {
+  return MCTargetOptions::cheriCapabilityTableABI();
+}
+
 // Returns the target ABI, or else a StringError if the requested ABIName is
 // not supported for the given TT and FeatureBits combination.
 ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
@@ -318,6 +327,9 @@ ABI getTargetABI(StringRef ABIName);
 MCRegister getBPReg(ABI TargetABI);
 // Returns the register used to hold the thread pointer.
 MCRegister getTPReg(ABI TargetABI);
+// Returns the register used to hold the globals pointer.
+MCRegister getGPReg(ABI TargetABI);
+
 inline static bool isCheriPureCapABI(ABI TargetABI) {
   switch (TargetABI) {
   case ABI_ILP32:

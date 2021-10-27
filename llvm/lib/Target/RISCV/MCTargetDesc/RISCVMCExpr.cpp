@@ -83,6 +83,12 @@ const MCFixup *RISCVMCExpr::getPCRelHiFixup(const MCFragment **DFOut) const {
     case RISCV::fixup_riscv_captab_pcrel_hi20:
     case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
     case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
+    case RISCV::fixup_riscv_captab_hi20:
+    case RISCV::fixup_riscv_captab_lo12_s:
+    case RISCV::fixup_riscv_captab_tls_hi20:
+    case RISCV::fixup_riscv_captab_tls_lo12_s:
+    case RISCV::fixup_riscv_captab_call_hi20:
+    case RISCV::fixup_riscv_captab_call_lo12_s:
       if (DFOut)
         *DFOut = DF;
       return &F;
@@ -127,6 +133,12 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
       .Case("tprel_cincoffset", VK_RISCV_TPREL_CINCOFFSET)
       .Case("tls_ie_captab_pcrel_hi", VK_RISCV_TLS_IE_CAPTAB_PCREL_HI)
       .Case("tls_gd_captab_pcrel_hi", VK_RISCV_TLS_GD_CAPTAB_PCREL_HI)
+      .Case("captab_hi", VK_RISCV_CAPTAB_HI)
+      .Case("captab_lo", VK_RISCV_CAPTAB_LO)
+      .Case("captab_tls_hi", VK_RISCV_CAPTAB_TLS_HI)
+      .Case("captab_tls_lo", VK_RISCV_CAPTAB_TLS_LO)
+      .Case("captab_call_hi", VK_RISCV_CAPTAB_CALL_HI)
+      .Case("captab_call_lo", VK_RISCV_CAPTAB_CALL_LO)
       .Default(VK_RISCV_Invalid);
 }
 
@@ -169,6 +181,18 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "call_plt";
   case VK_RISCV_CCALL:
     return "ccall";
+  case VK_RISCV_CAPTAB_HI:
+    return "captab_hi";
+  case VK_RISCV_CAPTAB_LO:
+    return "captab_lo";
+  case VK_RISCV_CAPTAB_TLS_HI:
+    return "captab_tls_hi";
+  case VK_RISCV_CAPTAB_TLS_LO:
+    return "captab_tls_lo";
+  case VK_RISCV_CAPTAB_CALL_HI:
+    return "captab_call_hi";
+  case VK_RISCV_CAPTAB_CALL_LO:
+    return "captab_call_lo";
   case VK_RISCV_32_PCREL:
     return "32_pcrel";
   }

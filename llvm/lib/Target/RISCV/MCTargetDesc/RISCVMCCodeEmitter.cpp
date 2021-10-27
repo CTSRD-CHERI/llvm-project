@@ -454,6 +454,24 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
       FixupKind = RISCV::fixup_riscv_ccall;
       RelaxCandidate = true;
       break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_HI:
+      FixupKind = RISCV::fixup_riscv_captab_hi20;
+      break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_LO:
+      FixupKind = RISCV::fixup_riscv_captab_lo12_s;
+      break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_TLS_HI:
+      FixupKind = RISCV::fixup_riscv_captab_tls_hi20;
+      break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_TLS_LO:
+      FixupKind = RISCV::fixup_riscv_captab_tls_lo12_s;
+      break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_CALL_HI:
+      FixupKind = RISCV::fixup_riscv_captab_call_hi20;
+      break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_CALL_LO:
+      FixupKind = RISCV::fixup_riscv_captab_call_lo12_s;
+      break;
     }
   } else if (Kind == MCExpr::SymbolRef &&
              cast<MCSymbolRefExpr>(Expr)->getKind() == MCSymbolRefExpr::VK_None) {

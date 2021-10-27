@@ -1521,6 +1521,8 @@ static void scanReloc(InputSectionBase &sec, OffsetGetter &getOffset, RelTy *&i,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_ENTRY_PC>(expr)) {
+    // Only CheriOS (currently) has a thread-local captable
+    assert(!sym.isTls() || config->isCheriOS());
     (sym.isTls() ? in.cheriCapTableLocal : in.cheriCapTable)
         ->addEntry(sym, expr, &sec, offset);
     // Write out the index into the instruction

@@ -1679,6 +1679,8 @@ void LinkerDriver::inferMachineType() {
     config->osabi = f->osabi;
     if (f->emachine == EM_MIPS) {
       config->setIsCheriOS(f->eflags & EF_MIPS_CHERIOSABI);
+    } else if (f->emachine == EM_RISCV) {
+      config->setIsCheriOS(f->eflags & EF_RISCV_CHERIOSABI);
     }
     config->mipsN32Abi = f->emachine == EM_MIPS && isMipsN32Abi(f);
     return;

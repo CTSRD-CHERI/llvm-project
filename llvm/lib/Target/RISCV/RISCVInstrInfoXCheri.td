@@ -1103,6 +1103,17 @@ def PseudoCLGC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
+def PseudoCLGC_TLS : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
+                        "clgc.tls", "$dst, $src">;
+// This is the same as clgc but is a static hint to the compiler/linker that will only be used for a call, and does
+// not need to return a unique function pointer.
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1 in
+def PseudoCLGC_CALL : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
+                        "clgc.call", "$dst, $src">;
+
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1 in
 def PseudoCLA_TLS_IE : Pseudo<(outs GPR:$dst, GPCR:$tmp),
                               (ins bare_symbol:$src), [],
                               "cla.tls.ie", "$dst, $src, $tmp">;

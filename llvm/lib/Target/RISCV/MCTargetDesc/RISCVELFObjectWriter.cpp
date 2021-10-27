@@ -182,6 +182,18 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_RISCV_ADD64;
   case RISCV::fixup_riscv_sub_64:
     return ELF::R_RISCV_SUB64;
+  case RISCV::fixup_riscv_captab_hi20:
+    return ELF::R_RISCV_CHERI_CAPTAB_HI20;
+  case RISCV::fixup_riscv_captab_lo12_s:
+    return ELF::R_RISCV_CHERI_CAPTAB_LO12_s;
+  case RISCV::fixup_riscv_captab_tls_hi20:
+    return ELF::R_RISCV_CHERI_CAPTAB_TLS_HI20;
+  case RISCV::fixup_riscv_captab_tls_lo12_s:
+    return ELF::R_RISCV_CHERI_CAPTAB_TLS_LO12_s;
+  case RISCV::fixup_riscv_captab_call_hi20:
+    return ELF::R_RISCV_CHERI_CAPTAB_CALL_HI20;
+  case RISCV::fixup_riscv_captab_call_lo12_s:
+    return ELF::R_RISCV_CHERI_CAPTAB_CALL_LO12_s;
   }
 }
 

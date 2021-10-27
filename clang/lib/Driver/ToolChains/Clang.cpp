@@ -2117,6 +2117,16 @@ void Clang::AddRISCVTargetArgs(const ArgList &Args,
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName.data());
 
+  StringRef DefaultCapTableABI = "pcrel";
+  StringRef ChosenCapTableABI = DefaultCapTableABI;
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
+    ChosenCapTableABI = A->getValue();
+    A->claim();
+  }
+  CmdArgs.push_back("-mllvm");
+  CmdArgs.push_back(
+      Args.MakeArgString("-cheri-cap-table-abi=" + ChosenCapTableABI));
+
   SetRISCVSmallDataLimit(getToolChain(), Args, CmdArgs);
 
   std::string TuneCPU;

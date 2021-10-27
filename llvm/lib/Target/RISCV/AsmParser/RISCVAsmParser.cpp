@@ -13,6 +13,7 @@
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "MCTargetDesc/RISCVMatInt.h"
 #include "MCTargetDesc/RISCVTargetStreamer.h"
+#include "RISCVSubtarget.h"
 #include "TargetInfo/RISCVTargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallBitVector.h"
@@ -156,12 +157,18 @@ class RISCVAsmParser : public MCTargetAsmParser {
                           const MCExpr *Symbol, RISCVMCExpr::VariantKind VKHi,
                           unsigned SecondOpcode, SMLoc IDLoc, MCStreamer &Out);
 
+  void emitLUICLCPair(MCOperand DestReg, MCOperand TmpReg, MCRegister BaseReg,
+                      RISCVMCExpr::VariantKind VKHi,
+                      RISCVMCExpr::VariantKind VKLo, const MCExpr *Symbol,
+                      MCStreamer &Out);
+
   // Helper to emit pseudo instruction "cllc" used in PCC-relative addressing.
   void emitCapLoadLocalCap(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
 
-  // Helper to emit pseudo instruction "clgc" used in captable addressing with
-  // the PC-relative ABI.
-  void emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+  // Helper to emit pseudo instruction "clgc.*" used in captable addressing with
+  // the PC-relative and PLT ABI.
+  void emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
+                            bool tls, bool call);
 
   // Helper to emit pseudo instruction "cla.tls.ie" used in initial-exec TLS
   // addressing.
@@ -2859,35 +2866,109 @@ void RISCVAsmParser::emitAuipccInstPair(MCOperand DestReg, MCOperand TmpReg,
                           .addExpr(RefToLinkTmpLabel));
 }
 
+void RISCVAsmParser::emitLUICLCPair(MCOperand DestReg, MCOperand TmpReg,
+                                    MCRegister BaseReg,
+                                    RISCVMCExpr::VariantKind VKHi,
+                                    RISCVMCExpr::VariantKind VKLo,
+                                    const MCExpr *Symbol, MCStreamer &Out) {
+  // A pair of instructions:
+  //    LUI Tmp, VKHi(symbol)
+  //    CLC DestReg, TmpReg, VKLo(symbol)(BaseReg)
+  MCContext &Ctx = getContext();
+
+  const RISCVMCExpr *SymbolHi = RISCVMCExpr::create(Symbol, VKHi, Ctx);
+  const RISCVMCExpr *SymbolLo = RISCVMCExpr::create(Symbol, VKLo, Ctx);
+
+  emitToStreamer(
+      Out, MCInstBuilder(RISCV::LUI).addOperand(TmpReg).addExpr(SymbolHi));
+  emitToStreamer(Out, MCInstBuilder(isRV64() ? RISCV::CLC_128 : RISCV::CLC_64)
+                          .addOperand(DestReg)
+                          .addOperand(TmpReg)
+                          .addReg(BaseReg)
+                          .addExpr(SymbolLo));
+}
+
 void RISCVAsmParser::emitCapLoadLocalCap(MCInst &Inst, SMLoc IDLoc,
                                          MCStreamer &Out) {
   // The capability load local capability pseudo-instruction "cllc" is used in
-  // PC-relative addressing of local symbols:
-  //   cllc rdest, symbol
-  // expands to
-  //   TmpLabel: AUIPCC cdest, %pcrel_hi(symbol)
-  //             CINCOFFSET cdest, cdest, %pcrel_lo(TmpLabel)
-  MCOperand DestReg = Inst.getOperand(0);
-  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
-  emitAuipccInstPair(DestReg, DestReg, Symbol,
-                     RISCVMCExpr::VK_RISCV_PCREL_HI,
-                     RISCV::CIncOffsetImm, IDLoc, Out);
+
+  switch (RISCVABI::CapabilityTableABI()) {
+  case CheriCapabilityTableABI::Pcrel: {
+    // PC-relative addressing of local symbols:
+    //   cllc rdest, symbol
+    // expands to
+    //   TmpLabel: AUIPCC cdest, %pcrel_hi(symbol)
+    //             CINCOFFSET cdest, cdest, %pcrel_lo(TmpLabel)
+    MCOperand DestReg = Inst.getOperand(0);
+    const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+    emitAuipccInstPair(DestReg, DestReg, Symbol, RISCVMCExpr::VK_RISCV_PCREL_HI,
+                       RISCV::CIncOffsetImm, IDLoc, Out);
+    return;
+  }
+  case CheriCapabilityTableABI::PLT:
+    // PLT addressing of local symbols uses the same sequence as global ones
+    emitCapLoadGlobalCap(Inst, IDLoc, Out, false, false);
+    return;
+  default:
+    assert(0 && "Using unsupported Cap table ABI");
+  }
 }
 
 void RISCVAsmParser::emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc,
-                                          MCStreamer &Out) {
+                                          MCStreamer &Out, bool IsTls,
+                                          bool IsCall) {
   // The capability load global capability pseudo-instruction "clgc" is used in
-  // captable-indirect addressing of global symbols in the PC-relative ABI:
-  //   clgc rdest, symbol
-  // expands to
-  //   TmpLabel: AUIPCC cdest, %captab_pcrel_hi(symbol)
-  //             CLC cdest, %pcrel_lo(TmpLabel)(cdest)
+  // captable-indirect addressing of global symbols
+  //
+
   MCOperand DestReg = Inst.getOperand(0);
   const MCExpr *Symbol = Inst.getOperand(1).getExpr();
-  unsigned SecondOpcode = isRV64() ? RISCV::CLC_128 : RISCV::CLC_64;
-  emitAuipccInstPair(DestReg, DestReg, Symbol,
-                     RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI, SecondOpcode,
-                     IDLoc, Out);
+
+  switch (RISCVABI::CapabilityTableABI()) {
+  case CheriCapabilityTableABI::Pcrel: {
+    // in the PC-relative ABI:
+    //   clgc rdest, symbol
+    // expands to
+    //   TmpLabel: AUIPCC cdest, %captab_pcrel_hi(symbol)
+    //             CLC cdest, %pcrel_lo(TmpLabel)(cdest)
+    unsigned SecondOpcode = isRV64() ? RISCV::CLC_128 : RISCV::CLC_64;
+    emitAuipccInstPair(DestReg, DestReg, Symbol,
+                       RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI, SecondOpcode,
+                       IDLoc, Out);
+    return;
+  }
+  case CheriCapabilityTableABI::PLT: {
+    // in the PLT ABI:
+    //   clgc[.tls] rdest, symbol
+    // expands to
+    //   LUI dest, %captab[_tls]_hi(symbol)
+    //   CINCOFFSET dest, (tls ? tp : gp), dest
+    //   CLC dest, %captab_[_tls]lo(dest)
+    const RISCVABI::ABI &TargetABI =
+        ((const RISCVSubtarget *)&getSTI())->getTargetABI();
+    RISCVMCExpr::VariantKind FlagsHi, FlagsLo;
+    MCRegister Base;
+    if (IsTls) {
+      Base = RISCVABI::getTPReg(TargetABI);
+      FlagsLo = RISCVMCExpr::VK_RISCV_CAPTAB_TLS_LO;
+      FlagsHi = RISCVMCExpr::VK_RISCV_CAPTAB_TLS_HI;
+    } else {
+      Base = RISCVABI::getGPReg(TargetABI);
+      if (IsCall) {
+        FlagsLo = RISCVMCExpr::VK_RISCV_CAPTAB_CALL_LO;
+        FlagsHi = RISCVMCExpr::VK_RISCV_CAPTAB_HI;
+      } else {
+        FlagsLo = RISCVMCExpr::VK_RISCV_CAPTAB_LO;
+        FlagsHi = RISCVMCExpr::VK_RISCV_CAPTAB_HI;
+      }
+    }
+
+    emitLUICLCPair(DestReg, DestReg, Base, FlagsHi, FlagsLo, Symbol, Out);
+    return;
+  }
+  default:
+    assert(0 && "Using unsupported Cap table ABI");
+  }
 }
 
 void RISCVAsmParser::emitCapLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc,
@@ -3036,7 +3117,13 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     emitCapLoadLocalCap(Inst, IDLoc, Out);
     return false;
   case RISCV::PseudoCLGC:
-    emitCapLoadGlobalCap(Inst, IDLoc, Out);
+    emitCapLoadGlobalCap(Inst, IDLoc, Out, false, false);
+    return false;
+  case RISCV::PseudoCLGC_TLS:
+    emitCapLoadGlobalCap(Inst, IDLoc, Out, true, false);
+    return false;
+  case RISCV::PseudoCLGC_CALL:
+    emitCapLoadGlobalCap(Inst, IDLoc, Out, true, true);
     return false;
   case RISCV::PseudoCLA_TLS_IE:
     emitCapLoadTLSIEAddress(Inst, IDLoc, Out);

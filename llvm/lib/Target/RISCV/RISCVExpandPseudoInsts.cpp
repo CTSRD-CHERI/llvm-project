@@ -64,12 +64,18 @@ private:
                             MachineBasicBlock::iterator MBBI,
                             MachineBasicBlock::iterator &NextMBBI,
                             unsigned FlagsHi, unsigned SecondOpcode);
+  bool expandLUICLCPair(MachineBasicBlock &MBB,
+                        MachineBasicBlock::iterator MBBI,
+                        MachineBasicBlock::iterator &NextMBBI, unsigned FlagsHi,
+                        unsigned FlagsLo, Register Base);
+
   bool expandCapLoadLocalCap(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
                              MachineBasicBlock::iterator &NextMBBI);
   bool expandCapLoadGlobalCap(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MBBI,
-                              MachineBasicBlock::iterator &NextMBBI);
+                              MachineBasicBlock::iterator &NextMBBI, bool IsTls,
+                              bool IsCall);
   bool expandCapLoadTLSIEAddress(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MBBI,
                                  MachineBasicBlock::iterator &NextMBBI);
@@ -124,7 +130,11 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case RISCV::PseudoCLLC:
     return expandCapLoadLocalCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLGC:
-    return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI);
+    return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI, false, false);
+  case RISCV::PseudoCLGC_TLS:
+    return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI, true, false);
+  case RISCV::PseudoCLGC_CALL:
+    return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI, false, true);
   case RISCV::PseudoCLA_TLS_IE:
     return expandCapLoadTLSIEAddress(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLC_TLS_GD:
@@ -306,22 +316,96 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
   return true;
 }
 
+bool RISCVExpandPseudo::expandLUICLCPair(MachineBasicBlock &MBB,
+                                         MachineBasicBlock::iterator MBBI,
+                                         MachineBasicBlock::iterator &NextMBBI,
+                                         unsigned FlagsHi, unsigned FlagsLo,
+                                         Register Base) {
+  MachineFunction *MF = MBB.getParent();
+  const auto &STI = MF->getSubtarget<RISCVSubtarget>();
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  // In case we ever introduce a pseudo op with an explicit tmp
+  bool HasTmpReg = MI.getNumOperands() > 2;
+
+  Register DestReg = MI.getOperand(0).getReg();
+  // TODO: assert merged register file, so TmpReg will be available when not
+  // explicit
+
+  Register TmpReg = HasTmpReg ? MI.getOperand(1).getReg() : DestReg;
+  const MachineOperand &Symbol = MI.getOperand(HasTmpReg ? 2 : 1);
+
+  BuildMI(MBB, MBBI, DL, TII->get(RISCV::LUI), TmpReg)
+      .addDisp(Symbol, 0, FlagsHi);
+  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CIncOffset), DestReg)
+      .addReg(Base)
+      .addReg(TmpReg);
+  BuildMI(MBB, MBBI, DL,
+          TII->get(STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64), DestReg)
+      .addReg(DestReg)
+      .addDisp(Symbol, 0, FlagsLo);
+
+  MBBI->eraseFromParent();
+
+  return true;
+}
+
 bool RISCVExpandPseudo::expandCapLoadLocalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_PCREL_HI,
-                              RISCV::CIncOffsetImm);
+
+  switch (RISCVABI::CapabilityTableABI()) {
+  case CheriCapabilityTableABI::Pcrel:
+    return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_PCREL_HI,
+                                RISCV::CIncOffsetImm);
+  case CheriCapabilityTableABI::PLT:
+    // For the PLT ABI we will treat local the same as global
+    return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI, false, false);
+  default:
+    assert(0 && "Using unsupported Cap table ABI");
+  }
 }
 
 bool RISCVExpandPseudo::expandCapLoadGlobalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
-    MachineBasicBlock::iterator &NextMBBI) {
+    MachineBasicBlock::iterator &NextMBBI, bool IsTls, bool IsCall) {
   MachineFunction *MF = MBB.getParent();
 
+  assert(!(IsTls && IsCall) && "Thread local functions are not a thing.");
+
   const auto &STI = MF->getSubtarget<RISCVSubtarget>();
-  unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
-  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_CAPTAB_PCREL_HI,
-                              SecondOpcode);
+
+  switch (RISCVABI::CapabilityTableABI()) {
+  case CheriCapabilityTableABI::Pcrel: {
+    assert(!IsTls);
+    unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
+    return expandAuipccInstPair(MBB, MBBI, NextMBBI,
+                                RISCVII::MO_CAPTAB_PCREL_HI, SecondOpcode);
+  }
+  case CheriCapabilityTableABI::PLT: {
+    unsigned FlagsHi, FlagsLo;
+    Register Base;
+    if (IsTls) {
+      Base = RISCVABI::getTPReg(STI.getTargetABI());
+      FlagsLo = RISCVII::MO_CAPTAB_TLS_LO;
+      FlagsHi = RISCVII::MO_CAPTAB_TLS_HI;
+    } else {
+      Base = RISCVABI::getGPReg(STI.getTargetABI());
+      if (IsCall) {
+        FlagsLo = RISCVII::MO_CAPTAB_CALL_LO;
+        FlagsHi = RISCVII::MO_CAPTAB_CALL_HI;
+      } else {
+        FlagsLo = RISCVII::MO_CAPTAB_LO;
+        FlagsHi = RISCVII::MO_CAPTAB_HI;
+      }
+    }
+    return expandLUICLCPair(MBB, MBBI, NextMBBI, FlagsHi, FlagsLo, Base);
+  }
+
+  default:
+    assert(0 && "Using unsupported Cap table ABI");
+  }
 }
 
 bool RISCVExpandPseudo::expandCapLoadTLSIEAddress(

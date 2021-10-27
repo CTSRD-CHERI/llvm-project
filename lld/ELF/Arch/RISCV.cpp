@@ -351,6 +351,14 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC;
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
     return R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC;
+  case R_RISCV_CHERI_CAPTAB_HI20:
+  case R_RISCV_CHERI_CAPTAB_LO12_s:
+  case R_RISCV_CHERI_CAPTAB_TLS_HI20:
+  case R_RISCV_CHERI_CAPTAB_TLS_LO12_s:
+    return R_CHERI_CAPABILITY_TABLE_INDEX;
+  case R_RISCV_CHERI_CAPTAB_CALL_HI20:
+  case R_RISCV_CHERI_CAPTAB_CALL_LO12_s:
+    return R_CHERI_CAPABILITY_TABLE_INDEX_CALL;
   default:
     error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
           ") against symbol " + toString(s));
@@ -464,7 +472,9 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     }
     return;
   }
-
+  case R_RISCV_CHERI_CAPTAB_HI20:
+  case R_RISCV_CHERI_CAPTAB_TLS_HI20:
+  case R_RISCV_CHERI_CAPTAB_CALL_HI20:
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
   case R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20:
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
@@ -480,6 +490,9 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
 
+  case R_RISCV_CHERI_CAPTAB_LO12_s:
+  case R_RISCV_CHERI_CAPTAB_TLS_LO12_s:
+  case R_RISCV_CHERI_CAPTAB_CALL_LO12_s:
   case R_RISCV_PCREL_LO12_I:
   case R_RISCV_TPREL_LO12_I:
   case R_RISCV_LO12_I: {

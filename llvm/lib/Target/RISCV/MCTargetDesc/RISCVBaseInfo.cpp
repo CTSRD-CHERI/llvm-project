@@ -115,6 +115,14 @@ MCRegister getTPReg(ABI TargetABI) {
     return RISCV::X4;
 }
 
+MCRegister getGPReg(ABI TargetABI) {
+  if (RISCVABI::isCheriPureCapABI(TargetABI)) {
+    return RISCV::C3;
+  } else {
+    return RISCV::X3;
+  }
+}
+
 // Returns the register holding shadow call stack pointer.
 MCRegister getSCSPReg() { return RISCV::X18; }
 
