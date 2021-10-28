@@ -142,8 +142,17 @@ public:
     assert(HasCheri && "Cannot get capability type for non-CHERI");
     return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
   }
+
+  // Vector codegen related methods.
+  bool hasVInstructions() const { return HasStdExtV; }
+  bool hasVInstructionsI64() const { return HasStdExtV; }
+  bool hasVInstructionsF16() const { return HasStdExtV && hasStdExtZfh(); }
+  bool hasVInstructionsF32() const { return HasStdExtV && hasStdExtF(); }
+  bool hasVInstructionsF64() const { return HasStdExtV && hasStdExtD(); }
+  // D and Zfh imply F.
+  bool hasVInstructionsAnyF() const { return HasStdExtV && hasStdExtF(); }
   unsigned getMaxInterleaveFactor() const {
-    return hasStdExtV() ? MaxInterleaveFactor : 1;
+    return hasVInstructions() ? MaxInterleaveFactor : 1;
   }
 
 protected:
