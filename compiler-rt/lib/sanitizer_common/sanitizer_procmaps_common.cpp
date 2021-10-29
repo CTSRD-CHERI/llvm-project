@@ -145,19 +145,19 @@ void MemoryMappingLayout::DumpListOfModules(
   }
 }
 
-void GetMemoryProfile(fill_profile_f cb, usize *stats, usize stats_size) {
+void GetMemoryProfile(fill_profile_f cb, usize *stats) {
   char *smaps = nullptr;
   usize smaps_cap = 0;
   usize smaps_len = 0;
   if (!ReadFileToBuffer("/proc/self/smaps", &smaps, &smaps_cap, &smaps_len))
     return;
-  ParseUnixMemoryProfile(cb, stats, stats_size, smaps, smaps_len);
+  ParseUnixMemoryProfile(cb, stats, smaps, smaps_len);
   UnmapOrDie(smaps, smaps_cap);
 }
 
-void ParseUnixMemoryProfile(fill_profile_f cb, usize *stats, usize stats_size,
-                            const char *smaps, usize smaps_len) {
-  usize start = 0;
+void ParseUnixMemoryProfile(fill_profile_f cb, usize *stats, const char *smaps,
+                            usize smaps_len) {
+  uptr start = 0;
   bool file = false;
   const char *pos = smaps;
   while (pos < smaps + smaps_len) {
@@ -168,7 +168,7 @@ void ParseUnixMemoryProfile(fill_profile_f cb, usize *stats, usize stats_size,
     } else if (internal_strncmp(pos, "Rss:", 4) == 0) {
       while (!IsDecimal(*pos)) pos++;
       usize rss = ParseDecimal(&pos) * 1024;
-      cb(start, rss, file, stats, stats_size);
+      cb(start, rss, file, stats);
     }
     while (*pos++ != '\n') {}
   }

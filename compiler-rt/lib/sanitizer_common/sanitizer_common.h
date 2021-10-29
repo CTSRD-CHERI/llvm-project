@@ -192,14 +192,13 @@ class ReservedAddressRange {
 };
 
 typedef void (*fill_profile_f)(uptr start, usize rss, bool file,
-                               /*out*/usize *stats, usize stats_size);
+                               /*out*/ usize *stats);
 
 // Parse the contents of /proc/self/smaps and generate a memory profile.
-// |cb| is a tool-specific callback that fills the |stats| array containing
-// |stats_size| elements.
-void GetMemoryProfile(fill_profile_f cb, usize *stats, usize stats_size);
-void ParseUnixMemoryProfile(fill_profile_f cb, usize *stats, usize stats_size,
-                            const char *smaps, uptr smaps_len);
+// |cb| is a tool-specific callback that fills the |stats| array.
+void GetMemoryProfile(fill_profile_f cb, usize *stats);
+void ParseUnixMemoryProfile(fill_profile_f cb, usize *stats, const char *smaps,
+                            usize smaps_len);
 
 // Simple low-level (mmap-based) allocator for internal use. Doesn't have
 // constructor, so all instances of LowLevelAllocator should be

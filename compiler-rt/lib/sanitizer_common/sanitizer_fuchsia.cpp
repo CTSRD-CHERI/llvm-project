@@ -372,7 +372,7 @@ bool IsAccessibleMemoryRange(uptr beg, usize size) {
 }
 
 // FIXME implement on this platform.
-void GetMemoryProfile(fill_profile_f cb, usize *stats, uptr stats_size) {}
+void GetMemoryProfile(fill_profile_f cb, usize *stats) {}
 
 bool ReadFileToBuffer(const char *file_name, char **buff, uptr *buff_size,
                       uptr *read_len, uptr max_len, error_t *errno_p) {
