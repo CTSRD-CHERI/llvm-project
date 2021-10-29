@@ -785,12 +785,15 @@ void SortAndDedup(Container &v, Compare comp = {}) {
   v.resize(last + 1);
 }
 
+constexpr uptr kDefaultFileMaxSize = FIRST_32_SECOND_64(1 << 26, 1 << 28);
+
 // Opens the file 'file_name" and reads up to 'max_len' bytes.
 // The resulting buffer is mmaped and stored in '*buff'.
 // Returns true if file was successfully opened and read.
 bool ReadFileToVector(const char *file_name,
                       InternalMmapVectorNoCtor<char> *buff,
-                      usize max_len = 1 << 26, error_t *errno_p = nullptr);
+                      usize max_len = kDefaultFileMaxSize,
+                      error_t *errno_p = nullptr);
 
 // Opens the file 'file_name" and reads up to 'max_len' bytes.
 // This function is less I/O efficient than ReadFileToVector as it may reread
@@ -801,7 +804,7 @@ bool ReadFileToVector(const char *file_name,
 // The total number of read bytes is stored in '*read_len'.
 // Returns true if file was successfully opened and read.
 bool ReadFileToBuffer(const char *file_name, char **buff, usize *buff_size,
-                      usize *read_len, usize max_len = 1 << 26,
+                      usize *read_len, usize max_len = kDefaultFileMaxSize,
                       error_t *errno_p = nullptr);
 
 // When adding a new architecture, don't forget to also update
