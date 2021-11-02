@@ -1118,9 +1118,9 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
     // in callee saved registers.
     // Omitting the kill flags is conservatively correct even if the live-in is
     // not used after all.
-    bool IsLiveIn = MF->getRegInfo().isLiveIn(Reg);
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-    TII.storeRegToStackSlot(MBB, MI, Reg, !IsLiveIn, CS.getFrameIdx(), RC, TRI);
+    TII.storeRegToStackSlot(MBB, MI, Reg, !MBB.isLiveIn(Reg), CS.getFrameIdx(),
+                            RC, TRI);
   }
 
   return true;
