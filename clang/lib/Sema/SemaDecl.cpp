@@ -9653,8 +9653,6 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
-  checkTypeSupport(NewFD->getType(), D.getBeginLoc(), NewFD);
-
   if (!getLangOpts().CPlusPlus) {
     // Perform semantic checking on the function declaration.
     if (!NewFD->isInvalidDecl() && NewFD->isMain())
@@ -14939,6 +14937,9 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
         ES == Sema::FunctionEmissionStatus::Unknown)
       DeclsToCheckForDeferredDiags.insert(FD);
   }
+
+  if (FD && !FD->isDeleted())
+    checkTypeSupport(FD->getType(), FD->getLocation(), FD);
 
   return dcl;
 }
