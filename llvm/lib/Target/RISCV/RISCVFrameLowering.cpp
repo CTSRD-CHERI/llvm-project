@@ -317,7 +317,10 @@ Register RISCVFrameLowering::getSPReg() const {
 Register RISCVFrameLowering::getUSPReg() const {
   assert(RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
          MCTargetOptions::isCheriOSABI());
-  return RISCV::C5;
+  // C4 is normally the thread pointer on RISCV. But, as CheriOS uses IDC for
+  // this purpose, it is neater to reuse the register, to not have to steal
+  // any of the low numbered temps.
+  return RISCV::C4;
 }
 
 static SmallVector<CalleeSavedInfo, 8>
