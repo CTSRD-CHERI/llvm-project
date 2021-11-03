@@ -997,11 +997,12 @@ enum IIT_Info {
   IIT_STRUCT9 = 49,
   IIT_V256 = 50,
   IIT_AMX  = 51,
-  IIT_IFATPTR64 = 52,
-  IIT_IFATPTR128 = 53,
-  IIT_IFATPTR256 = 54,
-  IIT_IFATPTR512 = 55,
-  IIT_IFATPTRAny = 56,
+  IIT_PPCF128 = 52,
+  IIT_IFATPTR64 = 53,
+  IIT_IFATPTR128 = 54,
+  IIT_IFATPTR256 = 55,
+  IIT_IFATPTR512 = 56,
+  IIT_IFATPTRAny = 57,
 };
 
 static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
@@ -1047,6 +1048,9 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
     return;
   case IIT_F128:
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Quad, 0));
+    return;
+  case IIT_PPCF128:
+    OutputTable.push_back(IITDescriptor::get(IITDescriptor::PPCQuad, 0));
     return;
   case IIT_I1:
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Integer, 1));
@@ -1281,6 +1285,7 @@ static Type *DecodeFixedType(ArrayRef<Intrinsic::IITDescriptor> &Infos,
   case IITDescriptor::Float: return Type::getFloatTy(Context);
   case IITDescriptor::Double: return Type::getDoubleTy(Context);
   case IITDescriptor::Quad: return Type::getFP128Ty(Context);
+  case IITDescriptor::PPCQuad: return Type::getPPC_FP128Ty(Context);
 
   case IITDescriptor::Integer:
     return IntegerType::get(Context, D.Integer_Width);
@@ -1463,6 +1468,7 @@ static bool matchIntrinsicType(
     case IITDescriptor::Float: return !Ty->isFloatTy();
     case IITDescriptor::Double: return !Ty->isDoubleTy();
     case IITDescriptor::Quad: return !Ty->isFP128Ty();
+    case IITDescriptor::PPCQuad: return !Ty->isPPC_FP128Ty();
     case IITDescriptor::Integer: return !Ty->isIntegerTy(D.Integer_Width);
     case IITDescriptor::Vector: {
       VectorType *VT = dyn_cast<VectorType>(Ty);
