@@ -316,6 +316,9 @@ bool RISCVTargetInfo::validateTarget(DiagnosticsEngine &Diags) const {
     return false;
   }
 
+  if (ABI.empty())
+    ABI = llvm::RISCV::computeDefaultABIFromArch(*ISAInfo).str();
+
   return true;
 }
 
