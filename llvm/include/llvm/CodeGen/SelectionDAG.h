@@ -1769,9 +1769,6 @@ public:
   SDValue FoldConstantArithmetic(unsigned Opcode, const SDLoc &DL, EVT VT,
                                  ArrayRef<SDValue> Ops);
 
-  SDValue FoldConstantVectorArithmetic(unsigned Opcode, const SDLoc &DL, EVT VT,
-                                       ArrayRef<SDValue> Ops);
-
   /// Fold floating-point operations with 2 operands when both operands are
   /// constants and/or undefined.
   SDValue foldConstantFPMath(unsigned Opcode, const SDLoc &DL, EVT VT,
