@@ -469,7 +469,8 @@ public:
   // Check if any one of SanitizeCoverage* is enabled.
   bool hasSanitizeCoverage() const {
     return SanitizeCoverageType || SanitizeCoverageIndirectCalls ||
-           SanitizeCoverageTraceCmp;
+           SanitizeCoverageTraceCmp || SanitizeCoverageTraceLoads ||
+           SanitizeCoverageTraceStores;
   }
 };
 
