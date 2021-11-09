@@ -2316,6 +2316,10 @@ void OMPClauseEnqueue::VisitOMPFilterClause(const OMPFilterClause *C) {
   Visitor->AddStmt(C->getThreadID());
 }
 
+void OMPClauseEnqueue::VisitOMPAlignClause(const OMPAlignClause *C) {
+  Visitor->AddStmt(C->getAlignment());
+}
+
 void OMPClauseEnqueue::VisitOMPUnifiedAddressClause(
     const OMPUnifiedAddressClause *) {}
 
