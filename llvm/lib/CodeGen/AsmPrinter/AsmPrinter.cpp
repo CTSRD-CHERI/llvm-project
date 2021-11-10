@@ -898,6 +898,30 @@ void AsmPrinter::emitAuxFunctionEntryLabel(MCSymbol *Symbol) {
   OutStreamer->emitLabel(Symbol);
 }
 
+void AsmPrinter::emitAuxFunctionBodyEnd(MCSymbol *Symbol, MCSymbol *FuncEnd) {
+  // By default, auxiliary entries should be as visible as the main entry
+  if(MF->getFunction().hasExternalLinkage())
+    OutStreamer->emitSymbolAttribute(Symbol, MCSA_Global);
+  switch (MF->getFunction().getVisibility()) {
+  case GlobalValue::HiddenVisibility:
+    OutStreamer->emitSymbolAttribute(Symbol, MCSA_Hidden);
+    break;
+  case GlobalValue::ProtectedVisibility:
+    OutStreamer->emitSymbolAttribute(Symbol, MCSA_Protected);
+    break;
+  default: {
+  }
+  }
+  if (MAI->hasDotTypeDotSizeDirective()) {
+    // This may not be exactly what we want if the aux entry starts part way
+    // through the function. Maybe this should have a min somewhere?
+    const MCExpr *SizeExp = MCBinaryExpr::createSub(
+        MCSymbolRefExpr::create(FuncEnd, OutContext),
+        MCSymbolRefExpr::create(Symbol, OutContext), OutContext);
+    OutStreamer->emitELFSize(Symbol, SizeExp);
+  }
+}
+
 /// emitComments - Pretty-print comments for instructions.
 static void emitComments(const MachineInstr &MI, raw_ostream &CommentOS) {
   const MachineFunction *MF = MI.getMF();
@@ -1520,11 +1544,6 @@ void AsmPrinter::emitFunctionBody() {
     OutStreamer->emitLabel(Sym);
   }
 
-  // Emit target-specific gunk after the function body.
-  for (MCSymbol *AuxEntry : AuxStarts) {
-    emitAuxFunctionBodyEnd(AuxEntry);
-  }
-
   emitFunctionBodyEnd();
 
   if (needFuncLabelsForEHOrDebugInfo(*MF) ||
@@ -1545,6 +1564,12 @@ void AsmPrinter::emitFunctionBody() {
         MCSymbolRefExpr::create(CurrentFnSymForSize, OutContext), OutContext);
     OutStreamer->emitELFSize(CurrentFnSym, SizeExp);
   }
+
+  // Emit target-specific gunk after the function body.
+  for (MCSymbol *AuxEntry : AuxStarts) {
+    emitAuxFunctionBodyEnd(AuxEntry, CurrentFnEnd);
+  }
+
   if (CurrentFnLocalForEH) {
     // For CHERI exception landing pad tables we need a local alias so
     // that we can emit non-preemptible relocations with the correct addend.

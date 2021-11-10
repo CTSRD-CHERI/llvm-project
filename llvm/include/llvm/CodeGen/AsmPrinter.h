@@ -490,7 +490,7 @@ public:
   /// function.
   virtual void emitFunctionBodyEnd() {}
 
-  virtual void emitAuxFunctionBodyEnd(MCSymbol *Symbol) {}
+  virtual void emitAuxFunctionBodyEnd(MCSymbol *Symbol, MCSymbol *FuncEnd);
 
   /// Targets can override this to emit stuff at the start of a basic block.
   /// By default, this method prints the label for the specified

@@ -141,7 +141,7 @@ public:
   void emitAuxFunctionEntryLabel(MCSymbol *Symbol) override;
   void emitFunctionBodyStart() override;
   void emitFunctionBodyEnd() override;
-  void emitAuxFunctionBodyEnd(MCSymbol *Symbol) override;
+  void emitAuxFunctionBodyEnd(MCSymbol *Symbol, MCSymbol *FuncEnd) override;
   void emitBasicBlockEnd(const MachineBasicBlock &MBB) override;
   bool isBlockOnlyReachableByFallthrough(
                                    const MachineBasicBlock* MBB) const override;

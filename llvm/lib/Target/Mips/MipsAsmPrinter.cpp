@@ -494,20 +494,10 @@ void MipsAsmPrinter::emitFunctionBodyEnd() {
   OutStreamer->emitDataRegion(MCDR_DataRegionEnd);
 }
 
-void MipsAsmPrinter::emitAuxFunctionBodyEnd(MCSymbol *Symbol) {
+void MipsAsmPrinter::emitAuxFunctionBodyEnd(MCSymbol *Symbol, MCSymbol *FuncEnd) {
   MipsTargetStreamer &TS = getTargetStreamer();
   TS.emitDirectiveEnd(Symbol->getName());
-  OutStreamer->emitSymbolAttribute(Symbol, MCSA_Global);
-  switch (MF->getFunction().getVisibility()) {
-  case GlobalValue::HiddenVisibility:
-    OutStreamer->emitSymbolAttribute(Symbol, MCSA_Hidden);
-    break;
-  case GlobalValue::ProtectedVisibility:
-    OutStreamer->emitSymbolAttribute(Symbol, MCSA_Protected);
-    break;
-  default: {
-  }
-  }
+  AsmPrinter::emitAuxFunctionBodyEnd(Symbol, FuncEnd);
 }
 
 void MipsAsmPrinter::emitBasicBlockEnd(const MachineBasicBlock &MBB) {
