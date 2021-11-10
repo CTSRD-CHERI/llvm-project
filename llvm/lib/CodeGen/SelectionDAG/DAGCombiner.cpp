@@ -5414,11 +5414,6 @@ bool DAGCombiner::isLegalNarrowLdSt(LSBaseSDNode *LDST,
   if (PtrType == MVT::Untyped || PtrType.isExtended())
     return false;
 
-  // FIXME: We can do this with fat pointers, but we need to be more careful
-  // about the arithmetic.
-  if (PtrType.isFatPointer())
-    return false;
-
   if (isa<LoadSDNode>(LDST)) {
     LoadSDNode *Load = cast<LoadSDNode>(LDST);
     // Don't transform one with multiple uses, this would require adding a new
