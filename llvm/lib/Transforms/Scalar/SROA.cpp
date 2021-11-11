@@ -1267,10 +1267,9 @@ void AllocaSlices::processTaggedSlices() {
       Slice ToFindU(S.beginOffset(), S.endOffset(), Align(), !S.readsTags(),
                     !S.writesTags(), S.getUse(), /*IsSplittable=*/false,
                     /*IsStrictAlignSlice=*/true);
-      const Slice &ToFindMax = std::max(ToFindS, ToFindU);
-      auto I = partition_point(Slices, [&](Slice &I) {
-        return !(ToFindMax < I || ToFindS == I || ToFindU == I);
-      });
+      auto I = lower_bound(Slices, ToFindS);
+      if (I == Slices.end() || *I != ToFindS)
+        I = lower_bound(Slices, ToFindU);
 
       if (strict_align_slices_dbgs()) {
         if (I != Slices.end() && (*I == ToFindS || *I == ToFindU))
