@@ -7,6 +7,10 @@
 ; RUN:   | opt -S -passes=sroa -o - | FileCheck %s --check-prefix NOCHERI
 ; RUN: sed -e 's/@PTR_AS@/0/g' -e 's/@PTR_PAIR_SIZE@/16/g' -e 's/-pf200:128:128:128:64//g' %s \
 ; RUN:   | opt -S -O2  | FileCheck %s --check-prefix NOCHERI-O2
+
+; RUN: sed -e 's/@PTR_AS@/200/g' -e 's/@PTR_PAIR_SIZE@/32/g' %s \
+; RUN:   | opt -S -passes=sroa  -sroa-print-strict-align-slices -disable-output 2>&1 | FileCheck --check-prefix CHECK-SLICES %s
+
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A@PTR_AS@-P@PTR_AS@-G@PTR_AS@"
 target triple = "riscv64"
 
@@ -126,3 +130,50 @@ bb:
   call void @read(%struct.c addrspace(@PTR_AS@)* %h.d.byval)
   ret void
 }
+
+; This shows that strict align slice processing doesn't properly work.
+; The [0, 16] (reads tags) slice has the [0, 16] (writes tags) pair,
+; but we couldn't find it.
+
+; CHECK-SLICES:      [SROA] Strict align slice [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [32, 48] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [48, 64] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA]        [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (writes tags)
+; CHECK-SLICES-NEXT: [SROA]        [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        [16, 32] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [32, 48] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [48, 64] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (writes tags)
+; CHECK-SLICES-NEXT: [SROA]        [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        [16, 32] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA]        [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair

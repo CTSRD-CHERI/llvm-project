@@ -116,6 +116,10 @@ STATISTIC(NumVectorized, "Number of vectorized aggregates");
 static cl::opt<bool> SROAStrictInbounds("sroa-strict-inbounds", cl::init(false),
                                         cl::Hidden);
 
+/// Hidden option to print information about strict align slice processing.
+static cl::opt<bool> PrintStrictAlignSlices("sroa-print-strict-align-slices",
+                                            cl::init(false), cl::Hidden);
+
 namespace {
 
 /// A custom IRBuilder inserter which prefixes all names, but only in
@@ -1216,6 +1220,16 @@ private:
   void visitInstruction(Instruction &I) { PI.setAborted(&I); }
 };
 
+static raw_ostream *strict_align_slices_dbgs() {
+  // Determine the output stream where we need to print strict align slice
+  // procesing debug. If -debug was passed just print to dbgs(). Otherwise
+  // for -sroa-print-strict-align-slices print to errs().
+  LLVM_DEBUG(return &dbgs());
+  if (PrintStrictAlignSlices)
+    return &errs();
+  return nullptr;
+}
+
 void AllocaSlices::processTaggedSlices() {
   // Find the indices of slices that can access capabilities. Locations
   // which have both capability reads and writes need to be non-splittable
@@ -1223,15 +1237,30 @@ void AllocaSlices::processTaggedSlices() {
   // be removed, otherwise they will confuse the transformation step.
   SmallVector<unsigned, 4> Unsplittable;
   SmallVector<unsigned, 4> ToRemove;
+
+  if (strict_align_slices_dbgs())
+    for (unsigned Idx = 0, EIdx = Slices.size(); Idx < EIdx; ++Idx) {
+      Slice &S = Slices[Idx];
+      if (!S.isStrictAlignSlice())
+        continue;
+      *strict_align_slices_dbgs()
+          << "[SROA] Strict align slice ["
+          << S.beginOffset() << ", " << S.endOffset() << "] "
+          << (S.writesTags() ? "(writes tags)" : "")
+          << (S.readsTags() ? "(reads tags)" : "") << "\n";
+    }
+
   // Determine which slices we need to remove or make unsplittable.
   // This makes use of the fact that the slices vector is sorted.
   for (unsigned Idx = 0, EIdx = Slices.size(); Idx < EIdx; ++Idx) {
     Slice &S = Slices[Idx];
     if ((S.readsTags() || S.writesTags()) && S.isStrictAlignSlice()) {
-      LLVM_DEBUG(dbgs() << "Finding pair of tagged slice ["
-                        << S.beginOffset() << ", " << S.endOffset() << "] "
-                        << (S.writesTags() ? "(writes tags)" : "")
-                        << (S.readsTags() ? "(reads tags)" : "") << "\n");
+      if (strict_align_slices_dbgs())
+        *strict_align_slices_dbgs()
+            << "[SROA] Finding pair of strict align slice ["
+            << S.beginOffset() << ", " << S.endOffset() << "] "
+            << (S.writesTags() ? "(writes tags)" : "")
+            << (S.readsTags() ? "(reads tags)" : "") << "\n";
       Slice ToFindS(S.beginOffset(), S.endOffset(), Align(), !S.readsTags(),
                     !S.writesTags(), S.getUse(), /*IsSplittable=*/true,
                     /*IsStrictAlignSlice=*/true);
@@ -1242,6 +1271,18 @@ void AllocaSlices::processTaggedSlices() {
       auto I = partition_point(Slices, [&](Slice &I) {
         return !(ToFindMax < I || ToFindS == I || ToFindU == I);
       });
+
+      if (strict_align_slices_dbgs()) {
+        if (I != Slices.end() && (*I == ToFindS || *I == ToFindU))
+          *strict_align_slices_dbgs()
+              << "[SROA]        ["
+              << I->beginOffset() << ", " << I->endOffset() << "] "
+              << (I->writesTags() ? "(writes tags)" : "")
+              << (I->readsTags() ? "(reads tags)" : "") << "\n";
+        else
+          *strict_align_slices_dbgs()
+              << "[SROA]        Could not find pair\n";
+      }
 
       if (I != Slices.end() && (*I == ToFindS || *I == ToFindU)) {
         Unsplittable.push_back(Idx);
