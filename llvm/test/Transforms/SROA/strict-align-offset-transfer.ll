@@ -54,25 +54,30 @@ define void @test() nounwind {
 ; CHECK-SAME: () addrspace(200) #[[ATTR2:[0-9]+]] {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    [[H_SROA_0_SROA_0:%.*]] = alloca i32 addrspace(200)*, align 16, addrspace(200)
-; CHECK-NEXT:    [[H_SROA_0_SROA_2:%.*]] = alloca [16 x i8], align 16, addrspace(200)
-; CHECK-NEXT:    [[H_SROA_6:%.*]] = alloca [[STRUCT_C:%.*]], align 16, addrspace(200)
-; CHECK-NEXT:    [[H_D_BYVAL:%.*]] = alloca [[STRUCT_C]], align 16, addrspace(200)
-; CHECK-NEXT:    [[H_SROA_0_SROA_0_0_H_I8_SROA_CAST11:%.*]] = bitcast i32 addrspace(200)* addrspace(200)* [[H_SROA_0_SROA_0]] to i8 addrspace(200)*
-; CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_0_SROA_0_0_H_I8_SROA_CAST11]], i8 1, i64 16, i1 false)
-; CHECK-NEXT:    [[H_SROA_0_SROA_2_0_H_I8_SROA_IDX10:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_0_SROA_2]], i64 0, i64 0
-; CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_0_SROA_2_0_H_I8_SROA_IDX10]], i8 1, i64 16, i1 false)
-; CHECK-NEXT:    [[H_SROA_6_0_H_I8_SROA_CAST:%.*]] = bitcast [[STRUCT_C]] addrspace(200)* [[H_SROA_6]] to i8 addrspace(200)*
-; CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_6_0_H_I8_SROA_CAST]], i8 1, i64 32, i1 false)
-; CHECK-NEXT:    [[H_SROA_0_SROA_2_16_H_SROA_6_32_H_E_I8_SROA_CAST_SROA_CAST:%.*]] = bitcast [[STRUCT_C]] addrspace(200)* [[H_SROA_6]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[H_SROA_0_SROA_2_0_H_D_I8_SROA_IDX8:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_0_SROA_2]], i64 0, i64 0
-; CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_0_SROA_2_0_H_D_I8_SROA_IDX8]], i8 addrspace(200)* align 16 [[H_SROA_0_SROA_2_16_H_SROA_6_32_H_E_I8_SROA_CAST_SROA_CAST]], i64 16, i1 false)
+; CHECK-NEXT:    [[H_SROA_0_SROA_5:%.*]] = alloca [16 x i8], align 16, addrspace(200)
+; CHECK-NEXT:    [[H_SROA_7_SROA_0:%.*]] = alloca i32 addrspace(200)*, align 16, addrspace(200)
+; CHECK-NEXT:    [[H_SROA_7_SROA_2:%.*]] = alloca [16 x i8], align 16, addrspace(200)
+; CHECK-NEXT:    [[H_D_BYVAL:%.*]] = alloca [[STRUCT_C:%.*]], align 16, addrspace(200)
+; CHECK-NEXT:    [[H_SROA_0_SROA_0_0_H_I8_SROA_CAST6:%.*]] = bitcast i32 addrspace(200)* addrspace(200)* [[H_SROA_0_SROA_0]] to i8 addrspace(200)*
+; CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_0_SROA_0_0_H_I8_SROA_CAST6]], i8 1, i64 16, i1 false)
+; CHECK-NEXT:    [[H_SROA_0_SROA_5_0_H_I8_SROA_IDX:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_0_SROA_5]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_0_SROA_5_0_H_I8_SROA_IDX]], i8 1, i64 16, i1 false)
+; CHECK-NEXT:    [[H_SROA_7_SROA_0_0_H_I8_SROA_CAST8:%.*]] = bitcast i32 addrspace(200)* addrspace(200)* [[H_SROA_7_SROA_0]] to i8 addrspace(200)*
+; CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_7_SROA_0_0_H_I8_SROA_CAST8]], i8 1, i64 16, i1 false)
+; CHECK-NEXT:    [[H_SROA_7_SROA_2_0_H_I8_SROA_IDX7:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_7_SROA_2]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_7_SROA_2_0_H_I8_SROA_IDX7]], i8 1, i64 16, i1 false)
+; CHECK-NEXT:    [[H_SROA_7_SROA_0_0_H_SROA_7_SROA_0_0_H_SROA_0_SROA_0_0_COPYLOAD:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[H_SROA_7_SROA_0]], align 16
+; CHECK-NEXT:    store i32 addrspace(200)* [[H_SROA_7_SROA_0_0_H_SROA_7_SROA_0_0_H_SROA_0_SROA_0_0_COPYLOAD]], i32 addrspace(200)* addrspace(200)* [[H_SROA_0_SROA_0]], align 16
+; CHECK-NEXT:    [[H_SROA_7_SROA_2_16_H_SROA_0_SROA_5_0_H_D_I8_SROA_IDX_SROA_IDX:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_0_SROA_5]], i64 0, i64 0
+; CHECK-NEXT:    [[H_SROA_7_SROA_2_16_H_E_I8_SROA_IDX:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_7_SROA_2]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_7_SROA_2_16_H_SROA_0_SROA_5_0_H_D_I8_SROA_IDX_SROA_IDX]], i8 addrspace(200)* align 16 [[H_SROA_7_SROA_2_16_H_E_I8_SROA_IDX]], i64 16, i1 false)
 ; CHECK-NEXT:    [[H_SROA_0_SROA_0_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT_C]], [[STRUCT_C]] addrspace(200)* [[H_D_BYVAL]], i64 0, i32 0
-; CHECK-NEXT:    [[H_SROA_0_SROA_0_0_H_SROA_0_SROA_0_0_COPYLOAD:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[H_SROA_0_SROA_0]], align 16
-; CHECK-NEXT:    store i32 addrspace(200)* [[H_SROA_0_SROA_0_0_H_SROA_0_SROA_0_0_COPYLOAD]], i32 addrspace(200)* addrspace(200)* [[H_SROA_0_SROA_0_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_IDX]], align 16
-; CHECK-NEXT:    [[H_SROA_0_SROA_2_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT_C]], [[STRUCT_C]] addrspace(200)* [[H_D_BYVAL]], i64 0, i32 1
-; CHECK-NEXT:    [[H_SROA_0_SROA_2_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_CAST:%.*]] = bitcast i32 addrspace(200)* [[H_SROA_0_SROA_2_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_IDX]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[H_SROA_0_SROA_2_0_H_D_I8_SROA_IDX9:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_0_SROA_2]], i64 0, i64 0
-; CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_0_SROA_2_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_CAST]], i8 addrspace(200)* align 16 [[H_SROA_0_SROA_2_0_H_D_I8_SROA_IDX9]], i64 16, i1 false)
+; CHECK-NEXT:    [[H_SROA_0_SROA_0_0_H_SROA_0_SROA_0_0_COPYLOAD3:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[H_SROA_0_SROA_0]], align 16
+; CHECK-NEXT:    store i32 addrspace(200)* [[H_SROA_0_SROA_0_0_H_SROA_0_SROA_0_0_COPYLOAD3]], i32 addrspace(200)* addrspace(200)* [[H_SROA_0_SROA_0_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_IDX]], align 16
+; CHECK-NEXT:    [[H_SROA_0_SROA_5_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_IDX:%.*]] = getelementptr inbounds [[STRUCT_C]], [[STRUCT_C]] addrspace(200)* [[H_D_BYVAL]], i64 0, i32 1
+; CHECK-NEXT:    [[H_SROA_0_SROA_5_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_CAST:%.*]] = bitcast i32 addrspace(200)* [[H_SROA_0_SROA_5_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_IDX]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[H_SROA_0_SROA_5_0_H_D_I8_SROA_IDX4:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[H_SROA_0_SROA_5]], i64 0, i64 0
+; CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 [[H_SROA_0_SROA_5_0_H_SROA_0_0_H_D_BYVAL_I8_SROA_CAST_SROA_CAST]], i8 addrspace(200)* align 16 [[H_SROA_0_SROA_5_0_H_D_I8_SROA_IDX4]], i64 16, i1 false)
 ; CHECK-NEXT:    call void @read([[STRUCT_C]] addrspace(200)* [[H_D_BYVAL]])
 ; CHECK-NEXT:    ret void
 ;
@@ -157,11 +162,14 @@ bb:
 ; CHECK-SLICES-NEXT: [SROA]        Could not find pair
 ; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (writes tags)
 ; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (writes tags)
 ; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA]        [0, 16] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
-; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA]        [0, 16] (writes tags)
 ; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (writes tags)
 ; CHECK-SLICES-NEXT: [SROA]        [16, 32] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (reads tags)
@@ -172,6 +180,15 @@ bb:
 ; CHECK-SLICES-NEXT: [SROA]        [0, 16] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA]        [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [16, 32] (reads tags)
+; CHECK-SLICES-NEXT: [SROA]        Could not find pair
 ; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
 ; CHECK-SLICES-NEXT: [SROA]        Could not find pair
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA] Strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (writes tags)
+; CHECK-SLICES-NEXT: [SROA]        [0, 16] (reads tags)
+; CHECK-SLICES-NEXT: [SROA] Finding pair of strict align slice [0, 16] (reads tags)
+; CHECK-SLICES-NEXt; [SROA]        [0, 16] (writes tags)
