@@ -353,6 +353,10 @@ def push_state: F<"push-state">,
 def print_map: F<"print-map">,
   HelpText<"Print a link map to the standard output">;
 
+defm relax: BB<"relax",
+  "Enable target-specific relaxations if supported (default)",
+  "Disable target-specific relaxations">;
+
 defm reproduce:
   Eq<"reproduce",
      "Write tar file containing inputs and command to reproduce link">;
@@ -732,7 +736,6 @@ def: F<"no-copy-dt-needed-entries">;
 def: F<"no-ctors-in-init-array">;
 def: F<"no-keep-memory">;
 def: F<"no-pipeline-knowledge">;
-def: F<"no-relax">;
 def: F<"no-warn-mismatch">;
 def: Flag<["-"], "p">;
 def: Separate<["--", "-"], "rpath-link">;
