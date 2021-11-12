@@ -6,10 +6,11 @@
 ; RUN: sed -e 's/@PTR_AS@/0/g' -e 's/@PTR_PAIR_SIZE@/16/g' -e 's/-pf200:128:128:128:64//g' %s \
 ; RUN:   | opt -S -passes=sroa -o - | FileCheck %s --check-prefix NOCHERI
 ; RUN: sed -e 's/@PTR_AS@/0/g' -e 's/@PTR_PAIR_SIZE@/16/g' -e 's/-pf200:128:128:128:64//g' %s \
-; RUN:   | opt -S -O2  | FileCheck %s --check-prefix NOCHERI-O2
+; RUN:   | opt -S -O2 | FileCheck %s --check-prefix NOCHERI-O2
 
 ; RUN: sed -e 's/@PTR_AS@/200/g' -e 's/@PTR_PAIR_SIZE@/32/g' %s \
-; RUN:   | opt -S -passes=sroa  -sroa-print-strict-align-slices -disable-output 2>&1 | FileCheck --check-prefix CHECK-SLICES %s
+; RUN:   | opt -S -passes=sroa -sroa-print-strict-align-slices -disable-output 2>&1 \
+; RUN:   | FileCheck %s --check-prefix CHECK-SLICES
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A@PTR_AS@-P@PTR_AS@-G@PTR_AS@"
 target triple = "riscv64"
