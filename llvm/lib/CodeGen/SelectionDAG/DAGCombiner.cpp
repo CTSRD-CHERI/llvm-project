@@ -439,7 +439,7 @@ namespace {
     SDValue visitOR(SDNode *N);
     SDValue visitORLike(SDValue N0, SDValue N1, SDNode *N);
     SDValue visitXOR(SDNode *N);
-    SDValue SimplifyVBinOp(SDNode *N);
+    SDValue SimplifyVBinOp(SDNode *N, const SDLoc &DL);
     SDValue visitSHL(SDNode *N);
     SDValue visitSRA(SDNode *N);
     SDValue visitSRL(SDNode *N);
@@ -2360,7 +2360,7 @@ SDValue DAGCombiner::visitADDLike(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector()) {
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
 
     // fold (add x, 0) -> x, vector edition
@@ -3360,7 +3360,7 @@ SDValue DAGCombiner::visitSUB(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector()) {
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
 
     // fold (sub x, 0) -> x, vector edition
@@ -3885,7 +3885,7 @@ SDValue DAGCombiner::visitMUL(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector()) {
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, SDLoc(N)))
       return FoldedVOp;
 
     N1IsConst = ISD::isConstantSplatVector(N1.getNode(), ConstValue1);
@@ -4236,13 +4236,12 @@ SDValue DAGCombiner::visitSDIV(SDNode *N) {
   SDValue N1 = N->getOperand(1);
   EVT VT = N->getValueType(0);
   EVT CCVT = getSetCCResultType(VT);
+  SDLoc DL(N);
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
-
-  SDLoc DL(N);
 
   // fold (sdiv c1, c2) -> c1/c2
   ConstantSDNode *N1C = isConstOrConstSplat(N1);
@@ -4381,13 +4380,12 @@ SDValue DAGCombiner::visitUDIV(SDNode *N) {
   SDValue N1 = N->getOperand(1);
   EVT VT = N->getValueType(0);
   EVT CCVT = getSetCCResultType(VT);
+  SDLoc DL(N);
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
-
-  SDLoc DL(N);
 
   // fold (udiv c1, c2) -> c1/c2
   ConstantSDNode *N1C = isConstOrConstSplat(N1);
@@ -4884,20 +4882,21 @@ SDValue DAGCombiner::visitIMINMAX(SDNode *N) {
   SDValue N1 = N->getOperand(1);
   EVT VT = N0.getValueType();
   unsigned Opcode = N->getOpcode();
+  SDLoc DL(N);
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
 
   // fold operation with constant operands.
-  if (SDValue C = DAG.FoldConstantArithmetic(Opcode, SDLoc(N), VT, {N0, N1}))
+  if (SDValue C = DAG.FoldConstantArithmetic(Opcode, DL, VT, {N0, N1}))
     return C;
 
   // canonicalize constant to RHS
   if (DAG.isConstantIntBuildVectorOrConstantInt(N0) &&
       !DAG.isConstantIntBuildVectorOrConstantInt(N1))
-    return DAG.getNode(N->getOpcode(), SDLoc(N), VT, N1, N0);
+    return DAG.getNode(N->getOpcode(), DL, VT, N1, N0);
 
   // Is sign bits are zero, flip between UMIN/UMAX and SMIN/SMAX.
   // Only do this if the current op isn't legal and the flipped is.
@@ -4913,7 +4912,7 @@ SDValue DAGCombiner::visitIMINMAX(SDNode *N) {
     default: llvm_unreachable("Unknown MINMAX opcode");
     }
     if (TLI.isOperationLegal(AltOpcode, VT))
-      return DAG.getNode(AltOpcode, SDLoc(N), VT, N0, N1);
+      return DAG.getNode(AltOpcode, DL, VT, N0, N1);
   }
 
   // Simplify the operands using demanded-bits information.
@@ -5767,7 +5766,7 @@ SDValue DAGCombiner::visitAND(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector()) {
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, SDLoc(N)))
       return FoldedVOp;
 
     // fold (and x, 0) -> 0, vector edition
@@ -6536,7 +6535,7 @@ SDValue DAGCombiner::visitOR(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector()) {
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, SDLoc(N)))
       return FoldedVOp;
 
     // fold (or x, 0) -> x, vector edition
@@ -7899,10 +7898,11 @@ SDValue DAGCombiner::visitXOR(SDNode *N) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
   EVT VT = N0.getValueType();
+  SDLoc DL(N);
 
   // fold vector ops
   if (VT.isVector()) {
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
 
     // fold (xor x, 0) -> x, vector edition
@@ -7913,7 +7913,6 @@ SDValue DAGCombiner::visitXOR(SDNode *N) {
   }
 
   // fold (xor undef, undef) -> 0. This is a common idiom (misuse).
-  SDLoc DL(N);
   if (N0.isUndef() && N1.isUndef())
     return DAG.getConstant(0, DL, VT);
 
@@ -8371,7 +8370,7 @@ SDValue DAGCombiner::visitSHL(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector()) {
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, SDLoc(N)))
       return FoldedVOp;
 
     BuildVectorSDNode *N1CV = dyn_cast<BuildVectorSDNode>(N1);
@@ -8726,7 +8725,7 @@ SDValue DAGCombiner::visitSRA(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, SDLoc(N)))
       return FoldedVOp;
 
   ConstantSDNode *N1C = isConstOrConstSplat(N1);
@@ -8924,7 +8923,7 @@ SDValue DAGCombiner::visitSRL(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, SDLoc(N)))
       return FoldedVOp;
 
   ConstantSDNode *N1C = isConstOrConstSplat(N1);
@@ -13837,7 +13836,7 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
 
   // fold (fadd c1, c2) -> c1 + c2
@@ -14045,7 +14044,7 @@ SDValue DAGCombiner::visitFSUB(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
 
   // fold (fsub c1, c2) -> c1-c2
@@ -14130,7 +14129,7 @@ SDValue DAGCombiner::visitFMUL(SDNode *N) {
   // fold vector ops
   if (VT.isVector()) {
     // This just handles C1 * C2 for vectors. Other vector folds are below.
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
   }
 
@@ -14467,7 +14466,7 @@ SDValue DAGCombiner::visitFDIV(SDNode *N) {
 
   // fold vector ops
   if (VT.isVector())
-    if (SDValue FoldedVOp = SimplifyVBinOp(N))
+    if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
       return FoldedVOp;
 
   // fold (fdiv c1, c2) -> c1/c2
@@ -22412,7 +22411,8 @@ SDValue DAGCombiner::XformToShuffleWithZero(SDNode *N) {
 
 /// If a vector binop is performed on splat values, it may be profitable to
 /// extract, scalarize, and insert/splat.
-static SDValue scalarizeBinOpOfSplats(SDNode *N, SelectionDAG &DAG) {
+static SDValue scalarizeBinOpOfSplats(SDNode *N, SelectionDAG &DAG,
+                                      const SDLoc &DL) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
   unsigned Opcode = N->getOpcode();
@@ -22433,7 +22433,6 @@ static SDValue scalarizeBinOpOfSplats(SDNode *N, SelectionDAG &DAG) {
       !TLI.isOperationLegalOrCustom(Opcode, EltVT))
     return SDValue();
 
-  SDLoc DL(N);
   SDValue IndexC = DAG.getVectorIdxConstant(Index0, DL);
   SDValue X = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, EltVT, Src0, IndexC);
   SDValue Y = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, EltVT, Src1, IndexC);
@@ -22457,7 +22456,7 @@ static SDValue scalarizeBinOpOfSplats(SDNode *N, SelectionDAG &DAG) {
 }
 
 /// Visit a binary vector operation, like ADD.
-SDValue DAGCombiner::SimplifyVBinOp(SDNode *N) {
+SDValue DAGCombiner::SimplifyVBinOp(SDNode *N, const SDLoc &DL) {
   EVT VT = N->getValueType(0);
   assert(VT.isVector() && "SimplifyVBinOp only works on vectors!");
 
@@ -22487,7 +22486,6 @@ SDValue DAGCombiner::SimplifyVBinOp(SDNode *N) {
     if (Shuf0 && Shuf1 && Shuf0->getMask().equals(Shuf1->getMask()) &&
         LHS.getOperand(1).isUndef() && RHS.getOperand(1).isUndef() &&
         (LHS.hasOneUse() || RHS.hasOneUse() || LHS == RHS)) {
-      SDLoc DL(N);
       SDValue NewBinOp = DAG.getNode(Opcode, DL, VT, LHS.getOperand(0),
                                      RHS.getOperand(0), Flags);
       SDValue UndefV = LHS.getOperand(1);
@@ -22504,7 +22502,6 @@ SDValue DAGCombiner::SimplifyVBinOp(SDNode *N) {
         Shuf0->hasOneUse() && Shuf0->getOperand(1).isUndef() &&
         Shuf0->getOperand(0).getOpcode() != ISD::INSERT_VECTOR_ELT) {
       // binop (splat X), (splat C) --> splat (binop X, C)
-      SDLoc DL(N);
       SDValue X = Shuf0->getOperand(0);
       SDValue NewBinOp = DAG.getNode(Opcode, DL, VT, X, RHS, Flags);
       return DAG.getVectorShuffle(VT, DL, NewBinOp, DAG.getUNDEF(VT),
@@ -22514,7 +22511,6 @@ SDValue DAGCombiner::SimplifyVBinOp(SDNode *N) {
         Shuf1->hasOneUse() && Shuf1->getOperand(1).isUndef() &&
         Shuf1->getOperand(0).getOpcode() != ISD::INSERT_VECTOR_ELT) {
       // binop (splat C), (splat X) --> splat (binop C, X)
-      SDLoc DL(N);
       SDValue X = Shuf1->getOperand(0);
       SDValue NewBinOp = DAG.getNode(Opcode, DL, VT, LHS, X, Flags);
       return DAG.getVectorShuffle(VT, DL, NewBinOp, DAG.getUNDEF(VT),
@@ -22538,7 +22534,6 @@ SDValue DAGCombiner::SimplifyVBinOp(SDNode *N) {
         TLI.isOperationLegalOrCustomOrPromote(Opcode, NarrowVT,
                                               LegalOperations)) {
       // (binop undef, undef) may not return undef, so compute that result.
-      SDLoc DL(N);
       SDValue VecC =
           DAG.getNode(Opcode, DL, VT, DAG.getUNDEF(VT), DAG.getUNDEF(VT));
       SDValue NarrowBO = DAG.getNode(Opcode, DL, NarrowVT, X, Y);
@@ -22565,7 +22560,6 @@ SDValue DAGCombiner::SimplifyVBinOp(SDNode *N) {
     EVT NarrowVT = LHS.getOperand(0).getValueType();
     if (NarrowVT == RHS.getOperand(0).getValueType() &&
         TLI.isOperationLegalOrCustomOrPromote(Opcode, NarrowVT)) {
-      SDLoc DL(N);
       unsigned NumOperands = LHS.getNumOperands();
       SmallVector<SDValue, 4> ConcatOps;
       for (unsigned i = 0; i != NumOperands; ++i) {
@@ -22578,7 +22572,7 @@ SDValue DAGCombiner::SimplifyVBinOp(SDNode *N) {
     }
   }
 
-  if (SDValue V = scalarizeBinOpOfSplats(N, DAG))
+  if (SDValue V = scalarizeBinOpOfSplats(N, DAG, DL))
     return V;
 
   return SDValue();
