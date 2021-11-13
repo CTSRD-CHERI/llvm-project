@@ -222,18 +222,6 @@ static int analyzeLoadFromClobberingWrite(Type *LoadTy, Value *LoadPtr,
       StoreOffset + StoreSize < LoadOffset + LoadSize)
     return -1;
 
-  // If the load and store are to the exact same address, they should have been
-  // a must alias.  AA must have gotten confused.
-  // FIXME: Study to see if/when this happens.  One case is forwarding a memset
-  // to a load from the base of the memset.
-
-  // If the load and store don't overlap at all, the store doesn't provide
-  // anything to the load.  In this case, they really don't alias at all, AA
-  // must have gotten confused.  The if statement above ensure the condition
-  // that StoreOffset <= LoadOffset.
-  if (StoreOffset + int64_t(StoreSize) <= LoadOffset)
-    return -1;
-
   // If we're dealing with a bounds-checked pointer, then we have stricter
   // overlap requirements.
   if (DL.isFatPointer(LoadPtr->getType()->getPointerAddressSpace())) {
