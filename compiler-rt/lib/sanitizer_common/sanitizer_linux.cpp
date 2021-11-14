@@ -1382,7 +1382,7 @@ usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
 #elif defined(__aarch64__)
 usize internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
                     int *parent_tidptr, void *newtls, int *child_tidptr) {
-  long long res;
+  register long long res __asm__("x0");
   if (!fn || !child_stack)
     return -EINVAL;
   CHECK_EQ(0, (uptr)child_stack % 16);
