@@ -368,7 +368,7 @@ bool TargetInstrInfo::hasLoadFromStackSlot(
                                   oe = MI.memoperands_end();
        o != oe; ++o) {
     if ((*o)->isLoad() &&
-        dyn_cast_or_null<FixedStackPseudoSourceValue>((*o)->getPseudoValue()))
+        isa_and_nonnull<FixedStackPseudoSourceValue>((*o)->getPseudoValue()))
       Accesses.push_back(*o);
   }
   return Accesses.size() != StartSize;
@@ -382,7 +382,7 @@ bool TargetInstrInfo::hasStoreToStackSlot(
                                   oe = MI.memoperands_end();
        o != oe; ++o) {
     if ((*o)->isStore() &&
-        dyn_cast_or_null<FixedStackPseudoSourceValue>((*o)->getPseudoValue()))
+        isa_and_nonnull<FixedStackPseudoSourceValue>((*o)->getPseudoValue()))
       Accesses.push_back(*o);
   }
   return Accesses.size() != StartSize;
