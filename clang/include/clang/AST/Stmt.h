@@ -1217,6 +1217,11 @@ public:
                    const PrintingPolicy &Policy, unsigned Indentation = 0,
                    StringRef NewlineSymbol = "\n",
                    const ASTContext *Context = nullptr) const;
+  void printPrettyControlled(raw_ostream &OS, PrinterHelper *Helper,
+                             const PrintingPolicy &Policy,
+                             unsigned Indentation = 0,
+                             StringRef NewlineSymbol = "\n",
+                             const ASTContext *Context = nullptr) const;
 
   /// Pretty-prints in JSON format.
   void printJson(raw_ostream &Out, PrinterHelper *Helper,
