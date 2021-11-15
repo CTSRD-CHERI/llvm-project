@@ -170,11 +170,9 @@ bool AtomicExpand::runOnFunction(Function &F) {
 
   // Changing control-flow while iterating through it is a bad idea, so gather a
   // list of all atomic instructions before we start.
-  for (inst_iterator II = inst_begin(F), E = inst_end(F); II != E; ++II) {
-    Instruction *I = &*II;
-    if (I->isAtomic() && !isa<FenceInst>(I))
-      AtomicInsts.push_back(I);
-  }
+  for (Instruction &I : instructions(F))
+    if (I.isAtomic() && !isa<FenceInst>(&I))
+      AtomicInsts.push_back(&I);
 
   bool MadeChange = false;
   const DataLayout &DL = F.getParent()->getDataLayout();
