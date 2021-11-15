@@ -56,7 +56,7 @@ uptr StackTrace::GetCurrentPc() {
   return GET_CALLER_PC();
 }
 
-void BufferedStackTrace::Init(const vaddr *pcs, usize cnt, bool extra_top_pc) {
+void BufferedStackTrace::Init(const uptr *pcs, usize cnt, uptr extra_top_pc) {
   size = cnt + !!extra_top_pc;
   CHECK_LE(size, kStackTraceMax);
   internal_memcpy(trace_buffer, pcs, cnt * sizeof(trace_buffer[0]));
@@ -157,7 +157,7 @@ void BufferedStackTrace::PopStackFrames(usize count) {
 
 static vaddr Distance(vaddr a, vaddr b) { return a < b ? b - a : a - b; }
 
-usize BufferedStackTrace::LocatePcInTrace(vaddr pc) {
+usize BufferedStackTrace::LocatePcInTrace(uptr pc) {
   usize best = 0;
   for (usize i = 1; i < size; ++i) {
     if (Distance(trace[i], pc) < Distance(trace[best], pc)) best = i;
