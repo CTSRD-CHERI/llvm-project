@@ -2962,7 +2962,7 @@ void RISCVAsmParser::emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc,
       Base = RISCVABI::getGPReg(TargetABI);
       if (IsCall) {
         FlagsLo = RISCVMCExpr::VK_RISCV_CAPTAB_CALL_LO;
-        FlagsHi = RISCVMCExpr::VK_RISCV_CAPTAB_HI;
+        FlagsHi = RISCVMCExpr::VK_RISCV_CAPTAB_CALL_HI;
       } else {
         FlagsLo = RISCVMCExpr::VK_RISCV_CAPTAB_LO;
         FlagsHi = RISCVMCExpr::VK_RISCV_CAPTAB_HI;
@@ -3129,7 +3129,7 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     emitCapLoadGlobalCap(Inst, IDLoc, Out, true, false);
     return false;
   case RISCV::PseudoCLGC_CALL:
-    emitCapLoadGlobalCap(Inst, IDLoc, Out, true, true);
+    emitCapLoadGlobalCap(Inst, IDLoc, Out, false, true);
     return false;
   case RISCV::PseudoCLA_TLS_IE:
     emitCapLoadTLSIEAddress(Inst, IDLoc, Out);
