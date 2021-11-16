@@ -8,7 +8,7 @@
 // RUN: %riscv64_cheri_purecap_cc1 %s -fsanitize=cheri-unrepresentable -fsanitize-trap=cheri-unrepresentable -disable-O0-optnone -emit-llvm -o - -fsanitize-undefined-strip-path-components=-1 \
 // RUN:   | opt -S -mem2reg | FileCheck %s --check-prefixes=PURECAP,PURECAP-TRAP
 /// Using -fsanitize=cheri should enable the same checks:
-// RUN: %riscv64_cheri_purecap_clang -c %s -fsanitize=cheri -fsanitize-trap=cheri -Xclang -disable-O0-optnone -S -emit-llvm -o - -fsanitize-undefined-strip-path-components=-1 -fomit-frame-pointer -fno-unwind-tables \
+// RUN: %riscv64_cheri_purecap_clang -c %s -fsanitize=cheri -fsanitize-trap=cheri -Xclang -disable-O0-optnone -S -emit-llvm -o - -fsanitize-undefined-strip-path-components=-1 -fomit-frame-pointer -fno-unwind-tables -fno-discard-value-names \
 // RUN:   | opt -S -mem2reg | FileCheck %s --check-prefixes=PURECAP,PURECAP-TRAP
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@maybe_unrepresentable
