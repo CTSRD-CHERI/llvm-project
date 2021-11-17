@@ -319,6 +319,8 @@ public:
   void processSymbolAssignments();
   void declareSymbols();
 
+  bool isDiscarded(const OutputSection *sec) const;
+
   // Used to handle INSERT AFTER statements.
   void processInsertCommands();
 

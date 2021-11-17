@@ -1037,7 +1037,7 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
   }
 }
 
-static bool isDiscardable(OutputSection &sec) {
+static bool isDiscardable(const OutputSection &sec) {
   if (sec.name == "/DISCARD/")
     return true;
 
@@ -1064,6 +1064,11 @@ static bool isDiscardable(OutputSection &sec) {
       return false;
   }
   return true;
+}
+
+bool LinkerScript::isDiscarded(const OutputSection *sec) const {
+  return hasSectionsCommand && (getFirstInputSection(sec) == nullptr) &&
+         isDiscardable(*sec);
 }
 
 static void maybePropagatePhdrs(OutputSection &sec,
