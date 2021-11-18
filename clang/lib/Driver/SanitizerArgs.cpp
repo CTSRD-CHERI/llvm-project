@@ -224,9 +224,7 @@ static SanitizerMask parseSanitizeTrapArgs(const Driver &D,
   SanitizerMask TrappingKinds;
   SanitizerMask TrappingSupportedWithGroups = setGroupBits(TrappingSupported);
 
-  for (ArgList::const_reverse_iterator I = Args.rbegin(), E = Args.rend();
-       I != E; ++I) {
-    const auto *Arg = *I;
+  for (const llvm::opt::Arg *Arg : llvm::reverse(Args)) {
     if (Arg->getOption().matches(options::OPT_fsanitize_trap_EQ)) {
       Arg->claim();
       SanitizerMask Add = parseArgValues(D, Arg, true);
@@ -323,9 +321,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   bool RemoveObjectSizeAtO0 =
       !OptLevel || OptLevel->getOption().matches(options::OPT_O0);
 
-  for (ArgList::const_reverse_iterator I = Args.rbegin(), E = Args.rend();
-       I != E; ++I) {
-    const auto *Arg = *I;
+  for (const llvm::opt::Arg *Arg : llvm::reverse(Args)) {
     if (Arg->getOption().matches(options::OPT_fsanitize_EQ)) {
       Arg->claim();
       SanitizerMask Add = parseArgValues(D, Arg, DiagnoseErrors);
@@ -350,7 +346,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       if (SanitizerMask KindsToDiagnose =
               Add & InvalidTrappingKinds & ~DiagnosedKinds) {
         if (DiagnoseErrors) {
-          std::string Desc = describeSanitizeArg(*I, KindsToDiagnose);
+          std::string Desc = describeSanitizeArg(Arg, KindsToDiagnose);
           D.Diag(diag::err_drv_argument_not_allowed_with)
               << Desc << "-fsanitize-trap=undefined";
         }
@@ -362,7 +358,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         if (SanitizerMask KindsToDiagnose =
                 Add & NotAllowedWithMinimalRuntime & ~DiagnosedKinds) {
           if (DiagnoseErrors) {
-            std::string Desc = describeSanitizeArg(*I, KindsToDiagnose);
+            std::string Desc = describeSanitizeArg(Arg, KindsToDiagnose);
             D.Diag(diag::err_drv_argument_not_allowed_with)
                 << Desc << "-fsanitize-minimal-runtime";
           }
@@ -392,7 +388,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
 
       if (SanitizerMask KindsToDiagnose = Add & ~Supported & ~DiagnosedKinds) {
         if (DiagnoseErrors) {
-          std::string Desc = describeSanitizeArg(*I, KindsToDiagnose);
+          std::string Desc = describeSanitizeArg(Arg, KindsToDiagnose);
           D.Diag(diag::err_drv_unsupported_opt_for_target)
               << Desc << TC.getTriple().str();
         }
