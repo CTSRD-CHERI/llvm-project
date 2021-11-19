@@ -1774,7 +1774,7 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->link = 0;
 
-  if (in.relaPlt == this) {
+  if (in.relaPlt == this && in.gotPlt->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
@@ -1784,7 +1784,7 @@ void RelocationBaseSection::finalizeContents() {
       getParent()->info = in.gotPlt->getParent()->sectionIndex;
     }
   }
-  if (in.relaIplt == this) {
+  if (in.relaIplt == this && in.igotPlt->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
