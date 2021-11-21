@@ -460,10 +460,9 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
     // Iterate over list of callee-saved registers and emit .cfi_offset
     // directives.
-    for (std::vector<CalleeSavedInfo>::const_iterator I = CSI.begin(),
-           E = CSI.end(); I != E; ++I) {
-      int64_t Offset = MFI.getObjectOffset(I->getFrameIdx());
-      unsigned Reg = I->getReg();
+    for (const CalleeSavedInfo &I : CSI) {
+      int64_t Offset = MFI.getObjectOffset(I.getFrameIdx());
+      unsigned Reg = I.getReg();
       if (Reg == Mips::RA_64 || Reg == Mips::RA)
         IsRASpilled = true;
 
@@ -853,13 +852,13 @@ bool MipsSEFrameLowering::spillCalleeSavedRegisters(
     KillRAOnSpill = false;
 
 
-  for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
+  for (const CalleeSavedInfo &I : CSI) {
     // Add the callee-saved register as live-in. Do not add if the register is
     // RA and return address is taken, because it has already been added in
     // method MipsTargetLowering::lowerRETURNADDR.
     // It's killed at the spill, unless the register is RA and return address
     // is taken.
-    unsigned Reg = CSI[i].getReg();
+    unsigned Reg = I.getReg();
     bool IsRA = (Reg == Mips::RA || Reg == Mips::RA_64);
     if (STI.getABI().IsCheriPureCap())
       IsRA = (Reg == Mips::C17);
@@ -900,8 +899,7 @@ bool MipsSEFrameLowering::spillCalleeSavedRegisters(
     // Insert the spill to the stack frame.
     bool IsKill = !IsRAAndRetAddrIsTaken && KillRAOnSpill;
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-    TII.storeRegToStackSlot(MBB, MI, Reg, IsKill,
-                            CSI[i].getFrameIdx(), RC, TRI);
+    TII.storeRegToStackSlot(MBB, MI, Reg, IsKill, I.getFrameIdx(), RC, TRI);
   }
 
   return true;
