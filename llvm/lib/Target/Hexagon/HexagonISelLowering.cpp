@@ -2550,7 +2550,8 @@ HexagonTargetLowering::extractVector(SDValue VecV, SDValue IdxV,
   // Special case for v{8,4,2}i1 (the only boolean vectors legal in Hexagon
   // without any coprocessors).
   if (ElemWidth == 1) {
-    assert(VecWidth == VecTy.getVectorNumElements() && "Sanity failure");
+    assert(VecWidth == VecTy.getVectorNumElements() &&
+           "Vector elements should equal vector width size");
     assert(VecWidth == 8 || VecWidth == 4 || VecWidth == 2);
     // Check if this is an extract of the lowest bit.
     if (IdxN) {
@@ -2864,8 +2865,7 @@ HexagonTargetLowering::LowerCONCAT_VECTORS(SDValue Op,
       Scale /= 2;
     }
 
-    // Another sanity check. At this point there should only be two words
-    // left, and Scale should be 2.
+    // At this point there should only be two words left, and Scale should be 2.
     assert(Scale == 2 && Words[IdxW].size() == 2);
 
     SDValue WW = DAG.getNode(HexagonISD::COMBINE, dl, MVT::i64,
