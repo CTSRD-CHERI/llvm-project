@@ -93,7 +93,6 @@ if (NOT DEFINED LIBCXX_ENABLE_SHARED)
   set(LIBCXX_ENABLE_SHARED ON)
 endif()
 
-pythonize_bool(LIBUNWIND_BUILD_32_BITS)
 pythonize_bool(LIBUNWIND_ENABLE_CET)
 pythonize_bool(LIBCXX_ENABLE_SHARED)
 pythonize_bool(LIBUNWIND_ENABLE_SHARED)
@@ -122,10 +121,6 @@ endif()
 
 if (LIBUNWIND_TARGET_TRIPLE)
   serialize_lit_param(target_triple "\"${LIBUNWIND_TARGET_TRIPLE}\"")
-endif()
-
-if (LIBUNWIND_BUILD_32_BITS)
-  serialize_lit_param(enable_32bit True)
 endif()
 
 if (NOT LIBUNWIND_TEST_ENABLE_EXCEPTIONS)
