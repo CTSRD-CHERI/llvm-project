@@ -1040,7 +1040,6 @@ void SelectionDAGBuilder::init(GCFunctionInfo *gfi, AliasAnalysis *aa,
   AA = aa;
   GFI = gfi;
   LibInfo = li;
-  DL = &DAG.getDataLayout();
   Context = DAG.getContext();
   LPadToCallSiteMap.clear();
   SL->init(DAG.getTargetLoweringInfo(), TM, DAG.getDataLayout());
@@ -2668,7 +2667,8 @@ void SelectionDAGBuilder::visitSPDescriptorParent(StackProtectorDescriptor &SPD,
   SDLoc dl = getCurSDLoc();
   SDValue StackSlotPtr = DAG.getFrameIndex(FI, StackPtrTy);
   const Module &M = *ParentBB->getParent()->getFunction().getParent();
-  Align Align = DL->getPrefTypeAlign(Type::getInt8PtrTy(M.getContext()));
+  Align Align =
+      DAG.getDataLayout().getPrefTypeAlign(Type::getInt8PtrTy(M.getContext()));
 
   // Generate code to load the content of the guard slot.
   SDValue GuardVal = DAG.getLoad(
@@ -3913,7 +3913,8 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
       unsigned Field = cast<Constant>(Idx)->getUniqueInteger().getZExtValue();
       if (Field) {
         // N = N + Offset
-        uint64_t Offset = DL->getStructLayout(StTy)->getElementOffset(Field);
+        uint64_t Offset =
+            DAG.getDataLayout().getStructLayout(StTy)->getElementOffset(Field);
 
         // In an inbounds GEP with an offset that is nonnegative even when
         // interpreted as signed, assume there is no unsigned overflow.
@@ -3930,7 +3931,8 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
       // (and fix up the result later).
       unsigned IdxSize = DAG.getDataLayout().getIndexSizeInBits(AS);
       MVT IdxTy = MVT::getIntegerVT(IdxSize);
-      TypeSize ElementSize = DL->getTypeAllocSize(GTI.getIndexedType());
+      TypeSize ElementSize =
+          DAG.getDataLayout().getTypeAllocSize(GTI.getIndexedType());
       // We intentionally mask away the high bits here; ElementSize may not
       // fit in IdxTy.
       APInt ElementMul(IdxSize, ElementSize.getKnownMinSize());
@@ -4827,7 +4829,7 @@ void SelectionDAGBuilder::visitTargetIntrinsic(const CallInst &I,
     }
 
     // Use TargetConstant instead of a regular constant for immarg.
-    EVT VT = TLI.getValueType(*DL, Arg->getType(), true);
+    EVT VT = TLI.getValueType(DAG.getDataLayout(), Arg->getType(), true);
     if (const ConstantInt *CI = dyn_cast<ConstantInt>(Arg)) {
       assert(CI->getBitWidth() <= 64 &&
              "large intrinsic immediates not handled");
@@ -6621,7 +6623,7 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     } else {
       EVT PtrTy = TLI.getValueType(DAG.getDataLayout(), I.getType());
       const Value *Global = TLI.getSDagStackGuard(M);
-      Align Align = DL->getPrefTypeAlign(Global->getType());
+      Align Align = DAG.getDataLayout().getPrefTypeAlign(Global->getType());
       Res = DAG.getLoad(PtrTy, sdl, Chain, getValue(Global),
                         MachinePointerInfo(Global, 0), Align,
                         MachineMemOperand::MOVolatile);
@@ -7779,8 +7781,9 @@ static SDValue getMemCmpLoad(const Value *PtrVal, MVT LoadVT,
     LoadInput = ConstantExpr::getBitCast(const_cast<Constant *>(LoadInput),
                                          PointerType::get(LoadTy, AS));
 
-    if (const Constant *LoadCst = ConstantFoldLoadFromConstPtr(
-            const_cast<Constant *>(LoadInput), LoadTy, *Builder.DL))
+    if (const Constant *LoadCst =
+            ConstantFoldLoadFromConstPtr(const_cast<Constant *>(LoadInput),
+                                         LoadTy, Builder.DAG.getDataLayout()))
       return Builder.getValue(LoadCst);
   }
 
