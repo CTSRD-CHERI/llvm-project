@@ -17,6 +17,10 @@
 ;     }
 ; }
 
+; UTC_ARGS: --disable
+; CHECK: .type .L_Z8do_catchv$eh_alias,@function
+; UTC_ARGS: --enable
+
 @_ZTIi = external dso_local addrspace(200) constant i8 addrspace(200)*
 define dso_local i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) uwtable personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*) {
 ; CHECK-LABEL: _Z8do_catchv:
@@ -93,10 +97,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; UTC_ARGS: --disable
 ; CHECK: .Lfunc_end0:
 ; CHECK-NEXT: .size _Z8do_catchv, .Lfunc_end0-_Z8do_catchv
-; CHECK-NEXT: .local  .L_Z8do_catchv$eh_alias
-; CHECK-NEXT: .type  .L_Z8do_catchv$eh_alias,@function
-; CHECK-NEXT: .set  .L_Z8do_catchv$eh_alias, _Z8do_catchv
-; CHECK-NEXT: .size  .L_Z8do_catchv$eh_alias, .Lfunc_end0-_Z8do_catchv
+; CHECK-NEXT: .size .L_Z8do_catchv$eh_alias, .Lfunc_end0-_Z8do_catchv
 
 ; CHECK:      GCC_except_table0:
 ; CHECK-NEXT: .Lexception0:
