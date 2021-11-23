@@ -776,8 +776,12 @@ void AsmPrinter::emitFunctionHeader() {
   if (MAI->hasFunctionAlignment())
     emitAlignment(MF->getAlignment(), &F);
 
-  if (MAI->hasDotTypeDotSizeDirective())
+  if (MAI->hasDotTypeDotSizeDirective()) {
     OutStreamer->emitSymbolAttribute(CurrentFnSym, MCSA_ELF_TypeFunction);
+    if (CurrentFnBeginForEH)
+      OutStreamer->emitSymbolAttribute(CurrentFnBeginForEH,
+                                       MCSA_ELF_TypeFunction);
+  }
 
   if (F.hasFnAttribute(Attribute::Cold))
     OutStreamer->emitSymbolAttribute(CurrentFnSym, MCSA_Cold);
@@ -854,9 +858,14 @@ void AsmPrinter::emitFunctionHeader() {
     if (MAI->useAssignmentForEHBegin()) {
       MCSymbol *CurPos = OutContext.createTempSymbol();
       OutStreamer->emitLabel(CurPos);
+      if (CurrentFnBeginForEH)
+        OutStreamer->emitAssignment(CurrentFnBeginForEH,
+                                    MCSymbolRefExpr::create(CurPos, OutContext));
       OutStreamer->emitAssignment(CurrentFnBegin,
                                  MCSymbolRefExpr::create(CurPos, OutContext));
     } else {
+      if (CurrentFnBeginForEH)
+        OutStreamer->emitLabel(CurrentFnBeginForEH);
       OutStreamer->emitLabel(CurrentFnBegin);
     }
   }
@@ -1516,29 +1525,15 @@ void AsmPrinter::emitFunctionBody() {
 
   // If the target wants a .size directive for the size of the function, emit
   // it.
-  const MCExpr *SizeExp = nullptr;
   if (MAI->hasDotTypeDotSizeDirective()) {
     // We can get the size as difference between the function label and the
     // temp label.
-    SizeExp = MCBinaryExpr::createSub(
+    const MCExpr *SizeExp = MCBinaryExpr::createSub(
         MCSymbolRefExpr::create(CurrentFnEnd, OutContext),
         MCSymbolRefExpr::create(CurrentFnSymForSize, OutContext), OutContext);
     OutStreamer->emitELFSize(CurrentFnSym, SizeExp);
-  }
-  if (CurrentFnLocalForEH) {
-    // For CHERI exception landing pad tables we need a local alias so
-    // that we can emit non-preemptible relocations with the correct addend.
-    // See https://github.com/CTSRD-CHERI/llvm-project/issues/512.
-    // Note: We add .local so that the symbol is not deleted after assembling
-    // even though the name might start with ".L".
-    OutStreamer->emitSymbolAttribute(CurrentFnLocalForEH, MCSA_Local);
-    OutStreamer->emitSymbolAttribute(CurrentFnLocalForEH,
-                                     MCSA_ELF_TypeFunction);
-    OutStreamer->emitAssignment(
-        CurrentFnLocalForEH,
-        MCSymbolRefExpr::create(CurrentFnSymForSize, OutContext));
-    if (SizeExp)
-      OutStreamer->emitELFSize(CurrentFnLocalForEH, SizeExp);
+    if (CurrentFnBeginForEH)
+      OutStreamer->emitELFSize(CurrentFnBeginForEH, SizeExp);
   }
 
   for (const HandlerInfo &HI : Handlers) {
@@ -2057,7 +2052,7 @@ void AsmPrinter::SetupMachineFunction(MachineFunction &MF) {
 
   CurrentFnSymForSize = CurrentFnSym;
   CurrentFnBegin = nullptr;
-  CurrentFnLocalForEH = nullptr;
+  CurrentFnBeginForEH = nullptr;
   CurrentSectionBeginSym = nullptr;
   MBBSectionRanges.clear();
   MBBSectionExceptionSyms.clear();
@@ -2074,12 +2069,10 @@ void AsmPrinter::SetupMachineFunction(MachineFunction &MF) {
     // landing pads. To avoid creating an (unnecessary and incorrect) dynamic
     // relocation with a non-zero addend, we need to ensure that the target
     // symbol is non-preemptible by creating a local alias for the function.
+    // See https://github.com/CTSRD-CHERI/llvm-project/issues/512.
     // TODO: could probably omit this for !F.isInterposable()?
-    if (MAI->isCheriPurecapABI() && needFuncLabelsForEH(MF)) {
-      CurrentFnLocalForEH =
-          OutContext.getOrCreateSymbol(MAI->getLinkerPrivateGlobalPrefix() +
-                                       CurrentFnSym->getName() + "$eh_alias");
-    }
+    if (MAI->isCheriPurecapABI() && needFuncLabelsForEH(MF))
+      CurrentFnBeginForEH = getSymbolWithGlobalValueBase(&F, "$eh_alias");
   }
 
   ORE = &getAnalysis<MachineOptimizationRemarkEmitterPass>().getORE();

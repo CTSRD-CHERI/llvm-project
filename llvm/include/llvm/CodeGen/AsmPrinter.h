@@ -189,9 +189,10 @@ private:
 
 protected:
   MCSymbol *CurrentFnBegin = nullptr;
-  /// Optional local alias for the current function. Needed for CHERI exception
-  /// handling relocations.
-  MCSymbol *CurrentFnLocalForEH = nullptr;
+
+  /// The symbol used to represent the start of the current function for the
+  /// purpose of exception handling for pure-capability CHERI targets.
+  MCSymbol *CurrentFnBeginForEH = nullptr;
 
   /// A vector of all debug/EH info emitters we should use. This vector
   /// maintains ownership of the emitters.

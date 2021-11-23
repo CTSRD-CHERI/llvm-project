@@ -240,8 +240,8 @@ void AsmPrinter::emitCallSiteCheriCapability(const MCSymbol *Hi,
   // this would result in EmitCheriCapability() creating a relocation against
   // section plus offset rather than function + offset. We need the right
   // bounds and permissions info and need to use a non-preemptible alias.
-  assert(CurrentFnLocalForEH && "Missing local function entry alias for EH!");
-  OutStreamer->EmitCheriCapability(CurrentFnLocalForEH, DiffToStart,
+  assert(CurrentFnBeginForEH && "Missing local function entry alias for EH!");
+  OutStreamer->EmitCheriCapability(CurrentFnBeginForEH, DiffToStart,
                                    TLOF.getCheriCapabilitySize(TM));
 }
 
