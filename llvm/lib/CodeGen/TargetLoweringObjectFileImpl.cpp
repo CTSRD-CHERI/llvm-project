@@ -1087,7 +1087,7 @@ const MCExpr *TargetLoweringObjectFileELF::lowerRelativeReference(
   if (!LHS->hasGlobalUnnamedAddr() || !LHS->getValueType()->isFunctionTy())
     return nullptr;
 
-  // Basic sanity checks.
+  // Basic correctness checks.
   if (LHS->getType()->getPointerAddressSpace() != 0 ||
       RHS->getType()->getPointerAddressSpace() != 0 || LHS->isThreadLocal() ||
       RHS->isThreadLocal())
@@ -2140,7 +2140,7 @@ const MCExpr *TargetLoweringObjectFileWasm::lowerRelativeReference(
   if (!LHS->hasGlobalUnnamedAddr() || !LHS->getValueType()->isFunctionTy())
     return nullptr;
 
-  // Basic sanity checks.
+  // Basic correctness checks.
   if (LHS->getType()->getPointerAddressSpace() != 0 ||
       RHS->getType()->getPointerAddressSpace() != 0 || LHS->isThreadLocal() ||
       RHS->isThreadLocal())
