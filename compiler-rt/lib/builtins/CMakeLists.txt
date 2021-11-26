@@ -612,6 +612,8 @@ set(mips64c256_SOURCES ${GENERIC_TF_SOURCES} ${mips_SOURCES})
 
 set(powerpc_SOURCES ${GENERIC_SOURCES})
 
+set(powerpcspe_SOURCES ${GENERIC_SOURCES})
+
 set(powerpc64_SOURCES
   ppc/divtc3.c
   ppc/fixtfdi.c
