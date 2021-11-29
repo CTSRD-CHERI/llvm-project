@@ -994,13 +994,13 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
   ctx->outSec = sec;
   if (sec->addrExpr && script->hasSectionsCommand) {
     // The alignment is ignored.
-    ctx->outSec->addr = dot;
+    sec->addr = dot;
   } else {
-    // ctx->outSec->alignment is the max of ALIGN and the maximum of input
+    // sec->alignment is the max of ALIGN and the maximum of input
     // section alignments.
     const uint64_t pos = dot;
-    dot = alignTo(dot, ctx->outSec->alignment);
-    ctx->outSec->addr = dot;
+    dot = alignTo(dot, sec->alignment);
+    sec->addr = dot;
     expandMemoryRegions(dot - pos);
   }
 
@@ -1022,7 +1022,7 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
   }
 
   // Propagate ctx->lmaOffset to the first "non-header" section.
-  if (PhdrEntry *l = ctx->outSec->ptLoad)
+  if (PhdrEntry *l = sec->ptLoad)
     if (sec == findFirstSection(l))
       l->lmaOffset = ctx->lmaOffset;
 
@@ -1044,7 +1044,7 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
 
     // Handle BYTE(), SHORT(), LONG(), or QUAD().
     if (auto *data = dyn_cast<ByteCommand>(cmd)) {
-      data->offset = dot - ctx->outSec->addr;
+      data->offset = dot - sec->addr;
       dot += data->size;
       expandOutputSection(data->size);
       continue;
@@ -1054,10 +1054,10 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
     // It calculates and assigns the offsets for each section and also
     // updates the output section size.
     for (InputSection *isec : cast<InputSectionDescription>(cmd)->sections) {
-      assert(ctx->outSec == isec->getParent());
+      assert(isec->getParent() == sec);
       const uint64_t pos = dot;
       dot = alignTo(dot, isec->alignment);
-      isec->outSecOff = dot - ctx->outSec->addr;
+      isec->outSecOff = dot - sec->addr;
       dot += isec->getSize();
 
       // Update output section size after adding each section. This is so that
