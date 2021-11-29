@@ -120,6 +120,7 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   markSuperRegs(Reserved, RISCV::C4); // ctp
 
   if (MCTargetOptions::isCheriOSABI()) {
+    markSuperRegs(Reserved, RISCV::X31); // (is aliased with C31)
     markSuperRegs(Reserved, RISCV::C31); // ctp on Cherios (C4 is cusp)
   }
 
