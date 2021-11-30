@@ -7612,6 +7612,7 @@ void ScalarEvolution::forgetAllLoops() {
   ConstantEvolutionLoopExitValue.clear();
   ValueExprMap.clear();
   ValuesAtScopes.clear();
+  ValuesAtScopesUsers.clear();
   LoopDispositions.clear();
   BlockDispositions.clear();
   UnsignedRanges.clear();
@@ -8852,6 +8853,9 @@ const SCEV *ScalarEvolution::getSCEVAtScope(const SCEV *V, const Loop *L) {
       LS.second = C;
       break;
     }
+
+  if (!isa<SCEVConstant>(C))
+    ValuesAtScopesUsers[C].push_back({L, V});
   return C;
 }
 
@@ -12470,6 +12474,7 @@ ScalarEvolution::ScalarEvolution(ScalarEvolution &&Arg)
       ConstantEvolutionLoopExitValue(
           std::move(Arg.ConstantEvolutionLoopExitValue)),
       ValuesAtScopes(std::move(Arg.ValuesAtScopes)),
+      ValuesAtScopesUsers(std::move(Arg.ValuesAtScopesUsers)),
       LoopDispositions(std::move(Arg.LoopDispositions)),
       LoopPropertiesCache(std::move(Arg.LoopPropertiesCache)),
       BlockDispositions(std::move(Arg.BlockDispositions)),
@@ -12924,7 +12929,6 @@ void ScalarEvolution::forgetMemoizedResults(ArrayRef<const SCEV *> SCEVs) {
 }
 
 void ScalarEvolution::forgetMemoizedResultsImpl(const SCEV *S) {
-  ValuesAtScopes.erase(S);
   LoopDispositions.erase(S);
   BlockDispositions.erase(S);
   UnsignedRanges.erase(S);
@@ -12942,6 +12946,22 @@ void ScalarEvolution::forgetMemoizedResultsImpl(const SCEV *S) {
       }
     }
     ExprValueMap.erase(ExprIt);
+  }
+
+  auto ScopeIt = ValuesAtScopes.find(S);
+  if (ScopeIt != ValuesAtScopes.end()) {
+    for (const auto &Pair : ScopeIt->second)
+      if (!isa_and_nonnull<SCEVConstant>(Pair.second))
+        erase_value(ValuesAtScopesUsers[Pair.second],
+                    std::make_pair(Pair.first, S));
+    ValuesAtScopes.erase(ScopeIt);
+  }
+
+  auto ScopeUserIt = ValuesAtScopesUsers.find(S);
+  if (ScopeUserIt != ValuesAtScopesUsers.end()) {
+    for (const auto &Pair : ScopeUserIt->second)
+      erase_value(ValuesAtScopes[Pair.second], std::make_pair(Pair.first, S));
+    ValuesAtScopesUsers.erase(ScopeUserIt);
   }
 }
 
