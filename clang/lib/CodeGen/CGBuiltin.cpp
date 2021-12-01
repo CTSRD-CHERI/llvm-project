@@ -165,15 +165,15 @@ static Value *MakeBinaryAtomicValue(
   return Result;
 }
 
-static Value *EmitNontemporalStore(CodeGenFunction &CGF, const CallExpr *E,
-                                   unsigned AddrSpace) {
+static Value *EmitNontemporalStore(CodeGenFunction &CGF, const CallExpr *E) {
   Value *Val = CGF.EmitScalarExpr(E->getArg(0));
   Value *Address = CGF.EmitScalarExpr(E->getArg(1));
 
   // Convert the type of the pointer to a pointer to the stored type.
   Val = CGF.EmitToMemory(Val, E->getArg(0)->getType());
+  unsigned SrcAddrSpace = Address->getType()->getPointerAddressSpace();
   Value *BC = CGF.Builder.CreateBitCast(
-      Address, llvm::PointerType::get(Val->getType(), AddrSpace), "cast");
+      Address, llvm::PointerType::get(Val->getType(), SrcAddrSpace), "cast");
   LValue LV = CGF.MakeNaturalAlignAddrLValue(BC, E->getArg(0)->getType());
   LV.setNontemporal(true);
   CGF.EmitStoreOfScalar(Val, LV, false);
@@ -4151,7 +4151,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_nontemporal_load:
     return RValue::get(EmitNontemporalLoad(*this, E));
   case Builtin::BI__builtin_nontemporal_store:
-    return RValue::get(EmitNontemporalStore(*this, E, DefaultAS));
+    return RValue::get(EmitNontemporalStore(*this, E));
   case Builtin::BI__c11_atomic_is_lock_free:
   case Builtin::BI__atomic_is_lock_free: {
     // Call "bool __atomic_is_lock_free(size_t size, void *ptr)". For the
