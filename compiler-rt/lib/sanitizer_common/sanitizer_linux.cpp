@@ -1776,7 +1776,8 @@ void *internal_start_thread(void *(*func)(void *arg), void *arg) {
 }
 
 void internal_join_thread(void *th) {
-  real_pthread_join(th, nullptr);
+  if (&real_pthread_join)
+    real_pthread_join(th, nullptr);
 }
 #else
 void *internal_start_thread(void *(*func)(void *), void *arg) { return 0; }
