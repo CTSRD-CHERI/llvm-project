@@ -143,6 +143,8 @@ Sema::PointerInterpretationForBaseExpr(const Expr *Base) const {
   QualType DerefType;
 
   while (Base) {
+    Base = Base->IgnoreParens();
+
     const Expr *NewBase = nullptr;
 
     if (auto *ME = dyn_cast<MemberExpr>(Base)) {
