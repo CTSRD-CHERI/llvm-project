@@ -1695,6 +1695,7 @@ Parser::isCXXDeclarationSpecifier(Parser::TPResult BracedCastResult,
   case tok::kw__Atomic:
     return TPResult::True;
 
+  case tok::kw__BitInt:
   case tok::kw__ExtInt: {
     if (NextToken().isNot(tok::l_paren))
       return TPResult::Error;
@@ -1746,6 +1747,7 @@ bool Parser::isCXXDeclarationSpecifierAType() {
   case tok::kw_short:
   case tok::kw_int:
   case tok::kw__ExtInt:
+  case tok::kw__BitInt:
   case tok::kw_long:
   case tok::kw___int64:
   case tok::kw___int128:
