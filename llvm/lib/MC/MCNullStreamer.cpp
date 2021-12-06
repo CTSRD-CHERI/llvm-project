@@ -41,6 +41,9 @@ namespace {
     void EmitCOFFSymbolStorageClass(int StorageClass) override {}
     void EmitCOFFSymbolType(int Type) override {}
     void EndCOFFSymbolDef() override {}
+    void
+    emitXCOFFSymbolLinkageWithVisibility(MCSymbol *Symbol, MCSymbolAttr Linkage,
+                                         MCSymbolAttr Visibility) override {}
   };
 
 }
