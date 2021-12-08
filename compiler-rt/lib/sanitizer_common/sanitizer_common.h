@@ -731,11 +731,9 @@ void Sort(T *v, usize size, Compare comp = {}) {
 
 // Works like std::lower_bound: finds the first element that is not less
 // than the val.
-template <class Container,
+template <class Container, class T,
           class Compare = CompareLess<typename Container::value_type>>
-usize InternalLowerBound(const Container &v,
-                        const typename Container::value_type &val,
-                        Compare comp = {}) {
+usize InternalLowerBound(const Container &v, const T &val, Compare comp = {}) {
   usize first = 0;
   usize last = v.size();
   while (last > first) {
