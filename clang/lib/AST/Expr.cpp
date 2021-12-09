@@ -2124,7 +2124,8 @@ QualType CastExpr::checkProvenanceImpl(QualType Ty, const ASTContext &C,
   // NULL pointers are untagged values
   // FIXME: change isNullPointerConstant to take a const astctx.
   if (ExprCanCarryProvenance &&
-      Src->isNullPointerConstant(const_cast<ASTContext &>(C), NPC_NeverValueDependent))
+      Src->isNullPointerConstant(const_cast<ASTContext &>(C),
+                                 NPC_ValueDependentIsNotNull))
     ExprCanCarryProvenance = false;
 
   if (!ExprCanCarryProvenance) {
