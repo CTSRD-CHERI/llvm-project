@@ -2089,7 +2089,8 @@ void CGOpenMPRuntime::emitIfClause(CodeGenFunction &CGF, const Expr *Cond,
 void CGOpenMPRuntime::emitParallelCall(CodeGenFunction &CGF, SourceLocation Loc,
                                        llvm::Function *OutlinedFn,
                                        ArrayRef<llvm::Value *> CapturedVars,
-                                       const Expr *IfCond) {
+                                       const Expr *IfCond,
+                                       llvm::Value *NumThreads) {
   if (!CGF.HaveInsertPoint())
     return;
   llvm::Value *RTLoc = emitUpdateLocation(CGF, Loc);
@@ -12898,7 +12899,8 @@ void CGOpenMPSIMDRuntime::emitParallelCall(CodeGenFunction &CGF,
                                            SourceLocation Loc,
                                            llvm::Function *OutlinedFn,
                                            ArrayRef<llvm::Value *> CapturedVars,
-                                           const Expr *IfCond) {
+                                           const Expr *IfCond,
+                                           llvm::Value *NumThreads) {
   llvm_unreachable("Not supported in SIMD-only mode");
 }
 
