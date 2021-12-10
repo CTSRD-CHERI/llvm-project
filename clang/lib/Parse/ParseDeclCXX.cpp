@@ -1356,6 +1356,8 @@ bool Parser::isValidAfterTypeSpecifier(bool CouldBeBitfield) {
     // We will diagnose these calling-convention specifiers on non-function
     // declarations later, so claim they are valid after a type specifier.
     return getLangOpts().MicrosoftExt;
+  // CHERI C qualifiers (only for legacy qualifier placement)
+  case tok::kw___capability:    // struct foo {...} __capability x;
   // Type qualifiers
   case tok::kw_const:           // struct foo {...} const     x;
   case tok::kw_volatile:        // struct foo {...} volatile  x;
