@@ -1032,10 +1032,9 @@ std::string Triple::normalize(StringRef Str) {
   }
 
   // Replace empty components with "unknown" value.
-  for (unsigned i = 0, e = Components.size(); i < e; ++i) {
-    if (Components[i].empty())
-      Components[i] = "unknown";
-  }
+  for (StringRef &C : Components)
+    if (C.empty())
+      C = "unknown";
 
   // Special case logic goes here.  At this point Arch, Vendor and OS have the
   // correct values for the computed components.
