@@ -1089,23 +1089,15 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
       continue;
     uint64_t offset = rel.offset;
     uint8_t *bufLoc = buf + offset;
-    RelType type = rel.type;
 
     uint64_t addrLoc = getOutputSection()->addr + offset;
     if (auto *sec = dyn_cast<InputSection>(this))
       addrLoc += sec->outSecOff;
-    RelExpr expr = rel.expr;
-    // FIXME: this should not be happening
-    if (!rel.sym) {
-      error(getErrorLocation(bufLoc) + "cannot create relocation against NULL symbol");
-      continue;
-    }
     uint64_t targetVA =
-        SignExtend64(getRelocTargetVA(file, type, rel.addend, addrLoc, *rel.sym,
-                                      expr, this, rel.offset),
-                     bits);
+        SignExtend64(getRelocTargetVA(file, rel.type, rel.addend, addrLoc,
+                                      *rel.sym, rel.expr, this, offset), bits);
 
-    switch (expr) {
+    switch (rel.expr) {
     case R_RELAX_GOT_PC:
     case R_RELAX_GOT_PC_NOPIC:
       target->relaxGot(bufLoc, rel, targetVA);
@@ -1117,9 +1109,9 @@ void InputSectionBase::relocateAlloc(uint8_t *buf, uint8_t *bufEnd) {
       // the associated R_PPC64_GOT_PCREL34 since only the latter has an
       // associated symbol. So save the offset when relaxing R_PPC64_GOT_PCREL34
       // and only relax the other if the saved offset matches.
-      if (type == R_PPC64_GOT_PCREL34)
+      if (rel.type == R_PPC64_GOT_PCREL34)
         lastPPCRelaxedRelocOff = offset;
-      if (type == R_PPC64_PCREL_OPT && offset != lastPPCRelaxedRelocOff)
+      if (rel.type == R_PPC64_PCREL_OPT && offset != lastPPCRelaxedRelocOff)
         break;
       target->relaxGot(bufLoc, rel, targetVA);
       break;
