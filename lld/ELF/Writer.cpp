@@ -2033,7 +2033,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     if (!config->relocatable) {
       forEachRelSec(scanRelocations<ELFT>);
       reportUndefinedSymbols<ELFT>();
-      postScanRelocations();
     }
   }
 
