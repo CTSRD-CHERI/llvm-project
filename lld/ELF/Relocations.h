@@ -138,6 +138,7 @@ struct JumpInstrMod {
 // Call reportUndefinedSymbols() after calling scanRelocations() to emit
 // the diagnostics.
 template <class ELFT> void scanRelocations(InputSectionBase &);
+void postScanRelocations();
 
 template <class ELFT> void reportUndefinedSymbols();
 
