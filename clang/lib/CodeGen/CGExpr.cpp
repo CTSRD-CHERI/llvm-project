@@ -4536,7 +4536,7 @@ emitArraySubscriptGEP(CodeGenFunction &CGF, llvm::Type *elemType,
     assert(isa<OMPArraySectionExpr>(E) && "Called with wrong expr type");
   }
   if (inbounds) {
-    return CGF.EmitCheckedInBoundsGEP(ptr, indices, signedIndices,
+    return CGF.EmitCheckedInBoundsGEP(elemType, ptr, indices, signedIndices,
                                       CodeGenFunction::NotSubtraction,
                                       E->getExprLoc(), name);
   } else {
