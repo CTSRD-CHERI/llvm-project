@@ -1384,18 +1384,14 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
                                            E->getExprLoc());
 
       Builder.CreateStore(
-          ResVal,
-          Builder.CreateBitCast(Dest, ResVal->getType()->getPointerTo(
-            CGM.getTargetCodeGenInfo().getDefaultAS())));
+          ResVal, Builder.CreateElementBitCast(Dest, ResVal->getType()));
     }
 
     if (RValTy->isVoidType())
       return RValue::get(nullptr);
 
-    unsigned AS = Dest.getType()->getPointerAddressSpace();
     return convertTempToRValue(
-        Builder.CreateBitCast(Dest,
-            ConvertTypeForMem(RValTy)->getPointerTo(AS)),
+        Builder.CreateElementBitCast(Dest, ConvertTypeForMem(RValTy)),
         RValTy, E->getExprLoc());
   }
 
@@ -1437,8 +1433,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
       return RValue::get(nullptr);
 
     return convertTempToRValue(
-        Builder.CreateBitCast(Dest, ConvertTypeForMem(RValTy)->getPointerTo(
-                                        Dest.getAddressSpace())),
+        Builder.CreateElementBitCast(Dest, ConvertTypeForMem(RValTy)),
         RValTy, E->getExprLoc());
   }
 
@@ -1510,15 +1505,11 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
   assert(Atomics.getValueSizeInBits() <= Atomics.getAtomicSizeInBits());
   return convertTempToRValue(
-      Builder.CreateBitCast(Dest, ConvertTypeForMem(RValTy)->getPointerTo(
-                                      Dest.getAddressSpace())),
+      Builder.CreateElementBitCast(Dest, ConvertTypeForMem(RValTy)),
       RValTy, E->getExprLoc());
 }
 
 Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
-  Address Result = Address::invalid();
-  auto *addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
-  unsigned addrspace = addrTy->getAddressSpace();
   llvm::Type *ty;
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
     // If capability atomics are natively supported the instruction expects
@@ -1534,8 +1525,7 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   } else {
     ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
   }
-  Result = CGF.Builder.CreateBitCast(addr, ty->getPointerTo(addrspace));
-  return Result;
+  return CGF.Builder.CreateElementBitCast(addr, ty);
 }
 
 Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
