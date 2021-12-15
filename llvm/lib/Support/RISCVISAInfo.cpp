@@ -711,8 +711,8 @@ struct ImpliedExtsEntry {
 };
 
 static constexpr ImpliedExtsEntry ImpliedExts[] = {
-    {"v", ImpliedExtsV},
-    {"zfh", ImpliedExtsZfh},
+    {{"v"}, {ImpliedExtsV}},
+    {{"zfh"}, {ImpliedExtsZfh}},
 };
 
 void RISCVISAInfo::updateImplication() {
