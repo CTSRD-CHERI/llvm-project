@@ -980,7 +980,9 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
     // Look for an existing one
     llvm::StringMap<llvm::Constant*>::iterator old = ObjCStrings.find(Str);
     if (old != ObjCStrings.end())
-      return ConstantAddress(old->getValue(), Align);
+      return ConstantAddress(
+          old->getValue(), old->getValue()->getType()->getPointerElementType(),
+          Align);
 
     bool isNonASCII = SL->containsNonAscii();
 
@@ -1002,7 +1004,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
       auto *ObjCStr = llvm::ConstantExpr::getIntToPtr(
           llvm::ConstantInt::get(Int64Ty, str), IdTy);
       ObjCStrings[Str] = ObjCStr;
-      return ConstantAddress(ObjCStr, Align);
+      return ConstantAddress(ObjCStr, IdTy->getPointerElementType(), Align);
     }
 
     StringRef StringClass = CGM.getLangOpts().ObjCConstantStringClass;
@@ -1116,7 +1118,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
     llvm::Constant *ObjCStr = llvm::ConstantExpr::getBitCast(ObjCStrGV, IdTy);
     ObjCStrings[Str] = ObjCStr;
     ConstantStrings.push_back(ObjCStr);
-    return ConstantAddress(ObjCStr, Align);
+    return ConstantAddress(ObjCStr, IdTy->getPointerElementType(), Align);
   }
 
   void PushProperty(ConstantArrayBuilder &PropertiesArray,
@@ -2494,7 +2496,7 @@ ConstantAddress CGObjCGNU::GenerateConstantString(const StringLiteral *SL) {
   // Look for an existing one
   llvm::StringMap<llvm::Constant*>::iterator old = ObjCStrings.find(Str);
   if (old != ObjCStrings.end())
-    return ConstantAddress(old->getValue(), Align);
+    return ConstantAddress(old->getValue(), Int8Ty, Align);
 
   StringRef StringClass = CGM.getLangOpts().ObjCConstantStringClass;
 
@@ -2523,7 +2525,7 @@ ConstantAddress CGObjCGNU::GenerateConstantString(const StringLiteral *SL) {
   ObjCStr = llvm::ConstantExpr::getBitCast(ObjCStr, PtrToInt8Ty);
   ObjCStrings[Str] = ObjCStr;
   ConstantStrings.push_back(ObjCStr);
-  return ConstantAddress(ObjCStr, Align);
+  return ConstantAddress(ObjCStr, Int8Ty, Align);
 }
 
 ///Generates a message send where the super is the receiver.  This is a message

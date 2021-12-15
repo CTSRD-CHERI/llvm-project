@@ -210,7 +210,8 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
     DeclPtr = llvm::ConstantExpr::getAddrSpaceCast(DeclPtr, PTy);
   }
 
-  ConstantAddress DeclAddr(DeclPtr, Context.getDeclAlign(&D));
+  ConstantAddress DeclAddr(DeclPtr, DeclPtr->getType()->getPointerElementType(),
+                           Context.getDeclAlign(&D));
 
   if (!T->isReferenceType()) {
     if (getLangOpts().OpenMP && !getLangOpts().OpenMPSimd &&
