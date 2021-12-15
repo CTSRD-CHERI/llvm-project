@@ -1157,7 +1157,7 @@ Address CodeGenModule::createUnnamedGlobalFrom(const VarDecl &D,
     CacheEntry->setAlignment(Align.getAsAlign());
   }
 
-  return Address(CacheEntry, Align);
+  return Address(CacheEntry, CacheEntry->getValueType(), Align);
 }
 
 static Address createUnnamedGlobalForMemcpyFrom(CodeGenModule &CGM,
