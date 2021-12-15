@@ -800,8 +800,8 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
     // equals the output section address. Note, there may be a gap between the
     // start of the output section and isec.
     auto *sym =
-        make<Defined>(isec->file, "", STB_LOCAL, /*stOther=*/0, STT_SECTION,
-                      /*value=*/0, /*size=*/0, isec->getOutputSection());
+        makeDefined(isec->file, "", STB_LOCAL, /*stOther=*/0, STT_SECTION,
+                    /*value=*/0, /*size=*/0, isec->getOutputSection());
     sym->isSectionStartSymbol = true;
     in.symTab->addSymbol(sym);
   }
