@@ -140,6 +140,12 @@
 #  define SANITIZER_X32 0
 #endif
 
+#if defined(__x86_64__) || defined(_M_X64)
+#  define SANITIZER_X64 1
+#else
+#  define SANITIZER_X64 0
+#endif
+
 #if defined(__i386__) || defined(_M_IX86)
 #  define SANITIZER_I386 1
 #else
@@ -209,10 +215,16 @@
 #  define SANITIZER_PPC64V2 0
 #endif
 
-#if defined(__arm__)
+#if defined(__arm__) || defined(_M_ARM)
 #  define SANITIZER_ARM 1
 #else
 #  define SANITIZER_ARM 0
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#  define SANITIZER_ARM64 1
+#else
+#  define SANITIZER_ARM64 0
 #endif
 
 #if SANITIZER_SOLARIS && SANITIZER_WORDSIZE == 32
