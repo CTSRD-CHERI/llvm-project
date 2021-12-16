@@ -843,9 +843,10 @@ public:
     basic_string(const _CharT* __s) : __r_(__default_init_tag(), __default_init_tag()) {
       _LIBCPP_ASSERT(__s != nullptr, "basic_string(const char*) detected nullptr");
       __init(__s, traits_type::length(__s));
-#   if _LIBCPP_DEBUG_LEVEL == 2
-      __get_db()->__insert_c(this);
-#   endif
+#if _LIBCPP_DEBUG_LEVEL == 2
+        if (!__libcpp_is_constant_evaluated())
+            __get_db()->__insert_c(this);
+#endif
     }
 
     template <class = __enable_if_t<__is_allocator<_Allocator>::value, nullptr_t> >
@@ -1802,7 +1803,8 @@ void
 basic_string<_CharT, _Traits, _Allocator>::__invalidate_all_iterators()
 {
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__invalidate_all(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__invalidate_all(this);
 #endif
 }
 
@@ -1812,22 +1814,24 @@ void
 basic_string<_CharT, _Traits, _Allocator>::__invalidate_iterators_past(size_type __pos)
 {
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __c_node* __c = __get_db()->__find_c_and_lock(this);
-    if (__c)
-    {
-        const_pointer __new_last = __get_pointer() + __pos;
-        for (__i_node** __p = __c->end_; __p != __c->beg_; )
+    if (!__libcpp_is_constant_evaluated()) {
+        __c_node* __c = __get_db()->__find_c_and_lock(this);
+        if (__c)
         {
-            --__p;
-            const_iterator* __i = static_cast<const_iterator*>((*__p)->__i_);
-            if (__i->base() > __new_last)
+            const_pointer __new_last = __get_pointer() + __pos;
+            for (__i_node** __p = __c->end_; __p != __c->beg_; )
             {
-                (*__p)->__c_ = nullptr;
-                if (--__c->end_ != __p)
-                    _VSTD::memmove(__p, __p+1, (__c->end_ - __p)*sizeof(__i_node*));
+                --__p;
+                const_iterator* __i = static_cast<const_iterator*>((*__p)->__i_);
+                if (__i->base() > __new_last)
+                {
+                    (*__p)->__c_ = nullptr;
+                    if (--__c->end_ != __p)
+                        _VSTD::memmove(__p, __p+1, (__c->end_ - __p)*sizeof(__i_node*));
+                }
             }
+            __get_db()->unlock();
         }
-        __get_db()->unlock();
     }
 #else
     (void)__pos;
@@ -1841,7 +1845,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string()
      : __r_(__default_init_tag(), __default_init_tag())
 {
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
     __zero();
 }
@@ -1857,7 +1862,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const allocator_type& __
 : __r_(__default_init_tag(), __a)
 {
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
     __zero();
 }
@@ -1919,7 +1925,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const _CharT* __s, const
     _LIBCPP_ASSERT(__s != nullptr, "basic_string(const char*, allocator) detected nullptr");
     __init(__s, traits_type::length(__s));
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -1928,10 +1935,11 @@ inline
 basic_string<_CharT, _Traits, _Allocator>::basic_string(const _CharT* __s, size_type __n)
      : __r_(__default_init_tag(), __default_init_tag())
 {
-    _LIBCPP_ASSERT(__n == 0 || __s != nullptr, "basic_string(const char*, n) detected nullptr");
-    __init(__s, __n);
+      _LIBCPP_ASSERT(__n == 0 || __s != nullptr, "basic_string(const char*, n) detected nullptr");
+      __init(__s, __n);
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -1943,7 +1951,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const _CharT* __s, size_
     _LIBCPP_ASSERT(__n == 0 || __s != nullptr, "basic_string(const char*, n, allocator) detected nullptr");
     __init(__s, __n);
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -1958,7 +1967,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const basic_string& __st
                                   __str.__get_long_size());
 
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -1973,7 +1983,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(
         __init_copy_ctor_external(_VSTD::__to_address(__str.__get_long_pointer()),
                                   __str.__get_long_size());
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2010,9 +2021,11 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(basic_string&& __str)
 {
     __str.__zero();
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
-    if (__is_long())
-        __get_db()->swap(this, &__str);
+    if (!__libcpp_is_constant_evaluated()) {
+        __get_db()->__insert_c(this);
+        if (__is_long())
+            __get_db()->swap(this, &__str);
+    }
 #endif
 }
 
@@ -2029,9 +2042,11 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(basic_string&& __str, co
         __str.__zero();
     }
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
-    if (__is_long())
-        __get_db()->swap(this, &__str);
+    if (!__libcpp_is_constant_evaluated()) {
+        __get_db()->__insert_c(this);
+        if (__is_long())
+            __get_db()->swap(this, &__str);
+    }
 #endif
 }
 
@@ -2068,7 +2083,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(size_type __n, _CharT __
 {
     __init(__n, __c);
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2079,7 +2095,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(size_type __n, _CharT __
 {
     __init(__n, __c);
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2094,7 +2111,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const basic_string& __st
         this->__throw_out_of_range();
     __init(__str.data() + __pos, _VSTD::min(__n, __str_sz - __pos));
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2109,7 +2127,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const basic_string& __st
         this->__throw_out_of_range();
     __init(__str.data() + __pos, __str_sz - __pos);
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2123,7 +2142,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(
     __self_view __sv = __sv0.substr(__pos, __n);
     __init(__sv.data(), __sv.size());
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2135,7 +2155,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const _Tp & __t)
     __self_view __sv = __t;
     __init(__sv.data(), __sv.size());
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2147,7 +2168,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(const _Tp & __t, const _
     __self_view __sv = __t;
     __init(__sv.data(), __sv.size());
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2229,7 +2251,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(_InputIterator __first, 
 {
     __init(__first, __last);
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2242,7 +2265,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(_InputIterator __first, 
 {
     __init(__first, __last);
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2256,7 +2280,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(
 {
     __init(__il.begin(), __il.end());
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2269,7 +2294,8 @@ basic_string<_CharT, _Traits, _Allocator>::basic_string(
 {
     __init(__il.begin(), __il.end());
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__insert_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__insert_c(this);
 #endif
 }
 
@@ -2279,7 +2305,8 @@ template <class _CharT, class _Traits, class _Allocator>
 basic_string<_CharT, _Traits, _Allocator>::~basic_string()
 {
 #if _LIBCPP_DEBUG_LEVEL == 2
-    __get_db()->__erase_c(this);
+    if (!__libcpp_is_constant_evaluated())
+        __get_db()->__erase_c(this);
 #endif
     if (__is_long())
         __alloc_traits::deallocate(__alloc(), __get_long_pointer(), __get_long_cap());
@@ -3484,11 +3511,13 @@ basic_string<_CharT, _Traits, _Allocator>::swap(basic_string& __str)
 #endif
 {
 #if _LIBCPP_DEBUG_LEVEL == 2
-    if (!__is_long())
-        __get_db()->__invalidate_all(this);
-    if (!__str.__is_long())
-        __get_db()->__invalidate_all(&__str);
-    __get_db()->swap(this, &__str);
+    if (!__libcpp_is_constant_evaluated()) {
+        if (!__is_long())
+            __get_db()->__invalidate_all(this);
+        if (!__str.__is_long())
+            __get_db()->__invalidate_all(&__str);
+        __get_db()->swap(this, &__str);
+    }
 #endif
     _LIBCPP_ASSERT(
         __alloc_traits::propagate_on_container_swap::value ||
