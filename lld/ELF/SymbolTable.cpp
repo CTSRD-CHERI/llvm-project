@@ -267,7 +267,7 @@ bool SymbolTable::assignExactVersion(SymbolVersion ver, uint16_t versionId,
 
     // If the version has not been assigned, verdefIndex is -1. Use an arbitrary
     // number (0) to indicate the version has been assigned.
-    if (sym->verdefIndex == UINT32_C(-1)) {
+    if (sym->verdefIndex == uint16_t(-1)) {
       sym->verdefIndex = 0;
       sym->versionId = versionId;
     }
@@ -286,7 +286,7 @@ void SymbolTable::assignWildcardVersion(SymbolVersion ver, uint16_t versionId,
   // so we set a version to a symbol only if no version has been assigned
   // to the symbol. This behavior is compatible with GNU.
   for (Symbol *sym : findAllByVersion(ver, includeNonDefault))
-    if (sym->verdefIndex == UINT32_C(-1)) {
+    if (sym->verdefIndex == uint16_t(-1)) {
       sym->verdefIndex = 0;
       sym->versionId = versionId;
     }
