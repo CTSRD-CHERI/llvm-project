@@ -2021,12 +2021,13 @@ Address CGOpenMPRuntime::getAddrOfArtificialThreadPrivate(CodeGenFunction &CGF,
                                                           StringRef Name) {
   std::string Suffix = getName({"artificial", ""});
   llvm::Type *VarLVType = CGF.ConvertTypeForMem(VarType);
-  llvm::Value *GAddr =
+  llvm::GlobalVariable *GAddr =
       getOrCreateInternalVariable(VarLVType, Twine(Name).concat(Suffix));
   if (CGM.getLangOpts().OpenMP && CGM.getLangOpts().OpenMPUseTLS &&
       CGM.getTarget().isTLSSupported()) {
-    cast<llvm::GlobalVariable>(GAddr)->setThreadLocal(/*Val=*/true);
-    return Address(GAddr, CGM.getContext().getTypeAlignInChars(VarType));
+    GAddr->setThreadLocal(/*Val=*/true);
+    return Address(GAddr, GAddr->getValueType(),
+                   CGM.getContext().getTypeAlignInChars(VarType));
   }
   std::string CacheSuffix = getName({"cache", ""});
   llvm::Value *Args[] = {
@@ -2181,7 +2182,7 @@ Address CGOpenMPRuntime::emitThreadIDAddress(CodeGenFunction &CGF,
   return ThreadIDTemp;
 }
 
-llvm::Constant *CGOpenMPRuntime::getOrCreateInternalVariable(
+llvm::GlobalVariable *CGOpenMPRuntime::getOrCreateInternalVariable(
     llvm::Type *Ty, const llvm::Twine &Name, unsigned AddressSpace) {
   SmallString<256> Buffer;
   llvm::raw_svector_ostream Out(Buffer);
@@ -2189,7 +2190,7 @@ llvm::Constant *CGOpenMPRuntime::getOrCreateInternalVariable(
   StringRef RuntimeName = Out.str();
   auto &Elem = *InternalVars.try_emplace(RuntimeName, nullptr).first;
   if (Elem.second) {
-    assert(Elem.second->getType()->getPointerElementType() == Ty &&
+    assert(Elem.second->getType()->isOpaqueOrPointeeTypeMatches(Ty) &&
            "OMP internal variable has different type than requested");
     return &*Elem.second;
   }
@@ -12692,12 +12693,11 @@ void CGOpenMPRuntime::emitLastprivateConditionalUpdate(CodeGenFunction &CGF,
 
   // Last value of the lastprivate conditional.
   // decltype(priv_a) last_a;
-  llvm::Constant *Last = getOrCreateInternalVariable(
+  llvm::GlobalVariable *Last = getOrCreateInternalVariable(
       CGF.ConvertTypeForMem(LVal.getType()), UniqueDeclName);
-  cast<llvm::GlobalVariable>(Last)->setAlignment(
-      LVal.getAlignment().getAsAlign());
-  LValue LastLVal =
-      CGF.MakeAddrLValue(Last, LVal.getType(), LVal.getAlignment());
+  Last->setAlignment(LVal.getAlignment().getAsAlign());
+  LValue LastLVal = CGF.MakeAddrLValue(
+      Address(Last, Last->getValueType(), LVal.getAlignment()), LVal.getType());
 
   // Global loop counter. Required to handle inner parallel-for regions.
   // iv
@@ -12870,7 +12870,8 @@ void CGOpenMPRuntime::emitLastprivateConditionalFinalUpdate(
   if (!GV)
     return;
   LValue LPLVal = CGF.MakeAddrLValue(
-      GV, PrivLVal.getType().getNonReferenceType(), PrivLVal.getAlignment());
+      Address(GV, GV->getValueType(), PrivLVal.getAlignment()),
+      PrivLVal.getType().getNonReferenceType());
   llvm::Value *Res = CGF.EmitLoadOfScalar(LPLVal, Loc);
   CGF.EmitStoreOfScalar(Res, PrivLVal);
 }
