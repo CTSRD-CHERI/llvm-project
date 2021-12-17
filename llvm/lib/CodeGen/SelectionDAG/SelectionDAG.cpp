@@ -5350,9 +5350,10 @@ SDValue SelectionDAG::FoldConstantArithmetic(unsigned Opcode, const SDLoc &DL,
   if (isUndef(Opcode, Ops))
     return getUNDEF(VT);
 
-  // Handle the case of two scalars.
+  // Handle binops special cases.
   if (NumOps == 2) {
-    // TODO: Move foldConstantFPMath here?
+    if (SDValue CFP = foldConstantFPMath(Opcode, DL, VT, Ops[0], Ops[1]))
+      return CFP;
 
     if (auto *C1 = dyn_cast<ConstantSDNode>(Ops[0])) {
       if (auto *C2 = dyn_cast<ConstantSDNode>(Ops[1])) {
@@ -6034,9 +6035,6 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
   // Perform trivial constant folding.
   if (SDValue SV = FoldConstantArithmetic(Opcode, DL, VT, {N1, N2}))
     return SV;
-
-  if (SDValue V = foldConstantFPMath(Opcode, DL, VT, N1, N2))
-    return V;
 
   // Canonicalize an UNDEF to the RHS, even over a constant.
   if (N1.isUndef()) {
