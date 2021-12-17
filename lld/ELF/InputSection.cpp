@@ -1432,7 +1432,7 @@ SyntheticSection *MergeInputSection::getParent() const {
 // null-terminated strings.
 void MergeInputSection::splitStrings(ArrayRef<uint8_t> data, size_t entSize) {
   size_t off = 0;
-  bool isAlloc = flags & SHF_ALLOC;
+  const bool live = !(flags & SHF_ALLOC) || !config->gcSections;
   StringRef s = toStringRef(data);
 
   while (!s.empty()) {
@@ -1441,7 +1441,7 @@ void MergeInputSection::splitStrings(ArrayRef<uint8_t> data, size_t entSize) {
       fatal(toString(this) + ": string is not null terminated");
     size_t size = end + entSize;
 
-    pieces.emplace_back(off, xxHash64(s.substr(0, size)), !isAlloc);
+    pieces.emplace_back(off, xxHash64(s.substr(0, size)), live);
     s = s.substr(size);
     off += size;
   }
@@ -1453,10 +1453,10 @@ void MergeInputSection::splitNonStrings(ArrayRef<uint8_t> data,
                                         size_t entSize) {
   size_t size = data.size();
   assert((size % entSize) == 0);
-  bool isAlloc = flags & SHF_ALLOC;
+  const bool live = !(flags & SHF_ALLOC) || !config->gcSections;
 
   for (size_t i = 0; i != size; i += entSize)
-    pieces.emplace_back(i, xxHash64(data.slice(i, entSize)), !isAlloc);
+    pieces.emplace_back(i, xxHash64(data.slice(i, entSize)), live);
 }
 
 template <class ELFT>
