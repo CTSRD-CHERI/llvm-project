@@ -1615,6 +1615,9 @@ public:
 
   QualType getEnumType(const EnumDecl *Decl) const;
 
+  QualType
+  getUnresolvedUsingType(const UnresolvedUsingTypenameDecl *Decl) const;
+
   QualType getInjectedClassNameType(CXXRecordDecl *Decl, QualType TST) const;
 
   QualType getAttributedType(attr::Kind attrKind,
