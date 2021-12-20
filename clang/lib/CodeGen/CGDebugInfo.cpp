@@ -3643,6 +3643,9 @@ llvm::DICompositeType *CGDebugInfo::CreateLimitedType(const RecordType *Ty) {
     // Record exports it symbols to the containing structure.
     if (CXXRD->isAnonymousStructOrUnion())
         Flags |= llvm::DINode::FlagExportSymbols;
+
+    Flags |= getAccessFlag(CXXRD->getAccess(),
+                           dyn_cast<CXXRecordDecl>(CXXRD->getDeclContext()));
   }
 
   llvm::DINodeArray Annotations = CollectBTFDeclTagAnnotations(D);
