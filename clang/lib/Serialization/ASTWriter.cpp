@@ -401,10 +401,6 @@ void TypeLocWriter::VisitUnresolvedUsingTypeLoc(UnresolvedUsingTypeLoc TL) {
   Record.AddSourceLocation(TL.getNameLoc());
 }
 
-void TypeLocWriter::VisitUsingTypeLoc(UsingTypeLoc TL) {
-  Record.AddSourceLocation(TL.getNameLoc());
-}
-
 void TypeLocWriter::VisitTypedefTypeLoc(TypedefTypeLoc TL) {
   Record.AddSourceLocation(TL.getNameLoc());
 }
