@@ -175,7 +175,7 @@ void CodeGenFunction::EmitInvariantStart(llvm::Constant *Addr, CharUnits Size) {
 }
 
 void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
-                                               llvm::Constant *DeclPtr,
+                                               llvm::GlobalVariable *GV,
                                                bool PerformInit) {
 
   const Expr *Init = D.getInit();
@@ -196,21 +196,22 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
   // For example, in the above CUDA code, the static local variable s has a
   // "shared" address space qualifier, but the constructor of StructWithCtor
   // expects "this" in the "generic" address space.
-  ASTContext &Context = getContext();
   // This is not quite right, we don't want an __intcap_t alloca to be AS200
   // unsigned ExpectedAddrSpace = CGM.getAddressSpaceForType(T);
+  ASTContext &Context = getContext();
   unsigned ExpectedAddrSpace =
       Context.getTargetInfo().areAllPointersCapabilities()
           ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
           : CGM.getTargetAddressSpace(T.getAddressSpace());
-  unsigned ActualAddrSpace = DeclPtr->getType()->getPointerAddressSpace();
+  unsigned ActualAddrSpace = GV->getAddressSpace();
+  llvm::Constant *DeclPtr = GV;
   if (ActualAddrSpace != ExpectedAddrSpace) {
-    llvm::Type *LTy = CGM.getTypes().ConvertTypeForMem(T);
-    llvm::PointerType *PTy = llvm::PointerType::get(LTy, ExpectedAddrSpace);
+    llvm::PointerType *PTy = llvm::PointerType::getWithSamePointeeType(
+        GV->getType(), ExpectedAddrSpace);
     DeclPtr = llvm::ConstantExpr::getAddrSpaceCast(DeclPtr, PTy);
   }
 
-  ConstantAddress DeclAddr(DeclPtr, DeclPtr->getType()->getPointerElementType(),
+  ConstantAddress DeclAddr(DeclPtr, GV->getValueType(),
                            Context.getDeclAlign(&D));
 
   if (!T->isReferenceType()) {
