@@ -28,7 +28,7 @@ using namespace llvm::ELF;
 using namespace lld;
 using namespace lld::elf;
 
-SymbolTable *elf::symtab;
+std::unique_ptr<SymbolTable> elf::symtab;
 
 Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   assert(!original->includeInDynsym() && "Already included in dynsym?");
