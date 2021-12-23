@@ -846,9 +846,9 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection *dynRelSec =
-        it.second.usedInCallExpr ? in.relaPlt.get() : mainPart->relaDyn.get();
+        it.second.usedInCallExpr ? in.relaPlt : mainPart->relaDyn;
     addCapabilityRelocation<ELFT>(
-        targetSym, elfCapabilityReloc, in.cheriCapTable.get(), off,
+        targetSym, elfCapabilityReloc, in.cheriCapTable, off,
         R_CHERI_CAPABILITY, 0, it.second.usedInCallExpr,
         [&]() {
           return ("\n>>> referenced by " + refName + "\n>>> first used in " +
@@ -1131,7 +1131,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
     // instead need to use an absolute pointer size relocation to write
     // the offset addend
     if (!dynRelSec)
-      dynRelSec = mainPart->relaDyn.get();
+      dynRelSec = mainPart->relaDyn;
     // in the case that -local-caprelocs=elf is passed we need to ensure that
     // the target symbol is included in the dynamic symbol table
     if (!mainPart->dynSymTab) {

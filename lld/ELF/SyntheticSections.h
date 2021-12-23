@@ -1210,24 +1210,24 @@ struct Partition {
   StringRef name;
   uint64_t nameStrTab;
 
-  std::unique_ptr<SyntheticSection> elfHeader;
-  std::unique_ptr<SyntheticSection> programHeaders;
+  SyntheticSection *elfHeader;
+  SyntheticSection *programHeaders;
   std::vector<PhdrEntry *> phdrs;
 
-  std::unique_ptr<ARMExidxSyntheticSection> armExidx;
-  std::unique_ptr<BuildIdSection> buildId;
-  std::unique_ptr<SyntheticSection> dynamic;
-  std::unique_ptr<StringTableSection> dynStrTab;
-  std::unique_ptr<SymbolTableBaseSection> dynSymTab;
-  std::unique_ptr<EhFrameHeader> ehFrameHdr;
-  std::unique_ptr<EhFrameSection> ehFrame;
-  std::unique_ptr<GnuHashTableSection> gnuHashTab;
-  std::unique_ptr<HashTableSection> hashTab;
-  std::unique_ptr<RelocationBaseSection> relaDyn;
-  std::unique_ptr<RelrBaseSection> relrDyn;
-  std::unique_ptr<VersionDefinitionSection> verDef;
-  std::unique_ptr<SyntheticSection> verNeed;
-  std::unique_ptr<VersionTableSection> verSym;
+  ARMExidxSyntheticSection *armExidx;
+  BuildIdSection *buildId;
+  SyntheticSection *dynamic;
+  StringTableSection *dynStrTab;
+  SymbolTableBaseSection *dynSymTab;
+  EhFrameHeader *ehFrameHdr;
+  EhFrameSection *ehFrame;
+  GnuHashTableSection *gnuHashTab;
+  HashTableSection *hashTab;
+  RelocationBaseSection *relaDyn;
+  RelrBaseSection *relrDyn;
+  VersionDefinitionSection *verDef;
+  SyntheticSection *verNeed;
+  VersionTableSection *verSym;
 
   unsigned getNumber() const { return this - &partitions[0] + 1; }
 };
@@ -1242,30 +1242,30 @@ inline Partition &SectionBase::getPartition() const {
 // Linker generated sections which can be used as inputs and are not specific to
 // a partition.
 struct InStruct {
-  std::unique_ptr<InputSection> attributes;
-  std::unique_ptr<BssSection> bss;
-  std::unique_ptr<BssSection> bssRelRo;
-  std::unique_ptr<GotSection> got;
-  std::unique_ptr<GotPltSection> gotPlt;
-  std::unique_ptr<IgotPltSection> igotPlt;
-  std::unique_ptr<CheriCapTableSection> cheriCapTable;
+  InputSection *attributes;
+  BssSection *bss;
+  BssSection *bssRelRo;
+  GotSection *got;
+  GotPltSection *gotPlt;
+  IgotPltSection *igotPlt;
+  CheriCapTableSection *cheriCapTable;
   // For per-file/per-function tables:
-  std::unique_ptr<CheriCapTableMappingSection> cheriCapTableMapping;
-  std::unique_ptr<PPC64LongBranchTargetSection> ppc64LongBranchTarget;
-  std::unique_ptr<MipsGotSection> mipsGot;
-  std::unique_ptr<MipsRldMapSection> mipsRldMap;
-  std::unique_ptr<SyntheticSection> partEnd;
-  std::unique_ptr<SyntheticSection> partIndex;
-  std::unique_ptr<PltSection> plt;
-  std::unique_ptr<IpltSection> iplt;
-  std::unique_ptr<PPC32Got2Section> ppc32Got2;
-  std::unique_ptr<IBTPltSection> ibtPlt;
-  std::unique_ptr<RelocationBaseSection> relaPlt;
-  std::unique_ptr<RelocationBaseSection> relaIplt;
-  std::unique_ptr<StringTableSection> shStrTab;
-  std::unique_ptr<StringTableSection> strTab;
-  std::unique_ptr<SymbolTableBaseSection> symTab;
-  std::unique_ptr<SymtabShndxSection> symTabShndx;
+  CheriCapTableMappingSection *cheriCapTableMapping;
+  PPC64LongBranchTargetSection *ppc64LongBranchTarget;
+  MipsGotSection *mipsGot;
+  MipsRldMapSection *mipsRldMap;
+  SyntheticSection *partEnd;
+  SyntheticSection *partIndex;
+  PltSection *plt;
+  IpltSection *iplt;
+  PPC32Got2Section *ppc32Got2;
+  IBTPltSection *ibtPlt;
+  RelocationBaseSection *relaPlt;
+  RelocationBaseSection *relaIplt;
+  StringTableSection *shStrTab;
+  StringTableSection *strTab;
+  SymbolTableBaseSection *symTab;
+  SymtabShndxSection *symTabShndx;
 };
 
 extern InStruct in;
@@ -1273,14 +1273,12 @@ extern InStruct in;
 template <class ELFT> struct InX {
   // XXXAR: needs to be templated because writing depends on endianess
   // TODO: use the non-templated version
-  static std::unique_ptr<CheriCapRelocsSection<ELFT>> capRelocs;
-  static std::unique_ptr<MipsAbiFlagsSection<ELFT>> mipsAbiFlags;
+  static CheriCapRelocsSection<ELFT> *capRelocs;
+  static MipsAbiFlagsSection<ELFT> *mipsAbiFlags;
 };
 
-template <class ELFT>
-std::unique_ptr<CheriCapRelocsSection<ELFT>> InX<ELFT>::capRelocs;
-template <class ELFT>
-std::unique_ptr<MipsAbiFlagsSection<ELFT>> InX<ELFT>::mipsAbiFlags;
+template <class ELFT> CheriCapRelocsSection<ELFT> *InX<ELFT>::capRelocs;
+template <class ELFT> MipsAbiFlagsSection<ELFT> *InX<ELFT>::mipsAbiFlags;
 } // namespace elf
 } // namespace lld
 
