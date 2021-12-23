@@ -599,6 +599,10 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
       setOperationAction(ISD::SELECT_CC, VT, Expand);
       setOperationAction(ISD::VSELECT, VT, Expand);
 
+      setOperationAction(ISD::VP_AND, VT, Custom);
+      setOperationAction(ISD::VP_OR, VT, Custom);
+      setOperationAction(ISD::VP_XOR, VT, Custom);
+
       setOperationAction(ISD::VECREDUCE_AND, VT, Custom);
       setOperationAction(ISD::VECREDUCE_OR, VT, Custom);
       setOperationAction(ISD::VECREDUCE_XOR, VT, Custom);
@@ -883,6 +887,9 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
         // Operations below are different for between masks and other vectors.
         if (VT.getVectorElementType() == MVT::i1) {
+          setOperationAction(ISD::VP_AND, VT, Custom);
+          setOperationAction(ISD::VP_OR, VT, Custom);
+          setOperationAction(ISD::VP_XOR, VT, Custom);
           setOperationAction(ISD::AND, VT, Custom);
           setOperationAction(ISD::OR, VT, Custom);
           setOperationAction(ISD::XOR, VT, Custom);
@@ -3251,11 +3258,11 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   case ISD::VP_UREM:
     return lowerVPOp(Op, DAG, RISCVISD::UREM_VL);
   case ISD::VP_AND:
-    return lowerVPOp(Op, DAG, RISCVISD::AND_VL);
+    return lowerLogicVPOp(Op, DAG, RISCVISD::VMAND_VL, RISCVISD::AND_VL);
   case ISD::VP_OR:
-    return lowerVPOp(Op, DAG, RISCVISD::OR_VL);
+    return lowerLogicVPOp(Op, DAG, RISCVISD::VMOR_VL, RISCVISD::OR_VL);
   case ISD::VP_XOR:
-    return lowerVPOp(Op, DAG, RISCVISD::XOR_VL);
+    return lowerLogicVPOp(Op, DAG, RISCVISD::VMXOR_VL, RISCVISD::XOR_VL);
   case ISD::VP_ASHR:
     return lowerVPOp(Op, DAG, RISCVISD::SRA_VL);
   case ISD::VP_LSHR:
@@ -5589,6 +5596,33 @@ SDValue RISCVTargetLowering::lowerVPOp(SDValue Op, SelectionDAG &DAG,
   SDValue VPOp = DAG.getNode(RISCVISDOpc, DL, ContainerVT, Ops);
 
   return convertFromScalableVector(VT, VPOp, DAG, Subtarget);
+}
+
+SDValue RISCVTargetLowering::lowerLogicVPOp(SDValue Op, SelectionDAG &DAG,
+                                            unsigned MaskOpc,
+                                            unsigned VecOpc) const {
+  MVT VT = Op.getSimpleValueType();
+  if (VT.getVectorElementType() != MVT::i1)
+    return lowerVPOp(Op, DAG, VecOpc);
+
+  // It is safe to drop mask parameter as masked-off elements are undef.
+  SDValue Op1 = Op->getOperand(0);
+  SDValue Op2 = Op->getOperand(1);
+  SDValue VL = Op->getOperand(3);
+
+  MVT ContainerVT = VT;
+  const bool IsFixed = VT.isFixedLengthVector();
+  if (IsFixed) {
+    ContainerVT = getContainerForFixedLengthVector(VT);
+    Op1 = convertToScalableVector(ContainerVT, Op1, DAG, Subtarget);
+    Op2 = convertToScalableVector(ContainerVT, Op2, DAG, Subtarget);
+  }
+
+  SDLoc DL(Op);
+  SDValue Val = DAG.getNode(MaskOpc, DL, ContainerVT, Op1, Op2, VL);
+  if (!IsFixed)
+    return Val;
+  return convertFromScalableVector(VT, Val, DAG, Subtarget);
 }
 
 // Custom lower MGATHER/VP_GATHER to a legalized form for RVV. It will then be
