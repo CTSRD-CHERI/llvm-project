@@ -1156,7 +1156,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       sym = newSym; // Make the relocation point to the newly added symbol
     }
     dynRelSec->addReloc(
-        DynamicReloc::AgainstSymbol, type, sec, offset, *sym, addend, expr,
+        DynamicReloc::AgainstSymbol, type, *sec, offset, *sym, addend, expr,
         /* Relocation type for the addend = */ target->symbolicRel);
 
   } else if (capRelocMode == CapRelocsMode::Legacy) {
