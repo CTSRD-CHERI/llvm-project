@@ -569,6 +569,7 @@ def ExcessPadding : DiagGroup<"excess-padding">;
 def OrderedCompareFunctionPointers : DiagGroup<"ordered-compare-function-pointers">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
+def UnalignedAccess : DiagGroup<"unaligned-access">;
 
 def PessimizingMove : DiagGroup<"pessimizing-move">;
 def ReturnStdMove : DiagGroup<"return-std-move">;
