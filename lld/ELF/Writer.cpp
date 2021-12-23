@@ -720,9 +720,6 @@ static bool shouldKeepInSymtab(const Defined &sym) {
 }
 
 static bool includeInSymtab(const Symbol &b) {
-  if (!b.isLocal() && !b.isUsedInRegularObj)
-    return false;
-
   if (auto *d = dyn_cast<Defined>(&b)) {
     // Always include absolute symbols.
     SectionBase *sec = d->section;
@@ -758,11 +755,8 @@ template <class ELFT> void Writer<ELFT>::copyLocalSymbols() {
       // No reason to keep local undefined symbol in symtab.
       if (!dr)
         continue;
-      if (!includeInSymtab(*b))
-        continue;
-      if (!shouldKeepInSymtab(*dr))
-        continue;
-      in.symTab->addSymbol(b);
+      if (includeInSymtab(*b) && shouldKeepInSymtab(*dr))
+        in.symTab->addSymbol(b);
     }
   }
 }
@@ -2094,7 +2088,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // Now that we have defined all possible global symbols including linker-
     // synthesized ones. Visit all symbols to give the finishing touches.
     for (Symbol *sym : symtab->symbols()) {
-      if (!includeInSymtab(*sym))
+      if (!sym->isUsedInRegularObj || !includeInSymtab(*sym))
         continue;
       if (in.symTab)
         in.symTab->addSymbol(sym);
