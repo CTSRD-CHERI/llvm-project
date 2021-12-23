@@ -334,7 +334,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
     // Capability target is the second field
     if (target.sym()->isPreemptible) {
       mainPart->relaDyn->addSymbolReloc(
-          *elf::target->absPointerRel, this, currentEntryOffset + fieldSize,
+          *elf::target->absPointerRel, *this, currentEntryOffset + fieldSize,
           *target.sym(), addend, lld::elf::target->symbolicRel);
     } else {
       // If the target is not preemptible we can optimize this to a relative
@@ -352,7 +352,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
       // Capability size is the fourth field
       assert((currentEntryOffset + 3 * fieldSize) < getSize());
       mainPart->relaDyn->addSymbolReloc(
-          sizeRel, this, currentEntryOffset + 3 * fieldSize, *target.sym());
+          sizeRel, *this, currentEntryOffset + 3 * fieldSize, *target.sym());
     }
   }
 }
@@ -846,9 +846,9 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection *dynRelSec =
-        it.second.usedInCallExpr ? in.relaPlt : mainPart->relaDyn;
+        it.second.usedInCallExpr ? in.relaPlt.get() : mainPart->relaDyn;
     addCapabilityRelocation<ELFT>(
-        targetSym, elfCapabilityReloc, in.cheriCapTable, off,
+        targetSym, elfCapabilityReloc, in.cheriCapTable.get(), off,
         R_CHERI_CAPABILITY, 0, it.second.usedInCallExpr,
         [&]() {
           return ("\n>>> referenced by " + refName + "\n>>> first used in " +
@@ -914,7 +914,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         this->relocations.push_back(
             {R_ADDEND, target->symbolicRel, offset, 1, s});
       else
-        mainPart->relaDyn->addSymbolReloc(target->tlsModuleIndexRel, this,
+        mainPart->relaDyn->addSymbolReloc(target->tlsModuleIndexRel, *this,
                                           offset, *s);
 
       offset += config->wordsize;
@@ -925,7 +925,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         this->relocations.push_back(
             {R_ABS, target->tlsOffsetRel, offset, 0, s});
       else
-        mainPart->relaDyn->addSymbolReloc(target->tlsOffsetRel, this, offset,
+        mainPart->relaDyn->addSymbolReloc(target->tlsOffsetRel, *this, offset,
                                           *s);
     }
   }

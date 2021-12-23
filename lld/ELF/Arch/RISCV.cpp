@@ -263,7 +263,7 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
   // nop
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
-  uint32_t entryva = config->isCheriAbi ? sym.getCapTableVA(in.plt, 0)
+  uint32_t entryva = config->isCheriAbi ? sym.getCapTableVA(in.plt.get(), 0)
                                         : sym.getGotPltVA();
   uint32_t offset = entryva - pltEntryAddr;
   write32le(buf + 0, utype(AUIPC, X_T3, hi20(offset)));
