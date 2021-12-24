@@ -11776,6 +11776,9 @@ OMPClause *OMPClauseReader::readClause() {
   case llvm::omp::OMPC_capture:
     C = new (Context) OMPCaptureClause();
     break;
+  case llvm::omp::OMPC_compare:
+    C = new (Context) OMPCompareClause();
+    break;
   case llvm::omp::OMPC_seq_cst:
     C = new (Context) OMPSeqCstClause();
     break;
@@ -12133,6 +12136,8 @@ void OMPClauseReader::VisitOMPUpdateClause(OMPUpdateClause *C) {
 }
 
 void OMPClauseReader::VisitOMPCaptureClause(OMPCaptureClause *) {}
+
+void OMPClauseReader::VisitOMPCompareClause(OMPCompareClause *) {}
 
 void OMPClauseReader::VisitOMPSeqCstClause(OMPSeqCstClause *) {}
 
