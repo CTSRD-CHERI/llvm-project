@@ -7349,7 +7349,7 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
     if (SimplifyDemandedLowBitsHelper(1, Log2_32(BitWidth)))
       return SDValue(N, 0);
 
-    return combineGREVI_GORCI(N, DCI.DAG);
+    return combineGREVI_GORCI(N, DAG);
   }
   case RISCVISD::GREVW:
   case RISCVISD::GORCW: {
@@ -7358,7 +7358,7 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
         SimplifyDemandedLowBitsHelper(1, 5))
       return SDValue(N, 0);
 
-    return combineGREVI_GORCI(N, DCI.DAG);
+    return combineGREVI_GORCI(N, DAG);
   }
   case RISCVISD::SHFL:
   case RISCVISD::UNSHFL: {
