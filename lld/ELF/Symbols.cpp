@@ -666,7 +666,7 @@ void Symbol::resolveUndefined(const Undefined &other) {
   }
 
   // Undefined symbols in a SharedFile do not change the binding.
-  if (dyn_cast_or_null<SharedFile>(other.file))
+  if (isa_and_nonnull<SharedFile>(other.file))
     return;
 
   if (isUndefined() || isShared()) {
@@ -724,7 +724,7 @@ int Symbol::compare(const Symbol *other) const {
   auto *oldSym = cast<Defined>(this);
   auto *newSym = cast<Defined>(other);
 
-  if (dyn_cast_or_null<BitcodeFile>(other->file))
+  if (isa_and_nonnull<BitcodeFile>(other->file))
     return 0;
 
   if (!oldSym->section && !newSym->section && oldSym->value == newSym->value &&
