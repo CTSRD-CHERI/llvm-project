@@ -1904,7 +1904,7 @@ void ThunkCreator::mergeThunks(ArrayRef<OutputSection *> outputSections) {
                           });
 
         // Merge sorted vectors of Thunks and InputSections by outSecOff
-        std::vector<InputSection *> tmp;
+        SmallVector<InputSection *, 0> tmp;
         tmp.reserve(isd->sections.size() + newThunks.size());
 
         std::merge(isd->sections.begin(), isd->sections.end(),
