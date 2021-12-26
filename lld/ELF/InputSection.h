@@ -179,11 +179,9 @@ public:
 
   // Get the function symbol that encloses this offset from within the
   // section.
-  template <class ELFT>
   Defined *getEnclosingFunction(uint64_t offset) const;
-  template <class ELFT>
   Defined *getEnclosingObject(uint64_t offset) const;
-  template <class ELFT, unsigned SymbolType>
+  template <unsigned SymbolType>
   Defined *getEnclosingSymbol(uint64_t offset) const;
 
   // Returns a source location string. Used to construct an error message.
