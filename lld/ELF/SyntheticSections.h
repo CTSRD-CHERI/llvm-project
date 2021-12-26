@@ -1212,7 +1212,7 @@ struct Partition {
 
   SyntheticSection *elfHeader;
   SyntheticSection *programHeaders;
-  std::vector<PhdrEntry *> phdrs;
+  SmallVector<PhdrEntry *, 0> phdrs;
 
   ARMExidxSyntheticSection *armExidx;
   BuildIdSection *buildId;
