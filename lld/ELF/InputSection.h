@@ -384,14 +384,10 @@ private:
   template <class ELFT> void copyShtGroup(uint8_t *buf);
 };
 
-#ifdef _WIN32
-static_assert(sizeof(InputSection) <= 168, "InputSection is too big");
-#else
 // TODO: drop the extra SmallVector<Relocation, 0>, it should not longer be
 // needed.
 static_assert(sizeof(InputSection) <= 160 + sizeof(std::vector<DynamicReloc>),
               "InputSection is too big");
-#endif
 
 inline bool isDebugSection(const InputSectionBase &sec) {
   return (sec.flags & llvm::ELF::SHF_ALLOC) == 0 &&
