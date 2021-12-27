@@ -832,8 +832,7 @@ void LinkerScript::addOrphanSections() {
   StringMap<TinyPtrVector<OutputSection *>> map;
   SmallVector<OutputSection *, 0> v;
 
-  std::function<void(InputSectionBase *)> add;
-  add = [&](InputSectionBase *s) {
+  auto add = [&](InputSectionBase *s) {
     if (s->isLive() && !s->parent) {
       orphanSections.push_back(s);
 
@@ -849,11 +848,6 @@ void LinkerScript::addOrphanSections() {
                s->getOutputSection()->sectionIndex == UINT32_MAX);
       }
     }
-
-    if (config->relocatable)
-      for (InputSectionBase *depSec : s->dependentSections)
-        if (depSec->flags & SHF_LINK_ORDER)
-          add(depSec);
   };
 
   // For further --emit-reloc handling code we need target output section
@@ -872,6 +866,10 @@ void LinkerScript::addOrphanSections() {
         if (auto *relIS = dyn_cast_or_null<InputSectionBase>(rel->parent))
           add(relIS);
     add(isec);
+    if (config->relocatable)
+      for (InputSectionBase *depSec : isec->dependentSections)
+        if (depSec->flags & SHF_LINK_ORDER)
+          add(depSec);
   }
 
   // If no SECTIONS command was given, we should insert sections commands
