@@ -39,6 +39,7 @@ namespace llvm {
   FunctionPass *createMicroMipsSizeReducePass();
   FunctionPass *createMipsExpandPseudoPass();
   FunctionPass *createMipsPreLegalizeCombiner();
+  FunctionPass *createMipsMulMulBugPass();
 
   FunctionPass *createCheriInvalidatePass();
   FunctionPass *createCheriRangeChecker();
@@ -57,6 +58,7 @@ namespace llvm {
   void initializeMipsOptimizePICCallPass(PassRegistry &);
   void initializeCheriAddressingModeFolderPass(PassRegistry &);
   void initializeCheriRangeCheckerPass(PassRegistry &);
+  void initializeMipsMulMulBugFixPass(PassRegistry&);
 } // end namespace llvm;
 
 #endif

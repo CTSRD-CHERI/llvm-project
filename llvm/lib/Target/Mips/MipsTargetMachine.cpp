@@ -54,6 +54,10 @@ UnsafeUsage(
 llvm::cl::init(false));
 
 
+static cl::opt<bool>
+    EnableMulMulFix("mfix4300", cl::init(false),
+                    cl::desc("Enable the VR4300 mulmul bug fix."), cl::Hidden);
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTarget() {
   // Register the target.
   RegisterTargetMachine<MipsebTargetMachine> X(getTheMipsTarget());
@@ -70,6 +74,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTarget() {
   initializeMipsOptimizePICCallPass(*PR);
   initializeCheriAddressingModeFolderPass(*PR);
   initializeCheriRangeCheckerPass(*PR);
+  initializeMipsMulMulBugFixPass(*PR);
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,
@@ -346,6 +351,11 @@ void MipsPassConfig::addPreEmitPass() {
   // The microMIPS size reduction pass performs instruction reselection for
   // instructions which can be remapped to a 16 bit instruction.
   addPass(createMicroMipsSizeReducePass());
+
+  // This pass inserts a nop instruction between two back-to-back multiplication
+  // instructions when the "mfix4300" flag is passed.
+  if (EnableMulMulFix)
+    addPass(createMipsMulMulBugPass());
 
   // The delay slot filler pass can potientially create forbidden slot hazards
   // for MIPSR6 and therefore it should go before MipsBranchExpansion pass.
