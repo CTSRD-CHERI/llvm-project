@@ -109,8 +109,10 @@ Symbol *SymbolTable::insert(StringRef name) {
   auto p = symMap.insert({CachedHashStringRef(stem), (int)symVector.size()});
   if (!p.second) {
     Symbol *sym = symVector[p.first->second];
-    if (stem.size() != name.size())
+    if (stem.size() != name.size()) {
       sym->setName(name);
+      sym->hasVersionSuffix = true;
+    }
     return sym;
   }
 
@@ -130,6 +132,8 @@ Symbol *SymbolTable::insert(StringRef name) {
   sym->referenced = false;
   sym->traced = false;
   sym->scriptDefined = false;
+  if (pos != StringRef::npos)
+    sym->hasVersionSuffix = true;
   sym->partition = 1;
   return sym;
 }
@@ -353,7 +357,8 @@ void SymbolTable::scanVersionScript() {
   // can contain versions in the form of <name>@<version>.
   // Let them parse and update their names to exclude version suffix.
   for (Symbol *sym : symVector)
-    sym->parseSymbolVersion();
+    if (sym->hasVersionSuffix)
+      sym->parseSymbolVersion();
 
   // isPreemptible is false at this point. To correctly compute the binding of a
   // Defined (which is used by includeInDynsym()), we need to know if it is
