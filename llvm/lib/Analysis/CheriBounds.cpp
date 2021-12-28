@@ -103,6 +103,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
       return true;
 
     case Intrinsic::cheri_bounded_stack_cap:
+    case Intrinsic::cheri_bounded_stack_cap_dynamic:
     case Intrinsic::cheri_cap_bounds_set:
     case Intrinsic::cheri_cap_bounds_set_exact: {
       auto SizeArg = I->getOperand(1);

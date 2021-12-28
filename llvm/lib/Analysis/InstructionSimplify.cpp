@@ -5848,6 +5848,7 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
   // csetbounds(csetbounds(x, len), len) -> csetbounds(x, len)
   // This can happen with subobject bounds
   case Intrinsic::cheri_bounded_stack_cap:
+  case Intrinsic::cheri_bounded_stack_cap_dynamic:
   case Intrinsic::cheri_cap_bounds_set:
   case Intrinsic::cheri_cap_bounds_set_exact:
     // The following happens quite often with sub-object bounds since we set
@@ -5856,8 +5857,10 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
     if (auto *M0 = dyn_cast<IntrinsicInst>(Op0->stripPointerCastsSameRepresentation())) {
       auto InputIID = M0->getIntrinsicID();
       // If the input is the same intrinsic we can just return that
-      if ((InputIID == IID || (InputIID == Intrinsic::cheri_bounded_stack_cap &&
-                               IID == Intrinsic::cheri_cap_bounds_set)) &&
+      if ((InputIID == IID ||
+           ((InputIID == Intrinsic::cheri_bounded_stack_cap ||
+             InputIID == Intrinsic::cheri_bounded_stack_cap_dynamic) &&
+            IID == Intrinsic::cheri_cap_bounds_set)) &&
           M0->getOperand(1) == Op1)
         return Op0;
       // setbounds on a setboundsexact can just use the setboundsexact

@@ -160,8 +160,15 @@ def int_cheri_representable_alignment_mask :
    Intrinsic<[llvm_anyint_ty], [LLVMMatchType<0>], [IntrNoMem, IntrWillReturn]>;
 
 
-/// This intrinsics makes it easier to avoid spilling registers to create
+/// This intrinsic makes it easier to avoid spilling registers to create
 /// bounded capabilities for the stack (such as when passing a stack buffer to
-/// another function, etc)
+/// another function, etc).
+/// We also need both this and the dynamic variant in order to ensure we can
+/// preserve lifetime markers properly in certain edge cases.
+///
+/// NB: They *only* has this additional meaning at the IR level; at the DAG and
+///     MIR levels they cannot be assumed safe like at the IR level.
 def int_cheri_bounded_stack_cap :
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem, IntrWillReturn]>;
+def int_cheri_bounded_stack_cap_dynamic :
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem, IntrWillReturn]>;

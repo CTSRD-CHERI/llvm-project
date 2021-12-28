@@ -1171,6 +1171,8 @@ def : PatGpcr<int_cheri_cap_seal_entry, CSealEntry>;
 // TODO: Make this rematerialisable like MIPS
 def : PatGpcrGpr<int_cheri_bounded_stack_cap, CSetBounds>;
 def : PatGpcrUimm12<int_cheri_bounded_stack_cap, CSetBoundsImm>;
+def : PatGpcrGpr<int_cheri_bounded_stack_cap_dynamic, CSetBounds>;
+def : PatGpcrUimm12<int_cheri_bounded_stack_cap_dynamic, CSetBoundsImm>;
 
 /// Pointer-Arithmetic Instructions
 

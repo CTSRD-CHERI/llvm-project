@@ -204,9 +204,9 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-NEXT:    clw a1, 12(csp)
 ; PURECAP-NEXT:    clw a2, 8(csp)
-; PURECAP-NEXT:    csb a0, 8(cs0)
 ; PURECAP-NEXT:    csw a1, 4(cs0)
 ; PURECAP-NEXT:    csw a2, 0(cs0)
+; PURECAP-NEXT:    csb a0, 8(cs0)
 ; PURECAP-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    cincoffset csp, csp, 32
@@ -555,9 +555,9 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-NEXT:    ccall __atomic_compare_exchange_8
 ; PURECAP-NEXT:    clw a1, 12(csp)
 ; PURECAP-NEXT:    clw a2, 8(csp)
-; PURECAP-NEXT:    csb a0, 8(cs0)
 ; PURECAP-NEXT:    csw a1, 4(cs0)
 ; PURECAP-NEXT:    csw a2, 0(cs0)
+; PURECAP-NEXT:    csb a0, 8(cs0)
 ; PURECAP-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    cincoffset csp, csp, 32

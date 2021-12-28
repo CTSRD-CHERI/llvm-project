@@ -1380,7 +1380,8 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
   }
   case Intrinsic::cheri_cap_bounds_set:
   case Intrinsic::cheri_cap_bounds_set_exact:
-  case Intrinsic::cheri_bounded_stack_cap: {
+  case Intrinsic::cheri_bounded_stack_cap:
+  case Intrinsic::cheri_bounded_stack_cap_dynamic: {
     // FIXME: this should be target-independent
     auto SrcOperand = N->getOperand(1);
     auto SizeOperand = N->getOperand(2);
@@ -1390,7 +1391,8 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
         cast<ConstantSDNode>(SrcOperand->getOperand(0))->getZExtValue();
     if (SrcIID != Intrinsic::cheri_cap_bounds_set &&
         SrcIID != Intrinsic::cheri_cap_bounds_set_exact &&
-        SrcIID != Intrinsic::cheri_bounded_stack_cap) {
+        SrcIID != Intrinsic::cheri_bounded_stack_cap &&
+        SrcIID != Intrinsic::cheri_bounded_stack_cap_dynamic) {
       break; // not a setbounds node
     }
     if (!DAG.isEqualTo(SizeOperand, SrcOperand->getOperand(2)))
@@ -1410,7 +1412,8 @@ static SDValue performINTRINSIC_WO_CHAINCombine(
       return SrcOperand;
     } else if (IID != Intrinsic::cheri_cap_bounds_set_exact) {
       assert(SrcIID == Intrinsic::cheri_cap_bounds_set ||
-             SrcIID == Intrinsic::cheri_bounded_stack_cap);
+             SrcIID == Intrinsic::cheri_bounded_stack_cap ||
+             SrcIID == Intrinsic::cheri_bounded_stack_cap_dynamic);
       LLVM_DEBUG(dbgs() << "  replacing imprecise setbounds with same size "
                            "imprecise setbounds: ";
                  SrcOperand->print(dbgs(), &DAG));

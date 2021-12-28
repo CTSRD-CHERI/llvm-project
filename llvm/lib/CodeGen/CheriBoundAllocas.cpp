@@ -132,6 +132,23 @@ public:
     const DataLayout &DL = M->getDataLayout();
     StackBoundsMethod BoundsMode = BoundsSettingMode;
 
+    // This intrinsic both helps for rematerialising and acts as a marker so
+    // isIntrinsicReturningPointerAliasingArgumentWithoutCapturing can safely
+    // peek through it for GetUnderlyingObjects in order to not break lifetime
+    // markers. Otherwise, if we have:
+    //   %0 = alloca
+    //   %1 = bitcast ... %0 to i8 addrspace(200)*
+    //   %2 = @llvm.lifetime.start.p200i8(..., %1)
+    //   ...
+    //   unsafe use of %1
+    // then we'll have marked the bitcast itself as unsafe and replaced its %0
+    // with the bounded capability, and in general having GetUnderlyingObjects
+    // return true for bounds-setting intrinsics is not safe.
+    //
+    // TODO: We should probably be more aggressive at sinking, which might
+    // render the above no longer an issue, though likely still fragile, as
+    // we'd need to stay in sync with ValueTracking.
+    //
     // TODO: csetboundsexact and round up sizes
     Function *BoundedStackFn =
         Intrinsic::getDeclaration(M, Intrinsic::cheri_bounded_stack_cap, SizeTy);
@@ -216,11 +233,10 @@ public:
         // TODO: skip bounds on dynamic allocas (maybe add a TLI hook to check
         // whether the backend already adds bounds to the dynamic_stackalloc)
         DBG_MESSAGE("Found dynamic alloca: must use single intrinisic and "
-                    "bounds.set intrinisic");
+                    "cheri.bounded.stack.cap.dynamic intrinisic");
         MustUseSingleIntrinsic = true;
-        SetBoundsIntrin =
-            Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_bounds_set,
-                                      SizeTy);
+        SetBoundsIntrin = Intrinsic::getDeclaration(
+            M, Intrinsic::cheri_bounded_stack_cap_dynamic, SizeTy);
       }
 
       // Reuse the result of a single csetbounds intrinisic if we are at -O0 or

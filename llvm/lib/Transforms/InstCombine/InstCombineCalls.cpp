@@ -1741,6 +1741,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
   // csetbounds(csetbounds(x, len), len) -> csetbounds(x, len)
   // This can happen with subobject bounds
   case Intrinsic::cheri_bounded_stack_cap:
+  case Intrinsic::cheri_bounded_stack_cap_dynamic:
   case Intrinsic::cheri_cap_bounds_set:
   case Intrinsic::cheri_cap_bounds_set_exact: {
     // The following happens quite often with sub-object bounds since we set
@@ -1754,7 +1755,8 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
       // For setbounds on a setboundsexact we can use the setboundsexact
       // csetbounds(csetboundsexact(x, len), len) -> csetboundsexact(x, len)
       if ((InputIID == IID ||
-           (InputIID == Intrinsic::cheri_bounded_stack_cap &&
+           ((InputIID == Intrinsic::cheri_bounded_stack_cap ||
+             InputIID == Intrinsic::cheri_bounded_stack_cap_dynamic) &&
             IID == Intrinsic::cheri_cap_bounds_set) ||
            InputIID == Intrinsic::cheri_cap_bounds_set_exact) &&
           M0->getOperand(1) == Op1) {
@@ -1771,8 +1773,8 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     // Check if we can completely omit the setbounds (all uses are known to be
     // in bounds and we know that the current source value grants access to the
     // same range
-    // We don't do this analysis for cheri_bounded_stack_cap since it should
-    // already have been done when creating the bounded_stack_cap
+    // We don't do this analysis for cheri_bounded_stack_cap(_dynamic) since it
+    // should already have been done when creating the bounded_stack_cap
     // TODO: can do this for csetboundsexact if size < minimum exactly representable size
     if (IID == Intrinsic::cheri_cap_bounds_set_exact) {
       LLVM_DEBUG(dbgs() << " Can't optimize away setbounds exact uses since "
@@ -1796,6 +1798,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
       // If the source was a csetbounds(x, len), we know that at least len bytes
       // will be accessible since otherwise the csetbounds would have trapped.
       if (SrcII->getIntrinsicID() == Intrinsic::cheri_bounded_stack_cap ||
+          SrcII->getIntrinsicID() == Intrinsic::cheri_bounded_stack_cap_dynamic ||
           SrcII->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set_exact ||
           SrcII->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set) {
         if (auto SrcSize = dyn_cast<ConstantInt>(SrcII->getArgOperand(1))) {

@@ -4,7 +4,6 @@
 
 ; Check that lifetime markers don't get lost due to CheriBoundAllocas, as we'd
 ; risk StackSlotColoring reusing the slot.
-; TODO: This is currently broken.
 
 declare void @use(i8 addrspace(200)*)
 

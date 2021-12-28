@@ -5,7 +5,6 @@
 
 ; Check that lifetime markers don't get lost due to CheriBoundAllocas, as we'd
 ; risk StackSlotColoring reusing the slot.
-; TODO: This is currently broken.
 
 declare void @use(i8 addrspace(200)*)
 
@@ -14,10 +13,12 @@ define void @static_alloca() {
   ; CHECK: bb.0 (%ir-block.0):
   ; CHECK-NEXT:   [[CIncOffsetImm:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0, 0
   ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:gpcr = CSetBoundsImm killed [[CIncOffsetImm]], 4
+  ; CHECK-NEXT:   LIFETIME_START %stack.0
   ; CHECK-NEXT:   ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
   ; CHECK-NEXT:   $c10 = COPY [[CSetBoundsImm]]
   ; CHECK-NEXT:   PseudoCCALL target-flags(riscv-ccall) @use, csr_il32pc64d_l64pc128d, implicit-def dead $c1, implicit $c10, implicit-def $c2
   ; CHECK-NEXT:   ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
+  ; CHECK-NEXT:   LIFETIME_END %stack.0
   ; CHECK-NEXT:   PseudoCRET
   %1 = alloca i32, align 4, addrspace(200)
   %2 = bitcast i32 addrspace(200)* %1 to i8 addrspace(200)*

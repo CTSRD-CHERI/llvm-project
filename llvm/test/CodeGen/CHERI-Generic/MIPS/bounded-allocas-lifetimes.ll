@@ -5,7 +5,6 @@
 
 ; Check that lifetime markers don't get lost due to CheriBoundAllocas, as we'd
 ; risk StackSlotColoring reusing the slot.
-; TODO: This is currently broken.
 
 declare void @use(i8 addrspace(200)*)
 
@@ -14,11 +13,13 @@ define void @static_alloca() {
   ; CHECK: bb.0 (%ir-block.0):
   ; CHECK-NEXT:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %1
   ; CHECK-NEXT:   [[CheriBoundedStackPseudoImm:%[0-9]+]]:cherigpr = CheriBoundedStackPseudoImm %stack.0, 0, 4
+  ; CHECK-NEXT:   LIFETIME_START %stack.0
   ; CHECK-NEXT:   ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
   ; CHECK-NEXT:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20-call) @use, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from call-entry @use)
   ; CHECK-NEXT:   $c3 = COPY [[CheriBoundedStackPseudoImm]]
   ; CHECK-NEXT:   CapJumpLinkPseudo killed [[LOADCAP_BigImm]], csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit $c3, implicit-def $c11
   ; CHECK-NEXT:   ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
+  ; CHECK-NEXT:   LIFETIME_END %stack.0
   ; CHECK-NEXT:   CapRetPseudo
   %1 = alloca i32, align 4, addrspace(200)
   %2 = bitcast i32 addrspace(200)* %1 to i8 addrspace(200)*

@@ -1079,6 +1079,11 @@ defm : StackCapPatterns<iFATPTR64, AddrFI64>;
 defm : StackCapPatterns<iFATPTR128, AddrFI128>;
 defm : StackCapPatterns<iFATPTR256, AddrFI256>;
 
+def : Pat<(int_cheri_bounded_stack_cap_dynamic CheriOpnd:$cs, GPR64Opnd:$rt),
+          (CSetBounds CheriOpnd:$cs, GPR64Opnd:$rt)>;
+def : Pat<(int_cheri_bounded_stack_cap_dynamic CheriOpnd:$cs, uimm11s0Pattern:$imm),
+          (CSetBoundsImm CheriOpnd:$cs, uimm11s0:$imm)>;
+
 // This would also work:
 // def frameindex_to_targetframeindex : SDNodeXForm<frameindex, [{
 //   auto FI = cast<FrameIndexSDNode>(N);

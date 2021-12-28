@@ -4450,7 +4450,12 @@ bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
   // loads that would have trapped at runtime. See cheri-intrinisics.ll test.
   // case Intrinsic::cheri_cap_bounds_set:
   // case Intrinsic::cheri_cap_bounds_set_exact:
-  // case Intrinsic::cheri_bounded_stack_cap:
+  // However, we must return true for the stack capability bounding intrinsics
+  // so SelectionDAG finds the allocas for lifetime markers in the case that
+  // the lifetime marker uses a bitcast and that same bitcast has another
+  // unsafe use.
+  case Intrinsic::cheri_bounded_stack_cap:
+  case Intrinsic::cheri_bounded_stack_cap_dynamic:
   case Intrinsic::launder_invariant_group:
   case Intrinsic::strip_invariant_group:
   case Intrinsic::aarch64_irg:
