@@ -98,9 +98,10 @@ bool elf::link(ArrayRef<const char *> args, bool canExitEarly,
     whyExtract.clear();
 
     tar = nullptr;
-    memset(&in, 0, sizeof(in));
+    in.reset();
 
-    partitions = {Partition()};
+    partitions.clear();
+    partitions.emplace_back();
 
     SharedFile::vernauxNum = 0;
   };
@@ -120,7 +121,8 @@ bool elf::link(ArrayRef<const char *> args, bool canExitEarly,
   script = std::make_unique<LinkerScript>();
   symtab = std::make_unique<SymbolTable>();
 
-  partitions = {Partition()};
+  partitions.clear();
+  partitions.emplace_back();
 
   config->progName = args[0];
 
@@ -2607,7 +2609,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
     combineEhSections();
     if (InX<ELFT>::capRelocs) {
       combineCapRelocsSections<ELFT>();
-      inputSections.push_back(InX<ELFT>::capRelocs);
+      inputSections.push_back(InX<ELFT>::capRelocs.get());
     }
   }
 

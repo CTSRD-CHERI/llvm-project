@@ -880,8 +880,8 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(uint32_t idx,
       // to work. In a full implementation we would merge all attribute
       // sections.
       if (in.attributes == nullptr) {
-        in.attributes = make<InputSection>(*this, sec, name);
-        return in.attributes;
+        in.attributes = std::make_unique<InputSection>(*this, sec, name);
+        return in.attributes.get();
       }
       return &InputSection::discarded;
     }
@@ -902,8 +902,8 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(uint32_t idx,
       // standard extensions to enable. In a full implementation we would merge
       // all attribute sections.
       if (in.attributes == nullptr) {
-        in.attributes = make<InputSection>(*this, sec, name);
-        return in.attributes;
+        in.attributes = std::make_unique<InputSection>(*this, sec, name);
+        return in.attributes.get();
       }
       return &InputSection::discarded;
     }
