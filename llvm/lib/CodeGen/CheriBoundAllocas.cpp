@@ -35,13 +35,6 @@ using namespace llvm;
 
 namespace {
 
-// TODO: remove this option after eval
-static cl::opt<bool> UseRematerializableIntrinsic(
-    "cheri-stack-bounds-allow-remat", cl::init(true),
-    cl::desc("Use bounded.stack.cap() instead of bounds.set() for stack "
-             "allocations (allows rematerialization)"),
-    cl::Hidden);
-
 // Loading/storing from constant stack indices does not need to use a small
 // tightly bounded capability and can use $csp instead
 // TODO: remove these options once we know what the best stragegy is?
@@ -136,16 +129,12 @@ public:
 
     LLVM_DEBUG(dbgs() << "\nChecking function " << F.getName() << "\n");
 
-    // TODO: csetboundsexact and round up sizes
-    // Keep around the non-rematerializable cheri_cap_bounds_set code path to
-    // compare how much rematerialization can help
-    Intrinsic::ID BoundedStackCap = UseRematerializableIntrinsic
-                                        ? Intrinsic::cheri_bounded_stack_cap
-                                        : Intrinsic::cheri_cap_bounds_set;
     const DataLayout &DL = M->getDataLayout();
-    Function *BoundedStackFn =
-        Intrinsic::getDeclaration(M, BoundedStackCap, SizeTy);
     StackBoundsMethod BoundsMode = BoundsSettingMode;
+
+    // TODO: csetboundsexact and round up sizes
+    Function *BoundedStackFn =
+        Intrinsic::getDeclaration(M, Intrinsic::cheri_bounded_stack_cap, SizeTy);
 
     IRBuilder<> B(C);
 
