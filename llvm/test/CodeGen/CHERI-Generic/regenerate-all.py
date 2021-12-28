@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import math
+import re
 import subprocess
 import sys
 import typing
@@ -8,6 +9,9 @@ from pathlib import Path
 
 
 LLVM_SRC_PATH = Path(__file__).parent.parent.parent.parent
+
+CHERI_GENERIC_UTC_KEY = 'CHERI-GENERIC-UTC:'
+CHERI_GENERIC_UTC_CMD = re.compile((r'.*' + CHERI_GENERIC_UTC_KEY + '\s*(?P<cmd>.*)\s*$').encode("utf-8"))
 
 
 class ArchSpecificValues(object):
@@ -91,6 +95,28 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     current_arch_base_if = b"@IF-" + arch_def.base_name.encode() + b"@"
     current_arch_ifnot = b"@IFNOT-" + arch_def.name.encode() + b"@"
     current_arch_base_ifnot = b"@IFNOT-" + arch_def.base_name.encode() + b"@"
+    cheri_generic_utcs = None
+
+    update_scripts_dir = LLVM_SRC_PATH / "utils"
+    llc_checks_cmd = [sys.executable, str(update_scripts_dir / "update_llc_test_checks.py"),
+                      "--force-update",
+                      "--llc-binary", str(args.llc_cmd),
+                      "--opt-binary", str(args.opt_cmd),
+                      str(output_path)]
+    mir_checks_cmd = [sys.executable, str(update_scripts_dir / "update_mir_test_checks.py"),
+                      "--force-update",
+                      "--llc-binary", str(args.llc_cmd),
+                      str(output_path)]
+    opt_checks_cmd = [sys.executable, str(update_scripts_dir / "update_test_checks.py"),
+                      "--function-signature", "--scrub-attributes", "--force-update",
+                      "--opt-binary", str(args.opt_cmd),
+                      str(output_path)]
+    utc_cmds = {
+        b'llc': llc_checks_cmd,
+        b'mir': mir_checks_cmd,
+        b'opt': opt_checks_cmd,
+    }
+
     with output_path.open("wb") as output_file:
         output_file.write(b"; DO NOT EDIT -- This file was generated from " + str(
             Path(input_file.name).relative_to(LLVM_SRC_PATH)).encode("utf-8") + b"\n")
@@ -128,6 +154,19 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                 if not valid_directive:
                     sys.exit("Invalid @IF- directive: " + line.decode("utf-8"))
 
+            m = CHERI_GENERIC_UTC_CMD.match(line)
+            if m:
+                if cheri_generic_utcs is None:
+                    cheri_generic_utcs = []
+                for s in m.group(1).split(b','):
+                    s = s.strip()
+                    if s not in utc_cmds:
+                        sys.exit("Unknown '" + s.decode("utf-8") + "' in CHERI-GENERIC-UTC directive: " +
+                                 line.decode("utf-8"))
+                    cheri_generic_utcs.append(s)
+                if not cheri_generic_utcs:
+                    sys.exit("Empty CHERI-GENERIC-UTC directive: " + line.decode("utf-8"))
+
             converted_line = line.replace(b"iCAPRANGE", b"i" + str(
                 arch_def.cap_range).encode("utf-8"))
             converted_line = converted_line.replace(b"iCAPWIDTH", b"i" + str(
@@ -163,18 +202,11 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
         print("Not auto-generating check lines.")
         return
 
+    # TODO: Always be explicit?
+    if cheri_generic_utcs is None:
+        cheri_generic_utcs = [b'llc', b'opt']
     # Generate the check lines using update_*_test_checks.py
-    update_scripts_dir = LLVM_SRC_PATH / "utils"
-    llc_checks_cmd = [sys.executable, str(update_scripts_dir / "update_llc_test_checks.py"),
-                      "--force-update",
-                      "--llc-binary", str(args.llc_cmd),
-                      "--opt-binary", str(args.opt_cmd),
-                      str(output_path)]
-    opt_checks_cmd = [sys.executable, str(update_scripts_dir / "update_test_checks.py"),
-                      "--function-signature", "--scrub-attributes", "--force-update",
-                      "--opt-binary", str(args.opt_cmd),
-                      str(output_path)]
-    for update_cmd in (llc_checks_cmd, opt_checks_cmd):
+    for update_cmd in [utc_cmds[k] for k in cheri_generic_utcs]:
         # if args.verbose:
         print("Running", " ".join(update_cmd))
         subprocess.check_call(update_cmd)
