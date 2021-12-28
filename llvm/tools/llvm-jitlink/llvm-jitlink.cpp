@@ -476,7 +476,7 @@ public:
       return;
     }
 
-    char *AllocBase = 0;
+    char *AllocBase = nullptr;
     {
       std::lock_guard<std::mutex> Lock(SlabMutex);
 
@@ -1884,7 +1884,7 @@ int main(int argc, char *argv[]) {
   if (ShowInitialExecutionSessionState)
     S->ES.dump(outs());
 
-  JITEvaluatedSymbol EntryPoint = 0;
+  JITEvaluatedSymbol EntryPoint = nullptr;
   {
     TimeRegion TR(Timers ? &Timers->LinkTimer : nullptr);
     // Find the entry-point function unconditionally, since we want to force
