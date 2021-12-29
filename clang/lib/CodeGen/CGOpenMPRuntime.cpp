@@ -1432,10 +1432,11 @@ static StringRef getIdentStringFromSourceLocation(CodeGenFunction &CGF,
 llvm::Value *CGOpenMPRuntime::emitUpdateLocation(CodeGenFunction &CGF,
                                                  SourceLocation Loc,
                                                  unsigned Flags) {
+  uint32_t SrcLocStrSize;
   llvm::Constant *SrcLocStr;
   if (CGM.getCodeGenOpts().getDebugInfo() == codegenoptions::NoDebugInfo ||
       Loc.isInvalid()) {
-    SrcLocStr = OMPBuilder.getOrCreateDefaultSrcLocStr();
+    SrcLocStr = OMPBuilder.getOrCreateDefaultSrcLocStr(SrcLocStrSize);
   } else {
     std::string FunctionName;
     if (const auto *FD = dyn_cast_or_null<FunctionDecl>(CGF.CurFuncDecl))
@@ -1444,12 +1445,12 @@ llvm::Value *CGOpenMPRuntime::emitUpdateLocation(CodeGenFunction &CGF,
     const char *FileName = PLoc.getFilename();
     unsigned Line = PLoc.getLine();
     unsigned Column = PLoc.getColumn();
-    SrcLocStr =
-        OMPBuilder.getOrCreateSrcLocStr(FunctionName, FileName, Line, Column);
+    SrcLocStr = OMPBuilder.getOrCreateSrcLocStr(FunctionName, FileName, Line,
+                                                Column, SrcLocStrSize);
   }
   unsigned Reserved2Flags = getDefaultLocationReserved2Flags();
-  return OMPBuilder.getOrCreateIdent(SrcLocStr, llvm::omp::IdentFlag(Flags),
-                                     Reserved2Flags);
+  return OMPBuilder.getOrCreateIdent(
+      SrcLocStr, SrcLocStrSize, llvm::omp::IdentFlag(Flags), Reserved2Flags);
 }
 
 llvm::Value *CGOpenMPRuntime::getThreadID(CodeGenFunction &CGF,
@@ -1460,10 +1461,11 @@ llvm::Value *CGOpenMPRuntime::getThreadID(CodeGenFunction &CGF,
   if (CGM.getLangOpts().OpenMPIRBuilder) {
     SmallString<128> Buffer;
     OMPBuilder.updateToLocation(CGF.Builder.saveIP());
+    uint32_t SrcLocStrSize;
     auto *SrcLocStr = OMPBuilder.getOrCreateSrcLocStr(
-        getIdentStringFromSourceLocation(CGF, Loc, Buffer));
+        getIdentStringFromSourceLocation(CGF, Loc, Buffer), SrcLocStrSize);
     return OMPBuilder.getOrCreateThreadID(
-        OMPBuilder.getOrCreateIdent(SrcLocStr));
+        OMPBuilder.getOrCreateIdent(SrcLocStr, SrcLocStrSize));
   }
 
   llvm::Value *ThreadID = nullptr;
@@ -9534,8 +9536,9 @@ llvm::Constant *
 emitMappingInformation(CodeGenFunction &CGF, llvm::OpenMPIRBuilder &OMPBuilder,
                        MappableExprsHandler::MappingExprInfo &MapExprs) {
 
+  uint32_t SrcLocStrSize;
   if (!MapExprs.getMapDecl() && !MapExprs.getMapExpr())
-    return OMPBuilder.getOrCreateDefaultSrcLocStr();
+    return OMPBuilder.getOrCreateDefaultSrcLocStr(SrcLocStrSize);
 
   SourceLocation Loc;
   if (!MapExprs.getMapDecl() && MapExprs.getMapExpr()) {
@@ -9559,7 +9562,8 @@ emitMappingInformation(CodeGenFunction &CGF, llvm::OpenMPIRBuilder &OMPBuilder,
 
   PresumedLoc PLoc = CGF.getContext().getSourceManager().getPresumedLoc(Loc);
   return OMPBuilder.getOrCreateSrcLocStr(PLoc.getFilename(), ExprName,
-                                         PLoc.getLine(), PLoc.getColumn());
+                                         PLoc.getLine(), PLoc.getColumn(),
+                                         SrcLocStrSize);
 }
 
 /// Emit the arrays used to pass the captures and map information to the
