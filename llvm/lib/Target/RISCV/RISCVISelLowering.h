@@ -488,6 +488,9 @@ public:
                       SelectionDAG &DAG) const override;
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
+  template <class NodeTy>
+  SDValue getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG, bool IsLocal,
+                  bool CanDeriveFromPcc) const;
 
   bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                          Type *Ty) const override {
@@ -573,10 +576,6 @@ private:
                          const SmallVectorImpl<ISD::OutputArg> &Outs,
                          bool IsRet, CallLoweringInfo *CLI,
                          RISCVCCAssignFn Fn) const;
-
-  template <class NodeTy>
-  SDValue getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG, bool IsLocal,
-                  bool CanDeriveFromPcc) const;
 
   SDValue getStaticTLSAddr(GlobalAddressSDNode *N, EVT Ty, SelectionDAG &DAG,
                            bool NotLocal) const;
