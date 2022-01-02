@@ -582,8 +582,7 @@ class Sema;
 
     ImplicitConversionSequence()
         : ConversionKind(Uninitialized),
-          InitializerListOfIncompleteArray(false),
-          InitializerListContainerType() {
+          InitializerListOfIncompleteArray(false) {
       Standard.setAsIdentityConversion();
     }
 
