@@ -1008,19 +1008,19 @@ public:
     if (const auto *FD = dyn_cast_or_null<FunctionDecl>(D)) {
       if (const auto *Attr = FD->getAttr<WebAssemblyImportModuleAttr>()) {
         llvm::Function *Fn = cast<llvm::Function>(GV);
-        llvm::AttrBuilder B;
+        llvm::AttrBuilder B(GV->getContext());
         B.addAttribute("wasm-import-module", Attr->getImportModule());
         Fn->addFnAttrs(B);
       }
       if (const auto *Attr = FD->getAttr<WebAssemblyImportNameAttr>()) {
         llvm::Function *Fn = cast<llvm::Function>(GV);
-        llvm::AttrBuilder B;
+        llvm::AttrBuilder B(GV->getContext());
         B.addAttribute("wasm-import-name", Attr->getImportName());
         Fn->addFnAttrs(B);
       }
       if (const auto *Attr = FD->getAttr<WebAssemblyExportNameAttr>()) {
         llvm::Function *Fn = cast<llvm::Function>(GV);
-        llvm::AttrBuilder B;
+        llvm::AttrBuilder B(GV->getContext());
         B.addAttribute("wasm-export-name", Attr->getExportName());
         Fn->addFnAttrs(B);
       }
@@ -6568,7 +6568,7 @@ public:
     // AAPCS guarantees that sp will be 8-byte aligned on any public interface,
     // however this is not necessarily true on taking any interrupt. Instruct
     // the backend to perform a realignment as part of the function prologue.
-    llvm::AttrBuilder B;
+    llvm::AttrBuilder B(Fn->getContext());
     B.addStackAlignmentAttr(8);
     Fn->addFnAttrs(B);
   }
