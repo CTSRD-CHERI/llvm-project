@@ -1373,11 +1373,8 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
     addSym(*sym);
 
   for (ELFFileBase *file : objectFiles)
-    for (Symbol *sym : file->getSymbols()) {
-      if (!sym->isLocal())
-        break;
+    for (Symbol *sym : file->getLocalSymbols())
       addSym(*sym);
-    }
 
   if (config->warnSymbolOrdering)
     for (auto orderEntry : symbolOrder)
