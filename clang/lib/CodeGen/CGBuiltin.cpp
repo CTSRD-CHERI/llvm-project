@@ -1070,7 +1070,10 @@ static llvm::Value *emitPPCLoadReserveIntrinsic(CodeGenFunction &CGF,
 
   llvm::InlineAsm *IA =
       llvm::InlineAsm::get(FTy, Asm, Constraints, /*hasSideEffects=*/true);
-  return CGF.Builder.CreateCall(IA, {Addr});
+  llvm::CallInst *CI = CGF.Builder.CreateCall(IA, {Addr});
+  CI->addParamAttr(
+      0, Attribute::get(CGF.getLLVMContext(), Attribute::ElementType, RetType));
+  return CI;
 }
 
 namespace {
