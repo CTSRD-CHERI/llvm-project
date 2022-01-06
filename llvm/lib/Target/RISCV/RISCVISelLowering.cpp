@@ -1735,7 +1735,8 @@ bool RISCVTargetLowering::isShuffleMaskLegal(ArrayRef<int> M, EVT VT) const {
   return false;
 }
 
-static SDValue lowerFP_TO_INT_SAT(SDValue Op, SelectionDAG &DAG) {
+static SDValue lowerFP_TO_INT_SAT(SDValue Op, SelectionDAG &DAG,
+                                  const RISCVSubtarget &Subtarget) {
   // RISCV FP-to-int conversions saturate to the destination register size, but
   // don't produce 0 for nan. We can use a conversion instruction and fix the
   // nan case with a compare and a select.
@@ -1747,15 +1748,17 @@ static SDValue lowerFP_TO_INT_SAT(SDValue Op, SelectionDAG &DAG) {
   bool IsSigned = Op.getOpcode() == ISD::FP_TO_SINT_SAT;
   unsigned Opc;
   if (SatVT == DstVT)
-    Opc = IsSigned ? RISCVISD::FCVT_X_RTZ : RISCVISD::FCVT_XU_RTZ;
+    Opc = IsSigned ? RISCVISD::FCVT_X : RISCVISD::FCVT_XU;
   else if (DstVT == MVT::i64 && SatVT == MVT::i32)
-    Opc = IsSigned ? RISCVISD::FCVT_W_RTZ_RV64 : RISCVISD::FCVT_WU_RTZ_RV64;
+    Opc = IsSigned ? RISCVISD::FCVT_W_RV64 : RISCVISD::FCVT_WU_RV64;
   else
     return SDValue();
   // FIXME: Support other SatVTs by clamping before or after the conversion.
 
   SDLoc DL(Op);
-  SDValue FpToInt = DAG.getNode(Opc, DL, DstVT, Src);
+  SDValue FpToInt = DAG.getNode(
+      Opc, DL, DstVT, Src,
+      DAG.getTargetConstant(RISCVFPRndMode::RTZ, DL, Subtarget.getXLenVT()));
 
   SDValue ZeroInt = DAG.getConstant(0, DL, DstVT);
   return DAG.getSelectCC(DL, Src, Src, ZeroInt, FpToInt, ISD::CondCode::SETUO);
@@ -3079,7 +3082,7 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   }
   case ISD::FP_TO_SINT_SAT:
   case ISD::FP_TO_UINT_SAT:
-    return lowerFP_TO_INT_SAT(Op, DAG);
+    return lowerFP_TO_INT_SAT(Op, DAG, Subtarget);
   case ISD::FTRUNC:
   case ISD::FCEIL:
   case ISD::FFLOOR:
@@ -5974,17 +5977,20 @@ void RISCVTargetLowering::ReplaceNodeResults(SDNode *N,
       if (!isTypeLegal(Op0.getValueType()))
         return;
       if (IsStrict) {
-        unsigned Opc = IsSigned ? RISCVISD::STRICT_FCVT_W_RTZ_RV64
-                                : RISCVISD::STRICT_FCVT_WU_RTZ_RV64;
+        unsigned Opc = IsSigned ? RISCVISD::STRICT_FCVT_W_RV64
+                                : RISCVISD::STRICT_FCVT_WU_RV64;
         SDVTList VTs = DAG.getVTList(MVT::i64, MVT::Other);
-        SDValue Res = DAG.getNode(Opc, DL, VTs, N->getOperand(0), Op0);
+        SDValue Res = DAG.getNode(
+            Opc, DL, VTs, N->getOperand(0), Op0,
+            DAG.getTargetConstant(RISCVFPRndMode::RTZ, DL, MVT::i64));
         Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Res));
         Results.push_back(Res.getValue(1));
         return;
       }
-      unsigned Opc =
-          IsSigned ? RISCVISD::FCVT_W_RTZ_RV64 : RISCVISD::FCVT_WU_RTZ_RV64;
-      SDValue Res = DAG.getNode(Opc, DL, MVT::i64, Op0);
+      unsigned Opc = IsSigned ? RISCVISD::FCVT_W_RV64 : RISCVISD::FCVT_WU_RV64;
+      SDValue Res =
+          DAG.getNode(Opc, DL, MVT::i64, Op0,
+                      DAG.getTargetConstant(RISCVFPRndMode::RTZ, DL, MVT::i64));
       Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Res));
       return;
     }
@@ -8123,10 +8129,10 @@ unsigned RISCVTargetLowering::ComputeNumSignBitsForTargetNode(
   case RISCVISD::UNSHFLW:
   case RISCVISD::BCOMPRESSW:
   case RISCVISD::BDECOMPRESSW:
-  case RISCVISD::FCVT_W_RTZ_RV64:
-  case RISCVISD::FCVT_WU_RTZ_RV64:
-  case RISCVISD::STRICT_FCVT_W_RTZ_RV64:
-  case RISCVISD::STRICT_FCVT_WU_RTZ_RV64:
+  case RISCVISD::FCVT_W_RV64:
+  case RISCVISD::FCVT_WU_RV64:
+  case RISCVISD::STRICT_FCVT_W_RV64:
+  case RISCVISD::STRICT_FCVT_WU_RV64:
     // TODO: As the result is sign-extended, this is conservatively correct. A
     // more precise answer could be calculated for SRAW depending on known
     // bits in the shift amount.
@@ -10025,12 +10031,12 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(FMV_X_ANYEXTH)
   NODE_NAME_CASE(FMV_W_X_RV64)
   NODE_NAME_CASE(FMV_X_ANYEXTW_RV64)
-  NODE_NAME_CASE(FCVT_X_RTZ)
-  NODE_NAME_CASE(FCVT_XU_RTZ)
-  NODE_NAME_CASE(FCVT_W_RTZ_RV64)
-  NODE_NAME_CASE(FCVT_WU_RTZ_RV64)
-  NODE_NAME_CASE(STRICT_FCVT_W_RTZ_RV64)
-  NODE_NAME_CASE(STRICT_FCVT_WU_RTZ_RV64)
+  NODE_NAME_CASE(FCVT_X)
+  NODE_NAME_CASE(FCVT_XU)
+  NODE_NAME_CASE(FCVT_W_RV64)
+  NODE_NAME_CASE(FCVT_WU_RV64)
+  NODE_NAME_CASE(STRICT_FCVT_W_RV64)
+  NODE_NAME_CASE(STRICT_FCVT_WU_RV64)
   NODE_NAME_CASE(READ_CYCLE_WIDE)
   NODE_NAME_CASE(GREV)
   NODE_NAME_CASE(GREVW)
