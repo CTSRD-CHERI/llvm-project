@@ -26116,11 +26116,6 @@ bool AArch64TargetLowering::isTargetCanonicalConstantNode(SDValue Op) const {
          TargetLowering::isTargetCanonicalConstantNode(Op);
 }
 
-bool AArch64TargetLowering::isConstantUnsignedBitfieldExtractLegal(
-    unsigned Opc, LLT Ty1, LLT Ty2) const {
-  return Ty1 == Ty2 && (Ty1 == LLT::scalar(32) || Ty1 == LLT::scalar(64));
-}
-
 bool AArch64TargetLowering::isComplexDeinterleavingSupported() const {
   return Subtarget->hasSVE() || Subtarget->hasSVE2() ||
          Subtarget->hasComplxNum();
