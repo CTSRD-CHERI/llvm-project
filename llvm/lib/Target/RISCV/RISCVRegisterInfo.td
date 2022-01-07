@@ -227,38 +227,15 @@ def GPRX0 : RegisterClass<"RISCV", [XLenVT], 32, (add X0)> {
   let RegInfos = XLenRI;
 }
 
-// The order of registers represents the preferred allocation sequence.
-// Registers are listed in the order caller-save, callee-save, specials.
-def GPRNoX0 : RegisterClass<"RISCV", [XLenVT], 32, (add
-    (sequence "X%u", 10, 17),
-    (sequence "X%u", 5, 7),
-    (sequence "X%u", 28, 31),
-    (sequence "X%u", 8, 9),
-    (sequence "X%u", 18, 27),
-    (sequence "X%u", 1, 4)
-  )> {
+def GPRNoX0 : RegisterClass<"RISCV", [XLenVT], 32, (sub GPR, X0)> {
   let RegInfos = XLenRI;
 }
 
-def GPCRNoC0 : RegisterClass<"RISCV", [CLenVT], 64, (add
-    (sequence "C%u", 10, 17),
-    (sequence "C%u", 5, 7),
-    (sequence "C%u", 28, 31),
-    (sequence "C%u", 8, 9),
-    (sequence "C%u", 18, 27),
-    (sequence "C%u", 1, 4)
-  )> {
+def GPCRNoC0 : RegisterClass<"RISCV", [CLenVT], 64, (sub GPCR, C0)> {
   let RegInfos = CLenRI;
 }
 
-def GPRNoX0X2 : RegisterClass<"RISCV", [XLenVT], 32, (add
-    (sequence "X%u", 10, 17),
-    (sequence "X%u", 5, 7),
-    (sequence "X%u", 28, 31),
-    (sequence "X%u", 8, 9),
-    (sequence "X%u", 18, 27),
-    X1, X3, X4
-  )> {
+def GPRNoX0X2 : RegisterClass<"RISCV", [XLenVT], 32, (sub GPR, X0, X2)> {
   let RegInfos = XLenRI;
 }
 
@@ -266,13 +243,7 @@ def GPRNoX0X2 : RegisterClass<"RISCV", [XLenVT], 32, (add
 // stack on some microarchitectures. Also remove the reserved registers X0, X2,
 // X3, and X4 as it reduces the number of register classes that get synthesized
 // by tablegen.
-def GPRJALR : RegisterClass<"RISCV", [XLenVT], 32, (add
-    (sequence "X%u", 10, 17),
-    (sequence "X%u", 6, 7),
-    (sequence "X%u", 28, 31),
-    (sequence "X%u", 8, 9),
-    (sequence "X%u", 18, 27)
-  )> {
+def GPRJALR : RegisterClass<"RISCV", [XLenVT], 32, (sub GPR, (sequence "X%u", 0, 5))> {
   let RegInfos = XLenRI;
 }
 
