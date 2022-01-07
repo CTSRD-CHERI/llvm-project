@@ -1593,6 +1593,7 @@ const EnumEntry<unsigned> ElfHeaderRISCVFlags[] = {
   ENUM_ENT(EF_RISCV_FLOAT_ABI_DOUBLE, "double-float ABI"),
   ENUM_ENT(EF_RISCV_FLOAT_ABI_QUAD, "quad-float ABI"),
   ENUM_ENT(EF_RISCV_RVE, "RVE"),
+  ENUM_ENT(EF_RISCV_TSO, "TSO"),
   ENUM_ENT(EF_RISCV_CHERIABI, "cheriabi"),
   ENUM_ENT(EF_RISCV_CAP_MODE, "capability mode"),
 };
