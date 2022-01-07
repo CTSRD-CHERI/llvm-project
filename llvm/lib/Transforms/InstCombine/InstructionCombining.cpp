@@ -2682,7 +2682,7 @@ static bool isAllocSiteRemovable(Instruction *AI,
           continue;
         }
 
-        if (isReallocLikeFn(I, &TLI, true)) {
+        if (isReallocLikeFn(I, &TLI)) {
           Users.emplace_back(I);
           Worklist.push_back(I);
           continue;
@@ -2923,7 +2923,7 @@ Instruction *InstCombinerImpl::visitFree(CallInst &FI) {
   // If we had free(realloc(...)) with no intervening uses, then eliminate the
   // realloc() entirely.
   if (CallInst *CI = dyn_cast<CallInst>(Op)) {
-    if (CI->hasOneUse() && isReallocLikeFn(CI, &TLI, true)) {
+    if (CI->hasOneUse() && isReallocLikeFn(CI, &TLI)) {
       return eraseInstFromFunction(
           *replaceInstUsesWith(*CI, CI->getOperand(0)));
     }
