@@ -1149,7 +1149,8 @@ optimizeOnceStoredGlobal(GlobalVariable *GV, Value *StoredOnceVal,
       // Optimize away any trapping uses of the loaded value.
       if (OptimizeAwayTrappingUsesOfLoads(GV, SOVC, DL, GetTLI))
         return true;
-    } else if (CallInst *CI = extractMallocCall(StoredOnceVal, GetTLI)) {
+    } else if (isMallocLikeFn(StoredOnceVal, GetTLI)) {
+      auto *CI = cast<CallInst>(StoredOnceVal);
       auto *TLI = &GetTLI(*CI->getFunction());
       Type *MallocType = getMallocAllocatedType(CI, TLI);
       if (MallocType && tryToOptimizeStoreOfMallocToGlobal(GV, CI, MallocType,
