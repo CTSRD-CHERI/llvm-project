@@ -217,8 +217,8 @@ getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
   const MipsSubtarget &Subtarget = MF.getSubtarget<MipsSubtarget>();
 
-  for (unsigned I = 0; I < array_lengthof(ReservedGPR32); ++I)
-    Reserved.set(ReservedGPR32[I]);
+  for (MCPhysReg R : ReservedGPR32)
+    Reserved.set(R);
 
   // Reserve registers for the NaCl sandbox.
   if (Subtarget.isTargetNaCl()) {
@@ -227,8 +227,8 @@ getReservedRegs(const MachineFunction &MF) const {
     Reserved.set(Mips::T8);   // Reserved for thread pointer.
   }
 
-  for (unsigned I = 0; I < array_lengthof(ReservedGPR64); ++I)
-    Reserved.set(ReservedGPR64[I]);
+  for (MCPhysReg R : ReservedGPR64)
+    Reserved.set(R);
 
   // In the CHERI pure-capability ABI, $sp is just another temporary register.
   if (!Subtarget.isABI_CheriPureCap()) {
