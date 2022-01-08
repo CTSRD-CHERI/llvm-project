@@ -292,8 +292,8 @@ static void parseOptions(const opt::InputArgList &Args) {
 namespace {
 struct ReadObjTypeTableBuilder {
   ReadObjTypeTableBuilder()
-      : Allocator(), IDTable(Allocator), TypeTable(Allocator),
-        GlobalIDTable(Allocator), GlobalTypeTable(Allocator) {}
+      : IDTable(Allocator), TypeTable(Allocator), GlobalIDTable(Allocator),
+        GlobalTypeTable(Allocator) {}
 
   llvm::BumpPtrAllocator Allocator;
   llvm::codeview::MergingTypeTableBuilder IDTable;
