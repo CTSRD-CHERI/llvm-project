@@ -21,9 +21,7 @@ namespace clang {
 
 class DeclContext;
 class LangOptions;
-class SourceManager;
 class Stmt;
-class TagDecl;
 
 class PrinterHelper {
 public:
