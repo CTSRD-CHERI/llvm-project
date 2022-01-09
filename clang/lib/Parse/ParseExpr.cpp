@@ -400,7 +400,7 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
   SourceLocation ColonLoc;
 
   auto SavedType = PreferredType;
-  while (1) {
+  while (true) {
     // Every iteration may rely on a preferred type for the whole expression.
     PreferredType = SavedType;
     // If this token has a lower precedence than we are allowed to parse (e.g.
@@ -1855,7 +1855,7 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
   // parsed, see if there are any postfix-expression pieces here.
   SourceLocation Loc;
   auto SavedType = PreferredType;
-  while (1) {
+  while (true) {
     // Each iteration relies on preferred type for the whole expression.
     PreferredType = SavedType;
     switch (Tok.getKind()) {
@@ -2560,7 +2560,7 @@ ExprResult Parser::ParseBuiltinPrimaryExpression() {
     Comps.back().LocStart = Comps.back().LocEnd = ConsumeToken();
 
     // FIXME: This loop leaks the index expressions on error.
-    while (1) {
+    while (true) {
       if (Tok.is(tok::period)) {
         // offsetof-member-designator: offsetof-member-designator '.' identifier
         Comps.push_back(Sema::OffsetOfComponent());
@@ -3393,7 +3393,7 @@ bool Parser::ParseExpressionList(SmallVectorImpl<Expr *> &Exprs,
                                  SmallVectorImpl<SourceLocation> &CommaLocs,
                                  llvm::function_ref<void()> ExpressionStarts) {
   bool SawError = false;
-  while (1) {
+  while (true) {
     if (ExpressionStarts)
       ExpressionStarts();
 
@@ -3453,7 +3453,7 @@ bool Parser::ParseExpressionList(SmallVectorImpl<Expr *> &Exprs,
 bool
 Parser::ParseSimpleExpressionList(SmallVectorImpl<Expr*> &Exprs,
                                   SmallVectorImpl<SourceLocation> &CommaLocs) {
-  while (1) {
+  while (true) {
     ExprResult Expr = ParseAssignmentExpression();
     if (Expr.isInvalid())
       return true;

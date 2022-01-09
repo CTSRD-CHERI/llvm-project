@@ -508,7 +508,7 @@ StmtResult Parser::ParseMicrosoftAsmStatement(SourceLocation AsmLoc) {
     TokLoc = Tok.getLocation();
     ++NumTokensRead;
     SkippedStartOfLine = false;
-  } while (1);
+  } while (true);
 
   if (BraceNesting && BraceCount != savedBraceCount) {
     // __asm without closing brace (this can happen at EOF).
@@ -682,7 +682,7 @@ StmtResult Parser::ParseMicrosoftAsmStatement(SourceLocation AsmLoc) {
 ///         asm-qualifier
 ///         asm-qualifier-list asm-qualifier
 bool Parser::parseGNUAsmQualifierListOpt(GNUAsmQualifiers &AQ) {
-  while (1) {
+  while (true) {
     const GNUAsmQualifiers::AQ A = getGNUAsmQualifier(Tok);
     if (A == GNUAsmQualifiers::AQ_unspecified) {
       if (Tok.isNot(tok::l_paren)) {
@@ -811,7 +811,7 @@ StmtResult Parser::ParseAsmStatement(bool &msAsm) {
     }
     // Parse the asm-string list for clobbers if present.
     if (!AteExtraColon && isTokenStringLiteral()) {
-      while (1) {
+      while (true) {
         ExprResult Clobber(ParseAsmStringLiteral(/*ForAsmLabel*/ false));
 
         if (Clobber.isInvalid())
@@ -889,7 +889,7 @@ bool Parser::ParseAsmOperandsOpt(SmallVectorImpl<IdentifierInfo *> &Names,
   if (!isTokenStringLiteral() && Tok.isNot(tok::l_square))
     return false;
 
-  while (1) {
+  while (true) {
     // Read the [id] if present.
     if (Tok.is(tok::l_square)) {
       BalancedDelimiterTracker T(*this, tok::l_square);
