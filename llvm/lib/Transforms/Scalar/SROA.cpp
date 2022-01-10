@@ -389,7 +389,7 @@ private:
   ///
   /// Note that these are not separated by slice. This is because we expect an
   /// alloca to be completely rewritten or not rewritten at all. If rewritten,
-  /// all these instructions can simply be removed and replaced with undef as
+  /// all these instructions can simply be removed and replaced with poison as
   /// they come from outside of the allocated space.
   SmallVector<Instruction *, 8> DeadUsers;
 
@@ -399,10 +399,10 @@ private:
   /// Operands which will become dead if we rewrite the alloca.
   ///
   /// These are operands that in their particular use can be replaced with
-  /// undef when we rewrite the alloca. These show up in out-of-bounds inputs
+  /// poison when we rewrite the alloca. These show up in out-of-bounds inputs
   /// to PHI nodes and the like. They aren't entirely dead (there might be
   /// a GEP back into the bounds using it elsewhere) and nor is the PHI, but we
-  /// want to swap this particular input for undef to simplify the use lists of
+  /// want to swap this particular input for poison to simplify the use lists of
   /// the alloca.
   SmallVector<Use *, 8> DeadOperands;
 
@@ -1183,7 +1183,7 @@ private:
         enqueueUsers(I);
       else
         // Otherwise the operand to the PHI/select is dead, and we can replace
-        // it with undef.
+        // it with poison.
         AS.DeadOperands.push_back(U);
 
       return;
@@ -1203,7 +1203,7 @@ private:
     // For PHI and select operands outside the alloca, we can't nuke the entire
     // phi or select -- the other side might still be relevant, so we special
     // case them here and use a separate structure to track the operands
-    // themselves which should be replaced with undef.
+    // themselves which should be replaced with poison.
     // FIXME: This should instead be escaped in the event we're instrumenting
     // for address sanitization.
     if (Offset.uge(AllocSize)) {
@@ -2837,7 +2837,7 @@ private:
       // the computed value, and then replace the placeholder with LI, leaving
       // LI only used for this computation.
       Value *Placeholder = new LoadInst(
-          LI.getType(), UndefValue::get(LI.getType()->getPointerTo(AS)), "",
+          LI.getType(), PoisonValue::get(LI.getType()->getPointerTo(AS)), "",
           false, Align(1));
       V = insertInteger(DL, IRB, Placeholder, V, NewBeginOffset - BeginOffset,
                         "insert");
@@ -3698,7 +3698,7 @@ private:
     LLVM_DEBUG(dbgs() << "    original: " << LI << "\n");
     LoadOpSplitter Splitter(&LI, *U, LI.getType(), LI.getAAMetadata(),
                             getAdjustedAlignment(&LI, 0), DL, IRB);
-    Value *V = UndefValue::get(LI.getType());
+    Value *V = PoisonValue::get(LI.getType());
     Splitter.emitSplitOps(LI.getType(), V, LI.getName() + ".fca");
     Visited.erase(&LI);
     LI.replaceAllUsesWith(V);
@@ -4876,11 +4876,11 @@ bool SROAPass::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
   return Changed;
 }
 
-/// Clobber a use with undef, deleting the used value if it becomes dead.
+/// Clobber a use with poison, deleting the used value if it becomes dead.
 void SROAPass::clobberUse(Use &U) {
   Value *OldV = U;
-  // Replace the use with an undef value.
-  U = UndefValue::get(OldV->getType());
+  // Replace the use with an poison value.
+  U = PoisonValue::get(OldV->getType());
 
   // Check for this making an instruction dead. We have to garbage collect
   // all the dead instructions to ensure the uses of any alloca end up being
@@ -4934,7 +4934,7 @@ bool SROAPass::runOnAlloca(AllocaInst &AI) {
       clobberUse(DeadOp);
 
     // Now replace the uses of this instruction.
-    DeadUser->replaceAllUsesWith(UndefValue::get(DeadUser->getType()));
+    DeadUser->replaceAllUsesWith(PoisonValue::get(DeadUser->getType()));
 
     // And mark it for deletion.
     DeadInsts.push_back(DeadUser);
