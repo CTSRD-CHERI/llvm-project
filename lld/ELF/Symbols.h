@@ -62,6 +62,7 @@ struct StringRefZ {
 struct SymbolAux {
   uint32_t gotIdx = -1;
   uint32_t pltIdx = -1;
+  uint32_t tlsDescIdx = -1;
   uint32_t tlsGdIdx = -1;
 };
 
@@ -206,6 +207,9 @@ public:
   }
   uint32_t getPltIdx() const {
     return auxIdx == uint32_t(-1) ? uint32_t(-1) : symAux[auxIdx].pltIdx;
+  }
+  uint32_t getTlsDescIdx() const {
+    return auxIdx == uint32_t(-1) ? uint32_t(-1) : symAux[auxIdx].tlsDescIdx;
   }
   uint32_t getTlsGdIdx() const {
     return auxIdx == uint32_t(-1) ? uint32_t(-1) : symAux[auxIdx].tlsGdIdx;
