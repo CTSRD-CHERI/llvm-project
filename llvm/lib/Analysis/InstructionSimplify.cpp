@@ -4460,7 +4460,8 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops, bool InBounds,
     return PoisonValue::get(GEPTy);
 
   if (Q.isUndefValue(Ops[0]))
-    return UndefValue::get(GEPTy);
+    // If inbounds, we can choose an out-of-bounds pointer as a base pointer.
+    return InBounds ? PoisonValue::get(GEPTy) : UndefValue::get(GEPTy);
 
   bool IsScalableVec =
       isa<ScalableVectorType>(SrcTy) || any_of(Ops, [](const Value *V) {
