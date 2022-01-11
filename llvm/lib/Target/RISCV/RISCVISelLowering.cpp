@@ -10724,6 +10724,24 @@ bool RISCVTargetLowering::shouldConvertFpToSat(unsigned Op, EVT FPVT,
   }
 }
 
+unsigned RISCVTargetLowering::getJumpTableEncoding() const {
+  // If we are using the small code model, we can reduce size of jump table
+  // entry to 4 bytes.
+  if (Subtarget.is64Bit() && !isPositionIndependent() &&
+      getTargetMachine().getCodeModel() == CodeModel::Small) {
+    return MachineJumpTableInfo::EK_Custom32;
+  }
+  return TargetLowering::getJumpTableEncoding();
+}
+
+const MCExpr *RISCVTargetLowering::LowerCustomJumpTableEntry(
+    const MachineJumpTableInfo *MJTI, const MachineBasicBlock *MBB,
+    unsigned uid, MCContext &Ctx) const {
+  assert(Subtarget.is64Bit() && !isPositionIndependent() &&
+         getTargetMachine().getCodeModel() == CodeModel::Small);
+  return MCSymbolRefExpr::create(MBB->getSymbol(), Ctx);
+}
+
 bool RISCVTargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
                                                      EVT VT) const {
   VT = VT.getScalarType();
