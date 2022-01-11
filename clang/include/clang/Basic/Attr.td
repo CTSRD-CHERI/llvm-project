@@ -3763,6 +3763,8 @@ def OMPDeclareTargetDecl : InheritableAttr {
     EnumArgument<"DevType", "DevTypeTy",
                  [ "host", "nohost", "any" ],
                  [ "DT_Host", "DT_NoHost", "DT_Any" ]>,
+    ExprArgument<"IndirectExpr">,
+    BoolArgument<"Indirect">,
     UnsignedArgument<"Level">
   ];
   let AdditionalMembers = [{
