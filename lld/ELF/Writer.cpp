@@ -584,8 +584,6 @@ template <class ELFT> void Writer<ELFT>::run() {
   // finalizeSections does that.
   finalizeSections();
   checkExecuteOnly();
-  if (errorCount())
-    return;
 
   // If --compressed-debug-sections is specified, compress .debug_* sections.
   // Do it right now because it changes the size of output sections.
@@ -2107,10 +2105,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     }
   }
 
-  // Do not proceed if there was an undefined symbol.
-  if (errorCount())
-    return;
-
   if (in.mipsGot)
     in.mipsGot->build();
 
@@ -2243,6 +2237,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   //    sometimes using forward symbol declarations. We want to set the correct
   //    values. They also might change after adding the thunks.
   finalizeAddressDependentContent();
+
+  // All information needed for OutputSection part of Map file is available.
   if (errorCount())
     return;
 
