@@ -49,17 +49,19 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
     {"xcheri", RISCVExtensionVersion{0, 0}},
 };
 
-static const RISCVSupportedExtension SupportedExperimentalExtensions[] = {
-    {"v", RISCVExtensionVersion{0, 10}},
     {"zba", RISCVExtensionVersion{1, 0}},
     {"zbb", RISCVExtensionVersion{1, 0}},
     {"zbc", RISCVExtensionVersion{1, 0}},
+    {"zbs", RISCVExtensionVersion{1, 0}},
+};
+
+static const RISCVSupportedExtension SupportedExperimentalExtensions[] = {
+    {"v", RISCVExtensionVersion{0, 10}},
     {"zbe", RISCVExtensionVersion{0, 93}},
     {"zbf", RISCVExtensionVersion{0, 93}},
     {"zbm", RISCVExtensionVersion{0, 93}},
     {"zbp", RISCVExtensionVersion{0, 93}},
     {"zbr", RISCVExtensionVersion{0, 93}},
-    {"zbs", RISCVExtensionVersion{1, 0}},
     {"zbt", RISCVExtensionVersion{0, 93}},
 
     {"zvlsseg", RISCVExtensionVersion{0, 10}},
