@@ -5062,6 +5062,7 @@ public:
   void DiscardCleanupsInEvaluationContext();
 
   ExprResult TransformToPotentiallyEvaluated(Expr *E);
+  TypeSourceInfo *TransformToPotentiallyEvaluated(TypeSourceInfo *TInfo);
   ExprResult HandleExprEvaluationContextForTypeof(Expr *E);
 
   ExprResult CheckUnevaluatedOperand(Expr *E);
