@@ -460,6 +460,8 @@ static void dumpObject(ObjectFile &Obj, ScopedPrinter &Writer,
       Dumper->printMachOVersionMin();
     if (opts::MachODysymtab)
       Dumper->printMachODysymtab();
+    if (opts::CGProfile)
+      Dumper->printCGProfile();
   }
   if (opts::PrintStackMap)
     Dumper->printStackMap();
