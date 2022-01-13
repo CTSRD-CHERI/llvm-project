@@ -6641,7 +6641,7 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
 
     Step(Kind K, const Type *ClassOrBound = nullptr,
          llvm::Optional<PointerInterpretationKind> PIK = llvm::None)
-        : K(K), Quals(), ClassOrBound(ClassOrBound), PIK(PIK) {}
+        : K(K), ClassOrBound(ClassOrBound), PIK(PIK) {}
     QualType rebuild(ASTContext &Ctx, QualType T) const {
       T = Ctx.getQualifiedType(T, Quals);
       PointerInterpretationKind DefaultPIK =
