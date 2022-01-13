@@ -4366,6 +4366,9 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
                                                        : RISCVISD::BDECOMPRESS;
     return DAG.getNode(Opc, DL, XLenVT, Op.getOperand(1), Op.getOperand(2));
   }
+  case Intrinsic::riscv_bfp:
+    return DAG.getNode(RISCVISD::BFP, DL, XLenVT, Op.getOperand(1),
+                       Op.getOperand(2));
   case Intrinsic::riscv_vmv_x_s:
     assert(Op.getValueType() == XLenVT && "Unexpected VT!");
     return DAG.getNode(RISCVISD::VMV_X_S, DL, Op.getValueType(),
@@ -6453,6 +6456,17 @@ void RISCVTargetLowering::ReplaceNodeResults(SDNode *N,
                          ? RISCVISD::BCOMPRESSW
                          : RISCVISD::BDECOMPRESSW;
       SDValue Res = DAG.getNode(Opc, DL, MVT::i64, NewOp1, NewOp2);
+      Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Res));
+      break;
+    }
+    case Intrinsic::riscv_bfp: {
+      assert(N->getValueType(0) == MVT::i32 && Subtarget.is64Bit() &&
+             "Unexpected custom legalisation");
+      SDValue NewOp1 =
+          DAG.getNode(ISD::ANY_EXTEND, DL, MVT::i64, N->getOperand(1));
+      SDValue NewOp2 =
+          DAG.getNode(ISD::ANY_EXTEND, DL, MVT::i64, N->getOperand(2));
+      SDValue Res = DAG.getNode(RISCVISD::BFPW, DL, MVT::i64, NewOp1, NewOp2);
       Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Res));
       break;
     }
@@ -10190,6 +10204,8 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(SHFLW)
   NODE_NAME_CASE(UNSHFL)
   NODE_NAME_CASE(UNSHFLW)
+  NODE_NAME_CASE(BFP)
+  NODE_NAME_CASE(BFPW)
   NODE_NAME_CASE(BCOMPRESS)
   NODE_NAME_CASE(BCOMPRESSW)
   NODE_NAME_CASE(BDECOMPRESS)
