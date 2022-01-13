@@ -2579,6 +2579,8 @@ public:
     case ISD::SHL:
     case ISD::SRL:
     case ISD::SRA:
+    case ISD::ROTL:
+    case ISD::ROTR:
     case ISD::SDIV:
     case ISD::UDIV:
     case ISD::SREM:
