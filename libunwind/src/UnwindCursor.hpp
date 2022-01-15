@@ -1929,9 +1929,14 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
 
   pc_t pc = this->getIP();
   CHERI_DBG("%s(%d): pc=%#p\n", __func__, isReturnAddress, (void *)pc.get());
-#if defined(_LIBUNWIND_ARM_EHABI)
+#if defined(_LIBUNWIND_ARM_EHABI) || \
+    (defined(__CHERI_PURE_CAPABILITY__) && defined(__aarch64__))
   // Remove the thumb bit so the IP represents the actual instruction address.
   // This matches the behaviour of _Unwind_GetIP on arm.
+  // Also do this for Morello, since we need to find the FDE for the actual
+  // instruction address, not the address with the LSB set. Note that this does
+  // *not* match _Unwind_GetIP, as clearing the LSB set would invalidate the
+  // returned sentry.
   pc &= (pint_t)~0x1;
 #endif
 
