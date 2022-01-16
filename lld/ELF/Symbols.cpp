@@ -377,8 +377,6 @@ uint8_t Symbol::computeBinding() const {
 }
 
 bool Symbol::includeInDynsym() const {
-  if (!config->hasDynSymTab)
-    return false;
   if (usedByDynReloc)
     return true;
   if (computeBinding() == STB_LOCAL)
