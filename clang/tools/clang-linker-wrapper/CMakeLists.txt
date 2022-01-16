@@ -1,4 +1,6 @@
-set(LLVM_LINK_COMPONENTS 
+include(GNUInstallDirs)
+
+set(LLVM_LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
   BitWriter
   Core
@@ -42,6 +44,6 @@ target_link_libraries(clang-linker-wrapper
   ${CLANG_LINKER_WRAPPER_LIB_DEPS}
   )
 
-install(TARGETS clang-linker-wrapper RUNTIME DESTINATION bin)
+install(TARGETS clang-linker-wrapper RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 # TODO: port this to remove getUnqual
 remove_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)
