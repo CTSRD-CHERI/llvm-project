@@ -48,7 +48,7 @@ public:
   void handleDynamicList();
 
   // Set of .so files to not link the same shared object file more than once.
-  llvm::DenseMap<StringRef, SharedFile *> soNames;
+  llvm::DenseMap<llvm::CachedHashStringRef, SharedFile *> soNames;
 
   // This is a workaround for CHERI to add local symbols to .dynsym for relocations
   Defined *ensureSymbolWillBeInDynsym(Symbol* original);
