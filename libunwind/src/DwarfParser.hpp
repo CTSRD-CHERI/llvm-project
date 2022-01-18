@@ -272,11 +272,9 @@ bool CFI_Parser<A>::findFDE(A &addressSpace, pc_t pc, pint_t ehSectionStart,
   // fprintf(stderr, "findFDE(ehSectionStart=%#p, sectionLengt=%u, fdeHint=%#p)\n", (void*)ehSectionStart, sectionLength, (void*)fdeHint);
   pint_t p = (fdeHint != 0) ? fdeHint : ehSectionStart;
   const pint_t ehSectionEnd =
-      (sectionLength == __SIZE_MAX__)
+      (sectionLength == SIZE_MAX)
           ? static_cast<pint_t>(-1)
           : assert_pointer_in_bounds(ehSectionStart + sectionLength);
-  // fprintf(stderr, "findFDE(ehSectionEnd=%#p, p=%#p)\n", (void*)ehSectionEnd,
-  // (void*)p);
   assert(pc.isValid());
   addr_t pcAddr = pc.address();
   while (p < ehSectionEnd) {
