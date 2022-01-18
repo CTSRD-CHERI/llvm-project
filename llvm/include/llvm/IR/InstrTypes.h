@@ -2092,8 +2092,8 @@ public:
   /// Is the function attribute S disallowed by some operand bundle on
   /// this operand bundle user?
   bool isFnAttrDisallowedByOpBundle(StringRef S) const {
-    // Operand bundles only possibly disallow readnone, readonly and argmemonly
-    // attributes.  All String attributes are fine.
+    // Operand bundles only possibly disallow memory access attributes.  All
+    // String attributes are fine.
     return false;
   }
 
@@ -2118,6 +2118,9 @@ public:
 
     case Attribute::ReadOnly:
       return hasClobberingOperandBundles();
+
+    case Attribute::WriteOnly:
+      return hasReadingOperandBundles();
     }
 
     llvm_unreachable("switch has a default case!");
