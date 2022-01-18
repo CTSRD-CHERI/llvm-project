@@ -6,7 +6,7 @@
 [subrepo]
 	remote = https://github.com/CTSRD-CHERI/libcxx
 	branch = monorepo-mirror
-	commit = ee49be23b2700ccd827432370c5c99ee5a310fb1
+	commit = f040ad6b16129bac0cb35708cffc00c7bb4c64d6
 	method = rebase
-	cmdver = 0.4.3
-	parent = 2c83b17e4546d49ceeea32011f3cd57d021dce55
+	cmdver = 0.4.0
+	parent = 23dceca3db5ce05179537ce40ad18328adeea60e
