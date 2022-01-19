@@ -1027,7 +1027,7 @@ void RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
                           .addMBB(&DestBB, RISCVII::MO_CALL);
 
   RS->enterBasicBlockEnd(MBB);
-  unsigned Scav = RS->scavengeRegisterBackwards(*RC,
+  Register Scav = RS->scavengeRegisterBackwards(*RC,
                                                 MI.getIterator(), false, 0);
   // TODO: The case when there is no scavenged register needs special handling.
   assert(Scav != RISCV::NoRegister && "No register is scavenged!");
