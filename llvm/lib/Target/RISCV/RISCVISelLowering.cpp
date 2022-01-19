@@ -1356,8 +1356,6 @@ bool RISCVTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT,
     return false;
   if (VT == MVT::f64 && !Subtarget.hasStdExtD())
     return false;
-  if (Imm.isNegZero())
-    return false;
   return Imm.isZero();
 }
 
