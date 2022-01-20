@@ -4,6 +4,7 @@
 #include "../SyntheticSections.h"
 #include "../Target.h"
 #include "../Writer.h"
+#include "lld/Common/CommonLinkerContext.h"
 #include "lld/Common/Memory.h"
 #include "llvm/Support/Path.h"
 
@@ -646,7 +647,7 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   CaptableMap &entries = getCaptableMapForFileAndOffset(isec, offset);
   if (config->zCapTableDebug) {
     // Add a local helper symbol to improve disassembly:
-    StringRef helperSymName = saver.save(
+    StringRef helperSymName = saver().save(
         "$captable_load_" +
         (sym.getName().empty() ? "$anonymous_symbol" : sym.getName()));
     addSyntheticLocal(helperSymName, STT_NOTYPE, offset, 0, *isec);
@@ -796,9 +797,9 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     // might not be unique. If there is a global with the same name we always
     // want the global to have the plain @CAPTABLE name
     if (name.empty() /* || Name.startswith(".L") */ || targetSym->isLocal())
-      refName = saver.save(name + "@CAPTABLE" + symContext + "." + Twine(index));
+      refName = saver().save(name + "@CAPTABLE" + symContext + "." + Twine(index));
     else
-      refName = saver.save(name + "@CAPTABLE" + symContext);
+      refName = saver().save(name + "@CAPTABLE" + symContext);
     // XXXAR: This should no longer be necessary now that I am using addSyntheticLocal?
 #if 0
     if (Symtab->find(RefName)) {
