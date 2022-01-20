@@ -67,7 +67,6 @@ static const RISCVSupportedExtension SupportedExperimentalExtensions[] = {
     {"zbr", RISCVExtensionVersion{0, 93}},
     {"zbt", RISCVExtensionVersion{0, 93}},
 
-    {"zvlsseg", RISCVExtensionVersion{0, 10}},
     {"zvl32b", RISCVExtensionVersion{0, 10}},
     {"zvl64b", RISCVExtensionVersion{0, 10}},
     {"zvl128b", RISCVExtensionVersion{0, 10}},
@@ -302,9 +301,7 @@ void RISCVISAInfo::toFeatures(
     if (ExtName == "i")
       continue;
 
-    if (ExtName == "zvlsseg") {
-      Features.push_back("+experimental-zvlsseg");
-    } else if (isExperimentalExtension(ExtName)) {
+    if (isExperimentalExtension(ExtName)) {
       Features.push_back(StrAlloc("+experimental-" + ExtName));
     } else {
       Features.push_back(StrAlloc("+" + ExtName));
@@ -692,7 +689,6 @@ Error RISCVISAInfo::checkDependency() {
   bool HasE = Exts.count("e") == 1;
   bool HasD = Exts.count("d") == 1;
   bool HasF = Exts.count("f") == 1;
-  bool HasZvlsseg = Exts.count("zvlsseg") == 1;
   bool HasVector = Exts.count("zve32x") == 1;
   bool HasZve32f = Exts.count("zve32f") == 1;
   bool HasZve64d = Exts.count("zve64d") == 1;
@@ -710,11 +706,6 @@ Error RISCVISAInfo::checkDependency() {
   if (HasD && !HasF)
     return createStringError(errc::invalid_argument,
                              "d requires f extension to also be specified");
-
-  if (HasZvlsseg && !HasVector)
-    return createStringError(
-        errc::invalid_argument,
-        "zvlsseg requires v or zve* extension to also be specified");
 
   // FIXME: Consider Zfinx in the future
   if (HasZve32f && !HasF)
@@ -746,7 +737,7 @@ static const char *ImpliedExtsZve64d[] = {"zve64f"};
 static const char *ImpliedExtsZve64f[] = {"zve64x", "zve32f"};
 static const char *ImpliedExtsZve64x[] = {"zve32x", "zvl64b"};
 static const char *ImpliedExtsZve32f[] = {"zve32x"};
-static const char *ImpliedExtsZve32x[] = {"zvlsseg", "zvl32b"};
+static const char *ImpliedExtsZve32x[] = {"zvl32b"};
 static const char *ImpliedExtsZvl65536b[] = {"zvl32768b"};
 static const char *ImpliedExtsZvl32768b[] = {"zvl16384b"};
 static const char *ImpliedExtsZvl16384b[] = {"zvl8192b"};

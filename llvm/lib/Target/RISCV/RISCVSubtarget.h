@@ -82,7 +82,6 @@ private:
   bool HasStdExtZve64x = false;
   bool HasStdExtZve64f = false;
   bool HasStdExtZve64d = false;
-  bool HasStdExtZvlsseg = false;
   bool HasStdExtZfhmin = false;
   bool HasStdExtZfh = false;
   bool HasRV64 = false;
@@ -164,7 +163,6 @@ public:
   bool hasStdExtZve64x() const { return HasStdExtZve64x; }
   bool hasStdExtZve64f() const { return HasStdExtZve64f; }
   bool hasStdExtZve64d() const { return HasStdExtZve64d; }
-  bool hasStdExtZvlsseg() const { return HasStdExtZvlsseg; }
   bool hasStdExtZvl() const { return ZvlLen != ExtZvl::NotSet; }
   bool hasStdExtZfhmin() const { return HasStdExtZfhmin; }
   bool hasStdExtZfh() const { return HasStdExtZfh; }
