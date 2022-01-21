@@ -1,4 +1,5 @@
 include(GNUInstallDirs)
+include(ExtendPath)
 include(LLVMDistributionSupport)
 include(LLVMProcessSources)
 include(LLVM-Config)
@@ -1955,7 +1956,7 @@ endfunction()
 function(add_lit_testsuites project directory)
   if (NOT LLVM_ENABLE_IDE)
     cmake_parse_arguments(ARG "EXCLUDE_FROM_CHECK_ALL" "FOLDER" "PARAMS;DEPENDS;ARGS" ${ARGN})
-    
+
     if (NOT ARG_FOLDER)
       set(ARG_FOLDER "Test Subdirectories")
     endif()
@@ -2038,11 +2039,14 @@ function(llvm_install_library_symlink name dest type)
 
   set(output_dir lib${LLVM_LIBDIR_SUFFIX})
   if(WIN32 AND "${type}" STREQUAL "SHARED")
-    set(output_dir bin)
+    set(output_dir "${CMAKE_INSTALL_BINDIR}")
   endif()
 
+  # `install_symlink` needs an absoute path.
+  extend_path(output_dir "${CMAKE_INSTALL_PREFIX}" "${output_dir}")
+
   install(SCRIPT ${INSTALL_SYMLINK}
-          CODE "install_symlink(${full_name} ${full_dest} ${output_dir})"
+          CODE "install_symlink(\"${full_name}\" \"${full_dest}\" \"${output_dir}\")"
           COMPONENT ${component})
 
 endfunction()
@@ -2077,8 +2081,11 @@ function(llvm_install_symlink project name dest)
     set(full_dest llvm${CMAKE_EXECUTABLE_SUFFIX})
   endif()
 
+  # `install_symlink` needs an absoute path.
+  extend_path(output_dir "${CMAKE_INSTALL_PREFIX}" "${${project}_TOOLS_INSTALL_DIR}")
+
   install(SCRIPT ${INSTALL_SYMLINK}
-          CODE "install_symlink(${full_name} ${full_dest} ${${project}_TOOLS_INSTALL_DIR})"
+          CODE "install_symlink(\"${full_name}\" \"${full_dest}\" \"${output_dir}\")"
           COMPONENT ${component})
 
   if (NOT LLVM_ENABLE_IDE AND NOT ARG_ALWAYS_GENERATE)
