@@ -242,7 +242,7 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__riscv_xcheri_mode_dependent_jumps");
   }
 
-  if (ISAInfo->hasExtension("zve32x"))
+  if (ISAInfo->hasExtension("zve32x") || ISAInfo->hasExtension("v"))
     Builder.defineMacro("__riscv_vector");
 }
 
