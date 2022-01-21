@@ -2362,9 +2362,10 @@ llvm::Value *CGObjCGNU::GetTypedSelector(CodeGenFunction &CGF, Selector Sel,
   }
   if (!SelValue) {
     SelValue = llvm::GlobalAlias::create(
-        SelectorTy->getElementType(), CGF.CGM.getTargetCodeGenInfo().getDefaultAS(),
-        llvm::GlobalValue::PrivateLinkage, ".objc_selector_" +
-        Sel.getAsString(), &TheModule);
+        SelectorTy->getPointerElementType(),
+        CGF.CGM.getTargetCodeGenInfo().getDefaultAS(),
+        llvm::GlobalValue::PrivateLinkage,
+        ".objc_selector_" + Sel.getAsString(), &TheModule);
     Types.emplace_back(TypeEncoding, SelValue);
   }
 
@@ -2597,14 +2598,16 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
       if (IsClassMessage)  {
         if (!MetaClassPtrAlias) {
           MetaClassPtrAlias = llvm::GlobalAlias::create(
-              IdTy->getElementType(), AS, llvm::GlobalValue::InternalLinkage,
+              IdTy->getPointerElementType(), AS,
+              llvm::GlobalValue::InternalLinkage,
               ".objc_metaclass_ref" + Class->getNameAsString(), &TheModule);
         }
         ReceiverClass = MetaClassPtrAlias;
       } else {
         if (!ClassPtrAlias) {
           ClassPtrAlias = llvm::GlobalAlias::create(
-              IdTy->getElementType(), AS, llvm::GlobalValue::InternalLinkage,
+              IdTy->getPointerElementType(), AS,
+              llvm::GlobalValue::InternalLinkage,
               ".objc_class_ref" + Class->getNameAsString(), &TheModule);
         }
         ReceiverClass = ClassPtrAlias;
@@ -3743,7 +3746,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   llvm::StructType *selStructTy =
-    dyn_cast<llvm::StructType>(SelectorTy->getElementType());
+      dyn_cast<llvm::StructType>(SelectorTy->getPointerElementType());
   llvm::Type *selStructPtrTy = SelectorTy;
   if (!selStructTy) {
     selStructTy = llvm::StructType::get(CGM.getLLVMContext(),

@@ -949,7 +949,7 @@ Constant *SymbolicallyEvaluateGEP(const GEPOperator *GEP,
   if (auto *GV = dyn_cast<GlobalValue>(Ptr))
     SrcElemTy = GV->getValueType();
   else if (!PTy->isOpaque())
-    SrcElemTy = PTy->getElementType();
+    SrcElemTy = PTy->getNonOpaquePointerElementType();
   else
     SrcElemTy = Type::getInt8Ty(Ptr->getContext());
 
