@@ -86,6 +86,7 @@ private:
   bool HasStdExtZfh = false;
   bool HasStdExtZbkb = false;
   bool HasStdExtZbkc = false;
+  bool HasStdExtZbkx = false;
   bool HasStdExtZknd = false;
   bool HasStdExtZkne = false;
   bool HasStdExtZknh = false;
@@ -174,6 +175,7 @@ public:
   bool hasStdExtZfh() const { return HasStdExtZfh; }
   bool hasStdExtZbkb() const { return HasStdExtZbkb; }
   bool hasStdExtZbkc() const { return HasStdExtZbkc; }
+  bool hasStdExtZbkx() const { return HasStdExtZbkx; }
   bool hasStdExtZknd() const { return HasStdExtZknd; }
   bool hasStdExtZkne() const { return HasStdExtZkne; }
   bool hasStdExtZknh() const { return HasStdExtZknh; }
