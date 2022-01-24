@@ -1707,7 +1707,7 @@ public:
 
   /// This may be '*', in which case this should fold to true.
   bool hasVersion() const { return !VersionToCheck.empty(); }
-  VersionTuple getVersion() { return VersionToCheck; }
+  VersionTuple getVersion() const { return VersionToCheck; }
 
   child_range children() {
     return child_range(child_iterator(), child_iterator());
