@@ -1385,6 +1385,9 @@ static VersionTuple getMachoBuildVersionSupportedOS(const Triple &Target) {
     return VersionTuple(12);
   case Triple::WatchOS:
     return VersionTuple(5);
+  case Triple::DriverKit:
+    // DriverKit always uses the build version load command.
+    return VersionTuple();
   default:
     break;
   }
@@ -1409,6 +1412,8 @@ getMachoBuildVersionPlatformType(const Triple &Target) {
   case Triple::WatchOS:
     return Target.isSimulatorEnvironment() ? MachO::PLATFORM_WATCHOSSIMULATOR
                                            : MachO::PLATFORM_WATCHOS;
+  case Triple::DriverKit:
+    return MachO::PLATFORM_DRIVERKIT;
   default:
     break;
   }
@@ -1437,6 +1442,9 @@ void MCStreamer::emitVersionForTarget(
     break;
   case Triple::WatchOS:
     Version = Target.getWatchOSVersion();
+    break;
+  case Triple::DriverKit:
+    Version = Target.getDriverKitVersion();
     break;
   default:
     llvm_unreachable("unexpected OS type");
