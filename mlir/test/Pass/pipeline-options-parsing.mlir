@@ -12,6 +12,6 @@
 // CHECK_ERROR_3: no such option invalid-option
 // CHECK_ERROR_4: 'notaninteger' value invalid for integer argument
 
-// CHECK_1: test-options-pass{list=1,2,3,4,5 string=some_value string-list=a,b,c,d}
+// CHECK_1: test-options-pass{list=1,2,3,4,5 string=nested_pipeline{arg1=10 arg2=" {} " arg3=true} string-list=a,b,c,d}
 // CHECK_2: test-options-pass{list=1 string= string-list=a,b}
 // CHECK_3: module(func(test-options-pass{list=3 string= }), func(test-options-pass{list=1,2,3,4 string= }))
