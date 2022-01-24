@@ -1407,6 +1407,9 @@ bool RISCVInstrInfo::verifyInstruction(const MachineInstr &MI,
           else
             Ok = isUInt<5>(Imm);
           break;
+        case RISCVOp::OPERAND_RVKRNUM:
+          Ok = Imm >= 0 && Imm <= 10;
+          break;
         }
         if (!Ok) {
           ErrInfo = "Invalid immediate";

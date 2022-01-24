@@ -651,6 +651,16 @@ public:
     return IsConstantImm && isUInt<7>(Imm) && VK == RISCVMCExpr::VK_RISCV_None;
   }
 
+  bool isRnumArg() const {
+    int64_t Imm;
+    RISCVMCExpr::VariantKind VK = RISCVMCExpr::VK_RISCV_None;
+    if (!isImm())
+      return false;
+    bool IsConstantImm = evaluateConstantImm(getImm(), Imm, VK);
+    return IsConstantImm && Imm >= INT64_C(0) && Imm <= INT64_C(10) &&
+           VK == RISCVMCExpr::VK_RISCV_None;
+  }
+
   bool isSImm5() const {
     if (!isImm())
       return false;
@@ -1416,6 +1426,9 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     return generateImmOutOfRangeError(Operands, ErrorInfo, -(1 << 4) + 1,
                                       (1 << 4),
                                       "immediate must be in the range");
+  }
+  case Match_InvalidRnumArg: {
+    return generateImmOutOfRangeError(Operands, ErrorInfo, 0, 10);
   }
   }
 
