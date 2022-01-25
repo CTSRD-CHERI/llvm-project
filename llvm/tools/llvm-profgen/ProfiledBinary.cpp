@@ -188,9 +188,9 @@ void ProfiledBinary::warnNoFuncEntry() {
 void ProfiledBinary::load() {
   // Attempt to open the binary.
   OwningBinary<Binary> OBinary = unwrapOrError(createBinary(Path), Path);
-  Binary &Binary = *OBinary.getBinary();
+  Binary &ExeBinary = *OBinary.getBinary();
 
-  auto *Obj = dyn_cast<ELFObjectFileBase>(&Binary);
+  auto *Obj = dyn_cast<ELFObjectFileBase>(&ExeBinary);
   if (!Obj)
     exitWithError("not a valid Elf image", Path);
 
@@ -207,7 +207,15 @@ void ProfiledBinary::load() {
   decodePseudoProbe(Obj);
 
   // Load debug info of subprograms from DWARF section.
-  loadSymbolsFromDWARF(*cast<ObjectFile>(&Binary));
+  // If path of debug info binary is specified, use the debug info from it,
+  // otherwise use the debug info from the executable binary.
+  if (!DebugBinaryPath.empty()) {
+    OwningBinary<Binary> DebugPath =
+        unwrapOrError(createBinary(DebugBinaryPath), DebugBinaryPath);
+    loadSymbolsFromDWARF(*dyn_cast<ObjectFile>(DebugPath.getBinary()));
+  } else {
+    loadSymbolsFromDWARF(*dyn_cast<ObjectFile>(&ExeBinary));
+  }
 
   // Disassemble the text sections.
   disassemble(Obj);
@@ -685,8 +693,9 @@ SampleContextFrameVector ProfiledBinary::symbolize(const InstructionPointer &IP,
          "Binary should only symbolize its own instruction");
   auto Addr = object::SectionedAddress{IP.Offset + getPreferredBaseAddress(),
                                        object::SectionedAddress::UndefSection};
-  DIInliningInfo InlineStack =
-      unwrapOrError(Symbolizer->symbolizeInlinedCode(Path, Addr), getName());
+  DIInliningInfo InlineStack = unwrapOrError(
+      Symbolizer->symbolizeInlinedCode(SymbolizerPath.str(), Addr),
+      SymbolizerPath);
 
   SampleContextFrameVector CallStack;
   for (int32_t I = InlineStack.getNumberOfFrames() - 1; I >= 0; I--) {
