@@ -499,7 +499,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_CHERI_CAPTAB_TPREL_LO16",   0,     16,   0 },
 
   };
-  static_assert(array_lengthof(LittleEndianInfos) == Mips::NumTargetFixupKinds,
+  static_assert(size(LittleEndianInfos) == Mips::NumTargetFixupKinds,
                 "Not all MIPS little endian fixup kinds added!");
 
   const static MCFixupKindInfo BigEndianInfos[] = {
@@ -600,7 +600,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_CHERI_CAPTAB_TPREL_LO16",  16,     16,   0 },
 
   };
-  static_assert(array_lengthof(BigEndianInfos) == Mips::NumTargetFixupKinds,
+  static_assert(size(BigEndianInfos) == Mips::NumTargetFixupKinds,
                 "Not all MIPS big endian fixup kinds added!");
 
   if (Kind < FirstTargetFixupKind)

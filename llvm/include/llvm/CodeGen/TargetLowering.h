@@ -956,7 +956,7 @@ public:
   /// promotions or expansions.
   bool isTypeLegal(EVT VT) const {
     assert(!VT.isSimple() ||
-           (unsigned)VT.getSimpleVT().SimpleTy < array_lengthof(RegClassForVT));
+           (unsigned)VT.getSimpleVT().SimpleTy < size(RegClassForVT));
     return VT.isSimple() && RegClassForVT[VT.getSimpleVT().SimpleTy] != nullptr;
   }
 
@@ -1110,7 +1110,7 @@ public:
     if (VT.isExtended()) return Expand;
     // If a target-specific SDNode requires legalization, require the target
     // to provide custom legalization for it.
-    if (Op >= array_lengthof(OpActions[0])) return Custom;
+    if (Op >= size(OpActions[0])) return Custom;
     return OpActions[(unsigned)VT.getSimpleVT().SimpleTy][Op];
   }
 
@@ -1412,8 +1412,8 @@ public:
   /// expander for it.
   LegalizeAction
   getCondCodeAction(ISD::CondCode CC, MVT VT) const {
-    assert((unsigned)CC < array_lengthof(CondCodeActions) &&
-           ((unsigned)VT.SimpleTy >> 3) < array_lengthof(CondCodeActions[0]) &&
+    assert((unsigned)CC < size(CondCodeActions) &&
+           ((unsigned)VT.SimpleTy >> 3) < size(CondCodeActions[0]) &&
            "Table isn't big enough!");
     // See setCondCodeAction for how this is encoded.
     uint32_t Shift = 4 * (VT.SimpleTy & 0x7);
@@ -1523,7 +1523,7 @@ public:
 
   /// Return the type of registers that this ValueType will eventually require.
   MVT getRegisterType(MVT VT) const {
-    assert((unsigned)VT.SimpleTy < array_lengthof(RegisterTypeForVT));
+    assert((unsigned)VT.SimpleTy < size(RegisterTypeForVT));
     return RegisterTypeForVT[VT.SimpleTy];
   }
 
@@ -1531,7 +1531,7 @@ public:
   MVT getRegisterType(LLVMContext &Context, EVT VT) const {
     if (VT.isSimple()) {
       assert((unsigned)VT.getSimpleVT().SimpleTy <
-                array_lengthof(RegisterTypeForVT));
+                size(RegisterTypeForVT));
       return RegisterTypeForVT[VT.getSimpleVT().SimpleTy];
     }
     if (VT.isVector()) {
@@ -1564,7 +1564,7 @@ public:
                   Optional<MVT> RegisterVT = None) const {
     if (VT.isSimple()) {
       assert((unsigned)VT.getSimpleVT().SimpleTy <
-                array_lengthof(NumRegistersForVT));
+                size(NumRegistersForVT));
       return NumRegistersForVT[VT.getSimpleVT().SimpleTy];
     }
     if (VT.isVector()) {
@@ -1632,7 +1632,7 @@ public:
   /// If true, the target has custom DAG combine transformations that it can
   /// perform for the specified node.
   bool hasTargetDAGCombine(ISD::NodeType NT) const {
-    assert(unsigned(NT >> 3) < array_lengthof(TargetDAGCombineArray));
+    assert(unsigned(NT >> 3) < size(TargetDAGCombineArray));
     return TargetDAGCombineArray[NT >> 3] & (1 << (NT&7));
   }
 
@@ -2265,7 +2265,7 @@ protected:
   /// specified value type. This indicates the selector can handle values of
   /// that class natively.
   void addRegisterClass(MVT VT, const TargetRegisterClass *RC) {
-    assert((unsigned)VT.SimpleTy < array_lengthof(RegClassForVT));
+    assert((unsigned)VT.SimpleTy < size(RegClassForVT));
     RegClassForVT[VT.SimpleTy] = RC;
   }
 
@@ -2282,7 +2282,7 @@ protected:
   /// type and indicate what to do about it. Note that VT may refer to either
   /// the type of a result or that of an operand of Op.
   void setOperationAction(unsigned Op, MVT VT, LegalizeAction Action) {
-    assert(Op < array_lengthof(OpActions[0]) && "Table isn't big enough!");
+    assert(Op < size(OpActions[0]) && "Table isn't big enough!");
     OpActions[(unsigned)VT.SimpleTy][Op] = Action;
   }
 
@@ -2347,7 +2347,7 @@ protected:
   /// target and indicate what to do about it.
   void setCondCodeAction(ISD::CondCode CC, MVT VT,
                          LegalizeAction Action) {
-    assert(VT.isValid() && (unsigned)CC < array_lengthof(CondCodeActions) &&
+    assert(VT.isValid() && (unsigned)CC < size(CondCodeActions) &&
            "Table isn't big enough!");
     assert((unsigned)Action < 0x10 && "too many bits for bitfield array");
     /// The lower 3 bits of the SimpleTy index into Nth 4bit set from the 32-bit
@@ -2377,7 +2377,7 @@ protected:
   /// they want to provide a custom DAG combiner for by implementing the
   /// PerformDAGCombine virtual method.
   void setTargetDAGCombine(ISD::NodeType NT) {
-    assert(unsigned(NT >> 3) < array_lengthof(TargetDAGCombineArray));
+    assert(unsigned(NT >> 3) < size(TargetDAGCombineArray));
     TargetDAGCombineArray[NT >> 3] |= 1 << (NT&7);
   }
 
