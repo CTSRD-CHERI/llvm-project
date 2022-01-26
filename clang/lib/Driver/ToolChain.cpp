@@ -124,6 +124,10 @@ bool ToolChain::isCheriPurecap() const {
          EffectiveTriple.getEnvironment() == llvm::Triple::CheriPurecap;
 }
 
+bool ToolChain::defaultToIEEELongDouble() const {
+  return PPC_LINUX_DEFAULT_IEEELONGDOUBLE && getTriple().isOSLinux();
+}
+
 SanitizerArgs
 ToolChain::getSanitizerArgs(const llvm::opt::ArgList &JobArgs) const {
   SanitizerArgs SanArgs(*this, JobArgs, !SanitizerArgsChecked);
