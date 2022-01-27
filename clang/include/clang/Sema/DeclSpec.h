@@ -2682,6 +2682,8 @@ public:
   /// redeclaration time if the decl is static.
   bool isStaticMember();
 
+  bool isExplicitObjectMemberFunction();
+
   /// Returns true if this declares a constructor or a destructor.
   bool isCtorOrDtor();
 
