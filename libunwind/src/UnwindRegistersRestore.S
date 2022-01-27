@@ -492,7 +492,7 @@ Lnovec:
   PPC64_LR(3)
   bctr
 
-#elif defined(__ppc__)
+#elif defined(__powerpc__)
 
 DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind13Registers_ppc6jumptoEv)
 //
