@@ -728,7 +728,7 @@ public:
 
   /// Tests whether the target is T32.
   bool isArmT32() const {
-    switch (auto SubArch = getSubArch()) {
+    switch (getSubArch()) {
     case Triple::ARMSubArch_v8m_baseline:
     case Triple::ARMSubArch_v7s:
     case Triple::ARMSubArch_v7k:
@@ -748,7 +748,7 @@ public:
 
   /// Tests whether the target is an M-class.
   bool isArmMClass() const {
-    switch (auto SubArch = getSubArch()) {
+    switch (getSubArch()) {
     case Triple::ARMSubArch_v6m:
     case Triple::ARMSubArch_v7m:
     case Triple::ARMSubArch_v7em:
