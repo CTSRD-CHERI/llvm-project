@@ -516,11 +516,11 @@ private:
 class RelocationBaseSection : public SyntheticSection {
 public:
   RelocationBaseSection(StringRef name, uint32_t type, int32_t dynamicTag,
-                        int32_t sizeDynamicTag);
+                        int32_t sizeDynamicTag, bool combreloc);
   /// Add a dynamic relocation without writing an addend to the output section.
   /// This overload can be used if the addends are written directly instead of
   /// using relocations on the input section (e.g. MipsGotSection::writeTo()).
-  void addReloc(const DynamicReloc &reloc);
+  void addReloc(const DynamicReloc &reloc) { relocs.push_back(reloc); }
   /// Add a dynamic relocation against \p sym with an optional addend.
   void addSymbolReloc(RelType dynType, InputSectionBase &isec,
                       uint64_t offsetInSec, Symbol &sym, int64_t addend = 0,
@@ -542,6 +542,7 @@ public:
   bool isNeeded() const override { return !relocs.empty(); }
   size_t getSize() const override { return relocs.size() * this->entsize; }
   size_t getRelativeRelocCount() const { return numRelativeRelocs; }
+  void partitionRels();
   void finalizeContents() override;
   static bool classof(const SectionBase *d) {
     return SyntheticSection::classof(d) &&
@@ -552,7 +553,9 @@ public:
   SmallVector<DynamicReloc, 0> relocs;
 
 protected:
-  size_t numRelativeRelocs = 0;
+  void computeRels();
+  size_t numRelativeRelocs = 0; // used by -z combreloc
+  bool combreloc;
 };
 
 template <class ELFT>
@@ -561,11 +564,8 @@ class RelocationSection final : public RelocationBaseSection {
   using Elf_Rela = typename ELFT::Rela;
 
 public:
-  RelocationSection(StringRef name, bool sort);
+  RelocationSection(StringRef name, bool combreloc);
   void writeTo(uint8_t *buf) override;
-
-private:
-  bool sort;
 };
 
 template <class ELFT>
