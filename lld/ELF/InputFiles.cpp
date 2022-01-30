@@ -604,7 +604,7 @@ void ObjFile<ELFT>::initializeSections(bool ignoreComdats,
       if (keepGroup) {
         if (config->relocatable)
           this->sections[i] = createInputSection(
-              i, sec, check(obj.getSectionName(sec, shstrtab)), shstrtab);
+              i, sec, check(obj.getSectionName(sec, shstrtab)));
         selectedGroups.push_back(entries);
         continue;
       }
@@ -628,8 +628,8 @@ void ObjFile<ELFT>::initializeSections(bool ignoreComdats,
     case SHT_NULL:
       break;
     default:
-      this->sections[i] = createInputSection(
-          i, sec, check(obj.getSectionName(sec, shstrtab)), shstrtab);
+      this->sections[i] =
+          createInputSection(i, sec, check(obj.getSectionName(sec, shstrtab)));
     }
   }
 
@@ -892,9 +892,9 @@ InputSectionBase *ObjFile<ELFT>::getRelocTarget(uint32_t idx,
 }
 
 template <class ELFT>
-InputSectionBase *
-ObjFile<ELFT>::createInputSection(uint32_t idx, const Elf_Shdr &sec,
-                                  StringRef name, StringRef shstrtab) {
+InputSectionBase *ObjFile<ELFT>::createInputSection(uint32_t idx,
+                                                    const Elf_Shdr &sec,
+                                                    StringRef name) {
   if (sec.sh_type == SHT_ARM_ATTRIBUTES && config->emachine == EM_ARM) {
     ARMAttributeParser attributes;
     ArrayRef<uint8_t> contents = check(this->getObj().getSectionContents(sec));

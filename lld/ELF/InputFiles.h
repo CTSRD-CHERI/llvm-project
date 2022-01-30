@@ -290,7 +290,7 @@ private:
   InputSectionBase *getRelocTarget(uint32_t idx, const Elf_Shdr &sec,
                                    uint32_t info);
   InputSectionBase *createInputSection(uint32_t idx, const Elf_Shdr &sec,
-                                       StringRef name, StringRef shstrtab);
+                                       StringRef name);
 
   bool shouldMerge(const Elf_Shdr &sec, StringRef name);
 
