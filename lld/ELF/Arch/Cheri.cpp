@@ -1082,9 +1082,11 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
         message("Do not need function pointer trampoline for " +
                 toString(*sym) + " in static binary");
       needTrampoline = false;
-    } else if (auto abi = InX<ELFT>::mipsAbiFlags->getCheriAbiVariant()) {
-      if (*abi == llvm::ELF::DF_MIPS_CHERI_ABI_PLT ||
-          *abi == llvm::ELF::DF_MIPS_CHERI_ABI_FNDESC)
+    } else if (in.mipsAbiFlags) {
+      auto abi = static_cast<MipsAbiFlagsSection<ELFT> &>(*in.mipsAbiFlags)
+                     .getCheriAbiVariant();
+      if (abi && (*abi == llvm::ELF::DF_MIPS_CHERI_ABI_PLT ||
+                  *abi == llvm::ELF::DF_MIPS_CHERI_ABI_FNDESC))
         needTrampoline = true;
     }
   }

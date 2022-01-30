@@ -981,7 +981,7 @@ class MipsAbiFlagsSection final : public SyntheticSection {
   using Elf_Mips_ABIFlags = llvm::object::Elf_Mips_ABIFlags<ELFT>;
 
 public:
-  static MipsAbiFlagsSection *create();
+  static std::unique_ptr<MipsAbiFlagsSection> create();
 
   MipsAbiFlagsSection(Elf_Mips_ABIFlags flags);
   size_t getSize() const override { return sizeof(Elf_Mips_ABIFlags); }
@@ -998,7 +998,7 @@ template <class ELFT> class MipsOptionsSection final : public SyntheticSection {
   using Elf_Mips_RegInfo = llvm::object::Elf_Mips_RegInfo<ELFT>;
 
 public:
-  static MipsOptionsSection *create();
+  static std::unique_ptr<MipsOptionsSection<ELFT>> create();
 
   MipsOptionsSection(Elf_Mips_RegInfo reginfo);
   void writeTo(uint8_t *buf) override;
@@ -1016,7 +1016,7 @@ template <class ELFT> class MipsReginfoSection final : public SyntheticSection {
   using Elf_Mips_RegInfo = llvm::object::Elf_Mips_RegInfo<ELFT>;
 
 public:
-  static MipsReginfoSection *create();
+  static std::unique_ptr<MipsReginfoSection> create();
 
   MipsReginfoSection(Elf_Mips_RegInfo reginfo);
   size_t getSize() const override { return sizeof(Elf_Mips_RegInfo); }
@@ -1254,7 +1254,10 @@ struct InStruct {
   // For per-file/per-function tables:
   std::unique_ptr<CheriCapTableMappingSection> cheriCapTableMapping;
   std::unique_ptr<PPC64LongBranchTargetSection> ppc64LongBranchTarget;
+  std::unique_ptr<SyntheticSection> mipsAbiFlags;
   std::unique_ptr<MipsGotSection> mipsGot;
+  std::unique_ptr<SyntheticSection> mipsOptions;
+  std::unique_ptr<SyntheticSection> mipsReginfo;
   std::unique_ptr<MipsRldMapSection> mipsRldMap;
   std::unique_ptr<SyntheticSection> partEnd;
   std::unique_ptr<SyntheticSection> partIndex;
@@ -1278,12 +1281,10 @@ template <class ELFT> struct InX {
   // XXXAR: needs to be templated because writing depends on endianess
   // TODO: use the non-templated version
   static std::unique_ptr<CheriCapRelocsSection<ELFT>> capRelocs;
-  static MipsAbiFlagsSection<ELFT> *mipsAbiFlags;
 };
 
 template <class ELFT>
 std::unique_ptr<CheriCapRelocsSection<ELFT>> InX<ELFT>::capRelocs;
-template <class ELFT> MipsAbiFlagsSection<ELFT> *InX<ELFT>::mipsAbiFlags;
 } // namespace elf
 } // namespace lld
 

@@ -2325,7 +2325,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
   llvm::TimeTraceScope timeScope("Link", StringRef("LinkerDriver::Link"));
 
   InX<ELFT>::capRelocs = nullptr;
-  InX<ELFT>::mipsAbiFlags = nullptr;
 
   // If a --hash-style option was not given, set to a default value,
   // which varies depending on the target.

@@ -102,7 +102,7 @@ template <class ELFT> void MipsAbiFlagsSection<ELFT>::writeTo(uint8_t *buf) {
 }
 
 template <class ELFT>
-MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
+std::unique_ptr<MipsAbiFlagsSection<ELFT>> MipsAbiFlagsSection<ELFT>::create() {
   Elf_Mips_ABIFlags flags = {};
   bool create = false;
 
@@ -153,7 +153,7 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
   };
 
   if (create)
-    return make<MipsAbiFlagsSection<ELFT>>(flags);
+    return std::make_unique<MipsAbiFlagsSection<ELFT>>(flags);
   return nullptr;
 }
 
@@ -198,7 +198,7 @@ template <class ELFT> void MipsOptionsSection<ELFT>::writeTo(uint8_t *buf) {
 }
 
 template <class ELFT>
-MipsOptionsSection<ELFT> *MipsOptionsSection<ELFT>::create() {
+std::unique_ptr<MipsOptionsSection<ELFT>> MipsOptionsSection<ELFT>::create() {
   // N64 ABI only.
   if (!ELFT::Is64Bits)
     return nullptr;
@@ -237,7 +237,7 @@ MipsOptionsSection<ELFT> *MipsOptionsSection<ELFT>::create() {
     }
   };
 
-  return make<MipsOptionsSection<ELFT>>(reginfo);
+  return std::make_unique<MipsOptionsSection<ELFT>>(reginfo);
 }
 
 // MIPS .reginfo section.
@@ -255,7 +255,7 @@ template <class ELFT> void MipsReginfoSection<ELFT>::writeTo(uint8_t *buf) {
 }
 
 template <class ELFT>
-MipsReginfoSection<ELFT> *MipsReginfoSection<ELFT>::create() {
+std::unique_ptr<MipsReginfoSection<ELFT>> MipsReginfoSection<ELFT>::create() {
   // Section should be alive for O32 and N32 ABIs only.
   if (ELFT::Is64Bits)
     return nullptr;
@@ -282,7 +282,7 @@ MipsReginfoSection<ELFT> *MipsReginfoSection<ELFT>::create() {
     sec->getFile<ELFT>()->mipsGp0 = r->ri_gp_value;
   };
 
-  return make<MipsReginfoSection<ELFT>>(reginfo);
+  return std::make_unique<MipsReginfoSection<ELFT>>(reginfo);
 }
 
 InputSection *elf::createInterpSection() {
@@ -1563,8 +1563,10 @@ DynamicSection<ELFT>::computeContents() {
     }
     uint64_t targetCheriFlags = 0;
     if (config->isCheriAbi) {
-      if (InX<ELFT>::mipsAbiFlags)
-        if (auto abi = InX<ELFT>::mipsAbiFlags->getCheriAbiVariant())
+      if (in.mipsAbiFlags)
+        if (auto abi =
+                static_cast<MipsAbiFlagsSection<ELFT> &>(*in.mipsAbiFlags)
+                    .getCheriAbiVariant())
           targetCheriFlags |= *abi;
       // if (Config->CapTableScope != CapTableScopePolicy::All)
       // Add the captable scope to the CHERI flags:
@@ -3949,7 +3951,10 @@ void InStruct::reset() {
   gotPlt.reset();
   igotPlt.reset();
   ppc64LongBranchTarget.reset();
+  mipsAbiFlags.reset();
   mipsGot.reset();
+  mipsOptions.reset();
+  mipsReginfo.reset();
   mipsRldMap.reset();
   partEnd.reset();
   partIndex.reset();
