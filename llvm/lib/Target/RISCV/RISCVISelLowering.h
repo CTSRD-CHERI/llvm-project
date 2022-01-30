@@ -99,8 +99,6 @@ enum NodeType : unsigned {
   // READ_CYCLE_WIDE - A read of the 64-bit cycle CSR on a 32-bit target
   // (returns (Lo, Hi)). It takes a chain operand.
   READ_CYCLE_WIDE,
-  // Reverse bits in each byte.
-  BREV8,
   CAP_CALL,
   CAP_TAIL,
   /// Legalised int_cheri_cap_tag_get
