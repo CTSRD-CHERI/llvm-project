@@ -1,6 +1,7 @@
 // RUN: %clang_cc1 -std=c++1z %s -verify -triple x86_64-linux-gnu -DALIGN=16
 // RUN: %clang_cc1 -std=c++1z %s -verify -fnew-alignment=2 -DALIGN=2
 // RUN: %clang_cc1 -std=c++1z %s -verify -fnew-alignment=256 -DALIGN=256
+// RUN: %clang_cc1 -std=c++1z %s -verify -triple wasm32-unknown-unknown -fnew-alignment=256 -DALIGN=256
 
 // Check that the default new alignment for CHERI is capability size
 // RUN: %cheri_cc1 -std=c++1z %s -verify -DALIGN=16
