@@ -3580,6 +3580,12 @@ public:
   bool SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
                             DAGCombinerInfo &DCI) const;
 
+  /// Helper wrapper around SimplifyDemandedBits.
+  /// Adds Op back to the worklist upon success.
+  bool SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
+                            const APInt &DemandedElts,
+                            DAGCombinerInfo &DCI) const;
+
   /// More limited version of SimplifyDemandedBits that can be used to "look
   /// through" ops that don't contribute to the DemandedBits/DemandedElts -
   /// bitwise ops etc.
