@@ -3592,7 +3592,7 @@ public:
   SDValue SimplifyMultipleUseDemandedBits(SDValue Op, const APInt &DemandedBits,
                                           const APInt &DemandedElts,
                                           SelectionDAG &DAG,
-                                          unsigned Depth) const;
+                                          unsigned Depth = 0) const;
 
   /// Helper wrapper around SimplifyMultipleUseDemandedBits, demanding all
   /// elements.
