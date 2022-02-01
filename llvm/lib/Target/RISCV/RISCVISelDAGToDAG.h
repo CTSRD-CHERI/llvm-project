@@ -118,6 +118,7 @@ public:
 private:
   bool doPeepholeLoadStoreOffset(SDNode *Node);
   bool doPeepholeSExtW(SDNode *Node);
+  bool doPeepholeMaskedRVV(SDNode *Node);
 };
 
 namespace RISCV {
@@ -188,6 +189,12 @@ struct VLX_VSXPseudo {
   uint16_t Pseudo;
 };
 
+struct RISCVMaskedPseudoInfo {
+  uint16_t MaskedPseudo;
+  uint16_t UnmaskedPseudo;
+  uint8_t MaskOpIdx;
+};
+
 #define GET_RISCVVSSEGTable_DECL
 #define GET_RISCVVLSEGTable_DECL
 #define GET_RISCVVLXSEGTable_DECL
@@ -196,6 +203,7 @@ struct VLX_VSXPseudo {
 #define GET_RISCVVSETable_DECL
 #define GET_RISCVVLXTable_DECL
 #define GET_RISCVVSXTable_DECL
+#define GET_RISCVMaskedPseudosTable_DECL
 #include "RISCVGenSearchableTables.inc"
 } // namespace RISCV
 
