@@ -771,6 +771,7 @@ struct ImpliedExtsEntry {
   bool operator<(StringRef Other) const { return Name < Other; }
 };
 
+// Note: The table needs to be sorted by name.
 static constexpr ImpliedExtsEntry ImpliedExts[] = {
     {{"v"}, {ImpliedExtsV}},
     {{"zfh"}, {ImpliedExtsZfh}},
