@@ -1267,7 +1267,8 @@ StringTableSection::StringTableSection(StringRef name, bool dynamic)
     : SyntheticSection(dynamic ? (uint64_t)SHF_ALLOC : 0, SHT_STRTAB, 1, name),
       dynamic(dynamic) {
   // ELF string tables start with a NUL byte.
-  addString("");
+  strings.push_back("");
+  size = 1;
 }
 
 // Adds a string to the string table. If `hashIt` is true we hash and check for
@@ -1280,6 +1281,8 @@ unsigned StringTableSection::addString(StringRef s, bool hashIt) {
     if (!r.second)
       return r.first->second;
   }
+  if (s.empty())
+    return 0;
   unsigned ret = this->size;
   this->size = this->size + s.size() + 1;
   strings.push_back(s);
@@ -2288,7 +2291,7 @@ void SymbolTableBaseSection::addSymbol(Symbol *b) {
   // Adding a local symbol to a .dynsym is a bug.
   assert(this->type != SHT_DYNSYM || !b->isLocal());
 
-  bool hashIt = b->isLocal();
+  bool hashIt = b->isLocal() && config->optimize >= 2;
   symbols.push_back({b, strTabSec.addString(b->getName(), hashIt)});
 }
 
