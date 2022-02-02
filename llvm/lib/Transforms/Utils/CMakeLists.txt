@@ -51,6 +51,7 @@ add_llvm_component_library(LLVMTransformUtils
   LowerSwitch.cpp
   MatrixUtils.cpp
   MemoryOpRemark.cpp
+  MemoryTaggingSupport.cpp
   Mem2Reg.cpp
   MetaRenamer.cpp
   ModuleUtils.cpp
