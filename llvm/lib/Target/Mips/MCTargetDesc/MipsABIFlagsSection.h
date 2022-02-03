@@ -9,8 +9,6 @@
 #ifndef LLVM_LIB_TARGET_MIPS_MCTARGETDESC_MIPSABIFLAGSSECTION_H
 #define LLVM_LIB_TARGET_MIPS_MCTARGETDESC_MIPSABIFLAGSSECTION_H
 
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MipsABIFlags.h"
@@ -21,6 +19,7 @@
 namespace llvm {
 
 class MCStreamer;
+class StringRef;
 
 struct MipsABIFlagsSection {
   // Internal representation of the fp_abi related values used in .module.
