@@ -23679,6 +23679,7 @@ TEST_F(FormatTest, ShortTemplatedArgumentLists) {
   verifyFormat("struct Y<[] { return 0; }> {};", Style);
 
   verifyFormat("struct Z : X<decltype([] { return 0; }){}> {};", Style);
+  verifyFormat("template <int N> struct Foo<char[N]> {};", Style);
 }
 
 TEST_F(FormatTest, RemoveBraces) {
