@@ -33,6 +33,11 @@
 #include "llvm/Target/TargetOptions.h"
 using namespace llvm;
 
+static cl::opt<bool> EnableRedundantCopyElimination(
+    "riscv-enable-copyelim",
+    cl::desc("Enable the redundant copy elimination pass"), cl::init(true),
+    cl::Hidden);
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   RegisterTargetMachine<RISCVTargetMachine> X(getTheRISCV32Target());
   RegisterTargetMachine<RISCVTargetMachine> Y(getTheRISCV64Target());
@@ -170,6 +175,7 @@ public:
   void addPreSched2() override;
   void addMachineSSAOptimization() override;
   void addPreRegAlloc() override;
+  void addPostRegAlloc() override;
 };
 } // namespace
 
@@ -237,4 +243,9 @@ void RISCVPassConfig::addPreRegAlloc() {
   addPass(createRISCVInsertVSETVLIPass());
   if (TM->getOptLevel() != CodeGenOpt::None)
     addPass(createCheriGetAddressElimPass());
+}
+
+void RISCVPassConfig::addPostRegAlloc() {
+  if (TM->getOptLevel() != CodeGenOpt::None && EnableRedundantCopyElimination)
+    addPass(createRISCVRedundantCopyEliminationPass());
 }
