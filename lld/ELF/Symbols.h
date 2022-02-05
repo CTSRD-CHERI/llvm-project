@@ -252,13 +252,12 @@ protected:
         isUsedInRegularObj(!file || file->kind() == InputFile::ObjKind),
         exportDynamic(false), inDynamicList(false), canInline(false),
         referenced(false), traced(false), hasVersionSuffix(false),
-        isInIplt(false), gotInIgot(false), isPreemptible(false),
-        used(!config->gcSections), usedByDynReloc(false),
-        isSectionStartSymbol(false), folded(false), needsTocRestore(false),
-        scriptDefined(false), needsCopy(false), needsGot(false),
-        needsPlt(false), needsTlsDesc(false), needsTlsGd(false),
-        needsTlsGdToIe(false), needsTlsLd(false), needsGotDtprel(false),
-        needsTlsIe(false), hasDirectReloc(false) {}
+        isInIplt(false), gotInIgot(false), isPreemptible(false), used(false),
+        usedByDynReloc(false), isSectionStartSymbol(false),
+        folded(false), needsTocRestore(false), scriptDefined(false),
+        needsCopy(false), needsGot(false), needsPlt(false), needsTlsDesc(false),
+        needsTlsGd(false), needsTlsGdToIe(false), needsTlsLd(false),
+        needsGotDtprel(false), needsTlsIe(false), hasDirectReloc(false) {}
 
 public:
   // True if this symbol is in the Iplt sub-section of the Plt and the Igot
