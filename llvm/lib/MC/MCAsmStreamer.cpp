@@ -199,6 +199,8 @@ public:
   void emitXCOFFRenameDirective(const MCSymbol *Name,
                                 StringRef Rename) override;
 
+  void emitXCOFFRefDirective(StringRef Name) override;
+
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
                         TailPaddingAmount TailPadding) override;
@@ -936,6 +938,11 @@ void MCAsmStreamer::emitXCOFFRenameDirective(const MCSymbol *Name,
     OS << C;
   }
   OS << DQ;
+  EmitEOL();
+}
+
+void MCAsmStreamer::emitXCOFFRefDirective(StringRef Name) {
+  OS << "\t.ref " << Name;
   EmitEOL();
 }
 
