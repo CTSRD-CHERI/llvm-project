@@ -471,8 +471,8 @@ public:
 // --start-lib and --end-lib options.
 class LazyObject : public Symbol {
 public:
-  LazyObject(InputFile &file, StringRef name)
-      : Symbol(LazyObjectKind, &file, name, llvm::ELF::STB_GLOBAL,
+  LazyObject(InputFile &file)
+      : Symbol(LazyObjectKind, &file, {}, llvm::ELF::STB_GLOBAL,
                llvm::ELF::STV_DEFAULT, llvm::ELF::STT_NOTYPE) {
     isUsedInRegularObj = false;
   }
@@ -557,7 +557,7 @@ static inline void assertSymbols() {
   AssertSymbol<LazyObject>();
 }
 
-void printTraceSymbol(const Symbol *sym);
+void printTraceSymbol(const Symbol &sym, StringRef name);
 
 size_t Symbol::getSymbolSize() const {
   switch (kind()) {
@@ -603,6 +603,8 @@ void Symbol::replace(const Symbol &newSym) {
 
   // old may be a placeholder. The referenced fields must be initialized in
   // SymbolTable::insert.
+  nameData = old.nameData;
+  nameSize = old.nameSize;
   partition = old.partition;
   visibility = old.visibility;
   isPreemptible = old.isPreemptible;
@@ -618,7 +620,7 @@ void Symbol::replace(const Symbol &newSym) {
   // Print out a log message if --trace-symbol was specified.
   // This is for debugging.
   if (traced)
-    printTraceSymbol(this);
+    printTraceSymbol(*this, getName());
 }
 
 template <typename... T> Defined *makeDefined(T &&...args) {
