@@ -43,8 +43,7 @@ static cl::opt<bool> DisableHazardRecognizer(
   "disable-sched-hazard", cl::Hidden, cl::init(false),
   cl::desc("Disable hazard detection during preRA scheduling"));
 
-TargetInstrInfo::~TargetInstrInfo() {
-}
+TargetInstrInfo::~TargetInstrInfo() = default;
 
 const TargetRegisterClass*
 TargetInstrInfo::getRegClass(const MCInstrDesc &MCID, unsigned OpNum,
@@ -1460,7 +1459,7 @@ std::string TargetInstrInfo::createMIROperandComment(
   return OS.str();
 }
 
-TargetInstrInfo::PipelinerLoopInfo::~PipelinerLoopInfo() {}
+TargetInstrInfo::PipelinerLoopInfo::~PipelinerLoopInfo() = default;
 
 void TargetInstrInfo::mergeOutliningCandidateAttributes(
     Function &F, std::vector<outliner::Candidate> &Candidates) const {
