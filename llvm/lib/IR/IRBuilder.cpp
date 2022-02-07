@@ -1292,8 +1292,8 @@ CallInst *IRBuilderBase::CreateAlignmentAssumption(const DataLayout &DL,
   return CreateAlignmentAssumptionHelper(DL, PtrValue, Alignment, OffsetValue);
 }
 
-IRBuilderDefaultInserter::~IRBuilderDefaultInserter() {}
-IRBuilderCallbackInserter::~IRBuilderCallbackInserter() {}
-IRBuilderFolder::~IRBuilderFolder() {}
+IRBuilderDefaultInserter::~IRBuilderDefaultInserter() = default;
+IRBuilderCallbackInserter::~IRBuilderCallbackInserter() = default;
+IRBuilderFolder::~IRBuilderFolder() = default;
 void ConstantFolder::anchor() {}
 void NoFolder::anchor() {}

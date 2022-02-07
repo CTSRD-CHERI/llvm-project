@@ -53,7 +53,7 @@ unsigned llvm::getDefaultMaxUsesToExploreForCaptureTracking() {
   return DefaultMaxUsesToExplore;
 }
 
-CaptureTracker::~CaptureTracker() {}
+CaptureTracker::~CaptureTracker() = default;
 
 bool CaptureTracker::shouldExplore(const Use *U) { return true; }
 

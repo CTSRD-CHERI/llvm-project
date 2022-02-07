@@ -99,7 +99,7 @@ MCStreamer::MCStreamer(MCContext &Ctx)
   SectionStack.push_back(std::pair<MCSectionSubPair, MCSectionSubPair>());
 }
 
-MCStreamer::~MCStreamer() {}
+MCStreamer::~MCStreamer() = default;
 
 void MCStreamer::reset() {
   DwarfFrameInfos.clear();
