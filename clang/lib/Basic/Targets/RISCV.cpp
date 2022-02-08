@@ -345,7 +345,7 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
         llvm::is_contained(Features, "+xcheri-v9-semantics");
   }
   if (ABI.empty())
-    ABI = llvm::RISCV::computeDefaultABIFromArch(*ISAInfo).str();
+    ABI = ISAInfo->computeDefaultABI().str();
 
   setDataLayout();
 
