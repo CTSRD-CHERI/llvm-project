@@ -1004,6 +1004,9 @@ bool MachineLICMBase::IsLICMCandidate(MachineInstr &I) {
   if (I.isConvergent())
     return false;
 
+  if (!TII->shouldHoist(I, CurLoop))
+    return false;
+
   if (I.mayTrap()) {
     if (!IsGuaranteedToExecute(I.getParent()))
       return false;
