@@ -221,10 +221,8 @@ void InitTlsSize() { }
 // sizeof(struct pthread) from glibc.
 static atomic_size_t thread_descriptor_size;
 
-usize ThreadDescriptorSize() {
-  usize val = atomic_load_relaxed(&thread_descriptor_size);
-  if (val)
-    return val;
+static usize ThreadDescriptorSizeFallback() {
+  usize val = 0;
 #if defined(__x86_64__) || defined(__i386__) || defined(__arm__)
   int major;
   int minor;
@@ -286,8 +284,21 @@ usize ThreadDescriptorSize() {
 #elif defined(__powerpc64__)
   val = 1776; // from glibc.ppc64le 2.20-8.fc21
 #endif
+  return val;
+}
+
+usize ThreadDescriptorSize() {
+  usize val = atomic_load_relaxed(&thread_descriptor_size);
   if (val)
-    atomic_store_relaxed(&thread_descriptor_size, val);
+    return val;
+  // _thread_db_sizeof_pthread is a GLIBC_PRIVATE symbol that is exported in
+  // glibc 2.34 and later.
+  if (unsigned *psizeof = static_cast<unsigned *>(
+          dlsym(RTLD_DEFAULT, "_thread_db_sizeof_pthread")))
+    val = *psizeof;
+  if (!val)
+    val = ThreadDescriptorSizeFallback();
+  atomic_store_relaxed(&thread_descriptor_size, val);
   return val;
 }
 
