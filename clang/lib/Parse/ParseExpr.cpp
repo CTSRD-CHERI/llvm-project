@@ -3415,7 +3415,9 @@ ExprResult Parser::ParseFoldExpression(ExprResult LHS,
 /// \endverbatim
 bool Parser::ParseExpressionList(SmallVectorImpl<Expr *> &Exprs,
                                  SmallVectorImpl<SourceLocation> &CommaLocs,
-                                 llvm::function_ref<void()> ExpressionStarts) {
+                                 llvm::function_ref<void()> ExpressionStarts,
+                                 bool FailImmediatelyOnInvalidExpr,
+                                 bool EarlyTypoCorrection) {
   bool SawError = false;
   while (true) {
     if (ExpressionStarts)
@@ -3427,6 +3429,9 @@ bool Parser::ParseExpressionList(SmallVectorImpl<Expr *> &Exprs,
       Expr = ParseBraceInitializer();
     } else
       Expr = ParseAssignmentExpression();
+
+    if (EarlyTypoCorrection)
+      Expr = Actions.CorrectDelayedTyposInExpr(Expr);
 
     if (Tok.is(tok::ellipsis))
       Expr = Actions.ActOnPackExpansion(Expr.get(), ConsumeToken());
@@ -3441,8 +3446,10 @@ bool Parser::ParseExpressionList(SmallVectorImpl<Expr *> &Exprs,
       break;
     }
     if (Expr.isInvalid()) {
-      SkipUntil(tok::comma, tok::r_paren, StopBeforeMatch);
       SawError = true;
+      if (FailImmediatelyOnInvalidExpr)
+        break;
+      SkipUntil(tok::comma, tok::r_paren, StopBeforeMatch);
     } else {
       Exprs.push_back(Expr.get());
     }
