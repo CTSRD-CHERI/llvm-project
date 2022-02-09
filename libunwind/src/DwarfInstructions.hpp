@@ -121,8 +121,8 @@ DwarfInstructions<A, R>::getSavedRegister(int reg, A &addressSpace,
                                             _pint_to_addr(savedReg.value));
 
   case CFI_Parser<A>::kRegisterInCFADecrypt: // sparc64 specific
-    return addressSpace.getP(cfa + (pint_t)savedReg.value) ^
-           getSparcWCookie(registers, 0);
+    return (pint_t)(addressSpace.getP(cfa + (pint_t)savedReg.value) ^
+           getSparcWCookie(registers, 0));
 
   case CFI_Parser<A>::kRegisterAtExpression:
     return (pint_t)addressSpace.getRegister(evaluateExpression(
