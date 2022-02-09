@@ -141,31 +141,7 @@ static bool hasAnyExplicitStorageClass(const FunctionDecl *D) {
 PointerInterpretationKind
 Sema::PointerInterpretationForBaseExpr(const Expr *Base) const {
   QualType DerefType;
-
-  while (Base) {
-    Base = Base->IgnoreParens();
-
-    const Expr *NewBase = nullptr;
-
-    if (auto *ME = dyn_cast<MemberExpr>(Base)) {
-      if (ME->getMemberDecl()->getType()->isReferenceType())
-        DerefType = ME->getMemberDecl()->getType();
-      else if (ME->isArrow())
-        DerefType = ME->getBase()->getType();
-      else
-        NewBase = ME->getBase();
-    } else if (auto *AS = dyn_cast<ArraySubscriptExpr>(Base)) {
-      DerefType = AS->getBase()->getType();
-    } else if (auto *UO = dyn_cast<UnaryOperator>(Base)) {
-      if (UO->getOpcode() == UO_Deref &&
-          UO->getSubExpr()->getType()->isPointerType())
-        DerefType = UO->getSubExpr()->getType();
-    } else if (Base->getRealReferenceType(Context)->isReferenceType()) {
-      DerefType = Base->getRealReferenceType(Context);
-    }
-
-    Base = NewBase;
-  }
+  (void)Base->getDereferencedBaseExpr(Context, &DerefType);
 
   // If we are just taking the address of something that happens to be a
   // capability, or decaying something that happens to have capability

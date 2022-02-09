@@ -5142,6 +5142,48 @@ QualType Expr::getRealReferenceType(ASTContext &Ctx,
   return E->getType();
 }
 
+const Expr *
+Expr::getDereferencedBaseExpr(ASTContext &Ctx, QualType *Ty) const {
+  const Expr *Base = this;
+  const Expr *BaseDeref;
+  QualType DerefType;
+
+  while (Base) {
+    Base = Base->IgnoreParens();
+
+    const Expr *NewBase = nullptr;
+
+    if (auto *ME = dyn_cast<MemberExpr>(Base)) {
+      if (ME->getMemberDecl()->getType()->isReferenceType()) {
+        BaseDeref = ME;
+        DerefType = ME->getMemberDecl()->getType();
+      } else if (ME->isArrow()) {
+        BaseDeref = ME->getBase();
+        DerefType = BaseDeref->getType();
+      } else
+        NewBase = ME->getBase();
+    } else if (auto *AS = dyn_cast<ArraySubscriptExpr>(Base)) {
+      BaseDeref = AS->getBase();
+      DerefType = BaseDeref->getType();
+    } else if (auto *UO = dyn_cast<UnaryOperator>(Base)) {
+      if (UO->getOpcode() == UO_Deref &&
+          UO->getSubExpr()->getType()->isPointerType()) {
+        BaseDeref = UO->getSubExpr();
+        DerefType = BaseDeref->getType();
+      }
+    } else if (Base->getRealReferenceType(Ctx)->isReferenceType()) {
+      BaseDeref = Base;
+      DerefType = BaseDeref->getRealReferenceType(Ctx);
+    }
+
+    Base = NewBase;
+  }
+
+  if (Ty)
+    *Ty = DerefType;
+  return BaseDeref;
+}
+
 RecoveryExpr::RecoveryExpr(ASTContext &Ctx, QualType T, SourceLocation BeginLoc,
                            SourceLocation EndLoc, ArrayRef<Expr *> SubExprs)
     : Expr(RecoveryExprClass, T.getNonReferenceType(),

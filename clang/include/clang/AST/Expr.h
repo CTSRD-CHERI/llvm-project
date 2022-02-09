@@ -985,6 +985,9 @@ public:
   QualType getRealReferenceType(ASTContext &C,
                                 bool LValuesAsReferences = true) const;
 
+  const Expr *
+  getDereferencedBaseExpr(ASTContext &Ctx, QualType *Ty = nullptr) const;
+
   /// Checks that the two Expr's will refer to the same value as a comparison
   /// operand.  The caller must ensure that the values referenced by the Expr's
   /// are not modified between E1 and E2 or the result my be invalid.
