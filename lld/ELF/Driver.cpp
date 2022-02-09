@@ -343,9 +343,6 @@ static void checkOptions() {
   if (!config->shared && !config->auxiliaryList.empty())
     error("-f may not be used without -shared");
 
-  if (!config->relocatable && !config->defineCommon)
-    error("-no-define-common not supported in non relocatable output");
-
   if (config->strip == StripPolicy::All && config->emitRelocs)
     error("--strip-all and --emit-relocs may not be used together");
 
@@ -1066,8 +1063,6 @@ static void readConfigs(opt::InputArgList &args) {
   config->chroot = args.getLastArgValue(OPT_chroot);
   config->compressDebugSections = getCompressDebugSections(args);
   config->cref = args.hasArg(OPT_cref);
-  config->defineCommon = args.hasFlag(OPT_define_common, OPT_no_define_common,
-                                      !args.hasArg(OPT_relocatable));
   config->optimizeBBJumps =
       args.hasFlag(OPT_optimize_bb_jumps, OPT_no_optimize_bb_jumps, false);
   config->demangle = args.hasFlag(OPT_demangle, OPT_no_demangle, true);
