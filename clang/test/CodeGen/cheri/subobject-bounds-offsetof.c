@@ -20,11 +20,8 @@ struct S {
 
 // CHECK-LABEL: @offsetof_x(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* null, i64 4)
-// CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// CHECK-NEXT:    ret i64 [[TMP2]]
+// CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
+// CHECK-NEXT:    ret i64 [[TMP0]]
 //
 long offsetof_x(void) {
   return (long)&((struct S *)0)->x;
@@ -32,11 +29,8 @@ long offsetof_x(void) {
 
 // CHECK-LABEL: @offsetof_z(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast (i32 addrspace(200)* getelementptr inbounds ([[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* null, i32 0, i32 1, i32 0) to i8 addrspace(200)*), i64 4)
-// CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADDRESS_WITH_BOUNDS]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// CHECK-NEXT:    ret i64 [[TMP2]]
+// CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* bitcast (i32 addrspace(200)* getelementptr inbounds ([[STRUCT_S:%.*]], [[STRUCT_S]] addrspace(200)* null, i32 0, i32 1, i32 0) to i8 addrspace(200)*))
+// CHECK-NEXT:    ret i64 [[TMP0]]
 //
 long offsetof_z(void) {
   return (long)&((struct S *)0)->y.z;
