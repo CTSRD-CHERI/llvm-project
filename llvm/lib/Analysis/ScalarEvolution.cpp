@@ -13635,7 +13635,7 @@ public:
   /// \p NewPreds such that the result will be an AddRecExpr.
   static const SCEV *rewrite(const SCEV *S, const Loop *L, ScalarEvolution &SE,
                              SmallPtrSetImpl<const SCEVPredicate *> *NewPreds,
-                             SCEVUnionPredicate *Pred) {
+                             const SCEVUnionPredicate *Pred) {
     SCEVPredicateRewriter Rewriter(L, SE, NewPreds, Pred);
     return Rewriter.visit(S);
   }
@@ -13687,7 +13687,7 @@ public:
 private:
   explicit SCEVPredicateRewriter(const Loop *L, ScalarEvolution &SE,
                         SmallPtrSetImpl<const SCEVPredicate *> *NewPreds,
-                        SCEVUnionPredicate *Pred)
+                        const SCEVUnionPredicate *Pred)
       : SCEVRewriteVisitor(SE), NewPreds(NewPreds), Pred(Pred), L(L) {}
 
   bool addOverflowAssumption(const SCEVPredicate *P) {
@@ -13732,14 +13732,15 @@ private:
   }
 
   SmallPtrSetImpl<const SCEVPredicate *> *NewPreds;
-  SCEVUnionPredicate *Pred;
+  const SCEVUnionPredicate *Pred;
   const Loop *L;
 };
 
 } // end anonymous namespace
 
-const SCEV *ScalarEvolution::rewriteUsingPredicate(const SCEV *S, const Loop *L,
-                                                   SCEVUnionPredicate &Preds) {
+const SCEV *
+ScalarEvolution::rewriteUsingPredicate(const SCEV *S, const Loop *L,
+                                       const SCEVUnionPredicate &Preds) {
   return SCEVPredicateRewriter::rewrite(S, L, *this, nullptr, &Preds);
 }
 
@@ -13866,7 +13867,7 @@ bool SCEVUnionPredicate::isAlwaysTrue() const {
 }
 
 ArrayRef<const SCEVPredicate *>
-SCEVUnionPredicate::getPredicatesForExpr(const SCEV *Expr) {
+SCEVUnionPredicate::getPredicatesForExpr(const SCEV *Expr) const {
   auto I = SCEVToPreds.find(Expr);
   if (I == SCEVToPreds.end())
     return ArrayRef<const SCEVPredicate *>();
