@@ -2305,6 +2305,7 @@ bool RISCVDAGToDAGISel::doPeepholeMaskedRVV(SDNode *N) {
          RISCVII::hasDummyMaskOp(UnmaskedMCID.TSFlags) &&
          !RISCVII::hasVecPolicyOp(UnmaskedMCID.TSFlags) &&
          "Unexpected pseudo to transform to");
+  (void)UnmaskedMCID;
 
   SmallVector<SDValue, 8> Ops;
   // Skip the merge operand at index 0.
