@@ -5785,9 +5785,11 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
           getModule(), Type, false, llvm::GlobalVariable::InternalLinkage,
           nullptr);
     }
-    return ConstantAddress(
-        InsertResult.first->second,
-        InsertResult.first->second->getType()->getPointerElementType(), Align);
+    return ConstantAddress(InsertResult.first->second,
+                           llvm::cast<llvm::GlobalVariable>(
+                               InsertResult.first->second->stripPointerCasts())
+                               ->getValueType(),
+                           Align);
   }
 
   // FIXME: If an externally-visible declaration extends multiple temporaries,
