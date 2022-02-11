@@ -176,6 +176,7 @@ add_llvm_component_library(LLVMSupport
   MD5.cpp
   MSP430Attributes.cpp
   MSP430AttributeParser.cpp
+  MSVCPaths.cpp
   NativeFormatting.cpp
   OptimizedStructLayout.cpp
   Optional.cpp
