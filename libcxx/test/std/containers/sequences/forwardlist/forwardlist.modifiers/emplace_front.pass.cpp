@@ -43,7 +43,7 @@ int main(int, char**)
         c.emplace_front(1, 2.5);
         assert(c.front() == Emplaceable(1, 2.5));
 #endif
-        assert(*next(c.begin()) == Emplaceable());
+        assert(*std::next(c.begin()) == Emplaceable());
         assert(std::distance(c.begin(), c.end()) == 2);
     }
     {
@@ -65,7 +65,7 @@ int main(int, char**)
         c.emplace_front(1, 2.5);
         assert(c.front() == Emplaceable(1, 2.5));
 #endif
-        assert(*next(c.begin()) == Emplaceable());
+        assert(*std::next(c.begin()) == Emplaceable());
         assert(std::distance(c.begin(), c.end()) == 2);
     }
 
