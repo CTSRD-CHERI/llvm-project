@@ -17,6 +17,7 @@
 // }
 // CHERI CHANGES END
 
+#include <__assert>
 #include <__utility/unreachable.h>
 #include <array>
 #include <climits>

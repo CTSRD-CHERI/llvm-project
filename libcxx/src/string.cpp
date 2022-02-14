@@ -17,7 +17,7 @@
 // }
 // CHERI CHANGES END
 
-#include <__debug>
+#include <__assert>
 #include <cerrno>
 #include <charconv>
 #include <cstdlib>
