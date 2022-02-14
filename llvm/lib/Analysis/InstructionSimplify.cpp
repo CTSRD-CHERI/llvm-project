@@ -5053,11 +5053,6 @@ static Constant *simplifyFPOp(ArrayRef<Value *> Ops, FastMathFlags FMF,
   return nullptr;
 }
 
-// TODO: Move this out to a header file:
-static inline bool canIgnoreSNaN(fp::ExceptionBehavior EB, FastMathFlags FMF) {
-  return (EB == fp::ebIgnore || FMF.noNaNs());
-}
-
 /// Given operands for an FAdd, see if we can fold the result.  If not, this
 /// returns null.
 static Value *
