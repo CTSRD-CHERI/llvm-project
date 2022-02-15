@@ -199,7 +199,6 @@ static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
   case Symbol::SharedKind:
   case Symbol::UndefinedKind:
     return 0;
-  case Symbol::LazyArchiveKind:
   case Symbol::LazyObjectKind:
     llvm_unreachable("lazy symbol reached writer");
   case Symbol::CommonKind:
@@ -345,22 +344,10 @@ void Symbol::parseSymbolVersion() {
 }
 
 void Symbol::extract() const {
-  if (auto *sym = dyn_cast<LazyArchive>(this)) {
-    cast<ArchiveFile>(sym->file)->extract(sym->sym);
-  } else if (file->lazy) {
+  if (file->lazy) {
     file->lazy = false;
     parseFile(file);
   }
-}
-
-MemoryBufferRef LazyArchive::getMemberBuffer() {
-  Archive::Child c =
-      CHECK(sym.getMember(),
-            "could not get the member for symbol " + toELFString(sym));
-
-  return CHECK(c.getMemoryBufferRef(),
-               "could not get the buffer for the member defining symbol " +
-                   toELFString(sym));
 }
 
 uint8_t Symbol::computeBinding() const {
@@ -529,9 +516,6 @@ void Symbol::resolve(const Symbol &other) {
     break;
   case Symbol::DefinedKind:
     resolveDefined(cast<Defined>(other));
-    break;
-  case Symbol::LazyArchiveKind:
-    resolveLazy(cast<LazyArchive>(other));
     break;
   case Symbol::LazyObjectKind:
     resolveLazy(cast<LazyObject>(other));
@@ -793,14 +777,7 @@ template <class LazyT> void Symbol::resolveLazy(const LazyT &other) {
   // For common objects, we want to look for global or weak definitions that
   // should be extracted as the canonical definition instead.
   if (isCommon() && elf::config->fortranCommon) {
-    if (auto *laSym = dyn_cast<LazyArchive>(&other)) {
-      ArchiveFile *archive = cast<ArchiveFile>(laSym->file);
-      const Archive::Symbol &archiveSym = laSym->sym;
-      if (archive->shouldExtractForCommon(archiveSym)) {
-        replaceCommon(*this, other);
-        return;
-      }
-    } else if (auto *loSym = dyn_cast<LazyObject>(&other)) {
+    if (auto *loSym = dyn_cast<LazyObject>(&other)) {
       if (loSym->file->shouldExtractForCommon(getName())) {
         replaceCommon(*this, other);
         return;
