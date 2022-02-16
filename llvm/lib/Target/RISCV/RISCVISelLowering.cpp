@@ -4377,7 +4377,7 @@ SDValue RISCVTargetLowering::lowerShiftLeftParts(SDValue Op,
 
   // if Shamt-XLEN < 0: // Shamt < XLEN
   //   Lo = Lo << Shamt
-  //   Hi = (Hi << Shamt) | ((Lo >>u 1) >>u (XLEN-1 - Shamt))
+  //   Hi = (Hi << Shamt) | ((Lo >>u 1) >>u (XLEN-1 ^ Shamt))
   // else:
   //   Lo = 0
   //   Hi = Lo << (Shamt-XLEN)
@@ -4387,7 +4387,7 @@ SDValue RISCVTargetLowering::lowerShiftLeftParts(SDValue Op,
   SDValue MinusXLen = DAG.getConstant(-(int)Subtarget.getXLen(), DL, VT);
   SDValue XLenMinus1 = DAG.getConstant(Subtarget.getXLen() - 1, DL, VT);
   SDValue ShamtMinusXLen = DAG.getNode(ISD::ADD, DL, VT, Shamt, MinusXLen);
-  SDValue XLenMinus1Shamt = DAG.getNode(ISD::SUB, DL, VT, XLenMinus1, Shamt);
+  SDValue XLenMinus1Shamt = DAG.getNode(ISD::XOR, DL, VT, Shamt, XLenMinus1);
 
   SDValue LoTrue = DAG.getNode(ISD::SHL, DL, VT, Lo, Shamt);
   SDValue ShiftRight1Lo = DAG.getNode(ISD::SRL, DL, VT, Lo, One);
@@ -4416,7 +4416,7 @@ SDValue RISCVTargetLowering::lowerShiftRightParts(SDValue Op, SelectionDAG &DAG,
 
   // SRA expansion:
   //   if Shamt-XLEN < 0: // Shamt < XLEN
-  //     Lo = (Lo >>u Shamt) | ((Hi << 1) << (XLEN-1 - Shamt))
+  //     Lo = (Lo >>u Shamt) | ((Hi << 1) << (ShAmt ^ XLEN-1))
   //     Hi = Hi >>s Shamt
   //   else:
   //     Lo = Hi >>s (Shamt-XLEN);
@@ -4424,7 +4424,7 @@ SDValue RISCVTargetLowering::lowerShiftRightParts(SDValue Op, SelectionDAG &DAG,
   //
   // SRL expansion:
   //   if Shamt-XLEN < 0: // Shamt < XLEN
-  //     Lo = (Lo >>u Shamt) | ((Hi << 1) << (XLEN-1 - Shamt))
+  //     Lo = (Lo >>u Shamt) | ((Hi << 1) << (ShAmt ^ XLEN-1))
   //     Hi = Hi >>u Shamt
   //   else:
   //     Lo = Hi >>u (Shamt-XLEN);
@@ -4437,7 +4437,7 @@ SDValue RISCVTargetLowering::lowerShiftRightParts(SDValue Op, SelectionDAG &DAG,
   SDValue MinusXLen = DAG.getConstant(-(int)Subtarget.getXLen(), DL, VT);
   SDValue XLenMinus1 = DAG.getConstant(Subtarget.getXLen() - 1, DL, VT);
   SDValue ShamtMinusXLen = DAG.getNode(ISD::ADD, DL, VT, Shamt, MinusXLen);
-  SDValue XLenMinus1Shamt = DAG.getNode(ISD::SUB, DL, VT, XLenMinus1, Shamt);
+  SDValue XLenMinus1Shamt = DAG.getNode(ISD::XOR, DL, VT, Shamt, XLenMinus1);
 
   SDValue ShiftRightLo = DAG.getNode(ISD::SRL, DL, VT, Lo, Shamt);
   SDValue ShiftLeftHi1 = DAG.getNode(ISD::SHL, DL, VT, Hi, One);
