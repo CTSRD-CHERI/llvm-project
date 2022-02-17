@@ -2634,6 +2634,7 @@ computePointerICmp(CmpInst::Predicate Pred, Value *LHS, Value *RHS,
         (isa<AllocaInst>(RHS) || isa<GlobalVariable>(RHS))) {
       uint64_t LHSSize, RHSSize;
       ObjectSizeOpts Opts;
+      Opts.EvalMode = ObjectSizeOpts::Mode::Min;
       Opts.NullIsUnknownSize =
           NullPointerIsDefined(cast<AllocaInst>(LHS)->getFunction());
       if (getObjectSize(LHS, LHSSize, DL, TLI, Opts) &&
