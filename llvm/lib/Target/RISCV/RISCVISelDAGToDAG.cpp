@@ -1672,8 +1672,7 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     MachineSDNode *Load =
         CurDAG->getMachineNode(P->Pseudo, DL, Node->getVTList(), Operands);
 
-    if (auto *MemOp = dyn_cast<MemSDNode>(Node))
-      CurDAG->setNodeMemRefs(Load, {MemOp->getMemOperand()});
+    CurDAG->setNodeMemRefs(Load, {Ld->getMemOperand()});
 
     ReplaceNode(Node, Load);
     return;
