@@ -2878,20 +2878,18 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   if (DAG.getTarget().useEmulatedTLS())
     return LowerToTLSEmulatedModel(GA, DAG);
 
+  SDLoc DL(GA);
+  const GlobalValue *GV = GA->getGlobal();
+  TLSModel::Model model = getTargetMachine().getTLSModel(GV);
+
   // In CheriOS ABI we also use the captable for TLS
-  if (ABI.IsCheriOS()) {
+  if (Subtarget.getABI().IsCheriOS()) {
     auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
     EVT Ty = Op.getValueType();
     EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
     return getDataFromCapTable(GA, SDLoc(GA), GlobalTy, DAG, DAG.getEntryNode(),
                                PtrInfo, true);
-  }
-
-  SDLoc DL(GA);
-  const GlobalValue *GV = GA->getGlobal();
-  TLSModel::Model model = getTargetMachine().getTLSModel(GV);
-
-  if (Subtarget.getABI().IsCheriPureCap()) {
+  } else if (Subtarget.getABI().IsCheriPureCap()) {
     const Type *GVTy = GV->getType();
     if (DAG.getDataLayout().isFatPointer(GVTy)) {
       EVT OffsetVT = getPointerRangeTy(DAG.getDataLayout(),
