@@ -174,15 +174,3 @@ Pass *llvm::createCHERISafeStacksPass() {
   return new Temporal(false, llvm::getTemporalAnalysisType(),
                       llvm::getTemporalExpandLimit());
 }
-
-/* If this is loaded
-static void loadPass(const PassManagerBuilder &Builder, legacy::PassManagerBase
-&PM) { PM.add(createCHERISafeStacksPass());
-}
-
-
-static RegisterStandardPasses
-clangtoolLoader_Ox(PassManagerBuilder::EP_OptimizerLast, loadPass); static
-RegisterStandardPasses
-clangtoolLoader_O0(PassManagerBuilder::EP_EnabledOnOptLevel0, loadPass);
-*/
