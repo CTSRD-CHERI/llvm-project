@@ -274,6 +274,8 @@ public:
   // Get cached DWARF information.
   DWARFCache *getDwarf();
 
+  void postParse();
+
 private:
   void initializeSections(bool ignoreComdats,
                           const llvm::object::ELFFile<ELFT> &obj);
@@ -316,7 +318,9 @@ public:
   static bool classof(const InputFile *f) { return f->kind() == BitcodeKind; }
   template <class ELFT> void parse();
   void parseLazy();
+  void postParse();
   std::unique_ptr<llvm::lto::InputFile> obj;
+  std::vector<bool> keptComdats;
 };
 
 // .so file.
