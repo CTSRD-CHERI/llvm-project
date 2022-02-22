@@ -260,7 +260,7 @@ getReservedRegs(const MachineFunction &MF) const {
       static_cast<const MipsFrameLowering*>(Subtarget.getFrameLowering());
     if (Subtarget.isABI_CheriPureCap()) {
       Reserved.set(ABI.GetStackPtr());
-      if (ABI.GetUnsafeStackPtr() != 0)
+      if (ABI.GetUnsafeStackPtr() != Mips::NoRegister)
         Reserved.set(ABI.GetUnsafeStackPtr());
       if (FL->hasFP(MF))
         Reserved.set(ABI.GetFramePtr());
