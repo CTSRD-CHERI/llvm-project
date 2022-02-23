@@ -2699,8 +2699,7 @@ void CodeGenFunction::EmitVTablePtrCheckForCall(const CXXRecordDecl *RD,
   EmitVTablePtrCheck(RD, VTable, TCK, Loc);
 }
 
-void CodeGenFunction::EmitVTablePtrCheckForCast(QualType T,
-                                                llvm::Value *Derived,
+void CodeGenFunction::EmitVTablePtrCheckForCast(QualType T, Address Derived,
                                                 bool MayBeNull,
                                                 CFITypeCheckKind TCK,
                                                 SourceLocation Loc) {
@@ -2723,7 +2722,7 @@ void CodeGenFunction::EmitVTablePtrCheckForCast(QualType T,
 
   if (MayBeNull) {
     llvm::Value *DerivedNotNull =
-        Builder.CreateIsNotNull(Derived, "cast.nonnull");
+        Builder.CreateIsNotNull(Derived.getPointer(), "cast.nonnull");
 
     llvm::BasicBlock *CheckBlock = createBasicBlock("cast.check");
     ContBlock = createBasicBlock("cast.cont");
@@ -2734,8 +2733,8 @@ void CodeGenFunction::EmitVTablePtrCheckForCast(QualType T,
   }
 
   llvm::Value *VTable;
-  std::tie(VTable, ClassDecl) = CGM.getCXXABI().LoadVTablePtr(
-      *this, Address::deprecated(Derived, getPointerAlign()), ClassDecl);
+  std::tie(VTable, ClassDecl) =
+      CGM.getCXXABI().LoadVTablePtr(*this, Derived, ClassDecl);
 
   EmitVTablePtrCheck(ClassDecl, VTable, TCK, Loc);
 
