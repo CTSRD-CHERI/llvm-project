@@ -1352,7 +1352,7 @@ static void buildStructValue(ConstantStructBuilder &Fields, CodeGenModule &CGM,
   llvm::StructType *StructTy = RL.getLLVMType();
   unsigned PrevIdx = 0;
   ConstantInitBuilder CIBuilder(CGM);
-  auto DI = Data.begin();
+  const auto *DI = Data.begin();
   for (const FieldDecl *FD : RD->fields()) {
     unsigned Idx = RL.getLLVMFieldNo(FD);
     // Fill the alignment.
@@ -3980,7 +3980,7 @@ static bool checkInitIsRequired(CodeGenFunction &CGF,
       continue;
     const VarDecl *VD = Pair.second.PrivateCopy;
     const Expr *Init = VD->getAnyInitializer();
-    InitRequired = InitRequired || (Init && isa<CXXConstructExpr>(Init) &&
+    InitRequired = InitRequired || (isa_and_nonnull<CXXConstructExpr>(Init) &&
                                     !CGF.isTrivialInitializer(Init));
     if (InitRequired)
       break;
@@ -5482,7 +5482,7 @@ llvm::Function *CGOpenMPRuntime::emitReductionFunction(
   //  *(Type<i>*)lhs[i] = RedOp<i>(*(Type<i>*)lhs[i], *(Type<i>*)rhs[i]);
   //  ...
   CodeGenFunction::OMPPrivateScope Scope(CGF);
-  auto IPriv = Privates.begin();
+  const auto *IPriv = Privates.begin();
   unsigned Idx = 0;
   for (unsigned I = 0, E = ReductionOps.size(); I < E; ++I, ++IPriv, ++Idx) {
     const auto *RHSVar =
@@ -5511,8 +5511,8 @@ llvm::Function *CGOpenMPRuntime::emitReductionFunction(
   }
   Scope.Privatize();
   IPriv = Privates.begin();
-  auto ILHS = LHSExprs.begin();
-  auto IRHS = RHSExprs.begin();
+  const auto *ILHS = LHSExprs.begin();
+  const auto *IRHS = RHSExprs.begin();
   for (const Expr *E : ReductionOps) {
     if ((*IPriv)->getType()->isArrayType()) {
       // Emit reduction for array section.
@@ -5607,9 +5607,9 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
 
   if (SimpleReduction) {
     CodeGenFunction::RunCleanupsScope Scope(CGF);
-    auto IPriv = Privates.begin();
-    auto ILHS = LHSExprs.begin();
-    auto IRHS = RHSExprs.begin();
+    const auto *IPriv = Privates.begin();
+    const auto *ILHS = LHSExprs.begin();
+    const auto *IRHS = RHSExprs.begin();
     for (const Expr *E : ReductionOps) {
       emitSingleReductionCombiner(CGF, E, *IPriv, cast<DeclRefExpr>(*ILHS),
                                   cast<DeclRefExpr>(*IRHS));
@@ -5634,7 +5634,7 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
                              /*IndexTypeQuals=*/0);
   Address ReductionList =
       CGF.CreateMemTemp(ReductionArrayTy, ".omp.reduction.red_list");
-  auto IPriv = Privates.begin();
+  const auto *IPriv = Privates.begin();
   unsigned Idx = 0;
   for (unsigned I = 0, E = RHSExprs.size(); I < E; ++I, ++IPriv, ++Idx) {
     Address Elem = CGF.Builder.CreateConstArrayGEP(ReductionList, Idx);
@@ -5712,9 +5712,9 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
   auto &&CodeGen = [Privates, LHSExprs, RHSExprs, ReductionOps](
                        CodeGenFunction &CGF, PrePostActionTy &Action) {
     CGOpenMPRuntime &RT = CGF.CGM.getOpenMPRuntime();
-    auto IPriv = Privates.begin();
-    auto ILHS = LHSExprs.begin();
-    auto IRHS = RHSExprs.begin();
+    const auto *IPriv = Privates.begin();
+    const auto *ILHS = LHSExprs.begin();
+    const auto *IRHS = RHSExprs.begin();
     for (const Expr *E : ReductionOps) {
       RT.emitSingleReductionCombiner(CGF, E, *IPriv, cast<DeclRefExpr>(*ILHS),
                                      cast<DeclRefExpr>(*IRHS));
@@ -5746,9 +5746,9 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
 
   auto &&AtomicCodeGen = [Loc, Privates, LHSExprs, RHSExprs, ReductionOps](
                              CodeGenFunction &CGF, PrePostActionTy &Action) {
-    auto ILHS = LHSExprs.begin();
-    auto IRHS = RHSExprs.begin();
-    auto IPriv = Privates.begin();
+    const auto *ILHS = LHSExprs.begin();
+    const auto *IRHS = RHSExprs.begin();
+    const auto *IPriv = Privates.begin();
     for (const Expr *E : ReductionOps) {
       const Expr *XExpr = nullptr;
       const Expr *EExpr = nullptr;
@@ -8359,7 +8359,7 @@ private:
     }
 
     // Skip the dummy dimension since we have already have its information.
-    auto DI = DimSizes.begin() + 1;
+    auto *DI = DimSizes.begin() + 1;
     // Product of dimension.
     llvm::Value *DimProd =
         llvm::ConstantInt::get(CGF.CGM.Int64Ty, ElementTypeSize);
@@ -10366,8 +10366,8 @@ void CGOpenMPRuntime::emitTargetCall(
   llvm::Value *MapTypesArray = nullptr;
   llvm::Value *MapNamesArray = nullptr;
   // Generate code for the host fallback function.
-  auto &&FallbackGen = [this, &D, OutlinedFn, &CapturedVars, RequiresOuterTask, &CS,
-                        OffloadingMandatory](CodeGenFunction &CGF) {
+  auto &&FallbackGen = [this, OutlinedFn, &D, &CapturedVars, RequiresOuterTask,
+                        &CS, OffloadingMandatory](CodeGenFunction &CGF) {
     if (OffloadingMandatory) {
       CGF.Builder.CreateUnreachable();
     } else {
@@ -10379,8 +10379,8 @@ void CGOpenMPRuntime::emitTargetCall(
     }
   };
   // Fill up the pointer arrays and transfer execution to the device.
-  auto &&ThenGen = [this, Device, OutlinedFnID, &D, &InputInfo,
-                    &MapTypesArray, &MapNamesArray, SizeEmitter,
+  auto &&ThenGen = [this, Device, OutlinedFnID, &D, &InputInfo, &MapTypesArray,
+                    &MapNamesArray, SizeEmitter,
                     FallbackGen](CodeGenFunction &CGF, PrePostActionTy &) {
     if (Device.getInt() == OMPC_DEVICE_ancestor) {
       // Reverse offloading is not supported, so just execute on the host.
@@ -12003,7 +12003,7 @@ void CGOpenMPRuntime::emitDeclareSimdFunction(const FunctionDecl *FD,
         ParamAttrs[Pos].Kind = Uniform;
       }
       // Get alignment info.
-      auto NI = Attr->alignments_begin();
+      auto *NI = Attr->alignments_begin();
       for (const Expr *E : Attr->aligneds()) {
         E = E->IgnoreParenImpCasts();
         unsigned Pos;
@@ -12026,8 +12026,8 @@ void CGOpenMPRuntime::emitDeclareSimdFunction(const FunctionDecl *FD,
         ++NI;
       }
       // Mark linear parameters.
-      auto SI = Attr->steps_begin();
-      auto MI = Attr->modifiers_begin();
+      auto *SI = Attr->steps_begin();
+      auto *MI = Attr->modifiers_begin();
       for (const Expr *E : Attr->linears()) {
         E = E->IgnoreParenImpCasts();
         unsigned Pos;
@@ -12054,7 +12054,8 @@ void CGOpenMPRuntime::emitDeclareSimdFunction(const FunctionDecl *FD,
           if (!(*SI)->EvaluateAsInt(Result, C, Expr::SE_AllowSideEffects)) {
             if (const auto *DRE =
                     cast<DeclRefExpr>((*SI)->IgnoreParenImpCasts())) {
-              if (const auto *StridePVD = cast<ParmVarDecl>(DRE->getDecl())) {
+              if (const auto *StridePVD =
+                      dyn_cast<ParmVarDecl>(DRE->getDecl())) {
                 ParamAttr.Kind = LinearWithVarStride;
                 ParamAttr.StrideOrArg = llvm::APSInt::getUnsigned(
                     ParamPositions[StridePVD->getCanonicalDecl()]);
