@@ -33,6 +33,6 @@
 // RV64-XCHERI-V9: "target-features"="+64bit,+relax,+xcheri,+xcheri-v9-semantics,-save-restore"
 
 // Dummy function
-int foo(){
+int foo(void){
   return  3;
 }
