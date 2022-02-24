@@ -649,6 +649,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_JUMP_TABLE;
   case Attribute::MinSize:
     return bitc::ATTR_KIND_MIN_SIZE;
+  case Attribute::AllocatedPointer:
+    return bitc::ATTR_KIND_ALLOCATED_POINTER;
   case Attribute::MustPreserveCheriTags:
     return bitc::ATTR_KIND_MUST_PRESERVE_CHERI_TAGS;
   case Attribute::Naked:
