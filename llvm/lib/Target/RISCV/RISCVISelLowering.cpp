@@ -1850,7 +1850,7 @@ static SDValue lowerFTRUNC_FCEIL_FFLOOR(SDValue Op, SelectionDAG &DAG) {
   SDLoc DL(Op);
 
   // Freeze the source since we are increasing the number of uses.
-  SDValue Src = DAG.getNode(ISD::FREEZE, DL, VT, Op.getOperand(0));
+  SDValue Src = DAG.getFreeze(Op.getOperand(0));
 
   // Truncate to integer and convert back to FP.
   MVT IntVT = VT.changeVectorElementTypeToInteger();
@@ -1912,7 +1912,7 @@ static SDValue lowerFROUND(SDValue Op, SelectionDAG &DAG) {
   SDLoc DL(Op);
 
   // Freeze the source since we are increasing the number of uses.
-  SDValue Src = DAG.getNode(ISD::FREEZE, DL, VT, Op.getOperand(0));
+  SDValue Src = DAG.getFreeze(Op.getOperand(0));
 
   // We do the conversion on the absolute value and fix the sign at the end.
   SDValue Abs = DAG.getNode(ISD::FABS, DL, VT, Src);
@@ -2800,7 +2800,7 @@ static SDValue lowerVECTOR_SHUFFLE(SDValue Op, SelectionDAG &DAG,
 
     // Freeze V2 since we use it twice and we need to be sure that the add and
     // multiply see the same value.
-    V2 = DAG.getNode(ISD::FREEZE, DL, IntHalfVT, V2);
+    V2 = DAG.getFreeze(V2);
 
     // Recreate TrueMask using the widened type's element count.
     MVT MaskVT =
