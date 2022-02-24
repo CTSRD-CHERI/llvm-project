@@ -43,6 +43,7 @@
 #include "Relocations.h"
 #include "Arch/Cheri.h"
 #include "Config.h"
+#include "InputFiles.h"
 #include "LinkerScript.h"
 #include "OutputSections.h"
 #include "SymbolTable.h"

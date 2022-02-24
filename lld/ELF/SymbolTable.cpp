@@ -14,6 +14,7 @@
 
 #include "SymbolTable.h"
 #include "Config.h"
+#include "InputFiles.h"
 #include "Symbols.h"
 #include "lld/Common/CommonLinkerContext.h"
 #include "lld/Common/ErrorHandler.h"
