@@ -133,6 +133,7 @@ void RISCVDAGToDAGISel::PreprocessISelDAG() {
 }
 
 void RISCVDAGToDAGISel::PostprocessISelDAG() {
+  HandleSDNode Dummy(CurDAG->getRoot());
   SelectionDAG::allnodes_iterator Position = CurDAG->allnodes_end();
 
   bool MadeChange = false;
@@ -146,6 +147,8 @@ void RISCVDAGToDAGISel::PostprocessISelDAG() {
     MadeChange |= doPeepholeLoadStoreOffset(N);
     MadeChange |= doPeepholeMaskedRVV(N);
   }
+
+  CurDAG->setRoot(Dummy.getValue());
 
   if (MadeChange)
     CurDAG->RemoveDeadNodes();
