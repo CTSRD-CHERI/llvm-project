@@ -52,7 +52,7 @@ struct ProfiledCallGraphNode {
   };
 
   using edge = ProfiledCallGraphEdge;
-  using edges = std::set<ProfiledCallGraphEdge, ProfiledCallGraphEdgeComparer>;
+  using edges = std::set<edge, ProfiledCallGraphEdgeComparer>;
   using iterator = edges::iterator;
   using const_iterator = edges::const_iterator;
 
