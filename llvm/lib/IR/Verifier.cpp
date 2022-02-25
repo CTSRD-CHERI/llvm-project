@@ -2178,7 +2178,7 @@ void Verifier::verifyInlineAsmCall(const CallBase &Call) {
              "Operand for indirect constraint must have pointer type",
              &Call);
 
-      Assert(Call.getAttributes().getParamElementType(ArgNo),
+      Assert(Call.getParamElementType(ArgNo),
              "Operand for indirect constraint must have elementtype attribute",
              &Call);
     } else {
@@ -2211,7 +2211,7 @@ void Verifier::verifyStatepoint(const CallBase &Call) {
          "positive",
          Call);
 
-  Type *TargetElemType = Call.getAttributes().getParamElementType(2);
+  Type *TargetElemType = Call.getParamElementType(2);
   Assert(TargetElemType,
          "gc.statepoint callee argument must have elementtype attribute", Call);
   FunctionType *TargetFuncType = dyn_cast<FunctionType>(TargetElemType);
@@ -5072,8 +5072,8 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
            Call.getArgOperand(0));
 
     // Assert that result type matches wrapped callee.
-    auto *TargetFuncType = cast<FunctionType>(
-        StatepointCall->getAttributes().getParamElementType(2));
+    auto *TargetFuncType =
+        cast<FunctionType>(StatepointCall->getParamElementType(2));
     Assert(Call.getType() == TargetFuncType->getReturnType(),
            "gc.result result type does not match wrapped callee", Call);
     break;
@@ -5530,7 +5530,7 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
   }
   case Intrinsic::preserve_array_access_index:
   case Intrinsic::preserve_struct_access_index: {
-    Type *ElemTy = Call.getAttributes().getParamElementType(0);
+    Type *ElemTy = Call.getParamElementType(0);
     Assert(ElemTy,
            "Intrinsic requires elementtype attribute on first argument.",
            &Call);
