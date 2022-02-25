@@ -42,7 +42,7 @@ public:
     return TLOF.get();
   }
 
-  TargetTransformInfo getTargetTransformInfo(const Function &F) override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) const override;
 
   bool IsRV64() const {
     return getTargetTriple().isArch64Bit();

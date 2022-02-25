@@ -136,7 +136,7 @@ RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
 }
 
 TargetTransformInfo
-RISCVTargetMachine::getTargetTransformInfo(const Function &F) {
+RISCVTargetMachine::getTargetTransformInfo(const Function &F) const {
   return TargetTransformInfo(RISCVTTIImpl(this, F));
 }
 
