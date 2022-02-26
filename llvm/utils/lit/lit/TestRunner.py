@@ -6,6 +6,7 @@ import getopt
 import os, signal, subprocess, sys
 import re
 import stat
+import pathlib
 import platform
 import shutil
 import tempfile
@@ -1121,6 +1122,12 @@ def getDefaultSubstitutions(test, tmpDir, tmpBase, normalize_slashes=False):
                           ('%t', tmpName),
                           ('%basename_t', baseName),
                           ('%T', tmpDir)])
+
+    substitutions.extend([
+        ('%{fs-src-root}', pathlib.Path(sourcedir).anchor),
+        ('%{fs-tmp-root}', pathlib.Path(tmpBase).anchor),
+        ('%{fs-sep}', os.path.sep),
+    ])
 
     # "%/[STpst]" should be normalized.
     substitutions.extend([
