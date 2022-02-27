@@ -179,7 +179,7 @@ defm entry: Eq<"entry", "Name of entry point symbol">,
   MetaVarName<"<entry>">;
 
 defm error_limit:
-  Eq<"error-limit", "Maximum number of errors to emit before stopping (0 = no limit)">;
+  EEq<"error-limit", "Maximum number of errors to emit before stopping (0 = no limit)">;
 
 defm warning_limit:
   Eq<"warning-limit", "Maximum number of warnings to emit before stopping (0 = no limit)">;
