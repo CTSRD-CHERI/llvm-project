@@ -1669,10 +1669,18 @@ template <class ELFT> void BitcodeFile::parse() {
   }
 
   symbols.resize(obj->symbols().size());
-  for (auto it : llvm::enumerate(obj->symbols())) {
-    Symbol *&sym = symbols[it.index()];
-    createBitcodeSymbol<ELFT>(sym, keptComdats, it.value(), *this);
-  }
+  // Process defined symbols first. See the comment in
+  // ObjFile<ELFT>::initializeSymbols.
+  for (auto it : llvm::enumerate(obj->symbols()))
+    if (!it.value().isUndefined()) {
+      Symbol *&sym = symbols[it.index()];
+      createBitcodeSymbol<ELFT>(sym, keptComdats, it.value(), *this);
+    }
+  for (auto it : llvm::enumerate(obj->symbols()))
+    if (it.value().isUndefined()) {
+      Symbol *&sym = symbols[it.index()];
+      createBitcodeSymbol<ELFT>(sym, keptComdats, it.value(), *this);
+    }
 
   for (auto l : obj->getDependentLibraries())
     addDependentLibrary(l, this);
