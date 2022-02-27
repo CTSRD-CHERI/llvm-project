@@ -115,10 +115,10 @@ bool elf::link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
   };
   ctx->e.logName = args::getFilenameWithoutExe(args[0]);
   ctx->e.errorLimitExceededMsg = "too many errors emitted, stopping now (use "
-                                 "-error-limit=0 to see all errors)";
+                                 "--error-limit=0 to see all errors)";
   ctx->e.warningLimitExceededMsg =
       "too many warnings emitted, stopping now (use "
-      "-warning-limit=0 to see all warnings)\n";
+      "--warning-limit=0 to see all warnings)\n";
   config = std::make_unique<Configuration>();
   driver = std::make_unique<LinkerDriver>();
   script = std::make_unique<LinkerScript>();
