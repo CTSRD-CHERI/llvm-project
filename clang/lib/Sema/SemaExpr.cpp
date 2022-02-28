@@ -10542,6 +10542,29 @@ QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
   return QualType();
 }
 
+QualType Sema::CheckSizelessVectorOperands(ExprResult &LHS, ExprResult &RHS,
+                                           SourceLocation Loc) {
+  QualType LHSType = LHS.get()->getType().getUnqualifiedType();
+  QualType RHSType = RHS.get()->getType().getUnqualifiedType();
+
+  const BuiltinType *LHSVecType = LHSType->getAs<BuiltinType>();
+  const BuiltinType *RHSVecType = RHSType->getAs<BuiltinType>();
+
+  unsigned DiagID = diag::err_typecheck_invalid_operands;
+  if (LHSVecType->isSVEBool() || RHSVecType->isSVEBool()) {
+    Diag(Loc, DiagID) << LHSType << RHSType << LHS.get()->getSourceRange()
+                      << RHS.get()->getSourceRange();
+    return QualType();
+  }
+
+  if (Context.hasSameType(LHSType, RHSType))
+    return LHSType;
+
+  Diag(Loc, DiagID) << LHSType << RHSType << LHS.get()->getSourceRange()
+                    << RHS.get()->getSourceRange();
+  return QualType();
+}
+
 // checkArithmeticNull - Detect when a NULL constant is used improperly in an
 // expression.  These are mainly cases where the null pointer is used as an
 // integer instead of a pointer.
@@ -10684,8 +10707,10 @@ QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
   QualType RHSTy = RHS.get()->getType();
   if (LHSTy->isVectorType() || RHSTy->isVectorType())
     return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign,
-                               /*AllowBothBool*/getLangOpts().AltiVec,
-                               /*AllowBoolConversions*/false);
+                               /*AllowBothBool*/ getLangOpts().AltiVec,
+                               /*AllowBoolConversions*/ false);
+  if (LHSTy->isVLSTBuiltinType() || RHSTy->isVLSTBuiltinType())
+    return CheckSizelessVectorOperands(LHS, RHS, Loc);
   if (!IsDiv &&
       (LHSTy->isConstantMatrixType() || RHSTy->isConstantMatrixType()))
     return CheckMatrixMultiplyOperands(LHS, RHS, Loc, IsCompAssign);
@@ -10733,6 +10758,21 @@ QualType Sema::CheckRemainderOperands(
       return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign,
                                  /*AllowBothBool*/getLangOpts().AltiVec,
                                  /*AllowBoolConversions*/false);
+    return InvalidOperands(Loc, LHS, RHS);
+  }
+
+  if (LHS.get()->getType()->isVLSTBuiltinType() &&
+      RHS.get()->getType()->isVLSTBuiltinType()) {
+    if (LHS.get()
+            ->getType()
+            ->getSveEltType(Context)
+            ->hasIntegerRepresentation() &&
+        RHS.get()
+            ->getType()
+            ->getSveEltType(Context)
+            ->hasIntegerRepresentation())
+      return CheckSizelessVectorOperands(LHS, RHS, Loc);
+
     return InvalidOperands(Loc, LHS, RHS);
   }
 
@@ -11050,6 +11090,14 @@ QualType Sema::CheckAdditionOperands(ExprResult &LHS, ExprResult &RHS,
     return compType;
   }
 
+  if (LHS.get()->getType()->isVLSTBuiltinType() ||
+      RHS.get()->getType()->isVLSTBuiltinType()) {
+    QualType compType = CheckSizelessVectorOperands(LHS, RHS, Loc);
+    if (CompLHSTy)
+      *CompLHSTy = compType;
+    return compType;
+  }
+
   if (LHS.get()->getType()->isConstantMatrixType() ||
       RHS.get()->getType()->isConstantMatrixType()) {
     QualType compType =
@@ -11153,6 +11201,14 @@ QualType Sema::CheckSubtractionOperands(ExprResult &LHS, ExprResult &RHS,
         /*AllowBothBool*/getLangOpts().AltiVec,
         /*AllowBoolConversions*/getLangOpts().ZVector);
     if (CompLHSTy) *CompLHSTy = compType;
+    return compType;
+  }
+
+  if (LHS.get()->getType()->isVLSTBuiltinType() ||
+      RHS.get()->getType()->isVLSTBuiltinType()) {
+    QualType compType = CheckSizelessVectorOperands(LHS, RHS, Loc);
+    if (CompLHSTy)
+      *CompLHSTy = compType;
     return compType;
   }
 
