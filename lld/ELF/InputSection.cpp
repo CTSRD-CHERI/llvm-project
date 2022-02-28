@@ -1280,11 +1280,6 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *buf,
 }
 
 template <class ELFT> void InputSection::writeTo(uint8_t *buf) {
-  if (auto *s = dyn_cast<SyntheticSection>(this)) {
-    s->writeTo(buf);
-    return;
-  }
-
   if (LLVM_UNLIKELY(type == SHT_NOBITS))
     return;
   // If -r or --emit-relocs is given, then an InputSection
