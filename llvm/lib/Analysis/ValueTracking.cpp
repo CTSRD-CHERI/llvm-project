@@ -71,10 +71,8 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <cstdint>
-#include <iterator>
 #include <utility>
 
 using namespace llvm;
