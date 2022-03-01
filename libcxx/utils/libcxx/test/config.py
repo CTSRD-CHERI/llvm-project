@@ -450,6 +450,8 @@ class Configuration(object):
                         link_flags += [abs_path]
                     else:
                         link_flags += ['-lc++abi']
+        elif cxx_abi == 'system-libcxxabi':
+            link_flags += ['-lc++abi']
         elif cxx_abi == 'libcxxrt':
             link_flags += ['-lcxxrt']
         elif cxx_abi == 'vcruntime':
