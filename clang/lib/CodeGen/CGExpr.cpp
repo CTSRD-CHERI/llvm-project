@@ -3637,7 +3637,7 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
             VarTy, getContext().getTargetAddressSpace(
                 VD->getType().getAddressSpace()));
         if (PTy != Addr.getType())
-          Addr = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy);
+          Addr = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy, VarTy);
       } else {
         const ReferenceType *RT = VD->getType()->getAs<ReferenceType>();
         if (RT->isCHERICapability()) {
