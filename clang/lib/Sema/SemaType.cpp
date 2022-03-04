@@ -270,6 +270,12 @@ namespace {
       return T;
     }
 
+    /// Get a BTFTagAttributed type for the btf_type_tag attribute.
+    QualType getBTFTagAttributedType(const BTFTypeTagAttr *BTFAttr,
+                                     QualType WrappedType) {
+      return sema.Context.getBTFTagAttributedType(BTFAttr, WrappedType);
+    }
+
     /// Completely replace the \c auto in \p TypeWithAuto by
     /// \p Replacement. Also replace \p TypeWithAuto in \c TypeAttrPair if
     /// necessary.
@@ -5983,6 +5989,9 @@ namespace {
       Visit(TL.getModifiedLoc());
       fillAttributedTypeLoc(TL, State);
     }
+    void VisitBTFTagAttributedTypeLoc(BTFTagAttributedTypeLoc TL) {
+      Visit(TL.getWrappedLoc());
+    }
     void VisitMacroQualifiedTypeLoc(MacroQualifiedTypeLoc TL) {
       Visit(TL.getInnerLoc());
       TL.setExpansionLoc(
@@ -6208,6 +6217,9 @@ namespace {
 
     void VisitAttributedTypeLoc(AttributedTypeLoc TL) {
       fillAttributedTypeLoc(TL, State);
+    }
+    void VisitBTFTagAttributedTypeLoc(BTFTagAttributedTypeLoc TL) {
+      // nothing
     }
     void VisitAdjustedTypeLoc(AdjustedTypeLoc TL) {
       // nothing
@@ -6643,8 +6655,8 @@ static void HandleBTFTypeTagAttribute(QualType &Type, const ParsedAttr &Attr,
 
   ASTContext &Ctx = S.Context;
   StringRef BTFTypeTag = StrLiteral->getString();
-  Type = State.getAttributedType(
-      ::new (Ctx) BTFTypeTagAttr(Ctx, Attr, BTFTypeTag), Type, Type);
+  Type = State.getBTFTagAttributedType(
+      ::new (Ctx) BTFTypeTagAttr(Ctx, Attr, BTFTypeTag), Type);
 }
 
 /// HandleAddressSpaceTypeAttribute - Process an address_space attribute on the
