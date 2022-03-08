@@ -3586,10 +3586,11 @@ public:
   /// Return true if the number of memory ops is below the threshold (Limit).
   /// It returns the types of the sequence of memory ops to perform
   /// memset / memcpy by reference.
-  bool findOptimalMemOpLowering(std::vector<EVT> &MemOps, unsigned Limit,
-                                const MemOp &Op, unsigned DstAS, unsigned SrcAS,
-                                const AttributeList &FuncAttributes,
-                                bool *ReachedLimit = nullptr) const;
+  virtual bool findOptimalMemOpLowering(std::vector<EVT> &MemOps,
+                                        unsigned Limit, const MemOp &Op,
+                                        unsigned DstAS, unsigned SrcAS,
+                                        const AttributeList &FuncAttributes,
+                                        bool *ReachedLimit = nullptr) const;
 
   /// Check to see if the specified operand of the specified instruction is a
   /// constant integer.  If so, check to see if there are any bits set in the
