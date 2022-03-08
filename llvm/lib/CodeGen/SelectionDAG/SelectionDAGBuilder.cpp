@@ -1643,7 +1643,9 @@ SDValue SelectionDAGBuilder::getValueImpl(const Value *V) {
         Ops.push_back(getValue(CV->getOperand(i)));
 
       return NodeMap[V] = DAG.getBuildVector(VT, getCurSDLoc(), Ops);
-    } else if (isa<ConstantAggregateZero>(C)) {
+    }
+
+    if (isa<ConstantAggregateZero>(C)) {
       EVT EltVT =
           TLI.getValueType(DAG.getDataLayout(), VecTy->getElementType());
 
@@ -1655,12 +1657,12 @@ SDValue SelectionDAGBuilder::getValueImpl(const Value *V) {
 
       if (isa<ScalableVectorType>(VecTy))
         return NodeMap[V] = DAG.getSplatVector(VT, getCurSDLoc(), Op);
-      else {
-        SmallVector<SDValue, 16> Ops;
-        Ops.assign(cast<FixedVectorType>(VecTy)->getNumElements(), Op);
-        return NodeMap[V] = DAG.getBuildVector(VT, getCurSDLoc(), Ops);
-      }
+
+      SmallVector<SDValue, 16> Ops;
+      Ops.assign(cast<FixedVectorType>(VecTy)->getNumElements(), Op);
+      return NodeMap[V] = DAG.getBuildVector(VT, getCurSDLoc(), Ops);
     }
+
     llvm_unreachable("Unknown vector constant");
   }
 
@@ -1684,11 +1686,12 @@ SDValue SelectionDAGBuilder::getValueImpl(const Value *V) {
     return RFV.getCopyFromRegs(DAG, FuncInfo, getCurSDLoc(), Chain, nullptr, V);
   }
 
-  if (const MetadataAsValue *MD = dyn_cast<MetadataAsValue>(V)) {
+  if (const MetadataAsValue *MD = dyn_cast<MetadataAsValue>(V))
     return DAG.getMDNode(cast<MDNode>(MD->getMetadata()));
-  }
+
   if (const auto *BB = dyn_cast<BasicBlock>(V))
     return DAG.getBasicBlock(FuncInfo.MBBMap[BB]);
+
   llvm_unreachable("Can't get register for value!");
 }
 
