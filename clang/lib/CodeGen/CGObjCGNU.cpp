@@ -1267,7 +1267,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
                              const std::string &Name,
                              bool isWeak) override {
     return CGF.Builder.CreateLoad(
-        Address::deprecated(GetClassVar(Name, isWeak), CGM.getPointerAlign()));
+        Address(GetClassVar(Name, isWeak), IdTy, CGM.getPointerAlign()));
   }
   int32_t FlagsForOwnership(Qualifiers::ObjCLifetime Ownership) {
     // typedef enum {
