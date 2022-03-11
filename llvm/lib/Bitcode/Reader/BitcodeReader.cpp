@@ -5082,8 +5082,10 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       cast<InvokeInst>(I)->setCallingConv(
           static_cast<CallingConv::ID>(CallingConv::MaxID & CCInfo));
       cast<InvokeInst>(I)->setAttributes(PAL);
-      if (Error Err = propagateAttributeTypes(cast<CallBase>(I), ArgTyIDs))
+      if (Error Err = propagateAttributeTypes(cast<CallBase>(I), ArgTyIDs)) {
+        I->deleteValue();
         return Err;
+      }
 
       break;
     }
@@ -5177,8 +5179,10 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       cast<CallBrInst>(I)->setCallingConv(
           static_cast<CallingConv::ID>((0x7ff & CCInfo) >> bitc::CALL_CCONV));
       cast<CallBrInst>(I)->setAttributes(PAL);
-      if (Error Err = propagateAttributeTypes(cast<CallBase>(I), ArgTyIDs))
+      if (Error Err = propagateAttributeTypes(cast<CallBase>(I), ArgTyIDs)) {
+        I->deleteValue();
         return Err;
+      }
       break;
     }
     case bitc::FUNC_CODE_INST_UNREACHABLE: // UNREACHABLE
@@ -5790,8 +5794,10 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
         TCK = CallInst::TCK_NoTail;
       cast<CallInst>(I)->setTailCallKind(TCK);
       cast<CallInst>(I)->setAttributes(PAL);
-      if (Error Err = propagateAttributeTypes(cast<CallBase>(I), ArgTyIDs))
+      if (Error Err = propagateAttributeTypes(cast<CallBase>(I), ArgTyIDs)) {
+        I->deleteValue();
         return Err;
+      }
       if (FMF.any()) {
         if (!isa<FPMathOperator>(I))
           return error("Fast-math-flags specified for call without "
