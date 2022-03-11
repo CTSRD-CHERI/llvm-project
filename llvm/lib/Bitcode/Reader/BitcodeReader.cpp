@@ -2517,9 +2517,10 @@ Error BitcodeReader::parseConstants() {
         SmallVector<int, 16> Mask;
         ShuffleVectorInst::getShuffleMask(Op2, Mask);
         Value *V = ConstantExpr::getShuffleVector(Op0, Op1, Mask);
-        ValueList.assignValue(
-            CstNo, V,
-            getVirtualTypeID(V->getType(), getContainedTypeID(OpTyID)));
+        if (Error Err = ValueList.assignValue(
+                CstNo, V,
+                getVirtualTypeID(V->getType(), getContainedTypeID(OpTyID))))
+          return Err;
       }
       for (auto &DelayedSelector : DelayedSelectors) {
         Type *OpTy = DelayedSelector.OpTy;
@@ -2545,7 +2546,8 @@ Error BitcodeReader::parseConstants() {
         Constant *Op0 =
             ValueList.getConstantFwdRef(Op0Idx, SelectorTy, SelectorTyID);
         Value *V = ConstantExpr::getSelect(Op0, Op1, Op2);
-        ValueList.assignValue(CstNo, V, OpTyID);
+        if (Error Err = ValueList.assignValue(CstNo, V, OpTyID))
+          return Err;
       }
 
       if (NextCstNo != ValueList.size())
@@ -3152,7 +3154,8 @@ Error BitcodeReader::parseConstants() {
     }
 
     assert(V->getType() == getTypeByID(CurTyID) && "Incorrect result type ID");
-    ValueList.assignValue(NextCstNo, V, CurTyID);
+    if (Error Err = ValueList.assignValue(NextCstNo, V, CurTyID))
+      return Err;
     ++NextCstNo;
   }
 }
@@ -5886,7 +5889,8 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
     if (!I->getType()->isVoidTy()) {
       assert(I->getType() == getTypeByID(ResTypeID) &&
              "Incorrect result type ID");
-      ValueList.assignValue(NextValueNo++, I, ResTypeID);
+      if (Error Err = ValueList.assignValue(NextValueNo++, I, ResTypeID))
+        return Err;
     }
   }
 
