@@ -27,7 +27,7 @@ jobs:
       - name: List commits
         run: git log --oneline "${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
       - name: Run clang-format
-        uses: wolletd/clang-format-checker@v1
+        uses: wolletd/clang-format-checker@test
         with:
           source-ref: "${{ github.event.pull_request.head.sha }}"
           target-ref: "${{ github.base_ref }}" # required, merge target
