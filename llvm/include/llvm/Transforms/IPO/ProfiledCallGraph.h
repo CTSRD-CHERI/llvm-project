@@ -34,12 +34,16 @@ struct ProfiledCallGraphNode {
       return L->Name < R->Name;
     }
   };
-  std::set<ProfiledCallGraphNode *, ProfiledCallGraphNodeComparer> Callees;
+  using edges =
+      std::set<ProfiledCallGraphNode *, ProfiledCallGraphNodeComparer>;
+  using iterator = edges::iterator;
+  using const_iterator = edges::const_iterator;
+  edges Callees;
 };
 
 class ProfiledCallGraph {
 public:
-  using iterator = std::set<ProfiledCallGraphNode *>::iterator;
+  using iterator = ProfiledCallGraphNode::iterator;
 
   // Constructor for non-CS profile.
   ProfiledCallGraph(StringMap<FunctionSamples> &ProfileMap) {
@@ -128,7 +132,7 @@ private:
 
 template <> struct GraphTraits<ProfiledCallGraphNode *> {
   using NodeRef = ProfiledCallGraphNode *;
-  using ChildIteratorType = std::set<ProfiledCallGraphNode *>::iterator;
+  using ChildIteratorType = ProfiledCallGraphNode::iterator;
 
   static NodeRef getEntryNode(NodeRef PCGN) { return PCGN; }
   static ChildIteratorType child_begin(NodeRef N) { return N->Callees.begin(); }
