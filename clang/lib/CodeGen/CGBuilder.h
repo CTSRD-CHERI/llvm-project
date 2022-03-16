@@ -283,37 +283,33 @@ public:
   }
 
   using CGBuilderBaseTy::CreateMemCpy;
-  llvm::CallInst *CreateMemCpy(
-      Address Dest, Address Src, llvm::Value *Size,
-      llvm::PreserveCheriTags PreserveTags = llvm::PreserveCheriTags::TODO,
-      bool IsVolatile = false) {
+  llvm::CallInst *CreateMemCpy(Address Dest, Address Src, llvm::Value *Size,
+                               llvm::PreserveCheriTags PreserveTags,
+                               bool IsVolatile = false) {
     return CreateMemCpy(Dest.getPointer(), Dest.getAlignment().getAsAlign(),
                         Src.getPointer(), Src.getAlignment().getAsAlign(), Size,
                         PreserveTags, IsVolatile);
   }
-  llvm::CallInst *CreateMemCpy(
-      Address Dest, Address Src, uint64_t Size,
-      llvm::PreserveCheriTags PreserveTags = llvm::PreserveCheriTags::TODO,
-      bool IsVolatile = false) {
+  llvm::CallInst *CreateMemCpy(Address Dest, Address Src, uint64_t Size,
+                               llvm::PreserveCheriTags PreserveTags,
+                               bool IsVolatile = false) {
     return CreateMemCpy(Dest.getPointer(), Dest.getAlignment().getAsAlign(),
                         Src.getPointer(), Src.getAlignment().getAsAlign(), Size,
                         PreserveTags, IsVolatile);
   }
 
   using CGBuilderBaseTy::CreateMemCpyInline;
-  llvm::CallInst *CreateMemCpyInline(
-      Address Dest, Address Src, uint64_t Size,
-      llvm::PreserveCheriTags PreserveTags = llvm::PreserveCheriTags::TODO) {
+  llvm::CallInst *CreateMemCpyInline(Address Dest, Address Src, uint64_t Size,
+                                     llvm::PreserveCheriTags PreserveTags) {
     return CreateMemCpyInline(
         Dest.getPointer(), Dest.getAlignment().getAsAlign(), Src.getPointer(),
         Src.getAlignment().getAsAlign(), getInt64(Size), PreserveTags);
   }
 
   using CGBuilderBaseTy::CreateMemMove;
-  llvm::CallInst *CreateMemMove(
-      Address Dest, Address Src, llvm::Value *Size,
-      llvm::PreserveCheriTags PreserveTags = llvm::PreserveCheriTags::TODO,
-      bool IsVolatile = false) {
+  llvm::CallInst *CreateMemMove(Address Dest, Address Src, llvm::Value *Size,
+                                llvm::PreserveCheriTags PreserveTags,
+                                bool IsVolatile = false) {
     return CreateMemMove(Dest.getPointer(), Dest.getAlignment().getAsAlign(),
                          Src.getPointer(), Src.getAlignment().getAsAlign(),
                          Size, PreserveTags, IsVolatile);

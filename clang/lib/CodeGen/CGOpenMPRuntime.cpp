@@ -4832,7 +4832,8 @@ static void emitDepobjElements(CodeGenFunction &CGF, QualType &KmpDependInfoTy,
           Address(CGF.Builder.CreateGEP(DependenciesArray.getElementType(),
                                         DependenciesArray.getPointer(), Pos),
                   DependenciesArray.getAlignment());
-      CGF.Builder.CreateMemCpy(DepAddr, Base.getAddress(CGF), Size);
+      CGF.Builder.CreateMemCpy(DepAddr, Base.getAddress(CGF), Size,
+                               llvm::PreserveCheriTags::TODO);
 
       // Increase pos.
       // pos += size;

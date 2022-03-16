@@ -561,6 +561,8 @@ static void EmitNullBaseClassInitialization(CodeGenFunction &CGF,
       CharUnits StoreOffset = Store.first;
       CharUnits StoreSize = Store.second;
       llvm::Value *StoreSizeVal = CGF.CGM.getSize(StoreSize);
+      assert(!CGF.getTarget().areAllPointersCapabilities() &&
+             "Missing test case for llvm::PreserveCheriTags");
       CGF.Builder.CreateMemCpy(
           CGF.Builder.CreateConstInBoundsByteGEP(DestPtr, StoreOffset),
           CGF.Builder.CreateConstInBoundsByteGEP(SrcPtr, StoreOffset),

@@ -2763,10 +2763,13 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
           // FIXME: We should have a common utility for generating an aggregate
           // copy.
           CharUnits Size = getContext().getTypeSizeInChars(Ty);
+          assert(!CGM.getTarget().areAllPointersCapabilities() &&
+                 "Missing test case for llvm::PreserveCheriTags");
           Builder.CreateMemCpy(
               AlignedTemp.getPointer(), AlignedTemp.getAlignment().getAsAlign(),
               ParamAddr.getPointer(), ParamAddr.getAlignment().getAsAlign(),
-              llvm::ConstantInt::get(IntPtrTy, Size.getQuantity()));
+              llvm::ConstantInt::get(IntPtrTy, Size.getQuantity()),
+              llvm::PreserveCheriTags::TODO);
           V = AlignedTemp;
         }
         ArgVals.push_back(ParamValue::forIndirect(V));
@@ -2969,7 +2972,10 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         }
 
         if (SrcSize > DstSize) {
-          Builder.CreateMemCpy(Ptr, AddrToStoreInto, DstSize);
+          assert(!CGM.getTarget().areAllPointersCapabilities() &&
+                 "Missing test case for llvm::PreserveCheriTags");
+          Builder.CreateMemCpy(Ptr, AddrToStoreInto, DstSize,
+                               llvm::PreserveCheriTags::TODO);
         }
 
       } else {
@@ -5018,10 +5024,13 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         // of the destination type to allow loading all of it. The bits past
         // the source value are left undef.
         if (SrcSize < DstSize) {
+          assert(!CGM.getTarget().areAllPointersCapabilities() &&
+                 "Missing test case for llvm::PreserveCheriTags");
           Address TempAlloca
             = CreateTempAlloca(STy, Src.getAlignment(),
                                Src.getName() + ".coerce");
-          Builder.CreateMemCpy(TempAlloca, Src, SrcSize);
+          Builder.CreateMemCpy(TempAlloca, Src, SrcSize,
+                               llvm::PreserveCheriTags::TODO);
           Src = TempAlloca;
         } else {
           Src = Builder.CreateBitCast(Src,
