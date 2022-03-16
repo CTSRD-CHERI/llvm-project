@@ -2774,7 +2774,16 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
     // Generate a sequence to load a capability from the captable. This
     // generates the pattern (PseudoCLGC sym), which expands to
     // (clc (auipcc %captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
-    return SDValue(DAG.getMachineNode(RISCV::PseudoCLGC, DL, Ty, Addr), 0);
+    SDValue Load =
+        SDValue(DAG.getMachineNode(RISCV::PseudoCLGC, DL, Ty, Addr), 0);
+    MachineFunction &MF = DAG.getMachineFunction();
+    MachineMemOperand *MemOp = MF.getMachineMemOperand(
+        MachinePointerInfo::getGOT(MF),
+        MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
+            MachineMemOperand::MOInvariant,
+        LLT(Ty.getSimpleVT()), Align(Ty.getFixedSizeInBits() / 8));
+    DAG.setNodeMemRefs(cast<MachineSDNode>(Load.getNode()), {MemOp});
+    return Load;
   }
 
   if (isPositionIndependent()) {
@@ -2889,6 +2898,13 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
       SDValue Addr = DAG.getTargetGlobalAddress(GV, DL, Ty, 0, 0);
       SDValue Load = SDValue(
           DAG.getMachineNode(RISCV::PseudoCLA_TLS_IE, DL, XLenVT, Ty, Addr), 0);
+      MachineFunction &MF = DAG.getMachineFunction();
+      MachineMemOperand *MemOp = MF.getMachineMemOperand(
+          MachinePointerInfo::getGOT(MF),
+          MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
+              MachineMemOperand::MOInvariant,
+          LLT(Ty.getSimpleVT()), Align(Ty.getFixedSizeInBits() / 8));
+      DAG.setNodeMemRefs(cast<MachineSDNode>(Load.getNode()), {MemOp});
 
       // Add the thread pointer.
       SDValue TPReg = DAG.getRegister(RISCV::C4, Ty);

@@ -13,33 +13,31 @@
 define void @test_clgc(i32 signext %n) {
 ; RV32I-LABEL: test_clgc:
 ; RV32I:       # %bb.0: # %entry
-; RV32I-NEXT:    mv a1, zero
+; RV32I-NEXT:  .LBB0_3: # %entry
+; RV32I-NEXT:    # Label of block must be emitted
+; RV32I-NEXT:    auipcc ca1, %captab_pcrel_hi(g)
+; RV32I-NEXT:    clc ca1, %pcrel_lo(.LBB0_3)(ca1)
+; RV32I-NEXT:    mv a2, zero
 ; RV32I-NEXT:  .LBB0_1: # %loop
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV32I-NEXT:  .LBB0_3: # %loop
-; RV32I-NEXT:    # in Loop: Header=BB0_1 Depth=1
-; RV32I-NEXT:    # Label of block must be emitted
-; RV32I-NEXT:    auipcc ca2, %captab_pcrel_hi(g)
-; RV32I-NEXT:    clc ca2, %pcrel_lo(.LBB0_3)(ca2)
-; RV32I-NEXT:    clw a2, 0(ca2)
-; RV32I-NEXT:    addi a1, a1, 1
-; RV32I-NEXT:    blt a1, a0, .LBB0_1
+; RV32I-NEXT:    clw a3, 0(ca1)
+; RV32I-NEXT:    addi a2, a2, 1
+; RV32I-NEXT:    blt a2, a0, .LBB0_1
 ; RV32I-NEXT:  # %bb.2: # %ret
 ; RV32I-NEXT:    cret
 ;
 ; RV64I-LABEL: test_clgc:
 ; RV64I:       # %bb.0: # %entry
-; RV64I-NEXT:    mv a1, zero
+; RV64I-NEXT:  .LBB0_3: # %entry
+; RV64I-NEXT:    # Label of block must be emitted
+; RV64I-NEXT:    auipcc ca1, %captab_pcrel_hi(g)
+; RV64I-NEXT:    clc ca1, %pcrel_lo(.LBB0_3)(ca1)
+; RV64I-NEXT:    mv a2, zero
 ; RV64I-NEXT:  .LBB0_1: # %loop
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV64I-NEXT:  .LBB0_3: # %loop
-; RV64I-NEXT:    # in Loop: Header=BB0_1 Depth=1
-; RV64I-NEXT:    # Label of block must be emitted
-; RV64I-NEXT:    auipcc ca2, %captab_pcrel_hi(g)
-; RV64I-NEXT:    clc ca2, %pcrel_lo(.LBB0_3)(ca2)
-; RV64I-NEXT:    clw a2, 0(ca2)
-; RV64I-NEXT:    addiw a1, a1, 1
-; RV64I-NEXT:    blt a1, a0, .LBB0_1
+; RV64I-NEXT:    clw a3, 0(ca1)
+; RV64I-NEXT:    addiw a2, a2, 1
+; RV64I-NEXT:    blt a2, a0, .LBB0_1
 ; RV64I-NEXT:  # %bb.2: # %ret
 ; RV64I-NEXT:    cret
 entry:
@@ -61,16 +59,15 @@ ret:
 define void @test_cla_tls_ie(i32 signext %n) {
 ; RV32I-LABEL: test_cla_tls_ie:
 ; RV32I:       # %bb.0: # %entry
+; RV32I-NEXT:  .LBB1_3: # %entry
+; RV32I-NEXT:    # Label of block must be emitted
+; RV32I-NEXT:    auipcc ca1, %tls_ie_captab_pcrel_hi(ie)
+; RV32I-NEXT:    clw a2, %pcrel_lo(.LBB1_3)(ca1)
 ; RV32I-NEXT:    mv a1, zero
+; RV32I-NEXT:    cincoffset ca2, ctp, a2
 ; RV32I-NEXT:  .LBB1_1: # %loop
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV32I-NEXT:  .LBB1_3: # %loop
-; RV32I-NEXT:    # in Loop: Header=BB1_1 Depth=1
-; RV32I-NEXT:    # Label of block must be emitted
-; RV32I-NEXT:    auipcc ca3, %tls_ie_captab_pcrel_hi(ie)
-; RV32I-NEXT:    clw a2, %pcrel_lo(.LBB1_3)(ca3)
-; RV32I-NEXT:    cincoffset ca2, ctp, a2
-; RV32I-NEXT:    clw a2, 0(ca2)
+; RV32I-NEXT:    clw a3, 0(ca2)
 ; RV32I-NEXT:    addi a1, a1, 1
 ; RV32I-NEXT:    blt a1, a0, .LBB1_1
 ; RV32I-NEXT:  # %bb.2: # %ret
@@ -78,16 +75,15 @@ define void @test_cla_tls_ie(i32 signext %n) {
 ;
 ; RV64I-LABEL: test_cla_tls_ie:
 ; RV64I:       # %bb.0: # %entry
+; RV64I-NEXT:  .LBB1_3: # %entry
+; RV64I-NEXT:    # Label of block must be emitted
+; RV64I-NEXT:    auipcc ca1, %tls_ie_captab_pcrel_hi(ie)
+; RV64I-NEXT:    cld a2, %pcrel_lo(.LBB1_3)(ca1)
 ; RV64I-NEXT:    mv a1, zero
+; RV64I-NEXT:    cincoffset ca2, ctp, a2
 ; RV64I-NEXT:  .LBB1_1: # %loop
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV64I-NEXT:  .LBB1_3: # %loop
-; RV64I-NEXT:    # in Loop: Header=BB1_1 Depth=1
-; RV64I-NEXT:    # Label of block must be emitted
-; RV64I-NEXT:    auipcc ca3, %tls_ie_captab_pcrel_hi(ie)
-; RV64I-NEXT:    cld a2, %pcrel_lo(.LBB1_3)(ca3)
-; RV64I-NEXT:    cincoffset ca2, ctp, a2
-; RV64I-NEXT:    clw a2, 0(ca2)
+; RV64I-NEXT:    clw a3, 0(ca2)
 ; RV64I-NEXT:    addiw a1, a1, 1
 ; RV64I-NEXT:    blt a1, a0, .LBB1_1
 ; RV64I-NEXT:  # %bb.2: # %ret
@@ -115,20 +111,22 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ; RV32I-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
 ; RV32I-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
 ; RV32I-NEXT:    csc cs1, 8(csp) # 8-byte Folded Spill
-; RV32I-NEXT:    mv s0, a0
-; RV32I-NEXT:    mv s1, zero
+; RV32I-NEXT:    csc cs2, 0(csp) # 8-byte Folded Spill
+; RV32I-NEXT:    mv s2, a0
+; RV32I-NEXT:    mv s0, zero
+; RV32I-NEXT:  .LBB2_3: # %entry
+; RV32I-NEXT:    # Label of block must be emitted
+; RV32I-NEXT:    auipcc cs1, %tls_gd_captab_pcrel_hi(gd)
+; RV32I-NEXT:    cincoffset cs1, cs1, %pcrel_lo(.LBB2_3)
 ; RV32I-NEXT:  .LBB2_1: # %loop
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV32I-NEXT:  .LBB2_3: # %loop
-; RV32I-NEXT:    # in Loop: Header=BB2_1 Depth=1
-; RV32I-NEXT:    # Label of block must be emitted
-; RV32I-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(gd)
-; RV32I-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB2_3)
+; RV32I-NEXT:    cmove ca0, cs1
 ; RV32I-NEXT:    ccall __tls_get_addr
 ; RV32I-NEXT:    clw a0, 0(ca0)
-; RV32I-NEXT:    addi s1, s1, 1
-; RV32I-NEXT:    blt s1, s0, .LBB2_1
+; RV32I-NEXT:    addi s0, s0, 1
+; RV32I-NEXT:    blt s0, s2, .LBB2_1
 ; RV32I-NEXT:  # %bb.2: # %ret
+; RV32I-NEXT:    clc cs2, 0(csp) # 8-byte Folded Reload
 ; RV32I-NEXT:    clc cs1, 8(csp) # 8-byte Folded Reload
 ; RV32I-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; RV32I-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
@@ -137,28 +135,30 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ;
 ; RV64I-LABEL: test_clc_tls_gd:
 ; RV64I:       # %bb.0: # %entry
-; RV64I-NEXT:    cincoffset csp, csp, -48
-; RV64I-NEXT:    csc cra, 32(csp) # 16-byte Folded Spill
-; RV64I-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
-; RV64I-NEXT:    csc cs1, 0(csp) # 16-byte Folded Spill
-; RV64I-NEXT:    mv s0, a0
-; RV64I-NEXT:    mv s1, zero
+; RV64I-NEXT:    cincoffset csp, csp, -64
+; RV64I-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
+; RV64I-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
+; RV64I-NEXT:    csc cs1, 16(csp) # 16-byte Folded Spill
+; RV64I-NEXT:    csc cs2, 0(csp) # 16-byte Folded Spill
+; RV64I-NEXT:    mv s2, a0
+; RV64I-NEXT:    mv s0, zero
+; RV64I-NEXT:  .LBB2_3: # %entry
+; RV64I-NEXT:    # Label of block must be emitted
+; RV64I-NEXT:    auipcc cs1, %tls_gd_captab_pcrel_hi(gd)
+; RV64I-NEXT:    cincoffset cs1, cs1, %pcrel_lo(.LBB2_3)
 ; RV64I-NEXT:  .LBB2_1: # %loop
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV64I-NEXT:  .LBB2_3: # %loop
-; RV64I-NEXT:    # in Loop: Header=BB2_1 Depth=1
-; RV64I-NEXT:    # Label of block must be emitted
-; RV64I-NEXT:    auipcc ca0, %tls_gd_captab_pcrel_hi(gd)
-; RV64I-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB2_3)
+; RV64I-NEXT:    cmove ca0, cs1
 ; RV64I-NEXT:    ccall __tls_get_addr
 ; RV64I-NEXT:    clw a0, 0(ca0)
-; RV64I-NEXT:    addiw s1, s1, 1
-; RV64I-NEXT:    blt s1, s0, .LBB2_1
+; RV64I-NEXT:    addiw s0, s0, 1
+; RV64I-NEXT:    blt s0, s2, .LBB2_1
 ; RV64I-NEXT:  # %bb.2: # %ret
-; RV64I-NEXT:    clc cs1, 0(csp) # 16-byte Folded Reload
-; RV64I-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
-; RV64I-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
-; RV64I-NEXT:    cincoffset csp, csp, 48
+; RV64I-NEXT:    clc cs2, 0(csp) # 16-byte Folded Reload
+; RV64I-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
+; RV64I-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; RV64I-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
+; RV64I-NEXT:    cincoffset csp, csp, 64
 ; RV64I-NEXT:    cret
 entry:
   br label %loop

@@ -1107,7 +1107,7 @@ def PseudoCLA_TLS_IE : Pseudo<(outs GPR:$dst, GPCR:$tmp),
                               (ins bare_symbol:$src), [],
                               "cla.tls.ie", "$dst, $src, $tmp">;
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
 def PseudoCLC_TLS_GD : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                               "clc.tls.gd", "$dst, $src">;
