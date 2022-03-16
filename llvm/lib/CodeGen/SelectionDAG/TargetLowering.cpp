@@ -12,6 +12,7 @@
 
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -35,6 +36,11 @@
 #include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <cctype>
 using namespace llvm;
+
+#define DEBUG_TYPE "targetlowering"
+
+STATISTIC(MemopMustPreserveCheriTags,
+          "Number of memcpy/memmove() calls that must preserve CHERI tags");
 
 /// NOTE: The TargetMachine owns TLOF.
 TargetLowering::TargetLowering(const TargetMachine &tm)
@@ -203,6 +209,7 @@ bool TargetLowering::findOptimalMemOpLowering(
 
   // XXXAR: (ab)use MVT::isVoid to indicate that a memcpy call must be made
   if (VT == MVT::isVoid) {
+    MemopMustPreserveCheriTags++;
     return false; // cannot lower as memops
   }
   // If the type is a fat pointer, then forcibly disable overlap.

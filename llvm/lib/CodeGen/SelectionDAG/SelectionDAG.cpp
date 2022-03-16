@@ -20,6 +20,7 @@
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Triple.h"
@@ -110,6 +111,10 @@ static cl::opt<int> MaxLdStGlue("ldstmemcpy-glue-max",
 static void NewSDValueDbgMsg(SDValue V, StringRef Msg, SelectionDAG *G) {
   LLVM_DEBUG(dbgs() << Msg; V.getNode()->dump(G););
 }
+
+STATISTIC(MemopInlined, "Number of memcpy/memmove() calls emitted inline");
+STATISTIC(MemmoveInlined, "Number of memcpy() calls emitted inline");
+STATISTIC(MemcpyInlined, "Number of memcpy() calls emitted inline");
 
 //===----------------------------------------------------------------------===//
 //                              ConstantFPSDNode Class
@@ -6712,6 +6717,8 @@ static SDValue getMemcpyLoadsAndStores(
       }
     }
   }
+  MemopInlined++;
+  MemcpyInlined++;
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
 }
 
@@ -6840,7 +6847,8 @@ static SDValue getMemmoveLoadsAndStores(
     OutChains.push_back(Store);
     DstOff += VTSize;
   }
-
+  MemopInlined++;
+  MemmoveInlined++;
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
 }
 
