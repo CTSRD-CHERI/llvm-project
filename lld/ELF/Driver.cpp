@@ -75,7 +75,6 @@ using namespace lld;
 using namespace lld::elf;
 
 std::unique_ptr<Configuration> elf::config;
-std::unique_ptr<Ctx> elf::ctx;
 std::unique_ptr<LinkerDriver> elf::driver;
 
 static void setConfigs(opt::InputArgList &args);
@@ -121,7 +120,6 @@ bool elf::link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
       "too many warnings emitted, stopping now (use "
       "--warning-limit=0 to see all warnings)\n";
   config = std::make_unique<Configuration>();
-  elf::ctx = std::make_unique<Ctx>();
   driver = std::make_unique<LinkerDriver>();
   script = std::make_unique<LinkerScript>();
   symtab = std::make_unique<SymbolTable>();
@@ -2579,20 +2577,6 @@ void LinkerDriver::link(opt::InputArgList &args) {
   parallelForEach(objectFiles, initializeLocalSymbols);
   parallelForEach(objectFiles, postParseObjectFile);
   parallelForEach(bitcodeFiles, [](BitcodeFile *file) { file->postParse(); });
-  for (auto &it : ctx->nonPrevailingSyms) {
-    Symbol &sym = *it.first;
-    // See the FIXME in InputFiles.cpp.
-    if (sym.getName() == "__x86.get_pc_thunk.bx" ||
-        sym.getName() == "__i686.get_pc_thunk.bx")
-      continue;
-    sym.replace(Undefined{sym.file, sym.getName(), sym.binding, sym.stOther,
-                          sym.type, it.second});
-    cast<Undefined>(sym).nonPrevailing = true;
-  }
-  ctx->nonPrevailingSyms.clear();
-  for (const DuplicateSymbol &d : ctx->duplicates)
-    reportDuplicate(*d.sym, d.file, d.section, d.value);
-  ctx->duplicates.clear();
 
   // Return if there were name resolution errors.
   if (errorCount())
@@ -2665,8 +2649,6 @@ void LinkerDriver::link(opt::InputArgList &args) {
   auto newObjectFiles = makeArrayRef(objectFiles).slice(numObjsBeforeLTO);
   parallelForEach(newObjectFiles, initializeLocalSymbols);
   parallelForEach(newObjectFiles, postParseObjectFile);
-  for (const DuplicateSymbol &d : ctx->duplicates)
-    reportDuplicate(*d.sym, d.file, d.section, d.value);
 
   // Handle --exclude-libs again because lto.tmp may reference additional
   // libcalls symbols defined in an excluded archive. This may override
