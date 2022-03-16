@@ -6,7 +6,6 @@
 
 ; Verifies that MachineLICM can hoist capability generation/loading pseudos out
 ; of loops.
-; TODO: Does not currently work.
 
 @g = addrspace(200) global i32 0, align 4
 
