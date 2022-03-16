@@ -50,5 +50,5 @@ endif()
 
 if(RUN_PYTHON_TESTS)
     set_property(GLOBAL APPEND PROPERTY
-                 LLVM_ADDITIONAL_TEST_TARGETS check-clang-python)
+                 LLVM_ALL_ADDITIONAL_TEST_TARGETS check-clang-python)
 endif()
