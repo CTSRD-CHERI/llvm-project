@@ -101,10 +101,10 @@ struct TransferrableTargetInfo {
   unsigned char AccumScale;
   unsigned char LongAccumScale;
 
-  unsigned short SuitableAlign;
-  unsigned short DefaultAlignForAttributeAligned;
   unsigned char MinGlobalAlign;
 
+  unsigned short SuitableAlign;
+  unsigned short DefaultAlignForAttributeAligned;
   unsigned short NewAlign;
   unsigned MaxVectorAlign;
   unsigned MaxTLSAlign;

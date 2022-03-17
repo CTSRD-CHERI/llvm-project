@@ -572,6 +572,7 @@ public:
     case llvm::Triple::x86_64:
       this->MCountName = ".mcount";
       this->NewAlign = 256;
+      this->SuitableAlign = 256;
       break;
     }
   }
