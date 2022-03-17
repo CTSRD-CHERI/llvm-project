@@ -102,11 +102,8 @@ public:
 };
 
 class ObjCARCContractLegacyPass : public FunctionPass {
-  ObjCARCContract OCARCC;
-
 public:
   void getAnalysisUsage(AnalysisUsage &AU) const override;
-  bool doInitialization(Module &M) override;
   bool runOnFunction(Function &F) override;
 
   static char ID;
@@ -738,11 +735,9 @@ Pass *llvm::createObjCARCContractPass() {
   return new ObjCARCContractLegacyPass();
 }
 
-bool ObjCARCContractLegacyPass::doInitialization(Module &M) {
-  return OCARCC.init(M);
-}
-
 bool ObjCARCContractLegacyPass::runOnFunction(Function &F) {
+  ObjCARCContract OCARCC;
+  OCARCC.init(*F.getParent());
   auto *AA = &getAnalysis<AAResultsWrapperPass>().getAAResults();
   auto *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   return OCARCC.run(F, AA, DT);
