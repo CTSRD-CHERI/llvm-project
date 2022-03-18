@@ -426,8 +426,9 @@ public:
 
     if (Value *Result = ConstantEmitter(CGF).tryEmitConstantExpr(E)) {
       if (E->isGLValue())
-        return CGF.Builder.CreateLoad(Address::deprecated(
-            Result, CGF.getContext().getTypeAlignInChars(E->getType())));
+        return CGF.Builder.CreateLoad(Address(
+            Result, CGF.ConvertTypeForMem(E->getType()),
+            CGF.getContext().getTypeAlignInChars(E->getType())));
       return Result;
     }
     return Visit(E->getSubExpr());
@@ -5466,7 +5467,9 @@ LValue CodeGenFunction::EmitObjCIsaExpr(const ObjCIsaExpr *E) {
   Expr *BaseExpr = E->getBase();
   Address Addr = Address::invalid();
   if (BaseExpr->isPRValue()) {
-    Addr = Address::deprecated(EmitScalarExpr(BaseExpr), getPointerAlign());
+    llvm::Type *BaseTy =
+        ConvertTypeForMem(BaseExpr->getType()->getPointeeType());
+    Addr = Address(EmitScalarExpr(BaseExpr), BaseTy, getPointerAlign());
   } else {
     Addr = EmitLValue(BaseExpr).getAddress(*this);
   }
