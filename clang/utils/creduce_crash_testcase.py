@@ -560,9 +560,13 @@ class Options(object):
     @property
     def creduce_cmd(self):
         # noinspection PyUnresolvedReferences
-        creduce_path = self.args.creduce_cmd or shutil.which("creduce")
+        creduce_path = self.args.creduce_cmd
         if not creduce_path:
-            die("Could not find `creduce` in $PATH. Add it to $PATH or pass --creduce-cmd")
+             creduce_path = shutil.which("cvise")
+        if not creduce_path:
+             creduce_path = shutil.which("creduce")
+        if not creduce_path:
+            die("Could not find `creduce` or `cvise` in $PATH. Add it to $PATH or pass --creduce-cmd")
         return Path(creduce_path)
 
     def _get_command(self, name):
@@ -1345,7 +1349,9 @@ def main():
     parser.add_argument("--llvm-dis-cmd", help="Path to `llvm-dis` tool. Default is $BINDIR/llvm-dis")
     parser.add_argument("--bugpoint-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/bugpoint")
     parser.add_argument("--llvm-reduce-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/llvm-reduce")
-    parser.add_argument("--creduce-cmd", help="Path to `creduce`/`cvise` tool. Default is `creduce`")
+    parser.add_argument("--creduce-cmd",
+                        help="Path to `creduce`/`cvise` tool. Default is "
+                             "`cvise` (or `creduce` if not found)")
     parser.add_argument("--output-file", help="The name of the output file")
     parser.add_argument("--verbose", action="store_true", help="Print more debug output")
     parser.add_argument("--timeout", type=int,
