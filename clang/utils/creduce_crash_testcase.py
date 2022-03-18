@@ -449,29 +449,36 @@ class RunCreduce(ReduceTool):
         self.interesting_exit_code = 0
         self.not_interesting_exit_code = 1
 
-    def reduce(self, input_file: Path, extra_args, tempdir,
-               run_cmds: typing.List[typing.List[str]],
-               run_lines: typing.List[str]):
-        reduce_script = self._create_reduce_script(tempdir, input_file.absolute(), run_cmds)
-        creduce = ["time", str(self.tool), str(reduce_script), str(input_file), "--timing"] + extra_args
+    def reduce(self, input_file: Path, extra_args: "list[str]", tempdir: Path,
+               run_cmds: "list[list[str]]", run_lines: "list[str]"):
+        reduce_script = self._create_reduce_script(
+            tempdir, input_file.absolute(), run_cmds)
+        # Work around https://github.com/csmith-project/creduce/issues/195.
+        # Note: CVise also requires it to be in the same directory since it
+        # does not allow an absolute path to the test case
+        reduced_input_file = Path(tempdir, input_file.name)
+        shutil.copy(str(input_file), str(reduced_input_file))
+        creduce = ["time", str(self.tool), str(reduce_script),
+                   reduced_input_file.name] + extra_args
         # This is way too verbose
         if self.args.extremely_verbose:
             creduce.append("--print-diff")
         print("About to run", creduce)
         try:
-            # work around https://github.com/csmith-project/creduce/issues/195 for released versions of creduce
-            shutil.copy(str(input_file), str(Path(tempdir, input_file.name)))
             run(creduce, cwd=tempdir)
         except KeyboardInterrupt:
             print(red("\nCTRL+C detected, stopping creduce.", style="bold"))
-        # write the output test file:
         print("\nDONE!")
-        self.create_test_case(input_file.read_text(encoding="utf-8"),
-                              input_file.with_suffix(".test" + input_file.suffix),
-                              run_lines)
+        # write the output test file:
+        reduced_testcase = reduced_input_file.read_text(encoding="utf-8")
+        if not reduced_testcase:
+            print(red("Reduction resulted in empty testcase!"))
+        output = input_file.with_suffix(".test" + input_file.suffix)
+        self.create_test_case(reduced_testcase, output, run_lines)
 
     def input_file_arg(self, input_file: Path):
-        # creduce creates an input file in the test directory with the same name as the original input
+        # creduce creates an input file in the test directory with the same
+        # name as the original input.
         return input_file.name
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
@@ -1338,7 +1345,7 @@ def main():
     parser.add_argument("--llvm-dis-cmd", help="Path to `llvm-dis` tool. Default is $BINDIR/llvm-dis")
     parser.add_argument("--bugpoint-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/bugpoint")
     parser.add_argument("--llvm-reduce-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/llvm-reduce")
-    parser.add_argument("--creduce-cmd", help="Path to `creduce` tool. Default is `creduce`")
+    parser.add_argument("--creduce-cmd", help="Path to `creduce`/`cvise` tool. Default is `creduce`")
     parser.add_argument("--output-file", help="The name of the output file")
     parser.add_argument("--verbose", action="store_true", help="Print more debug output")
     parser.add_argument("--timeout", type=int,
