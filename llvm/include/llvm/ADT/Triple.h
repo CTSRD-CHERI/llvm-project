@@ -266,6 +266,7 @@ public:
     UnknownObjectFormat,
 
     COFF,
+    DXContainer,
     ELF,
     GOFF,
     MachO,
