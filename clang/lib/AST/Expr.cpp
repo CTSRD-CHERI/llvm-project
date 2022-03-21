@@ -1984,6 +1984,9 @@ Expr *ignoreImplicitSemaNodes(Expr *E) {
   if (auto *Binder = dyn_cast<CXXBindTemporaryExpr>(E))
     return Binder->getSubExpr();
 
+  if (auto *Full = dyn_cast<FullExpr>(E))
+    return Full->getSubExpr();
+
   return E;
 }
 } // namespace
@@ -1997,11 +2000,9 @@ Expr *CastExpr::getSubExprAsWritten() {
     // Conversions by constructor and conversion functions have a
     // subexpression describing the call; strip it off.
     if (E->getCastKind() == CK_ConstructorConversion) {
-      SubExpr = IgnoreExprNodes(
-          cast<CXXConstructExpr>(SubExpr->IgnoreImplicit())->getArg(0),
-          ignoreImplicitSemaNodes);
+      SubExpr = IgnoreExprNodes(cast<CXXConstructExpr>(SubExpr)->getArg(0),
+                                ignoreImplicitSemaNodes);
     } else if (E->getCastKind() == CK_UserDefinedConversion) {
-      SubExpr = SubExpr->IgnoreImplicit();
       assert((isa<CXXMemberCallExpr>(SubExpr) || isa<BlockExpr>(SubExpr)) &&
              "Unexpected SubExpr for CK_UserDefinedConversion.");
       if (auto *MCE = dyn_cast<CXXMemberCallExpr>(SubExpr))
