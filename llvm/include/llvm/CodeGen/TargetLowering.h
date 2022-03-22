@@ -4437,6 +4437,7 @@ public:
     C_Register,            // Constraint represents specific register(s).
     C_RegisterClass,       // Constraint represents any of register(s) in class.
     C_Memory,              // Memory constraint.
+    C_Address,             // Address constraint.
     C_Immediate,           // Requires an immediate.
     C_Other,               // Something else.
     C_Unknown              // Unsupported constraint.
@@ -4541,6 +4542,8 @@ public:
       return InlineAsm::Constraint_o;
     if (ConstraintCode == "X")
       return InlineAsm::Constraint_X;
+    if (ConstraintCode == "p")
+      return InlineAsm::Constraint_p;
     return InlineAsm::Constraint_Unknown;
   }
 
