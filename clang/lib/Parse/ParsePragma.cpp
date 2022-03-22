@@ -364,7 +364,7 @@ struct PragmaAttributeHandler : public PragmaHandler {
                     Token &FirstToken) override;
 
   /// A pool of attributes that were parsed in \#pragma clang attribute.
-  ParsedAttributesWithRange AttributesForPragmaAttribute;
+  ParsedAttributes AttributesForPragmaAttribute;
 };
 
 struct PragmaMaxTokensHereHandler : public PragmaHandler {
@@ -1398,13 +1398,12 @@ bool Parser::HandlePragmaLoopHint(LoopHint &Hint) {
 namespace {
 struct PragmaAttributeInfo {
   enum ActionType { Push, Pop, Attribute };
-  ParsedAttributesWithRange &Attributes;
+  ParsedAttributes &Attributes;
   ActionType Action;
   const IdentifierInfo *Namespace = nullptr;
   ArrayRef<Token> Tokens;
 
-  PragmaAttributeInfo(ParsedAttributesWithRange &Attributes)
-      : Attributes(Attributes) {}
+  PragmaAttributeInfo(ParsedAttributes &Attributes) : Attributes(Attributes) {}
 };
 
 #include "clang/Parse/AttrSubMatchRulesParserStringSwitches.inc"
@@ -1687,7 +1686,7 @@ void Parser::HandlePragmaAttribute() {
                       /*IsReinject=*/false);
   ConsumeAnnotationToken();
 
-  ParsedAttributesWithRange &Attrs = Info->Attributes;
+  ParsedAttributes &Attrs = Info->Attributes;
   Attrs.clearListOnly();
 
   auto SkipToEnd = [this]() {
