@@ -7418,11 +7418,11 @@ CGObjCNonFragileABIMac::GetClassGlobal(StringRef Name,
            : llvm::GlobalValue::ExternalLinkage;
 
   llvm::GlobalVariable *GV = CGM.getModule().getGlobalVariable(Name);
-  if (!GV || GV->getType() != ObjCTypes.ClassnfABITy->getPointerTo()) {
-    auto *NewGV =
-        new llvm::GlobalVariable(ObjCTypes.ClassnfABITy, false, L, nullptr,
-                                 Name, llvm::GlobalVariable::NotThreadLocal,
-                                 CGM.getTargetCodeGenInfo().getDefaultAS());
+  if (!GV || GV->getValueType() != ObjCTypes.ClassnfABITy) {
+    auto *NewGV = new llvm::GlobalVariable(
+        ObjCTypes.ClassnfABITy, false, L, nullptr, Name,
+        llvm::GlobalVariable::NotThreadLocal,
+        CGM.getDataLayout().getDefaultGlobalsAddressSpace());
 
     if (DLLImport)
       NewGV->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
