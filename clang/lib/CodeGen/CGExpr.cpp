@@ -3678,10 +3678,8 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
                                            getContext().getDeclAlign(VD));
         llvm::Type *VarTy = getTypes().ConvertTypeForMem(VD->getType());
         auto *PTy = llvm::PointerType::get(
-            VarTy, getContext().getTargetAddressSpace(
-                VD->getType().getAddressSpace()));
-        if (PTy != Addr.getType())
-          Addr = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy, VarTy);
+            VarTy, CGM.getAddressSpaceForType(VD->getType()));
+        Addr = Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, PTy, VarTy);
       } else {
         const ReferenceType *RT = VD->getType()->getAs<ReferenceType>();
         if (RT->isCHERICapability()) {
