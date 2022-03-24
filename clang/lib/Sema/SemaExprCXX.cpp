@@ -7953,6 +7953,7 @@ static void MaybeDecrementCount(
     Expr *E, llvm::DenseMap<const VarDecl *, int> &RefsMinusAssignments) {
   DeclRefExpr *LHS = nullptr;
   bool IsCompoundAssign = false;
+  bool isIncrementDecrementUnaryOp = false;
   if (BinaryOperator *BO = dyn_cast<BinaryOperator>(E)) {
     if (BO->getLHS()->getType()->isDependentType() ||
         BO->getRHS()->getType()->isDependentType()) {
@@ -7967,6 +7968,11 @@ static void MaybeDecrementCount(
     if (COCE->getOperator() != OO_Equal)
       return;
     LHS = dyn_cast<DeclRefExpr>(COCE->getArg(0));
+  } else if (UnaryOperator *UO = dyn_cast<UnaryOperator>(E)) {
+    if (!UO->isIncrementDecrementOp())
+      return;
+    isIncrementDecrementUnaryOp = true;
+    LHS = dyn_cast<DeclRefExpr>(UO->getSubExpr());
   }
   if (!LHS)
     return;
@@ -7974,8 +7980,10 @@ static void MaybeDecrementCount(
   if (!VD)
     return;
   // Don't decrement RefsMinusAssignments if volatile variable with compound
-  // assignment (+=, ...) to avoid potential unused-but-set-variable warning.
-  if (IsCompoundAssign && VD->getType().isVolatileQualified())
+  // assignment (+=, ...) or increment/decrement unary operator to avoid
+  // potential unused-but-set-variable warning.
+  if ((IsCompoundAssign || isIncrementDecrementUnaryOp) &&
+      VD->getType().isVolatileQualified())
     return;
   auto iter = RefsMinusAssignments.find(VD);
   if (iter == RefsMinusAssignments.end())
