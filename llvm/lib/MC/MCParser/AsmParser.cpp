@@ -6107,13 +6107,12 @@ bool AsmParser::parseMSInlineAsm(
 
       bool isOutput = (i == 1) && Desc.mayStore();
       SMLoc Start = SMLoc::getFromPointer(SymName.data());
-      int64_t Size = Operand.isMemPlaceholder(Desc) ? 0 : SymName.size();
       if (isOutput) {
         ++InputIdx;
         OutputDecls.push_back(OpDecl);
         OutputDeclsAddressOf.push_back(Operand.needAddressOf());
         OutputConstraints.push_back(("=" + Constraint).str());
-        AsmStrRewrites.emplace_back(AOK_Output, Start, Size);
+        AsmStrRewrites.emplace_back(AOK_Output, Start, SymName.size());
       } else {
         InputDecls.push_back(OpDecl);
         InputDeclsAddressOf.push_back(Operand.needAddressOf());
@@ -6121,7 +6120,7 @@ bool AsmParser::parseMSInlineAsm(
         if (Desc.OpInfo[i - 1].isBranchTarget())
           AsmStrRewrites.emplace_back(AOK_CallInput, Start, SymName.size());
         else
-          AsmStrRewrites.emplace_back(AOK_Input, Start, Size);
+          AsmStrRewrites.emplace_back(AOK_Input, Start, SymName.size());
       }
     }
 
@@ -6236,17 +6235,13 @@ bool AsmParser::parseMSInlineAsm(
       OS << Ctx.getAsmInfo()->getPrivateLabelPrefix() << AR.Label;
       break;
     case AOK_Input:
-      if (AR.Len)
-        OS << '$' << InputIdx;
-      ++InputIdx;
+      OS << '$' << InputIdx++;
       break;
     case AOK_CallInput:
       OS << "${" << InputIdx++ << ":P}";
       break;
     case AOK_Output:
-      if (AR.Len)
-        OS << '$' << OutputIdx;
-      ++OutputIdx;
+      OS << '$' << OutputIdx++;
       break;
     case AOK_SizeDirective:
       switch (AR.Val) {
