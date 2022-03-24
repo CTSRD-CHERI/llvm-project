@@ -2245,7 +2245,6 @@ bool RISCVAsmParser::ParseInstruction(ParseInstructionInfo &Info,
     return true;
 
   // Parse until end of statement, consuming commas between operands
-  unsigned OperandIdx = 1;
   while (getLexer().is(AsmToken::Comma)) {
     // Consume comma token
     getLexer().Lex();
@@ -2253,8 +2252,6 @@ bool RISCVAsmParser::ParseInstruction(ParseInstructionInfo &Info,
     // Parse next operand
     if (parseOperand(Operands, Name))
       return true;
-
-    ++OperandIdx;
   }
 
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
