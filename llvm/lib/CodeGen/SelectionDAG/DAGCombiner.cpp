@@ -2196,6 +2196,8 @@ static SDValue foldSelectWithIdentityConstant(SDNode *N, SelectionDAG &DAG,
       case ISD::SRA: // X s>> 0 --> X
       case ISD::SRL: // X u>> 0 --> X
         return C->isZero();
+      case ISD::MUL: // X * 1 --> X
+        return C->isOne();
       }
     }
     return false;
