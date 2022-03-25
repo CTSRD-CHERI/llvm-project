@@ -1932,6 +1932,8 @@ bool CGOpenMPRuntime::emitDeclareTargetVarDefinition(const VarDecl *VD,
       llvm::Function *Fn = CGM.CreateGlobalInitOrCleanUpFunction(
           FTy, Twine(Buffer, "_ctor"), FI, Loc, false,
           llvm::GlobalValue::WeakODRLinkage);
+      if (CGM.getTriple().isAMDGCN())
+        Fn->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
       auto NL = ApplyDebugLocation::CreateEmpty(CtorCGF);
       CtorCGF.StartFunction(GlobalDecl(), CGM.getContext().VoidTy, Fn, FI,
                             FunctionArgList(), Loc, Loc);
@@ -1976,6 +1978,8 @@ bool CGOpenMPRuntime::emitDeclareTargetVarDefinition(const VarDecl *VD,
       llvm::Function *Fn = CGM.CreateGlobalInitOrCleanUpFunction(
           FTy, Twine(Buffer, "_dtor"), FI, Loc, false,
           llvm::GlobalValue::WeakODRLinkage);
+      if (CGM.getTriple().isAMDGCN())
+        Fn->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
       auto NL = ApplyDebugLocation::CreateEmpty(DtorCGF);
       DtorCGF.StartFunction(GlobalDecl(), CGM.getContext().VoidTy, Fn, FI,
                             FunctionArgList(), Loc, Loc);
