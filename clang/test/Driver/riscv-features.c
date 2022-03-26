@@ -1,40 +1,40 @@
-// RUN: %clang -target riscv32-unknown-elf -### %s -fsyntax-only 2>&1 | FileCheck %s
-// RUN: %clang -target riscv64-unknown-elf -### %s -fsyntax-only 2>&1 | FileCheck %s
+// RUN: %clang --target=riscv32-unknown-elf -### %s -fsyntax-only 2>&1 | FileCheck %s
+// RUN: %clang --target=riscv64-unknown-elf -### %s -fsyntax-only 2>&1 | FileCheck %s
 
 // CHECK: fno-signed-char
 
-// RUN: %clang -target riscv32-unknown-elf -### %s 2>&1 | FileCheck %s -check-prefix=DEFAULT
+// RUN: %clang --target=riscv32-unknown-elf -### %s 2>&1 | FileCheck %s -check-prefix=DEFAULT
 
-// RUN: %clang -target riscv32-unknown-elf -### %s -mrelax 2>&1 | FileCheck %s -check-prefix=RELAX
-// RUN: %clang -target riscv32-unknown-elf -### %s -mno-relax 2>&1 | FileCheck %s -check-prefix=NO-RELAX
+// RUN: %clang --target=riscv32-unknown-elf -### %s -mrelax 2>&1 | FileCheck %s -check-prefix=RELAX
+// RUN: %clang --target=riscv32-unknown-elf -### %s -mno-relax 2>&1 | FileCheck %s -check-prefix=NO-RELAX
 
 // RELAX: "-target-feature" "+relax"
 // NO-RELAX: "-target-feature" "-relax"
 // DEFAULT: "-target-feature" "+relax"
 // DEFAULT-NOT: "-target-feature" "-relax"
 
-// RUN: %clang -target riscv32-unknown-elf -### %s -msave-restore 2>&1 | FileCheck %s -check-prefix=SAVE-RESTORE
-// RUN: %clang -target riscv32-unknown-elf -### %s -mno-save-restore 2>&1 | FileCheck %s -check-prefix=NO-SAVE-RESTORE
+// RUN: %clang --target=riscv32-unknown-elf -### %s -msave-restore 2>&1 | FileCheck %s -check-prefix=SAVE-RESTORE
+// RUN: %clang --target=riscv32-unknown-elf -### %s -mno-save-restore 2>&1 | FileCheck %s -check-prefix=NO-SAVE-RESTORE
 
 // SAVE-RESTORE: "-target-feature" "+save-restore"
 // NO-SAVE-RESTORE: "-target-feature" "-save-restore"
 // DEFAULT: "-target-feature" "-save-restore"
 // DEFAULT-NOT: "-target-feature" "+save-restore"
 
-// RUN: %clang -target riscv32 -### %s -march=rv32ixcheri 2>&1 | FileCheck %s --check-prefixes=XCHERI
-// RUN: %clang -target riscv64 -### %s -march=rv64ixcheri 2>&1 | FileCheck %s --check-prefixes=XCHERI
-// RUN: %clang -target riscv32-unknown-elf -### %s -march=rv64ixcheri -mxcheri-rvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-EXPLICIT-RVC
-// RUN: %clang -target riscv32-unknown-elf -### %s -march=rv64ixcheri -mxcheri-norvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
-// RUN: %clang -target riscv32-unknown-elf -### %s -march=rv64ixcheri -mno-xcheri-rvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
+// RUN: %clang --target=riscv32 -### %s -march=rv32ixcheri 2>&1 | FileCheck %s --check-prefixes=XCHERI
+// RUN: %clang --target=riscv64 -### %s -march=rv64ixcheri 2>&1 | FileCheck %s --check-prefixes=XCHERI
+// RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv64ixcheri -mxcheri-rvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-EXPLICIT-RVC
+// RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv64ixcheri -mxcheri-norvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
+// RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv64ixcheri -mno-xcheri-rvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
 // XCHERI: "-target-feature" "+xcheri"
 // XCHERI-NOT: "{{[+|-]}}xcheri-
 // XCHERI-EXPLICIT-RVC: "-target-feature" "-xcheri-norvc"
 // XCHERI-NORVC: "-target-feature" "+xcheri-norvc"
 // XCHERI-NOT: "{{[+|-]}}xcheri-
 
-// RUN: %clang -target riscv32-linux -### %s -fsyntax-only 2>&1 \
+// RUN: %clang --target=riscv32-linux -### %s -fsyntax-only 2>&1 \
 // RUN:   | FileCheck %s -check-prefix=DEFAULT-LINUX
-// RUN: %clang -target riscv64-linux -### %s -fsyntax-only 2>&1 \
+// RUN: %clang --target=riscv64-linux -### %s -fsyntax-only 2>&1 \
 // RUN:   | FileCheck %s -check-prefix=DEFAULT-LINUX
 
 // DEFAULT-LINUX: "-target-feature" "+m"
