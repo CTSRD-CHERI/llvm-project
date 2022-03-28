@@ -7,7 +7,7 @@
 
 declare i32 @bar(i32 addrspace(200)*)
 
-define internal i32 @foo(i32 addrspace(200)* %a, iCAPRANGE addrspace(200)* %b) {
+define internal i32 @foo(i32 addrspace(200)* %a, iCAPRANGE addrspace(200)* %b) nounwind {
 entry:
   br label %loop
 

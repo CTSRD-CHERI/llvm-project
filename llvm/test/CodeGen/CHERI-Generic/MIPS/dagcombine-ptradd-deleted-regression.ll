@@ -9,17 +9,13 @@
 
 declare i32 @bar(i32 addrspace(200)*)
 
-define internal i32 @foo(i32 addrspace(200)* %a, i64 addrspace(200)* %b) {
+define internal i32 @foo(i32 addrspace(200)* %a, i64 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: foo:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    daddiu $sp, $sp, -32
-; HYBRID-NEXT:    .cfi_def_cfa_offset 32
 ; HYBRID-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sd $gp, 16($sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    csc $c17, $sp, 0($ddc) # 16-byte Folded Spill
-; HYBRID-NEXT:    .cfi_offset 31, -8
-; HYBRID-NEXT:    .cfi_offset 28, -16
-; HYBRID-NEXT:    .cfi_offset 89, -32
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(foo)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(foo)))
@@ -37,13 +33,9 @@ define internal i32 @foo(i32 addrspace(200)* %a, i64 addrspace(200)* %b) {
 ; PURECAP-LABEL: foo:
 ; PURECAP:       # %bb.0: # %entry
 ; PURECAP-NEXT:    cincoffset $c11, $c11, -48
-; PURECAP-NEXT:    .cfi_def_cfa_offset 48
 ; PURECAP-NEXT:    csc $c19, $zero, 32($c11) # 16-byte Folded Spill
 ; PURECAP-NEXT:    csc $c18, $zero, 16($c11) # 16-byte Folded Spill
 ; PURECAP-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
-; PURECAP-NEXT:    .cfi_offset 91, -16
-; PURECAP-NEXT:    .cfi_offset 90, -32
-; PURECAP-NEXT:    .cfi_offset 89, -48
 ; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c19, $1
