@@ -555,15 +555,8 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
 
   setOperationAction(ISD::TRAP, MVT::Other, Legal);
 
-  setTargetDAGCombine(ISD::SDIVREM);
-  setTargetDAGCombine(ISD::UDIVREM);
-  setTargetDAGCombine(ISD::SELECT);
-  setTargetDAGCombine(ISD::AND);
-  setTargetDAGCombine(ISD::OR);
-  setTargetDAGCombine(ISD::ADD);
-  setTargetDAGCombine(ISD::SUB);
-  setTargetDAGCombine(ISD::AssertZext);
-  setTargetDAGCombine(ISD::SHL);
+  setTargetDAGCombine({ISD::SDIVREM, ISD::UDIVREM, ISD::SELECT, ISD::AND,
+                       ISD::OR, ISD::ADD, ISD::SUB, ISD::AssertZext, ISD::SHL});
 
   // Some CHERI intrinsics return i1, which isn't legal, so we have to custom
   // lower them in the DAG combine phase before the first type legalization

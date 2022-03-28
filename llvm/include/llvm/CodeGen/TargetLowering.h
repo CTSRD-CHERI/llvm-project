@@ -2402,6 +2402,11 @@ protected:
     TargetDAGCombineArray[NT >> 3] |= 1 << (NT&7);
   }
 
+  void setTargetDAGCombine(ArrayRef<ISD::NodeType> NTs) {
+    for (auto NT : NTs)
+      setTargetDAGCombine(NT);
+  }
+
   /// Set the target's minimum function alignment.
   void setMinFunctionAlignment(Align Alignment) {
     MinFunctionAlignment = Alignment;
