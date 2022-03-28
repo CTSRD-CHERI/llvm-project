@@ -1953,6 +1953,9 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
     if (auto *GD = dyn_cast<MSGuidDecl>(D))
       return CGM.GetAddrOfMSGuidDecl(GD);
 
+    if (auto *GCD = dyn_cast<UnnamedGlobalConstantDecl>(D))
+      return CGM.GetAddrOfUnnamedGlobalConstantDecl(GCD);
+
     if (auto *TPO = dyn_cast<TemplateParamObjectDecl>(D))
       return CGM.GetAddrOfTemplateParamObject(TPO);
 
