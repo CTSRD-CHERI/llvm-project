@@ -2277,28 +2277,19 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
 
     SDValue Add = DAG.getNode(ISD::ADD, DL, IntVT, {Y, Z});
     // Calling visit() can replace the Add node with ISD::DELETED_NODE if there
-    // aren't any users. Therefore, we created the reassociated result now
-    // regardless of whether we end up returning it since otherwise we might end
-    // up using an invalid node in the checks below.
-    SDValue Reassociated = DAG.getPointerAdd(DL, X, Add);
+    // aren't any users, so keep a handle around whilst we visit it.
+    HandleSDNode ADDHandle(Add);
     SDValue VisitedAdd = visit(Add.getNode());
     if (VisitedAdd) {
       // If visit() returns the same node, it means the SDNode was RAUW'd, and
       // therefore we have to load the new value to perform the checks whether
-      // the reassociation fold is profitable. Otherwise just update Add to the
-      // simplified node.
-      if (VisitedAdd.getNode() == Add.getNode()) {
-        Add = Reassociated.getOperand(1);
-      } else {
+      // the reassociation fold is profitable.
+      if (VisitedAdd.getNode() == Add.getNode())
+        Add = ADDHandle.getValue();
+      else
         Add = VisitedAdd;
-        // Update Reassociated to handle cases where visit() did not RAUW.
-        recursivelyDeleteUnusedNodes(Reassociated.getNode());
-        Reassociated = DAG.getPointerAdd(DL, X, Add);
-      }
     }
     LLVM_DEBUG(dbgs() << "visitPTRADD() add operand:"; Add.dump(&DAG));
-    LLVM_DEBUG(dbgs() << "visitPTRADD() reassociated:";
-               Reassociated.dump(&DAG));
     assert(Add->getOpcode() != ISD::DELETED_NODE && "Deleted Node used");
     if (isNullConstant(X) ||
         DAG.isConstantIntBuildVectorOrConstantInt(Add) ||
@@ -2306,13 +2297,8 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
         (DAG.isConstantIntBuildVectorOrConstantInt(Y) && Z.hasOneUse()) ||
         (DAG.isConstantIntBuildVectorOrConstantInt(Y) && N0.hasOneUse()) ||
         (N0.hasOneUse() && Z.hasOneUse() &&
-         !DAG.isConstantIntBuildVectorOrConstantInt(Z))) {
-      return Reassociated;
-    } else {
-      assert(Reassociated->getOpcode() == ISD::PTRADD);
-      assert(Reassociated.getOperand(1) == Add);
-      recursivelyDeleteUnusedNodes(Reassociated.getNode());
-    }
+         !DAG.isConstantIntBuildVectorOrConstantInt(Z)))
+      return DAG.getPointerAdd(DL, X, Add);
   }
 
   return SDValue();
