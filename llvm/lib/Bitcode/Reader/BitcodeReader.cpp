@@ -1542,6 +1542,8 @@ static Attribute::AttrKind getAttrFromCode(uint64_t Code) {
     return Attribute::DereferenceableOrNull;
   case bitc::ATTR_KIND_ALLOC_ALIGN:
     return Attribute::AllocAlign;
+  case bitc::ATTR_KIND_ALLOC_KIND:
+    return Attribute::AllocKind;
   case bitc::ATTR_KIND_ALLOC_SIZE:
     return Attribute::AllocSize;
   case bitc::ATTR_KIND_ALLOCATED_POINTER:
@@ -1742,6 +1744,8 @@ Error BitcodeReader::parseAttributeGroupBlock() {
             B.addVScaleRangeAttrFromRawRepr(Record[++i]);
           else if (Kind == Attribute::UWTable)
             B.addUWTableAttr(UWTableKind(Record[++i]));
+          else if (Kind == Attribute::AllocKind)
+            B.addAllocKindAttr(static_cast<AllocFnKind>(Record[++i]));
         } else if (Record[i] == 3 || Record[i] == 4) { // String attribute
           bool HasValue = (Record[i++] == 4);
           SmallString<64> KindStr;
