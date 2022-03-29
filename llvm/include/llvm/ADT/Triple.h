@@ -251,6 +251,12 @@ public:
     Domain,
     Compute,
     Library,
+    RayGeneration,
+    Intersection,
+    AnyHit,
+    ClosestHit,
+    Miss,
+    Callable,
     Mesh,
     Amplification,
 
