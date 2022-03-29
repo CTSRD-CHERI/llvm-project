@@ -2061,8 +2061,10 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
   std::string Pad = std::string(Lvl * 4, ' ');
   unsigned GlobalAS = CGF.CGM.getDataLayout().getGlobalsAddressSpace();
 
+  PrintingPolicy Policy(Context.getLangOpts());
+  Policy.AnonymousTagLocations = false;
   Value *GString =
-      CGF.Builder.CreateGlobalStringPtr(RType.getAsString() + " {\n", "", GlobalAS);
+      CGF.Builder.CreateGlobalStringPtr(RType.getAsString(Policy) + " {\n");
   Value *Res = CGF.Builder.CreateCall(Func, {GString});
 
   static llvm::DenseMap<QualType, const char *> Types;
