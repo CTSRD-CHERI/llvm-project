@@ -2059,12 +2059,12 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
   ASTContext &Context = CGF.getContext();
   RecordDecl *RD = RType->castAs<RecordType>()->getDecl()->getDefinition();
   std::string Pad = std::string(Lvl * 4, ' ');
-  unsigned GlobalAS = CGF.CGM.getDataLayout().getGlobalsAddressSpace();
+  std::string ElementPad = std::string((Lvl + 1) * 4, ' ');
 
   PrintingPolicy Policy(Context.getLangOpts());
   Policy.AnonymousTagLocations = false;
-  Value *GString =
-      CGF.Builder.CreateGlobalStringPtr(RType.getAsString(Policy) + " {\n");
+  Value *GString = CGF.Builder.CreateGlobalStringPtr(
+    llvm::Twine(Pad).concat(RType.getAsString(Policy)).concat(" {\n").str());
   Value *Res = CGF.Builder.CreateCall(Func, {GString});
 
   static llvm::DenseMap<QualType, const char *> Types;
@@ -2092,7 +2092,7 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
   for (const auto *FD : RD->fields()) {
     Value *TmpRes = nullptr;
 
-    std::string Format = llvm::Twine(Pad)
+    std::string Format = llvm::Twine(ElementPad)
                              .concat(FD->getType().getAsString())
                              .concat(llvm::Twine(' '))
                              .concat(FD->getNameAsString())
@@ -2147,7 +2147,7 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
     Res = CGF.Builder.CreateAdd(Res, TmpRes);
   }
 
-  GString = CGF.Builder.CreateGlobalStringPtr(Pad + "}\n", "", GlobalAS );
+  GString = CGF.Builder.CreateGlobalStringPtr(Pad + "}\n");
   Value *TmpRes = CGF.Builder.CreateCall(Func, {GString});
   Res = CGF.Builder.CreateAdd(Res, TmpRes);
   return Res;
