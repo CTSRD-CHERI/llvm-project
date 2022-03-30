@@ -1007,7 +1007,7 @@ ASTNodeImporter::import(const Designator &D) {
 
 template <>
 Expected<LambdaCapture> ASTNodeImporter::import(const LambdaCapture &From) {
-  VarDecl *Var = nullptr;
+  ValueDecl *Var = nullptr;
   if (From.capturesVariable()) {
     if (auto VarOrErr = import(From.getCapturedVar()))
       Var = *VarOrErr;
