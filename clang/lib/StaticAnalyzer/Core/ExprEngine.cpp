@@ -2733,7 +2733,7 @@ void ExprEngine::VisitCommonDeclRefExpr(const Expr *Ex, const NamedDecl *D,
         MD->getParent()->isLambda()) {
       // Lookup the field of the lambda.
       const CXXRecordDecl *CXXRec = MD->getParent();
-      llvm::DenseMap<const VarDecl *, FieldDecl *> LambdaCaptureFields;
+      llvm::DenseMap<const ValueDecl *, FieldDecl *> LambdaCaptureFields;
       FieldDecl *LambdaThisCaptureField;
       CXXRec->getCaptureFields(LambdaCaptureFields, LambdaThisCaptureField);
 
