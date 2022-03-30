@@ -7031,15 +7031,15 @@ def warn_ambiguous_provenance_capability_binop : Warning<
   "inherited from the left-hand side">,
   InGroup<CHERIProvenance>;
 def warn_packed_capability : Warning<
-  "Under aligned capability field at offset %0 in packed structure will "
+  "under aligned capability field at offset %0 in packed structure will "
   "trap if accessed">,
   InGroup<CHERICaps>;
 def warn_packed_struct_capability : Warning<
-  "Under aligned structure field at offset %0 in packed structure containing "
+  "under aligned structure field at offset %0 in packed structure containing "
   "capabilities will trap if capability field is accessed">,
   InGroup<CHERICaps>;
 def warn_packed_capability_in_array : Warning<
-  "Capability field at offset %0 in packed structure will trap "
+  "capability field at offset %0 in packed structure will trap "
   "if structure is used in an array">,
   InGroup<CHERICaps>;
 def note_insert_attribute_aligned : Note<
