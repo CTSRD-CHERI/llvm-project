@@ -1985,7 +1985,8 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   // loads the lvalue formed by the subscript expr.  However, we have to be
   // careful, because the base of a vector subscript is occasionally an rvalue,
   // so we can't get it as an lvalue.
-  if (!E->getBase()->getType()->isVectorType()) {
+  if (!E->getBase()->getType()->isVectorType() &&
+      !E->getBase()->getType()->isVLSTBuiltinType()) {
     // Note: this eventually calls EmitArraySubscriptExpression which will set
     // CHERI sub-object bounds on the array.
     return EmitLoadOfLValue(E);
