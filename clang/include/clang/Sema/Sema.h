@@ -3291,7 +3291,7 @@ public:
   /// Invoked when we enter a tag definition that we're skipping.
   SkippedDefinitionContext ActOnTagStartSkippedDefinition(Scope *S, Decl *TD);
 
-  Decl *ActOnObjCContainerStartDefinition(Decl *IDecl);
+  void ActOnObjCContainerStartDefinition(ObjCContainerDecl *IDecl);
 
   /// ActOnStartCXXMemberDeclarations - Invoked when we have parsed a
   /// C++ record definition's base-specifiers clause and are starting its
@@ -3315,8 +3315,8 @@ public:
   /// scope for parsing/looking-up C constructs.
   ///
   /// Must be followed by a call to \see ActOnObjCReenterContainerContext
-  void ActOnObjCTemporaryExitContainerContext(DeclContext *DC);
-  void ActOnObjCReenterContainerContext(DeclContext *DC);
+  void ActOnObjCTemporaryExitContainerContext(ObjCContainerDecl *ObjCCtx);
+  void ActOnObjCReenterContainerContext(ObjCContainerDecl *ObjCCtx);
 
   /// ActOnTagDefinitionError - Invoked when there was an unrecoverable
   /// error parsing the definition of a tag.
@@ -9749,7 +9749,7 @@ public:
                                             SourceLocation rAngleLoc);
   void popObjCTypeParamList(Scope *S, ObjCTypeParamList *typeParamList);
 
-  Decl *ActOnStartClassInterface(
+  ObjCInterfaceDecl *ActOnStartClassInterface(
       Scope *S, SourceLocation AtInterfaceLoc, IdentifierInfo *ClassName,
       SourceLocation ClassLoc, ObjCTypeParamList *typeParamList,
       IdentifierInfo *SuperName, SourceLocation SuperLoc,
@@ -9783,13 +9783,13 @@ public:
     SourceLocation &PLoc, SourceLocation PrevLoc,
     const ObjCList<ObjCProtocolDecl> &PList);
 
-  Decl *ActOnStartProtocolInterface(
+  ObjCProtocolDecl *ActOnStartProtocolInterface(
       SourceLocation AtProtoInterfaceLoc, IdentifierInfo *ProtocolName,
       SourceLocation ProtocolLoc, Decl *const *ProtoRefNames,
       unsigned NumProtoRefs, const SourceLocation *ProtoLocs,
       SourceLocation EndProtoLoc, const ParsedAttributesView &AttrList);
 
-  Decl *ActOnStartCategoryInterface(
+  ObjCCategoryDecl *ActOnStartCategoryInterface(
       SourceLocation AtInterfaceLoc, IdentifierInfo *ClassName,
       SourceLocation ClassLoc, ObjCTypeParamList *typeParamList,
       IdentifierInfo *CategoryName, SourceLocation CategoryLoc,
@@ -9797,19 +9797,15 @@ public:
       const SourceLocation *ProtoLocs, SourceLocation EndProtoLoc,
       const ParsedAttributesView &AttrList);
 
-  Decl *ActOnStartClassImplementation(SourceLocation AtClassImplLoc,
-                                      IdentifierInfo *ClassName,
-                                      SourceLocation ClassLoc,
-                                      IdentifierInfo *SuperClassname,
-                                      SourceLocation SuperClassLoc,
-                                      const ParsedAttributesView &AttrList);
+  ObjCImplementationDecl *ActOnStartClassImplementation(
+      SourceLocation AtClassImplLoc, IdentifierInfo *ClassName,
+      SourceLocation ClassLoc, IdentifierInfo *SuperClassname,
+      SourceLocation SuperClassLoc, const ParsedAttributesView &AttrList);
 
-  Decl *ActOnStartCategoryImplementation(SourceLocation AtCatImplLoc,
-                                         IdentifierInfo *ClassName,
-                                         SourceLocation ClassLoc,
-                                         IdentifierInfo *CatName,
-                                         SourceLocation CatLoc,
-                                         const ParsedAttributesView &AttrList);
+  ObjCCategoryImplDecl *ActOnStartCategoryImplementation(
+      SourceLocation AtCatImplLoc, IdentifierInfo *ClassName,
+      SourceLocation ClassLoc, IdentifierInfo *CatName, SourceLocation CatLoc,
+      const ParsedAttributesView &AttrList);
 
   DeclGroupPtrTy ActOnFinishObjCImplementation(Decl *ObjCImpDecl,
                                                ArrayRef<Decl *> Decls);
@@ -13205,7 +13201,7 @@ public:
   IdentifierInfo *getSuperIdentifier() const;
   IdentifierInfo *getFloat128Identifier() const;
 
-  Decl *getObjCDeclContext() const;
+  ObjCContainerDecl *getObjCDeclContext() const;
 
   DeclContext *getCurLexicalContext() const {
     return OriginalLexicalContext ? OriginalLexicalContext : CurContext;
