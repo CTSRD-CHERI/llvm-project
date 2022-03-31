@@ -564,7 +564,8 @@ static void EmitNullBaseClassInitialization(CodeGenFunction &CGF,
       CGF.Builder.CreateMemCpy(
           CGF.Builder.CreateConstInBoundsByteGEP(DestPtr, StoreOffset),
           CGF.Builder.CreateConstInBoundsByteGEP(SrcPtr, StoreOffset),
-          StoreSizeVal);
+          StoreSizeVal, /* NULL constants never contain tags */
+          llvm::PreserveCheriTags::Unnecessary);
     }
 
   // Otherwise, just memset the whole thing to zero.  This is legal
