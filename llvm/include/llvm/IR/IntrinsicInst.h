@@ -681,6 +681,12 @@ static inline PreserveCheriTags shouldPreserveTags(const CallInst *CI) {
   return PreserveCheriTags::Unknown;
 }
 
+/// Out-of-line to allow counting statistics. This is only possible in source
+/// files and MemTransferBase is templated so moving it out-of-line is more
+/// awkward.
+void setPreserveCheriTags(IntrinsicInst *I, PreserveCheriTags NewValue,
+                          const DataLayout &DL);
+
 /// Common base class for all memory transfer intrinsics. Simply provides
 /// common methods.
 template <class BaseCL> class MemTransferBase : public BaseCL {
@@ -751,22 +757,8 @@ public:
         .getValueAsString();
   }
 
-  void setPreserveCheriTags(PreserveCheriTags NewValue) {
-    if (NewValue == PreserveCheriTags::Required) {
-      assert(!BaseCL::hasFnAttr(Attribute::NoPreserveCheriTags) &&
-             "attempting to set conflicting attributes");
-      BaseCL::addAttribute(llvm::AttributeList::FunctionIndex,
-                           llvm::Attribute::MustPreserveCheriTags);
-    } else if (NewValue == PreserveCheriTags::Unnecessary) {
-      assert(!BaseCL::hasFnAttr(Attribute::MustPreserveCheriTags) &&
-             "attempting to set conflicting attributes");
-      BaseCL::addAttribute(llvm::AttributeList::FunctionIndex,
-                           llvm::Attribute::NoPreserveCheriTags);
-    } else {
-      assert(!BaseCL::hasFnAttr(Attribute::MustPreserveCheriTags) &&
-             !BaseCL::hasFnAttr(Attribute::NoPreserveCheriTags) &&
-             "Cannot set unknown on an already annotated instruction");
-    }
+  void setPreserveCheriTags(PreserveCheriTags NewValue, const DataLayout &DL) {
+    llvm::setPreserveCheriTags(this, NewValue, DL);
   }
 };
 

@@ -206,7 +206,7 @@ CallInst *IRBuilderBase::CreateMemTransferInst(
 
   auto* MCI = cast<MemTransferInst>(CI);
   if (M->getDataLayout().hasCheriCapabilities())
-    MCI->setPreserveCheriTags(PreserveTags);
+    MCI->setPreserveCheriTags(PreserveTags, M->getDataLayout());
   if (DstAlign)
     MCI->setDestAlignment(*DstAlign);
   if (SrcAlign)
@@ -247,7 +247,7 @@ CallInst *IRBuilderBase::CreateMemCpyInline(
 
   auto *MCI = cast<MemCpyInlineInst>(CI);
   if (M->getDataLayout().hasCheriCapabilities())
-    MCI->setPreserveCheriTags(PreserveTags);
+    MCI->setPreserveCheriTags(PreserveTags, M->getDataLayout());
   if (DstAlign)
     MCI->setDestAlignment(*DstAlign);
   if (SrcAlign)
@@ -292,7 +292,7 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemCpy(
   // Set the alignment of the pointer args.
   auto *AMCI = cast<AtomicMemCpyInst>(CI);
   if (M->getDataLayout().hasCheriCapabilities())
-    AMCI->setPreserveCheriTags(PreserveTags);
+    AMCI->setPreserveCheriTags(PreserveTags, M->getDataLayout());
   AMCI->setDestAlignment(DstAlign);
   AMCI->setSourceAlignment(SrcAlign);
 
@@ -335,7 +335,7 @@ CallInst *IRBuilderBase::CreateMemMove(Value *Dst, MaybeAlign DstAlign,
 
   auto *MMI = cast<MemMoveInst>(CI);
   if (M->getDataLayout().hasCheriCapabilities())
-    MMI->setPreserveCheriTags(PreserveTags);
+    MMI->setPreserveCheriTags(PreserveTags, M->getDataLayout());
   if (DstAlign)
     MMI->setDestAlignment(*DstAlign);
   if (SrcAlign)
@@ -373,7 +373,8 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemMove(
 
   CallInst *CI = createCallHelper(TheFn, Ops, this);
   if (M->getDataLayout().hasCheriCapabilities())
-    cast<AtomicMemTransferInst>(CI)->setPreserveCheriTags(PreserveTags);
+    cast<AtomicMemTransferInst>(CI)->setPreserveCheriTags(PreserveTags,
+                                                          M->getDataLayout());
 
   // Set the alignment of the pointer args.
   CI->addParamAttr(0, Attribute::getWithAlignment(CI->getContext(), DstAlign));
