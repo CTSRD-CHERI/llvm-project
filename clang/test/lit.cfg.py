@@ -113,7 +113,8 @@ if config.clang_staticanalyzer:
 
 llvm_config.add_tool_substitutions(tools, tool_dirs)
 
-if llvm_config.add_tool_substitutions(['llvm-rc'], tool_dirs):
+if llvm_config.add_tool_substitutions(
+        [ToolSubst('llvm-rc', unresolved='break')], tool_dirs):
     config.available_features.add('llvm-rc')
 
 config.substitutions.append(
