@@ -3545,7 +3545,7 @@ QualType TypedefType::desugar() const {
 
 UsingType::UsingType(const UsingShadowDecl *Found, QualType Underlying,
                      QualType Canon)
-    : Type(Using, Canon, Underlying->getDependence()),
+    : Type(Using, Canon, toSemanticDependence(Underlying->getDependence())),
       Found(const_cast<UsingShadowDecl *>(Found)) {
   assert(Underlying == getUnderlyingType());
 }
