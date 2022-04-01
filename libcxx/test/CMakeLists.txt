@@ -103,10 +103,6 @@ if (NOT LIBCXX_ENABLE_RTTI)
   serialize_lit_param(enable_rtti False)
 endif()
 
-if (NOT LIBCXX_ENABLE_DEBUG_MODE_SUPPORT)
-  serialize_lit_param(enable_debug_tests False)
-endif()
-
 if (LIBCXX_ENABLE_ASSERTIONS)
   serialize_lit_param(enable_assertions True)
 endif()
