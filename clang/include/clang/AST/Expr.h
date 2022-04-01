@@ -3554,7 +3554,6 @@ protected:
     CastExprBits.BasePathSize = BasePathSize;
     assert((CastExprBits.BasePathSize == BasePathSize) &&
            "BasePathSize overflow!");
-    setDependence(computeDependence(this));
     assert(CastConsistency(Ctx));
     CastExprBits.HasFPFeatures = HasFPFeatures;
   }
@@ -3709,6 +3708,7 @@ class ImplicitCastExpr final
                    ExprValueKind VK, const ASTContext &Ctx)
       : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, BasePathLength,
                  FPO.requiresTrailingStorage(), Ctx) {
+    setDependence(computeDependence(this));
     if (hasStoredFPFeatures())
       *getTrailingFPFeatures() = FPO;
   }
@@ -3787,7 +3787,9 @@ protected:
                    bool HasFPFeatures, TypeSourceInfo *writtenTy,
                    const ASTContext &Ctx)
       : CastExpr(SC, exprTy, VK, kind, op, PathSize, HasFPFeatures, Ctx),
-        TInfo(writtenTy) {}
+        TInfo(writtenTy) {
+    setDependence(computeDependence(this));
+  }
 
   /// Construct an empty explicit cast.
   ExplicitCastExpr(StmtClass SC, EmptyShell Shell, unsigned PathSize,
