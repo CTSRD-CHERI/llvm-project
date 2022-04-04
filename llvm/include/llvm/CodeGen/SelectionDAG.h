@@ -912,6 +912,11 @@ public:
   /// Create a logical NOT operation as (XOR Val, BooleanOne).
   SDValue getLogicalNOT(const SDLoc &DL, SDValue Val, EVT VT);
 
+  /// Create a vector-predicated logical NOT operation as (VP_XOR Val,
+  /// BooleanOne, Mask, EVL).
+  SDValue getVPLogicalNOT(const SDLoc &DL, SDValue Val, SDValue Mask,
+                          SDValue EVL, EVT VT);
+
   /// Generate a CHERI CSetBounds intrinsic.
   /// Also create a log record if CSetBounds stats are being gathered
   SDValue getCSetBounds(SDValue Val, const SDLoc &DL, SDValue Length,
