@@ -924,6 +924,16 @@ Value *LibCallSimplifier::optimizeMemChr(CallInst *CI, IRBuilderBase &B) {
   // return null if we don't find the char.
   Str = Str.substr(0, LenC->getZExtValue());
 
+  if (CharC) {
+    // Compute the offset.
+    size_t I = Str.find(CharC->getSExtValue() & 0xFF);
+    if (I == StringRef::npos) // Didn't find the char.  memchr returns null.
+      return Constant::getNullValue(CI->getType());
+
+    // memchr(s+n,c,l) -> gep(s+n+i,c)
+    return B.CreateGEP(B.getInt8Ty(), SrcStr, B.getInt64(I), "memchr");
+  }
+
   // If the char is variable but the input str and length are not we can turn
   // this memchr call into a simple bit field test. Of course this only works
   // when the return value is only checked against null.
@@ -934,61 +944,50 @@ Value *LibCallSimplifier::optimizeMemChr(CallInst *CI, IRBuilderBase &B) {
   // memchr("\r\n", C, 2) != nullptr -> (1 << C & ((1 << '\r') | (1 << '\n')))
   // != 0
   //   after bounds check.
-  if (!CharC && !Str.empty() && isOnlyUsedInZeroEqualityComparison(CI)) {
-    unsigned char Max =
-        *std::max_element(reinterpret_cast<const unsigned char *>(Str.begin()),
-                          reinterpret_cast<const unsigned char *>(Str.end()));
-
-    // Make sure the bit field we're about to create fits in a register on the
-    // target.
-    // FIXME: On a 64 bit architecture this prevents us from using the
-    // interesting range of alpha ascii chars. We could do better by emitting
-    // two bitfields or shifting the range by 64 if no lower chars are used.
-    if (!DL.fitsInLegalInteger(Max + 1))
-      return nullptr;
-
-    // For the bit field use a power-of-2 type with at least 8 bits to avoid
-    // creating unnecessary illegal types.
-    unsigned char Width = NextPowerOf2(std::max((unsigned char)7, Max));
-
-    // Now build the bit field.
-    APInt Bitfield(Width, 0);
-    for (char C : Str)
-      Bitfield.setBit((unsigned char)C);
-    Value *BitfieldC = B.getInt(Bitfield);
-
-    // Adjust width of "C" to the bitfield width, then mask off the high bits.
-    Value *C = B.CreateZExtOrTrunc(CharVal, BitfieldC->getType());
-    C = B.CreateAnd(C, B.getIntN(Width, 0xFF));
-
-    // First check that the bit field access is within bounds.
-    Value *Bounds = B.CreateICmp(ICmpInst::ICMP_ULT, C, B.getIntN(Width, Width),
-                                 "memchr.bounds");
-
-    // Create code that checks if the given bit is set in the field.
-    Value *Shl = B.CreateShl(B.getIntN(Width, 1ULL), C);
-    Value *Bits = B.CreateIsNotNull(B.CreateAnd(Shl, BitfieldC), "memchr.bits");
-
-    // Finally merge both checks and cast to pointer type. To avoid
-    // materialising a nonsense pointer value, we select either a null or the
-    // source string and hope that later bits of instcombine will fold the two
-    // compares.
-    Value *Result = B.CreateLogicalAnd(Bounds, Bits, "memchr");
-    return B.CreateSelect(B.CreateIsNull(Result),
-        Constant::getNullValue(CI->getType()), SrcStr);
-  }
-
-  // Check if all arguments are constants.  If so, we can constant fold.
-  if (!CharC)
+  if (Str.empty() || !isOnlyUsedInZeroEqualityComparison(CI))
     return nullptr;
 
-  // Compute the offset.
-  size_t I = Str.find(CharC->getSExtValue() & 0xFF);
-  if (I == StringRef::npos) // Didn't find the char.  memchr returns null.
-    return Constant::getNullValue(CI->getType());
+  unsigned char Max =
+      *std::max_element(reinterpret_cast<const unsigned char *>(Str.begin()),
+                        reinterpret_cast<const unsigned char *>(Str.end()));
 
-  // memchr(s+n,c,l) -> gep(s+n+i,c)
-  return B.CreateGEP(B.getInt8Ty(), SrcStr, B.getInt64(I), "memchr");
+  // Make sure the bit field we're about to create fits in a register on the
+  // target.
+  // FIXME: On a 64 bit architecture this prevents us from using the
+  // interesting range of alpha ascii chars. We could do better by emitting
+  // two bitfields or shifting the range by 64 if no lower chars are used.
+  if (!DL.fitsInLegalInteger(Max + 1))
+    return nullptr;
+
+  // For the bit field use a power-of-2 type with at least 8 bits to avoid
+  // creating unnecessary illegal types.
+  unsigned char Width = NextPowerOf2(std::max((unsigned char)7, Max));
+
+  // Now build the bit field.
+  APInt Bitfield(Width, 0);
+  for (char C : Str)
+    Bitfield.setBit((unsigned char)C);
+  Value *BitfieldC = B.getInt(Bitfield);
+
+  // Adjust width of "C" to the bitfield width, then mask off the high bits.
+  Value *C = B.CreateZExtOrTrunc(CharVal, BitfieldC->getType());
+  C = B.CreateAnd(C, B.getIntN(Width, 0xFF));
+
+  // First check that the bit field access is within bounds.
+  Value *Bounds = B.CreateICmp(ICmpInst::ICMP_ULT, C, B.getIntN(Width, Width),
+                               "memchr.bounds");
+
+  // Create code that checks if the given bit is set in the field.
+  Value *Shl = B.CreateShl(B.getIntN(Width, 1ULL), C);
+  Value *Bits = B.CreateIsNotNull(B.CreateAnd(Shl, BitfieldC), "memchr.bits");
+
+  // Finally merge both checks and cast to pointer type. To avoid
+  // materialising a nonsense pointer value, we select either a null or the
+  // source string and hope that later bits of instcombine will fold the two
+  // compares.
+  Value *Result = B.CreateLogicalAnd(Bounds, Bits, "memchr");
+  return B.CreateSelect(B.CreateIsNull(Result),
+                        Constant::getNullValue(CI->getType()), SrcStr);
 }
 
 static Value *optimizeMemCmpConstantSize(CallInst *CI, Value *LHS, Value *RHS,
