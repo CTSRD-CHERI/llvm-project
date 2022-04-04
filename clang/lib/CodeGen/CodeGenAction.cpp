@@ -1009,6 +1009,9 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   if (BA != Backend_EmitNothing && !OS)
     return nullptr;
 
+  if (CI.getCodeGenOpts().OpaquePointers)
+    VMContext->enableOpaquePointers();
+
   // Load bitcode modules to link with, if we need to.
   if (LinkModules.empty())
     for (const CodeGenOptions::BitcodeFileToLink &F :
