@@ -826,21 +826,21 @@ def : MipsPat<(atomic_load_32 CheriOpnd0IsDDC:$a), (CAPLOAD32 ZERO_64, (i64 0), 
 def : MipsPat<(atomic_load_64 CheriOpnd0IsDDC:$a), (CAPLOAD64 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
 def : MipsPat<(atomic_load_cap CheriOpnd0IsDDC:$a), (LOADCAP ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
 // Atomic store patterns.
-def : MipsPat<(atomic_store_8 CheriOpnd0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_8 GPR64:$v, CheriOpnd0IsDDC:$a),
               (CAPSTORE8 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_8 CheriOpnd0IsDDC:$a, GPR32:$v),
+def : MipsPat<(atomic_store_8 GPR32:$v, CheriOpnd0IsDDC:$a),
               (CAPSTORE832 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_16 CheriOpnd0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_16 GPR64:$v, CheriOpnd0IsDDC:$a),
               (CAPSTORE16 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_16 CheriOpnd0IsDDC:$a, GPR32:$v),
+def : MipsPat<(atomic_store_16 GPR32:$v, CheriOpnd0IsDDC:$a),
               (CAPSTORE1632 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_32 CheriOpnd0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_32 GPR64:$v, CheriOpnd0IsDDC:$a),
               (CAPSTORE3264 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_32 CheriOpnd0IsDDC:$a, GPR32:$v),
+def : MipsPat<(atomic_store_32 GPR32:$v, CheriOpnd0IsDDC:$a),
               (CAPSTORE32 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_64 CheriOpnd0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_64 GPR64:$v, CheriOpnd0IsDDC:$a),
               (CAPSTORE64 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_cap CheriOpnd0IsDDC:$a, CheriOpnd:$v),
+def : MipsPat<(atomic_store_cap CheriOpnd:$v, CheriOpnd0IsDDC:$a),
               (STORECAP $v, ZERO_64, (i64 0), $a)>;
 }
 let Predicates=[IsCHERI,NotCHERIABI] in {

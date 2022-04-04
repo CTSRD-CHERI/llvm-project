@@ -4914,8 +4914,8 @@ void SelectionDAGBuilder::visitAtomicStore(const StoreInst &I) {
     DAG.setRoot(S);
     return;
   }
-  SDValue OutChain = DAG.getAtomic(ISD::ATOMIC_STORE, dl, MemVT, InChain,
-                                   Ptr, Val, MMO);
+  SDValue OutChain =
+      DAG.getAtomic(ISD::ATOMIC_STORE, dl, MemVT, InChain, Val, Ptr, MMO);
 
   setValue(&I, OutChain);
   DAG.setRoot(OutChain);

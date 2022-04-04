@@ -1678,7 +1678,7 @@ multiclass CheriStPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy, ValueTyp
 }
 
 multiclass CheriAtomicStPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy, ValueType StoreVt>
-    : CheriStPat<Swap<StoreOp>, Inst, StTy, StoreVt>;
+    : CheriStPat<StoreOp, Inst, StTy, StoreVt>;
 
 multiclass CheriAMOPat<string AtomicOp, string BaseInst> {
   def : PatGpcrGpr<!cast<PatFrag>(AtomicOp#"_monotonic"),
