@@ -38,7 +38,6 @@ add_llvm_component_library(LLVMCodeGen
   CalcSpillWeights.cpp
   CallingConvLower.cpp
   CFGuardLongjmp.cpp
-  CFIFixup.cpp
   CFIInstrInserter.cpp
   CheriBoundAllocas.cpp
   CheriGetAddressElim.cpp
