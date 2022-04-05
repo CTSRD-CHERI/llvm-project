@@ -433,6 +433,10 @@ protected:
   /// hidden visibility.  Defaults to MCSA_Hidden.
   MCSymbolAttr HiddenVisibilityAttr = MCSA_Hidden;
 
+  /// This attribute, if not MCSA_Invalid, is used to declare a symbol as having
+  /// exported visibility.  Defaults to MCSA_Exported.
+  MCSymbolAttr ExportedVisibilityAttr = MCSA_Exported;
+
   /// This attribute, if not MCSA_Invalid, is used to declare an undefined
   /// symbol as having hidden visibility. Defaults to MCSA_Hidden.
   MCSymbolAttr HiddenDeclarationVisibilityAttr = MCSA_Hidden;
@@ -764,6 +768,8 @@ public:
   bool avoidWeakIfComdat() const { return AvoidWeakIfComdat; }
 
   MCSymbolAttr getHiddenVisibilityAttr() const { return HiddenVisibilityAttr; }
+
+  MCSymbolAttr getExportedVisibilityAttr() const { return ExportedVisibilityAttr; }
 
   MCSymbolAttr getHiddenDeclarationVisibilityAttr() const {
     return HiddenDeclarationVisibilityAttr;
