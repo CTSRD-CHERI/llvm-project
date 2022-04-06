@@ -2011,8 +2011,8 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MLOAD(MaskedLoadSDNode *N,
 
 SDValue DAGTypeLegalizer::PromoteIntOp_MGATHER(MaskedGatherSDNode *N,
                                                unsigned OpNo) {
-
   SmallVector<SDValue, 5> NewOps(N->op_begin(), N->op_end());
+
   if (OpNo == 2) {
     // The Mask
     EVT DataVT = N->getValueType(0);
@@ -2041,6 +2041,7 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MSCATTER(MaskedScatterSDNode *N,
                                                 unsigned OpNo) {
   bool TruncateStore = N->isTruncatingStore();
   SmallVector<SDValue, 5> NewOps(N->op_begin(), N->op_end());
+
   if (OpNo == 2) {
     // The Mask
     EVT DataVT = N->getValue().getValueType();
@@ -2052,9 +2053,6 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MSCATTER(MaskedScatterSDNode *N,
       NewOps[OpNo] = SExtPromotedInteger(N->getOperand(OpNo));
     else
       NewOps[OpNo] = ZExtPromotedInteger(N->getOperand(OpNo));
-
-    N->setIndexType(TLI.getCanonicalIndexType(N->getIndexType(),
-                                              N->getMemoryVT(), NewOps[OpNo]));
   } else {
     NewOps[OpNo] = GetPromotedInteger(N->getOperand(OpNo));
     TruncateStore = true;
