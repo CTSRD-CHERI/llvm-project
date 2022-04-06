@@ -39,60 +39,94 @@ bool llvm::lowerAtomicCmpXchgInst(AtomicCmpXchgInst *CXI) {
   return true;
 }
 
+Value *llvm::buildAtomicRMWValue(AtomicRMWInst::BinOp Op,
+                                 IRBuilderBase &Builder, Value *Loaded,
+                                 Value *Inc) {
+  Module *M = Builder.GetInsertBlock()->getModule();
+  const DataLayout &DL = M->getDataLayout();
+  if (DL.isFatPointer(Loaded->getType())) {
+    switch (Op) {
+    case AtomicRMWInst::Xchg:
+      break;
+    case AtomicRMWInst::Add:
+    case AtomicRMWInst::Sub:
+    case AtomicRMWInst::And:
+    case AtomicRMWInst::Nand:
+    case AtomicRMWInst::Or:
+    case AtomicRMWInst::Xor: {
+      LLVMContext &C = M->getContext();
+      unsigned AS = Loaded->getType()->getPointerAddressSpace();
+      Type *I8CapTy = Type::getInt8PtrTy(C, AS);
+      Type *SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(AS));
+      Function *GetAddress = Intrinsic::getDeclaration(
+          M, Intrinsic::cheri_cap_address_get, SizeTy);
+      Function *SetAddress = Intrinsic::getDeclaration(
+          M, Intrinsic::cheri_cap_address_set, SizeTy);
+      Value *LoadedI8Cap = Builder.CreateBitCast(Loaded, I8CapTy);
+      Value *LoadedInt = Builder.CreateCall(GetAddress, {LoadedI8Cap});
+      Value *IncI8Cap = Builder.CreateBitCast(Inc, I8CapTy);
+      Value *IncInt = Builder.CreateCall(GetAddress, {IncI8Cap});
+      Value *NewInt = buildAtomicRMWValue(Op, Builder, LoadedInt, IncInt);
+      Value *NewI8Cap = Builder.CreateCall(SetAddress, {LoadedI8Cap, NewInt});
+      return Builder.CreateBitCast(NewI8Cap, Loaded->getType());
+    }
+    case AtomicRMWInst::Max:
+    case AtomicRMWInst::Min:
+    case AtomicRMWInst::UMax:
+    case AtomicRMWInst::UMin:
+      break;
+    case AtomicRMWInst::FAdd:
+    case AtomicRMWInst::FSub:
+      llvm_unreachable("Cannot use FP atomic op on capability value");
+    default:
+      llvm_unreachable("Unknown atomic op");
+    }
+  }
+
+  Value *NewVal;
+  switch (Op) {
+  case AtomicRMWInst::Xchg:
+    return Inc;
+  case AtomicRMWInst::Add:
+    return Builder.CreateAdd(Loaded, Inc, "new");
+  case AtomicRMWInst::Sub:
+    return Builder.CreateSub(Loaded, Inc, "new");
+  case AtomicRMWInst::And:
+    return Builder.CreateAnd(Loaded, Inc, "new");
+  case AtomicRMWInst::Nand:
+    return Builder.CreateNot(Builder.CreateAnd(Loaded, Inc), "new");
+  case AtomicRMWInst::Or:
+    return Builder.CreateOr(Loaded, Inc, "new");
+  case AtomicRMWInst::Xor:
+    return Builder.CreateXor(Loaded, Inc, "new");
+  case AtomicRMWInst::Max:
+    NewVal = Builder.CreateICmpSGT(Loaded, Inc);
+    return Builder.CreateSelect(NewVal, Loaded, Inc, "new");
+  case AtomicRMWInst::Min:
+    NewVal = Builder.CreateICmpSLE(Loaded, Inc);
+    return Builder.CreateSelect(NewVal, Loaded, Inc, "new");
+  case AtomicRMWInst::UMax:
+    NewVal = Builder.CreateICmpUGT(Loaded, Inc);
+    return Builder.CreateSelect(NewVal, Loaded, Inc, "new");
+  case AtomicRMWInst::UMin:
+    NewVal = Builder.CreateICmpULE(Loaded, Inc);
+    return Builder.CreateSelect(NewVal, Loaded, Inc, "new");
+  case AtomicRMWInst::FAdd:
+    return Builder.CreateFAdd(Loaded, Inc, "new");
+  case AtomicRMWInst::FSub:
+    return Builder.CreateFSub(Loaded, Inc, "new");
+  default:
+    llvm_unreachable("Unknown atomic op");
+  }
+}
+
 bool llvm::lowerAtomicRMWInst(AtomicRMWInst *RMWI) {
   IRBuilder<> Builder(RMWI);
   Value *Ptr = RMWI->getPointerOperand();
   Value *Val = RMWI->getValOperand();
 
   LoadInst *Orig = Builder.CreateLoad(Val->getType(), Ptr);
-  Value *Res = nullptr;
-
-  switch (RMWI->getOperation()) {
-  default: llvm_unreachable("Unexpected RMW operation");
-  case AtomicRMWInst::Xchg:
-    Res = Val;
-    break;
-  case AtomicRMWInst::Add:
-    Res = Builder.CreateAdd(Orig, Val);
-    break;
-  case AtomicRMWInst::Sub:
-    Res = Builder.CreateSub(Orig, Val);
-    break;
-  case AtomicRMWInst::And:
-    Res = Builder.CreateAnd(Orig, Val);
-    break;
-  case AtomicRMWInst::Nand:
-    Res = Builder.CreateNot(Builder.CreateAnd(Orig, Val));
-    break;
-  case AtomicRMWInst::Or:
-    Res = Builder.CreateOr(Orig, Val);
-    break;
-  case AtomicRMWInst::Xor:
-    Res = Builder.CreateXor(Orig, Val);
-    break;
-  case AtomicRMWInst::Max:
-    Res = Builder.CreateSelect(Builder.CreateICmpSLT(Orig, Val),
-                               Val, Orig);
-    break;
-  case AtomicRMWInst::Min:
-    Res = Builder.CreateSelect(Builder.CreateICmpSLT(Orig, Val),
-                               Orig, Val);
-    break;
-  case AtomicRMWInst::UMax:
-    Res = Builder.CreateSelect(Builder.CreateICmpULT(Orig, Val),
-                               Val, Orig);
-    break;
-  case AtomicRMWInst::UMin:
-    Res = Builder.CreateSelect(Builder.CreateICmpULT(Orig, Val),
-                               Orig, Val);
-    break;
-  case AtomicRMWInst::FAdd:
-    Res = Builder.CreateFAdd(Orig, Val);
-    break;
-  case AtomicRMWInst::FSub:
-    Res = Builder.CreateFSub(Orig, Val);
-    break;
-  }
+  Value *Res = buildAtomicRMWValue(RMWI->getOperation(), Builder, Orig, Val);
   Builder.CreateStore(Res, Ptr);
   RMWI->replaceAllUsesWith(Orig);
   RMWI->eraseFromParent();
