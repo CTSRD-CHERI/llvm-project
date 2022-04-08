@@ -4482,7 +4482,7 @@ void SelectionDAGBuilder::visitMaskedScatter(const CallInst &I) {
   if (!UniformBase) {
     Base = DAG.getConstant(0, sdl, TLI.getPointerRangeTy(DAG.getDataLayout()));
     Index = getValue(Ptr);
-    IndexType = ISD::SIGNED_UNSCALED;
+    IndexType = ISD::SIGNED_SCALED;
     Scale = DAG.getTargetConstant(1, sdl, TLI.getPointerRangeTy(DAG.getDataLayout()));
   }
 
@@ -4590,7 +4590,7 @@ void SelectionDAGBuilder::visitMaskedGather(const CallInst &I) {
   if (!UniformBase) {
     Base = DAG.getConstant(0, sdl, TLI.getPointerRangeTy(DAG.getDataLayout()));
     Index = getValue(Ptr);
-    IndexType = ISD::SIGNED_UNSCALED;
+    IndexType = ISD::SIGNED_SCALED;
     Scale = DAG.getTargetConstant(1, sdl, TLI.getPointerRangeTy(DAG.getDataLayout()));
   }
 
@@ -7504,9 +7504,9 @@ void SelectionDAGBuilder::visitVPLoadGather(const VPIntrinsic &VPIntrin, EVT VT,
     if (!UniformBase) {
       Base = DAG.getConstant(0, DL, TLI.getPointerTy(DAG.getDataLayout(), AS));
       Index = getValue(PtrOperand);
-      IndexType = ISD::SIGNED_UNSCALED;
-      Scale = DAG.getTargetConstant(1, DL,
-                                    TLI.getPointerTy(DAG.getDataLayout(), AS));
+      IndexType = ISD::SIGNED_SCALED;
+      Scale =
+          DAG.getTargetConstant(1, DL, TLI.getPointerTy(DAG.getDataLayout(), AS));
     }
     EVT IdxVT = Index.getValueType();
     EVT EltTy = IdxVT.getVectorElementType();
@@ -7561,9 +7561,9 @@ void SelectionDAGBuilder::visitVPStoreScatter(const VPIntrinsic &VPIntrin,
     if (!UniformBase) {
       Base = DAG.getConstant(0, DL, TLI.getPointerTy(DAG.getDataLayout(), AS));
       Index = getValue(PtrOperand);
-      IndexType = ISD::SIGNED_UNSCALED;
-      Scale = DAG.getTargetConstant(1, DL,
-                                    TLI.getPointerTy(DAG.getDataLayout(), AS));
+      IndexType = ISD::SIGNED_SCALED;
+      Scale =
+          DAG.getTargetConstant(1, DL, TLI.getPointerTy(DAG.getDataLayout(), AS));
     }
     EVT IdxVT = Index.getValueType();
     EVT EltTy = IdxVT.getVectorElementType();
