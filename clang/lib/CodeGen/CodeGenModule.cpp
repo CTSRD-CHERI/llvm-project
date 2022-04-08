@@ -1469,10 +1469,10 @@ static std::string getMangledNameImpl(CodeGenModule &CGM, GlobalDecl GD,
     }
 
   // Make unique name for device side static file-scope variable for HIP.
-  if (CGM.getContext().shouldExternalizeStaticVar(ND) &&
+  if (CGM.getContext().shouldExternalize(ND) &&
       CGM.getLangOpts().GPURelocatableDeviceCode &&
       CGM.getLangOpts().CUDAIsDevice && !CGM.getLangOpts().CUID.empty())
-    CGM.printPostfixForExternalizedStaticVar(Out);
+    CGM.printPostfixForExternalizedDecl(Out, ND);
   return std::string(Out.str());
 }
 
@@ -1539,8 +1539,7 @@ StringRef CodeGenModule::getMangledName(GlobalDecl GD) {
   // static device variable depends on whether the variable is referenced by
   // a host or device host function. Therefore the mangled name cannot be
   // cached.
-  if (!LangOpts.CUDAIsDevice ||
-      !getContext().mayExternalizeStaticVar(GD.getDecl())) {
+  if (!LangOpts.CUDAIsDevice || !getContext().mayExternalize(GD.getDecl())) {
     auto FoundName = MangledDeclNames.find(CanonicalGD);
     if (FoundName != MangledDeclNames.end())
       return FoundName->second;
@@ -1560,7 +1559,7 @@ StringRef CodeGenModule::getMangledName(GlobalDecl GD) {
   // directly between host- and device-compilations, the host- and
   // device-mangling in host compilation could help catching certain ones.
   assert(!isa<FunctionDecl>(ND) || !ND->hasAttr<CUDAGlobalAttr>() ||
-         getLangOpts().CUDAIsDevice ||
+         getContext().shouldExternalize(ND) || getLangOpts().CUDAIsDevice ||
          (getContext().getAuxTargetInfo() &&
           (getContext().getAuxTargetInfo()->getCXXABI() !=
            getContext().getTargetInfo().getCXXABI())) ||
@@ -7020,7 +7019,8 @@ bool CodeGenModule::stopAutoInit() {
   return false;
 }
 
-void CodeGenModule::printPostfixForExternalizedStaticVar(
-    llvm::raw_ostream &OS) const {
-  OS << "__static__" << getContext().getCUIDHash();
+void CodeGenModule::printPostfixForExternalizedDecl(llvm::raw_ostream &OS,
+                                                    const Decl *D) const {
+  OS << (isa<VarDecl>(D) ? "__static__" : ".anon.")
+     << getContext().getCUIDHash();
 }
