@@ -225,11 +225,11 @@ static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
   #ifdef __cplusplus
     extern "C" {
   #endif
-    extern  bool logAPIs();
-    extern  bool logUnwinding();
-    extern  bool logDWARF();
+    extern  bool logAPIs(void);
+    extern  bool logUnwinding(void);
+    extern  bool logDWARF(void);
   #ifdef __CHERI_PURE_CAPABILITY__
-    extern  bool logCHERI();
+    extern  bool logCHERI(void);
   #endif
   #ifdef __cplusplus
     }
