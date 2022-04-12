@@ -25,7 +25,7 @@ class LitConfig(object):
 
     def __init__(self, progname, path, quiet,
                  useValgrind, valgrindLeakCheck, valgrindArgs,
-                 noExecute, debug, isWindows,
+                 noExecute, debug, isWindows, order,
                  params, shardNumber=None, config_prefix = None,
                  maxIndividualTestTime = 0,
                  parallelism_groups = {},
@@ -41,6 +41,7 @@ class LitConfig(object):
         self.noExecute = noExecute
         self.debug = debug
         self.isWindows = bool(isWindows)
+        self.order = order
         self.params = dict(params)
         self.shardNumber = shardNumber
         self.bashPath = None
