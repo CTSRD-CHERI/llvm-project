@@ -27,11 +27,11 @@
 template<typename T> T uw_min(T a, T b) { return a < b ? a : b; }
 
 #ifndef _LIBUNWIND_USE_DLADDR
-#if !(defined(_LIBUNWIND_IS_BAREMETAL) || defined(_WIN32) || defined(_AIX))
-#define _LIBUNWIND_USE_DLADDR 1
-#else
-#define _LIBUNWIND_USE_DLADDR 0
-#endif
+  #if !(defined(_LIBUNWIND_IS_BAREMETAL) || defined(_WIN32) || defined(_AIX))
+    #define _LIBUNWIND_USE_DLADDR 1
+  #else
+    #define _LIBUNWIND_USE_DLADDR 0
+  #endif
 #endif
 
 #if _LIBUNWIND_USE_DLADDR
