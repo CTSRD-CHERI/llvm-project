@@ -19,6 +19,7 @@
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionGOFF.h"
 #include "llvm/MC/MCSectionMachO.h"
+#include "llvm/MC/MCSectionSPIRV.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCSectionXCOFF.h"
 #include "llvm/Support/Casting.h"
@@ -814,6 +815,11 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
                                         SectionKind::getReadOnly());
 }
 
+void MCObjectFileInfo::initSPIRVMCObjectFileInfo(const Triple &T) {
+  // Put everything in a single binary section.
+  TextSection = Ctx->getSPIRVSection();
+}
+
 void MCObjectFileInfo::initWasmMCObjectFileInfo(const Triple &T) {
   TextSection = Ctx->getWasmSection(".text", SectionKind::getText());
   DataSection = Ctx->getWasmSection(".data", SectionKind::getData());
@@ -1042,6 +1048,9 @@ void MCObjectFileInfo::initMCObjectFileInfo(MCContext &MCCtx, bool PIC,
   case MCContext::IsGOFF:
     initGOFFMCObjectFileInfo(TheTriple);
     break;
+  case MCContext::IsSPIRV:
+    initSPIRVMCObjectFileInfo(TheTriple);
+    break;
   case MCContext::IsWasm:
     initWasmMCObjectFileInfo(TheTriple);
     break;
@@ -1065,6 +1074,7 @@ MCSection *MCObjectFileInfo::getDwarfComdatSection(const char *Name,
   case Triple::MachO:
   case Triple::COFF:
   case Triple::GOFF:
+  case Triple::SPIRV:
   case Triple::XCOFF:
   case Triple::DXContainer:
   case Triple::UnknownObjectFormat:
