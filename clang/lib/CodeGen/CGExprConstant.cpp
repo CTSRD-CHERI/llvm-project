@@ -1098,7 +1098,16 @@ public:
     case CK_CHERICapabilityToAddress:
       llvm_unreachable("__cheri_offset and __cheri_addr are handled elsewhere");
 
-    case CK_LValueToRValue:
+    case CK_LValueToRValue: {
+      // We don't really support doing lvalue-to-rvalue conversions here; any
+      // interesting conversions should be done in Evaluate().  But as a
+      // special case, allow compound literals to support the gcc extension
+      // allowing "struct x {int x;} x = (struct x) {};".
+      if (auto *E = dyn_cast<CompoundLiteralExpr>(subExpr->IgnoreParens()))
+        return Visit(E->getInitializer(), destType);
+      return nullptr;
+    }
+
     case CK_AtomicToNonAtomic:
     case CK_NonAtomicToAtomic:
     case CK_NoOp:
