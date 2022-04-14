@@ -159,7 +159,7 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI, raw_ostream &OS,
   // Emit AUIPC[C] Ra, Func with R_RISCV_[CHERI_]CALL relocation type.
   TmpInst = MCInstBuilder(IsCap ? RISCV::AUIPCC : RISCV::AUIPC)
                 .addReg(Ra)
-                .addOperand(MCOperand::createExpr(CallExpr));
+                .addExpr(CallExpr);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
   support::endian::write(OS, Binary, support::little);
 
