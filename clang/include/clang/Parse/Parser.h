@@ -1863,6 +1863,8 @@ private:
                                      Token &Replacement);
   ExprResult ParseCXXIdExpression(bool isAddressOfOperand = false);
 
+  ExprResult ParseCXXMaybeMutableAgnosticExpression();
+
   bool areTokensAdjacent(const Token &A, const Token &B);
 
   void CheckForTemplateAndDigraph(Token &Next, ParsedType ObjectTypePtr,
