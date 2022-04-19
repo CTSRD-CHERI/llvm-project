@@ -1667,17 +1667,13 @@ int64_t DynamicReloc::computeAddend() const {
 }
 
 uint32_t DynamicReloc::getSymIndex(SymbolTableBaseSection *symTab) const {
-  if (needsDynSymIndex()) {
-    // It is fine to have a dynsymindex of 0 for the TLS module and TP offset
-    // relocations as both are emitted for non-preemptible symbols in DSOs.
-    if (sym->dynsymIndex == 0 && type != target->tlsModuleIndexRel &&
-        type != target->tlsGotRel) {
-      warn("DynsymIndex == 0 for " + toString(type) + " relocation against " +
-           verboseToString(sym) + "+" + Twine(addend));
-    }
-    return symTab->getSymbolIndex(sym);
-  }
-  return 0;
+  if (!needsDynSymIndex())
+    return 0;
+
+  size_t index = symTab->getSymbolIndex(sym);
+  assert((index != 0 || type != target->gotRel && type != target->pltRel) &&
+         "GOT or PLT relocation must refer to symbol in dynamic symbol table");
+  return index;
 }
 
 RelocationBaseSection::RelocationBaseSection(StringRef name, uint32_t type,
