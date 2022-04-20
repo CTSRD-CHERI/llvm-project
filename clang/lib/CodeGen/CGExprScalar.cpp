@@ -5204,7 +5204,8 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
     return tmp5;
   }
 
-  if (condExpr->getType()->isVectorType()) {
+  if (condExpr->getType()->isVectorType() ||
+      condExpr->getType()->isVLSTBuiltinType()) {
     CGF.incrementProfileCounter(E);
 
     llvm::Value *CondV = CGF.EmitScalarExpr(condExpr);
