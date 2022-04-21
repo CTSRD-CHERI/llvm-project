@@ -14,10 +14,10 @@ extern "C" {
 #endif
 
 /// Only Sema checks for the explicit mode since it won't compile.
-// RUN: %cheri_cc1 -fsyntax-only %s -cheri-int-to-cap=explicit -verify=explicit,c-explicit
-// RUN: %cheri_cc1 -fsyntax-only %s -cheri-int-to-cap=strict -verify=explicit,c-explicit,strict
-// RUN: %cheri_cc1 -fsyntax-only -xc++ %s -cheri-int-to-cap=explicit -verify=explicit
-// RUN: %cheri_cc1 -fsyntax-only -xc++ %s -cheri-int-to-cap=strict -verify=explicit,strict
+// RUN: %cheri_cc1 -fsyntax-only %s -cheri-int-to-cap=explicit -verify=explicit,explicit-not-strict
+// RUN: %cheri_cc1 -fsyntax-only %s -cheri-int-to-cap=strict -verify=explicit,explicit-and-strict
+// RUN: %cheri_cc1 -fsyntax-only -xc++ %s -cheri-int-to-cap=explicit -verify=explicit,explicit-not-strict
+// RUN: %cheri_cc1 -fsyntax-only -xc++ %s -cheri-int-to-cap=strict -verify=explicit,explicit-and-strict
 
 // relative-no-diagnostics
 // TODO: could split this into a Sema+CodeGen test, but having both here is easier
@@ -31,6 +31,8 @@ extern "C" {
 char *__capability test_long_to_capptr(long l) {
   return (char *__capability)l;
   // address-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
+  // explicit-not-strict-warning@-2{{cast from provenance-free integer type to pointer type}}
+  // explicit-and-strict-error@-3{{cast from provenance-free integer type to pointer type}}
   // AST-LABEL: FunctionDecl {{.+}} test_long_to_capptr
   // AST:       CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <IntegralToPointer>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'long' <LValueToRValue> part_of_explicit_cast
@@ -72,6 +74,9 @@ char *__capability test_signed_literal_to_capptr_default(void) {
   return (char *__capability)1;
   // address-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // address-note@-2{{use an explicit capability conversion or insert a cast to intcap_t if this is intended}}
+  // explicit-not-strict-warning@-3{{cast from provenance-free integer type}}
+  // explicit-and-strict-error@-4{{cast from provenance-free integer type}}
+  // explicit-note@-5{{use an explicit capability conversion}}
   // AST-LABEL: FunctionDecl {{.+}} test_signed_literal_to_capptr_default
   // AST:       CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <IntegralToPointer>
 }
@@ -145,9 +150,6 @@ __intcap test_ptr_to_intcap_tocap(char *p) {
 // CHECK-NEXT:    ret i8 addrspace(200)* null
 char *__capability test_NULL(void) {
   return (char *__capability)NULL;
-  // FIXME: this warning should be silenced
-  // c-address-warning@-2{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-  // c-explicit-error@-3{{converting non-capability type 'void *' to capability}}
   // AST-LABEL:    FunctionDecl {{.+}} test_NULL
   // C-AST:        CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
   // C-AST-NEXT:   ParenExpr {{.+}} 'void *'
@@ -163,9 +165,6 @@ char *__capability test_NULL(void) {
 // CHECK-NEXT:    ret i8 addrspace(200)* null
 char *__capability test_zero_constant(void) {
   return (char *__capability)0;
-  // FIXME: this warning should be silenced
-  // c-address-warning@-2{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
-  // c-address-note@-3{{use an explicit capability conversion}}
   // AST-LABEL:    FunctionDecl {{.+}} test_zero_constant
   // C-AST:        CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <NullToPointer>
   // CXX-AST:      CStyleCastExpr {{.+}} <col:10, col:30> 'char * __capability' <NoOp>
