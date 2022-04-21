@@ -2335,19 +2335,36 @@ void checkNonCapToCapCast(const SourceRange &OpRange, const Expr *SrcExpr,
     auto IsPurecap = Ctx.getTargetInfo().areAllPointersCapabilities();
     bool ShouldWarn;
     bool IsIntConstant = SrcExpr->isIntegerConstantExpr(Ctx);
-    bool StrictMode =
-        Self.getLangOpts().getCheriIntToCap() == LangOptions::CapInt_Strict;
+    auto IntToCapMode = Self.getLangOpts().getCheriIntToCap();
+    bool StrictMode = IntToCapMode == LangOptions::CapInt_Strict;
     if (IsPurecap) {
       // In purecap mode we warn if the source expression is not a constant
       // expression and emit an error if the int->cap conversion mode is strict.
-      ShouldWarn = StrictMode || !IsIntConstant;
+      if (StrictMode) {
+        // In strict mode the only time we don't warn is for NULL constants.
+        ShouldWarn = !SrcExpr->isNullPointerConstant(
+            Ctx, Expr::NPC_ValueDependentIsNotNull);
+      } else {
+        ShouldWarn = !IsIntConstant;
+      }
     } else {
-      // Only warn in hybrid mode if we are using strict int->cap conversions.
-      // No need to warn in hybrid mode (inside a function) since we will
-      // generate a DDC-relative capability unless we are using the "address"
-      // conversion mode.
-      ShouldWarn =
-          Self.getLangOpts().getCheriIntToCap() == LangOptions::CapInt_Address;
+      // In hybrid mode (inside a function) we will generate a DDC-relative
+      // capability unless we are using the "address" conversion mode (where we
+      // get an invalid capability), so we don't warn in the relative mode.
+      if (IntToCapMode == LangOptions::CapInt_Relative) {
+        ShouldWarn = false;
+      } else {
+        // We warn about casts for non-NULL constants (since integer constants
+        // might be used for fixed memory addresses in the kernel).
+        ShouldWarn = !SrcExpr->isNullPointerConstant(
+            Ctx, Expr::NPC_ValueDependentIsNotNull);
+        if (ShouldWarn && Self.getLangOpts().explicitConversionsToCap() &&
+            SrcExpr->getType()->isPointerType()) {
+          // Don't warn for pointer -> cap conversions, those are already
+          // handled by other warnings/errors in these compilation modes.
+          ShouldWarn = false;
+        }
+      }
     }
     if (ShouldWarn) {
       auto DiagID = StrictMode ? diag::err_capability_no_provenance
@@ -3127,7 +3144,11 @@ void CastOperation::CheckCapabilityConversions() {
   }
 
   if (Kind == CK_PointerToCHERICapability &&
-      Self.getLangOpts().explicitConversionsToCap()) {
+      Self.getLangOpts().explicitConversionsToCap() &&
+      !SrcExpr.get()->isNullPointerConstant(
+          Self.Context, Expr::NPC_ValueDependentIsNotNull)) {
+    // In C the NULL macro expands to ((void*)0), so we have to permit this
+    // CK_PointerToCHERICapability conversion even in the explicit mode.
     Expr *Placeholder = nullptr;
     Self.Diag(
         SrcExpr.get()->getBeginLoc(),
