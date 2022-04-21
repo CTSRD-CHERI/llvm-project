@@ -444,7 +444,7 @@ SDValue MipsSETargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
 }
 
 bool MipsSETargetLowering::allowsMisalignedMemoryAccesses(
-    EVT VT, unsigned AS, Align, MachineMemOperand::Flags, bool *Fast) const {
+    EVT VT, unsigned AS, Align, MachineMemOperand::Flags, unsigned *Fast) const {
   // capabilities must be aligned
   if (VT.isFatPointer())
     return false;
@@ -460,9 +460,9 @@ bool MipsSETargetLowering::allowsMisalignedMemoryAccesses(
       // CHERI used to support unaligned loads and stores within a cache-line
       // but now it is emulated in the OS instead.
       if (Subtarget.isCheri())
-        *Fast = false;
+        *Fast = 0;
       else
-        *Fast = true;
+        *Fast = 1;
     }
     return true;
   }
@@ -471,7 +471,7 @@ bool MipsSETargetLowering::allowsMisalignedMemoryAccesses(
   case MVT::i64: // LDL/LDR/SDL/SDR
   case MVT::i32: // LWL/LWR/SWL/SWR
     if (Fast)
-      *Fast = true;
+      *Fast = 1;
     return AS == 0;
   default:
     return false;
