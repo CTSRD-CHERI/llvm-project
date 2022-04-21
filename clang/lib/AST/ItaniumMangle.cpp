@@ -2210,9 +2210,6 @@ void CXXNameMangler::mangleType(TemplateName TN) {
 
   switch (TN.getKind()) {
   case TemplateName::QualifiedTemplate:
-    TD = TN.getAsQualifiedTemplateName()->getTemplateDecl();
-    goto HaveDecl;
-
   case TemplateName::UsingTemplate:
   case TemplateName::Template:
     TD = TN.getAsTemplateDecl();
