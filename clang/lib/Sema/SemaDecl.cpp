@@ -1116,18 +1116,14 @@ Corrected:
 
       UsingShadowDecl *FoundUsingShadow =
           dyn_cast<UsingShadowDecl>(*Result.begin());
-
-      if (SS.isNotEmpty()) {
-        // FIXME: support using shadow-declaration in qualified template name.
-        Template =
-            Context.getQualifiedTemplateName(SS.getScopeRep(),
-                                             /*TemplateKeyword=*/false, TD);
-      } else {
-        assert(!FoundUsingShadow ||
-               TD == cast<TemplateDecl>(FoundUsingShadow->getTargetDecl()));
-        Template = FoundUsingShadow ? TemplateName(FoundUsingShadow)
-                                    : TemplateName(TD);
-      }
+      assert(!FoundUsingShadow ||
+             TD == cast<TemplateDecl>(FoundUsingShadow->getTargetDecl()));
+      Template =
+          FoundUsingShadow ? TemplateName(FoundUsingShadow) : TemplateName(TD);
+      if (SS.isNotEmpty())
+        Template = Context.getQualifiedTemplateName(SS.getScopeRep(),
+                                                    /*TemplateKeyword=*/false,
+                                                    Template);
     } else {
       // All results were non-template functions. This is a function template
       // name.
