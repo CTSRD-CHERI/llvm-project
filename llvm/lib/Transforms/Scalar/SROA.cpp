@@ -3299,7 +3299,7 @@ private:
 
       Value *OurPtr = getNewAllocaSlicePtr(IRB, OldPtr->getType());
       Type *SizeTy = II.getLength()->getType();
-      Constant *Size = ConstantInt::get(SizeTy, NewEndOffset - NewBeginOffset);
+      uint64_t NewSize = NewEndOffset - NewBeginOffset;
 
       Value *DestPtr, *SrcPtr;
       MaybeAlign DestAlign, SrcAlign;
@@ -3315,11 +3315,24 @@ private:
         SrcPtr = OurPtr;
         SrcAlign = SliceAlign;
       }
-      // XXX: copying the II.shouldPreserveCheriTags() flags may be overly
-      // restrictive for optimization purposes.
-      CallInst *New =
-          IRB.CreateMemCpy(DestPtr, DestAlign, SrcPtr, SrcAlign, Size,
-                           II.shouldPreserveCheriTags(), II.isVolatile());
+
+      auto PreserveTags = II.shouldPreserveCheriTags();
+      if (PreserveTags != PreserveCheriTags::Unnecessary &&
+          !canRangeContainCapabilities(getCapabilitySize(DL), NewBeginOffset,
+                                       NewEndOffset)) {
+        // If we see a new slice that is less than the capability size, we can
+        // set the memcpy() flag to PreserveCheriTags::Unnecessary even if the
+        // whole struct copy had PreserveCheriTags::Required.
+        // TODO: Copying PreserveCheriTags::Required for any slice >= capability
+        // size may be overly restrictive. Should we just drop the attribute
+        // unless the value is PreserveCheriTags::Unnecessary? The resulting
+        // code should still be correct since the backend needs to be
+        // conservative by default.
+        PreserveTags = PreserveCheriTags::Unnecessary;
+      }
+      CallInst *New = IRB.CreateMemCpy(DestPtr, DestAlign, SrcPtr, SrcAlign,
+                                       ConstantInt::get(SizeTy, NewSize),
+                                       PreserveTags, II.isVolatile());
       if (AATags)
         New->setAAMetadata(AATags.shift(NewBeginOffset - BeginOffset));
       LLVM_DEBUG(dbgs() << "          to: " << *New << "\n");
