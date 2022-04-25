@@ -164,7 +164,7 @@ extern bool LargeCapTable;
       Ins,
       CIns,
 
-      // EXTR.W instrinsic nodes.
+      // EXTR.W intrinsic nodes.
       EXTP,
       EXTPDP,
       EXTR_S_H,
