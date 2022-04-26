@@ -59,7 +59,6 @@ public:
   bool MCNoDeprecatedWarn : 1;
   bool MCNoTypeCheck : 1;
   bool MCSaveTempLabels : 1;
-  bool MCUseDwarfDirectory : 1;
   bool MCIncrementalLinkerCompatible : 1;
   bool ShowMCEncoding : 1;
   bool ShowMCInst : 1;
@@ -70,6 +69,17 @@ public:
 
   bool Dwarf64 : 1;
   int DwarfVersion = 0;
+
+  enum DwarfDirectory {
+    // Force disable
+    DisableDwarfDirectory,
+    // Force enable, for assemblers that support
+    // `.file fileno directory filename' syntax
+    EnableDwarfDirectory,
+    // Default is based on the target
+    DefaultDwarfDirectory
+  };
+  DwarfDirectory MCUseDwarfDirectory;
 
   std::string ABIName;
   std::string AssemblyLanguage;
