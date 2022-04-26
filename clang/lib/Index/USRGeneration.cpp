@@ -103,6 +103,7 @@ public:
   void VisitTemplateTemplateParmDecl(const TemplateTemplateParmDecl *D);
   void VisitUnresolvedUsingValueDecl(const UnresolvedUsingValueDecl *D);
   void VisitUnresolvedUsingTypenameDecl(const UnresolvedUsingTypenameDecl *D);
+  void VisitConceptDecl(const ConceptDecl *D);
 
   void VisitLinkageSpecDecl(const LinkageSpecDecl *D) {
     IgnoreResults = true; // No USRs for linkage specs themselves.
@@ -1011,7 +1012,13 @@ void USRGenerator::VisitUnresolvedUsingTypenameDecl(const UnresolvedUsingTypenam
   Out << D->getName(); // Simple name.
 }
 
-
+void USRGenerator::VisitConceptDecl(const ConceptDecl *D) {
+  if (ShouldGenerateLocation(D) && GenLoc(D, /*IncludeOffset=*/isLocal(D)))
+    return;
+  VisitDeclContext(D->getDeclContext());
+  Out << "@CT@";
+  EmitDeclName(D);
+}
 
 //===----------------------------------------------------------------------===//
 // USR generation functions.
