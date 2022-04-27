@@ -2887,27 +2887,6 @@ bool SIInstrInfo::isFoldableCopy(const MachineInstr &MI) {
   }
 }
 
-unsigned SIInstrInfo::getAddressSpaceForPseudoSourceKind(
-    unsigned Kind) const {
-  switch(Kind) {
-  case PseudoSourceValue::Stack:
-  case PseudoSourceValue::FixedStack:
-    return AMDGPUAS::PRIVATE_ADDRESS;
-  case PseudoSourceValue::ConstantPool:
-  case PseudoSourceValue::GOT:
-  case PseudoSourceValue::JumpTable:
-  case PseudoSourceValue::GlobalValueCallEntry:
-  case PseudoSourceValue::ExternalSymbolCallEntry:
-  case PseudoSourceValue::TargetCustom:
-    return AMDGPUAS::CONSTANT_ADDRESS;
-  case PseudoSourceValue::CapTable:
-    // llvm_unreachable("Cap table not supported for AMDGPU");
-    // It won't be used. just return some random value
-    return AMDGPUAS::CONSTANT_ADDRESS;
-  }
-  return AMDGPUAS::FLAT_ADDRESS;
-}
-
 static constexpr unsigned ModifierOpNames[] = {
     AMDGPU::OpName::src0_modifiers, AMDGPU::OpName::src1_modifiers,
     AMDGPU::OpName::src2_modifiers, AMDGPU::OpName::clamp,

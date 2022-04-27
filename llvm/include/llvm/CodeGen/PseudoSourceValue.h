@@ -25,7 +25,7 @@ class MachineMemOperand;
 class MIRFormatter;
 class PseudoSourceValue;
 class raw_ostream;
-class TargetInstrInfo;
+class TargetMachine;
 
 raw_ostream &operator<<(raw_ostream &OS, const PseudoSourceValue* PSV);
 
@@ -60,7 +60,7 @@ private:
   virtual void printCustom(raw_ostream &O) const;
 
 public:
-  explicit PseudoSourceValue(unsigned Kind, const TargetInstrInfo &TII);
+  explicit PseudoSourceValue(unsigned Kind, const TargetMachine &TM);
 
   virtual ~PseudoSourceValue();
 
@@ -97,8 +97,8 @@ class FixedStackPseudoSourceValue : public PseudoSourceValue {
   const int FI;
 
 public:
-  explicit FixedStackPseudoSourceValue(int FI, const TargetInstrInfo &TII)
-      : PseudoSourceValue(FixedStack, TII), FI(FI) {}
+  explicit FixedStackPseudoSourceValue(int FI, const TargetMachine &TM)
+      : PseudoSourceValue(FixedStack, TM), FI(FI) {}
 
   static bool classof(const PseudoSourceValue *V) {
     return V->kind() == FixedStack;
@@ -117,7 +117,7 @@ public:
 
 class CallEntryPseudoSourceValue : public PseudoSourceValue {
 protected:
-  CallEntryPseudoSourceValue(unsigned Kind, const TargetInstrInfo &TII);
+  CallEntryPseudoSourceValue(unsigned Kind, const TargetMachine &TM);
 
 public:
   bool isConstant(const MachineFrameInfo *) const override;
@@ -130,8 +130,7 @@ class GlobalValuePseudoSourceValue : public CallEntryPseudoSourceValue {
   const GlobalValue *GV;
 
 public:
-  GlobalValuePseudoSourceValue(const GlobalValue *GV,
-                               const TargetInstrInfo &TII);
+  GlobalValuePseudoSourceValue(const GlobalValue *GV, const TargetMachine &TM);
 
   static bool classof(const PseudoSourceValue *V) {
     return V->kind() == GlobalValueCallEntry;
@@ -145,7 +144,7 @@ class ExternalSymbolPseudoSourceValue : public CallEntryPseudoSourceValue {
   const char *ES;
 
 public:
-  ExternalSymbolPseudoSourceValue(const char *ES, const TargetInstrInfo &TII);
+  ExternalSymbolPseudoSourceValue(const char *ES, const TargetMachine &TM);
 
   static bool classof(const PseudoSourceValue *V) {
     return V->kind() == ExternalSymbolCallEntry;
@@ -156,7 +155,7 @@ public:
 
 /// Manages creation of pseudo source values.
 class PseudoSourceValueManager {
-  const TargetInstrInfo &TII;
+  const TargetMachine &TM;
   const PseudoSourceValue StackPSV, GOTPSV, CapTablePSV, JumpTablePSV, ConstantPoolPSV;
   std::map<int, std::unique_ptr<FixedStackPseudoSourceValue>> FSValues;
   StringMap<std::unique_ptr<const ExternalSymbolPseudoSourceValue>>
@@ -166,7 +165,7 @@ class PseudoSourceValueManager {
       GlobalCallEntries;
 
 public:
-  PseudoSourceValueManager(const TargetInstrInfo &TII);
+  PseudoSourceValueManager(const TargetMachine &TM);
 
   /// Return a pseudo source value referencing the area below the stack frame of
   /// a function, e.g., the argument space.
