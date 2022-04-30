@@ -2159,8 +2159,8 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   if (!Base.isMachineOpcode())
     return false;
 
-  CurDAG->dump();
-  // There is a ADD between ADDI and load/store.
+  // There is a ADD/CIncOffset between ADDI/CIncOffsetImm and load/store.
+  // We can only fold ADDI/CIncOffsetImm that do not have a FrameIndex operand.
   SDValue Add;
   int AddBaseIdx;
   if (Base.getMachineOpcode() == OffsettingOpcodeReg) {
@@ -2169,14 +2169,16 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
     Add = Base;
     SDValue Op0 = Base.getOperand(0);
     SDValue Op1 = Base.getOperand(1);
-    if (Op0.isMachineOpcode() && Op0.getMachineOpcode() == OffsettingOpcodeImm &&
-        isa<ConstantSDNode>(Op0.getOperand(1)) &&
-        cast<ConstantSDNode>(Op0.getOperand(1))->getSExtValue() != 0) {
+    if (Op0.isMachineOpcode() &&
+        Op0.getMachineOpcode() == OffsettingOpcodeImm &&
+        !isa<FrameIndexSDNode>(Op0.getOperand(0)) &&
+        isa<ConstantSDNode>(Op0.getOperand(1))) {
       AddBaseIdx = 1;
       Base = Op0;
-    } else if (Op1.isMachineOpcode() && Op1.getMachineOpcode() == OffsettingOpcodeImm &&
-               isa<ConstantSDNode>(Op1.getOperand(1)) &&
-               cast<ConstantSDNode>(Op1.getOperand(1))->getSExtValue() != 0) {
+    } else if (Op1.isMachineOpcode() &&
+               Op1.getMachineOpcode() == OffsettingOpcodeImm &&
+               !isa<FrameIndexSDNode>(Op1.getOperand(0)) &&
+               isa<ConstantSDNode>(Op1.getOperand(1))) {
       AddBaseIdx = 0;
       Base = Op1;
     } else
