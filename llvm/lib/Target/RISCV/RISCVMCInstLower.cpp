@@ -102,7 +102,7 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
   return MCOperand::createExpr(ME);
 }
 
-bool llvm::LowerRISCVMachineOperandToMCOperand(const MachineOperand &MO,
+bool llvm::lowerRISCVMachineOperandToMCOperand(const MachineOperand &MO,
                                                MCOperand &MCOp,
                                                const AsmPrinter &AP) {
   switch (MO.getType()) {
@@ -236,7 +236,7 @@ bool llvm::lowerRISCVMachineInstrToMCInst(const MachineInstr *MI, MCInst &OutMI,
 
   for (const MachineOperand &MO : MI->operands()) {
     MCOperand MCOp;
-    if (LowerRISCVMachineOperandToMCOperand(MO, MCOp, AP))
+    if (lowerRISCVMachineOperandToMCOperand(MO, MCOp, AP))
       OutMI.addOperand(MCOp);
   }
 

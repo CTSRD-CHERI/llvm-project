@@ -64,7 +64,7 @@ public:
 
   // Wrapper needed for tblgenned pseudo lowering.
   bool lowerOperand(const MachineOperand &MO, MCOperand &MCOp) const {
-    return LowerRISCVMachineOperandToMCOperand(MO, MCOp, *this);
+    return lowerRISCVMachineOperandToMCOperand(MO, MCOp, *this);
   }
 
   void emitStartOfAsmFile(Module &M) override;
