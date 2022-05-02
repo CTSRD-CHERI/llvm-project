@@ -522,7 +522,9 @@ namespace {
 
     SDValue XformToShuffleWithZero(SDNode *N);
     bool reassociationCanBreakAddressingModePattern(unsigned Opc,
-                                                    const SDLoc &DL, SDValue N0,
+                                                    const SDLoc &DL,
+                                                    SDNode *N,
+                                                    SDValue N0,
                                                     SDValue N1);
     SDValue reassociateOpsCommutative(unsigned Opc, const SDLoc &DL, SDValue N0,
                                       SDValue N1);
@@ -999,6 +1001,7 @@ static bool canSplitIdx(LoadSDNode *LD) {
 
 bool DAGCombiner::reassociationCanBreakAddressingModePattern(unsigned Opc,
                                                              const SDLoc &DL,
+                                                             SDNode *N,
                                                              SDValue N0,
                                                              SDValue N1) {
   // Currently this only tries to ensure we don't undo the GEP splits done by
@@ -1029,7 +1032,7 @@ bool DAGCombiner::reassociationCanBreakAddressingModePattern(unsigned Opc,
     return false;
   const int64_t CombinedValue = CombinedValueIntVal.getSExtValue();
 
-  for (SDNode *Node : N0->uses()) {
+  for (SDNode *Node : N->uses()) {
     auto LoadStore = dyn_cast<MemSDNode>(Node);
     if (LoadStore) {
       // Is x[offset2] already not a legal addressing mode? If so then
@@ -2545,7 +2548,7 @@ SDValue DAGCombiner::visitADDLike(SDNode *N) {
     return NewSel;
 
   // reassociate add
-  if (!reassociationCanBreakAddressingModePattern(ISD::ADD, DL, N0, N1)) {
+  if (!reassociationCanBreakAddressingModePattern(ISD::ADD, DL, N, N0, N1)) {
     if (SDValue RADD = reassociateOps(ISD::ADD, DL, N0, N1, N->getFlags()))
       return RADD;
 
