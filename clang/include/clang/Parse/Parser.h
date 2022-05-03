@@ -2830,6 +2830,7 @@ private:
   void ParseOpenCLQualifiers(ParsedAttributes &Attrs);
   void ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs);
   void ParseCapabilityQualifier(ParsedAttributes &Attrs);
+  void ParseCUDAFunctionAttributes(ParsedAttributes &attrs);
 
   VersionTuple ParseVersionTuple(SourceRange &Range);
   void ParseAvailabilityAttribute(IdentifierInfo &Availability,
