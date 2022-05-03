@@ -133,6 +133,7 @@ public:
 
   void finalizeCGProfileEntry(const MCSymbolRefExpr *&SRE);
   void finalizeCGProfile();
+  void createAddrSigSection();
 };
 
 } // end anonymous namespace.
@@ -537,6 +538,7 @@ void MCMachOStreamer::finishImpl() {
 
   finalizeCGProfile();
 
+  createAddrSigSection();
   this->MCObjectStreamer::finishImpl();
 }
 
@@ -586,4 +588,17 @@ MCStreamer *llvm::createMachOStreamer(MCContext &Context,
   if (RelaxAll)
     S->getAssembler().setRelaxAll(true);
   return S;
+}
+
+// Create the AddrSig section and first data fragment here as its layout needs
+// to be computed immediately after in order for it to be exported correctly.
+void MCMachOStreamer::createAddrSigSection() {
+  MCAssembler &Asm = getAssembler();
+  MCObjectWriter &writer = Asm.getWriter();
+  if (!writer.getEmitAddrsigSection())
+    return;
+  MCSection *AddrSigSection =
+      Asm.getContext().getObjectFileInfo()->getAddrSigSection();
+  Asm.registerSection(*AddrSigSection);
+  new MCDataFragment(AddrSigSection);
 }
