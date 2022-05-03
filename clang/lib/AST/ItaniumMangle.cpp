@@ -79,8 +79,8 @@ class ItaniumMangleContextImpl : public ItaniumMangleContext {
 public:
   explicit ItaniumMangleContextImpl(
       ASTContext &Context, DiagnosticsEngine &Diags,
-      DiscriminatorOverrideTy DiscriminatorOverride)
-      : ItaniumMangleContext(Context, Diags),
+      DiscriminatorOverrideTy DiscriminatorOverride, bool IsAux = false)
+      : ItaniumMangleContext(Context, Diags, IsAux),
         DiscriminatorOverride(DiscriminatorOverride) {
     AllPointersAreCapabilities =
         Context.getTargetInfo().areAllPointersCapabilities();
@@ -149,7 +149,7 @@ public:
 
     // Use the canonical number for externally visible decls.
     if (ND->isExternallyVisible()) {
-      unsigned discriminator = getASTContext().getManglingNumber(ND);
+      unsigned discriminator = getASTContext().getManglingNumber(ND, isAux());
       if (discriminator == 1)
         return false;
       disc = discriminator - 2;
@@ -1576,7 +1576,8 @@ void CXXNameMangler::mangleUnqualifiedName(
     }
 
     if (TD->isExternallyVisible()) {
-      unsigned UnnamedMangle = getASTContext().getManglingNumber(TD);
+      unsigned UnnamedMangle =
+          getASTContext().getManglingNumber(TD, Context.isAux());
       Out << "Ut";
       if (UnnamedMangle > 1)
         Out << UnnamedMangle - 2;
@@ -6560,16 +6561,20 @@ void ItaniumMangleContextImpl::mangleLambdaSig(const CXXRecordDecl *Lambda,
 }
 
 ItaniumMangleContext *ItaniumMangleContext::create(ASTContext &Context,
-                                                   DiagnosticsEngine &Diags) {
+                                                   DiagnosticsEngine &Diags,
+                                                   bool IsAux) {
   return new ItaniumMangleContextImpl(
       Context, Diags,
       [](ASTContext &, const NamedDecl *) -> llvm::Optional<unsigned> {
         return llvm::None;
-      });
+      },
+      IsAux);
 }
 
 ItaniumMangleContext *
 ItaniumMangleContext::create(ASTContext &Context, DiagnosticsEngine &Diags,
-                             DiscriminatorOverrideTy DiscriminatorOverride) {
-  return new ItaniumMangleContextImpl(Context, Diags, DiscriminatorOverride);
+                             DiscriminatorOverrideTy DiscriminatorOverride,
+                             bool IsAux) {
+  return new ItaniumMangleContextImpl(Context, Diags, DiscriminatorOverride,
+                                      IsAux);
 }
