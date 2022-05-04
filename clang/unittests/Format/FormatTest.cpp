@@ -18037,6 +18037,12 @@ TEST_F(FormatTest, AlignWithLineBreaks) {
                "}",
                Style);
 
+  verifyFormat("unsigned i = 0;\n"
+               "int a[]    = {\n"
+               "    1234567890,\n"
+               "    -1234567890};",
+               Style);
+
   Style.ColumnLimit = 120;
 
   // clang-format off
