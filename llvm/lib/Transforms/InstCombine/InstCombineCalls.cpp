@@ -1275,6 +1275,8 @@ foldShuffledIntrinsicOperands(IntrinsicInst *II,
   case Intrinsic::umax:
   case Intrinsic::umin:
   case Intrinsic::fma:
+  case Intrinsic::fshl:
+  case Intrinsic::fshr:
     break;
   default:
     return nullptr;
