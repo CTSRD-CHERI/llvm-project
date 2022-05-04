@@ -878,6 +878,7 @@ inline bool LocalAddressSpace::findUnwindSections(pc_t targetAddr,
     DWORD err = GetLastError();
     _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: EnumProcessModules failed, "
                                "returned error %d", (int)err);
+    (void)err;
     return false;
   }
 
