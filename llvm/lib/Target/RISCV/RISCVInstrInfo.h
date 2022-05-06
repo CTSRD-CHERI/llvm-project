@@ -156,6 +156,8 @@ public:
   virtual bool isMBBSafeToOutlineFrom(MachineBasicBlock &MBB,
                                       unsigned &Flags) const override;
 
+  bool shouldOutlineFromFunctionByDefault(MachineFunction &MF) const override;
+
   // Calculate target-specific information for a set of outlining candidates.
   outliner::OutlinedFunction getOutliningCandidateInfo(
       std::vector<outliner::Candidate> &RepeatedSequenceLocs) const override;
