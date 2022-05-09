@@ -961,6 +961,7 @@ static bool canDefineSymbolInExecutable(Symbol &sym) {
 }
 
 // Returns true if a given relocation can be computed at link-time.
+// This only handles relocation types expected in processAux.
 //
 // For instance, we know the offset from a relocation to its target at
 // link-time if the relocation is PC-relative and refers a
