@@ -150,6 +150,8 @@ public:
     bytesDropped -= num;
   }
 
+  mutable ArrayRef<uint8_t> rawData;
+
   void trim() {
     if (bytesDropped) {
       rawData = rawData.drop_back(bytesDropped);
@@ -224,8 +226,6 @@ public:
     assert(s % sizeof(T) == 0);
     return llvm::makeArrayRef<T>((const T *)rawData.data(), s / sizeof(T));
   }
-
-  mutable ArrayRef<uint8_t> rawData;
 
 protected:
   template <typename ELFT>
