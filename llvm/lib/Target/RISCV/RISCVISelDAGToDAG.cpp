@@ -2185,10 +2185,8 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   // There is a ADD/CIncOffset between ADDI/CIncOffsetImm and load/store.
   // We can only fold ADDI/CIncOffsetImm that do not have a FrameIndex operand.
   SDValue Add;
-  int AddBaseIdx;
-  if (Base.getMachineOpcode() == OffsettingOpcodeReg) {
-    if (!Base.hasOneUse())
-      return false;
+  unsigned AddBaseIdx;
+  if (Base.getMachineOpcode() == OffsettingOpcodeReg && Base.hasOneUse()) {
     Add = Base;
     SDValue Op0 = Base.getOperand(0);
     SDValue Op1 = Base.getOperand(1);
@@ -2204,13 +2202,37 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
                isa<ConstantSDNode>(Op1.getOperand(1))) {
       AddBaseIdx = 0;
       Base = Op1;
+    } else if (Op1.isMachineOpcode() &&
+               Op1.getMachineOpcode() == RISCV::ADDIW &&
+               isa<ConstantSDNode>(Op1.getOperand(1)) &&
+               Op1.getOperand(0).isMachineOpcode() &&
+               Op1.getOperand(0).getMachineOpcode() == RISCV::LUI) {
+      // We found an LUI+ADDIW constant materialization. We might be able to
+      // fold the ADDIW offset if it could be treated as ADDI.
+      // Emulate the constant materialization to see if the result would be
+      // a simm32 if ADDI was used instead of ADDIW.
+
+      // First the LUI.
+      uint64_t Imm = Op1.getOperand(0).getConstantOperandVal(0);
+      Imm <<= 12;
+      Imm = SignExtend64(Imm, 32);
+
+      // Then the ADDI.
+      uint64_t LoImm = cast<ConstantSDNode>(Op1.getOperand(1))->getSExtValue();
+      Imm += LoImm;
+
+      // If the result isn't a simm32, we can't do the optimization.
+      if (!isInt<32>(Imm))
+        return false;
+
+      AddBaseIdx = 0;
+      Base = Op1;
     } else
       return false;
-  }
-
+  } else if (Base.getMachineOpcode() == OffsettingOpcodeImm) {
   // If the base is the right instruction (either ADDI or CIncOffsetImm), we
   // can merge it in to the load/store.
-  if (Base.getMachineOpcode() != OffsettingOpcodeImm)
+  } else
     return false;
 
   SDValue ImmOperand = Base.getOperand(1);
