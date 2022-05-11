@@ -128,9 +128,8 @@ bool llvm::optimizeGlobalCtorsList(
   bool MadeChange = false;
 
   // Loop over global ctors, optimizing them when we can.
-  unsigned NumCtors = Ctors.size();
-  BitVector CtorsToRemove(NumCtors);
-  for (unsigned i = 0; i != Ctors.size() && NumCtors > 0; ++i) {
+  BitVector CtorsToRemove(Ctors.size());
+  for (unsigned i = 0, e = Ctors.size(); i != e; ++i) {
     Function *F = Ctors[i];
     // Found a null terminator in the middle of the list, prune off the rest of
     // the list.
@@ -147,7 +146,6 @@ bool llvm::optimizeGlobalCtorsList(
     if (ShouldRemove(F)) {
       Ctors[i] = nullptr;
       CtorsToRemove.set(i);
-      NumCtors--;
       MadeChange = true;
       continue;
     }
