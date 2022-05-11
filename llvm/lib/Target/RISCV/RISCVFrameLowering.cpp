@@ -292,8 +292,8 @@ void RISCVFrameLowering::adjustReg(MachineBasicBlock &MBB,
       Opc = RISCV::CIncOffset;
     } else {
       Opc = RISCV::ADD;
-      bool isSub = Val < 0;
-      if (isSub) {
+      bool IsSub = Val < 0;
+      if (IsSub) {
         Val = -Val;
         Opc = RISCV::SUB;
       }
