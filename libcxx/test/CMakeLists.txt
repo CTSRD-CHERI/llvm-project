@@ -73,8 +73,7 @@ pythonize_bool(LIBCXX_ENABLE_PARALLEL_ALGORITHMS)
 pythonize_bool(LIBCXX_RUN_LONG_TESTS)
 pythonize_bool(LIBCXX_SLOW_TEST_HOST)
 
-# By default, for non-standalone builds, libcxx and libcxxabi share a library
-# directory.
+# By default, libcxx and libcxxabi share a library directory.
 if (NOT LIBCXX_CXX_ABI_LIBRARY_PATH)
   set(LIBCXX_CXX_ABI_LIBRARY_PATH "${LIBCXX_LIBRARY_DIR}" CACHE PATH
       "The path to libc++abi library.")
