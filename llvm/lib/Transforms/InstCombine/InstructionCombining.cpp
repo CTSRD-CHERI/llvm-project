@@ -1943,10 +1943,8 @@ static Instruction *foldSelectGEP(GetElementPtrInst &GEP,
   SmallVector<Value *, 4> IndexC(GEP.indices());
   bool IsInBounds = GEP.isInBounds();
   Type *Ty = GEP.getSourceElementType();
-  Value *NewTrueC = IsInBounds ? Builder.CreateInBoundsGEP(Ty, TrueC, IndexC)
-                               : Builder.CreateGEP(Ty, TrueC, IndexC);
-  Value *NewFalseC = IsInBounds ? Builder.CreateInBoundsGEP(Ty, FalseC, IndexC)
-                                : Builder.CreateGEP(Ty, FalseC, IndexC);
+  Value *NewTrueC = Builder.CreateGEP(Ty, TrueC, IndexC, "", IsInBounds);
+  Value *NewFalseC = Builder.CreateGEP(Ty, FalseC, IndexC, "", IsInBounds);
   return SelectInst::Create(Cond, NewTrueC, NewFalseC, "", nullptr, Sel);
 }
 
@@ -2000,11 +1998,9 @@ Instruction *InstCombinerImpl::visitGEPOfGEP(GetElementPtrInst &GEP,
             // -- have to recreate %src & %gep
             // put NewSrc at same location as %src
             Builder.SetInsertPoint(cast<Instruction>(Src));
-            Value *NewSrc = Builder.CreateGEP(
-                GEP.getSourceElementType(), SO0, GO1, Src->getName());
-            // Propagate 'inbounds' if the new source was not constant-folded.
-            if (auto *NewSrcGEPI = dyn_cast<GetElementPtrInst>(NewSrc))
-              NewSrcGEPI->setIsInBounds(Src->isInBounds());
+            Value *NewSrc =
+                Builder.CreateGEP(GEP.getSourceElementType(), SO0, GO1,
+                                  Src->getName(), Src->isInBounds());
             GetElementPtrInst *NewGEP = GetElementPtrInst::Create(
                 GEP.getSourceElementType(), NewSrc, {SO1});
             NewGEP->setIsInBounds(GEP.isInBounds());
@@ -2178,9 +2174,8 @@ Instruction *InstCombinerImpl::visitGEPOfBitcast(BitCastInst *BCI,
     // existing GEP Value. Causing issues if this Value is accessed when
     // constructing an AddrSpaceCastInst
     SmallVector<Value *, 8> Indices(GEP.indices());
-    Value *NGEP = GEP.isInBounds()
-                      ? Builder.CreateInBoundsGEP(SrcEltType, SrcOp, Indices)
-                      : Builder.CreateGEP(SrcEltType, SrcOp, Indices);
+    Value *NGEP =
+        Builder.CreateGEP(SrcEltType, SrcOp, Indices, "", GEP.isInBounds());
     NGEP->takeName(&GEP);
 
     // Preserve GEP address space to satisfy users
@@ -2231,14 +2226,12 @@ Instruction *InstCombinerImpl::visitGEPOfBitcast(BitCastInst *BCI,
     // Otherwise, if the offset is non-zero, we need to find out if there is a
     // field at Offset in 'A's type.  If so, we can pull the cast through the
     // GEP.
-    SmallVector<Value*, 8> NewIndices;
+    SmallVector<Value *, 8> NewIndices;
     if (findElementAtOffset(SrcType, Offset.getSExtValue(), NewIndices, DL)) {
       if (SrcType->getPointerAddressSpace() != GEP.getAddressSpace())
         return nullptr;
-      Value *NGEP =
-          GEP.isInBounds()
-              ? Builder.CreateInBoundsGEP(SrcEltType, SrcOp, NewIndices)
-              : Builder.CreateGEP(SrcEltType, SrcOp, NewIndices);
+      Value *NGEP = Builder.CreateGEP(SrcEltType, SrcOp, NewIndices, "",
+                                      GEP.isInBounds());
 
       if (NGEP->getType() == GEP.getType())
         return replaceInstUsesWith(GEP, NGEP);
@@ -2546,11 +2539,8 @@ Instruction *InstCombinerImpl::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             // addrspacecast i8 addrspace(1)* %0 to i8*
             SmallVector<Value *, 8> Idx(GEP.indices());
             Value *NewGEP =
-                GEP.isInBounds()
-                    ? Builder.CreateInBoundsGEP(StrippedPtrEltTy, StrippedPtr,
-                                                Idx, GEP.getName())
-                    : Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, Idx,
-                                        GEP.getName());
+                Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, Idx,
+                                  GEP.getName(), GEP.isInBounds());
             return new AddrSpaceCastInst(NewGEP, GEPType);
 #endif
           }
@@ -2566,13 +2556,9 @@ Instruction *InstCombinerImpl::visitGetElementPtrInst(GetElementPtrInst &GEP) {
           DL.getTypeAllocSize(StrippedPtrEltTy->getArrayElementType()) ==
               DL.getTypeAllocSize(GEPEltType)) {
         Type *IdxType = DL.getIndexType(GEPType);
-        Value *Idx[2] = { Constant::getNullValue(IdxType), GEP.getOperand(1) };
-        Value *NewGEP =
-            GEP.isInBounds()
-                ? Builder.CreateInBoundsGEP(StrippedPtrEltTy, StrippedPtr, Idx,
-                                            GEP.getName())
-                : Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, Idx,
-                                    GEP.getName());
+        Value *Idx[2] = {Constant::getNullValue(IdxType), GEP.getOperand(1)};
+        Value *NewGEP = Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, Idx,
+                                          GEP.getName(), GEP.isInBounds());
 
         // V and GEP are both pointer types --> BitCast
         return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP, GEPType);
@@ -2604,11 +2590,8 @@ Instruction *InstCombinerImpl::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             // If the multiplication NewIdx * Scale may overflow then the new
             // GEP may not be "inbounds".
             Value *NewGEP =
-                GEP.isInBounds() && NSW
-                    ? Builder.CreateInBoundsGEP(StrippedPtrEltTy, StrippedPtr,
-                                                NewIdx, GEP.getName())
-                    : Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, NewIdx,
-                                        GEP.getName());
+                Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, NewIdx,
+                                  GEP.getName(), GEP.isInBounds() && NSW);
 
             // The NewGEP must be pointer typed, so must the old one -> BitCast
             return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
@@ -2649,11 +2632,8 @@ Instruction *InstCombinerImpl::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             Value *Off[2] = {Constant::getNullValue(IndTy), NewIdx};
 
             Value *NewGEP =
-                GEP.isInBounds() && NSW
-                    ? Builder.CreateInBoundsGEP(StrippedPtrEltTy, StrippedPtr,
-                                                Off, GEP.getName())
-                    : Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, Off,
-                                        GEP.getName());
+                Builder.CreateGEP(StrippedPtrEltTy, StrippedPtr, Off,
+                                  GEP.getName(), GEP.isInBounds() && NSW);
             // The NewGEP must be pointer typed, so must the old one -> BitCast
             return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
                                                                  GEPType);
