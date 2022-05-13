@@ -128,6 +128,7 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   markSuperRegs(Reserved, RISCV::VTYPE);
   markSuperRegs(Reserved, RISCV::VXSAT);
   markSuperRegs(Reserved, RISCV::VXRM);
+  markSuperRegs(Reserved, RISCV::VLENB); // vlenb (constant)
 
   // Floating point environment registers.
   markSuperRegs(Reserved, RISCV::FRM);
