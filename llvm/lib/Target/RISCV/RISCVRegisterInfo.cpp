@@ -144,7 +144,8 @@ bool RISCVRegisterInfo::isAsmClobberable(const MachineFunction &MF,
 }
 
 bool RISCVRegisterInfo::isConstantPhysReg(MCRegister PhysReg) const {
-  return PhysReg == RISCV::X0 || PhysReg == RISCV::C0;
+  return PhysReg == RISCV::X0 || PhysReg == RISCV::VLENB ||
+         PhysReg == RISCV::C0;
 }
 
 const uint32_t *RISCVRegisterInfo::getNoPreservedMask() const {
