@@ -95,6 +95,7 @@ private:
   bool EnableLinkerRelax = false;
   bool EnableRVCHintInstrs = true;
   bool EnableCheriRVCInstrs = true;
+  bool EnableDefaultUnroll = true;
   bool EnableSaveRestore = false;
   unsigned XLen = 32;
   unsigned ZvlLen = 0;
@@ -188,6 +189,7 @@ public:
   bool enableLinkerRelax() const { return EnableLinkerRelax; }
   bool enableRVCHintInstrs() const { return EnableRVCHintInstrs; }
   bool enableCheriRVCInstrs() const { return EnableCheriRVCInstrs; }
+  bool enableDefaultUnroll() const { return EnableDefaultUnroll; }
   bool enableSaveRestore() const { return EnableSaveRestore; }
   MVT getXLenVT() const { return XLenVT; }
   unsigned getXLen() const { return XLen; }
