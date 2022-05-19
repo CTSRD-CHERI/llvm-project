@@ -12821,7 +12821,7 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
     } else if (UsingUIntCapOffset && isLHSCap &&
                (Opc == BO_Xor || Opc == BO_XorAssign)) {
       // XOR is highly dubious when in offset mode (except when using on plain
-      // integer values, but then the user should be using size_t/vaddr_t and
+      // integer values, but then the user should be using size_t/ptraddr_t and
       // not uintcap_t. Don't warn in address mode since that works just fine
       // (only slightly less efficiently)
       // FIXME: should warn in address mode (but as a pedantic warning)

@@ -8,7 +8,7 @@ target datalayout = "A200-P200-G200"
 declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) addrspace(200)
 
 ; Function Attrs: noinline nounwind optnone
-; C source code: return ((vaddr_t)first - (vaddr_t)second) / 16;
+; C source code: return ((ptraddr_t)first - (ptraddr_t)second) / 16;
 define i64 @cap_subtract_with_vaddr_cast(i8 addrspace(200)* %first, i8 addrspace(200)* %second) addrspace(200) {
 entry:
   %0 = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %first)
