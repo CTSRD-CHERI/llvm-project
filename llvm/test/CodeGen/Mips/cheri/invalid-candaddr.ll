@@ -8,7 +8,7 @@
 ;#define PAGE_MASK 4095
 ;typedef __SIZE_TYPE__ size_t;
 ;typedef __SIZE_TYPE__ vm_size_t;
-;typedef __SIZE_TYPE__ vaddr_t;
+;typedef __SIZE_TYPE__ ptraddr_t;
 ;#define	round_page(x)		(((x) + PAGE_MASK) & ~PAGE_MASK)
 ;
 ;#define __CAP_CHECK(cap, len) ({					\
@@ -28,7 +28,7 @@
 ;	size_t pageoff;
 ;
 ;	addr = cap;
-;	pageoff = ((__cheri_addr vaddr_t)addr & PAGE_MASK);
+;	pageoff = ((__cheri_addr ptraddr_t)addr & PAGE_MASK);
 ;	addr -= pageoff;
 ;	size += pageoff;
 ;	size = (vm_size_t)round_page(size);

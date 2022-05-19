@@ -5,22 +5,22 @@
 #error "memory_address attribute not supported"
 #endif
 
-using vaddr_t = __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__;
+using ptraddr_t = __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__;
 
 struct test {
   int x;
 };
 
 void test_capptr_to_int(void* __capability a) {
-  vaddr_t v{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
-  v = vaddr_t{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
-  vaddr_t v2 = 0; v2 = {a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
+  ptraddr_t v{a};
+  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  v = ptraddr_t{a};
+  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  ptraddr_t v2 = 0; v2 = {a};
+  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
 
   // NB: Compound literals are a GNU C++ extension so we need a single word alias
   using __uintcap = unsigned __intcap;
@@ -66,11 +66,11 @@ void test_capptr_to_int(void* __capability a) {
 }
 
 void test_uintcap_to_int(unsigned __intcap a) {
-  vaddr_t v{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'vaddr_t'}} \
+  ptraddr_t v{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'ptraddr_t'}} \
                 // expected-note {{insert an explicit cast to silence this issue}}
-  v = vaddr_t{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'vaddr_t'}} \
+  v = ptraddr_t{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'ptraddr_t'}} \
                   // expected-note {{insert an explicit cast to silence this issue}}
-  vaddr_t v2 = 0; v2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'vaddr_t'}} \
+  ptraddr_t v2 = 0; v2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'ptraddr_t'}} \
                             // expected-note {{insert an explicit cast to silence this issue}}
 
   long l{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'long'}} \

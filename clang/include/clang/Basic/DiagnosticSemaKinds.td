@@ -7015,13 +7015,13 @@ def err_typecheck_convert_ptr_to_cap_unrelated_type: Error<"cannot implicitly "
 def warn_uintcap_bitwise_and : Warning<
   "using bitwise and on a capability type may give surprising results; "
   "if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); "
-  "if you are operating on integer values only consider using size_t/vaddr_t; "
+  "if you are operating on integer values only consider using size_t/ptraddr_t; "
   "if you are attempting to store data in the low pointer bits use the "
   "cheri_low_bits_{get,set,clear}() macros.">,
   InGroup<CHERIBitwiseOps>;
 def warn_uintcap_bad_bitwise_op : Warning<
   "using %select{xor|shifts|remainder}0 on a capability type only operates on the offset; "
-  "consider using %select{vaddr_t if this is used for pointer hashing|__builtin_is_aligned() instead}1 "
+  "consider using %select{ptraddr_t if this is used for pointer hashing|__builtin_is_aligned() instead}1 "
   "or explicitly get the offset with __builtin_cheri_offset_get().">,
   InGroup<CHERIBitwiseOps>;
 

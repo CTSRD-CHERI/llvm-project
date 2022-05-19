@@ -24,7 +24,7 @@ void check_xor(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i ^ i; // fine
   // i is promoted to __intcap here so the warning triggers:
   uintptr_t int_and_cap = i ^ cap;   // offset-warning{{using xor on a capability type only operates on the offset}}
-  uintptr_t cap_and_int = cap ^ i;   // offset-warning{{using xor on a capability type only operates on the offset; consider using vaddr_t if this is used for pointer hashing or explicitly get the offset with __builtin_cheri_offset_get().}}
+  uintptr_t cap_and_int = cap ^ i;   // offset-warning{{using xor on a capability type only operates on the offset; consider using ptraddr_t if this is used for pointer hashing or explicitly get the offset with __builtin_cheri_offset_get().}}
   uintptr_t cap_and_cap = cap ^ cap; // offset-warning{{using xor on a capability type only operates on the offset}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
 
@@ -96,7 +96,7 @@ void check_and(void *ptr, uintptr_t cap, int i) {
   // i is promoted to __intcap here so the warning triggers:
   uintptr_t int_and_cap = i & cap;   // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   // Verify the full message once:
-  uintptr_t cap_and_int = cap & i;   // bitand-warning{{using bitwise and on a capability type may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/vaddr_t; if you are attempting to store data in the low pointer bits use the cheri_low_bits_{get,set,clear}() macros.}}
+  uintptr_t cap_and_int = cap & i;   // bitand-warning{{using bitwise and on a capability type may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/ptraddr_t; if you are attempting to store data in the low pointer bits use the cheri_low_bits_{get,set,clear}() macros.}}
   uintptr_t cap_and_cap = cap & cap; // bitand-warning{{using bitwise and on a capability type may give surprising results;}}
   // expected-warning@-1{{it is not clear which should be used as the source of provenance}}
   i &= i;
