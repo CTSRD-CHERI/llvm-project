@@ -237,7 +237,7 @@ const LoadedModule *Symbolizer::FindModuleForAddress(vaddr address) {
 class LLVMSymbolizerProcess final : public SymbolizerProcess {
  public:
   explicit LLVMSymbolizerProcess(const char *path)
-      : SymbolizerProcess(path, /*use_posix_spawn=*/SANITIZER_MAC) {}
+      : SymbolizerProcess(path, /*use_posix_spawn=*/SANITIZER_APPLE) {}
 
  private:
   bool ReachedEndOfOutput(const char *buffer, usize length) const override {
