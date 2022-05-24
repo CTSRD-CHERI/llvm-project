@@ -5336,7 +5336,9 @@ static bool isGuaranteedNotToBeUndefOrPoison(const Value *V,
   }
 
   if (auto *I = dyn_cast<LoadInst>(V))
-    if (I->getMetadata(LLVMContext::MD_noundef))
+    if (I->hasMetadata(LLVMContext::MD_noundef) ||
+        I->hasMetadata(LLVMContext::MD_dereferenceable) ||
+        I->hasMetadata(LLVMContext::MD_dereferenceable_or_null))
       return true;
 
   if (programUndefinedIfUndefOrPoison(V, PoisonOnly))
