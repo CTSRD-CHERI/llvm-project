@@ -2253,8 +2253,8 @@ Constant *ConstantExpr::getPtrToInt(Constant *C, Type *DstTy,
          "PtrToInt destination must be integer or integer vector");
   assert(isa<VectorType>(C->getType()) == isa<VectorType>(DstTy));
   if (isa<VectorType>(C->getType()))
-    assert(cast<FixedVectorType>(C->getType())->getNumElements() ==
-               cast<FixedVectorType>(DstTy)->getNumElements() &&
+    assert(cast<VectorType>(C->getType())->getElementCount() ==
+               cast<VectorType>(DstTy)->getElementCount() &&
            "Invalid cast between a different number of vector elements");
   if (C->getType()->getPointerAddressSpace() == 200) {  // FIXME: hardcoded AS200
     assert(DstTy->getIntegerBitWidth() <= 64);
