@@ -30,6 +30,11 @@
 #include <sys/pseg.h>
 #endif
 
+#if defined(_LIBUNWIND_TARGET_LINUX) &&                                        \
+    (defined(_LIBUNWIND_TARGET_AARCH64) || defined(_LIBUNWIND_TARGET_S390X))
+#define _LIBUNWIND_CHECK_LINUX_SIGRETURN 1
+#endif
+
 #if defined(_LIBUNWIND_SUPPORT_SEH_UNWIND)
 // Provide a definition for the DISPATCHER_CONTEXT struct for old (Win7 and
 // earlier) SDKs.
@@ -961,7 +966,7 @@ private:
   }
 #endif
 
-#if defined(_LIBUNWIND_TARGET_LINUX) && (defined(_LIBUNWIND_TARGET_AARCH64) || defined(_LIBUNWIND_TARGET_S390X))
+#if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN)
   bool setInfoForSigReturn() {
     R dummy;
     return setInfoForSigReturn(dummy);
@@ -970,14 +975,14 @@ private:
     R dummy;
     return stepThroughSigReturn(dummy);
   }
-  #if defined(_LIBUNWIND_TARGET_AARCH64)
+#if defined(_LIBUNWIND_TARGET_AARCH64)
   bool setInfoForSigReturn(Registers_arm64 &);
   int stepThroughSigReturn(Registers_arm64 &);
-  #endif
-  #if defined(_LIBUNWIND_TARGET_S390X)
+#endif
+#if defined(_LIBUNWIND_TARGET_S390X)
   bool setInfoForSigReturn(Registers_s390x &);
   int stepThroughSigReturn(Registers_s390x &);
-  #endif
+#endif
   template <typename Registers> bool setInfoForSigReturn(Registers &) {
     return false;
   }
@@ -1283,7 +1288,7 @@ private:
   unw_proc_info_t  _info;
   bool             _unwindInfoMissing;
   bool             _isSignalFrame;
-#if defined(_LIBUNWIND_TARGET_LINUX) && (defined(_LIBUNWIND_TARGET_AARCH64) || defined(_LIBUNWIND_TARGET_S390X))
+#if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN)
   bool             _isSigReturn = false;
 #endif
 };
@@ -2497,7 +2502,7 @@ int UnwindCursor<A, R>::stepWithTBTable(pint_t pc, tbtable *TBTable,
 
 template <typename A, typename R>
 void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
-#if defined(_LIBUNWIND_TARGET_LINUX) && (defined(_LIBUNWIND_TARGET_AARCH64) || defined(_LIBUNWIND_TARGET_S390X))
+#if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN)
   _isSigReturn = false;
 #endif
 
@@ -2627,7 +2632,7 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   }
 #endif // #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 
-#if defined(_LIBUNWIND_TARGET_LINUX) && (defined(_LIBUNWIND_TARGET_AARCH64) || defined(_LIBUNWIND_TARGET_S390X))
+#if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN)
   if (setInfoForSigReturn())
     return;
 #endif
@@ -2638,7 +2643,8 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   _unwindInfoMissing = true;
 }
 
-#if defined(_LIBUNWIND_TARGET_LINUX) && defined(_LIBUNWIND_TARGET_AARCH64)
+#if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN) &&                               \
+    defined(_LIBUNWIND_TARGET_AARCH64)
 template <typename A, typename R>
 bool UnwindCursor<A, R>::setInfoForSigReturn(Registers_arm64 &) {
   // Look for the sigreturn trampoline. The trampoline's body is two
@@ -2700,9 +2706,11 @@ int UnwindCursor<A, R>::stepThroughSigReturn(Registers_arm64 &) {
   _isSignalFrame = true;
   return UNW_STEP_SUCCESS;
 }
-#endif // defined(_LIBUNWIND_TARGET_LINUX) && defined(_LIBUNWIND_TARGET_AARCH64)
+#endif // defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN) &&
+       // defined(_LIBUNWIND_TARGET_AARCH64)
 
-#if defined(_LIBUNWIND_TARGET_LINUX) && defined(_LIBUNWIND_TARGET_S390X)
+#if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN) &&                               \
+    defined(_LIBUNWIND_TARGET_S390X)
 template <typename A, typename R>
 bool UnwindCursor<A, R>::setInfoForSigReturn(Registers_s390x &) {
   // Look for the sigreturn trampoline. The trampoline's body is a
@@ -2798,7 +2806,8 @@ int UnwindCursor<A, R>::stepThroughSigReturn(Registers_s390x &) {
 
   return UNW_STEP_SUCCESS;
 }
-#endif // defined(_LIBUNWIND_TARGET_LINUX) && defined(_LIBUNWIND_TARGET_S390X)
+#endif // defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN) &&
+       // defined(_LIBUNWIND_TARGET_S390X)
 
 template <typename A, typename R>
 int UnwindCursor<A, R>::step() {
@@ -2809,7 +2818,7 @@ int UnwindCursor<A, R>::step() {
   }
   // Use unwinding info to modify register set as if function returned.
   int result;
-#if defined(_LIBUNWIND_TARGET_LINUX) && (defined(_LIBUNWIND_TARGET_AARCH64) || defined(_LIBUNWIND_TARGET_S390X))
+#if defined(_LIBUNWIND_CHECK_LINUX_SIGRETURN)
   if (_isSigReturn) {
     result = this->stepThroughSigReturn();
   } else
