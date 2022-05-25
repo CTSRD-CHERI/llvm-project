@@ -386,7 +386,9 @@ AtomicExpand::convertAtomicXchgToIntegerType(AtomicRMWInst *RMWI) {
   Value *Val = RMWI->getValOperand();
   Type *PT = PointerType::get(NewTy, RMWI->getPointerAddressSpace());
   Value *NewAddr = Builder.CreateBitCast(Addr, PT);
-  Value *NewVal = Builder.CreateBitCast(Val, NewTy);
+  Value *NewVal = Val->getType()->isPointerTy()
+                      ? Builder.CreatePtrToInt(Val, NewTy)
+                      : Builder.CreateBitCast(Val, NewTy);
 
   auto *NewRMWI =
       Builder.CreateAtomicRMW(AtomicRMWInst::Xchg, NewAddr, NewVal,
@@ -394,7 +396,9 @@ AtomicExpand::convertAtomicXchgToIntegerType(AtomicRMWInst *RMWI) {
   NewRMWI->setVolatile(RMWI->isVolatile());
   LLVM_DEBUG(dbgs() << "Replaced " << *RMWI << " with " << *NewRMWI << "\n");
 
-  Value *NewRVal = Builder.CreateBitCast(NewRMWI, RMWI->getType());
+  Value *NewRVal = RMWI->getType()->isPointerTy()
+                       ? Builder.CreateIntToPtr(NewRMWI, RMWI->getType())
+                       : Builder.CreateBitCast(NewRMWI, RMWI->getType());
   RMWI->replaceAllUsesWith(NewRVal);
   RMWI->eraseFromParent();
   return NewRMWI;
@@ -526,6 +530,7 @@ static void createCmpXchgInstFun(IRBuilder<> &Builder, Value *Addr,
   Type *OrigTy = NewVal->getType();
 
   // This code can go away when cmpxchg supports FP types.
+  assert(!OrigTy->isPointerTy());
   bool NeedBitcast = OrigTy->isFloatingPointTy();
   if (NeedBitcast) {
     IntegerType *IntTy = Builder.getIntNTy(OrigTy->getPrimitiveSizeInBits());
