@@ -435,8 +435,6 @@ class Parser : public CodeCompletionHandler {
   /// a statement expression and builds a suitable expression statement.
   StmtResult handleExprStmt(ExprResult E, ParsedStmtContext StmtCtx);
 
-  OMPClause *ParseOpenMPFailClause(OMPClause *Clause);
-
 public:
   Parser(Preprocessor &PP, Sema &Actions, bool SkipFunctionBodies);
   ~Parser() override;
