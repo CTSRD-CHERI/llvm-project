@@ -97,6 +97,7 @@ private:
   bool EnableCheriRVCInstrs = true;
   bool EnableDefaultUnroll = true;
   bool EnableSaveRestore = false;
+  bool EnableUnalignedScalarMem = false;
   unsigned XLen = 32;
   unsigned ZvlLen = 0;
   MVT XLenVT = MVT::i32;
@@ -191,6 +192,7 @@ public:
   bool enableCheriRVCInstrs() const { return EnableCheriRVCInstrs; }
   bool enableDefaultUnroll() const { return EnableDefaultUnroll; }
   bool enableSaveRestore() const { return EnableSaveRestore; }
+  bool enableUnalignedScalarMem() const { return EnableUnalignedScalarMem; }
   MVT getXLenVT() const { return XLenVT; }
   unsigned getXLen() const { return XLen; }
   unsigned getFLen() const {
