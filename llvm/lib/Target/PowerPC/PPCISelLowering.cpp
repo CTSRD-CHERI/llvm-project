@@ -1883,8 +1883,7 @@ bool PPC::isVPKUWUMShuffleMask(ShuffleVectorSDNode *N, unsigned ShuffleKind,
 /// For the latter, the input operands are swapped (see PPCInstrAltivec.td).
 bool PPC::isVPKUDUMShuffleMask(ShuffleVectorSDNode *N, unsigned ShuffleKind,
                                SelectionDAG &DAG) {
-  const PPCSubtarget& Subtarget =
-      static_cast<const PPCSubtarget&>(DAG.getSubtarget());
+  const PPCSubtarget &Subtarget = DAG.getSubtarget<PPCSubtarget>();
   if (!Subtarget.hasP8Vector())
     return false;
 
@@ -6923,8 +6922,7 @@ SDValue PPCTargetLowering::LowerFormalArguments_AIX(
   if (useSoftFloat())
     report_fatal_error("Soft float support is unimplemented on AIX.");
 
-  const PPCSubtarget &Subtarget =
-      static_cast<const PPCSubtarget &>(DAG.getSubtarget());
+  const PPCSubtarget &Subtarget = DAG.getSubtarget<PPCSubtarget>();
 
   const bool IsPPC64 = Subtarget.isPPC64();
   const unsigned PtrByteSize = IsPPC64 ? 8 : 4;
@@ -7229,8 +7227,7 @@ SDValue PPCTargetLowering::LowerCall_AIX(
   if (CFlags.IsPatchPoint)
     report_fatal_error("This call type is unimplemented on AIX.");
 
-  const PPCSubtarget& Subtarget =
-      static_cast<const PPCSubtarget&>(DAG.getSubtarget());
+  const PPCSubtarget &Subtarget = DAG.getSubtarget<PPCSubtarget>();
 
   MachineFunction &MF = DAG.getMachineFunction();
   SmallVector<CCValAssign, 16> ArgLocs;
