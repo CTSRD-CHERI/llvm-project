@@ -60,10 +60,6 @@ cmake_dependent_option(LIBUNWIND_INSTALL_STATIC_LIBRARY
 cmake_dependent_option(LIBUNWIND_INSTALL_SHARED_LIBRARY
   "Install the shared libunwind library." ON
   "LIBUNWIND_ENABLE_SHARED;LIBUNWIND_INSTALL_LIBRARY" OFF)
-set(LIBUNWIND_TEST_LINKER_FLAGS "" CACHE STRING
-    "Additional linker flags for test programs.")
-set(LIBUNWIND_TEST_COMPILER_FLAGS "" CACHE STRING
-    "Additional compiler flags for test programs.")
 option(LIBUNWIND_TEST_ENABLE_EXCEPTIONS "Also include tests requiring C++ exceptions." ON)
 set(LIBUNWIND_TEST_CXX_ABI_LIB_PATH "" CACHE PATH "Path to the C++ ABI library to use for testing.")
 set(CXXABIS none default libcxxabi libcxxrt libstdc++ libsupc++ vcruntime)

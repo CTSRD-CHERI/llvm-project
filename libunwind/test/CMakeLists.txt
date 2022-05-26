@@ -93,20 +93,10 @@ message(STATUS "TESTS: ${_LIBUNWIND_TEST_BINARIES}")
 add_custom_target(unwind-test-binaries DEPENDS ${_LIBUNWIND_TEST_BINARIES})
 
 
-if (NOT DEFINED LIBCXX_ENABLE_SHARED)
-  set(LIBCXX_ENABLE_SHARED ON)
-endif()
-
 pythonize_bool(LIBUNWIND_ENABLE_CET)
-pythonize_bool(LIBCXX_ENABLE_SHARED)
-pythonize_bool(LIBUNWIND_ENABLE_SHARED)
 pythonize_bool(LIBUNWIND_ENABLE_THREADS)
 pythonize_bool(LIBUNWIND_TEST_ENABLE_EXCEPTIONS)
 pythonize_bool(LIBUNWIND_USES_ARM_EHABI)
-pythonize_bool(LIBUNWIND_USE_COMPILER_RT)
-pythonize_bool(LIBUNWIND_BUILD_EXTERNAL_THREAD_LIBRARY)
-set(LIBUNWIND_TARGET_INFO "libcxx.test.target_info.LocalTI" CACHE STRING
-    "TargetInfo to use when setting up test environment.")
 set(LIBUNWIND_EXECUTOR "${Python3_EXECUTABLE} ${LIBUNWIND_LIBCXX_PATH}/utils/run.py" CACHE STRING
     "Executor to use when running tests.")
 
