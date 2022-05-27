@@ -1033,7 +1033,8 @@ void ExprEngine::VisitUnaryOperator(const UnaryOperator* U, ExplodedNode *Pred,
           llvm_unreachable("Invalid Opcode.");
         case UO_Not:
           // FIXME: Do we need to handle promotions?
-          state = state->BindExpr(U, LCtx, evalComplement(V.castAs<NonLoc>()));
+          state = state->BindExpr(
+              U, LCtx, svalBuilder.evalComplement(V.castAs<NonLoc>()));
           break;
         case UO_Minus:
           // FIXME: Do we need to handle promotions?
