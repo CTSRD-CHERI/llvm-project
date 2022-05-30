@@ -1414,7 +1414,7 @@ void AsmPrinter::emitKCFITypeId(const MachineFunction &MF) {
   const Function &F = MF.getFunction();
   if (const MDNode *MD = F.getMetadata(LLVMContext::MD_kcfi_type))
     emitGlobalConstant(F.getParent()->getDataLayout(),
-                       mdconst::extract<ConstantInt>(MD->getOperand(0)));
+                       mdconst::extract<ConstantInt>(MD->getOperand(0)), 0);
 }
 
 void AsmPrinter::emitPseudoProbe(const MachineInstr &MI) {
