@@ -27,7 +27,7 @@
 ; CHECK: @__sancov_gen_{{.*}} = private global [1 x i8] zeroinitializer, section ".SCOV$CM", comdat($foo), align 1
 
 ; CHECK: @__sancov_gen_{{.*}} = private constant [2 x i64]
-; CHECK-SAME: [i64 ptrtoint (i32 (i32)* @foo to i64), i64 1],
+; CHECK-SAME: [i64 ptrtoint (ptr @foo to i64), i64 1],
 ; CHECK-SAME: section ".SCOVP$M", comdat($foo), align 8
 
 ; Tables for 'bar' should be in the 'bar' comdat.
@@ -35,7 +35,7 @@
 ; CHECK: @__sancov_gen_{{.*}} = private global [1 x i8] zeroinitializer, section ".SCOV$CM", comdat($bar), align 1
 
 ; CHECK: @__sancov_gen_{{.*}} = private constant [2 x i64]
-; CHECK-SAME: [i64 ptrtoint (i32 (i32)* @bar to i64), i64 1],
+; CHECK-SAME: [i64 ptrtoint (ptr @bar to i64), i64 1],
 ; CHECK-SAME: section ".SCOVP$M", comdat($bar), align 8
 
 ; 'foo' and 'bar' should be in their new comdat groups.
