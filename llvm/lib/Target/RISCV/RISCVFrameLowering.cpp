@@ -309,26 +309,51 @@ void RISCVFrameLowering::adjustReg(MachineBasicBlock &MBB,
         .addReg(SrcReg)
         .addImm(Val)
         .setMIFlag(Flag);
-  } else {
-    unsigned Opc;
-    if (RISCVABI::isCheriPureCapABI(STI.getTargetABI())) {
-      Opc = RISCV::CIncOffset;
-    } else {
-      Opc = RISCV::ADD;
-      bool IsSub = Val < 0;
-      if (IsSub) {
-        Val = -Val;
-        Opc = RISCV::SUB;
-      }
-    }
+    return;
+  }
 
-    Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
-    TII->movImm(MBB, MBBI, DL, ScratchReg, Val, Flag);
+  // Try to split the offset across two ADDIs. We need to keep the stack pointer
+  // aligned after each ADDI. We need to determine the maximum value we can put
+  // in each ADDI. In the negative direction, we can use -2048 which is always
+  // sufficiently aligned. In the positive direction, we need to find the
+  // largest 12-bit immediate that is aligned. Exclude -4096 since it can be
+  // created with LUI.
+  assert(getStackAlign().value() < 2048 && "Stack alignment too large");
+  int64_t MaxPosAdjStep = 2048 - getStackAlign().value();
+  if (Val > -4096 && Val <= (2 * MaxPosAdjStep)) {
+    unsigned Opc = RISCVABI::isCheriPureCapABI(STI.getTargetABI())
+                       ? RISCV::CIncOffsetImm
+                       : RISCV::ADDI;
+    int64_t FirstAdj = Val < 0 ? -2048 : MaxPosAdjStep;
+    Val -= FirstAdj;
     BuildMI(MBB, MBBI, DL, TII->get(Opc), DestReg)
         .addReg(SrcReg)
-        .addReg(ScratchReg, RegState::Kill)
+        .addImm(FirstAdj)
         .setMIFlag(Flag);
+    BuildMI(MBB, MBBI, DL, TII->get(Opc), DestReg)
+        .addReg(DestReg, RegState::Kill)
+        .addImm(Val)
+        .setMIFlag(Flag);
+    return;
   }
+  unsigned Opc;
+  if (RISCVABI::isCheriPureCapABI(STI.getTargetABI())) {
+    Opc = RISCV::CIncOffset;
+  } else {
+    Opc = RISCV::ADD;
+    bool IsSub = Val < 0;
+    if (IsSub) {
+      Val = -Val;
+      Opc = RISCV::SUB;
+    }
+  }
+
+  Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  TII->movImm(MBB, MBBI, DL, ScratchReg, Val, Flag);
+  BuildMI(MBB, MBBI, DL, TII->get(Opc), DestReg)
+      .addReg(SrcReg)
+      .addReg(ScratchReg, RegState::Kill)
+      .setMIFlag(Flag);
 }
 
 // Returns the register used to hold the frame pointer.
@@ -775,7 +800,7 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     FrameReg = RI->getFrameRegister(MF);
   }
 
-  if (FrameReg == getFPReg(STI)) {
+  if (FrameReg == getFPReg()) {
     Offset += StackOffset::getFixed(RVFI->getVarArgsSaveSize());
     if (FI >= 0)
       Offset -= StackOffset::getFixed(RVFI->getLibCallStackSize());
@@ -809,7 +834,8 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
 
   // This case handles indexing off both SP and BP.
   // If indexing off SP, there must not be any var sized objects
-  assert(FrameReg == RISCVABI::getBPReg() || !MFI.hasVarSizedObjects());
+  assert(FrameReg == RISCVABI::getBPReg(STI.getTargetABI()) ||
+         !MFI.hasVarSizedObjects());
 
   // When using SP to access frame objects, we need to add RVV stack size.
   //
