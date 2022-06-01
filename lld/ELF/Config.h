@@ -231,6 +231,7 @@ struct Configuration {
   bool target1Rel;
   bool trace;
   bool thinLTOEmitImportsFiles;
+  bool thinLTOEmitIndexFiles;
   bool thinLTOIndexOnly;
   bool timeTraceEnabled;
   bool tocOptimize;
