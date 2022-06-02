@@ -803,7 +803,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target,
           return true;
         case ConversionSpecifier::FreeBSDrArg:
         case ConversionSpecifier::FreeBSDyArg:
-          return Target.getTriple().isOSFreeBSD() || Target.getTriple().isPS4();
+          return Target.getTriple().isOSFreeBSD() || Target.getTriple().isPS();
         default:
           return false;
       }
@@ -839,7 +839,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target,
           return true;
         case ConversionSpecifier::FreeBSDrArg:
         case ConversionSpecifier::FreeBSDyArg:
-          return Target.getTriple().isOSFreeBSD() || Target.getTriple().isPS4();
+          return Target.getTriple().isOSFreeBSD() || Target.getTriple().isPS();
         default:
           return false;
       }
