@@ -38,7 +38,7 @@ public:
   typedef typename A::capability_t capability_t;
 
   static int stepWithDwarf(A &addressSpace, pc_t pc, pint_t fdeStart,
-                           R &registers, bool &isSignalFrame);
+                           R &registers, bool &isSignalFrame, bool stage2);
 
 private:
 
@@ -250,7 +250,7 @@ bool DwarfInstructions<A, R>::getRA_SIGN_STATE(A &addressSpace, R registers,
 template <typename A, typename R>
 int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pc_t pc,
                                            pint_t fdeStart, R &registers,
-                                           bool &isSignalFrame) {
+                                           bool &isSignalFrame, bool stage2) {
   FDE_Info fdeInfo;
   CIE_Info cieInfo;
   if (CFI_Parser<A>::decodeFDE(addressSpace, fdeStart, &fdeInfo, &cieInfo) ==
@@ -265,7 +265,35 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pc_t pc,
       if (!cfa_valid)
         return UNW_EBADFRAME;
 
-       // restore registers that DWARF says were saved
+      (void)stage2;
+#if defined(_LIBUNWIND_TARGET_AARCH64)
+      if (stage2 && cieInfo.mteTaggedFrame) {
+        pint_t sp = registers.getSP();
+        pint_t p = sp;
+        // AArch64 doesn't require the value of SP to be 16-byte aligned at
+        // all times, only at memory accesses and public interfaces [1]. Thus,
+        // a signal could arrive at a point where SP is not aligned properly.
+        // In that case, the kernel fixes up [2] the signal frame, but we
+        // still have a misaligned SP in the previous frame. If that signal
+        // handler caused stack unwinding, we would have an unaligned SP.
+        // We do not need to fix up the CFA, as that is the SP at a "public
+        // interface".
+        // [1]:
+        // https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#622the-stack
+        // [2]:
+        // https://github.com/torvalds/linux/blob/1930a6e739c4b4a654a69164dbe39e554d228915/arch/arm64/kernel/signal.c#L718
+        p &= ~0xfULL;
+        // CFA is the bottom of the current stack frame.
+        for (; p < cfa; p += 16) {
+          __asm__ __volatile__(".arch_extension memtag\n"
+                               "stg %[Ptr], [%[Ptr]]\n"
+                               :
+                               : [Ptr] "r"(p)
+                               : "memory");
+        }
+      }
+#endif
+      // restore registers that DWARF says were saved
       R newRegisters = registers;
 
       // Typically, the CFA is the stack pointer at the call site in
