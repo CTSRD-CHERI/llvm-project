@@ -3588,7 +3588,7 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   assert(!MemVT.isFatPointer());
 
   // Return if load is aligned or if MemVT is neither i32 nor i64.
-  if ((LD->getAlign() >= MemVT.getSizeInBits() / 8)) {
+  if ((LD->getAlign().value() >= MemVT.getSizeInBits() / 8)) {
     return SDValue();
   } else if (LD->getBasePtr()->getValueType(0).isFatPointer()) {
     // No capability version of LWL/LWR -> fall back to generic code
@@ -3740,7 +3740,7 @@ SDValue MipsTargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
 
   // Lower unaligned integer stores.
   if (!Subtarget.systemSupportsUnalignedAccess(SD->getAddressSpace()) &&
-      (SD->getAlign() < MemVT.getSizeInBits() / 8) && MemVT.isInteger())
+      (SD->getAlign().value() < MemVT.getSizeInBits() / 8) && MemVT.isInteger())
     return lowerUnalignedIntStore(SD, DAG, Subtarget.isLittle(), *this);
 
   return lowerFP_TO_SINT_STORE(SD, DAG, Subtarget.isSingleFloat());

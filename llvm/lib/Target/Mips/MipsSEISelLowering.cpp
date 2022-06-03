@@ -1264,9 +1264,8 @@ SDValue MipsSETargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
     std::swap(Lo, Hi);
 
   // i32 store to lower address.
-  Chain =
-      DAG.getStore(Chain, DL, Lo, Ptr, MachinePointerInfo(), Nd.getAlign(),
-                   Nd.getMemOperand()->getFlags(), Nd.getAAInfo());
+  Chain = DAG.getStore(Chain, DL, Lo, Ptr, MachinePointerInfo(), Nd.getAlign(),
+                       Nd.getMemOperand()->getFlags(), Nd.getAAInfo());
 
   // i32 store to higher address.
   Ptr = DAG.getPointerAdd(DL, Ptr, 4);
