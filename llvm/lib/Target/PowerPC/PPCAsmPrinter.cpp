@@ -2433,9 +2433,8 @@ void PPCAIXAsmPrinter::emitGlobalVariableHelper(const GlobalVariable *GV) {
   }
 
   // Emit aliasing label for global variable.
-  llvm::for_each(GOAliasMap[GV], [this](const GlobalAlias *Alias) {
+  for (const GlobalAlias *Alias : GOAliasMap[GV])
     OutStreamer->emitLabel(getSymbol(Alias));
-  });
 
   emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(), 0);
 }
@@ -2450,10 +2449,8 @@ void PPCAIXAsmPrinter::emitFunctionDescriptor() {
       cast<MCSymbolXCOFF>(CurrentFnDescSym)->getRepresentedCsect());
 
   // Emit aliasing label for function descriptor csect.
-  llvm::for_each(GOAliasMap[&MF->getFunction()],
-                 [this](const GlobalAlias *Alias) {
-                   OutStreamer->emitLabel(getSymbol(Alias));
-                 });
+  for (const GlobalAlias *Alias : GOAliasMap[&MF->getFunction()])
+    OutStreamer->emitLabel(getSymbol(Alias));
 
   // Emit function entry point address.
   OutStreamer->emitValue(MCSymbolRefExpr::create(CurrentFnSym, OutContext),
@@ -2477,11 +2474,9 @@ void PPCAIXAsmPrinter::emitFunctionEntryLabel() {
     PPCAsmPrinter::emitFunctionEntryLabel();
 
   // Emit aliasing label for function entry point label.
-  llvm::for_each(
-      GOAliasMap[&MF->getFunction()], [this](const GlobalAlias *Alias) {
-        OutStreamer->emitLabel(
-            getObjFileLowering().getFunctionEntryPointSymbol(Alias, TM));
-      });
+  for (const GlobalAlias *Alias : GOAliasMap[&MF->getFunction()])
+    OutStreamer->emitLabel(
+        getObjFileLowering().getFunctionEntryPointSymbol(Alias, TM));
 }
 
 void PPCAIXAsmPrinter::emitPGORefs() {
