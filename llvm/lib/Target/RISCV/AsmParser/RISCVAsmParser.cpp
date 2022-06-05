@@ -2507,8 +2507,7 @@ bool RISCVAsmParser::parseDirectiveAttribute() {
     Parser.Lex();
   }
 
-  if (Parser.parseToken(AsmToken::EndOfStatement,
-                        "unexpected token in '.attribute' directive"))
+  if (Parser.parseEOL())
     return true;
 
   if (IsIntegerValue)
