@@ -114,6 +114,11 @@ MCStreamer *createSPIRVStreamer(MCContext &Ctx,
                                 std::unique_ptr<MCObjectWriter> &&OW,
                                 std::unique_ptr<MCCodeEmitter> &&CE,
                                 bool RelaxAll);
+MCStreamer *createDXContainerStreamer(MCContext &Ctx,
+                                      std::unique_ptr<MCAsmBackend> &&TAB,
+                                      std::unique_ptr<MCObjectWriter> &&OW,
+                                      std::unique_ptr<MCCodeEmitter> &&CE,
+                                      bool RelaxAll);
 
 MCRelocationInfo *createMCRelocationInfo(const Triple &TT, MCContext &Ctx);
 
@@ -208,6 +213,12 @@ public:
                       std::unique_ptr<MCObjectWriter> &&OW,
                       std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
   using SPIRVStreamerCtorTy =
+      MCStreamer *(*)(const Triple &T, MCContext &Ctx,
+                      std::unique_ptr<MCAsmBackend> &&TAB,
+                      std::unique_ptr<MCObjectWriter> &&OW,
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
+  
+  using DXContainerStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
@@ -314,6 +325,7 @@ private:
   WasmStreamerCtorTy WasmStreamerCtorFn = nullptr;
   XCOFFStreamerCtorTy XCOFFStreamerCtorFn = nullptr;
   SPIRVStreamerCtorTy SPIRVStreamerCtorFn = nullptr;
+  DXContainerStreamerCtorTy DXContainerStreamerCtorFn = nullptr;
 
   /// Construction function for this target's null TargetStreamer, if
   /// registered (default = nullptr).
@@ -543,8 +555,6 @@ public:
     switch (T.getObjectFormat()) {
     case Triple::UnknownObjectFormat:
       llvm_unreachable("Unknown object format");
-    case Triple::DXContainer:
-      llvm_unreachable("DXContainer is unsupported through MC");
     case Triple::COFF:
       assert(T.isOSWindows() && "only Windows COFF is supported");
       S = COFFStreamerCtorFn(Ctx, std::move(TAB), std::move(OW),
@@ -594,6 +604,14 @@ public:
       else
         S = createSPIRVStreamer(Ctx, std::move(TAB), std::move(OW),
                                 std::move(Emitter), RelaxAll);
+      break;
+    case Triple::DXContainer:
+      if (DXContainerStreamerCtorFn)
+        S = DXContainerStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
+                              std::move(Emitter), RelaxAll);
+      else
+        S = createDXContainerStreamer(Ctx, std::move(TAB), std::move(OW),
+                                      std::move(Emitter), RelaxAll);
       break;
     }
     if (ObjectTargetStreamerCtorFn)
@@ -977,6 +995,10 @@ struct TargetRegistry {
 
   static void RegisterSPIRVStreamer(Target &T, Target::SPIRVStreamerCtorTy Fn) {
     T.SPIRVStreamerCtorFn = Fn;
+  }
+
+  static void RegisterDXContainerStreamer(Target &T, Target::DXContainerStreamerCtorTy Fn) {
+    T.DXContainerStreamerCtorFn = Fn;
   }
 
   static void RegisterWasmStreamer(Target &T, Target::WasmStreamerCtorTy Fn) {
