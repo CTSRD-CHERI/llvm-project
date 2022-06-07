@@ -208,6 +208,11 @@ static Value *mergeAttributesAndFlags(CallInst *NewCI, const CallInst &Old) {
   return copyFlags(Old, NewCI);
 }
 
+// Helper to avoid truncating the length if size_t is 32-bits.
+static StringRef substr(StringRef Str, uint64_t Len) {
+  return Len >= Str.size() ? Str : Str.substr(0, Len);
+}
+
 //===----------------------------------------------------------------------===//
 // String and Memory Library Call Optimizations
 //===----------------------------------------------------------------------===//
@@ -462,10 +467,8 @@ Value *LibCallSimplifier::optimizeStrNCmp(CallInst *CI, IRBuilderBase &B) {
   // strncmp(x, y)  -> cnst  (if both x and y are constant strings)
   if (HasStr1 && HasStr2) {
     // Avoid truncating the 64-bit Length to 32 bits in ILP32.
-    StringRef::size_type MinLen1 = std::min((uint64_t)Str1.size(), Length);
-    StringRef::size_type MinLen2 = std::min((uint64_t)Str2.size(), Length);
-    StringRef SubStr1 = Str1.substr(0, MinLen1);
-    StringRef SubStr2 = Str2.substr(0, MinLen2);
+    StringRef SubStr1 = substr(Str1, Length);
+    StringRef SubStr2 = substr(Str2, Length);
     return ConstantInt::get(CI->getType(), SubStr1.compare(SubStr2));
   }
 
@@ -1056,8 +1059,7 @@ Value *LibCallSimplifier::optimizeMemChr(CallInst *CI, IRBuilderBase &B) {
 
   // Truncate the string to LenC without slicing when targeting LP64
   // on an ILP32 host.
-  uint64_t EndOff = std::min(LenC->getZExtValue(), (uint64_t)StringRef::npos);
-  Str = Str.substr(0, EndOff);
+  Str = substr(Str, LenC->getZExtValue());
 
   // If the char is variable but the input str and length are not we can turn
   // this memchr call into a simple bit field test. Of course this only works
