@@ -385,7 +385,7 @@ void MCELFStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
 void MCELFStreamer::emitIdent(StringRef IdentString) {
   MCSection *Comment = getAssembler().getContext().getELFSection(
       ".comment", ELF::SHT_PROGBITS, ELF::SHF_MERGE | ELF::SHF_STRINGS, 1);
-  PushSection();
+  pushSection();
   SwitchSection(Comment);
   if (!SeenIdent) {
     emitInt8(0);
@@ -393,7 +393,7 @@ void MCELFStreamer::emitIdent(StringRef IdentString) {
   }
   emitBytes(IdentString);
   emitInt8(0);
-  PopSection();
+  popSection();
 }
 
 void MCELFStreamer::fixSymbolsInTLSFixups(const MCExpr *expr) {
@@ -515,7 +515,7 @@ void MCELFStreamer::finalizeCGProfile() {
   MCSection *CGProfile = getAssembler().getContext().getELFSection(
       ".llvm.call-graph-profile", ELF::SHT_LLVM_CALL_GRAPH_PROFILE,
       ELF::SHF_EXCLUDE, /*sizeof(Elf_CGProfile_Impl<>)=*/8);
-  PushSection();
+  pushSection();
   SwitchSection(CGProfile);
   uint64_t Offset = 0;
   for (MCAssembler::CGProfileEntry &E : Asm.CGProfile) {
@@ -524,7 +524,7 @@ void MCELFStreamer::finalizeCGProfile() {
     emitIntValue(E.Count, sizeof(uint64_t));
     Offset += sizeof(uint64_t);
   }
-  PopSection();
+  popSection();
 }
 
 void MCELFStreamer::emitInstToFragment(const MCInst &Inst,

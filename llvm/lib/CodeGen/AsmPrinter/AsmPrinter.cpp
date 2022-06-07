@@ -497,11 +497,11 @@ bool AsmPrinter::doInitialization(Module &M) {
   // Emit module-level inline asm if it exists.
   if (!M.getModuleInlineAsm().empty()) {
     OutStreamer->AddComment("Start of file scope inline assembly");
-    OutStreamer->AddBlankLine();
+    OutStreamer->addBlankLine();
     emitInlineAsm(M.getModuleInlineAsm() + "\n", *TM.getMCSubtargetInfo(),
                   TM.Options.MCOptions);
     OutStreamer->AddComment("End of file scope inline assembly");
-    OutStreamer->AddBlankLine();
+    OutStreamer->addBlankLine();
   }
 
   if (MAI->doesSupportDebugInformation()) {
@@ -698,9 +698,9 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
     if (isVerbose()) {
       // When printing the control variable __emutls_v.*,
       // we don't need to print the original TLS variable name.
-      GV->printAsOperand(OutStreamer->GetCommentOS(),
-                     /*PrintType=*/false, GV->getParent());
-      OutStreamer->GetCommentOS() << '\n';
+      GV->printAsOperand(OutStreamer->getCommentOS(),
+                         /*PrintType=*/false, GV->getParent());
+      OutStreamer->getCommentOS() << '\n';
     }
   }
 
@@ -847,7 +847,7 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
                          static_cast<uint64_t>(TailPadding));
     }
 
-    OutStreamer->AddBlankLine();
+    OutStreamer->addBlankLine();
 
     // Emit the variable struct for the runtime.
     MCSection *TLVSect = getObjFileLowering().getTLSExtraDataSection();
@@ -867,7 +867,7 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
     OutStreamer->emitIntValue(0, PtrSize);
     OutStreamer->emitSymbolValue(MangSym, PtrSize);
 
-    OutStreamer->AddBlankLine();
+    OutStreamer->addBlankLine();
     return;
   }
 
@@ -891,7 +891,7 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
     OutStreamer->emitELFSize(EmittedInitSym,
                              MCConstantExpr::create(Size, OutContext));
 
-  OutStreamer->AddBlankLine();
+  OutStreamer->addBlankLine();
 }
 
 /// Emit the directive and value for debug thread local expression
@@ -912,7 +912,7 @@ void AsmPrinter::emitFunctionHeader() {
   // FIXME: comment should probably be emitted after constant pool?
   //  or at least before .section .sdata
   if (isVerbose())
-    OutStreamer->GetCommentOS()
+    OutStreamer->getCommentOS()
         << "-- Begin function "
         << GlobalValue::dropLLVMManglingEscape(F.getName()) << '\n';
 
@@ -949,10 +949,10 @@ void AsmPrinter::emitFunctionHeader() {
     OutStreamer->emitSymbolAttribute(CurrentFnSym, MCSA_Cold);
 
   if (isVerbose()) {
-    F.printAsOperand(OutStreamer->GetCommentOS(),
-                   /*PrintType=*/false, F.getParent());
+    F.printAsOperand(OutStreamer->getCommentOS(),
+                     /*PrintType=*/false, F.getParent());
     emitFunctionHeaderComment();
-    OutStreamer->GetCommentOS() << '\n';
+    OutStreamer->getCommentOS() << '\n';
   }
 
   // Emit the prefix data.
@@ -1110,7 +1110,7 @@ void AsmPrinter::emitImplicitDef(const MachineInstr *MI) const {
      << printReg(RegNo, MF->getSubtarget().getRegisterInfo());
 
   OutStreamer->AddComment(OS.str());
-  OutStreamer->AddBlankLine();
+  OutStreamer->addBlankLine();
 }
 
 static void emitKill(const MachineInstr *MI, AsmPrinter &AP) {
@@ -1123,7 +1123,7 @@ static void emitKill(const MachineInstr *MI, AsmPrinter &AP) {
        << printReg(Op.getReg(), AP.MF->getSubtarget().getRegisterInfo());
   }
   AP.OutStreamer->AddComment(OS.str());
-  AP.OutStreamer->AddBlankLine();
+  AP.OutStreamer->addBlankLine();
 }
 
 /// emitDebugValueComment - This method handles the target-independent form
@@ -1345,7 +1345,7 @@ void AsmPrinter::emitBBAddrMapSection(const MachineFunction &MF) {
 
   const MCSymbol *FunctionSymbol = getFunctionBegin();
 
-  OutStreamer->PushSection();
+  OutStreamer->pushSection();
   OutStreamer->SwitchSection(BBAddrMapSection);
   OutStreamer->emitSymbolValue(FunctionSymbol, getPointerSize());
   // Emit the total number of basic blocks in this function.
@@ -1361,7 +1361,7 @@ void AsmPrinter::emitBBAddrMapSection(const MachineFunction &MF) {
     emitLabelDifferenceAsULEB128(MBB.getEndSymbol(), MBBSymbol);
     OutStreamer->emitULEB128IntValue(getBBAddrMapMetadata(MBB));
   }
-  OutStreamer->PopSection();
+  OutStreamer->popSection();
 }
 
 void AsmPrinter::emitPseudoProbe(const MachineInstr &MI) {
@@ -1389,7 +1389,7 @@ void AsmPrinter::emitStackSizeSection(const MachineFunction &MF) {
   if (FrameInfo.hasVarSizedObjects())
     return;
 
-  OutStreamer->PushSection();
+  OutStreamer->pushSection();
   OutStreamer->SwitchSection(StackSizeSection);
 
   const MCSymbol *FunctionSymbol = getFunctionBegin();
@@ -1398,7 +1398,7 @@ void AsmPrinter::emitStackSizeSection(const MachineFunction &MF) {
   OutStreamer->emitSymbolValue(FunctionSymbol, TM.getProgramPointerSize());
   OutStreamer->emitULEB128IntValue(StackSize);
 
-  OutStreamer->PopSection();
+  OutStreamer->popSection();
 }
 
 void AsmPrinter::emitStackUsage(const MachineFunction &MF) {
@@ -1503,7 +1503,7 @@ void AsmPrinter::emitFunctionBody() {
       }
 
       if (isVerbose())
-        emitComments(MI, OutStreamer->GetCommentOS());
+        emitComments(MI, OutStreamer->getCommentOS());
 
       switch (MI.getOpcode()) {
       case TargetOpcode::CFI_INSTRUCTION:
@@ -1734,9 +1734,9 @@ void AsmPrinter::emitFunctionBody() {
   emitPatchableFunctionEntries();
 
   if (isVerbose())
-    OutStreamer->GetCommentOS() << "-- End function\n";
+    OutStreamer->getCommentOS() << "-- End function\n";
 
-  OutStreamer->AddBlankLine();
+  OutStreamer->addBlankLine();
 }
 
 /// Compute the number of Global Variables that uses a Constant.
@@ -1854,13 +1854,13 @@ void AsmPrinter::emitGlobalAlias(Module &M, const GlobalAlias &GA) {
   if (IsFunction) {
     OutStreamer->emitSymbolAttribute(Name, MCSA_ELF_TypeFunction);
     if (TM.getTargetTriple().isOSBinFormatCOFF()) {
-      OutStreamer->BeginCOFFSymbolDef(Name);
+      OutStreamer->beginCOFFSymbolDef(Name);
       OutStreamer->emitCOFFSymbolStorageClass(
           GA.hasLocalLinkage() ? COFF::IMAGE_SYM_CLASS_STATIC
                                : COFF::IMAGE_SYM_CLASS_EXTERNAL);
       OutStreamer->emitCOFFSymbolType(COFF::IMAGE_SYM_DTYPE_FUNCTION
                                       << COFF::SCT_COMPLEX_TYPE_SHIFT);
-      OutStreamer->EndCOFFSymbolDef();
+      OutStreamer->endCOFFSymbolDef();
     }
   }
 
@@ -2205,7 +2205,7 @@ bool AsmPrinter::doFinalization(Module &M) {
   MMI = nullptr;
   AddrLabelSymbols = nullptr;
 
-  OutStreamer->Finish();
+  OutStreamer->finish();
   OutStreamer->reset();
   OwnedMLI.reset();
   OwnedMDT.reset();
@@ -2670,7 +2670,7 @@ void AsmPrinter::emitModuleCommandLines(Module &M) {
   if (!NMD || !NMD->getNumOperands())
     return;
 
-  OutStreamer->PushSection();
+  OutStreamer->pushSection();
   OutStreamer->SwitchSection(CommandLine);
   OutStreamer->emitZeros(1);
   for (unsigned i = 0, e = NMD->getNumOperands(); i != e; ++i) {
@@ -2681,7 +2681,7 @@ void AsmPrinter::emitModuleCommandLines(Module &M) {
     OutStreamer->emitBytes(S->getString());
     OutStreamer->emitZeros(1);
   }
-  OutStreamer->PopSection();
+  OutStreamer->popSection();
 }
 
 //===--------------------------------------------------------------------===//
@@ -3024,8 +3024,8 @@ static void emitGlobalConstantDataSequential(const DataLayout &DL,
   if (isa<IntegerType>(CDS->getElementType())) {
     for (unsigned i = 0, e = CDS->getNumElements(); i != e; ++i) {
       if (AP.isVerbose())
-        AP.OutStreamer->GetCommentOS() << format("0x%" PRIx64 "\n",
-                                                 CDS->getElementAsInteger(i));
+        AP.OutStreamer->getCommentOS()
+            << format("0x%" PRIx64 "\n", CDS->getElementAsInteger(i));
       AP.OutStreamer->emitIntValue(CDS->getElementAsInteger(i),
                                    ElementByteSize);
     }
@@ -3111,8 +3111,8 @@ static void emitGlobalConstantFP(APFloat APF, Type *ET, AsmPrinter &AP) {
   if (AP.isVerbose()) {
     SmallString<8> StrVal;
     APF.toString(StrVal);
-    ET->print(AP.OutStreamer->GetCommentOS());
-    AP.OutStreamer->GetCommentOS() << ' ' << StrVal << '\n';
+    ET->print(AP.OutStreamer->getCommentOS());
+    AP.OutStreamer->getCommentOS() << ' ' << StrVal << '\n';
   }
 
   // Now iterate through the APInt chunks, emitting them in endian-correct
@@ -3377,8 +3377,8 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 
     if (StoreSize <= 8) {
       if (AP.isVerbose())
-        AP.OutStreamer->GetCommentOS() << format("0x%" PRIx64 "\n",
-                                                 CI->getZExtValue());
+        AP.OutStreamer->getCommentOS()
+            << format("0x%" PRIx64 "\n", CI->getZExtValue());
       AP.OutStreamer->emitIntValue(CI->getZExtValue(), StoreSize);
     } else {
       emitGlobalConstantLargeInt(CI, AP);
@@ -3600,7 +3600,7 @@ static void emitBasicBlockLoopComments(const MachineBasicBlock &MBB,
 
   // Otherwise, it is a loop header.  Print out information about child and
   // parent loops.
-  raw_ostream &OS = AP.OutStreamer->GetCommentOS();
+  raw_ostream &OS = AP.OutStreamer->getCommentOS();
 
   PrintParentLoopComment(OS, Loop->getParentLoop(), AP.getFunctionNumber());
 
@@ -3662,9 +3662,9 @@ void AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   if (isVerbose()) {
     if (BB) {
       if (BB->hasName()) {
-        BB->printAsOperand(OutStreamer->GetCommentOS(),
+        BB->printAsOperand(OutStreamer->getCommentOS(),
                            /*PrintType=*/false, BB->getModule());
-        OutStreamer->GetCommentOS() << '\n';
+        OutStreamer->getCommentOS() << '\n';
       }
     }
 

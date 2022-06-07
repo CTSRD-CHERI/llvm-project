@@ -127,7 +127,7 @@ public:
   /// Return a raw_ostream that comments can be written to.
   /// Unlike AddComment, you are required to terminate comments with \n if you
   /// use this method.
-  raw_ostream &GetCommentOS() override {
+  raw_ostream &getCommentOS() override {
     if (!IsVerboseAsm)
       return nulls();  // Discard comments unless in verbose asm mode.
     return CommentStream;
@@ -139,9 +139,7 @@ public:
   void emitExplicitComments() override;
 
   /// Emit a blank line to a .s file to pretty it up.
-  void AddBlankLine() override {
-    EmitEOL();
-  }
+  void addBlankLine() override { EmitEOL(); }
 
   /// @name MCStreamer Interface
   /// @{
@@ -180,10 +178,10 @@ public:
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
 
   void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
-  void BeginCOFFSymbolDef(const MCSymbol *Symbol) override;
+  void beginCOFFSymbolDef(const MCSymbol *Symbol) override;
   void emitCOFFSymbolStorageClass(int StorageClass) override;
   void emitCOFFSymbolType(int Type) override;
-  void EndCOFFSymbolDef() override;
+  void endCOFFSymbolDef() override;
   void emitCOFFSafeSEH(MCSymbol const *Symbol) override;
   void emitCOFFSymbolIndex(MCSymbol const *Symbol) override;
   void emitCOFFSectionIndex(MCSymbol const *Symbol) override;
@@ -798,7 +796,7 @@ void MCAsmStreamer::emitSyntaxDirective() {
   // with may have a value of prefix or noprefix.
 }
 
-void MCAsmStreamer::BeginCOFFSymbolDef(const MCSymbol *Symbol) {
+void MCAsmStreamer::beginCOFFSymbolDef(const MCSymbol *Symbol) {
   OS << "\t.def\t";
   Symbol->print(OS, MAI);
   OS << ';';
@@ -815,7 +813,7 @@ void MCAsmStreamer::emitCOFFSymbolType(int Type) {
   EmitEOL();
 }
 
-void MCAsmStreamer::EndCOFFSymbolDef() {
+void MCAsmStreamer::endCOFFSymbolDef() {
   OS << "\t.endef";
   EmitEOL();
 }
@@ -1036,7 +1034,7 @@ void MCAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
                                  uint64_t Size, unsigned ByteAlignment,
                                  TailPaddingAmount TailPadding, SMLoc Loc) {
   if (Symbol)
-    AssignFragment(Symbol, &Section->getDummyFragment());
+    assignFragment(Symbol, &Section->getDummyFragment());
 
   if (TailPadding != TailPaddingAmount::None) {
     AddComment("adding " + Twine(static_cast<uint64_t>(TailPadding)) +
@@ -1075,7 +1073,7 @@ void MCAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 void MCAsmStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
                                    uint64_t Size, unsigned ByteAlignment,
                                    TailPaddingAmount TailPadding) {
-  AssignFragment(Symbol, &Section->getDummyFragment());
+  assignFragment(Symbol, &Section->getDummyFragment());
 
   assert(Symbol && "Symbol shouldn't be NULL!");
   // Instead of using the Section we'll just use the shortcut.
@@ -2155,7 +2153,7 @@ void MCAsmStreamer::emitWinEHHandlerData(SMLoc Loc) {
 
   MCSection *TextSec = &CurFrame->Function->getSection();
   MCSection *XData = getAssociatedXDataSection(TextSec);
-  SwitchSectionNoChange(XData);
+  switchSectionNoChange(XData);
 
   OS << "\t.seh_handlerdata";
   EmitEOL();
@@ -2235,7 +2233,7 @@ void MCAsmStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
 
 void MCAsmStreamer::AddEncodingComment(const MCInst &Inst,
                                        const MCSubtargetInfo &STI) {
-  raw_ostream &OS = GetCommentOS();
+  raw_ostream &OS = getCommentOS();
   SmallString<256> Code;
   SmallVector<MCFixup, 4> Fixups;
   raw_svector_ostream VecOS(Code);
@@ -2341,8 +2339,8 @@ void MCAsmStreamer::emitInstruction(const MCInst &Inst,
 
   // Show the MCInst if enabled.
   if (ShowInst) {
-    Inst.dump_pretty(GetCommentOS(), InstPrinter.get(), "\n ");
-    GetCommentOS() << "\n";
+    Inst.dump_pretty(getCommentOS(), InstPrinter.get(), "\n ");
+    getCommentOS() << "\n";
   }
 
   if(getTargetStreamer())
@@ -2352,7 +2350,7 @@ void MCAsmStreamer::emitInstruction(const MCInst &Inst,
 
   StringRef Comments = CommentToEmit;
   if (Comments.size() && Comments.back() != '\n')
-    GetCommentOS() << "\n";
+    getCommentOS() << "\n";
 
   EmitEOL();
 }
@@ -2601,7 +2599,7 @@ void MCAsmStreamer::doFinalizationAtSectionEnd(MCSection *Section) {
   if (MAI->usesDwarfFileAndLocDirectives())
     return;
 
-  SwitchSectionNoChange(Section);
+  switchSectionNoChange(Section);
 
   MCSymbol *Sym = getCurrentSectionOnly()->getEndSymbol(getContext());
 
