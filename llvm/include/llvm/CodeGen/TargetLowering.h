@@ -3639,6 +3639,7 @@ public:
 
   /// Determines the optimal series of memory ops to replace the memset / memcpy.
   /// Return true if the number of memory ops is below the threshold (Limit).
+  /// Note that this is always the case when Limit is ~0.
   /// It returns the types of the sequence of memory ops to perform
   /// memset / memcpy by reference.
   virtual bool findOptimalMemOpLowering(std::vector<EVT> &MemOps,

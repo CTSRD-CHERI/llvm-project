@@ -200,7 +200,8 @@ bool TargetLowering::findOptimalMemOpLowering(
     bool *ReachedLimit) const {
   if (ReachedLimit)
     *ReachedLimit = false;
-  if (Op.isMemcpyWithFixedDstAlign() && Op.getSrcAlign() < Op.getDstAlign())
+  if (Limit != ~unsigned(0) && Op.isMemcpyWithFixedDstAlign() &&
+      Op.getSrcAlign() < Op.getDstAlign())
     return false;
 
   EVT VT = getOptimalMemOpType(Op, FuncAttributes);
