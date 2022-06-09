@@ -1318,9 +1318,8 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
   // Don't try to simplify calls without uses. It will not do anything useful,
   // but will result in the following folds being skipped.
   if (!CI.use_empty())
-    if (Value *V = SimplifyCall(&CI, SQ.getWithInstruction(&CI))) {
+    if (Value *V = simplifyCall(&CI, SQ.getWithInstruction(&CI)))
       return replaceInstUsesWith(CI, V);
-    }
 
   if (isFreeCall(&CI, &TLI))
     return visitFree(CI);
@@ -1424,7 +1423,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
   // actually absent. To detect this case, call SimplifyConstrainedFPCall. If it
   // returns a replacement, the call may be removed.
   if (CI.use_empty() && isa<ConstrainedFPIntrinsic>(CI)) {
-    if (SimplifyConstrainedFPCall(&CI, SQ.getWithInstruction(&CI)))
+    if (simplifyConstrainedFPCall(&CI, SQ.getWithInstruction(&CI)))
       return eraseInstFromFunction(CI);
   }
 
@@ -2022,7 +2021,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     }
 
     // Try to simplify the underlying FMul.
-    if (Value *V = SimplifyFMulInst(II->getArgOperand(0), II->getArgOperand(1),
+    if (Value *V = simplifyFMulInst(II->getArgOperand(0), II->getArgOperand(1),
                                     II->getFastMathFlags(),
                                     SQ.getWithInstruction(II))) {
       auto *FAdd = BinaryOperator::CreateFAdd(V, II->getArgOperand(2));
@@ -2053,7 +2052,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
 
     // Try to simplify the underlying FMul. We can only apply simplifications
     // that do not require rounding.
-    if (Value *V = SimplifyFMAFMul(II->getArgOperand(0), II->getArgOperand(1),
+    if (Value *V = simplifyFMAFMul(II->getArgOperand(0), II->getArgOperand(1),
                                    II->getFastMathFlags(),
                                    SQ.getWithInstruction(II))) {
       auto *FAdd = BinaryOperator::CreateFAdd(V, II->getArgOperand(2));
