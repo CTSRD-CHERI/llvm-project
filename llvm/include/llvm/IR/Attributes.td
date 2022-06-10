@@ -314,6 +314,9 @@ def NoPreserveCheriTags : EnumAttr<"no_preserve_cheri_tags", [FnAttr]>;
 /// Function is required to make Forward Progress.
 def MustProgress : EnumAttr<"mustprogress", [FnAttr]>;
 
+/// Function is a presplit coroutine.
+def PresplitCoroutine : EnumAttr<"presplitcoroutine", [FnAttr]>;
+
 /// Target-independent string attributes.
 def LessPreciseFPMAD : StrBoolAttr<"less-precise-fpmad">;
 def NoInfsFPMath : StrBoolAttr<"no-infs-fp-math">;
