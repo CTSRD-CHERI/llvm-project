@@ -241,6 +241,10 @@ void ErrorHandler::warn(const Twine &msg) {
     error(msg);
     return;
   }
+
+  if (suppressWarnings)
+    return;
+
   static uint64_t warningCount = 0;
   std::lock_guard<std::mutex> lock(mu);
   if (warningLimit == 0 || warningCount < warningLimit) {
