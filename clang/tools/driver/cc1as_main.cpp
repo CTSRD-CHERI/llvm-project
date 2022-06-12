@@ -137,9 +137,6 @@ struct AssemblerInvocation {
   unsigned IncrementalLinkerCompatible : 1;
   unsigned EmbedBitcode : 1;
 
-  /// Whether to emit DWARF unwind info.
-  EmitDwarfUnwindType EmitDwarfUnwind;
-
   /// The name of the relocation model to use.
   std::string RelocationModel;
 
@@ -343,14 +340,6 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
     }
   }
 
-  if (auto *A = Args.getLastArg(OPT_femit_dwarf_unwind_EQ)) {
-    Opts.EmitDwarfUnwind =
-        llvm::StringSwitch<EmitDwarfUnwindType>(A->getValue())
-            .Case("always", EmitDwarfUnwindType::Always)
-            .Case("no-compact-unwind", EmitDwarfUnwindType::NoCompactUnwind)
-            .Case("default", EmitDwarfUnwindType::Default);
-  }
-
   return Success;
 }
 
@@ -398,7 +387,6 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   SrcMgr.setIncludeDirs(Opts.IncludePaths);
 
   MCTargetOptions MCOptions;
-  MCOptions.EmitDwarfUnwind = Opts.EmitDwarfUnwind;
 
   std::unique_ptr<MCRegisterInfo> MRI(
       TheTarget->createMCRegInfo(Opts.Triple, MCOptions));

@@ -43,12 +43,6 @@ enum class CheriCapabilityTableABI {
 
 enum class TailPaddingAmount : uint64_t { None = 0u };
 
-enum class EmitDwarfUnwindType {
-  Always,          // Always emit dwarf unwind
-  NoCompactUnwind, // Only emit if compact unwind isn't available
-  Default,         // Default behavior is based on the target
-};
-
 class StringRef;
 
 class MCTargetOptions {
@@ -74,9 +68,6 @@ public:
   bool PreserveAsmComments : 1;
 
   bool Dwarf64 : 1;
-
-  EmitDwarfUnwindType EmitDwarfUnwind;
-
   int DwarfVersion = 0;
 
   enum DwarfDirectory {
