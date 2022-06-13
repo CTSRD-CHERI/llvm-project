@@ -1532,8 +1532,6 @@ public:
 
     assert(WeakRefReferences.empty() &&
            "Not all WeakRefRefs have been applied");
-    NewBuilder->WeakRefReferences = std::move(WeakRefReferences);
-
     NewBuilder->TBAA = std::move(TBAA);
   }
 
