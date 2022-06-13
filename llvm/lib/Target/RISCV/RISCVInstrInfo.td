@@ -1367,7 +1367,7 @@ def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1),
 
 let Predicates = [NotCapMode, NotPureCapABI] in {
 def : Pat<(riscv_tail (iPTR tglobaladdr:$dst)),
-          (PseudoTAIL texternalsym:$dst)>;
+          (PseudoTAIL tglobaladdr:$dst)>;
 def : Pat<(riscv_tail (iPTR texternalsym:$dst)),
           (PseudoTAIL texternalsym:$dst)>;
 } // Predicates = [NotCapMode, NotPureCapABI]
