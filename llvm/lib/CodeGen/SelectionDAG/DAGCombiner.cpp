@@ -9054,7 +9054,7 @@ SDValue DAGCombiner::visitSHL(SDNode *N) {
         Mask = DAG.getNode(ISD::SHL, DL, VT, Mask, N01);
         Mask = DAG.getNode(ISD::SRL, DL, VT, Mask, Diff);
         SDValue Shift = DAG.getNode(ISD::SRL, DL, VT, N0.getOperand(0), Diff);
-        return DAG.getNode(ISD::AND, SDLoc(N0), VT, Shift, Mask);
+        return DAG.getNode(ISD::AND, DL, VT, Shift, Mask);
       }
       if (ISD::matchBinaryPredicate(N0.getOperand(1), N1, MatchShiftAmount,
                                     /*AllowUndefs*/ false,
@@ -9064,7 +9064,7 @@ SDValue DAGCombiner::visitSHL(SDNode *N) {
         SDValue Mask = DAG.getAllOnesConstant(DL, VT);
         Mask = DAG.getNode(ISD::SHL, DL, VT, Mask, N1);
         SDValue Shift = DAG.getNode(ISD::SHL, DL, VT, N0.getOperand(0), Diff);
-        return DAG.getNode(ISD::AND, SDLoc(N0), VT, Shift, Mask);
+        return DAG.getNode(ISD::AND, DL, VT, Shift, Mask);
       }
     }
   }
