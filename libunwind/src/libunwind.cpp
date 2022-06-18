@@ -226,7 +226,7 @@ _LIBUNWIND_WEAK_ALIAS(__unw_resume, unw_resume)
 
 /// Get name of function at cursor position in stack frame.
 _LIBUNWIND_HIDDEN int __unw_get_proc_name(unw_cursor_t *cursor, char *buf,
-                                          size_t bufLen, size_t *offset) {
+                                          size_t bufLen, unw_word_t *offset) {
   _LIBUNWIND_TRACE_API("__unw_get_proc_name(cursor=%p, &buf=%p, bufLen=%lu)",
                        static_cast<void *>(cursor), static_cast<void *>(buf),
                        static_cast<unsigned long>(bufLen));

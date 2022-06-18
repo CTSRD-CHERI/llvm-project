@@ -321,7 +321,7 @@ public:
 
   pint_t getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
                      pint_t datarelBase = 0);
-  bool findFunctionName(pc_t ip, char *buf, size_t bufLen, size_t *offset);
+  bool findFunctionName(pc_t ip, char *buf, size_t bufLen, unw_word_t *offset);
   bool findUnwindSections(pc_t targetAddr, UnwindInfoSections &info);
   bool findOtherFDE(addr_t targetAddr, pint_t &fde);
 
@@ -929,7 +929,8 @@ inline bool LocalAddressSpace::findOtherFDE(addr_t targetAddr, pint_t &fde) {
 }
 
 inline bool LocalAddressSpace::findFunctionName(pc_t ip, char *buf,
-                                                size_t bufLen, size_t *offset) {
+                                                size_t bufLen,
+                                                unw_word_t *offset) {
 #if _LIBUNWIND_USE_DLADDR
   Dl_info dyldInfo;
   CHERI_DBG("%s(0x%jx: %#p))\n", __func__, (uintmax_t)ip.address(),
