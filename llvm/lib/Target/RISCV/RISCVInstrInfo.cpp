@@ -1614,7 +1614,7 @@ std::string RISCVInstrInfo::createMIROperandComment(
     return GenericComment;
 
   // If not, we must have an immediate operand.
-  if (Op.getType() != MachineOperand::MO_Immediate)
+  if (!Op.isImm())
     return std::string();
 
   std::string Comment;
