@@ -441,7 +441,7 @@ public:
   virtual bool isSignalFrame() {
     _LIBUNWIND_ABORT("isSignalFrame not implemented");
   }
-  virtual bool getFunctionName(char *, size_t, size_t *) {
+  virtual bool getFunctionName(char *, size_t, unw_word_t *) {
     _LIBUNWIND_ABORT("getFunctionName not implemented");
   }
   virtual void setInfoBasedOnIPRegister(bool = false) {
@@ -477,7 +477,7 @@ public:
   virtual void        getInfo(unw_proc_info_t *);
   virtual void        jumpto();
   virtual bool        isSignalFrame();
-  virtual bool        getFunctionName(char *buf, size_t len, size_t *off);
+  virtual bool        getFunctionName(char *buf, size_t len, unw_word_t *off);
   virtual void        setInfoBasedOnIPRegister(bool isReturnAddress = false);
   virtual const char *getRegisterName(int num);
 #ifdef __arm__
@@ -902,7 +902,7 @@ public:
   virtual void        getInfo(unw_proc_info_t *);
   virtual void        jumpto();
   virtual bool        isSignalFrame();
-  virtual bool        getFunctionName(char *buf, size_t len, size_t *off);
+  virtual bool        getFunctionName(char *buf, size_t len, unw_word_t *off);
   virtual void        setInfoBasedOnIPRegister(bool isReturnAddress = false);
   virtual const char *getRegisterName(int num);
 #ifdef __arm__
@@ -2167,7 +2167,7 @@ void UnwindCursor<A, R>::getInfo(unw_proc_info_t *info) {
 
 template <typename A, typename R>
 bool UnwindCursor<A, R>::getFunctionName(char *buf, size_t bufLen,
-                                         size_t *offset) {
+                                         unw_word_t *offset) {
   return _addressSpace.findFunctionName(this->getIP(), buf, bufLen, offset);
 }
 
