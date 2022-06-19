@@ -1039,7 +1039,6 @@ valueIsOnlyUsedLocallyOrStoredToOneGlobal(const CallInst *CI,
 /// accessing the data, and exposes the resultant global to further GlobalOpt.
 static bool tryToOptimizeStoreOfAllocationToGlobal(GlobalVariable *GV,
                                                    CallInst *CI,
-                                                   AtomicOrdering Ordering,
                                                    const DataLayout &DL,
                                                    TargetLibraryInfo *TLI) {
   if (!isAllocRemovable(CI, TLI))
@@ -1086,7 +1085,7 @@ static bool tryToOptimizeStoreOfAllocationToGlobal(GlobalVariable *GV,
 // its initializer) is ever stored to the global.
 static bool
 optimizeOnceStoredGlobal(GlobalVariable *GV, Value *StoredOnceVal,
-                         AtomicOrdering Ordering, const DataLayout &DL,
+                         const DataLayout &DL,
                          function_ref<TargetLibraryInfo &(Function &)> GetTLI) {
   // Address space casts can have run-time behaviour, so don't eliminate the
   // store if it involves an AS cast.
@@ -1119,7 +1118,7 @@ optimizeOnceStoredGlobal(GlobalVariable *GV, Value *StoredOnceVal,
     } else if (isAllocationFn(StoredOnceVal, GetTLI)) {
       if (auto *CI = dyn_cast<CallInst>(StoredOnceVal)) {
         auto *TLI = &GetTLI(*CI->getFunction());
-        if (tryToOptimizeStoreOfAllocationToGlobal(GV, CI, Ordering, DL, TLI))
+        if (tryToOptimizeStoreOfAllocationToGlobal(GV, CI, DL, TLI))
           return true;
       }
     }
@@ -1604,7 +1603,7 @@ processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
 
     // Try to optimize globals based on the knowledge that only one value
     // (besides its initializer) is ever stored to the global.
-    if (optimizeOnceStoredGlobal(GV, StoredOnceValue, GS.Ordering, DL, GetTLI))
+    if (optimizeOnceStoredGlobal(GV, StoredOnceValue, DL, GetTLI))
       return true;
 
     // Otherwise, if the global was not a boolean, we can shrink it to be a
