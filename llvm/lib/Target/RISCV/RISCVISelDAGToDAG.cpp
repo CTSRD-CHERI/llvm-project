@@ -318,9 +318,7 @@ void RISCVDAGToDAGISel::addVectorLoadStoreOperands(
   SDValue Chain = Node->getOperand(0);
   SDValue Glue;
 
-  SDValue Base;
-  SelectBaseAddr(Node->getOperand(CurOp++), Base);
-  Operands.push_back(Base); // Base pointer.
+  Operands.push_back(Node->getOperand(CurOp++)); // Base pointer.
 
   if (IsStridedOrIndexed) {
     Operands.push_back(Node->getOperand(CurOp++)); // Index.
@@ -1931,20 +1929,6 @@ bool RISCVDAGToDAGISel::SelectCapFrameAddrRegImm(SDValue Cap, SDValue &Base,
                                                  SDValue &Offset) {
   return SelectFrameRegImmCommon(Cap, Base, Offset,
                                  Subtarget->typeForCapabilities());
-}
-
-bool RISCVDAGToDAGISel::SelectBaseAddr(SDValue Addr, SDValue &Base) {
-  // If this is FrameIndex, select it directly. Otherwise just let it get
-  // selected to a register independently.
-  if (Addr.getValueType().isFatPointer())
-    return false;
-  assert(Addr.getValueType().isInteger() || Addr.getValueType() == MVT::iPTR);
-
-  if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr))
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
-  else
-    Base = Addr;
-  return true;
 }
 
 bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,

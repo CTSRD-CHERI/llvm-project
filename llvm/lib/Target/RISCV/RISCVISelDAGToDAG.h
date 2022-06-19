@@ -52,7 +52,6 @@ public:
   bool SelectFrameAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
   bool SelectCapFrameAddrRegImm(SDValue Cap, SDValue &Base, SDValue &Offset);
   bool SelectBase(SDValue Addr, SDValue &Base, EVT PtrVT);
-  bool SelectBaseAddr(SDValue Addr, SDValue &Base);
   bool SelectRegImmCommon(SDValue Addr, SDValue &Base, SDValue &Offset,
                           EVT PtrVT);
   bool SelectAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
