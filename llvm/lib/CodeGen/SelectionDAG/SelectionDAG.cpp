@@ -6878,7 +6878,7 @@ static SDValue getMemcpyLoadsAndStores(
     const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
     if (!TRI->hasStackRealignment(MF))
       while (NewAlign > Alignment && DL.exceedsNaturalStackAlignment(NewAlign))
-        NewAlign = NewAlign / 2;
+        NewAlign = NewAlign.previous();
 
     if (MemOps[0].isFatPointer()) {
       assert(NewAlign == DL.getABITypeAlignment(Ty) &&
