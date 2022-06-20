@@ -705,6 +705,8 @@ public:
                                            bool Insert, bool Extract) {
     /// FIXME: a bitfield is not a reasonable abstraction for talking about
     /// which elements are needed from a scalable vector
+    if (isa<ScalableVectorType>(InTy))
+      return InstructionCost::getInvalid();
     auto *Ty = cast<FixedVectorType>(InTy);
 
     assert(DemandedElts.getBitWidth() == Ty->getNumElements() &&
@@ -727,6 +729,8 @@ public:
   /// Helper wrapper for the DemandedElts variant of getScalarizationOverhead.
   InstructionCost getScalarizationOverhead(VectorType *InTy, bool Insert,
                                            bool Extract) {
+    if (isa<ScalableVectorType>(InTy))
+      return InstructionCost::getInvalid();
     auto *Ty = cast<FixedVectorType>(InTy);
 
     APInt DemandedElts = APInt::getAllOnes(Ty->getNumElements());
