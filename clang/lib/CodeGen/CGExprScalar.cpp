@@ -174,7 +174,7 @@ static llvm::Optional<QualType> getUnwidenedIntegerType(const ASTContext &Ctx,
 
 /// Check if \p E is a widened promoted integer.
 static bool IsWidenedIntegerOp(const ASTContext &Ctx, const Expr *E) {
-  return getUnwidenedIntegerType(Ctx, E).hasValue();
+  return getUnwidenedIntegerType(Ctx, E).has_value();
 }
 
 /// Check if we can skip the overflow check for \p Op.
