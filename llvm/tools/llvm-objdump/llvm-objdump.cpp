@@ -2282,7 +2282,7 @@ void objdump::printSymbol(const ObjectFile *O, const SymbolRef &Symbol,
           dyn_cast<const XCOFFObjectFile>(O), Symbol);
       if (SymRef) {
 
-        Expected<StringRef> NameOrErr = SymRef.getValue().getName();
+        Expected<StringRef> NameOrErr = SymRef->getName();
 
         if (NameOrErr) {
           outs() << " (csect:";
@@ -2442,7 +2442,7 @@ static void printFaultMaps(const ObjectFile *Obj) {
   }
 
   StringRef FaultMapContents =
-      unwrapOrError(FaultMapSection.getValue().getContents(), Obj->getFileName());
+      unwrapOrError(FaultMapSection->getContents(), Obj->getFileName());
   FaultMapParser FMP(FaultMapContents.bytes_begin(),
                      FaultMapContents.bytes_end());
 
