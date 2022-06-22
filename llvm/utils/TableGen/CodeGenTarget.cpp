@@ -693,8 +693,8 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R,
 
   EnumName = DefName.substr(4);
 
-  if (R->getValue("GCCBuiltinName"))  // Ignore a missing GCCBuiltinName field.
-    GCCBuiltinName = std::string(R->getValueAsString("GCCBuiltinName"));
+  if (R->getValue("ClangBuiltinName"))  // Ignore a missing ClangBuiltinName field.
+    ClangBuiltinName = std::string(R->getValueAsString("ClangBuiltinName"));
   if (R->getValue("GCCBuiltinAliasName"))  // Ignore a missing GCCBuiltinAliasName field.
     GCCBuiltinAliasName = std::string(R->getValueAsString("GCCBuiltinAliasName"));
   if (R->getValue("MSBuiltinName"))   // Ignore a missing MSBuiltinName field.
