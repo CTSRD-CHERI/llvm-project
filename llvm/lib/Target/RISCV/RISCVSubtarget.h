@@ -98,6 +98,7 @@ private:
   bool EnableDefaultUnroll = true;
   bool EnableSaveRestore = false;
   bool EnableUnalignedScalarMem = false;
+  bool HasLUIADDIFusion = false;
   unsigned XLen = 32;
   unsigned ZvlLen = 0;
   MVT XLenVT = MVT::i32;
@@ -193,6 +194,7 @@ public:
   bool enableDefaultUnroll() const { return EnableDefaultUnroll; }
   bool enableSaveRestore() const { return EnableSaveRestore; }
   bool enableUnalignedScalarMem() const { return EnableUnalignedScalarMem; }
+  bool hasLUIADDIFusion() const { return HasLUIADDIFusion; }
   MVT getXLenVT() const { return XLenVT; }
   unsigned getXLen() const { return XLen; }
   unsigned getFLen() const {
@@ -227,6 +229,8 @@ public:
     assert(HasCheri && "Cannot get capability type for non-CHERI");
     return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
   }
+
+  bool hasMacroFusion() const { return hasLUIADDIFusion(); }
 
   // Vector codegen related methods.
   bool hasVInstructions() const { return HasStdExtZve32x; }
@@ -270,6 +274,9 @@ public:
   bool useRVVForFixedLengthVectors() const;
 
   bool enableSubRegLiveness() const override;
+
+  void getPostRAMutations(std::vector<std::unique_ptr<ScheduleDAGMutation>>
+                              &Mutations) const override;
 };
 } // End llvm namespace
 
