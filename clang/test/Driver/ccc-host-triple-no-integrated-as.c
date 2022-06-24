@@ -5,12 +5,12 @@
 // RUN:   | FileCheck -check-prefix=X86 %s
 // RUN: %clang -### -c -target x86_64-pc-win32-macho -no-integrated-as %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=X86_64 %s
-//
+
 // X86: "-cc1"
 // X86-NOT: "-cc1as"
 // X86: "-arch"
 // X86: "i386"
-//
+
 // X86_64: "-cc1"
 // X86_64-NOT: "-cc1as"
 // X86_64: "-arch"
