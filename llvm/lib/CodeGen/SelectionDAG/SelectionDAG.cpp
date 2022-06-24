@@ -24,6 +24,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/Analysis.h"
@@ -6816,8 +6817,8 @@ static SDValue getMemcpyLoadsAndStores(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     uint64_t Size, Align Alignment, bool isVol, bool AlwaysInline,
     PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
-    MachinePointerInfo SrcPtrInfo, const AAMDNodes &AAInfo, StringRef CopyTy,
-    CodeGenOpt::Level OptLevel) {
+    MachinePointerInfo SrcPtrInfo, const AAMDNodes &AAInfo, AAResults *AA,
+    StringRef CopyTy, CodeGenOpt::Level OptLevel) {
   // Turn a memcpy of undef to nop.
   // FIXME: We need to honor volatile even is Src is undef.
   if (Src.isUndef())
@@ -6918,6 +6919,11 @@ static SDValue getMemcpyLoadsAndStores(
   AAMDNodes NewAAInfo = AAInfo;
   NewAAInfo.TBAA = NewAAInfo.TBAAStruct = nullptr;
 
+  const Value *SrcVal = SrcPtrInfo.V.dyn_cast<const Value *>();
+  bool isConstant =
+      AA && SrcVal &&
+      AA->pointsToConstantMemory(MemoryLocation(SrcVal, Size, AAInfo));
+
   MachineMemOperand::Flags MMOFlags =
       isVol ? MachineMemOperand::MOVolatile : MachineMemOperand::MONone;
   SmallVector<SDValue, 16> OutLoadChains;
@@ -6979,6 +6985,8 @@ static SDValue getMemcpyLoadsAndStores(
       MachineMemOperand::Flags SrcMMOFlags = MMOFlags;
       if (isDereferenceable)
         SrcMMOFlags |= MachineMemOperand::MODereferenceable;
+      if (isConstant)
+        SrcMMOFlags |= MachineMemOperand::MOInvariant;
 
       Value = DAG.getExtLoad(
           ISD::EXTLOAD, dl, NVT, Chain,
@@ -7328,7 +7336,8 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                 PreserveCheriTags PreserveTags,
                                 MachinePointerInfo DstPtrInfo,
                                 MachinePointerInfo SrcPtrInfo,
-                                const AAMDNodes &AAInfo, StringRef CopyType) {
+                                const AAMDNodes &AAInfo, AAResults *AA,
+                                StringRef CopyType) {
   LLVM_DEBUG(dbgs() << "DAG.getMemcpy() align=" << Alignment.value()
                     << " size=";
              Size.dump(););
@@ -7344,8 +7353,8 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
 
     SDValue Result = getMemcpyLoadsAndStores(
         *this, dl, Chain, Dst, Src, ConstantSize->getZExtValue(), Alignment,
-        isVol, false, PreserveTags, DstPtrInfo, SrcPtrInfo, AAInfo, CopyType,
-        OptLevel);
+        isVol, false, PreserveTags, DstPtrInfo, SrcPtrInfo, AAInfo, AA,
+        CopyType, OptLevel);
     if (Result.getNode())
       return Result;
   }
@@ -7367,7 +7376,7 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
     return getMemcpyLoadsAndStores(*this, dl, Chain, Dst, Src,
                                    ConstantSize->getZExtValue(), Alignment,
                                    isVol, true, PreserveTags, DstPtrInfo,
-                                   SrcPtrInfo, AAInfo, CopyType, OptLevel);
+                                   SrcPtrInfo, AAInfo, AA, CopyType, OptLevel);
   }
 
   checkAddrSpaceIsValidForLibcall(TLI, DstPtrInfo.getAddrSpace());
@@ -7450,8 +7459,8 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                  PreserveCheriTags PreserveTags,
                                  MachinePointerInfo DstPtrInfo,
                                  MachinePointerInfo SrcPtrInfo,
-                                 const AAMDNodes &AAInfo, StringRef MoveType) {
-
+                                 const AAMDNodes &AAInfo, AAResults *AA,
+                                 StringRef MoveType) {
   // Check to see if we should lower the memmove to loads and stores first.
   // For cases within the target-specified limits, this is the best choice.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);

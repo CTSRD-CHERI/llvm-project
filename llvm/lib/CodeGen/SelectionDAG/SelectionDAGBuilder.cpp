@@ -4118,6 +4118,8 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
     return;
 
   bool isVolatile = I.isVolatile();
+  MachineMemOperand::Flags MMOFlags =
+      TLI.getLoadMemOperandFlags(I, DAG.getDataLayout());
 
   SDValue Root;
   bool ConstantMemory = false;
@@ -4134,6 +4136,12 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
     // Do not serialize (non-volatile) loads of constant memory with anything.
     Root = DAG.getEntryNode();
     ConstantMemory = true;
+    MMOFlags |= MachineMemOperand::MOInvariant;
+
+    // FIXME: pointsToConstantMemory probably does not imply dereferenceable,
+    // but the previous usage implied it did. Probably should check
+    // isDereferenceableAndAlignedPointer.
+    MMOFlags |= MachineMemOperand::MODereferenceable;
   } else {
     // Do not serialize non-volatile loads against each other.
     Root = DAG.getRoot();
@@ -4151,9 +4159,6 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
 
   SmallVector<SDValue, 4> Values(NumValues);
   SmallVector<SDValue, 4> Chains(std::min(MaxParallelChains, NumValues));
-
-  MachineMemOperand::Flags MMOFlags
-    = TLI.getLoadMemOperandFlags(I, DAG.getDataLayout());
 
   unsigned ChainI = 0;
   for (unsigned i = 0; i != NumValues; ++i, ++ChainI) {
@@ -5905,12 +5910,12 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     // FIXME: Support passing different dest/src alignments to the memcpy DAG
     // node.
     SDValue Root = isVol ? getRoot() : getMemoryRoot();
-    SDValue MC = DAG.getMemcpy(Root, sdl, Op1, Op2, Op3, Alignment, isVol,
-                               /* AlwaysInline */ false, isTC,
-                               MCI.shouldPreserveCheriTags(),
-                               MachinePointerInfo(I.getArgOperand(0)),
-                               MachinePointerInfo(I.getArgOperand(1)),
-                               I.getAAMetadata(), MCI.getFrontendCopyType());
+    SDValue MC = DAG.getMemcpy(
+        Root, sdl, Op1, Op2, Op3, Alignment, isVol,
+        /* AlwaysInline */ false, isTC, MCI.shouldPreserveCheriTags(),
+        MachinePointerInfo(I.getArgOperand(0)),
+        MachinePointerInfo(I.getArgOperand(1)), I.getAAMetadata(), AA,
+        MCI.getFrontendCopyType());
     updateDAGForMaybeTailCall(MC);
     return;
   }
@@ -5928,12 +5933,12 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     bool isTC = I.isTailCall() && isInTailCallPosition(I, DAG.getTarget());
     // FIXME: Support passing different dest/src alignments to the memcpy DAG
     // node.
-    SDValue MC = DAG.getMemcpy(getRoot(), sdl, Dst, Src, Size, Alignment, isVol,
-                               /* AlwaysInline */ true, isTC,
-                               MCI.shouldPreserveCheriTags(),
-                               MachinePointerInfo(I.getArgOperand(0)),
-                               MachinePointerInfo(I.getArgOperand(1)),
-                               I.getAAMetadata(), MCI.getFrontendCopyType());
+    SDValue MC = DAG.getMemcpy(
+        getRoot(), sdl, Dst, Src, Size, Alignment, isVol,
+        /* AlwaysInline */ true, isTC, MCI.shouldPreserveCheriTags(),
+        MachinePointerInfo(I.getArgOperand(0)),
+        MachinePointerInfo(I.getArgOperand(1)), I.getAAMetadata(), AA,
+        MCI.getFrontendCopyType());
     updateDAGForMaybeTailCall(MC);
     return;
   }
@@ -5985,11 +5990,11 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     // FIXME: Support passing different dest/src alignments to the memmove DAG
     // node.
     SDValue Root = isVol ? getRoot() : getMemoryRoot();
-    SDValue MM = DAG.getMemmove(Root, sdl, Op1, Op2, Op3, Alignment, isVol,
-                                isTC, MMI.shouldPreserveCheriTags(),
-                                MachinePointerInfo(I.getArgOperand(0)),
-                                MachinePointerInfo(I.getArgOperand(1)),
-                                I.getAAMetadata(), MMI.getFrontendCopyType());
+    SDValue MM = DAG.getMemmove(
+        Root, sdl, Op1, Op2, Op3, Alignment, isVol, isTC,
+        MMI.shouldPreserveCheriTags(), MachinePointerInfo(I.getArgOperand(0)),
+        MachinePointerInfo(I.getArgOperand(1)), I.getAAMetadata(), AA,
+        MMI.getFrontendCopyType());
     updateDAGForMaybeTailCall(MM);
     return;
   }
@@ -8132,11 +8137,12 @@ bool SelectionDAGBuilder::visitMemPCpyCall(const CallInst &I) {
   // because the return pointer needs to be adjusted by the size of
   // the copied memory.
   SDValue Root = isVol ? getRoot() : getMemoryRoot();
-  SDValue MC = DAG.getMemcpy(Root, sdl, Dst, Src, Size, Alignment, isVol, false,
-                             /*isTailCall=*/false, shouldPreserveTags(&I),
-                             MachinePointerInfo(I.getArgOperand(0)),
-                             MachinePointerInfo(I.getArgOperand(1)),
-                             I.getAAMetadata(), CopyType.getValueAsString());
+  SDValue MC =
+      DAG.getMemcpy(Root, sdl, Dst, Src, Size, Alignment, isVol, false,
+                    /*isTailCall=*/false, shouldPreserveTags(&I),
+                    MachinePointerInfo(I.getArgOperand(0)),
+                    MachinePointerInfo(I.getArgOperand(1)), I.getAAMetadata(),
+                    AA, CopyType.getValueAsString());
   assert(MC.getNode() != nullptr &&
          "** memcpy should not be lowered as TailCall in mempcpy context **");
   DAG.setRoot(MC);
