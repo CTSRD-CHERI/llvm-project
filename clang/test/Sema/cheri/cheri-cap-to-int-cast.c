@@ -15,8 +15,8 @@
 
 
 void* __capability a;
-typedef __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__ vaddr_t;
-typedef __attribute__((memory_address)) vaddr_t double_attribute;  // expected-warning {{attribute 'memory_address' is already applied}}
+typedef __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__ ptraddr_t;
+typedef __attribute__((memory_address)) ptraddr_t double_attribute;  // expected-warning {{attribute 'memory_address' is already applied}}
 typedef __attribute__((memory_address)) __intcap err_cap_type;  // expected-error {{'memory_address' attribute only applies to integer types that can store addresses ('__intcap' is invalid)}}
 typedef __attribute__((memory_address)) struct foo err_struct_type; // expected-error {{'memory_address' attribute only applies to integer types that can store addresses ('struct foo' is invalid)}}
 typedef int* __attribute__((memory_address)) err_pointer_type; // expected-error {{'memory_address' attribute only applies to integer types that can store addresses}}
@@ -67,7 +67,7 @@ Program received signal SIGABRT, Aborted.
     DeclEnd=..., attrs=...)
     at /home/alr48/cheri/sources/llvm/tools/clang/lib/Parse/ParseDecl.cpp:1486
 */
-typedef const vaddr_t other_addr_t;
+typedef const ptraddr_t other_addr_t;
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
 typedef unsigned __intcap uintptr_t;
 typedef __intcap intptr_t;
@@ -109,18 +109,18 @@ void foo(void) {
   __intcap x8 = (__intcap)a; 
   // AST: CStyleCastExpr {{.+}} '__intcap' <PointerToIntegral>
 
-  vaddr_t x10 = (vaddr_t)a;
-  // AST: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
+  ptraddr_t x10 = (ptraddr_t)a;
+  // AST: CStyleCastExpr {{.+}} 'ptraddr_t':'unsigned long' <PointerToIntegral>
   other_addr_t x11 = (other_addr_t)a;
-  // AST: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
+  // AST: CStyleCastExpr {{.+}} 'ptraddr_t':'unsigned long' <PointerToIntegral>
   void* __capability x12 = (void* __capability)a;
   // AST: CStyleCastExpr {{.+}} 'void * __capability' <NoOp>
   int x13 = (int)(uintptr_t)a;  // TODO: later on this should probably also be an error
   // AST: CStyleCastExpr {{.+}} 'int' <IntegralCast>
   // AST-NEXT: CStyleCastExpr {{.+}} 'uintptr_t':'unsigned __intcap' <PointerToIntegral>
-  int x14 = (int)(vaddr_t)a;
+  int x14 = (int)(ptraddr_t)a;
   // AST: CStyleCastExpr {{.+}} 'int' <IntegralCast>
-  // AST-NEXT: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
+  // AST-NEXT: CStyleCastExpr {{.+}} 'ptraddr_t':'unsigned long' <PointerToIntegral>
   word* __capability x15 = (word* __capability)a;
   // AST: CStyleCastExpr {{.+}} 'word * __capability' <BitCast>
   long x16 = (long __attribute__((memory_address)))a; // no warning

@@ -2,7 +2,7 @@
 // RUN: %cheri_purecap_cc1 -DCODEGEN -Wno-tautological-compare -o - -O2 -emit-llvm %s -cheri-uintcap=offset | FileCheck %s -check-prefix=PURECAP
 // RUN: %cheri_cc1 -DCODEGEN -Wno-tautological-compare -o - -O2 -emit-llvm %s -cheri-uintcap=offset | FileCheck %s -check-prefix=HYBRID
 
-typedef long vaddr_t;
+typedef long ptraddr_t;
 typedef __UINTPTR_TYPE__ uintptr_t;
 
 #define __static_assert_power_of_two(val)                          \
@@ -13,14 +13,14 @@ typedef __UINTPTR_TYPE__ uintptr_t;
 #define __macro_is_aligned_array(addr, align) ({                               \
   extern char __check_align_is_power_of_two[__builtin_choose_expr(             \
       __builtin_constant_p(align), ((align & (align - 1)) == 0 ? 1 : -1), 1)]; \
-  _Bool result = ((vaddr_t)addr & ((vaddr_t)(align)-1)) == 0;                  \
+  _Bool result = ((ptraddr_t)addr & ((ptraddr_t)(align)-1)) == 0;              \
   result;                                                                      \
 })
 
-#define __macro_is_aligned(addr, align) ({                        \
-  __static_assert_power_of_two(align)                             \
-      _Bool result = ((vaddr_t)addr & ((vaddr_t)(align)-1)) == 0; \
-  result;                                                         \
+#define __macro_is_aligned(addr, align) ({                          \
+  __static_assert_power_of_two(align)                               \
+      _Bool result = ((ptraddr_t)addr & ((ptraddr_t)(align)-1)) == 0; \
+  result;                                                           \
 })
 
 // PURECAP-LABEL: define {{[^@]+}}@is_aligned_macro
@@ -101,9 +101,9 @@ _Bool is_aligned_builtin(int *ptr, int align) {
 // HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8* [[RESULT_0]] to i32*
 // HYBRID-NEXT:    ret i32* [[TMP2]]
 //
-int *align_up_inline(int *ptr, vaddr_t align) {
+int *align_up_inline(int *ptr, ptraddr_t align) {
   char *result = (char *)ptr;
-  vaddr_t unaligned = (vaddr_t)ptr & (align - 1);
+  ptraddr_t unaligned = (ptraddr_t)ptr & (align - 1);
   if (unaligned != 0) {
     result += align - unaligned;
   }
@@ -112,7 +112,7 @@ int *align_up_inline(int *ptr, vaddr_t align) {
 
 #define __macro_align_up(addr, align) ({                                                       \
   __static_assert_power_of_two(align);                                                         \
-  vaddr_t unaligned_bits = (vaddr_t)addr & (align - 1);                                        \
+  ptraddr_t unaligned_bits = (ptraddr_t)addr & (align - 1);                                        \
   unaligned_bits == 0 ? addr : (__typeof__(addr))((uintptr_t)addr + (align - unaligned_bits)); \
 })
 
@@ -149,7 +149,7 @@ int *align_up_inline(int *ptr, vaddr_t align) {
 // HYBRID-NEXT:    [[COND:%.*]] = select i1 [[CMP]], i32* [[PTR]], i32* [[TMP1]]
 // HYBRID-NEXT:    ret i32* [[COND]]
 //
-int *align_up_macro(int *ptr, vaddr_t align) {
+int *align_up_macro(int *ptr, ptraddr_t align) {
   return __macro_align_up(ptr, align);
 }
 
@@ -183,7 +183,7 @@ int *align_up_macro(int *ptr, vaddr_t align) {
 // HYBRID-NEXT:    call void @llvm.assume(i1 true) [ "align"(i32* [[TMP1]], i64 [[ALIGN]]) ]
 // HYBRID-NEXT:    ret i32* [[TMP1]]
 //
-int *align_up_builtin(int *ptr, vaddr_t align) {
+int *align_up_builtin(int *ptr, ptraddr_t align) {
   return __builtin_align_up(ptr, align);
 }
 
@@ -209,7 +209,7 @@ int *align_up_builtin(int *ptr, vaddr_t align) {
 // HYBRID-NEXT:    [[COND:%.*]] = add i64 [[ADD]], [[ADDR]]
 // HYBRID-NEXT:    ret i64 [[COND]]
 //
-vaddr_t align_up_macro_int_type(vaddr_t addr, vaddr_t align) {
+ptraddr_t align_up_macro_int_type(ptraddr_t addr, ptraddr_t align) {
   return __macro_align_up(addr, align);
 }
 
@@ -231,7 +231,7 @@ vaddr_t align_up_macro_int_type(vaddr_t addr, vaddr_t align) {
 // HYBRID-NEXT:    [[ALIGNED_RESULT:%.*]] = and i64 [[OVER_BOUNDARY]], [[INVERTED_MASK]]
 // HYBRID-NEXT:    ret i64 [[ALIGNED_RESULT]]
 //
-vaddr_t align_up_builtin_int_type(vaddr_t addr, vaddr_t align) {
+ptraddr_t align_up_builtin_int_type(ptraddr_t addr, ptraddr_t align) {
   return __builtin_align_up(addr, align);
 }
 
@@ -265,7 +265,7 @@ int align_up_builtin_const() {
 
 #define __macro_align_down(addr, align) ({              \
   __static_assert_power_of_two(align);                  \
-  vaddr_t unaligned_bits = (vaddr_t)addr & (align - 1); \
+  ptraddr_t unaligned_bits = (ptraddr_t)addr & (align - 1); \
   (__typeof__(addr))((uintptr_t)addr - unaligned_bits); \
 })
 
@@ -291,7 +291,7 @@ int align_up_builtin_const() {
 // HYBRID-NEXT:    [[TMP1:%.*]] = inttoptr i64 [[SUB1]] to i32*
 // HYBRID-NEXT:    ret i32* [[TMP1]]
 //
-int *align_down_macro(int *ptr, vaddr_t align) {
+int *align_down_macro(int *ptr, ptraddr_t align) {
   return __macro_align_down(ptr, align);
 }
 
@@ -321,7 +321,7 @@ int *align_down_macro(int *ptr, vaddr_t align) {
 // HYBRID-NEXT:    call void @llvm.assume(i1 true) [ "align"(i32* [[TMP3]], i64 [[ALIGN]]) ]
 // HYBRID-NEXT:    ret i32* [[TMP3]]
 //
-int *align_down_builtin(int *ptr, vaddr_t align) {
+int *align_down_builtin(int *ptr, ptraddr_t align) {
   return __builtin_align_down(ptr, align);
 }
 
@@ -339,7 +339,7 @@ int *align_down_builtin(int *ptr, vaddr_t align) {
 // HYBRID-NEXT:    [[SUB1:%.*]] = and i64 [[SUB_NOT]], [[ADDR]]
 // HYBRID-NEXT:    ret i64 [[SUB1]]
 //
-vaddr_t align_down_macro_int_type(vaddr_t addr, vaddr_t align) {
+ptraddr_t align_down_macro_int_type(ptraddr_t addr, ptraddr_t align) {
   return __macro_align_down(addr, align);
 }
 
@@ -357,7 +357,7 @@ vaddr_t align_down_macro_int_type(vaddr_t addr, vaddr_t align) {
 // HYBRID-NEXT:    [[ALIGNED_RESULT:%.*]] = and i64 [[INVERTED_MASK]], [[ADDR]]
 // HYBRID-NEXT:    ret i64 [[ALIGNED_RESULT]]
 //
-vaddr_t align_down_builtin_int_type(vaddr_t addr, vaddr_t align) {
+ptraddr_t align_down_builtin_int_type(ptraddr_t addr, ptraddr_t align) {
   return __builtin_align_down(addr, align);
 }
 

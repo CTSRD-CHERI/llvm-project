@@ -883,7 +883,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     // sizeof and max macros, and not the type and width ones.
     DefineTypeSizeof("__SIZEOF_UINTCAP__", CapWidth, TI, Builder);
     DefineTypeSizeof("__SIZEOF_INTCAP__", CapWidth, TI, Builder);
-    // For the range we use the underlying ptrdiff_t/vaddr_t type
+    // For the range we use the underlying ptrdiff_t/ptraddr_t type
     DefineTypeSize("__INTCAP_MAX__", TI.getIntTypeByWidth(CapRange, true), TI, Builder);
     DefineTypeSize("__UINTCAP_MAX__", TI.getIntTypeByWidth(CapRange, false), TI, Builder);
 

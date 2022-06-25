@@ -4,10 +4,10 @@
 // RUN: %cheri_cc1 %s -o - -emit-llvm | %cheri_FileCheck %s -check-prefix=HYBRID
 // RUN: %cheri_purecap_cc1 %s -o - -emit-llvm | %cheri_FileCheck %s -check-prefix=PURECAP
 
-typedef __SIZE_TYPE__ vaddr_t;
+typedef __SIZE_TYPE__ ptraddr_t;
 // The existing inline function macro from cheric.h
 static __attribute__((always_inline)) inline void *__capability
-cheri_setaddress(const void *__capability dst, vaddr_t addr) {
+cheri_setaddress(const void *__capability dst, ptraddr_t addr) {
   return (__builtin_cheri_offset_increment(dst, addr - __builtin_cheri_address_get(dst)));
 }
 
@@ -53,7 +53,7 @@ cheri_setaddress(const void *__capability dst, vaddr_t addr) {
 // PURECAP-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT_I:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i64 [[SUB_I]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[__BUILTIN_CHERI_OFFSET_INCREMENT_I]]
 //
-void *__capability use_sys_cheric_function(void *__capability in, vaddr_t new_addr) {
+void *__capability use_sys_cheric_function(void *__capability in, ptraddr_t new_addr) {
   return cheri_setaddress(in, new_addr);
   // ASM-LABEL: .ent use_sys_cheric_function
   // ASM: csetaddr $c3, $c3, $4
@@ -84,7 +84,7 @@ void *__capability use_sys_cheric_function(void *__capability in, vaddr_t new_ad
 // PURECAP-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP1]])
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP2]]
 //
-void *__capability use_builtin_function(void *__capability in, vaddr_t new_addr) {
+void *__capability use_builtin_function(void *__capability in, ptraddr_t new_addr) {
   return __builtin_cheri_address_set(in, new_addr);
   // ASM-LABEL: .ent use_builtin_function
   // ASM: csetaddr $c3, $c3, $4
@@ -121,7 +121,7 @@ void *__capability use_builtin_function(void *__capability in, vaddr_t new_addr)
 // PURECAP-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[RESULT]], align 16
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
-void *__capability use_asm(void *__capability in, vaddr_t new_addr) {
+void *__capability use_asm(void *__capability in, ptraddr_t new_addr) {
   void *__capability result;
   __asm__ ("csetaddr %0, %1, %2\n\t" :"=C"(result) : "C"(in), "r"(new_addr));
   return result;
