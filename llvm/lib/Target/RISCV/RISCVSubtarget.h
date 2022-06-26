@@ -90,6 +90,7 @@ private:
   bool HasStdExtZicbom = false;
   bool HasStdExtZicboz = false;
   bool HasStdExtZicbop = false;
+  bool HasStdExtZmmul = false;
   bool HasRV64 = false;
   bool IsRV32E = false;
   bool HasCheri = false;
@@ -189,6 +190,7 @@ public:
   bool hasStdExtZicbom() const { return HasStdExtZicbom; }
   bool hasStdExtZicboz() const { return HasStdExtZicboz; }
   bool hasStdExtZicbop() const { return HasStdExtZicbop; }
+  bool hasStdExtZmmul() const { return HasStdExtZmmul; }
   bool is64Bit() const { return HasRV64; }
   bool isRV32E() const { return IsRV32E; }
   bool hasCheri() const { return HasCheri; }
