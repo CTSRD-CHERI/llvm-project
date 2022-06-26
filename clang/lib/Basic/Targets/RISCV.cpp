@@ -311,7 +311,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
                     .Case("64bit", Is64Bit)
                     .Case("xcheri", HasCheri)
                     .Default(None);
-  if (Result.hasValue())
+  if (Result)
     return Result.getValue();
 
   if (ISAInfo->isSupportedExtensionFeature(Feature))
