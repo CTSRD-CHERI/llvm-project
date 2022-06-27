@@ -1850,10 +1850,10 @@ bool RISCVDAGToDAGISel::SelectFrameRegImmCommon(SDValue Addr, SDValue &Base,
     return false;
 
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
-    auto *CN = cast<ConstantSDNode>(Addr.getOperand(1));
-    if (isInt<12>(CN->getSExtValue())) {
+    int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
+    if (isInt<12>(CVal)) {
       Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
-      Offset = CurDAG->getTargetConstant(CN->getSExtValue(), SDLoc(Addr),
+      Offset = CurDAG->getTargetConstant(CVal, SDLoc(Addr),
                                          Subtarget->getXLenVT());
       return true;
     }
@@ -1894,12 +1894,12 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
     return true;
 
   if (CurDAG->isBaseWithConstantOffset(Addr)) {
-    auto *CN = cast<ConstantSDNode>(Addr.getOperand(1));
-    if (isInt<12>(CN->getSExtValue())) {
+    int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
+    if (isInt<12>(CVal)) {
       Base = Addr.getOperand(0);
       if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
         Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
-      Offset = CurDAG->getTargetConstant(CN->getSExtValue(), SDLoc(Addr),
+      Offset = CurDAG->getTargetConstant(CVal, SDLoc(Addr),
                                          Subtarget->getXLenVT());
       return true;
     }
