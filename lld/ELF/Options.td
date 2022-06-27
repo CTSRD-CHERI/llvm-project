@@ -733,7 +733,6 @@ def captable_scope_function: F<"captable-scope=function">,
 // Options listed below are silently ignored for now for compatibility.
 def: F<"detect-odr-violations">;
 def: Flag<["-"], "d">;
-def: Flag<["-"], "dc">;
 def: Flag<["-"], "g">;
 def: F<"long-plt">;
 def: FF<"no-add-needed">;
