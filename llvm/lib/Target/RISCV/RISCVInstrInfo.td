@@ -1713,6 +1713,7 @@ include "RISCVInstrInfoZb.td"
 include "RISCVInstrInfoZk.td"
 include "RISCVInstrInfoV.td"
 include "RISCVInstrInfoZfh.td"
+include "RISCVInstrInfoZicbo.td"
 
 //===----------------------------------------------------------------------===//
 // Non-standard Extensions
