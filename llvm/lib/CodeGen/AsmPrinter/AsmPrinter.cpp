@@ -1052,7 +1052,7 @@ void AsmPrinter::emitFunctionHeader() {
     auto *PrologueSig = mdconst::extract<Constant>(MD->getOperand(0));
     auto *FTRTTIProxy = mdconst::extract<Constant>(MD->getOperand(1));
     assert(PrologueSig && FTRTTIProxy);
-    emitGlobalConstant(F.getParent()->getDataLayout(), PrologueSig);
+    emitGlobalConstant(F.getParent()->getDataLayout(), PrologueSig, 0);
 
     const MCExpr *Proxy = lowerConstant(FTRTTIProxy);
     const MCExpr *FnExp = MCSymbolRefExpr::create(CurrentFnSym, OutContext);

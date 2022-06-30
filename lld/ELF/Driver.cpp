@@ -98,12 +98,6 @@ bool elf::link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
   ctx->e.cleanupCallback = []() {
     inputSections.clear();
     outputSections.clear();
-    memoryBuffers.clear();
-    binaryFiles.clear();
-    bitcodeFiles.clear();
-    lazyBitcodeFiles.clear();
-    objectFiles.clear();
-    sharedFiles.clear();
     symAux.clear();
 
     tar = nullptr;
@@ -207,7 +201,7 @@ std::vector<std::pair<MemoryBufferRef, uint64_t>> static getArchiveMembers(
 
   // Take ownership of memory buffers created for members of thin archives.
   std::vector<std::unique_ptr<MemoryBuffer>> mbs = file->takeThinBuffers();
-  std::move(mbs.begin(), mbs.end(), std::back_inserter(memoryBuffers));
+  std::move(mbs.begin(), mbs.end(), std::back_inserter(ctx->memoryBuffers));
 
   return v;
 }
@@ -911,7 +905,7 @@ static std::pair<bool, bool> getPackDynRelocs(opt::InputArgList &args) {
 static void readCallGraph(MemoryBufferRef mb) {
   // Build a map from symbol name to section
   DenseMap<StringRef, Symbol *> map;
-  for (ELFFileBase *file : objectFiles)
+  for (ELFFileBase *file : ctx->objectFiles)
     for (Symbol *sym : file->getSymbols())
       map[sym->getName()] = sym;
 
@@ -990,7 +984,7 @@ processCallGraphRelocations(SmallVector<uint32_t, 32> &symbolIndices,
 template <class ELFT> static void readCallGraphsFromObjectFiles() {
   SmallVector<uint32_t, 32> symbolIndices;
   ArrayRef<typename ELFT::CGProfile> cgProfile;
-  for (auto file : objectFiles) {
+  for (auto file : ctx->objectFiles) {
     auto *obj = cast<ObjFile<ELFT>>(file);
     if (!processCallGraphRelocations(symbolIndices, cgProfile, obj))
       continue;
@@ -1847,10 +1841,10 @@ static void excludeLibs(opt::InputArgList &args) {
         sym->versionId = VER_NDX_LOCAL;
   };
 
-  for (ELFFileBase *file : objectFiles)
+  for (ELFFileBase *file : ctx->objectFiles)
     visit(file);
 
-  for (BitcodeFile *file : bitcodeFiles)
+  for (BitcodeFile *file : ctx->bitcodeFiles)
     visit(file);
 }
 
@@ -1916,10 +1910,10 @@ static void writeArchiveStats() {
 
   SmallVector<StringRef, 0> archives;
   DenseMap<CachedHashStringRef, unsigned> all, extracted;
-  for (ELFFileBase *file : objectFiles)
+  for (ELFFileBase *file : ctx->objectFiles)
     if (file->archiveName.size())
       ++extracted[CachedHashStringRef(file->archiveName)];
-  for (BitcodeFile *file : bitcodeFiles)
+  for (BitcodeFile *file : ctx->bitcodeFiles)
     if (file->archiveName.size())
       ++extracted[CachedHashStringRef(file->archiveName)];
   for (std::pair<StringRef, unsigned> f : driver->archiveFiles) {
@@ -2043,7 +2037,7 @@ static void writeDependencyFile() {
 // symbols of type CommonSymbol.
 static void replaceCommonSymbols() {
   llvm::TimeTraceScope timeScope("Replace common symbols");
-  for (ELFFileBase *file : objectFiles) {
+  for (ELFFileBase *file : ctx->objectFiles) {
     if (!file->hasCommonSyms)
       continue;
     for (Symbol *sym : file->getGlobalSymbols()) {
@@ -2119,7 +2113,7 @@ static void findKeepUniqueSections(opt::InputArgList &args) {
 
   // Visit the address-significance table in each object file and mark each
   // referenced symbol as address-significant.
-  for (InputFile *f : objectFiles) {
+  for (InputFile *f : ctx->objectFiles) {
     auto *obj = cast<ObjFile<ELFT>>(f);
     ArrayRef<Symbol *> syms = obj->getSymbols();
     if (obj->addrsigSec) {
@@ -2205,18 +2199,18 @@ static void markBuffersAsDontNeed(bool skipLinkedOutput) {
   // buffers as MADV_DONTNEED so that these pages can be reused by the expensive
   // thin link, saving memory.
   if (skipLinkedOutput) {
-    for (MemoryBuffer &mb : llvm::make_pointee_range(memoryBuffers))
+    for (MemoryBuffer &mb : llvm::make_pointee_range(ctx->memoryBuffers))
       mb.dontNeedIfMmap();
     return;
   }
 
   // Otherwise, just mark MemoryBuffers backing BitcodeFiles.
   DenseSet<const char *> bufs;
-  for (BitcodeFile *file : bitcodeFiles)
+  for (BitcodeFile *file : ctx->bitcodeFiles)
     bufs.insert(file->mb.getBufferStart());
-  for (BitcodeFile *file : lazyBitcodeFiles)
+  for (BitcodeFile *file : ctx->lazyBitcodeFiles)
     bufs.insert(file->mb.getBufferStart());
-  for (MemoryBuffer &mb : llvm::make_pointee_range(memoryBuffers))
+  for (MemoryBuffer &mb : llvm::make_pointee_range(ctx->memoryBuffers))
     if (bufs.count(mb.getBufferStart()))
       mb.dontNeedIfMmap();
 }
@@ -2233,10 +2227,10 @@ void LinkerDriver::compileBitcodeFiles(bool skipLinkedOutput) {
   llvm::TimeTraceScope timeScope("LTO");
   // Compile bitcode files and replace bitcode symbols.
   lto.reset(new BitcodeCompiler);
-  for (BitcodeFile *file : bitcodeFiles)
+  for (BitcodeFile *file : ctx->bitcodeFiles)
     lto->add(*file);
 
-  if (!bitcodeFiles.empty())
+  if (!ctx->bitcodeFiles.empty())
     markBuffersAsDontNeed(skipLinkedOutput);
 
   for (InputFile *file : lto->compile()) {
@@ -2248,7 +2242,7 @@ void LinkerDriver::compileBitcodeFiles(bool skipLinkedOutput) {
       for (Symbol *sym : obj->getGlobalSymbols())
         if (sym->hasVersionSuffix)
           sym->parseSymbolVersion();
-    objectFiles.push_back(obj);
+    ctx->objectFiles.push_back(obj);
   }
 }
 
@@ -2373,7 +2367,7 @@ static void redirectSymbols(ArrayRef<WrappedSymbol> wrapped) {
     return;
 
   // Update pointers in input files.
-  parallelForEach(objectFiles, [&](ELFFileBase *file) {
+  parallelForEach(ctx->objectFiles, [&](ELFFileBase *file) {
     for (Symbol *&sym : file->getMutableGlobalSymbols())
       if (Symbol *s = map.lookup(sym))
         sym = s;
@@ -2408,7 +2402,7 @@ static uint32_t getAndFeatures() {
     return 0;
 
   uint32_t ret = -1;
-  for (ELFFileBase *f : objectFiles) {
+  for (ELFFileBase *f : ctx->objectFiles) {
     uint32_t features = f->andFeatures;
 
     checkAndReportMissingFeature(
@@ -2562,7 +2556,7 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // We also need one if any shared libraries are used and for pie executables
   // (probably because the dynamic linker needs it).
   config->hasDynSymTab =
-      !sharedFiles.empty() || config->isPic || (config->exportDynamic && !config->isStatic);
+      !ctx->sharedFiles.empty() || config->isPic || (config->exportDynamic && !config->isStatic);
 
   // Some symbols (such as __ehdr_start) are defined lazily only when there
   // are undefined symbols for them, so we add these to trigger that logic.
@@ -2608,7 +2602,7 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // to, i.e. if the symbol's definition is in bitcode. Any other required
   // libcall symbols will be added to the link after LTO when we add the LTO
   // object file to the link.
-  if (!bitcodeFiles.empty())
+  if (!ctx->bitcodeFiles.empty())
     for (auto *s : lto::LTO::getRuntimeLibcallSymbols())
       handleLibcall(s);
 
@@ -2617,9 +2611,10 @@ void LinkerDriver::link(opt::InputArgList &args) {
 
   // No more lazy bitcode can be extracted at this point. Do post parse work
   // like checking duplicate symbols.
-  parallelForEach(objectFiles, initializeLocalSymbols);
-  parallelForEach(objectFiles, postParseObjectFile);
-  parallelForEach(bitcodeFiles, [](BitcodeFile *file) { file->postParse(); });
+  parallelForEach(ctx->objectFiles, initializeLocalSymbols);
+  parallelForEach(ctx->objectFiles, postParseObjectFile);
+  parallelForEach(ctx->bitcodeFiles,
+                  [](BitcodeFile *file) { file->postParse(); });
   for (auto &it : ctx->nonPrevailingSyms) {
     Symbol &sym = *it.first;
     sym.replace(Undefined{sym.file, sym.getName(), sym.binding, sym.stOther,
@@ -2682,7 +2677,7 @@ void LinkerDriver::link(opt::InputArgList &args) {
   //
   // With this the symbol table should be complete. After this, no new names
   // except a few linker-synthesized ones will be added to the symbol table.
-  const size_t numObjsBeforeLTO = objectFiles.size();
+  const size_t numObjsBeforeLTO = ctx->objectFiles.size();
   invokeELFT(compileBitcodeFiles, skipLinkedOutput);
 
   // Symbol resolution finished. Report backward reference problems,
@@ -2699,7 +2694,7 @@ void LinkerDriver::link(opt::InputArgList &args) {
 
   // compileBitcodeFiles may have produced lto.tmp object files. After this, no
   // more file will be added.
-  auto newObjectFiles = makeArrayRef(objectFiles).slice(numObjsBeforeLTO);
+  auto newObjectFiles = makeArrayRef(ctx->objectFiles).slice(numObjsBeforeLTO);
   parallelForEach(newObjectFiles, initializeLocalSymbols);
   parallelForEach(newObjectFiles, postParseObjectFile);
   for (const DuplicateSymbol &d : ctx->duplicates)
@@ -2722,11 +2717,11 @@ void LinkerDriver::link(opt::InputArgList &args) {
     // Now that we have a complete list of input files.
     // Beyond this point, no new files are added.
     // Aggregate all input sections into one place.
-    for (InputFile *f : objectFiles)
+    for (InputFile *f : ctx->objectFiles)
       for (InputSectionBase *s : f->getSections())
         if (s && s != &InputSection::discarded)
           inputSections.push_back(s);
-    for (BinaryFile *f : binaryFiles)
+    for (BinaryFile *f : ctx->binaryFiles)
       for (InputSectionBase *s : f->getSections())
         inputSections.push_back(cast<InputSection>(s));
   }
