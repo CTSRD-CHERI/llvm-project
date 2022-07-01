@@ -1305,6 +1305,7 @@ FunctionCallee llvm::getOrInsertLibFunc(Module *M, const TargetLibraryInfo &TLI,
   case LibFunc_ldexpf:
   case LibFunc_ldexpl:
   case LibFunc_memchr:
+  case LibFunc_memrchr:
   case LibFunc_strchr:
     setArgExtAttr(*F, 1, TLI);
     break;
@@ -1548,6 +1549,15 @@ Value *llvm::emitMemChr(Value *Ptr, Value *Val, Value *Len, IRBuilderBase &B,
       LibFunc_memchr, getInt8PtrTy(Ptr),
       {getInt8PtrTy(Ptr), B.getInt32Ty(),
        DL.getIntPtrType(Context, Ptr->getType()->getPointerAddressSpace())},
+      {castToCStr(Ptr, B), Val, Len}, B, TLI);
+}
+
+Value *llvm::emitMemRChr(Value *Ptr, Value *Val, Value *Len, IRBuilderBase &B,
+                        const DataLayout &DL, const TargetLibraryInfo *TLI) {
+  LLVMContext &Context = B.GetInsertBlock()->getContext();
+  return emitLibCall(
+      LibFunc_memrchr, B.getInt8PtrTy(),
+      {B.getInt8PtrTy(), B.getInt32Ty(), DL.getIntPtrType(Context)},
       {castToCStr(Ptr, B), Val, Len}, B, TLI);
 }
 
