@@ -1317,10 +1317,17 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
                                       ResVal, LoadVal1);
       } else if (PostOp) {
         llvm::Value *LoadVal1 = Args[1].getRValue(*this).getScalarVal();
+        if (IsCheriCap) {
+          ResVal = getCapabilityIntegerValue(ResVal);
+          LoadVal1 = getCapabilityIntegerValue(LoadVal1);
+        }
         ResVal = Builder.CreateBinOp(PostOp, ResVal, LoadVal1);
       }
       if (E->getOp() == AtomicExpr::AO__atomic_nand_fetch)
         ResVal = Builder.CreateNot(ResVal);
+      if (IsCheriCap && !PostOpMinMax && PostOp)
+        ResVal = setCapabilityIntegerValue(Res.getScalarVal(), ResVal,
+                                           E->getExprLoc());
 
       Builder.CreateStore(
           ResVal,
