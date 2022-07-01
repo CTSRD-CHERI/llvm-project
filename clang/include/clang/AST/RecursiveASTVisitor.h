@@ -3096,6 +3096,9 @@ DEF_TRAVERSE_STMT(OMPMaskedTaskLoopSimdDirective,
 DEF_TRAVERSE_STMT(OMPParallelMaskedTaskLoopDirective,
                   { TRY_TO(TraverseOMPExecutableDirective(S)); })
 
+DEF_TRAVERSE_STMT(OMPParallelMaskedTaskLoopSimdDirective,
+                  { TRY_TO(TraverseOMPExecutableDirective(S)); })
+
 DEF_TRAVERSE_STMT(OMPDistributeDirective,
                   { TRY_TO(TraverseOMPExecutableDirective(S)); })
 
