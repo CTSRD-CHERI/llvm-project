@@ -1078,7 +1078,6 @@ struct SignalContext {
 };
 
 void InitializePlatformEarly();
-void MaybeReexec();
 
 template <typename Fn>
 class RunOnDestruction {
