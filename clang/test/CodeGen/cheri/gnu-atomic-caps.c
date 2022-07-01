@@ -406,93 +406,600 @@ char *__capability test_fetch_sub_charptr_and_short(char *__capability *ptr, sho
   return __atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
 }
 
-// TODO: Implement these
-#if 0
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
 __uintcap_t test_fetch_and_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_fetch_and(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
 __uintcap_t test_fetch_or_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_fetch_or(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
 __uintcap_t test_fetch_xor_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_fetch_xor(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_nand_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_nand_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_fetch_nand_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_nand_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
 __uintcap_t test_fetch_nand_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_fetch_nand(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
 __uintcap_t test_fetch_max_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_fetch_max(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[CALL]]
+//
 __uintcap_t test_fetch_min_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_fetch_min(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
 __uintcap_t test_add_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_add_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_longptr
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)** [[TMP1]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP4]], i8 addrspace(200)* [[TMP2]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
+// HYBRID-NEXT:    [[TMP7:%.*]] = add i64 [[TMP5]], [[TMP6]]
+// HYBRID-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP7]])
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP8]], i8 addrspace(200)** [[TMP3]], align 16
+// HYBRID-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)** [[TMP3]] to i64 addrspace(200)**
+// HYBRID-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP9]], align 16
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_longptr
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP1]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP4]], i8 addrspace(200)* [[TMP2]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
+// PURECAP-NEXT:    [[TMP7:%.*]] = add i64 [[TMP5]], [[TMP6]]
+// PURECAP-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP7]])
+// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP8]], i8 addrspace(200)* addrspace(200)* [[TMP3]], align 16
+// PURECAP-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP3]] to i64 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP9]], align 16
+// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+//
 long *__capability test_add_fetch_longptr(long *__capability *ptr, __uintcap_t value) {
   return __atomic_add_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_longptr_and_short
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)** [[TMP0]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// HYBRID-NEXT:    [[TMP6:%.*]] = add i64 [[TMP4]], [[TMP5]]
+// HYBRID-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP6]])
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP7]], i8 addrspace(200)** [[TMP2]], align 16
+// HYBRID-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)** [[TMP2]] to i64 addrspace(200)**
+// HYBRID-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP8]], align 16
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_longptr_and_short
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP0]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP3]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// PURECAP-NEXT:    [[TMP6:%.*]] = add i64 [[TMP4]], [[TMP5]]
+// PURECAP-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP6]])
+// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP7]], i8 addrspace(200)* addrspace(200)* [[TMP2]], align 16
+// PURECAP-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP2]] to i64 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP8]], align 16
+// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+//
 long *__capability test_add_fetch_longptr_and_short(long *__capability *ptr, short value) {
   return __atomic_add_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_charptr
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// HYBRID-NEXT:    [[TMP5:%.*]] = add i64 [[TMP3]], [[TMP4]]
+// HYBRID-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP5]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP6]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_charptr
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// PURECAP-NEXT:    [[TMP5:%.*]] = add i64 [[TMP3]], [[TMP4]]
+// PURECAP-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP5]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP6]]
+//
 char *__capability test_add_fetch_charptr(char *__capability *ptr, __uintcap_t value) {
   return __atomic_add_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_charptr_and_short
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// HYBRID-NEXT:    [[TMP4:%.*]] = add i64 [[TMP2]], [[TMP3]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_charptr_and_short
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP4:%.*]] = add i64 [[TMP2]], [[TMP3]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+//
 char *__capability test_add_fetch_charptr_and_short(char *__capability *ptr, short value) {
   return __atomic_add_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
 __uintcap_t test_sub_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_sub_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_longptr
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)** [[TMP1]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP4]], i8 addrspace(200)* [[TMP2]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
+// HYBRID-NEXT:    [[TMP7:%.*]] = sub i64 [[TMP5]], [[TMP6]]
+// HYBRID-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP7]])
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP8]], i8 addrspace(200)** [[TMP3]], align 16
+// HYBRID-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)** [[TMP3]] to i64 addrspace(200)**
+// HYBRID-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP9]], align 16
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_longptr
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP1]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP4]], i8 addrspace(200)* [[TMP2]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
+// PURECAP-NEXT:    [[TMP7:%.*]] = sub i64 [[TMP5]], [[TMP6]]
+// PURECAP-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP7]])
+// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP8]], i8 addrspace(200)* addrspace(200)* [[TMP3]], align 16
+// PURECAP-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP3]] to i64 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP9]], align 16
+// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+//
 long *__capability test_sub_fetch_longptr(long *__capability *ptr, __uintcap_t value) {
   return __atomic_sub_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_longptr_and_short
+// HYBRID-SAME: (i64 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
+// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)** [[TMP0]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP3]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// HYBRID-NEXT:    [[TMP6:%.*]] = sub i64 [[TMP4]], [[TMP5]]
+// HYBRID-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP6]])
+// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP7]], i8 addrspace(200)** [[TMP2]], align 16
+// HYBRID-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)** [[TMP2]] to i64 addrspace(200)**
+// HYBRID-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP8]], align 16
+// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_longptr_and_short
+// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
+// PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP0]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP3]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// PURECAP-NEXT:    [[TMP6:%.*]] = sub i64 [[TMP4]], [[TMP5]]
+// PURECAP-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP6]])
+// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP7]], i8 addrspace(200)* addrspace(200)* [[TMP2]], align 16
+// PURECAP-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP2]] to i64 addrspace(200)* addrspace(200)*
+// PURECAP-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP8]], align 16
+// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+//
 long *__capability test_sub_fetch_longptr_and_short(long *__capability *ptr, short value) {
   return __atomic_sub_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_charptr
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// HYBRID-NEXT:    [[TMP5:%.*]] = sub i64 [[TMP3]], [[TMP4]]
+// HYBRID-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP5]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP6]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_charptr
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* [[TMP1]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
+// PURECAP-NEXT:    [[TMP5:%.*]] = sub i64 [[TMP3]], [[TMP4]]
+// PURECAP-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP5]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP6]]
+//
 char *__capability test_sub_fetch_charptr(char *__capability *ptr, __uintcap_t value) {
   return __atomic_sub_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_charptr_and_short
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i16 signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// HYBRID-NEXT:    [[TMP4:%.*]] = sub i64 [[TMP2]], [[TMP3]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_charptr_and_short
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i16 signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* [[TMP0]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP4:%.*]] = sub i64 [[TMP2]], [[TMP3]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+//
 char *__capability test_sub_fetch_charptr_and_short(char *__capability *ptr, short value) {
   return __atomic_sub_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_and_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_and_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
 __uintcap_t test_and_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_and_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_or_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = or i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_or_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = or i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
 __uintcap_t test_or_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_or_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_xor_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = xor i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_xor_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = xor i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+//
 __uintcap_t test_xor_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_xor_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_nand_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_nand_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = xor i64 [[TMP3]], -1
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_nand_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_nand_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CALL]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = xor i64 [[TMP3]], -1
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CALL]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+//
 __uintcap_t test_nand_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_nand_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_max_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TST:%.*]] = icmp ugt i8 addrspace(200)* [[CALL]], [[VALUE]]
+// HYBRID-NEXT:    [[NEWVAL:%.*]] = select i1 [[TST]], i8 addrspace(200)* [[CALL]], i8 addrspace(200)* [[VALUE]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[NEWVAL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_max_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TST:%.*]] = icmp ugt i8 addrspace(200)* [[CALL]], [[VALUE]]
+// PURECAP-NEXT:    [[NEWVAL:%.*]] = select i1 [[TST]], i8 addrspace(200)* [[CALL]], i8 addrspace(200)* [[VALUE]]
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[NEWVAL]]
+//
 __uintcap_t test_max_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_max_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_min_fetch_uintcap
+// HYBRID-SAME: (i8 addrspace(200)** [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TST:%.*]] = icmp ult i8 addrspace(200)* [[CALL]], [[VALUE]]
+// HYBRID-NEXT:    [[NEWVAL:%.*]] = select i1 [[TST]], i8 addrspace(200)* [[CALL]], i8 addrspace(200)* [[VALUE]]
+// HYBRID-NEXT:    ret i8 addrspace(200)* [[NEWVAL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_min_fetch_uintcap
+// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TST:%.*]] = icmp ult i8 addrspace(200)* [[CALL]], [[VALUE]]
+// PURECAP-NEXT:    [[NEWVAL:%.*]] = select i1 [[TST]], i8 addrspace(200)* [[CALL]], i8 addrspace(200)* [[VALUE]]
+// PURECAP-NEXT:    ret i8 addrspace(200)* [[NEWVAL]]
+//
 __uintcap_t test_min_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __atomic_min_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
-#endif
