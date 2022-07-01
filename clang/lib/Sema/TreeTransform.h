@@ -13170,6 +13170,13 @@ TreeTransform<Derived>::TransformLambdaExpr(LambdaExpr *E) {
                                                         NewCallOpType);
   }
 
+  // Transform the trailing requires clause
+  ExprResult NewTrailingRequiresClause;
+  if (Expr *TRC = E->getCallOperator()->getTrailingRequiresClause())
+    // FIXME: Concepts: Substitution into requires clause should only happen
+    //                  when checking satisfaction.
+    NewTrailingRequiresClause = getDerived().TransformExpr(TRC);
+
   // Create the local class that will describe the lambda.
 
   // FIXME: DependencyKind below is wrong when substituting inside a templated
@@ -13204,7 +13211,7 @@ TreeTransform<Derived>::TransformLambdaExpr(LambdaExpr *E) {
       E->getCallOperator()->getEndLoc(),
       NewCallOpTSI->getTypeLoc().castAs<FunctionProtoTypeLoc>().getParams(),
       E->getCallOperator()->getConstexprKind(),
-      E->getCallOperator()->getTrailingRequiresClause());
+      NewTrailingRequiresClause.get());
 
   LSI->CallOperator = NewCallOperator;
 
