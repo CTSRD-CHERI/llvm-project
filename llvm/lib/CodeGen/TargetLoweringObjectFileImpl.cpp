@@ -506,6 +506,9 @@ static unsigned getELFSectionType(StringRef Name, SectionKind K) {
   if (hasPrefix(Name, ".preinit_array"))
     return ELF::SHT_PREINIT_ARRAY;
 
+  if (hasPrefix(Name, ".llvm.offloading"))
+    return ELF::SHT_LLVM_OFFLOADING;
+
   if (K.isBSS() || K.isThreadBSS())
     return ELF::SHT_NOBITS;
 
