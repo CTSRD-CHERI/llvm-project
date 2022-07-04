@@ -98,13 +98,6 @@ defm simm8    : ShiftSImmPattern<8, 0>;
 defm simm11s0 : ShiftSImmPattern<11, 0>;
 defm uimm11s0 : ShiftUImmPattern<11, 0>;
 
-// Pattern for atomic loads on capabilities
-// TODO: these should end up in TargetSelectionDAG.td
-def atomic_load_add_cap_node : SDNode<"ISD::ATOMIC_LOAD_ADD" , SDTAtomicCap2,
-                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-def atomic_load_sub_cap_node : SDNode<"ISD::ATOMIC_LOAD_SUB" , SDTAtomicCap2,
-                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-
 // ClearRegs values
 // TODO: Add some nice parsing so that we can get handle register lists for
 // these.
