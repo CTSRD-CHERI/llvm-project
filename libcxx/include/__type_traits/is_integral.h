@@ -49,7 +49,7 @@ template <>          struct __libcpp_is_integral<__intcap_t>         { enum { va
 template <>          struct __libcpp_is_integral<__uintcap_t>        { enum { value = 1 }; };
 #endif
 
-#if __has_keyword(__is_integral)
+#if __has_builtin(__is_integral)
 
 template <class _Tp>
 struct _LIBCPP_TEMPLATE_VIS is_integral : _BoolConstant<__is_integral(_Tp)> { };
@@ -69,7 +69,7 @@ template <class _Tp>
 inline constexpr bool is_integral_v = is_integral<_Tp>::value;
 #endif
 
-#endif // __has_keyword(__is_integral)
+#endif // __has_builtin(__is_integral)
 
 _LIBCPP_END_NAMESPACE_STD
 
