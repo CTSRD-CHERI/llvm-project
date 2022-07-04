@@ -1492,26 +1492,12 @@ defm : AtomicStPat<atomic_store_cap, SC_128, GPCR, iFATPTR128>;
 defm : AMOCapPat<"128", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
 
-let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
-def PseudoCmpXchgCap
-    : Pseudo<(outs GPCR:$res, GPR:$scratch),
-             (ins GPR:$addr, GPCR:$cmpval, GPCR:$newval, ixlenimm:$ordering), []> {
-  let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
-  let mayLoad = 1;
-  let mayStore = 1;
-  let hasSideEffects = 0;
-}
+let Predicates = [HasCheri, HasStdExtA] in {
+def PseudoCmpXchgCap : PseudoCmpXchg<GPCR>;
+} // Predicates = [HasCheri, HasStdExtA]
 
-def : Pat<(atomic_cmp_swap_cap_monotonic GPR:$addr, GPCR:$cmp, GPCR:$new),
-          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 2)>;
-def : Pat<(atomic_cmp_swap_cap_acquire GPR:$addr, GPCR:$cmp, GPCR:$new),
-          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 4)>;
-def : Pat<(atomic_cmp_swap_cap_release GPR:$addr, GPCR:$cmp, GPCR:$new),
-          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 5)>;
-def : Pat<(atomic_cmp_swap_cap_acq_rel GPR:$addr, GPCR:$cmp, GPCR:$new),
-          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 6)>;
-def : Pat<(atomic_cmp_swap_cap_seq_cst GPR:$addr, GPCR:$cmp, GPCR:$new),
-          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 7)>;
+let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
+defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap", PseudoCmpXchgCap, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, NotCapMode]
 
 /// Capability Mode Instructions

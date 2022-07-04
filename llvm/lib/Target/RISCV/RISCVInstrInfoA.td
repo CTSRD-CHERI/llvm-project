@@ -269,9 +269,9 @@ def : PseudoMaskedAMOPat<int_riscv_masked_atomicrmw_umin_i32,
 
 /// Compare and exchange
 
-class PseudoCmpXchg
-    : Pseudo<(outs GPR:$res, GPR:$scratch),
-             (ins GPR:$addr, GPR:$cmpval, GPR:$newval, ixlenimm:$ordering), []> {
+class PseudoCmpXchg<RegisterClass ValTy=GPR>
+    : Pseudo<(outs ValTy:$res, GPR:$scratch),
+             (ins GPR:$addr, ValTy:$cmpval, ValTy:$newval, ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
   let mayLoad = 1;
   let mayStore = 1;
@@ -280,17 +280,18 @@ class PseudoCmpXchg
 
 // Ordering constants must be kept in sync with the AtomicOrdering enum in
 // AtomicOrdering.h.
-multiclass PseudoCmpXchgPat<string Op, Pseudo CmpXchgInst> {
-  def : Pat<(!cast<PatFrag>(Op#"_monotonic") GPR:$addr, GPR:$cmp, GPR:$new),
-            (CmpXchgInst GPR:$addr, GPR:$cmp, GPR:$new, 2)>;
-  def : Pat<(!cast<PatFrag>(Op#"_acquire") GPR:$addr, GPR:$cmp, GPR:$new),
-            (CmpXchgInst GPR:$addr, GPR:$cmp, GPR:$new, 4)>;
-  def : Pat<(!cast<PatFrag>(Op#"_release") GPR:$addr, GPR:$cmp, GPR:$new),
-            (CmpXchgInst GPR:$addr, GPR:$cmp, GPR:$new, 5)>;
-  def : Pat<(!cast<PatFrag>(Op#"_acq_rel") GPR:$addr, GPR:$cmp, GPR:$new),
-            (CmpXchgInst GPR:$addr, GPR:$cmp, GPR:$new, 6)>;
-  def : Pat<(!cast<PatFrag>(Op#"_seq_cst") GPR:$addr, GPR:$cmp, GPR:$new),
-            (CmpXchgInst GPR:$addr, GPR:$cmp, GPR:$new, 7)>;
+multiclass PseudoCmpXchgPat<string Op, Pseudo CmpXchgInst,
+                            RegisterClass ValTy=GPR> {
+  def : Pat<(!cast<PatFrag>(Op#"_monotonic") GPR:$addr, ValTy:$cmp, ValTy:$new),
+            (CmpXchgInst GPR:$addr, ValTy:$cmp, ValTy:$new, 2)>;
+  def : Pat<(!cast<PatFrag>(Op#"_acquire") GPR:$addr, ValTy:$cmp, ValTy:$new),
+            (CmpXchgInst GPR:$addr, ValTy:$cmp, ValTy:$new, 4)>;
+  def : Pat<(!cast<PatFrag>(Op#"_release") GPR:$addr, ValTy:$cmp, ValTy:$new),
+            (CmpXchgInst GPR:$addr, ValTy:$cmp, ValTy:$new, 5)>;
+  def : Pat<(!cast<PatFrag>(Op#"_acq_rel") GPR:$addr, ValTy:$cmp, ValTy:$new),
+            (CmpXchgInst GPR:$addr, ValTy:$cmp, ValTy:$new, 6)>;
+  def : Pat<(!cast<PatFrag>(Op#"_seq_cst") GPR:$addr, ValTy:$cmp, ValTy:$new),
+            (CmpXchgInst GPR:$addr, ValTy:$cmp, ValTy:$new, 7)>;
 }
 
 def PseudoCmpXchg32 : PseudoCmpXchg;
