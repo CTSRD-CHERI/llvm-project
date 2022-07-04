@@ -893,8 +893,21 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     return 16;
   case RISCV::PseudoMaskedCmpXchg32:
     return 32;
+  case RISCV::PseudoAtomicLoadAddCap:
+    return 16;
+  case RISCV::PseudoAtomicLoadSubCap:
+  case RISCV::PseudoAtomicLoadAndCap:
+  case RISCV::PseudoAtomicLoadOrCap:
+  case RISCV::PseudoAtomicLoadXorCap:
+    return 20;
+  case RISCV::PseudoAtomicLoadNandCap:
+    return 24;
+  case RISCV::PseudoAtomicLoadMaxCap:
+  case RISCV::PseudoAtomicLoadMinCap:
+  case RISCV::PseudoAtomicLoadUMaxCap:
+  case RISCV::PseudoAtomicLoadUMinCap:
+    return 24;
   case RISCV::PseudoCmpXchgCap:
-  case RISCV::PseudoCheriCmpXchgCap:
     return 16;
   case RISCV::PseudoCheriAtomicSwap8:
   case RISCV::PseudoCheriAtomicSwap16:
@@ -923,10 +936,25 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCheriAtomicLoadUMin8:
   case RISCV::PseudoCheriAtomicLoadUMin16:
     return 24;
+  case RISCV::PseudoCheriAtomicLoadAddCap:
+    return 16;
+  case RISCV::PseudoCheriAtomicLoadSubCap:
+  case RISCV::PseudoCheriAtomicLoadAndCap:
+  case RISCV::PseudoCheriAtomicLoadOrCap:
+  case RISCV::PseudoCheriAtomicLoadXorCap:
+    return 20;
+  case RISCV::PseudoCheriAtomicLoadNandCap:
+    return 24;
+  case RISCV::PseudoCheriAtomicLoadMaxCap:
+  case RISCV::PseudoCheriAtomicLoadMinCap:
+  case RISCV::PseudoCheriAtomicLoadUMaxCap:
+  case RISCV::PseudoCheriAtomicLoadUMinCap:
+    return 24;
   case RISCV::PseudoCheriCmpXchg8:
   case RISCV::PseudoCheriCmpXchg16:
   case RISCV::PseudoCheriCmpXchg32:
   case RISCV::PseudoCheriCmpXchg64:
+  case RISCV::PseudoCheriCmpXchgCap:
     return 16;
   case TargetOpcode::INLINEASM:
   case TargetOpcode::INLINEASM_BR: {
