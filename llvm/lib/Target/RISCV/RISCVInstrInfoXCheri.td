@@ -1493,10 +1493,30 @@ defm : AMOCapPat<"128", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
 
 let Predicates = [HasCheri, HasStdExtA] in {
+def PseudoAtomicLoadAddCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadSubCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadAndCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadOrCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadXorCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadMaxCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadMinCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadUMaxCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadUMinCap : PseudoAMO<GPCR>;
+def PseudoAtomicLoadNandCap : PseudoAMO<GPCR>;
 def PseudoCmpXchgCap : PseudoCmpXchg<GPCR>;
 } // Predicates = [HasCheri, HasStdExtA]
 
 let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
+defm : PseudoAMOPat<"atomic_load_add_cap", PseudoAtomicLoadAddCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_sub_cap", PseudoAtomicLoadSubCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_and_cap", PseudoAtomicLoadAndCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_or_cap", PseudoAtomicLoadOrCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_xor_cap", PseudoAtomicLoadXorCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_max_cap", PseudoAtomicLoadMaxCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_min_cap", PseudoAtomicLoadMinCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_umax_cap", PseudoAtomicLoadUMaxCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_umin_cap", PseudoAtomicLoadUMinCap, GPCR>;
+defm : PseudoAMOPat<"atomic_load_nand_cap", PseudoAtomicLoadNandCap, GPCR>;
 defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap", PseudoCmpXchgCap, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, NotCapMode]
 
@@ -1555,25 +1575,27 @@ multiclass CheriAMOSubPat<string AtomicOp, string BaseInst> {
             (!cast<RVInst>(BaseInst#"_AQ_RL") GPCR:$addr, (SUB X0, GPR:$incr))>;
 }
 
-class PseudoCheriAMO : Pseudo<(outs GPR:$res, GPR:$scratch),
-                              (ins GPCR:$addr, GPR:$incr, ixlenimm:$ordering), []> {
+class PseudoCheriAMO<RegisterClass ValTy=GPR>
+    : Pseudo<(outs ValTy:$res, ValTy:$scratch),
+             (ins GPCR:$addr, ValTy:$incr, ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
   let mayLoad = 1;
   let mayStore = 1;
   let hasSideEffects = 0;
 }
 
-multiclass PseudoCheriAMOPat<string AtomicOp, Instruction BaseInst> {
-  def : Pat<(!cast<PatFrag>(AtomicOp#"_monotonic") GPCR:$addr, GPR:$incr),
-            (BaseInst GPCR:$addr, GPR:$incr, 2)>;
-  def : Pat<(!cast<PatFrag>(AtomicOp#"_acquire") GPCR:$addr, GPR:$incr),
-            (BaseInst GPCR:$addr, GPR:$incr, 4)>;
-  def : Pat<(!cast<PatFrag>(AtomicOp#"_release") GPCR:$addr, GPR:$incr),
-            (BaseInst GPCR:$addr, GPR:$incr, 5)>;
-  def : Pat<(!cast<PatFrag>(AtomicOp#"_acq_rel") GPCR:$addr, GPR:$incr),
-            (BaseInst GPCR:$addr, GPR:$incr, 6)>;
-  def : Pat<(!cast<PatFrag>(AtomicOp#"_seq_cst") GPCR:$addr, GPR:$incr),
-            (BaseInst GPCR:$addr, GPR:$incr, 7)>;
+multiclass PseudoCheriAMOPat<string AtomicOp, Instruction BaseInst,
+                             RegisterClass ValTy=GPR> {
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_monotonic") GPCR:$addr, ValTy:$incr),
+            (BaseInst GPCR:$addr, ValTy:$incr, 2)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_acquire") GPCR:$addr, ValTy:$incr),
+            (BaseInst GPCR:$addr, ValTy:$incr, 4)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_release") GPCR:$addr, ValTy:$incr),
+            (BaseInst GPCR:$addr, ValTy:$incr, 5)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_acq_rel") GPCR:$addr, ValTy:$incr),
+            (BaseInst GPCR:$addr, ValTy:$incr, 6)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_seq_cst") GPCR:$addr, ValTy:$incr),
+            (BaseInst GPCR:$addr, ValTy:$incr, 7)>;
 }
 
 class PseudoCheriCmpXchg<RegisterClass ValTy=GPR>
@@ -1642,6 +1664,16 @@ def PseudoCheriCmpXchg16 : PseudoCheriCmpXchg;
 def PseudoCheriAtomicLoadNand32 : PseudoCheriAMO;
 def PseudoCheriCmpXchg32 : PseudoCheriCmpXchg;
 
+def PseudoCheriAtomicLoadAddCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadSubCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadAndCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadOrCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadXorCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadMaxCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadMinCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadUMaxCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadUMinCap : PseudoCheriAMO<GPCR>;
+def PseudoCheriAtomicLoadNandCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR>;
 } // Predicates = [HasCheri, HasStdExtA]
 
@@ -1823,6 +1855,17 @@ defm : PseudoCheriAMOPat<"atomic_load_umin_16", PseudoCheriAtomicLoadUMin16>;
 defm : PseudoCheriAMOPat<"atomic_load_nand_16", PseudoCheriAtomicLoadNand16>;
 
 defm : PseudoCheriAMOPat<"atomic_load_nand_32", PseudoCheriAtomicLoadNand32>;
+
+defm : PseudoCheriAMOPat<"atomic_load_add_cap", PseudoCheriAtomicLoadAddCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_sub_cap", PseudoCheriAtomicLoadSubCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_and_cap", PseudoCheriAtomicLoadAndCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_or_cap", PseudoCheriAtomicLoadOrCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_xor_cap", PseudoCheriAtomicLoadXorCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_max_cap", PseudoCheriAtomicLoadMaxCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_min_cap", PseudoCheriAtomicLoadMinCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_umax_cap", PseudoCheriAtomicLoadUMaxCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_umin_cap", PseudoCheriAtomicLoadUMinCap, GPCR>;
+defm : PseudoCheriAMOPat<"atomic_load_nand_cap", PseudoCheriAtomicLoadNandCap, GPCR>;
 
 /// Compare and exchange
 

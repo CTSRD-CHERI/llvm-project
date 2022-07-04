@@ -180,12 +180,27 @@ def : Pat<(atomic_load_sub_32_seq_cst GPR:$addr, GPR:$incr),
 
 /// Pseudo AMOs
 
-class PseudoAMO : Pseudo<(outs GPR:$res, GPR:$scratch),
-                         (ins GPR:$addr, GPR:$incr, ixlenimm:$ordering), []> {
+class PseudoAMO<RegisterClass ValTy=GPR>
+    : Pseudo<(outs ValTy:$res, ValTy:$scratch),
+             (ins GPR:$addr, ValTy:$incr, ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
   let mayLoad = 1;
   let mayStore = 1;
   let hasSideEffects = 0;
+}
+
+multiclass PseudoAMOPat<string AtomicOp, Instruction BaseInst,
+                        RegisterClass ValTy=GPR> {
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_monotonic") GPR:$addr, ValTy:$incr),
+            (BaseInst GPR:$addr, ValTy:$incr, 2)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_acquire") GPR:$addr, ValTy:$incr),
+            (BaseInst GPR:$addr, ValTy:$incr, 4)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_release") GPR:$addr, ValTy:$incr),
+            (BaseInst GPR:$addr, ValTy:$incr, 5)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_acq_rel") GPR:$addr, ValTy:$incr),
+            (BaseInst GPR:$addr, ValTy:$incr, 6)>;
+  def : Pat<(!cast<PatFrag>(AtomicOp#"_seq_cst") GPR:$addr, ValTy:$incr),
+            (BaseInst GPR:$addr, ValTy:$incr, 7)>;
 }
 
 def PseudoAtomicLoadNand32 : PseudoAMO;
