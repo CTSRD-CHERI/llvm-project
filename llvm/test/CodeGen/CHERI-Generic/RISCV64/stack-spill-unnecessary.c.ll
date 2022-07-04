@@ -17,7 +17,7 @@ declare void @multi_arg(i32 addrspace(200)* %start, i32 addrspace(200)* %end, i8
 
 define void @use_after_call() addrspace(200) nounwind {
 ; CHECK-LABEL: use_after_call:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -48
 ; CHECK-NEXT:    csc cra, 32(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
@@ -34,7 +34,7 @@ define void @use_after_call() addrspace(200) nounwind {
 ; CHECK-NEXT:    cret
 ;
 ; HYBRID-LABEL: use_after_call:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    addi sp, sp, -16
 ; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    addi a0, zero, 123
@@ -45,7 +45,6 @@ define void @use_after_call() addrspace(200) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-entry:
   %x = alloca i32, align 4, addrspace(200)
   store i32 123, i32 addrspace(200)* %x, align 4
   call void @foo()
@@ -53,10 +52,9 @@ entry:
   ret void
 }
 
-
 define void @use_after_call_no_store() addrspace(200) nounwind {
 ; CHECK-LABEL: use_after_call_no_store:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -64
 ; CHECK-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
@@ -77,7 +75,7 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
 ; CHECK-NEXT:    cret
 ;
 ; HYBRID-LABEL: use_after_call_no_store:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    addi sp, sp, -16
 ; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    call foo@plt
@@ -88,7 +86,6 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-entry:
   %x = alloca i32, align 4, addrspace(200)
   %y = alloca i32, align 4, addrspace(200)
   call void @foo()
@@ -99,7 +96,7 @@ entry:
 
 define void @multi_use() addrspace(200) nounwind {
 ; CHECK-LABEL: multi_use:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -64
 ; CHECK-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
@@ -124,7 +121,7 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    cret
 ;
 ; HYBRID-LABEL: multi_use:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    addi sp, sp, -16
 ; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    call foo@plt
@@ -139,7 +136,6 @@ define void @multi_use() addrspace(200) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-entry:
   %y = alloca i32, align 4, addrspace(200)
   %x = alloca i32, align 4, addrspace(200)
   call void @foo()

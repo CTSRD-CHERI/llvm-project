@@ -19,7 +19,7 @@ target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-
 
 define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM-LABEL: g:
-; ASM:       # %bb.0: # %entry
+; ASM:       # %bb.0:
 ; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
@@ -33,7 +33,6 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM-NEXT:    csc $c2, $zero, 0($c1)
 ; CHECK-LABEL: define {{[^@]+}}@g
 ; CHECK-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TMP3:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*))
 ; CHECK-NEXT:    [[ADD:%.*]] = add i64 [[Y]], [[X]]
 ; CHECK-NEXT:    [[ADD1:%.*]] = add i64 [[ADD]], [[TMP3]]
@@ -41,7 +40,6 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    store i8 addrspace(200)* [[TMP11]], i8 addrspace(200)* addrspace(200)* @e, align 32
 ; CHECK-NEXT:    ret void
 ;
-entry:
   %x.addr = alloca i64, align 4, addrspace(200)
   %y.addr = alloca i64, align 4, addrspace(200)
   store i64 %x, i64 addrspace(200)* %x.addr, align 4
@@ -63,7 +61,6 @@ entry:
 }
 
 ; define void @g(i64 %x, i64 %y)  nounwind {
-; entry:
 ;   %tmp1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*), i64 %x)
 ;   %tmp3 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %tmp1, i64 %y)
 ;   store i8 addrspace(200)* %tmp3, i8 addrspace(200)* addrspace(200)* @e, align 32

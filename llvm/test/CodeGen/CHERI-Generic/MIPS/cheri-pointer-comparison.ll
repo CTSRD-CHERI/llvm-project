@@ -42,15 +42,14 @@
 
 define i32 @eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: eq:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    ceq $2, $c3, $c4
 ;
 ; PURECAP-LABEL: eq:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    ceq $2, $c3, $c4
-entry:
   %cmp = icmp eq i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -58,15 +57,14 @@ entry:
 
 define i32 @ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: ne:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cne $2, $c3, $c4
 ;
 ; PURECAP-LABEL: ne:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cne $2, $c3, $c4
-entry:
   %cmp = icmp ne i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -74,15 +72,14 @@ entry:
 
 define i32 @ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: ugt:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cltu $2, $c4, $c3
 ;
 ; PURECAP-LABEL: ugt:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cltu $2, $c4, $c3
-entry:
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -90,15 +87,14 @@ entry:
 
 define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: uge:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cleu $2, $c4, $c3
 ;
 ; PURECAP-LABEL: uge:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cleu $2, $c4, $c3
-entry:
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -106,15 +102,14 @@ entry:
 
 define i32 @ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: ult:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cltu $2, $c3, $c4
 ;
 ; PURECAP-LABEL: ult:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cltu $2, $c3, $c4
-entry:
   %cmp = icmp ult i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -122,15 +117,14 @@ entry:
 
 define i32 @ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: ule:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cleu $2, $c3, $c4
 ;
 ; PURECAP-LABEL: ule:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cleu $2, $c3, $c4
-entry:
   %cmp = icmp ule i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -138,15 +132,14 @@ entry:
 
 define i32 @sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: sgt:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    clt $2, $c4, $c3
 ;
 ; PURECAP-LABEL: sgt:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    clt $2, $c4, $c3
-entry:
   %cmp = icmp sgt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -154,15 +147,14 @@ entry:
 
 define i32 @sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: sge:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cle $2, $c4, $c3
 ;
 ; PURECAP-LABEL: sge:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cle $2, $c4, $c3
-entry:
   %cmp = icmp sge i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -170,15 +162,14 @@ entry:
 
 define i32 @slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: slt:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    clt $2, $c3, $c4
 ;
 ; PURECAP-LABEL: slt:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    clt $2, $c3, $c4
-entry:
   %cmp = icmp slt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -186,15 +177,14 @@ entry:
 
 define i32 @sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: sle:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cle $2, $c3, $c4
 ;
 ; PURECAP-LABEL: sle:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cle $2, $c3, $c4
-entry:
   %cmp = icmp sle i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -202,15 +192,14 @@ entry:
 
 define i32 @eq_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: eq_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    ceq $2, $c3, $cnull
 ;
 ; PURECAP-LABEL: eq_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    ceq $2, $c3, $cnull
-entry:
   %cmp = icmp eq i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -218,15 +207,14 @@ entry:
 
 define i32 @ne_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: ne_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cne $2, $c3, $cnull
 ;
 ; PURECAP-LABEL: ne_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cne $2, $c3, $cnull
-entry:
   %cmp = icmp ne i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -234,15 +222,14 @@ entry:
 
 define i32 @ugt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: ugt_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cltu $2, $cnull, $c3
 ;
 ; PURECAP-LABEL: ugt_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cltu $2, $cnull, $c3
-entry:
   %cmp = icmp ugt i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -250,15 +237,14 @@ entry:
 
 define i32 @uge_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: uge_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cleu $2, $cnull, $c3
 ;
 ; PURECAP-LABEL: uge_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cleu $2, $cnull, $c3
-entry:
   %cmp = icmp uge i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -266,15 +252,14 @@ entry:
 
 define i32 @ult_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: ult_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cltu $2, $c3, $cnull
 ;
 ; PURECAP-LABEL: ult_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cltu $2, $c3, $cnull
-entry:
   %cmp = icmp ult i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -282,15 +267,14 @@ entry:
 
 define i32 @ule_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: ule_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cleu $2, $c3, $cnull
 ;
 ; PURECAP-LABEL: ule_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cleu $2, $c3, $cnull
-entry:
   %cmp = icmp ule i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -298,15 +282,14 @@ entry:
 
 define i32 @sgt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: sgt_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    clt $2, $cnull, $c3
 ;
 ; PURECAP-LABEL: sgt_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    clt $2, $cnull, $c3
-entry:
   %cmp = icmp sgt i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -314,15 +297,14 @@ entry:
 
 define i32 @sge_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: sge_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cle $2, $cnull, $c3
 ;
 ; PURECAP-LABEL: sge_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cle $2, $cnull, $c3
-entry:
   %cmp = icmp sge i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -330,15 +312,14 @@ entry:
 
 define i32 @slt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: slt_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    clt $2, $c3, $cnull
 ;
 ; PURECAP-LABEL: slt_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    clt $2, $c3, $cnull
-entry:
   %cmp = icmp slt i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -346,15 +327,14 @@ entry:
 
 define i32 @sle_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: sle_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cle $2, $c3, $cnull
 ;
 ; PURECAP-LABEL: sle_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cle $2, $c3, $cnull
-entry:
   %cmp = icmp sle i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -362,19 +342,18 @@ entry:
 
 define i8 addrspace(200)* @select_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_eq:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    ceq $1, $c3, $c4
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_eq:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ceq $1, $c3, $c4
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp eq i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -382,19 +361,18 @@ entry:
 
 define i8 addrspace(200)* @select_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ne:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cne $1, $c3, $c4
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ne:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cne $1, $c3, $c4
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ne i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -402,19 +380,18 @@ entry:
 
 define i8 addrspace(200)* @select_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ugt:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cltu $1, $c4, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ugt:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cltu $1, $c4, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -422,19 +399,18 @@ entry:
 
 define i8 addrspace(200)* @select_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_uge:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cleu $1, $c4, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_uge:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cleu $1, $c4, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -442,19 +418,18 @@ entry:
 
 define i8 addrspace(200)* @select_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ult:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cltu $1, $c3, $c4
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ult:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cltu $1, $c3, $c4
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ult i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -462,19 +437,18 @@ entry:
 
 define i8 addrspace(200)* @select_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ule:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cleu $1, $c3, $c4
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ule:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cleu $1, $c3, $c4
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ule i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -482,19 +456,18 @@ entry:
 
 define i8 addrspace(200)* @select_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_sgt:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    clt $1, $c4, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_sgt:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    clt $1, $c4, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp sgt i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -502,19 +475,18 @@ entry:
 
 define i8 addrspace(200)* @select_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_sge:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cle $1, $c4, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_sge:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cle $1, $c4, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp sge i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -522,19 +494,18 @@ entry:
 
 define i8 addrspace(200)* @select_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_slt:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    clt $1, $c3, $c4
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_slt:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    clt $1, $c3, $c4
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp slt i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -542,19 +513,18 @@ entry:
 
 define i8 addrspace(200)* @select_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_sle:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cle $1, $c3, $c4
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_sle:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cle $1, $c3, $c4
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp sle i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -562,19 +532,18 @@ entry:
 
 define i8 addrspace(200)* @select_eq_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_eq_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    ceq $1, $c3, $cnull
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_eq_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ceq $1, $c3, $cnull
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp eq i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -582,19 +551,18 @@ entry:
 
 define i8 addrspace(200)* @select_ne_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ne_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cne $1, $c3, $cnull
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ne_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cne $1, $c3, $cnull
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ne i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -602,19 +570,18 @@ entry:
 
 define i8 addrspace(200)* @select_ugt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ugt_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cltu $1, $cnull, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ugt_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cltu $1, $cnull, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ugt i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -622,19 +589,18 @@ entry:
 
 define i8 addrspace(200)* @select_uge_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_uge_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cleu $1, $cnull, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_uge_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cleu $1, $cnull, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp uge i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -642,19 +608,18 @@ entry:
 
 define i8 addrspace(200)* @select_ult_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ult_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cltu $1, $c3, $cnull
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ult_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cltu $1, $c3, $cnull
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ult i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -662,19 +627,18 @@ entry:
 
 define i8 addrspace(200)* @select_ule_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_ule_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cleu $1, $c3, $cnull
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_ule_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cleu $1, $c3, $cnull
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp ule i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -682,19 +646,18 @@ entry:
 
 define i8 addrspace(200)* @select_sgt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_sgt_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    clt $1, $cnull, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_sgt_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    clt $1, $cnull, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp sgt i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -702,19 +665,18 @@ entry:
 
 define i8 addrspace(200)* @select_sge_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_sge_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cle $1, $cnull, $c3
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_sge_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cle $1, $cnull, $c3
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp sge i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -722,19 +684,18 @@ entry:
 
 define i8 addrspace(200)* @select_slt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_slt_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    clt $1, $c3, $cnull
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_slt_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    clt $1, $c3, $cnull
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp slt i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -742,19 +703,18 @@ entry:
 
 define i8 addrspace(200)* @select_sle_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-LABEL: select_sle_null:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cle $1, $c3, $cnull
 ; HYBRID-NEXT:    cmovn $c4, $c3, $1
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c4
 ;
 ; PURECAP-LABEL: select_sle_null:
-; PURECAP:       # %bb.0: # %entry
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cle $1, $c3, $cnull
 ; PURECAP-NEXT:    cmovn $c4, $c3, $1
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c4
-entry:
   %cmp = icmp sle i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond

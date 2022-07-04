@@ -35,14 +35,14 @@ entry:
   %1 = bitcast i32 addrspace(200)* %dst to i8 addrspace(200)*
   br label %for.body
 
-for.cond.cleanup:                                 ; preds = %for.inc
+for.cond.cleanup:
   ret void
 
-for.body:                                         ; preds = %entry, %for.inc
+for.body:
   %i.06 = phi i32 [ 0, %entry ], [ %inc, %for.inc ]
   br i1 %tobool, label %for.inc, label %if.then
 
-if.then:                                          ; preds = %for.body
+if.then:
   %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %0, iCAPRANGE 4)
   %address.with.bounds = bitcast i8 addrspace(200)* %2 to i32 addrspace(200)*
   %3 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
@@ -50,7 +50,7 @@ if.then:                                          ; preds = %for.body
   call void @call(i32 addrspace(200)* %address.with.bounds, i32 addrspace(200)* %address.with.bounds1)
   br label %for.inc
 
-for.inc:                                          ; preds = %for.body, %if.then
+for.inc:
   %inc = add nuw nsw i32 %i.06, 1
   %cmp = icmp ult i32 %i.06, 99
   br i1 %cmp, label %for.body, label %for.cond.cleanup

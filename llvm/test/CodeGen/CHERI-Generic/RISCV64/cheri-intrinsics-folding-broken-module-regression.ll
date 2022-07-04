@@ -19,14 +19,12 @@ target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128
 
 define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM-LABEL: g:
-; ASM:       # %bb.0: # %entry
-; ASM-NEXT:  .LBB0_1: # %entry
-; ASM-NEXT:    # Label of block must be emitted
+; ASM:       # %bb.0:
+; ASM-NEXT:  .LBB0_1: # Label of block must be emitted
 ; ASM-NEXT:    auipcc ca2, %captab_pcrel_hi(d)
 ; ASM-NEXT:    clc ca2, %pcrel_lo(.LBB0_1)(ca2)
 ; ASM-NEXT:    add a0, a1, a0
-; ASM-NEXT:  .LBB0_2: # %entry
-; ASM-NEXT:    # Label of block must be emitted
+; ASM-NEXT:  .LBB0_2: # Label of block must be emitted
 ; ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(e)
 ; ASM-NEXT:    clc ca1, %pcrel_lo(.LBB0_2)(ca1)
 ; ASM-NEXT:    cgetoffset a3, ca2
@@ -36,7 +34,6 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@g
 ; CHECK-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TMP3:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*))
 ; CHECK-NEXT:    [[ADD:%.*]] = add i64 [[Y]], [[X]]
 ; CHECK-NEXT:    [[ADD1:%.*]] = add i64 [[ADD]], [[TMP3]]
@@ -44,7 +41,6 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    store i8 addrspace(200)* [[TMP11]], i8 addrspace(200)* addrspace(200)* @e, align 32
 ; CHECK-NEXT:    ret void
 ;
-entry:
   %x.addr = alloca i64, align 4, addrspace(200)
   %y.addr = alloca i64, align 4, addrspace(200)
   store i64 %x, i64 addrspace(200)* %x.addr, align 4
@@ -66,7 +62,6 @@ entry:
 }
 
 ; define void @g(i64 %x, i64 %y)  nounwind {
-; entry:
 ;   %tmp1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*), i64 %x)
 ;   %tmp3 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %tmp1, i64 %y)
 ;   store i8 addrspace(200)* %tmp3, i8 addrspace(200)* addrspace(200)* @e, align 32

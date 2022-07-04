@@ -15,7 +15,6 @@ declare void @one_arg(i32 addrspace(200)*) addrspace(200)
 declare void @multi_arg(i32 addrspace(200)* %start, i32 addrspace(200)* %end, i8 addrspace(200)* %buf) addrspace(200)
 
 define void @use_after_call() addrspace(200) nounwind {
-entry:
   %x = alloca i32, align 4, addrspace(200)
   store i32 123, i32 addrspace(200)* %x, align 4
   call void @foo()
@@ -23,9 +22,7 @@ entry:
   ret void
 }
 
-
 define void @use_after_call_no_store() addrspace(200) nounwind {
-entry:
   %x = alloca i32, align 4, addrspace(200)
   %y = alloca i32, align 4, addrspace(200)
   call void @foo()
@@ -35,7 +32,6 @@ entry:
 }
 
 define void @multi_use() addrspace(200) nounwind {
-entry:
   %y = alloca i32, align 4, addrspace(200)
   %x = alloca i32, align 4, addrspace(200)
   call void @foo()

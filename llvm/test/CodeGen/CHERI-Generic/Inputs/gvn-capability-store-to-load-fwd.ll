@@ -21,7 +21,6 @@ target datalayout = "@PURECAP_DATALAYOUT@"
 
 
 define i32 @first_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_addr addrspace(200) nounwind {
-bb:
   %stackval = alloca %struct.addrinfo, align @CAP_BYTES@, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, %struct.addrinfo addrspace(200)* %stackval, i64 0, i32 0
   %as_cap = bitcast %struct.addrinfo addrspace(200)* %stackval to i8 addrspace(200)* addrspace(200)*
@@ -31,7 +30,6 @@ bb:
 }
 
 define i32 @second_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_addr addrspace(200) nounwind {
-bb:
   %stackval = alloca %struct.addrinfo, align @CAP_BYTES@, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, %struct.addrinfo addrspace(200)* %stackval, i64 0, i32 1
   %as_cap = bitcast %struct.addrinfo addrspace(200)* %stackval to i8 addrspace(200)* addrspace(200)*
@@ -41,7 +39,6 @@ bb:
 }
 
 define i32 @third_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_addr addrspace(200) nounwind {
-bb:
   %stackval = alloca %struct.addrinfo, align @CAP_BYTES@, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, %struct.addrinfo addrspace(200)* %stackval, i64 0, i32 2
   %as_cap = bitcast %struct.addrinfo addrspace(200)* %stackval to i8 addrspace(200)* addrspace(200)*
@@ -51,7 +48,6 @@ bb:
 }
 
 define i32 @fourth_i32_store_to_load_fwd(i8 addrspace(200)* %arg) local_unnamed_addr addrspace(200) nounwind {
-bb:
   %stackval = alloca %struct.addrinfo, align @CAP_BYTES@, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, %struct.addrinfo addrspace(200)* %stackval, i64 0, i32 3
   %as_cap = bitcast %struct.addrinfo addrspace(200)* %stackval to i8 addrspace(200)* addrspace(200)*

@@ -46,10 +46,8 @@ declare dso_local void @foo_byval(%struct.foo addrspace(200)* nocapture byval(%s
 ;   ret void
 ; }
 
-; Function Attrs: argmemonly nounwind willreturn writeonly
 declare void @llvm.memset.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8, i64, i1 immarg) addrspace(200) argmemonly nounwind willreturn writeonly
 
-; Function Attrs: nounwind uwtable
 define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-STATIC-LABEL: clang_purecap_byval_args:
 ; RV64-STATIC:       # %bb.0: # %entry

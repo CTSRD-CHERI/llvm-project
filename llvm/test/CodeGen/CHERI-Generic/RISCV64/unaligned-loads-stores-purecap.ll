@@ -2,8 +2,6 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/unaligned-loads-stores-purecap.ll
 ; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d %s -o - | FileCheck %s
 
-; ModuleID = 'global.c'
-
 @a1 = addrspace(200) global i64 0, align 1
 @a2 = addrspace(200) global i64 0, align 2
 @a4 = addrspace(200) global i64 0, align 4
@@ -11,9 +9,8 @@
 
 define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_1:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB0_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB0_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca0, %captab_pcrel_hi(a1)
 ; CHECK-NEXT:    clc ca0, %pcrel_lo(.LBB0_1)(ca0)
 ; CHECK-NEXT:    clbu a1, 1(ca0)
@@ -39,16 +36,14 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    slli a0, a0, 32
 ; CHECK-NEXT:    or a0, a0, a1
 ; CHECK-NEXT:    cret
-entry:
   %ret = load i64, i64 addrspace(200)* @a1, align 1
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_2:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB1_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB1_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca0, %captab_pcrel_hi(a2)
 ; CHECK-NEXT:    clc ca0, %pcrel_lo(.LBB1_1)(ca0)
 ; CHECK-NEXT:    clhu a1, 2(ca0)
@@ -62,16 +57,14 @@ define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    slli a0, a0, 32
 ; CHECK-NEXT:    or a0, a0, a1
 ; CHECK-NEXT:    cret
-entry:
   %ret = load i64, i64 addrspace(200)* @a2, align 2
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_4:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB2_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB2_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca0, %captab_pcrel_hi(a4)
 ; CHECK-NEXT:    clc ca0, %pcrel_lo(.LBB2_1)(ca0)
 ; CHECK-NEXT:    clwu a1, 4(ca0)
@@ -79,30 +72,26 @@ define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    slli a1, a1, 32
 ; CHECK-NEXT:    or a0, a1, a0
 ; CHECK-NEXT:    cret
-entry:
   %ret = load i64, i64 addrspace(200)* @a4, align 4
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_8:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB3_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB3_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca0, %captab_pcrel_hi(a8)
 ; CHECK-NEXT:    clc ca0, %pcrel_lo(.LBB3_1)(ca0)
 ; CHECK-NEXT:    cld a0, 0(ca0)
 ; CHECK-NEXT:    cret
-entry:
   %ret = load i64, i64 addrspace(200)* @a8, align 8
   ret i64 %ret
 }
 
 define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_1:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB4_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB4_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(a1)
 ; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB4_1)(ca1)
 ; CHECK-NEXT:    csb a0, 0(ca1)
@@ -121,17 +110,14 @@ define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    srli a0, a0, 8
 ; CHECK-NEXT:    csb a0, 1(ca1)
 ; CHECK-NEXT:    cret
-entry:
   store i64 %y, i64 addrspace(200)* @a1, align 1
   ret void
 }
 
-; Function Attrs: nounwind
 define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_2:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB5_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB5_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(a2)
 ; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB5_1)(ca1)
 ; CHECK-NEXT:    csh a0, 0(ca1)
@@ -142,37 +128,32 @@ define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    srli a0, a0, 16
 ; CHECK-NEXT:    csh a0, 2(ca1)
 ; CHECK-NEXT:    cret
-entry:
   store i64 %y, i64 addrspace(200)* @a2, align 2
   ret void
 }
 
 define void @store_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_4:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB6_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB6_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(a4)
 ; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB6_1)(ca1)
 ; CHECK-NEXT:    csw a0, 0(ca1)
 ; CHECK-NEXT:    srli a0, a0, 32
 ; CHECK-NEXT:    csw a0, 4(ca1)
 ; CHECK-NEXT:    cret
-entry:
   store i64 %y, i64 addrspace(200)* @a4, align 4
   ret void
 }
 
 define void @store_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_8:
-; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:  .LBB7_1: # %entry
-; CHECK-NEXT:    # Label of block must be emitted
+; CHECK:       # %bb.0:
+; CHECK-NEXT:  .LBB7_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(a8)
 ; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB7_1)(ca1)
 ; CHECK-NEXT:    csd a0, 0(ca1)
 ; CHECK-NEXT:    cret
-entry:
   store i64 %y, i64 addrspace(200)* @a8, align 8
   ret void
 }

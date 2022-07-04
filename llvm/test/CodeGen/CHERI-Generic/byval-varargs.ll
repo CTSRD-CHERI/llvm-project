@@ -25,8 +25,7 @@
 
 %struct.Foo = type { [1024 x i8] }
 
-; Function Attrs: nounwind
-define signext i32 @test_alloca() local_unnamed_addr addrspace(200) #0 {
+define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-LABEL: test_alloca:
 ; RV64:       # %bb.0: # %entry
 ; RV64-NEXT:    addi sp, sp, -2032
@@ -181,20 +180,19 @@ entry:
   %f = alloca %struct.Foo, align 1, addrspace(200)
   %byval-temp = alloca %struct.Foo, align 1, addrspace(200)
   %0 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %f, i64 0, i32 0, i64 0
-  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
+  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %0)
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %0, i8 0, i64 1024, i1 false)
-  %call = call signext i32 @byref(%struct.Foo addrspace(200)* nonnull %f) #4
+  %call = call signext i32 @byref(%struct.Foo addrspace(200)* nonnull %f)
   %1 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %byval-temp, i64 0, i32 0, i64 0
-  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %1) #4
+  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %1)
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %1, i8 addrspace(200)* nonnull align 1 dereferenceable(1024) %0, i64 1024, i1 false)
-  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull %byval-temp) #4
-  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %1) #4
-  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
+  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull %byval-temp)
+  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %1)
+  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %0)
   ret i32 %call1
 }
 
-; Function Attrs: nounwind
-define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
+define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; The RV64 Stack frame size should be > 2048 (split into two instructions)
 ; RV64-LABEL: test_byval:
 ; RV64:       # %bb.0: # %entry
@@ -357,32 +355,22 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) #0 {
 entry:
   %f = alloca %struct.Foo, align 8, addrspace(200)
   %0 = getelementptr inbounds %struct.Foo, %struct.Foo addrspace(200)* %f, i64 0, i32 0, i64 0
-  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
+  call void @llvm.lifetime.start.p200i8(i64 1024, i8 addrspace(200)* nonnull %0)
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 8 dereferenceable(1024) %0, i8 0, i64 1024, i1 false)
-  %call = call signext i32 @byref(%struct.Foo addrspace(200)* nonnull %f) #4
-  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull byval(%struct.Foo) align 8 %f) #4
-  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %0) #4
+  %call = call signext i32 @byref(%struct.Foo addrspace(200)* nonnull %f)
+  %call1 = call signext i32 (i32, ...) @varargs(i32 signext 1024, %struct.Foo addrspace(200)* nonnull byval(%struct.Foo) align 8 %f)
+  call void @llvm.lifetime.end.p200i8(i64 1024, i8 addrspace(200)* nonnull %0)
   ret i32 %call1
 }
 
-; Function Attrs: argmemonly nounwind willreturn
-declare void @llvm.lifetime.start.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200) #1
+declare void @llvm.lifetime.start.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200)
 
-; Function Attrs: argmemonly nounwind willreturn writeonly
-declare void @llvm.memset.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8, i64, i1 immarg) addrspace(200) #2
+declare void @llvm.memset.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8, i64, i1 immarg) addrspace(200)
 
-; Function Attrs: argmemonly nounwind willreturn
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noalias nocapture writeonly, i8 addrspace(200)* noalias nocapture readonly, i64, i1 immarg) addrspace(200) #1
+declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noalias nocapture writeonly, i8 addrspace(200)* noalias nocapture readonly, i64, i1 immarg) addrspace(200)
 
-declare signext i32 @byref(%struct.Foo addrspace(200)*) local_unnamed_addr addrspace(200) #3
+declare signext i32 @byref(%struct.Foo addrspace(200)*) local_unnamed_addr addrspace(200)
 
-declare signext i32 @varargs(i32 signext, ...) local_unnamed_addr addrspace(200) #3
+declare signext i32 @varargs(i32 signext, ...) local_unnamed_addr addrspace(200)
 
-; Function Attrs: argmemonly nounwind willreturn
-declare void @llvm.lifetime.end.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200) #1
-
-attributes #0 = { nounwind }
-attributes #1 = { argmemonly nounwind willreturn }
-attributes #2 = { argmemonly nounwind willreturn writeonly }
-attributes #3 = { nounwind }
-attributes #4 = { nounwind }
+declare void @llvm.lifetime.end.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200)

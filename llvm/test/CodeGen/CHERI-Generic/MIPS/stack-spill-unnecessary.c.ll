@@ -17,7 +17,7 @@ declare void @multi_arg(i32 addrspace(200)* %start, i32 addrspace(200)* %end, i8
 
 define void @use_after_call() addrspace(200) nounwind {
 ; CHECK-LABEL: use_after_call:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset $c11, $c11, -48
 ; CHECK-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
@@ -39,7 +39,7 @@ define void @use_after_call() addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, 48
 ;
 ; HYBRID-LABEL: use_after_call:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    daddiu $sp, $sp, -32
 ; HYBRID-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sd $gp, 16($sp) # 8-byte Folded Spill
@@ -62,7 +62,6 @@ define void @use_after_call() addrspace(200) nounwind {
 ; HYBRID-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 32
-entry:
   %x = alloca i32, align 4, addrspace(200)
   store i32 123, i32 addrspace(200)* %x, align 4
   call void @foo()
@@ -70,10 +69,9 @@ entry:
   ret void
 }
 
-
 define void @use_after_call_no_store() addrspace(200) nounwind {
 ; CHECK-LABEL: use_after_call_no_store:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset $c11, $c11, -48
 ; CHECK-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
@@ -97,7 +95,7 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, 48
 ;
 ; HYBRID-LABEL: use_after_call_no_store:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    daddiu $sp, $sp, -32
 ; HYBRID-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sd $gp, 16($sp) # 8-byte Folded Spill
@@ -123,7 +121,6 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
 ; HYBRID-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 32
-entry:
   %x = alloca i32, align 4, addrspace(200)
   %y = alloca i32, align 4, addrspace(200)
   call void @foo()
@@ -134,7 +131,7 @@ entry:
 
 define void @multi_use() addrspace(200) nounwind {
 ; CHECK-LABEL: multi_use:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset $c11, $c11, -64
 ; CHECK-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
@@ -167,7 +164,7 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, 64
 ;
 ; HYBRID-LABEL: multi_use:
-; HYBRID:       # %bb.0: # %entry
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    daddiu $sp, $sp, -32
 ; HYBRID-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sd $gp, 16($sp) # 8-byte Folded Spill
@@ -203,7 +200,6 @@ define void @multi_use() addrspace(200) nounwind {
 ; HYBRID-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 32
-entry:
   %y = alloca i32, align 4, addrspace(200)
   %x = alloca i32, align 4, addrspace(200)
   call void @foo()

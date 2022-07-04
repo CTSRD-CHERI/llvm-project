@@ -9,7 +9,7 @@
 @IF-RISCV32@; RUN:   FileCheck %s --check-prefix=RELOCS -DINTEGER_RELOC=R_RISCV_32 '-DCAPABILITY_RELOC=R_RISCV_CHERI_CAPABILITY'
 target datalayout = "@HYBRID_DATALAYOUT@"
 
-declare void @extern_fn() #0
+declare void @extern_fn()
 @extern_data = external global i8, align 1
 
 ; TODO: should the inttoptr ones be tagged -> emit a constructor?

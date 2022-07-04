@@ -8,24 +8,21 @@
 
 @_thr_umutex_init.default_mtx = internal addrspace(200) constant %struct.umutex zeroinitializer, align 16
 
-; Function Attrs: nounwind
 define void @_thr_umutex_init(%struct.umutex addrspace(200)* %mtx) local_unnamed_addr addrspace(200) nounwind "frame-pointer"="none" {
 ; CHECK-LABEL: _thr_umutex_init:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csc $cnull, $zero, 16($c3)
-entry:
-  %0 = bitcast %struct.umutex addrspace(200)* %mtx to i8 addrspace(200)*
-  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %0, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 false)
+  %1 = bitcast %struct.umutex addrspace(200)* %mtx to i8 addrspace(200)*
+  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %1, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 false)
   ret void
 }
 
-; Function Attrs: nounwind
 define void @_thr_umutex_init_volatile(%struct.umutex addrspace(200)* %mtx) local_unnamed_addr addrspace(200) nounwind "frame-pointer"="none" {
 ; CHECK-LABEL: _thr_umutex_init_volatile:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -37,11 +34,9 @@ define void @_thr_umutex_init_volatile(%struct.umutex addrspace(200)* %mtx) loca
 ; CHECK-NEXT:    clc $c1, $zero, 16($c1)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csc $c1, $zero, 16($c3)
-entry:
-  %0 = bitcast %struct.umutex addrspace(200)* %mtx to i8 addrspace(200)*
-  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %0, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 true)
+  %1 = bitcast %struct.umutex addrspace(200)* %mtx to i8 addrspace(200)*
+  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %1, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 true)
   ret void
 }
 
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noalias nocapture writeonly %0, i8 addrspace(200)* noalias nocapture readonly %1, i64 %2, i1 immarg %3) addrspace(200) #0
-attributes #0 = { argmemonly nounwind willreturn }
+declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noalias nocapture writeonly %0, i8 addrspace(200)* noalias nocapture readonly %1, i64 %2, i1 immarg %3) addrspace(200)

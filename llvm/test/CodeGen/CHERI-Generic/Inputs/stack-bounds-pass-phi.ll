@@ -57,7 +57,6 @@ phi_block:
   ret void
 }
 
-
 ; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(i32 addrspace(200)* %val1)
 ; DBG: test_phi: 1 of 3 users need bounds for   %alloca1 = alloca i32, align 4, addrspace(200)
 ; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(i32 addrspace(200)* %val2)

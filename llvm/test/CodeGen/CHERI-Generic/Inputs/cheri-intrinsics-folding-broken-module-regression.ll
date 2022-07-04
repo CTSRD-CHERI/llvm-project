@@ -16,7 +16,6 @@ target datalayout = "@PURECAP_DATALAYOUT@"
 ;}
 
 define void @g(iCAPRANGE %x, iCAPRANGE %y) addrspace(200) nounwind {
-entry:
   %x.addr = alloca iCAPRANGE, align 4, addrspace(200)
   %y.addr = alloca iCAPRANGE, align 4, addrspace(200)
   store iCAPRANGE %x, iCAPRANGE addrspace(200)* %x.addr, align 4
@@ -38,7 +37,6 @@ entry:
 }
 
 ; define void @g(iCAPRANGE %x, iCAPRANGE %y)  nounwind {
-; entry:
 ;   %tmp1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.iCAPRANGE(i8 addrspace(200)* bitcast (iCAPRANGE addrspace(200)* @d to i8 addrspace(200)*), iCAPRANGE %x)
 ;   %tmp3 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.iCAPRANGE(i8 addrspace(200)* %tmp1, iCAPRANGE %y)
 ;   store i8 addrspace(200)* %tmp3, i8 addrspace(200)* addrspace(200)* @e, align 32

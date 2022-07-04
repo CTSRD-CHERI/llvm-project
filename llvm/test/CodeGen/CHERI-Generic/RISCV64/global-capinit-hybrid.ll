@@ -5,7 +5,7 @@
 ; RUN:   FileCheck %s --check-prefix=RELOCS -DINTEGER_RELOC=R_RISCV_64 '-DCAPABILITY_RELOC=R_RISCV_CHERI_CAPABILITY'
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128"
 
-declare void @extern_fn() #0
+declare void @extern_fn()
 @extern_data = external global i8, align 1
 
 ; TODO: should the inttoptr ones be tagged -> emit a constructor?

@@ -7,161 +7,146 @@
 
 define i32 addrspace(200)* @atomic_cap_ptr_xchg_sc(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_sc:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB0_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB0_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
 ; PURECAP-NEXT:    cscc $1, $c4, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB0_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_sc:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB0_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB0_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
 ; HYBRID-NEXT:    cscc $1, $c4, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB0_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
   ret i32 addrspace(200)* %tmp
 }
 
 define i32 addrspace(200)* @atomic_cap_ptr_xchg_relaxed(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_relaxed:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    .insn
-; PURECAP-NEXT:  .LBB1_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB1_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
 ; PURECAP-NEXT:    cscc $1, $c4, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB1_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_relaxed:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    .insn
-; HYBRID-NEXT:  .LBB1_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB1_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
 ; HYBRID-NEXT:    cscc $1, $c4, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB1_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val monotonic
   ret i32 addrspace(200)* %tmp
 }
 
 define i32 addrspace(200)* @atomic_cap_ptr_xchg_acquire(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_acquire:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    .insn
-; PURECAP-NEXT:  .LBB2_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
 ; PURECAP-NEXT:    cscc $1, $c4, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB2_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_acquire:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    .insn
-; HYBRID-NEXT:  .LBB2_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
 ; HYBRID-NEXT:    cscc $1, $c4, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB2_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val acquire
   ret i32 addrspace(200)* %tmp
 }
 
 define i32 addrspace(200)* @atomic_cap_ptr_xchg_rel(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_rel:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB3_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
 ; PURECAP-NEXT:    cscc $1, $c4, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB3_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_rel:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB3_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
 ; HYBRID-NEXT:    cscc $1, $c4, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB3_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val release
   ret i32 addrspace(200)* %tmp
 }
 
 define i32 addrspace(200)* @atomic_cap_ptr_xchg_acq_rel(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_acq_rel:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB4_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
 ; PURECAP-NEXT:    cscc $1, $c4, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB4_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_acq_rel:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB4_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
 ; HYBRID-NEXT:    cscc $1, $c4, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB4_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val acq_rel
   ret i32 addrspace(200)* %tmp
 }
@@ -169,94 +154,81 @@ bb:
 ; Also check non-i8* xchg:
 define i32 addrspace(200)* @atomic_cap_ptr_xchg_i32ptr(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg_i32ptr:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB5_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
 ; PURECAP-NEXT:    cscc $1, $c4, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB5_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg_i32ptr:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB5_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
 ; HYBRID-NEXT:    cscc $1, $c4, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB5_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-bb:
   %tmp = atomicrmw xchg i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val acq_rel
   ret i32 addrspace(200)* %tmp
 }
 
 ; TODO: support all these:
 ; define i32 addrspace(200)* @atomic_cap_ptr_add(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw add i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_sub(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw sub i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_and(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw and i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_nand(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw nand i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_or(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw or i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_xor(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw xor i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_max(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw max i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_min(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw min i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_umax(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw umax i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }
 ;
 ; define i32 addrspace(200)* @atomic_cap_ptr_umin(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-; bb:
 ;   %tmp = atomicrmw umin i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
 ;   ret i32 addrspace(200)* %tmp
 ; }

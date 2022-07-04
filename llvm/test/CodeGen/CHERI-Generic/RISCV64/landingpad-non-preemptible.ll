@@ -66,7 +66,7 @@ lpad:
   catch i8 addrspace(200)* null
   %1 = extractvalue { i8 addrspace(200)*, i32 } %0, 0
   %2 = extractvalue { i8 addrspace(200)*, i32 } %0, 1
-  %3 = tail call i32 @llvm.eh.typeid.for(i8* addrspacecast (i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @_ZTIi to i8 addrspace(200)*) to i8*)) #3
+  %3 = tail call i32 @llvm.eh.typeid.for(i8* addrspacecast (i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @_ZTIi to i8 addrspace(200)*) to i8*))
   %matches = icmp eq i32 %2, %3
   %4 = tail call i8 addrspace(200)* @__cxa_begin_catch(i8 addrspace(200)* %1) nounwind
   br i1 %matches, label %catch1, label %catch
@@ -79,7 +79,7 @@ catch:
   tail call void @__cxa_end_catch()
   br label %return
 
-return:                                           ; preds = %entry, %catch1, %catch
+return:
   %retval.0 = phi i32 [ 1, %catch1 ], [ 2, %catch ], [ %call, %entry ]
   ret i32 %retval.0
 }

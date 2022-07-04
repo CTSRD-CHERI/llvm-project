@@ -2,8 +2,6 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/unaligned-loads-stores-purecap.ll
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap %s -o - | FileCheck %s
 
-; ModuleID = 'global.c'
-
 @a1 = addrspace(200) global i64 0, align 1
 @a2 = addrspace(200) global i64 0, align 2
 @a4 = addrspace(200) global i64 0, align 4
@@ -11,7 +9,7 @@
 
 define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_1:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -39,14 +37,13 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsll $2, $2, 32
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    or $2, $2, $1
-entry:
   %ret = load i64, i64 addrspace(200)* @a1, align 1
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_2:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -62,14 +59,13 @@ define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsll $2, $2, 32
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    or $2, $2, $1
-entry:
   %ret = load i64, i64 addrspace(200)* @a2, align 2
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_4:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -79,28 +75,26 @@ define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsll $1, $1, 32
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    or $2, $1, $2
-entry:
   %ret = load i64, i64 addrspace(200)* @a4, align 4
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: load_global_i64_align_8:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c1, %captab20(a8)($c1)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cld $2, $zero, 0($c1)
-entry:
   %ret = load i64, i64 addrspace(200)* @a8, align 8
   ret i64 %ret
 }
 
 define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_1:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -121,15 +115,13 @@ define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsrl $1, $4, 56
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csb $1, $zero, 0($c1)
-entry:
   store i64 %y, i64 addrspace(200)* @a1, align 1
   ret void
 }
 
-; Function Attrs: nounwind
 define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_2:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -142,14 +134,13 @@ define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsrl $1, $4, 48
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csh $1, $zero, 0($c1)
-entry:
   store i64 %y, i64 addrspace(200)* @a2, align 2
   ret void
 }
 
 define void @store_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_4:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -158,21 +149,19 @@ define void @store_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsrl $1, $4, 32
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csw $1, $zero, 0($c1)
-entry:
   store i64 %y, i64 addrspace(200)* @a4, align 4
   ret void
 }
 
 define void @store_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-LABEL: store_global_i64_align_8:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c1, %captab20(a8)($c1)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csd $4, $zero, 0($c1)
-entry:
   store i64 %y, i64 addrspace(200)* @a8, align 8
   ret void
 }

@@ -7,255 +7,233 @@
 
 define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xchg:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB0_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB0_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    cscd $1, $4, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB0_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xchg:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB0_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB0_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    cscd $1, $4, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB0_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw xchg i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_add(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_add:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB1_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB1_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    daddu $1, $2, $4
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB1_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_add:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB1_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB1_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    daddu $1, $2, $4
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB1_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw add i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_sub(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_sub:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB2_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    dsubu $1, $2, $4
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB2_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_sub:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB2_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    dsubu $1, $2, $4
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB2_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw sub i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_and(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_and:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB3_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    and $1, $2, $4
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB3_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_and:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB3_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB3_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    and $1, $2, $4
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB3_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw and i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_nand(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_nand:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB4_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    and $1, $2, $4
 ; PURECAP-NEXT:    nor $1, $zero, $1
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB4_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_nand:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB4_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    and $1, $2, $4
 ; HYBRID-NEXT:    nor $1, $zero, $1
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB4_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw nand i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_or(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_or:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB5_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    or $1, $2, $4
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB5_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_or:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB5_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    or $1, $2, $4
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB5_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw or i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_xor(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_xor:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB6_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    xor $1, $2, $4
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB6_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_xor:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB6_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    xor $1, $2, $4
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB6_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw xor i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_max:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB7_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    slt $3, $2, $4
 ; PURECAP-NEXT:    move $1, $2
@@ -263,16 +241,15 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB7_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_max:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB7_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    slt $3, $2, $4
 ; HYBRID-NEXT:    move $1, $2
@@ -280,21 +257,19 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB7_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw max i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_min:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB8_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    slt $3, $2, $4
 ; PURECAP-NEXT:    move $1, $2
@@ -302,16 +277,15 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB8_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_min:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB8_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    slt $3, $2, $4
 ; HYBRID-NEXT:    move $1, $2
@@ -319,21 +293,19 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB8_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw min i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_umax:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB9_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    sltu $3, $2, $4
 ; PURECAP-NEXT:    move $1, $2
@@ -341,16 +313,15 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB9_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_umax:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB9_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    sltu $3, $2, $4
 ; HYBRID-NEXT:    move $1, $2
@@ -358,21 +329,19 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB9_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw umax i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_umin:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB10_1: # %bb
-; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
 ; PURECAP-NEXT:    sltu $3, $2, $4
 ; PURECAP-NEXT:    move $1, $2
@@ -380,16 +349,15 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; PURECAP-NEXT:    cscd $1, $1, $c3
 ; PURECAP-NEXT:    beqz $1, .LBB10_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # %bb
+; PURECAP-NEXT:  # %bb.2:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_umin:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB10_1: # %bb
-; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
 ; HYBRID-NEXT:    sltu $3, $2, $4
 ; HYBRID-NEXT:    move $1, $2
@@ -397,18 +365,17 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    cscd $1, $1, $c3
 ; HYBRID-NEXT:    beqz $1, .LBB10_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # %bb
+; HYBRID-NEXT:  # %bb.2:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw umin i64 addrspace(200)* %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
 define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_fadd:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    clw $2, $zero, 0($c3)
 ; PURECAP-NEXT:    mtc1 $2, $f0
@@ -439,7 +406,7 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fadd:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    clw $2, $zero, 0($c3)
 ; HYBRID-NEXT:    mtc1 $2, $f0
@@ -468,14 +435,13 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw fadd float addrspace(200)* %ptr, float %val seq_cst
   ret float %tmp
 }
 
 define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwind {
 ; PURECAP-LABEL: atomic_cap_ptr_fsub:
-; PURECAP:       # %bb.0: # %bb
+; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    clw $2, $zero, 0($c3)
 ; PURECAP-NEXT:    mtc1 $2, $f0
@@ -506,7 +472,7 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-NEXT:    nop
 ;
 ; HYBRID-LABEL: atomic_cap_ptr_fsub:
-; HYBRID:       # %bb.0: # %bb
+; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    clw $2, $zero, 0($c3)
 ; HYBRID-NEXT:    mtc1 $2, $f0
@@ -535,7 +501,6 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-bb:
   %tmp = atomicrmw fsub float addrspace(200)* %ptr, float %val seq_cst
   ret float %tmp
 }
