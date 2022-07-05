@@ -182,53 +182,806 @@ define i32 addrspace(200)* @atomic_cap_ptr_xchg_i32ptr(i32 addrspace(200)* addrs
   ret i32 addrspace(200)* %tmp
 }
 
-; TODO: support all these:
-; define i32 addrspace(200)* @atomic_cap_ptr_add(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw add i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+define i32 addrspace(200)* @atomic_cap_ptr_add(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_add:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB6_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cgetaddr $1, $c3
+; PURECAP-NEXT:    cgetaddr $2, $c19
+; PURECAP-NEXT:    daddu $1, $1, $2
+; PURECAP-NEXT:    csetaddr $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB6_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_sub(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw sub i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_add:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_add)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_add)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB6_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cgetaddr $1, $c3
+; HYBRID-NEXT:    cgetaddr $2, $c17
+; HYBRID-NEXT:    daddu $1, $1, $2
+; HYBRID-NEXT:    csetaddr $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp0, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp0:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB6_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw add i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_sub(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_sub:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB7_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cgetaddr $1, $c3
+; PURECAP-NEXT:    cgetaddr $2, $c19
+; PURECAP-NEXT:    dsubu $1, $1, $2
+; PURECAP-NEXT:    csetaddr $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB7_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_and(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw and i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_sub:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_sub)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_sub)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB7_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cgetaddr $1, $c3
+; HYBRID-NEXT:    cgetaddr $2, $c17
+; HYBRID-NEXT:    dsubu $1, $1, $2
+; HYBRID-NEXT:    csetaddr $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp1, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp1:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB7_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw sub i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_and(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_and:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB8_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cgetaddr $1, $c19
+; PURECAP-NEXT:    candaddr $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB8_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_nand(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw nand i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_and:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_and)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_and)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB8_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cgetaddr $1, $c17
+; HYBRID-NEXT:    candaddr $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp2, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp2:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB8_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw and i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_nand(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_nand:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -96
+; PURECAP-NEXT:    csd $16, $zero, 88($c11) # 8-byte Folded Spill
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c4
+; PURECAP-NEXT:    cmove $c19, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:    daddiu $16, $zero, -1
+; PURECAP-NEXT:  .LBB9_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cgetaddr $1, $c18
+; PURECAP-NEXT:    cgetandaddr $1, $c3, $1
+; PURECAP-NEXT:    xor $1, $1, $16
+; PURECAP-NEXT:    csetaddr $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c19
+; PURECAP-NEXT:    beqz $2, .LBB9_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cld $16, $zero, 88($c11) # 8-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 96
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_or(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw or i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_nand:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $17, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 48($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_nand)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_nand)))
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $17, $zero, -1
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB9_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cgetaddr $1, $c17
+; HYBRID-NEXT:    cgetandaddr $1, $c3, $1
+; HYBRID-NEXT:    xor $1, $1, $17
+; HYBRID-NEXT:    csetaddr $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp3, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp3:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB9_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 48($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $17, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw nand i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_or(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_or:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB10_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cgetaddr $1, $c3
+; PURECAP-NEXT:    cgetaddr $2, $c19
+; PURECAP-NEXT:    or $1, $1, $2
+; PURECAP-NEXT:    csetaddr $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB10_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_xor(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw xor i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_or:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_or)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_or)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB10_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cgetaddr $1, $c3
+; HYBRID-NEXT:    cgetaddr $2, $c17
+; HYBRID-NEXT:    or $1, $1, $2
+; HYBRID-NEXT:    csetaddr $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp4, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp4:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB10_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw or i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_xor(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_xor:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB11_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cgetaddr $1, $c3
+; PURECAP-NEXT:    cgetaddr $2, $c19
+; PURECAP-NEXT:    xor $1, $1, $2
+; PURECAP-NEXT:    csetaddr $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB11_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_max(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw max i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_xor:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_xor)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_xor)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB11_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cgetaddr $1, $c3
+; HYBRID-NEXT:    cgetaddr $2, $c17
+; HYBRID-NEXT:    xor $1, $1, $2
+; HYBRID-NEXT:    csetaddr $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp5, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp5:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB11_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw xor i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_max(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_max:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB12_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    clt $1, $c19, $c3
+; PURECAP-NEXT:    cmove $c5, $c19
+; PURECAP-NEXT:    cmovn $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB12_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_min(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw min i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_max:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_max)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_max)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB12_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    clt $1, $c17, $c3
+; HYBRID-NEXT:    cmove $c4, $c17
+; HYBRID-NEXT:    cmovn $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp6, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp6:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB12_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw max i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_min(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_min:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB13_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cle $1, $c3, $c19
+; PURECAP-NEXT:    cmove $c5, $c19
+; PURECAP-NEXT:    cmovn $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB13_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_umax(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw umax i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_min:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_min)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_min)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB13_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cle $1, $c3, $c17
+; HYBRID-NEXT:    cmove $c4, $c17
+; HYBRID-NEXT:    cmovn $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp7, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp7:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB13_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw min i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_umax(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_umax:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB14_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cltu $1, $c19, $c3
+; PURECAP-NEXT:    cmove $c5, $c19
+; PURECAP-NEXT:    cmovn $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB14_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
 ;
-; define i32 addrspace(200)* @atomic_cap_ptr_umin(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
-;   %tmp = atomicrmw umin i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
-;   ret i32 addrspace(200)* %tmp
-; }
+; HYBRID-LABEL: atomic_cap_ptr_umax:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_umax)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_umax)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB14_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cltu $1, $c17, $c3
+; HYBRID-NEXT:    cmove $c4, $c17
+; HYBRID-NEXT:    cmovn $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp8, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp8:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB14_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw umax i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
+
+define i32 addrspace(200)* @atomic_cap_ptr_umin(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val) nounwind {
+; PURECAP-LABEL: atomic_cap_ptr_umin:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cincoffset $c11, $c11, -80
+; PURECAP-NEXT:    csc $c20, $zero, 64($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c19, $zero, 48($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove $c18, $c3
+; PURECAP-NEXT:    clc $c3, $zero, 0($c3)
+; PURECAP-NEXT:    cmove $c19, $c4
+; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; PURECAP-NEXT:    cgetpccincoffset $c20, $1
+; PURECAP-NEXT:  .LBB15_1: # %atomicrmw.start
+; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cleu $1, $c3, $c19
+; PURECAP-NEXT:    cmove $c5, $c19
+; PURECAP-NEXT:    cmovn $c5, $c3, $1
+; PURECAP-NEXT:    csc $c3, $zero, 0($c11)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(__atomic_compare_exchange_cap)($c20)
+; PURECAP-NEXT:    csetbounds $c4, $c11, 16
+; PURECAP-NEXT:    daddiu $4, $zero, 5
+; PURECAP-NEXT:    daddiu $5, $zero, 5
+; PURECAP-NEXT:    cjalr $c12, $c17
+; PURECAP-NEXT:    cmove $c3, $c18
+; PURECAP-NEXT:    beqz $2, .LBB15_1
+; PURECAP-NEXT:    clc $c3, $zero, 0($c11)
+; PURECAP-NEXT:  # %bb.2: # %atomicrmw.end
+; PURECAP-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c19, $zero, 48($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc $c20, $zero, 64($c11) # 16-byte Folded Reload
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cincoffset $c11, $c11, 80
+;
+; HYBRID-LABEL: atomic_cap_ptr_umin:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    daddiu $sp, $sp, -80
+; HYBRID-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $gp, 64($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 56($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    csc $c18, $sp, 32($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
+; HYBRID-NEXT:    cmove $c17, $c4
+; HYBRID-NEXT:    cmove $c18, $c3
+; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(atomic_cap_ptr_umin)))
+; HYBRID-NEXT:    daddu $1, $1, $25
+; HYBRID-NEXT:    clc $c3, $zero, 0($c3)
+; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(atomic_cap_ptr_umin)))
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:  .LBB15_1: # %atomicrmw.start
+; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cleu $1, $c3, $c17
+; HYBRID-NEXT:    cmove $c4, $c17
+; HYBRID-NEXT:    cmovn $c4, $c3, $1
+; HYBRID-NEXT:    csc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $25, %call16(__atomic_compare_exchange_cap_c)($gp)
+; HYBRID-NEXT:    daddiu $5, $zero, 5
+; HYBRID-NEXT:    daddiu $6, $zero, 5
+; HYBRID-NEXT:    cmove $c3, $c18
+; HYBRID-NEXT:    .reloc .Ltmp9, R_MIPS_JALR, __atomic_compare_exchange_cap_c
+; HYBRID-NEXT:  .Ltmp9:
+; HYBRID-NEXT:    jalr $25
+; HYBRID-NEXT:    move $4, $16
+; HYBRID-NEXT:    beqz $2, .LBB15_1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:  # %bb.2: # %atomicrmw.end
+; HYBRID-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    clc $c18, $sp, 32($ddc) # 16-byte Folded Reload
+; HYBRID-NEXT:    ld $16, 56($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $gp, 64($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 80
+  %tmp = atomicrmw umin i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %val seq_cst
+  ret i32 addrspace(200)* %tmp
+}
