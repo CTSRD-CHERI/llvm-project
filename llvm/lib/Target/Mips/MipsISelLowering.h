@@ -838,6 +838,10 @@ extern bool LargeCapTable;
       return true;
     }
 
+    bool supportsAtomicOperation(const DataLayout &DL, const Instruction *AI,
+                                 Type *ValueTy, Type *PointerTy,
+                                 Align Alignment) const override;
+
     /// Emit a sign-extension using sll/sra, seb, or seh appropriately.
     MachineBasicBlock *emitSignExtendToI32InReg(MachineInstr &MI,
                                                 MachineBasicBlock *BB,

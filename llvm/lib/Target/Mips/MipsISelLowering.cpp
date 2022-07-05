@@ -2164,6 +2164,19 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
   return BB;
 }
 
+bool MipsTargetLowering::supportsAtomicOperation(const DataLayout &DL,
+                                                 const Instruction *AI,
+                                                 Type *ValueTy, Type *PointerTy,
+                                                 Align Alignment) const {
+  // FIXME: We should have a proper implementation of RMW atomics on capability
+  // values but CHERI-MIPS is EOL.
+  if (DL.isFatPointer(ValueTy) && isa<AtomicRMWInst>(AI))
+    if (cast<AtomicRMWInst>(AI)->getOperation() != AtomicRMWInst::Xchg)
+      return false;
+  return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
+                                                 Alignment);
+}
+
 MachineBasicBlock *MipsTargetLowering::emitSignExtendToI32InReg(
     MachineInstr &MI, MachineBasicBlock *BB, unsigned Size, unsigned DstReg,
     unsigned SrcReg) const {
