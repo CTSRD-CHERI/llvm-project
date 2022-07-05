@@ -531,6 +531,50 @@ static void createCmpXchgInstFun(IRBuilder<> &Builder, Value *Addr,
 /// returning the new value.
 static Value *performAtomicOp(AtomicRMWInst::BinOp Op, IRBuilder<> &Builder,
                               Value *Loaded, Value *Inc) {
+
+  Module *M = Builder.GetInsertBlock()->getModule();
+  const DataLayout &DL = M->getDataLayout();
+  if (DL.isFatPointer(Loaded->getType())) {
+    switch (Op) {
+    case AtomicRMWInst::Xchg:
+      break;
+    case AtomicRMWInst::Add:
+    case AtomicRMWInst::Sub:
+    case AtomicRMWInst::And:
+    case AtomicRMWInst::Nand:
+    case AtomicRMWInst::Or:
+    case AtomicRMWInst::Xor: {
+      LLVMContext &C = M->getContext();
+      unsigned AS = Loaded->getType()->getPointerAddressSpace();
+      Type *I8CapTy = Type::getInt8PtrTy(C, AS);
+      Type *SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(AS));
+      Function *GetAddress =
+          Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_address_get,
+                                    SizeTy);
+      Function *SetAddress =
+          Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_address_set,
+                                    SizeTy);
+      Value *LoadedI8Cap = Builder.CreateBitCast(Loaded, I8CapTy);
+      Value *LoadedInt = Builder.CreateCall(GetAddress, {LoadedI8Cap});
+      Value *IncI8Cap = Builder.CreateBitCast(Inc, I8CapTy);
+      Value *IncInt = Builder.CreateCall(GetAddress, {IncI8Cap});
+      Value *NewInt = performAtomicOp(Op, Builder, LoadedInt, IncInt);
+      Value *NewI8Cap = Builder.CreateCall(SetAddress, {LoadedI8Cap, NewInt});
+      return Builder.CreateBitCast(NewI8Cap, Loaded->getType());
+    }
+    case AtomicRMWInst::Max:
+    case AtomicRMWInst::Min:
+    case AtomicRMWInst::UMax:
+    case AtomicRMWInst::UMin:
+      break;
+    case AtomicRMWInst::FAdd:
+    case AtomicRMWInst::FSub:
+      llvm_unreachable("Cannot use FP atomic op on capability value");
+    default:
+      llvm_unreachable("Unknown atomic op");
+    }
+  }
+
   Value *NewVal;
   switch (Op) {
   case AtomicRMWInst::Xchg:
