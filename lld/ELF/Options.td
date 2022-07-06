@@ -371,6 +371,8 @@ def relocatable: F<"relocatable">, HelpText<"Create relocatable object file">;
 
 def compartment: F<"compartment">, HelpText<"Create object file for a compartment">;
 
+defm compartment_report: Eq<"compartment-report", "Emit a compartment report metadata file">;
+
 defm retain_symbols_file:
   Eq<"retain-symbols-file", "Retain only the symbols listed in the file">,
   MetaVarName<"<file>">;
