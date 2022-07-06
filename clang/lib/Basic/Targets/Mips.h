@@ -571,18 +571,6 @@ public:
 
   bool SupportsCapabilities() const override { return IsCHERI; }
 
-  bool hasBuiltinAtomic(uint64_t AtomicSizeInBits,
-                        uint64_t AlignmentInBits) const override {
-#if 0
-    if (SupportsCapabilities() &&
-        AtomicSizeInBits == getCHERICapabilityWidth() &&
-        AlignmentInBits == getCHERICapabilityAlign()) {
-      return true;
-    }
-#endif
-    return TargetInfo::hasBuiltinAtomic(AtomicSizeInBits, AlignmentInBits);
-  }
-
   unsigned getUnwindWordWidth() const override;
 
   bool validateTarget(DiagnosticsEngine &Diags) const override;
