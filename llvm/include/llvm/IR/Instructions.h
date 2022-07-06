@@ -762,8 +762,16 @@ public:
     /// *p = old - v
     FSub,
 
+    /// *p = maxnum(old, v)
+    /// \p maxnum matches the behavior of \p llvm.maxnum.*.
+    FMax,
+
+    /// *p = minnum(old, v)
+    /// \p minnum matches the behavior of \p llvm.minnum.*.
+    FMin,
+
     FIRST_BINOP = Xchg,
-    LAST_BINOP = FSub,
+    LAST_BINOP = FMin,
     BAD_BINOP
   };
 
@@ -806,6 +814,8 @@ public:
     switch (Op) {
     case AtomicRMWInst::FAdd:
     case AtomicRMWInst::FSub:
+    case AtomicRMWInst::FMax:
+    case AtomicRMWInst::FMin:
       return true;
     default:
       return false;
