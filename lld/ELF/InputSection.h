@@ -13,6 +13,7 @@
 #include "Relocations.h"
 #include "Thunks.h"
 #include "lld/Common/LLVM.h"
+#include "lld/Common/Memory.h"
 #include "llvm/ADT/CachedHashString.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/TinyPtrVector.h"
@@ -101,6 +102,8 @@ protected:
         entsize(entsize), type(type), link(link), info(info) {}
 };
 
+struct RISCVRelaxAux;
+
 // This corresponds to a section of an input file.
 class InputSectionBase : public SectionBase {
 public:
@@ -129,11 +132,10 @@ public:
     return cast_or_null<ObjFile<ELFT>>(file);
   }
 
-  // If basic block sections are enabled, many code sections could end up with
-  // one or two jump instructions at the end that could be relaxed to a smaller
-  // instruction. The members below help trimming the trailing jump instruction
-  // and shrinking a section.
-  unsigned bytesDropped = 0;
+  // Used by --optimize-bb-jumps and RISC-V linker relaxation temporarily to
+  // indicate the number of bytes which is not counted in the size. This should
+  // be reset to zero after uses.
+  uint16_t bytesDropped = 0;
 
   // Whether the section needs to be padded with a NOP filler due to
   // deleteFallThruJmpInsn.
@@ -145,6 +147,8 @@ public:
     assert(bytesDropped >= num);
     bytesDropped -= num;
   }
+
+  mutable ArrayRef<uint8_t> rawData;
 
   void trim() {
     if (bytesDropped) {
@@ -228,6 +232,10 @@ public:
   // basic blocks.
   SmallVector<JumpInstrMod, 0> jumpInstrMods;
 
+  // Auxiliary information for RISC-V linker relaxation. RISC-V does not use
+  // jumpInstrMod.
+  RISCVRelaxAux *relaxAux;
+
   // A function compiled with -fsplit-stack calling a function
   // compiled without -fsplit-stack needs its prologue adjusted. Find
   // such functions and adjust their prologues.  This is very similar
@@ -247,8 +255,6 @@ protected:
   template <typename ELFT>
   void parseCompressedHeader();
   void uncompress() const;
-
-  mutable ArrayRef<uint8_t> rawData;
 
   // This field stores the uncompressed size of the compressed data in rawData,
   // or -1 if rawData is not compressed (either because the section wasn't

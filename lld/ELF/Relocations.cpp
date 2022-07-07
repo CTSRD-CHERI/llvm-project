@@ -458,6 +458,7 @@ static bool isStaticLinkTimeConstant(RelExpr e, RelType type, const Symbol &sym,
                                      InputSectionBase &s, uint64_t relOff) {
   // These expressions always compute a constant
   if (oneof<R_DTPREL, R_GOTPLT, R_GOT_OFF, R_TLSLD_GOT_OFF,
+            R_RELAX_HINT,
             R_CHERI_CAPABILITY_TABLE_INDEX,
             R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
@@ -2131,7 +2132,9 @@ bool ThunkCreator::normalizeExistingThunk(Relocation &rel, uint64_t src) {
 // made no changes. If the target requires range extension thunks, currently
 // ARM, then any future change in offset between caller and callee risks a
 // relocation out of range error.
-bool ThunkCreator::createThunks(ArrayRef<OutputSection *> outputSections) {
+bool ThunkCreator::createThunks(uint32_t pass,
+                                ArrayRef<OutputSection *> outputSections) {
+  this->pass = pass;
   bool addressesChanged = false;
 
   if (pass == 0 && target->getThunkSectionSpacing())
@@ -2193,7 +2196,6 @@ bool ThunkCreator::createThunks(ArrayRef<OutputSection *> outputSections) {
 
   // Merge all created synthetic ThunkSections back into OutputSection
   mergeThunks(outputSections);
-  ++pass;
   return addressesChanged;
 }
 

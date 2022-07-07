@@ -1788,14 +1788,17 @@ template <class ELFT> void Writer<ELFT>::finalizeAddressDependentContent() {
   if (config->emachine == EM_HEXAGON)
     hexagonTLSSymbolUpdate(outputSections);
 
-  int assignPasses = 0;
+  uint32_t pass = 0, assignPasses = 0;
   for (;;) {
-    bool changed = target->needsThunks && tc.createThunks(outputSections);
+    bool changed = target->needsThunks ? tc.createThunks(pass, outputSections)
+                                       : target->relaxOnce(pass);
+    ++pass;
 
     // With Thunk Size much smaller than branch range we expect to
     // converge quickly; if we get to 15 something has gone wrong.
-    if (changed && tc.pass >= 15) {
-      error("thunk creation not converged");
+    if (changed && pass >= 15) {
+      error(target->needsThunks ? "thunk creation not converged"
+                                : "relaxation not converged");
       break;
     }
 
@@ -1833,6 +1836,8 @@ template <class ELFT> void Writer<ELFT>::finalizeAddressDependentContent() {
       }
     }
   }
+  if (!config->relocatable && config->emachine == EM_RISCV)
+    riscvFinalizeRelax(pass);
 
   // If addrExpr is set, the address may not be a multiple of the alignment.
   // Warn because this is error-prone.
