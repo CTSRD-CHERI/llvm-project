@@ -335,7 +335,6 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_TPREL_LO12_I:
   case R_RISCV_TPREL_LO12_S:
     return R_TPREL;
-  case R_RISCV_RELAX:
   case R_RISCV_TPREL_ADD:
   case R_RISCV_CHERI_TPREL_CINCOFFSET:
     return R_NONE;
@@ -349,6 +348,8 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC;
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
     return R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC;
+  case R_RISCV_RELAX:
+    return config->relax ? R_RELAX_HINT : R_NONE;
   default:
     error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
           ") against symbol " + toString(s));
@@ -575,6 +576,9 @@ struct elf::RISCVRelaxAux {
   // For relocations[i], the actual offset is r_offset - (i ? relocDeltas[i-1] :
   // 0).
   std::unique_ptr<uint32_t[]> relocDeltas;
+  // For relocations[i], the actual type is relocTypes[i].
+  std::unique_ptr<RelType[]> relocTypes;
+  SmallVector<uint32_t, 0> writes;
 };
 
 static void initSymbolAnchors() {
@@ -584,9 +588,12 @@ static void initSymbolAnchors() {
       continue;
     for (InputSection *sec : getInputSections(osec)) {
       sec->relaxAux = make<RISCVRelaxAux>();
-      if (sec->relocations.size())
+      if (sec->relocations.size()) {
         sec->relaxAux->relocDeltas =
             std::make_unique<uint32_t[]>(sec->relocations.size());
+        sec->relaxAux->relocTypes =
+            std::make_unique<RelType[]>(sec->relocations.size());
+      }
     }
   }
   // Store anchors (st_value and st_value+st_size) for symbols relative to text
@@ -619,6 +626,33 @@ static void initSymbolAnchors() {
   }
 }
 
+// Relax R_RISCV_CALL/R_RISCV_CALL_PLT auipc+jalr to c.j, c.jal, or jal.
+static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
+                      Relocation &r, uint32_t &remove) {
+  const bool rvc = config->eflags & EF_RISCV_RVC;
+  const Symbol &sym = *r.sym;
+  const uint64_t insnPair = read64le(sec.rawData.data() + r.offset);
+  const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
+  const uint64_t dest =
+      (r.expr == R_PLT_PC ? sym.getPltVA() : sym.getVA()) + r.addend;
+  const int64_t displace = dest - loc;
+
+  if (rvc && isInt<12>(displace) && rd == 0) {
+    sec.relaxAux->relocTypes[i] = R_RISCV_RVC_JUMP;
+    sec.relaxAux->writes.push_back(0xa001); // c.j
+    remove = 6;
+  } else if (rvc && isInt<12>(displace) && rd == X_RA &&
+             !config->is64) { // RV32C only
+    sec.relaxAux->relocTypes[i] = R_RISCV_RVC_JUMP;
+    sec.relaxAux->writes.push_back(0x2001); // c.jal
+    remove = 6;
+  } else if (isInt<21>(displace)) {
+    sec.relaxAux->relocTypes[i] = R_RISCV_JAL;
+    sec.relaxAux->writes.push_back(0x6f | rd << 7); // jal
+    remove = 4;
+  }
+}
+
 static bool relax(InputSection &sec) {
   const uint64_t secAddr = sec.getVA();
   auto &aux = *sec.relaxAux;
@@ -639,6 +673,8 @@ static bool relax(InputSection &sec) {
   sa = makeArrayRef(aux.anchors);
   delta = 0;
 
+  std::fill_n(aux.relocTypes.get(), sec.relocations.size(), R_RISCV_NONE);
+  aux.writes.clear();
   for (auto it : llvm::enumerate(sec.relocations)) {
     Relocation &r = it.value();
     const size_t i = it.index();
@@ -654,6 +690,12 @@ static bool relax(InputSection &sec) {
              "R_RISCV_ALIGN needs expanding the content");
       break;
     }
+    case R_RISCV_CALL:
+    case R_RISCV_CALL_PLT:
+      if (i + 1 != sec.relocations.size() &&
+          sec.relocations[i + 1].type == R_RISCV_RELAX)
+        relaxCall(sec, i, loc, r, remove);
+      break;
     }
 
     // For all anchors whose offsets are <= r.offset, they are preceded by
@@ -729,6 +771,7 @@ void elf::riscvFinalizeRelax(int passes) {
       ArrayRef<uint8_t> old = sec->rawData;
       size_t newSize =
           old.size() - aux.relocDeltas[sec->relocations.size() - 1];
+      size_t writesIdx = 0;
       uint8_t *p = bAlloc.Allocate<uint8_t>(newSize);
       uint64_t offset = 0;
       int64_t delta = 0;
@@ -765,6 +808,20 @@ void elf::riscvFinalizeRelax(int passes) {
               write16le(p + j, 0x0001); // c.nop
             }
           }
+        } else if (RelType newType = aux.relocTypes[i]) {
+          const uint32_t insn = aux.writes[writesIdx++];
+          switch (newType) {
+          case R_RISCV_RVC_JUMP:
+            skip = 2;
+            write16le(p, insn);
+            break;
+          case R_RISCV_JAL:
+            skip = 4;
+            write32le(p, insn);
+            break;
+          default:
+            llvm_unreachable("unsupported type");
+          }
         }
 
         p += skip;
@@ -780,6 +837,8 @@ void elf::riscvFinalizeRelax(int passes) {
         uint64_t cur = rels[i].offset;
         do {
           rels[i].offset -= delta;
+          if (aux.relocTypes[i] != R_RISCV_NONE)
+            rels[i].type = aux.relocTypes[i];
         } while (++i != e && rels[i].offset == cur);
         delta = aux.relocDeltas[i - 1];
       }
