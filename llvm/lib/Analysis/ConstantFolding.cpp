@@ -1412,6 +1412,8 @@ Constant *llvm::ConstantFoldFPInstOperands(unsigned Opcode, Constant *LHS,
 
     // Calculate constant result.
     Constant *C = ConstantFoldBinaryOpOperands(Opcode, Op0, Op1, DL);
+    if (!C)
+      return nullptr;
 
     // Flush denormal output if needed.
     return FlushFPConstant(C, I, /* IsOutput */ true);
