@@ -2352,6 +2352,11 @@ bool ConstantExpr::isDesirableBinOp(unsigned Opcode) {
   case Instruction::SDiv:
   case Instruction::URem:
   case Instruction::SRem:
+  case Instruction::FAdd:
+  case Instruction::FSub:
+  case Instruction::FMul:
+  case Instruction::FDiv:
+  case Instruction::FRem:
     return false;
   case Instruction::Add:
   case Instruction::Sub:
@@ -2362,11 +2367,6 @@ bool ConstantExpr::isDesirableBinOp(unsigned Opcode) {
   case Instruction::And:
   case Instruction::Or:
   case Instruction::Xor:
-  case Instruction::FAdd:
-  case Instruction::FSub:
-  case Instruction::FMul:
-  case Instruction::FDiv:
-  case Instruction::FRem:
     return true;
   default:
     llvm_unreachable("Argument must be binop opcode");
