@@ -147,7 +147,6 @@ void RISCVDAGToDAGISel::PostprocessISelDAG() {
       continue;
 
     MadeChange |= doPeepholeSExtW(N);
-    MadeChange |= doPeepholeLoadStoreOffset(N);
     MadeChange |= doPeepholeMaskedRVV(N);
   }
 
@@ -155,72 +154,6 @@ void RISCVDAGToDAGISel::PostprocessISelDAG() {
 
   if (MadeChange)
     CurDAG->RemoveDeadNodes();
-}
-
-// Returns true if N is a MachineSDNode that has a reg and simm12 memory
-// operand. The indices of the base pointer and offset are returned in BaseOpIdx
-// and OffsetOpIdx.
-static bool hasMemOffset(SDNode *N, unsigned &BaseOpIdx,
-                         unsigned &OffsetOpIdx, unsigned &ImmOpc) {
-  switch (N->getMachineOpcode()) {
-  case RISCV::LB:
-  case RISCV::LH:
-  case RISCV::LW:
-  case RISCV::LBU:
-  case RISCV::LHU:
-  case RISCV::LWU:
-  case RISCV::LD:
-  case RISCV::LC_64:
-  case RISCV::LC_128:
-  case RISCV::FLH:
-  case RISCV::FLW:
-  case RISCV::FLD:
-    BaseOpIdx = 0;
-    OffsetOpIdx = 1;
-    ImmOpc = RISCV::ADDI;
-    return true;
-  case RISCV::CLB:
-  case RISCV::CLH:
-  case RISCV::CLW:
-  case RISCV::CLBU:
-  case RISCV::CLHU:
-  case RISCV::CLWU:
-  case RISCV::CLD:
-  case RISCV::CLC_64:
-  case RISCV::CLC_128:
-  case RISCV::CFLW:
-  case RISCV::CFLD:
-    BaseOpIdx = 0;
-    OffsetOpIdx = 1;
-    ImmOpc = RISCV::CIncOffsetImm;
-    return true;
-  case RISCV::SB:
-  case RISCV::SH:
-  case RISCV::SW:
-  case RISCV::SD:
-  case RISCV::SC_64:
-  case RISCV::SC_128:
-  case RISCV::FSH:
-  case RISCV::FSW:
-  case RISCV::FSD:
-    BaseOpIdx = 1;
-    OffsetOpIdx = 2;
-    ImmOpc = RISCV::ADDI;
-    return true;
-  case RISCV::CSB:
-  case RISCV::CSH:
-  case RISCV::CSW:
-  case RISCV::CSD:
-  case RISCV::CSC_64:
-  case RISCV::CSC_128:
-  case RISCV::CFSW:
-  case RISCV::CFSD:
-    BaseOpIdx = 1;
-    OffsetOpIdx = 2;
-    ImmOpc = RISCV::CIncOffsetImm;
-    return true;
-  }
-  return false;
 }
 
 static SDNode *selectImmSeq(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
@@ -2432,103 +2365,6 @@ bool RISCVDAGToDAGISel::selectRVVSimm5(SDValue N, unsigned Width,
   }
 
   return false;
-}
-
-// Merge an ADDI or CIncOffsetImm into the offset of a load/store instruction where possible.
-// (load (opimm base, off1), off2) -> (load base, off1+off2)
-// (store val, (opimm base, off1), off2) -> (store val, base, off1+off2)
-// (load (op base, (opimm src, off1)), off2)
-//    -> (load (op base, src), off1+off2)
-// (store val, (op base, (opimm src, off1)), off2)
-//    -> (store val, (op base, src), off1+off2)
-// This is possible when off1+off2 fits a 12-bit immediate.
-bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
-  unsigned OffsetOpIdx, BaseOpIdx;
-  unsigned ImmOpc;
-  if (!hasMemOffset(N, BaseOpIdx, OffsetOpIdx, ImmOpc))
-    return false;
-
-  if (!isa<ConstantSDNode>(N->getOperand(OffsetOpIdx)))
-    return false;
-
-  SDValue Base = N->getOperand(BaseOpIdx);
-
-  if (!Base.isMachineOpcode())
-    return false;
-
-  if (Base.getMachineOpcode() == ImmOpc) {
-    // If the base is an ADDI/CIncOffsetImm, we can merge it in to the load/store.
-  } else if (Base.getMachineOpcode() == RISCV::ADDIW &&
-             isa<ConstantSDNode>(Base.getOperand(1)) &&
-             Base.getOperand(0).isMachineOpcode() &&
-             Base.getOperand(0).getMachineOpcode() == RISCV::LUI &&
-             isa<ConstantSDNode>(Base.getOperand(0).getOperand(0))) {
-    // ADDIW can be merged if it's part of LUI+ADDIW constant materialization
-    // and LUI+ADDI would have produced the same result. This is true for all
-    // simm32 values except 0x7ffff800-0x7fffffff.
-    int64_t Offset =
-      SignExtend64<32>(Base.getOperand(0).getConstantOperandVal(0) << 12);
-    Offset += cast<ConstantSDNode>(Base.getOperand(1))->getSExtValue();
-    if (!isInt<32>(Offset))
-      return false;
-  } else
-   return false;
-
-  SDValue ImmOperand = Base.getOperand(1);
-  uint64_t Offset2 = N->getConstantOperandVal(OffsetOpIdx);
-
-  if (auto *Const = dyn_cast<ConstantSDNode>(ImmOperand)) {
-    int64_t Offset1 = Const->getSExtValue();
-    int64_t CombinedOffset = Offset1 + Offset2;
-    if (!isInt<12>(CombinedOffset))
-      return false;
-    ImmOperand = CurDAG->getTargetConstant(CombinedOffset, SDLoc(ImmOperand),
-                                           ImmOperand.getValueType());
-  } else if (auto *GA = dyn_cast<GlobalAddressSDNode>(ImmOperand)) {
-    // If the off1 in (op base, off1) is a global variable's address (its
-    // low part, really), then we can rely on the alignment of that variable
-    // to provide a margin of safety before off1 can overflow the 12 bits.
-    // Check if off2 falls within that margin; if so off1+off2 can't overflow.
-    const DataLayout &DL = CurDAG->getDataLayout();
-    Align Alignment = commonAlignment(GA->getGlobal()->getPointerAlignment(DL),
-                                      GA->getOffset());
-    if (Offset2 != 0 && Alignment <= Offset2)
-      return false;
-    int64_t Offset1 = GA->getOffset();
-    int64_t CombinedOffset = Offset1 + Offset2;
-    ImmOperand = CurDAG->getTargetGlobalAddress(
-        GA->getGlobal(), SDLoc(ImmOperand), ImmOperand.getValueType(),
-        CombinedOffset, GA->getTargetFlags());
-  } else if (auto *CP = dyn_cast<ConstantPoolSDNode>(ImmOperand)) {
-    // Ditto.
-    Align Alignment = commonAlignment(CP->getAlign(), CP->getOffset());
-    if (Offset2 != 0 && Alignment <= Offset2)
-      return false;
-    int64_t Offset1 = CP->getOffset();
-    int64_t CombinedOffset = Offset1 + Offset2;
-    ImmOperand = CurDAG->getTargetConstantPool(
-        CP->getConstVal(), ImmOperand.getValueType(), CP->getAlign(),
-        CombinedOffset, CP->getTargetFlags());
-  } else {
-    return false;
-  }
-
-  LLVM_DEBUG(dbgs() << "Folding offsetting into mem-op:\nBase:    ");
-  LLVM_DEBUG(Base->dump(CurDAG));
-  LLVM_DEBUG(dbgs() << "\nN: ");
-  LLVM_DEBUG(N->dump(CurDAG));
-  LLVM_DEBUG(dbgs() << "\n");
-
-  // Modify the offset operand of the load/store.
-  if (BaseOpIdx == 0) { // Load
-    N = CurDAG->UpdateNodeOperands(N, Base.getOperand(0), ImmOperand,
-                                   N->getOperand(2));
-  } else { // Store
-    N = CurDAG->UpdateNodeOperands(N, N->getOperand(0), Base.getOperand(0),
-                                   ImmOperand, N->getOperand(3));
-  }
-
-  return true;
 }
 
 // Try to remove sext.w if the input is a W instruction or can be made into
