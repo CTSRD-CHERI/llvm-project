@@ -568,7 +568,7 @@ static bool useFramePointerForTargetByDefault(const ArgList &Args,
     break;
   }
 
-  if (Triple.isOSNetBSD()) {
+  if (Triple.isOSFuchsia() || Triple.isOSNetBSD()) {
     return !areOptimizationsEnabled(Args);
   }
 
