@@ -105,6 +105,10 @@ def ElementType : TypeAttr<"elementtype", [ParamAttr]>;
 /// Function has additional side-effects.
 def HasSideEffects : EnumAttr<"hassideeffects", [FnAttr]>;
 
+/// Whether to keep return instructions, or replace with a jump to an external
+/// symbol.
+def FnRetThunkExtern : EnumAttr<"fn_ret_thunk_extern", [FnAttr]>;
+
 /// Function may only access memory that is inaccessible from IR.
 def InaccessibleMemOnly : EnumAttr<"inaccessiblememonly", [FnAttr]>;
 
