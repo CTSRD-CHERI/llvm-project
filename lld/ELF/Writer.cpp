@@ -1353,12 +1353,16 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
 // Sorts the sections in ISD according to the provided section order.
 static void
 sortISDBySectionOrder(InputSectionDescription *isd,
-                      const DenseMap<const InputSectionBase *, int> &order) {
+                      const DenseMap<const InputSectionBase *, int> &order,
+                      bool executableOutputSection) {
   SmallVector<InputSection *, 0> unorderedSections;
   SmallVector<std::pair<InputSection *, int>, 0> orderedSections;
   uint64_t unorderedSize = 0;
+  uint64_t totalSize = 0;
 
   for (InputSection *isec : isd->sections) {
+    if (executableOutputSection)
+      totalSize += isec->getSize();
     auto i = order.find(isec);
     if (i == order.end()) {
       unorderedSections.push_back(isec);
@@ -1396,8 +1400,15 @@ sortISDBySectionOrder(InputSectionDescription *isd,
   // of the second block of cold code can call the hot code without a thunk. So
   // we effectively double the amount of code that could potentially call into
   // the hot code without a thunk.
+  //
+  // The above is not necessary if total size of input sections in this "isd"
+  // is small. Note that we assume all input sections are executable if the
+  // output section is executable (which is not always true but supposed to
+  // cover most cases).
   size_t insPt = 0;
-  if (target->getThunkSectionSpacing() && !orderedSections.empty()) {
+  if (executableOutputSection && !orderedSections.empty() &&
+      target->getThunkSectionSpacing() &&
+      totalSize >= target->getThunkSectionSpacing()) {
     uint64_t unorderedPos = 0;
     for (; insPt != unorderedSections.size(); ++insPt) {
       unorderedPos += unorderedSections[insPt]->getSize();
@@ -1438,7 +1449,7 @@ static void sortSection(OutputSection &osec,
   if (!order.empty())
     for (SectionCommand *b : osec.commands)
       if (auto *isd = dyn_cast<InputSectionDescription>(b))
-        sortISDBySectionOrder(isd, order);
+        sortISDBySectionOrder(isd, order, osec.flags & SHF_EXECINSTR);
 
   if (script->hasSectionsCommand)
     return;
