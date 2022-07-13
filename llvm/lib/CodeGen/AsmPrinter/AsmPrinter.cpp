@@ -3529,6 +3529,11 @@ void AsmPrinter::emitGlobalConstant(const DataLayout &DL, const Constant *CV,
     OutStreamer->AddComment("Tail padding to ensure precise bounds");
     OutStreamer->emitZeros(TailPadding);
   }
+  if (!AliasList)
+    return;
+  for (const auto &AliasPair : *AliasList)
+    report_fatal_error("Aliases with offset " + Twine(AliasPair.first) +
+                       " were not emitted.");
 }
 
 void AsmPrinter::emitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
