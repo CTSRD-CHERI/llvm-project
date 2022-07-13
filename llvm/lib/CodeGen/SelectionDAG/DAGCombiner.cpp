@@ -11151,6 +11151,9 @@ SDValue DAGCombiner::visitVSELECT(SDNode *N) {
     if (SDValue V = foldVSelectToSignBitSplatMask(N, DAG))
       return V;
 
+  if (SimplifyDemandedVectorElts(SDValue(N, 0)))
+    return SDValue(N, 0);
+
   return SDValue();
 }
 
