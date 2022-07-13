@@ -142,14 +142,9 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
         AtomicAlign = ValueAlign = lvalue.getAlignment();
         LVal = lvalue;
       }
-      if (AtomicTy->isCHERICapabilityType(CGF.CGM.getContext())) {
-        UseLibcall =
-            CGF.CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
-                Op);
-      } else {
-        UseLibcall = !C.getTargetInfo().hasBuiltinAtomic(
-            AtomicSizeInBits, C.toBits(lvalue.getAlignment()));
-      }
+      UseLibcall = !C.getTargetInfo().hasBuiltinAtomic(
+          AtomicSizeInBits, C.toBits(lvalue.getAlignment()),
+          AtomicTy->isCHERICapabilityType(CGF.CGM.getContext()));
     }
 
     QualType getAtomicType() const { return AtomicTy; }
@@ -539,6 +534,8 @@ static void EmitAtomicOp(CodeGenFunction &CGF, AtomicExpr *E, Address Dest,
   llvm::AtomicRMWInst::BinOp Op = llvm::AtomicRMWInst::Add;
   bool PostOpMinMax = false;
   unsigned PostOp = 0;
+  QualType AtomicTy = E->getPtr()->getType()->getPointeeType();
+  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGF.CGM.getContext());
 
   switch (E->getOp()) {
   case AtomicExpr::AO__c11_atomic_init:
@@ -703,11 +700,18 @@ static void EmitAtomicOp(CodeGenFunction &CGF, AtomicExpr *E, Address Dest,
     Result = EmitPostAtomicMinMax(CGF.Builder, E->getOp(),
                                   E->getValueType()->isSignedIntegerType(),
                                   RMWI, LoadVal1);
-  else if (PostOp)
-    Result = CGF.Builder.CreateBinOp((llvm::Instruction::BinaryOps)PostOp, RMWI,
-                                     LoadVal1);
+  else if (PostOp) {
+    if (IsCheriCap) {
+      Result = CGF.getCapabilityIntegerValue(RMWI);
+      LoadVal1 = CGF.getCapabilityIntegerValue(LoadVal1);
+    }
+    Result = CGF.Builder.CreateBinOp((llvm::Instruction::BinaryOps)PostOp,
+                                     Result, LoadVal1);
+  }
   if (E->getOp() == AtomicExpr::AO__atomic_nand_fetch)
     Result = CGF.Builder.CreateNot(Result);
+  if (IsCheriCap && !PostOpMinMax && PostOp)
+    Result = CGF.setCapabilityIntegerValue(RMWI, Result, E->getExprLoc());
   CGF.Builder.CreateStore(Result, Dest);
 }
 
@@ -841,8 +845,9 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   unsigned MaxInlineWidthInBits = getTarget().getMaxAtomicInlineWidth();
 
   bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
-  bool Oversized =
-      !IsCheriCap && getContext().toBits(TInfo.Width) > MaxInlineWidthInBits;
+  bool Oversized = (!IsCheriCap &&
+                    getContext().toBits(TInfo.Width) > MaxInlineWidthInBits) ||
+                   (IsCheriCap && MaxInlineWidthInBits == 0);
   bool Misaligned = (Ptr.getAlignment() % TInfo.Width) != 0;
   bool UseLibcall = Misaligned | Oversized;
   bool ShouldCastToIntPtrTy = true;
@@ -851,13 +856,6 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
       getContext().toCharUnitsFromBits(MaxInlineWidthInBits);
 
   DiagnosticsEngine &Diags = CGM.getDiags();
-
-  if (IsCheriCap &&
-      CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
-          E->getOp())) {
-    Diags.Report(E->getBeginLoc(), diag::warn_atomic_op_unsupported);
-    UseLibcall = true;
-  }
 
   if (Misaligned) {
     Diags.Report(E->getBeginLoc(), diag::warn_atomic_op_misaligned)
@@ -1494,10 +1492,11 @@ Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
   llvm::Type *Ty = Addr.getElementType();
   // correctly convert fetch_add, etc arguments:
   if (AtomicTy->isCHERICapabilityType(CGF.getContext()) && Ty->isIntegerTy()) {
+    llvm::Type *AtomicLLVMTy = CGF.ConvertTypeForMem(AtomicTy);
     auto AlignChars = CGF.getContext().getTypeAlignInChars(AtomicTy);
-    auto *Tmp = CGF.CreateTempAlloca(CGF.Int8CheriCapTy, "atomic-intcap-arg");
+    auto *Tmp = CGF.CreateTempAlloca(AtomicLLVMTy, "atomic-intcap-arg");
     CGF.Builder.CreateAlignedStore(
-        CGF.getNullDerivedCapability(CGF.Int8CheriCapTy,
+        CGF.getNullDerivedCapability(AtomicLLVMTy,
                                      CGF.Builder.CreateLoad(Addr)),
         Tmp, AlignChars.getAsAlign());
     return Address(Tmp, AlignChars);
