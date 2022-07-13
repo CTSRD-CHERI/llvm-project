@@ -435,10 +435,10 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
   // targets with '/usr/lib64(c)'.
   std::string CompatLib = (Twine("lib") + (Triple.isArch32Bit() ? "32" : "64") +
                            (IsCheriPurecap ? "c" : "")).str();
-  if (D.getVFS().exists(getDriver().SysRoot + "/usr/" + CompatLib + "/crt1.o"))
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/" + CompatLib);
+  if (D.getVFS().exists(concat(getDriver().SysRoot, "/usr/" + CompatLib + "/crt1.o")))
+    getFilePaths().push_back(concat(getDriver().SysRoot, "/usr/" + CompatLib));
   else
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
+    getFilePaths().push_back(concat(getDriver().SysRoot, "/usr/lib"));
 }
 
 ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
@@ -457,14 +457,14 @@ unsigned FreeBSD::GetDefaultDwarfVersion() const {
 void FreeBSD::addLibCxxIncludePaths(const llvm::opt::ArgList &DriverArgs,
                                     llvm::opt::ArgStringList &CC1Args) const {
   addSystemInclude(DriverArgs, CC1Args,
-                   getDriver().SysRoot + "/usr/include/c++/v1");
+                   concat(getDriver().SysRoot, "/usr/include/c++/v1"));
 }
 
 void FreeBSD::addLibStdCxxIncludePaths(
     const llvm::opt::ArgList &DriverArgs,
     llvm::opt::ArgStringList &CC1Args) const {
-  addLibStdCXXIncludePaths(getDriver().SysRoot + "/usr/include/c++/4.2", "", "",
-                           DriverArgs, CC1Args);
+  addLibStdCXXIncludePaths(concat(getDriver().SysRoot, "/usr/include/c++/4.2"),
+                           "", "", DriverArgs, CC1Args);
 }
 
 void FreeBSD::AddCXXStdlibLibArgs(const ArgList &Args,
