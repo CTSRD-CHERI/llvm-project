@@ -787,27 +787,33 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
     // Load value and pass it to the function directly.
     CharUnits Align = CGF.getContext().getTypeAlignInChars(ValTy);
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
-    llvm::Value *Arg = Val;
-    // capabilities must be passed directly to the optimized libcall
-    if (!ValTy->isCHERICapabilityType(CGF.getContext())) {
-      // Coerce the value into an appropriately sized integer type.
+    llvm::Type *ValLLVMTy;
+    if (ValTy->isCHERICapabilityType(CGF.getContext())) {
+      ValTy =
+          CGF.getContext().getPointerType(CGF.getContext().VoidTy,
+                                          PIK_Capability);
+      ValLLVMTy = CGF.Int8CheriCapTy;
+    } else {
       ValTy =
           CGF.getContext().getIntTypeForBitwidth(SizeInBits, /*Signed=*/false);
-      llvm::Type *IPtrTy =
-          llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits)
-              ->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
-      Arg = CGF.Builder.CreateBitCast(Val, IPtrTy);
+      ValLLVMTy = llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits);
     }
-    Address Ptr = Address(Arg, Align);
+    llvm::Type *IPtrTy =
+        ValLLVMTy->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
+    Address Ptr = Address(CGF.Builder.CreateBitCast(Val, IPtrTy), Align);
     Val = CGF.EmitLoadOfScalar(Ptr, false,
-                               CGF.getContext().getPointerType(ValTy), Loc);
+                               CGF.getContext().getPointerType(ValTy),
+                               Loc);
+    // Coerce the value into an appropriately sized integer or into a
+    // void/i8 capability type.
     Args.add(RValue::get(Val), ValTy);
   } else {
     // Non-optimized functions always take a reference.
+    // NB: Capabilities must be passed directly to the optimized libcall
     assert(!ValTy->isCHERICapabilityType(CGF.getContext()) &&
            "Capabilities should not be passed to the generic libcall");
     Args.add(RValue::get(CGF.EmitCastToVoidPtr(Val)),
-             CGF.getContext().VoidPtrTy);
+                         CGF.getContext().VoidPtrTy);
   }
 }
 
