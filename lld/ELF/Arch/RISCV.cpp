@@ -372,7 +372,7 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
 
   case R_RISCV_RVC_BRANCH: {
-    checkInt(loc, static_cast<int64_t>(val) >> 1, 8, rel);
+    checkInt(loc, val, 9, rel);
     checkAlignment(loc, val, 2, rel);
     uint16_t insn = read16le(loc) & 0xE383;
     uint16_t imm8 = extractBits(val, 8, 8) << 12;
@@ -388,7 +388,7 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 
   case R_RISCV_RVC_JUMP:
   case R_RISCV_CHERI_RVC_CJUMP: {
-    checkInt(loc, static_cast<int64_t>(val) >> 1, 11, rel);
+    checkInt(loc, val, 12, rel);
     checkAlignment(loc, val, 2, rel);
     uint16_t insn = read16le(loc) & 0xE003;
     uint16_t imm11 = extractBits(val, 11, 11) << 12;
@@ -420,7 +420,7 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 
   case R_RISCV_JAL:
   case R_RISCV_CHERI_CJAL: {
-    checkInt(loc, static_cast<int64_t>(val) >> 1, 20, rel);
+    checkInt(loc, val, 21, rel);
     checkAlignment(loc, val, 2, rel);
 
     uint32_t insn = read32le(loc) & 0xFFF;
@@ -435,7 +435,7 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   }
 
   case R_RISCV_BRANCH: {
-    checkInt(loc, static_cast<int64_t>(val) >> 1, 12, rel);
+    checkInt(loc, val, 13, rel);
     checkAlignment(loc, val, 2, rel);
 
     uint32_t insn = read32le(loc) & 0x1FFF07F;
