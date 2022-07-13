@@ -747,7 +747,12 @@ public:
   /// Returns true if the given target supports lock-free atomic
   /// operations at the specified width and alignment.
   virtual bool hasBuiltinAtomic(uint64_t AtomicSizeInBits,
-                                uint64_t AlignmentInBits) const {
+                                uint64_t AlignmentInBits,
+                                bool IsCheriCapability) const {
+    // Assume the target supports lock-free atomic operations on capabilities
+    // if it supports them on any integer type.
+    if (IsCheriCapability && getMaxAtomicInlineWidth() > 0)
+      return true;
     return AtomicSizeInBits <= AlignmentInBits &&
            AtomicSizeInBits <= getMaxAtomicInlineWidth() &&
            (AtomicSizeInBits <= getCharWidth() ||

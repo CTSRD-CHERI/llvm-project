@@ -255,10 +255,6 @@ public:
   /// using the legacy TLS ABI.
   virtual unsigned getTlsAddressSpace() const { return getDefaultAS(); }
 
-  virtual bool cheriCapabilityAtomicNeedsLibcall(AtomicExpr::AtomicOp Op) const {
-    return true;
-  }
-
   virtual unsigned getCHERICapabilityAS() const {
     llvm_unreachable("Target does not support CHERI capabilities!\n");
     return 0;
