@@ -98,7 +98,7 @@ BinarySizeContextTracker::getFuncSizeForContext(const ContextTrieNode *Node) {
     PrevNode = CurrNode;
     CurrNode = CurrNode->getChildContext(CallSiteLoc, Node->getFuncName());
     if (CurrNode && CurrNode->getFunctionSize())
-      Size = CurrNode->getFunctionSize().getValue();
+      Size = CurrNode->getFunctionSize().value();
     CallSiteLoc = Node->getCallSiteLoc();
     Node = Node->getParentContext();
   }
@@ -112,12 +112,12 @@ BinarySizeContextTracker::getFuncSizeForContext(const ContextTrieNode *Node) {
     while (!Size && CurrNode && !CurrNode->getAllChildContext().empty()) {
       CurrNode = &CurrNode->getAllChildContext().begin()->second;
       if (CurrNode->getFunctionSize())
-        Size = CurrNode->getFunctionSize().getValue();
+        Size = CurrNode->getFunctionSize().value();
     }
   }
 
   assert(Size && "We should at least find one context size.");
-  return Size.getValue();
+  return Size.value();
 }
 
 void BinarySizeContextTracker::trackInlineesOptimizedAway(

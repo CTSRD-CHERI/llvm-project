@@ -1419,7 +1419,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile &Obj,
       // separately. But WebAssembly decodes preludes for some symbols.
       //
       if (Status) {
-        if (Status.getValue() == MCDisassembler::Fail) {
+        if (Status.value() == MCDisassembler::Fail) {
           outs() << "// Error in decoding " << SymbolName
                  << " : Decoding failed region as bytes.\n";
           for (uint64_t I = 0; I < Size; ++I) {
@@ -2297,7 +2297,7 @@ void objdump::printSymbol(const ObjectFile &O, const SymbolRef &Symbol,
 
           if (SymbolDescription)
             SymName = getXCOFFSymbolDescription(
-                createSymbolInfo(O, SymRef.getValue()), SymName);
+                createSymbolInfo(O, SymRef.value()), SymName);
 
           outs() << ' ' << SymName;
           outs() << ") ";
@@ -2404,8 +2404,8 @@ static void printRawClangAST(const ObjectFile *Obj) {
   if (!ClangASTSection)
     return;
 
-  StringRef ClangASTContents = unwrapOrError(
-      ClangASTSection.getValue().getContents(), Obj->getFileName());
+  StringRef ClangASTContents =
+      unwrapOrError(ClangASTSection.value().getContents(), Obj->getFileName());
   outs().write(ClangASTContents.data(), ClangASTContents.size());
 }
 
