@@ -685,6 +685,10 @@ public:
     return getST()->enableWritePrefetching();
   }
 
+  virtual bool shouldPrefetchAddressSpace(unsigned AS) const {
+    return getST()->shouldPrefetchAddressSpace(AS);
+  }
+
   /// @}
 
   /// \name Vector TTI Implementations
