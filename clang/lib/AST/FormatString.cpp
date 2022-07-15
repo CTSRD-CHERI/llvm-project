@@ -1027,9 +1027,10 @@ Optional<LengthModifier> FormatSpecifier::getCorrectedLengthModifier() const {
 
 bool FormatSpecifier::namedTypeToLengthModifier(QualType QT,
                                                 LengthModifier &LM) {
-  for (/**/; const auto *TT = QT->getAs<TypedefType>();
-       QT = TT->getDecl()->getUnderlyingType()) {
-    const TypedefNameDecl *Typedef = TT->getDecl();
+  assert(isa<TypedefType>(QT) && "Expected a TypedefType");
+  const TypedefNameDecl *Typedef = cast<TypedefType>(QT)->getDecl();
+
+  for (;;) {
     const IdentifierInfo *Identifier = Typedef->getIdentifier();
     if (Identifier->getName() == "size_t") {
       LM.setKind(LengthModifier::AsSizeT);
@@ -1054,6 +1055,12 @@ bool FormatSpecifier::namedTypeToLengthModifier(QualType QT,
       LM.setKind(LengthModifier::AsPtrDiff);
       return true;
     }
+
+    QualType T = Typedef->getUnderlyingType();
+    if (!isa<TypedefType>(T))
+      break;
+
+    Typedef = cast<TypedefType>(T)->getDecl();
   }
   return false;
 }
