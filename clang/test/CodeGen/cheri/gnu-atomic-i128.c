@@ -228,6 +228,24 @@ __uint128_t test_fetch_xor(__uint128_t *ptr, __uint128_t value) {
   return __atomic_fetch_xor(ptr, value, __ATOMIC_SEQ_CST);
 }
 
+// HYBRID-LABEL: define {{[^@]+}}@test_fetch_nand
+// HYBRID-SAME: (i128* [[PTR:%.*]], i128 [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i128* [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i128 @__atomic_fetch_nand_16(i8* [[TMP0]], i128 [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    ret i128 [[CALL]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_fetch_nand
+// PURECAP-SAME: (i128 addrspace(200)* [[PTR:%.*]], i128 [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i128 addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i128 @__atomic_fetch_nand_16(i8 addrspace(200)* [[TMP0]], i128 [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    ret i128 [[CALL]]
+//
+__uint128_t test_fetch_nand(__uint128_t *ptr, __uint128_t value) {
+  return __atomic_fetch_nand(ptr, value, __ATOMIC_SEQ_CST);
+}
+
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_max
 // HYBRID-SAME: (i128* [[PTR:%.*]], i128 [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
@@ -362,6 +380,28 @@ __uint128_t test_or_fetch(__uint128_t *ptr, __uint128_t value) {
 //
 __uint128_t test_xor_fetch(__uint128_t *ptr, __uint128_t value) {
   return __atomic_xor_fetch(ptr, value, __ATOMIC_SEQ_CST);
+}
+
+// HYBRID-LABEL: define {{[^@]+}}@test_nand_fetch
+// HYBRID-SAME: (i128* [[PTR:%.*]], i128 [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-NEXT:  entry:
+// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i128* [[PTR]] to i8*
+// HYBRID-NEXT:    [[CALL:%.*]] = call i128 @__atomic_fetch_nand_16(i8* [[TMP0]], i128 [[VALUE]], i32 signext 5)
+// HYBRID-NEXT:    [[TMP1:%.*]] = and i128 [[CALL]], [[VALUE]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = xor i128 [[TMP1]], -1
+// HYBRID-NEXT:    ret i128 [[TMP2]]
+//
+// PURECAP-LABEL: define {{[^@]+}}@test_nand_fetch
+// PURECAP-SAME: (i128 addrspace(200)* [[PTR:%.*]], i128 [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-NEXT:  entry:
+// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i128 addrspace(200)* [[PTR]] to i8 addrspace(200)*
+// PURECAP-NEXT:    [[CALL:%.*]] = call i128 @__atomic_fetch_nand_16(i8 addrspace(200)* [[TMP0]], i128 [[VALUE]], i32 signext 5)
+// PURECAP-NEXT:    [[TMP1:%.*]] = and i128 [[CALL]], [[VALUE]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = xor i128 [[TMP1]], -1
+// PURECAP-NEXT:    ret i128 [[TMP2]]
+//
+__uint128_t test_nand_fetch(__uint128_t *ptr, __uint128_t value) {
+  return __atomic_nand_fetch(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_max_fetch
