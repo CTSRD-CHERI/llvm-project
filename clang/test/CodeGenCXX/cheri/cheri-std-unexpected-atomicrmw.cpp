@@ -1,6 +1,6 @@
 // REQUIRES: mips-registered-target
 
-// RUN: %cheri_purecap_cc1 -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -std=c++11 -fsyntax-only -verify %s
 // RUN: %cheri_purecap_cc1 -emit-llvm -std=c++11 -o - %s | %cheri_FileCheck %s
 // RUN: %cheri_purecap_cc1 -O2 -mllvm -cheri-cap-table-abi=pcrel -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM -enable-var-scope %s
 // RUN: %cheri_purecap_cc1 -std=c++11 -ast-dump %s | %cheri_FileCheck -check-prefix=AST %s
@@ -10,20 +10,19 @@
 // CHECK: ; ModuleID = '{{.+}}/cheri-std-unexpected-atomicrmw.cpp'
 // CHECK: source_filename = "{{.+}}"
 
+// expected-no-diagnostics
+
 typedef void (*handler)();
 __attribute__((__require_constant_initialization__)) static handler __handler;
-
-#ifdef INVALID_ATOMIC_CALL
 handler set_handler_sync(handler func) noexcept {
-  return __sync_lock_test_and_set(&__handler, func); // expected-error {{the __sync_* atomic builtins only work with integers and not capability type 'handler' (aka 'void (*)()').}}
-  // AST-NOT: DeclRefExpr {{.*}} '__sync_lock_test_and_set_16' '__int128 (volatile __int128 *, __int128, ...) noexcept'
+  return __sync_lock_test_and_set(&__handler, func);
+  // AST: DeclRefExpr {{.*}} '__sync_lock_test_and_set_cap' '__intcap (volatile __intcap *, __intcap, ...) noexcept'
 }
 
 handler get_handler_sync() noexcept {
-  return __sync_fetch_and_add(&__handler, (handler)0); // expected-error {{the __sync_* atomic builtins only work with integers and not capability type 'handler' (aka 'void (*)()').}}
-  // AST-NOT: DeclRefExpr {{.*}} '__sync_fetch_and_add_16' '__int128 (volatile __int128 *, __int128, ...) noexcept'
+  return __sync_fetch_and_add(&__handler, (handler)0);
+  // AST: DeclRefExpr {{.*}} '__sync_fetch_and_add_cap' '__intcap (volatile __intcap *, __intcap, ...) noexcept'
 }
-#endif
 
 handler set_handler_atomic(handler func) noexcept {
   // CHECK-LABEL: @_Z18set_handler_atomicPFvvE(
@@ -40,11 +39,11 @@ handler set_handler_atomic(handler func) noexcept {
   // ASM-LABEL: _Z18set_handler_atomicPFvvE:
   // ASM:      clcbi   $c2, %captab20(_ZL9__handler)($c{{.+}})
   // ASM-NEXT: sync
-  // ASM-NEXT: .LBB0_1: # %entry
+  // ASM-NEXT: .LBB2_1: # %entry
   // ASM-NEXT: # =>This Inner Loop Header: Depth=1
   // ASM-NEXT: cllc    $c1, $c2
   // ASM-NEXT: cscc    $1, $c3, $c2
-  // ASM-NEXT: beqz    $1, .LBB0_1
+  // ASM-NEXT: beqz    $1, .LBB2_1
   // ASM-NEXT: nop
   // ASM-NEXT: # %bb.2: # %entry
   // ASM-NEXT: sync
@@ -82,11 +81,11 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // ASM-LABEL: _Z22set_handler_c11_atomicPFvvE:
   // ASM:      clcbi   $c2, %captab20(_ZL16__atomic_handler)($c{{.+}})
   // ASM-NEXT: sync
-  // ASM-NEXT: .LBB2_1: # %entry
+  // ASM-NEXT: .LBB4_1: # %entry
   // ASM-NEXT: # =>This Inner Loop Header:
   // ASM-NEXT: cllc    $c1, $c2
   // ASM-NEXT: cscc    $1, $c3, $c2
-  // ASM-NEXT: beqz    $1, .LBB2_1
+  // ASM-NEXT: beqz    $1, .LBB4_1
   // ASM-NEXT: nop
   // ASM-NEXT: # %bb.2: # %entry
   // ASM-NEXT: sync

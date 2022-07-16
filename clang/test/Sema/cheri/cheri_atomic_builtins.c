@@ -1,12 +1,9 @@
-// RUN: %cheri_purecap_cc1 -fsyntax-only  %s -verify=expected,purecap
-// RUN: %cheri_cc1 "-target-abi" "n64" -fsyntax-only  %s -verify=expected,hybrid
-
-// check that we reject usage of the __sync atomic builtins with capabilites
-// as this would result in wrong code generation
+// RUN: %cheri_purecap_cc1 -fsyntax-only  %s -verify=expected
+// RUN: %cheri_cc1 "-target-abi" "n64" -fsyntax-only  %s -verify=expected
 
 // Check that we can emit assembly without crashing
-// RUN: %cheri_cc1 "-target-abi" "n64" -S -o /dev/null %s -verify=expected,hybrid
-// RUN: %cheri_purecap_cc1 -S -o /dev/null %s -verify=expected,purecap
+// RUN: %cheri_cc1 "-target-abi" "n64" -S -o /dev/null %s -verify=expected
+// RUN: %cheri_purecap_cc1 -S -o /dev/null %s -verify=expected
 
 #define do_atomic_ops(ptr, result, newval) do { \
   result = __sync_fetch_and_add(ptr, 0); \
@@ -38,56 +35,44 @@
 
 
 
-int capability_ptr() {
-  void* __capability foo_cap;
+void capability_ptr() {
+  void* __capability foo_cap = 0;
   void* __capability result = 0;
   void* __capability newval = (__cheri_tocap void* __capability * __capability)&foo_cap;
   do_atomic_ops(&foo_cap, result, newval);
-  // hybrid-error@-1 13 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
-  // purecap-error@-2 13 {{the __sync_* atomic builtins only work with integers and not capability type 'void *'.}}
-  // check that calling the size-suffixed functions fails too
+  // expected-warning@-1 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
   do_suffixed_atomic_ops(&foo_cap, result, newval);
-  // hybrid-error@-1 5 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
-  // purecap-error@-2 5 {{the __sync_* atomic builtins only work with integers and not capability type 'void *'.}}
 }
 
-int intcap() {
+void intcap() {
   __intcap foo_intcap = 0;
   __intcap result = 0;
   __intcap newval = (__intcap)&foo_intcap;
-  do_atomic_ops(&foo_intcap, result, newval); // expected-error 13 {{the __sync_* atomic builtins only work with integers and not capability type '__intcap'.}}
-  // check that calling the size-suffixed functions fails too
-  do_suffixed_atomic_ops(&foo_intcap, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type '__intcap'.}}
+  do_atomic_ops(&foo_intcap, result, newval);
+  // expected-warning@-1 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
+  do_suffixed_atomic_ops(&foo_intcap, result, newval);
 }
 
-int uintptr() {
+void uintptr() {
   __UINTPTR_TYPE__ foo_uintptr = 0;
   __UINTPTR_TYPE__ result = 0;
   __UINTPTR_TYPE__ newval = (__UINTPTR_TYPE__)1;
 
-  // should be acceptable in hybrid ABI but cause errors in pure capability ABI
   do_atomic_ops(&foo_uintptr, result, newval);
-#ifdef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 13 {{the __sync_* atomic builtins only work with integers and not capability type 'unsigned __intcap'.}}
-  do_suffixed_atomic_ops(&foo_uintptr, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type 'unsigned __intcap'.}}
-#else
-  // expected-warning@-5 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
-#endif
+  // expected-warning@-1 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
+  do_suffixed_atomic_ops(&foo_uintptr, result, newval);
 }
 
 
-#ifndef __CHERI_PURE_CAPABILITY__
-int hybrid_ptr(void) {
-  // in hybrid ABI all these should be acceptable
-  void* foo_nocap = 0;
+void native_ptr(void) {
+  void* foo = 0;
   void* result = 0;
   void* newval = 0;
-  do_atomic_ops(&foo_nocap, result, newval); // expected-warning 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
-  do_suffixed_atomic_ops(&foo_nocap, result, newval);
+  do_atomic_ops(&foo, result, newval);
+  // expected-warning@-1 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
+  do_suffixed_atomic_ops(&foo, result, newval);
 }
-#endif
 
-#ifdef __CHERI_PURE_CAPABILITY__
 #define memory_order_seq_cst __ATOMIC_SEQ_CST
 #define memory_order_relaxed __ATOMIC_RELAXED
 
@@ -126,5 +111,3 @@ void memory_checks(_Atomic(int*) *Ap, int**p, int* val) {
   (void)__atomic_compare_exchange(p, p, p, 0, memory_order_seq_cst, memory_order_relaxed);
   (void)__atomic_compare_exchange_n(p, p, val, 0, memory_order_seq_cst, memory_order_relaxed);
 }
-
-#endif
